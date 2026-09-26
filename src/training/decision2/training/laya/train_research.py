@@ -1,0 +1,550 @@
+"""Low-LR supervised Laya typed-encoder continuation, private research arm.
+
+Every admitted row is used once per completed epoch. The model is selected on
+frozen SELECT source/task macro-F1, with CSS-like and structured components
+reported separately. The CSS pilot and public benchmarks are never consulted
+during training or selection.
+"""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter, defaultdict
+import json
+import math
+import os
+from pathlib import Path
+import random
+import shutil
+import sys
+import time
+
+from inference.laya import MODEL_REVISION, verify_release
+from training.laya.build_research_data import sha
+
+
+def _load_data(data: Path) -> tuple[list[dict], list[dict], dict]:
+    manifest_path = data / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    if (
+        manifest.get("schema_version") != "decision2-laya-joint-research-data/1"
+        or manifest.get("research_only") is not True
+        or manifest.get("release_qualified") is not False
+    ):
+        raise ValueError("Research data manifest differs")
+    rows = []
+    for role, filename in (
+        ("train", "train.tokens.jsonl"),
+        ("select", "select.tokens.jsonl"),
+    ):
+        path = data / filename
+        meta = manifest["outputs"][filename]
+        if sha(path) != meta["sha256"]:
+            raise ValueError(f"Frozen {role} token file differs")
+        read = [json.loads(line) for line in path.open()]
+        if len(read) != meta["rows"] or len({r["id"] for r in read}) != len(read):
+            raise ValueError(f"{role} row count or ID uniqueness differs")
+        for row in read:
+            if (
+                not 2 <= row["option_count"] <= 128
+                or not 0 <= row["label"] < row["option_count"]
+                or len(row["markers"]) != row["option_count"]
+                or max(row["markers"]) >= len(row["ids"])
+                or len(row["ids"]) > 1024
+            ):
+                raise ValueError(f"{role} tokenized row malformed")
+        rows.append(read)
+    if set(r["id"] for r in rows[0]) & set(r["id"] for r in rows[1]):
+        raise ValueError("TRAIN and SELECT IDs overlap")
+    return rows[0], rows[1], manifest
+
+
+def _collate(rows: list[dict], pad_id: int, device):
+    import torch
+
+    n = len(rows)
+    length = max(len(row["ids"]) for row in rows)
+    count = max(len(row["markers"]) for row in rows)
+    ids = torch.full((n, length), pad_id, dtype=torch.long)
+    att = torch.zeros((n, length), dtype=torch.long)
+    markers = torch.zeros((n, count), dtype=torch.long)
+    mask = torch.zeros((n, count), dtype=torch.bool)
+    for i, row in enumerate(rows):
+        size, k = len(row["ids"]), len(row["markers"])
+        ids[i, :size] = torch.tensor(row["ids"])
+        att[i, :size] = 1
+        markers[i, :k] = torch.tensor(row["markers"])
+        mask[i, :k] = True
+    return (
+        ids.to(device),
+        att.to(device),
+        markers.to(device),
+        mask.to(device),
+        torch.tensor([row["qtype"] for row in rows], device=device),
+        torch.tensor([row["label"] for row in rows], device=device),
+    )
+
+
+def _weights(rows: list[dict]) -> list[float]:
+    """Equalize broad source kind and task; soften fixed-class imbalance."""
+    task = Counter(row["task_type"] for row in rows)
+    source_kind = Counter(
+        (
+            "structured"
+            if row["source"].startswith(("legacy:stage", "decision2_"))
+            else "human"
+        )
+        for row in rows
+    )
+    fixed_class = Counter(
+        (row["task_type"], row["label"])
+        for row in rows
+        if row["task_type"] in {"noul", "score"}
+    )
+    result = []
+    for row in rows:
+        kind = (
+            "structured"
+            if row["source"].startswith(("legacy:stage", "decision2_"))
+            else "human"
+        )
+        value = math.sqrt(len(rows) / (2 * source_kind[kind]))
+        value *= math.sqrt(len(rows) / (3 * task[row["task_type"]]))
+        if row["task_type"] in {"noul", "score"}:
+            value *= (
+                task[row["task_type"]]
+                / (row["option_count"] * fixed_class[(row["task_type"], row["label"])])
+            ) ** 0.25
+        result.append(min(3.0, max(0.3, value)))
+    mean = sum(result) / len(result)
+    return [value / mean for value in result]
+
+
+def _batches(rows: list[dict], seed: int, micro: int) -> list[list[dict]]:
+    order = rows.copy()
+    random.Random(seed).shuffle(order)
+    # A bounded local sort reduces padding while retaining global mixing.
+    batches = []
+    for start in range(0, len(order), 128):
+        block = sorted(order[start : start + 128], key=lambda row: len(row["ids"]))
+        batches.extend(
+            block[offset : offset + micro] for offset in range(0, len(block), micro)
+        )
+    return batches
+
+
+def _macro_f1(truth: list[str], predicted: list[str], classes: list[str]) -> float:
+    terms = []
+    for label in classes:
+        tp = sum(a == label and b == label for a, b in zip(truth, predicted))
+        fp = sum(a != label and b == label for a, b in zip(truth, predicted))
+        fn = sum(a == label and b != label for a, b in zip(truth, predicted))
+        terms.append(2 * tp / (2 * tp + fp + fn) if tp + fp + fn else 0.0)
+    return sum(terms) / len(terms)
+
+
+def _select_score(rows: list[dict], predicted: list[int]) -> dict:
+    if len(rows) != len(predicted):
+        raise ValueError("Selection prediction count differs")
+    buckets = defaultdict(list)
+    for row, index in zip(rows, predicted):
+        if not 0 <= index < row["option_count"]:
+            raise ValueError("SELECT prediction index outside native options")
+        if row["source"].startswith("css_pilot:"):
+            category, key = "css", row["source"]
+        elif row["source"] == "google_goemotions_official_train":
+            category, key = "goemotions", row["task_type"]
+        else:
+            category, key = "structured", row["task_type"]
+        buckets[(category, key)].append((row, index))
+    by_bucket = {}
+    for (category, key), pairs in sorted(buckets.items()):
+        gold = [row["option_keys"][row["label"]] for row, _ in pairs]
+        answers = [row["option_keys"][index] for row, index in pairs]
+        labels = sorted({value for row, _ in pairs for value in row["option_keys"]})
+        by_bucket[f"{category}:{key}"] = {
+            "n": len(pairs),
+            "correct": sum(a == b for a, b in zip(gold, answers)),
+            "accuracy": sum(a == b for a, b in zip(gold, answers)) / len(pairs),
+            "macro_f1": _macro_f1(gold, answers, labels),
+            "classes": len(labels),
+        }
+    means = {}
+    for category in ("css", "goemotions", "structured"):
+        values = [
+            v["macro_f1"] for k, v in by_bucket.items() if k.startswith(category + ":")
+        ]
+        if not values:
+            raise ValueError(f"SELECT {category} bucket missing")
+        means[category] = sum(values) / len(values)
+    composite = (
+        0.5 * means["css"] + 0.25 * means["goemotions"] + 0.25 * means["structured"]
+    )
+    return {
+        "composite_macro_f1": composite,
+        "component_macro_f1": means,
+        "hard_accuracy": sum(
+            row["label"] == index for row, index in zip(rows, predicted)
+        )
+        / len(rows),
+        "by_bucket": by_bucket,
+        "items": len(rows),
+    }
+
+
+def _evaluate(model, rows: list[dict], tok, device, micro: int) -> dict:
+    import torch
+
+    model.eval()
+    predicted = []
+    with torch.inference_mode():
+        for start in range(0, len(rows), micro):
+            batch = _collate(rows[start : start + micro], tok.pad_token_id, device)
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                logits, _ = model(*batch[:5])
+            logits = logits.float().masked_fill(~batch[3], -1e4)
+            predicted.extend(logits.argmax(dim=-1).cpu().tolist())
+    model.train()
+    return _select_score(rows, predicted)
+
+
+def _save_checkpoint(
+    model, source: Path, output: Path, step: int, selection: dict, run_sha: str
+) -> dict:
+    from safetensors.torch import save_file
+    import torch
+
+    target = output / f"checkpoint-{step:06d}"
+    if target.exists():
+        raise FileExistsError(target)
+    target.mkdir(mode=0o700)
+    for subdir in ("encoder", "tokenizer"):
+        shutil.copytree(source / subdir, target / subdir)
+    cfg = json.loads((source / "rl_agent_config.json").read_text())
+    cfg["model_name"] = "laya-joint-typed-research"
+    cfg["decision2_research_only"] = True
+    (target / "rl_agent_config.json").write_text(
+        json.dumps(cfg, indent=2, sort_keys=True) + "\n"
+    )
+    state = {
+        name: value.detach().to(dtype=torch.float16, device="cpu").contiguous()
+        for name, value in model.state_dict().items()
+    }
+    save_file(state, str(target / "model.safetensors"))
+    receipt = {
+        "schema_version": "decision2-laya-joint-checkpoint/1",
+        "research_only": True,
+        "release_qualified": False,
+        "step": step,
+        "run_sha256": run_sha,
+        "selection": selection,
+        "files": {
+            name: sha(target / name)
+            for name in ("model.safetensors", "rl_agent_config.json")
+        },
+    }
+    (target / "CHECKPOINT.json").write_text(
+        json.dumps(receipt, indent=2, sort_keys=True) + "\n"
+    )
+    return {
+        "step": step,
+        "checkpoint_sha256": sha(target / "CHECKPOINT.json"),
+        "weights_sha256": receipt["files"]["model.safetensors"],
+        "selection": selection,
+    }
+
+
+def train(
+    *,
+    data: Path,
+    source_model: Path,
+    source_code: Path,
+    output: Path,
+    epochs: int,
+    micro: int,
+    accum: int,
+    encoder_lr: float,
+    head_lr: float,
+    seed: int,
+    max_updates: int | None,
+) -> dict:
+    if output.exists() or output.is_symlink():
+        raise FileExistsError(output)
+    if not 1 <= epochs <= 3 or not 1 <= micro <= 16 or not 1 <= accum <= 16:
+        raise ValueError("Research training resource bounds exceeded")
+    if encoder_lr > 5e-6 or head_lr > 3e-5:
+        raise ValueError("Low-LR research arm bounds exceeded")
+    train_rows, select_rows, data_manifest = _load_data(data)
+    base = verify_release(source_model, source_code, MODEL_REVISION)
+    if data_manifest["model"] != base:
+        raise ValueError("Tokenization/base model identity differs")
+    sys.path.insert(0, str(source_code))
+    import torch
+    import torch.nn.functional as F
+    from safetensors.torch import load_file
+    from transformers import AutoTokenizer
+    from laya.common import build_model
+
+    if torch.version.hip is None or torch.cuda.device_count() != 1:
+        raise RuntimeError("One visible ROCm GPU is required")
+    torch.manual_seed(seed)
+    random.seed(seed)
+    torch.cuda.set_device(0)
+    torch.set_num_threads(2)
+    device = torch.device("cuda:0")
+    cfg = json.loads((source_model / "rl_agent_config.json").read_text())
+    tok = AutoTokenizer.from_pretrained(
+        source_model / "tokenizer", local_files_only=True
+    )
+    model = build_model(
+        cfg, encoder_dir=str(source_model / "encoder"), pretrained=False
+    )
+    model.load_state_dict(
+        load_file(str(source_model / "model.safetensors"), device="cpu"), strict=True
+    )
+    model.to(device)
+    model.train()
+    weights = _weights(train_rows)
+    by_id = {row["id"]: weight for row, weight in zip(train_rows, weights)}
+    optimizer = torch.optim.AdamW(
+        [
+            {
+                "params": [
+                    p
+                    for name, p in model.named_parameters()
+                    if name.startswith("encoder.")
+                ],
+                "lr": encoder_lr,
+            },
+            {
+                "params": [
+                    p
+                    for name, p in model.named_parameters()
+                    if not name.startswith("encoder.")
+                ],
+                "lr": head_lr,
+            },
+        ],
+        weight_decay=0.01,
+    )
+    batches_per_epoch = sum(
+        len(_batches(train_rows, seed + epoch, micro)) for epoch in range(epochs)
+    )
+    planned_updates = math.ceil(batches_per_epoch / accum)
+    run = {
+        "schema_version": "decision2-laya-joint-research-run/1",
+        "research_only": True,
+        "release_qualified": False,
+        "data_manifest_sha256": sha(data / "manifest.json"),
+        "data_train_sha256": data_manifest["outputs"]["train.tokens.jsonl"]["sha256"],
+        "data_select_sha256": data_manifest["outputs"]["select.tokens.jsonl"]["sha256"],
+        "base": base,
+        "source_revision": base["source_revision"],
+        "trainer_sha256": sha(Path(__file__)),
+        "hyperparameters": {
+            "epochs": epochs,
+            "micro": micro,
+            "accum": accum,
+            "encoder_lr": encoder_lr,
+            "head_lr": head_lr,
+            "ordinal_rps_weight": 0.1,
+            "loss_weights": "sqrt inverse source kind/task; quarter-power fixed-label; cap .3–3 then mean normalize",
+            "seed": seed,
+            "max_updates": max_updates,
+        },
+        "runtime": {"torch": torch.__version__, "hip": torch.version.hip},
+        "expected_train_rows_per_epoch": len(train_rows),
+        "expected_select_rows": len(select_rows),
+        "planned_updates": planned_updates,
+    }
+    output.mkdir(parents=True, mode=0o700)
+    (output / "RUN.json").write_text(json.dumps(run, indent=2, sort_keys=True) + "\n")
+    run_sha = sha(output / "RUN.json")
+    baseline = _evaluate(model, select_rows, tok, device, micro)
+    curve = [{"step": 0, "selection": baseline, "checkpoint": None}]
+    print(
+        json.dumps(
+            {
+                "event": "base_select",
+                "composite": baseline["composite_macro_f1"],
+                "components": baseline["component_macro_f1"],
+                "hard_accuracy": baseline["hard_accuracy"],
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
+    optimizer.zero_grad(set_to_none=True)
+    step, batch_count, rows_seen = 0, 0, 0
+    loss_sum, min_loss, max_loss = 0.0, float("inf"), 0.0
+    start = time.time()
+    stop = False
+    for epoch in range(epochs):
+        for chunk in _batches(train_rows, seed + epoch, micro):
+            ids, att, markers, mask, qtype, labels = _collate(
+                chunk, tok.pad_token_id, device
+            )
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                logits, act = model(ids, att, markers, mask, qtype)
+            logits = logits.float().masked_fill(~mask, -1e4)
+            ce = F.cross_entropy(logits, labels, reduction="none")
+            probs = torch.softmax(logits, -1) * mask
+            target = F.one_hot(labels, logits.shape[-1]).float()
+            counts = mask.sum(-1).clamp_min(2)
+            rps = (((probs.cumsum(-1) - target.cumsum(-1)) ** 2) * mask).sum(-1) / (
+                counts - 1
+            )
+            ordinal = (qtype == 1).float()
+            row_weights = torch.tensor(
+                [by_id[row["id"]] for row in chunk], device=device
+            )
+            loss = ((ce + 0.1 * ordinal * rps) * row_weights).sum() / row_weights.sum()
+            loss_value = float(loss.detach())
+            if not math.isfinite(loss_value) or not torch.isfinite(act).all():
+                raise FloatingPointError("Nonfinite model output or training loss")
+            (loss / accum + 0.0 * act.sum()).backward()
+            rows_seen += len(chunk)
+            loss_sum += loss_value * len(chunk)
+            min_loss = min(min_loss, loss_value)
+            max_loss = max(max_loss, loss_value)
+            batch_count += 1
+            if batch_count % accum == 0 or (
+                epoch == epochs - 1 and rows_seen == len(train_rows) * epochs
+            ):
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                if not torch.isfinite(grad_norm):
+                    raise FloatingPointError("Nonfinite training gradient norm")
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
+                step += 1
+                if max_updates is not None and step >= max_updates:
+                    stop = True
+                if (
+                    step
+                    in {
+                        max(1, planned_updates // 3),
+                        max(1, 2 * planned_updates // 3),
+                        planned_updates,
+                    }
+                    or stop
+                ):
+                    selection = _evaluate(model, select_rows, tok, device, micro)
+                    checkpoint = _save_checkpoint(
+                        model, source_model, output, step, selection, run_sha
+                    )
+                    curve.append(
+                        {"step": step, "selection": selection, "checkpoint": checkpoint}
+                    )
+                    print(
+                        json.dumps(
+                            {
+                                "event": "checkpoint",
+                                "step": step,
+                                "seen": rows_seen,
+                                "mean_loss": loss_sum / rows_seen,
+                                "selection_composite": selection["composite_macro_f1"],
+                                "selection_components": selection["component_macro_f1"],
+                                "selection_hard_accuracy": selection["hard_accuracy"],
+                            },
+                            sort_keys=True,
+                        ),
+                        flush=True,
+                    )
+                if stop:
+                    break
+        if stop:
+            break
+    # The last data batch triggers its optimizer step inside the loop, even
+    # when the final accumulation has fewer than `accum` micro-batches.
+    complete = max_updates is None and rows_seen == len(train_rows) * epochs
+    baseline_css = baseline["component_macro_f1"]["css"]
+    baseline_structured = baseline["component_macro_f1"]["structured"]
+    eligible = [
+        point
+        for point in curve[1:]
+        if point["selection"]["component_macro_f1"]["css"] >= baseline_css - 0.01
+        and point["selection"]["component_macro_f1"]["structured"]
+        >= baseline_structured - 0.02
+    ]
+    best = (
+        max(
+            eligible,
+            key=lambda point: (
+                point["selection"]["composite_macro_f1"],
+                point["selection"]["hard_accuracy"],
+                -point["step"],
+            ),
+        )
+        if eligible
+        else None
+    )
+    if (
+        best
+        and best["selection"]["composite_macro_f1"] <= baseline["composite_macro_f1"]
+    ):
+        best = None
+    receipt = {
+        "schema_version": "decision2-laya-joint-research-complete/1",
+        "status": "complete" if complete else "smoke_or_partial",
+        "research_only": True,
+        "release_qualified": False,
+        "run_sha256": run_sha,
+        "rows_seen": rows_seen,
+        "updates": step,
+        "elapsed_seconds": time.time() - start,
+        "mean_train_loss": loss_sum / rows_seen,
+        "min_batch_loss": min_loss,
+        "max_batch_loss": max_loss,
+        "curve": curve,
+        "selected_checkpoint": best["checkpoint"] if best else None,
+        "selection_rule": "max .5 CSS + .25 GoEmotions + .25 structured source/task macro-F1; CSS >= source-.01; structured >= source-.02; require composite > source",
+        "base_is_selected": best is None,
+        "scope": "SELECT only; CSS pilot/public/FINAL not used",
+    }
+    (output / "COMPLETE.json").write_text(
+        json.dumps(receipt, indent=2, sort_keys=True) + "\n"
+    )
+    return receipt
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data", type=Path, required=True)
+    parser.add_argument("--source-model", type=Path, required=True)
+    parser.add_argument("--source-code", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--micro", type=int, default=8)
+    parser.add_argument("--accum", type=int, default=4)
+    parser.add_argument("--encoder-lr", type=float, default=2e-6)
+    parser.add_argument("--head-lr", type=float, default=1e-5)
+    parser.add_argument("--seed", type=int, default=20260927)
+    parser.add_argument("--max-updates", type=int)
+    args = parser.parse_args()
+    result = train(
+        data=args.data,
+        source_model=args.source_model,
+        source_code=args.source_code,
+        output=args.output,
+        epochs=args.epochs,
+        micro=args.micro,
+        accum=args.accum,
+        encoder_lr=args.encoder_lr,
+        head_lr=args.head_lr,
+        seed=args.seed,
+        max_updates=args.max_updates,
+    )
+    print(
+        json.dumps(
+            {
+                "status": result["status"],
+                "updates": result["updates"],
+                "selected": result["selected_checkpoint"],
+            },
+            sort_keys=True,
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()

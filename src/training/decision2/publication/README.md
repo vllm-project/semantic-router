@@ -1,5 +1,54 @@
 # Model-card artifacts from frozen reports
 
+## JevArena six-axis release artifacts
+
+`python3 -m publication.generate_arena` creates the Decision 2.0 release
+tables and six SVG figures: separate JevArena and 231-item public JevBench
+rank/Pareto charts, plus JevArena axis and model-by-task matrices. It accepts
+only a completed `jevarena-ranking/2` **release** report and a matched
+`jevarena-jevbench-public-rank/1` report containing exactly the same models,
+revisions, parameter counts and public scorer digests. Every matched 2.0/1.0
+size pair needs typed group-bootstrap and transfer paired-bootstrap reports
+bound to the exact ranked prediction hashes. It refuses to overwrite an
+output directory and screens generated files for credentials, host paths and
+IP addresses.
+
+The configuration names relative report paths:
+
+```json
+{
+  "arena_rank": "reports/jevarena-release-rank.json",
+  "jevbench_public_rank": "reports/jevbench-public-rank.json",
+  "comparison_pairs": [
+    {
+      "new": "dev-2.0-0.8b",
+      "old": "decision-1.0-eos",
+      "typed_comparison": "reports/typed-pair.json",
+      "transfer_comparison": "reports/transfer-pair.json",
+      "new_typed_report": "reports/dev-2.0-0.8b-typed.json",
+      "old_typed_report": "reports/eos-typed.json",
+      "new_transfer_report": "reports/dev-2.0-0.8b-transfer.json",
+      "old_transfer_report": "reports/eos-transfer.json"
+    }
+  ]
+}
+```
+
+```bash
+PYTHONPATH=src/training/decision2 python3 -m publication.generate_arena \
+  --config /path/to/release-config.json \
+  --output-dir /path/to/new/release-card-artifacts
+```
+
+The generated table discloses the public subsets and distinguishes the 231
+exposed JevBench questions from the upstream closed benchmark. It never
+claims an official closed-set ranking. The older `/2` generator and portable
+Qwen3.5 LoRA bundle described below are retained for audit; they are not a
+Decision 2.0 JevArena release artifact and must not be used as the final card
+without the six-axis `/3` report and package parity gate.
+
+## Earlier four-family artifact generator
+
 This generator turns **scored reports**, not raw predictions or handwritten
 numbers, into model-card material:
 

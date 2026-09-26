@@ -1,0 +1,44 @@
+{
+  "files": {
+    "jev_arena/authored_v3.py": {
+      "ast_sha256": "ddc67dc291237e4b4afd433b098a845c32e1815abc47b470c0e383bef0bcd894",
+      "snapshot": "research/source_snapshots/2026-09-27/jev_arena__authored_v3.py.source",
+      "source_sha256": "e602c2ad8388fef571bb0f3d80fcb1710e0883226f433f4903a60f5742458422"
+    },
+    "jev_arena/authored_v3_ops.py": {
+      "ast_sha256": "61e689d8f58c9fe41d00e9558de3be02408d20233f6ee8376891845c2aff9c0c",
+      "snapshot": "research/source_snapshots/2026-09-27/jev_arena__authored_v3_ops.py.source",
+      "source_sha256": "b3345e6a1927a0db1f4b93f61b19fd1542e88c18cfbf7b0196533d9308ed353d"
+    },
+    "jev_arena/authored_v3_reference.py": {
+      "ast_sha256": "49e8a44f4f0a0d69896d31821bda3fb0111f0c23f331b206948dcd373eb0a7c5",
+      "snapshot": "research/source_snapshots/2026-09-27/jev_arena__authored_v3_reference.py.source",
+      "source_sha256": "5fa936b06ca3d5c9a7adb1864c49e12fe55422199a186c7256c666435784f05b"
+    },
+    "multilingual/translation_smoke.py": {
+      "ast_sha256": "59ff57169e8dadd6134ccb87953f97eab1efbe0912bdbc92b55173979d840ed0",
+      "snapshot": "research/source_snapshots/2026-09-27/multilingual__translation_smoke.py.source",
+      "source_sha256": "2c26fcd556100950ad0b4ea4f30148c56cdfb9577ce5f4898b430019c99db87e"
+    },
+    "training/laya/build_research_data.py": {
+      "ast_sha256": "88613d59f710cd4493da4c52f0d40ed07f41afd4b1c5116575dac43ba42c38bd",
+      "snapshot": "research/source_snapshots/2026-09-27/training__laya__build_research_data.py.source",
+      "source_sha256": "dd331be1c1918bf4f86a4fabe50afc6eab4f3ca55974484ce969c8a8141f4c13"
+    },
+    "training/laya/infer_research.py": {
+      "ast_sha256": "ef1708a036cbff12fc9719b364b16af7a36030fc4a1a97875ca5cd4fa50f91d5",
+      "snapshot": "research/source_snapshots/2026-09-27/training__laya__infer_research.py.source",
+      "source_sha256": "08c7fb31dff600166a3180e4d6e89b12ad1774ed7b4cb6d132ad0ac91492747b"
+    },
+    "training/laya/train_research.py": {
+      "ast_sha256": "68331ac72edc6fa091bcdc2902cfacc748a629690de0d2d1dd703da0e9e49f89",
+      "snapshot": "research/source_snapshots/2026-09-27/training__laya__train_research.py.source",
+      "source_sha256": "55a62ee120fcaa79f50c3cea5a38284d5855c264237d2abb27f9068a1161659f"
+    }
+  },
+  "purpose": "Exact sources used for authored-v3 candidate, multilingual smoke, and Laya r2 research run before repository formatting",
+  "scratch_commits": [
+    "0c183b5",
+    "a15a091"
+  ]
+}

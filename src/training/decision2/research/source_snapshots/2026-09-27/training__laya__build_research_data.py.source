@@ -1,0 +1,310 @@
+"""Audit and tokenize a private Laya continuation mix without silent truncation.
+
+This intentionally produces a research-only arm. Source text stays on the GPU
+host; the derived token files are private and must never enter a public branch.
+"""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter, defaultdict
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+from inference.laya import MODEL_REVISION, SOURCE_REVISION, verify_release
+from training.data import build_pilot as pilot
+from training.data import build_targeted_candidate as targeted
+from training.model.data import check_partition_isolation, load_partition
+
+
+SOURCE_HASHES = {
+    "structured_train": "773cd53d21663095a4208e6e35de6654bdca4af5d314e23b03582dbe70eae87f",
+    "structured_select": "d8b1197830fe96a6554b49ee72c12f4755da00d0a819fb514725dc957b687e38",
+    "structured_cal": "bf5bbf29693928a2559ce0aff10e9d6b5b1541b50698634fcdb7725902412dcf",
+    "structured_manifest": "336c039e22573c6bb0396bbedc3f86c04a25d9d126a933d4c9a6f1c6fcc0931f",
+    "structured_rights": "b51c4ad4e35087654cc9d763f078322cbe96691abb4ba6a15c9b9201aca00dce",
+    "clean_train": "61740be433c6cd714810a9908432ad29597c570d0d267d2731ab78cdad243755",
+    "clean_select": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6",
+    "clean_cal": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a",
+    "clean_manifest": "61aa883052759830c4ecf897b36c1062ad816c935a12db824c80abd1f80e9ee8",
+}
+PROTECTED_HASHES = {
+    "dev": "a17ec4b675bbc3da96dba8f31af8f25c9b02cc96ff048fb7de899bdd8b6cf79a",
+    "css_pilot": "598319a429de16c659b59ede0eac3c269939356b0599f4e08d1983e44def3dda",
+    "css_evaluation": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+    "jevbench_public": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+    "decision_bench_v4": "41c0e4728202d800972edb31375e92e92148906856b2f20396154c8d0a9c80da",
+}
+GOEMOTIONS_SOURCE = "google_goemotions_official_train"
+SEED = "decision2-laya-joint-typed-v1"
+
+
+def sha(path: Path) -> str:
+    result = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            result.update(block)
+    return result.hexdigest()
+
+
+def _verified(path: Path, expected: str) -> None:
+    if sha(path) != expected:
+        raise ValueError(f"Frozen input differs: {path.name}")
+
+
+def _read_sources(data_root: Path, protected: dict[str, Path]) -> tuple[list[dict], list[dict], list[dict], dict]:
+    structured = data_root / "nox4b_structured_mix_v1"
+    clean = data_root / "rights_clean_goemotions_v2"
+    paths = {
+        "structured_train": structured / "nox4b_structured.train.jsonl",
+        "structured_select": structured / "select.jsonl",
+        "structured_cal": structured / "cal.jsonl",
+        "structured_manifest": structured / "nox4b_structured.manifest.json",
+        "structured_rights": structured / "nox4b-structured8522.noncommercial-attestation.json",
+        "clean_train": clean / "rights_clean.train.jsonl",
+        "clean_select": clean / "select.jsonl",
+        "clean_cal": clean / "cal.jsonl",
+        "clean_manifest": clean / "rights_clean.manifest.json",
+    }
+    for role, path in paths.items():
+        _verified(path, SOURCE_HASHES[role])
+    for role, path in protected.items():
+        _verified(path, PROTECTED_HASHES[role])
+    structured_manifest = json.loads(paths["structured_manifest"].read_text())
+    clean_manifest = json.loads(paths["clean_manifest"].read_text())
+    if (structured_manifest["outputs"]["nox4b_structured.train.jsonl"]["sha256"] != SOURCE_HASHES["structured_train"]
+            or clean_manifest["outputs"]["rights_clean.train.jsonl"]["sha256"] != SOURCE_HASHES["clean_train"]
+            or clean_manifest.get("publication_eligible") is not True):
+        raise ValueError("Source training manifest or clean-data rights differ")
+    structured_train = load_partition(paths["structured_train"], "train")
+    clean_train = load_partition(paths["clean_train"], "train")
+    goemo = [row for row in clean_train if row["source"] == GOEMOTIONS_SOURCE]
+    if len(structured_train) != 8522 or len(goemo) != 2800:
+        raise ValueError("Frozen train mix counts differ")
+    select = [*load_partition(paths["structured_select"], "select"),
+              *load_partition(paths["clean_select"], "select")]
+    cal = [*load_partition(paths["structured_cal"], "cal"),
+           *load_partition(paths["clean_cal"], "cal")]
+    if (len(select), len(cal)) != (1300, 1600):
+        raise ValueError("Frozen SELECT/CAL union counts differ")
+    check_partition_isolation({"select": select, "cal": cal})
+    references = {}
+    for role, path in protected.items():
+        references[role], _ = targeted.load_context_reference(path)
+    manifest = {"inputs": {role: {"sha256": expected, "basename": paths[role].name}
+                           for role, expected in SOURCE_HASHES.items()},
+                "protected": {role: {"sha256": PROTECTED_HASHES[role], "basename": path.name,
+                                      "rows": len(references[role])}
+                              for role, path in protected.items()},
+                "source_rights": clean_manifest["source_rights"],
+                "structured_noncommercial_rights_sha256": SOURCE_HASHES["structured_rights"]}
+    return [*structured_train, *goemo], select, cal, {"references": references, **manifest}
+
+
+def _quarantine(train: list[dict], holdouts: list[dict]) -> tuple[list[dict], dict]:
+    """Drop whole source groups touching holdout by ID, input or context."""
+    ids = {row["id"] for row in holdouts}
+    groups = {row.get("group_id") for row in holdouts if isinstance(row.get("group_id"), str)}
+    inputs = {row.get("input_sha256") for row in holdouts if isinstance(row.get("input_sha256"), str)}
+    hashes = {targeted.text_hashes(row["state"]) for row in holdouts}
+    raw = {value[0] for value in hashes}
+    normalized = {value[1] for value in hashes}
+    near = pilot.near_duplicates(targeted.context_rows(train),
+                                 targeted.context_rows(holdouts), collect_left_ids=True)
+    near_ids = set(near.pop("left_ids"))
+    flagged = set()
+    reasons = Counter()
+    for row in train:
+        a, b = targeted.text_hashes(row["state"])
+        evidence = []
+        if row["id"] in ids or row["group_id"] in groups or row["input_sha256"] in inputs:
+            evidence.append("identity")
+        if a in raw or b in normalized:
+            evidence.append("exact_context")
+        if row["id"] in near_ids:
+            evidence.append("near_context")
+        if evidence:
+            flagged.add(row["group_id"])
+            reasons.update(evidence)
+    kept = [row for row in train if row["group_id"] not in flagged]
+    return kept, {"input_rows": len(train), "output_rows": len(kept),
+                  "quarantined_rows": len(train) - len(kept),
+                  "quarantined_groups": len(flagged),
+                  "trigger_rows_by_reason": dict(sorted(reasons.items())),
+                  "near_candidate_count": near["count"],
+                  "near_method": near["method"]}
+
+
+def _question(row: dict) -> dict:
+    task = row["task_type"]
+    if task == "score":
+        if [option["key"] for option in row["options"]] != [str(i) for i in range(len(row["options"]))]:
+            raise ValueError("Score levels must be zero-based and contiguous")
+        criteria = [option["description"] for option in row["options"]]
+    else:
+        criteria = {option["key"]: option["description"] for option in row["options"]}
+        if len(criteria) != len(row["options"]):
+            raise ValueError("Choice/Noul option keys repeated")
+        if task == "noul" and set(criteria) != {"false", "true"}:
+            raise ValueError("Noul semantic labels differ from Laya")
+    return {"t": task, "ins": row["instructions"], "crit": criteria}
+
+
+def _tokens(row: dict, tok, cfg: dict, source_path: Path) -> tuple[dict | None, str | None]:
+    from laya.common import QTYPES, build_sequence, encode_text, render_options, serialize_state
+
+    q = _question(row)
+    opts = render_options(q)
+    if not 0 <= row["label"] < len(opts):
+        raise ValueError("Gold option index is invalid")
+    label = row["label"]
+    if q["t"] == "noul":
+        # Laya always renders [false, true] even when the source task shuffled
+        # option order. Carry the semantic answer rather than the old index.
+        semantic = row["options"][label]["key"]
+        label = {"false": 0, "true": 1}[semantic]
+        option_keys = ["false", "true"]
+    else:
+        option_keys = [option["key"] for option in row["options"]]
+    mask_tok = tok.mask_token
+    head_len = len(encode_text(tok, f"{q['t']} question: {str(q['ins']).replace(mask_tok, ' ')}",
+                               add_special_tokens=False)["input_ids"])
+    option_lens = [len(encode_text(tok, " " + value.replace(mask_tok, " "),
+                                   add_special_tokens=False)["input_ids"])
+                   for value in opts]
+    if any(length > 48 for length in option_lens):
+        return None, "option_truncation"
+    marker_lens = [length + 1 for length in option_lens]
+    budget = cfg["head_max_len"] - sum(marker_lens)
+    if budget < 16:
+        per = max(4, (cfg["head_max_len"] - 16) // max(1, len(marker_lens)))
+        if any(length > per for length in marker_lens):
+            return None, "head_option_truncation"
+        budget = cfg["head_max_len"] - sum(marker_lens)
+    if head_len > max(8, budget):
+        return None, "instruction_truncation"
+    state_len = len(encode_text(tok, serialize_state(row["state"]).replace(mask_tok, " "),
+                                add_special_tokens=False)["input_ids"])
+    fixed = 1 + head_len + 1 + sum(marker_lens) + 1 + 1
+    if fixed + state_len > cfg["max_len"]:
+        return None, "state_truncation"
+    ids, markers = build_sequence(tok, row["state"], q, cfg["max_len"], cfg["head_max_len"])
+    if len(ids) != fixed + state_len or len(markers) != len(opts):
+        raise ValueError("Native Laya packed sequence differs from verified full budget")
+    return {"id": row["id"], "group_id": row["group_id"],
+            "input_sha256": row["input_sha256"], "source": row["source"],
+            "family": row["family"], "task_type": q["t"],
+            "qtype": QTYPES[q["t"]], "ids": ids, "markers": markers,
+            "label": label, "option_count": len(opts),
+            "option_keys": option_keys}, None
+
+
+def _admit(rows: list[dict], tok, cfg: dict, source_path: Path) -> tuple[list[dict], dict]:
+    tokenized = {}
+    trigger = Counter()
+    flagged = set()
+    for row in rows:
+        item, reason = _tokens(row, tok, cfg, source_path)
+        if reason:
+            flagged.add(row["group_id"])
+            trigger[reason] += 1
+        else:
+            tokenized[row["id"]] = item
+    kept = [tokenized[row["id"]] for row in rows if row["group_id"] not in flagged]
+    return kept, {"input_rows": len(rows), "output_rows": len(kept),
+                  "quarantined_rows": len(rows) - len(kept),
+                  "quarantined_groups": len(flagged),
+                  "trigger_rows_by_reason": dict(sorted(trigger.items()))}
+
+
+def build(data_root: Path, model_path: Path, source_path: Path,
+          protected: dict[str, Path], output: Path) -> dict:
+    if output.exists() or output.is_symlink():
+        raise FileExistsError(output)
+    if set(protected) != set(PROTECTED_HASHES):
+        raise ValueError("All five development-only reference panels required")
+    source_revision = subprocess.check_output(
+        ["git", "-C", str(source_path), "rev-parse", "HEAD"], text=True).strip()
+    if source_revision != SOURCE_REVISION:
+        raise ValueError("Pinned Laya source differs")
+    model_identity = verify_release(model_path, source_path, MODEL_REVISION)
+    train, select, cal, evidence = _read_sources(data_root, protected)
+    references = evidence.pop("references")
+    holdouts = [*select, *cal, *(row for rows in references.values() for row in rows)]
+    train, context_quarantine = _quarantine(train, holdouts)
+    check_partition_isolation({"train": train, "select": select, "cal": cal})
+    overlap = {name: targeted.context_overlap(train, rows, approximate=True)
+               for name, rows in {"select": targeted.context_rows(select),
+                                  "cal": targeted.context_rows(cal), **references}.items()}
+    sys.path.insert(0, str(source_path))
+    from transformers import AutoTokenizer
+    tok = AutoTokenizer.from_pretrained(model_path / "tokenizer", local_files_only=True)
+    cfg = json.loads((model_path / "rl_agent_config.json").read_text())
+    if (cfg["max_len"], cfg["head_max_len"]) != (1024, 256):
+        raise ValueError("Frozen native Laya token budgets differ")
+    train_tokens, train_admission = _admit(train, tok, cfg, source_path)
+    select_tokens, select_admission = _admit(select, tok, cfg, source_path)
+    if not train_tokens or not select_tokens:
+        raise ValueError("No admitted training or selection rows")
+    # Source/group composition is explicit; no restriction-bearing text is copied
+    # to the repository or research receipt.
+    train_tokens.sort(key=lambda row: (pilot.sha_bytes(f"{SEED}\0train\0{row['id']}".encode()), row["id"]))
+    select_tokens.sort(key=lambda row: (pilot.sha_bytes(f"{SEED}\0select\0{row['id']}".encode()), row["id"]))
+    stage = output.with_name(output.name + ".pending")
+    if stage.exists() or stage.is_symlink():
+        raise FileExistsError(stage)
+    stage.mkdir(parents=True, mode=0o700)
+    for name, rows in (("train.tokens.jsonl", train_tokens), ("select.tokens.jsonl", select_tokens)):
+        with (stage / name).open("w") as stream:
+            for row in rows:
+                stream.write(json.dumps(row, separators=(",", ":"), ensure_ascii=False) + "\n")
+    counts = {split: {key: dict(sorted(Counter(row[key] for row in rows).items()))
+                      for key in ("task_type", "source", "family")}
+              for split, rows in (("train", train_tokens), ("select", select_tokens))}
+    manifest = {"schema_version": "decision2-laya-joint-research-data/1",
+                "research_only": True, "release_qualified": False,
+                "private_tokens": True, "raw_text_in_manifest": False,
+                "seed": SEED, "builder_sha256": sha(Path(__file__)),
+                "model": model_identity, "sources": evidence,
+                "context_quarantine": context_quarantine,
+                "native_full_input_admission": {"train": train_admission,
+                                                "select": select_admission},
+                "near_and_exact_overlap_after_quarantine": overlap,
+                "counts": counts,
+                "outputs": {name: {"sha256": sha(stage / name), "rows": n}
+                            for name, n in (("train.tokens.jsonl", len(train_tokens)),
+                                            ("select.tokens.jsonl", len(select_tokens)))},
+                "limitations": ["Native Laya 1024-token/256-head budget excludes complete groups; no truncation used.",
+                                "SELECT combines old human and clean-v2 holdouts; no CSS pilot score participates in checkpoint selection.",
+                                "Research-only mix includes noncommercial/research-only source text; no raw rows may be published.",
+                                "Approximate near-duplicate index is not a mathematical completeness guarantee."]}
+    (stage / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    os.replace(stage, output)
+    return manifest
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data-root", type=Path, required=True)
+    parser.add_argument("--model-path", type=Path, required=True)
+    parser.add_argument("--source-path", type=Path, required=True)
+    parser.add_argument("--dev", type=Path, required=True)
+    parser.add_argument("--css-pilot", type=Path, required=True)
+    parser.add_argument("--css-evaluation", type=Path, required=True)
+    parser.add_argument("--jevbench-public", type=Path, required=True)
+    parser.add_argument("--decision-bench-v4", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    protected = {name: getattr(args, name) for name in PROTECTED_HASHES}
+    manifest = build(args.data_root, args.model_path, args.source_path, protected, args.output)
+    print(json.dumps({"manifest_sha256": sha(args.output / "manifest.json"),
+                      "counts": manifest["counts"],
+                      "admission": manifest["native_full_input_admission"]}, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

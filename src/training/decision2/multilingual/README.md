@@ -131,3 +131,25 @@ English source ID. `compare` gives matched model deltas and two-sided exact
 McNemar p-values by corpus and language. Each language slice has only 60 or
 40 independent IDs, and multiple languages are inspected. Individual small
 deltas or nominal p-values are exploratory evidence, not release claims.
+
+## Translation quality smoke before any multilingual training
+
+`python -m multilingual.translation_smoke` selects 80 deterministic,
+rights-clean TRAIN source groups spanning human emotion, human FLUTE and
+internally generated Choice/Noul/Score cases. It checks the pinned
+TRAIN/SELECT/CAL hashes and rights manifest; checks selected parent contexts
+against explicitly supplied public development references by exact and
+approximate near-match screening; and preserves every parent group ID in its
+translated variants. It uses pinned MIT `facebook/m2m100_418M` locally to
+translate en to zh/es/fr/de/ja/ar and back-translate each state for a screening
+signal. Option order, keys, labels, task type and numeric text invariants are
+audited. It produces private translated rows, row-level QA flags and a
+stratified review packet for bilingual human judgement.
+
+Every output manifest explicitly says `training_approved=false` and
+`publication_eligible=false`. A round-trip string match does not certify
+translation meaning or label preservation. The tool refuses any path with
+`final` in its name; absent a gold-free final source-ID denylist, it cannot
+claim that sealed final source IDs were excluded. Keep outputs in private
+storage. No translated smoke row may enter a training run until bilingual
+review, source overlap and rights gates are complete.

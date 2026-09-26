@@ -1,0 +1,596 @@
+"""Produce a private, unapproved multilingual TRAIN translation smoke sample.
+
+This is a quality audit, not a trainer. It reads only pinned rights-clean TRAIN,
+SELECT/CAL and explicit public development references. Source/translated text
+stays in the private output directory; source control receives only this code
+and aggregate findings. No sealed final file is accepted or inspected.
+"""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter, defaultdict
+from copy import deepcopy
+from datetime import datetime, timezone
+from difflib import SequenceMatcher
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import unicodedata
+
+from multilingual.audit import sha256
+from training.data import build_pilot as pilot
+from training.data.build_targeted_candidate import context_rows
+from training.eikos.rights import verify_clean_files
+from training.model.data import (
+    INPUT_FIELDS,
+    check_partition_isolation,
+    digest,
+    load_partition,
+    validate_row,
+)
+
+VERSION = "decision2-multilingual-translation-smoke/1"
+SOURCE_SHA = {
+    "rights_clean.train.jsonl": "61740be433c6cd714810a9908432ad29597c570d0d267d2731ab78cdad243755",
+    "select.jsonl": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6",
+    "cal.jsonl": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a",
+}
+MANIFEST_SHA = "61aa883052759830c4ecf897b36c1062ad816c935a12db824c80abd1f80e9ee8"
+TRANSLATOR_ID = "facebook/m2m100_418M"
+TRANSLATOR_REVISION = "55c2e61bbf05dfb8d7abccdc3fae6fc8512fd636"
+TRANSLATOR_LICENSE = "MIT"
+LANGUAGES = ("zh", "es", "fr", "de", "ja", "ar")
+SALT = "decision2-multilingual-smoke-20260927-v1"
+BUCKETS = {
+    "google_goemotions_official_train:choice+noul": 20,
+    "css_flute_official_train:choice": 15,
+    "decision2_programmatic_original_v1:choice": 15,
+    "decision2_targeted_programmatic_v1:noul": 15,
+    "decision2_targeted_programmatic_v1:score": 15,
+}
+
+
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
+    with path.open("w", encoding="utf-8") as stream:
+        for row in rows:
+            stream.write(
+                json.dumps(row, ensure_ascii=False, sort_keys=True, allow_nan=False)
+                + "\n"
+            )
+
+
+def _load_public_references(paths: list[Path]) -> tuple[list[dict], dict]:
+    refs, fingerprints = [], {}
+    for path in paths:
+        if "final" in path.name.lower() or "final" in str(path.parent).lower():
+            raise ValueError("No sealed FINAL path may be opened by this smoke tool")
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        reference_key = f"{len(fingerprints):02d}:{path.parent.name}/{path.name}"
+        rows = []
+        with path.open(encoding="utf-8") as stream:
+            for line in stream:
+                row = json.loads(line)
+                if "state" not in row or "id" not in row:
+                    raise ValueError(f"{path.name}: reference needs state and ID")
+                rows.append(
+                    {
+                        "id": f"{reference_key}:{row['id']}",
+                        "state": row["state"],
+                        "instructions": "",
+                        "options": [],
+                        "task_type": "context",
+                    }
+                )
+        refs.extend(rows)
+        fingerprints[reference_key] = {"sha256": sha256(path), "rows": len(rows)}
+    return refs, fingerprints
+
+
+def _bucket(row: dict) -> str | None:
+    source = row["source"]
+    task_type = row["task_type"]
+    if source == "google_goemotions_official_train":
+        return f"{source}:choice+noul"
+    candidate = f"{source}:{task_type}"
+    return candidate if candidate in BUCKETS else None
+
+
+def _eligible(row: dict) -> bool:
+    return (
+        row["language"] == "en"
+        and isinstance(row["state"], str)
+        and 12 <= len(row["state"]) <= 450
+        and isinstance(row["instructions"], str)
+        and len(row["instructions"]) <= 450
+        and all(
+            isinstance(o["description"], str)
+            and o["description"].strip()
+            and len(o["description"]) <= 240
+            for o in row["options"]
+        )
+        and len(row["options"]) <= 100
+    )
+
+
+def select_groups(train: list[dict]) -> tuple[list[dict], dict]:
+    grouped = defaultdict(list)
+    for row in train:
+        bucket = _bucket(row)
+        if bucket and _eligible(row):
+            grouped[(bucket, row["group_id"])].append(row)
+    selected, selection = [], {}
+    for bucket, desired in BUCKETS.items():
+        choices = [
+            (group_id, rows)
+            for (name, group_id), rows in grouped.items()
+            if name == bucket
+        ]
+        choices.sort(
+            key=lambda item: hashlib.sha256(
+                f"{SALT}:{bucket}:{item[0]}".encode()
+            ).digest()
+        )
+        if len(choices) < desired:
+            raise ValueError(f"{bucket}: only {len(choices)} eligible groups")
+        chosen = choices[:desired]
+        for _, rows in chosen:
+            selected.extend(sorted(rows, key=lambda row: row["id"]))
+        selection[bucket] = {
+            "available_groups": len(choices),
+            "selected_groups": desired,
+            "selected_rows": sum(len(rows) for _, rows in chosen),
+        }
+    if len({row["group_id"] for row in selected}) != sum(BUCKETS.values()):
+        raise ValueError("A source group was selected twice")
+    return selected, selection
+
+
+def _normalized_state(value: object) -> str:
+    return re.sub(r"\s+", " ", pilot.canonical(value).casefold()).strip()
+
+
+def screen_overlap(rows: list[dict], refs: list[dict]) -> dict:
+    left = context_rows(rows)
+    exact_states = {_normalized_state(row["state"]) for row in refs}
+    exact_ids = {row["id"] for row in refs}
+    exact = [
+        row["id"]
+        for row in left
+        if row["id"] in exact_ids or _normalized_state(row["state"]) in exact_states
+    ]
+    near = pilot.near_duplicates(left, refs, collect_left_ids=True)
+    return {
+        "exact_count": len(exact),
+        "exact_ids": exact,
+        "near_count": near["count"],
+        "near_ids": near["left_ids"],
+        "near_method": near["method"],
+    }
+
+
+def _numbers(text: str) -> tuple[str, ...]:
+    out = []
+    for token in re.findall(r"(?<!\w)[+-]?\d+(?:[.,]\d+)?", text, flags=re.UNICODE):
+        normalized = "".join(
+            str(unicodedata.decimal(c)) if c.isdecimal() else c for c in token
+        )
+        out.append(normalized.replace(",", "."))
+    return tuple(sorted(out))
+
+
+def _roundtrip_ratio(original: str, back: str) -> float:
+    left = re.sub(r"\s+", " ", original.casefold()).strip()
+    right = re.sub(r"\s+", " ", back.casefold()).strip()
+    return SequenceMatcher(None, left, right).ratio()
+
+
+def _translator(model_path: Path):
+    import torch
+    from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
+
+    if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
+        raise RuntimeError("Translator smoke requires one assigned GPU")
+    tokenizer = M2M100Tokenizer.from_pretrained(model_path, local_files_only=True)
+    model = (
+        M2M100ForConditionalGeneration.from_pretrained(
+            model_path,
+            local_files_only=True,
+            torch_dtype=torch.float16,
+        )
+        .to("cuda:0")
+        .eval()
+    )
+    return tokenizer, model
+
+
+def translate_many(
+    tokenizer, model, texts: list[str], source: str, target: str, batch_size: int
+) -> list[str]:
+    if not texts:
+        return []
+    import torch
+
+    tokenizer.src_lang = source
+    result = []
+    with torch.inference_mode():
+        for offset in range(0, len(texts), batch_size):
+            chunk = texts[offset : offset + batch_size]
+            batch = tokenizer(
+                chunk, padding=True, truncation=False, return_tensors="pt"
+            ).to("cuda:0")
+            if batch["input_ids"].shape[1] > 512:
+                raise ValueError(
+                    "Selected source segment exceeds M2M100 512-token smoke limit"
+                )
+            generated = model.generate(
+                **batch,
+                forced_bos_token_id=tokenizer.get_lang_id(target),
+                max_new_tokens=192,
+                num_beams=1,
+                do_sample=False,
+            )
+            result.extend(tokenizer.batch_decode(generated, skip_special_tokens=True))
+    if len(result) != len(texts):
+        raise AssertionError("Translation count changed")
+    return [item.strip() for item in result]
+
+
+def _segments(rows: list[dict]) -> list[str]:
+    return sorted(
+        {
+            item
+            for row in rows
+            for item in [
+                row["state"],
+                row["instructions"],
+                *(option["description"] for option in row["options"]),
+            ]
+        }
+    )
+
+
+def _translated_row(row: dict, language: str, translated: dict[str, str]) -> dict:
+    result = deepcopy(row)
+    result["id"] = f"{row['id']}::mt:{language}"
+    # Retain the original group_id across all languages and paired task rows.
+    result["language"] = language
+    result["state"] = translated[row["state"]]
+    result["instructions"] = translated[row["instructions"]]
+    for option in result["options"]:
+        option["description"] = translated[option["description"]]
+    result["source"] = f"mt:{row['source']}"
+    result["render_template"] = "m2m100-418m-translation-smoke-v1"
+    result["audit_metadata"] = {
+        "parent_id": row["id"],
+        "parent_group_id": row["group_id"],
+        "parent_input_sha256": row["input_sha256"],
+        "parent_row_sha256": digest(row),
+        "parent_source": row["source"],
+        "translator_model": TRANSLATOR_ID,
+        "translator_revision": TRANSLATOR_REVISION,
+        "training_status": "unapproved_machine_translation_smoke",
+    }
+    result["input_sha256"] = digest({name: result[name] for name in INPUT_FIELDS})
+    return validate_row(result, "train")
+
+
+def build(args: argparse.Namespace) -> dict:
+    if args.output.exists():
+        raise FileExistsError(args.output)
+    paths = (args.train, args.select, args.cal)
+    if {path.name: sha256(path) for path in paths} != SOURCE_SHA or sha256(
+        args.manifest
+    ) != MANIFEST_SHA:
+        raise ValueError(
+            "TRAIN/SELECT/CAL or rights receipt differ from frozen clean-v2"
+        )
+    train, select, cal = (
+        load_partition(path, role)
+        for path, role in zip(paths, ("train", "select", "cal"))
+    )
+    check_partition_isolation({"train": train, "select": select, "cal": cal})
+    verify_clean_files(args.manifest, *paths, (len(train), len(select), len(cal)))
+    selected, selection = select_groups(train)
+    protected_files = [args.select, args.cal, *args.protected]
+    refs, ref_receipts = _load_public_references(protected_files)
+    before_overlap = screen_overlap(selected, refs)
+    blocked = set(before_overlap["exact_ids"]) | set(before_overlap["near_ids"])
+    blocked_groups = {row["group_id"] for row in selected if row["id"] in blocked}
+    quarantine = [
+        {
+            "group_id": group,
+            "parent_rows": [row["id"] for row in selected if row["group_id"] == group],
+            "exact_ids": sorted(
+                row["id"]
+                for row in selected
+                if row["group_id"] == group and row["id"] in before_overlap["exact_ids"]
+            ),
+            "near_ids": sorted(
+                row["id"]
+                for row in selected
+                if row["group_id"] == group and row["id"] in before_overlap["near_ids"]
+            ),
+        }
+        for group in sorted(blocked_groups)
+    ]
+    selected = [row for row in selected if row["group_id"] not in blocked_groups]
+    if not 50 <= len({row["group_id"] for row in selected}) <= 100:
+        raise ValueError("Overlap quarantine left fewer than 50 smoke source groups")
+    residual_overlap = screen_overlap(selected, refs)
+    if residual_overlap["near_count"] or residual_overlap["exact_count"]:
+        raise ValueError("Residual visible reference overlap")
+
+    model_path = args.translator
+    if not (model_path / "pytorch_model.bin").is_file():
+        raise FileNotFoundError("Pinned translator weights missing")
+    tokenizer, model = _translator(model_path)
+    segments = _segments(selected)
+    by_language = {}
+    for language in LANGUAGES:
+        outputs = translate_many(
+            tokenizer, model, segments, "en", language, args.batch_size
+        )
+        by_language[language] = dict(zip(segments, outputs))
+        print(
+            json.dumps(
+                {
+                    "event": "translated",
+                    "language": language,
+                    "unique_segments": len(segments),
+                },
+                sort_keys=True,
+            ),
+            flush=True,
+        )
+    # Back-translation is a screening signal only, not semantic certification.
+    states = sorted({row["state"] for row in selected})
+    back = {}
+    for language in LANGUAGES:
+        translated_states = [by_language[language][state] for state in states]
+        back[language] = dict(
+            zip(
+                states,
+                translate_many(
+                    tokenizer, model, translated_states, language, "en", args.batch_size
+                ),
+            )
+        )
+        print(
+            json.dumps(
+                {
+                    "event": "backtranslated",
+                    "language": language,
+                    "unique_states": len(states),
+                },
+                sort_keys=True,
+            ),
+            flush=True,
+        )
+
+    outputs, qa = [], []
+    for row in selected:
+        for language in LANGUAGES:
+            translated = by_language[language]
+            flags = []
+            if any(
+                not translated[text]
+                for text in [
+                    row["state"],
+                    row["instructions"],
+                    *(o["description"] for o in row["options"]),
+                ]
+            ):
+                flags.append("empty_translation")
+                qa.append(
+                    {
+                        "id": f"{row['id']}::mt:{language}",
+                        "group_id": row["group_id"],
+                        "source": row["source"],
+                        "task_type": row["task_type"],
+                        "language": language,
+                        "parent_input_sha256": row["input_sha256"],
+                        "translated_input_sha256": None,
+                        "emitted": False,
+                        "state_numbers_preserved": None,
+                        "roundtrip_state_similarity": None,
+                        "flags": flags,
+                    }
+                )
+                continue
+            candidate = _translated_row(row, language, translated)
+            state_back = back[language][row["state"]]
+            score = _roundtrip_ratio(row["state"], state_back)
+            if _numbers(row["state"]) != _numbers(candidate["state"]):
+                flags.append("state_numbers_changed")
+            if _numbers(row["instructions"]) != _numbers(candidate["instructions"]):
+                flags.append("instruction_numbers_changed")
+            for original, option in zip(row["options"], candidate["options"]):
+                if _numbers(original["description"]) != _numbers(option["description"]):
+                    flags.append("option_numbers_changed")
+            if score < 0.35:
+                flags.append("low_roundtrip_character_similarity")
+            if not 0.25 <= len(candidate["state"]) / len(row["state"]) <= 4:
+                flags.append("state_length_ratio_extreme")
+            outputs.append(candidate)
+            qa.append(
+                {
+                    "id": candidate["id"],
+                    "group_id": row["group_id"],
+                    "source": row["source"],
+                    "task_type": row["task_type"],
+                    "language": language,
+                    "parent_input_sha256": row["input_sha256"],
+                    "translated_input_sha256": candidate["input_sha256"],
+                    "emitted": True,
+                    "state_numbers_preserved": "state_numbers_changed" not in flags,
+                    "roundtrip_state_similarity": round(score, 4),
+                    "flags": sorted(set(flags)),
+                }
+            )
+    if len(qa) != len(selected) * len(LANGUAGES) or len(outputs) > len(qa):
+        raise AssertionError("Translation attempts and QA row counts differ")
+    translated_overlap = screen_overlap(outputs, refs)
+    qa_by_id = {row["id"]: row for row in qa}
+    for row_id in set(translated_overlap["exact_ids"]) | set(
+        translated_overlap["near_ids"]
+    ):
+        qa_by_id[row_id]["flags"].append("visible_holdout_overlap")
+    qa.sort(key=lambda row: row["id"])
+    outputs.sort(key=lambda row: row["id"])
+    review = []
+    output_by_id = {row["id"]: row for row in outputs}
+    for bucket in BUCKETS:
+        source = bucket.split(":")[0]
+        for language in LANGUAGES:
+            candidates = [
+                row
+                for row in selected
+                if row["source"] == source
+                and row["task_type"]
+                == ("choice" if "choice" in bucket else bucket.split(":")[-1])
+                and f"{row['id']}::mt:{language}" in output_by_id
+            ]
+            if not candidates:
+                raise ValueError(
+                    f"{bucket}/{language}: no translatable manual-review candidate"
+                )
+            row = sorted(
+                candidates,
+                key=lambda item: hashlib.sha256(
+                    f"{SALT}:manual:{bucket}:{language}:{item['id']}".encode()
+                ).digest(),
+            )[0]
+            variant = output_by_id[f"{row['id']}::mt:{language}"]
+            review.append(
+                {
+                    "parent_id": row["id"],
+                    "group_id": row["group_id"],
+                    "source": source,
+                    "task_type": row["task_type"],
+                    "language": language,
+                    "source_state": row["state"],
+                    "translated_state": variant["state"],
+                    "backtranslated_state": back[language][row["state"]],
+                    "source_instruction": row["instructions"],
+                    "translated_instruction": variant["instructions"],
+                    "source_options": [o["description"] for o in row["options"]],
+                    "translated_options": [
+                        o["description"] for o in variant["options"]
+                    ],
+                    "automatic_flags": qa_by_id[variant["id"]]["flags"],
+                    "human_semantic_agreement": None,
+                    "human_reviewer_language": None,
+                }
+            )
+
+    pending = args.output.with_name(args.output.name + ".pending")
+    if pending.exists():
+        raise FileExistsError(pending)
+    pending.mkdir(parents=True)
+    _write_jsonl(pending / "translated-smoke.unapproved.jsonl", outputs)
+    _write_jsonl(pending / "qa.jsonl", qa)
+    _write_jsonl(pending / "source-overlap-quarantine.private.jsonl", quarantine)
+    _write_jsonl(pending / "manual-review.private.jsonl", review)
+    receipt = {
+        "schema_version": VERSION,
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "manual_review_pending; not training approved",
+        "training_approved": False,
+        "publication_eligible": False,
+        "scope": "private noncommercial development; no raw source redistribution",
+        "source": {
+            "train_select_cal_sha256": SOURCE_SHA,
+            "rights_manifest_sha256": MANIFEST_SHA,
+            "selected_groups": len({row["group_id"] for row in selected}),
+            "selected_parent_rows": len(selected),
+            "bucket_selection": selection,
+            "selection_salt": SALT,
+            "source_input_hashes_sha256": digest(
+                sorted(row["input_sha256"] for row in selected)
+            ),
+        },
+        "translator": {
+            "model_id": TRANSLATOR_ID,
+            "revision": TRANSLATOR_REVISION,
+            "license": TRANSLATOR_LICENSE,
+            "weights_sha256": sha256(model_path / "pytorch_model.bin"),
+            "tokenizer_sha256": sha256(model_path / "sentencepiece.bpe.model"),
+            "decoding": "greedy; max_new_tokens=192; deterministic; FP16",
+        },
+        "protected_references": ref_receipts,
+        "source_overlap_before_group_quarantine": {
+            key: value
+            for key, value in before_overlap.items()
+            if not key.endswith("ids")
+        },
+        "source_groups_quarantined_for_visible_overlap": len(blocked_groups),
+        "translated_visible_overlap": {
+            key: value
+            for key, value in translated_overlap.items()
+            if not key.endswith("ids")
+        },
+        "final_exclusion": "sealed FINAL not accessed; no gold-free source-ID denylist available",
+        "qa": {
+            "translated_rows": len(outputs),
+            "translation_attempts": len(qa),
+            "by_language": dict(Counter(row["language"] for row in qa)),
+            "by_flag": dict(Counter(flag for row in qa for flag in row["flags"])),
+            "fully_automatic_pass_rows": sum(not row["flags"] for row in qa),
+            "manual_review_sample_rows": len(review),
+            "manual_semantic_agreement": "unmeasured",
+        },
+        "files": {
+            name: sha256(pending / name)
+            for name in (
+                "translated-smoke.unapproved.jsonl",
+                "qa.jsonl",
+                "manual-review.private.jsonl",
+                "source-overlap-quarantine.private.jsonl",
+            )
+        },
+        "builder_sha256": sha256(Path(__file__)),
+    }
+    (pending / "manifest.json").write_text(
+        json.dumps(receipt, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(pending, args.output)
+    return receipt
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--train", type=Path, required=True)
+    parser.add_argument("--select", type=Path, required=True)
+    parser.add_argument("--cal", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--protected", type=Path, action="append", default=[])
+    parser.add_argument("--translator", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--batch-size", type=int, default=12)
+    args = parser.parse_args()
+    if args.batch_size < 1 or not args.protected:
+        raise ValueError(
+            "Need positive batch size and explicit public development references"
+        )
+    receipt = build(args)
+    print(
+        json.dumps(
+            {
+                "output": str(args.output),
+                "manifest_sha256": sha256(args.output / "manifest.json"),
+                "source_groups": receipt["source"]["selected_groups"],
+                "qa": receipt["qa"],
+                "training_approved": False,
+            },
+            sort_keys=True,
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()
