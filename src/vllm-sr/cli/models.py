@@ -47,9 +47,10 @@ class Listener(BaseModel):
     timeout: Optional[str] = "300s"
     api_keys: Optional[List[str]] = Field(
         default=None,
-        description="Bearer tokens required to call this listener. "
-        "If set, requests without 'Authorization: Bearer <key>' matching one of these "
-        "values are rejected with HTTP 401.",
+        description="Client keys required to call this listener. "
+        "If set, requests must send one of these values as "
+        "'Authorization: Bearer <key>' or, for Azure OpenAI clients, "
+        "'api-key: <key>'; other requests are rejected with HTTP 401.",
     )
 
 
@@ -967,6 +968,27 @@ class ContextCompressionPluginConfig(BaseModel):
     recovery: Optional[ContextCompressionRecoveryConfig] = None
     request_controls: Optional[ContextCompressionRequestControlsConfig] = None
     failure_mode: Literal["fail_open", "fail_closed"] = "fail_open"
+
+
+class PromptCachePluginConfig(BaseModel):
+    """Route-local prompt-cache marker injection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    ttl: Literal["5m", "1h"] = "5m"
+    targets: List[Literal["instructions", "tools"]] = Field(
+        default_factory=lambda: ["instructions", "tools"]
+    )
+    on_unsupported: Literal["skip", "reject"] = "skip"
+
+    @model_validator(mode="after")
+    def validate_targets(self) -> "PromptCachePluginConfig":
+        if not self.targets:
+            raise ValueError("targets must not be empty")
+        if len(set(self.targets)) != len(self.targets):
+            raise ValueError("targets must not contain duplicates")
+        return self
 
 
 class FastResponsePluginConfig(BaseModel):

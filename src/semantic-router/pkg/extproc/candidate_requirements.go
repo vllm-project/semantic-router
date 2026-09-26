@@ -51,6 +51,21 @@ func (r *OpenAIRouter) validateModelDemand(requirements *config.CandidateRequire
 }
 
 func (r *OpenAIRouter) eligibleDemandModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, demand selection.CandidateDemand) ([]config.ModelRef, error) {
+	return eligibleModelRefsByDemand(refs, func(ref config.ModelRef) error {
+		return r.validateModelDemand(requirements, ref.Model, demand)
+	})
+}
+
+// Strict live selection must qualify each model against the wire request it
+// would actually receive. Anthropic-only controls can be safely projected for
+// one backend format and unsupported for another.
+func (r *OpenAIRouter) eligibleRequestModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, request *llmprotocol.Request, decision *config.Decision) ([]config.ModelRef, error) {
+	return eligibleModelRefsByDemand(refs, func(ref config.ModelRef) error {
+		return r.candidateCapabilityMismatch(ref, request, decision, requirements, nil)
+	})
+}
+
+func eligibleModelRefsByDemand(refs []config.ModelRef, admit func(config.ModelRef) error) ([]config.ModelRef, error) {
 	eligible := make([]config.ModelRef, 0, len(refs))
 	var budgetError *selection.RequestBudgetError
 	allBudgetErrors := true
@@ -58,7 +73,7 @@ func (r *OpenAIRouter) eligibleDemandModelRefs(requirements *config.CandidateReq
 		if strings.TrimSpace(ref.Model) == "" {
 			continue
 		}
-		if err := r.validateModelDemand(requirements, ref.Model, demand); err == nil {
+		if err := admit(ref); err == nil {
 			eligible = append(eligible, ref)
 		} else {
 			var candidateBudget *selection.RequestBudgetError
@@ -90,11 +105,7 @@ func (r *OpenAIRouter) decisionEligibleModelRefs(decision *config.Decision, ctx 
 	if !selection.CandidateRequirementsEnabled(requirements) {
 		return r.contextEligibleDecisionModelRefs(decision.ModelRefs, decision.Name, ctx.VSRContextTokenCount, ctx)
 	}
-	demand, err := selection.EffectiveCandidateDemand(ctx.SemanticRequest, decision)
-	if err != nil {
-		return nil, err
-	}
-	eligible, err := r.eligibleDemandModelRefs(requirements, decision.ModelRefs, demand)
+	eligible, err := r.eligibleRequestModelRefs(requirements, decision.ModelRefs, ctx.SemanticRequest, decision)
 	if err != nil {
 		return nil, err
 	}

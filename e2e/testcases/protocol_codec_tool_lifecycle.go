@@ -33,7 +33,7 @@ func runProtocolCodecToolLifecycle(
 	if err := runResponsesToolResultRoundtrip(ctx, session, model, tool, call); err != nil {
 		return err
 	}
-	if err := runCrossProtocolToolLifecycles(ctx, session, model); err != nil {
+	if err := runCrossProtocolToolLifecycles(ctx, session, model, backendFormat == "anthropic.messages.v1"); err != nil {
 		return err
 	}
 	if opts.SetDetails != nil {
@@ -139,11 +139,12 @@ func runCrossProtocolToolLifecycles(
 	ctx context.Context,
 	session *fixtures.ServiceSession,
 	model string,
+	expectAnthropicDirectCaller bool,
 ) error {
 	if err := runChatClientToolLifecycle(ctx, session, model); err != nil {
 		return fmt.Errorf("Chat Completions client: %w", err)
 	}
-	if err := runAnthropicClientToolLifecycle(ctx, session, model); err != nil {
+	if err := runAnthropicClientToolLifecycle(ctx, session, model, expectAnthropicDirectCaller); err != nil {
 		return fmt.Errorf("Anthropic Messages client: %w", err)
 	}
 	for _, stream := range []bool{false, true} {
@@ -274,6 +275,7 @@ type responsesToolStreamEvent struct {
 	Name      string `json:"name"`
 	Arguments string `json:"arguments"`
 	Item      struct {
+		ID        string `json:"id"`
 		Type      string `json:"type"`
 		CallID    string `json:"call_id"`
 		Name      string `json:"name"`
@@ -283,6 +285,7 @@ type responsesToolStreamEvent struct {
 
 type responsesToolStreamState struct {
 	call       responsesFunctionCall
+	itemID     string
 	deltas     strings.Builder
 	deltaCount int
 	doneCount  int
@@ -339,9 +342,10 @@ func (state *responsesToolStreamState) consume(data string) error {
 }
 
 func (state *responsesToolStreamState) addCall(event responsesToolStreamEvent, data string) error {
-	if event.Item.Type != "function_call" || event.Item.CallID == "" || event.Item.Name == "" {
+	if event.Item.Type != "function_call" || event.Item.ID == "" || event.Item.CallID == "" || event.Item.Name == "" {
 		return fmt.Errorf("malformed Responses function_call item: %s", data)
 	}
+	state.itemID = event.Item.ID
 	state.call.CallID = event.Item.CallID
 	state.call.Name = event.Item.Name
 	return nil
@@ -349,7 +353,8 @@ func (state *responsesToolStreamState) addCall(event responsesToolStreamEvent, d
 
 func (state *responsesToolStreamState) finishArguments(event responsesToolStreamEvent, data string) error {
 	state.doneCount++
-	if event.Name != state.call.Name || event.ItemID == "" {
+	// The Responses wire may omit name here; the surrounding item carries it.
+	if event.ItemID != state.itemID || (event.Name != "" && event.Name != state.call.Name) {
 		return fmt.Errorf("Responses function arguments completion lost identity: %s", data)
 	}
 	state.call.Arguments = event.Arguments
@@ -357,7 +362,7 @@ func (state *responsesToolStreamState) finishArguments(event responsesToolStream
 }
 
 func (state *responsesToolStreamState) validateCompletedCall(event responsesToolStreamEvent, data string) error {
-	if event.Item.CallID != state.call.CallID || event.Item.Name != state.call.Name || event.Item.Arguments != state.call.Arguments {
+	if event.Item.ID != state.itemID || event.Item.CallID != state.call.CallID || event.Item.Name != state.call.Name || event.Item.Arguments != state.call.Arguments {
 		return fmt.Errorf("Responses completed function item changed identity or arguments: %s", data)
 	}
 	return nil

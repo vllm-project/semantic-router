@@ -180,6 +180,11 @@ func isCJK(r rune) bool {
 // per word (Sennrich et al. 2016, "Neural Machine Translation of Rare Words
 // with Subword Units").
 //
+// A field whose letters, digits and punctuation alternate, such as compact
+// JSON or a call expression, counts one token per run instead, because BPE
+// tokenizers split text where those character categories change (Radford et
+// al. 2019, "Language Models are Unsupervised Multitask Learners").
+//
 // For CJK characters with no word boundaries: each ideograph ≈ 1.5 BPE tokens
 // on average in multilingual BERT/GPT tokenizers, because common characters are
 // single tokens while rare ones get split into byte-level pieces.
@@ -190,6 +195,7 @@ func CountTokensApprox(text string) int {
 
 	var cjkRunes int
 	var nonCJKWords int
+	var runTokens int
 	hasFields := false
 
 	// Split on whitespace lazily; within each field count CJK runes separately.
@@ -206,7 +212,11 @@ func CountTokensApprox(text string) int {
 		}
 
 		cjkRunes += fieldCJKRunes
-		// Non-CJK fields and mixed fields (e.g. "Python函数") each add one word.
+		if runs := characterRuns(trimTokenField(field)); runs > 1 {
+			runTokens += runs
+			continue
+		}
+		// Plain non-CJK words and simple mixed fields (e.g. "Python函数") add one word.
 		if fieldCJKRunes == 0 || hasNonCJK {
 			nonCJKWords++
 		}
@@ -214,11 +224,37 @@ func CountTokensApprox(text string) int {
 
 	cjkTokens := float64(cjkRunes) * 1.5
 	wordTokens := float64(nonCJKWords) * 1.3
-	total := int(cjkTokens + wordTokens)
+	total := int(cjkTokens+wordTokens) + runTokens
 	if total == 0 && hasFields {
 		total = 1
 	}
 	return total
+}
+
+// characterRuns counts maximal non-CJK runs of letters, digits and other runes.
+// CJK characters are counted separately and end the preceding run. Combining
+// marks join the letter class so Indic and Thai words stay one run.
+func characterRuns(s string) int {
+	runs := 0
+	prevClass := -1
+	for _, r := range s {
+		if isCJK(r) {
+			prevClass = -1
+			continue
+		}
+		class := 2
+		switch {
+		case unicode.IsLetter(r) || unicode.IsMark(r):
+			class = 0
+		case unicode.IsDigit(r):
+			class = 1
+		}
+		if class != prevClass {
+			runs++
+			prevClass = class
+		}
+	}
+	return runs
 }
 
 // TokenizeWords splits text into tokens suitable for bag-of-words scoring.

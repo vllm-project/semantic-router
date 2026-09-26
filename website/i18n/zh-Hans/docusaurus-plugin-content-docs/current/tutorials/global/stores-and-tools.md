@@ -110,8 +110,11 @@ global:
         dimension: 384
       embedding_model: bert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.70
+      default_similarity_threshold: 0.30
 ```
+
+此 Qdrant 示例对 `bert`（`mom-embedding-light`）使用原始余弦分数。
+0.30 仅是小规模冷启动召回测试的起点，不适用于其他嵌入模型；上线前还需检查无关查询和已更正的旧事实。
 
 完整部署说明见：
 
@@ -136,9 +139,9 @@ global:
 
 `metadata_store` 控制向量存储和已上传文件元数据的注册表。本地或类生产堆栈若需重启安全，请使用 `postgres`；CLI 本地运行时在设置 `metadata_store: postgres` 时会配置 Postgres 并填充 `metadata_postgres` 连接默认值。仅对短暂的本地实验使用 `memory`，因为存储和文件元数据会在路由器重启后丢失。
 
-使用本地 `mmbert` 嵌入（包括 Vela Embedding）时，每个新向量存储都会记录创建向量所用的表示身份。更换模型或维度后，旧存储仍可见，上传文件仍保留。搜索不兼容或无身份标记的存储，或向其中关联文件，会返回 `409 EMBEDDING_REINDEX_REQUIRED`。请创建新向量存储并重新关联原上传文件 ID，以生成兼容向量。客户端元数据不能替换 Router 管理的 `_router_embedding_identity` 字段。
+使用本地 `mmbert` 嵌入（包括 Vela Embedding）时，每个新向量存储都会记录创建向量所用的表示身份。Candle `bert` 存储也会记录编码器版本，使修正后的无填充向量不会与此前包含填充影响的向量混用。旧存储仍可见，上传文件仍保留。搜索不兼容或无身份标记的存储，或向其中关联文件，会返回 `409 EMBEDDING_REINDEX_REQUIRED`。请创建新向量存储并重新关联原上传文件 ID，以生成兼容向量。客户端元数据不能替换 Router 管理的 `_router_embedding_identity` 字段。
 
-同样的检查适用于请求时 RAG 和缓存检索结果。`llama_stack` 在远端生成搜索查询向量，因此目前不能与绑定身份的本地 `mmbert` 文档向量组合；这类配置请使用 `memory`、`milvus`、`valkey` 或 `qdrant`。远程提供方的身份验证属于另一项能力。
+同样的检查适用于请求时 RAG 和缓存检索结果。`llama_stack` 在远端生成搜索查询向量，因此目前不能与绑定身份的本地 `mmbert` 或 Candle `bert` 文档向量组合；这类配置请使用 `memory`、`milvus`、`valkey` 或 `qdrant`。远程提供方的身份验证属于另一项能力。
 
 ### 工具 {#tools}
 

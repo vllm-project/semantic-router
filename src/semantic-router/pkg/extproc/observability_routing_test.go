@@ -68,7 +68,9 @@ func TestRoutingTraceSpansCoverStreamingAndPreserveSiblingParentage(t *testing.T
 	decision := &config.Decision{Name: "reason", Algorithm: &config.AlgorithmConfig{Type: "static"}}
 	observeDecisionIdentity(ctx, decisionSpan, decision)
 	tracing.EndDecisionSpan(decisionSpan, 0, []string{"math"}, "priority", false)
-	router.startUpstreamSpanAndInjectHeaders("model-a", "provider.invalid", ctx)
+	router.startUpstreamSpanAndInjectHeaders(
+		&providerDispatch{logicalModel: "model-a", backendAddress: "provider.invalid"}, ctx,
+	)
 	ctx.IsStreamingResponse = true
 	ctx.UpstreamStatusCode = 200
 	annotateUpstreamResponseSpan(ctx, responseHeaderOutcome{statusCode: 200, isSuccessful: true})

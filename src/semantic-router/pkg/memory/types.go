@@ -124,7 +124,7 @@ func DefaultMemoryConfig() config.MemoryConfig {
 			Dimension: 384, // Safe default, will be overridden by router
 		},
 		DefaultRetrievalLimit:      5,
-		DefaultSimilarityThreshold: 0.70,
+		DefaultSimilarityThreshold: config.DefaultMemorySimilarityThreshold,
 	}
 }
 

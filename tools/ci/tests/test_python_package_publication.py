@@ -118,6 +118,32 @@ class PythonPublisherContractTests(unittest.TestCase):
                 self.workflows[filename].jobs["pypi"]["with"]["prebuilt-dist"]
             )
 
+    def test_prebuilt_publication_installs_qualification_dependency_before_verify(
+        self,
+    ) -> None:
+        steps = self.publisher.jobs["pypi"]["steps"]
+        install_index = next(
+            index
+            for index, step in enumerate(steps)
+            if step.get("name") == "Install qualification dependencies"
+        )
+        verify_index = next(
+            index
+            for index, step in enumerate(steps)
+            if step.get("name") == "Verify qualified source and package content"
+        )
+        publish_index = next(
+            index
+            for index, step in enumerate(steps)
+            if step.get("name") == "Publish verified package"
+        )
+        self.assertLess(install_index, verify_index)
+        self.assertLess(verify_index, publish_index)
+        install = steps[install_index]
+        self.assertEqual(install["if"], "inputs.prebuilt-dist")
+        self.assertIn("PyYAML==6.0.3", install["run"])
+        self.assertIn("PyYAML==6.0.3", str(self.workflows["package-check.yml"].jobs))
+
     def test_installer_uses_isolated_home_without_runtime_bootstrap(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             wheel = Path(temporary) / "candidate.whl"

@@ -183,7 +183,7 @@ func init() {
 		Fn:          testProtocolCodecChatBackendToolLifecycle,
 	})
 	pkgtestcases.Register("protocol-codec-responses-backend-tool-lifecycle", pkgtestcases.TestCase{
-		Description: "All client protocols preserve buffered and streamed tool calls and results through a native Responses backend",
+		Description: "Responses, Chat, and Messages clients complete streamed tool calls and second-turn results when the Responses backend omits name from function_call_arguments.done",
 		Tags:        []string{"protocol-codec", "response-api", "tools", "matrix", "streaming"},
 		Fn:          testProtocolCodecResponsesBackendToolLifecycle,
 	})
