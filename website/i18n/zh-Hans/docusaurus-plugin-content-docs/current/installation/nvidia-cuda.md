@@ -2,7 +2,7 @@
 title: NVIDIA CUDA 部署
 description: 在 NVIDIA GPU 上运行 vLLM 后端，并可选择用 CUDA 加速 Semantic Router 的本地信号模型。
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "8d971517501f80107607162e8aebcc084ca71923"
   source_file: "docs/installation/nvidia-cuda.md"
   outdated: false
 ---
@@ -17,7 +17,8 @@ translation:
 
 - Linux，以及你计划运行的 vLLM 发行版所支持的 NVIDIA GPU；
 - 使用当前 Semantic Router CUDA 镜像时需要 x86-64 主机；
-- 与所选容器镜像兼容的 NVIDIA 驱动；
+- Router 镜像需要计算能力为 7.0 或更高的 GPU（Volta 及更新架构），其本地模型按该最低要求编译；构建时可通过 `CUDA_COMPUTE_CAP=<value>` 调整最低计算能力要求；
+- NVIDIA 驱动，以及传入 Router 容器的 GPU。CUDA Router 镜像直接链接驱动库，因此即使所有 Router 侧模型都配置为使用 CPU，没有 GPU 透传时仍无法启动；
 - Docker 和 NVIDIA Container Toolkit；
 - 有足够的 GPU 内存用于 vLLM 模型、KV cache 以及任何 Router 侧模型；以及
 - 一份完整的 Semantic Router 配置，并带有可到达的模型端点。
@@ -129,11 +130,11 @@ VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest \
 
 ```bash
 vllm-sr status
-vllm-sr logs router | grep 'Using CUDA execution provider'
+vllm-sr logs router | grep model_binding_ready
 nvidia-smi
 ```
 
-仅当活动配方加载受支持的本地 ONNX 模型时，才会出现 CUDA 日志。然后通过该配方暴露的入口点发送请求。如果你的配置使用另一个公共模型名称，请替换 `vllm-sr/auto`：
+每个准备就绪的 Router 侧模型都会报告其运行设备，因此 GPU 部署中，配置的分类器会显示 `"device":"cuda:0"`，且 `nvidia-smi` 会列出 Router 进程。报告 `"device":"cpu"` 的模型运行在 CPU 上，与是否启用 GPU 透传无关。然后通过该配方暴露的入口点发送请求。如果你的配置使用另一个公共模型名称，请替换 `vllm-sr/auto`：
 
 ```bash
 curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
@@ -151,11 +152,11 @@ curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
 
 ### Docker 拒绝 `--gpus all`
 
-用 `nvidia-ctk` 配置 Docker，重启 Docker，并重复 NVIDIA 的示例容器命令。在调试 vLLM 或 Semantic Router 之前，先调试容器运行时。
+用 `nvidia-ctk` 配置 Docker，重启 Docker，并重复 NVIDIA 的示例容器命令。在调试 vLLM 或 Semantic Router 之前，先调试容器运行时。对于 CUDA Router 镜像，GPU 透传是必需的：它链接了驱动库，因此透传不可用时，容器会在启动时退出，并报告 `libcuda.so.1: cannot open shared object file`。
 
 ### Router 使用 CPU
 
-确认 `--platform nvidia` 选择了 `vllm-sr-cuda` 镜像，并且未启用 `VLLM_SR_NVIDIA_PRESERVE_CPU`。检查生成的运行时配置和启动日志，而不仅仅是源配方。没有本地 ONNX 信号模型的配方没有什么可以移到 CUDA。
+确认 `--platform nvidia` 选择了 `vllm-sr-cuda` 镜像，并且未启用 `VLLM_SR_NVIDIA_PRESERVE_CPU`。检查生成的运行时配置和启动日志，而不仅仅是源配方。没有本地信号模型的配方没有什么可以移到 CUDA。
 
 ### vLLM 或 Router 耗尽 GPU 内存
 

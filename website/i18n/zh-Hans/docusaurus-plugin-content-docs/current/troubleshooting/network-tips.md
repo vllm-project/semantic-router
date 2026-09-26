@@ -2,7 +2,7 @@
 title: 受限网络环境
 sidebar_label: 受限网络
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "8d971517501f80107607162e8aebcc084ca71923"
   source_file: "docs/troubleshooting/network-tips.md"
   outdated: false
 ---
