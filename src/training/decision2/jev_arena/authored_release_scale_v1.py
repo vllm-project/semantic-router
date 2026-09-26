@@ -32,6 +32,18 @@ EXTRA_OPERATIONS = {
     "evidence_agreement": "score",
 }
 OPERATIONS = V13_OPERATIONS | EXTRA_OPERATIONS
+FORM_FAMILIES = {
+    "tabular_register",
+    "price_quote",
+    "signed_memo",
+    "email",
+    "schedule",
+    "ticket",
+    "field_log",
+    "lab_sheet",
+    "workflow_chart",
+    "checklist",
+}
 WORD = re.compile(r"\w+", re.UNICODE)
 
 
@@ -321,9 +333,9 @@ def prepare(
         raise ValueError("Need at least 12 cases per native family")
     if len({c["operation"] for c in cases}) < 12:
         raise ValueError("Need at least 12 semantic mechanisms")
-    forms = {s["form"] for c in cases for s in c["sources"]}
+    forms = {s.get("form_family") for c in cases for s in c["sources"]}
     domains = {c["domain"] for c in cases}
-    if len(forms) < 9 or len(domains) < 6:
+    if not forms <= FORM_FAMILIES or len(forms) < 9 or len(domains) < 6:
         raise ValueError("Document-form or domain diversity below preregistered floor")
     originals: list[dict[str, Any]] = []
     variants: list[dict[str, Any]] = []
