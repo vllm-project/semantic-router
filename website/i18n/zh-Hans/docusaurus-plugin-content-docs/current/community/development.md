@@ -29,10 +29,13 @@ make harness-bootstrap
 
 ```bash
 make vllm-sr-dev
-vllm-sr serve --image-pull-policy never
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  vllm-sr serve --image-pull-policy never
 ```
 
-该构建会安装可编辑的 `vllm-sr` CLI，并创建本地 Router、控制面板和 Envoy 镜像。`--image-pull-policy never` 确保运行使用这些本地镜像。
+该构建会安装可编辑的 `vllm-sr` CLI，构建标记为 `latest` 的 Router 和控制面板镜像，并确保官方 Envoy 镜像可用。
+即使采用可编辑安装，只要包版本号是稳定版本，CLI 默认仍会选择对应的发布镜像，因此需要显式设置 `VLLM_SR_IMAGE`。
+CLI 会推导出相同 tag 的官方控制面板镜像；`--image-pull-policy never` 则禁止拉取缺失的镜像。
 
 常用生命周期命令：
 
@@ -48,8 +51,12 @@ ROCm 相关工作：
 
 ```bash
 make vllm-sr-dev VLLM_SR_PLATFORM=amd
-vllm-sr serve --image-pull-policy never --platform amd
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest \
+  vllm-sr serve --image-pull-policy never --platform amd
 ```
+
+如果自定义了 `DOCKER_TAG`、`DOCKER_REGISTRY` 或 Make 的镜像变量，请通过 `VLLM_SR_IMAGE` 将实际构建的镜像传给 `serve`，必要时同时设置 `VLLM_SR_DASHBOARD_IMAGE`。
+构建完成后的提示会打印包含所选镜像的启动命令。
 
 ## 选择正确的测试
 

@@ -438,7 +438,7 @@ vllm-sr-dev:
 	@echo "=========================================="
 	@echo ""
 	@echo "Next steps:"
-	@echo "  Start service: cd src/vllm-sr && vllm-sr serve --config config.yaml"
+	@echo "  Start service: VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) vllm-sr serve --image-pull-policy never$(if $(VLLM_SR_PLATFORM_NORMALIZED), --platform $(VLLM_SR_PLATFORM_NORMALIZED))"
 	@echo "  Or use:        make vllm-sr-start"
 	@echo ""
 

@@ -35,7 +35,8 @@ make impact ENV=cpu CHANGED_FILES="path/to/changed-file"
 
 ```bash
 make vllm-sr-dev
-vllm-sr serve --image-pull-policy never
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  vllm-sr serve --image-pull-policy never
 ```
 
 针对性测试和运行时命令见[开发指南](./development)。
