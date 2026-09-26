@@ -1,0 +1,1 @@
+"""Joyfox continuation contract tests."""
