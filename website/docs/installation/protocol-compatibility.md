@@ -103,7 +103,7 @@ instead of being silently dropped.
 | Hosted image-generation lifecycle | Not supported | Supported | Not supported |
 | Multiple response candidates | Supported | Not supported | Not supported |
 | Prompt-cache directives | Supported | Not supported | Supported |
-| Prompt cache key (`prompt_cache_key`) | Supported | Supported | Not supported |
+| Prompt cache key (`prompt_cache_key`) | Supported | Supported | Not forwarded; reported as `dropped` |
 | Reasoning token budget | Supported extension | Not supported | Supported |
 | Seed and frequency or presence penalties | Supported | Not supported | Not supported |
 | `top_k` sampling | Supported extension | Not supported | Supported for nonnegative values |
@@ -211,7 +211,7 @@ The Router handles them as follows:
 
 | Field | Router behavior |
 | --- | --- |
-| `prompt_cache_key` | Forwarded to `openai` and `responses` backends. A route to an `anthropic` backend fails with `unsupported_prompt_cache_key`, because Messages has no equivalent. |
+| `prompt_cache_key` | Forwarded to `openai` and `responses` backends. A route to an `anthropic` backend omits it and reports `dropped`, because Messages has no equivalent. A decision's `request_params.blocked_params` can remove it before dispatch. |
 | `include: ["reasoning.encrypted_content"]` | Accepted and not forwarded. The Router never relays provider-encrypted reasoning, so reasoning items carry no `encrypted_content`. Other `include` values remain unsupported. |
 | `client_metadata` | Accepted and not forwarded, because it carries Codex telemetry rather than model input. |
 | `text.verbosity` | Forwarded to `responses` backends, mapped to `verbosity` for `openai` Chat backends, and reported as `dropped` for `anthropic` Messages backends. The only accepted values are `low`, `medium`, and `high`. |
