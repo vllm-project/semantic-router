@@ -41,7 +41,7 @@ FORMAT_CUES = {
     "report": ("Report:", "Finding:"),
 }
 NEUTRAL_LEAD_FORBIDDEN = re.compile(
-    r"\b(?:source|record|file|document|exhibit|attach(?:ed|ment)?|"
+    r"\b(?:source|record|file|document|exhibit|attach|attached|attachment|"
     r"signed|signature|approved|certified|confirmed|cleared|"
     r"likely|winner|answer|outcome|contains|includes|lists)\b",
     re.I,
