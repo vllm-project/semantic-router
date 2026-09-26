@@ -27,6 +27,7 @@ EXTRA_OPERATIONS = {
     "eligibility_deadline": "choice",
     "quorum_veto": "noul",
     "custody_chain": "noul",
+    "allocation_envelope": "noul",
     "risk_matrix": "score",
     "evidence_agreement": "score",
 }
@@ -87,6 +88,17 @@ def solve(
             right[item["id"]] == item["to"]
             and (index == 0 or transfers[index - 1]["to"] == item["from"])
             for index, item in enumerate(transfers)
+        )
+    if operation == "allocation_envelope":
+        if set(left) != set(right) or not left:
+            raise ValueError("Allocation source universe mismatch")
+        if any(
+            type(value) is not int or value < 0
+            for value in [*left.values(), *right.values()]
+        ):
+            raise ValueError("Allocation quantities must be nonnegative integers")
+        return all(left[key] >= right[key] for key in left) and (
+            sum(left.values()) - sum(right.values()) <= params["maximum_surplus"]
         )
     if operation == "risk_matrix":
         if set(left) != set(right):

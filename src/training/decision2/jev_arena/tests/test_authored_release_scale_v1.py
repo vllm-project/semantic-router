@@ -63,6 +63,15 @@ def test_new_noul_operations_are_boolean() -> None:
     assert (
         solve("custody_chain", transfers, {"t1": "courier", "t2": "desk"}, {}) is False
     )
+    stock = {"east": 8, "west": 7}
+    need = {"east": 6, "west": 5}
+    assert solve("allocation_envelope", stock, need, {"maximum_surplus": 5}) is True
+    assert (
+        solve(
+            "allocation_envelope", stock, {"east": 9, "west": 5}, {"maximum_surplus": 5}
+        )
+        is False
+    )
 
 
 def test_new_score_operations_obey_ordered_bands() -> None:
