@@ -45,7 +45,7 @@ run's audited CAL700; this is an explicitly separate diagnostic fit.
 Apply the new Noul and Score temperatures to **copies** of the existing
 calibrated DEV predictions by probability power transform
 `p_new ∝ p_old ** (T_old / T_new)`. Recompute Score's probability-weighted
-mean exactly as the native adapter does. Choice stays byte-identical. Reuse
+mean exactly as the native adapter does. Choice answer values stay unchanged. Reuse
 the frozen typed scorer on all 1,600 DEV items and report accuracy, Brier,
 NLL and ECE by type against original CAL700. CSS pilot predictions need no
 rescore because they are Choice only and Choice temperature is unchanged.
@@ -69,3 +69,18 @@ It verifies the completed run's original CAL identity, model fingerprint,
 frozen hard-CAL bytes, 300/300 eligible source families and full row
 coverage. Its diagnostic output cannot be passed off as the original native
 calibration receipt.
+
+## Hard-CAL fit freeze before independent DEV scoring
+
+The fixed model returned finite logits for all 600/600 eligible rows. The
+private logits and diagnostic fit SHA-256 values are
+`59d8485018ac3ef413e7cd3cf5509b28fdbe5397b164471f1fbcd9eff76a1a53`
+and `4c2cec5bf729a0b0f85e5476875e269b61b4c342c09e2faa71f5157e9a16bf71`.
+Frozen temperatures: Choice unchanged .9814940779855923, Noul
+.2208159785782674, Score .7585376567281248. On the 300 hard-CAL Noul
+rows, original/new NLL .11012/.02630 and Brier .02180/.00707 with both
+99% correct; these rows are evidently easy for this 27B model. On the 300
+hard-CAL Score rows, original/new NLL 1.17954/1.15782 and Brier
+.31206/.30383 with both 47.33% correct. These are fit-set metrics only;
+they do not satisfy the independent DEV gate. The frozen fit will now be
+transported exactly once to copies of the existing DEV predictions.
