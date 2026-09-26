@@ -215,6 +215,7 @@ func assertRejectedToolKindSwitch(body []byte, firstKind string) error {
 func assertValidCustomToolStream(body []byte) error {
 	frames := protocolSSEDataFrames(body)
 	input, toolDeltas, terminals, done := "", 0, 0, 0
+	identitySeen := false
 	for _, data := range frames {
 		if data == "[DONE]" {
 			done++
@@ -236,16 +237,27 @@ func assertValidCustomToolStream(body []byte) error {
 			}
 			for _, call := range choice.Delta.ToolCalls {
 				toolDeltas++
-				if call.Index != 0 || call.ID != "call_mock_custom_kind" || call.Type != "custom" ||
-					call.Custom == nil || len(call.Function) != 0 ||
-					call.Custom.Name != "apply_patch" {
+				// Stream continuations may carry only the index and the next input fragment.
+				if call.Index != 0 || len(call.Function) != 0 ||
+					(call.ID != "" && call.ID != "call_mock_custom_kind") ||
+					(call.Type != "" && call.Type != "custom") ||
+					(call.Custom != nil && call.Custom.Name != "" && call.Custom.Name != "apply_patch") {
 					return fmt.Errorf("valid stream changed custom identity: %s", truncateString(string(body), 900))
 				}
-				input += call.Custom.Input
+				if !identitySeen {
+					if call.ID != "call_mock_custom_kind" || call.Type != "custom" ||
+						call.Custom == nil || call.Custom.Name != "apply_patch" {
+						return fmt.Errorf("valid stream omitted initial custom identity: %s", truncateString(string(body), 900))
+					}
+					identitySeen = true
+				}
+				if call.Custom != nil {
+					input += call.Custom.Input
+				}
 			}
 		}
 	}
-	if toolDeltas != 4 || input != "abcdefghi" || terminals != 1 || done != 1 ||
+	if !identitySeen || toolDeltas != 4 || input != "abcdefghi" || terminals != 1 || done != 1 ||
 		len(frames) == 0 || frames[len(frames)-1] != "[DONE]" {
 		return fmt.Errorf("valid custom stream incomplete: deltas=%d input=%q terminals=%d done=%d: %s",
 			toolDeltas, input, terminals, done, truncateString(string(body), 900))

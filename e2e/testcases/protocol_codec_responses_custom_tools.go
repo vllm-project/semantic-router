@@ -27,6 +27,11 @@ func init() {
 		Tags:        []string{"protocol-codec", "response-api", "agents", "tools", "streaming"},
 		Fn:          testProtocolCodecResponsesCustomToolLoop,
 	})
+	pkgtestcases.Register("protocol-codec-responses-verbosity-anthropic", pkgtestcases.TestCase{
+		Description: "Responses verbosity is dropped with a warning when routed to Messages in buffered and streaming requests",
+		Tags:        []string{"protocol-codec", "response-api", "anthropic", "streaming"},
+		Fn:          testProtocolCodecResponsesVerbosityAnthropic,
+	})
 }
 
 func testProtocolCodecResponsesCustomToolLoop(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -95,6 +100,62 @@ func testProtocolCodecResponsesCustomToolLoop(ctx context.Context, client *kuber
 			}
 		}
 		provider.Close()
+	}
+	return nil
+}
+
+func testProtocolCodecResponsesVerbosityAnthropic(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	session, err := fixtures.OpenServiceSession(ctx, client, opts)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+	provider, err := openProtocolCodecProviderSession(ctx, client, opts, "anthropic.messages.v1")
+	if err != nil {
+		return err
+	}
+	defer provider.Close()
+
+	for _, stream := range []bool{false, true} {
+		marker := protocolCodecAnthropicProbe + " Responses verbosity probe"
+		sessionID := "responses-verbosity-anthropic-" + uuid.NewString()
+		result, requestErr := sendProtocolMatrixRaw(ctx, session, "/v1/responses", map[string]any{
+			"model": "MoM", "input": marker, "stream": stream,
+			"text": map[string]any{"verbosity": "low"},
+		}, stream, map[string]string{"x-vsr-test-session-id": sessionID})
+		if requestErr != nil {
+			return fmt.Errorf("messages stream=%t request: %w", stream, requestErr)
+		}
+		if result.StatusCode != http.StatusOK {
+			return fmt.Errorf("messages stream=%t HTTP %d: %s", stream, result.StatusCode, truncateString(string(result.Body), 500))
+		}
+		if stream {
+			err = validateResponsesProtocolStream(result.Body, protocolCodecAnthropicReply)
+		} else {
+			err = assertResponsesBody(result.Body, protocolCodecAnthropicReply)
+		}
+		if err != nil {
+			return fmt.Errorf("messages stream=%t response: %w", stream, err)
+		}
+		if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !hasProtocolFieldDiagnostic(warnings, "dropped", "text.verbosity") {
+			return fmt.Errorf("messages stream=%t did not report dropped text.verbosity: %q", stream, warnings)
+		}
+		if err := verifyProviderSimulatorRequest(ctx, provider, sessionID, "anthropic.messages.v1", marker); err != nil {
+			return fmt.Errorf("messages stream=%t provider request: %w", stream, err)
+		}
+		raw, observationErr := lastProviderSimulatorRequest(ctx, provider, sessionID)
+		if observationErr != nil {
+			return observationErr
+		}
+		var receipt struct {
+			Body map[string]json.RawMessage `json:"body"`
+		}
+		if json.Unmarshal(raw, &receipt) != nil {
+			return fmt.Errorf("messages stream=%t provider receipt is invalid: %s", stream, truncateString(string(raw), 500))
+		}
+		if _, leaked := receipt.Body["verbosity"]; leaked {
+			return fmt.Errorf("messages stream=%t received OpenAI verbosity: %s", stream, truncateString(string(raw), 500))
+		}
 	}
 	return nil
 }

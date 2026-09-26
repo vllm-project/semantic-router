@@ -112,7 +112,7 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) error {
-	projected, err := r.projectAnthropicRequestForBackend(*request, dispatch.logicalModel, dispatch.targetFormat)
+	projected, err := r.projectRequestForBackend(*request, dispatch.logicalModel, dispatch.targetFormat)
 	if err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) && ctx != nil {

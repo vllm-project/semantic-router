@@ -363,10 +363,13 @@ func TestResponsesTextVerbositySurvivesRouting(t *testing.T) {
 				t.Fatalf("%s to %s: %v %s", verbosity, format, encodeErr, encoded.Body)
 			}
 		}
-		_, err = engine.EncodeRequest(llmprotocol.AnthropicMessagesV1, request, envelope)
-		var protocolError *llmprotocol.ProtocolError
-		if !errors.As(err, &protocolError) || protocolError.Code != "unsupported_capability" {
-			t.Fatalf("Anthropic verbosity returned %v, want unsupported_capability", err)
+		encoded, encodeErr := engine.EncodeRequest(llmprotocol.AnthropicMessagesV1, request, envelope)
+		if encodeErr != nil || encoded.Request.TextVerbosity != "" ||
+			bytes.Contains(encoded.Body, []byte(`"verbosity"`)) || request.TextVerbosity != verbosity {
+			t.Fatalf("Messages projection of %s: %v, request=%+v, body=%s", verbosity, encodeErr, encoded.Request, encoded.Body)
+		}
+		if !hasDroppedVerbosityDiagnostic(encoded.Diagnostics, "text.verbosity") {
+			t.Fatalf("Messages omitted %s without a warning: %+v", verbosity, encoded.Diagnostics)
 		}
 	}
 	for _, raw := range []string{`"verbose"`, `7`, `true`} {
@@ -382,6 +385,21 @@ func TestResponsesTextVerbositySurvivesRouting(t *testing.T) {
 	if err != nil || !bytes.Contains(translated.Body, []byte(`"verbosity":"medium"`)) {
 		t.Fatalf("Chat verbosity lost on Responses backend: %s, %v", translated.Body, err)
 	}
+	translated, err = engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, chat, nil)
+	if err != nil || bytes.Contains(translated.Body, []byte(`"verbosity"`)) ||
+		!hasDroppedVerbosityDiagnostic(translated.Diagnostics, "verbosity") {
+		t.Fatalf("Chat verbosity to Messages: %v, body=%s, diagnostics=%+v", err, translated.Body, translated.Diagnostics)
+	}
+}
+
+func hasDroppedVerbosityDiagnostic(diagnostics llmprotocol.Diagnostics, field string) bool {
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Field == field && diagnostic.Action == llmprotocol.DiagnosticDropped &&
+			diagnostic.Target == llmprotocol.AnthropicMessagesV1 {
+			return true
+		}
+	}
+	return false
 }
 
 func TestResponsesCustomToolVariantsRejectMissingAndForeignFields(t *testing.T) {

@@ -6,7 +6,7 @@ REQUESTED_RUNTIME="${VLLM_SR_RUNTIME:-auto}"
 INSTALL_ROOT="${VLLM_SR_INSTALL_ROOT:-$HOME/.local/share/vllm-sr}"
 BIN_DIR="${VLLM_SR_BIN_DIR:-$HOME/.local/bin}"
 PIP_SPEC="${VLLM_SR_PIP_SPEC:-}"
-REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-dev}"
+REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-stable}"
 PYTHON_BIN="${VLLM_SR_PYTHON:-}"
 REQUESTED_PLATFORM="${VLLM_SR_INSTALL_PLATFORM:-${VLLM_SR_PLATFORM:-auto}}"
 AUTO_LAUNCH="${VLLM_SR_INSTALL_AUTO_LAUNCH:-1}"
@@ -219,7 +219,7 @@ Options:
   --bin-dir PATH           Launcher directory. Default: ~/.local/bin
   --channel stable|dev     Package channel to install when --pip-spec is not
                            set. The dev channel resolves and pins the newest
-                           published .dev package. Default: dev
+                           published .dev package. Default: stable
   --pip-spec SPEC          Explicit Python package spec to install. Overrides
                            --channel when set
   --python PATH            Explicit Python interpreter to use

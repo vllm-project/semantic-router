@@ -110,6 +110,7 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-buffered-matrix",
 	"protocol-codec-anthropic-backend-streaming-matrix",
 	"protocol-codec-anthropic-response-diagnostics",
+	"protocol-codec-responses-verbosity-anthropic",
 	"protocol-codec-anthropic-per-message-effort-backend",
 	"protocol-codec-zero-penalty-anthropic",
 	"protocol-codec-anthropic-backend-tool-lifecycle",

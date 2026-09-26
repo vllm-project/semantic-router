@@ -70,7 +70,7 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 			}
 		}
 	}
-	preview, err = r.projectAnthropicRequestForBackend(preview, ref.Model, format)
+	preview, err = r.projectRequestForBackend(preview, ref.Model, format)
 	if err != nil {
 		return err
 	}
