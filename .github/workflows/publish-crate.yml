@@ -4,7 +4,11 @@ on:
   workflow_call:
     inputs:
       version:
-        description: Stable version without a leading v.
+        description: Router release version without a leading v.
+        required: true
+        type: string
+      crate_version:
+        description: Candle crate version to publish; may differ from the Router release.
         required: true
         type: string
       tag:
@@ -36,14 +40,15 @@ jobs:
         env:
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_CRATE_VERSION: ${{ inputs.crate_version }}
         run: |
           CRATE_VERSION="$(
             cargo metadata --no-deps --format-version 1 |
               jq -r '.packages[] | select(.name == "candle-semantic-router") | .version'
           )"
-          if [[ "$CRATE_VERSION" != "$RELEASE_VERSION" ]] ||
+          if [[ "$CRATE_VERSION" != "$EXPECTED_CRATE_VERSION" ]] ||
              [[ "$RELEASE_TAG" != "v${RELEASE_VERSION}" ]]; then
-            echo "::error::Crate, version, and tag inputs do not match"
+            echo "::error::Crate version, Router version, or tag inputs do not match"
             exit 1
           fi
 

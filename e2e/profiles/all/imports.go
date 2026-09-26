@@ -35,9 +35,11 @@ import (
 	routerreplay "github.com/vllm-project/semantic-router/e2e/profiles/router-replay"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
+	structurerouting "github.com/vllm-project/semantic-router/e2e/profiles/structure-routing"
 	vectorstoreregistry "github.com/vllm-project/semantic-router/e2e/profiles/vectorstore-registry"
 	velahalu "github.com/vllm-project/semantic-router/e2e/profiles/vela-halu"
 	velaomni "github.com/vllm-project/semantic-router/e2e/profiles/vela-omni"
+	velashield "github.com/vllm-project/semantic-router/e2e/profiles/vela-shield"
 )
 
 var providerMockerLocalImages = []framework.LocalImageBuild{
@@ -64,6 +66,7 @@ var dashboardLocalImages = []framework.LocalImageBuild{
 
 func init() {
 	register("vela-halu", func() framework.Profile { return velahalu.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("vela-shield", func() framework.Profile { return velashield.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"envoy-ai-gateway",
@@ -81,6 +84,7 @@ func init() {
 	register("complexity-remote-backend", func() framework.Profile { return complexityremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("pii-remote-backend", func() framework.Profile { return piiremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("local-classifier-backend", func() framework.Profile { return localclassifierbackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("structure-routing", func() framework.Profile { return structurerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"dashboard",
 		func() framework.Profile { return dashboard.NewProfile() },

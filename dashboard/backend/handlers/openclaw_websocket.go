@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -60,13 +61,29 @@ type WSOutboundMessage struct {
 
 // WSClient represents a WebSocket client connection
 type WSClient struct {
-	conn     *websocket.Conn
-	send     chan WSOutboundMessage
-	roomID   string
-	clientID string
-	handler  *OpenClawHandler
-	closed   bool
-	closeMu  sync.Mutex
+	conn       *websocket.Conn
+	send       chan WSOutboundMessage
+	roomID     string
+	clientID   string
+	handler    *OpenClawHandler
+	revalidate func() error
+	closed     bool
+	closeMu    sync.Mutex
+}
+
+// The HTTP request context is canceled as soon as the upgrade handler returns.
+// Keep its auth values, but detach that cancellation for the lifetime of the
+// WebSocket so permission checks can still reach the session store.
+func websocketPermissionRevalidator(r *http.Request) func() error {
+	if _, authenticated := auth.AuthFromContext(r); !authenticated {
+		return nil
+	}
+	request := r.WithContext(context.WithoutCancel(r.Context()))
+	return func() error { return auth.RevalidateRequest(request) }
+}
+
+func (c *WSClient) permissionActive() bool {
+	return c.revalidate == nil || c.revalidate() == nil
 }
 
 // trySend serializes send admission with channel closure. The second return
@@ -168,11 +185,12 @@ func (h *OpenClawHandler) handleRoomWebSocket(w http.ResponseWriter, r *http.Req
 
 	clientID := generateRoomEntityID("ws-client")
 	client := &WSClient{
-		conn:     conn,
-		send:     make(chan WSOutboundMessage, 128),
-		roomID:   roomID,
-		clientID: clientID,
-		handler:  h,
+		conn:       conn,
+		send:       make(chan WSOutboundMessage, 128),
+		roomID:     roomID,
+		clientID:   clientID,
+		handler:    h,
+		revalidate: websocketPermissionRevalidator(r),
 	}
 
 	// Register client
@@ -209,6 +227,9 @@ func (c *WSClient) writePump() {
 				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
+			if !c.permissionActive() {
+				return
+			}
 
 			_ = c.conn.SetWriteDeadline(time.Now().Add(roomWSWriteTimeout))
 			if err := c.conn.WriteJSON(message); err != nil {
@@ -217,6 +238,9 @@ func (c *WSClient) writePump() {
 			}
 
 		case <-ticker.C:
+			if !c.permissionActive() {
+				return
+			}
 			_ = c.conn.SetWriteDeadline(time.Now().Add(roomWSWriteTimeout))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
@@ -252,6 +276,9 @@ func (c *WSClient) readPump() {
 		if err := json.Unmarshal(data, &msg); err != nil {
 			c.sendError("invalid message format")
 			continue
+		}
+		if (msg.Type == WSTypeSendMessage || msg.Type == WSTypeSurfaceEvent) && !c.permissionActive() {
+			return
 		}
 
 		c.handleMessage(msg)
@@ -299,6 +326,9 @@ func (c *WSClient) handleSurfaceEvent(msg WSInboundMessage) {
 		}
 	}
 
+	if !c.permissionActive() {
+		return
+	}
 	c.handler.publishRoomCollaborationEvent(
 		c.roomID,
 		surfaceEventCollaborationEvent(participantType, participantID, msg.Payload),
@@ -366,6 +396,9 @@ func (c *WSClient) handleSendMessage(msg WSInboundMessage) {
 	// Create and save message
 	created := newRoomMessage(*room, senderType, senderID, senderName, content, nil)
 
+	if !c.permissionActive() {
+		return
+	}
 	if err := c.handler.appendRoomMessageWS(room.ID, created); err != nil {
 		c.sendError("failed to save message: " + err.Error())
 		return

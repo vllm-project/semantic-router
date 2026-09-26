@@ -149,3 +149,35 @@ func TestHybridPolarityMissPreservesNegativeScore(t *testing.T) {
 	require.False(t, result.Found)
 	require.Equal(t, float32(-0.25), result.Similarity)
 }
+
+func TestHybridHitReportsNegationGuard(t *testing.T) {
+	for _, tc := range negationGuardServedPairs {
+		t.Run(tc.name, func(t *testing.T) {
+			storedAt := time.Now().Truncate(time.Second)
+			milvus := &MilvusCache{
+				enabled: true, config: milvusCacheTestConfig("Strong"),
+				embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(),
+				queryByIDFn: func(context.Context, string, string) (client.ResultSet, error) {
+					return client.ResultSet{
+						entity.NewColumnVarChar("query", []string{tc.cached}),
+						entity.NewColumnVarChar("response_body", []string{"ANSWER"}),
+						entity.NewColumnInt64("timestamp", []int64{storedAt.Unix()}),
+						entity.NewColumnInt64("expires_at", []int64{storedAt.Add(time.Hour).Unix()}),
+					}, nil
+				},
+				searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) {
+					return nil, nil
+				},
+			}
+			hybrid := newTestHybridCache(1)
+			hybrid.milvusCache = milvus
+			vector, err := milvus.getEmbedding(context.Background(), tc.incoming)
+			require.NoError(t, err)
+			addToMemoryIndexForTest(hybrid, "candidate-id", vector)
+			result, err := hybrid.LookupSimilarWithThreshold(context.Background(), "tenant-a", tc.incoming, 0.8)
+			require.NoError(t, err)
+			require.True(t, result.Found)
+			require.Equal(t, tc.want, result.NegationGuard)
+		})
+	}
+}

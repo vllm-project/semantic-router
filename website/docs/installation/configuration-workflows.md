@@ -120,6 +120,13 @@ helm upgrade --install semantic-router \
   -f values.yaml
 ```
 
+Helm values seed the Router ConfigMap at install. If the Dashboard or Router
+API later saves a config edit, an ordinary Helm upgrade preserves that live
+document. To intentionally apply a revised `configOverride`, change
+`configMap.applyValuesRevision` in the values file for that upgrade. Reusing
+the same revision on later upgrades preserves subsequent live edits. A saved
+ConfigMap edit takes effect after the Router deployment rolls out.
+
 `vllm-sr serve --target k8s --config config.yaml` passes the selected document
 as an atomic override, so chart example routes cannot merge into it. The command
 rejects an empty or setup-only document and does not inject local-Docker service

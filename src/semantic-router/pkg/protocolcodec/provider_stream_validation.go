@@ -33,6 +33,8 @@ func validateResponsesEventPayload(wire responsesEventWire) error {
 		return validateResponsesSummaryEventTarget(wire)
 	case "response.function_call_arguments.delta", "response.function_call_arguments.done":
 		return validateResponsesToolEventTarget(wire)
+	case "response.custom_tool_call_input.delta", "response.custom_tool_call_input.done":
+		return validateResponsesToolEventTarget(wire)
 	case "response.output_text.annotation.added":
 		return validateResponsesAnnotationEvent(wire)
 	case "response.reasoning_summary_part.added", "response.reasoning_summary_part.done":
@@ -120,6 +122,13 @@ func validateResponsesSummaryPartEvent(wire responsesEventWire) error {
 }
 
 func validateAnthropicStreamEvent(wire anthropicEventWire, body []byte) error {
+	if len(wire.ContextManagement) > 0 && wire.Type != "message_delta" {
+		return invalidProviderResponse("invalid_context_management_event", "Anthropic context management belongs to message_delta")
+	}
+	if wire.Delta != nil && wire.Delta.EstimatedTokens != nil &&
+		(wire.Type != "content_block_delta" || wire.Delta.Type != "thinking_delta") {
+		return invalidProviderResponse("invalid_estimated_tokens_event", "Anthropic estimated tokens belong to thinking_delta")
+	}
 	if anthropicEventUsesIndex(wire.Type) && (wire.Index == nil || *wire.Index < 0) {
 		return invalidProviderResponse("invalid_stream_item_index", "Anthropic content event requires a non-negative index")
 	}
@@ -228,7 +237,9 @@ func validateResponsesEventFieldPresence(eventType string, body []byte) error {
 		"response.reasoning_summary_text.delta":      {"delta"},
 		"response.reasoning_summary_text.done":       {"text"},
 		"response.function_call_arguments.delta":     {"delta"},
-		"response.function_call_arguments.done":      {"name", "arguments"},
+		"response.function_call_arguments.done":      {"arguments"},
+		"response.custom_tool_call_input.delta":      {"delta"},
+		"response.custom_tool_call_input.done":       {"input"},
 		"response.image_generation_call.in_progress": {"output_index", "item_id"},
 		"response.image_generation_call.generating":  {"output_index", "item_id"},
 		"response.image_generation_call.completed":   {"output_index", "item_id"},
