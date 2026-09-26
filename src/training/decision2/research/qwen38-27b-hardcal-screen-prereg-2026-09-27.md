@@ -58,3 +58,14 @@ would require a separate native inference/package parity test before any
 release; it cannot repair the underlying 161/400 Score reasoning accuracy or
 prove six-axis JevArena quality. Synthetic FINAL and 15-task CSS heldout
 labels remain unopened.
+
+## Pre-inference implementation freeze
+
+The original calibrated DEV prediction file SHA-256 is
+`15ebc30b0207208e971e71deff2fceb4538fc74caf389ba47a2db9fdc9c622b1`.
+The isolated hard-CAL collector/transformer source SHA-256 is
+`722fa198babbf9d6f09915ff710cf7b649d73c08722b4cccbbb4739d26ffbff8`.
+It verifies the completed run's original CAL identity, model fingerprint,
+frozen hard-CAL bytes, 300/300 eligible source families and full row
+coverage. Its diagnostic output cannot be passed off as the original native
+calibration receipt.
