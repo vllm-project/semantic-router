@@ -1,7 +1,8 @@
-"""Aggregate, gold-free preflight for a private authored scale candidate.
+"""Aggregate private preflight for a private authored scale candidate.
 
 This cannot confer release eligibility. It verifies commitments and exposes
-coverage failures before any blinded reviewer packet is made.
+coverage failures before any blinded reviewer packet is made. Oracle answers
+stay private; only class counts may leave this task's private environment.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from typing import Any
 
 from jev_arena.authored_release_scale_v1 import FORM_FAMILIES, file_sha, write_private
 
-VERSION = "jevarena-authored-release-scale-preflight/1"
+VERSION = "jevarena-authored-release-scale-preflight/2"
 
 
 def _rows(path: Path) -> list[dict[str, Any]]:
@@ -35,6 +36,41 @@ def _band(tokens: int) -> str:
     if tokens <= 2000:
         return "medium"
     return "long"
+
+
+def _target_balance(
+    cases: list[dict[str, Any]], proofs: list[dict[str, Any]]
+) -> tuple[dict[str, Any], list[str]]:
+    by_case = {case["slug"]: case for case in cases}
+    noul = Counter(
+        str(row["original"]).lower() for row in proofs if row["type"] == "noul"
+    )
+    score = Counter(str(row["original"]) for row in proofs if row["type"] == "score")
+    positions: Counter[str] = Counter()
+    hold_option = hold_answer = 0
+    for row in proofs:
+        if row["type"] != "choice":
+            continue
+        case = by_case[row["slug"]]
+        positions[str(case["option_order"].index(row["original"]) + 1)] += 1
+        hold_option += "HOLD" in case["criteria"]
+        hold_answer += row["original"] == "HOLD"
+    reasons = []
+    if min(noul.get("true", 0), noul.get("false", 0)) < 3:
+        reasons.append("noul_target_shortcut")
+    if min(score.get(str(level), 0) for level in (0, 1, 2)) < 2:
+        reasons.append("score_target_shortcut")
+    if min(positions.get(str(position), 0) for position in (1, 2, 3, 4)) < 2:
+        reasons.append("choice_position_imbalance")
+    if hold_option >= 4 and hold_answer == 0:
+        reasons.append("unused_choice_hold_option")
+    return {
+        "noul": dict(sorted(noul.items())),
+        "score": dict(sorted(score.items())),
+        "choice_positions": dict(sorted(positions.items())),
+        "choice_hold_option_cases": hold_option,
+        "choice_hold_answers": hold_answer,
+    }, reasons
 
 
 def audit(
@@ -87,6 +123,8 @@ def audit(
         "\n" not in source["document"] for case in cases for source in case["sources"]
     )
     reasons: list[str] = []
+    balance, balance_reasons = _target_balance(cases, proofs)
+    reasons.extend(balance_reasons)
     if (
         overlap.get("exact_hits")
         or overlap.get("near_hits_trigram_jaccard_at_least_0_7")
@@ -129,6 +167,7 @@ def audit(
         "native_tokens_original_max": max(original_lengths),
         "native_tokens_variant_max": max(variant_lengths),
         "semantic_mechanisms": len({case["operation"] for case in cases}),
+        "aggregate_target_balance": balance,
         "raw_form_labels_not_verified_families": raw_label_count,
         "verified_document_families": len(set(family_counts) & FORM_FAMILIES),
         "single_paragraph_sources": single_paragraph_sources,

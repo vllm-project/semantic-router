@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from jev_arena.authored_release_scale_audit import _target_balance
 from jev_arena.authored_release_scale_v1 import inspect, render_source, solve
 
 
@@ -159,3 +160,25 @@ def test_substitution_keeps_both_sources_causally_necessary() -> None:
     case["variant_witnesses"]["left"] = [{"gross": 8}, {"gross": 9}]
     with pytest.raises(ValueError, match="unnecessary"):
         inspect(case)
+
+
+def test_aggregate_preflight_detects_answer_shortcuts() -> None:
+    cases = [
+        {
+            "slug": f"choice-{i}",
+            "option_order": ["A", "B", "C", "HOLD"],
+            "criteria": {"A": "a", "B": "b", "C": "c", "HOLD": "hold"},
+        }
+        for i in range(4)
+    ]
+    proofs = (
+        [{"slug": f"choice-{i}", "type": "choice", "original": "A"} for i in range(4)]
+        + [{"slug": f"noul-{i}", "type": "noul", "original": True} for i in range(3)]
+        + [{"slug": f"score-{i}", "type": "score", "original": 1} for i in range(3)]
+    )
+    counts, reasons = _target_balance(cases, proofs)
+    assert counts["noul"] == {"true": 3}
+    assert "noul_target_shortcut" in reasons
+    assert "score_target_shortcut" in reasons
+    assert "choice_position_imbalance" in reasons
+    assert "unused_choice_hold_option" in reasons
