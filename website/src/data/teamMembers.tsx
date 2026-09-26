@@ -367,6 +367,22 @@ export const topNewContributorMembers: TeamMember[] = [
 export const allCommitterMembers: TeamMember[] = [
   ...topNewContributorMembers,
   {
+    name: 'Stefan Wang',
+    role: <Translate id="team.members.1fanwang.role">Individual Contributor</Translate>,
+    avatar: 'https://github.com/1fanwang.png',
+    github: 'https://github.com/1fanwang',
+    bio: <Translate id="team.members.1fanwang.bio">Open source contributor to vLLM Semantic Router.</Translate>,
+    memberType: 'committer',
+  },
+  {
+    name: 'Binbin Zhang',
+    role: <Translate id="team.members.Bevisy.role">Individual Contributor</Translate>,
+    avatar: 'https://github.com/Bevisy.png',
+    github: 'https://github.com/Bevisy',
+    bio: <Translate id="team.members.Bevisy.bio">Open source contributor to vLLM Semantic Router.</Translate>,
+    memberType: 'committer',
+  },
+  {
     name: 'Chen Wang',
     role: <Translate id="team.members.ChenWang.role">Senior Staff Research Scientist</Translate>,
     company: 'IBM',
