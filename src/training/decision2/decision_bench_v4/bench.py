@@ -10,13 +10,13 @@ renderings in their state and are reported by original modality.
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict
 import hashlib
 import json
 import math
-from pathlib import Path
 import statistics
 import tempfile
+from collections import Counter, defaultdict
+from pathlib import Path
 from typing import Any
 
 SOURCE_URL = "https://github.com/atlanai/decision-bench"
@@ -380,12 +380,32 @@ def score(
             or receipt.get("model_id") != model_id
             or receipt.get("model_revision") != model_revision
             or receipt.get("input_items") != 1041
-            or receipt.get("evaluated_items") != 1041
+            or receipt.get("evaluated_items", 1041) != 1041
             or receipt.get("counts", {}).get("items") != 1041
+            or receipt.get("counts", {}).get("questions") != 1041
+            or receipt.get("counts", {}).get("valid_questions", 0)
+            + receipt.get("counts", {}).get("invalid_questions", 0)
+            != 1041
         ):
             raise ValueError(
                 "Prediction manifest differs from frozen Decision Bench panel or model"
             )
+        if any(
+            not isinstance(receipt.get(field), str) or not receipt[field]
+            for field in ("model_sha256", "adapter_sha256")
+        ):
+            raise ValueError("Prediction manifest is missing native model identity")
+        calibration = receipt.get("calibration")
+        if isinstance(calibration, dict) and (
+            not isinstance(calibration.get("file_sha256"), str)
+            or not calibration["file_sha256"]
+        ):
+            raise ValueError("Prediction manifest is missing calibration identity")
+        calibration_sha256 = (
+            calibration.get("file_sha256")
+            if isinstance(calibration, dict)
+            else receipt.get("calibration_sha256")
+        )
     predictions: dict[str, dict[str, Any]] = {}
     uniform_identity: dict[str, Any] = {}
     identity_fields = (
@@ -407,13 +427,24 @@ def score(
             )
         if (
             row.get("source_input_sha256") != expected[item_id]["source_input_sha256"]
-            or row.get("model_id") != model_id
-            or row.get("model_revision") != model_revision
+            or row.get("input_sha256", expected[item_id]["source_input_sha256"])
+            != expected[item_id]["source_input_sha256"]
+            or (
+                row.get("model_id") != model_id
+                if receipt is None
+                else row.get("model_id", model_id) != model_id
+            )
+            or (
+                row.get("model_revision") != model_revision
+                if receipt is None
+                else row.get("model_revision", model_revision) != model_revision
+            )
         ):
             raise ValueError(f"{item_id}: prediction input/model identity changed")
         if receipt is not None and (
             row.get("model_sha256") != receipt.get("model_sha256")
-            or row.get("calibration_sha256") != receipt.get("calibration_sha256")
+            or row.get("adapter_sha256") != receipt.get("adapter_sha256")
+            or row.get("calibration_sha256") != calibration_sha256
         ):
             raise ValueError(
                 f"{item_id}: packaged model identity differs from manifest"

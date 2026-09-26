@@ -36,9 +36,16 @@ python3 -m decision_bench_v4.bench build \
 python3 -m decision_bench_v4.bench score \
   --panel-dir <workspace>/decision-bench-v4-panel \
   --predictions <workspace>/predictions.jsonl \
+  --prediction-manifest <workspace>/predictions.jsonl.manifest.json \
   --model-id <model-id> --model-revision <revision> \
   --output <workspace>/score.json
 ```
+
+The native collector records model ID and revision in its sidecar manifest,
+while each prediction row carries input, model and adapter hashes plus a
+calibration hash when applicable.
+Pass that sidecar to bind the row-external identity before scoring. Without a
+manifest, the scorer requires model ID and revision on every prediction row.
 
 The repository's MIT code license does not replace the per-row source terms.
 The upstream corpus retains individual source licenses, notices, and review
