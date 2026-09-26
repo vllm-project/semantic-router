@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from types import SimpleNamespace
 
@@ -42,6 +43,12 @@ def _args(monkeypatch: pytest.MonkeyPatch, *extra: str):
             "immutable-base",
             "--initial-model-sha256",
             INITIAL_SHA,
+            "--direct-lora-parity-receipt",
+            "parity.json",
+            "--direct-lora-parity-sha256",
+            "b" * 64,
+            "--direct-lora-arm",
+            "A",
             "--lora-rank",
             "8",
             "--lora-alpha",
@@ -76,13 +83,63 @@ def test_legacy_run_contract_has_no_new_initial_identity_field(
 ) -> None:
     args = _args(monkeypatch)
     assert train.direct_lora_contract_fields(args) == {
-        "initial_model_sha256": INITIAL_SHA
+        "initial_model_sha256": INITIAL_SHA,
+        "direct_lora_parity_sha256": "b" * 64,
+        "direct_lora_arm": "A",
     }
     for kind in ("base", "posttrained", "decision1", "decision2"):
         old = SimpleNamespace(**vars(args))
         old.init_kind = kind
         old.initial_model_sha256 = None
         assert train.direct_lora_contract_fields(old) == {}
+
+
+def test_direct_lora_optimizer_is_gated_by_both_zero_step_starts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    args = _args(monkeypatch)
+    args.initial_model_sha256 = (
+        "d9f4990427156a7712325de16f6105659fc00015d44c3e2f9331f52481d350d2"
+    )
+    args.train = str(tmp_path / "arm-a.jsonl")
+    args.direct_lora_parity_receipt = str(tmp_path / "parity.json")
+    args.direct_lora_parity_sha256 = "f" * 64
+    arm_shas = {
+        "A": "6a6ef7d3f2eac2a63cdd61cd806275e67c0aa772e78b45bf0953200f2a776235",
+        "B": "1c705c9a8271ce2e526b6bc91affe18d463a52bb86ce99b6b1bcb5007d467b41",
+    }
+    receipt = {
+        "schema_version": "decision2-score-en-direct-lora-start-parity/1",
+        "status": "PASS",
+        "source_model_sha256": args.initial_model_sha256,
+        "roster_sha256": "193404fb2ed3905cbb9e34379400a2f33a40d86aaae971940454c6fe71163bc5",
+        "tolerance": 1e-4,
+        "arms": {
+            arm: {
+                "status": "PASS",
+                "train_sha256": digest,
+                "same_argmax": 32,
+                "max_absolute_option_probability_drift": 0.0,
+            }
+            for arm, digest in arm_shas.items()
+        },
+    }
+    path = tmp_path / "parity.json"
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+    monkeypatch.setattr(
+        train,
+        "file_sha256",
+        lambda target: "f" * 64 if str(target) == str(path) else arm_shas["A"],
+    )
+    train.verify_direct_lora_parity_gate(args)
+    receipt["arms"]["B"]["same_argmax"] = 31
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+    with pytest.raises(ValueError, match="arm B failed"):
+        train.verify_direct_lora_parity_gate(args)
+    receipt["arms"]["B"]["same_argmax"] = 32
+    args.direct_lora_arm = "B"
+    with pytest.raises(ValueError, match="frozen arm differs"):
+        train.verify_direct_lora_parity_gate(args)
 
 
 class _Backbone(nn.Module):

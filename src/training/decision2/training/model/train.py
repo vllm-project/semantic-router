@@ -261,6 +261,15 @@ def parse_args() -> argparse.Namespace:
         "--initial-model-sha256",
         help="Required original adapter-plus-base fingerprint for direct LoRA continuation",
     )
+    parser.add_argument(
+        "--direct-lora-parity-receipt",
+        help="Sealed PASS receipt for both zero-step native BF16 direct-LoRA starts",
+    )
+    parser.add_argument(
+        "--direct-lora-parity-sha256",
+        help="SHA-256 of the sealed direct-LoRA parity receipt",
+    )
+    parser.add_argument("--direct-lora-arm", choices=("A", "B"))
     parser.add_argument("--output", required=True)
     parser.add_argument("--resume", help="Exact checkpoint-N directory within --output")
     parser.add_argument("--epochs", type=int, default=2)
@@ -311,13 +320,28 @@ def validate_args(args: argparse.Namespace) -> None:
             or not isinstance(args.initial_model_sha256, str)
             or not re.fullmatch(r"[0-9a-f]{64}", args.initial_model_sha256)
             or args.base_revision is not None
+            or not args.direct_lora_parity_receipt
+            or not isinstance(args.direct_lora_parity_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", args.direct_lora_parity_sha256)
+            or args.direct_lora_arm not in ("A", "B")
         ):
             raise ValueError(
                 "Direct LoRA continuation needs --train-mode lora, --source-path, "
-                "a 64-character --initial-model-sha256, and no --base-revision"
+                "a 64-character --initial-model-sha256, a sealed parity receipt/hash/arm, "
+                "and no --base-revision"
             )
-    elif args.initial_model_sha256 is not None:
-        raise ValueError("--initial-model-sha256 applies only to decision2-lora")
+    elif any(
+        value is not None
+        for value in (
+            args.initial_model_sha256,
+            args.direct_lora_parity_receipt,
+            args.direct_lora_parity_sha256,
+            args.direct_lora_arm,
+        )
+    ):
+        raise ValueError(
+            "Direct LoRA source and parity flags apply only to decision2-lora"
+        )
     if args.resume and args.train_mode == "lora" and not args.source_path:
         raise ValueError("Exact LoRA resume requires --source-path")
     if args.resume and args.train_mode != "lora" and args.source_path:
@@ -409,15 +433,60 @@ def load_direct_lora_start(
 def direct_lora_contract_fields(args: argparse.Namespace) -> dict[str, str]:
     """Keep preexisting run contracts byte-compatible outside the new mode."""
     return (
-        {"initial_model_sha256": args.initial_model_sha256}
+        {
+            "initial_model_sha256": args.initial_model_sha256,
+            "direct_lora_parity_sha256": args.direct_lora_parity_sha256,
+            "direct_lora_arm": args.direct_lora_arm,
+        }
         if args.init_kind == "decision2-lora"
         else {}
     )
 
 
+def verify_direct_lora_parity_gate(args: argparse.Namespace) -> None:
+    """Reject a direct-LoRA optimizer start without both frozen BF16 starts."""
+    if args.init_kind != "decision2-lora":
+        return
+    path = Path(args.direct_lora_parity_receipt)
+    if file_sha256(path) != args.direct_lora_parity_sha256:
+        raise ValueError("Direct LoRA parity receipt hash differs")
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    arm = args.direct_lora_arm
+    expected_train_sha = {
+        "A": "6a6ef7d3f2eac2a63cdd61cd806275e67c0aa772e78b45bf0953200f2a776235",
+        "B": "1c705c9a8271ce2e526b6bc91affe18d463a52bb86ce99b6b1bcb5007d467b41",
+    }
+    if (
+        receipt.get("schema_version") != "decision2-score-en-direct-lora-start-parity/1"
+        or receipt.get("status") != "PASS"
+        or args.initial_model_sha256
+        != "d9f4990427156a7712325de16f6105659fc00015d44c3e2f9331f52481d350d2"
+        or receipt.get("source_model_sha256") != args.initial_model_sha256
+        or receipt.get("roster_sha256")
+        != "193404fb2ed3905cbb9e34379400a2f33a40d86aaae971940454c6fe71163bc5"
+        or receipt.get("tolerance") != 1e-4
+        or file_sha256(args.train) != expected_train_sha[arm]
+        or set(receipt.get("arms", {})) != {"A", "B"}
+    ):
+        raise ValueError("Direct LoRA parity receipt or frozen arm differs")
+    for name, expected in expected_train_sha.items():
+        result = receipt["arms"][name]
+        if (
+            result.get("status") != "PASS"
+            or result.get("train_sha256") != expected
+            or result.get("same_argmax") != 32
+            or type(result.get("max_absolute_option_probability_drift"))
+            not in (int, float)
+            or not math.isfinite(result["max_absolute_option_probability_drift"])
+            or result["max_absolute_option_probability_drift"] > 1e-4
+        ):
+            raise ValueError(f"Direct LoRA zero-step arm {name} failed parity")
+
+
 def main() -> None:
     args = parse_args()
     validate_args(args)
+    verify_direct_lora_parity_gate(args)
     output = Path(args.output)
     resume = Path(args.resume) if args.resume else None
     if resume:
