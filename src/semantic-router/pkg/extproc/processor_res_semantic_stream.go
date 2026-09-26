@@ -210,9 +210,9 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	// only at EOF. The stream engine retains callback failures across bodies
 	// and uses its normal protocol-specific error finalization.
 	mutation := func(event *llmprotocol.Event) error {
-		if err := validateDynamoResponseEvents(ctx, []llmprotocol.Event{*event}); err != nil {
+		if boundaryErr := validateDynamoResponseEvents(ctx, []llmprotocol.Event{*event}); boundaryErr != nil {
 			if ctx.StreamBoundaryError == nil {
-				ctx.StreamBoundaryError = err
+				ctx.StreamBoundaryError = boundaryErr
 			}
 			ctx.StreamingAborted = true
 			return ctx.StreamBoundaryError

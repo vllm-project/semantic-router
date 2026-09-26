@@ -70,9 +70,9 @@ func TestDynamoBoundaryMutationFailureAcrossChunksAndEOF(t *testing.T) {
 					if !errors.Is(pushErr, rejection) {
 						t.Fatalf("want boundary rejection, got %v", pushErr)
 					}
-					later, _, _, err := stream.Push([]byte("data: [DONE]\n\n"))
-					if !errors.Is(err, rejection) || len(later) != 0 {
-						t.Fatalf("later body recovered from rejection: frames=%q err=%v", later, err)
+					later, _, _, laterErr := stream.Push([]byte("data: [DONE]\n\n"))
+					if !errors.Is(laterErr, rejection) || len(later) != 0 {
+						t.Fatalf("later body recovered from rejection: frames=%q err=%v", later, laterErr)
 					}
 				}
 				// Deliberately pass nil, like a fresh response-body buffer.
