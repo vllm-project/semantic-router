@@ -3418,6 +3418,17 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B
+  - catalog: microsoft/phi-4-reasoning-plus
+    relationship: self_hosted
+    id: microsoft/Phi-4-reasoning-plus
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://huggingface.co/microsoft/Phi-4-reasoning-plus/blob/69baf8528e1bcf05f475034d9e5dd32875ed125f/README.md
   - catalog: cohere/tiny-aya-global
     relationship: self_hosted
     id: CohereLabs/tiny-aya-global
@@ -6206,6 +6217,43 @@ models:
   - efficient
   - hybrid
   released_at: '2025-07-09'
+- id: microsoft/phi-4-reasoning-plus
+  display_name: Phi-4 Reasoning Plus
+  description: Open-weight 14B Phi-4 reasoning model with additional reinforcement learning for math, science, and coding.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: Φ
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-plus
+    license: MIT
+  family: phi-4
+  parameter_size: 14B
+  revision: 69baf8528e1bcf05f475034d9e5dd32875ed125f
+  released_at: '2025-04-30'
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - reasoning
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: '2026-09-24'
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-plus/blob/69baf8528e1bcf05f475034d9e5dd32875ed125f/README.md
+  tags:
+  - open_weights
+  - reasoning
+  - dense
 - id: minimax/minimax-m3
   display_name: MiniMax M3
   description: Native multimodal open-weight MiniMax model with million-token context.
@@ -21358,6 +21406,110 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://aclanthology.org/2026.eacl-long.78.pdf
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-aime-2024@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 1
+    sampling_temperature: 0.8
+    maximum_output_tokens: 65536
+    samples_per_prompt: 5
+  metrics:
+    pass_at_1: 0.813
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-aime-2025@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 1
+    sampling_temperature: 0.8
+    maximum_output_tokens: 65536
+    samples_per_prompt: 50
+  metrics:
+    pass_at_1: 0.78
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-gpqa-diamond@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 1
+    sampling_temperature: 0.8
+    maximum_output_tokens: 65536
+  metrics:
+    accuracy: 0.693
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-ifeval@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 2
+    metric_variant: strict
+    sampling_temperature: 0.8
+    maximum_output_tokens: 32768
+  metrics:
+    accuracy: 0.849
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 2
+    sampling_temperature: 0.8
+    maximum_output_tokens: 32768
+    samples_per_prompt: 5
+  metrics:
+    accuracy: 0.76
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
     redistributable: true
 - id: independent/minimax-m3-aa-briefcase@1.0.0
   model: minimax/minimax-m3
@@ -42184,6 +42336,28 @@ index_results:
   - microsoft/mai-thinking-1-report-mmlu-pro@1.0.0
   domains:
     general_reasoning: 85.0
+- model: microsoft/phi-4-reasoning-plus
+  reasoning_effort: default
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 76.0
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.76
+    normalized: 0.76
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 76.0
 - model: minimax/minimax-m3
   reasoning_effort: adaptive
   index: vllm-sr/reasoning@1.0.0

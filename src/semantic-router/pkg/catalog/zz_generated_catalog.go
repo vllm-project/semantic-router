@@ -16150,6 +16150,135 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "matharena/aime@2024.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/pdf/2504.21318v1",
+        "verification": "claimed"
+      },
+      "id": "microsoft/phi-4-reasoning-plus-paper-aime-2024@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.813
+      },
+      "model": "microsoft/phi-4-reasoning-plus",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 65536,
+        "samples_per_prompt": 5,
+        "sampling_temperature": 0.8,
+        "source_kind": "official_technical_report",
+        "table": "Table 1",
+        "variant": "Phi-4-reasoning-plus"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/pdf/2504.21318v1",
+        "verification": "claimed"
+      },
+      "id": "microsoft/phi-4-reasoning-plus-paper-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.78
+      },
+      "model": "microsoft/phi-4-reasoning-plus",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 65536,
+        "samples_per_prompt": 50,
+        "sampling_temperature": 0.8,
+        "source_kind": "official_technical_report",
+        "table": "Table 1",
+        "variant": "Phi-4-reasoning-plus"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/pdf/2504.21318v1",
+        "verification": "claimed"
+      },
+      "id": "microsoft/phi-4-reasoning-plus-paper-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.693
+      },
+      "model": "microsoft/phi-4-reasoning-plus",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 65536,
+        "sampling_temperature": 0.8,
+        "source_kind": "official_technical_report",
+        "table": "Table 1",
+        "variant": "Phi-4-reasoning-plus"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/pdf/2504.21318v1",
+        "verification": "claimed"
+      },
+      "id": "microsoft/phi-4-reasoning-plus-paper-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.849
+      },
+      "model": "microsoft/phi-4-reasoning-plus",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 32768,
+        "metric_variant": "strict",
+        "sampling_temperature": 0.8,
+        "source_kind": "official_technical_report",
+        "table": "Table 2",
+        "variant": "Phi-4-reasoning-plus"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/pdf/2504.21318v1",
+        "verification": "claimed"
+      },
+      "id": "microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.76
+      },
+      "model": "microsoft/phi-4-reasoning-plus",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 32768,
+        "samples_per_prompt": 5,
+        "sampling_temperature": 0.8,
+        "source_kind": "official_technical_report",
+        "table": "Table 2",
+        "variant": "Phi-4-reasoning-plus"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/briefcase@1.0.0",
       "benchmark_profile": "independent-agent",
       "evidence": {
@@ -58240,6 +58369,175 @@ const builtInCatalogJSON = `{
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.76,
+          "status": "available",
+          "value": 0.76,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 76.0
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "microsoft/phi-4-reasoning-plus",
+      "provenance": [
+        "microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "default",
+      "score": 76.0,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "microsoft/phi-4-reasoning-plus-paper-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.693,
+          "status": "available",
+          "value": 0.693,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "microsoft/phi-4-reasoning-plus",
+      "provenance": [
+        "microsoft/phi-4-reasoning-plus-paper-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "microsoft/phi-4-reasoning-plus",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "microsoft/phi-4-reasoning-plus",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.76,
+          "status": "available",
+          "value": 0.76,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "microsoft/phi-4-reasoning-plus",
+      "provenance": [
+        "microsoft/phi-4-reasoning-plus-paper-gpqa-diamond@1.0.0",
+        "microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
           "benchmark_profiles": [
             "independent-standard",
             "published-standard"
@@ -90454,6 +90752,54 @@ const builtInCatalogJSON = `{
     {
       "capabilities": [
         "chat",
+        "reasoning"
+      ],
+      "description": "Open-weight 14B Phi-4 reasoning model with additional reinforcement learning for math, science, and coding.",
+      "display_name": "Phi-4 Reasoning Plus",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/microsoft/Phi-4-reasoning-plus",
+        "type": "open_weights"
+      },
+      "family": "phi-4",
+      "id": "microsoft/phi-4-reasoning-plus",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 32768
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "14B",
+      "presentation": {
+        "logo": "package:microsoft",
+        "monochrome": false,
+        "monogram": "Φ"
+      },
+      "publisher": "Microsoft",
+      "released_at": "2025-04-30",
+      "revision": "69baf8528e1bcf05f475034d9e5dd32875ed125f",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "dense"
+      ],
+      "verification": {
+        "authority": "Microsoft",
+        "source": "https://huggingface.co/microsoft/Phi-4-reasoning-plus/blob/69baf8528e1bcf05f475034d9e5dd32875ed125f/README.md",
+        "status": "claimed",
+        "verified_at": "2026-09-24"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
         "reasoning",
         "tools",
         "structured_output",
@@ -98393,6 +98739,21 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "microsoft/phi-4-reasoning-plus",
+          "id": "microsoft/Phi-4-reasoning-plus",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/microsoft/Phi-4-reasoning-plus/blob/69baf8528e1bcf05f475034d9e5dd32875ed125f/README.md",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
           }
         },
         {
