@@ -4,7 +4,9 @@ This profile routes client Chat Completions, Responses, and Anthropic Messages
 through Envoy and the Router to provider-mocker's native Anthropic Messages
 endpoint. Together with `response-api`, it exercises every client/backend
 protocol pairing in buffered and streaming mode, plus tool lifecycles,
-structured output, usage, cache counters, and provider errors.
+structured output, usage, cache counters, and provider errors. It also replays
+the captured agent-client tool loops in `e2e/testcases/testdata/agent_clients`
+that declare an Anthropic backend.
 
 ```bash
 make e2e-test E2E_PROFILE=provider-protocols
