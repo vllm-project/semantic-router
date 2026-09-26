@@ -321,9 +321,34 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     for role in EXPECTED:
-        parser.add_argument(f"--{role.replace('_', '-')}", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    result = audit(parser.parse_args())
+        parser.add_argument(
+            f"--{role.replace('_', '-')}",
+            type=Path,
+            required=role not in ("private_map", "private_salt"),
+        )
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--seal-only", action="store_true")
+    args = parser.parse_args()
+    if args.seal_only:
+        sealed = verify_public_seal(args)
+        print(
+            json.dumps(
+                {
+                    "status": "PUBLIC_SEAL_VERIFIED",
+                    "rows": len(sealed["rows"]),
+                    "groups": len(sealed["groups"]),
+                    "sealed_at_utc": sealed["sealed_at_utc"],
+                    "private_opened": False,
+                },
+                sort_keys=True,
+            )
+        )
+        return
+    if args.private_map is None or args.private_salt is None or args.output is None:
+        parser.error(
+            "private map, private salt and output are required for post-key audit"
+        )
+    result = audit(args)
     print(
         json.dumps(
             {
