@@ -84,6 +84,9 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			logging.Errorf("Process: recovered panic: %v\n%s", rec, debug.Stack())
 			retErr = status.Errorf(codes.Internal, "internal error: %v", rec)
 		}
+		if retErr != nil && ctx != nil {
+			sendHeldHeaderReplyBeforeError(stream, ctx)
+		}
 		finishRequestTrace(ctx, retErr)
 	}()
 
@@ -221,6 +224,11 @@ func (r *OpenAIRouter) handleProcessRequest(
 		return r.processRequestHeaders(stream, v, ctx)
 	case *ext_proc.ProcessingRequest_RequestBody:
 		return r.processRequestBody(stream, v, ctx)
+	case *ext_proc.ProcessingRequest_RequestTrailers:
+		if ctx.FullDuplexRequestBody {
+			return r.processRequestTrailers(stream, ctx)
+		}
+		return processUnknownRequest(stream, v)
 	case *ext_proc.ProcessingRequest_ResponseHeaders:
 		return r.processResponseHeaders(stream, v, ctx)
 	case *ext_proc.ProcessingRequest_ResponseBody:
@@ -242,6 +250,9 @@ func (r *OpenAIRouter) processRequestHeaders(
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
+	if r.holdFullDuplexHeaderReply(v, response, ctx) {
+		return nil
+	}
 	if err := sendResponse(stream, response, "request header"); err != nil {
 		logging.Errorf("sendResponse for headers failed: %v", err)
 		return err
@@ -256,11 +267,24 @@ func (r *OpenAIRouter) processRequestBody(
 	ctx *RequestContext,
 ) error {
 	response, err := r.handleRequestBodyDispatch(v, ctx)
+	_, err = r.sendRequestBodyResult(stream, response, err, ctx)
+	return err
+}
+
+// sendRequestBodyResult sends the reply to a request body message, or to the
+// request trailers that end a full-duplex body, and reports whether it was an
+// immediate response.
+func (r *OpenAIRouter) sendRequestBodyResult(
+	stream ext_proc.ExternalProcessor_ProcessServer,
+	response *ext_proc.ProcessingResponse,
+	err error,
+	ctx *RequestContext,
+) (bool, error) {
 	if err != nil {
 		var ok bool
 		if response, ok = r.processBodyRoutingError(err, ctx); !ok {
 			logging.Errorf("handleRequestBody failed: %v", err)
-			return err
+			return false, err
 		}
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
@@ -270,14 +294,20 @@ func (r *OpenAIRouter) processRequestBody(
 	// number of input chunks before sending a StreamedBodyResponse. A nil
 	// response here means this chunk was retained for the eventual EOS reply.
 	if response == nil && ctx.FullDuplexRequestBody {
-		return nil
+		if ctx.StreamedBody == nil && ctx.fullDuplexHold != nil {
+			return false, status.Error(codes.Internal, "full-duplex request body ended without a reply")
+		}
+		return false, nil
+	}
+	if err := flushHeldRequestHeaderReply(stream, response, ctx); err != nil {
+		return false, err
 	}
 	if err := sendResponse(stream, response, "request body"); err != nil {
 		logging.Errorf("sendResponse for body failed: %v", err)
-		return err
+		return false, err
 	}
 	finishImmediateResponseTrace(ctx, response)
-	return nil
+	return response.GetImmediateResponse() != nil, nil
 }
 
 // processBodyRoutingError converts a *llmprotocol.ProtocolError raised during
