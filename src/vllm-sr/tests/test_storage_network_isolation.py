@@ -107,6 +107,7 @@ def test_serve_creates_both_stack_networks_before_provisioning_storage(
 
     monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(tmp_path))
     monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _name: None)
+    monkeypatch.setattr(core, "container_status_strict", lambda _name: "not found")
     monkeypatch.setattr(
         core,
         "load_config",

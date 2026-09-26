@@ -1,0 +1,263 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+import subprocess
+import sys
+import unittest
+import urllib.error
+from pathlib import Path
+from unittest import mock
+
+import yaml
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+MODULE_PATH = REPO_ROOT / "tools" / "ci" / "verify_published_dashboard_image.py"
+SPEC = importlib.util.spec_from_file_location(
+    "verify_published_dashboard_image", MODULE_PATH
+)
+assert SPEC is not None and SPEC.loader is not None
+verifier = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(verifier)
+
+
+def completed(
+    command: list[str], stdout: str = "", returncode: int = 0
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(command, returncode, stdout, "")
+
+
+class Response:
+    status = 200
+
+    def __enter__(self) -> Response:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return b'{"status":"healthy","service":"semantic-router-dashboard"}'
+
+
+class PublishedDashboardImageTests(unittest.TestCase):
+    def test_manifest_platforms_extracts_oci_index_platforms(self) -> None:
+        raw = json.dumps(
+            {
+                "manifests": [
+                    {
+                        "platform": {"os": "linux", "architecture": "amd64"},
+                        "digest": "sha256:" + "a" * 64,
+                    },
+                    {
+                        "platform": {"os": "linux", "architecture": "arm64"},
+                        "digest": "sha256:" + "b" * 64,
+                    },
+                    {
+                        "platform": {"os": "unknown", "architecture": "unknown"},
+                        "digest": "sha256:" + "c" * 64,
+                    },
+                ]
+            }
+        )
+
+        self.assertEqual(
+            verifier.manifest_platforms(raw),
+            {
+                "linux/amd64": "sha256:" + "a" * 64,
+                "linux/arm64": "sha256:" + "b" * 64,
+            },
+        )
+
+    def test_verify_manifest_rejects_a_missing_arm64_variant(self) -> None:
+        raw = json.dumps(
+            {
+                "manifests": [
+                    {
+                        "platform": {"os": "linux", "architecture": "amd64"},
+                        "digest": "sha256:" + "a" * 64,
+                    }
+                ]
+            }
+        )
+        with (
+            mock.patch.object(verifier, "run_command", return_value=completed([], raw)),
+            self.assertRaisesRegex(verifier.VerificationError, "linux/arm64"),
+        ):
+            verifier.verify_manifest("example.invalid/dashboard@sha256:" + "a" * 64)
+
+    def test_manifest_rejects_ambiguous_or_malformed_child_digests(self) -> None:
+        amd64 = {
+            "platform": {"os": "linux", "architecture": "amd64"},
+            "digest": "sha256:" + "a" * 64,
+        }
+        arm64 = {
+            "platform": {"os": "linux", "architecture": "arm64"},
+            "digest": "sha256:" + "b" * 64,
+        }
+        cases = (
+            ([amd64, amd64, arm64], "duplicate linux/amd64"),
+            ([amd64, {**arm64, "digest": "sha256:bad"}], "no valid digest"),
+            ([amd64, {**arm64, "digest": amd64["digest"]}], "share one child"),
+        )
+        for manifests, message in cases:
+            with (
+                self.subTest(message=message),
+                self.assertRaisesRegex(verifier.VerificationError, message),
+            ):
+                verifier.manifest_platforms(json.dumps({"manifests": manifests}))
+
+    def test_main_runs_each_platform_by_its_verified_child_digest(self) -> None:
+        index_ref = "example.invalid/dashboard@sha256:" + "0" * 64
+        amd64_ref = "example.invalid/dashboard@sha256:" + "a" * 64
+        arm64_ref = "example.invalid/dashboard@sha256:" + "b" * 64
+        raw = json.dumps(
+            {
+                "manifests": [
+                    {
+                        "platform": {"os": "linux", "architecture": "amd64"},
+                        "digest": "sha256:" + "a" * 64,
+                    },
+                    {
+                        "platform": {"os": "linux", "architecture": "arm64"},
+                        "digest": "sha256:" + "b" * 64,
+                    },
+                ]
+            }
+        )
+        with (
+            mock.patch.object(sys, "argv", ["verify", index_ref]),
+            mock.patch.object(
+                verifier, "run_command", return_value=completed([], raw)
+            ) as run,
+            mock.patch.object(verifier, "verify_runtime") as runtime,
+        ):
+            self.assertEqual(verifier.main(), 0)
+
+        run.assert_called_once_with(
+            ["docker", "buildx", "imagetools", "inspect", "--raw", index_ref]
+        )
+        runtime.assert_has_calls(
+            [
+                mock.call(amd64_ref, "linux/amd64"),
+                mock.call(arm64_ref, "linux/arm64"),
+            ]
+        )
+        self.assertEqual(runtime.call_count, 2)
+
+    def test_health_response_requires_dashboard_identity(self) -> None:
+        with self.assertRaisesRegex(verifier.VerificationError, "service"):
+            verifier.validate_health_response(200, b'{"status":"healthy"}')
+
+    def test_wait_for_health_retries_not_ready_errors(self) -> None:
+        for error in (
+            urllib.error.URLError("connection refused"),
+            urllib.error.HTTPError(
+                "http://localhost/healthz", 503, "Not ready", {}, None
+            ),
+        ):
+            with (
+                self.subTest(error=error),
+                mock.patch.object(verifier, "published_port", return_value=49152),
+                mock.patch.object(verifier, "container_is_running", return_value=True),
+                mock.patch.object(
+                    verifier.urllib.request, "urlopen", side_effect=[error, Response()]
+                ) as request,
+                mock.patch.object(verifier.time, "sleep") as sleep,
+                mock.patch.object(verifier.time, "monotonic", side_effect=[0, 1, 2]),
+            ):
+                verifier.wait_for_health("dashboard")
+                self.assertEqual(request.call_count, 2)
+                sleep.assert_called_once_with(2)
+
+    def test_wait_for_health_fails_immediately_on_contract_errors(self) -> None:
+        for body in (
+            b'{"status":"healthy","service":"wrong-service"}',
+            b'{"status":"unhealthy","service":"semantic-router-dashboard"}',
+            b"not JSON",
+        ):
+            with (
+                self.subTest(body=body),
+                mock.patch.object(verifier, "published_port", return_value=49152),
+                mock.patch.object(verifier, "container_is_running", return_value=True),
+                mock.patch.object(
+                    verifier.urllib.request, "urlopen", return_value=Response()
+                ) as request,
+                mock.patch.object(Response, "read", return_value=body),
+                mock.patch.object(verifier.time, "sleep") as sleep,
+                mock.patch.object(verifier.time, "monotonic", side_effect=[0, 1, 91]),
+            ):
+                with self.assertRaises(verifier.VerificationError):
+                    verifier.wait_for_health("dashboard")
+                request.assert_called_once()
+                sleep.assert_not_called()
+
+    def test_arm64_runtime_uses_platform_and_always_removes_container(self) -> None:
+        calls: list[list[str]] = []
+
+        def fake_run(command: list[str], *, check: bool = True):  # type: ignore[no-untyped-def]
+            del check
+            calls.append(command)
+            if command[1] == "port":
+                return completed(command, "127.0.0.1:49152\n")
+            if command[1] == "inspect":
+                return completed(command, "true\n")
+            return completed(command)
+
+        with (
+            mock.patch.object(verifier, "run_command", side_effect=fake_run),
+            mock.patch.object(
+                verifier.urllib.request, "urlopen", return_value=Response()
+            ),
+        ):
+            verifier.verify_runtime(
+                "example.invalid/dashboard@sha256:" + "a" * 64, "linux/arm64"
+            )
+
+        run = next(command for command in calls if command[1] == "run")
+        self.assertIn("linux/arm64", run)
+        self.assertIn("127.0.0.1::8700", run)
+        self.assertEqual(calls[-1][1:3], ["rm", "--force"])
+
+    def test_publish_workflow_verifies_each_dashboard_publication_by_digest(
+        self,
+    ) -> None:
+        workflow = yaml.safe_load(
+            (REPO_ROOT / ".github" / "workflows" / "docker-publish.yml").read_text(
+                encoding="utf-8"
+            )
+        )
+        steps = workflow["jobs"]["publish"]["steps"]
+        promote = next(
+            step
+            for step in steps
+            if step.get("name") == "Promote the qualified image without rebuilding"
+        )
+        verify = next(
+            step
+            for step in steps
+            if step.get("name") == "Verify published Dashboard image"
+        )
+
+        self.assertLess(steps.index(promote), steps.index(verify))
+        self.assertIn("image_artifacts.py promote", promote["run"])
+        self.assertEqual(verify["if"], "matrix.image == 'dashboard'")
+        self.assertIn(
+            "cat .agent-harness/image-input/published-digest.txt", verify["run"]
+        )
+        self.assertIn(
+            'python3 tools/ci/verify_published_dashboard_image.py "ghcr.io/${OWNER}/semantic-router/dashboard@${DIGEST}"',
+            verify["run"],
+        )
+        for action in ("setup-qemu", "setup-buildx", "login"):
+            setup = next(
+                step
+                for step in steps
+                if step.get("uses") == f"docker/{action}-action@v3"
+            )
+            self.assertEqual(setup["if"], "matrix.image == 'dashboard'")
+            self.assertLess(steps.index(setup), steps.index(verify))
+
+
+if __name__ == "__main__":
+    unittest.main()

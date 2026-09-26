@@ -102,7 +102,7 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 			AutoStore:                  false,
 			Milvus:                     MemoryMilvusConfig{Collection: "agentic_memory", Dimension: 384},
 			DefaultRetrievalLimit:      5,
-			DefaultSimilarityThreshold: 0.70,
+			DefaultSimilarityThreshold: DefaultMemorySimilarityThreshold,
 			Persistence: MemoryPersistenceConfig{
 				TimeoutSeconds:       30,
 				Concurrency:          8,
@@ -230,14 +230,15 @@ func defaultCalibrationKnowledgeBase() KnowledgeBaseConfig {
 func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
 	return CanonicalEmbeddingModels{
 		Semantic: EmbeddingModels{
-			MmBertModelPath: "models/Vela-1.0-Encoder-307M-Embedding",
-			UseCPU:          true,
+			MmBertModelPath:     "models/Vela-1.0-Encoder-307M-Embedding",
+			MultiModalModelPath: "models/vela-1.0-omni-nano",
+			UseCPU:              true,
 			EmbeddingConfig: HNSWConfig{
 				// Keep representative routing samples; full 32K text is explicitly opt-in.
 				FullContext:       false,
 				ModelType:         "mmbert",
 				PreloadEmbeddings: true,
-				TargetDimension:   768,
+				TargetDimension:   0,
 				TargetLayer:       22,
 				TopK:              canonicalIntPtr(0),
 				MinScoreThreshold: 0.5,
@@ -310,12 +311,12 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 		Detector: CanonicalHallucinationDetector{
 			ModelRef: "hallucination_detector",
 			HallucinationModelConfig: HallucinationModelConfig{
-				Threshold:              0.8,
+				Threshold:              0.5,
 				UseCPU:                 true,
-				MinSpanLength:          2,
-				MinSpanConfidence:      0.6,
+				MinSpanLength:          1,
+				MinSpanConfidence:      0,
 				ContextWindowSize:      50,
-				EnableNLIFiltering:     true,
+				EnableNLIFiltering:     false,
 				NLIEntailmentThreshold: 0.75,
 			},
 		},
@@ -350,7 +351,7 @@ func DefaultSystemModels() CanonicalSystemModels {
 		DomainClassifier:       "models/Vela-1.0-Encoder-307M-Domain",
 		PIIClassifier:          "models/Vela-1.0-Encoder-307M-PII",
 		FactCheckClassifier:    "models/Vela-1.0-Encoder-307M-FactCheck",
-		HallucinationDetector:  "models/mom-halugate-detector",
+		HallucinationDetector:  "models/Vela-1.0-Encoder-307M-Halu",
 		HallucinationExplainer: "models/mom-halugate-explainer",
 		FeedbackDetector:       "models/Vela-1.0-Encoder-307M-Feedback",
 	}

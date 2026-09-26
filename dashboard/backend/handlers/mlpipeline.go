@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,9 +14,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
+)
+
+// The route contract and multipart parser share the same upload bounds.
+const (
+	MLBenchmarkUploadMaxBytes = 32 << 20
+	MLTrainUploadMaxBytes     = 64 << 20
 )
 
 // MLPipelineHandler holds dependencies for ML pipeline endpoints.
@@ -140,17 +148,25 @@ func (h *MLPipelineHandler) RunBenchmarkHandler() http.HandlerFunc {
 		}
 
 		// Parse multipart form (models YAML + queries JSONL + config)
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse form: %v", err), http.StatusBadRequest)
+		if err := r.ParseMultipartForm(MLBenchmarkUploadMaxBytes); err != nil {
+			writeMLRequestBodyError(w, err, "Failed to parse form")
 			return
 		}
 
 		// Save uploaded files to job dir
-		tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("ml-bench-%d", time.Now().UnixMilli()))
-		if err := os.MkdirAll(tempDir, 0o755); err != nil {
+		tempDir, err := os.MkdirTemp("", "ml-bench-")
+		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to create temp dir: %v", err), http.StatusInternalServerError)
 			return
 		}
+		submitted := false
+		defer func() {
+			if !submitted {
+				if cleanupErr := os.RemoveAll(tempDir); cleanupErr != nil {
+					log.Printf("Failed to remove rejected ML benchmark upload %s: %v", tempDir, cleanupErr)
+				}
+			}
+		}()
 
 		modelsPath, err := saveUploadedFile(r, "models_yaml", tempDir)
 		if err != nil {
@@ -173,12 +189,16 @@ func (h *MLPipelineHandler) RunBenchmarkHandler() http.HandlerFunc {
 			}
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		ctx := context.Background()
 		jobID, err := h.runner.RunBenchmark(ctx, modelsPath, queriesPath, req)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to start benchmark: %v", err), http.StatusInternalServerError)
 			return
 		}
+		submitted = true
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
@@ -205,22 +225,30 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 
 		var benchmarkDataPath string
 		var trainConfig mlpipeline.TrainRequest
+		submitted := false
 
 		contentType := r.Header.Get("Content-Type")
 
 		if strings.HasPrefix(contentType, "multipart/form-data") {
 			// ── Multipart upload mode: user uploads a training data file directly ──
-			if err := r.ParseMultipartForm(64 << 20); err != nil {
-				http.Error(w, fmt.Sprintf("Failed to parse form: %v", err), http.StatusBadRequest)
+			if err := r.ParseMultipartForm(MLTrainUploadMaxBytes); err != nil {
+				writeMLRequestBodyError(w, err, "Failed to parse form")
 				return
 			}
 
 			// Save the uploaded training data file
-			tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("ml-train-upload-%d", time.Now().UnixMilli()))
-			if err := os.MkdirAll(tempDir, 0o755); err != nil {
+			tempDir, err := os.MkdirTemp("", "ml-train-upload-")
+			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to create temp dir: %v", err), http.StatusInternalServerError)
 				return
 			}
+			defer func() {
+				if !submitted {
+					if cleanupErr := os.RemoveAll(tempDir); cleanupErr != nil {
+						log.Printf("Failed to remove rejected ML training upload %s: %v", tempDir, cleanupErr)
+					}
+				}
+			}()
 
 			uploadedPath, err := saveUploadedFile(r, "training_data", tempDir)
 			if err != nil {
@@ -243,8 +271,17 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 				BenchmarkJobID    string                  `json:"benchmark_job_id"`
 				Config            mlpipeline.TrainRequest `json:"config"`
 			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+			decoder := json.NewDecoder(r.Body)
+			if err := decoder.Decode(&body); err != nil {
+				writeMLRequestBodyError(w, err, "Invalid request body")
+				return
+			}
+			var trailing json.RawMessage
+			if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+				if err == nil {
+					err = errors.New("trailing JSON value")
+				}
+				writeMLRequestBodyError(w, err, "Invalid request body")
 				return
 			}
 
@@ -268,12 +305,16 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 			trainConfig.Algorithms = []string{"knn", "kmeans", "svm", "mlp"}
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		ctx := context.Background()
 		jobID, err := h.runner.RunTrain(ctx, benchmarkDataPath, trainConfig)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to start training: %v", err), http.StatusInternalServerError)
 			return
 		}
+		submitted = true
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
@@ -282,6 +323,15 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 			"status": "started",
 		})
 	}
+}
+
+func writeMLRequestBodyError(w http.ResponseWriter, err error, prefix string) {
+	var maxErr *http.MaxBytesError
+	if errors.As(err, &maxErr) {
+		http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	http.Error(w, fmt.Sprintf("%s: %v", prefix, err), http.StatusBadRequest)
 }
 
 // GenerateConfigHandler generates deployment config (Layer 3).
@@ -298,6 +348,9 @@ func (h *MLPipelineHandler) GenerateConfigHandler() http.HandlerFunc {
 		var req mlpipeline.ConfigRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+			return
+		}
+		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
 
@@ -481,8 +534,7 @@ func saveUploadedFile(r *http.Request, fieldName, targetDir string) (string, err
 	}
 	defer file.Close()
 
-	destPath := filepath.Join(targetDir, header.Filename)
-	out, err := os.Create(destPath)
+	out, err := os.CreateTemp(targetDir, fieldName+"-*"+filepath.Ext(header.Filename))
 	if err != nil {
 		return "", fmt.Errorf("failed to create file: %w", err)
 	}
@@ -492,5 +544,5 @@ func saveUploadedFile(r *http.Request, fieldName, targetDir string) (string, err
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 
-	return destPath, nil
+	return out.Name(), nil
 }

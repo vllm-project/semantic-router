@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
@@ -67,6 +68,11 @@ func buildReplayRouteDiagnostics(
 		RequestDemandSnapshots:         cloneRequestDemandSnapshots(ctx.RequestDemandSnapshots),
 		SignalErrors:                   cloneReplayStringMap(ctx.VSRSignalErrors),
 		AppliedUnknownPolicies:         ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,
+		DecisionRanking:                replayDecisionRanking(ctx.VSRDecisionDiagnostics.Ranking),
+	}
+	if ctx.preparedDispatchReceipt != nil {
+		receipt := *ctx.preparedDispatchReceipt
+		diagnostics.PreparedDispatch = &receipt
 	}
 	if ctx.VSRSelectedDecision != nil {
 		diagnostics.Annotations = ctx.VSRSelectedDecision.Annotations
@@ -179,4 +185,24 @@ func sessionPolicyMapForReplay(ctx *RequestContext) map[string]interface{} {
 		return nil
 	}
 	return cloneReplayInterfaceMap(policy.ToMap())
+}
+
+// replayDecisionRanking carries the ranking the engine recorded into the
+// replay record, so a replayed request explains which key selected its
+// decision the same way the eval API does.
+func replayDecisionRanking(trace *decision.RankingTrace) *routerreplay.DecisionRanking {
+	if trace == nil {
+		return nil
+	}
+	return &routerreplay.DecisionRanking{
+		Strategy:   trace.Strategy,
+		Tiered:     trace.Tiered,
+		Tier:       trace.Tier,
+		Comparable: trace.Comparable,
+		Fallback:   trace.Fallback,
+		ScoreKind:  trace.ScoreKind,
+		DecidedBy:  trace.DecidedBy,
+		Winner:     trace.Winner,
+		Candidates: trace.Candidates,
+	}
 }

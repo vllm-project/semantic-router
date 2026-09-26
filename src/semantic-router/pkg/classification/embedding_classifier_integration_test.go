@@ -1,20 +1,13 @@
 package classification
 
-// Integration test for the multimodal embedding classifier path.
-//
-// This test exercises the real candle-binding FFI (no stubbed embedding
-// functions) to prove the end-to-end image-query path works against the
-// production model: base64 image -> getMultiModalImageEmbedding -> 384-dim
-// embedding -> cosine match against preloaded text anchors. It mirrors the
-// env-var-skip pattern used by the multimodal tests in
-// candle-binding/semantic-router_test.go.
-//
-// Run with:
-//   MULTIMODAL_MODEL_PATH=/path/to/multi-modal-embed-small \
-//     go test ./pkg/classification/ -run TestEmbeddingClassifier_Integration -v
+// Real model integration uses an explicitly prepared, owned Omni artifact.
+// Run with VELA_OMNI_ARTIFACT=/path/to/vela-1.0-omni-nano and ORT_DYLIB_PATH
+// pointing to the installed ORT library. An explicitly selected missing/broken
+// artifact fails; only an unselected model-backed suite is skipped.
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"image"
 	"image/color"
@@ -22,13 +15,14 @@ import (
 	"os"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 // generateSyntheticPNGBase64 returns a base64-encoded 32x32 PNG with a single
 // solid color. The exact pixel content is unimportant; the test only needs a
-// valid PNG that the multi-modal-embed-small image branch can decode and embed.
+// valid PNG that the selected Omni image branch can decode and embed.
 // Using a procedurally generated image keeps the fixture in-source so the test
 // has no external dependencies.
 func generateSyntheticPNGBase64(t *testing.T, c color.RGBA) string {
@@ -46,18 +40,44 @@ func generateSyntheticPNGBase64(t *testing.T, c color.RGBA) string {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 }
 
-// requireMultiModalModel skips the test when the model path is not available,
-// matching the convention in candle-binding/semantic-router_test.go for
-// MultiModal tests.
-func requireMultiModalModel(t *testing.T) {
+func requireOmniProvider(t *testing.T) embedding.Provider {
 	t.Helper()
-	modelPath := os.Getenv("MULTIMODAL_MODEL_PATH")
-	if modelPath == "" {
-		t.Skip("Skipping integration test: MULTIMODAL_MODEL_PATH not set; export it to point at the multi-modal-embed-small model directory to run this test")
+	artifact := os.Getenv("VELA_OMNI_ARTIFACT")
+	if artifact == "" {
+		if os.Getenv("REQUIRE_OMNI_TESTS") == "1" {
+			t.Fatal("VELA_OMNI_ARTIFACT must select a prepared artifact")
+		}
+		t.Skip("set VELA_OMNI_ARTIFACT to select owned Omni integration")
 	}
-	// Init is idempotent at the candle-binding layer; ignoring already-initialized
-	// is consistent with how candle-binding/semantic-router_test.go handles it.
-	_ = candle_binding.InitMultiModalEmbeddingModel(modelPath, true)
+	provider, err := native.New(nil).Embedding(context.Background(), config.ResolvedModelBinding{
+		Recipe: "image-test", Name: "embedding",
+		Binding:    config.ModelBinding{Deployment: "omni", Contract: "embedding.v1", Adapter: "vela_omni"},
+		Deployment: config.ModelDeployment{Artifact: artifact, Provider: "ort", Device: "cpu", Precision: "native", Input: config.ModelInputBudget{Overflow: "reject"}},
+	}, 0, 0)
+	if err != nil {
+		t.Fatalf("prepare selected Omni artifact: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := provider.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	return provider
+}
+
+func newOwnedImageClassifier(t *testing.T, rules []config.EmbeddingRule) *EmbeddingClassifier {
+	t.Helper()
+	provider := requireOmniProvider(t)
+	options := multimodalHNSWConfig(true)
+	options.TargetDimension = provider.Dimension()
+	classifier, err := NewEmbeddingClassifierWithProvider(rules, options, provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := classifier.WarmupCandidateEmbeddings(); err != nil {
+		t.Fatalf("warm owned image anchors: %v", err)
+	}
+	return classifier
 }
 
 // TestEmbeddingClassifier_IntegrationImageQueryEndToEnd proves the full image
@@ -66,19 +86,14 @@ func requireMultiModalModel(t *testing.T) {
 // base64-encoded PNG payload, and asserts that the FFI returned an embedding
 // and the result populates Scores for the image rules (not the absent text
 // rules). This is the integration coverage missing from the unit-test suite,
-// which stubs getMultiModalImageEmbedding and never exercises the FFI path.
+// which uses owned typed fakes instead of a real native artifact.
 func TestEmbeddingClassifier_IntegrationImageQueryEndToEnd(t *testing.T) {
-	requireMultiModalModel(t)
-
 	imagePayload := generateSyntheticPNGBase64(t, color.RGBA{R: 200, G: 50, B: 50, A: 255})
 
 	// Use the same fixture the unit tests use so the integration test exercises
 	// real preload semantics for the same anchor pack shape that ships with the
 	// upstream PR's reference example tutorial.
-	classifier, err := NewEmbeddingClassifier(chipFabImageRules(), multimodalHNSWConfig(true))
-	if err != nil {
-		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
-	}
+	classifier := newOwnedImageClassifier(t, chipFabImageRules())
 
 	result, err := classifier.ClassifyDetailedMultimodal(config.QueryModalityImage, imagePayload)
 	if err != nil {
@@ -105,14 +120,9 @@ func TestEmbeddingClassifier_IntegrationImageQueryEndToEnd(t *testing.T) {
 // mixed text + image rules should only score the image rules when called via
 // ClassifyDetailedMultimodal.
 func TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath(t *testing.T) {
-	requireMultiModalModel(t)
-
 	imagePayload := generateSyntheticPNGBase64(t, color.RGBA{R: 100, G: 100, B: 200, A: 255})
 
-	classifier, err := NewEmbeddingClassifier(mixedModalityRules(), multimodalHNSWConfig(true))
-	if err != nil {
-		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
-	}
+	classifier := newOwnedImageClassifier(t, mixedModalityRules())
 
 	result, err := classifier.ClassifyDetailedMultimodal(config.QueryModalityImage, imagePayload)
 	if err != nil {

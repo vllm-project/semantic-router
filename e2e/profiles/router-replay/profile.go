@@ -16,7 +16,7 @@ const (
 )
 
 var resourceManifests = []string{
-	"deploy/kubernetes/router-replay/mock-vllm.yaml",
+	"deploy/kubernetes/router-replay/provider-mocker.yaml",
 	"deploy/kubernetes/response-api/gwapi-resources.yaml",
 }
 
@@ -33,7 +33,7 @@ func NewProfile() *Profile {
 			SemanticRouterValuesFile: valuesFile,
 			PrerequisiteManifests:    []string{postgresManifest},
 			ResourceManifests:        resourceManifests,
-			WaitDeployments:          []helpers.DeploymentRef{{Namespace: "default", Name: "mock-vllm"}},
+			WaitDeployments:          []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
 		}),
 	}
 }
@@ -67,6 +67,7 @@ func (p *Profile) GetTestCases() []string {
 		"router-replay-session-list-filter",
 		"router-replay-session-turn-progression",
 		"shadow-dispatch-observes-candidate-model",
+		"shadow-dataset-export-manifest",
 		"shadow-dispatch-fail-open-unreachable-backend",
 		"shadow-dispatch-fail-open-timeout",
 		"shadow-dispatch-fail-open-malformed-response",

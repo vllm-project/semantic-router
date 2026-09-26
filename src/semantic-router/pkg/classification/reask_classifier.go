@@ -121,14 +121,7 @@ func minimumReaskThreshold(rules []config.ReaskRule) float64 {
 }
 
 func (c *ReaskClassifier) embedText(text string) ([]float32, error) {
-	if c.provider != nil {
-		return c.provider.Embed(context.Background(), text)
-	}
-	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	return embedding.Embed(context.Background(), c.provider, text, embedding.Options{})
 }
 
 func evaluateReaskStreak(similarities []float64, threshold float64, lookbackTurns int) (float64, int) {

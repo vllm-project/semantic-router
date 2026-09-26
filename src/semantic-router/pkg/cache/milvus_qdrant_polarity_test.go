@@ -110,6 +110,29 @@ func TestRemoteVectorCachePolarityCandidates(t *testing.T) {
 	}
 }
 
+func TestRemoteVectorCacheHitReportsNegationGuard(t *testing.T) {
+	for _, tc := range negationGuardServedPairs {
+		candidates := []remotePolarityCandidate{{tc.cached, "ANSWER", .95}}
+		milvus := &MilvusCache{enabled: true, config: milvusCacheTestConfig("Strong"), embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) {
+			return []client.SearchResult{milvusPolarityFixture(candidates)}, nil
+		}}
+		qdrantCache := &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
+			return qdrantPolarityFixture(candidates), nil
+		}}
+		for backend, lookup := range map[string]func(context.Context, string, string, float32) (LookupResult, error){
+			"milvus": milvus.LookupSimilarWithThreshold,
+			"qdrant": qdrantCache.LookupSimilarWithThreshold,
+		} {
+			t.Run(backend+"/"+tc.name, func(t *testing.T) {
+				result, err := lookup(context.Background(), "tenant-a", tc.incoming, .8)
+				require.NoError(t, err)
+				require.True(t, result.Found)
+				assert.Equal(t, tc.want, result.NegationGuard)
+			})
+		}
+	}
+}
+
 func TestMilvusResponseColumnUsesName(t *testing.T) {
 	const body = "0123456789abcdef0123456789abcdef"
 	c := &MilvusCache{enabled: true, queryByIDFn: func(context.Context, string, string) (client.ResultSet, error) {

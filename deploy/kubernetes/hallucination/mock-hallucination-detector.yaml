@@ -1,6 +1,6 @@
 # Stands in for a generative span detector behind an OpenAI-compatible server
 # (e.g. vLLM serving KRLabsOrg/lettucedect-v2-qwen-2b). It reuses the shared
-# mock-vllm image, which returns structured hallucinated_spans when it receives
+# provider-mocker image, which returns structured hallucinated_spans when it receives
 # the detector's json_schema request.
 apiVersion: apps/v1
 kind: Deployment
@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: mock-hallucination-detector
-        image: ghcr.io/vllm-project/semantic-router/mock-vllm:latest
+        image: semantic-router-ci/provider-mocker:e2e-test
         imagePullPolicy: Never
         ports:
         - containerPort: 8000

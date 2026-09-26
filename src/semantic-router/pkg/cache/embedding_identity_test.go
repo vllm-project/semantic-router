@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 )
 
 type persistedSemanticRecord struct {
@@ -109,12 +111,17 @@ func TestCacheEmbeddingSettingsReflectActualBackend(t *testing.T) {
 	if !ok || settings.Layer != 6 || settings.Dimension != 256 {
 		t.Fatalf("inmemory actual settings: %#v %v", settings, ok)
 	}
-	persistent := &QdrantCache{embeddingModel: "mmbert"}
+	persistent := &QdrantCache{embeddingModel: "mmbert", embeddingProvider: storagetest.Vectors{Size: 768}}
 	settings, ok = LocalEmbeddingSettings(persistent)
 	if !ok || settings.Layer != 0 || settings.Dimension != 768 {
 		t.Fatalf("persistent actual settings: %#v %v", settings, ok)
 	}
-	if _, ok := LocalEmbeddingSettings(NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "bert"})); ok {
+	if _, ok = LocalEmbeddingSettings(NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "qwen3"})); ok {
 		t.Fatal("unsupported provider received guessed identity")
+	}
+	bert := NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "bert", EmbeddingProvider: storagetest.Vectors{Size: 384}})
+	settings, ok = LocalEmbeddingSettings(bert)
+	if !ok || settings.Layer != 0 || settings.Dimension != 384 {
+		t.Fatalf("bert actual settings: %#v %v", settings, ok)
 	}
 }

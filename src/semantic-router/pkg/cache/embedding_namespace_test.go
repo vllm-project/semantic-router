@@ -1,10 +1,13 @@
 package cache
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
@@ -25,7 +28,7 @@ func physicalNamespace(cfg CacheConfig) []string {
 }
 
 func namespaceFixture(backend CacheBackendType, dimension int) CacheConfig {
-	cfg := CacheConfig{Enabled: true, BackendType: backend, EmbeddingModel: "mmbert"}
+	cfg := CacheConfig{Enabled: true, BackendType: backend, EmbeddingModel: "mmbert", EmbeddingProvider: storagetest.Vectors{Size: 768}}
 	switch backend {
 	case RedisCacheType:
 		cfg.Redis = &config.RedisConfig{}
@@ -59,7 +62,7 @@ func TestEmbeddingNamespaceIsolatesPhysicalIndexesAndPrefixesBeforeOpening(t *te
 				if settings.Layer != 0 || settings.Dimension != 768 {
 					t.Fatalf("wrong effective settings: %#v", settings)
 				}
-				return embedding.ContentIdentity{Fingerprint: "old-weights-768"}, nil
+				return embedding.ContentIdentity{Fingerprint: "old-weights-768", Descriptor: embedding.RuntimeDescriptor{Dimension: 768}}, nil
 			}
 			first, identity, err := PrepareEmbeddingNamespace(original, resolve)
 			if err != nil || identity == "" {
@@ -70,7 +73,7 @@ func TestEmbeddingNamespaceIsolatesPhysicalIndexesAndPrefixesBeforeOpening(t *te
 				t.Fatal("same identity was not stable")
 			}
 			changed, _, err := PrepareEmbeddingNamespace(original, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-				return embedding.ContentIdentity{Fingerprint: "new-weights-768"}, nil
+				return embedding.ContentIdentity{Fingerprint: "new-weights-768", Descriptor: embedding.RuntimeDescriptor{Dimension: 768}}, nil
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -88,7 +91,7 @@ func TestEmbeddingNamespaceIsolatesPhysicalIndexesAndPrefixesBeforeOpening(t *te
 					if settings.Dimension != 256 {
 						t.Fatalf("reduced dimension ignored: %#v", settings)
 					}
-					return embedding.ContentIdentity{Fingerprint: fmt.Sprintf("new-weights-%d", settings.Dimension)}, nil
+					return embedding.ContentIdentity{Fingerprint: fmt.Sprintf("new-weights-%d", settings.Dimension), Descriptor: embedding.RuntimeDescriptor{Dimension: settings.Dimension}}, nil
 				})
 				if err != nil {
 					t.Fatal(err)
@@ -114,7 +117,7 @@ func TestEmbeddingNamespaceLeavesUnsupportedProvidersAndDisabledCachesUntouched(
 	for _, enabled := range []bool{false, true} {
 		cfg := namespaceFixture(RedisCacheType, 768)
 		cfg.Enabled = enabled
-		cfg.EmbeddingModel = "bert"
+		cfg.EmbeddingModel = "qwen3"
 		got, identity, err := PrepareEmbeddingNamespace(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 			t.Fatal("unsupported provider resolved")
 			return embedding.ContentIdentity{}, nil
@@ -122,5 +125,45 @@ func TestEmbeddingNamespaceLeavesUnsupportedProvidersAndDisabledCachesUntouched(
 		if err != nil || identity != "" || !reflect.DeepEqual(got, cfg) {
 			t.Fatal("legacy behavior changed")
 		}
+	}
+}
+
+func TestCandleBERTCacheOpensVersionedNamespace(t *testing.T) {
+	embed := func(context.Context, string) ([]float32, error) {
+		return nil, errors.New("namespace binding ran inference")
+	}
+	for _, backend := range []CacheBackendType{RedisCacheType, ValkeyCacheType, MilvusCacheType, HybridCacheType, QdrantCacheType} {
+		t.Run(string(backend), func(t *testing.T) {
+			prepare := func(runtime string) (CacheConfig, CacheConfig, string) {
+				t.Helper()
+				provider, err := embedding.NewFuncProvider(runtime, 384, embed)
+				if err != nil {
+					t.Fatal(err)
+				}
+				cfg := namespaceFixture(backend, 384)
+				cfg.EmbeddingModel, cfg.EmbeddingProvider = "bert", provider
+				bound, identity, err := PrepareEmbeddingNamespace(cfg, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
+					return embedding.ResolveNamespaceIdentity(provider, settings)
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return cfg, bound, identity
+			}
+			legacy, bound, identity := prepare("candle")
+			_, reopened, _ := prepare("candle")
+			if identity == "" || !reflect.DeepEqual(physicalNamespace(bound), physicalNamespace(reopened)) {
+				t.Fatal("Candle BERT namespace is missing or unstable")
+			}
+			for index, name := range physicalNamespace(bound) {
+				if name == physicalNamespace(legacy)[index] {
+					t.Fatalf("upgraded Candle BERT reopened the old index %q", name)
+				}
+			}
+			unchanged, got, identity := prepare("ort")
+			if identity != "" || !reflect.DeepEqual(got, unchanged) {
+				t.Fatal("BERT runtime with unchanged vectors moved to a new namespace")
+			}
+		})
 	}
 }

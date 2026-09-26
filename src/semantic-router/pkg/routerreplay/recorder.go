@@ -47,6 +47,7 @@ type (
 	LearningRescueDiagnostics     = store.LearningRescueDiagnostics
 	LearningSamplingDiagnostics   = store.LearningSamplingDiagnostics
 	Outcome                       = store.Outcome
+	PreparedDispatchReceipt       = store.PreparedDispatchReceipt
 	RequestDemandSnapshot         = store.RequestDemandSnapshot
 	FusionPanelAttemptDiagnostics = store.FusionPanelAttemptDiagnostics
 	FusionQuorumDiagnostics       = store.FusionQuorumDiagnostics
@@ -54,6 +55,7 @@ type (
 	LooperAttempt                 = store.LooperAttempt
 	LooperDiagnostics             = store.LooperDiagnostics
 	RouteDiagnostics              = store.RouteDiagnostics
+	DecisionRanking               = store.DecisionRanking
 	RoutingRecord                 = store.Record
 	ToolTrace                     = store.ToolTrace
 	ToolTraceStep                 = store.ToolTraceStep

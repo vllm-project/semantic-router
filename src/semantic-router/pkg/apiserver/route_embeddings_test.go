@@ -13,37 +13,8 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
-
-func TestBuildBatchSimilarityMatchesRejectsInvalidNativeIndex(t *testing.T) {
-	result := &candle_binding.BatchSimilarityOutput{
-		Matches: []candle_binding.BatchSimilarityMatch{
-			{Index: 2, Similarity: 0.9},
-		},
-	}
-
-	if _, err := buildBatchSimilarityMatches(result, []string{"a", "b"}); err == nil {
-		t.Fatalf("expected invalid native match index to return an error")
-	}
-}
-
-func TestBuildBatchSimilarityMatchesIncludesCandidateText(t *testing.T) {
-	result := &candle_binding.BatchSimilarityOutput{
-		Matches: []candle_binding.BatchSimilarityMatch{
-			{Index: 1, Similarity: 0.9},
-			{Index: 0, Similarity: 0.7},
-		},
-	}
-
-	matches, err := buildBatchSimilarityMatches(result, []string{"first", "second"})
-	if err != nil {
-		t.Fatalf("expected valid native matches, got %v", err)
-	}
-
-	if matches[0].Text != "second" || matches[1].Text != "first" {
-		t.Fatalf("expected candidate text to follow native indexes, got %+v", matches)
-	}
-}
 
 func TestValidateEmbeddingRequestRequiresTextsOrImages(t *testing.T) {
 	req := EmbeddingRequest{Dimension: defaultEmbeddingDimension}
@@ -52,7 +23,7 @@ func TestValidateEmbeddingRequestRequiresTextsOrImages(t *testing.T) {
 	if ok {
 		t.Fatalf("expected empty texts and images to be invalid")
 	}
-	if code != "INVALID_INPUT" || message != "at least one of texts or images must be provided" {
+	if code != "INVALID_INPUT" || message != "at least one of texts, images or audios must be provided" {
 		t.Fatalf("unexpected validation error %q: %q", code, message)
 	}
 }
@@ -113,26 +84,21 @@ func TestValidateEmbeddingRequestAcceptsUppercaseDataURIScheme(t *testing.T) {
 }
 
 func TestBuildEmbeddingResultsWrapsImageEncodeFailure(t *testing.T) {
-	// A validated safe data URI whose bytes are not a decodable image fails at the
-	// FFI; buildEmbeddingResults must tag it as an imageEncodeError so the handler
-	// maps it to 400 instead of 500.
-	orig := multiModalEncodeImage
-	defer func() { multiModalEncodeImage = orig }()
-	multiModalEncodeImage = func(string, int) (*candle_binding.MultiModalEmbeddingOutput, error) {
-		return nil, errors.New("failed to decode image")
-	}
+	fp, _ := embedding.NewFuncProvider("synthetic", 2, func(context.Context, string) ([]float32, error) { return []float32{1, 0}, nil })
+	provider := &apiMediaProvider{FuncProvider: fp, imageError: binding.ErrInvalidInput}
+	prepared := embedding.NewSet(map[string]embedding.Provider{"multimodal": provider}, "multimodal")
 
 	req := EmbeddingRequest{
 		Images:    []string{"data:image/png;base64,aGVsbG8="},
 		Dimension: defaultEmbeddingDimension,
 	}
-	_, _, err := buildEmbeddingResults(req)
+	_, _, err := buildOwnedEmbeddingResults(context.Background(), prepared, req)
 	if err == nil {
 		t.Fatalf("expected an error from a failing image encode")
 	}
-	var imgErr *imageEncodeError
+	var imgErr *mediaEncodeError
 	if !errors.As(err, &imgErr) {
-		t.Fatalf("expected imageEncodeError, got %T: %v", err, err)
+		t.Fatalf("expected mediaEncodeError, got %T: %v", err, err)
 	}
 	if imgErr.index != 0 {
 		t.Fatalf("expected image index 0, got %d", imgErr.index)
@@ -140,7 +106,7 @@ func TestBuildEmbeddingResultsWrapsImageEncodeFailure(t *testing.T) {
 }
 
 func TestClassifyEmbeddingErrorMapsImageEncodeFailureTo400(t *testing.T) {
-	status, code, _ := classifyEmbeddingError(&imageEncodeError{index: 2, err: errors.New("bad image")})
+	status, code, _ := classifyEmbeddingError(&mediaEncodeError{modality: "image", index: 2, err: binding.ErrInvalidInput})
 	if status != http.StatusBadRequest || code != "INVALID_IMAGE" {
 		t.Fatalf("expected 400 INVALID_IMAGE, got %d %q", status, code)
 	}
@@ -291,6 +257,15 @@ func TestEmbeddingEndpointsReturn503WhenNotReady(t *testing.T) {
 	}
 
 	for _, tc := range tests {
+		{"valid", SimilarityRequest{Text1: "a", Text2: "b", Dimension: defaultEmbeddingDimension}, true, ""},
+		{"empty_text1", SimilarityRequest{Text1: "", Text2: "b", Dimension: defaultEmbeddingDimension}, false, "INVALID_INPUT"},
+		{"whitespace_text2", SimilarityRequest{Text1: "a", Text2: "   ", Dimension: defaultEmbeddingDimension}, false, "INVALID_INPUT"},
+		{"bad_dimension", SimilarityRequest{Text1: "a", Text2: "b", Dimension: -1}, false, "INVALID_DIMENSION"},
+		{"dimension_64_allowed", SimilarityRequest{Text1: "a", Text2: "b", Dimension: 64}, true, ""},
+		{"quality_priority_too_high", SimilarityRequest{Text1: "a", Text2: "b", Dimension: defaultEmbeddingDimension, QualityPriority: 1.5}, false, "INVALID_PARAMETER"},
+		{"latency_priority_negative", SimilarityRequest{Text1: "a", Text2: "b", Dimension: defaultEmbeddingDimension, LatencyPriority: -0.1}, false, "INVALID_PARAMETER"},
+	}
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -442,17 +417,17 @@ func TestValidateEmbeddingRequestTargetLayerLegacyFallback(t *testing.T) {
 }
 
 // target_layer is only meaningful for mmbert; other models must reject it.
-func TestValidateEmbeddingRequestTargetLayerRejectedForNonMmbert(t *testing.T) {
+func TestValidateEmbeddingRequestTargetLayerRejectedWhenNotAdvertised(t *testing.T) {
 	code, _, ok := validateEmbeddingRequest(EmbeddingRequest{
 		Model:       "qwen3",
 		Texts:       []string{"hello"},
 		Dimension:   defaultEmbeddingDimension,
 		TargetLayer: 6,
-	}, []int{6, 11, 16, 22})
+	}, nil)
 	if ok {
 		t.Fatalf("expected target_layer on non-mmbert model to be rejected")
 	}
-	if code != "INVALID_PARAMETER" {
-		t.Fatalf("expected INVALID_PARAMETER, got %q", code)
+	if code != "INVALID_LAYER" {
+		t.Fatalf("expected INVALID_LAYER, got %q", code)
 	}
 }

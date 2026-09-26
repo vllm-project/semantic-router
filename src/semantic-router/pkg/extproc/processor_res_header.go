@@ -2,6 +2,8 @@ package extproc
 
 import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // handleResponseHeaders processes the response headers.
@@ -30,7 +32,30 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 	r.updateRouterReplayStatus(ctx, outcome.statusCode, ctx != nil && ctx.IsStreamingResponse)
 	r.observeRouterLearningProviderStatus(ctx, outcome.statusCode)
 
+	if outcome.isSuccessful {
+		r.recordPrimarySuccess(ctx)
+	} else if r.shouldAttemptFallback(ctx) {
+		if fallbackResp := r.maybeExecuteFallback(nil, ctx); fallbackResp != nil {
+			return fallbackResp, nil
+		}
+	}
+	// Once response headers are continued to Envoy, Envoy's response_header_mode: SEND
+	// sends the headers downstream to the client, committing the response.
+	// ResponseHeadersContinued must be true to prevent subsequent body-stage
+	// processing from attempting fallback and emitting an invalid ImmediateResponse.
+	if ctx != nil {
+		ctx.ResponseHeadersContinued = true
+	}
+
 	headerMutation := buildResponseHeaderMutation(ctx, outcome.isSuccessful)
 	headerMutation = mergeHeaderMutations(headerMutation, buildResponseStreamingMutation(ctx, outcome))
+	// Response headers are sent before the body is decoded. A same-format Chat
+	// provider may require canonical re-encoding after its decorations are
+	// dropped, so do not commit the provider's original byte count.
+	if outcome.isSuccessful && ctx != nil && !ctx.IsStreamingResponse &&
+		ctx.SourceFormat == llmprotocol.OpenAIChatV1 && ctx.TargetFormat == llmprotocol.OpenAIChatV1 {
+		headerMutation = mergeHeaderMutations(headerMutation,
+			&ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}})
+	}
 	return buildResponseHeadersContinueResponse(headerMutation, ctx != nil && ctx.IsStreamingResponse), nil
 }

@@ -381,3 +381,46 @@ func TestBuildRefusesAFailedPrimaryBesideACompletedShadow(t *testing.T) {
 		}
 	}
 }
+
+// A request can be compared against several candidates at once. The arms a
+// manifest carries must not follow the order the router happened to append the
+// outcomes in, because the digest covers them and two runs over the same
+// observation would otherwise stop agreeing on the dataset's identity.
+func TestBuildOrdersSeveralShadowArmsIndependentlyOfArrivalOrder(t *testing.T) {
+	first := buildOrFail(t, []store.Record{comparedRecord("r1", "ask one", "answer one",
+		shadowOutcome("candidate-b", "d2"),
+		shadowOutcome("candidate-a", "d1"),
+	)}, testPolicy())
+	second := buildOrFail(t, []store.Record{comparedRecord("r1", "ask one", "answer one",
+		shadowOutcome("candidate-a", "d1"),
+		shadowOutcome("candidate-b", "d2"),
+	)}, testPolicy())
+
+	if first.Digest != second.Digest {
+		t.Fatalf("arms appended in a different order gave digests %s and %s", first.Digest, second.Digest)
+	}
+	arms := first.Examples[0].Shadows
+	if len(arms) != 2 {
+		t.Fatalf("example carries %d shadow arms, want 2", len(arms))
+	}
+	if arms[0].Model != "candidate-a" || arms[1].Model != "candidate-b" {
+		t.Fatalf("shadow arms read %s then %s, want candidate-a then candidate-b", arms[0].Model, arms[1].Model)
+	}
+}
+
+// One candidate answering twice is two arms, not one, so the second must not be
+// dropped by an ordering that only compares model names.
+func TestBuildKeepsEveryArmOfOneCandidate(t *testing.T) {
+	manifest := buildOrFail(t, []store.Record{comparedRecord("r1", "ask one", "answer one",
+		shadowOutcome("candidate-a", "d2"),
+		shadowOutcome("candidate-a", "d1"),
+	)}, testPolicy())
+
+	arms := manifest.Examples[0].Shadows
+	if len(arms) != 2 {
+		t.Fatalf("example carries %d shadow arms, want 2", len(arms))
+	}
+	if arms[0].OutputDigest != "d1" || arms[1].OutputDigest != "d2" {
+		t.Fatalf("arms read %s then %s, want d1 then d2", arms[0].OutputDigest, arms[1].OutputDigest)
+	}
+}

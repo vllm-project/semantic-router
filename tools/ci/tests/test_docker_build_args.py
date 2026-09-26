@@ -25,6 +25,14 @@ def run_resolver(**overrides: str) -> str:
 
 
 class DockerBuildArgumentTests(unittest.TestCase):
+    def test_e2e_image_contains_both_omni_variants(self) -> None:
+        output = run_resolver(MATRIX_IMAGE="extproc")
+        self.assertIn("VELA_OMNI_VARIANTS=nano mini\n", output)
+
+    def test_other_images_keep_their_model_bundle_defaults(self) -> None:
+        output = run_resolver(MATRIX_IMAGE="envoy")
+        self.assertNotIn("VELA_OMNI_VARIANTS", output)
+
     def test_release_dashboard_uses_stable_tag(self) -> None:
         output = run_resolver(
             DASHBOARD_VERSION_MODE="release",
@@ -34,12 +42,16 @@ class DockerBuildArgumentTests(unittest.TestCase):
         self.assertRegex(output, r"VLLM_SR_SOURCE_REVISION=[0-9a-f]{40}\n")
 
     def test_nightly_dashboard_uses_explicit_date(self) -> None:
-        output = run_resolver(
-            DASHBOARD_VERSION_MODE="publish",
-            IS_NIGHTLY="true",
-            NIGHTLY_DATE="20260806",
-        )
-        self.assertIn("DASHBOARD_VERSION=v0.3.0-nightly.20260806.", output)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            version_file = Path(temp_dir) / "pyproject.toml"
+            version_file.write_text('version = "9.8.7"\n', encoding="utf-8")
+            output = run_resolver(
+                DASHBOARD_VERSION_MODE="publish",
+                IS_NIGHTLY="true",
+                NIGHTLY_DATE="20260806",
+                PROJECT_VERSION_FILE=str(version_file),
+            )
+        self.assertIn("DASHBOARD_VERSION=v9.8.7-nightly.20260806.", output)
 
     def test_dashboard_source_revision_is_the_full_git_commit(self) -> None:
         output = run_resolver(

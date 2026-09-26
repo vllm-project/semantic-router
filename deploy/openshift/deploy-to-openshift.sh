@@ -45,16 +45,16 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --simulator           Use mock-vllm simulator instead of llm-katan (no GPU required)"
+            echo "  --simulator           Use KServe simulator resources (requires --kserve)"
             echo "  --kserve              Deploy semantic-router with a KServe backend (use --simulator for KServe sim)"
             echo "  --classifier-gpu      Run semantic router classifier on GPU"
             echo "  --no-observability    Skip deploying dashboard, OpenWebUI, Grafana, and Prometheus"
             echo "  --namespace, -n NS    Target namespace (default: vllm-semantic-router-system)"
             echo "  --help, -h            Show this help message"
             echo ""
-            echo "By default, deploys the full stack with llm-katan (requires GPU)."
-            echo "Use --simulator for CPU-only clusters without GPUs."
-            echo "Use --classifier-gpu with --simulator to run classifier on GPU but vLLM models on CPU."
+            echo "By default, deploys CPU-only provider-mocker backends."
+            echo "Set PROVIDER_MOCKER_IMAGE to a qualified registry image digest."
+            echo "Use --classifier-gpu to run the Router classifier on GPU independently."
             exit 0
             ;;
         *)
@@ -91,6 +91,18 @@ apply_with_namespace() {
     sed "s/${DEFAULT_NAMESPACE}/${NAMESPACE}/g" "$1" | oc apply -n "$NAMESPACE" -f -
 }
 
+# Standalone deployments reuse a qualified fixture and never rebuild it.
+if [[ "$USE_KSERVE" == "false" ]]; then
+    if [[ "$USE_SIMULATOR" == "true" ]]; then
+        error "--simulator is only used with --kserve; the default backend is provider-mocker."
+        exit 1
+    fi
+    if [[ ! "${PROVIDER_MOCKER_IMAGE:-}" =~ ^[a-zA-Z0-9._:/-]+@sha256:[a-f0-9]{64}$ ]]; then
+        error "Set PROVIDER_MOCKER_IMAGE to a published provider-mocker@sha256:<digest> image."
+        exit 1
+    fi
+fi
+
 # Check if logged in to OpenShift
 if ! oc whoami &>/dev/null; then
     error "Not logged in to OpenShift. Please login first:"
@@ -124,6 +136,14 @@ for i in {1..30}; do
     break
 done
 success "Namespace ready"
+
+# ServiceAccount and the Role letting the router/dashboard patch their own
+# ConfigMap through the Kubernetes API instead of the read-only mounted
+# file (issue #3688). Needed before the deployments below reference it.
+log "Creating ServiceAccount and RBAC for config writes..."
+apply_with_namespace "$SCRIPT_DIR/serviceaccount.yaml"
+apply_with_namespace "$SCRIPT_DIR/rbac.yaml"
+success "ServiceAccount and RBAC ready"
 
 # KServe mode: deploy LLMInferenceService and semantic-router
 if [[ "$USE_KSERVE" == "true" ]]; then
@@ -259,72 +279,6 @@ if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
     log "Found $GPU_NODES node(s) with GPU resources for semantic router classifier"
 fi
 
-# Build model backend image based on mode
-if [[ "$USE_SIMULATOR" == "true" ]]; then
-    # Use mock-vllm simulator (no GPU required)
-    log "Simulator mode: Building mock-vllm image..."
-    BACKEND_IMAGE_NAME="mock-vllm"
-    MOCK_VLLM_DIR="$SCRIPT_DIR/../../tools/test/services/mock-vllm"
-
-    if ! oc get imagestream mock-vllm -n "$NAMESPACE" &> /dev/null; then
-        if [[ -f "$MOCK_VLLM_DIR/Dockerfile" ]]; then
-            oc new-build --name mock-vllm --binary --strategy=docker -n "$NAMESPACE"
-            log "Uploading mock-vllm source and building..."
-            oc start-build mock-vllm --from-dir="$MOCK_VLLM_DIR" --follow -n "$NAMESPACE" || true
-
-            log "Waiting for build to complete..."
-            # Get the latest build to handle reruns (mock-vllm-1, mock-vllm-2, etc.)
-            LATEST_BUILD=$(oc get builds -l buildconfig=mock-vllm -n "$NAMESPACE" -o name --sort-by=.metadata.creationTimestamp | tail -1)
-            if [[ -n "$LATEST_BUILD" ]]; then
-                if ! oc wait --for=condition=Complete "$LATEST_BUILD" -n "$NAMESPACE" --timeout=60s 2>/dev/null; then
-                    warn "Build may still be in progress. Checking status..."
-                    oc get builds -n "$NAMESPACE"
-                fi
-            else
-                warn "No mock-vllm build found to wait for"
-            fi
-            success "mock-vllm image built"
-        else
-            error "mock-vllm Dockerfile not found at: $MOCK_VLLM_DIR/Dockerfile"
-            exit 1
-        fi
-    else
-        log "mock-vllm image already exists"
-    fi
-else
-    # Use llm-katan (requires GPU)
-    log "Standard mode: Checking for llm-katan image..."
-    BACKEND_IMAGE_NAME="llm-katan"
-
-    if ! oc get imagestream llm-katan -n "$NAMESPACE" &> /dev/null; then
-        log "Building llm-katan image..."
-
-        if [[ -f "$SCRIPT_DIR/Dockerfile.llm-katan" ]]; then
-            oc new-build --dockerfile - --name llm-katan -n "$NAMESPACE" < "$SCRIPT_DIR/Dockerfile.llm-katan"
-        else
-            error "Dockerfile.llm-katan not found at: $SCRIPT_DIR/Dockerfile.llm-katan"
-            exit 1
-        fi
-
-        log "Waiting for build to start..."
-        sleep 5
-
-        log "Starting build..."
-        oc start-build llm-katan -n "$NAMESPACE" --follow || true
-
-        log "Waiting for build to complete..."
-        if ! oc wait --for=condition=Complete build/llm-katan-1 -n "$NAMESPACE" --timeout=600s 2>/dev/null; then
-            warn "Build may still be in progress. Checking status..."
-            oc get builds -n "$NAMESPACE"
-            oc logs build/llm-katan-1 -n "$NAMESPACE" --tail=50 || true
-        fi
-
-        success "llm-katan image built"
-    else
-        log "llm-katan image already exists"
-    fi
-fi
-
 # Create PVCs
 log "Creating PersistentVolumeClaims..."
 cat <<EOF | oc apply -n "$NAMESPACE" -f -
@@ -355,48 +309,16 @@ spec:
     requests:
       storage: 20Gi
   storageClassName: gp3-csi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: vllm-model-a-cache
-  labels:
-    app: vllm-model
-    model: model-a
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: gp3-csi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: vllm-model-b-cache
-  labels:
-    app: vllm-model
-    model: model-b
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: gp3-csi
+
 EOF
 success "PVCs created"
 
 # Deploy vLLM models FIRST to get their ClusterIPs
 log "Deploying vLLM model services and deployments..."
 
-if [[ "$USE_SIMULATOR" == "true" ]]; then
-    log "Simulator mode: Using deployment-simulator.yaml (mock-vllm, no GPU required)..."
-    apply_with_namespace "$SCRIPT_DIR/deployment-simulator.yaml"
-else
-    apply_with_namespace "$SCRIPT_DIR/deployment.yaml"
-fi
+sed -e "s|${DEFAULT_NAMESPACE}|${NAMESPACE}|g" \
+    -e "s|semantic-router-ci/provider-mocker:e2e-test|${PROVIDER_MOCKER_IMAGE}|g" \
+    "$SCRIPT_DIR/deployment.yaml" | oc apply -n "$NAMESPACE" -f -
 
 if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
     oc patch deployment/semantic-router -n "$NAMESPACE" --type='merge' -p '{

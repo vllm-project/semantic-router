@@ -36,19 +36,39 @@ The PR, main, nightly, and release entrypoints share one verification plan:
 - **Quality** checks source formatting, static rules, trusted security checks,
   and generated contracts. Checks that need native libraries wait for that
   artifact; other static checks can start immediately.
+- **Artifacts** builds selected container images and native libraries, or
+  acquires an already qualified provider-mocker image by immutable digest.
+  Artifact production and verification are separate responsibilities.
 - **Tests** executes the selected unit, integration, and end-to-end contracts.
-  A build blocks only its consumers. Runtime suites keep their containers and
-  services isolated.
+  Contracts are grouped as Components, Runtime, Conformance, Integration,
+  E2E, Packages, and Performance. Models and features are cases within these
+  contracts. A build blocks only its consumers; execution workers are selected
+  by environment, resource requirements, and state isolation.
 - **Gate** compares the planned inventory with the actual results and consumed
   artifacts. The branch-protection check remains **PR Gate**.
 
-Job names describe the work, such as **Core Tests**, **Storage Integration**,
-and **Generated Contracts**. Catalog IDs identify the corresponding results.
+Display categories, execution workers, and verification identities are separate.
+Catalog IDs identify results even when a display name changes. Job names describe
+the execution boundary; model names and feature cases appear in its report.
 Compatible component checks share three workers: **CLI and Fleet**, **Model
 Tools**, and **Router Tools**. Each selected contract keeps its own test
 inventory, logs, and result. A failed contract leaves other independent checks
-running, but fails its worker and the Gate. The inference, deployment, and
-component matrices each run at most two workers concurrently.
+running, but fails its worker and the Gate.
+
+Compatible runtime contracts share a worker for their runtime, device, target
+platform, and execution mode. ORT model regression and image conformance can
+reuse the same prepared model while retaining separate required receipts.
+Kubernetes profiles run in bounded shards with compatible artifact and resource
+requirements. Images are loaded once per worker, but profiles have separate
+clusters, state, and evidence. A profile failure does not suppress independent
+profiles; a cleanup failure fails the remaining work instead of running it in
+contaminated state. Adding a model or feature does not automatically add a job.
+
+Local deployment contracts appear under **Local Stack**. The existing serving,
+routing, and lifecycle tests and the stateful memory tests remain separate
+execution shards: they deliberately stop the stack or its database. Their common
+deployment entrypoint is `vllm-sr serve`; memory is a capability exercised through
+that entrypoint, not a separate deployment environment.
 
 Unit tests exercise module logic. Integration tests exercise component
 boundaries. End-to-end tests enter through a user-facing path and check its
@@ -87,7 +107,7 @@ changes do not start unrelated model downloads or runtime stacks. Image assets
 named by the calibration manifest are executable test inputs: changing them
 selects the image-calibration contract even under a documentation directory.
 
-For a manual qualification, dispatch **Product Verification** (`ci.yml`),
+For a manual qualification, dispatch **CI** (`ci.yml`),
 select the branch or tag, and enter a catalog verification ID such as
 `native.image-calibration-cpu` or `native.ort-cpu`. It uses the
 same plan, compatible build dependencies, required receipt, and Gate. Normal PR checks
@@ -115,13 +135,13 @@ RISC-V hardware or its performance and never loads the shared AMD64 libraries.
 | Go tools | `make go-tools-test` | CLI, classifier operating-point, fusion evaluation, image calibration, and offline model-compatibility tests. |
 | Dashboard | `make dashboard-check`; `make dashboard-test-wasm`; `make dashboard-test-e2e-evaluation` | Frontend and backend tests, compiled WASM behavior, and browser acceptance. |
 | Native fixtures | `CI=true make test-owned-native` | Real libraries with small tensors: ownership, isolation, cleanup, and assembly. |
-| Published Candle models | `make test-models MODEL_TEST_PROVIDER=candle` | Ten Vela families and five multimodal compatibility cases. |
-| Published ORT models | `make test-models MODEL_TEST_PROVIDER=ort` | Ten Vela families, classifier integration, and implicit/explicit execution defaults. |
+| Published Candle models | `make test-models MODEL_TEST_PROVIDER=candle` | Ten Vela families, real Halu grounding contracts, and legacy multimodal binding compatibility cases. |
+| Published ORT models | `make test-models MODEL_TEST_PROVIDER=ort` | Ten Vela families, prepared Omni Nano/Mini contracts, classifier integration, and implicit/explicit execution defaults. |
 | RISC-V QEMU | `make test-riscv-qemu` | Host/target classifier parity, owned fixtures, target ELF identity, and live router diagnostics under emulation. |
 | OpenVINO runtime | `make verify-openvino-binding` | Owned-handle lifetime and token-budget checks under the race detector, plus pinned Vela Domain and Embedding tokenization and CPU inference. |
-| Image-routing calibration | `make verify-image-routing-calibration` | Every authored scored image, the three original threshold assertions, and multimodal profile package tests. |
-| CLI lifecycle | `make vllm-sr-test-integration` | Live `serve`/`stop`, mounts, environment, pull policy, and request behavior. |
-| Memory | `USE_DETERMINISTIC_MEMORY_EMBEDDINGS=0 make memory-test-integration` | Vela embedding, persistent retrieval, injection, and user isolation. |
+| Image-routing conformance | `make verify-image-routing-calibration` | Prepared Nano identity, every authored scored image, prototype provenance, frozen threshold/validation assertions, and multimodal profile package tests. |
+| Local Stack serving contracts | `make vllm-sr-test-integration` | Live `serve`/`stop`, mounts, environment, pull policy, request behavior, and service isolation. |
+| Local Stack memory contracts | `USE_DETERMINISTIC_MEMORY_EMBEDDINGS=0 make memory-test-integration` | Vela embedding, persistent retrieval, injection, user isolation, and persistence failure behavior. |
 | Kubernetes | `make verify PROFILE=envoy-ai-gateway` | Deployment and routed requests through the selected profile. |
 | E2E framework units | `make test-e2e-unit` | Collected Go helper and profile assertions, without starting a cluster. |
 | Recipes | `make recipe-conformance-static`; `make recipe-conformance-live-cpu-all` | Authored contracts and live CPU Preview probes for all maintained sources. |
@@ -154,15 +174,22 @@ results must agree, just like the other required suites.
 
 ## Models and artifacts
 
-Published inference covers Domain, Guard, PII, FactCheck, Feedback, Modality,
-Safety, Hazard, Embedding, and Reranker. The downloader resolves the canonical
-runtime registry's immutable revisions and validates the required format. The
-runner requires the complete suite and rejects skipped or missing cases.
-Candle's pinned multimodal compatibility checkpoint remains separate from Vela.
-Image calibration reuses its frozen checkpoint, requires all five model/tokenizer files
-and their resolved download metadata, and retains raw score/threshold reports.
-Excluded fixtures retain provenance only. Scored fixtures record model outputs,
-and threshold assertions preserve the calibrated confusion matrices.
+Published inference retains Domain, Guard, PII, FactCheck, Feedback, Modality,
+Safety, Hazard, Embedding, and Reranker. The supported runtime inventory also
+owns Candle Halu grounding and ORT Omni Nano/Mini contracts. Task adapters retain
+their semantic assertions, including spans, input budgets, modalities, dimensions,
+and ownership; a common runner does not reduce them to health checks. The
+downloader resolves immutable revisions and validates the required format. The
+runner requires every selected case and rejects skipped or missing results.
+Candle's pinned legacy multimodal compatibility checkpoint remains distinct.
+
+Prepared Omni bundles include a source identity, file hashes, and export parity.
+Preparation is shared by compatible runtime and conformance contracts. Image
+conformance uses the prepared Nano bundle and retains raw scores, threshold
+checks, prototype protocol and validation results, and fixture provenance.
+It does not replace deployed image extraction and routing tests. Reference-model
+parity and maximum-context qualifications that require explicit inputs remain
+separately declared; a shorter input acceptance test cannot qualify full context.
 
 ```bash
 make download-models-test MODEL_TEST_PROVIDER=candle
@@ -197,9 +224,11 @@ the affected verification; do not remove a required case to make the Gate green.
 
 For Preview failures, inspect the per-probe signals, decisions, and latency in
 the conformance report. The built-in MoM inventory includes all five entrypoints
-and 315 probes. For performance failures, distinguish allocation gates from
-timing observations on shared runners. Go allocation metrics do not measure
-native memory or GPU memory; see [`perf/README.md`](../../../perf/README.md).
+and 315 probes. Performance CI reports numerical regressions as warnings;
+benchmark execution, complete inventory, and matching model identities remain
+required. The explicit local `make perf-check` still fails on allocation
+regressions. Go allocation metrics do not measure native memory or GPU memory;
+see [`perf/README.md`](../../../perf/README.md).
 
 ## Add a verification or platform
 
@@ -207,8 +236,10 @@ native memory or GPU memory; see [`perf/README.md`](../../../perf/README.md).
    [`domains.yaml`](../domains.yaml). This is the only changed-path registry.
 2. Add or extend a verification in
    [`verification_catalog.yaml`](../../ci/verification_catalog.yaml). Declare
-   its product boundary, executor, inventory, runtime/device, services, and
-   build dependencies. Keep concrete case discovery in its testing framework.
+   its product boundary, logical category, executor, inventory, runtime/device,
+   services, and build dependencies. Kubernetes profiles also declare runtime,
+   device, and resource class in the domain registry. Compatible cases join
+   an existing worker; keep concrete case discovery in its testing framework.
 3. Extend the executor only when the new check has different execution needs.
    Emit actual case outcomes and consumed artifact identities. Add negative
    coverage proving that missing cases or dependencies cannot pass.

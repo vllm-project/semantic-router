@@ -12,7 +12,7 @@ import (
 const valuesFile = "e2e/profiles/response-api/values.yaml"
 
 var resourceManifests = []string{
-	"deploy/kubernetes/response-api/mock-vllm.yaml",
+	"deploy/kubernetes/response-api/provider-mocker.yaml",
 	"deploy/kubernetes/response-api/gwapi-resources.yaml",
 }
 
@@ -55,6 +55,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 // GetTestCases returns the list of test cases for this profile.
 func (p *Profile) GetTestCases() []string {
 	return []string{
+		"provider-native-image-generation",
 		"response-api-create",
 		"response-api-get",
 		"response-api-delete",
@@ -77,10 +78,19 @@ func (p *Profile) GetTestCases() []string {
 		"model-catalog-astra",
 		"protocol-codec-chat-backend-buffered-matrix",
 		"protocol-codec-chat-backend-streaming-matrix",
+		"protocol-codec-openrouter-reply",
 		"protocol-codec-responses-backend-buffered-matrix",
 		"protocol-codec-responses-backend-streaming-matrix",
+		"protocol-codec-responses-provider-decorations",
 		"protocol-codec-chat-backend-tool-lifecycle",
+		"protocol-codec-anthropic-cache-tool-loop-chat",
+		"protocol-codec-anthropic-adaptive-chat",
+		"protocol-codec-chat-custom-tool-kind-switch",
+		"protocol-codec-responses-custom-tool-loop",
 		"protocol-codec-responses-backend-tool-lifecycle",
+		"protocol-codec-anthropic-cache-tool-loop-responses",
+		"protocol-codec-anthropic-adaptive-responses",
+		"protocol-codec-anthropic-per-message-effort",
 		"protocol-codec-chat-backend-structured-output",
 		"protocol-codec-responses-backend-structured-output",
 		"protocol-codec-chat-backend-error-matrix",
@@ -89,6 +99,14 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-incomplete-stream-terminal",
 		"protocol-codec-chat-backend-midstream-error-matrix",
 		"protocol-codec-responses-backend-midstream-error-matrix",
+		"protocol-codec-agent-client-fields",
+		"protocol-codec-responses-input-compat",
+		"protocol-codec-azure-ingress",
+		"protocol-codec-reasoning-summary-responses-backend",
+		"protocol-codec-reasoning-summary-template-responses-backend",
+		"protocol-codec-ollama-output-limit",
+		"protocol-codec-ollama-empty-content",
+		"protocol-codec-auto-unsupported-capability",
 	}
 }
 

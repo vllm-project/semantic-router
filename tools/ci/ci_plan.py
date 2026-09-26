@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Produce one immutable verification and build plan for every CI entrypoint."""
+
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -18,6 +20,23 @@ from classify_pr_changes import (
     git_changed_files,
 )
 from domain_registry import domain_records, load_domain_registry, matching_domains
+from execution_batches import (
+    EXECUTOR_JOBS,
+    dispatch_job,
+    e2e_batches,
+    expected_dispatch_jobs,
+    image_producers,
+    native_batches,
+)
+from provider_mocker_image import (
+    IMAGE as MOCKER_IMAGE,
+)
+from provider_mocker_image import (
+    PublicationMissingError,
+    acquisition,
+    published_from_plan,
+    resolve_published,
+)
 from verification_catalog import (
     catalog_errors,
     full_cpu_ids,
@@ -49,6 +68,30 @@ def digest(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
+
+
+def resolve_image_sources(plan: dict) -> None:
+    """Reuse exact-input fixtures when available, otherwise qualify them here."""
+    published = published_from_plan(plan)
+    if not published:
+        return
+    try:
+        plan["image_sources"][MOCKER_IMAGE] = resolve_published(published)
+    except PublicationMissingError:
+        if plan["profile"] not in {"pr", "main"}:
+            # Release and nightly runs require an already qualified main image.
+            raise
+        # A failed main gate can leave a valid fixture build unpublished. PRs
+        # still qualify their own exact inputs, without registry write access.
+        published["source"] = "candidate"
+        plan["build_images"] = sorted({*plan["build_images"], MOCKER_IMAGE})
+        if plan["profile"] == "main":
+            # The next successful main gate promotes this sealed candidate.
+            plan["publish_images"] = sorted({*plan["publish_images"], MOCKER_IMAGE})
+            plan["multiarch"] = True
+    plan["plan_sha256"] = digest(
+        {key: value for key, value in plan.items() if key != "plan_sha256"}
+    )
 
 
 def make_plan(
@@ -94,7 +137,7 @@ def make_plan(
             in domain_records()[domain].get("escalation", {}).get("verifications", [])
         ]
         if full and name in full_cpu_ids():
-            reasons.append("full-cpu-v1")
+            reasons.append(f"full-cpu-v{load_catalog()['full_cpu']['version']}")
         record["reasons"] = (
             ["manual-selection"]
             if requested
@@ -126,6 +169,7 @@ def make_plan(
             ]
         if record["executor"] == "e2e":
             record["baseline_suite"] = "full" if full else "standard"
+        record["dispatch_job"] = dispatch_job(record)
         record["contract_sha256"] = digest(record)
         verifications.append(record)
     publish_images = []
@@ -140,6 +184,17 @@ def make_plan(
         | set(publish_images)
         | {image for record in verifications for image in record["images"]}
     )
+    image_sources = (
+        {MOCKER_IMAGE: acquisition(paths if profile in {"pr", "main"} else [])}
+        if MOCKER_IMAGE in images
+        else {}
+    )
+    reused = [
+        name
+        for name, record in image_sources.items()
+        if record["source"] == "published"
+    ]
+    build_images = [name for name in images if name not in reused]
     plan = {
         "schema_version": 1,
         "source_sha": source_sha,
@@ -154,6 +209,8 @@ def make_plan(
         "verifications": verifications,
         "expected_verification_ids": ids,
         "images": images,
+        "build_images": build_images,
+        "image_sources": image_sources,
         "native": any(record["native"] for record in verifications),
         "publish_images": publish_images,
         "publish_helm": profile in {"nightly", "release"}
@@ -170,6 +227,10 @@ def make_plan(
         "quality_context": dict(selection.signals),
     }
     plan["component_batches"] = component_batches(verifications)
+    plan["native_batches"] = native_batches(verifications)
+    plan["e2e_batches"] = e2e_batches(verifications)
+    plan["image_producers"] = image_producers(images)
+    plan["expected_dispatch_jobs"] = expected_dispatch_jobs(plan)
     plan["plan_sha256"] = digest(plan)
     return plan
 
@@ -189,31 +250,70 @@ def component_batches(verifications: list[dict]) -> list[dict]:
     ]
 
 
-def github_outputs(plan: dict) -> dict[str, str]:
-    # Only labels enter the Actions matrix; full records stay outside it so
-    # GitHub cannot append their fields to a static caller name.
-    dispatch = {"tools": records_by_display_name(plan["component_batches"])}
-    outputs = {
-        "plan": json.dumps(plan, separators=(",", ":")),
-        "images": json.dumps(plan["images"]),
-        "publish_images": json.dumps(plan["publish_images"]),
-        "build_native": str(plan["native"]).lower(),
-        "multiarch": str(plan["multiarch"]).lower(),
-        "publish_helm": str(plan["publish_helm"]).lower(),
-        "publish_python": str(plan["publish_python"]).lower(),
-        "component_batches": json.dumps(
-            plan["component_batches"], separators=(",", ":")
-        ),
+def dispatch_records(plan: dict) -> dict[str, list[dict]]:
+    """Map stable physical caller IDs to contracts or bounded workers."""
+    result = {job: [] for job in EXECUTOR_JOBS}
+    for record in plan["verifications"]:
+        if record["executor"] not in {"tools", "native", "e2e"}:
+            result[record["dispatch_job"]].append(record)
+    result["tools"] = plan["component_batches"]
+    for batch in [*plan["native_batches"], *plan["e2e_batches"]]:
+        result[batch["dispatch_job"]].append(batch)
+    return result
+
+
+def display_dispatch(plan: dict) -> dict[str, dict]:
+    """Only scalar worker labels enter Actions matrices."""
+    records = dispatch_records(plan)
+    dispatch = {
+        job: records_by_display_name(rows)
+        for job, rows in records.items()
+        if job != "local"
     }
-    for executor in EXECUTORS:
-        if executor == "tools":
-            continue
-        records = [r for r in plan["verifications"] if r["executor"] == executor]
-        outputs[executor] = json.dumps(records, separators=(",", ":"))
-        if executor not in {"quality", "generated"}:
-            dispatch[executor] = records_by_display_name(records)
-    outputs["dispatch"] = json.dumps(dispatch, separators=(",", ":"))
-    return outputs
+    dispatch["local"] = {
+        f"Shard {index}": row
+        for index, row in enumerate(
+            sorted(records["local"], key=lambda row: row["id"]), 1
+        )
+    }
+    return dispatch
+
+
+def github_outputs(plan: dict) -> dict[str, str]:
+    records = dispatch_records(plan)
+    dispatch = display_dispatch(plan)
+    published = published_from_plan(plan)
+    producers = {
+        job: {
+            "images": selected,
+            "build_images": [
+                image for image in selected if image in plan["build_images"]
+            ],
+            "published_images": (
+                [published] if published and published["id"] in selected else []
+            ),
+        }
+        for job, selected in plan["image_producers"].items()
+    }
+    values = {
+        "plan": plan,
+        "dispatch": dispatch,
+        "worker_labels": {job: list(rows) for job, rows in dispatch.items()},
+        "image_producers": producers,
+        "images": plan["images"],
+        "build_images": plan["build_images"],
+        "published_images": [published] if published else [],
+        "publish_images": plan["publish_images"],
+        "build_native": plan["native"],
+        "multiarch": plan["multiarch"],
+        "publish_helm": plan["publish_helm"],
+        "publish_python": plan["publish_python"],
+        "component_batches": plan["component_batches"],
+    }
+    values.update(records)
+    return {
+        key: json.dumps(value, separators=(",", ":")) for key, value in values.items()
+    }
 
 
 def records_by_display_name(records: list[dict]) -> dict[str, dict]:
@@ -224,6 +324,36 @@ def records_by_display_name(records: list[dict]) -> dict[str, dict]:
             raise ValueError("CI matrix display names must be nonempty and unique")
         indexed[label] = record
     return indexed
+
+
+def render_plan_summary(plan: dict) -> str:
+    paths = {
+        "quality": "Quality",
+        "components": "Tests / Components",
+        "integration": "Tests / Integration",
+        "conformance": "Tests / Conformance",
+        "runtime": "Tests / Runtime",
+        "e2e": "Tests / E2E",
+        "performance": "Tests / Performance",
+        "packages": "Tests / Packages",
+    }
+    workers = {}
+    for job, rows in display_dispatch(plan).items():
+        for label, row in rows.items():
+            for record in row.get("verifications", [row]):
+                workers[record["id"]] = job + " / " + label
+    lines = [
+        "| Category | Planned contract | Worker | Runtime / device / platform |",
+        "| --- | --- | --- | --- |",
+    ]
+    for record in sorted(
+        plan["verifications"], key=lambda row: (row["category"], row["id"])
+    ):
+        lines.append(
+            f"| {paths[record['category']]} | {record['display_name']} | "
+            f"{workers[record['id']]} | {record['runtime']} / {record['device']} / {record['platform']} |"
+        )
+    return "\n".join(lines) + "\n"
 
 
 def previous_release(version: str, tags: list[str]) -> str:
@@ -287,14 +417,18 @@ def main() -> int:
         draft=args.draft,
         requested=tuple(args.verification),
     )
+    resolve_image_sources(plan)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(plan, indent=2) + "\n")
     if args.github_output:
         with args.github_output.open("a") as stream:
             for key, value in github_outputs(plan).items():
                 stream.write(f"{key}={value}\n")
+    if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
+        with Path(summary).open("a") as stream:
+            stream.write(render_plan_summary(plan))
     print(
-        f"Planned {len(plan['verifications'])} verifications; {len(plan['images'])} image builds; full CPU={plan['full_cpu']}"
+        f"Planned {len(plan['verifications'])} verifications; {len(plan['build_images'])} image builds; full CPU={plan['full_cpu']}"
     )
     return 0
 
