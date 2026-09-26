@@ -197,8 +197,20 @@ func hasConfiguredModels(req *Request) bool {
 		return true
 	}
 	algoType := algorithmTypeFromRequest(req)
-	if algoType == config.DecisionAlgorithmFusion && req.Algorithm != nil && req.Algorithm.Fusion != nil {
-		return len(req.Algorithm.Fusion.AnalysisModels) > 0 || strings.TrimSpace(req.Algorithm.Fusion.Model) != ""
+	switch algoType {
+	case config.DecisionAlgorithmFusion:
+		if req.Algorithm != nil && req.Algorithm.Fusion != nil {
+			return len(req.Algorithm.Fusion.AnalysisModels) > 0 || strings.TrimSpace(req.Algorithm.Fusion.Model) != ""
+		}
+	case config.DecisionAlgorithmWorkflows:
+		if req.Algorithm != nil && req.Algorithm.Workflows != nil {
+			wf := req.Algorithm.Workflows
+			return strings.TrimSpace(wf.Final.Model) != "" || strings.TrimSpace(wf.Planner.Model) != "" || len(wf.Roles) > 0
+		}
+	case config.DecisionAlgorithmReMoM:
+		if req.Algorithm != nil && req.Algorithm.ReMoM != nil {
+			return strings.TrimSpace(req.Algorithm.ReMoM.SynthesisModel) != ""
+		}
 	}
 	return false
 }
@@ -245,6 +257,9 @@ func resolveReMoMFinalStage(req *Request) StageOwnership {
 func resolveWorkflowsFinalStage(req *Request) StageOwnership {
 	cfg := resolveWorkflowsExecutionConfig(req)
 	targetModel := strings.TrimSpace(cfg.Final.Model)
+	if targetModel == "" && strings.TrimSpace(cfg.PlannerModel) != "" {
+		targetModel = strings.TrimSpace(cfg.PlannerModel)
+	}
 	if targetModel == "" && len(req.ModelRefs) > 0 {
 		targetModel = req.ModelRefs[0].Model
 		if req.ModelRefs[0].LoRAName != "" {
@@ -262,7 +277,7 @@ func resolveConfidenceFinalStage(req *Request) StageOwnership {
 	return StageOwnership{
 		AlgorithmType:      config.DecisionAlgorithmConfidence,
 		StageName:          "candidate_selection",
-		StageRole:          StageRoleCandidate,
+		StageRole:          StageRoleDirect,
 		TargetModel:        "",
 		IsFinalUserVisible: true,
 		Eligibility:        StreamingIneligibleBufferingRequired,
@@ -277,7 +292,7 @@ func resolveRatingsFinalStage(req *Request) StageOwnership {
 	return StageOwnership{
 		AlgorithmType:      config.DecisionAlgorithmRatings,
 		StageName:          "ratings_deliberation",
-		StageRole:          StageRoleCandidate,
+		StageRole:          StageRoleSynthesis,
 		TargetModel:        "",
 		IsFinalUserVisible: true,
 		Eligibility:        StreamingIneligibleBufferingRequired,
