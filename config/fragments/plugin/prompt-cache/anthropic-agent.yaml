@@ -1,0 +1,7 @@
+plugin:
+  type: prompt_cache
+  configuration:
+    enabled: true
+    ttl: 1h
+    targets: [instructions, tools]
+    on_unsupported: skip

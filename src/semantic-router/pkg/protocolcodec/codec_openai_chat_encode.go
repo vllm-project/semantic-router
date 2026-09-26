@@ -99,6 +99,9 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 		TopK: request.Sampling.TopK, MinP: request.Sampling.MinP, RepetitionPenalty: request.Sampling.RepetitionPenalty,
 		PromptCacheKey: request.PromptCacheKey,
 	}
+	if request.TextVerbosity != "" {
+		wire.Verbosity, _ = json.Marshal(request.TextVerbosity)
+	}
 	if request.Stream && (request.StreamOptions.IncludeUsage != nil || request.StreamOptions.IncludeObfuscation != nil) {
 		wire.StreamOptions = &chatStreamOptionsWire{
 			IncludeUsage:       request.StreamOptions.IncludeUsage,
@@ -319,7 +322,11 @@ func encodeChatToolChoice(choice llmprotocol.ToolChoice) json.RawMessage {
 		body, _ := json.Marshal(choice.Mode)
 		return body
 	case llmprotocol.ToolChoiceNamed:
-		body, _ := json.Marshal(map[string]any{"type": "function", "function": map[string]string{"name": choice.Name}})
+		kind, key := "function", "function"
+		if choice.Kind == llmprotocol.ToolKindCustom {
+			kind, key = "custom", "custom"
+		}
+		body, _ := json.Marshal(map[string]any{"type": kind, key: map[string]string{"name": choice.Name}})
 		return body
 	default:
 		return nil

@@ -38,14 +38,14 @@ plugins:
     configuration:
       enabled: true
       retrieval_limit: 5
-      similarity_threshold: 0.72
       auto_store: true
 ```
 
 Memory can persist request-derived content and send retrieved memories to the
 selected model. Choose user/tenant isolation, retention, authentication, and
-transport security appropriate for that data. Thresholds depend on the
-embedding model. See a complete example:
+transport security appropriate for that data. The omitted per-decision
+threshold inherits the global setting; calibrate that value for the selected
+embedding model and search mode before adding an override. See a complete example:
 [`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml).
 
 ## Upgrading the embedding model

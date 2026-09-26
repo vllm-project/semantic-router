@@ -436,7 +436,7 @@ func (r *OpenAIRouter) buildCacheAffinityContext(reqCtx *RequestContext, modelRe
 
 	// Missing model window metadata is valid; the estimator treats it as a
 	// neutral fit score rather than as an error.
-	return &selection.CacheAffinityContext{
+	affinity := &selection.CacheAffinityContext{
 		TurnIndex:           reqCtx.TurnIndex,
 		PreviousModel:       reqCtx.PreviousModel,
 		PreviousResponseID:  reqCtx.PreviousResponseID,
@@ -444,6 +444,13 @@ func (r *OpenAIRouter) buildCacheAffinityContext(reqCtx *RequestContext, modelRe
 		ContextTokens:       reqCtx.VSRContextTokenCount,
 		ModelContextWindows: r.modelContextWindows(modelRefs),
 	}
+	if reqCtx.SemanticRequest != nil {
+		affinity.PromptCacheKey = strings.TrimSpace(reqCtx.SemanticRequest.PromptCacheKey)
+	}
+	if affinity.PreviousModel == "" {
+		affinity.PreviousModel = promptCacheKeyModel(reqCtx)
+	}
+	return affinity
 }
 
 // getSelectionMethod determines which selection algorithm to use.

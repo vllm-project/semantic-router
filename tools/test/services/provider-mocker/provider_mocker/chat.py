@@ -11,12 +11,14 @@ from pydantic import ValidationError
 from . import ollama_fixture, openrouter_fixture, workflow_chat
 from .chat_request import ChatRequest, build_chat_content
 from .chat_wire import (
+    build_chat_custom_tool_response,
     build_chat_response,
     build_chat_usage,
     chat_contains,
     chat_has_tool_result,
     chat_requests_mock_tool,
     generate_chat_custom_tool_kind_stream,
+    generate_chat_custom_tool_stream,
     generate_chat_midstream_error,
     generate_chat_stream,
     generate_chat_tool_stream,
@@ -147,6 +149,14 @@ async def chat_completions(request: Request):
                     media_type="text/event-stream",
                     headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
                 )
+    if req.tools and chat_contains(req, "__mock_responses_custom_tool__"):
+        if req.stream:
+            return StreamingResponse(
+                generate_chat_custom_tool_stream(req, created_ts),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+            )
+        return build_chat_custom_tool_response(req, created_ts)
     control_response = mock_chat_control_response(req, created_ts)
     if control_response is not None:
         return control_response

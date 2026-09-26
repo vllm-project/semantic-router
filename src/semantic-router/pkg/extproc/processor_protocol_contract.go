@@ -213,7 +213,10 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		format = llmprotocol.OpenAIChatV1
 	}
 	dispatchRequest := *ctx.SemanticRequest
-	dispatchRequest, projectionDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(dispatchRequest, ctx.RequestModel, format)
+	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, format); policyErr != nil {
+		return nil, policyErr
+	}
+	dispatchRequest, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(dispatchRequest, ctx.RequestModel, format)
 	if err != nil {
 		return nil, err
 	}

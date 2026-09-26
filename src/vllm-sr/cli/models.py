@@ -970,6 +970,27 @@ class ContextCompressionPluginConfig(BaseModel):
     failure_mode: Literal["fail_open", "fail_closed"] = "fail_open"
 
 
+class PromptCachePluginConfig(BaseModel):
+    """Route-local prompt-cache marker injection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    ttl: Literal["5m", "1h"] = "5m"
+    targets: List[Literal["instructions", "tools"]] = Field(
+        default_factory=lambda: ["instructions", "tools"]
+    )
+    on_unsupported: Literal["skip", "reject"] = "skip"
+
+    @model_validator(mode="after")
+    def validate_targets(self) -> "PromptCachePluginConfig":
+        if not self.targets:
+            raise ValueError("targets must not be empty")
+        if len(set(self.targets)) != len(self.targets):
+            raise ValueError("targets must not contain duplicates")
+        return self
+
+
 class FastResponsePluginConfig(BaseModel):
     """Configuration for fast_response plugin."""
 
