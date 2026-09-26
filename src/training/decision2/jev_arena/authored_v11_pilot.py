@@ -685,7 +685,7 @@ def build(spec_path: Path, salt_path: Path, output: Path) -> dict[str, Any]:
     length_bands = Counter(
         (
             "compact"
-            if proof["words"] <= 300
+            if proof["words"] < 250
             else "medium" if proof["words"] < 500 else "long"
         )
         for proof in proofs
