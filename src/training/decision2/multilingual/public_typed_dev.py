@@ -20,7 +20,7 @@ from typing import Any
 
 from inference.run import digest, file_digest
 
-VERSION = "decision2-public-multilingual-typed-dev/1"
+VERSION = "decision2-public-multilingual-typed-dev/2"
 ZH_COMMIT = "4d6f0a9875d5558efec8b6b48323de65e20724b6"
 RU_COMMIT = "10713af21eb5772be20ee8a6ab8263d49c1171ac"
 MASSIVE_ARCHIVE_SHA256 = (
@@ -74,7 +74,28 @@ def _read_jsonl(path: Path, *, allow_empty: bool = False) -> list[dict[str, Any]
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("x", encoding="utf-8") as output:
         for row in rows:
-            output.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+            # Native Choice reads criteria in insertion order. Sorting nested
+            # keys here changes the model input and its recorded fingerprint.
+            output.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def _validate_serialized_inputs(
+    prompts: list[dict[str, Any]], targets: list[dict[str, Any]]
+) -> None:
+    if len(prompts) != len(targets):
+        raise ValueError("Prompt/target row count mismatch")
+    for prompt, target in zip(prompts, targets, strict=True):
+        if prompt["id"] != target["id"]:
+            raise ValueError("Prompt/target ID mismatch")
+        payload = {"state": prompt["state"], "questions": prompt["questions"]}
+        if digest(payload) != target["source_input_sha256"]:
+            raise ValueError(f"{prompt['id']}: serialized input fingerprint mismatch")
+        question = prompt["questions"]["decision"]
+        if (
+            question["type"] == "choice"
+            and list(question["criteria"]) != target["options"]
+        ):
+            raise ValueError(f"{prompt['id']}: serialized Choice order changed")
 
 
 def verify_source(root: Path, name: str) -> dict[str, Any]:
@@ -421,6 +442,7 @@ def build(
     _write_jsonl(prompt_path, prompts)
     _write_jsonl(target_path, targets)
     target_path.chmod(0o600)
+    _validate_serialized_inputs(_read_jsonl(prompt_path), _read_jsonl(target_path))
     counts = Counter((row["language"], row["task_type"]) for row in targets)
     task_counts = Counter(row["task"] for row in targets)
     manifest = {
@@ -517,6 +539,7 @@ def score(panel: Path, predictions: Path) -> dict[str, Any]:
         or not set(by_answer) <= set(by_prompt)
     ):
         raise ValueError("Duplicate/extra/mismatched prompt, target or prediction ID")
+    _validate_serialized_inputs(prompts, targets)
     identity = {key: answers[0].get(key) for key in MODEL_KEYS} if answers else {}
     if answers and (
         not all(identity.values())

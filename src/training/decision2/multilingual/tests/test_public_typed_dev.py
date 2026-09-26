@@ -61,6 +61,31 @@ class PublicTypedDevTest(unittest.TestCase):
         )
         self.assertEqual(bare_target["options"], ["alarm", "audio"])
 
+    def test_serialized_choice_preserves_input_fingerprint_and_option_order(self):
+        question = {
+            "type": "choice",
+            "instructions": "Choose",
+            "criteria": {"z_last": "Last", "a_first": "First"},
+        }
+        prompt, target = public._make_row(
+            "item", "group", "zh/test", "zh-CN", "State", question, "a_first"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "prompts.jsonl"
+            public._write_jsonl(path, [prompt])
+            serialized = public._read_jsonl(path)
+            public._validate_serialized_inputs(serialized, [target])
+            self.assertEqual(
+                list(serialized[0]["questions"]["decision"]["criteria"]),
+                ["z_last", "a_first"],
+            )
+            path.write_text(
+                json.dumps(prompt, ensure_ascii=False, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "fingerprint mismatch"):
+                public._validate_serialized_inputs(public._read_jsonl(path), [target])
+
     def test_malformed_native_semantics_fail_closed(self):
         with self.assertRaises(ValueError):
             public._question_target(
