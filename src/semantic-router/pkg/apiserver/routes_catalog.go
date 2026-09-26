@@ -451,12 +451,12 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 			etagResponseHeaders(http.StatusOK),
 		),
 		managedRoute(
-			EndpointMetadata{Path: apiConfigValidatePath, Method: "POST", Description: "Validate and normalize a router config without writing it"},
+			EndpointMetadata{Path: apiConfigValidatePath, Method: "POST", Description: "Validate and normalize a router config, returning v1 diagnostics and an optional redacted diff without writing it"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleConfigValidate,
 			jsonResponse[RouterConfigValidateResponse](http.StatusOK, "Successful response"),
 			errorResponses(400, 500),
-			strictJSONBodyFor[RouterConfigUpdateRequest](),
+			strictJSONBodyFor[RouterConfigValidateRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiConfigPlanPath, Method: "POST", Description: "Plan an exact merge or replace mutation, including hot-reload compatibility, without writing it"},

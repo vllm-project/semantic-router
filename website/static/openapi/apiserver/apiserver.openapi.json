@@ -6462,8 +6462,8 @@
     },
     "/api/v1/config/validate": {
       "post": {
-        "summary": "Validate and normalize a router config without writing it",
-        "description": "Validate and normalize a router config without writing it",
+        "summary": "Validate and normalize a router config, returning v1 diagnostics and an optional redacted diff without writing it",
+        "description": "Validate and normalize a router config, returning v1 diagnostics and an optional redacted diff without writing it",
         "operationId": "post_api_v1_config_validate",
         "tags": [
           "config"
@@ -6482,16 +6482,160 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "contract_version": {
+                      "type": "string"
+                    },
+                    "diff": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "added": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "field": {
+                                "type": "string"
+                              },
+                              "new": {},
+                              "old": {}
+                            },
+                            "required": [
+                              "field"
+                            ]
+                          }
+                        },
+                        "changed": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "field": {
+                                "type": "string"
+                              },
+                              "new": {},
+                              "old": {}
+                            },
+                            "required": [
+                              "field"
+                            ]
+                          }
+                        },
+                        "removed": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "field": {
+                                "type": "string"
+                              },
+                              "new": {},
+                              "old": {}
+                            },
+                            "required": [
+                              "field"
+                            ]
+                          }
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "added",
+                        "removed",
+                        "changed",
+                        "truncated"
+                      ]
+                    },
+                    "errors": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "recipe": {
+                            "type": "string"
+                          },
+                          "resource": {
+                            "type": "string"
+                          },
+                          "severity": {
+                            "type": "string"
+                          },
+                          "stage": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "severity",
+                          "stage",
+                          "message"
+                        ]
+                      }
+                    },
                     "normalized_yaml": {
                       "type": "string"
                     },
                     "valid": {
                       "type": "boolean"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "recipe": {
+                            "type": "string"
+                          },
+                          "resource": {
+                            "type": "string"
+                          },
+                          "severity": {
+                            "type": "string"
+                          },
+                          "stage": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "severity",
+                          "stage",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
                     "valid",
-                    "normalized_yaml"
+                    "contract_version",
+                    "normalized_yaml",
+                    "errors",
+                    "warnings"
                   ]
                 }
               }
@@ -6734,6 +6878,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "compare_to_active": {
+                    "type": "boolean"
+                  },
                   "yaml": {
                     "type": "string"
                   }
