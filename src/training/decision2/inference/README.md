@@ -1,5 +1,31 @@
 # Native published-model collectors
 
+## Joyfox Qwen3.5-0.8B-JEV
+
+The `python -m inference.joyfox` collector loads the released
+[`joyfox/Qwen3.5-0.8B-JEV`](https://huggingface.co/joyfox/Qwen3.5-0.8B-JEV)
+through its pinned [native `DecisionEngine`](https://github.com/joyfoxai/jev-inference),
+not a text-generation pipeline. The Hugging Face model revision is
+`ae7b7040aeff7802f6f2bcfdd27f08a72d5cd969`; the source revision is
+`2677b5a3714489847668175de793e2d92fe183f0`. The adapter checks local
+download metadata, configuration, head, backbone, tokenizer and source commit
+before loading. It uses BF16, row execution and the release's 1,024-token
+cutoff. Context overflow is explicit invalidity in the common denominator.
+Any ROCm run is labeled `unvalidated_rocm_native` because the published
+package specifies a different Transformers version and does not claim ROCm
+numerical qualification. The model card's teacher agreement is a distillation
+metric, not independent task accuracy; the JevArena panels measure the latter.
+
+```bash
+ROCR_VISIBLE_DEVICES=6 PYTHONPATH=/work/source HF_HUB_OFFLINE=1 \
+  python -m inference.joyfox \
+  --model-path /work/models/joyfox-qwen35-08b-jev \
+  --source-path /work/external/joyfox-inference \
+  --model-revision ae7b7040aeff7802f6f2bcfdd27f08a72d5cd969 \
+  --input /work/runs/dev.prompts.jsonl \
+  --output /work/runs/joyfox-dev.predictions.jsonl
+```
+
 `python -m inference.run` reads only a gold-free `*.prompts.jsonl` and writes
 one `id`/`answers`/`latency_ms` record per item. Run inference on the remote
 experiment host. The model load is outside the latency clock. Results can be
