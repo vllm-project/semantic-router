@@ -176,3 +176,44 @@ func TestRouterReplayDatasetExportRejectsANonReadMethod(t *testing.T) {
 	response := router.handleRouterReplayAPI("POST", "/api/v1/observability/replays/dataset"+datasetExportQuery)
 	assertDatasetStatus(t, response, typev3.StatusCode_MethodNotAllowed)
 }
+
+// A cap without a group, or a group without a cap, states no balance. Reading
+// either one alone would build a dataset under a rule the caller never gave.
+func TestRouterReplayDatasetExportRejectsAHalfStatedBalance(t *testing.T) {
+	router := newDatasetExportRouter(t, comparedReplayRecord(t, "replay-1", "vault"))
+
+	for name, query := range map[string]string{
+		"group without a cap": datasetExportQuery + "&balance_by=recipe",
+		"cap without a group": datasetExportQuery + "&balance_max=1",
+		"cap is not a number": datasetExportQuery + "&balance_by=recipe&balance_max=some",
+		"group is not a key":  datasetExportQuery + "&balance_by=caller&balance_max=1",
+	} {
+		t.Run(name, func(t *testing.T) {
+			assertDatasetStatus(t, exportDataset(router, query), typev3.StatusCode_BadRequest)
+		})
+	}
+}
+
+func TestRouterReplayDatasetExportAppliesTheBalanceCap(t *testing.T) {
+	router := newDatasetExportRouter(t,
+		comparedReplayRecord(t, "replay-1", "vault"),
+		comparedReplayRecord(t, "replay-2", "vault"),
+		comparedReplayRecord(t, "replay-3", "atlas"),
+	)
+
+	response := exportDataset(router, datasetExportQuery+"&balance_by=recipe&balance_max=1")
+	assertDatasetStatus(t, response, typev3.StatusCode_OK)
+	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+
+	counts, ok := body["counts"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected manifest counts, got %#v", body["counts"])
+	}
+	assertIntField(t, counts, "records", 3)
+	assertIntField(t, counts, "examples", 2)
+	excluded, ok := counts["excluded"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected an exclusion tally, got %#v", counts["excluded"])
+	}
+	assertIntField(t, excluded, "balance_cap", 1)
+}
