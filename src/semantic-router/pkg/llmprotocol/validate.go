@@ -178,8 +178,18 @@ func validateRequestMessage(
 	if !validRequestRole(message.Role) {
 		return NewError(ErrorInvalidRequest, "invalid_role", "message role is invalid", nil)
 	}
+	if message.ReasoningEffort != "" {
+		if message.Role != RoleSystem {
+			return NewError(ErrorInvalidRequest, "invalid_message_reasoning_effort", "per-message effort requires a system message", nil)
+		}
+		switch message.ReasoningEffort {
+		case "low", "medium", "high", "xhigh", "max":
+		default:
+			return NewError(ErrorInvalidRequest, "invalid_message_reasoning_effort", "per-message effort is invalid", nil)
+		}
+	}
 	*blocks += len(message.Content)
-	if len(message.Content) == 0 {
+	if len(message.Content) == 0 && message.ReasoningEffort == "" {
 		return NewError(ErrorInvalidRequest, "empty_message", "messages must contain at least one content block", nil)
 	}
 	if message.Role == RoleTool && len(message.Content) != 1 {

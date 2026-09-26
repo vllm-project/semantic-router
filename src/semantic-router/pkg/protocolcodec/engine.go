@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -119,11 +120,13 @@ func (engine *Engine) EncodeRequest(format llmprotocol.WireFormat, request llmpr
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return RequestResult{Request: request, Envelope: envelope}, err
 	}
-	if err := llmprotocol.RequireCapabilities(format, pair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(request)); err != nil {
-		return RequestResult{Request: request, Envelope: envelope}, err
+	projected, projectionDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(request, format)
+	if err := llmprotocol.RequireCapabilities(format, pair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(projected)); err != nil {
+		return RequestResult{Request: projected, Envelope: envelope, Diagnostics: projectionDiagnostics}, err
 	}
-	body, diagnostics, encodeRequestErr := pair.buffered.EncodeRequest(request, envelope, engine.policy)
-	return RequestResult{Request: request, Envelope: envelope, Body: body, Diagnostics: diagnostics}, encodeRequestErr
+	body, encodeDiagnostics, encodeRequestErr := pair.buffered.EncodeRequest(projected, envelope, engine.policy)
+	diagnostics := appendDiagnostics(projectionDiagnostics, encodeDiagnostics, engine.policy.Limits.Diagnostics)
+	return RequestResult{Request: projected, Envelope: envelope, Body: body, Diagnostics: diagnostics}, encodeRequestErr
 }
 
 // EncodeResponse validates and encodes an already-neutral response. Settlement
@@ -171,6 +174,8 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
+	request, projectionDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(request, target)
+	diagnostics = appendDiagnostics(diagnostics, projectionDiagnostics, engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(target, targetPair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(request)); err != nil {
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
@@ -318,9 +323,12 @@ func (engine *Engine) NewStream(source, target llmprotocol.WireFormat, context l
 }
 
 // StreamEventMutation applies request-scoped policy to decoded neutral events
-// before they reach a public wire encoder. It cannot observe provider bytes or
-// HTTP headers and therefore keeps protocol translation provider-neutral.
+// before they reach a public wire encoder. Returning ErrOmitStreamEvent removes
+// an event from public output and from the accepted semantic event stream.
+// It cannot observe provider bytes or HTTP headers.
 type StreamEventMutation func(*llmprotocol.Event) error
+
+var ErrOmitStreamEvent = errors.New("omit neutral stream event")
 
 func (engine *Engine) NewStreamWithMutation(
 	source,
@@ -590,7 +598,9 @@ func (engine *StreamEngine) encodeEvents(
 	frames := make([][]byte, 0, len(events))
 	accepted := make([]llmprotocol.Event, 0, len(events))
 	for index := range events {
-		if err := engine.prepareEvent(&events[index]); err != nil {
+		if err := engine.prepareEvent(&events[index]); errors.Is(err, ErrOmitStreamEvent) {
+			continue
+		} else if err != nil {
 			return frames, accepted, diagnostics, err
 		}
 		encoded, eventDiagnostics, err := engine.encoder.Push(events[index])

@@ -10,13 +10,13 @@ func (r *OpenAIRouter) validateRequestHeaders(method string, path string) *ext_p
 	normalizedPath := normalizeRequestPath(path)
 
 	switch normalizedPath {
-	case "/v1/chat/completions":
+	case "/v1/chat/completions", azureV1ChatPath:
 		return validateAllowedMethod(r, method, "POST")
 	case "/v1/messages":
 		return validateAllowedMethod(r, method, "POST")
 	case "/v1/models":
 		return validateAllowedMethod(r, method, "GET")
-	case "/v1/responses":
+	case "/v1/responses", azureResponsesPath, azureV1ResponsesPath:
 		return r.validateResponseAPICollectionMethod(method)
 	}
 
@@ -32,7 +32,7 @@ func (r *OpenAIRouter) validateRequestHeaders(method string, path string) *ext_p
 		return validateAllowedMethod(r, method, "POST")
 	}
 
-	if isAzureDeploymentPath(normalizedPath) {
+	if isAzureOpenAIPath(normalizedPath) {
 		return r.createErrorResponse(404, "endpoint not found")
 	}
 

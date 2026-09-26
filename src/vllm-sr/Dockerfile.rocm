@@ -55,12 +55,13 @@ ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
 # Install cross-compilation toolchain and OpenSSL for arm64 (needed by hf-hub -> openssl-sys, esaxx-rs -> g++)
 # libssl is Multi-Arch: same, so both architectures get the newest version they share.
+# Allow an explicit downgrade only in this builder when the native base is ahead.
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
       dpkg --add-architecture arm64 && \
       apt-get update && \
       host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
       ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
-      apt-get install -y \
+      apt-get install -y --allow-downgrades --no-remove \
         gcc-aarch64-linux-gnu \
         g++-aarch64-linux-gnu \
         "libssl-dev:arm64=${ssl_version}" \

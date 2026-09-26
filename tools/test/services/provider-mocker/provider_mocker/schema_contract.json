@@ -238,6 +238,7 @@
         "prompt_routed_experts",
         "prompt_text",
         "prompt_token_ids",
+        "provider",
         "remote_block_ids",
         "remote_engine_id",
         "remote_host",
@@ -255,10 +256,14 @@
       ],
       "extension_usage_fields": [
         "completion_time",
+        "cost",
+        "cost_details",
         "cost_in_usd_ticks",
+        "is_byok",
         "num_sources_used",
         "prompt_time",
         "queue_time",
+        "server_tool_use",
         "service_tier",
         "total_time"
       ]
@@ -399,6 +404,7 @@
         "input"
       ],
       "official_response_fields": [
+        "access_programs",
         "background",
         "completed_at",
         "conversation",
@@ -436,8 +442,12 @@
         "user"
       ],
       "extension_response_fields": [
+        "billing",
         "conversation_id",
-        "store"
+        "frequency_penalty",
+        "presence_penalty",
+        "store",
+        "tool_usage"
       ],
       "official_usage_fields": [
         "compute_units",
@@ -481,6 +491,7 @@
         "container",
         "content",
         "context_management",
+        "diagnostics",
         "id",
         "model",
         "role",

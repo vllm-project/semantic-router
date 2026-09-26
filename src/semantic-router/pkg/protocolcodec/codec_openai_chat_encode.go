@@ -61,6 +61,12 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 
 func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
+	for _, message := range request.Messages {
+		if message.ReasoningEffort != "" {
+			appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat,
+				"messages[].output_config.effort", "Chat Completions cannot apply Anthropic per-message effort")
+		}
+	}
 	if request.ReasoningSummary != "" {
 		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "reasoning.summary", "Chat Completions cannot request a reasoning summary")
 	}
@@ -111,6 +117,9 @@ func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) erro
 		wire.Messages = append(wire.Messages, encoded)
 	}
 	for _, message := range request.Messages {
+		if len(message.Content) == 0 && message.ReasoningEffort != "" {
+			continue
+		}
 		encoded, err := encodeChatMessage(message)
 		if err != nil {
 			return err
@@ -193,7 +202,7 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 	case llmprotocol.ContentToolCall:
 		return state.appendCachelessToolCall(content)
 	case llmprotocol.ContentToolResult:
-		return state.appendCachelessToolResult(content)
+		return state.appendToolResultContent(content)
 	default:
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "content cannot be encoded as chat", nil)
 	}
@@ -218,11 +227,8 @@ func (state *chatMessageEncodingState) appendCachelessToolCall(content llmprotoc
 	return state.appendToolCall(content.ToolCall)
 }
 
-func (state *chatMessageEncodingState) appendCachelessToolResult(content llmprotocol.Content) error {
-	if content.Cache != nil {
-		return unsupportedChatCacheDirective(string(content.Kind))
-	}
-	return state.appendToolResult(content.ToolResult)
+func (state *chatMessageEncodingState) appendToolResultContent(content llmprotocol.Content) error {
+	return state.appendToolResult(content.ToolResult, content.Cache)
 }
 
 func (state *chatMessageEncodingState) appendText(content llmprotocol.Content) {
@@ -277,11 +283,12 @@ func (state *chatMessageEncodingState) appendToolCall(call *llmprotocol.ToolCall
 	return nil
 }
 
-func (state *chatMessageEncodingState) appendToolResult(result *llmprotocol.ToolResult) error {
+func (state *chatMessageEncodingState) appendToolResult(result *llmprotocol.ToolResult, outerCache *llmprotocol.CacheDirective) error {
 	if result == nil {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_result", "tool result content is invalid", nil)
 	}
 	state.wire.ToolCallID = result.CallID
+	firstPart := len(state.parts)
 	for _, resultContent := range result.Content {
 		if resultContent.Kind != llmprotocol.ContentText {
 			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "tool_result_media", "chat tool results support text only", nil)
@@ -290,6 +297,18 @@ func (state *chatMessageEncodingState) appendToolResult(result *llmprotocol.Tool
 			Type: "text", Text: resultContent.Text,
 			CacheControl: encodeAnthropicCacheControl(resultContent.Cache),
 		})
+	}
+	if outerCache != nil {
+		if len(state.parts) == firstPart {
+			return unsupportedChatCacheDirective(string(llmprotocol.ContentToolResult))
+		}
+		lastPart := &state.parts[len(state.parts)-1]
+		if lastPart.CacheControl != nil && (lastPart.CacheControl.Type != outerCache.Type || lastPart.CacheControl.TTL != outerCache.TTL) {
+			return unsupportedChatCacheDirective(string(llmprotocol.ContentToolResult))
+		}
+		// Anthropic's outer tool_result boundary is after the entire result.
+		// Chat's last result text part marks the same prompt prefix boundary.
+		lastPart.CacheControl = encodeAnthropicCacheControl(outerCache)
 	}
 	return nil
 }

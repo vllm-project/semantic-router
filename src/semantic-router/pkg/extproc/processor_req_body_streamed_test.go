@@ -203,6 +203,40 @@ func TestProcessRequestBodyRejectsStreamedGuardViolations(t *testing.T) {
 	}
 }
 
+func TestProcessRequestBodyRejectsSingleEOSAboveStreamedLimit(t *testing.T) {
+	router := makeTestRouterWithLimits(100, 0)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	stream := NewMockStream(nil)
+
+	err := router.processRequestBody(stream, &ext_proc.ProcessingRequest_RequestBody{
+		RequestBody: &ext_proc.HttpBody{
+			Body:        bytes.Repeat([]byte("a"), 101),
+			EndOfStream: true,
+		},
+	}, ctx)
+	require.NoError(t, err)
+	require.Len(t, stream.Responses, 1)
+	immediate := stream.Responses[0].GetImmediateResponse()
+	require.NotNil(t, immediate)
+	assert.Equal(t, typev3.StatusCode_PayloadTooLarge, immediate.GetStatus().GetCode())
+	assert.Nil(t, ctx.StreamedBody)
+}
+
+func TestSingleEOSWithinStreamedLimitReachesCodec(t *testing.T) {
+	router := makeTestRouterWithLimits(512, 0)
+	ctx := &RequestContext{Headers: make(map[string]string), SourceFormat: llmprotocol.OpenAIChatV1}
+	body := []byte(`{"model":"fallback-model","messages":[{"role":"user","content":"hello"}]}`)
+
+	response, err := router.handleRequestBodyDispatch(&ext_proc.ProcessingRequest_RequestBody{
+		RequestBody: &ext_proc.HttpBody{Body: body, EndOfStream: true},
+	}, ctx)
+	require.NoError(t, err)
+	require.NotNil(t, response)
+	require.NotNil(t, ctx.SemanticRequest)
+	assert.Equal(t, "fallback-model", ctx.SemanticRequest.Model)
+	assert.Nil(t, ctx.StreamedBody)
+}
+
 func TestStreamedBodyPoolReuseClearsRequestStateAndGuards(t *testing.T) {
 	first := newStreamedBodyHandler(makeTestRouterWithLimits(500, 60), &RequestContext{})
 	first.buf.WriteString("leftover")

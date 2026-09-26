@@ -212,13 +212,11 @@ func CountTokensApprox(text string) int {
 		}
 
 		cjkRunes += fieldCJKRunes
-		if fieldCJKRunes == 0 {
-			if runs := characterRuns(trimTokenField(field)); runs > 1 {
-				runTokens += runs
-				continue
-			}
+		if runs := characterRuns(trimTokenField(field)); runs > 1 {
+			runTokens += runs
+			continue
 		}
-		// Plain non-CJK words and mixed fields (e.g. "Python函数") each add one word.
+		// Plain non-CJK words and simple mixed fields (e.g. "Python函数") add one word.
 		if fieldCJKRunes == 0 || hasNonCJK {
 			nonCJKWords++
 		}
@@ -233,12 +231,17 @@ func CountTokensApprox(text string) int {
 	return total
 }
 
-// characterRuns counts maximal runs of letters, digits and other runes.
-// Combining marks join the letter class so Indic and Thai words stay one run.
+// characterRuns counts maximal non-CJK runs of letters, digits and other runes.
+// CJK characters are counted separately and end the preceding run. Combining
+// marks join the letter class so Indic and Thai words stay one run.
 func characterRuns(s string) int {
 	runs := 0
 	prevClass := -1
 	for _, r := range s {
+		if isCJK(r) {
+			prevClass = -1
+			continue
+		}
 		class := 2
 		switch {
 		case unicode.IsLetter(r) || unicode.IsMark(r):

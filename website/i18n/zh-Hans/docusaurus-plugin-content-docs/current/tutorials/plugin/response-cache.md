@@ -36,10 +36,8 @@ plugins:
   - type: response_cache
     configuration:
       enabled: true
-      mode: exact_then_semantic
+      mode: exact
       scope: user
-      semantic:
-        similarity_threshold: 0.92
       ttl_seconds: 86400
       request_controls:
         enabled: true
@@ -55,6 +53,13 @@ plugins:
 - `semantic`（默认）：仅向量查找。
 - `exact`：仅规范化后的精确请求查找。
 - `exact_then_semantic`：先精确查找，未命中再进行向量查找。
+
+随附的 `config/config.yaml`、多目标路由示例和 `memory.yaml` 片段使用
+`exact`：相同请求仍可命中，不会仅凭向量相似度把另一个问题的答案返回给用户。
+只有验证了该路由所用语言和矛盾问句的行为后，才应显式选择 `semantic` 或
+`exact_then_semantic`。内置词面校验只识别英语否定词；德语 `nicht` 或中文
+`不` 的反向问题可能命中原问题的缓存答案。`high-recall.yaml` 仍是显式启用
+语义缓存的示例。
 
 精确层级可用于内存、Redis、Valkey、Milvus、Qdrant 和混合缓存后端。Anthropic 客户端请求会以 Anthropic 响应或 SSE 线格式回放。
 

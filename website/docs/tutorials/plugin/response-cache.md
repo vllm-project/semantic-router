@@ -31,10 +31,8 @@ plugins:
   - type: response_cache
     configuration:
       enabled: true
-      mode: exact_then_semantic
+      mode: exact
       scope: user
-      semantic:
-        similarity_threshold: 0.92
       ttl_seconds: 86400
       request_controls:
         enabled: true
@@ -50,6 +48,15 @@ plugins:
 - `semantic` (default): vector lookup only.
 - `exact`: normalized exact request lookup only.
 - `exact_then_semantic`: exact lookup first, then vector lookup on a miss.
+
+The shipped `config/config.yaml`, multi-objective example, and `memory.yaml`
+fragment use `exact`. It preserves reuse for identical requests without
+returning an answer to a different question solely because its embedding is
+similar. Choose `semantic` or `exact_then_semantic` explicitly only after
+validating the route's language and contradiction behavior. The built-in
+lexical guard recognizes English negation cues; a German `nicht` or Chinese
+`不` can otherwise receive a cached answer to the opposite question. The
+`high-recall.yaml` fragment remains an explicit semantic-cache example.
 
 The exact tier is available with the in-memory, Redis, Valkey, Milvus, Qdrant,
 and hybrid cache backends. Anthropic client requests are replayed in the

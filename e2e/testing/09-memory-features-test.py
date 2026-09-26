@@ -12,6 +12,7 @@ Test classes live in the memory_tests package:
   - ChatCompletionsMemoryTest: Memory via /v1/chat/completions
   - MemoryContentIntegrityTest: Content preserved in Milvus (no truncation/corruption)
   - SimilarityThresholdTest: Irrelevant NOT injected, relevant IS injected
+  - MemoryDefaultThresholdTest: Zero plugin threshold resolves to the 0.70 default
   - StaleMemoryTest: Contradicting facts baseline (soft-insert, no contradiction detection)
   - PluginCombinationTest: Memory + system_prompt coexistence
   - MemoryStorageTest: Conversation turns stored in Milvus
@@ -48,6 +49,7 @@ import requests
 from memory_tests import (
     ChatCompletionsMemoryTest,
     MemoryContentIntegrityTest,
+    MemoryDefaultThresholdTest,
     MemoryInjectionPipelineTest,
     MemoryPersistenceReceiptTest,
     MemoryPersistenceShutdownTest,
@@ -110,6 +112,7 @@ def run_tests():
             ChatCompletionsMemoryTest,
             MemoryContentIntegrityTest,
             SimilarityThresholdTest,
+            MemoryDefaultThresholdTest,
             StaleMemoryTest,
             PluginCombinationTest,
             MemoryStorageTest,
