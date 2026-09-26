@@ -110,3 +110,34 @@ The v1 four-axis development ranking above is an earlier protocol. It can
 guide exploration but its scalar is not interchangeable with v2. The
 authored builder/scorer, pretest freeze and full-panel release reports are
 required before any v2 result is publishable.
+
+## Authored v9 editorial pilot
+
+`authored_v9_pilot.py` builds a twelve-item **DEV-only** Choice/Noul/Score
+packet from private hand-authored scenarios and a private salt. It renders
+independent signed evidence documents, parses their attested fields back from
+the visible prompt, and checks the current-rule answer against a separate
+reference implementation. Its three long cases use different source joins:
+an accepted revision, an entity alias, and an effective-time event log.
+Every claimed essential document is removed in a gold-free ablation; the
+remaining evidence must leave a policy field unproved, and a domain-valid
+alternative completion must change the answer. This mechanical test cannot
+certify that prose lacks shortcuts or that a dossier is editorially strong.
+
+The builder writes `prompts.jsonl` and `ablations.gold-free.jsonl` outside the
+source tree, plus `private/targets.jsonl`, `private/proof_traces.jsonl` and a
+private audit receipt. The public-safe receipt records hashes, type and
+mechanism counts, answer-position counts, and long-context lengths. It never
+marks a packet release qualified. Source scenarios, salt, targets and proofs
+stay in the authorized private experiment workspace. No v9 item may enter a
+FINAL benchmark or training set from automated proof alone. An independent
+reviewer must seal answers to prompts, then seal a separate ablation review,
+before any post-key comparison. Failed frozen versions remain as evidence of
+the design revisions rather than being overwritten.
+
+```bash
+PYTHONPATH=/work/source python3 -m jev_arena.authored_v9_pilot \
+  --specs /work/private/authored-specs.json \
+  --private-salt /work/private/authored-salt.bin \
+  --output-dir /work/private/authored-v9-dev12
+```
