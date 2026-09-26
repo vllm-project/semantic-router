@@ -12,7 +12,28 @@ from typing import Any
 from publication.render import COLORS
 
 WIDTH = 1080
-AXES = ("typed", "transfer", "authored", "robustness")
+AXES_V1 = ("typed", "transfer", "authored", "robustness")
+AXES_V2 = (
+    "typed",
+    "transfer",
+    "jevbench_public",
+    "decision_bench_v4",
+    "sealed_authored",
+    "robustness",
+)
+AXIS_LABELS = {
+    "typed": "Typed",
+    "transfer": "Transfer",
+    "authored": "Authored",
+    "jevbench_public": "Public 231",
+    "decision_bench_v4": "DB v4",
+    "sealed_authored": "Sealed",
+    "robustness": "Robustness",
+}
+INK = "#172542"
+MUTED = "#52617c"
+PAPER = "#fff9ef"
+GRID = "#dce3f1"
 
 
 def _svg(height: int, title: str, description: str) -> list[str]:
@@ -21,7 +42,7 @@ def _svg(height: int, title: str, description: str) -> list[str]:
         f'viewBox="0 0 {WIDTH} {height}" role="img" aria-labelledby="title desc">',
         f'<title id="title">{escape(title)}</title>',
         f'<desc id="desc">{escape(description)}</desc>',
-        '<rect width="100%" height="100%" fill="#fff"/>',
+        f'<rect width="100%" height="100%" fill="{PAPER}"/>',
     ]
 
 
@@ -33,7 +54,7 @@ def _text(
     size: int = 14,
     weight: int = 400,
     anchor: str = "start",
-    fill: str = "#202b36",
+    fill: str = INK,
 ) -> str:
     return (
         f'<text x="{x:.1f}" y="{y:.1f}" fill="{fill}" '
@@ -61,6 +82,13 @@ def _context(report: dict[str, Any]) -> tuple[str, str, str]:
             "Equal-weight geometric mean of typed, transfer, authored and robustness",
             "Independent multi-panel rank · public authored items · rank among displayed models",
         )
+    if schema == "jevarena-ranking/2":
+        phase = report["phase"].upper()
+        return (
+            f"JevArena {phase}",
+            "Equal-weight geometric mean of six frozen evaluation axes",
+            "Same-panel rank · public subsets disclosed in methods · sealed authored quality gate required",
+        )
     raise ValueError("Unsupported ranking report schema")
 
 
@@ -84,24 +112,24 @@ def ranking_svg(report: dict[str, Any]) -> str:
     height = 171 + 49 * len(rows)
     parts = _svg(height, f"{name} ranking", caveat)
     parts.append(_text(32, 42, f"{name} ranking", size=24, weight=700))
-    parts.append(_text(32, 67, subtitle, size=13, fill="#51606b"))
+    parts.append(_text(32, 67, subtitle, size=13, fill=MUTED))
     x0, span = 365, 572
     for tick in (0, 25, 50, 75, 100):
         x = x0 + tick / 100 * span
         parts.append(
             f'<line x1="{x:.1f}" y1="106" x2="{x:.1f}" '
-            f'y2="{height - 56}" stroke="#e3e8ed"/>'
+            f'y2="{height - 56}" stroke="{GRID}"/>'
         )
-        parts.append(_text(x, 99, f"{tick}%", size=11, anchor="middle", fill="#61707e"))
+        parts.append(_text(x, 99, f"{tick}%", size=11, anchor="middle", fill=MUTED))
     for index, row in enumerate(rows):
         y = 119 + index * 49
         parts.append(
             f'<rect x="{x0}" y="{y}" width="{span}" height="25" '
-            'rx="4" fill="#f1f4f7"/>'
+            'rx="8" fill="#e8edfa"/>'
         )
         parts.append(
             f'<rect x="{x0}" y="{y}" width="{span * row["score"] / 100:.2f}" '
-            f'height="25" rx="4" fill="{_color(row["group"])}"/>'
+            f'height="25" rx="8" fill="{_color(row["group"])}"/>'
         )
         parts.append(
             _text(32, y + 18, f'{row["rank"]}. {row["label"]}', size=14, weight=600)
@@ -111,7 +139,7 @@ def ranking_svg(report: dict[str, Any]) -> str:
                 1028, y + 18, f'{row["score"]:.2f}', size=14, weight=700, anchor="end"
             )
         )
-    parts.append(_text(32, height - 24, caveat, size=11, fill="#61707e"))
+    parts.append(_text(32, height - 24, caveat, size=11, fill=MUTED))
     parts.append("</svg>")
     return "\n".join(parts) + "\n"
 
@@ -139,7 +167,7 @@ def pareto_svg(report: dict[str, Any]) -> str:
             67,
             "Actual parameter count (billions, log scale) vs score · filled = Pareto frontier",
             size=13,
-            fill="#51606b",
+            fill=MUTED,
         )
     )
     left, right, top, bottom = 105, 960, 113, 562
@@ -160,10 +188,10 @@ def pareto_svg(report: dict[str, Any]) -> str:
         yy = y(tick)
         parts.append(
             f'<line x1="{left}" y1="{yy:.1f}" x2="{right}" '
-            f'y2="{yy:.1f}" stroke="#e3e8ed"/>'
+            f'y2="{yy:.1f}" stroke="{GRID}"/>'
         )
         parts.append(
-            _text(left - 12, yy + 5, f"{tick}", size=12, anchor="end", fill="#61707e")
+            _text(left - 12, yy + 5, f"{tick}", size=12, anchor="end", fill=MUTED)
         )
     powers = range(math.floor(log_min), math.ceil(log_max) + 1)
     ticks = sorted(
@@ -178,12 +206,10 @@ def pareto_svg(report: dict[str, Any]) -> str:
         xx = x(tick)
         parts.append(
             f'<line x1="{xx:.1f}" y1="{top}" x2="{xx:.1f}" '
-            f'y2="{bottom}" stroke="#edf0f3"/>'
+            f'y2="{bottom}" stroke="{GRID}"/>'
         )
         parts.append(
-            _text(
-                xx, bottom + 21, f"{tick:g}", size=11, anchor="middle", fill="#61707e"
-            )
+            _text(xx, bottom + 21, f"{tick:g}", size=11, anchor="middle", fill=MUTED)
         )
     frontier = sorted(
         (row for row in rows if row.get("pareto_frontier")),
@@ -194,14 +220,14 @@ def pareto_svg(report: dict[str, Any]) -> str:
             f'{x(row["size_b"]):.1f},{y(row["score"]):.1f}' for row in frontier
         )
         parts.append(
-            f'<polyline points="{path}" fill="none" stroke="#718c87" '
+            f'<polyline points="{path}" fill="none" stroke="#f4b642" '
             'stroke-width="2" stroke-dasharray="6 5"/>'
         )
     # Draw dominated points first to keep frontier markers visible.
     for row in sorted(rows, key=lambda item: bool(item.get("pareto_frontier"))):
         xx, yy = x(row["size_b"]), y(row["score"])
         color = _color(row["group"])
-        fill = color if row.get("pareto_frontier") else "#fff"
+        fill = color if row.get("pareto_frontier") else PAPER
         parts.append(
             f'<circle cx="{xx:.1f}" cy="{yy:.1f}" r="8" '
             f'fill="{fill}" stroke="{color}" stroke-width="2.5"/>'
@@ -222,14 +248,16 @@ def pareto_svg(report: dict[str, Any]) -> str:
             anchor="middle",
         )
     )
-    parts.append(_text(32, height - 24, caveat, size=11, fill="#61707e"))
+    parts.append(_text(32, height - 24, caveat, size=11, fill=MUTED))
     parts.append("</svg>")
     return "\n".join(parts) + "\n"
 
 
 def matrix_svg(report: dict[str, Any]) -> str:
-    if report.get("schema_version") != "jevarena-ranking/1":
+    schema = report.get("schema_version")
+    if schema not in ("jevarena-ranking/1", "jevarena-ranking/2"):
         raise ValueError("Axis matrix is defined for JevArena only")
+    axes = AXES_V2 if schema == "jevarena-ranking/2" else AXES_V1
     name, _, caveat = _context(report)
     rows = _models(report)
     height = 161 + 47 * len(rows)
@@ -239,19 +267,20 @@ def matrix_svg(report: dict[str, Any]) -> str:
         _text(
             32,
             67,
-            "Four separate axes in percent · one color scale across all cells",
+            f"{len(axes)} separate axes in percent · one color scale across all cells",
             size=13,
-            fill="#51606b",
+            fill=MUTED,
         )
     )
-    x0, cell_width, gap = 310, 161, 8
-    for index, axis in enumerate(AXES):
+    x0, gap = (274, 7) if len(axes) == 6 else (310, 8)
+    cell_width = 125 if len(axes) == 6 else 161
+    for index, axis in enumerate(axes):
         parts.append(
             _text(
                 x0 + index * (cell_width + gap) + cell_width / 2,
                 103,
-                axis.title(),
-                size=13,
+                AXIS_LABELS[axis],
+                size=12 if len(axes) == 6 else 13,
                 weight=600,
                 anchor="middle",
             )
@@ -261,18 +290,18 @@ def matrix_svg(report: dict[str, Any]) -> str:
         parts.append(
             _text(32, yy + 19, f'{row["rank"]}. {row["label"]}', size=13, weight=600)
         )
-        for column, axis in enumerate(AXES):
+        for column, axis in enumerate(axes):
             score = row["axes"][axis]
             if type(score) not in (float, int) or not 0 <= score <= 1:
                 raise ValueError("Invalid axis score")
-            rr = round(239 * (1 - score) + 23 * score)
-            gg = round(245 * (1 - score) + 107 * score)
-            bb = round(243 * (1 - score) + 91 * score)
+            rr = round(255 * (1 - score) + 49 * score)
+            gg = round(231 * (1 - score) + 91 * score)
+            bb = round(197 * (1 - score) + 255 * score)
             fill = f"#{rr:02x}{gg:02x}{bb:02x}"
             xx = x0 + column * (cell_width + gap)
             parts.append(
                 f'<rect x="{xx}" y="{yy}" width="{cell_width}" '
-                f'height="29" rx="4" fill="{fill}"/>'
+                f'height="29" rx="7" fill="{fill}"/>'
             )
             parts.append(
                 _text(
@@ -282,10 +311,10 @@ def matrix_svg(report: dict[str, Any]) -> str:
                     size=13,
                     weight=700,
                     anchor="middle",
-                    fill="#fff" if score >= 0.67 else "#17312c",
+                    fill="#fff" if score >= 0.85 else INK,
                 )
             )
-    parts.append(_text(32, height - 24, caveat, size=11, fill="#61707e"))
+    parts.append(_text(32, height - 24, caveat, size=11, fill=MUTED))
     parts.append("</svg>")
     return "\n".join(parts) + "\n"
 
@@ -298,7 +327,7 @@ def main() -> None:
     args = parser.parse_args()
     report = json.loads(args.input.read_text(encoding="utf-8"))
     products = {"rank": ranking_svg(report), "pareto": pareto_svg(report)}
-    if report.get("schema_version") == "jevarena-ranking/1":
+    if report.get("schema_version") in ("jevarena-ranking/1", "jevarena-ranking/2"):
         products["matrix"] = matrix_svg(report)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     for suffix, svg in products.items():

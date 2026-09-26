@@ -8,11 +8,11 @@ from typing import Any
 from benchmark.generate import FINAL_FAMILIES
 
 COLORS = {
-    "decision2": "#176b5b",
-    "decision1": "#377ca3",
-    "open": "#93643c",
-    "hosted": "#7550a1",
-    "other": "#657184",
+    "decision2": "#315bff",
+    "decision1": "#738299",
+    "open": "#f46b50",
+    "hosted": "#9b55c7",
+    "other": "#43536e",
 }
 TYPE_NAMES = ("choice", "noul", "score")
 FAMILY_LABELS = ("Constraint", "Exception", "Evidence", "Resource")

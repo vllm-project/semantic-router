@@ -82,7 +82,10 @@ class PublicScoreTest(unittest.TestCase):
             receipt_path = root / "predictions.jsonl.manifest.json"
             prompts.write_text('{"id":"a"}\n', encoding="utf-8")
             predictions.write_text('{"id":"a"}\n', encoding="utf-8")
-            digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+
+            def digest(path: Path) -> str:
+                return hashlib.sha256(path.read_bytes()).hexdigest()
+
             receipt = {
                 "model_id": "candidate",
                 "model_revision": "checkpoint-1",

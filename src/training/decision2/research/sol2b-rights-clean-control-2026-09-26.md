@@ -87,3 +87,15 @@ For the matched Sol 1.0 baseline, DEV was 58.94%, CSS micro accuracy
 The previous targeted3024 arm reached 59.13% DEV, 42.52% CSS micro, and
 `0.34763` CSS macro-F1. Thus this control is an informative source ablation,
 not a broad transfer improvement or release selection.
+
+On the pinned *public-only* JevBench231 diagnostic, the same native
+calibrated checkpoint was strictly valid on all 231 questions but scored
+160/231 (69.264%): easy 48/48, standard 66/72, hard 46/111. Tier-macro
+accuracy was 77.703%, Brier `0.25873`, and pmax ECE `0.23614`.
+Sol 1.0 was 161/231 with Brier `0.20545` and ECE `0.10394`. The poorer
+calibration is consistent with the synthetic-only CAL300 fit reaching its
+Noul temperature lower bound; the public panel is not the sealed official
+JevBench composite. Prediction, companion manifest, and score SHA-256 values
+are `e3c2641fd30c4ba36045cc94a19ea67a2cb14502fb2dd1d26d310d71cb928b18`,
+`eb665350ba533244e12c64d6815dd5faa35f10dd9eba859adeac313ce79e35fb`,
+and `9f6dc9baf90e0f69943714ba2fe885a78842a18e30b9a524239991e05670c9bd`.

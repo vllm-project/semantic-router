@@ -10,13 +10,13 @@ renderings in their state and are reported by original modality.
 from __future__ import annotations
 
 import argparse
+from collections import Counter, defaultdict
 import hashlib
 import json
 import math
+from pathlib import Path
 import statistics
 import tempfile
-from collections import Counter, defaultdict
-from pathlib import Path
 from typing import Any
 
 SOURCE_URL = "https://github.com/atlanai/decision-bench"

@@ -10,9 +10,9 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from pathlib import Path, PurePosixPath
 import sys
 import time
-from pathlib import Path, PurePosixPath
 from typing import Any
 
 from inference.kai_lex import MODELS, runtime_report, verify_native_bundle
@@ -24,7 +24,13 @@ MODEL_NAME = "dev-2.0-0.6b"
 PARENT_MANIFEST_SHA = "c1bf07ab1c4c3fa1f819256d3de858d1ed87869bdfa663553280d7e78b88bee4"
 
 
-def verify_export(run: Path, native: Path, expected_manifest: str) -> dict[str, Any]:
+def verify_export(
+    run: Path,
+    native: Path,
+    expected_manifest: str,
+    parent_run: Path | None = None,
+    parent_native: Path | None = None,
+) -> dict[str, Any]:
     """Require a completed run and every original export file to match bytes."""
     if len(expected_manifest) != 64 or any(
         c not in "0123456789abcdef" for c in expected_manifest
@@ -47,16 +53,42 @@ def verify_export(run: Path, native: Path, expected_manifest: str) -> dict[str, 
     manifest_path = native / "MANIFEST.json"
     if manifest_path.is_symlink() or file_digest(manifest_path) != expected_manifest:
         raise ValueError("Native export manifest SHA-256 differs")
+    immediate_parent = complete.get("identity", {}).get("native_manifest_sha256")
     if (
         complete.get("status") != "COMPLETE_DECISION_FINETUNE"
         or complete.get("native") != str(native)
         or complete.get("native_manifest_sha256") != expected_manifest
-        or complete.get("identity", {}).get("native_manifest_sha256")
-        != PARENT_MANIFEST_SHA
+        or not isinstance(immediate_parent, str)
     ):
         raise ValueError(
             "Native export differs from completed training and parent source"
         )
+    if parent_run is None and parent_native is None:
+        if immediate_parent != PARENT_MANIFEST_SHA:
+            raise ValueError(
+                "A continuation parent needs an exact completed-run receipt"
+            )
+        parent_receipt_sha = None
+    elif parent_run is None or parent_native is None:
+        raise ValueError("Specify both parent run and native export")
+    else:
+        parent_run, parent_native = parent_run.resolve(
+            strict=True
+        ), parent_native.resolve(strict=True)
+        parent = verify_export(parent_run, parent_native, immediate_parent)
+        run_path = run / "RUN.json"
+        if run_path.is_symlink() or not run_path.is_file():
+            raise ValueError("Sequential fine-tune lacks its input source receipt")
+        run_receipt = json.loads(run_path.read_text(encoding="utf-8"))
+        if (
+            run_receipt.get("identity") != complete.get("identity")
+            or run_receipt.get("native_path") != str(parent_native)
+            or parent["model_revision"] != immediate_parent
+        ):
+            raise ValueError(
+                "Sequential fine-tune source differs from the attested parent"
+            )
+        parent_receipt_sha = parent["run_receipt_sha256"]
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     files = manifest.get("files")
     if (
@@ -100,7 +132,9 @@ def verify_export(run: Path, native: Path, expected_manifest: str) -> dict[str, 
         "model_name": MODEL_NAME,
         "model_revision": expected_manifest,
         "model_config_sha256": expected_manifest,
-        "base_manifest_sha256": PARENT_MANIFEST_SHA,
+        "base_manifest_sha256": immediate_parent,
+        "root_base_manifest_sha256": PARENT_MANIFEST_SHA,
+        "parent_run_receipt_sha256": parent_receipt_sha,
         "run_receipt_sha256": file_digest(complete_path),
         "native_file_count": len(files),
         "revision_attested": True,
@@ -128,6 +162,8 @@ def _completed(
             or item.get("model_revision") != identity["model_revision"]
             or item.get("model_config_sha256") != identity["model_config_sha256"]
             or item.get("base_manifest_sha256") != identity["base_manifest_sha256"]
+            or item.get("parent_run_receipt_sha256")
+            != identity["parent_run_receipt_sha256"]
             or item.get("run_receipt_sha256") != identity["run_receipt_sha256"]
             or item.get("adapter_version") != VERSION
             or item.get("source_input_sha256") != expected[item_id][0]
@@ -149,10 +185,12 @@ def collect(
     output: Path,
     resume: bool = False,
     max_items: int | None = None,
+    parent_run: Path | None = None,
+    parent_native: Path | None = None,
 ) -> dict[str, Any]:
     run, native = run.resolve(strict=True), native.resolve(strict=True)
     rows = load_prompts(prompts)
-    identity = verify_export(run, native, expected_manifest)
+    identity = verify_export(run, native, expected_manifest, parent_run, parent_native)
     runtime = runtime_report("cuda:0", check_gpu=True)
     if not runtime["runtime_matches_validated"]:
         raise RuntimeError(
@@ -235,7 +273,9 @@ def collect(
                 "model_id": MODEL_ID,
                 "model_revision": expected_manifest,
                 "model_config_sha256": expected_manifest,
-                "base_manifest_sha256": PARENT_MANIFEST_SHA,
+                "base_manifest_sha256": identity["base_manifest_sha256"],
+                "root_base_manifest_sha256": PARENT_MANIFEST_SHA,
+                "parent_run_receipt_sha256": identity["parent_run_receipt_sha256"],
                 "run_receipt_sha256": identity["run_receipt_sha256"],
                 "adapter_version": VERSION,
                 "revision_attested": True,
@@ -270,6 +310,8 @@ def main() -> None:
     parser.add_argument("--manifest-sha256", required=True)
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--parent-run", type=Path)
+    parser.add_argument("--parent-native", type=Path)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--max-items", type=int)
     args = parser.parse_args()
@@ -284,6 +326,8 @@ def main() -> None:
                 output=args.output,
                 resume=args.resume,
                 max_items=args.max_items,
+                parent_run=args.parent_run,
+                parent_native=args.parent_native,
             ),
             ensure_ascii=False,
             sort_keys=True,

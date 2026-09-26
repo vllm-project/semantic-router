@@ -8,30 +8,49 @@ quarantine receipt; no text is truncated and no row is silently discarded.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import hashlib
 import json
 import os
+from pathlib import Path
 import statistics
 import sys
-from collections import Counter
-from pathlib import Path
 from typing import Any
 
 from inference.kai_lex import MODELS, verify_native_bundle
-
 from training.model.data import check_partition_isolation, load_partition
 
-PARENT_SHA = {
-    "train": "61740be433c6cd714810a9908432ad29597c570d0d267d2731ab78cdad243755",
-    "select": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6",
-    "cal": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a",
-    "manifest": "61aa883052759830c4ecf897b36c1062ad816c935a12db824c80abd1f80e9ee8",
-}
-PARENT_FILES = {
-    "train": "rights_clean.train.jsonl",
-    "select": "select.jsonl",
-    "cal": "cal.jsonl",
-    "manifest": "rights_clean.manifest.json",
+PROFILES = {
+    "rights-clean-v2": {
+        "sha": {
+            "train": "61740be433c6cd714810a9908432ad29597c570d0d267d2731ab78cdad243755",
+            "select": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6",
+            "cal": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a",
+            "manifest": "61aa883052759830c4ecf897b36c1062ad816c935a12db824c80abd1f80e9ee8",
+        },
+        "files": {
+            "train": "rights_clean.train.jsonl",
+            "select": "select.jsonl",
+            "cal": "cal.jsonl",
+            "manifest": "rights_clean.manifest.json",
+        },
+    },
+    "balanced-human5824": {
+        "sha": {
+            "train": "e83fb07021b779bb86d6b1d773b007c2dda9d91052aedf1f72f89bebbfef50e2",
+            "select": "d8b1197830fe96a6554b49ee72c12f4755da00d0a819fb514725dc957b687e38",
+            "cal": "bf5bbf29693928a2559ce0aff10e9d6b5b1541b50698634fcdb7725902412dcf",
+            "manifest": "869a94c0c74b9e80f2b60bf414eb7440cda17cbce1e61906621bbe206ea5aa9f",
+            "rights": "a0eb728d4c876a8d3e7f2763f94a594998629f8f9ca9edbf10afaeb8d6bb5d91",
+        },
+        "files": {
+            "train": "balanced_human_5824.train.jsonl",
+            "select": "select.jsonl",
+            "cal": "cal.jsonl",
+            "manifest": "balanced_human_5824.manifest.json",
+            "rights": "eikos4b-r2.noncommercial-attestation.json",
+        },
+    },
 }
 MODEL_NAME = "Decision-1.0-Kai"
 
@@ -108,24 +127,68 @@ def convert(row: dict[str, Any], converter: Any) -> tuple[dict[str, Any], bool]:
 
 
 def _read_parent(
-    parent: Path,
-) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
-    for role, name in PARENT_FILES.items():
+    parent: Path, profile: str
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any], dict[str, Any]]:
+    pinned = PROFILES[profile]
+    files, digests = pinned["files"], pinned["sha"]
+    for role, name in files.items():
         path = parent / name
-        if path.is_symlink() or not path.is_file() or sha(path) != PARENT_SHA[role]:
-            raise ValueError(f"Frozen rights-clean {role} bytes differ")
-    manifest = json.loads((parent / PARENT_FILES["manifest"]).read_text())
-    if (
-        manifest.get("publication_eligible") is not True
-        or manifest.get("derivation_version") != "decision2-goemotions-human-v2/1"
-    ):
-        raise ValueError("Expected the audited rights-clean human v2 manifest")
+        if path.is_symlink() or not path.is_file() or sha(path) != digests[role]:
+            raise ValueError(f"Frozen {profile} {role} bytes differ")
+    manifest = json.loads((parent / files["manifest"]).read_text())
     splits = {
-        role: load_partition(parent / PARENT_FILES[role], role)
+        role: load_partition(parent / files[role], role)
         for role in ("train", "select", "cal")
     }
     check_partition_isolation(splits)
-    return splits, manifest
+    if profile == "rights-clean-v2":
+        if (
+            manifest.get("publication_eligible") is not True
+            or manifest.get("derivation_version") != "decision2-goemotions-human-v2/1"
+        ):
+            raise ValueError("Expected the audited rights-clean human v2 manifest")
+        rights = {
+            "publication_scope": manifest["publication_scope"],
+            "source_rights": manifest["source_rights"],
+            "rights_basis": "Exact audited rights-clean v2 source manifest",
+        }
+    else:
+        attestation = json.loads((parent / files["rights"]).read_text())
+        if (
+            attestation.get("schema_version")
+            != "decision2-noncommercial-research-attestation/1"
+            or attestation.get("noncommercial_use") is not True
+            or attestation.get("no_raw_training_rows") is not True
+            or attestation.get("data_manifest_sha256") != digests["manifest"]
+            or attestation.get("data_sha256")
+            != {
+                "train": digests["train"],
+                "select": digests["select"],
+                "cal_audited_only": digests["cal"],
+            }
+            or attestation.get("source_counts") != manifest["counts"]["source"]
+            or set(attestation.get("source_groups", {}))
+            != set(manifest["counts"]["source"])
+        ):
+            raise ValueError(
+                "Noncommercial source rights attestation does not match the frozen TRAIN"
+            )
+        actual_holdout = {
+            role: _counts(splits[role], "source") for role in ("select", "cal")
+        }
+        if attestation.get("holdout_source_counts") != actual_holdout:
+            raise ValueError(
+                "Noncommercial rights attestation does not match SELECT/CAL"
+            )
+        rights = {
+            "publication_scope": attestation["publication_scope"],
+            "source_rights": attestation["rights_conditions"],
+            "source_groups": attestation["source_groups"],
+            "holdout_groups": attestation["holdout_groups"],
+            "rights_evidence_sha256": digests["rights"],
+            "rights_basis": "Exact noncommercial research source-terms evidence; original attestation is tied to an Eikos run and is not a Kai run authorization",
+        }
+    return splits, manifest, rights
 
 
 def _jsonl(rows: list[dict[str, Any]]) -> bytes:
@@ -146,10 +209,12 @@ def _token_stats(values: list[int]) -> dict[str, int | float]:
     }
 
 
-def build(parent: Path, model: Path, output: Path) -> dict[str, Any]:
+def build(
+    parent: Path, model: Path, output: Path, profile: str = "rights-clean-v2"
+) -> dict[str, Any]:
     if output.exists() or output.is_symlink():
         raise FileExistsError(output)
-    splits, parent_manifest = _read_parent(parent)
+    splits, parent_manifest, rights = _read_parent(parent, profile)
     model = model.resolve(strict=True)
     identity = verify_native_bundle(model, "kai", MODELS["kai"]["revision"])
     sys.path.insert(0, str(model))
@@ -262,17 +327,22 @@ def build(parent: Path, model: Path, output: Path) -> dict[str, Any]:
     if len(train) != len(accepted["train"]) or len(select) != len(accepted["select"]):
         raise AssertionError("Native fine-tune split validation changed row count")
     manifest = {
-        "schema_version": "decision2-kai06b-native-rights-clean-v1/1",
+        "schema_version": "decision2-kai06b-native-v1/2",
+        "profile": profile,
         "generator_code_sha256": sha(Path(__file__)),
         "base_model": identity,
         "base_model_manifest_sha256": identity["model_config_sha256"],
-        "parent_manifest_sha256": PARENT_SHA["manifest"],
+        "parent_manifest_sha256": PROFILES[profile]["sha"]["manifest"],
         "parent_split_sha256": {
-            role: PARENT_SHA[role] for role in ("train", "select", "cal")
+            role: PROFILES[profile]["sha"][role] for role in ("train", "select", "cal")
         },
-        "parent_publication_scope": parent_manifest["publication_scope"],
-        "parent_source_rights": parent_manifest["source_rights"],
-        "rights_basis": "inherited from the exact rights-clean v2 source manifest; admitted source counts account for the 1K quarantine",
+        "parent_publication_scope": rights["publication_scope"],
+        "parent_source_rights": rights["source_rights"],
+        "rights_evidence": {
+            key: value
+            for key, value in rights.items()
+            if key not in {"publication_scope", "source_rights"}
+        },
         "native_conversion": "published SystemOne system_one_training_rows; original state/instructions/candidate order; one-hot source gold; original source/group IDs",
         "score_null_description_fallback_rows": len(fallback_ids),
         "full_input_limit": 1024,
@@ -290,10 +360,18 @@ def build(parent: Path, model: Path, output: Path) -> dict[str, Any]:
             for name in ("train.jsonl", "select.jsonl", "quarantine.jsonl")
         },
         "limitations": [
-            "Selection mixes synthetic oracle and projected GoEmotions labels; it is not a blind transfer panel.",
+            "Selection is tied to the frozen source distribution; it is not a blind transfer panel.",
             "Complete-input 1K admission can quarantine source groups; see per-row private quarantine receipt.",
             "The Kai base model and inherited tokenizer retain their own source conditions; model release requires separate review.",
-            "CAL700 is retained only as a parent split isolation receipt; the Kai native trainer does not use CAL or temperature fitting.",
+            "The source CAL is retained only as a split isolation receipt; the Kai native trainer does not use CAL or temperature fitting.",
+            *(
+                [
+                    "TweetEval and other source-task terms restrict this profile to noncommercial research; no raw rows may be published.",
+                    "Source-matched CSS pilot tasks are not independent out-of-domain transfer evidence.",
+                ]
+                if profile == "balanced-human5824"
+                else []
+            ),
         ],
     }
     (stage / "manifest.json").write_text(
@@ -308,8 +386,9 @@ def main() -> None:
     parser.add_argument("--parent", type=Path, required=True)
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--profile", choices=tuple(PROFILES), default="rights-clean-v2")
     args = parser.parse_args()
-    result = build(args.parent, args.model, args.output)
+    result = build(args.parent, args.model, args.output, args.profile)
     print(
         json.dumps(
             {"audit": result["audit"], "outputs": result["outputs"]},

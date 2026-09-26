@@ -2,8 +2,10 @@
 
 This is an **independent** native typed-decision rerun of the public
 [`atlanai/decision-bench`](https://github.com/atlanai/decision-bench) corpus at
-commit `6fed2cd4c3608b070e649180796ccaef3d020a23`. It is separate from
-JevArena and from the project's sealed final evaluation.
+commit `6fed2cd4c3608b070e649180796ccaef3d020a23`. It is a public,
+Choice-only JevArena v2 axis and remains separate from the sealed authored
+final panel. JevArena v1 reports do not contain this axis and must not be
+numerically compared with v2 rankings.
 
 The upstream bench-v4 release has 1,071 cases, 35 tasks, and 11 categories.
 The adapter evaluates 1,041 text-readable cases across 34 tasks and 10

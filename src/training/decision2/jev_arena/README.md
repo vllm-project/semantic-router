@@ -77,3 +77,31 @@ PYTHONPATH=/work/source python3 -m jev_arena.jevbench_public score \
 No artifact containing training text, benchmark gold, model weights or
 credentials belongs in this source tree. The private Hugging Face dataset
 stores the distributable training split and lineage/rights manifests.
+
+## JevArena v2 release protocol
+
+`arena_v2.py` freezes a six-axis, equal-weight geometric mean before any
+sealed FINAL label is used. The axes are typed synthetic family-macro
+accuracy, held-out human-transfer task-median macro-F1, public JevBench
+tier-macro accuracy, Decision Bench v4 text-readable task-macro accuracy,
+independently authored Choice/Noul/Score family-macro accuracy, and paired
+robustness joint correctness. A zero axis gives a zero aggregate. Invalid or
+missing answers count wrong in the upstream scorers. Calibration, validity,
+latency, throughput and cost remain mandatory separate results. Paired
+variants are not counted as additional independent questions.
+
+The release roster requires the same 1,600-item typed FINAL, 6,547-item
+15-task CSS evaluation, 231 public JevBench items, 1,041 eligible Decision
+Bench v4 cases with 30 visual-only N/E, and 1,200–1,480 independently
+authored sealed items for **every** model. That totals 10,619–10,899
+effective text answers per model before paired variants. A smaller,
+independently seeded 100–250-item authored DEV panel pairs with typed DEV,
+CSS pilot and the two public panels. All panel prompt/target/gold hashes must
+match across a rank roster. The authored axis is unavailable until its source,
+oracle, ambiguity, human review and training-overlap quality gate passes.
+The release aggregate cannot be produced from an incomplete roster.
+
+The v1 four-axis development ranking above is an earlier protocol. It can
+guide exploration but its scalar is not interchangeable with v2. The
+authored builder/scorer, pretest freeze and full-panel release reports are
+required before any v2 result is publishable.

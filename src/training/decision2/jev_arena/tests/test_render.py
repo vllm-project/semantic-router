@@ -38,7 +38,7 @@ class RenderTest(unittest.TestCase):
         self.assertIn("not an official JevBench rank", rank)
         self.assertIn("Decision 2", pareto)
         self.assertIn("filled = Pareto frontier", pareto)
-        self.assertIn("#176b5b", pareto)
+        self.assertIn("#315bff", pareto)
 
     def test_arena_matrix_uses_all_predeclared_axes(self) -> None:
         report = {
@@ -67,6 +67,43 @@ class RenderTest(unittest.TestCase):
             self.assertIn(axis, matrix)
         self.assertIn("JevArena RELEASE", matrix)
         self.assertIn("50.0%", matrix)
+
+    def test_arena_v2_matrix_has_all_six_axes(self) -> None:
+        report = {
+            "schema_version": "jevarena-ranking/2",
+            "phase": "release",
+            "models": [
+                {
+                    "key": "a",
+                    "rank": 1,
+                    "label": "Decision 2",
+                    "group": "decision2",
+                    "score": 73.0,
+                    "size_b": 4.0,
+                    "pareto_frontier": True,
+                    "axes": {
+                        "typed": 0.8,
+                        "transfer": 0.5,
+                        "jevbench_public": 0.7,
+                        "decision_bench_v4": 0.6,
+                        "sealed_authored": 0.9,
+                        "robustness": 0.8,
+                    },
+                },
+            ],
+        }
+        matrix = matrix_svg(report)
+        for label in (
+            "Typed",
+            "Transfer",
+            "Public 231",
+            "DB v4",
+            "Sealed",
+            "Robustness",
+        ):
+            self.assertIn(label, matrix)
+        self.assertIn("6 separate axes", matrix)
+        self.assertIn("sealed authored quality gate required", ranking_svg(report))
 
 
 if __name__ == "__main__":
