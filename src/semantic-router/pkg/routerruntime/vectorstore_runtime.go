@@ -78,12 +78,9 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 			_ = prepared.Close()
 		}
 	}()
-	identity, err := embedding.ResolveProviderIdentity(embedder, embedding.ConsumerSettings{
-		ModelType: cfg.VectorStore.EmbeddingModel, Dimension: cfg.VectorStore.EmbeddingDimension,
-		InputPolicy: "vectorstore-chunk-content-and-query-v1",
-	})
-	if err != nil && (cfg.VectorStore.EmbeddingModel == "mmbert" || cfg.VectorStore.EmbeddingModel == "multimodal" || !errors.Is(err, embedding.ErrIdentityUnsupported)) {
-		return nil, fmt.Errorf("bind vector store embedding representation: %w", err)
+	identity, err := resolveVectorStoreEmbeddingIdentity(embedder, cfg.VectorStore)
+	if err != nil {
+		return nil, err
 	}
 
 	storeReg, fileReg, regCloser, err := buildMetadataRegistries(cfg)
@@ -155,6 +152,17 @@ func prepareVectorStoreEmbedding(prepared *embedding.Set, cfg *config.VectorStor
 	}
 	cfg.EmbeddingDimension = dimension
 	return embedding.WithOptions(provider, embedding.Options{Dimension: dimension}), nil
+}
+
+func resolveVectorStoreEmbeddingIdentity(embedder embedding.Provider, cfg *config.VectorStoreConfig) (embedding.ContentIdentity, error) {
+	identity, err := embedding.ResolveNamespaceIdentity(embedder, embedding.ConsumerSettings{
+		ModelType: cfg.EmbeddingModel, Dimension: cfg.EmbeddingDimension,
+		InputPolicy: "vectorstore-chunk-content-and-query-v1",
+	})
+	if err != nil && (cfg.EmbeddingModel == "mmbert" || cfg.EmbeddingModel == "multimodal" || !errors.Is(err, embedding.ErrIdentityUnsupported)) {
+		return embedding.ContentIdentity{}, fmt.Errorf("bind vector store embedding representation: %w", err)
+	}
+	return identity, nil
 }
 
 func buildMetadataRegistries(cfg *config.RouterConfig) (vectorstore.StoreRegistry, vectorstore.FileRegistry, io.Closer, error) {

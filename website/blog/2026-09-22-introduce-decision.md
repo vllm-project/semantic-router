@@ -39,10 +39,10 @@ A useful decision layer has to keep up with the application. Available models ch
 <ArticleVideo
   src="/videos/decision-1-0/decision-1-0-tetris.mp4"
   poster="/img/blog/decision-1-0/tetris-poster.png"
-  title="Decision 1.0 speed comparison in Tetris"
+  title="Tetris speed demo: Kai-0.6B, Lux-9B, and Jev Upstream"
   showcase
 >
-  <em>Feel the speed.</em>
+  <em>Feel the speed.</em> Kai-0.6B runs alongside Lux-9B and Jev Upstream.
 </ArticleVideo>
 
 Decision 1.0 makes the decision itself programmable:
@@ -108,6 +108,15 @@ Start with the model that fits your workload. Keep the questions, options, and r
 | [**Decision-1.0-Lux-9B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B) | Our largest model and strongest overall result on the released decision suite. | 16,384 tokens |
 
 Input budgets cover the complete state, question, and candidate descriptions. The model cards document each release's architecture and runtime requirements.
+
+<ArticleVideo
+  src="/videos/decision-1-0/decision-1-0-nox-4b-robot-arm.mp4"
+  poster="/img/blog/decision-1-0/nox-4b-robot-arm-poster.png"
+  title="Nox-4B action selection in a robot-arm simulation"
+  landscape
+>
+  Nox-4B chooses actions step by step in a robot-arm simulation; the on-screen number is model latency for that step.
+</ArticleVideo>
 
 ## Three answers your software can use
 

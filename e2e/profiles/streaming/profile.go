@@ -40,7 +40,7 @@ func (p *Profile) Name() string {
 }
 
 func (p *Profile) Description() string {
-	return "Tests streamed request body mode: chunked delivery, cache round-trip, large payloads, multimodal, SSE streaming responses"
+	return "Tests streamed request body mode: chunked delivery, body limits, cache round-trip, large payloads, multimodal, SSE streaming responses"
 }
 
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
@@ -56,6 +56,8 @@ func (p *Profile) GetTestCases() []string {
 		"streaming-keyword-routing",
 		"streaming-cache-roundtrip",
 		"streaming-large-body",
+		"streaming-body-size-limit",
+		"streaming-body-deadline",
 		"streaming-sse-cache",
 		// Safety: verify fast_response blocking works with streamed body chunks
 		"streaming-pii-blocked",

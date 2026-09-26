@@ -228,7 +228,7 @@ Quick/dev sets enable bounded tuning; standard is disjoint holdout. Preview has
 no capability score, and replay is a saved-answer estimate. Priced live runs are
 required for a measured savings claim. Unknown usage is not zero, and spend
 reservations are not a universal provider-enforced hard USD cap. See the
-[sr-bench guide](../../website/docs/benchmarking/sr-bench.md) for setup, manifests,
+[sr-bench guide](../../website/docs/benchmarking/sr-bench/index.md) for setup, manifests,
 all nine adapters, failure recovery, regrading and dev-only training export.
 
 ## Deploy to Kubernetes

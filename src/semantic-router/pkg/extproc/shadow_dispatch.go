@@ -233,7 +233,7 @@ type shadowSubmitDeps struct {
 
 // shadowRequestEncoder mirrors the primary pipeline for the shadow model:
 // semantic reasoning mode for non-chat targets before encoding, then the
-// provider-dialect reasoning rewrite for chat targets after encoding.
+// provider-dialect rewrites for chat targets after encoding.
 func (r *OpenAIRouter) shadowRequestEncoder(
 	ctx *RequestContext,
 	dispatch *providerDispatch,
@@ -253,16 +253,24 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 		if decisionName != "" && target.format != llmprotocol.OpenAIChatV1 {
 			r.applySemanticReasoningMode(&request, target.logicalModel, target.format, useReasoning, decision)
 		}
-		encoded, err := engine.EncodeRequest(target.format, request, envelope)
+		projected, err := r.projectAnthropicRequestForBackend(request, target.logicalModel, target.format)
 		if err != nil {
 			return nil, err
 		}
-		if decisionName == "" || target.format != llmprotocol.OpenAIChatV1 {
-			return encoded.Body, nil
+		encoded, err := engine.EncodeRequest(target.format, projected, envelope)
+		if err != nil {
+			return nil, err
 		}
-		return r.setReasoningModeToRequestBodyForModelAndProvider(
-			encoded.Body, target.logicalModel, useReasoning, decision, target.profile,
-		)
+		body := encoded.Body
+		if decisionName != "" && target.format == llmprotocol.OpenAIChatV1 {
+			body, err = r.setReasoningModeToRequestBodyForModelAndProvider(
+				body, target.logicalModel, useReasoning, decision, target.profile,
+			)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return adaptOllamaOutputLimit(body, target.format, target.profile)
 	}
 }
 

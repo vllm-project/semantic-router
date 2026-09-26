@@ -277,6 +277,10 @@ does not install those policies or routes. Follow the matching
 backend selection contract. Do not point an inference `HTTPRoute` at the Router
 management API; it does not implement `/v1/chat/completions`.
 
+When that ExtProc policy sends request bodies in `STREAMED` or
+`FullDuplexStreamed` mode, also set `spec.config.streamed_body.enabled: true`,
+as described in [Streamed ExtProc](streamed-extproc).
+
 ### OpenShift Route
 
 On OpenShift, the Operator can create a Route:
