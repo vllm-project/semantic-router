@@ -1,6 +1,8 @@
 """Native Chat Completions HTTP boundary and fixture selection."""
 
+import asyncio
 import json
+import re
 import time
 from typing import Any
 
@@ -93,6 +95,24 @@ def mock_chat_control_response(req: ChatRequest, created_ts: int) -> Any | None:
     return workflow_chat.mock_chat_control_response(req, created_ts, _chat_control)
 
 
+def extract_mock_header_delay(req: ChatRequest) -> float:
+    for message in req.messages:
+        if isinstance(message.content, str):
+            m = re.search(r"__mock_header_delay_(\d+(?:\.\d+)?)s?__", message.content)
+            if m:
+                return float(m.group(1))
+    return 0.0
+
+
+def extract_mock_frame_stall(req: ChatRequest) -> float:
+    for message in req.messages:
+        if isinstance(message.content, str):
+            m = re.search(r"__mock_frame_stall_(\d+(?:\.\d+)?)s?__", message.content)
+            if m:
+                return float(m.group(1))
+    return 0.0
+
+
 @router.post("/v1/chat/completions")
 async def chat_completions(request: Request):
     raw_body = await request.body()
@@ -113,6 +133,9 @@ async def chat_completions(request: Request):
 
     await apply_fixture_delay()
     created_ts = int(time.time())
+    delay = extract_mock_header_delay(req)
+    if delay > 0:
+        await asyncio.sleep(delay)
     scenario_response = await respond_to_scenario(request, req, created_ts)
     if scenario_response is not None:
         return scenario_response
@@ -185,6 +208,7 @@ async def chat_completions(request: Request):
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
+    stall_sec = extract_mock_frame_stall(req)
     return StreamingResponse(
         generate_chat_stream(
             req,
@@ -193,6 +217,7 @@ async def chat_completions(request: Request):
             usage,
             created_ts,
             complete=not chat_contains(req, "__mock_incomplete_stream__"),
+            stall_seconds=stall_sec,
         ),
         media_type="text/event-stream",
         headers={

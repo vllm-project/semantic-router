@@ -5069,6 +5069,15 @@
         },
         "health_check_timeout": {
           "type": "string"
+        },
+        "request_timeout": {
+          "type": "string"
+        },
+        "stream_idle_timeout": {
+          "type": "string"
+        },
+        "connect_timeout": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

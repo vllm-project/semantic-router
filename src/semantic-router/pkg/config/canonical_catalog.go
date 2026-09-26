@@ -406,6 +406,8 @@ func providerReliabilityFromCatalog(reliability modelcatalog.Reliability) Provid
 		Consecutive5xx: reliability.Consecutive5xx, BaseEjectionTime: reliability.BaseEjectionTime,
 		MaxEjectionPercent: reliability.MaxEjectionPercent, HealthCheckPath: reliability.HealthCheckPath,
 		HealthCheckInterval: reliability.HealthCheckInterval, HealthCheckTimeout: reliability.HealthCheckTimeout,
+		RequestTimeout: reliability.RequestTimeout, StreamIdleTimeout: reliability.StreamIdleTimeout,
+		ConnectTimeout: reliability.ConnectTimeout,
 	}
 }
 
