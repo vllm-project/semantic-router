@@ -89,6 +89,13 @@ ignore = [
 "bench/reasoning/router_reason_bench_multi_dataset.py" = [
   "PLR2004",  # answer-parsing and token thresholds are readable inline
 ]
+"bench/redteam/test_*.py" = ["PLR2004"]
+"bench/redteam/datasets.py" = [
+  "PLC0415",  # datasets is only needed for the Hub-backed prompt source
+]
+"bench/redteam/scorers.py" = [
+  "PLC0415",  # torch/transformers are only needed to score a local artifact
+]
 "tools/test/services/provider-mocker/tests/*.py" = ["PLR2004"]
 "src/vllm-sr/tests/test_config_template.py" = ["E402", "UP015"]
 "src/training/model_embeddings/cache_embeddings/lora_trainer.py" = [

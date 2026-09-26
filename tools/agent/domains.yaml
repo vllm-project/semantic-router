@@ -588,6 +588,7 @@ domains:
   training:
     owner: training
     paths:
+      - bench/redteam/**
       - src/training/**
       - tools/make/models.mk
       - tools/ci/training-test-requirements.txt
