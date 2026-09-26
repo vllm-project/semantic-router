@@ -102,3 +102,16 @@ hashes and ordering *before* opening the private join; any material blind
 finding keeps v4 blocked. Even a clean editorial verdict does not authorize
 GPU training: first create a separately frozen, group-disjoint three-level
 SELECT diagnostic and get the project lead's matched-control pilot decision.
+
+## Prospective feasibility clarification
+
+The first R149 wording required near-identical mark histograms in every
+weight bucket across labels. Before any v4 rows existed, signed-off commit
+`8d19a8c29` corrected that impossible hard gate: summing equal per-weight
+mark marginals would make average weighted totals equal, yet every complete
+group requires level-0 total below level-1 below level-2. The current hard
+gates instead hold each group's marks/weights multisets fixed, forbid any
+single-signal complete three-way ranking, and cap held-out single-signal
+classification at 40%. Position, name and weight marginals remain audited
+and counterbalanced as far as the score tiers permit. No training or review
+outcome motivated this correction.
