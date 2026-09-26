@@ -59,6 +59,138 @@ SCENES_ZH = (
     "博物馆工坊",
     "骑行项目",
 )
+REVIEW_TOPICS_EN = (
+    "identity",
+    "access",
+    "consent",
+    "budget",
+    "schedule",
+    "safety",
+    "staffing",
+    "notice",
+    "translation",
+    "records",
+    "insurance",
+    "supplies",
+    "location",
+    "privacy",
+    "training",
+    "maintenance",
+    "equipment",
+    "attendance",
+    "inspection",
+    "handoff",
+)
+REVIEW_TOPICS_ZH = (
+    "身份",
+    "访问",
+    "同意",
+    "预算",
+    "日程",
+    "安全",
+    "人员",
+    "通知",
+    "翻译",
+    "档案",
+    "保险",
+    "物资",
+    "场地",
+    "隐私",
+    "培训",
+    "维护",
+    "设备",
+    "出席",
+    "检查",
+    "交接",
+)
+SIGNAL_TOPICS_EN = (
+    "clarity",
+    "coverage",
+    "relevance",
+    "traceability",
+    "freshness",
+    "consistency",
+    "usefulness",
+    "precision",
+    "reach",
+    "timeliness",
+    "readability",
+    "accessibility",
+    "completeness",
+    "organization",
+    "repeatability",
+    "durability",
+    "specificity",
+    "stability",
+    "fit",
+    "response",
+)
+SIGNAL_TOPICS_ZH = (
+    "清晰度",
+    "覆盖度",
+    "相关性",
+    "可追溯性",
+    "时效性",
+    "一致性",
+    "实用性",
+    "准确度",
+    "覆盖范围",
+    "及时性",
+    "可读性",
+    "无障碍性",
+    "完整性",
+    "组织性",
+    "可重复性",
+    "耐久性",
+    "具体性",
+    "稳定性",
+    "契合度",
+    "响应度",
+)
+STREAK_TOPICS_EN = (
+    "response note",
+    "stock report",
+    "lesson plan",
+    "inspection log",
+    "repair ticket",
+    "survey upload",
+    "access review",
+    "safety check",
+    "schedule update",
+    "reading summary",
+    "garden log",
+    "service memo",
+    "staff rota",
+    "event recap",
+    "equipment check",
+    "expense note",
+    "meeting record",
+    "handoff memo",
+    "arrival report",
+    "training log",
+)
+STREAK_TOPICS_ZH = (
+    "响应记录",
+    "库存报告",
+    "课程计划",
+    "检查日志",
+    "维修工单",
+    "调查上传",
+    "访问审核",
+    "安全核查",
+    "日程更新",
+    "阅读摘要",
+    "园艺日志",
+    "服务备忘",
+    "人员排班",
+    "活动总结",
+    "设备核查",
+    "费用记录",
+    "会议纪要",
+    "交接备忘",
+    "到达报告",
+    "培训日志",
+)
 
 
 def _sha(text: str) -> str:
@@ -117,27 +249,25 @@ def oracle(family: str, state: dict[str, Any]) -> int:
 def _obligation_states(
     rng: random.Random, case: str, language: str
 ) -> list[dict[str, Any]]:
-    words = (
-        ["identity", "access", "evidence", "acknowledgement"]
-        if language == "en"
-        else ["身份", "访问", "证明", "确认"]
-    )
+    vocabulary = REVIEW_TOPICS_ZH if language == "zh" else REVIEW_TOPICS_EN
+    words = rng.sample(vocabulary, 4)
     core = [{"name": word, "scope": "core", "assessment": "accepted"} for word in words]
     optional = {
-        "name": "archive" if language == "en" else "归档",
+        "name": rng.choice([word for word in vocabulary if word not in words]),
         "scope": "informational",
-        "assessment": "rejected",
+        "assessment": rng.choice(("accepted", "unresolved", "rejected")),
     }
+    first, second = rng.sample(range(4), 2)
     order = list(range(len(core) + 1))
     rng.shuffle(order)
     states = []
     for level in range(3):
         reviews = [dict(item) for item in [*core, optional]]
         if level == 0:
-            reviews[0]["assessment"] = "rejected"
-            reviews[1]["assessment"] = "unresolved"
+            reviews[first]["assessment"] = "rejected"
+            reviews[second]["assessment"] = "unresolved"
         elif level == 1:
-            reviews[1]["assessment"] = "unresolved"
+            reviews[second]["assessment"] = "unresolved"
         states.append({"case": case, "reviews": [reviews[i] for i in order]})
     return states
 
@@ -145,11 +275,7 @@ def _obligation_states(
 def _weighted_states(
     rng: random.Random, case: str, language: str
 ) -> list[dict[str, Any]]:
-    words = (
-        ["clarity", "coverage", "relevance", "traceability"]
-        if language == "en"
-        else ["清晰度", "覆盖度", "相关性", "可追溯性"]
-    )
+    words = rng.sample(SIGNAL_TOPICS_ZH if language == "zh" else SIGNAL_TOPICS_EN, 4)
     weights = [1, 2, 2, 3]
     rng.shuffle(weights)
     lower, upper = rng.randint(8, 10), rng.randint(15, 17)
@@ -197,20 +323,40 @@ def _route_states(rng: random.Random, case: str) -> list[dict[str, Any]]:
     return states
 
 
-def _streak_states(rng: random.Random, case: str) -> list[dict[str, Any]]:
-    schedules = (
-        (False, True, False, True, False),
-        (False, True, True, True, False),
-        (False, True, True, True, True),
-    )
+def _streak_states(
+    rng: random.Random, case: str, language: str
+) -> list[dict[str, Any]]:
+    def level(values: tuple[bool, ...]) -> int:
+        best = current = 0
+        for value in values:
+            current = current + 1 if value else 0
+            best = max(best, current)
+        return 0 if best <= 1 else (1 if best <= 3 else 2)
+
+    patterns = [
+        tuple(bool(bits & (1 << index)) for index in range(5)) for bits in range(32)
+    ]
+    paths = [
+        (low, middle, high)
+        for low in patterns
+        if level(low) == 0
+        for middle in patterns
+        if level(middle) == 1 and sum(a != b for a, b in zip(low, middle)) == 1
+        for high in patterns
+        if level(high) == 2 and sum(a != b for a, b in zip(middle, high)) == 1
+    ]
+    if not paths:
+        raise AssertionError("No three-level one-change streak paths")
+    schedules = rng.choice(paths)
+    process = rng.choice(STREAK_TOPICS_ZH if language == "zh" else STREAK_TOPICS_EN)
     states = []
     for schedule in schedules:
-        days = [{"day": 0, "on_time": True}]
+        days = [{"day": 0, "on_time": rng.choice((True, False))}]
         days.extend(
             {"day": day, "on_time": value} for day, value in enumerate(schedule, 1)
         )
         rng.shuffle(days)
-        states.append({"case": case, "days": days})
+        states.append({"case": case, "tracked_process": process, "days": days})
     return states
 
 
@@ -296,7 +442,7 @@ def generate() -> list[dict[str, Any]]:
             elif family == "route_depth":
                 states = _route_states(rng, case)
             else:
-                states = _streak_states(rng, case)
+                states = _streak_states(rng, case, language)
             instructions, options = _question(family, language)
             stem = _sha(f"{SEED}\0{family}\0{index}")[:20]
             for level, state in enumerate(states):

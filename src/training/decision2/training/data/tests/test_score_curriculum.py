@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import collections
+import difflib
+import itertools
 import json
 import tempfile
 import unittest
@@ -113,6 +115,25 @@ class ScoreCurriculumTests(unittest.TestCase):
         streak["days"][4]["on_time"] = True
         streak["days"][5]["on_time"] = True
         self.assertEqual(curriculum.oracle("timely_streak", streak), 2)
+
+    def test_cross_group_level_zero_contexts_are_not_near_clones(self) -> None:
+        groups = collections.defaultdict(list)
+        for row in curriculum.generate():
+            if row["label"] == 0:
+                groups[row["family"]].append(
+                    json.dumps(
+                        row["state"],
+                        sort_keys=True,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                )
+        for family, states in groups.items():
+            closest = max(
+                difflib.SequenceMatcher(None, left, right).ratio()
+                for left, right in itertools.combinations(states, 2)
+            )
+            self.assertLess(closest, 0.94, family)
 
     def test_protected_reader_rejects_gold_and_incomplete_roles(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
