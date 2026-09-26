@@ -1,6 +1,6 @@
 # JevArena authored v11 DEV12: frozen gold-free editorial packet
 
-**Status: AUTOMATED_PROOF_ONLY, awaiting independent two-stage blind review.**
+**Status: BLOCK_FOR_RELEASE_BENCH after independent two-stage blind review.**
 This is not a release benchmark, training set, model score, or claim of model
 improvement. The [prospective method](jev-arena-authored-v11-prereg-2026-09-27.md)
 was mirrored into source commit `60dd1e188` before any v11 case text or gold
@@ -50,11 +50,12 @@ measurement and process detail before freezing r3. These prospective
 changes kept the same facts and one original salt; they were made without
 blind judgments or model scores.
 
-Mechanical necessity and surface overlap checks cannot establish natural
-answerability or absence of subtle prose cues. The next reviewer should
-receive **only** the gold-free original prompt and freeze/manifest files
-first, solve and seal all originals, then receive the gold-free deletion
-variants and seal source-necessity judgments. Private targets and proofs stay
-closed until both seals. Any direct or plausible residual clue, unnecessary
-source, ambiguity or formulaic filler blocks this entire DEV packet from
-release use. No FINAL, training, GPU inference or publication occurred.
+Mechanical necessity and surface overlap checks did not establish natural
+answerability or absence of subtle prose cues. The independent reviewer
+sealed original judgments before seeing deletion variants, then sealed the
+deletion judgments before private targets and proofs were opened. The
+[post-key audit](jev-arena-authored-v11-independent-postkey-2026-09-27.md)
+matched all twelve original targets but found four materially ambiguous
+source deletions and additional editorial weaknesses. This frozen DEV packet
+is blocked from release use. No FINAL, training, GPU inference or publication
+occurred.
