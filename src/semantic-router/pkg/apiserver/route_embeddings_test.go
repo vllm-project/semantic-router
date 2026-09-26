@@ -324,6 +324,17 @@ func TestCheckEmbeddingReadinessExplicitFamilyMustBePresent(t *testing.T) {
 	}
 }
 
+func TestCheckEmbeddingReadinessAutoTextRejectsBertOnlySet(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"bert": fakeProvider("candle")}, "qwen3")
+	err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "auto", Texts: []string{"hi"}})
+	if err == nil {
+		t.Fatal("expected auto text to be rejected when only bert is prepared (auto cannot select bert)")
+	}
+	if !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected ErrEmbeddingModelNotReady, got %v", err)
+	}
+}
+
 func TestCheckEmbeddingReadinessMultimodalTextPassesWithMultimodalPrepared(t *testing.T) {
 	set := embedding.NewSet(map[string]embedding.Provider{"multimodal": fakeProvider("candle")}, "qwen3")
 	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "multimodal", Texts: []string{"hi"}}); err != nil {

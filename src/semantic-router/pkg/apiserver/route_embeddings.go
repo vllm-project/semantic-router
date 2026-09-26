@@ -62,18 +62,13 @@ func checkEmbeddingReadiness(set *embedding.Set, req EmbeddingRequest) error {
 
 // textEmbeddingReady reports whether the text portion's selected model family
 // is prepared for the generation. An unspecified ("") or "auto" request needs
-// any prepared text model; a multimodal-only generation must not satisfy text
-// inputs. An explicit family (qwen3, gemma, mmbert, ...) must be present, with
-// model == "multimodal" allowed to serve text through its own provider.
+// a model that auto-selection can actually use (qwen3, gemma, mmbert, or the
+// configured primary); a multimodal-only generation must not satisfy text
+// inputs. An explicit family must be present in the set.
 func textEmbeddingReady(set *embedding.Set, model string) bool {
 	switch strings.ToLower(strings.TrimSpace(model)) {
 	case "", "auto":
-		for _, info := range set.Models() {
-			if info.Name != "multimodal" {
-				return true
-			}
-		}
-		return false
+		return set.Has("qwen3") || set.Has("gemma") || set.Has("mmbert") || set.Has("")
 	default:
 		return set.Has(model)
 	}
