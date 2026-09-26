@@ -19,6 +19,7 @@ For an interpretation of maintained benchmark coverage, see the
 | Does production protection obey maintained per-turn contracts? | [`make bench-agent-routing-protection`](../website/docs/benchmarking/agent-routing-protection.md) |
 | Does a routed model complete maintained multi-turn agent tasks? | `agent_task_live_benchmark.py` |
 | Does a backend report prompt-cache usage through the router? | `cache_token_probe.py` |
+| How fast does Router Memory cover a new user, and how often is the retrieved memory wrong? | [`memory_coldstart/`](#router-memory-cold-start) |
 | Do Router Flow arms improve answer quality? | [`router_flow/`](router_flow/README.md) |
 | Does grounding-aware fusion help on DRACO? | [`grounded_fusion/`](grounded_fusion/README.md) |
 | How do hallucination detectors compare? | [`hallucination/`](hallucination/README.md) |
@@ -174,6 +175,38 @@ The related tools are intentionally separate:
 The branch-image and GA tools validate evidence; they do not build, deploy, or
 approve an image. Use immutable image tags or digests and record the reviewed
 source ref whenever those artifacts are used for a release decision.
+
+## Router Memory cold start
+
+`memory_coldstart/` replays a month of conversations from one synthetic user
+through Router Memory. Each session opens with questions about earlier sessions
+and then stores its own turns. Writes go through the router's chunk store into
+the in-memory backend, and reads go through `Store.Retrieve` and the default
+memory filter. It needs no model or service.
+
+```bash
+make run-memory-coldstart
+make run-memory-coldstart GO_TOOL_ARGS="-json /tmp/memory-coldstart.json"
+make test-memory-coldstart
+```
+
+Questions are grouped by phase: `no_memory` (the fact was never stated),
+`first_seen`, `recurring`, and `stale_or_conflicting` (the user has corrected
+the fact). The table counts, per phase:
+
+- `hit`: retrieval returned something, which is when the router records a
+  `used` memory receipt;
+- `right`: a retrieved memory holds the needed fact, and `top-1` when it ranks
+  first;
+- `stale`: a superseded fact was injected;
+- `ungrounded`: the needed memory was not retrieved, so a small model would
+  answer without it.
+
+Receipts and metrics only show `hit`. Deterministic embeddings match words, not
+meaning, so the rates depend on the scenario wording and the threshold, and
+they don't predict production numbers. The in-memory backend also ignores
+hybrid search and adaptive thresholds. Answer correctness and cost need a live
+model; the JSON report records the memories each question would inject.
 
 ## Results and reproducibility
 
