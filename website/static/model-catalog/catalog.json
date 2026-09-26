@@ -12456,6 +12456,253 @@
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-1-pro",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.1-pro-model-card-humanitys-last-exam-no-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.444
+      },
+      "model": "google/gemini-3.1-pro",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "hle_mode": "full_no_tools",
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "variant": "Gemini 3.1 Pro Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-1-pro",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.1-pro-model-card-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.514
+      },
+      "model": "google/gemini-3.1-pro",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "tool_policy": "with_tools",
+        "tools": "search with blocklist, code execution",
+        "variant": "Gemini 3.1 Pro Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "arc-prize/arc-agi-2@1.0.0",
+      "benchmark_profile": "semi-private",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-1-pro",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.1-pro-model-card-arc-agi-2@1.0.0",
+      "metrics": {
+        "accuracy": 0.771
+      },
+      "model": "google/gemini-3.1-pro",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "evaluation_set": "semi-private",
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-1-pro",
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "variant": "Gemini 3.1 Pro Thinking (High)",
+        "verified_by": "ARC Prize"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-1-pro",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.1-pro-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.943
+      },
+      "model": "google/gemini-3.1-pro",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "tool_policy": "no_tools",
+        "variant": "Gemini 3.1 Pro Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-1-pro",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.1-pro-model-card-terminal-bench@2.0.0",
+      "metrics": {
+        "resolved": 0.685
+      },
+      "model": "google/gemini-3.1-pro",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "terminal_harness": "Terminus-2",
+        "variant": "Gemini 3.1 Pro Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-1-pro",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.1-pro-model-card-swe-bench-verified@1.0.0",
+      "metrics": {
+        "resolved": 0.806
+      },
+      "model": "google/gemini-3.1-pro",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "averaged_runs": 10,
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-1-pro",
+        "reasoning_mode": "high",
+        "score_adjustment": "includes 0.6 points for three tasks that fail in the official harness",
+        "source_kind": "official_model_card",
+        "swe_harness": "single-attempt bash, file-operation, and submit tools",
+        "variant": "Gemini 3.1 Pro Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-1-pro",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.1-pro-model-card-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.542
+      },
+      "model": "google/gemini-3.1-pro",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "averaged_runs": 5,
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "subset": "public",
+        "swe_harness": "single-attempt bash, file-operation, and submit tools",
+        "variant": "Gemini 3.1 Pro Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "mmmu-benchmark/mmmu-pro@1.0.0",
+      "benchmark_profile": "standard-10-vision-average",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-1-pro",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.1-pro-model-card-mmmu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.805
+      },
+      "model": "google/gemini-3.1-pro",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-1-pro",
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "tool_policy": "no_tools",
+        "variant": "Gemini 3.1 Pro Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "google-deepmind/mrcr@2.0.0",
+      "benchmark_profile": "8-needle-128k-average",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-1-pro",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.1-pro-model-card-mrcr-v2-128k@2.0.0",
+      "metrics": {
+        "score": 0.849
+      },
+      "model": "google/gemini-3.1-pro",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "variant": "Gemini 3.1 Pro Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "google-deepmind/mrcr@2.0.0",
+      "benchmark_profile": "8-needle-1m-pointwise",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-1-pro",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.1-pro-model-card-mrcr-v2-1m@2.0.0",
+      "metrics": {
+        "score": 0.263
+      },
+      "model": "google/gemini-3.1-pro",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "variant": "Gemini 3.1 Pro Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
         "source": "https://huggingface.co/google/gemma-4-31b-it",
         "verification": "claimed"
       },
@@ -51926,6 +52173,322 @@
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemini-3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemini-3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemini-3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemini-3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemini-3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemini-3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "google/gemini-3.1-pro-model-card-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.943,
+          "status": "available",
+          "value": 0.943,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemini-3.1-pro",
+      "provenance": [
+        "google/gemini-3.1-pro-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemini-3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemini-3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemini-3.1-pro",
+      "provenance": [
+        "google/gemini-3.1-pro-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
           "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-standard",
@@ -89725,6 +90288,63 @@
         "chat",
         "reasoning",
         "tools",
+        "structured_output",
+        "vision",
+        "audio",
+        "video",
+        "long_context"
+      ],
+      "description": "Google's Gemini 3 Pro-series reasoning model for software engineering and agentic workflows, available in preview.",
+      "display_name": "Gemini 3.1 Pro",
+      "distribution": {
+        "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview",
+        "type": "proprietary_api"
+      },
+      "family": "gemini-3",
+      "id": "google/gemini-3.1-pro",
+      "kind": "physical",
+      "lifecycle": "experimental",
+      "limits": {
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio",
+          "video",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:gemini",
+        "monochrome": false,
+        "monogram": "G"
+      },
+      "publisher": "Google",
+      "released_at": "2026-02-19",
+      "tags": [
+        "proprietary",
+        "multimodal",
+        "agentic",
+        "preview"
+      ],
+      "verification": {
+        "authority": "Google",
+        "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview",
+        "status": "claimed",
+        "verified_at": "2026-09-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
         "vision",
         "long_context"
       ],
@@ -95222,6 +95842,20 @@
       "display_name": "Google Gemini",
       "id": "gemini",
       "models": [
+        {
+          "catalog": "google/gemini-3.1-pro",
+          "id": "gemini-3.1-pro-preview",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview",
+            "status": "claimed",
+            "verified_at": "2026-09-23"
+          }
+        },
         {
           "catalog": "google/gemini-3.6-flash",
           "id": "gemini-3.6-flash",
