@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -30,6 +31,11 @@ def fixture_source(groups_per_intent: int = 4):
     for intent in v5.SOURCE_INTENT_ORDER:
         for number in range(groups_per_intent):
             identifier = f"{intent}-{number}"
+            phrase = (
+                phrases[number]
+                if number < len(phrases)
+                else hashlib.sha256(identifier.encode()).hexdigest()[:32]
+            )
             for locale in massive.LOCALES:
                 source[locale][identifier] = {
                     "id": identifier,
@@ -37,7 +43,7 @@ def fixture_source(groups_per_intent: int = 4):
                     "partition": "train",
                     "intent": intent,
                     "scenario": intent.split("_")[0],
-                    "utt": f"{locale} {domains[intent]} {phrases[number]}",
+                    "utt": f"{locale} {domains[intent]} {phrase}",
                     "quality_pass": True,
                     "passing_votes": 3,
                 }
@@ -73,7 +79,25 @@ class MassiveV5Contracts(unittest.TestCase):
         chosen, audit = v5.overlap_filter(source, by_intent, protected)
         self.assertEqual(len(chosen), 12)
         self.assertNotIn("alarm_set-0", chosen)
-        self.assertEqual(audit["quarantined_source_groups"], 1)
+        self.assertEqual(audit["quarantined_screened_source_groups"], 1)
+
+    def test_rank_prefix_doubles_without_changing_intent_quota(self):
+        source = fixture_source(groups_per_intent=15)
+        by_intent = {
+            intent: [f"{intent}-{number}" for number in range(15)]
+            for intent in v5.SOURCE_INTENT_ORDER
+        }
+        protected = v5._context_rows(
+            [source["en-US"][f"alarm_set-{number}"]["utt"] for number in range(12)],
+            "protected",
+        )
+        chosen, audit = v5.overlap_filter(source, by_intent, protected)
+        self.assertEqual(len(chosen), 12)
+        self.assertEqual(
+            [item for item in chosen if item.startswith("alarm_set-")],
+            ["alarm_set-12", "alarm_set-13", "alarm_set-14"],
+        )
+        self.assertEqual(audit["screened_prefix_per_intent"], 24)
 
     def test_rows_and_two_blind_stages_have_no_visible_gold(self):
         source = fixture_source(groups_per_intent=3)

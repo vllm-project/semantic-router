@@ -145,6 +145,8 @@ def protected_inputs(
     for role in sorted(references):
         for row in references[role]:
             texts.extend(_leaf_texts(row["state"]))
+            texts.extend(_leaf_texts(row.get("instructions", "")))
+            texts.extend(_leaf_texts(row.get("options", [])))
     if not texts:
         raise ValueError("Protected utterance index is empty")
     return _context_rows(texts, "protected"), sorted(receipts, key=lambda r: r["role"])
@@ -173,80 +175,105 @@ def overlap_filter(
     by_intent: dict[str, list[str]],
     protected: list[dict[str, Any]],
 ) -> tuple[list[str], dict[str, Any]]:
-    pool_ids = [identifier for ids in by_intent.values() for identifier in ids]
-    pool = [
-        {
-            "id": f"candidate:{identifier}:{locale}",
-            "state": source[locale][identifier]["utt"],
-            "instructions": "",
-            "options": [],
-            "task_type": "context",
-        }
-        for identifier in pool_ids
-        for locale in massive.LOCALES
-    ]
+    total_pool_groups = sum(map(len, by_intent.values()))
     protected_hashes = {targeted.text_hashes(row["state"]) for row in protected}
     raw = {value[0] for value in protected_hashes}
     normalized = {value[1] for value in protected_hashes}
-    exact_ids = {
-        row["id"]
-        for row in pool
-        if (pair := targeted.text_hashes(row["state"]))[0] in raw
-        or pair[1] in normalized
-    }
-    near = pilot.near_duplicates(pool, protected, collect_left_ids=True)
-    near_ids = set(near.pop("left_ids"))
-    blocked = {
-        identifier
-        for identifier in pool_ids
-        if any(
-            f"candidate:{identifier}:{locale}" in exact_ids | near_ids
+    protected_by_length = [(len(pilot._near_text(row)), row) for row in protected]
+
+    prefix = 12
+    while True:
+        current_pool = {
+            intent: identifiers[:prefix] for intent, identifiers in by_intent.items()
+        }
+        pool_ids = [identifier for ids in current_pool.values() for identifier in ids]
+        pool = [
+            {
+                "id": f"candidate:{identifier}:{locale}",
+                "state": source[locale][identifier]["utt"],
+                "instructions": "",
+                "options": [],
+                "task_type": "context",
+            }
+            for identifier in pool_ids
             for locale in massive.LOCALES
-        )
-    }
-    selected: list[str] = []
-    chosen_context: list[dict[str, Any]] = []
-    clone_quarantine = Counter()
-    for intent in SOURCE_INTENT_ORDER:
-        count = 0
-        for identifier in by_intent[intent]:
-            if identifier in blocked:
-                continue
-            current = [
-                {
-                    "id": f"candidate:{identifier}:{locale}",
-                    "state": source[locale][identifier]["utt"],
-                    "instructions": "",
-                    "options": [],
-                    "task_type": "context",
-                }
+        ]
+        exact_ids = {
+            row["id"]
+            for row in pool
+            if (pair := targeted.text_hashes(row["state"]))[0] in raw
+            or pair[1] in normalized
+        }
+        lengths = [len(pilot._near_text(row)) for row in pool]
+        # The original near matcher rejects a pair if its lengths differ by
+        # more than 8% of the longer string. This broad bound cannot remove
+        # any pair that the original implementation could have accepted.
+        lower, upper = 0.92 * min(lengths), max(lengths) / 0.92
+        relevant = [
+            row for length, row in protected_by_length if lower <= length <= upper
+        ]
+        near = pilot.near_duplicates(pool, relevant, collect_left_ids=True)
+        near_ids = set(near.pop("left_ids"))
+        blocked = {
+            identifier
+            for identifier in pool_ids
+            if any(
+                f"candidate:{identifier}:{locale}" in exact_ids | near_ids
                 for locale in massive.LOCALES
-            ]
-            if chosen_context:
-                same = {targeted.text_hashes(row["state"]) for row in chosen_context}
-                near_chosen = pilot.near_duplicates(current, chosen_context)
-                if near_chosen["count"] or any(
-                    targeted.text_hashes(row["state"]) in same for row in current
-                ):
-                    clone_quarantine[intent] += 1
+            )
+        }
+        selected: list[str] = []
+        chosen_context: list[dict[str, Any]] = []
+        clone_quarantine = Counter()
+        shortages = {}
+        for intent in SOURCE_INTENT_ORDER:
+            count = 0
+            for identifier in current_pool[intent]:
+                if identifier in blocked:
                     continue
-            selected.append(identifier)
-            chosen_context.extend(current)
-            count += 1
-            if count == GROUPS_PER_INTENT:
-                break
-        if count != GROUPS_PER_INTENT:
-            raise ValueError(f"Only {count} non-overlap groups remain for {intent}")
-    audit = {
-        "qualified_pool_groups": len(pool_ids),
-        "protected_exact_rows": len(exact_ids),
-        "protected_near_rows": len(near_ids),
-        "quarantined_source_groups": len(blocked),
-        "cross_selected_clone_skips": dict(sorted(clone_quarantine.items())),
-        "near_method": near["method"],
-        "near_retrieval_is_approximate": True,
-    }
-    return selected, audit
+                current = [
+                    {
+                        "id": f"candidate:{identifier}:{locale}",
+                        "state": source[locale][identifier]["utt"],
+                        "instructions": "",
+                        "options": [],
+                        "task_type": "context",
+                    }
+                    for locale in massive.LOCALES
+                ]
+                if chosen_context:
+                    same = {
+                        targeted.text_hashes(row["state"]) for row in chosen_context
+                    }
+                    near_chosen = pilot.near_duplicates(current, chosen_context)
+                    if near_chosen["count"] or any(
+                        targeted.text_hashes(row["state"]) in same for row in current
+                    ):
+                        clone_quarantine[intent] += 1
+                        continue
+                selected.append(identifier)
+                chosen_context.extend(current)
+                count += 1
+                if count == GROUPS_PER_INTENT:
+                    break
+            if count != GROUPS_PER_INTENT:
+                shortages[intent] = count
+        if not shortages:
+            audit = {
+                "qualified_pool_groups": total_pool_groups,
+                "screened_prefix_per_intent": prefix,
+                "screened_source_groups": len(pool_ids),
+                "protected_exact_rows": len(exact_ids),
+                "protected_near_rows": len(near_ids),
+                "quarantined_screened_source_groups": len(blocked),
+                "cross_selected_clone_skips": dict(sorted(clone_quarantine.items())),
+                "near_method": near["method"],
+                "near_retrieval_is_approximate": True,
+            }
+            return selected, audit
+        if prefix >= max(map(len, by_intent.values())):
+            raise ValueError(f"Insufficient non-overlap groups: {shortages}")
+        prefix *= 2
 
 
 def make_rows(
