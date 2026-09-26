@@ -123,3 +123,27 @@ curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
 清单只携带标识、输出摘要与来源信息，不含提示词或响应文本，因此可以与它支撑的数据一同发布。一条观测要么整条进入，要么完全不进入：失败的请求、未结束的请求、输入被截断的请求，以及从未记录摘要的请求都会被排除并按原因计数，`counts` 会报告保留了什么、丢弃了什么。由于清单描述的是构建它的整个选择集，超过 5000 条记录的选择会被拒绝，而不是按页导出。请缩小过滤条件后重新导出。
 
 导出需要 `replay.read` 权限，读取的记录与列表 API 相同。被比较的决策必须开启正文采集，否则未采集到请求的观测会以 `request_body_missing` 被排除。
+
+### 交给评审模型
+
+`GET /api/v1/observability/replays/dataset/judge-tasks` 接受与导出相同的选择条件与拆分方案，外加一个 `blinding_key`，返回成对的评审任务：一条主模型回答对一条影子模型回答，并附上两者收到的请求。每一对都会以交换左右位置的形式出现两次，因此偏好先出现答案的评审模型会表现为两种顺序之间的不一致。每一侧都带有不透明的分支标签，既不暴露模型名称，也不暴露哪一侧是主模型，且每一对中的标签都不相同。只有该密钥能把标签映射回模型，因此不要让评审模型接触到它。密钥不能与已公开的清单 seed 相同。
+
+```bash
+curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
+  "$ROUTER_MANAGEMENT_URL/api/v1/observability/replays/dataset/judge-tasks?recipe=vault&seed=2026-q3&split=train:8&split=eval:2&blinding_key=$JUDGE_KEY"
+```
+
+只有当两段文本都能哈希回清单中的摘要时才会构建一对任务。影子文本来自采集的摘录，因此影子决策需要开启 `capture_response_body`，并把 `max_capture_bytes` 设得足以容纳完整回答。被截断的摘录，或在存储前被响应阶段插件改写的主模型回答，都会被排除并计为 `arm_text_digest_mismatch`；完全没有文本的一对计为 `arm_text_missing`。提到自身模型名称的回答会被标记为 `names_own_model`，因为任何标签都无法对评审模型隐藏这一点。
+
+任务携带提示词与回答文本，因此该接口需要 `replay.detail` 权限，对没有该权限的调用方直接拒绝，而不是返回脱敏后的任务。评审模型在路由器之外运行。
+
+### 发布数据集与评审结果
+
+`tools/calibration/shadow-dataset` 把清单，以及评审模型针对它返回的评审结果（可选），发布到一个存储目录中。任何挂载为文件系统的对象存储都可以作为该目录。该工具在写入任何内容之前会校验全部输入：清单必须与其自身摘要一致，评审结果必须回答其引用的任务，这些任务必须来自同一份清单，且评审记录中不能出现未定义的字段。
+
+```bash
+make run-shadow-dataset GO_TOOL_ARGS="--dest /mnt/shadow-datasets \
+  --manifest $PWD/manifest.json --tasks $PWD/tasks.json --judgments $PWD/judgments.json"
+```
+
+清单写入 `manifests/<digest>.json`，评审结果写入 `judgments/<manifest digest>/<digest of the set>.json`，旁边附带一份 `.report.json`，统计各类结果、各位置被选中的次数，以及有多少对任务跟随了位置而不是答案。所有名称都由内容决定，因此重复发布相同文件不会产生变化，已发布的名称也永远不会被替换为不同的内容。评审任务只用于校验评审结果，永远不会被发布，因为它们携带提示词与两个回答。不要把数据集提交到本仓库。
