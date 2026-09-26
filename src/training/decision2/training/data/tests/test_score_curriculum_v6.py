@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import collections
 import itertools
+import json
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from training.data import build_score_curriculum_v6 as curriculum
+from training.data import build_pilot as pilot
 from training.data import score_curriculum_v6_abstract as abstract
 from training.model.data import validate_row
 
@@ -135,6 +140,56 @@ class ScoreV6Tests(unittest.TestCase):
         )
         for family in ("obligation_review", "route_depth", "timely_streak"):
             self.assertEqual(audit[family]["count_only_correct"], 81)
+
+    def test_protected_roster_rejects_gold_and_accepts_opaque_packet(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            packet = root / "packet.jsonl"
+            item = {
+                "review_id": "opaque",
+                "group_id": "opaque-group",
+                "family": "score_example",
+                "language": "en",
+                "state": {"record": "private prompt"},
+                "instructions": "Read the record.",
+                "options": [{"key": "0", "description": "none"}],
+            }
+            packet.write_text(json.dumps(item) + "\n", encoding="utf-8")
+            inventory = root / "inventory.json"
+            inventory.write_text(
+                json.dumps(
+                    [
+                        {
+                            "role": "opaque",
+                            "path": str(packet),
+                            "sha256": pilot.sha_file(packet),
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            with patch.object(curriculum, "REQUIRED_PROTECTED_ROLES", {"opaque"}):
+                references, receipts = curriculum._load_protected(inventory)
+                self.assertEqual(
+                    references["opaque"][0]["instructions"], "Read the record."
+                )
+                self.assertEqual(receipts[0]["rows"], 1)
+                item["label"] = 1
+                packet.write_text(json.dumps(item) + "\n", encoding="utf-8")
+                inventory.write_text(
+                    json.dumps(
+                        [
+                            {
+                                "role": "opaque",
+                                "path": str(packet),
+                                "sha256": pilot.sha_file(packet),
+                            }
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(ValueError, "unexpected fields"):
+                    curriculum._load_protected(inventory)
 
 
 if __name__ == "__main__":

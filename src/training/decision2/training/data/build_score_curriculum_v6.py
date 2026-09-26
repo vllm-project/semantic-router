@@ -1053,8 +1053,12 @@ def _load_protected(
                     "state": source["state"],
                     "group_id": source.get("group_id"),
                     "input_sha256": None,
-                    "instructions": "",
-                    "options": [],
+                    "instructions": (
+                        pilot.canonical(source["questions"])
+                        if "questions" in source
+                        else source["instructions"]
+                    ),
+                    "options": source.get("options", []),
                     "task_type": "context",
                 }
             )
@@ -1156,6 +1160,8 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             current_context, protected_context, collect_left_ids=True
         )
         near_ids = set(near.pop("left_ids"))
+        near_full = pilot.near_duplicates(current, protected, collect_left_ids=True)
+        near_ids.update(near_full.pop("left_ids"))
         rejected_ids.update(near_ids)
         dropped = [
             group
@@ -1169,6 +1175,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "quarantined_groups": len(dropped),
             "quarantined_rows": 3 * len(dropped),
             "near": near,
+            "near_full_prompt": near_full,
         }
     clone_quarantine = _quarantine_cross_group_clones(by_group)
     candidate = [row for group in sorted(by_group) for row in by_group[group]]
