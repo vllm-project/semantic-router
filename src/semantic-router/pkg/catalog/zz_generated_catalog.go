@@ -89841,7 +89841,7 @@ const builtInCatalogJSON = `{
       "publisher": "DeepSeek",
       "reasoning_family": "deepseek",
       "released_at": "2026-09-10",
-      "revision": "DeepSeek-V4.1-Flash",
+      "revision": "dba1be0a40aa45a94ad051997016db3960a90277",
       "tags": [
         "efficient",
         "open_weights",

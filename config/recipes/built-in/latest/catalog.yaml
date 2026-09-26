@@ -5235,7 +5235,7 @@ models:
     license: MIT
   family: deepseek-v4.1
   parameter_size: 552B (8B prefill, 16B decode active)
-  revision: DeepSeek-V4.1-Flash
+  revision: dba1be0a40aa45a94ad051997016db3960a90277
   lifecycle: active
   limits:
     context_window_size: 1048576
