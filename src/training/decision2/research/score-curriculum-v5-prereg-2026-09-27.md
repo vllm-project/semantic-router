@@ -71,8 +71,10 @@ For every complete three-row group, enforce and independently verify:
 3. No one signal of the **selected** plan has three distinct marks or
    strictly ranks all three levels within a group. Keep a local feature
    inventory of single mark, weight, product, selected plan position and
-   first/last displayed card; flag any one-field rule that solves a whole
-   triplet. A fixed table-only feature must score exactly 1/3.
+   first/last displayed card. Flag a predeclared global one-field rule or
+   group-heldout fitted one-field rule that solves a whole triplet; never
+   fit a position-to-label map on that triplet's own gold. A fixed
+   table-only feature must score exactly 1/3.
 4. On group-heldout prediction over all weighted rows, the best one selected
    signal `(position, weight, mark)` lookup must be **at most 40%**. Also test
    one selected product, maximum selected product, selected unweighted sum,
