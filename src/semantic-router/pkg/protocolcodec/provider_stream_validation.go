@@ -33,6 +33,8 @@ func validateResponsesEventPayload(wire responsesEventWire) error {
 		return validateResponsesSummaryEventTarget(wire)
 	case "response.function_call_arguments.delta", "response.function_call_arguments.done":
 		return validateResponsesToolEventTarget(wire)
+	case "response.custom_tool_call_input.delta", "response.custom_tool_call_input.done":
+		return validateResponsesToolEventTarget(wire)
 	case "response.output_text.annotation.added":
 		return validateResponsesAnnotationEvent(wire)
 	case "response.reasoning_summary_part.added", "response.reasoning_summary_part.done":
@@ -236,6 +238,8 @@ func validateResponsesEventFieldPresence(eventType string, body []byte) error {
 		"response.reasoning_summary_text.done":       {"text"},
 		"response.function_call_arguments.delta":     {"delta"},
 		"response.function_call_arguments.done":      {"arguments"},
+		"response.custom_tool_call_input.delta":      {"delta"},
+		"response.custom_tool_call_input.done":       {"input"},
 		"response.image_generation_call.in_progress": {"output_index", "item_id"},
 		"response.image_generation_call.generating":  {"output_index", "item_id"},
 		"response.image_generation_call.completed":   {"output_index", "item_id"},

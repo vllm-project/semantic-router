@@ -57,6 +57,7 @@ const (
 	// CapabilityCustomTools covers free-form custom tools and their calls, which
 	// a JSON Schema function tool cannot represent.
 	CapabilityCustomTools
+	CapabilityTextVerbosity
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -143,6 +144,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityMatchedStopSequence, "matched_stop_sequence"},
 		{CapabilityImageGeneration, "image_generation"},
 		{CapabilityCustomTools, "custom_tools"},
+		{CapabilityTextVerbosity, "text_verbosity"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -238,6 +240,9 @@ func requestStateCapabilities(request Request) Capability {
 
 func outputOptionCapabilities(request Request) Capability {
 	var required Capability
+	if request.TextVerbosity != "" {
+		required |= CapabilityTextVerbosity
+	}
 	if request.OutputFormat.Kind == OutputJSONObject {
 		required |= CapabilityStructuredJSON
 	}
@@ -403,6 +408,9 @@ func requestToolResultCapabilities(result *ToolResult) Capability {
 	if result == nil {
 		return capabilities
 	}
+	if result.Kind == ToolKindCustom {
+		capabilities |= CapabilityCustomTools
+	}
 	for _, nested := range result.Content {
 		capabilities |= capabilityForRequestContent(nested)
 	}
@@ -413,6 +421,9 @@ func responseToolResultCapabilities(result *ToolResult) Capability {
 	capabilities := CapabilityTools
 	if result == nil {
 		return capabilities
+	}
+	if result.Kind == ToolKindCustom {
+		capabilities |= CapabilityCustomTools
 	}
 	for _, nested := range result.Content {
 		capabilities |= capabilityForResponseContent(nested)
@@ -467,6 +478,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"matched_stop_sequence": CapabilityMatchedStopSequence,
 		"image_generation":      CapabilityImageGeneration,
 		"custom_tools":          CapabilityCustomTools,
+		"text_verbosity":        CapabilityTextVerbosity,
 	}
 	var set CapabilitySet
 	for _, name := range names {

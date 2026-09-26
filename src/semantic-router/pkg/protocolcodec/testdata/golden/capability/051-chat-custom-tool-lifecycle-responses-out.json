@@ -3,20 +3,79 @@
     {
       "name": "grammar_tool_call_and_result",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_capability"
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "Create hello.txt containing hi",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            },
+            {
+              "call_id": "call_1",
+              "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n",
+              "name": "apply_patch",
+              "type": "custom_tool_call"
+            },
+            {
+              "call_id": "call_1",
+              "output": [
+                {
+                  "text": "Created hello.txt",
+                  "type": "input_text"
+                }
+              ],
+              "type": "custom_tool_call_output"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "description": "Edit files with a patch.",
+              "format": {
+                "definition": "start: begin_patch hunk end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: /(.|\\n)+/\n%import common.LF",
+                "syntax": "lark",
+                "type": "grammar"
+              },
+              "name": "apply_patch",
+              "type": "custom"
+            }
+          ]
         }
       }
     },
     {
       "name": "text_tool",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_capability"
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "Print hello",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "description": "Run Python code.",
+              "name": "code_exec",
+              "type": "custom"
+            }
+          ]
         }
       }
     }

@@ -44,10 +44,27 @@
     {
       "name": "text_verbosity_and_format_description",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_text_verbosity"
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "response_format": {
+            "json_schema": {
+              "description": "A concise answer",
+              "name": "answer",
+              "schema": {
+                "type": "object"
+              },
+              "strict": true
+            },
+            "type": "json_schema"
+          },
+          "verbosity": "high"
         }
       }
     },

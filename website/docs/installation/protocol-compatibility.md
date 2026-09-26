@@ -92,7 +92,8 @@ instead of being silently dropped.
 | --- | --- | --- | --- |
 | Text, image input, and file input | Supported | Supported | Supported |
 | Tools, parallel tool calls, and strict tool schemas | Supported | Supported | Supported |
-| Custom (free-form) tools and their calls | Supported | Not supported | Not supported |
+| Custom (free-form) tools and their calls | Supported | Supported | Not supported |
+| Text verbosity (`low`, `medium`, `high`) | Supported | Supported | Not forwarded; reported as `dropped` |
 | Strict JSON Schema output | Supported | Supported | Supported |
 | Buffered and streaming responses | Supported | Supported | Supported |
 | Reasoning content and effort | Supported | Supported | Supported |
@@ -102,7 +103,7 @@ instead of being silently dropped.
 | Hosted image-generation lifecycle | Not supported | Supported | Not supported |
 | Multiple response candidates | Supported | Not supported | Not supported |
 | Prompt-cache directives | Supported | Not supported | Supported |
-| Prompt cache key (`prompt_cache_key`) | Supported | Supported | Not supported |
+| Prompt cache key (`prompt_cache_key`) | Supported | Supported | Not forwarded; reported as `dropped` |
 | Reasoning token budget | Supported extension | Not supported | Supported |
 | Seed and frequency or presence penalties | Supported | Not supported | Not supported |
 | `top_k` sampling | Supported extension | Not supported | Supported for nonnegative values |
@@ -132,6 +133,14 @@ A Responses client can still use `previous_response_id` with a Chat
 Completions or Messages backend. The Router retrieves and materializes the
 retained history, removes Router-owned object controls, and then encodes the
 stateless request in the selected backend format.
+
+Responses custom tools use `type: custom` with a flattened `format` object.
+Their `custom_tool_call` and `custom_tool_call_output` items retain free-form
+input, tool results, and call IDs through Chat or Responses backends, including
+buffered and streaming responses. A Messages backend rejects them with
+`unsupported_capability`. Responses `text.verbosity` maps to the Chat
+`verbosity` field. Messages has no equivalent, so the Router drops this output
+detail hint and reports `text.verbosity` in `x-vsr-protocol-warnings`.
 
 ## Configure a backend format
 
@@ -197,14 +206,15 @@ verification and extension contract.
 
 ## Codex CLI
 
-Codex CLI uses the Responses endpoint and sends three fields on every request.
+Codex CLI uses the Responses endpoint and sends several compatibility fields.
 The Router handles them as follows:
 
 | Field | Router behavior |
 | --- | --- |
-| `prompt_cache_key` | Forwarded to `openai` and `responses` backends. A route to an `anthropic` backend fails with `unsupported_prompt_cache_key`, because Messages has no equivalent. |
+| `prompt_cache_key` | Forwarded to `openai` and `responses` backends. A route to an `anthropic` backend omits it and reports `dropped`, because Messages has no equivalent. A decision's `request_params.blocked_params` can remove it before dispatch. |
 | `include: ["reasoning.encrypted_content"]` | Accepted and not forwarded. The Router never relays provider-encrypted reasoning, so reasoning items carry no `encrypted_content`. Other `include` values remain unsupported. |
 | `client_metadata` | Accepted and not forwarded, because it carries Codex telemetry rather than model input. |
+| `text.verbosity` | Forwarded to `responses` backends, mapped to `verbosity` for `openai` Chat backends, and reported as `dropped` for `anthropic` Messages backends. The only accepted values are `low`, `medium`, and `high`. |
 
 Each accepted but unforwarded field appears as a `dropped` entry in
 `x-vsr-protocol-warnings`.

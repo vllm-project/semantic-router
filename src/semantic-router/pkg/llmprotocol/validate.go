@@ -27,7 +27,7 @@ func ValidateRequest(request Request, limits Limits) error {
 	if err != nil {
 		return err
 	}
-	if err := validateToolChoice(request.ToolChoice, namedTools, len(request.Tools), request.ImageGeneration != nil); err != nil {
+	if err := validateToolChoice(request.ToolChoice, namedTools, request.Tools, request.ImageGeneration != nil); err != nil {
 		return err
 	}
 	if err := validateImageGenerationOptions(request.ImageGeneration, limits); err != nil {
@@ -57,6 +57,10 @@ func ValidateRequest(request Request, limits Limits) error {
 func validateRequestEnvelope(request Request, limits Limits) (int, error) {
 	if err := validateRequestIdentity(request, limits); err != nil {
 		return 0, err
+	}
+	if request.TextVerbosity != "" && request.TextVerbosity != "low" &&
+		request.TextVerbosity != "medium" && request.TextVerbosity != "high" {
+		return 0, NewError(ErrorInvalidRequest, "invalid_text_verbosity", "text verbosity must be low, medium or high", nil)
 	}
 	if err := validateRequestCardinality(request, limits); err != nil {
 		return 0, err
@@ -300,20 +304,28 @@ func validateCustomTool(tool Tool, limits Limits) error {
 	return validateCacheDirective(tool.Cache)
 }
 
-func validateToolChoice(choice ToolChoice, namedTools map[string]struct{}, toolCount int, hasImageGeneration bool) error {
+func validateToolChoice(choice ToolChoice, namedTools map[string]struct{}, tools []Tool, hasImageGeneration bool) error {
 	if !validToolChoiceMode(choice.Mode) {
 		return NewError(ErrorInvalidRequest, "invalid_tool_choice", "tool choice is invalid", nil)
 	}
 	if choice.Mode == ToolChoiceNamed {
-		return validateNamedToolChoice(choice.Name, namedTools)
+		if err := validateNamedToolChoice(choice.Name, namedTools); err != nil {
+			return err
+		}
+		for _, tool := range tools {
+			if tool.Name == choice.Name && tool.Kind != choice.Kind {
+				return NewError(ErrorInvalidRequest, "tool_choice_kind_mismatch", "named tool choice kind does not match the declared tool", nil)
+			}
+		}
+		return nil
 	}
-	if choice.Name != "" {
-		return NewError(ErrorInvalidRequest, "invalid_tool_choice", "only named tool choice may contain a name", nil)
+	if choice.Name != "" || choice.Kind != "" {
+		return NewError(ErrorInvalidRequest, "invalid_tool_choice", "only named tool choice may contain a name or kind", nil)
 	}
 	if choice.Mode == ToolChoiceImageGeneration && !hasImageGeneration {
 		return NewError(ErrorInvalidRequest, "image_generation_tool_required", "image-generation tool choice requires a declared image-generation tool", nil)
 	}
-	if choice.Mode == ToolChoiceRequired && toolCount == 0 && !hasImageGeneration {
+	if choice.Mode == ToolChoiceRequired && len(tools) == 0 && !hasImageGeneration {
 		return NewError(ErrorInvalidRequest, "tools_required", "tool choice requires at least one declared tool", nil)
 	}
 	return nil
@@ -777,6 +789,9 @@ func validateToolResultContent(content Content, blocks *int, limits Limits, dept
 	result := content.ToolResult
 	if result == nil || strings.TrimSpace(result.CallID) == "" {
 		return NewError(ErrorInvalidRequest, "invalid_tool_result", "tool result requires a call ID", nil)
+	}
+	if result.Kind != "" && result.Kind != ToolKindCustom {
+		return NewError(ErrorInvalidRequest, "invalid_tool_result", "tool result kind is invalid", nil)
 	}
 	if exceeds(result.CallID, limits.IdentifierBytes) {
 		return NewError(ErrorInvalidRequest, "tool_result_id_limit", "tool result call ID exceeds the configured limit", nil)
