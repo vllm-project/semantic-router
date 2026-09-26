@@ -14,6 +14,50 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "release"))
 import check_version_contract as release_contract  # noqa: E402
 
 
+class ReleaseImageContractTests(unittest.TestCase):
+    def test_source_contract_accepts_the_current_release_runbook(self) -> None:
+        _, errors = release_contract.validate(None)
+        self.assertEqual(errors, [])
+
+    def test_runbook_checks_published_image_names_without_fabricating_cpu_tag(
+        self,
+    ) -> None:
+        images = ("decision-runtime-cpu", "vllm-sr-cuda")
+        version = release_contract.parse_project_version(
+            release_contract.PYPROJECT_PATH
+        )
+        errors: list[str] = []
+        release_contract.validate_upgrade_docs_images(errors, images, version)
+        self.assertEqual(errors, [])
+
+        original = release_contract.UPGRADE_ROLLBACK_DOC_PATH.read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn(f"decision-runtime-cpu:v{version}", original)
+        altered = original.replace(
+            f"ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:v{version}",
+            "vllm-sr-cuda image",
+            1,
+        )
+        self.assertNotEqual(original, altered)
+
+        def read_text(path: Path) -> str:
+            return (
+                altered
+                if path == release_contract.UPGRADE_ROLLBACK_DOC_PATH
+                else path.read_text()
+            )
+
+        with (
+            mock.patch.object(release_contract, "read_text", side_effect=read_text),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            errors = []
+            release_contract.validate_upgrade_docs_images(errors, images, version)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("vllm-sr-cuda", errors[0])
+
+
 class ReleaseCatalogContractTests(unittest.TestCase):
     def _validate_manifest(
         self, content: str | None, *, version: str = "9.8.7"

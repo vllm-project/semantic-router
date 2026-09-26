@@ -25,26 +25,28 @@ const categoryName = (category: CatalogProvider['category']): ModelProviderPrese
   return 'Private runtimes'
 }
 
-const apiFormat = (protocol: string): ModelProviderPreset['apiFormat'] => {
+const apiFormat = (protocol: string): ModelProviderPreset['apiFormat'] | undefined => {
   if (protocol === 'openai/chat-completions@1') return 'openai'
   if (protocol === 'anthropic/messages@1') return 'anthropic'
   if (protocol === 'openai/responses@1') return 'responses'
-  throw new Error(`unsupported default provider protocol: ${protocol}`)
+  return undefined
 }
 
-// This is a projection, not a second inventory. Provider identity, order,
-// support level, protocols, defaults, auth, and presentation all come from the
-// generated repository catalog; package:* merely resolves bundled SVG assets.
-export const modelProviderPresetsFromCatalog = (
-  providers: readonly CatalogProvider[],
-): ModelProviderPreset[] =>
-  providers.map((provider) => ({
+const providerPreset = (provider: CatalogProvider): ModelProviderPreset | undefined => {
+  const format = apiFormat(provider.default_protocol)
+  if (!format) {
+    // Specialized private runtimes remain visible in the public Model Hub, but
+    // they are not upstream transports that the Router's Add Model flow can use.
+    if (provider.category === 'private_runtime') return undefined
+    throw new Error(`unsupported default provider protocol: ${provider.default_protocol}`)
+  }
+  return {
     id: provider.id,
     name: provider.display_name,
     description: provider.description,
     category: categoryName(provider.category),
     baseUrl: provider.default_base_url ?? '',
-    apiFormat: apiFormat(provider.default_protocol),
+    apiFormat: format,
     authStrategy: provider.auth.strategy,
     icon: resolveModelCatalogIcon(provider.presentation.logo),
     monogram: provider.presentation.monogram,
@@ -55,7 +57,19 @@ export const modelProviderPresetsFromCatalog = (
     ),
     featured: Boolean(provider.presentation.featured),
     monochrome: provider.presentation.monochrome,
-  }))
+  }
+}
+
+// This is a projection, not a second inventory. Provider identity, order,
+// support level, protocols, defaults, auth, and presentation all come from the
+// generated repository catalog; package:* merely resolves bundled SVG assets.
+export const modelProviderPresetsFromCatalog = (
+  providers: readonly CatalogProvider[],
+): ModelProviderPreset[] =>
+  providers.flatMap((provider) => {
+    const preset = providerPreset(provider)
+    return preset ? [preset] : []
+  })
 
 export const filterModelProviderPresets = (
   providers: readonly ModelProviderPreset[],
@@ -100,7 +114,5 @@ export function findModelProviderPreset({
   providers = modelProviderCatalog,
 }: ProviderLookupInput): ModelProviderPreset | undefined {
   const normalized = normalizedProviderID(providerID)
-  return normalized
-    ? providers.find((provider) => provider.id === normalized)
-    : undefined
+  return normalized ? providers.find((provider) => provider.id === normalized) : undefined
 }

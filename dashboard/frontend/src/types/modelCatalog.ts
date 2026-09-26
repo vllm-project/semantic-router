@@ -4,6 +4,7 @@ export type ModelCatalogLifecycle = 'experimental' | 'active' | 'deprecated' | '
 export type CatalogEvidenceStatus = 'claimed' | 'imported' | 'reproduced'
 export type CatalogResultStatus = 'available' | 'missing' | 'failed' | 'not_applicable' | 'withheld'
 export type CatalogModelRelationship = 'first_party' | 'managed_cloud' | 'gateway' | 'self_hosted'
+export type CatalogEvaluationClass = 'general_llm' | 'decision'
 
 export interface BuiltInModelCatalogVersion {
   catalog_version: string
@@ -159,6 +160,8 @@ export interface BuiltInModelMetadata {
   released_at?: string
   knowledge_cutoff?: string
   lifecycle: ModelCatalogLifecycle
+  evaluation_class?: CatalogEvaluationClass
+  protocols?: string[]
   limits?: {
     context_window_size?: number
     max_output_tokens?: number

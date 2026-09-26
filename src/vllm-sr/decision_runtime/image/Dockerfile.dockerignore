@@ -1,0 +1,40 @@
+# Only the package source and its canonical generated inputs enter the build.
+**
+!src/
+!src/vllm-sr/
+!src/vllm-sr/pyproject.toml
+!src/vllm-sr/setup.py
+!src/vllm-sr/build_support.py
+!src/vllm-sr/README.md
+!src/vllm-sr/MANIFEST.in
+!src/vllm-sr/requirements.txt
+!src/vllm-sr/cli/
+!src/vllm-sr/cli/**
+# Generated catalog files in a developer checkout must never enter the image.
+# The wheel builder stages them from canonical config after COPY.
+src/vllm-sr/cli/model_assets/**
+!src/vllm-sr/cli/model_assets/__init__.py
+!src/vllm-sr/decision_runtime/
+!src/vllm-sr/decision_runtime/**
+!src/semantic-router/
+!src/semantic-router/pkg/
+!src/semantic-router/pkg/configschema/
+!src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+!config/
+!config/recipes/
+!config/recipes/built-in/
+!config/recipes/built-in/**
+!tools/
+!tools/release/
+!tools/release/stage_model_catalog_package.py
+
+# Local environments, generated package output, and model caches are never inputs.
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/.pytest_cache/
+**/*.egg-info/
+**/build/
+**/dist/
+**/artifacts/
+**/models/

@@ -9,6 +9,8 @@ recursive-include cli/templates *.yaml
 recursive-include cli/templates *.json
 recursive-include cli/templates *.ini
 recursive-include cli/model_assets *.yaml *.md *.dsl
+include cli/decision_runtime/decision-images.lock.json
+recursive-include decision_runtime/profiles *.json
 
 # Include requirements
 include requirements.txt

@@ -592,6 +592,33 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_split_runtime_backend_provisioning.py \
 		src/vllm-sr/tests/test_split_runtime_stack.py
 
+# Model-backed ROCm graph parity needs explicit artifact inputs on a GPU host.
+vllm-sr-decision-runtime-test: ## Run focused Decision runtime contract tests
+vllm-sr-decision-runtime-test: harness-venv-install
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" -m pip install -e "src/vllm-sr[decision-runtime,dev]"
+	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
+		src/vllm-sr/tests/test_decision_runtime_contracts.py \
+		src/vllm-sr/tests/test_decision_runtime_engine.py \
+		src/vllm-sr/tests/test_decision_serve.py \
+		src/vllm-sr/tests/test_decision_catalog_adapter.py \
+		src/vllm-sr/tests/test_decision_cpu_threads.py \
+		src/vllm-sr/tests/test_decision_runtime_api.py \
+		src/vllm-sr/tests/test_decision_runtime_profiles.py \
+		src/vllm-sr/tests/test_decision_runtime_artifacts.py \
+		src/vllm-sr/tests/test_decision_image_lock.py \
+		src/vllm-sr/tests/test_decision_runtime_torch_batch_sync.py \
+		src/vllm-sr/tests/test_decision_physical_batching.py \
+		src/vllm-sr/tests/test_decision_request_limits.py \
+		src/vllm-sr/tests/test_decision_release_artifacts.py \
+		src/vllm-sr/tests/test_decision_image_build.py \
+		src/vllm-sr/tests/test_decision_model_inputs.py \
+		src/vllm-sr/tests/test_decision_token_preparation.py \
+		src/vllm-sr/tests/test_decision_vela_torch_contract.py \
+		src/vllm-sr/tests/test_decision_qwen35_torch_contract.py \
+		src/vllm-sr/tests/test_decision_qwen35_rocm_binder.py \
+		src/vllm-sr/tests/test_decision_qwen35_rocm_graph.py \
+		src/vllm-sr/tests/test_decision_runtime_server.py
 vllm-sr-test-integration: ## Run CLI integration tests (requires local runtime images)
 vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-provider-mocker
 	@$(LOG_TARGET)

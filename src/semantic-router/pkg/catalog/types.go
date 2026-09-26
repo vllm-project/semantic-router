@@ -310,6 +310,8 @@ type ModelCard struct {
 	ReleasedAt      string               `json:"released_at,omitempty"`
 	KnowledgeCutoff string               `json:"knowledge_cutoff,omitempty"`
 	Lifecycle       string               `json:"lifecycle"`
+	EvaluationClass string               `json:"evaluation_class,omitempty"`
+	Protocols       []string             `json:"protocols,omitempty"`
 	Limits          ModelLimits          `json:"limits,omitzero"`
 	Capabilities    []string             `json:"capabilities"`
 	Modalities      Modalities           `json:"modalities"`

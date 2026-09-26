@@ -131,7 +131,8 @@ For Kubernetes manifests, pin to the digest, not the tag:
 image: ghcr.io/vllm-project/semantic-router/extproc@sha256:<digest>
 ```
 
-Published versioned images for a full release:
+Versioned image repositories vary by release. Check that a tag exists before
+using it:
 
 | Image | Typical owner |
 |-------|---------------|

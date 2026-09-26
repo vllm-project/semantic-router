@@ -71,6 +71,12 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config validate`](#vllm-sr-config-validate) | Validate configuration file. |
 | [`vllm-sr config versions`](#vllm-sr-config-versions) | List immutable configuration backup versions. |
 | [`vllm-sr dashboard`](#vllm-sr-dashboard) | Open the dashboard in your default web browser. |
+| [`vllm-sr decision`](#vllm-sr-decision) | Serve and manage standalone Decision 1.0 models. |
+| [`vllm-sr decision forget`](#vllm-sr-decision-forget) | Forget registry evidence without stopping any container. |
+| [`vllm-sr decision list`](#vllm-sr-decision-list) | List registry lifecycle, runtime state, and cross-runtime orphans. |
+| [`vllm-sr decision serve`](#vllm-sr-decision-serve) | Launch one exact MODEL as a standalone SystemOne service. |
+| [`vllm-sr decision status`](#vllm-sr-decision-status) | Inspect lifecycle, runtime state, and strict readiness for INSTANCE_NAME. |
+| [`vllm-sr decision stop`](#vllm-sr-decision-stop) | Stop one owned runtime or clear a proven container-missing record. |
 | [`vllm-sr logs`](#vllm-sr-logs) | Show logs from vLLM Semantic Router service. |
 | [`vllm-sr optimize`](#vllm-sr-optimize) | Analyze routing evidence and produce candidate recipe changes. |
 | [`vllm-sr optimize recipe-learning`](#vllm-sr-optimize-recipe-learning) | Analyze replay and outcomes to produce recipe-learning artifacts. |
@@ -950,6 +956,113 @@ vllm-sr dashboard --no-open
 | `--namespace TEXT` | Kubernetes namespace (k8s target only) |
 | `--context TEXT` | kubectl / Helm context (k8s target only) |
 | `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
+| `--help` | Show this message and exit. Default: false. |
+
+## `vllm-sr decision` {#vllm-sr-decision}
+
+```text
+Usage: vllm-sr decision [OPTIONS] COMMAND [ARGS]...
+```
+
+Serve and manage standalone Decision 1.0 models.
+
+``vllm-sr decision serve MODEL`` starts one model as a SystemOne HTTP service.
+An installed release selects its verified image for a supported backend;
+``--image`` is only needed for an explicit override. Use ``--detach`` to leave
+the model running, then manage it with list, status, and stop.
+
+```text
+Examples:
+  vllm-sr decision serve llm-semantic-router/Decision-1.0-Kai-0.6B \
+    --instance-name kai-demo --detach
+  vllm-sr decision list
+  vllm-sr decision status kai-demo
+  vllm-sr decision stop kai-demo
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr decision forget` {#vllm-sr-decision-forget}
+
+```text
+Usage: vllm-sr decision forget [OPTIONS] INSTANCE_NAME
+```
+
+Forget registry evidence without stopping any container.
+
+| Parameter | Description |
+| --- | --- |
+| `INSTANCE_NAME` | Required argument. Type: text. |
+| `--force` | Forget a starting reservation after independently confirming its launch process is no longer active; no container is changed. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr decision list` {#vllm-sr-decision-list}
+
+```text
+Usage: vllm-sr decision list [OPTIONS]
+```
+
+List registry lifecycle, runtime state, and cross-runtime orphans.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr decision serve` {#vllm-sr-decision-serve}
+
+```text
+Usage: vllm-sr decision serve [OPTIONS] MODEL
+```
+
+Launch one exact MODEL as a standalone SystemOne service.
+
+| Parameter | Description |
+| --- | --- |
+| `MODEL` | Required argument. Type: text. |
+| `--revision TEXT` | Exact model revision; the catalog revision is used when omitted. |
+| `--host TEXT` | Host IP used to publish the SystemOne endpoint.  [default: 127.0.0.1] |
+| `--port INTEGER RANGE` | Host port used to publish the SystemOne endpoint.  [default: 8000; 1&lt;=x&lt;=65535] |
+| `--backend CHOICE` | Decision inference backend.  [default: auto] Choices: auto, rocm, cuda, cpu. |
+| `--max-batch INTEGER RANGE` | Maximum physical inference batch override.  [x&gt;=1] |
+| `--max-concurrency INTEGER RANGE` | Maximum concurrent request override.  [x&gt;=1] |
+| `--max-queue INTEGER RANGE` | Maximum queued request override.  [x&gt;=0] |
+| `--cpu-threads INTEGER RANGE` | CPU-only Torch/BLAS threads; default is min(8, container CPU allowance).  [1&lt;=x&lt;=256] |
+| `--gpu-device TEXT` | ROCm-only GPU index visible to this instance (0-9999); default sees all GPUs. |
+| `--instance-name TEXT` | Stable lowercase name for this managed Decision runtime instance. |
+| `--image TEXT` | Override the image selected by this CLI release (advanced). |
+| `--image-pull-policy CHOICE` | Container image pull policy.  [default: ifnotpresent] Choices: always, ifnotpresent, never. |
+| `--runtime CHOICE` | Docker-compatible container runtime. Choices: docker, podman. |
+| `--startup-timeout INTEGER RANGE` | Seconds allowed for model loading and readiness.  [default: 1800; x&gt;=1] |
+| `--detach` | Leave the managed runtime running after readiness succeeds. Default: false. |
+| `--restart-policy CHOICE` | Docker restart policy; unless-stopped requires --detach.  [default: no] Choices: no, unless-stopped. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr decision status` {#vllm-sr-decision-status}
+
+```text
+Usage: vllm-sr decision status [OPTIONS] INSTANCE_NAME
+```
+
+Inspect lifecycle, runtime state, and strict readiness for INSTANCE_NAME.
+
+| Parameter | Description |
+| --- | --- |
+| `INSTANCE_NAME` | Required argument. Type: text. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr decision stop` {#vllm-sr-decision-stop}
+
+```text
+Usage: vllm-sr decision stop [OPTIONS] INSTANCE_NAME
+```
+
+Stop one owned runtime or clear a proven container-missing record.
+
+| Parameter | Description |
+| --- | --- |
+| `INSTANCE_NAME` | Required argument. Type: text. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr logs` {#vllm-sr-logs}

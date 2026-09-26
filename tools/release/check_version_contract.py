@@ -22,6 +22,12 @@ from release_contract_markers import (
 from snapshot_model_catalog import release_snapshot_errors
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+CI_TOOLS_ROOT = REPO_ROOT / "tools/ci"
+if str(CI_TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(CI_TOOLS_ROOT))
+
+from image_artifacts import publication_tags  # noqa: E402
+
 PYPROJECT_PATH = REPO_ROOT / "src/vllm-sr/pyproject.toml"
 SIM_PYPROJECT_PATH = REPO_ROOT / "src/fleet-sim/pyproject.toml"
 CANDLE_CARGO_PATH = REPO_ROOT / "candle-binding/Cargo.toml"
@@ -29,7 +35,10 @@ CANDLE_LOCK_PATH = REPO_ROOT / "candle-binding/Cargo.lock"
 HELM_CHART_PATH = REPO_ROOT / "deploy/helm/semantic-router/Chart.yaml"
 HELM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/helm-publish.yml"
 DOCKER_PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/docker-publish.yml"
+CI_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/ci.yml"
 RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/release.yml"
+CI_CHANGES_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/ci-changes.yml"
+CI_PLAN_PATH = REPO_ROOT / "tools/ci/ci_plan.py"
 CI_IMAGE_INVENTORY_PATH = REPO_ROOT / "tools/ci/classify_pr_changes.py"
 CI_IMAGE_ARTIFACTS_PATH = REPO_ROOT / "tools/ci/image_artifacts.py"
 SIM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/pypi-publish-vllm-sr-sim.yml"
@@ -179,7 +188,7 @@ def validate_release_catalog(errors: list[str], version: str) -> str:
 
 
 def parse_release_images() -> tuple[str, ...]:
-    """Read the release inventory selected by the shared CI plan."""
+    """Read the hosted release inventory shared by validation and image build."""
 
     module = ast.parse(read_text(CI_IMAGE_INVENTORY_PATH))
     for statement in module.body:
@@ -209,6 +218,10 @@ def parse_release_images() -> tuple[str, ...]:
             raise ValueError(
                 "production release images have no build definition: "
                 + ", ".join(missing)
+            )
+        if "decision-runtime-cpu" not in images or "decision-runtime-rocm" in images:
+            raise ValueError(
+                "production release inventory must build Decision CPU, not ROCm"
             )
         return tuple(sorted(images))
     raise ValueError("could not find the production release image inventory")
@@ -360,6 +373,26 @@ def validate_release_image_bridge(errors: list[str]) -> None:
             "images: ${{ needs.validate.outputs.images }}",
         ),
         (
+            CI_PLAN_PATH,
+            "release image inventory selection",
+            "for image in PRODUCTION_RELEASE_IMAGES",
+        ),
+        (
+            CI_PLAN_PATH,
+            "Decision image qualification switch",
+            'if decision_runtime_images or image != "decision-runtime-cpu"',
+        ),
+        (
+            CI_CHANGES_WORKFLOW_PATH,
+            "CI plan image output",
+            "publish_images: ${{ steps.plan.outputs.publish_images }}",
+        ),
+        (
+            CI_WORKFLOW_PATH,
+            "CI image output",
+            "value: ${{ jobs.plan.outputs.publish_images }}",
+        ),
+        (
             RELEASE_WORKFLOW_PATH,
             "release image validation output",
             "images: ${{ steps.contract.outputs.release_images_json }}",
@@ -403,7 +436,13 @@ def validate_upgrade_docs_images(
 ) -> None:
     upgrade_docs = read_text(UPGRADE_ROLLBACK_DOC_PATH)
     for image in release_images:
-        image_ref = f"{GHCR_IMAGE_PREFIX}/{image}:v{version}"
+        release_tag = f"v{version}"
+        if release_tag not in publication_tags(
+            image, "release", release_tag, False, ""
+        ):
+            # Decision CPU is published by source SHA and selected by the CLI.
+            continue
+        image_ref = f"{GHCR_IMAGE_PREFIX}/{image}:{release_tag}"
         if image_ref in upgrade_docs:
             continue
         message = (

@@ -47,6 +47,11 @@ def validate_batch(batch: dict) -> None:
 def commands(target: str, output: Path) -> list[list[str]]:
     """Keep the maintained Make entrypoints as the owners of discovery."""
     python = str(ROOT / ".venv-agent/bin/python")
+    if target == "vllm-sr-test":
+        return [
+            ["make", "vllm-sr-test"],
+            ["make", "vllm-sr-decision-runtime-test"],
+        ]
     if target == "test-learning-tools":
         return [["make", target], ["make", "test-calibration"]]
     if target == "soak-test":
@@ -64,7 +69,6 @@ def commands(target: str, output: Path) -> list[list[str]]:
     if target == "test-e2e-unit":
         return [["make", target, f"E2E_UNIT_REPORT_DIR={output}"]]
     if target in {
-        "vllm-sr-test",
         "vllm-sr-sim-test",
         "harness-check",
         "onnx-artifact-test",
@@ -91,6 +95,22 @@ def run_command(command: list[str], env: dict, log: Path) -> None:
     if result.returncode:
         print("\n".join(log.read_text().splitlines()[-100:]), flush=True)
         result.check_returncode()
+
+
+def install_cpu_torch(env: dict, log: Path) -> None:
+    run_command(
+        [
+            str(ROOT / ".venv-agent/bin/python"),
+            "-m",
+            "pip",
+            "install",
+            "torch==2.10.0",
+            "--index-url",
+            "https://download.pytorch.org/whl/cpu",
+        ],
+        env,
+        log,
+    )
 
 
 def contract_evidence(record: dict, output: Path) -> dict:
@@ -142,17 +162,9 @@ def run_batch(batch: dict, output: Path) -> bool:
         print(f"::group::{record['display_name']}", flush=True)
         try:
             if target == "test-training-contracts":
+                install_cpu_torch(env, log)
                 python = str(ROOT / ".venv-agent/bin/python")
-                for command in (
-                    [
-                        python,
-                        "-m",
-                        "pip",
-                        "install",
-                        "torch==2.10.0",
-                        "--index-url",
-                        "https://download.pytorch.org/whl/cpu",
-                    ],
+                run_command(
                     [
                         python,
                         "-m",
@@ -161,8 +173,9 @@ def run_batch(batch: dict, output: Path) -> bool:
                         "-r",
                         "tools/ci/training-test-requirements.txt",
                     ],
-                ):
-                    run_command(command, env, log)
+                    env,
+                    log,
+                )
             test_env = dict(env)
             if target not in {"test-e2e-unit", "soak-test"}:
                 test_env.update(
@@ -174,6 +187,8 @@ def run_batch(batch: dict, output: Path) -> bool:
             if target == "test-training-contracts":
                 test_env.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
             for command in commands(target, raw):
+                if command == ["make", "vllm-sr-decision-runtime-test"]:
+                    install_cpu_torch(env, log)
                 run_command(command, test_env, log)
             evidence = contract_evidence(record, raw)
             (raw / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")

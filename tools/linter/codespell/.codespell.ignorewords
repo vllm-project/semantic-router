@@ -111,6 +111,7 @@ espace
 analise
 # Evaluation terminology (grading saved answers again)
 regrading
-
 # Model reasoning-mode toggle terms (not spelling errors)
 nothink
+# Linux DRM render-node basename prefix (/dev/dri/renderD*)
+renderD

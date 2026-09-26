@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import provider_mocker_image as mocker
@@ -125,7 +125,7 @@ class FixturePublicationTests(unittest.TestCase):
                 mocker.validate_acquisition({**result, field: "wrong"}, result)
 
     def test_registry_access_errors_fail_closed_and_missing_tag_is_distinct(self):
-        for code in (401, 403):
+        for code in (401, 403, 404):
             with patch.object(
                 mocker,
                 "RegistryClient",
@@ -133,11 +133,30 @@ class FixturePublicationTests(unittest.TestCase):
             ), self.assertRaises(mocker.PublicationUnavailableError):
                 mocker.resolve_published({"inputs_sha256": "b" * 64})
         with patch.object(
-            mocker,
-            "RegistryClient",
-            side_effect=HTTPError("url", 404, "missing", {}, None),
-        ), self.assertRaises(mocker.PublicationMissingError):
+            mocker, "RegistryClient", side_effect=URLError("network unavailable")
+        ), self.assertRaises(mocker.PublicationUnavailableError):
             mocker.resolve_published({"inputs_sha256": "b" * 64})
+
+        registry = FakeRegistry("b" * 64)
+        tag = mocker.input_tag("b" * 64)
+        missing = HTTPError("url", 404, "missing", {}, None)
+        with patch.object(registry, "document", side_effect=missing) as lookup:
+            with self.assertRaises(mocker.PublicationMissingError):
+                mocker.resolve_published({"inputs_sha256": "b" * 64}, registry)
+            lookup.assert_called_once_with("manifests", tag)
+
+        original_document = registry.document
+
+        def missing_child(kind, reference):
+            if reference == tag:
+                return original_document(kind, reference)
+            raise missing
+
+        with (
+            patch.object(registry, "document", side_effect=missing_child),
+            self.assertRaises(HTTPError),
+        ):
+            mocker.resolve_published({"inputs_sha256": "b" * 64}, registry)
 
     def test_missing_exact_input_publication_builds_candidate_for_pr_and_main(self):
         for profile in ("pr", "main"):
@@ -202,6 +221,33 @@ class FixturePublicationTests(unittest.TestCase):
                 ), self.assertRaises(mocker.PublicationMissingError):
                     resolve_image_sources(plan)
                 self.assertNotIn(mocker.IMAGE, plan["build_images"])
+
+    def test_valid_publication_is_reused_and_invalid_one_still_fails(self):
+        plan = make_plan(
+            ["e2e/testing/run_memory_integration.sh"],
+            source_sha="c" * 40,
+        )
+        fingerprint = plan["image_sources"][mocker.IMAGE]["inputs_sha256"]
+        published = mocker.resolve_published(
+            plan["image_sources"][mocker.IMAGE], FakeRegistry(fingerprint)
+        )
+        with patch("ci_plan.resolve_published", return_value=published):
+            resolve_image_sources(plan)
+        self.assertEqual(plan["image_sources"][mocker.IMAGE], published)
+        self.assertNotIn(mocker.IMAGE, plan["build_images"])
+        self.assertEqual(
+            json.loads(github_outputs(plan)["published_images"]), [published]
+        )
+        invalid = make_plan(
+            ["e2e/testing/run_memory_integration.sh"],
+            source_sha="c" * 40,
+        )
+        with (
+            patch("ci_plan.resolve_published", side_effect=ValueError("bad labels")),
+            self.assertRaisesRegex(ValueError, "bad labels"),
+        ):
+            resolve_image_sources(invalid)
+        self.assertNotIn(mocker.IMAGE, invalid["build_images"])
 
     def test_fixture_is_reused_for_all_unrelated_ci_entrypoints(self):
         for profile, full in (

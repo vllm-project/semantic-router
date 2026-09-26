@@ -309,6 +309,7 @@ func cloneReasoningFamily(value ReasoningFamilyDefinition) ReasoningFamilyDefini
 }
 
 func cloneModel(value ModelCard) ModelCard {
+	value.Protocols = append([]string(nil), value.Protocols...)
 	value.Capabilities = append([]string(nil), value.Capabilities...)
 	value.Modalities.Input = append([]string(nil), value.Modalities.Input...)
 	value.Modalities.Output = append([]string(nil), value.Modalities.Output...)

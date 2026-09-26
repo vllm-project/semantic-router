@@ -90,7 +90,7 @@ func validateModelCatalogEnvelope(envelope modelCatalogEnvelope) error {
 	if err != nil {
 		return err
 	}
-	models, err := validateCatalogModels(envelope.Models, reasoning)
+	models, err := validateCatalogModels(envelope.Models, reasoning, protocols)
 	if err != nil {
 		return err
 	}
@@ -320,6 +320,7 @@ func validateCatalogReasoning(
 func validateCatalogModels(
 	values []modelcatalog.ModelCard,
 	reasoning map[string]modelcatalog.ReasoningFamilyDefinition,
+	protocols map[string]struct{},
 ) (map[string]struct{}, error) {
 	ids := make(map[string]struct{}, len(values))
 	for _, model := range values {
@@ -336,7 +337,9 @@ func validateCatalogModels(
 			len(model.Modalities.Output) == 0 ||
 			model.Verification.Authority == "" ||
 			!oneOf(model.Verification.Status, "claimed", "imported", "reproduced") ||
-			(model.Verification.Source != "" && !validHTTPSURL(model.Verification.Source)) {
+			(model.Verification.Source != "" && !validHTTPSURL(model.Verification.Source)) ||
+			!validCatalogModelEvaluationClass(model) ||
+			!validCatalogModelProtocols(model, protocols) {
 			return nil, fmt.Errorf("malformed model")
 		}
 		if _, exists := ids[model.ID]; exists {
@@ -361,6 +364,33 @@ func validateCatalogModels(
 		}
 	}
 	return ids, nil
+}
+
+func validCatalogModelEvaluationClass(model modelcatalog.ModelCard) bool {
+	if model.Kind == "virtual" {
+		return model.EvaluationClass == ""
+	}
+	return oneOf(model.EvaluationClass, "", "general_llm", "decision")
+}
+
+func validCatalogModelProtocols(
+	model modelcatalog.ModelCard,
+	protocols map[string]struct{},
+) bool {
+	if model.Kind == "virtual" && len(model.Protocols) == 0 {
+		return false
+	}
+	seen := make(map[string]struct{}, len(model.Protocols))
+	for _, protocol := range model.Protocols {
+		if _, known := protocols[protocol]; !known {
+			return false
+		}
+		if _, duplicate := seen[protocol]; duplicate {
+			return false
+		}
+		seen[protocol] = struct{}{}
+	}
+	return true
 }
 
 func validateCatalogProviderBindings(

@@ -1,0 +1,14 @@
+{
+  "schema_version": 4,
+  "family": "qwen3.5",
+  "artifact": {"manifest_path": "bundle-manifest.json"},
+  "max_input_tokens": 16384,
+  "dtype": {
+    "backbone": "bfloat16",
+    "head": "float32"
+  },
+  "physical_batch_size": 8,
+  "calibration": {"temperature": 1.3231350559653137},
+  "prompt_policy": {"choice_null_description": "render_key"},
+  "execution": {"rocm": {"job_turn_batches": 4, "backbone_graph": "short_b8", "graph_prewarm_padded_tokens": [128]}}
+}
