@@ -1,6 +1,6 @@
 # Qwen3.8 27B generative versus typed-head architecture screen
 
-Status: **preregistered, no predictions yet**. This is a bounded development
+Status: **completed; screen gate failed**. This is a bounded development
 architecture diagnostic. The frozen Decision 2.0 27B head underperforms on
 Noul rule precedence and Score set reconciliation despite almost perfect
 Choice on the synthetic DEV track. This experiment asks whether the pinned
@@ -62,3 +62,41 @@ DEV prompts. The 120-prompt file and selection manifest SHA-256 values are
 and `ab69838a48f41a930a87f4ce37d22cf5a114adf6d62f6ee1bedf59b8eea77266`.
 The local source revision and fixed config/template hashes passed attestation.
 No gold or previous prediction was used in selection.
+
+## Frozen screen result
+
+The exact 120 prompts were served from the pinned source model on one AMD GPU
+through vLLM with the fixed generation settings. Predictions SHA-256:
+`30456b8584679dd2fd6a11c65cb7e146ba9398164fd58130ff145dc4e017422b`.
+The existing BEST368 head predictions were filtered by the same frozen IDs,
+SHA-256 `84c274c3123094a18c395449e2a09a8bc1040f1253df7480a9903828335abe3e`.
+The filtered private DEV gold SHA-256 is
+`d7e0f1083f59bee17153ee763f83b127163d14f4029a381932f0bc4597211450`.
+
+The full typed-suite scorer rejected this sparse subset because each group
+must contain all four variants. No scoring rule was changed: the exploratory
+comparison calls its `evaluate_answer` function on each matched item, checks
+all source-input digests, and counts invalid/missing answers as wrong. The
+separate comparison script SHA-256 is
+`991150df93e86e373d764f3b96ba613c201d315daab2eea63ba363f303845f66`;
+its private paired report SHA-256 is
+`3ac00593c4cadd91e285004dd40a7da4e6146c242b7aa03b0033f0530cb14a99`.
+There are 120 items from 109 unique synthetic groups, so these counts are
+diagnostic and are not a complete four-variant suite score.
+
+| Type | BEST368 head | Generative source | Source-only wins | Head-only wins | Invalid source |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Choice | 40/40 | 37/40 | 0 | 3 | 3 |
+| Noul | 25/40 | 24/40 | 5 | 6 | 0 |
+| Score | 13/40 | 14/40 | 1 | 0 | 0 |
+
+The source gains just one Score item and loses one Noul and three Choice
+items; it therefore misses the preregistered ≥5 Score/Noul gain needed for a
+full DEV rerun. Its 117/120 syntactically valid responses are not calibrated
+probabilities. Mean/median per-request latency were 137.6/124.1 ms; mean
+input/output lengths were 266.4/6.8 tokens, maximum input 327 tokens. This
+short synthetic sample says nothing about long-context transfer or relative
+serving speed under controlled hardware. The task-owned vLLM server was
+stopped after collection. No final label, CSS heldout label, authored release
+label or official hidden JevBench item was consulted. No checkpoint was
+promoted or released from this negative architecture screen.
