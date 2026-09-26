@@ -56,6 +56,36 @@ training overlap and question quality must be checked before any same-panel
 inference or JevArena inclusion. Catalog descriptions and author scores are
 not evaluation evidence.
 
+Three newly indexed primary repositories offer narrower, usable evidence:
+
+- [ZH-Decision-Bench v0.1](https://github.com/CodyQin/zh-decision-bench)
+  reports 219 Chinese items/284 typed questions: 179 from human-labelled
+  MASSIVE Chinese development utterances and 40 synthetic items adjudicated
+  by its owner. It tests Choice, Noul, Score, probability calibration,
+  option-order flips and simplified/traditional Chinese variation. Its small
+  non-voice task sizes (25 and 15 items) make per-scenario calibration noisy.
+  A future development diagnostic needs exact source-ID exclusion against our
+  MASSIVE TRAIN candidate and frozen native adapters; the author's model
+  comparison is not our result.
+- [RuDecide v0.1](https://github.com/smolnikov-k/rudecide) lists 2,235
+  Russian questions in a public source-task track and 1,543 in an applied
+  track, spanning Choice, Noul and Score. The README discloses mixed upstream
+  licenses, including CC BY-SA 4.0, and says some reported systems trained on
+  parts of the applied track. Treat both tracks as attributed, exposed
+  **evaluation-only** candidates, separate from our sealed authored panel.
+  Check task/source group overlap and native language validity before use.
+- The [Jev-Omni three-readout ablation](https://github.com/CondadosAI/jev-omni-eval)
+  compares a trained decision head, digit-token logits from untouched Gemma 4
+  12B, and digit logits from the fine-tuned weights on the same inputs. Its
+  author reports head-versus-digit gains on those fine-tuned weights of
+  +6.1/+4.8 points for DecisionBench medium/hard and +9.1/+9.8 on the BLINK
+  and MMStar visual tasks, while the trained head's advantage over the
+  untouched base is much smaller on the visual tasks. This is **author-run
+  evidence**, not a Decision 2.0 comparison. It motivates a matched
+  backbone/data/compute ablation of semantic heads versus token readouts,
+  with the untouched source as a separate control; vision gains should not
+  be projected onto text-only Decision 2.0.
+
 ## Actionable release rule
 
 Keep a versioned external-benchmark appendix with source attribution and
