@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -733,4 +734,32 @@ func TestErrValkeyMemoryAlreadyExists(t *testing.T) {
 	// Double-wrapped
 	doubleWrapped := fmt.Errorf("valkey store failed: %w", wrapped)
 	assert.ErrorIs(t, doubleWrapped, errValkeyMemoryAlreadyExists)
+}
+
+func TestValkeyConditionalDeleteArgsUseStoredVersion(t *testing.T) {
+	t.Parallel()
+
+	args := valkeyForgetIfCurrentArgs(memoryVersion{
+		id:         "id-1",
+		userID:     "user-1",
+		projectID:  "",
+		typ:        MemoryTypeSemantic,
+		content:    `say "hello"`,
+		createdAt:  time.UnixMilli(1_600_000_000_123),
+		updatedAt:  time.UnixMilli(1_700_000_000_123),
+		importance: 0.7,
+	})
+	require.Equal(t, []string{
+		"id-1",
+		"user-1",
+		"default",
+		"semantic",
+		`say "hello"`,
+		"1600000000123",
+		"1700000000123",
+		"0.7",
+	}, args)
+	require.Contains(t, valkeyForgetIfCurrentScriptSource, "redis.call('DEL', KEYS[1])")
+	require.Contains(t, valkeyForgetIfCurrentScriptSource, "fields[5] ~= ARGV[5]")
+	require.Contains(t, valkeyForgetIfCurrentScriptSource, "fields[8] ~= ARGV[8]")
 }

@@ -52,6 +52,10 @@ func (v *ValkeyStore) List(context.Context, ListOptions) (*ListResult, error) {
 
 func (v *ValkeyStore) Forget(context.Context, string) error { return errValkeyGlideUnavailable }
 
+func (v *ValkeyStore) forgetIfCurrent(context.Context, memoryVersion) (bool, error) {
+	return false, errValkeyGlideUnavailable
+}
+
 func (v *ValkeyStore) ForgetByScope(context.Context, MemoryScope) error {
 	return errValkeyGlideUnavailable
 }

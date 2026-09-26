@@ -3643,6 +3643,33 @@
         },
         "persistence": {
           "$ref": "#/$defs/MemoryPersistenceConfig"
+        },
+        "consolidation": {
+          "$ref": "#/$defs/MemoryConsolidationConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryConsolidationConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "cooldown_seconds": {
+          "type": "integer",
+          "maximum": 9223372036,
+          "minimum": 0
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "maximum": 9223372036,
+          "minimum": 0
+        },
+        "concurrency": {
+          "type": "integer",
+          "maximum": 64,
+          "minimum": 0
         }
       },
       "additionalProperties": false,

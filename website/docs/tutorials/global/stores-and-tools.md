@@ -201,6 +201,25 @@ jobs do not start. Native embedding calls cannot be interrupted, so active work
 retains its worker slot and resources until exit. Cancellation does not undo
 writes already accepted by a backend.
 
+#### Post-write consolidation
+
+`global.stores.memory.consolidation` is off unless `enabled: true`. After a
+successful async memory write, the router may enqueue one background merge for
+that user. The merge reuses the existing word-overlap grouping in
+`ConsolidateUser` and does not run on the request path. A user is consolidated
+at most once per cooldown, and a busy runner skips extra work instead of
+queueing it. Failures do not change the response already returned to the client.
+
+| Field | Meaning | Default when enabled |
+| --- | --- | --- |
+| `enabled` | Turn post-write consolidation on | `false` |
+| `cooldown_seconds` | Minimum gap between accepted runs for one user; `0` uses the default | 60 |
+| `timeout_seconds` | Bound for one user's merge; `0` uses the default | 30 |
+| `concurrency` | Simultaneous users; `0` uses the default | 1 |
+
+Outcomes are content-free on `llm_memory_consolidation_total`. Shutdown and
+reload retire this work before the memory store closes.
+
 ### Vector Store
 
 ```yaml

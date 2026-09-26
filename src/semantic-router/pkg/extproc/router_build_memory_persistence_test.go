@@ -71,3 +71,16 @@ func TestBuildRouterWiresMemoryPersistenceRunner(t *testing.T) {
 	})
 	require.NoError(t, runner.RetireAndWait(time.Second))
 }
+
+func TestCreateMemoryConsolidationRunnerRequiresOptIn(t *testing.T) {
+	store := &noopMemoryStore{}
+	enabled := &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true}}
+	assert.Nil(t, createMemoryConsolidationRunner(nil, store))
+	assert.Nil(t, createMemoryConsolidationRunner(enabled, nil))
+	assert.Nil(t, createMemoryConsolidationRunner(enabled, store))
+
+	enabled.Memory.Consolidation.Enabled = true
+	runner := createMemoryConsolidationRunner(enabled, store)
+	require.NotNil(t, runner)
+	require.NoError(t, runner.RetireAndWait(time.Second))
+}

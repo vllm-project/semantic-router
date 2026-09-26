@@ -42,10 +42,13 @@ plugins:
 ```
 
 Memory can persist request-derived content and send retrieved memories to the
-selected model. Choose user/tenant isolation, retention, authentication, and
-transport security appropriate for that data. The omitted per-decision
-threshold inherits the global setting; calibrate that value for the selected
-embedding model and search mode before adding an override. See a complete example:
+selected model. Optional post-write consolidation, under
+`global.stores.memory.consolidation`, merges lexically similar memories for
+that user in the background. It is off by default. Choose user/tenant
+isolation, retention, authentication, and transport security appropriate for
+that data. The omitted per-decision threshold inherits the global setting;
+calibrate that value for the selected embedding model and search mode before
+adding an override. See a complete example:
 [`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml).
 
 ## Upgrading the embedding model

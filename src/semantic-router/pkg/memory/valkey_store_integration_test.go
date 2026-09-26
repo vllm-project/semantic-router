@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
@@ -731,4 +732,57 @@ func TestValkeyStoreInteg_ConsolidateUser(t *testing.T) {
 	list, err := store.List(ctx, ListOptions{UserID: userID, Limit: 100})
 	require.NoError(t, err)
 	t.Logf("ConsolidateUser: merged=%d, deleted=%d, remaining=%d", merged, deleted, list.Total)
+}
+
+// StorageIntegration: valkey
+func TestValkeyStoreInteg_ForgetIfCurrentLeavesUpdatedSource(t *testing.T) {
+	store, _ := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+	id := fmt.Sprintf("conditional_%d", time.Now().UnixNano())
+
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID: id, Type: MemoryTypeSemantic, UserID: "conditional-user",
+		Content: "original source content", Importance: 0.3,
+	}))
+	original, err := store.Get(ctx, id)
+	require.NoError(t, err)
+
+	require.NoError(t, store.Update(ctx, id, &Memory{
+		Type: MemoryTypeSemantic, UserID: "conditional-user",
+		Content: "updated source content", Importance: 0.8,
+	}))
+	deleted, err := store.forgetIfCurrent(ctx, versionOf(original))
+	require.NoError(t, err)
+	require.False(t, deleted)
+
+	live, err := store.Get(ctx, id)
+	require.NoError(t, err)
+	require.Equal(t, "updated source content", live.Content)
+	require.InDelta(t, 0.8, live.Importance, 0.001)
+}
+
+// StorageIntegration: valkey
+func TestValkeyStoreInteg_ConsolidationRunnerMergesAfterEnqueue(t *testing.T) {
+	store, _ := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+	userID := fmt.Sprintf("consol_runner_%d", time.Now().UnixNano())
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID: fmt.Sprintf("mem_r_%s_1", userID), Type: MemoryTypeSemantic,
+		Content: "The user prefers dark mode in all applications", UserID: userID,
+	}))
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID: fmt.Sprintf("mem_r_%s_2", userID), Type: MemoryTypeSemantic,
+		Content: "The user prefers dark mode in all their applications and IDEs", UserID: userID,
+	}))
+	time.Sleep(500 * time.Millisecond)
+
+	runner := NewConsolidationRunner(store, ConsolidationOptions{
+		Cooldown: time.Hour, Timeout: 5 * time.Second, Concurrency: 1,
+	})
+	t.Cleanup(func() { _ = runner.RetireAndWait(time.Second) })
+	before := testutil.ToFloat64(MemoryConsolidationTotal.WithLabelValues("completed", "finished"))
+	runner.Enqueue(userID)
+	require.Eventually(t, func() bool {
+		return testutil.ToFloat64(MemoryConsolidationTotal.WithLabelValues("completed", "finished")) > before
+	}, 5*time.Second, 50*time.Millisecond)
 }

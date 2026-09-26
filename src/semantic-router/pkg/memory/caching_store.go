@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -137,6 +138,20 @@ func (c *CachingStore) Forget(ctx context.Context, id string) error {
 		c.invalidate(ctx, owner)
 	}
 	return err
+}
+
+// forgetIfCurrent delegates a version-conditional delete and invalidates the
+// hot cache only when the matching version was actually removed.
+func (c *CachingStore) forgetIfCurrent(ctx context.Context, want memoryVersion) (bool, error) {
+	replacer, ok := c.store.(sourceReplacer)
+	if !ok {
+		return false, fmt.Errorf("memory store does not support version-conditional delete")
+	}
+	deleted, err := replacer.forgetIfCurrent(ctx, want)
+	if err == nil && deleted {
+		c.invalidate(ctx, want.userID)
+	}
+	return deleted, err
 }
 
 // ForgetByScope implements Store; delegates then invalidates cache for the scope's user.

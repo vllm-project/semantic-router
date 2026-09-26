@@ -431,6 +431,48 @@ func (s *QdrantStore) Forget(ctx context.Context, id string) error {
 	return nil
 }
 
+// forgetIfCurrent deletes the point only when its payload still matches want.
+func (s *QdrantStore) forgetIfCurrent(ctx context.Context, want memoryVersion) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if !s.enabled {
+		return false, fmt.Errorf("qdrant store is not enabled")
+	}
+	if want.id == "" {
+		return false, fmt.Errorf("memory ID is required")
+	}
+
+	wait := true
+	_, err := s.client.Delete(ctx, &qdrant.DeletePoints{
+		CollectionName: s.collectionName,
+		Wait:           &wait,
+		Points:         qdrant.NewPointsSelectorFilter(qdrantVersionFilter(want)),
+	})
+	if err != nil {
+		return false, fmt.Errorf("qdrant conditional delete failed: %w", err)
+	}
+	_, getErr := s.Get(ctx, want.id)
+	return conditionalDeleteResult(getErr)
+}
+
+func qdrantVersionFilter(want memoryVersion) *qdrant.Filter {
+	importance := float64(want.importance)
+	return &qdrant.Filter{
+		Must: []*qdrant.Condition{
+			qdrant.NewHasID(arbitraryIDToUUID(want.id)),
+			qdrant.NewMatchKeyword("id", want.id),
+			qdrant.NewMatchKeyword("user_id", want.userID),
+			qdrant.NewMatchKeyword("project_id", want.projectID),
+			qdrant.NewMatchKeyword("memory_type", string(want.typ)),
+			qdrant.NewMatchKeyword("content", want.content),
+			qdrant.NewMatchInt("created_at", want.createdAt.Unix()),
+			qdrant.NewMatchInt("updated_at", want.updatedAt.Unix()),
+			qdrant.NewRange("importance", &qdrant.Range{Gte: &importance, Lte: &importance}),
+		},
+	}
+}
+
 func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
 	if !s.enabled {
 		return fmt.Errorf("qdrant store is not enabled")

@@ -96,3 +96,20 @@ func TestMemoryPersistenceBoundsAtKubernetesValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestMemoryConsolidationRejectsOutOfRangeBounds(t *testing.T) {
+	cases := []MemoryConsolidationConfig{
+		{CooldownSeconds: -1},
+		{TimeoutSeconds: -1},
+		{Concurrency: -1},
+		{Concurrency: MaxMemoryPersistenceConcurrency + 1},
+	}
+	for _, cfg := range cases {
+		if err := validateMemoryConsolidation(cfg); err == nil {
+			t.Fatalf("expected consolidation config %+v to be rejected", cfg)
+		}
+	}
+	if err := validateMemoryConsolidation(MemoryConsolidationConfig{Enabled: true, CooldownSeconds: 60, TimeoutSeconds: 30, Concurrency: 1}); err != nil {
+		t.Fatal(err)
+	}
+}
