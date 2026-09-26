@@ -84,3 +84,35 @@ hard-CAL Score rows, original/new NLL 1.17954/1.15782 and Brier
 .31206/.30383 with both 47.33% correct. These are fit-set metrics only;
 they do not satisfy the independent DEV gate. The frozen fit will now be
 transported exactly once to copies of the existing DEV predictions.
+
+## Independent DEV transport result and gate
+
+The already frozen fit was applied once to a copy of the 1,600 original
+calibrated DEV predictions. The transformed prediction SHA-256 is
+`cc4cf9d50e24040072a97b93952eebcd1b04d42db8bc516d4adb7d295b4b2a85`;
+the unchanged frozen scorer's output SHA-256 is
+`b8e077aca394423b6c8a428f2a5e46a39659576c6c8cdac4bee9eb8ba4b772d5`.
+Every answer remained valid and all hard decisions were unchanged: total
+1,213/1,600, Choice 791/800, Noul 261/400, Score 161/400.
+
+| Metric | Original CAL700 | Hard-CAL transport | Change |
+| --- | ---: | ---: | ---: |
+| Score Brier | .534035 | .496127 | -.037908 |
+| Score NLL | 2.469938 | 1.939390 | -.530548 |
+| Score ECE | .521115 | .482926 | -.038189 |
+| Score MAE | .930070 | .917228 | -.012842 |
+| Noul Brier | .231548 | .320466 | +.088918 |
+| Noul NLL | .659260 | 1.740481 | +1.081221 |
+| Noul ECE | .096995 | .307063 | +.210068 |
+| Overall Brier | .195948 | .208700 | +.012752 |
+| Overall NLL | .808866 | .946534 | +.137668 |
+| Overall ECE | .138421 | .183170 | +.044749 |
+
+**Gate failed.** The preregistered Score Brier/NLL improvement and
+hard-correct conditions passed, but Noul Brier exceeded the permitted .005
+regression by a wide margin. The fit-set Noul examples were too easy to
+transport to the harder independent DEV distribution. Do not promote this
+calibration, relabel it as the run's CAL700, or select a Score-only variant
+after inspecting DEV. This diagnostic leaves the completed checkpoint and
+original-calibrated development report unchanged. It supplies no release
+result and does not open sealed FINAL or heldout transfer labels.

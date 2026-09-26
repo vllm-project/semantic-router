@@ -123,3 +123,6 @@ regrading
 
 # Model reasoning-mode toggle terms (not spelling errors)
 nothink
+
+# Correct French plural in localized intent-option descriptions
+recommandations
