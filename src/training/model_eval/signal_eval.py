@@ -438,7 +438,8 @@ def parse_args():
     parser.add_argument(
         "--dataset",
         type=str,
-        required=True,
+        required=False,
+        default=None,
         choices=list(DATASET_REGISTRY.keys()),
         help="Dataset ID to evaluate (e.g., mmlu-pro-en, fact-check-en, feedback-en)",
     )
@@ -471,6 +472,14 @@ def parse_args():
         type=int,
         default=1,
         help="Number of concurrent requests (default: 1 for sequential)",
+    )
+    parser.add_argument(
+        "--custom-ground-truth",
+        type=str,
+        default=None,
+        help="Path to a JSONL file with custom ground-truth pairs. "
+        'Each line: {"text": "...", "expected_signal": "..."}. '
+        "Bypasses --dataset registry. (New feature, does not affect existing usage.)",
     )
     return parser.parse_args()
 
@@ -702,8 +711,174 @@ def evaluate_dataset(
     return results
 
 
+def load_custom_ground_truth(jsonl_path, max_samples=None):
+    """Load custom ground-truth pairs from a JSONL file.
+
+    Each line should be a JSON object with:
+      - text (str): the prompt/question text
+      - expected_signal (str): the expected domain/signal label
+      - category (str, optional): sub-category label
+
+    Returns a list of dicts with 'question' and 'answer' fields.
+    """
+    records = []
+    with open(jsonl_path) as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line:
+                continue
+            item = json.loads(line)
+            records.append(
+                {
+                    "question": item.get("text", ""),
+                    "answer": item.get("expected_signal", ""),
+                    "category": item.get("category", "custom"),
+                }
+            )
+    if max_samples:
+        records = records[:max_samples]
+    logging.info(f"Loaded {len(records)} custom ground-truth records from {jsonl_path}")
+    return records
+
+
+def evaluate_custom_dataset(records, dimension, endpoint, timeout, concurrent=1):
+    """Evaluate custom ground-truth records against the routing preview API.
+
+    Works like evaluate_dataset() but takes pre-loaded records instead of
+    loading from the dataset registry. Each record should have 'question'
+    and 'answer' fields.
+    """
+    config = {
+        "text_col": "question",
+        "label_col": "answer",
+        "label_mapping": {},
+        "signal_field": dimension,
+        "dimension": dimension,
+        "name": "custom",
+    }
+
+    results = {
+        "dataset_id": "custom",
+        "dimension": dimension,
+        "total_samples": len(records),
+        "correct": 0,
+        "incorrect": 0,
+        "skipped": 0,
+        "accuracy": 0.0,
+        "details": [],
+    }
+
+    logging.info(f"Evaluating {len(records)} custom records (dimension: {dimension})")
+    logging.info(f"Concurrent requests: {concurrent}")
+
+    if concurrent <= 1:
+        for sample in tqdm(records, desc="Evaluating custom"):
+            detail = evaluate_single_sample(sample, config, endpoint, timeout)
+            results["details"].append(detail)
+            if detail["status"] == "correct":
+                results["correct"] += 1
+            elif detail["status"] == "incorrect":
+                results["incorrect"] += 1
+            else:
+                results["skipped"] += 1
+    else:
+        with ThreadPoolExecutor(max_workers=concurrent) as executor:
+            futures = {
+                executor.submit(
+                    evaluate_single_sample, sample, config, endpoint, timeout
+                ): idx
+                for idx, sample in enumerate(records)
+            }
+            for future in tqdm(
+                as_completed(futures),
+                total=len(records),
+                desc="Evaluating custom",
+            ):
+                detail = future.result()
+                results["details"].append(detail)
+                if detail["status"] == "correct":
+                    results["correct"] += 1
+                elif detail["status"] == "incorrect":
+                    results["incorrect"] += 1
+                else:
+                    results["skipped"] += 1
+
+    total_evaluated = results["correct"] + results["incorrect"]
+    if total_evaluated > 0:
+        results["accuracy"] = results["correct"] / total_evaluated
+
+    logging.info(
+        f"Evaluation complete: {results['correct']}/{total_evaluated} correct "
+        f"(accuracy: {results['accuracy']:.4f}), {results['skipped']} skipped"
+    )
+
+    return results
+
+
 def main():
     args = parse_args()
+
+    # --- Custom ground-truth branch (new feature, does not affect existing usage) ---
+    if not args.dataset and not args.custom_ground_truth:
+        parser = argparse.ArgumentParser()
+        parser.error("--dataset is required (unless --custom-ground-truth is provided)")
+
+    if args.custom_ground_truth:
+        custom_records = load_custom_ground_truth(
+            args.custom_ground_truth, args.max_samples
+        )
+        dimension = "domain"
+        logging.info(
+            f"Signal Evaluation - Custom ground-truth: {args.custom_ground_truth}"
+        )
+        logging.info(f"Dimension: {dimension} (default for custom)")
+        logging.info(f"Endpoint: {args.endpoint}")
+        logging.info(f"Records: {len(custom_records)}")
+        logging.info(f"Concurrent requests: {args.concurrent}")
+
+        start_time = time.time()
+        results = evaluate_custom_dataset(
+            records=custom_records,
+            dimension=dimension,
+            endpoint=args.endpoint,
+            timeout=args.timeout,
+            concurrent=args.concurrent,
+        )
+        elapsed_time = time.time() - start_time
+
+        results["metadata"] = {
+            "source": "custom_ground_truth",
+            "path": args.custom_ground_truth,
+            "record_count": len(custom_records),
+            "dimension": dimension,
+            "endpoint": args.endpoint,
+            "max_samples": args.max_samples,
+            "concurrent": args.concurrent,
+            "elapsed_time_seconds": elapsed_time,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w") as f:
+            json.dump(results, f, indent=2)
+        logging.info(f"Results saved to: {output_path}")
+
+        print("\n" + "=" * 60)
+        print("Signal Evaluation Summary - Custom Ground Truth")
+        print(f"Dimension: {dimension}")
+        print("=" * 60)
+        print(f"Total samples: {results['total_samples']}")
+        print(f"Correct: {results['correct']}")
+        print(f"Incorrect: {results['incorrect']}")
+        print(f"Skipped: {results['skipped']}")
+        print(f"Accuracy: {results['accuracy']:.4f} ({results['accuracy']*100:.2f}%)")
+        print(f"Elapsed time: {elapsed_time:.2f}s")
+        print("=" * 60)
+        return 0
+    # --- End custom branch ---
+
+    # Existing logic (unchanged below)
 
     # Get dataset config
     dataset_config = DATASET_REGISTRY[args.dataset]
