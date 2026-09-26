@@ -21,9 +21,9 @@ from typing import Any
 
 from training.data import build_pilot as pilot
 from training.data import build_targeted_candidate as targeted
-from training.data.build_score_curriculum_v6 import REQUIRED_PROTECTED_ROLES
 from training.data import score_three_level_select_r2_oracle as oracle
 from training.data import score_three_level_select_r2_render_oracle as render_oracle
+from training.data.build_score_curriculum_v6 import REQUIRED_PROTECTED_ROLES
 from training.model.data import digest, validate_row
 from training.model.infer import question_to_row
 
