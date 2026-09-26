@@ -6,6 +6,7 @@ import contextlib
 import io
 import sys
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -121,7 +122,35 @@ class ReleaseVersionContractTests(unittest.TestCase):
     def test_crate_markers_match_locked_release_publisher(self) -> None:
         errors: list[str] = []
         release_contract.validate_candle_crate_workflow(errors)
+        release_contract.validate_candle_release_notes(errors)
         self.assertEqual(errors, [])
+
+    def test_crate_patch_may_differ_but_release_line_and_lock_must_match(self) -> None:
+        contract = release_contract.ReleaseContract(
+            pyproject_version="0.4.0",
+            sim_version="0.1.0",
+            candle_version="0.4.1",
+            candle_lock_version="0.4.1",
+            helm_chart_version="0.2.0",
+            helm_app_version="v0.4.0",
+            release_images=("dashboard",),
+        )
+        errors: list[str] = []
+        release_contract.validate_candle_version(errors, contract, "0.4.0")
+        self.assertEqual(errors, [])
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            release_contract.validate_candle_version(
+                errors, replace(contract, candle_lock_version="0.4.0"), "0.4.0"
+            )
+            release_contract.validate_candle_version(
+                errors,
+                replace(contract, candle_version="0.5.1", candle_lock_version="0.5.1"),
+                "0.4.0",
+            )
+        self.assertEqual(len(errors), 2)
+        self.assertIn("lockfile version", errors[0])
+        self.assertIn("must share major.minor", errors[1])
 
     def test_simulator_docs_use_an_independent_published_version(self) -> None:
         errors: list[str] = []

@@ -697,7 +697,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_verbosity"
+          "code": "unsupported_capability"
         }
       }
     },

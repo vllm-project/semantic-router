@@ -276,6 +276,36 @@ def require_markers(
         require_contains(errors, path, label, marker)
 
 
+def validate_candle_version(
+    errors: list[str], contract: ReleaseContract, router_version: str
+) -> None:
+    """The crate has its own patch stream within the Router release minor."""
+
+    crate_match = SEMVER_RE.fullmatch(contract.candle_version)
+    router_match = SEMVER_RE.fullmatch(router_version)
+    if crate_match is None:
+        message = f"candle-binding version is invalid: {contract.candle_version}"
+        errors.append(f"{CANDLE_CARGO_PATH.relative_to(REPO_ROOT)}: {message}")
+        emit_github_error(CANDLE_CARGO_PATH, "Invalid crate version", message)
+    elif router_match is not None and (
+        crate_match.group("major"),
+        crate_match.group("minor"),
+    ) != (router_match.group("major"), router_match.group("minor")):
+        message = (
+            f"candle-binding version '{contract.candle_version}' must share "
+            f"major.minor with Router version '{router_version}'"
+        )
+        errors.append(f"{CANDLE_CARGO_PATH.relative_to(REPO_ROOT)}: {message}")
+        emit_github_error(CANDLE_CARGO_PATH, "Crate release line mismatch", message)
+    require_equal(
+        errors,
+        CANDLE_LOCK_PATH,
+        "candle-binding lockfile version",
+        contract.candle_lock_version,
+        contract.candle_version,
+    )
+
+
 def validate_helm_workflow(errors: list[str]) -> None:
     require_contains(
         errors,
@@ -440,20 +470,7 @@ def validate(expected_version: str | None) -> tuple[ReleaseContract, list[str]]:
     require_equal(
         errors, PYPROJECT_PATH, "vllm-sr version", contract.pyproject_version, expected
     )
-    require_equal(
-        errors,
-        CANDLE_CARGO_PATH,
-        "candle-binding version",
-        contract.candle_version,
-        expected,
-    )
-    require_equal(
-        errors,
-        CANDLE_LOCK_PATH,
-        "candle-binding lockfile version",
-        contract.candle_lock_version,
-        expected,
-    )
+    validate_candle_version(errors, contract, expected)
 
     validate_source_helm_app_version(
         errors, contract.helm_app_version, expected_version

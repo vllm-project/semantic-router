@@ -106,6 +106,10 @@ def candle_crate_workflow_markers() -> MarkerSet:
             "RELEASE_VERSION: ${{ inputs.version }}",
         ),
         (
+            "Candle crate version input",
+            "EXPECTED_CRATE_VERSION: ${{ inputs.crate_version }}",
+        ),
+        (
             "Candle crate tag input",
             "RELEASE_TAG: ${{ inputs.tag }}",
         ),
@@ -136,9 +140,17 @@ def candle_crate_workflow_markers() -> MarkerSet:
 
 def candle_release_notes_markers() -> MarkerSet:
     return (
+        (
+            "Candle crate validated output",
+            "candle_version: ${{ steps.contract.outputs.candle_version }}",
+        ),
+        (
+            "Candle crate publisher version",
+            "crate_version: ${{ needs.validate.outputs.candle_version }}",
+        ),
         ("Candle crate release notes section", "### Rust Crate (crates.io)"),
         (
             "Candle crate release notes version",
-            'candle-semantic-router = "${{ needs.validate.outputs.version }}"',
+            'candle-semantic-router = "${{ needs.validate.outputs.candle_version }}"',
         ),
     )

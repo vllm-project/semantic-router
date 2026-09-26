@@ -92,7 +92,8 @@ instead of being silently dropped.
 | --- | --- | --- | --- |
 | Text, image input, and file input | Supported | Supported | Supported |
 | Tools, parallel tool calls, and strict tool schemas | Supported | Supported | Supported |
-| Custom (free-form) tools and their calls | Supported | Not supported | Not supported |
+| Custom (free-form) tools and their calls | Supported | Supported | Not supported |
+| Text verbosity (`low`, `medium`, `high`) | Supported | Supported | Not supported |
 | Strict JSON Schema output | Supported | Supported | Supported |
 | Buffered and streaming responses | Supported | Supported | Supported |
 | Reasoning content and effort | Supported | Supported | Supported |
@@ -132,6 +133,13 @@ A Responses client can still use `previous_response_id` with a Chat
 Completions or Messages backend. The Router retrieves and materializes the
 retained history, removes Router-owned object controls, and then encodes the
 stateless request in the selected backend format.
+
+Responses custom tools use `type: custom` with a flattened `format` object.
+Their `custom_tool_call` and `custom_tool_call_output` items retain free-form
+input, tool results, and call IDs through Chat or Responses backends, including
+buffered and streaming responses. A Messages backend rejects them with
+`unsupported_capability`. Responses `text.verbosity` maps to the Chat
+`verbosity` field; Messages has no equivalent and rejects that control.
 
 ## Configure a backend format
 

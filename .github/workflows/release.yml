@@ -28,6 +28,7 @@ jobs:
       performance_base: ${{ steps.baseline.outputs.ref }}
       tag: ${{ steps.version.outputs.tag }}
       sim_version: ${{ steps.contract.outputs.sim_version }}
+      candle_version: ${{ steps.contract.outputs.candle_version }}
       catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}
     steps:
       - uses: actions/checkout@v4
@@ -157,6 +158,7 @@ jobs:
     uses: ./.github/workflows/publish-crate.yml
     with:
       version: ${{ needs.validate.outputs.version }}
+      crate_version: ${{ needs.validate.outputs.candle_version }}
       tag: ${{ needs.validate.outputs.tag }}
     secrets: inherit
 
@@ -237,8 +239,11 @@ jobs:
             ### Rust Crate (crates.io)
 
             ```toml
-            candle-semantic-router = "${{ needs.validate.outputs.version }}"
+            candle-semantic-router = "${{ needs.validate.outputs.candle_version }}"
             ```
+
+            The crate version may differ from the Router tag because crates.io
+            versions are immutable. Use the version shown above for Rust dependencies.
 
             ### Built-in virtual models
 
