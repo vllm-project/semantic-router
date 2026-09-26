@@ -1,12 +1,12 @@
 # Decision 2.0 visual direction
 
 The provisional family mascot is an original, chibi pixel-mosaic owl perched
-where one branch becomes two. The fork stands for a decision; the owl's wide
-eyes stand for checking evidence before choosing. Its larger head, shorter
-wings and rounded die-cut outline keep the mosaic silhouette legible at
-Hugging Face collection and model-card thumbnail sizes. The current asset is
-`decision-2-sticker-chibi-v2.png`; the earlier
-`decision-2-sticker.png` remains as a retained design study.
+above a bold three-way fork. The fork stands for a decision; the owl's curious
+eyes stand for checking evidence before choosing. Its rounded face, coral
+cheeks, chunky color blocks and cream die-cut outline keep the silhouette
+legible at Hugging Face collection and model-card thumbnail sizes. The current
+asset is `decision-2-sticker-chibi-v3.png`; earlier stickers remain as design
+studies.
 
 | Role | Color |
 | --- | --- |
