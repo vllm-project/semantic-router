@@ -21,9 +21,16 @@ lower bound on what a real adversary achieves.
 
 ## Running it
 
+The default target is Vela-1.0-Encoder-307M-Guard from the
+[Vela 1.0 collection](https://huggingface.co/collections/llm-semantic-router/vela-10),
+the jailbreak detector the router serves as `prompt_guard`.
+`make download-eval-models` fetches it at the revision the router pins, along
+with the other Vela evaluation models.
+
 ```bash
+make download-eval-models
 python3 -m bench.redteam.evaluate \
-    --model models/mmbert32k-jailbreak-detector-merged \
+    --model models/Vela-1.0-Encoder-307M-Guard \
     --dataset jailbreakbench \
     --threshold 0.7
 ```

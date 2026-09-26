@@ -2,7 +2,7 @@
 
 Usage:
     python3 -m bench.redteam.evaluate \
-        --model models/mmbert32k-jailbreak-detector-merged \
+        --model models/Vela-1.0-Encoder-307M-Guard \
         --dataset jailbreakbench --threshold 0.7
 
 Exits non-zero when a gate is supplied and the model misses it, which is what
