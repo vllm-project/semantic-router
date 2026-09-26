@@ -266,9 +266,7 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
 	state := &routeHeaderState{
-		setHeaders: r.startUpstreamSpanAndInjectHeaders(
-			dispatch.logicalModel, dispatch.backendAddress, ctx,
-		),
+		setHeaders:    r.startUpstreamSpanAndInjectHeaders(dispatch, ctx),
 		removeHeaders: []string{"content-length"},
 		profile:       dispatch.profile,
 	}
@@ -408,17 +406,17 @@ func isClientProtocolError(category llmprotocol.ErrorCategory) bool {
 }
 
 func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(
-	model string,
-	endpoint string,
+	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) []*core.HeaderValueOption {
 	spanContext, upstreamSpan := tracing.StartSpan(
 		ctx.TraceContext, tracing.SpanUpstreamRequest, trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(genAIRequestAttributes(dispatch)...),
 	)
 	ctx.UpstreamSpan = upstreamSpan
 	tracing.SetSpanAttributes(upstreamSpan,
-		attribute.String(tracing.AttrModelName, model),
-		attribute.String(tracing.AttrEndpointAddress, endpoint),
+		attribute.String(tracing.AttrModelName, dispatch.logicalModel),
+		attribute.String(tracing.AttrEndpointAddress, dispatch.backendAddress),
 	)
 	traceHeaders := tracing.InjectTraceContextToSlice(spanContext)
 	result := make([]*core.HeaderValueOption, 0, len(traceHeaders))
