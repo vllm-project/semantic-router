@@ -7,7 +7,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from inference.joyfox import _predict, completed_ids
+from inference.joyfox import (
+    ADAPTER_VERSION,
+    EXTENDED_ADAPTER_VERSION,
+    _predict,
+    collector_identity,
+    completed_ids,
+)
 from inference.run import digest
 
 ROW = {
@@ -30,6 +36,15 @@ class FakeEngine:
 
 
 class JoyfoxCollectorTest(unittest.TestCase):
+    def test_context_ablation_has_distinct_identity(self) -> None:
+        release = {"adapter_version": ADAPTER_VERSION, "model_revision": "abc"}
+        self.assertIs(collector_identity(release, 1024), release)
+        extended = collector_identity(release, 4096)
+        self.assertEqual(extended["adapter_version"], EXTENDED_ADAPTER_VERSION)
+        self.assertEqual(extended["cutoff_len"], 4096)
+        with self.assertRaisesRegex(ValueError, "between 1 and 4096"):
+            collector_identity(release, 4097)
+
     def test_native_answer_and_overflow(self) -> None:
         answer = {"refund": {"type": "noul", "noul": 0.9}}
         self.assertEqual(_predict(FakeEngine(answer), ROW), (answer, "ok"))

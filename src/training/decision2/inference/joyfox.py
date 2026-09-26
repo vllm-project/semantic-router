@@ -31,6 +31,20 @@ MODEL_HASHES = {
     "tokenizer/tokenizer.json": "87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4",
 }
 ADAPTER_VERSION = "joyfox-native-v1"
+EXTENDED_ADAPTER_VERSION = "joyfox-native-extended-context-v1"
+
+
+def collector_identity(release: dict[str, Any], cutoff_len: int) -> dict[str, Any]:
+    """Keep the published 1,024-token contract distinct from context ablations."""
+    if cutoff_len < 1 or cutoff_len > 4096:
+        raise ValueError("Joyfox cutoff must be between 1 and 4096 tokens")
+    if cutoff_len == 1024:
+        return release
+    return {
+        **release,
+        "adapter_version": EXTENDED_ADAPTER_VERSION,
+        "cutoff_len": cutoff_len,
+    }
 
 
 def verify_release(
@@ -112,7 +126,7 @@ def completed_ids(
     return completed
 
 
-def load_native(model_path: Path, source_path: Path, device: str):
+def load_native(model_path: Path, source_path: Path, device: str, cutoff_len: int):
     if device != "cuda:0":
         raise ValueError("Expose one ROCm GPU as cuda:0 for Joyfox")
     os.environ["HF_HUB_OFFLINE"] = "1"
@@ -129,7 +143,7 @@ def load_native(model_path: Path, source_path: Path, device: str):
     if not torch.cuda.is_available():
         raise RuntimeError("Joyfox native inference requires ROCm GPU")
     engine = DecisionEngine.load(
-        model_path, device=device, dtype="bfloat16", cutoff_len=1024
+        model_path, device=device, dtype="bfloat16", cutoff_len=cutoff_len
     )
     if next(engine.model.parameters()).device.type != "cuda":
         raise RuntimeError("Joyfox silently fell back to CPU")
@@ -169,6 +183,7 @@ def collect(
     prompts: Path,
     output: Path,
     device: str = "cuda:0",
+    cutoff_len: int = 1024,
     resume: bool = False,
     max_items: int | None = None,
 ) -> dict[str, Any]:
@@ -178,7 +193,9 @@ def collect(
     model_path, source_path = model_path.resolve(strict=True), source_path.resolve(
         strict=True
     )
-    identity = verify_release(model_path, source_path, revision)
+    identity = collector_identity(
+        verify_release(model_path, source_path, revision), cutoff_len
+    )
     if output.exists():
         if not resume:
             raise FileExistsError(output)
@@ -190,7 +207,7 @@ def collect(
         remaining = remaining[:max_items]
     if not remaining:
         return {**identity, "input_items": len(rows), "collected_now": 0}
-    engine, runtime = load_native(model_path, source_path, device)
+    engine, runtime = load_native(model_path, source_path, device, cutoff_len)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("a" if output.exists() else "x", encoding="utf-8") as target:
         for row in remaining:
@@ -238,6 +255,7 @@ def main() -> None:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--cutoff-len", type=int, default=1024)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--max-items", type=int)
     args = parser.parse_args()
@@ -250,6 +268,7 @@ def main() -> None:
                 prompts=args.input,
                 output=args.output,
                 device=args.device,
+                cutoff_len=args.cutoff_len,
                 resume=args.resume,
                 max_items=args.max_items,
             ),
