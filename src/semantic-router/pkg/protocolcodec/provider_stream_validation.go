@@ -235,7 +235,7 @@ func validateResponsesEventFieldPresence(eventType string, body []byte) error {
 		"response.reasoning_summary_text.delta":      {"delta"},
 		"response.reasoning_summary_text.done":       {"text"},
 		"response.function_call_arguments.delta":     {"delta"},
-		"response.function_call_arguments.done":      {"name", "arguments"},
+		"response.function_call_arguments.done":      {"arguments"},
 		"response.image_generation_call.in_progress": {"output_index", "item_id"},
 		"response.image_generation_call.generating":  {"output_index", "item_id"},
 		"response.image_generation_call.completed":   {"output_index", "item_id"},

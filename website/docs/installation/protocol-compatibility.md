@@ -92,9 +92,11 @@ instead of being silently dropped.
 | --- | --- | --- | --- |
 | Text, image input, and file input | Supported | Supported | Supported |
 | Tools, parallel tool calls, and strict tool schemas | Supported | Supported | Supported |
+| Custom (free-form) tools and their calls | Supported | Not supported | Not supported |
 | Strict JSON Schema output | Supported | Supported | Supported |
 | Buffered and streaming responses | Supported | Supported | Supported |
 | Reasoning content and effort | Supported | Supported | Supported |
+| Reasoning summary requests (`reasoning.summary`) | Not forwarded; reported as `dropped` | Supported; reported as `dropped` if the provider uses `chat_template_kwargs` for reasoning controls | Not forwarded; reported as `dropped` |
 | JSON object mode without a schema | Supported | Supported | Not supported |
 | Audio input | Supported | Not supported | Not supported |
 | Hosted image-generation lifecycle | Not supported | Supported | Not supported |
@@ -112,6 +114,19 @@ This table describes codec representation, not model capability. For example,
 an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
+
+For an Anthropic Messages client using a Chat Completions or Responses backend,
+`thinking.type: adaptive` uses the backend model's default reasoning behavior;
+`output_config.effort` is retained. `thinking.display: omitted` removes reasoning
+from the translated response, including streaming output. Explicit
+`thinking.type: disabled` requires a configured reasoning family and an
+effective backend reasoning-off control. Unsupported controls fail with a typed
+request error. A `context_management` edit of `clear_thinking_20251015` with
+`keep: all` has no effect and is omitted for these backends; edits that would
+change history are rejected. Anthropic `cache_control` boundaries are omitted
+when the selected backend uses Responses, which cannot represent them. The
+prompt and tool result still dispatch, and `x-vsr-protocol-warnings` reports a
+`dropped` diagnostic for `cache_control`.
 
 A Responses client can still use `previous_response_id` with a Chat
 Completions or Messages backend. The Router retrieves and materializes the
@@ -194,13 +209,15 @@ The Router handles them as follows:
 Each accepted but unforwarded field appears as a `dropped` entry in
 `x-vsr-protocol-warnings`.
 
-Codex can also request reasoning summaries, multi-agent namespace tools, and the
-hosted web search tool. The Router does not support those, so turn them off in
-the Codex `config.toml` that points at the Router. These settings were checked
-with Codex CLI 0.156.1:
+Codex can also request reasoning summaries. The Router forwards
+`reasoning.summary` to a Responses backend. A Chat Completions or Messages
+backend cannot request a summary, so the Router accepts the turn and reports
+the dropped setting in `x-vsr-protocol-warnings`. Multi-agent namespace tools
+and hosted web search remain unsupported; disable those in the Codex
+`config.toml` that points at the Router. These settings were checked with
+Codex CLI 0.156.1:
 
 ```toml
-model_reasoning_summary = "none"
 web_search = "disabled"
 
 [features]

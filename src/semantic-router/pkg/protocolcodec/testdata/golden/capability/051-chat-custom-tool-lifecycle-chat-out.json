@@ -1,0 +1,79 @@
+{
+  "cases": [
+    {
+      "name": "grammar_tool_call_and_result",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "Create hello.txt containing hi",
+              "role": "user"
+            },
+            {
+              "role": "assistant",
+              "tool_calls": [
+                {
+                  "custom": {
+                    "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n",
+                    "name": "apply_patch"
+                  },
+                  "id": "call_1",
+                  "type": "custom"
+                }
+              ]
+            },
+            {
+              "content": "Created hello.txt",
+              "role": "tool",
+              "tool_call_id": "call_1"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "custom": {
+                "description": "Edit files with a patch.",
+                "format": {
+                  "grammar": {
+                    "definition": "start: begin_patch hunk end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: /(.|\\n)+/\n%import common.LF",
+                    "syntax": "lark"
+                  },
+                  "type": "grammar"
+                },
+                "name": "apply_patch"
+              },
+              "type": "custom"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "text_tool",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "Print hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "custom": {
+                "description": "Run Python code.",
+                "name": "code_exec"
+              },
+              "type": "custom"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

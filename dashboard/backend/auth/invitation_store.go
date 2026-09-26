@@ -89,24 +89,21 @@ func (s *Store) CreateInvitation(
 	kind, email, name, role, digest, createdBy string,
 	maxUses int,
 	expiresAt int64,
+	actors ...AuthContext,
 ) (*Invitation, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+	now := nowUnix()
+	id := uuid.NewString()
+	err := s.withAdminMutation(ctx, optionalAdminActor(actors), func(tx *sql.Tx) error {
+		if kind == InvitationPersonal {
+			if _, updateErr := tx.ExecContext(ctx, `UPDATE dashboard_invitations SET status=?,revoked_at=? WHERE email=? AND kind=? AND status=?`, InvitationRevoked, now, email, InvitationPersonal, InvitationPending); updateErr != nil {
+				return updateErr
+			}
+		}
+		_, insertErr := tx.ExecContext(ctx, `INSERT INTO dashboard_invitations(id,email,name,role,kind,max_uses,used_count,token_digest,status,expires_at,created_at,created_by) VALUES(?,?,?,?,?,?,0,?,?,?,?,?)`, id, email, name, role, kind, maxUses, digest, InvitationPending, expiresAt, now, createdBy)
+		return insertErr
+	})
 	if err != nil {
 		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
-	now := nowUnix()
-	if kind == InvitationPersonal {
-		if _, updateErr := tx.ExecContext(ctx, `UPDATE dashboard_invitations SET status=?,revoked_at=? WHERE email=? AND kind=? AND status=?`, InvitationRevoked, now, email, InvitationPersonal, InvitationPending); updateErr != nil {
-			return nil, updateErr
-		}
-	}
-	id := uuid.NewString()
-	if _, insertErr := tx.ExecContext(ctx, `INSERT INTO dashboard_invitations(id,email,name,role,kind,max_uses,used_count,token_digest,status,expires_at,created_at,created_by) VALUES(?,?,?,?,?,?,0,?,?,?,?,?)`, id, email, name, role, kind, maxUses, digest, InvitationPending, expiresAt, now, createdBy); insertErr != nil {
-		return nil, insertErr
-	}
-	if commitErr := tx.Commit(); commitErr != nil {
-		return nil, commitErr
 	}
 	item, _, lookupErr := s.GetInvitationByID(ctx, id)
 	return item, lookupErr
@@ -137,28 +134,36 @@ func (s *Store) ListInvitations(ctx context.Context) ([]*Invitation, error) {
 	return items, rows.Err()
 }
 
-func (s *Store) RotateInvitation(ctx context.Context, id, digest string, expiresAt int64) (*Invitation, error) {
-	result, err := s.db.ExecContext(ctx, `UPDATE dashboard_invitations SET token_digest=?,expires_at=? WHERE id=? AND status=?`, digest, expiresAt, id, InvitationPending)
+func (s *Store) RotateInvitation(ctx context.Context, id, digest string, expiresAt int64, actors ...AuthContext) (*Invitation, error) {
+	err := s.withAdminMutation(ctx, optionalAdminActor(actors), func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `UPDATE dashboard_invitations SET token_digest=?,expires_at=? WHERE id=? AND status=?`, digest, expiresAt, id, InvitationPending)
+		if err != nil {
+			return err
+		}
+		if affected, _ := result.RowsAffected(); affected != 1 {
+			return ErrInvitationUnavailable
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-	if affected, _ := result.RowsAffected(); affected != 1 {
-		return nil, ErrInvitationUnavailable
 	}
 	item, _, err := s.GetInvitationByID(ctx, id)
 	return item, err
 }
 
-func (s *Store) RevokeInvitation(ctx context.Context, id string) error {
+func (s *Store) RevokeInvitation(ctx context.Context, id string, actors ...AuthContext) error {
 	now := nowUnix()
-	result, err := s.db.ExecContext(ctx, `UPDATE dashboard_invitations SET status=?,revoked_at=? WHERE id=? AND status=?`, InvitationRevoked, now, id, InvitationPending)
-	if err != nil {
-		return err
-	}
-	if affected, _ := result.RowsAffected(); affected != 1 {
-		return ErrInvitationUnavailable
-	}
-	return nil
+	return s.withAdminMutation(ctx, optionalAdminActor(actors), func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `UPDATE dashboard_invitations SET status=?,revoked_at=? WHERE id=? AND status=?`, InvitationRevoked, now, id, InvitationPending)
+		if err != nil {
+			return err
+		}
+		if affected, _ := result.RowsAffected(); affected != 1 {
+			return ErrInvitationUnavailable
+		}
+		return nil
+	})
 }
 
 func (s *Store) AcceptInvitation(ctx context.Context, digest, email, name, passwordHash string) (*User, error) {

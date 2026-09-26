@@ -467,26 +467,32 @@ html[data-route-kind='blog'] body,
   text-transform: uppercase;
 }
 
-/* ---- Article: left contents rail, then one left-flush column ----
- * The column is the article width, not 1fr: at 1fr the prose would need
- * centring, which is the ~310px misalignment this phase removes. */
+/* ---- Article: contents rail, then one prose column, centred as a group ----
+ * The column is the article width, not 1fr, so prose stays left-aligned
+ * against the rail; the [rail | prose] group is centred inside --page-max so
+ * wide screens do not leave the Docs right-TOC slot as an empty band. */
 .site-blog-layout--post .site-blog-layout__inner {
   position: relative;
   display: grid;
   grid-template-columns: var(--rail) minmax(0, var(--blog-prose));
-  justify-content: start;
+  justify-content: center;
   gap: var(--rail-gap);
   align-items: start;
   padding: var(--space-8) var(--gutter) 5.5rem;
 }
 
-/* Only when there is a rail to divide — a post with no headings gets no TOC. */
+/* Only when there is a rail to divide — a post with no headings gets no TOC.
+ * The divider follows the centred group: half the free space in the content
+ * box, clamped at 0 once the prose track is already shrinking. */
 .site-blog-layout--post .site-blog-layout__inner:has(.site-blog-layout__toc)::before {
   content: '';
   position: absolute;
   top: var(--space-8);
   bottom: 5.5rem;
-  left: calc(var(--gutter) + var(--rail));
+  left: calc(
+    var(--gutter) + var(--rail) +
+      max(0px, (100% - 2 * var(--gutter) - var(--rail) - var(--rail-gap) - var(--blog-prose)) / 2)
+  );
   width: 1px;
   background: var(--site-border);
 }
@@ -641,8 +647,8 @@ html[data-route-kind='blog'] body,
   line-height: 1.75;
 }
 
-/* Left-flush, so the first character sits on the same x as a docs paragraph.
- * Never `margin-inline: auto` here. */
+/* Left-aligned within the prose column so text, code and media share one
+ * left edge. Never `margin-inline: auto` here. */
 .site-blog-post__content > :is(p, ul, ol, blockquote, h2, h3, h4, h5, h6),
 .site-blog-layout--post .markdown > :is(p, ul, ol, blockquote, h2, h3, h4, h5, h6) {
   max-width: var(--blog-prose);
