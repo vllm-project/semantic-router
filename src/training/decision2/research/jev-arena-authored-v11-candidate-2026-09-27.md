@@ -7,7 +7,8 @@ was mirrored into source commit `60dd1e188` before any v11 case text or gold
 was authored; the central gist preregistration is `eecf9dece`, SHA-256
 `ca6b1053db5182d65154d823eab7c155137e6f511eab30366ff358b8dc93a1e4`.
 Signed builder commits are `1855c4b39` and `ff5a8173b`. Construction ran on
-an authorized experiment host using CPU only.
+the second authorized experiment host using CPU only. The frozen reviewer
+receipt contains content hashes and no host identity.
 
 | Frozen item | SHA-256 |
 | --- | --- |
