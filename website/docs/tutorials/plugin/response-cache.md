@@ -120,6 +120,15 @@ does not prevent a later eligible fetched candidate from being used; remote
 search remains bounded by its candidate limit. This check does not establish
 semantic equivalence for word-order-only, cue-less, or non-English changes.
 
+Every served semantic hit records whether that check could judge the pair, as
+`cache.negation_guard` on the `response_cache` plugin span and as
+`negation_guard` on the `cache_hit` log event. `checked` means both questions
+use the same words, in any order, or differ only in negation cues such as `not`
+and `never`. `not_applicable` means some other word changed, which the cue list
+cannot judge, so the hit relied on vector similarity alone. Reworded English
+questions and most non-English hits report `not_applicable`; for example, the
+cue list does not recognize German `nicht` or Chinese `不`.
+
 The in-memory backend additionally supports the optional NLI verifier
 (`global.stores.response_cache.polarity_guard`; see
 [Stores and Tools](../global/stores-and-tools.md#negation-guard)). With this

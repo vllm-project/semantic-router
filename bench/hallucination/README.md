@@ -128,6 +128,55 @@ python3 -m bench.hallucination.evaluate_detectors \
 Use `transformer:<path>` instead of `llm:<model>` for a locally loaded encoder.
 The script writes metrics and per-sample rows to the results directory.
 
+## Agent trajectories
+
+An agent can finish with a correct answer after an earlier step misreported a
+tool result. `evaluate_trajectories.py` runs a detector on every assistant step
+of a trajectory instead of only the last answer.
+
+`testdata/agent_trajectories.json` holds a few hand-written trajectories. Each
+one has the user `request` and ordered `steps`. A `tool` step records the tool
+`name`, its `arguments` and its `output`. An `assistant` step records the
+message `text` and its gold `unsupported_spans`, where an empty list marks the
+message as supported:
+
+```json
+{
+  "role": "assistant",
+  "text": "All six parser tests pass, so I'll move on to the changelog.",
+  "unsupported_spans": [
+    {"start": 0, "end": 25, "text": "All six parser tests pass", "label": "contradicted"}
+  ]
+}
+```
+
+Spans follow the router's `token_spans.v1` contract. Offsets are Unicode code
+points into the message, `text` must equal that slice, `label` comes from the
+hallucination label set (`SUPPORTED` and `O` are rejected), and a repeated
+`(label, start, end)` is an error. The loader also rejects unknown keys, so a
+misspelled field fails instead of turning a step into a supported one.
+
+Each assistant step is checked with the request as the question and, as the
+context, the tool outputs before that step, joined with blank lines the way the
+router's response stage joins tool results. A later passing test run therefore
+cannot make an earlier false claim look supported.
+
+```bash
+python3 -m pip install lettucedetect
+python3 -m bench.hallucination.evaluate_trajectories \
+  --detector transformer:KRLabsOrg/lettucedect-base-modernbert-en-v1
+```
+
+`--detector` accepts the same specifications as `evaluate_detectors.py`. The
+script prints one line per step and writes step-level and character-level
+metrics to the results directory. The examples show that a detector runs on
+every step; they are too few to compare detectors. The loader and scoring tests
+need no model:
+
+```bash
+python3 -m pytest -q bench/hallucination/test_trajectories.py
+```
+
 ## Reading the output
 
 The router evaluator reports:

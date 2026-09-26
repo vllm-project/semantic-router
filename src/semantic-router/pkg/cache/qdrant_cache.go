@@ -463,7 +463,9 @@ func (c *QdrantCache) LookupSimilarWithThreshold(ctx context.Context, model, que
 		logging.Debugf("QdrantCache: CACHE HIT similarity=%.4f threshold=%.4f response_size=%d", selected.Score, threshold, len(responseBody))
 		metrics.RecordCacheOperation("qdrant", "find_similar", "hit", time.Since(start).Seconds())
 		storedAt, expiresAt := parseQdrantPayloadTiming(selected.Payload)
-		return lookupResultFromTimestamps([]byte(responseBody), selected.Score, storedAt, expiresAt), nil
+		result := lookupResultFromTimestamps([]byte(responseBody), selected.Score, storedAt, expiresAt)
+		result.NegationGuard = negationGuardOutcomeFor(queryTokens, selected.Payload["query"].GetStringValue())
+		return result, nil
 	}
 	atomic.AddInt64(&c.missCount, 1)
 	metrics.RecordCacheOperation("qdrant", "find_similar", "miss", time.Since(start).Seconds())
