@@ -120,7 +120,11 @@ def render_source(source: dict[str, Any], data: Any | None = None) -> str:
         raise ValueError("Private source facts must be a nonempty map or list")
     template = source["document"]
     fields = [name for _, name, _, _ in string.Formatter().parse(template) if name]
-    values = actual if isinstance(actual, dict) else {"entries": actual}
+    values = (
+        actual
+        if isinstance(actual, dict) and set(fields) != {"entries"}
+        else {"entries": actual}
+    )
     if not fields or set(fields) != set(values):
         raise ValueError("Every source fact must appear in its document")
     if any(not name.isidentifier() for name in fields):

@@ -93,3 +93,10 @@ def test_private_document_requires_all_structured_fields() -> None:
     source["document"] = "Unit {unit} recorded items."
     with pytest.raises(ValueError, match="Every source fact"):
         render_source(source)
+    ledger = {
+        "title": "Revision ledger",
+        "form": "ledger",
+        "data": {"1": "approved", "2": "provisional"},
+        "document": "The complete revision ledger reads {entries}.",
+    }
+    assert '"1": "approved"' in render_source(ledger)
