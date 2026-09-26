@@ -111,6 +111,7 @@ export interface AuthzSignalConfig {
 
 export interface PIISignalConfig {
   threshold?: number
+  source?: 'tool_result'
   pii_types_allowed?: string[]
   include_history?: boolean
 }
@@ -501,6 +502,7 @@ export interface ConfigData {
   pii?: Array<{
     name: string
     threshold?: number
+    source?: 'tool_result'
     pii_types_allowed?: string[]
     include_history?: boolean
     description?: string
@@ -658,6 +660,7 @@ export interface ConfigData {
     pii?: Array<{
       name: string
       threshold?: number
+      source?: 'tool_result'
       pii_types_allowed?: string[]
       include_history?: boolean
       description?: string

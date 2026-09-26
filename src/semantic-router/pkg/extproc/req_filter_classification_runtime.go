@@ -49,19 +49,21 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	}
 
 	signals, authzErr := classifier.EvaluateAllSignalsWithHeaders(classification.SignalEvaluationInput{
-		Text:                   signalInput.compressedText,
-		ContextText:            signalInput.allMessagesText,
-		CurrentUserText:        signalInput.currentUserText,
-		PriorUserMessages:      signalInput.priorUserMessages,
-		NonUserMessages:        nonUserMessages,
-		HasPriorAssistantReply: signalInput.hasAssistantReply,
-		Headers:                ctx.Headers,
-		ImageURL:               ctx.RequestImageURL,
-		Audio:                  ctx.RequestAudio,
-		UncompressedText:       signalInput.evaluationText,
-		SkipCompressionSignals: signalInput.skipCompressionSignals,
-		ConversationFacts:      signalInput.conversationFacts,
-		RequestFacts:           signalInput.requestFacts,
+		ToolResultTexts:          signalInput.toolResultTexts,
+		ToolResultScanIncomplete: signalInput.toolResultScanIncomplete,
+		Text:                     signalInput.compressedText,
+		ContextText:              signalInput.allMessagesText,
+		CurrentUserText:          signalInput.currentUserText,
+		PriorUserMessages:        signalInput.priorUserMessages,
+		NonUserMessages:          nonUserMessages,
+		HasPriorAssistantReply:   signalInput.hasAssistantReply,
+		Headers:                  ctx.Headers,
+		ImageURL:                 ctx.RequestImageURL,
+		Audio:                    ctx.RequestAudio,
+		UncompressedText:         signalInput.evaluationText,
+		SkipCompressionSignals:   signalInput.skipCompressionSignals,
+		ConversationFacts:        signalInput.conversationFacts,
+		RequestFacts:             signalInput.requestFacts,
 	})
 	if authzErr != nil {
 		signalSpan.SetStatus(codes.Error, "signal_evaluation_failed")

@@ -67,7 +67,9 @@ func TestSignalInputLimitAggregationPreservesPolicies(t *testing.T) {
 					}
 					result := &SignalResults{SignalConfidences: map[string]float64{}}
 					c.evaluateBERTJailbreakRule(c.Config.JailbreakRules[0], []string{"sample"}, map[string][]cachedJailbreakResult{"sample": guard}, time.Now(), result, &sync.Mutex{})
-					c.evaluatePIIRule(c.Config.PIIRules[0], "sample", nil, map[string][]cachedPIIResult{"sample": pii}, time.Now(), result, &sync.Mutex{})
+					c.evaluatePIIRule(c.Config.PIIRules[0], "sample", nil, nil, false,
+						map[piiCacheKey]cachedPIIContent{{source: "legacy", content: "sample"}: {results: pii}},
+						time.Now(), result, &sync.Mutex{})
 					require.Equal(t, "input_limit", result.SignalErrors["jailbreak:guard"])
 					require.Equal(t, "input_limit", result.SignalErrors["pii:private"])
 					wantMatched := positive || policy == config.OnErrorBlock

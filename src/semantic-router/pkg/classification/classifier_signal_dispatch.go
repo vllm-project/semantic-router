@@ -22,6 +22,7 @@ func (c *Classifier) buildSignalDispatchers(input SignalEvaluationInput, results
 	)...)
 	return append(dispatchers, c.buildPolicySignalDispatchers(
 		results, mu, textForSignal, input.PriorUserMessages, input.NonUserMessages,
+		input.ToolResultTexts, input.ToolResultScanIncomplete,
 		input.ConversationFacts, input.RequestFacts, usedSignals,
 	)...)
 }
