@@ -860,7 +860,7 @@ tags:
 - jevarena
 ---
 
-![Decision 2.0 chibi pixel-mosaic owl at a three-way fork](decision-2-sticker-chibi-v3.png)
+![Decision 2.0 chibi mosaic owl with a three-facet decision gem](decision-2-sticker-chibi-v4.png)
 
 # {model_id}
 
@@ -1048,7 +1048,7 @@ def assemble(
     # Records copied to the public repository contain only reviewed, screened text.
     for path in (package_record, parity_receipt, release_gate):
         _public_text(path.read_text(encoding="utf-8"), path.name)
-    sticker = Path(__file__).with_name("decision-2-sticker-chibi-v3.png")
+    sticker = Path(__file__).with_name("decision-2-sticker-chibi-v4.png")
     if not sticker.is_file() or sticker.is_symlink():
         raise ValueError("Family sticker asset is missing")
     output.parent.mkdir(parents=True, exist_ok=True)
