@@ -32,7 +32,7 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 				"stream_options", "temperature", "tool_choice", "tools", "top_logprobs", "top_p", "user",
 				"verbosity", "web_search_options",
 			),
-			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens", "top_k", "min_p", "repetition_penalty", "cache_salt"),
+			extensions: fields("nvext", "chat_template_kwargs", "reasoning_budget_tokens", "top_k", "min_p", "repetition_penalty", "cache_salt"),
 		},
 		{
 			name: "OpenAI Responses",
@@ -45,7 +45,7 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 				"stream_options", "temperature", "text", "tool_choice", "tools", "top_logprobs", "top_p",
 				"truncation", "user",
 			),
-			extensions: fields("auto_store", "client_metadata"),
+			extensions: fields("auto_store", "client_metadata", "nvext"),
 		},
 		{
 			name: "Anthropic Messages",
@@ -93,7 +93,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"prediction", "prompt_cache_options", "prompt_cache_retention",
 				"safety_identifier", "service_tier", "top_logprobs", "verbosity", "web_search_options",
 			),
-			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens", "top_k", "min_p", "repetition_penalty", "cache_salt"),
+			extensions: fields("nvext", "chat_template_kwargs", "reasoning_budget_tokens", "top_k", "min_p", "repetition_penalty", "cache_salt"),
 			transport:  fields("stream_options"),
 		},
 		{
@@ -110,7 +110,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"service_tier", "top_logprobs",
 			),
 			transport:  fields("stream_options"),
-			extensions: fields("auto_store"),
+			extensions: fields("auto_store", "nvext"),
 			// Accepted but never forwarded; decode reports each as a dropped diagnostic.
 			dropped: fields("client_metadata", "include"),
 		},
@@ -150,7 +150,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 			),
 			extensions: fields(
 				"do_remote_decode", "do_remote_prefill", "ec_transfer_params", "error", "kv_transfer_params", "metrics",
-				"prompt_logprobs", "prompt_routed_experts", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
+				"nvext", "prompt_logprobs", "prompt_routed_experts", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
 				"provider", "remote_host", "remote_port", "usage_breakdown", "x_groq",
 			),
 		},
@@ -165,7 +165,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 				"safety_identifier", "service_tier", "status", "temperature", "text", "tool_choice",
 				"tools", "top_logprobs", "top_p", "truncation", "usage", "user",
 			),
-			extensions: fields("billing", "conversation_id", "frequency_penalty", "presence_penalty", "store", "tool_usage"),
+			extensions: fields("billing", "conversation_id", "nvext", "frequency_penalty", "presence_penalty", "store", "tool_usage"),
 		},
 		{
 			name: "Anthropic Messages",

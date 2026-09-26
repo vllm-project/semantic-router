@@ -77,6 +77,7 @@ type chatRequestWire struct {
 	MinP                 *float64               `json:"min_p,omitempty"`
 	RepetitionPenalty    *float64               `json:"repetition_penalty,omitempty"`
 	CacheSalt            *string                `json:"cache_salt,omitempty"`
+	NVExt                json.RawMessage        `json:"nvext,omitempty"`
 }
 
 type chatStreamOptionsWire struct {
@@ -205,7 +206,15 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 	if err := decodeChatRequestOptions(wire, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	return request, requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy), nil, nil
+	envelope := requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy)
+	dynamoNVExt, err := decodeDynamoRequestNVExt(wire.NVExt, policy)
+	if err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
+	if dynamoNVExt != nil {
+		envelope.Dynamo = &llmprotocol.DynamoEnvelope{RequestNVExt: dynamoNVExt}
+	}
+	return request, envelope, nil, nil
 }
 
 func validateChatRequestWire(wire chatRequestWire) error {

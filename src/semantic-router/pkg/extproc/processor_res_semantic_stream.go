@@ -75,7 +75,7 @@ type semanticStreamBuffers struct {
 }
 
 func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestContext) {
-	if len(responseBody) == 0 {
+	if ctx.StreamingAborted || len(responseBody) == 0 {
 		return
 	}
 	if ctx.PublicChatUsageFilter != nil {
@@ -85,8 +85,14 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 	}
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
-		buffers.translated = appendProtocolFrames(buffers.translated, frames)
-		observeProtocolStream(ctx, events, diagnostics)
+		if err == nil && ctx.StreamBoundaryError == nil {
+			observeProtocolStream(ctx, events, diagnostics)
+		} else {
+			ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
+		}
+		if ctx.StreamBoundaryError == nil {
+			buffers.translated = appendProtocolFrames(buffers.translated, frames)
+		}
 		buffers.recordError(ctx, err, true)
 	}
 }
@@ -94,8 +100,14 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Finalize(buffers.streamErr)
+		if err == nil && ctx.StreamBoundaryError == nil {
+			observeProtocolStream(ctx, events, diagnostics)
+		} else {
+			ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
+		}
+		// The codec validates before encoding and retains its first failure.
+		// Finalize can therefore emit a safe error even for a rejected EOF event.
 		buffers.translated = appendProtocolFrames(buffers.translated, frames)
-		observeProtocolStream(ctx, events, diagnostics)
 		buffers.recordError(ctx, err, true)
 	}
 	if ctx.PublicChatUsageFilter != nil {
@@ -189,9 +201,26 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		Options:     clientStreamOptions(ctx),
 		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
 	}
-	mutation := clientStreamMutation(ctx, source)
-	if responseID := responseObjectPublicID(ctx); responseID != "" {
+	clientMutation := clientStreamMutation(ctx, source)
+	responseID := responseObjectPublicID(ctx)
+	if responseID != "" {
 		streamContext.ResponseID = responseID
+	}
+	// Reject provider-bound events before encoding, including events decoded
+	// only at EOF. The stream engine retains callback failures across bodies
+	// and uses its normal protocol-specific error finalization.
+	mutation := func(event *llmprotocol.Event) error {
+		if boundaryErr := validateDynamoResponseEvents(ctx, []llmprotocol.Event{*event}); boundaryErr != nil {
+			if ctx.StreamBoundaryError == nil {
+				ctx.StreamBoundaryError = boundaryErr
+			}
+			ctx.StreamingAborted = true
+			return ctx.StreamBoundaryError
+		}
+		if clientMutation != nil {
+			return clientMutation(event)
+		}
+		return nil
 	}
 	stream, err := engine.NewStreamWithMutation(source, target, streamContext, mutation)
 	if err != nil {
@@ -386,6 +415,12 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			"error":      responseErr.Error(),
 		})
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
+		return
+	}
+	// StreamingAborted is request-scoped: a later successful chunk or terminal
+	// reconstruction must never make an aborted response eligible for storage.
+	// Keep cleanup and usage accounting above this gate.
+	if ctx.StreamingAborted {
 		return
 	}
 	recordPrimaryOutputDigest(ctx, semanticResponse)

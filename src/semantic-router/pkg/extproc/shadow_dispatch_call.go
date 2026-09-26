@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -27,6 +28,7 @@ const (
 type shadowTarget struct {
 	logicalModel  string
 	backendName   string
+	backendType   string
 	upstreamModel string
 	profile       *config.ProviderProfile
 	format        llmprotocol.WireFormat
@@ -170,6 +172,12 @@ func shadowCallHeaders(job *shadowJob, target *shadowTarget) map[string]string {
 			result[key] = value
 		}
 	}
+	// Dynamo routing inputs are never propagated to shadow requests.
+	for existing := range result {
+		if _, ok := canonicalDynamoRoutingHeaderName(existing); ok {
+			delete(result, existing)
+		}
+	}
 	result[headers.RequestID] = job.shadowRequestID
 	return result
 }
@@ -214,6 +222,11 @@ func resolveShadowTarget(cfg *config.RouterConfig, model string) (*shadowTarget,
 	if !found || address == "" {
 		return nil, fmt.Errorf("shadow model %q has no configured backend", model)
 	}
+	endpoint, found := cfg.GetEndpointByName(backendName)
+	if !found {
+		return nil, fmt.Errorf("shadow model %q resolved unknown backend %q", model, backendName)
+	}
+	backendType := strings.TrimSpace(endpoint.Type)
 	profile, err := cfg.GetProviderProfileForEndpoint(backendName)
 	if err != nil {
 		return nil, fmt.Errorf("resolve provider profile for shadow model %q: %w", model, err)
@@ -229,6 +242,7 @@ func resolveShadowTarget(cfg *config.RouterConfig, model string) (*shadowTarget,
 	return &shadowTarget{
 		logicalModel:  model,
 		backendName:   backendName,
+		backendType:   backendType,
 		upstreamModel: cfg.ResolveExternalModelID(model, backendName),
 		profile:       profile,
 		format:        format,

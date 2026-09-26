@@ -772,15 +772,6 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicFailure(event llmprotocol.
 	}, nil
 }
 
-func (encoder *anthropicStreamEncoder) encodeAnthropicOpaque(
-	event llmprotocol.Event,
-) ([][]byte, llmprotocol.Diagnostics, error) {
-	if encoder.policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat || encoder.context.Source != encoder.context.Target {
-		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "opaque_event", "opaque provider event cannot cross formats", nil)
-	}
-	return [][]byte{append([]byte(nil), event.Opaque...)}, nil, nil
-}
-
 func (encoder *anthropicStreamEncoder) encodeAnthropicTextDelta(
 	event llmprotocol.Event,
 ) ([][]byte, llmprotocol.Diagnostics, error) {

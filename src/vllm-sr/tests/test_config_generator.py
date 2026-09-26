@@ -41,6 +41,15 @@ def _cluster_by_name(rendered_config, cluster_name):
     raise AssertionError(f"cluster {cluster_name!r} not found")
 
 
+def _ext_proc_config(rendered_config):
+    listener = rendered_config["static_resources"]["listeners"][0]
+    filters = listener["filter_chains"][0]["filters"][0]["typed_config"]["http_filters"]
+    for http_filter in filters:
+        if http_filter["name"] == "envoy.filters.http.ext_proc":
+            return http_filter["typed_config"]
+    raise AssertionError("ext_proc filter not found")
+
+
 def test_helm_backend_target_fixture_is_valid_canonical_config(tmp_path):
     fixture = yaml.safe_load(
         (REPO_ROOT / "deploy/helm/testdata/backend-target-values.yaml").read_text()
@@ -52,6 +61,166 @@ def test_helm_backend_target_fixture_is_valid_canonical_config(tmp_path):
 
     errors = validate_user_config(config, log_summary=False)
     assert [str(error) for error in errors] == []
+
+
+def test_maintained_dynamo_values_preserve_backend_identity(tmp_path, monkeypatch):
+    fixture = yaml.safe_load(
+        (
+            REPO_ROOT / "deploy/kubernetes/dynamo/semantic-router-values/values.yaml"
+        ).read_text()
+    )
+    config_text = yaml.safe_dump(fixture["config"])
+    config_path = tmp_path / "dynamo-config.yaml"
+    config_path.write_text(config_text)
+
+    config = parse_user_config(str(config_path))
+    errors = validate_user_config(config, log_summary=False)
+    assert [str(error) for error in errors] == []
+
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        config_text,
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+    assert _ext_proc_config(rendered)["response_attributes"] == [
+        'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_name"]',
+        'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_type"]',
+    ]
+
+    backend_identities = []
+    for cluster in rendered["static_resources"]["clusters"]:
+        load_assignment = cluster.get("load_assignment")
+        if load_assignment is None:
+            continue
+        for locality in load_assignment["endpoints"]:
+            for endpoint in locality["lb_endpoints"]:
+                metadata = endpoint.get("metadata", {}).get("filter_metadata", {})
+                identity = metadata.get("semantic-router")
+                if identity is not None:
+                    backend_identities.append(identity)
+    assert {
+        "backend_name": "dynamo-frontend",
+        "backend_type": "dynamo",
+    } in backend_identities
+
+
+def test_maintained_dynamo_gateway_exposes_eds_backend_identity():
+    manifests = list(
+        yaml.safe_load_all(
+            (
+                REPO_ROOT
+                / "deploy/kubernetes/dynamo/dynamo-resources/gwapi-resources.yaml"
+            ).read_text()
+        )
+    )
+    patch_policy = next(
+        manifest
+        for manifest in manifests
+        if manifest.get("kind") == "EnvoyPatchPolicy"
+        and manifest["metadata"]["name"] == "semantic-router-extproc-patch-policy"
+    )
+    patches = patch_policy["spec"]["jsonPatches"]
+
+    listener_patch = next(
+        patch
+        for patch in patches
+        if patch["type"] == "type.googleapis.com/envoy.config.listener.v3.Listener"
+    )
+    assert listener_patch["operation"]["value"]["typedConfig"][
+        "response_attributes"
+    ] == [
+        'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_name"]',
+        'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_type"]',
+    ]
+
+    dynamo_resource = "httproute/default/semantic-router-to-dynamo/rule/0"
+    endpoint_patch = next(
+        patch
+        for patch in patches
+        if patch["name"] == dynamo_resource
+        and patch["type"]
+        == "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment"
+    )
+    assert endpoint_patch["operation"] == {
+        "op": "add",
+        "jsonPath": "..lb_endpoints[*]",
+        "path": "metadata",
+        "value": {
+            "filter_metadata": {
+                "semantic-router": {
+                    "backend_name": "dynamo-frontend",
+                    "backend_type": "dynamo",
+                }
+            }
+        },
+    }
+
+    cluster_operations = [
+        patch["operation"]
+        for patch in patches
+        if patch["name"] == dynamo_resource
+        and patch["type"] == "type.googleapis.com/envoy.config.cluster.v3.Cluster"
+    ]
+    assert not any(
+        operation.get("path") in {"/type", "/eds_cluster_config", "/load_assignment"}
+        for operation in cluster_operations
+    )
+
+
+def test_envoy_exposes_actual_backend_type_to_response_processor(tmp_path, monkeypatch):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    model: "dynamo-model"
+  models:
+    - name: "dynamo-model"
+      backend_refs:
+        - name: "dynamo-a"
+          endpoint: "10.0.0.1:8000"
+          provider: dynamo
+routing:
+  modelCards:
+    - name: "dynamo-model"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "dynamo-model"
+          use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    ext_proc = _ext_proc_config(rendered)
+    assert ext_proc["response_attributes"] == [
+        'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_name"]',
+        'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_type"]',
+    ]
+
+    cluster = _cluster_by_name(rendered, "dynamo_model_cluster")
+    endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
+    identities = [
+        endpoint["metadata"]["filter_metadata"]["semantic-router"]
+        for endpoint in endpoints
+    ]
+    assert identities == [
+        {"backend_name": "dynamo-a", "backend_type": "dynamo"},
+    ]
 
 
 def test_generate_envoy_config_uses_logical_dns_for_split_extproc_host(

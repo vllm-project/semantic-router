@@ -23,6 +23,7 @@ type responsesStreamDecoder struct {
 	reportedProviderDecorations map[string]bool
 	wireSequence                uint64
 	wireSequenceSeen            bool
+	dynamoNVExtBytes            int
 }
 
 type responsesOutputKind string

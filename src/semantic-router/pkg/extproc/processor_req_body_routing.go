@@ -350,6 +350,17 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	if common == nil {
 		return nil, status.Error(codes.Internal, "provider dispatch response is unavailable")
 	}
+	// Capability rerouting and provider/decision header mutations can change
+	// the target and its Dynamo state after the initial backend check.
+	dynamoHeaders, err := snapshotEffectiveDynamoRoutingHeaders(ctx, common.HeaderMutation)
+	if err != nil {
+		return nil, dispatchWireError(err, ctx, "validate outbound Dynamo routing headers")
+	}
+	if err := validateDynamoBackendPool(
+		r.Config, dispatch.logicalModel, &RequestContext{Headers: dynamoHeaders}, ctx.ProtocolEnvelope,
+	); err != nil {
+		return nil, dispatchWireError(err, ctx, "validate final Dynamo dispatch")
+	}
 	if common.HeaderMutation == nil {
 		common.HeaderMutation = &ext_proc.HeaderMutation{}
 	}
