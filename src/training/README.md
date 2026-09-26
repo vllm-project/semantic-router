@@ -15,6 +15,7 @@ MOM artifacts retain their original training owners.
 | `model_eval/` | cross-family evaluation utilities |
 | `model_experiment/` | experiments that are not release owners |
 | `model_selection/` | learned model-selection research |
+| `decision2/` | Decision 2.0 typed-decision data, training, native inference, JevArena evaluation, and publication receipts |
 
 Each release-owning family has a focused directory with a README,
 machine-readable configuration, explicit data/output paths, train and export

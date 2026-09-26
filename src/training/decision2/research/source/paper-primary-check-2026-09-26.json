@@ -1,0 +1,488 @@
+[
+  {
+    "id": "arxiv-jev-pentest",
+    "url": "https://arxiv.org/abs/2609.28940",
+    "status": 200,
+    "primary_title": "Calibrated Decision Models for Autonomous Penetration-Testing Harnesses: JEV and Laya as System One Decision Layers for LLM-Driven Pentest Agents",
+    "title_similarity": 1.0,
+    "abstract_sha256": "b94e3095b9c4ee55de0e0dfcb3c6c7c6976cca246a9c13c86530686eea3fb32a",
+    "abstract_chars": 1388
+  },
+  {
+    "id": "arxiv-harness-governance",
+    "url": "https://arxiv.org/abs/2609.28919",
+    "status": 200,
+    "primary_title": "Control the Harness, Control the Cost: Routing and Governing AI Coding Agents in the Enterprise",
+    "title_similarity": 1.0,
+    "abstract_sha256": "72f3ab2e600e066b481272c946ad497991a2a072fb82a29da28c7ed6f30d628c",
+    "abstract_chars": 1726
+  },
+  {
+    "id": "arxiv-pixeljev",
+    "url": "https://arxiv.org/abs/2609.29283",
+    "status": 200,
+    "primary_title": "From Text Decisions to Pixels: An Study of Jev-Style Visual Choice Model",
+    "title_similarity": 1.0,
+    "abstract_sha256": "78245d02ed8b3b168694da3d245a4028b2d8901dfe03894fa74bf577f1b45079",
+    "abstract_chars": 1444
+  },
+  {
+    "id": "arxiv-jev-in-the-wild",
+    "url": "https://arxiv.org/abs/2609.30216",
+    "status": 200,
+    "primary_title": "Jev in the Wild: A Data-Driven Analysis of the Jev Model's Functionality, Applications and Ecosystem",
+    "title_similarity": 1.0,
+    "abstract_sha256": "47e052077ee7fda6c6b7b1ffe45cd9f85734ad94771e1d777aa920774af8272d",
+    "abstract_chars": 1241
+  },
+  {
+    "id": "arxiv-jev-rubric-judges",
+    "url": "https://arxiv.org/abs/2609.29769",
+    "status": 200,
+    "primary_title": "JEV vs. LLMs as Rubric Judges: Cheaper, Faster, and Wrong in the Same Places",
+    "title_similarity": 1.0,
+    "abstract_sha256": "44ce7060b3bd96df9938c02eb1cee35bd45b581a2005532ab9e0cbf877a1e2dd",
+    "abstract_chars": 1354
+  },
+  {
+    "id": "arxiv-jev-mobile",
+    "url": "https://arxiv.org/abs/2609.30186",
+    "status": 200,
+    "primary_title": "Jev-Mobile: Jev as an Executor for Mobile GUI Agents",
+    "title_similarity": 1.0,
+    "abstract_sha256": "0aafa867a1c729d6a87071a839997db8bcc6e31b85aafce321c376ce0f07fe8c",
+    "abstract_chars": 1219
+  },
+  {
+    "id": "jevout",
+    "url": "https://arxiv.org/abs/2609.30243",
+    "status": 200,
+    "primary_title": "JevOut: Natural Context Can Flip Decision Models",
+    "title_similarity": 1.0,
+    "abstract_sha256": "d9e0c11467ba043a0853da2aed0d609a0dcd16583aae3da5454d5f8e87bf11f5",
+    "abstract_chars": 1433
+  },
+  {
+    "id": "arxiv-just-ask-jev",
+    "url": "https://arxiv.org/abs/2609.29429",
+    "status": 200,
+    "primary_title": "Just Ask Jev: Reinforcement Learning for Calibrated Decisions as a Zero-Shot Detector of AI Alignment Failures",
+    "title_similarity": 1.0,
+    "abstract_sha256": "424ace550cc7fcbcf7a014d0de67f2744615635ba54aedacb4584a7e6ed99cb4",
+    "abstract_chars": 1608
+  },
+  {
+    "id": "arxiv-radiology-judge",
+    "url": "https://arxiv.org/abs/2609.27607",
+    "status": 200,
+    "primary_title": "Can Jev Judge Radiology Reports? Evaluating a System One Model for Clinical Factuality",
+    "title_similarity": 0.542,
+    "abstract_sha256": "ca9b7549afa54490329e13e6eb93c61d6a714b96f7bae48e4bec22aa51df7387",
+    "abstract_chars": 1603
+  },
+  {
+    "id": "arxiv-decision-hijacking",
+    "url": "https://arxiv.org/abs/2609.28613",
+    "status": 200,
+    "primary_title": "Decision Hijacking: Prompt Injection Attacks on Jev's Typed Probabilistic Decisions",
+    "title_similarity": 1.0,
+    "abstract_sha256": "d26e5210d7649c588989ce1c30af5bc73fe3052721b2c7dcc32ad482f5eb43e1",
+    "abstract_chars": 971
+  },
+  {
+    "id": "jev-scientific-decisions",
+    "url": "https://arxiv.org/abs/2609.24965",
+    "status": 200,
+    "primary_title": "Jev for Scientific Decisions: Evaluating Semantic Choices and Their Consequences",
+    "title_similarity": 0.519,
+    "abstract_sha256": "7106a323cb9bbe944d0197d08c3f14a7986fd96dafb04ee4f0f355973eeb7948",
+    "abstract_chars": 1115
+  },
+  {
+    "id": "arxiv-jev-star",
+    "url": "https://arxiv.org/abs/2609.27331",
+    "status": 200,
+    "primary_title": "JEV-Star: Fast, Low-Cost StarCraft II Control with Language-Model Planning",
+    "title_similarity": 0.577,
+    "abstract_sha256": "dc8e37aa2b8e2bd96bb66fdd9a9d6f40c0bfc377ad2ff8e6502f917d4fbf1804",
+    "abstract_chars": 1279
+  },
+  {
+    "id": "arxiv-kite",
+    "url": "https://arxiv.org/abs/2609.27535",
+    "status": 200,
+    "primary_title": "KITE: Scaling Jev Population Experiments with Sparse Flagship Calibration",
+    "title_similarity": 1.0,
+    "abstract_sha256": "2eb27a99d30fda8892c343c5bcdd7fab5bbeae1336697909362fcb3dc35e1415",
+    "abstract_chars": 1476
+  },
+  {
+    "id": "arxiv-numericjev",
+    "url": "https://arxiv.org/abs/2609.28587",
+    "status": 200,
+    "primary_title": "NumericJev: Jev-like LLM Numerical Decoding with Multiway Decision Trees",
+    "title_similarity": 1.0,
+    "abstract_sha256": "82ead11bd2bbe8d0837f3719ee448ad635e10c80fbd86f6cfc8f23f9efd692d6",
+    "abstract_chars": 1218
+  },
+  {
+    "id": "arxiv-same-scores",
+    "url": "https://arxiv.org/abs/2609.27678",
+    "status": 200,
+    "primary_title": "Same Scores, Different Decisions: Evaluating JEV and Language Models for Legal Document Understanding",
+    "title_similarity": 0.481,
+    "abstract_sha256": "cc5f3ddc7f752b43e9157f0d0e229fa3c2f645714b8d6178488db4e2ceba2164",
+    "abstract_chars": 1192
+  },
+  {
+    "id": "arxiv-jev-judge",
+    "url": "https://arxiv.org/abs/2609.26550",
+    "status": 200,
+    "primary_title": "JEV-as-a-Judge: Accept When Confident, Escalate When Unsure",
+    "title_similarity": 1.0,
+    "abstract_sha256": "e5d9b613805e043d87f932a1e5d364e7be53cd7b0cb67a87c57b96efd4762c24",
+    "abstract_chars": 904
+  },
+  {
+    "id": "arxiv-reflex-jev",
+    "url": "https://arxiv.org/abs/2609.26532",
+    "status": 200,
+    "primary_title": "REFLEX with Jev for Efficient Selective Control in LLM Agents",
+    "title_similarity": 0.395,
+    "abstract_sha256": "68aa4297a222aa425027fa467487385dd3aef1d1e6a74a3d7191eb90e5a8f645",
+    "abstract_chars": 918
+  },
+  {
+    "id": "arxiv-type-safe-not-error-free",
+    "url": "https://arxiv.org/abs/2609.26758",
+    "status": 200,
+    "primary_title": "Type-Safe Is Not Error-Free: A Constrained Decision Head Follows the Option Name, Not the Rubric Bound to It",
+    "title_similarity": 0.4,
+    "abstract_sha256": "b946e650d677df531dd862a50213bc4e0ea0270e856fec19721be9ac36017c90",
+    "abstract_chars": 1896
+  },
+  {
+    "id": "arxiv-visual-jev",
+    "url": "https://arxiv.org/abs/2609.25845",
+    "status": 200,
+    "primary_title": "Visual Jev: Accurate and Efficient Decisions from Shared Visual Context",
+    "title_similarity": 0.807,
+    "abstract_sha256": "cad77d24530c4c4403ce7671923f54179ac4f806f0ed31442ff5443c5670c0b4",
+    "abstract_chars": 963
+  },
+  {
+    "id": "arxiv-calibrated-decisions-scale",
+    "url": "https://arxiv.org/abs/2609.24052",
+    "status": 200,
+    "primary_title": "Calibrated Decisions at Scale: Converting Police Crash Narratives into Probabilistic Crash Variables with a System One Model (Jev)",
+    "title_similarity": 0.365,
+    "abstract_sha256": "781e3dbd7bd96d6029f486cf9e9022ceec1ca0d434038e8584350d2475bdbce3",
+    "abstract_chars": 1578
+  },
+  {
+    "id": "arxiv-css-annotation",
+    "url": "https://arxiv.org/abs/2609.24574",
+    "status": 200,
+    "primary_title": "Evaluating Decision Models for Text Annotation in Computational Social Science",
+    "title_similarity": 0.924,
+    "abstract_sha256": "9ba5933508a2955ac7d6b80989a3b135633931429c658a744881c10e53c008c0",
+    "abstract_chars": 1735
+  },
+  {
+    "id": "arxiv-jev-mem",
+    "url": "https://arxiv.org/abs/2609.23986",
+    "status": 200,
+    "primary_title": "Jev-Mem: System-One-Controlled Agentic Memory for Efficient AI Agents",
+    "title_similarity": 0.789,
+    "abstract_sha256": "345ab30144b8c553278092348ed8b790276572f1e95060b6ca8d2ff0d82fca59",
+    "abstract_chars": 1359
+  },
+  {
+    "id": "arxiv-jev-lite",
+    "url": "https://arxiv.org/abs/2609.23959",
+    "status": 200,
+    "primary_title": "Open-Jev Judgments on CallScreenBench: Calibrated One-Pass Scam Screening with a Small Language Model",
+    "title_similarity": 0.362,
+    "abstract_sha256": "825662aa252a769cf8810781cbf3a57a739ede9eae0442d9a69dca3b1093ca27",
+    "abstract_chars": 1254
+  },
+  {
+    "id": "arxiv-jevqa",
+    "url": "https://arxiv.org/abs/2609.24395",
+    "status": 200,
+    "primary_title": "JEVQA - Video Quality from Metadata, Bitstream, and Pixel Features with a General-Purpose Decision Model",
+    "title_similarity": 0.686,
+    "abstract_sha256": "328f51d3a89089023954625fef1c13169b821385a209f9b8b69f06b14708be67",
+    "abstract_chars": 1307
+  },
+  {
+    "id": "arxiv-pinocchio",
+    "url": "https://arxiv.org/abs/2609.24881",
+    "status": 200,
+    "primary_title": "Pinocchio: Fast Uncertainty Estimates for Black-Box Language Models",
+    "title_similarity": 1.0,
+    "abstract_sha256": "56238c7e2b626e8e1d753b7277415a01a65f94c67cfdeb65ce96980c5e1b9b95",
+    "abstract_chars": 1178
+  },
+  {
+    "id": "arxiv-fractal-nl",
+    "url": "https://arxiv.org/abs/2609.25498",
+    "status": 200,
+    "primary_title": "Universal Fractal Natural Language Decision Map: Real-Time Edge Triage Across Heterogeneous Domains",
+    "title_similarity": 0.5,
+    "abstract_sha256": "34b7dae38700d0e963c42f08ab2479001f912df1e108cf06e6c23e55c689414b",
+    "abstract_chars": 1747
+  },
+  {
+    "id": "arxiv-this-that",
+    "url": "https://arxiv.org/abs/2609.23886",
+    "status": 200,
+    "primary_title": "this-that-model-1.0: A typed decision model that decides in 30 ms, for a millionth of a cent",
+    "title_similarity": 0.617,
+    "abstract_sha256": "75011bcf32622315b266ba003a5ac5dadf46cbf9664a5cdb4301a4a0b3b08afd",
+    "abstract_chars": 1864
+  },
+  {
+    "id": "arxiv-6g-edge",
+    "url": "https://arxiv.org/abs/2609.23136",
+    "status": 200,
+    "primary_title": "Fast Intent-Driven Service Orchestration with Jev for 6G Edge Networks",
+    "title_similarity": 1.0,
+    "abstract_sha256": "9afd78bc176017e4ce405f800d44c5573254a39b1bfea4028241252da916779c",
+    "abstract_chars": 1780
+  },
+  {
+    "id": "arxiv-assurance-harness",
+    "url": "https://arxiv.org/abs/2609.22664",
+    "status": 200,
+    "primary_title": "From Capability to Assurance in Autonomous Penetration-Testing Harnesses: A Framework and Reference Implementation",
+    "title_similarity": 1.0,
+    "abstract_sha256": "1477a65b657f5c8a35eb9ce8cac8c79d56c5818429def53b4aa48624f49a66e3",
+    "abstract_chars": 1911
+  },
+  {
+    "id": "arxiv-edge-replace-llm",
+    "url": "https://arxiv.org/abs/2609.22753",
+    "status": 200,
+    "primary_title": "Replacing Large Language Models with Jev Decision Models for Low-Latency Edge Service Orchestration",
+    "title_similarity": 0.855,
+    "abstract_sha256": "e8e2cd74064aae3049c7e51d3afb73d10ebfaad86fe3ce2b4843e22b608d9ac3",
+    "abstract_chars": 1413
+  },
+  {
+    "id": "arxiv-verbal-rl-survey",
+    "url": "https://arxiv.org/abs/2609.01597",
+    "status": 200,
+    "primary_title": "The Rise of Verbal Reinforcement Learning",
+    "title_similarity": 1.0,
+    "abstract_sha256": "056de895c51dd218864530dbc0c12f6ce028940710f72eedacd3fed46eb53e17",
+    "abstract_chars": 1247
+  },
+  {
+    "id": "arxiv-claim-calibration",
+    "url": "https://arxiv.org/abs/2608.22483",
+    "status": 200,
+    "primary_title": "Claim-Level Confidence Calibration for Reliable Decision Making with Large Language Models",
+    "title_similarity": 1.0,
+    "abstract_sha256": "7cc243459e3ee3909a69bffabf89c06110818c1451fea1df0e5a6c19791f4dae",
+    "abstract_chars": 1341
+  },
+  {
+    "id": "arxiv-judgearena",
+    "url": "https://arxiv.org/abs/2608.02620",
+    "status": 200,
+    "primary_title": "JudgeArena: A Unified Framework for Reproducible LLM-Judge Evaluation",
+    "title_similarity": 1.0,
+    "abstract_sha256": "b065ac90fed5a7c9d7a4be50941450fd9842da7a39c4a3eaa40598b897ebb27c",
+    "abstract_chars": 1386
+  },
+  {
+    "id": "arxiv-dfl-onpolicy",
+    "url": "https://arxiv.org/abs/2606.01081",
+    "status": 200,
+    "primary_title": "Decision-Focused On-Policy Learning for Contextual Linear Optimization with Partial Feedback",
+    "title_similarity": 1.0,
+    "abstract_sha256": "45a7be1060e16f3419f21112c17a3db188c949c3bab59019b277cda76c061019",
+    "abstract_chars": 1569
+  },
+  {
+    "id": "arxiv-well-tempered",
+    "url": "https://arxiv.org/abs/2602.14862",
+    "status": 200,
+    "primary_title": "The Well-Tempered Classifier: Some Elementary Properties of Temperature Scaling",
+    "title_similarity": 1.0,
+    "abstract_sha256": "2f52b8d6a90178e831abafb6c718003c17acda58e2756826c8f137d02ff8920d",
+    "abstract_chars": 1266
+  },
+  {
+    "id": "arxiv-silent-judge",
+    "url": "https://arxiv.org/abs/2509.26072",
+    "status": 200,
+    "primary_title": "The Silent Judge: Unacknowledged Shortcut Bias in LLM-as-a-Judge",
+    "title_similarity": 1.0,
+    "abstract_sha256": "2e85156eaa9d417db99c378544b17523030a624b68eeab0ae81c85cf6a13c7ed",
+    "abstract_chars": 1732
+  },
+  {
+    "id": "arxiv-gliclass",
+    "url": "https://arxiv.org/abs/2508.07662",
+    "status": 200,
+    "primary_title": "GLiClass: Generalist Lightweight Model for Sequence Classification Tasks",
+    "title_similarity": 1.0,
+    "abstract_sha256": "a9edf5505f9bff639fb07cd9855dcd0f2e658492a70e21f89c7f7c844f6a7bf3",
+    "abstract_chars": 1445
+  },
+  {
+    "id": "arxiv-dfl-online",
+    "url": "https://arxiv.org/abs/2505.13564",
+    "status": 200,
+    "primary_title": "Online Decision-Focused Learning",
+    "title_similarity": 1.0,
+    "abstract_sha256": "9673118acac95fca32e9a8111298672800d9414a2db2ab03f432a77934be9f36",
+    "abstract_chars": 1324
+  },
+  {
+    "id": "arxiv-dff",
+    "url": "https://arxiv.org/abs/2501.01874",
+    "status": 200,
+    "primary_title": "DFF: Decision-Focused Fine-tuning for Smarter Predict-then-Optimize with Limited Data",
+    "title_similarity": 1.0,
+    "abstract_sha256": "4ecedb735d528410b2af776d317c799163ea8901129bc8c40025a6eeaf9b531a",
+    "abstract_chars": 1583
+  },
+  {
+    "id": "arxiv-self-preference",
+    "url": "https://arxiv.org/abs/2404.13076",
+    "status": 200,
+    "primary_title": "LLM Evaluators Recognize and Favor Their Own Generations",
+    "title_similarity": 1.0,
+    "abstract_sha256": "914c69cd49d95aaff147cb60141fc6c669be2d2ff0522951ff8e22b576da2a57",
+    "abstract_chars": 1135
+  },
+  {
+    "id": "arxiv-prometheus",
+    "url": "https://arxiv.org/abs/2310.08491",
+    "status": 200,
+    "primary_title": "Prometheus: Inducing Fine-grained Evaluation Capability in Language Models",
+    "title_similarity": 1.0,
+    "abstract_sha256": "a6d500854b74bb81a7c47f7dfec296a1d96500b280fd0f7959da9d4923d796a0",
+    "abstract_chars": 1778
+  },
+  {
+    "id": "arxiv-calibration-survey",
+    "url": "https://arxiv.org/abs/2308.01222",
+    "status": 200,
+    "primary_title": "Calibration in Deep Learning: A Survey of the State-of-the-Art",
+    "title_similarity": 1.0,
+    "abstract_sha256": "7ec890310ae08cc0c606968d134e6c8f679a792f87436f25b2fa26b378035d43",
+    "abstract_chars": 1282
+  },
+  {
+    "id": "arxiv-dfl-survey",
+    "url": "https://arxiv.org/abs/2307.13565",
+    "status": 200,
+    "primary_title": "Decision-Focused Learning: Foundations, State of the Art, Benchmark and Future Opportunities",
+    "title_similarity": 1.0,
+    "abstract_sha256": "350e50e448c031d70f5ae0f25c0e674793d17ec2eec1399cedbc38b4a2803ed3",
+    "abstract_chars": 901
+  },
+  {
+    "id": "arxiv-llm-judge",
+    "url": "https://arxiv.org/abs/2306.05685",
+    "status": 200,
+    "primary_title": "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena",
+    "title_similarity": 1.0,
+    "abstract_sha256": "c64b6b31f6ad049b10d2063ac2494d03262c06e7c6473e994ab0390b7cfb4268",
+    "abstract_chars": 1288
+  },
+  {
+    "id": "arxiv-just-ask-calibration",
+    "url": "https://arxiv.org/abs/2305.14975",
+    "status": 200,
+    "primary_title": "Just Ask for Calibration: Strategies for Eliciting Calibrated Confidence Scores from Language Models Fine-Tuned with Human Feedback",
+    "title_similarity": 1.0,
+    "abstract_sha256": "eba5e40daa9b1f49fefc578be46c10aa10a42632d0ef4bf1ce9850be391ce734",
+    "abstract_chars": 1083
+  },
+  {
+    "id": "arxiv-self-refine",
+    "url": "https://arxiv.org/abs/2303.17651",
+    "status": 200,
+    "primary_title": "Self-Refine: Iterative Refinement with Self-Feedback",
+    "title_similarity": 1.0,
+    "abstract_sha256": "969cec904ce1ef6a42809c213dbdc44b298477b3d48e6bc111cd18f7e2de1afa",
+    "abstract_chars": 1189
+  },
+  {
+    "id": "arxiv-geval",
+    "url": "https://arxiv.org/abs/2303.16634",
+    "status": 200,
+    "primary_title": "G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment",
+    "title_similarity": 1.0,
+    "abstract_sha256": "5e2e21bbead3905d31166290f61274db79344c0d14066d343e6bcaf3a77bf007",
+    "abstract_chars": 1264
+  },
+  {
+    "id": "arxiv-reflexion",
+    "url": "https://arxiv.org/abs/2303.11366",
+    "status": 200,
+    "primary_title": "Reflexion: Language Agents with Verbal Reinforcement Learning",
+    "title_similarity": 1.0,
+    "abstract_sha256": "09bcfd8aec1d727732fc5c7adffbc20c91b0c803cf15c597b5390b375b5f14b7",
+    "abstract_chars": 1357
+  },
+  {
+    "id": "arxiv-tuned-lens",
+    "url": "https://arxiv.org/abs/2303.08112",
+    "status": 200,
+    "primary_title": "Eliciting Latent Predictions from Transformers with the Tuned Lens",
+    "title_similarity": 1.0,
+    "abstract_sha256": "cc80a423431ed516cb0b48e3536b18560a44e50e997cb50c058229fc82e49e2f",
+    "abstract_chars": 893
+  },
+  {
+    "id": "arxiv-react",
+    "url": "https://arxiv.org/abs/2210.03629",
+    "status": 200,
+    "primary_title": "ReAct: Synergizing Reasoning and Acting in Language Models",
+    "title_similarity": 1.0,
+    "abstract_sha256": "793b4f97383033a3d9caf7e143676b6702237a90196e1ce707ac00414be09750",
+    "abstract_chars": 1628
+  },
+  {
+    "id": "arxiv-spo-plus",
+    "url": "https://arxiv.org/abs/2108.08887",
+    "status": 200,
+    "primary_title": "Risk Bounds and Calibration for a Smart Predict-then-Optimize Method",
+    "title_similarity": 1.0,
+    "abstract_sha256": "419790d4c4919c04a34116a7c6c60f3347621b76275e2b7a581e6450f1536872",
+    "abstract_chars": 1697
+  },
+  {
+    "id": "arxiv-calibration-ptrs",
+    "url": "https://arxiv.org/abs/2003.07892",
+    "status": 200,
+    "primary_title": "Calibration of Pre-trained Transformers",
+    "title_similarity": 1.0,
+    "abstract_sha256": "8f87eee0a257ae9070a756272f4b81a0612f8b10f10f562abda0477943fe4930",
+    "abstract_chars": 1050
+  },
+  {
+    "id": "arxiv-spo",
+    "url": "https://arxiv.org/abs/1710.08005",
+    "status": 200,
+    "primary_title": "Smart \"Predict, then Optimize\"",
+    "title_similarity": 1.0,
+    "abstract_sha256": "57a30d71562c4a6fb258ab823621f0815eec36c9992bbb421925ed9b9f29fbc9",
+    "abstract_chars": 1594
+  },
+  {
+    "id": "arxiv-guo-calibration",
+    "url": "https://arxiv.org/abs/1706.04599",
+    "status": 200,
+    "primary_title": "On Calibration of Modern Neural Networks",
+    "title_similarity": 1.0,
+    "abstract_sha256": "d3435dc928803830decc6068fa82c399569a5460d197e65d54b3a251da69c20d",
+    "abstract_chars": 899
+  }
+]

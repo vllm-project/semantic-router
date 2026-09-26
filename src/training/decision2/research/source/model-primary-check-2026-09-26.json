@@ -1,0 +1,354 @@
+[
+  {
+    "model": "akhilaaa3/Jev-Omni",
+    "url": "https://huggingface.co/akhilaaa3/Jev-Omni",
+    "revision": "5addda86ddee081a68fb067477ea100c221b8917",
+    "card_sha256": "42995cac5590c55bc79bdedd427ccfb0d717ed1d183ddf402a7e8d6ea3dc0aa9",
+    "card_bytes": 4106,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "model.safetensors"
+    ]
+  },
+  {
+    "model": "alibiserikbay/JevK5",
+    "url": "https://huggingface.co/alibiserikbay/JevK5",
+    "revision": "c4f7fdb3aeab5582336406e78d3bef11bf98833d",
+    "card_sha256": "ae04e164af42c70837b1e79a5d5414c3b9c5641a7651047223756404fd6a2786",
+    "card_bytes": 14966,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "model.safetensors"
+    ]
+  },
+  {
+    "model": "alibiserikbay/JevK5-2B",
+    "url": "https://huggingface.co/alibiserikbay/JevK5-2B",
+    "revision": "7922d1f55df137b72ef763fced56fd09efc5e99d",
+    "card_sha256": "9a513960ee25c16bab331a2a6233cfaeddefa1c0b2e6bb6e3638eaa84d350ba4",
+    "card_bytes": 5418,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "model.safetensors"
+    ]
+  },
+  {
+    "model": "alibiserikbay/JevK5-9B",
+    "url": "https://huggingface.co/alibiserikbay/JevK5-9B",
+    "revision": "d6521a18a86999190e9d775c915af3d6d6772fc4",
+    "card_sha256": "bd14f75e16c3af1b58e7934a35798d091a71874a0856aa859c470567f68bb6d8",
+    "card_bytes": 13623,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "model.safetensors"
+    ]
+  },
+  {
+    "model": "AlquimiaAi/openjev",
+    "url": "https://huggingface.co/AlquimiaAi/openjev",
+    "revision": "6f4488f39623b18da6fc5af328996593537fa956",
+    "card_sha256": "3753084b48b71e8f8014df50b24fea80d2a2337d97244daade1b04b09fbb2cfa",
+    "card_bytes": 12158,
+    "gated": false,
+    "license": "cc-by-nc-4.0",
+    "weight_files": [
+      "model-00001-of-00012.safetensors",
+      "model-00002-of-00012.safetensors",
+      "model-00003-of-00012.safetensors",
+      "model-00004-of-00012.safetensors",
+      "model-00005-of-00012.safetensors",
+      "model-00006-of-00012.safetensors",
+      "model-00007-of-00012.safetensors",
+      "model-00008-of-00012.safetensors",
+      "model-00009-of-00012.safetensors",
+      "model-00010-of-00012.safetensors",
+      "model-00011-of-00012.safetensors",
+      "model-00012-of-00012.safetensors"
+    ]
+  },
+  {
+    "model": "apus-ailab/APUS-OpenJev-v1",
+    "url": "https://huggingface.co/apus-ailab/APUS-OpenJev-v1",
+    "revision": "af276da53a2e7a6d0fbdbafc9280bf9982b2d3a6",
+    "card_sha256": "e9150a37709443ad81eb701fd173348d67cf68a1a55693f94868b2276ea41146",
+    "card_bytes": 26389,
+    "gated": false,
+    "license": null,
+    "weight_files": [
+      "4B-5949/model-00001-of-00003.safetensors",
+      "4B-5949/model-00002-of-00003.safetensors",
+      "4B-5949/model-00003-of-00003.safetensors",
+      "9B-3000/model-00001-of-00006.safetensors",
+      "9B-3000/model-00002-of-00006.safetensors",
+      "9B-3000/model-00003-of-00006.safetensors",
+      "9B-3000/model-00004-of-00006.safetensors",
+      "9B-3000/model-00005-of-00006.safetensors",
+      "9B-3000/model-00006-of-00006.safetensors",
+      "9B-5949/model-00001-of-00006.safetensors",
+      "9B-5949/model-00002-of-00006.safetensors",
+      "9B-5949/model-00003-of-00006.safetensors"
+    ]
+  },
+  {
+    "model": "apus-ailab/APUS-OpenJev-v1-35B-A3B",
+    "url": "https://huggingface.co/apus-ailab/APUS-OpenJev-v1-35B-A3B",
+    "revision": "090388abe2237117cc3b4df6f4250e81cbb36864",
+    "card_sha256": "d8d25c3162c11c6ba553d1d21c25f717ed9653d5e08175ee3974c2cbcb74f9d4",
+    "card_bytes": 5670,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "model.safetensors-00001-of-00014.safetensors",
+      "model.safetensors-00002-of-00014.safetensors",
+      "model.safetensors-00003-of-00014.safetensors",
+      "model.safetensors-00004-of-00014.safetensors",
+      "model.safetensors-00005-of-00014.safetensors",
+      "model.safetensors-00006-of-00014.safetensors",
+      "model.safetensors-00007-of-00014.safetensors",
+      "model.safetensors-00008-of-00014.safetensors",
+      "model.safetensors-00009-of-00014.safetensors",
+      "model.safetensors-00010-of-00014.safetensors",
+      "model.safetensors-00011-of-00014.safetensors",
+      "model.safetensors-00012-of-00014.safetensors"
+    ]
+  },
+  {
+    "model": "apus-ailab/APUS-OpenJev-v1-4B",
+    "url": "https://huggingface.co/apus-ailab/APUS-OpenJev-v1-4B",
+    "revision": "422b3741f8b5c092eeefef847c1ca89d78337d45",
+    "card_sha256": "fa84273267b85cc4cb1b877b92bc2e2ace32893fa4f9e2535e67d2185a254a6c",
+    "card_bytes": 4098,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "model-00001-of-00003.safetensors",
+      "model-00002-of-00003.safetensors",
+      "model-00003-of-00003.safetensors"
+    ]
+  },
+  {
+    "model": "apus-ailab/APUS-OpenJev-v1-9B",
+    "url": "https://huggingface.co/apus-ailab/APUS-OpenJev-v1-9B",
+    "revision": "82c9c56cfa9de8d36704ed91948d4726ef111635",
+    "card_sha256": "69f452c7669f3de1a488279798b31a73b654936a97bdbc1d7ac680b6b683f311",
+    "card_bytes": 4098,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "model-00001-of-00006.safetensors",
+      "model-00002-of-00006.safetensors",
+      "model-00003-of-00006.safetensors",
+      "model-00004-of-00006.safetensors",
+      "model-00005-of-00006.safetensors",
+      "model-00006-of-00006.safetensors"
+    ]
+  },
+  {
+    "model": "bespokelabs/Bespoke-Nimble-9B",
+    "url": "https://huggingface.co/bespokelabs/Bespoke-Nimble-9B",
+    "revision": "bd792f44ec8e265be861bfcdf4e05967ffe0e858",
+    "card_sha256": "1d968b0816997a7cfb31ed0cd7fc77f65b5ce725451bdde632ff5922abc1f250",
+    "card_bytes": 3131,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "adapter_model.safetensors"
+    ]
+  },
+  {
+    "model": "caiovicentino1/Eikos-27B",
+    "url": "https://huggingface.co/caiovicentino1/Eikos-27B",
+    "revision": "e3ce53a27c2bdb26450d5c26d79695808c32de0b",
+    "card_sha256": "cd962d0d8d330cccce1463888665af4984bf1d0e7b17d9e3fa0aeddb8311db4b",
+    "card_bytes": 16757,
+    "gated": false,
+    "license": "mit",
+    "weight_files": [
+      "model-00001-of-00018.safetensors",
+      "model-00002-of-00018.safetensors",
+      "model-00003-of-00018.safetensors",
+      "model-00004-of-00018.safetensors",
+      "model-00005-of-00018.safetensors",
+      "model-00006-of-00018.safetensors",
+      "model-00007-of-00018.safetensors",
+      "model-00008-of-00018.safetensors",
+      "model-00009-of-00018.safetensors",
+      "model-00010-of-00018.safetensors",
+      "model-00011-of-00018.safetensors",
+      "model-00012-of-00018.safetensors"
+    ]
+  },
+  {
+    "model": "caiovicentino1/Eikos-4B",
+    "url": "https://huggingface.co/caiovicentino1/Eikos-4B",
+    "revision": "582ffb13f19a4da3f455e3db198584190bd7755b",
+    "card_sha256": "a657b2ff561a167d9652523606b6afc7fbe0b3b702d8563ce0e8e74682b55ef5",
+    "card_bytes": 17060,
+    "gated": false,
+    "license": "mit",
+    "weight_files": [
+      "model.safetensors-00001-of-00002.safetensors",
+      "model.safetensors-00002-of-00002.safetensors"
+    ]
+  },
+  {
+    "model": "convaiinnovations/laya",
+    "url": "https://huggingface.co/convaiinnovations/laya",
+    "revision": "55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851",
+    "card_sha256": "00355613796b3f5860b0d5b20392381d26580ec242e04a1fd150c7f116858602",
+    "card_bytes": 23187,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "model.safetensors",
+      "multilingual/model.safetensors",
+      "typed-decisions/model.safetensors"
+    ]
+  },
+  {
+    "model": "fastino/GLiNER2.5-Decide",
+    "url": "https://huggingface.co/fastino/GLiNER2.5-Decide",
+    "revision": "7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6",
+    "card_sha256": "dfcbd7c87a74b78d0250acf166a47c8ece8a51ba22dc1e14a622c52c76f9b569",
+    "card_bytes": 16880,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "model.safetensors"
+    ]
+  },
+  {
+    "model": "flock-io/this-that-model-1.0",
+    "url": "https://huggingface.co/flock-io/this-that-model-1.0",
+    "revision": "3d927195c4f9845efe66c5715883a7a0f42b1239",
+    "card_sha256": "abe872c49ef19bf551d6751abdd47a98a201e14ab18c74762f62376ab7699ac5",
+    "card_bytes": 10080,
+    "gated": false,
+    "license": "mit",
+    "weight_files": [
+      "model.safetensors"
+    ]
+  },
+  {
+    "model": "flymy-ai/decision-4b-v1.2",
+    "url": "https://huggingface.co/flymy-ai/decision-4b-v1.2",
+    "revision": "79792bfb89e38498a21d1b71bc96b684be7b6617",
+    "card_sha256": "6cd0e78c5e485f9a5df833a5bf4d98a90b5e458a2b24c310ba760d35379b3345",
+    "card_bytes": 6215,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "adapter/adapter_model.safetensors"
+    ]
+  },
+  {
+    "model": "interfaze-ai/lev",
+    "url": "https://huggingface.co/interfaze-ai/lev",
+    "revision": "f8ef71157ec06a7d3b6435bc0756f9d735c33748",
+    "card_sha256": "4b79be19aae4de08ce685d64b4a8ba97bca4b5fdd3e6d4c93229679ad1924ede",
+    "card_bytes": 16771,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "adapter_model.safetensors"
+    ]
+  },
+  {
+    "model": "jaredpalmer/kev-4b",
+    "url": "https://huggingface.co/jaredpalmer/kev-4b",
+    "revision": "139fdd94f1b6a6ad80cc15e08fcb99cac885a101",
+    "card_sha256": "3eac08b65ac314e0ee1b4ae7ddda9440e39310effa5da3a2cdcb56a9f1249e76",
+    "card_bytes": 24999,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "adapter_model.safetensors"
+    ]
+  },
+  {
+    "model": "Mapika/decider-35b-a3b",
+    "url": "https://huggingface.co/Mapika/decider-35b-a3b",
+    "revision": "91470e65478656eb68fde8c0ccdfe575d69d0309",
+    "card_sha256": "287bdce7ac5e71eaa06ce08c5d72f1a089ccb2713ee801fae3e8d9f501ff5ed6",
+    "card_bytes": 20353,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "model-00001-of-00015.safetensors",
+      "model-00002-of-00015.safetensors",
+      "model-00003-of-00015.safetensors",
+      "model-00004-of-00015.safetensors",
+      "model-00005-of-00015.safetensors",
+      "model-00006-of-00015.safetensors",
+      "model-00007-of-00015.safetensors",
+      "model-00008-of-00015.safetensors",
+      "model-00009-of-00015.safetensors",
+      "model-00010-of-00015.safetensors",
+      "model-00011-of-00015.safetensors",
+      "model-00012-of-00015.safetensors"
+    ]
+  },
+  {
+    "model": "Mapika/decider-4b",
+    "url": "https://huggingface.co/Mapika/decider-4b",
+    "revision": "eb5fbdfc9448473ec25e399882912863afbdb70e",
+    "card_sha256": "3a4a82d78e0adcfb84bc7a9691f8a79b0f54a5c1efd8379621a9dbf1d6de980b",
+    "card_bytes": 40452,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "model.safetensors"
+    ]
+  },
+  {
+    "model": "openjev/openjev",
+    "url": "https://huggingface.co/openjev/openjev",
+    "revision": "0b6bb6e571bc7bcd6f1eb68de706f592f29c6483",
+    "card_sha256": "cef167bd6ee25af0416c2aeb889ab138e1d88f13be91214c7a78a7da14900fd8",
+    "card_bytes": 12746,
+    "gated": false,
+    "license": "cc-by-nc-4.0",
+    "weight_files": [
+      "model-00001-of-00012.safetensors",
+      "model-00002-of-00012.safetensors",
+      "model-00003-of-00012.safetensors",
+      "model-00004-of-00012.safetensors",
+      "model-00005-of-00012.safetensors",
+      "model-00006-of-00012.safetensors",
+      "model-00007-of-00012.safetensors",
+      "model-00008-of-00012.safetensors",
+      "model-00009-of-00012.safetensors",
+      "model-00010-of-00012.safetensors",
+      "model-00011-of-00012.safetensors",
+      "model-00012-of-00012.safetensors"
+    ]
+  },
+  {
+    "model": "PsiACE/Dohnuts-0.1.0-0.8B",
+    "url": "https://huggingface.co/PsiACE/Dohnuts-0.1.0-0.8B",
+    "revision": "959828a3d9cf3dacbd1491e11bb1cd36d12709ac",
+    "card_sha256": "b2a8fb161d262d35bef46a3a2788ae50da77df8b19c15a2a4d5814866c34221c",
+    "card_bytes": 11339,
+    "gated": false,
+    "license": "cc-by-nc-sa-4.0",
+    "weight_files": [
+      "adapter.safetensors"
+    ]
+  },
+  {
+    "model": "ZefanCai/Open-Jev-2B",
+    "url": "https://huggingface.co/ZefanCai/Open-Jev-2B",
+    "revision": "0c7aa498b1627be8da4acf34c863ff0ee0a92785",
+    "card_sha256": "2e0005c57ee7e3fe0f6fff57071314d260fd7978bf72dba70237865bcb4f9538",
+    "card_bytes": 7400,
+    "gated": false,
+    "license": "apache-2.0",
+    "weight_files": [
+      "package/checkpoint/adapter/adapter_model.safetensors"
+    ]
+  }
+]

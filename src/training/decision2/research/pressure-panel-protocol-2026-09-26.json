@@ -1,0 +1,105 @@
+{
+  "protocol_version": "decision2-pressure-dev/1",
+  "as_of_utc": "2026-09-26",
+  "role": "public_development_diagnostic_only",
+  "source": {
+    "repository": "https://github.com/gazelle93/decision-models-under-pressure",
+    "revision": "21820dc8b455e37aebaf5a83122233b6e564c109",
+    "data_license": "CC-BY-SA-4.0 (dataset README)",
+    "code_license": "no root code license found; do not copy source harness",
+    "items_url": "https://github.com/gazelle93/decision-models-under-pressure/blob/21820dc8b455e37aebaf5a83122233b6e564c109/dataset/v3/items.jsonl",
+    "items_sha256": "15de056cb01884b8ace78083a6702f0cad6454ab64d49ff45a9b27166e7bdb86",
+    "manifest_url": "https://github.com/gazelle93/decision-models-under-pressure/blob/21820dc8b455e37aebaf5a83122233b6e564c109/dataset/v3/manifest.json",
+    "manifest_sha256": "bb1d264ca2d9df2f379e786dc720f50fd23bd3122c25c30e6f012a71f43b7a49",
+    "gates_url": "https://github.com/gazelle93/decision-models-under-pressure/blob/21820dc8b455e37aebaf5a83122233b6e564c109/dataset/v3/gates.json",
+    "gates_sha256": "b45a2ac858fb916381ee23ec452197ce0d436ef64f483053fad3d30877360c0a",
+    "gates_passed": false,
+    "failed_gate": "G3_textfree_gold_picker"
+  },
+  "typed_input": {
+    "state": "item.text",
+    "question_id": "decision",
+    "question_type": "choice",
+    "instructions": "Which label applies here?",
+    "criteria": "in ordered-option insertion order, {label:label}",
+    "gold": "item.gold",
+    "payload_hash": "SHA-256 UTF-8 compact unescaped-ASCII JSON of {state,questions} in that key order; require prediction source_input_sha256"
+  },
+  "slices": [
+    {
+      "id": "rq3_shared_hardness",
+      "split_file": "splits/rq3_hardness.json",
+      "sha256": "ef1d5116478452a0feec1bface291fa98c21cbaf941f77c509d028e2b2f49559",
+      "uids": 400,
+      "tiers": [
+        "near",
+        "far"
+      ],
+      "k": [
+        2,
+        4,
+        8,
+        16
+      ],
+      "requests": 3200,
+      "pairing": "same uid and K, near vs far"
+    },
+    {
+      "id": "rq2_shared_order",
+      "split_file": "splits/rq2_order.json",
+      "sha256": "e3ed684f4588dbbc25a4a658f8515676d432c5de76be656ea6553e45235ed4d7",
+      "uids": 800,
+      "tiers": [
+        "near",
+        "far"
+      ],
+      "k": [
+        16
+      ],
+      "permutations": 5,
+      "requests": 8000,
+      "pairing": "same uid, tier, K and candidate set; vary only order",
+      "recommended_control": "one identical-order repeat per uid and tier"
+    },
+    {
+      "id": "rq1_extended_capacity",
+      "split_file": "splits/rq1_kscaling.json",
+      "sha256": "dc8696f5fc0595f0fdda5406d9cc094833b09d68858d243647a737098dbdc147",
+      "uids": 800,
+      "tiers": [
+        "ext"
+      ],
+      "k": [
+        2,
+        4,
+        8,
+        16,
+        32,
+        64,
+        128
+      ],
+      "requests": 5600,
+      "max_k_reason": "Jev Choice API documented cap 255; source K256 omitted"
+    }
+  ],
+  "metrics": [
+    "all-item accuracy including missing/invalid",
+    "per-domain accuracy",
+    "near/far within-uid accuracy delta",
+    "same-set order-flip fraction",
+    "identical-order repeat fraction",
+    "K-curve with admission coverage",
+    "per-domain leaked/nonleaked strata",
+    "wrong-answer confidence",
+    "Brier and NLL on valid normalized distributions",
+    "cluster-bootstrap intervals by source uid"
+  ],
+  "caveats": [
+    "G3 text-blind picker exceeds threshold in 6/10 domain/tier cells; DBpedia near 0.260 vs K16 chance 0.0625",
+    "public items may overlap training or pretraining",
+    "fin-topic third-party tweet rights less certain than uploader-stated MIT",
+    "APUS native interface admits only 2-16 candidates; larger K is a separate capability profile",
+    "raw data or derived text-containing prompts carry CC BY-SA attribution/sharealike obligations",
+    "CSS15 and synthetic family-disjoint final remain release gates"
+  ]
+}

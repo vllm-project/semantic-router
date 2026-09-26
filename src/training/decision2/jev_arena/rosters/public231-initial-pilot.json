@@ -1,0 +1,11 @@
+{
+  "models": [
+    {"key": "eikos4b", "label": "Eikos 4B", "group": "open", "model_id": "caiovicentino1/Eikos-4B", "revision": "582ffb13f19a4da3f455e3db198584190bd7755b", "size_b": 4.0, "report": "eikos.score.json"},
+    {"key": "decider4b", "label": "Decider 4B", "group": "open", "model_id": "Mapika/decider-4b", "revision": "eb5fbdfc9448473ec25e399882912863afbdb70e", "size_b": 4.0, "report": "decider.score.json"},
+    {"key": "lux9b", "label": "Decision 1.0 Lux 9B", "group": "decision1", "model_id": "llm-semantic-router/Decision-1.0-Lux-9B", "revision": "bd45a30aee8c84032791c245c70f86dee5389cc8", "size_b": 9.0, "report": "lux.score.json"},
+    {"key": "nox4b", "label": "Decision 1.0 Nox 4B", "group": "decision1", "model_id": "llm-semantic-router/Decision-1.0-Nox-4B", "revision": "0bb833504965c0eabdb9630b7bbd385cb2fe5cd4", "size_b": 4.0, "report": "nox.score.json"},
+    {"key": "sol2b", "label": "Decision 1.0 Sol 2B", "group": "decision1", "model_id": "llm-semantic-router/Decision-1.0-Sol-2B", "revision": "0665a41108e8f0b33a9515c98311c45947b99399", "size_b": 2.0, "report": "sol.score.json"},
+    {"key": "eos08b", "label": "Decision 1.0 Eos 0.8B", "group": "decision1", "model_id": "llm-semantic-router/Decision-1.0-Eos-0.8B", "revision": "3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd", "size_b": 0.8, "report": "eos.score.json"},
+    {"key": "d2eikos4b-nc-pilot", "label": "Decision 2.0 Eikos 4B NC pilot", "group": "decision2", "model_id": "llm-semantic-router/dev-2.0-4b", "revision": "checkpoint-0160", "size_b": 4.0, "report": "d2eikos.score.json"}
+  ]
+}

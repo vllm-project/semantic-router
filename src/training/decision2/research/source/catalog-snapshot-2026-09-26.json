@@ -1,0 +1,19 @@
+{
+  "source_page": "https://hanxiao.io/all-about-jev/",
+  "download_url": "https://hanxiao.io/all-about-jev/all-methods.jsonl",
+  "fetched_utc": "2026-09-26 12:39 UTC",
+  "page_header_count_at_open": 1691,
+  "download_valid_json_rows": 1690,
+  "download_sha256": "612332c1ac1209554c054afb60b2bdfb4854064dcb927a470a1096c9304ba2c5",
+  "category_counts": {
+    "model": 200,
+    "benchmark": 169,
+    "paper": 54,
+    "app": 744,
+    "runtime": 384,
+    "interpretation": 131,
+    "official": 8
+  },
+  "audited_categories": ["model", "benchmark", "paper"],
+  "audit_limitation": "The catalog is a live third-party index. Source scores are author or catalog claims, not reproduced measurements."
+}

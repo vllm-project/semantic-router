@@ -1,0 +1,6 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# Keep APUS's private Qwen3.5 layer interfaces at its audited Transformers pin.
+# Torch remains the task host's ROCm build; numerical parity is not claimed.
+RUN python3 -m pip install --no-cache-dir --no-deps 'transformers==5.16.1'

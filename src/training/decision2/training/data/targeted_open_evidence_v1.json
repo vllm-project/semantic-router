@@ -1,0 +1,73 @@
+{
+  "schema_version": "decision2-targeted-open-error-evidence/1",
+  "scope": "synthetic DEV and CSS three-task pilot only; no benchmark final or CSS fifteen-task evaluation inputs",
+  "method": "DEV correctness uses benchmark.score.evaluate_answer; 200 choice label-invariance pairs whose gold option keys differ are counted as option reversals. CSS pilot correctness uses transfer.score.evaluate. Confusions count valid wrong predictions only.",
+  "sources": {
+    "synthetic_dev_gold_sha256": "c7a8b86bda0d0d6120e572b94dfc756bf10264108554af76307141ae02fbf5dc",
+    "css_pilot_gold_sha256": "9a7274760dc4ced5ce5219b300974a1cf54c7d5e7e0c7de05d78bb33f2959391",
+    "combined_6k_train_sha256": "4e82651181fd4f9b11e82718275a7370b82cbe810f20bbe87db9786cfdf888ad",
+    "dev_score_report_sha256": {
+      "Lux": "4eed0b9c54c6d430e8c611f7b9d707ebba0bc42c09205e69d0428780f156530c",
+      "Nox": "19392eaf38d0b77c83e8c315e4dd7ef5a3ad3a531728d2e12841f802c6e7d31f",
+      "Sol": "fd8f83c5f00321b47935b625b6451d4d509c3d88bc395b58b654119adaf05e2b",
+      "Jev": "c4e412ccdf6dce5d0366d97f56b4fd41536c6a052e544842d8b044d6ca941fca",
+      "Decider": "34b35021ae373edb32ca42d7bebcd333397f94b38d8918e4953a4c4d5b02e023",
+      "Kev": "15d72bc3571e99ff6670f1bc8fa5f5a6163a203d3c48635ce9356a0a6815591d"
+    },
+    "css_pilot_score_report_sha256": {
+      "Lux": "b39e679607a89b43825d3be16a6f0488601de3bbdb8210959b2111d03d025db4",
+      "Nox": "d02ed0930cc46974fe74efd253e813864c0ea3de4610c185858f9bdc10b48a6e",
+      "Sol": "a9dbc09b8c816054ec92ea782286687f60fbed38d10358f6b3868a96d6dbc4af",
+      "Jev": "7304e291b582a66efd287b2bae645f6a1c5f1e60a34b19dafeba5ff852f55ae8",
+      "Decider": "b3c9fa53b4ec70be0c349de8ca07768e6ed5ab01de7accd28a7fd50c4c3d9029",
+      "Kev": "88e39a4150c73d09793eb6c39dc04186439ab402b0bf54b55e3225e08736451c"
+    },
+    "select_metrics_sha256": {
+      "baseline": "99e40a72e1dbdd153ca66ced194d767fa08a2e28c69073ea4387045158ccf9cb",
+      "step_25": "2dbc72fa50ea4d0f4f0fbf9bf6f34b33ac8134e2b9fbc1e940ff798ad15de09b",
+      "step_125": "231c0765b5d382b00a102707313bb65c9f330a94229f152ddf50eabb4d563b38"
+    }
+  },
+  "synthetic_dev": {
+    "questions": 1600,
+    "choice_questions": 800,
+    "noul_questions": 400,
+    "score_questions": 400,
+    "choice_option_reversal_pairs": 200,
+    "models": {
+      "Lux": {"correct": 1388, "choice_correct": 799, "noul_correct": 258, "score_correct": 331, "reversal_both_correct": 200, "score_gold_1_pred_2": 68, "noul_false_to_true": 77, "noul_true_to_false": 65},
+      "Nox": {"correct": 1068, "choice_correct": 466, "noul_correct": 223, "score_correct": 379, "reversal_both_correct": 99, "score_gold_1_pred_2": 21, "noul_false_to_true": 176, "noul_true_to_false": 1},
+      "Sol": {"correct": 943, "choice_correct": 413, "noul_correct": 217, "score_correct": 313, "reversal_both_correct": 78, "score_gold_1_pred_2": 60, "noul_false_to_true": 172, "noul_true_to_false": 11},
+      "Jev": {"correct": 1420, "choice_correct": 797, "noul_correct": 266, "score_correct": 357, "reversal_both_correct": 199, "score_gold_1_pred_2": 43, "noul_false_to_true": 2, "noul_true_to_false": 130},
+      "Decider": {"correct": 1289, "choice_correct": 733, "noul_correct": 191, "score_correct": 365, "reversal_both_correct": 182, "score_gold_1_pred_2": 34, "noul_false_to_true": 134, "noul_true_to_false": 69},
+      "Kev": {"correct": 1337, "choice_correct": 754, "noul_correct": 254, "score_correct": 329, "reversal_both_correct": 189, "score_gold_1_pred_2": 46, "noul_false_to_true": 31, "noul_true_to_false": 115}
+    }
+  },
+  "css_pilot": {
+    "task_totals": {"discourse": 497, "implicit_hate": 498, "semeval_stance": 435},
+    "correct_by_task": {
+      "Lux": {"discourse": 281, "implicit_hate": 219, "semeval_stance": 269},
+      "Nox": {"discourse": 207, "implicit_hate": 187, "semeval_stance": 265},
+      "Sol": {"discourse": 167, "implicit_hate": 154, "semeval_stance": 229},
+      "Jev": {"discourse": 305, "implicit_hate": 220, "semeval_stance": 321},
+      "Decider": {"discourse": 261, "implicit_hate": 188, "semeval_stance": 277},
+      "Kev": {"discourse": 224, "implicit_hate": 198, "semeval_stance": 270}
+    },
+    "stance_none_to_against": {"Lux": 89, "Nox": 82, "Sol": 111, "Jev": 29, "Decider": 74, "Kev": 16},
+    "stance_against_to_none": {"Lux": 4, "Nox": 11, "Sol": 1, "Jev": 16, "Decider": 15, "Kev": 65},
+    "stance_favor_to_none": {"Lux": 0, "Nox": 0, "Sol": 1, "Jev": 1, "Decider": 15, "Kev": 59},
+    "note": "Kev's largest stance errors favor None; do not infer that it lacks neutral detection."
+  },
+  "combined_6k_distribution": {
+    "rows": 6000,
+    "tokens_exact": 4506153,
+    "task_type": {"choice": 4392, "noul": 1242, "score": 366},
+    "language": {"en": 4628, "zh": 1372},
+    "source": {"legacy": 5000, "new_programmatic": 300, "flute_train": 700}
+  },
+  "lux_combined6k_lora_select": {
+    "rows": 600,
+    "correct": {"baseline": 322, "step_25": 332, "step_125": 323},
+    "interpretation": "The short pilot curve does not establish stable transfer improvement."
+  }
+}

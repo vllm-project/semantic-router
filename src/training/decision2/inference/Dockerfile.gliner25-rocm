@@ -1,0 +1,8 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# This source commit contains the official classification scorer/schema path.
+RUN python3 -m pip install --no-cache-dir \
+      'transformers==4.48.3' 'sentencepiece==0.2.2' \
+      'gliner2[local] @ git+https://github.com/fastino-ai/GLiNER2.git@55656fbfa01d3d4a77485e1a1eeeaf682990ccdf'
+ENV GLINER2_SOURCE_COMMIT=55656fbfa01d3d4a77485e1a1eeeaf682990ccdf

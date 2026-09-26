@@ -1,0 +1,118 @@
+[
+  {
+    "repo": "fstandhartinger/JevBench",
+    "url": "https://github.com/fstandhartinger/JevBench",
+    "revision": "1bcc55eb6c8cffde2306b3db03ede39b61c6152a",
+    "readme_sha256": "288f02ad9db46bb7bdaa54088e5b7126db7baac0f78590c579bec6b14ee9d135",
+    "readme_bytes": 33745,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "atlanai/decision-bench",
+    "url": "https://github.com/atlanai/decision-bench",
+    "revision": "6fed2cd4c3608b070e649180796ccaef3d020a23",
+    "readme_sha256": "6572a44cfbca08df5ac3e4584aea95a39262b20d441842de289d2061e8f75f93",
+    "readme_bytes": 4466,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "gazelle93/decision-models-under-pressure",
+    "url": "https://github.com/gazelle93/decision-models-under-pressure",
+    "revision": "21820dc8b455e37aebaf5a83122233b6e564c109",
+    "readme_sha256": "5e65ee705303f9c8427d15a63c64b25c93bed70b6007966c8efeb7feaa9b524d",
+    "readme_bytes": 16629,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "scienthoon/jev-ood-calibration",
+    "url": "https://github.com/scienthoon/jev-ood-calibration",
+    "revision": "914d87ab16517f14e833cff63d73b51235b14bd6",
+    "readme_sha256": "0109d4d1c5b2ae9f8057ed0ad631e09741c771954f7c1d8a18651466d248408b",
+    "readme_bytes": 12801,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "zachlandes/jev-dialect-bias",
+    "url": "https://github.com/zachlandes/jev-dialect-bias",
+    "revision": "5675ca701f9c587a230d35acf2f205fc64e10151",
+    "readme_sha256": "556a7d381f6219a0a1b0dd266904b0289be9d8346eacdf55a182576aa5d14daf",
+    "readme_bytes": 12075,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "cacan/system1-bench",
+    "url": "https://github.com/cacan/system1-bench",
+    "revision": "e7a87ee455077a3c22479209da1d0541c48931dd",
+    "readme_sha256": "d9f037febdd84ddec084f89c3138ef75b990d9a1232da055f8254092e02bb299",
+    "readme_bytes": 6669,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "model-collapse/jev-bench",
+    "url": "https://github.com/model-collapse/jev-bench",
+    "revision": "fd9256f96e3e60a355adc2fad73f17ead8cceaa9",
+    "readme_sha256": "1aa275606b99d5f93eb17a1e53d6f9eab1ab3b252bbd31c00e4bf2009274dda1",
+    "readme_bytes": 14327,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "sumleo/RLCDAlignBench",
+    "url": "https://github.com/sumleo/RLCDAlignBench",
+    "revision": "473b72f290234a49484c4d89c03aababcd74f758",
+    "readme_sha256": "143a1cb89faae72cd5fda8ef55d8a14c321ed03882bdea60e9c428b036e8f099",
+    "readme_bytes": 9495,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "bydeng01/scientific-decision-eval",
+    "url": "https://github.com/bydeng01/scientific-decision-eval",
+    "revision": "166bbca0de4ea3f24161a1434217c91cb2791b56",
+    "readme_sha256": "8f1c374132448584112508810e7ee024975bc6d4f581bf79116f0612bd786433",
+    "readme_bytes": 4913,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "ZF-Utokyo/Jev",
+    "error": "Command '['git', 'ls-remote', 'https://github.com/ZF-Utokyo/Jev.git', 'HEAD']' returned non-zero exi"
+  },
+  {
+    "repo": "xzx34/JevOut",
+    "url": "https://github.com/xzx34/JevOut",
+    "revision": "55acf135a262cf182568e940709f6ad683bf1282",
+    "readme_sha256": "6192485a253cf37d3cfc7350c2c9998c85055d35e7bf8332cf2cc26ed8cc1f6c",
+    "readme_bytes": 3069,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "heyimMarc/jev-calibration-probe",
+    "url": "https://github.com/heyimMarc/jev-calibration-probe",
+    "revision": "f35c40782dadfa321f104b1a82025b79fdd53777",
+    "readme_sha256": "7f6d580e3d18b2bd478130dca3c238b2d506dabac4203f146f065b8a50663ea0",
+    "readme_bytes": 6964,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "4nt0ineB/typed-decision-bench",
+    "url": "https://github.com/4nt0ineB/typed-decision-bench",
+    "revision": "649b302fe4f651679a20fb3886ec69c3d36f12ac",
+    "readme_sha256": "d2f56562a6554b8550679e3da4c5b75b0cb1ff0ccf508e63898b5b27a6ec72e9",
+    "readme_bytes": 11757,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "relevan-dev/decision-model-eval",
+    "url": "https://github.com/relevan-dev/decision-model-eval",
+    "revision": "31c3b3af2c610b44b2c176d08e1e510668d820a7",
+    "readme_sha256": "92f622eaabdd0e8f6020b99893ddb737d5d913771c8822730b67b37caaaf69a1",
+    "readme_bytes": 10735,
+    "readme_name": "README.md"
+  },
+  {
+    "repo": "anthusai/decision-models-are-not-calculators",
+    "url": "https://github.com/anthusai/decision-models-are-not-calculators",
+    "revision": "8dec23b045b129507a5069f28600ae1cf2274dc2",
+    "readme_sha256": "2fcb5ad9965864c8dd67a5dafff735eeeab2bcec1b4c005f4648ccfabb1c55a9",
+    "readme_bytes": 11947,
+    "readme_name": "README.md"
+  }
+]

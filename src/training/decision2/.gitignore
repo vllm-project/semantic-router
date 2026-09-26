@@ -1,0 +1,6 @@
+_reference/
+runs/
+.private/
+__pycache__/
+*.pyc
+.pytest_cache/
