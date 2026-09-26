@@ -12,6 +12,7 @@ import json
 import math
 import os
 import random
+import re
 import shutil
 import time
 from collections import defaultdict
@@ -24,7 +25,8 @@ import torch
 
 from .data import check_partition_isolation, file_sha256, load_partition
 from .decision_model import PROMPT_VERSION, DecisionModel, collate, encode
-from .lora import adapter_parameters, attach_lora
+from .infer import checkpoint_fingerprint
+from .lora import LORA_FORMAT, adapter_parameters, attach_lora
 from .loss import LOSS_VERSION, per_example_loss
 from .plan import epoch_batches, planned_updates, replay_count, validate_resume_state
 from .source import source_fingerprint
@@ -221,7 +223,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--init-kind",
-        choices=("base", "posttrained", "decision1", "decision2"),
+        choices=("base", "posttrained", "decision1", "decision2", "decision2-lora"),
         default="base",
     )
     parser.add_argument(
@@ -254,6 +256,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lora-lr", type=float, default=1e-4)
     parser.add_argument(
         "--source-path", help="Content-identical local source for exact LoRA resume"
+    )
+    parser.add_argument(
+        "--initial-model-sha256",
+        help="Required original adapter-plus-base fingerprint for direct LoRA continuation",
     )
     parser.add_argument("--output", required=True)
     parser.add_argument("--resume", help="Exact checkpoint-N directory within --output")
@@ -294,10 +300,24 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError(
             "Exact resume loads its model from --resume; omit --model-path"
         )
-    if not args.resume and args.source_path:
+    if not args.resume and args.source_path and args.init_kind != "decision2-lora":
         raise ValueError(
-            "Fresh initialization uses --model-path; --source-path is only for LoRA resume"
+            "Fresh initialization uses --model-path; --source-path is only for direct LoRA continuation or resume"
         )
+    if args.init_kind == "decision2-lora":
+        if (
+            args.train_mode != "lora"
+            or not args.source_path
+            or not isinstance(args.initial_model_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", args.initial_model_sha256)
+            or args.base_revision is not None
+        ):
+            raise ValueError(
+                "Direct LoRA continuation needs --train-mode lora, --source-path, "
+                "a 64-character --initial-model-sha256, and no --base-revision"
+            )
+    elif args.initial_model_sha256 is not None:
+        raise ValueError("--initial-model-sha256 applies only to decision2-lora")
     if args.resume and args.train_mode == "lora" and not args.source_path:
         raise ValueError("Exact LoRA resume requires --source-path")
     if args.resume and args.train_mode != "lora" and args.source_path:
@@ -339,6 +359,51 @@ def validate_args(args: argparse.Namespace) -> None:
         or not 0 <= args.lora_dropout < 1
     ):
         raise ValueError("Invalid LoRA rank, alpha, or dropout")
+
+
+def load_direct_lora_start(
+    args: argparse.Namespace,
+) -> tuple[DecisionModel, Any, dict[str, Any]]:
+    """Reuse one byte-pinned PEFT adapter/head with a new optimizer later."""
+    identity = checkpoint_fingerprint(Path(args.model_path), Path(args.source_path))
+    if identity["model_sha256"] != args.initial_model_sha256:
+        raise ValueError("Initial LoRA adapter-plus-base fingerprint mismatch")
+    model, tokenizer = DecisionModel.from_checkpoint(
+        args.model_path, source_path=args.source_path, trainable_adapter=True
+    )
+    lora = model.metadata.get("lora")
+    if (
+        model.metadata.get("checkpoint_format") != LORA_FORMAT
+        or not isinstance(lora, dict)
+        or lora.get("rank") != args.lora_rank
+        or lora.get("alpha") != args.lora_alpha
+        or lora.get("dropout") != args.lora_dropout
+        or lora.get("peft_version") != version("peft")
+        or model.metadata.get("head_dim") != args.head_dim
+        or not isinstance(lora.get("source_fingerprint"), dict)
+    ):
+        raise ValueError("Initial LoRA topology, PEFT version, head or source differs")
+    active = [
+        name
+        for name, parameter in model.backbone.named_parameters()
+        if parameter.requires_grad
+    ]
+    if not active or any("lora_" not in name for name in active):
+        raise ValueError(
+            "Direct continuation needs only the existing trainable LoRA tensors"
+        )
+    if not all(parameter.requires_grad for parameter in model.head.parameters()):
+        raise ValueError("Selected Decision head is not fully trainable")
+    model.metadata["continuation_origin"] = {
+        "initial_model_sha256": identity["model_sha256"],
+        "initial_adapter_sha256": identity["files_sha256"][
+            "checkpoint/adapter/adapter_model.safetensors"
+        ],
+        "initial_head_sha256": identity["files_sha256"][
+            "checkpoint/decision_head.safetensors"
+        ],
+    }
+    return model, tokenizer, identity
 
 
 def main() -> None:
@@ -383,6 +448,8 @@ def main() -> None:
     code_files = (
         (*SOURCE_FILES, "lora.py") if args.train_mode == "lora" else SOURCE_FILES
     )
+    if args.init_kind == "decision2-lora":
+        code_files = (*code_files, "infer.py")
     source_code_sha = {
         name: file_sha256(Path(__file__).with_name(name)) for name in code_files
     }
@@ -392,6 +459,7 @@ def main() -> None:
     torch.cuda.manual_seed_all(args.seed)
     torch.backends.cudnn.benchmark = False
     device = torch.device("cuda:0")
+    initial_model_identity = None
     if resume:
         prior = json.loads((output / "provenance.json").read_text(encoding="utf-8"))
         source = prior["model_source"]
@@ -411,9 +479,20 @@ def main() -> None:
             "peft_version"
         ) != version("peft"):
             raise ValueError("Exact LoRA resume requires the original PEFT version")
+        if (
+            args.init_kind == "decision2-lora"
+            and model.metadata.get("continuation_origin", {}).get(
+                "initial_model_sha256"
+            )
+            != args.initial_model_sha256
+        ):
+            raise ValueError("Direct LoRA resume lost its original adapter identity")
     else:
-        source = source_fingerprint(Path(args.model_path))
-        if args.init_kind in ("base", "posttrained"):
+        if args.init_kind == "decision2-lora":
+            model, tokenizer, initial_model_identity = load_direct_lora_start(args)
+            source = model.metadata["lora"]["source_fingerprint"]
+        elif args.init_kind in ("base", "posttrained"):
+            source = source_fingerprint(Path(args.model_path))
             model, tokenizer = DecisionModel.from_base(
                 args.model_path,
                 args.base_revision,
@@ -421,16 +500,18 @@ def main() -> None:
                 source_stage=args.init_kind,
             )
         elif args.init_kind == "decision1":
+            source = source_fingerprint(Path(args.model_path))
             model, tokenizer = DecisionModel.from_decision1(
                 args.model_path, args.head_dim
             )
         else:
+            source = source_fingerprint(Path(args.model_path))
             model, tokenizer = DecisionModel.from_checkpoint(args.model_path)
             if model.metadata["head_dim"] != args.head_dim:
                 raise ValueError(
                     "--head-dim must match the Decision 2.0 initialization checkpoint"
                 )
-        if args.train_mode == "lora":
+        if args.train_mode == "lora" and args.init_kind != "decision2-lora":
             attach_lora(
                 model,
                 rank=args.lora_rank,
@@ -492,6 +573,7 @@ def main() -> None:
         "seed": args.seed,
         "gradient_checkpointing": args.gradient_checkpointing,
         "init_kind": args.init_kind,
+        "initial_model_sha256": args.initial_model_sha256,
         "base_revision": args.base_revision,
         "objective": args.objective,
         "brier_weight": args.brier_weight,
@@ -569,6 +651,7 @@ def main() -> None:
                 "contract": contract,
                 "code_sha256": source_code_sha,
                 "model_source": source,
+                "initial_model_identity": initial_model_identity,
                 "train_examples": len(train_items),
                 "replay_pool_examples": len(replay_items),
                 "replay_examples_per_epoch": replay_count(
