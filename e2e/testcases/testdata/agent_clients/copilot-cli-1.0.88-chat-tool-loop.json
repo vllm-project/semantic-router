@@ -6,9 +6,21 @@
     "user-agent": "OpenAI/JS 5.20.1"
   },
   "backends": {
+    "anthropic.messages.v1": [
+      "max_tokens",
+      "system",
+      "temperature",
+      "tools",
+      "top_p"
+    ],
     "openai.chat.v1": [
       "frequency_penalty",
       "presence_penalty",
+      "temperature",
+      "tools",
+      "top_p"
+    ],
+    "openai.responses.v1": [
       "temperature",
       "tools",
       "top_p"

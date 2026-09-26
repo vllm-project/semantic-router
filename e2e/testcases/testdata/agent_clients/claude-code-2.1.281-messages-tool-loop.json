@@ -16,6 +16,18 @@
       "system",
       "thinking",
       "tools"
+    ],
+    "openai.chat.v1": [
+      "max_completion_tokens",
+      "reasoning_effort",
+      "tools",
+      "user"
+    ],
+    "openai.responses.v1": [
+      "max_output_tokens",
+      "reasoning",
+      "tools",
+      "user"
     ]
   },
   "turns": [
