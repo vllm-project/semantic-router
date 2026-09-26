@@ -80,21 +80,27 @@ def audit(
 
 
 def write(
-    *, model_path: Path, prompts: Path, predictions: Path, output: Path
+    *,
+    model_path: Path,
+    prompts: Path,
+    predictions: Path,
+    output: Path,
+    variant: str = "english",
 ) -> dict[str, Any]:
     if output.exists():
         raise FileExistsError(output)
+    profile = gliner25.PROFILES[variant]
     release = gliner25.verify_release(
-        model_path.resolve(strict=True), gliner25.REVISION
+        model_path.resolve(strict=True), profile["revision"], variant
     )
     rows = load_prompts(prompts)
     identity = {
-        "backend": "gliner25",
-        "model_id": gliner25.MODEL_ID,
-        "model_revision": gliner25.REVISION,
+        "backend": profile["backend"],
+        "model_id": profile["model_id"],
+        "model_revision": profile["revision"],
         "revision_attested": True,
         "library_commit": gliner25.LIBRARY_COMMIT,
-        "adapter_version": gliner25.ADAPTER_VERSION,
+        "adapter_version": profile["adapter_version"],
         "prompt_projection": "state-text; instruction-and-criteria-native-schema",
         **release,
     }
@@ -139,6 +145,9 @@ def write(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-path", type=Path, required=True)
+    parser.add_argument(
+        "--variant", choices=tuple(gliner25.PROFILES), default="english"
+    )
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--predictions", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -150,6 +159,7 @@ def main() -> None:
                 prompts=args.input,
                 predictions=args.predictions,
                 output=args.output,
+                variant=args.variant,
             ),
             sort_keys=True,
         )
