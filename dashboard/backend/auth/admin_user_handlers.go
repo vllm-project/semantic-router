@@ -168,8 +168,14 @@ func handleAdminUserPatch(
 		return
 	}
 
-	user, err := svc.store.UpdateUserRoleOrStatus(r.Context(), userID, normalizedRole, normalizedStatus)
+	if RejectRevokedMutation(w, r) {
+		return
+	}
+	user, err := svc.store.UpdateUserRoleOrStatusAuthorized(r.Context(), ac, userID, normalizedRole, normalizedStatus)
 	if err != nil {
+		if writeAdminMutationAuthorizationError(w, err) {
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -211,7 +217,13 @@ func handleAdminUserDelete(
 		return
 	}
 
-	if err := svc.store.DeleteUser(r.Context(), userID); err != nil {
+	if RejectRevokedMutation(w, r) {
+		return
+	}
+	if err := svc.store.DeleteUserAuthorized(r.Context(), ac, userID); err != nil {
+		if writeAdminMutationAuthorizationError(w, err) {
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

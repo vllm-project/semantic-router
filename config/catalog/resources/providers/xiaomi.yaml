@@ -52,3 +52,13 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://platform.xiaomimimo.com/docs/en-US/usage-guide/passing-back-reasoning_content
+- catalog: xiaomi/mimo-v2.6-flash
+  relationship: first_party
+  id: mimo-v2.6-flash
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-23
+    source: https://mimo.mi.com/docs/en-US/quick-start/summary/model

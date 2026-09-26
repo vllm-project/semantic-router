@@ -1,0 +1,31 @@
+{
+  "id": "gen-openrouter-1",
+  "object": "chat.completion",
+  "created": 100,
+  "model": "openai/gpt-4.1-nano",
+  "provider": "OpenAI",
+  "choices": [
+    {
+      "index": 0,
+      "message": {"role": "assistant", "content": "Hello from OpenRouter."},
+      "finish_reason": "stop",
+      "native_finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 9,
+    "completion_tokens": 4,
+    "total_tokens": 13,
+    "prompt_tokens_details": {"cached_tokens": 0, "video_tokens": 0},
+    "completion_tokens_details": {"reasoning_tokens": 0, "image_tokens": 0},
+    "cost": 0.00014,
+    "is_byok": false,
+    "cost_details": {
+      "upstream_inference_cost": 0.0001,
+      "upstream_inference_prompt_cost": 0.00006,
+      "upstream_inference_completions_cost": 0.00004,
+      "server_tool_cost": null
+    },
+    "server_tool_use": {"web_search_requests": 0}
+  }
+}

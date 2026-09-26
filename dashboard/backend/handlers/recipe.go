@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 )
 
@@ -147,6 +148,9 @@ func (h *RecipeHandler) serveProbeMutation(
 		}
 		writeRecipeJSON(w, http.StatusOK, plan)
 	case "validate":
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		result, err := h.service.Validate(r.Context(), decisionID, variantID, expectedDigest)
 		if err != nil {
 			if errors.Is(err, recipe.ErrUpstream) {

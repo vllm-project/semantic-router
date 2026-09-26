@@ -80,6 +80,37 @@ func TestRedactResponseBodyRemovesRecordFreeTextAndPrivacySurfaces(t *testing.T)
 	assertRedactedOutcome(t, record)
 }
 
+func TestRedactResponseBodyRemovesPreparedDispatchReceipt(t *testing.T) {
+	body, err := json.Marshal(store.Record{
+		ID: "prepared-dispatch",
+		RouteDiagnostics: &store.RouteDiagnostics{
+			SelectedModel: "model-a",
+			PreparedDispatch: &store.PreparedDispatchReceipt{
+				Version:    1,
+				WireFormat: "openai.chat.v1",
+				SHA256:     "private-payload-fingerprint",
+				ByteLength: 137,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal prepared dispatch Replay record: %v", err)
+	}
+
+	redacted := mustRedactChanged(t, body)
+	if bytes.Contains(redacted, []byte("private-payload-fingerprint")) {
+		t.Fatalf("redacted record retained prepared dispatch fingerprint: %s", redacted)
+	}
+	record := decodeRedactedRecord(t, redacted)
+	diagnostics := record["route_diagnostics"].(map[string]any)
+	if diagnostics["selected_model"] != "model-a" {
+		t.Fatalf("selected model changed during redaction: %#v", diagnostics)
+	}
+	if _, exists := diagnostics["prepared_dispatch"]; exists {
+		t.Fatalf("prepared dispatch receipt was not removed: %#v", diagnostics["prepared_dispatch"])
+	}
+}
+
 func mustRedactChanged(t *testing.T, body []byte) []byte {
 	t.Helper()
 	redacted, changed, err := RedactResponseBody(body)

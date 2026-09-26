@@ -94,6 +94,7 @@ async def test_messages_tools_stream_preserves_arguments_and_terminal_order(clie
         p["content_block"] for p in payloads if p["type"] == "content_block_start"
     )
     assert tool["id"] == "call_mock_lookup" and tool["name"] == "lookup"
+    assert tool["caller"] == {"type": "direct"}
     fragments = [
         p["delta"]["partial_json"]
         for p in payloads
@@ -107,6 +108,47 @@ async def test_messages_tools_stream_preserves_arguments_and_terminal_order(clie
         "message_stop",
     ]
     assert payloads[-2]["delta"]["stop_reason"] == "tool_use"
+
+
+async def test_responses_tool_stream_omits_name_from_arguments_done(client):
+    response = await client.post(
+        "/v1/responses",
+        json={
+            "model": "native-test",
+            "input": "__mock_tool_call__",
+            "stream": True,
+            "tools": [
+                {
+                    "type": "function",
+                    "name": "lookup",
+                    "parameters": {"type": "object"},
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+    payloads = events(response.text)
+    added = next(
+        p["item"] for p in payloads if p["type"] == "response.output_item.added"
+    )
+    done = next(
+        p for p in payloads if p["type"] == "response.function_call_arguments.done"
+    )
+    finished = next(
+        p["item"] for p in payloads if p["type"] == "response.output_item.done"
+    )
+    deltas = [
+        p["delta"]
+        for p in payloads
+        if p["type"] == "response.function_call_arguments.delta"
+    ]
+
+    assert "name" not in done
+    assert done["item_id"] == added["id"] == finished["id"]
+    assert added["name"] == finished["name"] == "lookup"
+    assert done["arguments"] == finished["arguments"] == "".join(deltas)
+    assert json.loads(done["arguments"]) == {"query": "weather"}
+    assert payloads[-1]["type"] == "response.completed"
 
 
 @pytest.mark.parametrize("stream", [False, True])
@@ -258,3 +300,77 @@ async def test_native_failure_scenarios_keep_error_and_completion_boundaries(
         assert "mock provider stream failed" in response.text
     else:
         assert "error" not in response.text
+
+
+CUSTOM_TOOL_KIND_MARKERS = (
+    "__mock_custom_kind_custom_to_function__",
+    "__mock_custom_kind_custom_to_untyped_function__",
+    "__mock_custom_kind_function_to_custom__",
+    "__mock_custom_kind_valid_custom__",
+)
+CUSTOM_TOOL = {"type": "custom", "custom": {"name": "apply_patch"}}
+
+
+@pytest.mark.parametrize("marker", CUSTOM_TOOL_KIND_MARKERS)
+async def test_custom_tool_kind_fixture_emits_complete_native_stream(client, marker):
+    response = await client.post(
+        "/v1/chat/completions", json=body(marker, stream=True, tools=[CUSTOM_TOOL])
+    )
+    assert response.status_code == 200
+    chunks = events(response.text)
+    calls = [
+        call
+        for chunk in chunks
+        for choice in chunk["choices"]
+        for call in choice["delta"].get("tool_calls", [])
+    ]
+    assert chunks[0]["choices"][0]["delta"] == {"role": "assistant"}
+    assert calls[0]["id"] == "call_mock_custom_kind"
+    assert calls[0]["index"] == 0
+    if marker == "__mock_custom_kind_function_to_custom__":
+        assert calls[0]["type"] == "function"
+        assert calls[1] == {"index": 0, "custom": {"input": "def"}}
+    else:
+        assert calls[0]["type"] == "custom"
+        assert calls[0]["custom"] == {"name": "apply_patch", "input": "abc"}
+        if marker == "__mock_custom_kind_custom_to_function__":
+            assert calls[1] == {
+                "index": 0,
+                "type": "function",
+                "function": {"arguments": '{"x":1}'},
+            }
+        elif marker == "__mock_custom_kind_custom_to_untyped_function__":
+            assert calls[1] == {"index": 0, "function": {"arguments": '{"x":1}'}}
+        else:
+            assert calls[1:] == [
+                {"index": 0, "custom": {"input": "def"}},
+                {"index": 0},
+                {"index": 0, "custom": {"input": "ghi"}},
+            ]
+    assert chunks[-1]["choices"][0]["finish_reason"] == "tool_calls"
+    assert response.text.endswith("data: [DONE]\n\n")
+    assert response.text.count("data: [DONE]") == 1
+
+
+@pytest.mark.parametrize("marker", CUSTOM_TOOL_KIND_MARKERS)
+async def test_custom_tool_kind_markers_do_not_change_buffered_replies(client, marker):
+    response = await client.post(
+        "/v1/chat/completions", json=body(marker, tools=[CUSTOM_TOOL])
+    )
+    assert response.status_code == 200
+    choice = response.json()["choices"][0]
+    assert choice["finish_reason"] == "stop"
+    assert "tool_calls" not in choice["message"]
+
+
+@pytest.mark.parametrize("marker", CUSTOM_TOOL_KIND_MARKERS)
+async def test_custom_tool_kind_markers_require_custom_tool_in_stream(client, marker):
+    response = await client.post("/v1/chat/completions", json=body(marker, stream=True))
+    assert response.status_code == 200
+    chunks = events(response.text)
+    assert all(
+        "tool_calls" not in choice["delta"]
+        for chunk in chunks
+        for choice in chunk["choices"]
+    )
+    assert chunks[-1]["choices"][0]["finish_reason"] == "stop"

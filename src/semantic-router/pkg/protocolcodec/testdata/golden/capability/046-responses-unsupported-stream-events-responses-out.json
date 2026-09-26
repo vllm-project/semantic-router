@@ -91,26 +91,6 @@
       }
     },
     {
-      "name": "response.custom_tool_call_input.delta",
-      "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unknown_stream_event"
-        }
-      }
-    },
-    {
-      "name": "response.custom_tool_call_input.done",
-      "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unknown_stream_event"
-        }
-      }
-    },
-    {
       "name": "response.file_search_call.completed",
       "outcome": {
         "status": "error",
