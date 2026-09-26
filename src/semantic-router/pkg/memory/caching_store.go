@@ -148,8 +148,8 @@ func (c *CachingStore) forgetIfCurrent(ctx context.Context, want memoryVersion) 
 		return false, fmt.Errorf("memory store does not support version-conditional delete")
 	}
 	deleted, err := replacer.forgetIfCurrent(ctx, want)
-	if err == nil && deleted && c.cache != nil && want.userID != "" {
-		c.cache.InvalidateByUser(ctx, want.userID)
+	if err == nil && deleted {
+		c.invalidate(ctx, want.userID)
 	}
 	return deleted, err
 }
