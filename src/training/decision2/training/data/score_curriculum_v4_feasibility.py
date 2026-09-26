@@ -39,7 +39,9 @@ def record(output: Path) -> dict[str, object]:
     if match is None:
         raise ValueError("The v4 dry run failed outside its preregistered gate")
     by_position = ast.literal_eval(match.group(3))
-    if not isinstance(by_position, dict) or set(by_position) != set(range(5)):
+    if not isinstance(by_position, dict) or set(by_position) != {
+        str(position) for position in range(5)
+    }:
         raise ValueError("Malformed aggregate position counts")
     best, total = int(match.group(1)), int(match.group(2))
     if (best, total) != (112, 243) or max(by_position.values()) != best:
