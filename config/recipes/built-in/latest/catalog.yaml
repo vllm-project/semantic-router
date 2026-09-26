@@ -3163,6 +3163,20 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/moonshotai/Kimi-K3
+  - catalog: moonshot/kimi-linear-48b-a3b-instruct
+    relationship: self_hosted
+    id: moonshotai/Kimi-Linear-48B-A3B-Instruct
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    restrictions:
+      minimum_vllm_version: 0.11.1
+      trust_remote_code: true
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/blob/e1df551a447157d4658b573f9a695d57658590e9/README.md
   - catalog: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
     relationship: self_hosted
     id: nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
@@ -6677,6 +6691,45 @@ models:
   - moe
   - agentic
   released_at: '2026-01-27'
+- id: moonshot/kimi-linear-48b-a3b-instruct
+  display_name: Kimi Linear 48B A3B Instruct
+  description: Open-weight Kimi hybrid linear-attention MoE model for efficient long-context chat.
+  kind: physical
+  publisher: Moonshot / Kimi
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct
+    license: MIT
+  family: kimi-linear
+  parameter_size: 48B (3B active)
+  revision: e1df551a447157d4658b573f9a695d57658590e9
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/blob/e1df551a447157d4658b573f9a695d57658590e9/README.md
+  tags:
+  - open_weights
+  - moe
+  - hybrid_architecture
+  - efficient
+  released_at: '2025-10-30'
 - id: nvidia/nemotron-3.5-lightning
   display_name: NVIDIA Nemotron 3.5 Lightning
   description: Efficient open-weight NVIDIA reasoning model for fast agentic inference.
@@ -24019,6 +24072,101 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-gpqa-diamond@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    samples_per_prompt: 8
+  metrics:
+    accuracy: 0.717
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-mmlu-pro@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    metric_variant: exact_match
+  metrics:
+    accuracy: 0.727
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-aime-2025@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    samples_per_prompt: 64
+  metrics:
+    pass_at_1: 0.586
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-math-500@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: huggingfaceh4/math-500@1.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    reported_measure: accuracy
+  metrics:
+    pass_at_1: 0.946
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-livecodebench-v6@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.457
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
     redistributable: true
 - id: nvidia/nemotron-cascade-2-model-card-scicode@1.0.0
   model: nvidia/nemotron-cascade-2-30b-a3b
@@ -43315,6 +43463,28 @@ index_results:
   domains:
     frontier_reasoning: 13.1603336422614
     scientific_reasoning: 78.8888888888889
+- model: moonshot/kimi-linear-48b-a3b-instruct
+  reasoning_effort: default
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 72.7
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.727
+    normalized: 0.727
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: moonshot/kimi-linear-48b-a3b-instruct-report-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - moonshot/kimi-linear-48b-a3b-instruct-report-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 72.7
 - model: nvidia/nemotron-3.5-lightning
   reasoning_effort: enabled
   index: vllm-sr/general@1.0.0
