@@ -7,6 +7,7 @@ script never downloads weights and never reads release-panel gold.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
 import time
@@ -26,6 +27,8 @@ ACCUMULATION = 8
 LORA_RANK = 8
 LORA_ALPHA = 16
 LORA_LR = 2e-5
+NEGATIVE_CAP = 8
+TRAIN_CONTRACT = "qwen3-rerank06-sampled8-checkpointed-v2"
 TARGET_MODULES = [
     "q_proj",
     "k_proj",
@@ -63,6 +66,7 @@ def verify_adapter(adapter: Path, source_receipt: dict[str, Any]) -> dict[str, A
         or receipt.get("source_train_sha256")
         != "32a1226931967fd7a0f53cb2a4fd51189d5b643c56eeb1b88cea94ebf4312398"
         or receipt.get("optimizer_updates") != UPDATES
+        or receipt.get("train_contract") != TRAIN_CONTRACT
         or receipt.get("adapter_sha256") != file_sha256(weights_path)
     ):
         raise ValueError("Trained adapter receipt mismatch")
@@ -99,6 +103,9 @@ def load(
             task_type=TaskType.CAUSAL_LM,
         )
         model = get_peft_model(model, config)
+        model.config.use_cache = False
+        model.gradient_checkpointing_enable()
+        model.enable_input_require_grads()
         model.train()
     elif adapter is not None:
         verify_adapter(adapter, source_receipt)
@@ -116,8 +123,12 @@ def margins(
     question: dict[str, Any],
     no_id: int,
     yes_id: int,
+    candidate_indices: list[int] | None = None,
 ) -> tuple[Any, list[str], int]:
     sequences, keys = pilot.encode(tokenizer, state, question)
+    if candidate_indices is not None:
+        sequences = [sequences[index] for index in candidate_indices]
+        keys = [keys[index] for index in candidate_indices]
     batch = tokenizer.pad(
         [{"input_ids": ids} for ids in sequences],
         padding=True,
@@ -127,6 +138,21 @@ def margins(
     output = model(**batch, logits_to_keep=1).logits[:, -1, :]
     values = output[:, yes_id].float() - output[:, no_id].float()
     return values, keys, max(map(len, sequences))
+
+
+def selected_indices(row_id: str, keys: list[str], target: str) -> list[int]:
+    if target not in keys:
+        raise ValueError("Gold target absent from candidate set")
+    if len(keys) <= NEGATIVE_CAP:
+        return list(range(len(keys)))
+    positive = keys.index(target)
+    negatives = sorted(
+        (index for index in range(len(keys)) if index != positive),
+        key=lambda index: hashlib.sha256(
+            f"{SEED}:{row_id}:{keys[index]}".encode()
+        ).hexdigest(),
+    )
+    return sorted([positive, *negatives[: NEGATIVE_CAP - 1]])
 
 
 def predict_row(
@@ -188,11 +214,21 @@ def run_train(
     optimizer.zero_grad(set_to_none=True)
     for index, row in enumerate(ordered):
         question = pilot.row_question(row)
+        target_key = pilot.target_key(row)
+        all_keys = [key for key, _ in pilot.option_items(question)]
+        chosen_indices = selected_indices(row["id"], all_keys, target_key)
         with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
             values, keys, length = margins(
-                model, torch, tokenizer, row["state"], question, no_id, yes_id
+                model,
+                torch,
+                tokenizer,
+                row["state"],
+                question,
+                no_id,
+                yes_id,
+                candidate_indices=chosen_indices,
             )
-            target = torch.tensor([keys.index(pilot.target_key(row))], device="cuda")
+            target = torch.tensor([keys.index(target_key)], device="cuda")
             loss = F.cross_entropy(values[None, :], target)
         if not torch.isfinite(loss):
             raise ValueError("Non-finite loss")
@@ -221,6 +257,7 @@ def run_train(
     model.save_pretrained(output)
     receipt = {
         "contract": pilot.ADAPTER,
+        "train_contract": TRAIN_CONTRACT,
         "source": source_receipt,
         "source_train_sha256": file_sha256(data),
         "optimizer_updates": UPDATES,
@@ -228,6 +265,8 @@ def run_train(
         "lora_rank": LORA_RANK,
         "lora_alpha": LORA_ALPHA,
         "lora_lr": LORA_LR,
+        "negative_cap": NEGATIVE_CAP,
+        "gradient_checkpointing": True,
         "target_modules": TARGET_MODULES,
         "max_tokens": pilot.MAX_TOKENS,
         "max_tokens_seen": max_tokens_seen,

@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from training.qwen3_reranker06 import pilot, train
+from training.qwen3_reranker06.compare import bootstrap
 
 
 class FakeTokenizer:
@@ -90,6 +91,7 @@ class PilotContracts(unittest.TestCase):
                 "source": source,
                 "source_train_sha256": "32a1226931967fd7a0f53cb2a4fd51189d5b643c56eeb1b88cea94ebf4312398",
                 "optimizer_updates": train.UPDATES,
+                "train_contract": train.TRAIN_CONTRACT,
                 "adapter_sha256": pilot.file_sha256(weights),
             }
             (directory / "decision2_pilot_receipt.json").write_text(
@@ -99,6 +101,21 @@ class PilotContracts(unittest.TestCase):
             weights.write_bytes(b"second")
             with self.assertRaisesRegex(ValueError, "receipt mismatch"):
                 train.verify_adapter(directory, source)
+
+    def test_group_stratified_interval_uses_group_count(self) -> None:
+        result = bootstrap({"a": [0.25, 0.5], "b": [-0.5, 0]}, repeats=1000)
+        self.assertEqual(result["independent_groups"], 4)
+        self.assertAlmostEqual(result["family_macro_delta"], 0.0625)
+        self.assertLessEqual(result["ci95"][0], result["family_macro_delta"])
+        self.assertGreaterEqual(result["ci95"][1], result["family_macro_delta"])
+
+    def test_large_slate_keeps_gold_and_seven_fixed_negatives(self) -> None:
+        keys = [str(i) for i in range(128)]
+        first = train.selected_indices("fixed-id", keys, "97")
+        self.assertEqual(first, train.selected_indices("fixed-id", keys, "97"))
+        self.assertEqual(len(first), 8)
+        self.assertIn(97, first)
+        self.assertEqual(train.selected_indices("small", keys[:3], "1"), [0, 1, 2])
 
 
 if __name__ == "__main__":
