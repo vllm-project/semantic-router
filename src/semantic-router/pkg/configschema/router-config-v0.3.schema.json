@@ -6723,6 +6723,9 @@
         },
         "dynamic_retrieval": {
           "$ref": "#/$defs/DynamicRetrievalConfig"
+        },
+        "trusted_facts": {
+          "$ref": "#/$defs/TrustedFactsConfig"
         }
       },
       "additionalProperties": false,
@@ -6786,6 +6789,33 @@
         },
         "rate": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TrustedFactsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "enforcement": {
+          "type": "string"
+        },
+        "trust_sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "freshness_seconds": {
+          "type": "integer"
+        },
+        "stage_roles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
