@@ -110,8 +110,11 @@ global:
         dimension: 384
       embedding_model: bert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.70
+      default_similarity_threshold: 0.30
 ```
+
+此 Qdrant 示例对 `bert`（`mom-embedding-light`）使用原始余弦分数。
+0.30 仅是小规模冷启动召回测试的起点，不适用于其他嵌入模型；上线前还需检查无关查询和已更正的旧事实。
 
 完整部署说明见：
 
