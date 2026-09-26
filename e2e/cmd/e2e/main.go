@@ -127,8 +127,8 @@ func boolEnv(key string, fallback bool) bool {
 }
 
 func baselineSuiteFromEnv() string {
-	if value := os.Getenv("E2E_BASELINE_SUITE"); value != "" {
+	if value := os.Getenv(framework.BaselineSuiteEnv); value != "" {
 		return value
 	}
-	return "standard"
+	return framework.DefaultBaselineSuite
 }

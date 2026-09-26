@@ -150,6 +150,13 @@ var BaselineStress = []string{
 	"chat-completions-progressive-stress",
 }
 
+// BaselineSuites lists the qualification scopes BaselineCases accepts by
+// name; the empty suite resolves to "standard". The list is documentation
+// for callers that enumerate the suite layer (the E2E audit); BaselineCases
+// does not read it, so a suite added here without selection logic, or the
+// reverse, is caught by the testmatrix tests rather than hidden.
+var BaselineSuites = []string{"standard", "full"}
+
 // BaselineCases selects a qualification scope without a second functional allowlist.
 func BaselineCases(suite string) ([]string, error) {
 	if suite == "full" {
