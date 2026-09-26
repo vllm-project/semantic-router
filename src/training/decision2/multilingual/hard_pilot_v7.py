@@ -79,7 +79,7 @@ POLICY = {
     "score_penalty": {
         "en": "Start at 3, subtract one per late event and two per open exception, then ADD the mitigation credit. The credit increases the result; it is not another penalty. Bound the final level to 0..3.",
         "zh": "从 3 开始，每个逾期事件减 1，每个未结例外减 2；然后把减轻措施的加分加上。加分会提高结果，并不是再扣分。最终等级限制在 0 到 3。",
-        "es": "Parta de 3, reste uno por cada demora y dos por cada excepción abierta; después SUME la bonificación de mitigación. Esta bonificación aumenta el resultado, no es otra penalización. Limite el nivel final a 0..3.",
+        "es": "Comience en 3, descuente uno por cada demora y dos por cada excepción abierta; después SUME la bonificación de mitigación. Esta bonificación aumenta el resultado, no es otra penalización. Mantenga el nivel final dentro de 0..3.",
         "ja": "3 から始め、遅延1件ごとに1、未解決の例外1件ごとに2を引き、その後で軽減措置の加点を足します。加点は値を増やすもので、追加の減点ではありません。最終段階は 0～3 に収めます。",
     },
     "score_order": {
