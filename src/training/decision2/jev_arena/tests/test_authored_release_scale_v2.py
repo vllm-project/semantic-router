@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections import Counter
+
 import pytest
 
+from jev_arena.authored_release_scale_v2_audit import _required_gaps
 from jev_arena.authored_release_scale_v2 import _distribution
 
 
@@ -34,3 +37,14 @@ def test_v2_balanced_native_targets_include_joint_hold() -> None:
     proofs[3]["original"] = "A"
     with pytest.raises(ValueError, match="Choice"):
         _distribution(cases, proofs)
+
+
+def test_v2_preflight_requires_medium_and_long_originals() -> None:
+    by_type = {
+        "choice": Counter({"short": 3, "long": 1}),
+        "noul": Counter({"short": 3, "medium": 1}),
+        "score": Counter({"short": 3, "medium": 1}),
+    }
+    assert _required_gaps(by_type) == []
+    by_type["choice"]["long"] = 0
+    assert _required_gaps(by_type) == ["length_allocation"]
