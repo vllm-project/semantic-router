@@ -108,6 +108,7 @@ def collect(
     device: str = "cuda:0",
     max_items: int | None = None,
     rights_attestation: Path | None = None,
+    deterministic_algorithms: bool = False,
 ) -> dict[str, Any]:
     if model_id != MODEL_ID:
         raise ValueError(f"Eikos 4B Decision 2.0 model ID must be {MODEL_ID}")
@@ -115,6 +116,10 @@ def collect(
         raise ValueError("Published Eikos inference requires the qualified GPU path")
     if output.exists() or output.with_name(output.name + ".manifest.json").exists():
         raise FileExistsError(output)
+    import torch
+
+    if deterministic_algorithms:
+        torch.use_deterministic_algorithms(True)
     identity = package_identity(
         model_path, rights_attestation=rights_attestation, require_rights=True
     )
@@ -131,7 +136,6 @@ def collect(
         rows = rows[:max_items]
     native = load_decider(model_path, None, model_path / "calib.json", device=device)
     import fla
-    import torch
 
     runtime = {
         "torch": str(torch.__version__),
@@ -142,6 +146,7 @@ def collect(
             getattr(torch.cuda.get_device_properties(device), "gcnArchName", "unknown")
         ).split(":", 1)[0],
         "device": device,
+        "torch_deterministic_algorithms": torch.are_deterministic_algorithms_enabled(),
         "qualification": "BF16 ROCm source-author parity unvalidated; package-native PyTorch path",
     }
     predictions = []
@@ -252,6 +257,7 @@ def main() -> None:
     parser.add_argument("--model-revision")
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--max-items", type=int)
+    parser.add_argument("--deterministic-algorithms", action="store_true")
     parser.add_argument(
         "--rights-attestation",
         type=Path,
@@ -269,6 +275,7 @@ def main() -> None:
                 device=args.device,
                 max_items=args.max_items,
                 rights_attestation=args.rights_attestation,
+                deterministic_algorithms=args.deterministic_algorithms,
             ),
             sort_keys=True,
         )
