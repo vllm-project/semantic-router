@@ -381,8 +381,19 @@ def previous_release(version: str, tags: list[str]) -> str:
     return max(candidates)[1]
 
 
+def performance_base(version: str, tags: list[str]) -> str:
+    """Choose an implementation that can run the current paired model harness."""
+    # v0.3.0 predates the Vela benchmark contract and pkg/embedding; copying
+    # the current perf harness into that tree cannot compile. This reviewed
+    # v0.4 development anchor introduced the paired Vela CPU benchmarks.
+    if version == "0.4.0":
+        return "12597be5ffae2319d856f230d61ca26248eb9b3b"
+    return previous_release(version, tags)
+
+
 def main() -> int:
-    if len(sys.argv) > 1 and sys.argv[1] == "previous-release":
+    if len(sys.argv) > 1 and sys.argv[1] in {"previous-release", "performance-base"}:
+        command = sys.argv[1]
         parser = argparse.ArgumentParser(
             description="Resolve an ancestor stable release in the same major version"
         )
@@ -393,7 +404,11 @@ def main() -> int:
             ["git", "tag", "--merged", "HEAD"], text=True
         ).splitlines()
         try:
-            ref = previous_release(args.version, tags)
+            ref = (
+                performance_base(args.version, tags)
+                if command == "performance-base"
+                else previous_release(args.version, tags)
+            )
         except ValueError as exc:
             parser.exit(1, str(exc) + "\n")
         with args.github_output.open("a") as stream:
