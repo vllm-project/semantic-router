@@ -2,6 +2,7 @@
 
 import copy
 import time
+from pathlib import Path
 
 import pytest
 from cli.sr_bench.candidate_plans import candidate_manifest
@@ -451,6 +452,191 @@ def test_pending_model_alias_is_not_an_observed_backend():
     result = metric("balance", [], calls, 3)
     assert result["selected_models"] == {"actual-backend": 1, "acknowledged-backend": 1}
     assert result["pending_selection_count"] == 1
+
+
+def _request(case_id: str, selected_model: str | None, **fields: object) -> dict:
+    return {
+        "role": "subject",
+        "case_id": case_id,
+        "status": "completed",
+        "selected_model": selected_model,
+        "decision": f"route-{selected_model}" if selected_model else None,
+        "inference_call_count": 1,
+        **fields,
+    }
+
+
+UNACKNOWLEDGED = {"status": "failed", "model": "vllm-sr/mom-v1-blend"}
+
+
+@pytest.mark.parametrize(
+    ("calls", "expected"),
+    [
+        pytest.param(
+            [_request("task", model) for model in ("a", "a", "b", "a")],
+            {
+                "multi_request_tasks": 1,
+                "switched_tasks": 1,
+                "model_switches": 2,
+                "max_switches_per_task": 2,
+                "decision_changed_tasks": 1,
+            },
+            id="a-a-b-a",
+        ),
+        pytest.param(
+            [_request("task", "a")],
+            {
+                "multi_request_tasks": 0,
+                "unswitched_tasks": 0,
+                "mean_switches_per_task": None,
+                "max_switches_per_task": None,
+            },
+            id="single-request-task",
+        ),
+        pytest.param(
+            [
+                _request("task", "a"),
+                _request("task", "judge", role="judge"),
+                _request("task", "user", role="simulator"),
+                _request("task", "a"),
+            ],
+            {
+                "multi_request_tasks": 1,
+                "model_switches": 0,
+                "decision_changed_tasks": 0,
+            },
+            id="judge-and-simulator-ignored",
+        ),
+        pytest.param(
+            [
+                _request("task", "a"),
+                _request("task", None, **UNACKNOWLEDGED),
+                _request("task", "a"),
+            ],
+            {
+                "multi_request_tasks": 1,
+                "model_switches": 0,
+                "unknown_model_requests": 1,
+            },
+            id="unknown-model-is-not-a-switch",
+        ),
+        pytest.param(
+            [
+                _request("task", "a"),
+                _request("task", None, **UNACKNOWLEDGED),
+                _request("task", "b"),
+            ],
+            {"model_switches": 1, "unknown_model_requests": 1},
+            id="switch-across-unknown-model",
+        ),
+        pytest.param(
+            [_request("task", "a"), _request("task", "b", inference_call_count=3)],
+            {"multi_request_tasks": 0, "model_switches": 0, "multi_inference_tasks": 1},
+            id="multi-inference-request",
+        ),
+        pytest.param(
+            [
+                _request("task-1", "a"),
+                _request("task-2", "b"),
+                _request("task-1", "a"),
+                _request("task-2", "b"),
+            ],
+            {"multi_request_tasks": 2, "model_switches": 0},
+            id="interleaved-tasks",
+        ),
+        pytest.param(
+            [_request("task", "a", decision="x"), _request("task", "a", decision="y")],
+            {"switched_tasks": 0, "decision_changed_tasks": 1},
+            id="decision-change-without-switch",
+        ),
+    ],
+)
+def test_continuity_counts_switches_between_known_subject_selections(
+    calls: list[dict], expected: dict
+) -> None:
+    block = metric("mom", [], calls, 1)["continuity"]
+    assert {key: block[key] for key in expected} == expected
+
+
+def _routed_run(routes: dict[str, list[str]]) -> dict:
+    calls = [
+        _request(task, model) for task, models in routes.items() for model in models
+    ]
+    results = [
+        {"case_id": "task-1", "status": "completed", "correct": True},
+        {"case_id": "task-2", "status": "completed", "correct": False},
+    ]
+    return metric("mom", results, calls, 2, planned_case_ids=["task-1", "task-2"])
+
+
+def test_continuity_separates_steady_and_switching_runs_with_equal_accuracy() -> None:
+    steady = _routed_run({"task-1": ["big", "big"], "task-2": ["small", "small"]})
+    switching = _routed_run({"task-1": ["big", "small"], "task-2": ["small", "big"]})
+    mixed = _routed_run({"task-1": ["big", "small"], "task-2": ["small", "small"]})
+    assert steady["accuracy"] == switching["accuracy"] == mixed["accuracy"] == 0.5
+    assert steady["selected_models"] == switching["selected_models"]
+    assert steady["decisions"] == switching["decisions"]
+    unchanged = {"unknown_model_requests": 0, "multi_inference_tasks": 0}
+    assert steady["continuity"] == {
+        "multi_request_tasks": 2,
+        "switched_tasks": 0,
+        "switched_accuracy": None,
+        "unswitched_tasks": 2,
+        "unswitched_accuracy": 0.5,
+        "model_switches": 0,
+        "mean_switches_per_task": 0.0,
+        "max_switches_per_task": 0,
+        "decision_changed_tasks": 0,
+        **unchanged,
+    }
+    assert switching["continuity"] == {
+        "multi_request_tasks": 2,
+        "switched_tasks": 2,
+        "switched_accuracy": 0.5,
+        "unswitched_tasks": 0,
+        "unswitched_accuracy": None,
+        "model_switches": 2,
+        "mean_switches_per_task": 1.0,
+        "max_switches_per_task": 1,
+        "decision_changed_tasks": 2,
+        **unchanged,
+    }
+    assert mixed["continuity"]["switched_accuracy"] == 1.0
+    assert mixed["continuity"]["unswitched_accuracy"] == 0.0
+
+
+def test_report_continuity_follows_stored_call_order(tmp_path: Path) -> None:
+    store = Store(tmp_path)
+    document = _manifest()
+    document["benchmark_options"] = {}
+    document["targets"][0].update(
+        id="balance",
+        kind="mom",
+        model="balance",
+        config_hash="frozen",
+        max_inference_calls=1,
+    )
+    run, _ = store.create(plan(document))
+    store.result(
+        run["id"], "one", "balance", "completed", {"correct": True, "score": 1}
+    )
+    for role, model in (
+        ("subject", "a"),
+        ("judge", "flash"),
+        ("subject", "b"),
+        ("subject", "b"),
+    ):
+        call = store.start_call(run["id"], "one", "balance", role, {"model": "balance"})
+        store.finish_call(
+            call,
+            "completed",
+            {"selected_model": model, "decision": model, "inference_call_count": 1},
+        )
+    report = make_report(store, run["id"])
+    target = report["summary"]["targets"][0]["continuity"]
+    assert report["benchmarks"][0]["continuity"] == target
+    assert (target["switched_tasks"], target["model_switches"]) == (1, 1)
+    assert (target["switched_accuracy"], target["decision_changed_tasks"]) == (1.0, 1)
 
 
 @pytest.mark.parametrize("change", ["prices", "limits", "native-profile", "judge"])

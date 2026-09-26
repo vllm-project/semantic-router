@@ -34,6 +34,72 @@ func TestPolicyMuxRejectsUnmappedProtectedRoute(t *testing.T) {
 	}
 }
 
+func TestPolicyLookupUsesEscapedPathLikeServeMux(t *testing.T) {
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "policy-escaped-path@example.com", RoleRead, "active")
+	mux := NewPolicyMux()
+	mux.HandlePolicyFunc(ProtectedRoute("/api/items/{id}", PermConfigRead,
+		SensitivityOperational, ResourceOwnerConfig, http.MethodGet),
+		func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandlePolicyFunc(ProtectedRoute("/api/items/a/{id}", PermUsersManage,
+		SensitivitySensitive, ResourceOwnerAuth, http.MethodGet),
+		func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusAccepted) })
+	mux.Seal()
+	handler := AuthenticateRequest(svc, mux)(mux)
+
+	encoded := newAuthenticatedRequest(t, svc, user, http.MethodGet, "/api/items/a%2Fb", "")
+	policy, lookup := mux.LookupRoutePolicy(encoded.Method, encoded.URL.EscapedPath())
+	if lookup != RouteFound || policy.Permission != PermConfigRead {
+		t.Fatalf("encoded slash lookup = %+v, %v; want config.read", policy, lookup)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, encoded)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("encoded slash dispatch returned %d, want 204", response.Code)
+	}
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, user, http.MethodGet, "/api/items/a/b", ""))
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("literal slash reached the privileged route: status=%d", response.Code)
+	}
+}
+
+func TestRegisteredCORSPreflightDoesNotAuthorizeActualRequest(t *testing.T) {
+	svc := newTestAuthService(t)
+	mux := NewPolicyMux()
+	mux.HandlePolicyFunc(ProtectedRoute("/api/config", PermConfigRead,
+		SensitivityOperational, ResourceOwnerConfig, http.MethodGet),
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		})
+	mux.Seal()
+	handler := AuthenticateRequest(svc, mux)(mux)
+
+	preflight := httptest.NewRequest(http.MethodOptions, "/api/config", nil)
+	preflight.Header.Set("Origin", "https://example.test")
+	preflight.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, preflight)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("credential-free registered preflight returned %d, want 204", response.Code)
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/config", nil))
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated actual request returned %d, want 401", response.Code)
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodOptions, "/api/unknown", nil))
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("unknown route preflight returned %d, want 403", response.Code)
+	}
+}
+
 func TestPolicyMuxRejectsRegistrationWithoutPolicy(t *testing.T) {
 	mux := NewPolicyMux()
 	defer func() {
@@ -81,6 +147,11 @@ func TestProtectedRouteRequiresAuditActionAtRegistration(t *testing.T) {
 	bounded := ProtectedBoundedRoute("/api/config/preview", PermConfigDeploy, SensitivitySensitive, ResourceOwnerConfig, 1024, http.MethodPost)
 	if policy := bounded.Policies[0]; policy.AuditMode != AuditNone || !policy.Revalidate {
 		t.Fatalf("read-style POST lacks live revalidation or unexpectedly emits audit writes: %+v", policy)
+	}
+	streaming := ProtectedStreamingMutationRoute("/api/upload", PermMlPipeline, "ml.upload",
+		SensitivitySensitive, ResourceOwnerML, NoBodyLimit, http.MethodPost)
+	if err := ValidateRouteContract(streaming); err == nil {
+		t.Fatal("unbounded streaming mutation was accepted")
 	}
 }
 
@@ -331,6 +402,116 @@ ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=0`, user.ID, PermInfe
 	default:
 	}
 }
+
+func TestStreamingMutationBoundsUploadAndRechecksBeforeCommit(t *testing.T) {
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "streaming-upload@example.com", RoleRead, "active")
+	mux := NewPolicyMux()
+	const limit = 6 << 20
+	enteredHandler := false
+	committed := false
+	mux.HandlePolicyFunc(ProtectedStreamingMutationRoute("/api/upload", PermInferenceRun,
+		"upload.create", SensitivitySensitive, ResourceOwnerInference, limit, http.MethodPost),
+		func(w http.ResponseWriter, r *http.Request) {
+			enteredHandler = true
+			payload, readErr := io.ReadAll(r.Body)
+			if readErr != nil {
+				http.Error(w, "Invalid upload", http.StatusBadRequest)
+				return
+			}
+			if len(payload) != 5<<20 || RejectRevokedMutation(w, r) {
+				return
+			}
+			committed = true
+			w.WriteHeader(http.StatusCreated)
+		})
+	mux.Seal()
+	handler := AuthenticateRequest(svc, mux)(mux)
+
+	payload := strings.Repeat("x", 5<<20)
+	request := newAuthenticatedRequest(t, svc, user, http.MethodPost, "/api/upload", "")
+	body := &handlerReadBody{Reader: strings.NewReader(payload), handlerEntered: &enteredHandler}
+	request.Body = body
+	request.ContentLength = int64(len(payload))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated || !committed || body.readBeforeHandler {
+		t.Fatalf("streamed upload: status=%d committed=%t readBeforeHandler=%t",
+			response.Code, committed, body.readBeforeHandler)
+	}
+
+	enteredHandler, committed = false, false
+	oversized := newAuthenticatedRequest(t, svc, user, http.MethodPost, "/api/upload", "")
+	oversized.Body = io.NopCloser(strings.NewReader(strings.Repeat("x", limit+1)))
+	oversized.ContentLength = limit + 1
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, oversized)
+	if response.Code != http.StatusRequestEntityTooLarge || enteredHandler || committed {
+		t.Fatalf("oversized upload: status=%d enteredHandler=%t committed=%t",
+			response.Code, enteredHandler, committed)
+	}
+}
+
+func TestStreamingMutationRejectsPermissionRevokedDuringUpload(t *testing.T) {
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "streaming-revoked@example.com", RoleRead, "active")
+	mux := NewPolicyMux()
+	committed := make(chan struct{}, 1)
+	mux.HandlePolicyFunc(ProtectedStreamingMutationRoute("/api/upload", PermInferenceRun,
+		"upload.create", SensitivitySensitive, ResourceOwnerInference, 1024, http.MethodPost),
+		func(w http.ResponseWriter, r *http.Request) {
+			if _, readErr := io.ReadAll(r.Body); readErr != nil {
+				http.Error(w, "Invalid upload", http.StatusBadRequest)
+				return
+			}
+			if RejectRevokedMutation(w, r) {
+				return
+			}
+			committed <- struct{}{}
+			w.WriteHeader(http.StatusCreated)
+		})
+	mux.Seal()
+	request := newAuthenticatedRequest(t, svc, user, http.MethodPost, "/api/upload", "")
+	body := &pausedBody{entered: make(chan struct{}), release: make(chan struct{}), body: strings.NewReader("upload")}
+	request.Body = body
+	request.ContentLength = int64(len("upload"))
+	response := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		AuthenticateRequest(svc, mux)(mux).ServeHTTP(response, request)
+		close(done)
+	}()
+	<-body.entered
+	if _, updateErr := svc.store.db.Exec(`INSERT INTO user_permissions(user_id, permission_key, allowed) VALUES(?,?,0)
+ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=0`, user.ID, PermInferenceRun); updateErr != nil {
+		t.Fatal(updateErr)
+	}
+	close(body.release)
+	<-done
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("revoked upload returned %d, want 403", response.Code)
+	}
+	select {
+	case <-committed:
+		t.Fatal("revoked upload committed")
+	default:
+	}
+}
+
+type handlerReadBody struct {
+	io.Reader
+	handlerEntered    *bool
+	readBeforeHandler bool
+}
+
+func (b *handlerReadBody) Read(p []byte) (int, error) {
+	if !*b.handlerEntered {
+		b.readBeforeHandler = true
+	}
+	return b.Reader.Read(p)
+}
+
+func (b *handlerReadBody) Close() error { return nil }
 
 func TestReadStylePostRejectsRevocationWhileBodyIsPaused(t *testing.T) {
 	svc := newTestAuthService(t)

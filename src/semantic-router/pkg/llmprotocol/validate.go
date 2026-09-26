@@ -27,7 +27,7 @@ func ValidateRequest(request Request, limits Limits) error {
 	if err != nil {
 		return err
 	}
-	if err := validateToolChoice(request.ToolChoice, namedTools, len(request.Tools), request.ImageGeneration != nil); err != nil {
+	if err := validateToolChoice(request.ToolChoice, namedTools, request.Tools, request.ImageGeneration != nil); err != nil {
 		return err
 	}
 	if err := validateImageGenerationOptions(request.ImageGeneration, limits); err != nil {
@@ -57,6 +57,10 @@ func ValidateRequest(request Request, limits Limits) error {
 func validateRequestEnvelope(request Request, limits Limits) (int, error) {
 	if err := validateRequestIdentity(request, limits); err != nil {
 		return 0, err
+	}
+	if request.TextVerbosity != "" && request.TextVerbosity != "low" &&
+		request.TextVerbosity != "medium" && request.TextVerbosity != "high" {
+		return 0, NewError(ErrorInvalidRequest, "invalid_text_verbosity", "text verbosity must be low, medium or high", nil)
 	}
 	if err := validateRequestCardinality(request, limits); err != nil {
 		return 0, err
@@ -89,6 +93,9 @@ func validateRequestIdentity(request Request, limits Limits) error {
 	}
 	if exceeds(request.EndUserID, limits.IdentifierBytes) {
 		return NewError(ErrorInvalidRequest, "end_user_id_limit", "end-user ID exceeds the configured limit", nil)
+	}
+	if exceeds(request.PromptCacheKey, limits.IdentifierBytes) {
+		return NewError(ErrorInvalidRequest, "prompt_cache_key_limit", "prompt_cache_key exceeds the configured limit", nil)
 	}
 	if request.PreviousResponseID != "" && request.ConversationID != "" {
 		return NewError(
@@ -175,8 +182,18 @@ func validateRequestMessage(
 	if !validRequestRole(message.Role) {
 		return NewError(ErrorInvalidRequest, "invalid_role", "message role is invalid", nil)
 	}
+	if message.ReasoningEffort != "" {
+		if message.Role != RoleSystem {
+			return NewError(ErrorInvalidRequest, "invalid_message_reasoning_effort", "per-message effort requires a system message", nil)
+		}
+		switch message.ReasoningEffort {
+		case "low", "medium", "high", "xhigh", "max":
+		default:
+			return NewError(ErrorInvalidRequest, "invalid_message_reasoning_effort", "per-message effort is invalid", nil)
+		}
+	}
 	*blocks += len(message.Content)
-	if len(message.Content) == 0 {
+	if len(message.Content) == 0 && message.ReasoningEffort == "" {
 		return NewError(ErrorInvalidRequest, "empty_message", "messages must contain at least one content block", nil)
 	}
 	if message.Role == RoleTool && len(message.Content) != 1 {
@@ -236,6 +253,9 @@ func validateRequestTools(tools []Tool, limits Limits) (map[string]struct{}, int
 			return nil, 0, NewError(ErrorInvalidRequest, "duplicate_tool", "tool names must be unique", nil)
 		}
 		schemaBytes += len(tool.InputSchema)
+		if tool.CustomFormat != nil {
+			schemaBytes += len(tool.CustomFormat.Definition)
+		}
 		if limits.SchemaBytes > 0 && schemaBytes > limits.SchemaBytes {
 			return nil, 0, NewError(ErrorInvalidRequest, "schema_limit", "total schema limit exceeded", nil)
 		}
@@ -245,6 +265,12 @@ func validateRequestTools(tools []Tool, limits Limits) (map[string]struct{}, int
 }
 
 func validateRequestTool(tool Tool, limits Limits) error {
+	if tool.Kind == ToolKindCustom {
+		return validateCustomTool(tool, limits)
+	}
+	if tool.Kind != "" || tool.CustomFormat != nil {
+		return NewError(ErrorInvalidRequest, "invalid_tool", "tool kind is unsupported", nil)
+	}
 	if strings.TrimSpace(tool.Name) == "" || len(tool.InputSchema) == 0 || !json.Valid(tool.InputSchema) {
 		return NewError(ErrorInvalidRequest, "invalid_tool", "tool name and JSON Schema are required", nil)
 	}
@@ -260,20 +286,46 @@ func validateRequestTool(tool Tool, limits Limits) error {
 	return validateSchemaObject(tool.InputSchema, "tool schema", limits)
 }
 
-func validateToolChoice(choice ToolChoice, namedTools map[string]struct{}, toolCount int, hasImageGeneration bool) error {
+func validateCustomTool(tool Tool, limits Limits) error {
+	if strings.TrimSpace(tool.Name) == "" || len(tool.InputSchema) != 0 || tool.Strict != nil {
+		return NewError(ErrorInvalidRequest, "invalid_tool", "custom tools require a name and take no JSON Schema", nil)
+	}
+	if exceeds(tool.Name, limits.ToolNameBytes) || exceeds(tool.Description, limits.ToolDescriptionBytes) {
+		return NewError(ErrorInvalidRequest, "tool_text_limit", "tool name or description exceeds the configured limit", nil)
+	}
+	if format := tool.CustomFormat; format != nil {
+		if format.Syntax != "lark" && format.Syntax != "regex" || strings.TrimSpace(format.Definition) == "" {
+			return NewError(ErrorInvalidRequest, "invalid_tool", "custom tool grammar requires lark or regex syntax and a definition", nil)
+		}
+		if limits.SchemaBytes > 0 && len(format.Definition) > limits.SchemaBytes {
+			return NewError(ErrorInvalidRequest, "schema_limit", "tool grammar limit exceeded", nil)
+		}
+	}
+	return validateCacheDirective(tool.Cache)
+}
+
+func validateToolChoice(choice ToolChoice, namedTools map[string]struct{}, tools []Tool, hasImageGeneration bool) error {
 	if !validToolChoiceMode(choice.Mode) {
 		return NewError(ErrorInvalidRequest, "invalid_tool_choice", "tool choice is invalid", nil)
 	}
 	if choice.Mode == ToolChoiceNamed {
-		return validateNamedToolChoice(choice.Name, namedTools)
+		if err := validateNamedToolChoice(choice.Name, namedTools); err != nil {
+			return err
+		}
+		for _, tool := range tools {
+			if tool.Name == choice.Name && tool.Kind != choice.Kind {
+				return NewError(ErrorInvalidRequest, "tool_choice_kind_mismatch", "named tool choice kind does not match the declared tool", nil)
+			}
+		}
+		return nil
 	}
-	if choice.Name != "" {
-		return NewError(ErrorInvalidRequest, "invalid_tool_choice", "only named tool choice may contain a name", nil)
+	if choice.Name != "" || choice.Kind != "" {
+		return NewError(ErrorInvalidRequest, "invalid_tool_choice", "only named tool choice may contain a name or kind", nil)
 	}
 	if choice.Mode == ToolChoiceImageGeneration && !hasImageGeneration {
 		return NewError(ErrorInvalidRequest, "image_generation_tool_required", "image-generation tool choice requires a declared image-generation tool", nil)
 	}
-	if choice.Mode == ToolChoiceRequired && toolCount == 0 && !hasImageGeneration {
+	if choice.Mode == ToolChoiceRequired && len(tools) == 0 && !hasImageGeneration {
 		return NewError(ErrorInvalidRequest, "tools_required", "tool choice requires at least one declared tool", nil)
 	}
 	return nil
@@ -419,6 +471,9 @@ func validateReasoning(request Request, limits Limits) error {
 	if err := validateReasoningDisplay(request); err != nil {
 		return err
 	}
+	if err := validateReasoningSummary(request); err != nil {
+		return err
+	}
 	return validateReasoningMode(request)
 }
 
@@ -449,6 +504,14 @@ func validateReasoningDisplay(request Request) error {
 		return NewError(ErrorInvalidRequest, "conflicting_reasoning_display", "reasoning display requires enabled or adaptive reasoning", nil)
 	}
 	return nil
+}
+
+func validateReasoningSummary(request Request) error {
+	switch request.ReasoningSummary {
+	case "", "auto", "concise", "detailed":
+		return nil
+	}
+	return NewError(ErrorInvalidRequest, "invalid_reasoning_summary", "reasoning summary must be auto, concise, or detailed", nil)
 }
 
 func validateReasoningMode(request Request) error {
@@ -702,11 +765,13 @@ func validateMediaSource(content Content) error {
 func validateToolCallContent(content Content, limits Limits) error {
 	call := content.ToolCall
 	if call == nil || strings.TrimSpace(call.ID) == "" ||
-		strings.TrimSpace(call.Name) == "" {
+		strings.TrimSpace(call.Name) == "" || call.Kind != "" && call.Kind != ToolKindCustom {
 		return NewError(ErrorInvalidRequest, "invalid_tool_call", "tool call requires an ID, name, and JSON arguments", nil)
 	}
-	if err := ValidateJSONObject([]byte(call.Arguments), limits.JSONDepth); err != nil {
-		return NewError(ErrorInvalidRequest, "invalid_tool_call", "tool call arguments must be one strict JSON object", err)
+	if call.Kind == "" {
+		if err := ValidateJSONObject([]byte(call.Arguments), limits.JSONDepth); err != nil {
+			return NewError(ErrorInvalidRequest, "invalid_tool_call", "tool call arguments must be one strict JSON object", err)
+		}
 	}
 	if exceeds(call.ID, limits.IdentifierBytes) || exceeds(call.Name, limits.ToolNameBytes) {
 		return NewError(ErrorInvalidRequest, "tool_call_limit", "tool call ID or name exceeds the configured limit", nil)
@@ -724,6 +789,9 @@ func validateToolResultContent(content Content, blocks *int, limits Limits, dept
 	result := content.ToolResult
 	if result == nil || strings.TrimSpace(result.CallID) == "" {
 		return NewError(ErrorInvalidRequest, "invalid_tool_result", "tool result requires a call ID", nil)
+	}
+	if result.Kind != "" && result.Kind != ToolKindCustom {
+		return NewError(ErrorInvalidRequest, "invalid_tool_result", "tool result kind is invalid", nil)
 	}
 	if exceeds(result.CallID, limits.IdentifierBytes) {
 		return NewError(ErrorInvalidRequest, "tool_result_id_limit", "tool result call ID exceeds the configured limit", nil)

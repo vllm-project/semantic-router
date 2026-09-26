@@ -19,6 +19,66 @@ use serial_test::serial;
 use std::path::Path;
 use std::sync::Arc;
 
+#[test]
+fn test_attention_keeps_fp32_cpu_and_causal_mask() {
+    let device = Device::Cpu;
+    let config = Qwen3EmbeddingConfig {
+        vocab_size: 16,
+        hidden_size: 8,
+        num_hidden_layers: 1,
+        num_attention_heads: 1,
+        num_key_value_heads: 1,
+        intermediate_size: 16,
+        max_position_embeddings: 8,
+        rope_theta: 1000000.0,
+        rms_norm_eps: 1e-6,
+        attention_dropout: 0.0,
+        head_dim: 8,
+    };
+    let identity = Tensor::eye(8, DType::F32, &device).unwrap();
+    let mut weights = std::collections::HashMap::new();
+    for projection in ["q_proj", "k_proj", "v_proj", "o_proj"] {
+        weights.insert(format!("{projection}.weight"), identity.clone());
+    }
+    for norm in ["q_norm", "k_norm"] {
+        weights.insert(
+            format!("{norm}.weight"),
+            Tensor::ones(8, DType::F32, &device).unwrap(),
+        );
+    }
+    let attention = Qwen3Attention::new(
+        &config,
+        Arc::new(RotaryEmbeddingCache::new(8, 8, 1000000.0, &device).unwrap()),
+        VarBuilder::from_tensors(weights, DType::F32, &device),
+    )
+    .unwrap();
+    let input = identity.narrow(0, 0, 3).unwrap().unsqueeze(0).unwrap();
+    let mask = Tensor::ones((1, 3), DType::U32, &device).unwrap();
+    let unmasked = attention.forward(&input, None).unwrap();
+    let masked = attention.forward(&input, Some(&mask)).unwrap();
+    let prefix = attention
+        .forward(&input.narrow(1, 0, 2).unwrap(), None)
+        .unwrap();
+    assert_eq!(masked.dtype(), DType::F32);
+    assert_eq!(masked.dims(), &[1, 3, 8]);
+    for (actual, expected) in [
+        (masked, unmasked.clone()),
+        (unmasked.narrow(1, 0, 2).unwrap(), prefix),
+    ] {
+        let difference = (actual - expected)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .flatten_all()
+            .unwrap()
+            .max(0)
+            .unwrap()
+            .to_scalar::<f32>()
+            .unwrap();
+        assert!(difference <= 1e-6, "{difference}");
+    }
+}
+
 /// Test loading valid Qwen3-Embedding-0.6B config
 #[rstest]
 #[serial]

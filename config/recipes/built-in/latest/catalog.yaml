@@ -3674,11 +3674,11 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
-    lifecycle: active
+    lifecycle: deprecated
     verification:
       status: claimed
-      verified_at: '2026-09-05'
-      source: https://www.volcengine.com/docs/82379/1795150
+      verified_at: '2026-09-24'
+      source: https://www.volcengine.com/docs/82379/1330310
 - id: writer
   display_name: Writer
   description: Palmyra enterprise models through the Writer chat API.
@@ -5027,7 +5027,7 @@ models:
     source: https://seed.bytedance.com/en/seed2
   family: seed-2.0
   released_at: '2026-02-14'
-  lifecycle: active
+  lifecycle: deprecated
   limits:
     context_window_size: 262144
   capabilities:
@@ -5048,8 +5048,8 @@ models:
   verification:
     authority: ByteDance Seed Team
     status: claimed
-    verified_at: '2026-09-05'
-    source: https://seed.bytedance.com/en/seed2
+    verified_at: '2026-09-26'
+    source: https://docs.volcengine.com/docs/ark/model-deprecation-notice?lang=zh
   tags:
   - proprietary
   - multimodal

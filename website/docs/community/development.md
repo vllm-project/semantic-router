@@ -26,12 +26,16 @@ package metadata beside the component you are changing.
 
 ```bash
 make vllm-sr-dev
-vllm-sr serve --image-pull-policy never
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  vllm-sr serve --image-pull-policy never
 ```
 
-The build installs the editable `vllm-sr` CLI and creates local Router,
-Dashboard, and Envoy images. `--image-pull-policy never` ensures the
-run uses those local images.
+The build installs the editable `vllm-sr` CLI, builds Router and Dashboard
+images tagged `latest`, and ensures the official Envoy image is available.
+Set `VLLM_SR_IMAGE` explicitly because an editable CLI installation with a
+stable package version defaults to that release's image tag. The CLI derives
+the official Dashboard image with the same tag; `--image-pull-policy never`
+prevents pulling missing images.
 
 Useful lifecycle commands:
 
@@ -47,8 +51,14 @@ For ROCm-specific work:
 
 ```bash
 make vllm-sr-dev VLLM_SR_PLATFORM=amd
-vllm-sr serve --image-pull-policy never --platform amd
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest \
+  vllm-sr serve --image-pull-policy never --platform amd
 ```
+
+If you customize `DOCKER_TAG`, `DOCKER_REGISTRY`, or the Make image variables,
+pass the actual built images to `serve` through `VLLM_SR_IMAGE` and, when needed,
+`VLLM_SR_DASHBOARD_IMAGE`. The build's completion message prints a startup
+command with the selected images.
 
 ## Select the right tests
 

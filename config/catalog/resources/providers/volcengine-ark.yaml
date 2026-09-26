@@ -41,8 +41,8 @@ models:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
-  lifecycle: active
+  lifecycle: deprecated
   verification:
     status: claimed
-    verified_at: 2026-09-05
-    source: https://www.volcengine.com/docs/82379/1795150
+    verified_at: 2026-09-24
+    source: https://www.volcengine.com/docs/82379/1330310

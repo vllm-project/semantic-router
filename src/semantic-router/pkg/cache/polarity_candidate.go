@@ -14,3 +14,9 @@ func semanticCandidateMatchesPolarity(incoming []string, cachedQuery string) boo
 	var cachedBuffer [32]string
 	return !polarityTokensMismatch(incoming, tokenizeForPolarity(cachedQuery, cachedBuffer[:0]))
 }
+
+// negationGuardOutcomeFor classifies the original query of a served candidate.
+func negationGuardOutcomeFor(incoming []string, cachedQuery string) NegationGuardOutcome {
+	var cachedBuffer [32]string
+	return negationGuardOutcome(incoming, tokenizeForPolarity(cachedQuery, cachedBuffer[:0]))
+}

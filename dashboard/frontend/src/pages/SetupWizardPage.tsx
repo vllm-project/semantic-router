@@ -28,6 +28,7 @@ import {
   removeSetupModel,
   restoreSetupModel,
   summarizeSetupConfig,
+  switchSetupModelProvider,
   type ImportedSetupConfig,
   type ModelDraft,
   type PresetCatalogState,
@@ -41,10 +42,7 @@ import {
   type SetupStep,
   type SetupValidationState,
 } from "./setupWizardSupport";
-import {
-  getSetupProviderOption,
-  type ProviderKind,
-} from "./setupWizardProviderCatalog";
+import { type ProviderKind } from "./setupWizardProviderCatalog";
 import styles from "./SetupWizardPage.module.css";
 
 const SetupWizardPage: React.FC = () => {
@@ -287,16 +285,7 @@ const SetupWizardPage: React.FC = () => {
         }
 
         if (field === "providerKind") {
-          const nextProvider = value as ProviderKind;
-          const nextBaseUrl =
-            getSetupProviderOption(nextProvider).initialBaseUrl;
-          return {
-            ...model,
-            providerKind: nextProvider,
-            baseUrl: model.baseUrl.trim()
-              ? model.baseUrl
-              : nextBaseUrl,
-          };
+          return switchSetupModelProvider(model, value as ProviderKind);
         }
 
         return { ...model, [field]: value };

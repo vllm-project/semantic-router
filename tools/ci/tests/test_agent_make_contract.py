@@ -76,6 +76,47 @@ class HarnessMakeContractTests(unittest.TestCase):
             self.assertEqual(unit.count(f"src/vllm-sr/tests/{name}"), 1)
         self.assertIn("run_cli_tests.py --verbose", unit)
 
+    def test_cuda_compute_cap_is_optional_and_overrides_reach_the_image_build(
+        self,
+    ) -> None:
+        environment = {
+            key: value
+            for key, value in os.environ.items()
+            if key
+            not in {
+                "CUDA_COMPUTE_CAP",
+                "MAKEFLAGS",
+                "MFLAGS",
+                "MAKEOVERRIDES",
+                "MAKEFILES",
+            }
+        }
+        for arguments, overrides, build_arg in (
+            ((), {}, None),
+            (("CUDA_COMPUTE_CAP=86",), {}, "--build-arg CUDA_COMPUTE_CAP=86"),
+            ((), {"CUDA_COMPUTE_CAP": "86"}, "--build-arg CUDA_COMPUTE_CAP=86"),
+        ):
+            with self.subTest(arguments=arguments, environment=overrides):
+                result = subprocess.run(
+                    [
+                        "make",
+                        "-n",
+                        "docker-build-vllm-sr-router",
+                        "VLLM_SR_PLATFORM=nvidia",
+                        *arguments,
+                    ],
+                    cwd=REPO_ROOT,
+                    env=environment | overrides,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertNotIn("CUDA_COMPUTE_CAP", result.stderr)
+                if build_arg is None:
+                    self.assertNotIn("CUDA_COMPUTE_CAP", result.stdout)
+                else:
+                    self.assertIn(build_arg, result.stdout)
+
     def test_daily_interface_is_small_and_direct(self) -> None:
         for target in ("impact", "check", "verify", "ci-full", "harness-check"):
             self.assertIn(f"{target}:", HARNESS_MAKE)

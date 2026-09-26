@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
+import sys
 import unittest
 import urllib.error
 from pathlib import Path
@@ -40,26 +42,108 @@ class Response:
 
 class PublishedDashboardImageTests(unittest.TestCase):
     def test_manifest_platforms_extracts_oci_index_platforms(self) -> None:
-        raw = """{
-          "manifests": [
-            {"platform": {"os": "linux", "architecture": "amd64"}},
-            {"platform": {"os": "linux", "architecture": "arm64"}},
-            {"platform": {"os": "unknown", "architecture": "unknown"}}
-          ]
-        }"""
+        raw = json.dumps(
+            {
+                "manifests": [
+                    {
+                        "platform": {"os": "linux", "architecture": "amd64"},
+                        "digest": "sha256:" + "a" * 64,
+                    },
+                    {
+                        "platform": {"os": "linux", "architecture": "arm64"},
+                        "digest": "sha256:" + "b" * 64,
+                    },
+                    {
+                        "platform": {"os": "unknown", "architecture": "unknown"},
+                        "digest": "sha256:" + "c" * 64,
+                    },
+                ]
+            }
+        )
 
         self.assertEqual(
             verifier.manifest_platforms(raw),
-            {"linux/amd64", "linux/arm64", "unknown/unknown"},
+            {
+                "linux/amd64": "sha256:" + "a" * 64,
+                "linux/arm64": "sha256:" + "b" * 64,
+            },
         )
 
     def test_verify_manifest_rejects_a_missing_arm64_variant(self) -> None:
-        raw = '{"manifests":[{"platform":{"os":"linux","architecture":"amd64"}}]}'
+        raw = json.dumps(
+            {
+                "manifests": [
+                    {
+                        "platform": {"os": "linux", "architecture": "amd64"},
+                        "digest": "sha256:" + "a" * 64,
+                    }
+                ]
+            }
+        )
         with (
             mock.patch.object(verifier, "run_command", return_value=completed([], raw)),
             self.assertRaisesRegex(verifier.VerificationError, "linux/arm64"),
         ):
             verifier.verify_manifest("example.invalid/dashboard@sha256:" + "a" * 64)
+
+    def test_manifest_rejects_ambiguous_or_malformed_child_digests(self) -> None:
+        amd64 = {
+            "platform": {"os": "linux", "architecture": "amd64"},
+            "digest": "sha256:" + "a" * 64,
+        }
+        arm64 = {
+            "platform": {"os": "linux", "architecture": "arm64"},
+            "digest": "sha256:" + "b" * 64,
+        }
+        cases = (
+            ([amd64, amd64, arm64], "duplicate linux/amd64"),
+            ([amd64, {**arm64, "digest": "sha256:bad"}], "no valid digest"),
+            ([amd64, {**arm64, "digest": amd64["digest"]}], "share one child"),
+        )
+        for manifests, message in cases:
+            with (
+                self.subTest(message=message),
+                self.assertRaisesRegex(verifier.VerificationError, message),
+            ):
+                verifier.manifest_platforms(json.dumps({"manifests": manifests}))
+
+    def test_main_runs_each_platform_by_its_verified_child_digest(self) -> None:
+        index_ref = "example.invalid/dashboard@sha256:" + "0" * 64
+        amd64_ref = "example.invalid/dashboard@sha256:" + "a" * 64
+        arm64_ref = "example.invalid/dashboard@sha256:" + "b" * 64
+        raw = json.dumps(
+            {
+                "manifests": [
+                    {
+                        "platform": {"os": "linux", "architecture": "amd64"},
+                        "digest": "sha256:" + "a" * 64,
+                    },
+                    {
+                        "platform": {"os": "linux", "architecture": "arm64"},
+                        "digest": "sha256:" + "b" * 64,
+                    },
+                ]
+            }
+        )
+        with (
+            mock.patch.object(sys, "argv", ["verify", index_ref]),
+            mock.patch.object(
+                verifier, "run_command", return_value=completed([], raw)
+            ) as run,
+            mock.patch.object(verifier, "verify_runtime") as runtime,
+        ):
+            self.assertEqual(verifier.main(), 0)
+
+        run.assert_called_once_with(
+            ["docker", "buildx", "imagetools", "inspect", "--raw", index_ref]
+        )
+        runtime.assert_has_calls(
+            [
+                mock.call(amd64_ref, "linux/amd64"),
+                mock.call(arm64_ref, "linux/arm64"),
+            ]
+        )
+        self.assertEqual(runtime.call_count, 2)
 
     def test_health_response_requires_dashboard_identity(self) -> None:
         with self.assertRaisesRegex(verifier.VerificationError, "service"):
