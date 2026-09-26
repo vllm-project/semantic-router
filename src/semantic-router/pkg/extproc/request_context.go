@@ -107,8 +107,9 @@ type RequestContext struct {
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
 	SkipProcessing        bool // true only when the configured opt-out header is valid
 
-	StreamingComplete      bool // True after neutral stream finalization runs once.
-	StreamingAborted       bool // True if the neutral stream ended abnormally.
+	StreamingComplete      bool  // True after neutral stream finalization runs once.
+	StreamingAborted       bool  // True if the neutral stream ended abnormally.
+	StreamBoundaryError    error // First rejected provider event; retained across response bodies.
 	ProtocolResponseStream *protocolcodec.StreamEngine
 	PublicChatUsageFilter  *protocolcodec.ChatUsageStreamFilter
 	SemanticStreamState    *semanticResponseStreamState

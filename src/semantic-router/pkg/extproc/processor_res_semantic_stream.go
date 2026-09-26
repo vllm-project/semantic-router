@@ -85,38 +85,29 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 	}
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
-		boundaryErr := validateDynamoResponseEvents(ctx, events)
-		if err == nil && boundaryErr == nil {
+		if err == nil && ctx.StreamBoundaryError == nil {
 			observeProtocolStream(ctx, events, diagnostics)
 		} else {
 			ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
 		}
-		if boundaryErr == nil {
+		if ctx.StreamBoundaryError == nil {
 			buffers.translated = appendProtocolFrames(buffers.translated, frames)
-		} else {
-			err = boundaryErr
 		}
 		buffers.recordError(ctx, err, true)
 	}
 }
 
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
-	if ctx.StreamingAborted {
-		return
-	}
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Finalize(buffers.streamErr)
-		boundaryErr := validateDynamoResponseEvents(ctx, events)
-		if err == nil && boundaryErr == nil {
+		if err == nil && ctx.StreamBoundaryError == nil {
 			observeProtocolStream(ctx, events, diagnostics)
 		} else {
 			ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
 		}
-		if boundaryErr == nil {
-			buffers.translated = appendProtocolFrames(buffers.translated, frames)
-		} else {
-			err = boundaryErr
-		}
+		// The codec validates before encoding and retains its first failure.
+		// Finalize can therefore emit a safe error even for a rejected EOF event.
+		buffers.translated = appendProtocolFrames(buffers.translated, frames)
 		buffers.recordError(ctx, err, true)
 	}
 	if ctx.PublicChatUsageFilter != nil {
@@ -210,13 +201,25 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		Options:     clientStreamOptions(ctx),
 		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
 	}
-	var mutation protocolcodec.StreamEventMutation
-	if responseID := responseObjectPublicID(ctx); responseID != "" {
+	responseID := responseObjectPublicID(ctx)
+	if responseID != "" {
 		streamContext.ResponseID = responseID
-		mutation = func(event *llmprotocol.Event) error {
-			event.ResponseID = responseID
-			return nil
+	}
+	// Reject provider-bound events before encoding, including events decoded
+	// only at EOF. The stream engine retains callback failures across bodies
+	// and uses its normal protocol-specific error finalization.
+	mutation := func(event *llmprotocol.Event) error {
+		if err := validateDynamoResponseEvents(ctx, []llmprotocol.Event{*event}); err != nil {
+			if ctx.StreamBoundaryError == nil {
+				ctx.StreamBoundaryError = err
+			}
+			ctx.StreamingAborted = true
+			return ctx.StreamBoundaryError
 		}
+		if responseID != "" {
+			event.ResponseID = responseID
+		}
+		return nil
 	}
 	stream, err := engine.NewStreamWithMutation(source, target, streamContext, mutation)
 	if err != nil {

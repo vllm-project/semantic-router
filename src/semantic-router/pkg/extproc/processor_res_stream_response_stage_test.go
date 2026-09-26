@@ -178,15 +178,33 @@ func TestAbortedTerminalStreamSkipsResponseStageAndReplay(t *testing.T) {
 	recorder := startResponseStageReplay(t, router, ctx)
 	// A prior chunk failed. Later valid terminal events must not recover the
 	// request or trigger persistence through response-stage/replay processing.
+	expectStreamedResponse(ctx)
 	ctx.StreamingAborted = true
-	streamResponseStageAnswer(t, router, ctx, hallucinationAnswer)
+	body := []byte("data: {\"id\":\"response_1\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"discarded answer\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+	response := router.handleSemanticStreamingResponseBody(body, true, ctx)
+	mutation := response.GetResponseBody().GetResponse().GetBodyMutation()
+	if mutation == nil || mutation.GetMutation() == nil {
+		t.Fatalf("aborted stream must discard later content and completion frames: %v", mutation)
+	}
+	for _, forbidden := range []string{"discarded answer", "[DONE]", `"finish_reason":"stop"`} {
+		if strings.Contains(string(mutation.GetBody()), forbidden) {
+			t.Fatalf("aborted stream released %q: %s", forbidden, mutation.GetBody())
+		}
+	}
+	if ctx.SemanticResponse != nil || ctx.SemanticStreamState.terminal || len(ctx.SemanticStreamState.items) != 0 {
+		t.Fatal("discarded frames must not reconstruct a response")
+	}
 	if !ctx.StreamingAborted || !ctx.StreamingComplete {
 		t.Fatal("request-wide abort was not retained through finalization")
 	}
 	if calls.Load() != 0 {
 		t.Fatal("aborted response reached response-stage processing")
 	}
-	if outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID); len(outcomes) != 0 {
-		t.Fatalf("aborted response produced replay outcomes: %+v", outcomes)
+	// A disabled-memory receipt records cleanup, not a persisted answer.
+	for _, outcome := range replayOutcomes(t, recorder, ctx.RouterReplayID) {
+		if outcome.Target == "router" && outcome.TargetRef == "memory_persistence" && outcome.Verdict == "disabled" {
+			continue
+		}
+		t.Fatalf("aborted response produced a response-stage or replay outcome: %+v", outcome)
 	}
 }
