@@ -147,6 +147,18 @@ class V13OracleTest(unittest.TestCase):
         self.assertTrue(compare("a b c d", "a b c d")["exact"])
         self.assertLess(compare("a b c d", "w x y z")["trigram_jaccard"], 0.7)
 
+    def test_utilization_boundaries_use_exact_decimal_arithmetic(self) -> None:
+        params = {"ratio_limits": [0.6, 0.9]}
+        self.assertEqual(
+            solve("utilization_band", {"capacity": 10}, {"demand": 6}, params), 2
+        )
+        self.assertEqual(
+            solve("utilization_band", {"capacity": 10}, {"demand": 9}, params), 1
+        )
+        self.assertEqual(
+            solve("utilization_band", {"capacity": 10}, {"demand": 10}, params), 0
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,7 @@ import re
 import secrets
 from collections import Counter
 from datetime import datetime, timezone
+from fractions import Fraction
 from itertools import combinations
 from pathlib import Path
 from typing import Any
@@ -184,7 +185,14 @@ def solve(
         ):
             raise ValueError("Invalid capacity or demand")
         low, high = params["ratio_limits"]
-        return 2 if demand <= low * capacity else 1 if demand <= high * capacity else 0
+        low_limit, high_limit = Fraction(str(low)), Fraction(str(high))
+        if not 0 <= low_limit < high_limit or high_limit > 1:
+            raise ValueError("Invalid ordered ratio limits")
+        return (
+            2
+            if demand <= low_limit * capacity
+            else 1 if demand <= high_limit * capacity else 0
+        )
     if operation == "median_divergence":
         if any(
             len(row) != 3 or any(type(v) is not int for v in row)
