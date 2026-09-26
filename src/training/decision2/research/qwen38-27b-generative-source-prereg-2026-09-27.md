@@ -50,3 +50,15 @@ if it gains at least five Score or five Noul items over the head and loses at
 most five Choice items. No pilot result may select or recalibrate BEST368, and
 the synthetic FINAL, 15-task CSS evaluation gold and authored release set
 remain unopened. This is not a JevArena or official JevBench score.
+
+## Pre-inference implementation and sample freeze
+
+The fixed parser, prompt and collector were committed as `67f5ce2bb` before
+the first model call; `qwen38_generative_screen.py` SHA-256 is
+`6ee70addd80a5e2530e2aeb9c4ae2881437b52fa3fd870c347d0d54140bb77d3`.
+Its label-free selector produced exactly 40 items per type from the frozen
+DEV prompts. The 120-prompt file and selection manifest SHA-256 values are
+`417f62b6f2dd18303223322222d522a44ce5cc9257f1ee5452cb74afbf972ea1`
+and `ab69838a48f41a930a87f4ce37d22cf5a114adf6d62f6ee1bedf59b8eea77266`.
+The local source revision and fixed config/template hashes passed attestation.
+No gold or previous prediction was used in selection.
