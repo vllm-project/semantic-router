@@ -863,6 +863,15 @@ profiles:
       - e2e/testcases/structure_routing.go
       - src/semantic-router/pkg/classification/structure_classifier.go
       - src/semantic-router/pkg/classification/classifier_signal_structure.go
+  long-context-routing:
+    display_name: Long Context Routing
+    owner: e2e
+    coverage_role: long-context-routing
+    selection: pr
+    paths:
+      - e2e/profiles/long-context-routing/**
+      - e2e/testcases/context_routing.go
+      - e2e/testcases/testdata/context_routing_cases.json
   external-gateway-responses:
     display_name: External Gateway Responses
     owner: e2e
