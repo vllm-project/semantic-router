@@ -6,11 +6,14 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 func TestValidateEmbeddingRequestRequiresTextsOrImages(t *testing.T) {
@@ -116,6 +119,43 @@ func TestClassifyEmbeddingErrorMapsInternalFailureTo500(t *testing.T) {
 	}
 }
 
+func TestClassifyEmbeddingErrorMapsModelNotReadyTo503(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantText   string
+		wantCode   string
+		wantStatus int
+	}{
+		{
+			name:       "services sentinel",
+			err:        services.ErrModelNotReady,
+			wantText:   services.ErrModelNotReady.Error(),
+			wantCode:   "EMBEDDING_NOT_READY",
+			wantStatus: http.StatusServiceUnavailable,
+		},
+		{
+			name:       "candle sentinel",
+			err:        candle_binding.ErrEmbeddingModelNotReady,
+			wantText:   candle_binding.ErrEmbeddingModelNotReady.Error(),
+			wantCode:   "EMBEDDING_NOT_READY",
+			wantStatus: http.StatusServiceUnavailable,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			status, code, message := classifyEmbeddingError(tc.err)
+			if status != tc.wantStatus || code != tc.wantCode {
+				t.Fatalf("expected %d %q, got %d %q", tc.wantStatus, tc.wantCode, status, code)
+			}
+			if !strings.Contains(message, tc.wantText) {
+				t.Fatalf("expected message to include %q, got %q", tc.wantText, message)
+			}
+		})
+	}
+}
+
 func TestValidateEmbeddingRequestRejectsTooManyImages(t *testing.T) {
 	images := make([]string, maxImagesPerRequest+1)
 	for i := range images {
@@ -158,65 +198,6 @@ func TestNormalizeBatchSimilarityLimitCapsTopKAtCandidateCount(t *testing.T) {
 	}
 }
 
-func TestValidateSimilarityRequest(t *testing.T) {
-	cases := []struct {
-		name     string
-		req      SimilarityRequest
-		wantOK   bool
-		wantCode string
-	}{
-		{"valid", SimilarityRequest{Text1: "a", Text2: "b", Dimension: defaultEmbeddingDimension}, true, ""},
-		{"empty_text1", SimilarityRequest{Text1: "", Text2: "b", Dimension: defaultEmbeddingDimension}, false, "INVALID_INPUT"},
-		{"whitespace_text2", SimilarityRequest{Text1: "a", Text2: "   ", Dimension: defaultEmbeddingDimension}, false, "INVALID_INPUT"},
-		{"bad_dimension", SimilarityRequest{Text1: "a", Text2: "b", Dimension: -1}, false, "INVALID_DIMENSION"},
-		{"dimension_64_allowed", SimilarityRequest{Text1: "a", Text2: "b", Dimension: 64}, true, ""},
-		{"quality_priority_too_high", SimilarityRequest{Text1: "a", Text2: "b", Dimension: defaultEmbeddingDimension, QualityPriority: 1.5}, false, "INVALID_PARAMETER"},
-		{"latency_priority_negative", SimilarityRequest{Text1: "a", Text2: "b", Dimension: defaultEmbeddingDimension, LatencyPriority: -0.1}, false, "INVALID_PARAMETER"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			code, _, ok := validateSimilarityRequest(tc.req)
-			if ok != tc.wantOK {
-				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
-			}
-			if code != tc.wantCode {
-				t.Fatalf("code = %q, want %q", code, tc.wantCode)
-			}
-		})
-	}
-}
-
-func TestValidateBatchSimilarityRequestRejectsBlankAndOutOfRange(t *testing.T) {
-	base := func() BatchSimilarityRequest {
-		return BatchSimilarityRequest{Query: "q", Candidates: []string{"a", "b"}, Dimension: defaultEmbeddingDimension}
-	}
-	cases := []struct {
-		name     string
-		mutate   func(*BatchSimilarityRequest)
-		wantOK   bool
-		wantCode string
-	}{
-		{"valid", func(*BatchSimilarityRequest) {}, true, ""},
-		{"whitespace_query", func(r *BatchSimilarityRequest) { r.Query = "  " }, false, "INVALID_INPUT"},
-		{"blank_candidate", func(r *BatchSimilarityRequest) { r.Candidates = []string{"a", " "} }, false, "INVALID_INPUT"},
-		{"quality_priority_too_high", func(r *BatchSimilarityRequest) { r.QualityPriority = 2 }, false, "INVALID_PARAMETER"},
-		{"latency_priority_negative", func(r *BatchSimilarityRequest) { r.LatencyPriority = -1 }, false, "INVALID_PARAMETER"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			req := base()
-			tc.mutate(&req)
-			code, _, ok := validateBatchSimilarityRequest(req)
-			if ok != tc.wantOK {
-				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
-			}
-			if code != tc.wantCode {
-				t.Fatalf("code = %q, want %q", code, tc.wantCode)
-			}
-		})
-	}
-}
-
 func TestValidateBatchSimilarityRequestRejectsNegativeTopK(t *testing.T) {
 	req := BatchSimilarityRequest{
 		Query:      "query",
@@ -231,6 +212,163 @@ func TestValidateBatchSimilarityRequestRejectsNegativeTopK(t *testing.T) {
 	}
 	if code != "INVALID_INPUT" || message != "top_k cannot be negative" {
 		t.Fatalf("unexpected validation error %q: %q", code, message)
+	}
+}
+
+// --- Embedding readiness tests using embedding.Set fakes -------------------
+
+// fakeProvider returns a stub embedding.Provider with the given backend name.
+func fakeProvider(backend string) embedding.Provider {
+	p, _ := embedding.NewFuncProvider(backend, 768, func(_ context.Context, _ string) ([]float32, error) {
+		return make([]float32, 768), nil
+	})
+	return p
+}
+
+// A zero-value server acquires a nil embedding set. Every handler must
+// surface 503 EMBEDDING_NOT_READY rather than a 500 or protocol error.
+func TestEmbeddingEndpointsReturn503WhenNotReady(t *testing.T) {
+	s := &ClassificationAPIServer{}
+
+	tests := []struct {
+		name    string
+		path    string
+		body    string
+		handler func(http.ResponseWriter, *http.Request)
+	}{
+		{
+			"embeddings",
+			"/api/v1/embeddings",
+			`{"texts":["hi"]}`,
+			s.handleEmbeddings,
+		},
+		{
+			"similarity",
+			"/api/v1/similarity",
+			`{"text1":"hello","text2":"world"}`,
+			s.handleSimilarity,
+		},
+		{
+			"batch similarity",
+			"/api/v1/similarity/batch",
+			`{"query":"hello","candidates":["world"]}`,
+			s.handleBatchSimilarity,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			tc.handler(rr, req)
+
+			if rr.Code != http.StatusServiceUnavailable {
+				t.Fatalf("expected 503, got %d: %s", rr.Code, rr.Body.String())
+			}
+			if !strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
+				t.Fatalf("expected EMBEDDING_NOT_READY, got: %s", rr.Body.String())
+			}
+		})
+	}
+
+}
+
+func TestCheckEmbeddingReadinessNilSetReturnsNotReady(t *testing.T) {
+	err := checkEmbeddingReadiness(nil, EmbeddingRequest{Texts: []string{"hello"}})
+	if err == nil {
+		t.Fatal("expected nil embedding set to return not-ready for text request")
+	}
+	if !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected ErrEmbeddingModelNotReady, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessEmptyTextReturnsNil(t *testing.T) {
+	if err := checkEmbeddingReadiness(nil, EmbeddingRequest{}); err != nil {
+		t.Fatalf("expected nil error for empty request, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessAutoTextWithTextModelPrepared(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "auto", Texts: []string{"hi"}}); err != nil {
+		t.Fatalf("expected auto text to pass when qwen3 is prepared, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessAutoTextRejectsMultimodalOnlySet(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"multimodal": fakeProvider("candle")}, "qwen3")
+	err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "auto", Texts: []string{"hi"}})
+	if err == nil {
+		t.Fatal("expected auto text to be rejected when only multimodal is prepared")
+	}
+}
+
+func TestCheckEmbeddingReadinessExplicitFamilyMustBePresent(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"gemma": fakeProvider("candle")}, "gemma")
+	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "gemma", Texts: []string{"hi"}}); err != nil {
+		t.Fatalf("expected gemma text to pass when gemma is prepared, got %v", err)
+	}
+	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "qwen3", Texts: []string{"hi"}}); err == nil {
+		t.Fatal("expected qwen3 text to be rejected when only gemma is prepared")
+	}
+}
+
+func TestCheckEmbeddingReadinessAutoTextRejectsBertOnlySet(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"bert": fakeProvider("candle")}, "qwen3")
+	err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "auto", Texts: []string{"hi"}})
+	if err == nil {
+		t.Fatal("expected auto text to be rejected when only bert is prepared (auto cannot select bert)")
+	}
+	if !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected ErrEmbeddingModelNotReady, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessMultimodalTextPassesWithMultimodalPrepared(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"multimodal": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "multimodal", Texts: []string{"hi"}}); err != nil {
+		t.Fatalf("expected multimodal text to pass when multimodal is prepared, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessImageRequestRequiresMultimodal(t *testing.T) {
+	textOnly := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	images := []string{"data:image/png;base64,aGVsbG8="}
+	err := checkEmbeddingReadiness(textOnly, EmbeddingRequest{Images: images})
+	if err == nil {
+		t.Fatal("expected image request to be rejected when multimodal is not prepared")
+	}
+	both := embedding.NewSet(map[string]embedding.Provider{
+		"qwen3":      fakeProvider("candle"),
+		"multimodal": fakeProvider("candle"),
+	}, "qwen3")
+	if err := checkEmbeddingReadiness(both, EmbeddingRequest{Images: images}); err != nil {
+		t.Fatalf("expected image request to pass when multimodal is prepared, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessMixedRequestNeedsBothFamilies(t *testing.T) {
+	textOnly := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	mixed := EmbeddingRequest{
+		Texts:  []string{"hello"},
+		Images: []string{"data:image/png;base64,aGVsbG8="},
+	}
+	if err := checkEmbeddingReadiness(textOnly, mixed); err == nil {
+		t.Fatal("expected mixed request to be rejected when multimodal is not prepared")
+	}
+	imageOnly := embedding.NewSet(map[string]embedding.Provider{"multimodal": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(imageOnly, mixed); err == nil {
+		t.Fatal("expected mixed request to be rejected when no text model is prepared")
+	}
+	both := embedding.NewSet(map[string]embedding.Provider{
+		"qwen3":      fakeProvider("candle"),
+		"multimodal": fakeProvider("candle"),
+	}, "qwen3")
+	if err := checkEmbeddingReadiness(both, mixed); err != nil {
+		t.Fatalf("expected mixed request to pass when both are prepared, got %v", err)
 	}
 }
 

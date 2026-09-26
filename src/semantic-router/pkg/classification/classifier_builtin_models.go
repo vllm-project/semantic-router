@@ -63,6 +63,7 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 	}
 
 	if c.Config.PromptGuard.Backend != nil {
+		c.jailbreakModelReady = true
 		return nil
 	}
 
@@ -82,7 +83,11 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		"use_cpu":   c.Config.PromptGuard.UseCPU,
 	})
 
-	return c.jailbreakInitializer.Init(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, numClasses)
+	if err := c.jailbreakInitializer.Init(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, numClasses); err != nil {
+		return err
+	}
+	c.jailbreakModelReady = true
+	return nil
 }
 
 // CheckForJailbreak analyzes the given text for jailbreak attempts.
@@ -203,6 +208,7 @@ func (c *Classifier) initializePIIClassifier() error {
 	if c.Config.PIIModel.Backend != nil {
 		// Remote inference is fully constructed during classifier assembly and has
 		// no local model lifecycle to execute.
+		c.piiModelReady = true
 		return nil
 	}
 	if !c.IsPIIEnabled() || c.piiInitializer == nil {
@@ -220,5 +226,9 @@ func (c *Classifier) initializePIIClassifier() error {
 		"use_cpu":   c.Config.PIIModel.UseCPU,
 	})
 
-	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU, numPIIClasses)
+	if err := c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU, numPIIClasses); err != nil {
+		return err
+	}
+	c.piiModelReady = true
+	return nil
 }
