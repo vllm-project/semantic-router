@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
@@ -31,8 +32,6 @@ func (e *mediaEncodeError) Error() string {
 	return fmt.Sprintf("%s[%d]: %v", e.modality, e.index, e.err)
 }
 func (e *mediaEncodeError) Unwrap() error { return e.err }
-
-func (e *imageEncodeError) Unwrap() error { return e.err }
 
 func isEmbeddingModelNotReady(err error) bool {
 	return errors.Is(err, services.ErrModelNotReady) ||
@@ -277,12 +276,12 @@ func buildEmbeddingResults(req EmbeddingRequest) ([]EmbeddingResult, int64, erro
 		if canonical, ok := imageurl.CanonicalDataURL(image); ok {
 			encodeInput = canonical
 		}
-		output, err := multiModalEncodeImage(encodeInput, req.Dimension)
+		output, err := candle_binding.MultiModalEncodeImageFromBase64(encodeInput, req.Dimension)
 		if err != nil {
 			// The image already passed the safe-data-URI + base64-decode gate, so
 			// an encode failure here is input-caused (undecodable image bytes);
 			// surface it as a 400 rather than a 500.
-			return nil, 0, &imageEncodeError{index: i, err: err}
+			return nil, 0, &mediaEncodeError{modality: "image", index: i, err: err}
 		}
 
 		processingTime := int64(output.ProcessingTimeMs)
