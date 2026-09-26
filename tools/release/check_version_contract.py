@@ -21,6 +21,12 @@ from release_contract_markers import (
 from snapshot_model_catalog import release_snapshot_errors
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+CI_TOOLS_ROOT = REPO_ROOT / "tools/ci"
+if str(CI_TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(CI_TOOLS_ROOT))
+
+from image_artifacts import publication_tags  # noqa: E402
+
 PYPROJECT_PATH = REPO_ROOT / "src/vllm-sr/pyproject.toml"
 SIM_PYPROJECT_PATH = REPO_ROOT / "src/fleet-sim/pyproject.toml"
 CANDLE_CARGO_PATH = REPO_ROOT / "candle-binding/Cargo.toml"
@@ -28,8 +34,8 @@ CANDLE_LOCK_PATH = REPO_ROOT / "candle-binding/Cargo.lock"
 HELM_CHART_PATH = REPO_ROOT / "deploy/helm/semantic-router/Chart.yaml"
 HELM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/helm-publish.yml"
 DOCKER_PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/docker-publish.yml"
-RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/release.yml"
 CI_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/ci.yml"
+RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/release.yml"
 CI_CHANGES_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/ci-changes.yml"
 CI_PLAN_PATH = REPO_ROOT / "tools/ci/ci_plan.py"
 CI_IMAGE_INVENTORY_PATH = REPO_ROOT / "tools/ci/classify_pr_changes.py"
@@ -359,7 +365,12 @@ def validate_release_image_bridge(errors: list[str]) -> None:
         (
             CI_PLAN_PATH,
             "release image inventory selection",
-            "publish_images = list(PRODUCTION_RELEASE_IMAGES)",
+            "for image in PRODUCTION_RELEASE_IMAGES",
+        ),
+        (
+            CI_PLAN_PATH,
+            "Decision image qualification switch",
+            'if decision_runtime_images or image != "decision-runtime-cpu"',
         ),
         (
             CI_CHANGES_WORKFLOW_PATH,
@@ -410,7 +421,13 @@ def validate_upgrade_docs_images(
 ) -> None:
     upgrade_docs = read_text(UPGRADE_ROLLBACK_DOC_PATH)
     for image in release_images:
-        image_ref = f"{GHCR_IMAGE_PREFIX}/{image}:v{version}"
+        release_tag = f"v{version}"
+        if release_tag not in publication_tags(
+            image, "release", release_tag, False, ""
+        ):
+            # Decision CPU is published by source SHA and selected by the CLI.
+            continue
+        image_ref = f"{GHCR_IMAGE_PREFIX}/{image}:{release_tag}"
         if image_ref in upgrade_docs:
             continue
         message = (

@@ -1,0 +1,20 @@
+{
+  "schema_version": 4,
+  "family": "qwen3.5",
+  "artifact": {"manifest_path": "MODEL_MANIFEST.json"},
+  "max_input_tokens": 16384,
+  "dtype": {
+    "backbone": "bfloat16",
+    "head": "float32"
+  },
+  "physical_batch_size": 8,
+  "calibration": {"temperature": 1.0389139156246665},
+  "prompt_policy": {"choice_null_description": "preserve_json_null"},
+  "execution": {
+    "rocm": {
+      "gated_delta": "native_torch",
+      "max_physical_batch_size": 8,
+      "job_turn_batches": 2
+    }
+  }
+}

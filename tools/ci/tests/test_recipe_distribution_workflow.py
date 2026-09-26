@@ -57,6 +57,17 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertIn("fetch-depth: 0", self.text)
         self.assertIn("github.event.pull_request.base.sha", self.text)
 
+    def test_release_package_uses_tagged_commit_as_base(self) -> None:
+        qualification = next(
+            step
+            for step in self.workflow.jobs["package"]["steps"]
+            if step.get("name") == "Qualify the final candidate"
+        )
+        self.assertIn(
+            "inputs.mode == 'release' && github.sha",
+            qualification["env"]["BASE_REF"],
+        )
+
     def test_source_package_build_stages_catalog_assets_automatically(self) -> None:
         setup_text = (REPO_ROOT / "src" / "vllm-sr" / "setup.py").read_text(
             encoding="utf-8"
@@ -112,8 +123,9 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertNotIn("managed-recipe-release-assets", release_text)
         self.assertNotIn("release-assets/recipes", release_text)
         self.assertNotIn(".vllm-sr-recipe.zip", release_text)
-        self.assertIn(
-            "needs: [validate, gate, docker, helm, pypi, crate]", release_text
+        self.assertEqual(
+            needs(self.release_workflow.jobs["release-notes"]),
+            {"validate", "gate", "docker", "helm", "pypi", "crate"},
         )
         self.assertIn("They are not published", release_text)
         self.assertIn("as separate GitHub Release assets", release_text)

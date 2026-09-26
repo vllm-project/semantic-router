@@ -15,6 +15,7 @@ IMAGE_PRODUCERS = {
     "image-operator": ("operator", "operator-bundle"),
     "image-fixtures": ("provider-mocker",),
     "image-distribution": (
+        "decision-runtime-cpu",
         "extproc-rocm",
         "vllm-sr-cuda",
         "vllm-sr-rocm",

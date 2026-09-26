@@ -30,6 +30,10 @@ jobs:
       sim_version: ${{ steps.contract.outputs.sim_version }}
       candle_version: ${{ steps.contract.outputs.candle_version }}
       catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}
+      decision_rocm_qualification: ${{ steps.decision_rocm.outputs.record }}
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -72,6 +76,20 @@ jobs:
             --version "${{ steps.version.outputs.version }}" \
             --github-output "$GITHUB_OUTPUT"
 
+      - name: Validate Decision ROCm qualification record and image identity
+        if: github.event_name == 'push'
+        id: decision_rocm
+        env:
+          DECISION_ROCM_QUALIFICATION: ${{ vars.DECISION_ROCM_QUALIFICATION }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+          printf '%s' "$GHCR_TOKEN" | skopeo login --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+          record="$(python3 tools/ci/package_contract.py --mode release \
+            --verify-rocm-qualification --verify-registry)"
+          printf 'record=%s\n' "$record" >> "$GITHUB_OUTPUT"
+
       - name: Resolve compatible previous release for paired performance
         id: baseline
         env:
@@ -79,6 +97,7 @@ jobs:
         run: |
           python3 tools/ci/ci_plan.py previous-release \
             --version "$RELEASE_VERSION" --github-output "$GITHUB_OUTPUT"
+
 
   ci:
     name: Release Candidate
@@ -92,15 +111,16 @@ jobs:
       profile: release
       tag: ${{ needs.validate.outputs.tag }}
       performance-base-ref: ${{ needs.validate.outputs.performance_base }}
+      decision-runtime-images: true
     secrets: inherit
 
   gate:
-    name: Release CPU Qualification
+    name: Release Checks
     if: always()
     needs: [validate, ci]
     runs-on: ubuntu-24.04
     steps:
-      - name: Require version and complete CPU evidence
+      - name: Require release checks
         env:
           VERSION_RESULT: ${{ needs.validate.result }}
           QUALIFICATION_RESULT: ${{ needs.ci.result }}
@@ -111,7 +131,9 @@ jobs:
   docker:
     name: Publish Images
     needs: [validate, gate, ci]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    if: >-
+      !cancelled() && github.event_name == 'push'
+      && needs.gate.result == 'success'
     permissions:
       contents: read
       actions: read
@@ -127,7 +149,9 @@ jobs:
   helm:
     name: Publish Helm Chart
     needs: [validate, gate]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    if: >-
+      !cancelled() && github.event_name == 'push'
+      && needs.gate.result == 'success'
     permissions:
       contents: read
       actions: read
@@ -141,20 +165,31 @@ jobs:
 
   pypi:
     name: Publish Python Package
-    needs: [validate, gate]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    needs: [validate, gate, docker]
+    if: >-
+      !cancelled() && github.event_name == 'push'
+      && needs.gate.result == 'success'
+      && needs.docker.result == 'success'
+    permissions:
+      contents: read
+      actions: read
+      packages: read
     uses: ./.github/workflows/pypi-publish.yml
     with:
       version: ${{ needs.validate.outputs.version }}
       tag: ${{ needs.validate.outputs.tag }}
       catalog_snapshot: ${{ needs.validate.outputs.catalog_snapshot }}
       prebuilt-dist: true
+      decision_runtime: true
+      decision_rocm_qualification: ${{ needs.validate.outputs.decision_rocm_qualification }}
     secrets: inherit
 
   crate:
     name: Publish Rust Crate
     needs: [validate, gate]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    if: >-
+      !cancelled() && github.event_name == 'push'
+      && needs.gate.result == 'success'
     uses: ./.github/workflows/publish-crate.yml
     with:
       version: ${{ needs.validate.outputs.version }}
@@ -165,14 +200,21 @@ jobs:
   release-notes:
     name: Publish GitHub Release
     needs: [validate, gate, docker, helm, pypi, crate]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    if: >-
+      always() && !cancelled() && github.event_name == 'push'
+      && needs.validate.result == 'success'
+      && needs.gate.result == 'success'
+      && needs.docker.result == 'success'
+      && needs.helm.result == 'success'
+      && needs.crate.result == 'success'
+      && needs.pypi.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: vllm-sr-dist
+          name: vllm-sr-bound-dist
           path: release-assets/python
 
       - uses: actions/download-artifact@v4
@@ -203,12 +245,12 @@ jobs:
           body: |
             ## Release ${{ needs.validate.outputs.tag }}
 
-            Version and CPU runtime qualification completed before Docker, Helm, PyPI, crates.io,
-            and operator image publication.
+            Version and CPU checks passed. The six-model Decision ROCm qualification
+            record and published image identity were verified before publication.
 
             ### Container images
 
-            All images use `${{ needs.validate.outputs.tag }}` and `latest`:
+            The router images below use `${{ needs.validate.outputs.tag }}` and `latest`:
 
             - `dashboard`
             - `extproc`
@@ -218,6 +260,10 @@ jobs:
             - `vllm-sr`
             - `vllm-sr-cuda`
             - `vllm-sr-rocm`
+
+            Decision Runtime CPU and ROCm images are bound to this Python package
+            by digest. The installed CLI selects them automatically; their image
+            tags are not part of the user-facing serving command.
 
             Registry prefix:
             `ghcr.io/${{ steps.owner.outputs.value }}/semantic-router/`
@@ -259,3 +305,11 @@ jobs:
             `vllm-sr-sim` Python releases remain on the independent
             `vllm-sr-sim-v*` tag stream (current source version
             `${{ needs.validate.outputs.sim_version }}`).
+
+            ### Decision 1.0
+
+            This release publishes `decision-runtime-cpu` and binds the verified
+            `decision-runtime-rocm` image. The installed CLI selects the matching
+            image automatically. Run
+            `vllm-sr decision serve llm-semantic-router/Decision-1.0-Kai-0.6B --port 8001 --detach`
+            to serve a model.

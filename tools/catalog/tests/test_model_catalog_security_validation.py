@@ -97,14 +97,14 @@ class ModelCatalogSecurityValidationTests(unittest.TestCase):
         )
         physical["distribution"]["source"] = malformed
         with self.assertRaisesRegex(catalog.CatalogBuildError, "HTTPS document URL"):
-            catalog._validate_models([physical], set(), reasoning_ids)
+            catalog._validate_models([physical], set(), reasoning_ids, set())
 
         physical = deepcopy(
             next(item for item in resources["models"] if item["kind"] == "physical")
         )
         physical["verification"]["source"] = "https://:443"
         with self.assertRaisesRegex(catalog.CatalogBuildError, "HTTPS document URL"):
-            catalog._validate_models([physical], set(), reasoning_ids)
+            catalog._validate_models([physical], set(), reasoning_ids, set())
 
         providers = deepcopy(resources["providers"])
         binding = next(

@@ -278,13 +278,19 @@ class SelectionTests(unittest.TestCase):
         for path in (
             "src/vllm-sr/README.md",
             "src/vllm-sr/tests/test_container_start.py",
-            "src/vllm-sr/cli/evaluation/runtime_factors.py",
-            "src/vllm-sr/cli/commands/chat.py",
         ):
             with self.subTest(unrelated_path=path):
                 plan = make_plan([path], source_sha=SHA)
                 self.assertNotIn("local.cli", plan["expected_verification_ids"])
                 self.assertEqual(plan["images"], [])
+        for path in (
+            "src/vllm-sr/cli/evaluation/runtime_factors.py",
+            "src/vllm-sr/cli/commands/chat.py",
+        ):
+            with self.subTest(packaged_cli_path=path):
+                plan = make_plan([path], source_sha=SHA)
+                self.assertNotIn("local.cli", plan["expected_verification_ids"])
+                self.assertNotIn("decision-runtime-cpu", plan["images"])
 
     def test_operator_request_helper_selects_its_real_deployment(self):
         path = "tools/ci/check_operator_request.py"
@@ -473,7 +479,90 @@ class SelectionTests(unittest.TestCase):
         self.assertFalse(docs["publish_images"])
         cli = make_plan(["src/vllm-sr/cli/core.py"], source_sha=SHA, profile="main")
         self.assertTrue(cli["publish_python"])
+        self.assertNotIn("decision-runtime-cpu", cli["publish_images"])
         self.assertIn("cli-package", cli["expected_verification_ids"])
+
+    def test_main_catalog_package_keeps_decision_image_opt_in(self):
+        for path in (
+            "src/vllm-sr/tests/test_decision_runtime_server.py",
+            "src/vllm-sr/README.md",
+            "config/catalog/README.md",
+            "website/static/model-catalog/catalog.json",
+        ):
+            with self.subTest(path=path):
+                plan = make_plan([path], source_sha=SHA, profile="main")
+                self.assertFalse(plan["publish_python"])
+        for path in (
+            "config/catalog/manifest.yaml",
+            "config/catalog/schemas/catalog-resources-v1.schema.json",
+        ):
+            with self.subTest(path=path):
+                plan = make_plan([path], source_sha=SHA, profile="main")
+                self.assertTrue(plan["publish_python"])
+                self.assertNotIn("decision-runtime-cpu", plan["publish_images"])
+                decision = make_plan(
+                    [path], source_sha=SHA, profile="main", decision_runtime_images=True
+                )
+                self.assertNotIn("decision-runtime-cpu", decision["publish_images"])
+        for path in (
+            "config/catalog/resources/models/single/llm-semantic-router.yaml",
+            "config/catalog/resources/providers/decision-runtime.yaml",
+            "config/recipes/built-in/latest/catalog.yaml",
+        ):
+            with self.subTest(decision_source=path):
+                plan = make_plan([path], source_sha=SHA, profile="main")
+                self.assertNotIn("decision-runtime-cpu", plan["publish_images"])
+                decision = make_plan(
+                    [path], source_sha=SHA, profile="main", decision_runtime_images=True
+                )
+                self.assertIn("decision-runtime-cpu", decision["publish_images"])
+
+    def test_decision_cpu_enters_trusted_image_flow_without_scheduling_rocm(self):
+        for path in (
+            "src/vllm-sr/decision_runtime/image/Dockerfile",
+            "src/vllm-sr/cli/commands/decision.py",
+            "src/vllm-sr/setup.py",
+            "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+        ):
+            with self.subTest(path=path):
+                pr = make_plan([path], source_sha=SHA)
+                self.assertIn("decision-runtime-cpu", pr["images"])
+                self.assertNotIn("decision-runtime-rocm", pr["images"])
+                self.assertEqual(pr["publish_images"], [])
+                self.assertIn(
+                    "decision-runtime-cpu", pr["image_producers"]["image-distribution"]
+                )
+                main = make_plan([path], source_sha=SHA, profile="main")
+                self.assertNotIn("decision-runtime-cpu", main["publish_images"])
+                enabled = make_plan(
+                    [path], source_sha=SHA, profile="main", decision_runtime_images=True
+                )
+                self.assertIn("decision-runtime-cpu", enabled["publish_images"])
+        for path in (
+            "src/vllm-sr/cli/commands/chat.py",
+            "config/recipes/built-in/latest/mom-v1/config.yaml",
+        ):
+            with self.subTest(unrelated_packaged_source=path):
+                pr = make_plan([path], source_sha=SHA)
+                self.assertNotIn("decision-runtime-cpu", pr["images"])
+                main = make_plan(
+                    [path], source_sha=SHA, profile="main", decision_runtime_images=True
+                )
+                self.assertNotIn("decision-runtime-cpu", main["publish_images"])
+        nightly = make_plan([], source_sha=SHA, profile="nightly")
+        self.assertNotIn("decision-runtime-cpu", nightly["publish_images"])
+        decision_nightly = make_plan(
+            [], source_sha=SHA, profile="nightly", decision_runtime_images=True
+        )
+        self.assertIn("decision-runtime-cpu", decision_nightly["publish_images"])
+        self.assertNotIn("decision-runtime-rocm", decision_nightly["images"])
+        release = make_plan([], source_sha=SHA, profile="release")
+        self.assertNotIn("decision-runtime-cpu", release["publish_images"])
+        decision_release = make_plan(
+            [], source_sha=SHA, profile="release", decision_runtime_images=True
+        )
+        self.assertIn("decision-runtime-cpu", decision_release["publish_images"])
+        self.assertNotIn("decision-runtime-rocm", decision_release["images"])
 
     def test_previous_release_is_explicit_compatible_and_not_head_parent(self):
         self.assertEqual(

@@ -387,6 +387,16 @@ domains:
     checks: [make ck-rewrite-test]
     verifications: [ck-rewrite]
 
+  decision-runtime:
+    owner: vllm-sr-cli
+    paths:
+      - src/vllm-sr/decision_runtime/**
+      - src/vllm-sr/tests/test_decision_runtime_*.py
+      - src/vllm-sr/tests/test_decision_physical_batching.py
+      - src/vllm-sr/tests/test_decision_request_limits.py
+    checks: [make vllm-sr-decision-runtime-test]
+    verifications: [cli-unit]
+
   vllm-sr-cli:
     owner: vllm-sr-cli
     paths:
@@ -695,6 +705,54 @@ domains:
     verifications: [quality]
 
 images:
+  decision-runtime-cpu:
+    pr_paths:
+      - src/vllm-sr/decision_runtime/**
+      - src/vllm-sr/cli/decision_runtime/**
+      - src/vllm-sr/cli/commands/decision.py
+      - src/vllm-sr/cli/main.py
+      - src/vllm-sr/cli/model_catalog.py
+      - src/vllm-sr/cli/model_catalog_types.py
+      - src/vllm-sr/cli/model_catalog_validation.py
+      - src/vllm-sr/pyproject.toml
+      - src/vllm-sr/setup.py
+      - src/vllm-sr/build_support.py
+      - src/vllm-sr/requirements.txt
+      - src/vllm-sr/MANIFEST.in
+      - config/catalog/resources/models/single/llm-semantic-router.yaml
+      - config/catalog/resources/providers/decision-runtime.yaml
+      - config/recipes/built-in/latest/catalog.yaml
+      - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+      - tools/release/stage_model_catalog_package.py
+      - tools/ci/image_artifacts.py
+      - tools/ci/docker-build-args.sh
+      - .github/workflows/build-artifacts.yml
+    publish_paths:
+      - src/vllm-sr/decision_runtime/**
+      - src/vllm-sr/cli/decision_runtime/**
+      - src/vllm-sr/cli/commands/decision.py
+      - src/vllm-sr/cli/main.py
+      - src/vllm-sr/cli/model_catalog.py
+      - src/vllm-sr/cli/model_catalog_types.py
+      - src/vllm-sr/cli/model_catalog_validation.py
+      - src/vllm-sr/pyproject.toml
+      - src/vllm-sr/setup.py
+      - src/vllm-sr/build_support.py
+      - src/vllm-sr/requirements.txt
+      - src/vllm-sr/MANIFEST.in
+      - config/catalog/resources/models/single/llm-semantic-router.yaml
+      - config/catalog/resources/providers/decision-runtime.yaml
+      - config/recipes/built-in/latest/catalog.yaml
+      - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+      - tools/release/stage_model_catalog_package.py
+      - tools/ci/image_artifacts.py
+      - tools/ci/docker-build-args.sh
+      - .github/workflows/build-artifacts.yml
+  # ROCm stays outside hosted image matrices. Stable releases bind a separately
+  # qualified and published GPU image by digest.
+  decision-runtime-rocm:
+    pr_paths: []
+    publish_paths: []
   dashboard:
     pr_paths:
       - dashboard/**/Dockerfile*

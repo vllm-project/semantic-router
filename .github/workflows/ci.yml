@@ -25,6 +25,10 @@ on:
       performance-base-ref:
         type: string
         default: ''
+      decision-runtime-images:
+        description: Include Decision images in a publishing CI profile.
+        type: boolean
+        default: false
     outputs:
       plan:
         value: ${{ jobs.plan.outputs.plan }}
@@ -47,6 +51,7 @@ jobs:
       profile: ${{ inputs.profile || 'pr' }}
       full: ${{ inputs.full || false }}
       draft: ${{ inputs.draft || false }}
+      decision-runtime-images: ${{ inputs.decision-runtime-images || false }}
       verification: ${{ github.event_name == 'workflow_dispatch' && inputs.verification || '' }}
 
   image-router:

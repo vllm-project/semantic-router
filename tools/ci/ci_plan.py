@@ -103,9 +103,12 @@ def make_plan(
     draft: bool = False,
     base_sha: str = "",
     requested: tuple[str, ...] = (),
+    decision_runtime_images: bool = False,
 ) -> dict:
     if profile not in PROFILES:
         raise ValueError(f"unknown CI profile: {profile}")
+    if decision_runtime_images and profile == "pr":
+        raise ValueError("Decision publication is unavailable in the PR CI profile")
     if len(source_sha) != GIT_SHA_LENGTH or any(
         c not in "0123456789abcdef" for c in source_sha
     ):
@@ -174,11 +177,29 @@ def make_plan(
         verifications.append(record)
     publish_images = []
     if profile == "main":
-        publish_images = list(selection.publish_images)
+        publish_images = [
+            image
+            for image in selection.publish_images
+            if decision_runtime_images or image != "decision-runtime-cpu"
+        ]
     elif profile == "nightly":
-        publish_images = list(NIGHTLY_IMAGES)
+        publish_images = [
+            image
+            for image in NIGHTLY_IMAGES
+            if decision_runtime_images or image != "decision-runtime-cpu"
+        ]
     elif profile == "release":
-        publish_images = list(PRODUCTION_RELEASE_IMAGES)
+        publish_images = [
+            image
+            for image in PRODUCTION_RELEASE_IMAGES
+            if decision_runtime_images or image != "decision-runtime-cpu"
+        ]
+    publish_python = profile == "release" or (
+        profile == "main"
+        and not selection.signals["docs_only"]
+        and not selection.test_only
+        and bool({"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains))
+    )
     images = sorted(
         set(selection.pr_images if ids else ())
         | set(publish_images)
@@ -215,13 +236,7 @@ def make_plan(
         "publish_images": publish_images,
         "publish_helm": profile in {"nightly", "release"}
         or (profile == "main" and selection.signals["helm"]),
-        "publish_python": profile == "release"
-        or (
-            profile == "main"
-            and bool(
-                {"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains)
-            )
-        ),
+        "publish_python": publish_python,
         "multiarch": bool(publish_images),
         "not_applicable": load_catalog()["full_cpu"]["excluded"],
         "quality_context": dict(selection.signals),
@@ -399,6 +414,7 @@ def main() -> int:
     parser.add_argument("--head", required=True)
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--draft", action="store_true")
+    parser.add_argument("--decision-runtime-images", action="store_true")
     parser.add_argument("--verification", action="append", default=[])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--github-output", type=Path)
@@ -416,6 +432,7 @@ def main() -> int:
         full=args.full,
         draft=args.draft,
         requested=tuple(args.verification),
+        decision_runtime_images=args.decision_runtime_images,
     )
     resolve_image_sources(plan)
     args.output.parent.mkdir(parents=True, exist_ok=True)

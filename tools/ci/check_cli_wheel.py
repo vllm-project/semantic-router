@@ -10,10 +10,11 @@ import subprocess
 import sys
 import tempfile
 import venv
+from collections.abc import Mapping
 from pathlib import Path
 
 
-def check_wheel(wheel: Path) -> None:
+def check_wheel(wheel: Path, decision_images: Mapping[str, str] | None = None) -> None:
     wheel = wheel.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="vllm-sr-wheel-") as temporary:
         root = Path(temporary)
@@ -162,12 +163,47 @@ def check_wheel(wheel: Path) -> None:
         print(
             "Installed wheel supports schema, config lifecycle, route evidence, and built-in Recipe export."
         )
+        if decision_images is not None:
+            cli("decision", "serve", "--help")
+            result = subprocess.run(
+                args=[
+                    str(python),
+                    "-I",
+                    "-c",
+                    "import json; "
+                    "from cli.decision_runtime.image_lock import load_decision_image_lock; "
+                    "print(json.dumps(dict(load_decision_image_lock().images), sort_keys=True))",
+                ],
+                cwd=root,
+                env=child_env,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=60,
+            )
+            if result.returncode:
+                raise RuntimeError("installed Decision image lock is unreadable")
+            try:
+                installed_images = json.loads(result.stdout)
+            except (json.JSONDecodeError, TypeError) as error:
+                raise RuntimeError(
+                    "installed Decision image lock is unreadable"
+                ) from error
+            if installed_images != dict(decision_images):
+                raise RuntimeError(
+                    "installed Decision images do not match the published release"
+                )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheel", type=Path)
-    check_wheel(parser.parse_args().wheel)
+    parser.add_argument("--decision-images-json")
+    args = parser.parse_args()
+    images = (
+        json.loads(args.decision_images_json) if args.decision_images_json else None
+    )
+    check_wheel(args.wheel, decision_images=images)
 
 
 if __name__ == "__main__":

@@ -22,6 +22,7 @@ class ReleaseVersionContractTests(unittest.TestCase):
             release_contract.parse_release_images(),
             (
                 "dashboard",
+                "decision-runtime-cpu",
                 "extproc",
                 "extproc-rocm",
                 "operator",
@@ -89,6 +90,30 @@ class ReleaseVersionContractTests(unittest.TestCase):
             release_contract.validate_release_image_bridge(errors)
         self.assertEqual(len(errors), 1)
         self.assertIn("release image input", errors[0])
+
+    def test_upgrade_docs_require_current_release_tag_except_source_tagged_cpu(
+        self,
+    ) -> None:
+        original_read_text = release_contract.read_text
+
+        def stale_upgrade_guide(path: Path) -> str:
+            content = original_read_text(path)
+            if path == release_contract.UPGRADE_ROLLBACK_DOC_PATH:
+                return content.replace("vllm-sr:v0.4.0", "vllm-sr:v0.3.0")
+            return content
+
+        errors: list[str] = []
+        with (
+            mock.patch.object(
+                release_contract, "read_text", side_effect=stale_upgrade_guide
+            ),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            release_contract.validate_upgrade_docs_images(
+                errors, ("vllm-sr", "decision-runtime-cpu"), "0.4.0"
+            )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("vllm-sr:v0.4.0", errors[0])
 
     def test_helm_source_default_pins_a_stable_release(self) -> None:
         for app_version in ("v0.3.0", "v0.4.0"):

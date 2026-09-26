@@ -25,6 +25,20 @@ class CatalogCompatibility:
 
 
 @dataclass(frozen=True)
+class CatalogProviderModel:
+    """One physical model resolved through an exact provider binding."""
+
+    catalog_id: str
+    provider_id: str
+    model_id: str
+    revision: str
+    family: str
+    parameter_size: str
+    protocols: tuple[str, ...]
+    distribution_source: str
+
+
+@dataclass(frozen=True)
 class CatalogModel:
     id: str
     display_name: str

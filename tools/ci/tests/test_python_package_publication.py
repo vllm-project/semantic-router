@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import hashlib
+import io
+import json
 import os
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -13,8 +18,39 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
 from check_cli_wheel import check_wheel  # noqa: E402
+from ci_plan import make_plan  # noqa: E402
+from image_artifacts import DECISION_RUNTIME_BASES  # noqa: E402
+from package_contract import (  # noqa: E402
+    DECISION_LOCK_PATH,
+    ROCM_CHECKS,
+    decision_catalog_revisions,
+    decision_lock,
+    decision_publication,
+    rocm_qualification,
+    verify_distribution,
+)
 from prepare_dev_package import prepare_version  # noqa: E402
 from validate_workflows import load_workflows, needs  # noqa: E402
+
+
+def rocm_record(source: str, manifest: bytes) -> dict:
+    digest = "sha256:" + hashlib.sha256(manifest).hexdigest()
+    return {
+        "schema_version": 1,
+        "image": "decision-runtime-rocm",
+        "source_sha": source,
+        "platform": "linux/amd64",
+        "digest": digest,
+        "ref": f"ghcr.io/example/semantic-router/decision-runtime-rocm@{digest}",
+        "evidence_sha256": "e" * 64,
+        "models": {
+            model_id: {
+                "revision": revision,
+                "checks": dict.fromkeys(ROCM_CHECKS, "passed"),
+            }
+            for model_id, revision in decision_catalog_revisions().items()
+        },
+    }
 
 
 class DevelopmentVersionTests(unittest.TestCase):
@@ -61,6 +97,17 @@ class PythonPublisherContractTests(unittest.TestCase):
         publisher = main.jobs["pypi"]
         self.assertEqual(publisher["uses"], "./.github/workflows/pypi-publish.yml")
         self.assertEqual(publisher["with"]["channel"], "dev")
+        self.assertEqual(needs(publisher), {"ci"})
+        self.assertFalse(publisher["with"].get("decision_runtime", False))
+        self.assertNotIn("decision-runtime-images", main.jobs["ci"]["with"])
+        source = "src/vllm-sr/cli/decision_runtime/image_lock.py"
+        normal_plan = make_plan([source], source_sha="a" * 40, profile="main")
+        decision_plan = make_plan(
+            [source], source_sha="a" * 40, profile="main", decision_runtime_images=True
+        )
+        self.assertTrue(normal_plan["publish_python"])
+        self.assertNotIn("decision-runtime-cpu", normal_plan["publish_images"])
+        self.assertIn("decision-runtime-cpu", decision_plan["publish_images"])
         for job_name in ("pypi", "images", "helm"):
             job = main.jobs[job_name]
             self.assertIn("ci", needs(job))
@@ -130,7 +177,7 @@ class PythonPublisherContractTests(unittest.TestCase):
         verify_index = next(
             index
             for index, step in enumerate(steps)
-            if step.get("name") == "Verify qualified source and package content"
+            if step.get("name") == "Verify prebuilt distribution"
         )
         publish_index = next(
             index
@@ -143,6 +190,280 @@ class PythonPublisherContractTests(unittest.TestCase):
         self.assertEqual(install["if"], "inputs.prebuilt-dist")
         self.assertIn("PyYAML==6.0.3", install["run"])
         self.assertIn("PyYAML==6.0.3", str(self.workflows["package-check.yml"].jobs))
+
+    def test_python_publication_waits_for_the_published_decision_image(self) -> None:
+        publisher = self.workflows["release.yml"].jobs["pypi"]
+        self.assertIn("docker", needs(publisher))
+        self.assertIn("needs.docker.result == 'success'", publisher["if"])
+        self.assertTrue(publisher["with"]["decision_runtime"])
+        receipt = self.workflows["docker-publish.yml"].jobs["publish"]["steps"]
+        self.assertTrue(
+            any(
+                step.get("with", {}).get("name") == "ci-published-decision-runtime-cpu"
+                for step in receipt
+            )
+        )
+        publish_steps = self.publisher.jobs["pypi"]["steps"]
+        self.assertTrue(
+            any(
+                "--decision-image-receipt" in step.get("run", "")
+                and "--verify-registry" in step["run"]
+                for step in publish_steps
+            )
+        )
+        release = self.workflows["release.yml"]
+        validation = release.jobs["validate"]
+        self.assertIn("decision_rocm_qualification", validation["outputs"])
+        rocm_step = next(
+            step for step in validation["steps"] if step.get("id") == "decision_rocm"
+        )
+        self.assertEqual(rocm_step["if"], "github.event_name == 'push'")
+        self.assertIn("--verify-rocm-qualification", rocm_step["run"])
+        self.assertIn("--verify-registry", rocm_step["run"])
+        self.assertIn("DECISION_ROCM_QUALIFICATION", rocm_step["env"])
+        self.assertEqual(
+            release.jobs["pypi"]["with"]["decision_rocm_qualification"],
+            "${{ needs.validate.outputs.decision_rocm_qualification }}",
+        )
+
+    def test_stable_release_requires_version_bound_decision_images(
+        self,
+    ) -> None:
+        release = self.workflows["release.yml"]
+        publisher = release.jobs["pypi"]
+        self.assertNotIn("decision_pypi", release.jobs)
+        self.assertNotIn(
+            "decision_runtime_release", release.jobs["validate"]["outputs"]
+        )
+        self.assertNotIn(
+            "DECISION_RUNTIME_RELEASE", str(release.jobs["validate"]["steps"])
+        )
+        self.assertEqual(needs(publisher), {"validate", "gate", "docker"})
+        self.assertIn("needs.docker.result == 'success'", publisher["if"])
+        self.assertTrue(publisher["with"]["decision_runtime"])
+        self.assertEqual(
+            release.jobs["ci"]["with"]["decision-runtime-images"],
+            True,
+        )
+        notes = release.jobs["release-notes"]
+        self.assertIn("needs.pypi.result == 'success'", notes["if"])
+        self.assertNotIn("decision_pypi", str(notes))
+        python_downloads = [
+            step
+            for step in notes["steps"]
+            if step.get("with", {}).get("path") == "release-assets/python"
+        ]
+        self.assertEqual(
+            [step["with"]["name"] for step in python_downloads],
+            ["vllm-sr-bound-dist"],
+        )
+        decision_plan = make_plan(
+            [], source_sha="a" * 40, profile="release", decision_runtime_images=True
+        )
+        self.assertIn("decision-runtime-cpu", decision_plan["publish_images"])
+
+        stable_guard = next(
+            step
+            for step in self.publisher.jobs["pypi"]["steps"]
+            if step.get("name") == "Require Decision images for stable packages"
+        )
+        self.assertEqual(stable_guard["if"], "inputs.channel == 'stable'")
+        self.assertIn('test "$DECISION_RUNTIME" = true', stable_guard["run"])
+        self.assertIn('test "$PREBUILT_DIST" = true', stable_guard["run"])
+        verify = next(
+            step
+            for step in self.publisher.jobs["pypi"]["steps"]
+            if step.get("name") == "Verify prebuilt distribution"
+        )
+        self.assertIn('"$MODE" == release', verify["run"])
+        self.assertIn("--require-decision-images", verify["run"])
+
+    def test_decision_receipt_rejects_stale_source_and_registry_content(self) -> None:
+        source = "a" * 40
+        raw = b'{"schemaVersion":2}'
+        digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+        receipt = {
+            "schema_version": 1,
+            "image": "decision-runtime-cpu",
+            "source_sha": source,
+            "mode": "release",
+            "tag": "v1.2.3",
+            "digest": digest,
+            "ref": f"ghcr.io/example/semantic-router/decision-runtime-cpu@{digest}",
+            "archive_sha256": "b" * 64,
+            "platform": "linux/amd64",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "published.json"
+            path.write_text(json.dumps(receipt))
+            with (
+                patch.dict(os.environ, {"GITHUB_REPOSITORY_OWNER": "Example"}),
+                patch("package_contract.subprocess.check_output", return_value=raw),
+            ):
+                decision_publication(
+                    path,
+                    source_sha=source,
+                    mode="release",
+                    tag="v1.2.3",
+                    verify_registry=True,
+                )
+                with self.assertRaisesRegex(ValueError, "does not match"):
+                    decision_publication(
+                        path,
+                        source_sha="c" * 40,
+                        mode="release",
+                        tag="v1.2.3",
+                        verify_registry=True,
+                    )
+                with (
+                    patch(
+                        "package_contract.subprocess.check_output",
+                        return_value=b"other",
+                    ),
+                    self.assertRaisesRegex(ValueError, "digest differs"),
+                ):
+                    decision_publication(
+                        path,
+                        source_sha=source,
+                        mode="release",
+                        tag="v1.2.3",
+                        verify_registry=True,
+                    )
+
+    def test_rocm_qualification_requires_six_models_and_exact_registry_image(
+        self,
+    ) -> None:
+        source = "a" * 40
+        manifest = b'{"schemaVersion":2}'
+        record = rocm_record(source, manifest)
+        config = {
+            "os": "linux",
+            "architecture": "amd64",
+            "config": {
+                "Labels": {
+                    "org.opencontainers.image.base.name": DECISION_RUNTIME_BASES[
+                        "decision-runtime-rocm"
+                    ][0],
+                    "org.opencontainers.image.revision": source,
+                    "ai.vllm-sr.decision.source-state": "clean",
+                    "ai.vllm-sr.decision.backend": "rocm",
+                }
+            },
+        }
+
+        def inspect(command: list[str]) -> bytes:
+            if "--raw" in command:
+                return manifest
+            if "--config" in command:
+                return json.dumps(config).encode()
+            raise AssertionError(f"unexpected command: {command}")
+
+        with (
+            patch.dict(os.environ, {"GITHUB_REPOSITORY_OWNER": "Example"}),
+            patch("package_contract.subprocess.check_output", side_effect=inspect),
+        ):
+            with self.assertRaisesRegex(ValueError, "missing or oversized"):
+                rocm_qualification("", source_sha=source, verify_registry=True)
+            self.assertEqual(
+                rocm_qualification(
+                    json.dumps(record), source_sha=source, verify_registry=True
+                ),
+                record,
+            )
+            extra = {**record, "validation_host": "never-public"}
+            with self.assertRaisesRegex(ValueError, "fields are invalid"):
+                rocm_qualification(
+                    json.dumps(extra), source_sha=source, verify_registry=True
+                )
+            with self.assertRaisesRegex(ValueError, "does not match"):
+                rocm_qualification(
+                    json.dumps(record), source_sha="b" * 40, verify_registry=True
+                )
+            missing = json.loads(json.dumps(record))
+            missing["models"].pop(next(iter(missing["models"])))
+            with self.assertRaisesRegex(ValueError, "all catalog models"):
+                rocm_qualification(
+                    json.dumps(missing), source_sha=source, verify_registry=True
+                )
+            failed = json.loads(json.dumps(record))
+            next(iter(failed["models"].values()))["checks"]["no_regression"] = "failed"
+            with self.assertRaisesRegex(ValueError, "incomplete"):
+                rocm_qualification(
+                    json.dumps(failed), source_sha=source, verify_registry=True
+                )
+            config["config"]["Labels"]["ai.vllm-sr.decision.backend"] = "cpu"
+            with self.assertRaisesRegex(ValueError, "config differs"):
+                rocm_qualification(
+                    json.dumps(record), source_sha=source, verify_registry=True
+                )
+            config["config"]["Labels"]["ai.vllm-sr.decision.backend"] = "rocm"
+            with (
+                patch(
+                    "package_contract.subprocess.check_output",
+                    return_value=b"different",
+                ),
+                self.assertRaisesRegex(ValueError, "digest differs"),
+            ):
+                rocm_qualification(
+                    json.dumps(record), source_sha=source, verify_registry=True
+                )
+
+    def test_bound_wheel_and_sdist_must_contain_identical_version_lock(self) -> None:
+        source = "a" * 40
+        images = {
+            backend: f"ghcr.io/example/semantic-router/decision-runtime-{backend}@sha256:{letter * 64}"
+            for backend, letter in (("cpu", "b"), ("rocm", "c"))
+        }
+        lock = decision_lock("1.2.3", source, images)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            wheel = output / "vllm_sr-1.2.3-py3-none-any.whl"
+            sdist = output / "vllm_sr-1.2.3.tar.gz"
+            with zipfile.ZipFile(wheel, "w") as archive:
+                archive.writestr(DECISION_LOCK_PATH, lock)
+            with tarfile.open(sdist, "w:gz") as archive:
+                member = tarfile.TarInfo("vllm_sr-1.2.3/" + DECISION_LOCK_PATH)
+                member.size = len(lock)
+                archive.addfile(member, io.BytesIO(lock))
+            manifest = {
+                "source_sha": source,
+                "mode": "release",
+                "tag": "v1.2.3",
+                "version": "1.2.3",
+                "files": {
+                    path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                    for path in (wheel, sdist)
+                },
+                "decision_images": {
+                    "refs": images,
+                    "lock_sha256": hashlib.sha256(lock).hexdigest(),
+                },
+            }
+            (output / "manifest.json").write_text(json.dumps(manifest))
+            with patch("package_contract.subprocess.check_output", return_value=source):
+                verify_distribution(
+                    output, "release", "v1.2.3", require_decision_images=True
+                )
+                manifest["decision_images"]["refs"]["rocm"] = images["rocm"].replace(
+                    "c" * 64, "d" * 64
+                )
+                (output / "manifest.json").write_text(json.dumps(manifest))
+                with self.assertRaisesRegex(ValueError, "lock metadata differs"):
+                    verify_distribution(output, "release", "v1.2.3")
+                del manifest["decision_images"]["refs"]["rocm"]
+                (output / "manifest.json").write_text(json.dumps(manifest))
+                with self.assertRaisesRegex(ValueError, "backends are incomplete"):
+                    verify_distribution(output, "release", "v1.2.3")
+                for empty in ({}, None):
+                    manifest["decision_images"] = empty
+                    (output / "manifest.json").write_text(json.dumps(manifest))
+                    with self.assertRaisesRegex(ValueError, "metadata is invalid"):
+                        verify_distribution(
+                            output,
+                            "release",
+                            "v1.2.3",
+                            require_decision_images=True,
+                        )
 
     def test_installer_uses_isolated_home_without_runtime_bootstrap(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

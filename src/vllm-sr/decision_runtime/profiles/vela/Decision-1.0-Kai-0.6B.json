@@ -1,0 +1,13 @@
+{
+  "schema_version": 4,
+  "family": "vela",
+  "artifact": {"manifest_path": "native/MANIFEST.json"},
+  "max_input_tokens": 1024,
+  "dtype": {
+    "backbone": "float32",
+    "head": "float32"
+  },
+  "physical_batch_size": 8,
+  "calibration": null,
+  "prompt_policy": {"choice_null_description": "render_key"}
+}

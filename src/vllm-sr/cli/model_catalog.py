@@ -18,6 +18,7 @@ from cli.model_catalog_types import (
     CatalogCompatibility,
     CatalogComponentVersions,
     CatalogModel,
+    CatalogProviderModel,
     ModelCatalog,
     ModelCatalogError,
 )
@@ -65,6 +66,7 @@ __all__ = [
     "CatalogCompatibility",
     "CatalogComponentVersions",
     "CatalogModel",
+    "CatalogProviderModel",
     "ModelCatalog",
     "ModelCatalogError",
     "available_catalog_versions",
@@ -73,6 +75,7 @@ __all__ = [
     "find_catalog_model",
     "load_all_model_catalogs",
     "load_model_catalog",
+    "resolve_catalog_provider_model",
 ]
 
 
@@ -209,7 +212,7 @@ def _parse_catalog_models(
     raw_models = document.get("models")
     if not isinstance(raw_models, list) or not raw_models:
         raise ModelCatalogError("built-in model catalog has no models")
-    protocols = _parse_catalog_protocols(document.get("protocols"))
+    registered_protocols = _parse_catalog_protocol_registry(document.get("protocols"))
     models: list[CatalogModel] = []
     seen: set[str] = set()
     seen_entrypoints: set[str] = set()
@@ -241,7 +244,11 @@ def _parse_catalog_models(
             model_id,
             asset=asset,
             entrypoint=entrypoint,
-            protocols=protocols,
+            protocols=_parse_catalog_protocols(
+                raw.get("protocols"),
+                model_id=model_id,
+                registered_protocols=registered_protocols,
+            ),
             verification=verification,
             resource_version=resource_version,
             header=header,
@@ -303,8 +310,8 @@ def _parse_catalog_model(
     )
 
 
-def _parse_catalog_protocols(value: Any) -> tuple[str, ...]:
-    """Project v2 protocol definitions onto the CLI virtual-model contract."""
+def _parse_catalog_protocol_registry(value: Any) -> frozenset[str]:
+    """Validate the global protocol registry without assigning it to models."""
 
     if not isinstance(value, list) or not value:
         raise ModelCatalogError("built-in catalog has no protocols")
@@ -313,7 +320,75 @@ def _parse_catalog_protocols(value: Any) -> tuple[str, ...]:
         if not isinstance(item, dict):
             raise ModelCatalogError("catalog protocol entry is invalid")
         protocol_ids.append(_required_string(item, "id"))
-    return _unique_enum_strings(protocol_ids, "protocols", SUPPORTED_PROTOCOLS)
+    if len(protocol_ids) != len(set(protocol_ids)):
+        raise ModelCatalogError("catalog protocols contain duplicate values")
+    return frozenset(protocol_ids)
+
+
+def _parse_catalog_protocols(
+    value: Any,
+    *,
+    model_id: str,
+    registered_protocols: frozenset[str],
+) -> tuple[str, ...]:
+    """Project one virtual model's explicit protocols onto the CLI contract."""
+
+    protocols = _unique_enum_strings(
+        value,
+        f"{model_id}.protocols",
+        SUPPORTED_PROTOCOLS,
+    )
+    unregistered = sorted(set(protocols) - registered_protocols)
+    if unregistered:
+        raise ModelCatalogError(
+            f"catalog model {model_id} references unregistered protocols: "
+            + ", ".join(unregistered)
+        )
+    return protocols
+
+
+def _parse_provider_model_protocols(
+    value: Any,
+    *,
+    provider_id: str,
+    registered_protocols: frozenset[str],
+) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        raise ModelCatalogError(
+            f"catalog provider {provider_id} model protocols must be a non-empty list"
+        )
+    if any(not isinstance(protocol, str) or not protocol.strip() for protocol in value):
+        raise ModelCatalogError(
+            f"catalog provider {provider_id} model protocols are invalid"
+        )
+    protocols = tuple(protocol.strip() for protocol in value)
+    if len(protocols) != len(set(protocols)):
+        raise ModelCatalogError(
+            f"catalog provider {provider_id} model protocols contain duplicates"
+        )
+    unregistered = sorted(set(protocols) - registered_protocols)
+    if unregistered:
+        raise ModelCatalogError(
+            f"catalog provider {provider_id} model references unregistered protocols: "
+            + ", ".join(unregistered)
+        )
+    return protocols
+
+
+def _catalog_entries_by_id(value: Any, kind: str) -> dict[str, dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ModelCatalogError(f"built-in catalog {kind} inventory is invalid")
+    entries: dict[str, dict[str, Any]] = {}
+    for entry in value:
+        if not isinstance(entry, dict):
+            raise ModelCatalogError(f"built-in catalog contains an invalid {kind}")
+        entry_id = _required_string(entry, "id")
+        if entry_id in entries:
+            raise ModelCatalogError(
+                f"built-in catalog contains duplicate {kind}: {entry_id}"
+            )
+        entries[entry_id] = entry
+    return entries
 
 
 def _parse_model_verification(
@@ -350,6 +425,76 @@ def find_catalog_model(
         if model.id == model_id:
             return catalog, model
     raise ModelCatalogError(f"built-in model is not installed: {model_id}")
+
+
+def resolve_catalog_provider_model(
+    model_id: str,
+    *,
+    provider_id: str = "decision-runtime",
+    catalog_version: str = DEFAULT_CHANNEL,
+) -> CatalogProviderModel:
+    """Resolve a physical model and immutable revision from one provider binding.
+
+    ``model_id`` may be either the catalog identity or the provider's exact model
+    identity. Runtime commands use this projection instead of maintaining a
+    second model/revision table.
+    """
+
+    requested_model = model_id.strip()
+    requested_provider = provider_id.strip()
+    if not requested_model:
+        raise ModelCatalogError("catalog provider model ID is required")
+    if not requested_provider:
+        raise ModelCatalogError("catalog provider ID is required")
+
+    _, document = _load_catalog_document(catalog_version)
+    registered_protocols = _parse_catalog_protocol_registry(document.get("protocols"))
+    providers = _catalog_entries_by_id(document.get("providers"), "provider")
+    models = _catalog_entries_by_id(document.get("models"), "model")
+    provider = providers.get(requested_provider)
+    if provider is None:
+        raise ModelCatalogError(
+            f"built-in provider is not installed: {requested_provider}"
+        )
+
+    raw_bindings = provider.get("models")
+    if not isinstance(raw_bindings, list):
+        raise ModelCatalogError(
+            f"catalog provider {requested_provider} has no model bindings"
+        )
+    matches = [
+        binding
+        for binding in raw_bindings
+        if isinstance(binding, dict)
+        and requested_model in {binding.get("catalog"), binding.get("id")}
+    ]
+    if len(matches) != 1:
+        raise ModelCatalogError(
+            f"catalog provider {requested_provider} does not bind model {requested_model}"
+        )
+    binding = matches[0]
+    catalog_id = _required_string(binding, "catalog")
+    card = models.get(catalog_id)
+    if card is None or card.get("kind") != "physical":
+        raise ModelCatalogError(
+            f"catalog provider {requested_provider} references an invalid physical model"
+        )
+    distribution = _required_mapping(card, "distribution")
+    protocols = _parse_provider_model_protocols(
+        binding.get("protocols"),
+        provider_id=requested_provider,
+        registered_protocols=registered_protocols,
+    )
+    return CatalogProviderModel(
+        catalog_id=catalog_id,
+        provider_id=requested_provider,
+        model_id=_required_string(binding, "id"),
+        revision=_required_string(card, "revision"),
+        family=_required_string(card, "family"),
+        parameter_size=_required_string(card, "parameter_size"),
+        protocols=protocols,
+        distribution_source=_required_string(distribution, "source"),
+    )
 
 
 def catalog_to_json(catalog: ModelCatalog, models: Iterable[CatalogModel]) -> str:

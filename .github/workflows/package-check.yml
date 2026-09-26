@@ -36,7 +36,7 @@ jobs:
         env:
           MODE: ${{ inputs.mode }}
           TAG: ${{ inputs.tag }}
-          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+          BASE_REF: ${{ inputs.mode == 'release' && github.sha || github.event.pull_request.base.sha || github.event.before || github.sha }}
         run: |
           python tools/ci/package_contract.py --mode "$MODE" --tag "$TAG" \
             --base-ref "$BASE_REF" --output .agent-harness/package

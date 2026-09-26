@@ -1,0 +1,146 @@
+"""Model-backed ROCm graph parity; requires an external verified artifact.
+
+Run this test directly with pytest on a ROCm host. Set all five
+DECISION_QWEN_GRAPH_TEST_* inputs in an isolated validation run: MODEL,
+REVISION, ARTIFACT_ROOT, CONTENT_ID, and REQUEST_PATH. No model snapshot,
+host path, or revision is embedded in this test.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from decision_runtime.artifacts import open_verified_artifact  # noqa: E402
+from decision_runtime.catalog_adapter import (  # noqa: E402
+    resolve_decision_runtime_model,
+)
+from decision_runtime.contracts import (  # noqa: E402
+    SystemOneBatchRequest,
+    SystemOneRequest,
+)
+from decision_runtime.physical_batching import DecisionRow, _request_rows  # noqa: E402
+from decision_runtime.qwen35_torch import _collate  # noqa: E402
+from decision_runtime.row_executor import TorchDecisionRowExecutor  # noqa: E402
+from decision_runtime.runtime_factory import _load_family  # noqa: E402
+
+
+def _inputs():
+    names = ("MODEL", "REVISION", "ARTIFACT_ROOT", "CONTENT_ID", "REQUEST_PATH")
+    values = {
+        name: os.environ.get(f"DECISION_QWEN_GRAPH_TEST_{name}") for name in names
+    }
+    if all(value is None for value in values.values()):
+        pytest.skip("external Qwen ROCm graph validation inputs are absent")
+    missing = [name for name, value in values.items() if value is None]
+    if missing:
+        pytest.fail("missing ROCm graph test inputs: " + ", ".join(missing))
+    return values
+
+
+def _rows(request_path: Path, model_id: str):
+    raw = json.loads(request_path.read_bytes())
+    if raw.get("model") != model_id:
+        raise ValueError("sealed test request model differs")
+    if "states" not in raw:
+        return _request_rows(SystemOneRequest.model_validate(raw))
+    request = SystemOneBatchRequest.model_validate(raw)
+    return tuple(
+        DecisionRow(model_id, state.state, question_id, question)
+        for state in request.states
+        for question_id, question in request.questions.items()
+    )
+
+
+def _windows(encoded, *, padded_tokens=None):
+    options = []
+    for offset in range(0, len(encoded) - 7, 8):
+        rows = encoded[offset : offset + 8]
+        padded = ((max(row.input_tokens for row in rows) + 31) // 32) * 32
+        if padded <= 256 and (padded_tokens is None or padded == padded_tokens):
+            layout = (padded, any(row.input_tokens != padded for row in rows))
+            options.append((layout, rows))
+    for index, (layout, first) in enumerate(options):
+        for second_layout, second in options[index + 1 :]:
+            if layout == second_layout and tuple(
+                row.input_ids for row in first
+            ) != tuple(row.input_ids for row in second):
+                return first, second
+    pytest.fail("configured request has no two changed-content short B8 windows")
+
+
+def _valid_bits(torch, logits, batch, temperature):
+    valid = batch["candidate_mask"]
+    values = logits.float()[valid]
+    probabilities = (logits.float() / temperature).softmax(-1)
+    assert bool(torch.isfinite(values).all())
+    assert bool(torch.isfinite(probabilities[valid]).all())
+    return values.view(torch.int32), probabilities[valid].view(torch.int32)
+
+
+def test_short_b8_graph_replays_changed_content_with_bitwise_eager_parity():
+    inputs = _inputs()
+    model_id = inputs["MODEL"]
+    resolved = resolve_decision_runtime_model(
+        model_id, revision=inputs["REVISION"], backend="rocm", target="gfx942"
+    )
+    artifact = open_verified_artifact(
+        Path(inputs["ARTIFACT_ROOT"]),
+        resolved,
+        expected_content_id=inputs["CONTENT_ID"],
+    )
+    graph_events = []
+    runtime = _load_family(
+        resolved,
+        artifact,
+        "rocm",
+        physical_batch_size=8,
+        graph_event_recorder=graph_events.append,
+    )
+    assert runtime.rocm_profile_binding is not None
+    assert runtime.rocm_graphs is not None
+    startup_prewarm = resolved.profile.execution["rocm"].graph_prewarm_padded_tokens
+    if startup_prewarm:
+        assert graph_events == ["capture"]
+        assert runtime.rocm_graphs._capture_attempts == 1
+    encoded = TorchDecisionRowExecutor(runtime, resolved.profile)._encode_rows(
+        _rows(Path(inputs["REQUEST_PATH"]), model_id)
+    )
+    first, second = _windows(
+        encoded, padded_tokens=startup_prewarm[0] if startup_prewarm else None
+    )
+    torch = runtime.torch
+
+    for window in (first, second, first):
+        batch = _collate(torch, window, runtime.tokenizer, device=runtime.device)
+        with (
+            runtime.rocm_graphs.lock,
+            torch.inference_mode(),
+            torch.autocast(device_type=runtime.device.type, dtype=torch.bfloat16),
+        ):
+            ordinary = runtime.model(**batch)
+            candidate = runtime.rocm_graphs.logits(batch)
+            if startup_prewarm:
+                assert graph_events[-1] == "replay"
+                assert runtime.rocm_graphs._capture_attempts == 1
+            torch.cuda.synchronize(runtime.device)
+            expected = _valid_bits(torch, ordinary, batch, runtime.temperature)
+            actual = _valid_bits(torch, candidate, batch, runtime.temperature)
+            assert torch.equal(expected[0], actual[0])
+            assert torch.equal(expected[1], actual[1])
+        predictions = runtime.predict_encoded(window)
+        assert len(predictions) == 8
+        assert tuple(item.question_id for item in predictions) == tuple(
+            item.question_id for item in window
+        )
+
+    assert len(runtime.rocm_graphs._graphs) == 1
+    assert runtime.rocm_graphs._capture_attempts == 1

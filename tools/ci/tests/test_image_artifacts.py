@@ -3,6 +3,7 @@ import hashlib
 import io
 import json
 import os
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -15,7 +16,7 @@ import image_artifacts as images
 from check_ci_gate import load_builds
 
 
-def archive_image(path, architectures=("amd64",)):
+def archive_image(path, architectures=("amd64",), labels=None):
     contents, descriptors = {}, []
 
     def blob(value):
@@ -30,7 +31,10 @@ def archive_image(path, architectures=("amd64",)):
                 "os": "linux",
                 "architecture": arch,
                 "rootfs": {"type": "layers", "diff_ids": ["sha256:" + "a" * 64]},
-                "config": {"Cmd": ["router"], "Labels": {"empty-label": ""}},
+                "config": {
+                    "Cmd": ["router"],
+                    "Labels": labels if labels is not None else {"empty-label": ""},
+                },
             }
         )
         descriptors.append(blob({"config": config, "layers": []}))
@@ -43,6 +47,120 @@ def archive_image(path, architectures=("amd64",)):
 
 
 class ImageArtifactTests(unittest.TestCase):
+    def test_hosted_image_builder_rejects_rocm_and_verifies_cpu_archive(self):
+        workflow = (
+            Path(__file__).resolve().parents[3]
+            / ".github/workflows/build-artifacts.yml"
+        ).read_text()
+        self.assertIn('[[ "$IMAGE" == decision-runtime-rocm ]]', workflow)
+        self.assertIn("not supported by the hosted image builder", workflow)
+        self.assertLess(
+            workflow.index("name: Verify the sealed candidate"),
+            workflow.index("name: ci-image-${{ matrix.image }}"),
+        )
+
+    def test_ci_build_args_transport_decision_base_and_source(self):
+        root = Path(__file__).resolve().parents[3]
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "build-args.txt"
+            environment = {
+                **os.environ,
+                "GITHUB_OUTPUT": str(output),
+                "MATRIX_IMAGE": "decision-runtime-cpu",
+                "CARGO_BUILD_JOBS": "8",
+            }
+            subprocess.run(
+                ["bash", "tools/ci/docker-build-args.sh"],
+                cwd=root,
+                env=environment,
+                check=True,
+            )
+            text = output.read_text()
+            for argument in images.decision_build_args(
+                "decision-runtime-cpu", images.source_sha()
+            ):
+                self.assertIn(argument + "\n", text)
+
+    def test_decision_images_use_immutable_distinct_base_and_source_args(self):
+        revision = "a" * 40
+        for image, (base, backend, index) in images.DECISION_RUNTIME_BASES.items():
+            with self.subTest(image=image):
+                self.assertRegex(base, r"@sha256:[0-9a-f]{64}$")
+                self.assertEqual(
+                    images.DEFINITIONS[image],
+                    (
+                        ".",
+                        "src/vllm-sr/decision_runtime/image/Dockerfile",
+                        ["linux/amd64"],
+                    ),
+                )
+                args = dict(
+                    value.split("=", 1)
+                    for value in images.decision_build_args(image, revision)
+                )
+                self.assertEqual(args["BASE_IMAGE"], base)
+                self.assertEqual(args["BACKEND"], backend)
+                self.assertEqual(args["TORCH_INDEX_URL"], index)
+                self.assertEqual(args["SOURCE_REVISION"], revision)
+                self.assertEqual(args["SOURCE_STATE"], "clean")
+        with self.assertRaisesRegex(ValueError, "full source SHA"):
+            images.decision_build_args("decision-runtime-cpu", "latest")
+
+    def test_decision_archive_rejects_wrong_base_backend_or_source_label(self):
+        revision = "a" * 40
+        image = "decision-runtime-cpu"
+        base, backend, _ = images.DECISION_RUNTIME_BASES[image]
+        labels = {
+            "org.opencontainers.image.base.name": base,
+            "org.opencontainers.image.revision": revision,
+            "ai.vllm-sr.decision.source-state": "clean",
+            "ai.vllm-sr.decision.backend": backend,
+        }
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(images, "source_sha", return_value=revision),
+        ):
+            directory = Path(tmp)
+            archive = directory / "image.tar"
+            archive_image(archive, labels=labels)
+            manifest = {
+                "source_sha": revision,
+                "id": image,
+                "context": ".",
+                "dockerfile": "src/vllm-sr/decision_runtime/image/Dockerfile",
+                "sha256": images.sha256(archive),
+                "images": images.oci_images(archive),
+                "build_args": [*images.decision_build_args(image, revision)],
+            }
+            receipt = directory / "manifest.json"
+            receipt.write_text(json.dumps(manifest))
+            images.verify(directory, image)
+            for key in labels:
+                with self.subTest(label=key):
+                    changed = {**labels, key: "wrong"}
+                    archive_image(archive, labels=changed)
+                    manifest["sha256"] = images.sha256(archive)
+                    manifest["images"] = images.oci_images(archive)
+                    receipt.write_text(json.dumps(manifest))
+                    with self.assertRaisesRegex(ValueError, "labels differ"):
+                        images.verify(directory, image)
+            archive_image(archive, labels=labels)
+            manifest["sha256"] = images.sha256(archive)
+            manifest["images"] = images.oci_images(archive)
+            for key in ("BASE_IMAGE", "BACKEND", "SOURCE_REVISION", "SOURCE_STATE"):
+                with self.subTest(argument=key):
+                    tampered = dict(arg.split("=", 1) for arg in manifest["build_args"])
+                    tampered[key] = "wrong"
+                    manifest["build_args"] = [
+                        f"{name}={value}" for name, value in tampered.items()
+                    ]
+                    receipt.write_text(json.dumps(manifest))
+                    with self.assertRaisesRegex(ValueError, "pinned source"):
+                        images.verify(directory, image)
+                    manifest["build_args"] = [
+                        *images.decision_build_args(image, revision)
+                    ]
+
     def test_multiarchitecture_inventory_is_actual_oci_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "image.tar"
@@ -98,6 +216,16 @@ class ImageArtifactTests(unittest.TestCase):
             images.publication_tags("vllm-sr", "release", "v1.2.3", True, ""),
             ["v1.2.3", "latest"],
         )
+        with patch.object(images, "source_sha", return_value="a" * 40):
+            for mode in ("main", "nightly", "release"):
+                self.assertEqual(
+                    images.publication_tags(
+                        "decision-runtime-cpu", mode, "v1.2.3", True, "20260924"
+                    ),
+                    ["a" * 40],
+                )
+        with self.assertRaisesRegex(ValueError, "hosted image publisher"):
+            images.publication_tags("decision-runtime-rocm", "main", "", False, "")
 
     def test_promotion_records_the_copied_digest_for_each_tag(self):
         with (
@@ -148,6 +276,56 @@ class ImageArtifactTests(unittest.TestCase):
                     ],
                 )
                 self.assertTrue(call.kwargs["check"])
+
+    def test_decision_publication_receipt_binds_source_digest_and_platform(self):
+        source = "a" * 40
+        digest = "sha256:" + "b" * 64
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "image_artifacts.py",
+                    "promote",
+                    "--image",
+                    "decision-runtime-cpu",
+                    "--directory",
+                    tmp,
+                    "--mode",
+                    "release",
+                    "--tag",
+                    "v1.2.3",
+                ],
+            ),
+            patch.dict(images.os.environ, {"GITHUB_REPOSITORY_OWNER": "Example"}),
+            patch.object(images, "source_sha", return_value=source),
+            patch.object(
+                images,
+                "verify",
+                return_value={
+                    "mode": "release",
+                    "tag": "v1.2.3",
+                    "date": "",
+                    "source_sha": source,
+                    "sha256": "c" * 64,
+                    "images": [{"platform": "linux/amd64"}],
+                },
+            ),
+            patch.object(images.subprocess, "run") as copy,
+        ):
+            directory = Path(tmp)
+            (directory / "published-digest.txt").write_text(digest + "\n")
+            images.main()
+            self.assertEqual(copy.call_count, 1)
+            receipt = json.loads((directory / "published.json").read_text())
+            self.assertEqual(receipt["source_sha"], source)
+            self.assertEqual(receipt["digest"], digest)
+            self.assertEqual(receipt["platform"], "linux/amd64")
+            self.assertEqual(
+                receipt["ref"],
+                f"ghcr.io/example/semantic-router/decision-runtime-cpu@{digest}",
+            )
 
     def test_published_archive_preserves_registry_and_checkout_identities(self):
         with tempfile.TemporaryDirectory() as tmp:
