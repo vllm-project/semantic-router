@@ -812,6 +812,18 @@ routing:
           configuration:
             enabled: true
             model: qwen3-32b
+            arms:
+              - qwen3-8b
+            # Zero-valued bounds keep the aggregate budget surface covered by
+            # the reference-config check; a real bound is an operator setting.
+            budget:
+              max_calls_per_request: 0
+              max_tokens_per_request: 0
+              max_cost_per_request: 0
+              price_per_million_tokens: 0
+              reserve_tokens_per_arm: 0
+              max_concurrency_per_request: 0
+              max_response_bytes_per_request: 0
             sample_rate: 0.05
             max_concurrency: 2
             max_queue_depth: 8

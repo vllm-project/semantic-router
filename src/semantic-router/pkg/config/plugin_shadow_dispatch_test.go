@@ -37,7 +37,7 @@ func TestShadowDispatchPluginPayloadValidation(t *testing.T) {
 	}{
 		{name: "valid", payload: map[string]interface{}{"enabled": true, "model": "candidate", "sample_rate": half, "max_retries": 3}},
 		{name: "declared but disabled without model", payload: map[string]interface{}{"enabled": false}},
-		{name: "missing model", payload: map[string]interface{}{"enabled": true}, wantErr: "model is required"},
+		{name: "missing model", payload: map[string]interface{}{"enabled": true}, wantErr: "model or arms is required"},
 		{name: "sample rate out of range", payload: map[string]interface{}{"enabled": true, "model": "m", "sample_rate": tooHigh}, wantErr: "sample_rate"},
 		{name: "negative bound", payload: map[string]interface{}{"enabled": true, "model": "m", "max_concurrency": -1}, wantErr: "max_concurrency cannot be negative"},
 		{name: "too many retries", payload: map[string]interface{}{"enabled": true, "model": "m", "max_retries": 4}, wantErr: "max_retries cannot exceed"},
@@ -54,6 +54,33 @@ func TestShadowDispatchPluginPayloadValidation(t *testing.T) {
 				Type:          DecisionPluginShadowDispatch,
 				Configuration: MustStructuredPayload(tc.payload),
 			})
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("error = %v, want containing %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestShadowDispatchBudgetCapsRejectSilentCombinations(t *testing.T) {
+	cases := []struct {
+		name    string
+		cfg     ShadowDispatchBudgetConfig
+		wantErr string
+	}{
+		{name: "token cap without admission reserve", cfg: ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100}, wantErr: "requires reserve_tokens_per_arm"},
+		{name: "cost cap without price", cfg: ShadowDispatchBudgetConfig{MaxCostPerRequest: 1.0}, wantErr: "requires reserve_tokens_per_arm and price_per_million_tokens"},
+		{name: "cost cap without admission reserve", cfg: ShadowDispatchBudgetConfig{MaxCostPerRequest: 1.0, PricePerMillionTokens: 2.0}, wantErr: "requires reserve_tokens_per_arm and price_per_million_tokens"},
+		{name: "bounded pair accepted", cfg: ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100, ReserveTokensPerArm: 50, MaxCostPerRequest: 1.0, PricePerMillionTokens: 2.0}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := (&ShadowDispatchPluginConfig{Enabled: true, Model: "m", Budget: tc.cfg}).Validate()
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)

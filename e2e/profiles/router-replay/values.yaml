@@ -41,6 +41,11 @@ config:
           - name: shadow-queue-endpoint
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
+      - name: openai/shadow-arm-b
+        backend_refs:
+          - name: shadow-arm-b-endpoint
+            endpoint: mock-vllm.default.svc.cluster.local:8000
+            weight: 1
   routing:
     decisions:
       - name: default_decision
@@ -68,6 +73,7 @@ config:
       - name: openai/shadow-timeout
       - name: openai/shadow-malformed
       - name: openai/shadow-queue
+      - name: openai/shadow-arm-b
   entrypoints:
     - model_names: ["vllm-sr/replay-first"]
       recipe: replay-first
@@ -83,6 +89,8 @@ config:
       recipe: shadow-malformed
     - model_names: ["vllm-sr/shadow-queue"]
       recipe: shadow-queue
+    - model_names: ["vllm-sr/shadow-multiarm"]
+      recipe: shadow-multiarm
   recipes:
     - name: replay-first
       routing:
@@ -251,6 +259,48 @@ config:
                   max_concurrency: 1
                   max_queue_depth: 1
                   timeout_seconds: 30
+                  max_response_bytes: 1048576
+                  max_retries: 0
+                  capture_response_body: false
+    - name: shadow-multiarm
+      routing:
+        strategy: priority
+        signals: {}
+        decisions:
+          - name: shadow_multiarm_decision
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: openai/gpt-oss-20b
+                use_reasoning: false
+            plugins:
+              - type: router_replay
+                configuration:
+                  enabled: true
+                  max_records: 1000
+                  capture_request_body: false
+                  capture_response_body: true
+                  max_body_bytes: 65536
+              - type: shadow_dispatch
+                configuration:
+                  enabled: true
+                  model: openai/shadow-candidate
+                  arms:
+                    - openai/shadow-arm-b
+                  budget:
+                    max_calls_per_request: 0
+                    max_tokens_per_request: 0
+                    max_cost_per_request: 0
+                    price_per_million_tokens: 0
+                    reserve_tokens_per_arm: 0
+                    max_concurrency_per_request: 0
+                    max_response_bytes_per_request: 0
+                  sample_rate: 1.0
+                  max_concurrency: 2
+                  max_queue_depth: 8
+                  timeout_seconds: 20
                   max_response_bytes: 1048576
                   max_retries: 0
                   capture_response_body: false

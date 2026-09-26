@@ -46,6 +46,15 @@ plugins:
     configuration:
       enabled: true
       model: candidate-model
+      arms: []
+      budget:
+        max_calls_per_request: 0
+        max_tokens_per_request: 0
+        max_cost_per_request: 0.0
+        price_per_million_tokens: 0.0
+        reserve_tokens_per_arm: 0
+        max_concurrency_per_request: 0
+        max_response_bytes_per_request: 0
       sample_rate: 0.05
       max_concurrency: 2
       max_queue_depth: 8
@@ -61,7 +70,15 @@ plugins:
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
 | `enabled` | 必需 | 为该决策打开 shadow。 |
-| `model` | 启用时必需 | 接收 shadow 副本的已配置逻辑模型。必须在 `providers.models` 中有后端。 |
+| `model` | 启用时需 `model`/`arms` 其一 | 接收 shadow 副本的已配置逻辑模型。必须在 `providers.models` 中有后端。 |
+| `arms` | `[]` | `model` 之外额外的 shadow 候选模型；会去重，每个臂都必须能解析出后端。同一决策的所有臂共享一份按请求 `budget`。 |
+| `budget.max_calls_per_request` | `0` | 每请求允许准入的臂数（跨全部臂）。`0` = 不限；这是唯一无需其他设置即生效的维度。 |
+| `budget.max_tokens_per_request` | `0` | 聚合 token 上限。仅当 `reserve_tokens_per_arm` 已设时在分发前生效；否则只在完成时记账。`0` = 不限。 |
+| `budget.max_cost_per_request` | `0` | 聚合费用上限；需配合 `price_per_million_tokens`。`0` = 不限。 |
+| `budget.price_per_million_tokens` | `0` | 费用上限使用的 token→费用换算。 |
+| `budget.reserve_tokens_per_arm` | `0` | 准入时每臂预留的 token 数，使并发准入的臂无法突破 `max_tokens_per_request`/`max_cost_per_request`。 |
+| `budget.max_concurrency_per_request` | `0` | 同一请求允许同时在飞的臂数；超出的臂以原因 `budget_concurrency_limit` 丢弃。`0` = 不限。 |
+| `budget.max_response_bytes_per_request` | `0` | 同一请求跨全部臂的响应字节聚合上限。每次准入预留每臂 `max_response_bytes`，故在分发前生效，完成时以实际观测值折算。`0` = 不限。 |
 | `sample_rate` | `1.0` | 要 shadow 的合格请求比例，范围为 `[0, 1]`。`0` 保持插件已声明但永不分发。 |
 | `max_concurrency` | `2` | 该决策的进行中 shadow 调用数。 |
 | `max_queue_depth` | `8` | 等待槽位的调用。超出部分会以原因 `queue_full` 丢弃。 |
@@ -83,7 +100,7 @@ plugins:
 | --- | --- |
 | `completed` | `completed` |
 | `failed` | `backend_unresolved`、`credential_unresolved`、`encode_failed`、`timeout`、`transport_error`、`upstream_status`、`redirect_rejected`、`response_too_large`、`malformed_response` |
-| `dropped` | `queue_full`、`queue_timeout`、`router_closing`、`same_as_primary`、`internal_request`、`request_unavailable` |
+| `dropped` | `queue_full`, `queue_timeout`, `router_closing`, `same_as_primary`, `internal_request`, `request_unavailable`, `budget_call_limit`, `budget_token_limit`, `budget_cost_limit`, `budget_concurrency_limit`, `budget_response_bytes_limit` |
 | `sampled_out` | `sampled_out` |
 
 结果和原因导出为 `sr_shadow_dispatch_total{decision,result,reason}`，以及 `sr_shadow_dispatch_latency_seconds`、`sr_shadow_dispatch_inflight` 和 `sr_shadow_dispatch_queued`。由资源边界导致的丢弃通过指标和结构化 `shadow_dispatch_dropped` 事件报告，而不是写入回放，因此过载的 shadow 通道不会放大回放存储负载。

@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -21,9 +22,11 @@ func getIntField(fields map[string]Value, key string) (int, bool) {
 		if iv, ok := v.(IntValue); ok {
 			return iv.V, true
 		}
-		// Also accept float as int
+		// Also accept float as int. Round up: a fractional bound must never
+		// silently truncate to a looser one (`0.5` calls is one call, not
+		// unlimited).
 		if fv, ok := v.(FloatValue); ok {
-			return int(fv.V), true
+			return int(math.Ceil(fv.V)), true
 		}
 	}
 	return 0, false

@@ -116,8 +116,13 @@ func (c *ShadowDispatchPluginConfig) Validate() error {
 	if c == nil {
 		return nil
 	}
-	if c.Enabled && strings.TrimSpace(c.Model) == "" {
-		return fmt.Errorf("model is required when enabled")
+	if c.Enabled && strings.TrimSpace(c.Model) == "" && len(c.Arms) == 0 {
+		return fmt.Errorf("model or arms is required when enabled")
+	}
+	for _, arm := range c.Arms {
+		if strings.TrimSpace(arm) == "" {
+			return fmt.Errorf("arms cannot contain empty model names")
+		}
 	}
 	if c.SampleRate != nil && (*c.SampleRate < 0 || *c.SampleRate > 1) {
 		return fmt.Errorf("sample_rate must be between 0 and 1")
@@ -140,7 +145,56 @@ func (c *ShadowDispatchPluginConfig) Validate() error {
 	if c.MaxRetries > maxShadowDispatchRetries {
 		return fmt.Errorf("max_retries cannot exceed %d", maxShadowDispatchRetries)
 	}
+	for _, bound := range []struct {
+		name  string
+		value float64
+	}{
+		{"max_calls_per_request", float64(c.Budget.MaxCallsPerRequest)},
+		{"max_tokens_per_request", float64(c.Budget.MaxTokensPerRequest)},
+		{"max_cost_per_request", c.Budget.MaxCostPerRequest},
+		{"price_per_million_tokens", c.Budget.PricePerMillionTokens},
+		{"reserve_tokens_per_arm", float64(c.Budget.ReserveTokensPerArm)},
+		{"max_concurrency_per_request", float64(c.Budget.MaxConcurrencyPerRequest)},
+		{"max_response_bytes_per_request", float64(c.Budget.MaxResponseBytesPerRequest)},
+	} {
+		if bound.value < 0 {
+			return fmt.Errorf("budget.%s cannot be negative", bound.name)
+		}
+	}
+	// Reject cap/core combinations that would bind silently at run time: a cap
+	// needs an admission reservation to hold before dispatch, and a cost cap
+	// additionally needs a price to convert accounted tokens.
+	if c.Budget.MaxTokensPerRequest > 0 && c.Budget.ReserveTokensPerArm == 0 {
+		return fmt.Errorf("budget.max_tokens_per_request requires reserve_tokens_per_arm to bind before dispatch")
+	}
+	if c.Budget.MaxCostPerRequest > 0 && (c.Budget.ReserveTokensPerArm == 0 || c.Budget.PricePerMillionTokens == 0) {
+		return fmt.Errorf("budget.max_cost_per_request requires reserve_tokens_per_arm and price_per_million_tokens")
+	}
 	return validateShadowForwardHeaders(c.ForwardHeaders)
+}
+
+// ShadowModels returns the deduplicated, non-empty list of shadow models a
+// decision dispatches to: Model first, then every configured Arm not already
+// listed. The Budget field holds the aggregate limits every returned model
+// shares (issue #3376 multi-arm).
+func (c *ShadowDispatchPluginConfig) ShadowModels() []string {
+	if c == nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	models := make([]string, 0, 1+len(c.Arms))
+	for _, name := range append([]string{c.Model}, c.Arms...) {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		models = append(models, trimmed)
+	}
+	return models
 }
 
 // validateShadowForwardHeaders rejects allowlist entries that could never be
@@ -194,13 +248,14 @@ func validateDecisionShadowDispatchPlugin(cfg *RouterConfig, decision *Decision)
 			decision.Algorithm.Type,
 		)
 	}
-	model := strings.TrimSpace(shadow.Model)
-	if len(cfg.GetEndpointsForModel(model)) == 0 {
-		return fmt.Errorf(
-			"decision %q: shadow_dispatch model %q has no configured backend",
-			decision.Name,
-			model,
-		)
+	for _, model := range shadow.ShadowModels() {
+		if len(cfg.GetEndpointsForModel(model)) == 0 {
+			return fmt.Errorf(
+				"decision %q: shadow_dispatch model %q has no configured backend",
+				decision.Name,
+				model,
+			)
+		}
 	}
 	return nil
 }

@@ -23,6 +23,8 @@ describe('capability plugin field schemas', () => {
     expect(fields?.map((field) => field.key)).toEqual([
       'enabled',
       'model',
+      'arms',
+      'budget',
       'sample_rate',
       'max_concurrency',
       'max_queue_depth',
@@ -34,6 +36,8 @@ describe('capability plugin field schemas', () => {
       'tls_skip_verify',
       'forward_headers',
     ])
+    expect(fields?.find((field) => field.key === 'arms')?.type).toBe('string[]')
+    expect(fields?.find((field) => field.key === 'budget')?.type).toBe('object')
   })
 
   it('exposes canonical response cache fields', () => {
