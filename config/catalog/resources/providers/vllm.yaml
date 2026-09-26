@@ -421,6 +421,19 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
+- catalog: tencent/hunyuan-7b-instruct
+  relationship: self_hosted
+  id: tencent/Hunyuan-7B-Instruct
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  restrictions:
+    minimum_vllm_version: 0.10.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-23
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
 - catalog: zai/glm-5.1
   relationship: self_hosted
   id: zai-org/GLM-5.1

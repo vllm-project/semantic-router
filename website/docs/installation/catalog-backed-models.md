@@ -78,6 +78,39 @@ Do not set `providers.models[].reasoning` on a catalog-backed Model. That
 combination is rejected so an alias cannot silently change a repository-owned
 reasoning contract.
 
+## Match the deployed context limit
+
+A catalog context window describes the model, not every serving configuration.
+If the backend accepts a smaller window, override the card's context limit for
+your deployment. This changes routing metadata; it does not reconfigure the
+backend or extend its capacity.
+
+For example, vLLM 0.11.1 derives a 32,768-token limit from the pinned
+[Hunyuan 7B Instruct config](https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/config.json)
+and rejects `max_model_len=262144`, although the model card and tokenizer
+advertise 256K. For that deployment, use the verified runtime limit:
+
+```yaml
+version: v0.3
+providers:
+  defaults:
+    model: local-hunyuan
+  models:
+    - name: local-hunyuan
+      catalog: tencent/hunyuan-7b-instruct
+      backend_refs:
+        - provider: vllm
+          base_url: http://127.0.0.1:8000/v1
+routing:
+  modelCards:
+    - name: tencent/hunyuan-7b-instruct
+      context_window_size: 32768
+```
+
+The override uses the canonical card ID, not `local-hunyuan`. Keep the published
+card unchanged, and revalidate the deployment limit after changing the serving
+runtime or model revision.
+
 ## Override the protocol only when necessary
 
 The selected Provider mapping normally supplies the correct protocol and
