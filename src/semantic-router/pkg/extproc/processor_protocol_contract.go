@@ -133,6 +133,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	if ctx.SourceFormat == "" {
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1
 	}
+	body = withAzureDeploymentModel(body, ctx.Headers[":path"])
 	engine, err := r.protocolEngine()
 	if err != nil {
 		return nil, r.createErrorResponse(503, "protocol runtime unavailable")
@@ -215,6 +216,10 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, format); policyErr != nil {
 		return nil, policyErr
 	}
+	dispatchRequest, projectionDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(dispatchRequest, ctx.RequestModel, format)
+	if err != nil {
+		return nil, err
+	}
 	if format == llmprotocol.OpenAIChatV1 && dispatchRequest.Stream &&
 		!streamUsageAlreadyRequested(dispatchRequest.StreamOptions) {
 		// The Router always asks Chat backends for the final usage chunk so
@@ -231,6 +236,7 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
 	return encodeLooperEvidence(encoded.Body, format, ctx)
 }
@@ -258,19 +264,14 @@ func (r *OpenAIRouter) decodeClientResponse(
 		return nil, err
 	}
 	source, target := responseWireFormats(ctx)
-	var mutation protocolcodec.ResponseMutation
-	if responseID := responseObjectPublicID(ctx); responseID != "" {
-		mutation = func(response *llmprotocol.Response) error {
-			response.ID = responseID
-			return nil
-		}
-	}
+	mutation := clientResponseMutation(ctx, source)
 	decoded, err := engine.TranslateResponse(source, target, body, mutation)
 	if err != nil {
 		return nil, err
 	}
 	ctx.SemanticResponse = &decoded.Response
 	ctx.ResponseEnvelope = decoded.Envelope
+	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired
 	ctx.ResponseVendorExtensions = protocolcodec.DiagnosticsDroppedVendorExtensions(decoded.Diagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)
 	return ctx.SemanticResponse, nil

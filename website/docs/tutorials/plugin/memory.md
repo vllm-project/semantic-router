@@ -63,4 +63,19 @@ embeddings. The management API has no import or bulk export endpoint for
 memories, so the collection for the new model starts empty and repopulates
 from new traffic. No old collection is deleted during
 startup or model migration. This automatic identity binding currently covers
-local `mmbert`; other embedding providers keep their existing behavior.
+local `mmbert`; other embedding providers keep their existing behavior, except
+Candle `bert` as described below.
+
+Candle `bert` models have no content descriptor, so the router keys their memory
+by an encoder version that changes whenever Candle BERT vectors change, as they
+did when padding tokens stopped counting toward the average. After upgrading
+across such a change, BERT memory opens a new collection or index and a new
+Redis hot cache. Entries stored before the upgrade stay in the old collection
+and are no longer recalled, so memory fills again from new conversations. BERT
+served by another runtime keeps its existing storage.
+
+A remote embedding endpoint cannot prove which model produced its vectors, so
+memory keeps the configured collection or index, and the router logs a startup
+warning. After you change `endpoint.model`, or the provider changes the model
+behind the endpoint, point memory at a new collection or index. The new one
+starts empty, and the old one is left as it was.

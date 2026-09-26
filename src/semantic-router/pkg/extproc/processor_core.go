@@ -23,10 +23,11 @@ import (
 //
 // BUFFERED mode (default): the message goes straight to handleRequestBody.
 //
-// STREAMED mode (streamed_body_mode: true in config): Envoy sends multiple
-// body messages. A StreamedBodyHandler accumulates chunks, detects the model
-// from the first few KB, and either passes through or accumulates for the
-// full pipeline on end_of_stream.
+// STREAMED and FULL_DUPLEX_STREAMED modes (global.router.streamed_body.enabled):
+// Envoy sends multiple body messages. A StreamedBodyHandler accumulates every
+// chunk and runs the full pipeline on end_of_stream. Requests that name a
+// concrete model are accumulated too, because dispatch can still rewrite the
+// model ID, translate the wire format, and add stream_options.include_usage.
 func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	// Honor x-vsr-skip-processing before allocating a streamed-body handler.
 	// This guarantees no chunk accumulation, model detection, or buffered
@@ -55,7 +56,8 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 	if ctx.FullDuplexRequestBody && !streamedMode {
 		return newFullDuplexRequestBodyResponse(v.RequestBody.GetBody(), eos), nil
 	}
-	if streamedMode && (!eos || ctx.FullDuplexRequestBody) {
+	// STREAMED may contain just one EOS body message; it still needs the guards.
+	if streamedMode {
 		ctx.StreamedBody = newStreamedBodyHandler(r, ctx)
 		resp, err := ctx.StreamedBody.HandleChunk(v.RequestBody, ctx)
 		if eos {
@@ -65,7 +67,7 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 		return resp, err
 	}
 
-	// BUFFERED mode or single-message STREAMED — use classic pipeline
+	// BUFFERED mode uses the classic pipeline.
 	return r.handleRequestBody(v, ctx)
 }
 

@@ -149,19 +149,14 @@ vllm-sr serve
 | 字段 | 值 |
 | --- | --- |
 | **Model name** | 你的 Ollama 标签，例如 `llama3.2:3b` |
-| **Provider** | **Local vLLM** |
+| **Provider** | **Ollama** |
 | **Base URL or host** | `host.docker.internal:11434` |
 | **Endpoint label** | `primary`（或任何简短标签） |
 | **Default** | 如果这是你唯一的后端，选择此模型 |
 
-![在设置控制面板中配置 Ollama 后端](/img/installation/ollama/setup-wizard-ollama-model.png)
-
-为什么是 **Local vLLM** 而不是 **OpenAI-compatible API**？
-
-- Ollama 在 `/v1/chat/completions` 提供 OpenAI 兼容表面。
-- **Local vLLM** 会将你输入的主机和协议写为 `endpoint` 后端引用，因此请显式输入 `host.docker.internal:11434`。
-
-或者，选择 **OpenAI-compatible API** 并输入 `http://host.docker.internal:11434/v1`；该 provider 类型会写入 `base_url`。两条路径都使用 Ollama 的 OpenAI 兼容 API。
+选择 **Ollama** 会写入 Ollama 后端引用；在本地容器部署中，默认地址是
+`host.docker.internal:11434`。Router 据此识别 Ollama，并用其支持的
+`max_tokens` 字段传递输出 token 上限。如果 Ollama 运行在其他主机，请替换默认地址。
 
 当 model card 校验通过后，点击 **Continue**。
 
@@ -170,8 +165,6 @@ vllm-sr serve
 在 **Step 2 — Choose routing** 上，如果只注册了一个 Ollama 模型，请保留 **Single-model baseline**。稍后添加更多后端时，可以导入预设或远程配置。
 
 在 **Step 3 — Review & activate** 上，确认模型摘要，然后点击 **Activate configuration**。
-
-![复核生成的配置并激活设置](/img/installation/ollama/setup-wizard-ollama-activate.png)
 
 激活会将 `config.yaml` 写入当前目录并退出设置模式。Envoy 在端口 `8899` 启动，并将请求通过 Semantic Router 路由到你的 Ollama 后端。
 

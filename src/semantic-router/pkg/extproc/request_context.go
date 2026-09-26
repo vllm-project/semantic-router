@@ -368,6 +368,7 @@ type RequestContext struct {
 	PrimaryOutputChars       int
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
+	ResponseBodyNeedsRewrite bool // The decoded client wire differs from the provider body.
 	ProtocolDiagnostics      llmprotocol.Diagnostics
 	ResponseVendor           llmprotocol.ResponseVendor
 	ResponseVendorExtensions bool // Upstream response carried vendor decorations that were dropped on decode

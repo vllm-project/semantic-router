@@ -86,7 +86,8 @@ type Content struct {
 // CacheDirective marks a request block or tool definition as an explicit
 // prompt-cache boundary. It is semantic request state rather than an opaque
 // provider extension, so same-format routing mutations cannot silently erase
-// it. A target format without cache directives must reject the translation.
+// it. A target format without cache directives must reject the translation
+// unless a narrow cross-format projection reports the omitted boundaries.
 type CacheDirective struct {
 	Type string
 	TTL  string
@@ -102,9 +103,10 @@ type Citation struct {
 }
 
 type Message struct {
-	ID      string
-	Role    Role
-	Content []Content
+	ID              string
+	Role            Role
+	Content         []Content
+	ReasoningEffort string // Anthropic per-message output_config.effort.
 }
 
 type InstructionBlock struct {
@@ -113,6 +115,9 @@ type InstructionBlock struct {
 }
 
 type ToolCall struct {
+	// Kind is empty for a function call. A custom call carries the model's
+	// free-form input in Arguments instead of a JSON object.
+	Kind      ToolKind
 	ID        string
 	Name      string
 	Arguments string
@@ -129,12 +134,26 @@ type ToolResult struct {
 	DeferredLink bool
 }
 
+// ToolKind separates JSON Schema function tools, the empty kind, from OpenAI
+// custom tools, which take free-form text that a grammar may constrain.
+type ToolKind string
+
+const ToolKindCustom ToolKind = "custom"
+
 type Tool struct {
+	Kind        ToolKind
 	Name        string
 	Description string
 	Strict      *bool
 	InputSchema json.RawMessage
-	Cache       *CacheDirective
+	// CustomFormat constrains a custom tool's input. Nil means unconstrained text.
+	CustomFormat *CustomToolFormat
+	Cache        *CacheDirective
+}
+
+type CustomToolFormat struct {
+	Syntax     string
+	Definition string
 }
 
 type ToolChoiceMode string
@@ -233,6 +252,9 @@ type Request struct {
 	ReasoningMode         ReasoningMode
 	ReasoningEffort       string
 	ReasoningBudgetTokens *int64
+	// ReasoningSummary asks a Responses provider for a reasoning summary: auto,
+	// concise or detailed. Chat Completions and Messages cannot carry it.
+	ReasoningSummary string
 	// ReasoningDisplay controls whether a provider returns summarized reasoning
 	// content or only its signed continuation token. It is distinct from whether
 	// reasoning itself is enabled.
@@ -256,6 +278,9 @@ type Request struct {
 	ContextManagement json.RawMessage
 	// CacheSalt isolates backend prefix-cache entries; it is never prompt text.
 	CacheSalt *string
+	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model
+	// output, but targets that cannot carry it must reject it, not drop it.
+	PromptCacheKey string
 }
 
 type StopReason string

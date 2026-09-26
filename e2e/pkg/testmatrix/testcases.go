@@ -23,6 +23,7 @@ var BaselineRouterContract = []string{
 	"semantic-cache",
 	// NLI polarity tier of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
+	"exact-cache-multilingual-negation",
 	"pii-detection",
 	// PII entity positions are code-point offsets (issue #3146)
 	"pii-entity-offsets",
@@ -71,6 +72,8 @@ var DashboardContract = []string{
 	// Core API
 	"dashboard-health",
 	"dashboard-status",
+	// Issue #2466: invitation, role-bound routes, and immediate session revocation.
+	"dashboard-route-bound-authorization",
 	// Config endpoints
 	"dashboard-config-read",
 	"dashboard-deploy-preview",
@@ -90,6 +93,7 @@ var DashboardContract = []string{
 // OpenAI-shaped backends because they assert on Anthropic-specific
 // behaviour such as cache-token synthesis and stop-reason mapping.
 var ProviderProtocolsContract = []string{
+	"prompt-compression-json-routing",
 	// Chat clients must receive Chat Completions even though the selected
 	// backend speaks Anthropic Messages.
 	"chat-completions-request",
@@ -105,6 +109,9 @@ var ProviderProtocolsContract = []string{
 	"anthropic-response-api-streaming",
 	"protocol-codec-anthropic-backend-buffered-matrix",
 	"protocol-codec-anthropic-backend-streaming-matrix",
+	"protocol-codec-anthropic-response-diagnostics",
+	"protocol-codec-anthropic-per-message-effort-backend",
+	"protocol-codec-zero-penalty-anthropic",
 	"protocol-codec-anthropic-backend-tool-lifecycle",
 	"protocol-codec-anthropic-backend-structured-output",
 	"protocol-codec-anthropic-backend-error-matrix",

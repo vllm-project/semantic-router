@@ -23,8 +23,15 @@ func (r *OpenAIRouter) progressCandidateReason(ctx *RequestContext, selCtx *sele
 	if r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount) {
 		return "context_limit"
 	}
-	if ctx.SemanticRequest != nil && !r.modelCanServeCapabilities(ref.Model, llmprotocol.RequiredCapabilities(*ctx.SemanticRequest)) {
-		return "capability"
+	if ctx.SemanticRequest != nil {
+		format, err := wireFormatForModel(r.Config.GetModelAPIFormat(ref.Model))
+		if err != nil {
+			return "capability"
+		}
+		projected, err := r.projectAnthropicRequestForBackend(*ctx.SemanticRequest, ref.Model, format)
+		if err != nil || !r.modelCanServeCapabilities(ref.Model, llmprotocol.RequiredCapabilities(projected)) {
+			return "capability"
+		}
 	}
 	if decision := ctx.VSRSelectedDecision; decision != nil {
 		method := r.getSelectionMethod(decision.Algorithm)

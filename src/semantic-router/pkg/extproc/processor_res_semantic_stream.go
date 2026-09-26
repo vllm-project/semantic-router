@@ -189,21 +189,19 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		Options:     clientStreamOptions(ctx),
 		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
 	}
-	var mutation protocolcodec.StreamEventMutation
+	mutation := clientStreamMutation(ctx, source)
 	if responseID := responseObjectPublicID(ctx); responseID != "" {
 		streamContext.ResponseID = responseID
-		mutation = func(event *llmprotocol.Event) error {
-			event.ResponseID = responseID
-			return nil
-		}
 	}
 	stream, err := engine.NewStreamWithMutation(source, target, streamContext, mutation)
 	if err != nil {
 		return err
 	}
 	ctx.ProtocolResponseStream = stream
-	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 && !streamUsageRequestedByClient(ctx) {
-		ctx.PublicChatUsageFilter = protocolcodec.NewChatUsageStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes)
+	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 {
+		ctx.PublicChatUsageFilter = protocolcodec.NewChatPublicStreamFilter(
+			llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, streamUsageRequestedByClient(ctx),
+		)
 	}
 	ctx.SemanticStreamState = &semanticResponseStreamState{
 		usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
@@ -266,6 +264,9 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				item.toolCall = &llmprotocol.ToolCall{}
 			}
 			if event.ToolCall != nil {
+				if event.ToolCall.Kind != "" {
+					item.toolCall.Kind = event.ToolCall.Kind
+				}
 				if event.ToolCall.ID != "" {
 					item.toolCall.ID = event.ToolCall.ID
 				}
