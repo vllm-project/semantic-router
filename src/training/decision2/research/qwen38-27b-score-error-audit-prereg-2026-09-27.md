@@ -42,3 +42,35 @@ totals; Noul and Score gold-level summaries remain. Revised source SHA-256
 is `46ddfe589a3f7e19bb1952b14886684a514a1b07e527d9e2b03c8695e34ab936`.
 The same three frozen inputs will be rerun once after this correction is
 committed. This is an output-privacy fix, not an opportunity to tune a model.
+
+## Corrected aggregate result
+
+The corrected private aggregate SHA-256 is
+`73aed9d30c05ebc9829522209101b729f1b2a42ba15b62ac2f48821c9935a3c4`.
+Both prediction files cover all 1,600 rows with zero invalid answers. The
+27B count reproduces the frozen 1,213/1,600 scorer result exactly; the
+published Decision 1.0 Lux 9B comparison is 1,388/1,600.
+
+| DEV family (400 rows each) | 27B | Lux 1.0 9B | 27B-only / Lux-only correct |
+| --- | ---: | ---: | ---: |
+| Attribute gate | 395 | 400 | 0 / 5 |
+| Rule precedence | 261 | 258 | 127 / 124 |
+| Set reconciliation (Score) | **161** | **331** | **2 / 172** |
+| Transition table | 396 | 399 | 1 / 4 |
+
+For Score, the true level counts are 0:85, 1:107, 2:208. The 27B correct
+counts are 85, 5 and 71; Lux 9B counts are 85, 38 and 208. Of the 107
+true-level-1 rows, 27B predicts level 0 on 102. Of the 208 true-level-2
+rows, it predicts level 0 on 121 and level 1 on 16. This is an unusually
+strong low-level bias in the 27B native head, not merely a probability
+temperature problem; positive temperature cannot alter its modal level.
+
+Counterfactual/order/label paired-both-correct counts are 259/268/291 of
+400 for 27B and 297/314/342 for Lux. All-four-variant group success is
+244/400 versus 266/400. These are correlated synthetic development
+variants, so the row differences are not treated as independent confidence
+samples. The existing rights-clean TRAIN Score pool is small and dominated
+by different ordinal mechanisms. A separately preregistered, balanced
+TRAIN-only curriculum is warranted for research; its design must avoid
+copying the DEV set-reconciliation template or selecting against sealed
+release labels. This audit does not make the 27B model release-qualified.
