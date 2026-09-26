@@ -84,6 +84,7 @@ same final validation but are not replaced by another model.
 | Type | Status | Goal | Main dependency | Guide |
 |---|---|---|---|---|
 | `static` | supported | Use declared order or fixed domain scores | None | [Static](./selection/static) |
+| `random` | supported | Pick uniformly among eligible declared candidates | None | [Random](./selection/random) |
 | `router_dc` | supported | Match request semantics to model descriptions | Embedding runtime and useful model cards | [Router DC](./selection/router-dc) |
 | `latency_aware` | supported | Prefer the candidate with the best observed TTFT/TPOT | Per-process latency observations | [Latency Aware](./selection/latency-aware) |
 | `multi_factor` | supported | Balance quality, latency, cost, and load with optional SLO filters | Model metadata and live local metrics | [Multi Factor](./selection/multi-factor) |

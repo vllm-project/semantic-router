@@ -180,6 +180,7 @@ func expectedSelectionStatuses(algorithm string) []string {
 		"static":        {"selected", "execution_required"},
 		"multi_factor":  {"selected", "execution_required"},
 		"latency_aware": {"selected", "execution_required"},
+		"random":        {"selected", "execution_required"},
 		"workflows":     {"planned_final", "execution_required"},
 		"fusion":        {"planned_final", "execution_required"},
 		"remom":         {"planned_final", "execution_required"},
@@ -202,11 +203,23 @@ func selectionStatusFailures(algorithm string, expectedStatuses []string, status
 	return nil
 }
 
+// Selection short-circuits to "single" for one-candidate decisions, so
+// single-model selectors report "single" rather than the algorithm name (#3273).
+func algorithmAllowsSingleCandidateShortcut(algorithm string) bool {
+	switch algorithm {
+	case "static", "random":
+		return true
+	default:
+		return false
+	}
+}
+
 func selectionMethodFailures(algorithm, method string) []string {
 	if method == "" {
 		return []string{"selection_method is missing"}
 	}
-	if method != algorithm && (algorithm != "static" || method != "single") {
+	if method != algorithm &&
+		(method != "single" || !algorithmAllowsSingleCandidateShortcut(algorithm)) {
 		return []string{fmt.Sprintf(
 			"selection_method=%q, want %q",
 			method,
