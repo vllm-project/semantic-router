@@ -221,7 +221,8 @@ def review(packet: Path, manifest: Path) -> tuple[list[dict], list[dict], dict]:
         "rows_reviewed": len(decisions),
         "groups_reviewed": len(groups),
         "operation_language_counts": {
-            f"{o}/{l}": n for (o, l), n in sorted(count.items())
+            f"{operation_name}/{language_name}": n
+            for (operation_name, language_name), n in sorted(count.items())
         },
         "parsed_rows": len(decisions),
         "ambiguous_rows": sum(bool(row["ambiguity"]) for row in decisions),

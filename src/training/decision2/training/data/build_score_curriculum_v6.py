@@ -1080,7 +1080,7 @@ def _quarantine_cross_group_clones(
     """Conservatively retain the earliest group in each same-level near cluster."""
     retained: dict[tuple[str, int], list[str]] = collections.defaultdict(list)
     dropped = collections.Counter()
-    for group in sorted(list(by_group)):
+    for group in sorted(by_group):
         rows = by_group[group]
         texts = {row["label"]: pilot._near_text(row) for row in rows}
         family = rows[0]["family"]

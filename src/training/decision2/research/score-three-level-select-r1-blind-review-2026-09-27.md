@@ -16,10 +16,11 @@ documented in `score-three-level-select-r1-freeze-2026-09-27.md`.
   state using the private sealed revision of
   `score_select_r1_blind_reviewer.py` (SHA-256
   `6926da69dd013d527315cc983f1167d6261220eb39b7fdbe8545b49a2dbe5734`).
-  The source-branch copy was reformatted only for repository style (SHA-256
-  `303ff723eb8a35d7c1face2a2ecbec0e1e7fd6023d74b9306cdd857ff61709a2`);
-  its parsed Python AST matches the sealed revision under the same local
-  interpreter. Neither revision imports the author builder or oracle. The
+  The source-branch copy was reformatted and given a lint-only local-variable
+  rename (SHA-256
+  `a5f65914f83a97800004c1624d8ce4edf60f906200aabcaa59a584584492ea7e`);
+  its rerun on the frozen packet reproduced the sealed row and group judgment
+  bytes exactly. Neither revision imports the author builder or oracle. The
   sealed revision parsed 240/240 rows and
   found 80/80 complete 0/1/2 triplets. The reviewer manually read eight
   complete English groups (24 rows) and four Chinese groups (12 rows) as a

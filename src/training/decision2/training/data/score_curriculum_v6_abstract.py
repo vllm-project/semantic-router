@@ -13,9 +13,9 @@ import itertools
 import json
 import os
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 SEED = "decision20-score-v6-abstract-20260927"
 PREREG_SHA256 = "e82e92826cf3ae106579b48612b9b435a581662a5b06be78119e73089138ac34"
