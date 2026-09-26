@@ -15,10 +15,30 @@
       "snapshot": "research/source_snapshots/2026-09-27/jev_arena__authored_v3_reference.py.source",
       "source_sha256": "5fa936b06ca3d5c9a7adb1864c49e12fe55422199a186c7256c666435784f05b"
     },
+    "jev_arena/authored_v4.py": {
+      "ast_sha256": "a5bbf4a09b2aee8a55c5290b43847d33c6007e51b3256db166633bdbee6e4278",
+      "snapshot": "research/source_snapshots/2026-09-27/jev_arena__authored_v4.py.source",
+      "source_sha256": "36b8a4e81679bc4233c24c7bf310598491f749d97d65d7755b4845313662d433"
+    },
+    "jev_arena/authored_v4_ops.py": {
+      "ast_sha256": "b2232c3aa6fe30b34a6859539e7393dfd191745e40c18a18e28fcf2f1bc699f6",
+      "snapshot": "research/source_snapshots/2026-09-27/jev_arena__authored_v4_ops.py.source",
+      "source_sha256": "42aa1a3a8525679cd56454edae027052adf34fa14ea6b3568c831fa44bfbb047"
+    },
+    "jev_arena/authored_v4_reference.py": {
+      "ast_sha256": "361d429beab811a0d5e559a98c5ca93fd28fc50d54097afa02ab93b76fdf6da8",
+      "snapshot": "research/source_snapshots/2026-09-27/jev_arena__authored_v4_reference.py.source",
+      "source_sha256": "eb66133be006b60db542d98aaba44d44846ca187d2fda23c5863ac06d32fb850"
+    },
     "multilingual/translation_smoke.py": {
       "ast_sha256": "59ff57169e8dadd6134ccb87953f97eab1efbe0912bdbc92b55173979d840ed0",
       "snapshot": "research/source_snapshots/2026-09-27/multilingual__translation_smoke.py.source",
       "source_sha256": "2c26fcd556100950ad0b4ea4f30148c56cdfb9577ce5f4898b430019c99db87e"
+    },
+    "training/data/build_short_reasoning_replay.py": {
+      "ast_sha256": "5f67015b3e8e4b853685d205616834773432721f4d8226a8dfed8c592b91ae01",
+      "snapshot": "research/source_snapshots/2026-09-27/training__data__build_short_reasoning_replay.py.source",
+      "source_sha256": "483e38e74670af125b115f8abdafc9cfff0cb7fc8d26225dd22aff6bc067218d"
     },
     "training/laya/build_research_data.py": {
       "ast_sha256": "88613d59f710cd4493da4c52f0d40ed07f41afd4b1c5116575dac43ba42c38bd",
@@ -36,9 +56,13 @@
       "source_sha256": "55a62ee120fcaa79f50c3cea5a38284d5855c264237d2abb27f9068a1161659f"
     }
   },
-  "purpose": "Exact sources used for authored-v3 candidate, multilingual smoke, and Laya r2 research run before repository formatting",
+  "purpose": "Exact sources used for blocked authored-v3 and authored-v4 candidates, multilingual smoke, Laya r2 research, and the A1 short-reasoning replay dataset before repository formatting",
   "scratch_commits": [
     "0c183b5",
-    "a15a091"
+    "2db834f",
+    "38bd612",
+    "4f83e8e",
+    "a15a091",
+    "cf82b2b"
   ]
 }
