@@ -30,7 +30,13 @@ FROZEN = {
     "select": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6",
     "cal": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a",
 }
-REQUIRED_PROTECTED_ROLES = {"typed_dev", "css_pilot", "css15_goldfree"}
+REQUIRED_PROTECTED_ROLES = {
+    "typed_dev",
+    "css_pilot",
+    "css15_goldfree",
+    "jevbench_public231",
+    "decision_bench_v4_text",
+}
 SCENES = (
     "community workshop",
     "language center",
@@ -492,7 +498,9 @@ def _load_protected(
     references, evidence = {}, []
     for entry in inventory:
         role, file = entry["role"], Path(entry["path"])
-        if "gold" in file.name.lower() or not file.name.endswith(".prompts.jsonl"):
+        if "gold" in file.name.lower() or not (
+            file.name.endswith(".prompts.jsonl") or file.name == "prompts.jsonl"
+        ):
             raise ValueError(f"Only gold-free prompt inputs permitted for {role}")
         rows, receipt = targeted.load_context_reference(file)
         if not all(

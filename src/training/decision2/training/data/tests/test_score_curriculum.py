@@ -148,7 +148,12 @@ class ScoreCurriculumTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "Protected roles"):
                 curriculum._load_protected(inventory)
-            others = ["css_pilot", "css15_goldfree"]
+            others = [
+                "css_pilot",
+                "css15_goldfree",
+                "jevbench_public231",
+                "decision_bench_v4_text",
+            ]
             inventory.write_text(
                 json.dumps(
                     [
@@ -159,7 +164,7 @@ class ScoreCurriculumTests(unittest.TestCase):
             )
             references, receipt = curriculum._load_protected(inventory)
             self.assertEqual(set(references), {"typed_dev", *others})
-            self.assertEqual(len(receipt), 3)
+            self.assertEqual(len(receipt), 5)
             prompt.write_text(
                 json.dumps({"id": "x", "state": {}, "questions": {}, "gold": 2}) + "\n"
             )
