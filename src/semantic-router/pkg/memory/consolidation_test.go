@@ -9,6 +9,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	_ sourceReplacer = (*InMemoryStore)(nil)
+	_ sourceReplacer = (*MilvusStore)(nil)
+	_ sourceReplacer = (*QdrantStore)(nil)
+	_ sourceReplacer = (*CachingStore)(nil)
+	_ sourceReplacer = (*ValkeyStore)(nil)
+	_ sourceReplacer = (*scriptMemoryStore)(nil)
+)
+
 func TestGroupBySimilarity(t *testing.T) {
 	now := time.Now()
 	memories := []*Memory{
@@ -265,9 +274,10 @@ func TestConsolidateUserRollsBackSummaryWhenSourceChangesBeforeDelete(t *testing
 		&Memory{ID: "a", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now()},
 		&Memory{ID: "b", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now()},
 	)
-	// Gets 1 and 2 confirm the list snapshot. Get 3 is the post-write recheck.
-	store.onGet = func(n int) {
-		if n != 3 {
+	// The pre-delete Gets still see the listed versions. The update lands inside
+	// the version-conditional delete, immediately before that compare.
+	store.beforeSourceDelete = func(id string) {
+		if id != "a" {
 			return
 		}
 		store.mu.Lock()
@@ -296,4 +306,92 @@ func TestConsolidateUserRollsBackSummaryWhenSourceChangesBeforeDelete(t *testing
 			require.Equal(t, updated, mem.Content)
 		}
 	}
+}
+
+func TestConsolidateUserKeepsPartialMergeWhenLaterSourceChangesBeforeDelete(t *testing.T) {
+	updated := "budget is now 20000 dollars after the revision"
+	store := newScriptMemoryStore(
+		&Memory{ID: "a", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now()},
+		&Memory{ID: "b", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now()},
+	)
+	store.beforeSourceDelete = func(id string) {
+		if id != "b" {
+			return
+		}
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		for _, mem := range store.memories {
+			if mem.ID == "b" {
+				mem.Content = updated
+				mem.UpdatedAt = time.Now()
+			}
+		}
+	}
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 1, merged)
+	require.Equal(t, 1, deleted)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	require.Len(t, store.memories, 2)
+	byID := map[string]*Memory{}
+	summaryFound := false
+	for _, mem := range store.memories {
+		if mem.Source == "consolidation" {
+			summaryFound = true
+		}
+		byID[mem.ID] = mem
+	}
+	require.NotContains(t, byID, "a")
+	require.Equal(t, updated, byID["b"].Content)
+	require.True(t, summaryFound)
+}
+
+func TestInMemoryForgetIfCurrentLeavesNewerVersion(t *testing.T) {
+	store := NewInMemoryStore()
+	original := &Memory{
+		ID: "a", UserID: "user-1", Type: MemoryTypeSemantic,
+		Content: "alpha beta gamma", UpdatedAt: time.Unix(10, 0).UTC(),
+	}
+	store.memories[original.ID] = original
+	want := versionOf(original)
+
+	store.memories[original.ID] = &Memory{
+		ID: "a", UserID: "user-1", Type: MemoryTypeSemantic,
+		Content: "budget is now 20000 dollars after the revision", UpdatedAt: time.Unix(11, 0).UTC(),
+	}
+
+	deleted, err := store.forgetIfCurrent(context.Background(), want)
+	require.NoError(t, err)
+	require.False(t, deleted)
+	require.Equal(t, "budget is now 20000 dollars after the revision", store.memories["a"].Content)
+
+	deleted, err = store.forgetIfCurrent(context.Background(), versionOf(store.memories["a"]))
+	require.NoError(t, err)
+	require.True(t, deleted)
+	_, exists := store.memories["a"]
+	require.False(t, exists)
+}
+
+func TestMilvusConditionalDeleteExprKeepsContentQuoted(t *testing.T) {
+	updatedAt := time.Unix(1_700_000_000, 0).UTC()
+	expr := milvusConditionalDeleteExpr(memoryVersion{
+		id:         `id" || id != "x`,
+		userID:     "user-1",
+		projectID:  "",
+		typ:        MemoryTypeSemantic,
+		content:    "alpha \"beta\"",
+		createdAt:  time.Unix(1_600_000_000, 0).UTC(),
+		updatedAt:  updatedAt,
+		importance: 0.7,
+	})
+	require.Contains(t, expr, `id == "id\" || id != \"x"`)
+	require.Contains(t, expr, `project_id == "default"`)
+	require.Contains(t, expr, `content == "alpha \"beta\""`)
+	require.Contains(t, expr, "created_at == 1600000000")
+	require.Contains(t, expr, "updated_at == 1700000000")
+	require.Contains(t, expr, "importance == 0.7")
+	require.NotContains(t, expr, `id != "x" &&`)
 }

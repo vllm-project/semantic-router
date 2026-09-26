@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
@@ -129,6 +130,59 @@ func (m *MilvusStore) Forget(ctx context.Context, id string) error {
 
 	logging.Debugf("MilvusStore.Forget: successfully deleted memory id=%s", id)
 	return nil
+}
+
+// forgetIfCurrent deletes id only when the stored scalar fields still match want.
+// Milvus applies the expression on the server, so an update that lands before
+// the delete no longer matches and is left in place.
+func (m *MilvusStore) forgetIfCurrent(ctx context.Context, want memoryVersion) (bool, error) {
+	startTime := time.Now()
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("milvus", "forget", status, time.Since(startTime).Seconds())
+	}()
+
+	if err := ctx.Err(); err != nil {
+		status = "error"
+		return false, err
+	}
+	if !m.enabled {
+		status = "error"
+		return false, fmt.Errorf("milvus store is not enabled")
+	}
+	if want.id == "" {
+		status = "error"
+		return false, fmt.Errorf("memory ID is required")
+	}
+
+	err := m.retryWithBackoff(ctx, func() error {
+		return m.client.Delete(ctx, m.collectionName, "", milvusConditionalDeleteExpr(want))
+	})
+	if err != nil {
+		status = "error"
+		return false, fmt.Errorf("milvus conditional delete failed: %w", err)
+	}
+	_, getErr := m.Get(ctx, want.id)
+	deleted, getErr := conditionalDeleteResult(getErr)
+	if getErr != nil {
+		status = "error"
+	}
+	return deleted, getErr
+}
+
+func milvusConditionalDeleteExpr(want memoryVersion) string {
+	projectID, _ := normalizedMemoryScopeFields(&Memory{ProjectID: want.projectID})
+	return fmt.Sprintf(
+		"id == %q && user_id == %q && project_id == %q && memory_type == %q && content == %q && created_at == %d && updated_at == %d && importance == %s",
+		want.id,
+		want.userID,
+		projectID,
+		string(want.typ),
+		want.content,
+		want.createdAt.Unix(),
+		want.updatedAt.Unix(),
+		strconv.FormatFloat(float64(want.importance), 'g', -1, 32),
+	)
 }
 
 func (m *MilvusStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {

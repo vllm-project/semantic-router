@@ -735,6 +735,33 @@ func TestValkeyStoreInteg_ConsolidateUser(t *testing.T) {
 }
 
 // StorageIntegration: valkey
+func TestValkeyStoreInteg_ForgetIfCurrentLeavesUpdatedSource(t *testing.T) {
+	store, _ := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+	id := fmt.Sprintf("conditional_%d", time.Now().UnixNano())
+
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID: id, Type: MemoryTypeSemantic, UserID: "conditional-user",
+		Content: "original source content", Importance: 0.3,
+	}))
+	original, err := store.Get(ctx, id)
+	require.NoError(t, err)
+
+	require.NoError(t, store.Update(ctx, id, &Memory{
+		Type: MemoryTypeSemantic, UserID: "conditional-user",
+		Content: "updated source content", Importance: 0.8,
+	}))
+	deleted, err := store.forgetIfCurrent(ctx, versionOf(original))
+	require.NoError(t, err)
+	require.False(t, deleted)
+
+	live, err := store.Get(ctx, id)
+	require.NoError(t, err)
+	require.Equal(t, "updated source content", live.Content)
+	require.InDelta(t, 0.8, live.Importance, 0.001)
+}
+
+// StorageIntegration: valkey
 func TestValkeyStoreInteg_ConsolidationRunnerMergesAfterEnqueue(t *testing.T) {
 	store, _ := setupValkeyMemoryIntegration(t)
 	ctx := context.Background()

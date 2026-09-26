@@ -283,6 +283,27 @@ func (s *InMemoryStore) Forget(ctx context.Context, id string) error {
 	return nil
 }
 
+// forgetIfCurrent deletes id only when the locked record still matches want.
+func (s *InMemoryStore) forgetIfCurrent(ctx context.Context, want memoryVersion) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if !s.enabled {
+		return false, fmt.Errorf("store not enabled")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	mem, exists := s.memories[want.id]
+	if !exists || !sameVersion(want, mem) {
+		return false, nil
+	}
+	delete(s.memories, want.id)
+	logging.Debugf("InMemoryStore: deleted memory id=%s at matching version", want.id)
+	return true, nil
+}
+
 // ForgetByScope deletes all memories matching the scope.
 func (s *InMemoryStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
 	if !s.enabled {

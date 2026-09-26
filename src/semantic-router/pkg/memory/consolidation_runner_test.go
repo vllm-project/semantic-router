@@ -12,16 +12,17 @@ import (
 )
 
 type scriptMemoryStore struct {
-	mu        sync.Mutex
-	memories  []*Memory
-	listGate  chan struct{}
-	listErr   error
-	afterList func()
-	onGet     func(n int)
-	gets      int
-	stores    int
-	forgets   int
-	enabled   bool
+	mu                 sync.Mutex
+	memories           []*Memory
+	listGate           chan struct{}
+	listErr            error
+	afterList          func()
+	onGet              func(n int)
+	beforeSourceDelete func(id string)
+	gets               int
+	stores             int
+	forgets            int
+	enabled            bool
 }
 
 func newScriptMemoryStore(memories ...*Memory) *scriptMemoryStore {
@@ -97,14 +98,45 @@ func (s *scriptMemoryStore) Forget(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.forgets++
-	kept := s.memories[:0]
+	s.memories = withoutMemoryID(s.memories, id)
+	return nil
+}
+
+// forgetIfCurrent deletes id only when the locked record still matches want.
+// beforeSourceDelete runs first, without the lock, so a test can publish an
+// update that must not be removed.
+func (s *scriptMemoryStore) forgetIfCurrent(_ context.Context, want memoryVersion) (bool, error) {
+	s.mu.Lock()
+	hook := s.beforeSourceDelete
+	s.mu.Unlock()
+	if hook != nil {
+		hook(want.id)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, memory := range s.memories {
+		if memory.ID != want.id {
+			continue
+		}
+		if !sameVersion(want, memory) {
+			return false, nil
+		}
+		s.forgets++
+		s.memories = withoutMemoryID(s.memories, want.id)
+		return true, nil
+	}
+	return false, nil
+}
+
+func withoutMemoryID(memories []*Memory, id string) []*Memory {
+	kept := memories[:0]
+	for _, memory := range memories {
 		if memory.ID != id {
 			kept = append(kept, memory)
 		}
 	}
-	s.memories = kept
-	return nil
+	return kept
 }
 
 func (s *scriptMemoryStore) ForgetByScope(context.Context, MemoryScope) error { return nil }

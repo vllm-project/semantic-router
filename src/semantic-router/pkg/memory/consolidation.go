@@ -20,13 +20,16 @@ const (
 // deleted. This reduces redundancy and improves retrieval quality over time.
 //
 // Designed to be called from a background goroutine on a schedule.
-// Accepts any Store implementation so it works with both Milvus and Valkey backends.
 func ConsolidateUser(ctx context.Context, store Store, userID string) (merged int, deleted int, err error) {
 	if !store.IsEnabled() {
 		return 0, 0, fmt.Errorf("memory store is not enabled")
 	}
 	if userID == "" {
 		return 0, 0, fmt.Errorf("user ID is required")
+	}
+	replacer, ok := store.(sourceReplacer)
+	if !ok {
+		return 0, 0, fmt.Errorf("memory store does not support version-conditional delete")
 	}
 
 	result, err := store.List(ctx, ListOptions{
@@ -74,9 +77,9 @@ func ConsolidateUser(ctx context.Context, store Store, userID string) (merged in
 				continue
 			}
 
-			current, err := sourcesStillCurrent(ctx, store, versions)
-			if err != nil {
-				return merged, deleted, err
+			current, checkErr := sourcesStillCurrent(ctx, store, versions)
+			if checkErr != nil {
+				return merged, deleted, checkErr
 			}
 			if !current {
 				logging.Warnf("ConsolidateUser: skipped stale group for user=%s", userID)
@@ -95,33 +98,35 @@ func ConsolidateUser(ctx context.Context, store Store, userID string) (merged in
 				Importance: maxImportance(group),
 			}
 
-			if err := store.Store(ctx, summaryMem); err != nil {
-				logging.Warnf("ConsolidateUser: failed to store merged memory: %v", err)
+			if storeErr := store.Store(ctx, summaryMem); storeErr != nil {
+				logging.Warnf("ConsolidateUser: failed to store merged memory: %v", storeErr)
 				continue
 			}
 
-			// Re-check after the write. If a source changed, drop the summary
-			// and leave the live records in place.
-			current, err = sourcesStillCurrent(ctx, store, versions)
-			if err != nil || !current {
+			// Delete each source only while it still matches the listed version.
+			// A separate Get plus Forget loses an update that lands between them.
+			removed, complete, replaceErr := forgetCurrentSources(ctx, replacer, versions)
+			deleted += len(removed)
+			if !complete && len(removed) == 0 {
 				if ferr := store.Forget(ctx, summaryMem.ID); ferr != nil {
-					logging.Warnf("ConsolidateUser: failed to roll back merged memory id=%s: %v", summaryMem.ID, ferr)
+					return merged, deleted, fmt.Errorf("rolling back stale merged memory: %w", ferr)
 				}
-				if err != nil {
-					return merged, deleted, err
+				if replaceErr != nil {
+					return merged, deleted, replaceErr
 				}
 				logging.Warnf("ConsolidateUser: rolled back stale group for user=%s", userID)
 				continue
 			}
-
-			for _, old := range group {
-				if ferr := store.Forget(ctx, old.ID); ferr != nil {
-					logging.Warnf("ConsolidateUser: failed to delete original memory id=%s: %v", old.ID, ferr)
-				} else {
-					deleted++
-				}
-			}
 			merged++
+			if replaceErr != nil {
+				return merged, deleted, replaceErr
+			}
+			if !complete {
+				// Keep the summary if a concurrent write changed one source after
+				// earlier sources were deleted. Rolling it back and restoring those
+				// snapshots can overwrite a concurrent re-create in some stores.
+				logging.Warnf("ConsolidateUser: kept partial merge for stale group user=%s", userID)
+			}
 		}
 	}
 
@@ -130,24 +135,28 @@ func ConsolidateUser(ctx context.Context, store Store, userID string) (merged in
 }
 
 // memoryVersion is the list-time identity of one source record.
-// Consolidation may replace a record only when a later Get still matches it.
+// A source is deleted only when the store still matches this version.
 type memoryVersion struct {
-	id        string
-	userID    string
-	projectID string
-	typ       MemoryType
-	content   string
-	updatedAt time.Time
+	id         string
+	userID     string
+	projectID  string
+	typ        MemoryType
+	content    string
+	createdAt  time.Time
+	updatedAt  time.Time
+	importance float32
 }
 
 func versionOf(mem *Memory) memoryVersion {
 	return memoryVersion{
-		id:        mem.ID,
-		userID:    mem.UserID,
-		projectID: mem.ProjectID,
-		typ:       mem.Type,
-		content:   mem.Content,
-		updatedAt: mem.UpdatedAt,
+		id:         mem.ID,
+		userID:     mem.UserID,
+		projectID:  mem.ProjectID,
+		typ:        mem.Type,
+		content:    mem.Content,
+		createdAt:  mem.CreatedAt,
+		updatedAt:  mem.UpdatedAt,
+		importance: mem.Importance,
 	}
 }
 
@@ -160,7 +169,48 @@ func sameVersion(want memoryVersion, live *Memory) bool {
 		live.ProjectID == want.projectID &&
 		live.Type == want.typ &&
 		live.Content == want.content &&
-		live.UpdatedAt.Equal(want.updatedAt)
+		live.CreatedAt.Equal(want.createdAt) &&
+		live.UpdatedAt.Equal(want.updatedAt) &&
+		live.Importance == want.importance
+}
+
+// sourceReplacer deletes one memory only when the stored record still matches want.
+// deleted is false when that id is missing or now holds a different version.
+type sourceReplacer interface {
+	forgetIfCurrent(ctx context.Context, want memoryVersion) (deleted bool, err error)
+}
+
+// forgetCurrentSources deletes every listed source under its version predicate.
+// removed contains ids this call actually deleted. complete is false when a
+// source is missing or has a newer version.
+func forgetCurrentSources(ctx context.Context, replacer sourceReplacer, versions []memoryVersion) (removed []string, complete bool, err error) {
+	for _, want := range versions {
+		if err = ctx.Err(); err != nil {
+			return removed, false, err
+		}
+		deleted, ferr := replacer.forgetIfCurrent(ctx, want)
+		if ferr != nil {
+			return removed, false, ferr
+		}
+		if !deleted {
+			return removed, false, nil
+		}
+		removed = append(removed, want.id)
+	}
+	return removed, true, nil
+}
+
+// conditionalDeleteResult turns the required post-delete read for stores that
+// do not report a delete count into a completion signal. Safety does not rely
+// on this read: their server-side delete predicate performs the version check.
+func conditionalDeleteResult(getErr error) (deleted bool, err error) {
+	if getErr == nil {
+		return false, nil
+	}
+	if strings.Contains(getErr.Error(), "not found") {
+		return true, nil
+	}
+	return false, getErr
 }
 
 // sourcesStillCurrent reports whether every listed source is still unchanged.
