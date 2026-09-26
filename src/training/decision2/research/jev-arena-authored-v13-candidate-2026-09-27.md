@@ -4,6 +4,9 @@
 small source-quality pilot under the [prospective v13 method](jev-arena-authored-v13-prereg-2026-09-27.md).
 It is neither a release benchmark nor a training source. No model inference,
 protected FINAL access or publication is part of this candidate.
+The later blind and post-key outcome is recorded separately in
+[the v13 post-key audit](jev-arena-authored-v13-postkey-2026-09-27.md); this
+freeze-time status is retained for chronology.
 
 The signed builder source commit is `3fc789943284fdd82863a28a9911719744bba9f2`.
 The private candidate froze at **2026-09-26 22:43:29.923926 UTC**. The
