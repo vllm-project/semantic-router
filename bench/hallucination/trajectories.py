@@ -154,15 +154,10 @@ def _trajectory(raw: object, where: str) -> Trajectory:
     if not isinstance(raw_steps, list) or not raw_steps:
         raise _error(where, "steps must be a non-empty list")
 
-    steps: list[ToolStep | AssistantStep] = []
-    for index, raw_step in enumerate(raw_steps):
-        at = f"{where}.steps[{index}]"
-        step = _step(raw_step, where=at)
-        if isinstance(step, AssistantStep) and not any(
-            isinstance(earlier, ToolStep) for earlier in steps
-        ):
-            raise _error(at, "assistant step has no earlier tool output to check")
-        steps.append(step)
+    steps: list[ToolStep | AssistantStep] = [
+        _step(raw_step, where=f"{where}.steps[{index}]")
+        for index, raw_step in enumerate(raw_steps)
+    ]
     if not any(isinstance(step, AssistantStep) for step in steps):
         raise _error(where, "has no assistant step to check")
     return Trajectory(

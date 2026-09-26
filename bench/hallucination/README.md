@@ -134,11 +134,11 @@ An agent can finish with a correct answer after an earlier step misreported a
 tool result. `evaluate_trajectories.py` runs a detector on every assistant step
 of a trajectory instead of only the last answer.
 
-`testdata/agent_trajectories.json` holds a few hand-written trajectories. Each
-one has the user `request` and ordered `steps`. A `tool` step records the tool
-`name`, its `arguments` and its `output`. An `assistant` step records the
-message `text` and its gold `unsupported_spans`, where an empty list marks the
-message as supported:
+`testdata/agent_trajectories.json` holds a few trajectories, most of them
+hand-written. Each one has the user `request` and ordered `steps`. A `tool` step
+records the tool `name`, its `arguments` and its `output`. An `assistant` step
+records the message `text` and its gold `unsupported_spans`, where an empty list
+marks the message as supported:
 
 ```json
 {
@@ -161,14 +161,42 @@ context, the tool outputs before that step, joined with blank lines the way the
 router's response stage joins tool results. A later passing test run therefore
 cannot make an earlier false claim look supported.
 
+A step taken before any tool has run is checked against an empty context, so a
+claim such as "the tests pass" made before running them is unsupported, even
+though a detector may accept it as plausible. The router does not run its
+detector on such a response; with no tool output, it reports that no context
+was available.
+
+Tool output gets long quickly. The router's ModernBERT detector
+(`models/mom-halugate-detector`) reads at most 512 tokens: it keeps the question
+and the answer, and cuts the context from the end until the input fits. Tool
+outputs are joined oldest first, so the most recent output is the first to go.
+`--context-window 512` applies the same cut before calling the detector. Every
+row records `context_chars` and `context_chars_seen`, and sets `truncated` when
+the step saw only part of its context; `truncated_steps` in the metrics counts
+the outcomes of those steps. A miss caused by the cut then no longer looks like a
+detector miss. The router's default detector, Vela-1.0-Encoder-307M-Halu,
+reads up to 8,192 tokens of request, context and answer, and rejects a longer
+input instead of cutting it.
+
+Besides step-level and character-level scores, the script reports where each
+trajectory first goes wrong: whether the detector flagged the earliest
+unsupported step, and if not, how many assistant steps later it first flagged an
+unsupported one. A flag on a supported step does not count as a catch, and a
+flag before the first unsupported step is reported as a false alarm.
+`mean_steps_late` averages that delay over the trajectories the detector caught.
+
 ```bash
 python3 -m pip install lettucedetect
 python3 -m bench.hallucination.evaluate_trajectories \
-  --detector transformer:KRLabsOrg/lettucedect-base-modernbert-en-v1
+  --detector transformer:KRLabsOrg/lettucedect-base-modernbert-en-v1 \
+  --context-window 512
 ```
 
-`--detector` accepts the same specifications as `evaluate_detectors.py`. The
-script prints one line per step and writes step-level and character-level
+`--detector` accepts the same specifications as `evaluate_detectors.py`.
+`--context-window` counts tokens with the transformer detector's tokenizer; pass
+`--tokenizer` for an `llm:` detector. The script prints one line per step and
+per trajectory, and writes step-level, character-level and first-false-step
 metrics to the results directory. The examples show that a detector runs on
 every step; they are too few to compare detectors. The loader and scoring tests
 need no model:
@@ -176,6 +204,16 @@ need no model:
 ```bash
 python3 -m pytest -q bench/hallucination/test_trajectories.py
 ```
+
+The `flask-async-commit-misreported` trajectory combines the `grep` and
+`git_log` samples for `pallets__flask-4074` from the test split of the
+[LettuceDetect Grounded Hallucination Dataset](https://huggingface.co/datasets/KRLabsOrg/lettucedetect-code-hallucination)
+by KRLabsOrg (Kovács et al., [arXiv:2607.00895](https://arxiv.org/abs/2607.00895)),
+revision `866a7c5392c3cf87e4fbc2b3808815d524f54331`, used under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The request joins the
+two samples' questions, each tool output is the text inside the sample's code
+fence, and the answers and spans are unchanged. The dataset's tool-output
+samples are single-step, so they are a source for more multi-step trajectories.
 
 ## Reading the output
 
