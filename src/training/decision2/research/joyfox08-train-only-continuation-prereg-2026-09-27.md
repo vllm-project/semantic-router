@@ -104,3 +104,37 @@ a concrete transfer risk to measure, not evidence that Joyfox exhibits the
 paper's measured effect. The fixed pilot does not add label-swap training; a
 separate preregistered augmentation would be required if the robustness gate
 fails.
+
+## Completed pilot and frozen stop decision
+
+The rights-clean v2 partitions were disjoint by ID, lineage group, and
+canonical input. The native 1,024-token TRAIN eligibility audit admitted
+Choice 3,124, Noul 2,683, and Score 464 rows, then deterministically selected
+128/192/192 respectively (392 English, 120 Chinese). The selected file SHA-256
+is `ecb50a755c351c903a72a73a285d54622b141fce3e09809bf79d609ae8d2e532`.
+The private pre-optimizer source/data/runtime receipt SHA-256 is
+`8b6e5342464f41d101b39920370d18bb34db97d19b8d67fc1f951b58bf909c8e`.
+Zero-initialized LoRA reproduced source logits exactly (`max_abs=0`), and the
+preflight native gradient was finite and nonzero. The isolated optimizer run
+completed all 64 updates; its private receipt SHA-256 is
+`3ca4a3b121c039630adcd02aacb10ccdb54e79fb71f0a7bcf770aed0c9e54fce`.
+Step-32 and step-64 private adapter SHA-256 values are
+`b59511a519b34cbc6281dd40f9167f54e071db62709385a83ff37b8e96713ffc`
+and `31cf36c30a6fd268dafadf52fc82c838fdec9f929b4b7adb5214fa7dce574abf`.
+
+| Native SELECT, same 700 rows | Source step 0 | Step 32 | Step 64 |
+| --- | ---: | ---: | ---: |
+| Correct | 513 | 514 | 516 |
+| Family-macro accuracy | .668426 | .669259 | .670926 |
+| Family-macro Brier | .198479 | .195867 | .194532 |
+| Choice correct / 320 | 230 | 231 | 232 |
+| Noul correct / 290 | 251 | 251 | 252 |
+| Score correct / 90 | 32 | 32 | 32 |
+| Invalid | 0 | 0 | 0 |
+
+The predeclared selector chooses step 64, but its family-macro accuracy gain
+is only `.002500`, below the frozen `.015` gate. No type or invalidity gate
+regressed, and Brier improved on SELECT; neither overrides the missed primary
+gate. This is a negative 0.8B arm. We did not run typed DEV, human CSS,
+the public 231-item subset, or sealed release evaluation on the checkpoints.
+They remain private and are not Decision 2.0 release candidates.
