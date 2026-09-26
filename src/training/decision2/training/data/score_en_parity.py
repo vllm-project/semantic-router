@@ -11,6 +11,7 @@ import hashlib
 import json
 import math
 import os
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 
@@ -248,9 +249,14 @@ def compare(
     merged, merged_manifest = _read_prediction(
         merged_predictions, materialization["merged_model_sha256"], roster_file, roster
     )
-    if original_manifest.get("adapter_sha256") != merged_manifest.get(
-        "adapter_sha256"
-    ) or original_manifest.get("execution") != merged_manifest.get("execution"):
+    if (
+        original_manifest.get("adapter_sha256") != merged_manifest.get("adapter_sha256")
+        or original_manifest.get("adapter_files_sha256")
+        != merged_manifest.get("adapter_files_sha256")
+        or original_manifest.get("execution") != merged_manifest.get("execution")
+        or original_manifest.get("torch_version")
+        != merged_manifest.get("torch_version")
+    ):
         raise ValueError("Native adapter or execution contracts differ")
     max_drift = 0.0
     same = 0
@@ -271,14 +277,38 @@ def compare(
             max_drift, *(abs(a_probs[key] - b_probs[key]) for key in a_probs)
         )
         same += a_winner == b_winner
+    import torch
+
+    if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
+        raise RuntimeError(
+            "Native parity comparator requires the same BF16 GPU runtime"
+        )
+    hardware = torch.cuda.get_device_properties(0)
     result = {
         "schema_version": "decision2-score-en-native-source-parity/1",
         "source_model_sha256": SOURCE_MODEL_SHA,
         "merged_model_sha256": materialization["merged_model_sha256"],
         "materialization_receipt_sha256": file_sha256(receipt_path),
+        "materializer_code_sha256": materialization["materializer_code_sha256"],
         "roster_sha256": file_sha256(roster_file),
+        "roster_manifest_sha256": file_sha256(roster_dir / "manifest.json"),
         "source_predictions_sha256": file_sha256(source_predictions),
         "merged_predictions_sha256": file_sha256(merged_predictions),
+        "native_adapter_sha256": original_manifest["adapter_sha256"],
+        "native_adapter_files_sha256": original_manifest["adapter_files_sha256"],
+        "parity_code_sha256": file_sha256(Path(__file__)),
+        "software": {
+            "torch": torch.__version__,
+            "torch_hip": torch.version.hip,
+            "transformers": version("transformers"),
+            "peft": version("peft"),
+            "safetensors": version("safetensors"),
+        },
+        "hardware": {
+            "accelerator_name": hardware.name,
+            "total_memory_bytes": hardware.total_memory,
+            "visible_device_count": torch.cuda.device_count(),
+        },
         "rows": len(roster),
         "same_argmax": same,
         "max_absolute_option_probability_drift": max_drift,
