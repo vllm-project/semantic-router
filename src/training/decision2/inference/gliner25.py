@@ -29,6 +29,35 @@ MODEL_FILES = {
     "tokenizer_config.json": "323199a4e946039410899f3779f2aa3eaef1500213c512727ad0f623d4f21309",
     "special_tokens_map.json": "84ea70143f533d7e99b393d87f20010887a9ac2cba955828ef313886e4e83f4f",
 }
+MULTI_MODEL_ID = "fastino/GLiNER2.5-multi-Decide"
+MULTI_REVISION = "6bc1d43d201b0691e733626389af8c57eea3ea68"
+MULTI_MODEL_FILES = {
+    "model.safetensors": "9efe0f88c99f2aa794452e9559dc60e98d60d9fa2bf1b60cf2710411b6da5b4e",
+    "config.json": "be5123080c0f3f01b938bc46a5dd0d7a2e515a34f6df798dfd70ed04c277c8bf",
+    "tokenizer.json": "c62446df87ae18ec98b133f8f84fc449a07cc89bbf8ef192a4cb5f9c53777a7a",
+    "tokenizer_config.json": "fd4a31dc2f1f17e31638c5f0e783b81cdb2fbe6bddd116a8d9e5d50d78148cf1",
+    "encoder_config/config.json": "d0ebbcb8b458e285a39e12cc315cbaf3d1c6f631e7281e6b22dd5b4071183f83",
+}
+PROFILES = {
+    "english": {
+        "model_id": MODEL_ID,
+        "revision": REVISION,
+        "files": MODEL_FILES,
+        "architecture": "span",
+        "architectures": ["SpanExtractor"],
+        "backend": "gliner25",
+        "adapter_version": ADAPTER_VERSION,
+    },
+    "multilingual": {
+        "model_id": MULTI_MODEL_ID,
+        "revision": MULTI_REVISION,
+        "files": MULTI_MODEL_FILES,
+        "architecture": "boundary",
+        "architectures": ["BoundaryExtractor"],
+        "backend": "gliner25-multilingual",
+        "adapter_version": "gliner25-multilingual-native-exclusive-v1",
+    },
+}
 _FORBIDDEN = (
     "[P]",
     "[L]",
@@ -52,23 +81,36 @@ class NativeContextOverflow(ValueError):
         self.limit = limit
 
 
-def verify_release(path: Path, revision: str) -> dict[str, Any]:
-    if revision != REVISION or not local_revision(path, revision):
-        raise ValueError("GLiNER2.5-Decide requires its attested pinned revision")
-    for name, expected in MODEL_FILES.items():
+def _profile(variant: str) -> dict[str, Any]:
+    if variant not in PROFILES:
+        raise ValueError(f"Unknown GLiNER2.5 variant: {variant}")
+    return PROFILES[variant]
+
+
+def verify_release(
+    path: Path, revision: str, variant: str = "english"
+) -> dict[str, Any]:
+    profile = _profile(variant)
+    if revision != profile["revision"] or not local_revision(path, revision):
+        raise ValueError("GLiNER2.5 requires its attested pinned revision")
+    for name, expected in profile["files"].items():
         candidate = path / name
         if not candidate.is_file() or file_digest(candidate) != expected:
             raise ValueError(f"GLiNER model file mismatch: {name}")
     config = json.loads((path / "config.json").read_text(encoding="utf-8"))
-    if config.get("architecture") != "span" or config.get("architectures") != [
-        "SpanExtractor"
-    ]:
+    if (
+        config.get("architecture") != profile["architecture"]
+        or config.get("architectures") != profile["architectures"]
+    ):
         raise ValueError("Unexpected GLiNER source architecture")
-    return {
-        "model_weights_sha256": MODEL_FILES["model.safetensors"],
-        "model_config_sha256": MODEL_FILES["config.json"],
-        "tokenizer_sha256": MODEL_FILES["tokenizer.json"],
+    result = {
+        "model_weights_sha256": profile["files"]["model.safetensors"],
+        "model_config_sha256": profile["files"]["config.json"],
+        "tokenizer_sha256": profile["files"]["tokenizer.json"],
     }
+    if variant == "multilingual":
+        result["encoder_config_sha256"] = profile["files"]["encoder_config/config.json"]
+    return result
 
 
 def _clean_alias(key: str, index: int, used: set[str]) -> str:
@@ -211,6 +253,19 @@ def load_native(path: Path, device: str):
     )
 
 
+def native_context_limit(native: Any) -> int:
+    """Use a boundary checkpoint's declared window, then the encoder fallback."""
+    configured = getattr(native.model.config, "max_len", None)
+    limit = (
+        configured
+        if configured is not None
+        else native.model.encoder.config.max_position_embeddings
+    )
+    if type(limit) is not int or limit < 1:
+        raise ValueError("GLiNER source has no valid native context limit")
+    return limit
+
+
 def score_question(native: Any, state: Any, question: dict[str, Any]) -> dict[str, Any]:
     from gliner2.classification.schema import ClassificationSchema
 
@@ -224,7 +279,7 @@ def score_question(native: Any, state: Any, question: dict[str, Any]) -> dict[st
     native_tokens = len(
         native.model.processor.transform_record(text, compiled.build()).input_ids
     )
-    max_positions = int(native.model.encoder.config.max_position_embeddings)
+    max_positions = native_context_limit(native)
     if native_tokens > max_positions:
         raise NativeContextOverflow(native_tokens, max_positions)
     scores = native.score(text, compiled)
@@ -277,19 +332,21 @@ def collect(
     device: str = "cuda:0",
     resume: bool = False,
     max_items: int | None = None,
+    variant: str = "english",
 ) -> dict[str, Any]:
     if max_items is not None and max_items < 1:
         raise ValueError("max_items must be positive")
     model_path = model_path.resolve(strict=True)
-    release = verify_release(model_path, revision)
+    profile = _profile(variant)
+    release = verify_release(model_path, revision, variant)
     rows = load_prompts(prompts)
     identity = {
-        "backend": "gliner25",
-        "model_id": MODEL_ID,
+        "backend": profile["backend"],
+        "model_id": profile["model_id"],
         "model_revision": revision,
         "revision_attested": True,
         "library_commit": LIBRARY_COMMIT,
-        "adapter_version": ADAPTER_VERSION,
+        "adapter_version": profile["adapter_version"],
         "prompt_projection": "state-text; instruction-and-criteria-native-schema",
         **release,
     }
@@ -332,7 +389,7 @@ def collect(
                 "latency_ms": latency_ms,
                 "usage": None,
                 "source_input_sha256": digest(payload),
-                "model": f"{MODEL_ID}@{revision}",
+                "model": f"{profile['model_id']}@{revision}",
                 "runtime_qualification": "pytorch_fp32_rocm_unvalidated",
                 "context_policy": "native-tokenizer-default",
                 "invalid_reason": invalid_reason,
@@ -357,7 +414,8 @@ def collect(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-path", type=Path, required=True)
-    parser.add_argument("--model-revision", default=REVISION)
+    parser.add_argument("--variant", choices=tuple(PROFILES), default="english")
+    parser.add_argument("--model-revision")
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
@@ -368,12 +426,13 @@ def main() -> None:
         json.dumps(
             collect(
                 model_path=args.model_path,
-                revision=args.model_revision,
+                revision=args.model_revision or _profile(args.variant)["revision"],
                 prompts=args.input,
                 output=args.output,
                 device=args.device,
                 resume=args.resume,
                 max_items=args.max_items,
+                variant=args.variant,
             ),
             sort_keys=True,
         )

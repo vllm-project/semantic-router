@@ -3,11 +3,45 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 
-from inference.gliner25 import prepare_question, project, schema_labels
+from inference.gliner25 import (
+    MULTI_REVISION,
+    native_context_limit,
+    prepare_question,
+    project,
+    schema_labels,
+    verify_release,
+)
 
 
 class ProjectionTest(unittest.TestCase):
+    def test_boundary_context_uses_checkpoint_limit(self):
+        encoder = SimpleNamespace(config=SimpleNamespace(max_position_embeddings=512))
+        boundary = SimpleNamespace(
+            model=SimpleNamespace(config=SimpleNamespace(max_len=4096), encoder=encoder)
+        )
+        span = SimpleNamespace(
+            model=SimpleNamespace(config=SimpleNamespace(max_len=None), encoder=encoder)
+        )
+        self.assertEqual(native_context_limit(boundary), 4096)
+        self.assertEqual(native_context_limit(span), 512)
+        with self.assertRaisesRegex(ValueError, "native context limit"):
+            native_context_limit(
+                SimpleNamespace(
+                    model=SimpleNamespace(
+                        config=SimpleNamespace(max_len=0), encoder=encoder
+                    )
+                )
+            )
+
+    def test_multilingual_profile_rejects_unpinned_revision(self):
+        with self.assertRaisesRegex(ValueError, "attested pinned revision"):
+            verify_release(
+                Path("/does-not-exist"), MULTI_REVISION[:-1] + "0", "multilingual"
+            )
+
     def test_choice_keeps_opaque_keys_and_probability_distribution(self):
         question = {
             "type": "choice",
