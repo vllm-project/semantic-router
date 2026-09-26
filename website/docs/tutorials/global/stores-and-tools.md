@@ -145,6 +145,23 @@ When an external model with `model_role: memory_rewrite` is configured, its
 `max_response_bytes` limits each query-rewrite response. An omitted or
 non-positive value uses the 1 MiB default.
 
+#### Hybrid search and reflection
+
+`hybrid_mode` and `reflection.algorithm` can be set globally under
+`global.stores.memory` and overridden in a decision's `memory` plugin. The
+router refuses to start with any other value, including one set in a recipe's
+decisions:
+
+| Field | Accepted values | Default |
+|-------|-----------------|---------|
+| `hybrid_mode` | `weighted`, `rrf` (exact, lowercase) | `weighted` |
+| `reflection.algorithm` | `heuristic`, `noop` | `heuristic` |
+
+`hybrid_mode` takes effect only with `hybrid_search: true`. Older configs that
+use `hybrid_mode: rerank` or `algorithm: recency_semantic` fail at startup.
+Replace them with `weighted` and `heuristic`, which is how those values
+already ran.
+
 #### Write path bounds
 
 Automatic persistence first respects Memory enablement, retention policy, and

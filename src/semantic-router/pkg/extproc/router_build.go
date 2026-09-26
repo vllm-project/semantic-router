@@ -300,7 +300,10 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
 	}
 
-	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg, components.serviceEmbeddings)
+	components.memoryStore, components.memoryExtractor, err = createMemoryRuntime(cfg, components.serviceEmbeddings)
+	if err != nil {
+		return nil, rollbackResources(components.resources, err)
+	}
 	if components.memoryStore != nil {
 		components.resources.add(components.memoryStore.Close)
 	}
