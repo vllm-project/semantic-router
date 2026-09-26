@@ -12,13 +12,16 @@ import (
 )
 
 type scriptMemoryStore struct {
-	mu       sync.Mutex
-	memories []*Memory
-	listGate chan struct{}
-	listErr  error
-	stores   int
-	forgets  int
-	enabled  bool
+	mu        sync.Mutex
+	memories  []*Memory
+	listGate  chan struct{}
+	listErr   error
+	afterList func()
+	onGet     func(n int)
+	gets      int
+	stores    int
+	forgets   int
+	enabled   bool
 }
 
 func newScriptMemoryStore(memories ...*Memory) *scriptMemoryStore {
@@ -39,7 +42,24 @@ func (s *scriptMemoryStore) Retrieve(context.Context, RetrieveOptions) ([]*Retri
 	return nil, nil
 }
 
-func (s *scriptMemoryStore) Get(context.Context, string) (*Memory, error) { return nil, nil }
+func (s *scriptMemoryStore) Get(_ context.Context, id string) (*Memory, error) {
+	s.mu.Lock()
+	s.gets++
+	n := s.gets
+	hook := s.onGet
+	s.mu.Unlock()
+	if hook != nil {
+		hook(n)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, memory := range s.memories {
+		if memory.ID == id {
+			return memory, nil
+		}
+	}
+	return nil, errors.New("memory not found: " + id)
+}
 
 func (s *scriptMemoryStore) Update(context.Context, string, *Memory) error { return nil }
 
@@ -55,12 +75,20 @@ func (s *scriptMemoryStore) List(ctx context.Context, opts ListOptions) (*ListRe
 		return nil, s.listErr
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	var matched []*Memory
 	for _, memory := range s.memories {
 		if memory.UserID == opts.UserID {
-			matched = append(matched, memory)
+			// List returns a copy, as Valkey and Milvus do. A later update must
+			// not rewrite the snapshot ConsolidateUser already observed.
+			clone := *memory
+			matched = append(matched, &clone)
 		}
+	}
+	hook := s.afterList
+	s.afterList = nil
+	s.mu.Unlock()
+	if hook != nil {
+		hook()
 	}
 	return &ListResult{Memories: matched, Total: len(matched), Limit: opts.Limit}, nil
 }

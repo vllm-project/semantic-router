@@ -41,6 +41,16 @@ func ConsolidateUser(ctx context.Context, store Store, userID string) (merged in
 		return 0, 0, nil
 	}
 
+	// Copy source versions at list time. Later Get calls compare against this
+	// snapshot so a concurrent delete or update is not overwritten by the merge.
+	listed := make(map[string]memoryVersion, len(result.Memories))
+	for _, mem := range result.Memories {
+		if mem == nil || mem.ID == "" {
+			continue
+		}
+		listed[mem.ID] = versionOf(mem)
+	}
+
 	// Never merge across project or type: similar text in different scopes must stay separate.
 	for _, scoped := range partitionByProjectAndType(result.Memories) {
 		if len(scoped) < 2 {
@@ -49,6 +59,27 @@ func ConsolidateUser(ctx context.Context, store Store, userID string) (merged in
 		groups := groupBySimilarity(scoped, consolidationGroupThreshold)
 		for _, group := range groups {
 			if len(group) < 2 {
+				continue
+			}
+			versions := make([]memoryVersion, 0, len(group))
+			for _, mem := range group {
+				version, ok := listed[mem.ID]
+				if !ok {
+					versions = nil
+					break
+				}
+				versions = append(versions, version)
+			}
+			if len(versions) < 2 {
+				continue
+			}
+
+			current, err := sourcesStillCurrent(ctx, store, versions)
+			if err != nil {
+				return merged, deleted, err
+			}
+			if !current {
+				logging.Warnf("ConsolidateUser: skipped stale group for user=%s", userID)
 				continue
 			}
 
@@ -69,6 +100,20 @@ func ConsolidateUser(ctx context.Context, store Store, userID string) (merged in
 				continue
 			}
 
+			// Re-check after the write. If a source changed, drop the summary
+			// and leave the live records in place.
+			current, err = sourcesStillCurrent(ctx, store, versions)
+			if err != nil || !current {
+				if ferr := store.Forget(ctx, summaryMem.ID); ferr != nil {
+					logging.Warnf("ConsolidateUser: failed to roll back merged memory id=%s: %v", summaryMem.ID, ferr)
+				}
+				if err != nil {
+					return merged, deleted, err
+				}
+				logging.Warnf("ConsolidateUser: rolled back stale group for user=%s", userID)
+				continue
+			}
+
 			for _, old := range group {
 				if ferr := store.Forget(ctx, old.ID); ferr != nil {
 					logging.Warnf("ConsolidateUser: failed to delete original memory id=%s: %v", old.ID, ferr)
@@ -82,6 +127,58 @@ func ConsolidateUser(ctx context.Context, store Store, userID string) (merged in
 
 	logging.Infof("ConsolidateUser: user=%s merged=%d groups, deleted=%d originals", userID, merged, deleted)
 	return merged, deleted, nil
+}
+
+// memoryVersion is the list-time identity of one source record.
+// Consolidation may replace a record only when a later Get still matches it.
+type memoryVersion struct {
+	id        string
+	userID    string
+	projectID string
+	typ       MemoryType
+	content   string
+	updatedAt time.Time
+}
+
+func versionOf(mem *Memory) memoryVersion {
+	return memoryVersion{
+		id:        mem.ID,
+		userID:    mem.UserID,
+		projectID: mem.ProjectID,
+		typ:       mem.Type,
+		content:   mem.Content,
+		updatedAt: mem.UpdatedAt,
+	}
+}
+
+func sameVersion(want memoryVersion, live *Memory) bool {
+	if live == nil {
+		return false
+	}
+	return live.ID == want.id &&
+		live.UserID == want.userID &&
+		live.ProjectID == want.projectID &&
+		live.Type == want.typ &&
+		live.Content == want.content &&
+		live.UpdatedAt.Equal(want.updatedAt)
+}
+
+// sourcesStillCurrent reports whether every listed source is still unchanged.
+// A missing record or a Get error means the group is not safe to merge.
+func sourcesStillCurrent(ctx context.Context, store Store, versions []memoryVersion) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	for _, want := range versions {
+		live, err := store.Get(ctx, want.id)
+		if err != nil || !sameVersion(want, live) {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return false, ctxErr
+			}
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // partitionByProjectAndType keeps consolidation inside one (project_id, type) bucket.

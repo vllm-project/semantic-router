@@ -198,3 +198,102 @@ func TestConsolidateUserPreservesProjectOnMerge(t *testing.T) {
 	require.Equal(t, 1, projects["project-a"])
 	require.Equal(t, 1, projects["project-b"])
 }
+
+func TestConsolidateUserSkipsMergeWhenSourceDeletedAfterList(t *testing.T) {
+	store := newScriptMemoryStore(
+		&Memory{ID: "a", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now()},
+		&Memory{ID: "b", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now()},
+	)
+	store.afterList = func() {
+		require.NoError(t, store.Forget(context.Background(), "a"))
+	}
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 0, merged)
+	require.Equal(t, 0, deleted)
+	require.Equal(t, 0, store.stores)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	require.Len(t, store.memories, 1)
+	require.Equal(t, "b", store.memories[0].ID)
+	require.NotContains(t, store.memories[0].Content, "alpha beta gamma\n")
+	for _, mem := range store.memories {
+		require.NotEqual(t, "consolidation", mem.Source)
+	}
+}
+
+func TestConsolidateUserSkipsMergeWhenSourceUpdatedAfterList(t *testing.T) {
+	updated := "budget is now 20000 dollars after the revision"
+	store := newScriptMemoryStore(
+		&Memory{ID: "a", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now()},
+		&Memory{ID: "b", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now()},
+	)
+	store.afterList = func() {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		for _, mem := range store.memories {
+			if mem.ID == "a" {
+				mem.Content = updated
+				mem.UpdatedAt = time.Now()
+			}
+		}
+	}
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 0, merged)
+	require.Equal(t, 0, deleted)
+	require.Equal(t, 0, store.stores)
+	require.Equal(t, 0, store.forgets)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	require.Len(t, store.memories, 2)
+	for _, mem := range store.memories {
+		require.NotEqual(t, "consolidation", mem.Source)
+		if mem.ID == "a" {
+			require.Equal(t, updated, mem.Content)
+		}
+	}
+}
+
+func TestConsolidateUserRollsBackSummaryWhenSourceChangesBeforeDelete(t *testing.T) {
+	updated := "budget is now 20000 dollars after the revision"
+	store := newScriptMemoryStore(
+		&Memory{ID: "a", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now()},
+		&Memory{ID: "b", UserID: "user-1", Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now()},
+	)
+	// Gets 1 and 2 confirm the list snapshot. Get 3 is the post-write recheck.
+	store.onGet = func(n int) {
+		if n != 3 {
+			return
+		}
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		for _, mem := range store.memories {
+			if mem.ID == "a" {
+				mem.Content = updated
+				mem.UpdatedAt = time.Now()
+			}
+		}
+	}
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 0, merged)
+	require.Equal(t, 0, deleted)
+	require.Equal(t, 1, store.stores)
+	require.Equal(t, 1, store.forgets)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	require.Len(t, store.memories, 2)
+	for _, mem := range store.memories {
+		require.NotEqual(t, "consolidation", mem.Source)
+		if mem.ID == "a" {
+			require.Equal(t, updated, mem.Content)
+		}
+	}
+}
