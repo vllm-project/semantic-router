@@ -1,5 +1,12 @@
 # Pinned public Chinese and Russian typed-decision DEV diagnostics
 
+**Superseded build warning:** the initial v1 serialized prompt file reordered
+Choice option keys and failed the model-input fingerprint check on all 4,052
+rows. Its model outputs are quarantined. See the
+[v1 correction and rebuilt v2 panel](multilingual-public-typed-v1-fingerprint-correction-2026-09-27.md)
+before using this diagnostic; the counts and source-lineage audit below remain
+valid, but v1 prediction scores do not.
+
 Status: **supplementary exposed DEV only**. This adapter does not create an
 independent JevArena release panel or a model score. No model inference was run
 for this audit. The source questions and answers are public, so they cannot be
