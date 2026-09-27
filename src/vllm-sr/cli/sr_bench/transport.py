@@ -22,6 +22,9 @@ MAX_RECEIPT_CALLS = 256
 SESSION_PHASE_HEADER = "x-vsr-session-phase"
 USER_TURN_PHASE = "user_turn"
 TOOL_LOOP_PHASE = "tool_loop"
+PROVIDER_STATE_PHASE = "provider_state"
+UNKNOWN_PHASE = "unknown"
+SESSION_PHASES = frozenset({USER_TURN_PHASE, TOOL_LOOP_PHASE, PROVIDER_STATE_PHASE})
 
 
 # Shared internal transport/harness contract; preserving its exception identity.
@@ -72,7 +75,8 @@ def session_phase(
     """Prefer the Router phase while retaining a bounded request fallback."""
     value = (response_headers or {}).get(SESSION_PHASE_HEADER)
     if isinstance(value, str) and value.strip():
-        return value.strip()
+        phase = value.strip()
+        return phase if phase in SESSION_PHASES else UNKNOWN_PHASE
     return request_phase(messages)
 
 
@@ -314,8 +318,8 @@ def chat(
     ttft = None
     tool_calls = {}
     raw_usage = {}
-    cache_read_reported = None
-    cache_write_reported = None
+    cache_read_reported: bool | None = None
+    cache_write_reported: bool | None = None
     observed_session_phase = request_phase(messages)
     done = False
     response = None
@@ -430,7 +434,15 @@ def chat(
             if obj.get("usage"):
                 raw_usage = obj["usage"]
                 usage = normalize_usage(raw_usage)
-                cache_read_reported, cache_write_reported = usage_presence(raw_usage)
+                chunk_cache_read_reported, chunk_cache_write_reported = usage_presence(
+                    raw_usage
+                )
+                cache_read_reported = (
+                    cache_read_reported is True or chunk_cache_read_reported
+                )
+                cache_write_reported = (
+                    cache_write_reported is True or chunk_cache_write_reported
+                )
             for choice in obj.get("choices", []):
                 if choice.get("index", 0) != 0:
                     continue

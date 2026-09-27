@@ -64,18 +64,10 @@ class Target(BaseHTTPRequestHandler):
                     }
                 ],
             },
-            {
-                "model": "model",
-                "choices": [],
-                "usage": {
-                    "prompt_tokens": 10,
-                    "completion_tokens": 3,
-                    "prompt_tokens_details": {
-                        "cached_tokens": 2,
-                        "cache_creation_tokens": 1,
-                    },
-                },
-            },
+            *[
+                {"model": "model", "choices": [], "usage": usage}
+                for usage in self.server.usage_events
+            ],
         ]
         try:
             for event in events:
@@ -98,6 +90,16 @@ def target():
     server.delay = 0
     server.ack = None
     server.session_phase = None
+    server.usage_events = [
+        {
+            "prompt_tokens": 10,
+            "completion_tokens": 3,
+            "prompt_tokens_details": {
+                "cached_tokens": 2,
+                "cache_creation_tokens": 1,
+            },
+        }
+    ]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield server
@@ -177,6 +179,27 @@ def test_live_http_usage_final_channel_and_idempotency(tmp_path, target):
     assert score["accuracy"] == 1 and score["total"] == 1
     assert list((tmp_path / "runs" / run["id"]).glob("*/*.sse"))
     assert store.calls(run["id"])[0]["reasoning"] == "The answer might be B."
+
+
+def test_streaming_cache_presence_accumulates_across_usage_events(tmp_path, target):
+    target.usage_events = [
+        {
+            "prompt_tokens": 10,
+            "completion_tokens": 3,
+            "prompt_tokens_details": {
+                "cached_tokens": 2,
+                "cache_creation_tokens": 1,
+            },
+        },
+        {"prompt_tokens": 10, "completion_tokens": 3},
+    ]
+    store = Store(tmp_path)
+    run = Engine(store).start(manifest(target))
+
+    assert wait_run(store, run["id"])["status"] == "completed"
+    call = store.calls(run["id"])[0]
+    assert call["cache_read_reported"] is True
+    assert call["cache_write_reported"] is True
 
 
 def test_derived_tool_loop_phase_is_saved_in_call_summary(tmp_path, target):
@@ -626,6 +649,8 @@ def test_session_phase_prefers_router_header_and_derives_router_phase_names():
     assert session_phase(turn, {"x-vsr-session-phase": "provider_state"}) == (
         "provider_state"
     )
+    assert session_phase(turn, {"x-vsr-session-phase": "tool_loop"}) == "tool_loop"
+    assert session_phase(turn, {"x-vsr-session-phase": " future_phase "}) == "unknown"
     assert session_phase(turn, {"x-vsr-session-phase": "  "}) == "user_turn"
 
 
