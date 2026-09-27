@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +14,7 @@ from unittest.mock import patch
 
 from publication import bundle_arena
 from publication.generate_arena import ARTIFACTS
+from publication.tests.test_adapter_bundle import AdapterBundleTests
 from training.model.calibration import CALIBRATION_VERSION
 from training.model.infer import checkpoint_fingerprint
 
@@ -568,6 +571,235 @@ class ArenaBundleTests(unittest.TestCase):
             ValueError, "does not cover exact functional files"
         ):
             bundle_arena._native_identity(semif, identity, files)
+
+
+class ExternalAdapterArenaBundleTests(unittest.TestCase):
+    def setUp(self) -> None:
+        release = ArenaBundleTests(
+            "test_assembles_exact_same_panel_package_and_detects_tampering"
+        )
+        release.setUp()
+        self.addCleanup(release.doCleanups)
+        adapter = AdapterBundleTests(
+            "test_adapter_package_pins_full_base_and_verifies_external_bytes"
+        )
+        adapter.setUp()
+        self.addCleanup(adapter.doCleanups)
+        inner = adapter.assemble()
+        release.model = adapter.root / "bundle"
+        release.files = bundle_arena._inventory(
+            release.model, allow_adapter_metadata=True
+        )
+        release.files_digest = hashlib.sha256(
+            json.dumps(release.files, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        release.native_sha = inner["model_sha256"]
+        release.calibration_sha = release.files["calibration.json"]
+        combined_files = checkpoint_fingerprint(
+            release.model / "model", adapter.source
+        )["files_sha256"]
+        release.record.update(
+            {
+                "architecture": bundle_arena.EXTERNAL_ADAPTER,
+                "parameter_count": inner["parameter_count"],
+                "active_weight_files": [
+                    "model/adapter/adapter_model.safetensors",
+                    "model/decision_head.safetensors",
+                ],
+                "support_weight_files": [],
+                "non_parameter_tensors": [],
+                "model_files_sha256": release.files,
+                "native_identity": {
+                    "scheme": "external-peft-checkpoint-fingerprint",
+                    "file": None,
+                    "sha256": inner["model_sha256"],
+                },
+                "calibration_sha256": release.calibration_sha,
+                "native_adapter_version": "decision2-peft-package-native-v1",
+            }
+        )
+        write(release.record_path, release.record)
+        report_hashes = {}
+        for family, inputs in release.score_inputs.items():
+            native_path = inputs["native_manifest"]
+            native = json.loads(native_path.read_text(encoding="utf-8"))
+            native.update(
+                {
+                    "model_sha256": inner["model_sha256"],
+                    "calibration_sha256": release.calibration_sha,
+                    "adapter_version": release.record["native_adapter_version"],
+                    "package_manifest_sha256": release.files["MODEL_MANIFEST.json"],
+                    "model_files_sha256": combined_files,
+                }
+            )
+            write(native_path, native)
+            score_path = inputs["score"]
+            score = json.loads(score_path.read_text(encoding="utf-8"))
+            if family in {"public", "dbv4", "authored"}:
+                score["prediction_manifest_sha256"] = bundle_arena.sha_file(native_path)
+            write(score_path, score)
+            report_hashes[family] = bundle_arena.sha_file(score_path)
+        arena = json.loads(release.arena_rank.read_text(encoding="utf-8"))
+        arena["models"][0]["report_sha256"] = report_hashes
+        arena["models"][0]["size_b"] = inner["parameter_count"] / 1e9
+        write(release.arena_rank, arena)
+        public = json.loads(release.public_rank.read_text(encoding="utf-8"))
+        public["models"][0]["report_sha256"] = report_hashes["public"]
+        public["models"][0]["size_b"] = inner["parameter_count"] / 1e9
+        write(release.public_rank, public)
+        artifacts = json.loads((release.artifacts / "manifest.json").read_text())
+        artifacts["ranking_sha256"] = {
+            "arena": bundle_arena.sha_file(release.arena_rank),
+            "jevbench_public": bundle_arena.sha_file(release.public_rank),
+        }
+        artifacts["models"][0]["size_b"] = inner["parameter_count"] / 1e9
+        write(release.artifacts / "manifest.json", artifacts)
+        release.parity.update(
+            {
+                "native_model_sha256": inner["model_sha256"],
+                "model_files_sha256": release.files_digest,
+                "calibration_sha256": release.calibration_sha,
+            }
+        )
+        write(release.parity_path, release.parity)
+        release.gate.update(
+            {
+                "package_record_sha256": bundle_arena.sha_file(release.record_path),
+                "parity_receipt_sha256": bundle_arena.sha_file(release.parity_path),
+                "artifact_manifest_sha256": bundle_arena.sha_file(
+                    release.artifacts / "manifest.json"
+                ),
+                "native_model_sha256": inner["model_sha256"],
+                "model_files_sha256": release.files_digest,
+            }
+        )
+        write(release.gate_path, release.gate)
+        self.source_parity = release.root / "adapter-source-parity.json"
+        self.source_parity_value = {
+            "schema_version": bundle_arena.ADAPTER_PARITY_VERSION,
+            "package_manifest_sha256": release.files["MODEL_MANIFEST.json"],
+            "scored_prediction_manifest_sha256": inner[
+                "scored_prediction_manifest_sha256"
+            ],
+            "scored_predictions_sha256": inner["scored_predictions_sha256"],
+            "model_sha256": inner["model_sha256"],
+            "calibration_sha256": inner["calibration_sha256"],
+            "gold_free_prompts_sha256": "1" * 64,
+            "source_answers_sha256": "2" * 64,
+            "package_answers_sha256": "3" * 64,
+            "native_runtime": {
+                "bf16": True,
+                "one_item_batch": True,
+                "no_truncation": True,
+            },
+            "items": 3,
+            "questions": 9,
+            "types": ["choice", "noul", "score"],
+            "invalid_or_missing_n": 0,
+            "categorical_mismatch_n": 0,
+            "max_probability_or_score_drift": 0,
+            "passed": True,
+            "predeclared_gate": {
+                "invalid_or_missing_n": 0,
+                "categorical_mismatch_n": 0,
+                "max_probability_or_score_drift": bundle_arena.ADAPTER_MAX_DRIFT,
+            },
+        }
+        write(self.source_parity, self.source_parity_value)
+        self.release = release
+        self.adapter = adapter
+        self.inner = inner
+        self.combined_files = combined_files
+
+    def assemble(self) -> dict:
+        release = self.release
+        with patch.object(bundle_arena, "_size_compatible", return_value=True):
+            return bundle_arena.assemble(
+                model_dir=release.model,
+                artifacts=release.artifacts,
+                arena_rank=release.arena_rank,
+                public_rank=release.public_rank,
+                package_record=release.record_path,
+                parity_receipt=release.parity_path,
+                release_gate=release.gate_path,
+                provenance_inputs=release.provenance_inputs,
+                freeze_manifest=release.freeze_manifest,
+                gate_evidence=release.gate_evidence,
+                score_inputs=release.score_inputs,
+                score_key="d2-0.8",
+                output=release.root / "external-release",
+                base_source=self.adapter.source,
+                adapter_source_parity_receipt=self.source_parity,
+            )
+
+    def test_external_release_preserves_unmerged_adapter_and_reference(self) -> None:
+        result = self.assemble()
+        package = self.release.root / "external-release"
+        self.assertEqual(result["parameter_count"], 12)
+        self.assertEqual(result["external_base"], self.inner["base"])
+        self.assertFalse((package / "native/model/backbone").exists())
+        self.assertTrue(
+            (package / "native/model/adapter/adapter_model.safetensors").exists()
+        )
+        self.assertIn("generic `AutoModel`", (package / "README.md").read_text())
+        self.assertEqual(
+            bundle_arena.verify(package, base_source=self.adapter.source), result
+        )
+        imported = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import decision2; decision2.verify_bundle(__import__('sys').argv[1])",
+                str(package / "native"),
+            ],
+            cwd=package / "native",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(imported.returncode, 0, imported.stderr)
+        self.assertEqual(bundle_arena.verify(package), result)
+        (self.adapter.source / "config.json").write_text("{}\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Upstream source files differ"):
+            bundle_arena.verify(package, base_source=self.adapter.source)
+
+    def test_external_release_rejects_unbound_source_parity(self) -> None:
+        self.source_parity_value["passed"] = False
+        write(self.source_parity, self.source_parity_value)
+        with self.assertRaisesRegex(ValueError, "source parity is missing"):
+            self.assemble()
+
+    def test_external_release_rejects_wrong_base_and_native_score_package(self) -> None:
+        self.release.record["base_model"]["revision"] = "b" * 40
+        write(self.release.record_path, self.release.record)
+        with self.assertRaisesRegex(ValueError, "base or model ID"):
+            self.assemble()
+        self.release.record["base_model"]["revision"] = "a" * 40
+        write(self.release.record_path, self.release.record)
+        native_path = self.release.score_inputs["public"]["native_manifest"]
+        native = json.loads(native_path.read_text(encoding="utf-8"))
+        native["package_manifest_sha256"] = "f" * 64
+        write(native_path, native)
+        with self.assertRaisesRegex(ValueError, "another native manifest"):
+            self.assemble()
+        public_score = self.release.score_inputs["public"]["score"]
+        score = json.loads(public_score.read_text(encoding="utf-8"))
+        score["prediction_manifest_sha256"] = bundle_arena.sha_file(native_path)
+        write(public_score, score)
+        row = json.loads(self.release.arena_rank.read_text())["models"][0]
+        row["report_sha256"]["public"] = bundle_arena.sha_file(public_score)
+        with self.assertRaisesRegex(ValueError, "another external PEFT package"):
+            bundle_arena._score_inputs(
+                self.release.score_inputs,
+                row,
+                self.inner["model_sha256"],
+                self.release.model_id,
+                self.release.revision,
+                self.release.calibration_sha,
+                self.release.record["native_adapter_version"],
+                self.release.files["MODEL_MANIFEST.json"],
+                self.combined_files,
+            )
 
 
 if __name__ == "__main__":

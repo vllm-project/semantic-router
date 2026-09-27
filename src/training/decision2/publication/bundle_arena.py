@@ -1,7 +1,9 @@
-"""Fail-closed JevArena release packager for already self-contained models.
+"""Fail-closed JevArena release packager for qualified native models.
 
 This is a byte-integrity and process gate, not a GPU parity runner. The input
-model directory must already run using its embedded native inference code.
+model directory must already run using its embedded native inference code. An
+external-base PEFT profile retains the scored adapter and decision head without
+copying or merging its pinned upstream backbone.
 Gold and raw training rows remain outside the public package.
 """
 
@@ -17,10 +19,14 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from . import adapter_runtime
+from .adapter_parity import MAX_DRIFT as ADAPTER_MAX_DRIFT
+from .adapter_parity import VERSION as ADAPTER_PARITY_VERSION
 from .generate_arena import ARTIFACTS, matched_models
 from .generate_arena import VERSION as ARTIFACT_VERSION
 
-VERSION = "decision2-jevarena-self-contained-bundle/1"
+VERSION = "decision2-jevarena-release-bundle/2"
+EXTERNAL_ADAPTER = "qwen-external-base-peft"
 RECORD_VERSION = "decision2-release-package-record/2"
 PARITY_VERSION = "decision2-native-package-parity/1"
 GATE_VERSION = "decision2-jevarena-release-gate/1"
@@ -121,7 +127,7 @@ def _portable_name(name: str) -> bool:
     )
 
 
-def _inventory(root: Path) -> dict[str, str]:
+def _inventory(root: Path, *, allow_adapter_metadata: bool = False) -> dict[str, str]:
     if root.is_symlink() or not root.is_dir():
         raise ValueError("Model input must be a regular directory")
     files: dict[str, str] = {}
@@ -139,7 +145,9 @@ def _inventory(root: Path) -> dict[str, str]:
             "README.md",
             "MODEL_MANIFEST.json",
             "publication-manifest.json",
-        }:
+        } and not (
+            allow_adapter_metadata and name in {"README.md", "MODEL_MANIFEST.json"}
+        ):
             raise ValueError("Model input must contain functional files only")
         if path.suffix in TEXT_SUFFIXES or path.name in SPECIAL_TEXT:
             _public_text(path.read_text(encoding="utf-8"), name)
@@ -208,7 +216,21 @@ def _tensor_counts(path: Path) -> dict[str, int]:
 
 def _profile(root: Path, architecture: str, files: dict[str, str]) -> None:
     names = set(files)
-    if architecture in {"qwen3.5-decision-head", "qwen3.8-decision-head"}:
+    if architecture == EXTERNAL_ADAPTER:
+        required = {
+            "MODEL_MANIFEST.json",
+            "README.md",
+            "requirements.txt",
+            "calibration.json",
+            "model/decision_config.json",
+            "model/decision_head.safetensors",
+            "model/adapter/adapter_config.json",
+            "model/adapter/adapter_model.safetensors",
+            "model/tokenizer.json",
+        } | QWEN_RUNTIME
+        if any(name.startswith("model/backbone/") for name in names):
+            raise ValueError("External-base PEFT package may not copy backbone weights")
+    elif architecture in {"qwen3.5-decision-head", "qwen3.8-decision-head"}:
         required = {
             "model/decision_config.json",
             "model/materialization_receipt.json",
@@ -266,10 +288,8 @@ def _profile(root: Path, architecture: str, files: dict[str, str]) -> None:
     else:
         raise ValueError("Unrecognized release architecture")
     if not required <= names:
-        raise ValueError(
-            f"Self-contained {architecture} package lacks {sorted(required - names)}"
-        )
-    if architecture != "encoder-decision" and any(
+        raise ValueError(f"{architecture} package lacks {sorted(required - names)}")
+    if architecture not in {"encoder-decision", EXTERNAL_ADAPTER} and any(
         "adapter_model.safetensors" in name for name in names
     ):
         raise ValueError("A partial LoRA adapter is not a full publishable model")
@@ -312,13 +332,27 @@ def _parameter_count(
     return count
 
 
-def _native_identity(root: Path, record: dict[str, Any], files: dict[str, str]) -> str:
+def _size_compatible(count: int, model_id: str) -> bool:
+    nominal = float(model_id.rsplit("-", 1)[-1][:-1])
+    return abs(count / 1e9 - nominal) / nominal <= 0.25
+
+
+def _native_identity(
+    root: Path,
+    record: dict[str, Any],
+    files: dict[str, str],
+    external_manifest: dict[str, Any] | None = None,
+) -> str:
     identity = record.get("native_identity")
     if not isinstance(identity, dict) or set(identity) != {"scheme", "sha256", "file"}:
         raise ValueError("Native model identity declaration is incomplete")
     expected = _sha(identity["sha256"], "native model identity")
     scheme, name = identity["scheme"], identity["file"]
-    if scheme == "qwen-checkpoint-fingerprint":
+    if scheme == "external-peft-checkpoint-fingerprint":
+        if name is not None or external_manifest is None:
+            raise ValueError("External PEFT identity needs a verified adapter manifest")
+        actual = external_manifest["model_sha256"]
+    elif scheme == "qwen-checkpoint-fingerprint":
         if name is not None:
             raise ValueError("Qwen checkpoint fingerprint has no identity file")
         from training.model.infer import checkpoint_fingerprint
@@ -349,6 +383,122 @@ def _native_identity(root: Path, record: dict[str, Any], files: dict[str, str]) 
     if actual != expected:
         raise ValueError("Native model identity differs from package bytes")
     return actual
+
+
+def _external_adapter_contract(
+    root: Path,
+    base_source: Path,
+    record: dict[str, Any],
+    files: dict[str, str],
+) -> tuple[dict[str, Any], int, dict[str, str]]:
+    """Bind external bytes and count the loaded base, LoRA and native head."""
+    if base_source.is_symlink():
+        raise ValueError("External base source cannot be a directory symlink")
+    # The source-aware verifier imports .infer from the *copied* decision2
+    # package. Calling its source module here would resolve publication.infer.
+    from .adapter_bundle import _verify_staged_runtime
+
+    manifest = adapter_runtime.verify_bundle(root)
+    _verify_staged_runtime(root, base_source)
+    from training.model.infer import checkpoint_fingerprint
+
+    identity = checkpoint_fingerprint(root / "model", base_source)
+    if identity["model_sha256"] != manifest["model_sha256"]:
+        raise ValueError("External PEFT scored checkpoint identity changed")
+    if files != {
+        **manifest["files_sha256"],
+        "MODEL_MANIFEST.json": files["MODEL_MANIFEST.json"],
+    }:
+        raise ValueError("External PEFT files differ from frozen native package")
+    base = manifest["base"]
+    if (
+        manifest.get("model_id") != record["model_id"]
+        or base["repo_id"] != record["base_model"]["id"]
+        or base["revision"] != record["base_model"]["revision"]
+    ):
+        raise ValueError("External PEFT base or model ID differs from release record")
+    active = record.get("active_weight_files")
+    if (
+        set(active or [])
+        != {
+            "model/adapter/adapter_model.safetensors",
+            "model/decision_head.safetensors",
+        }
+        or record.get("support_weight_files") != []
+        or record.get("non_parameter_tensors") != []
+    ):
+        raise ValueError("External PEFT weights must be only the adapter and head")
+    local_count = _parameter_count(root, active, [], [], files)
+    breakdown = manifest.get("parameter_breakdown")
+    if (
+        not isinstance(breakdown, dict)
+        or local_count != breakdown.get("adapter", -1) + breakdown.get("head", -1)
+        or breakdown.get("base_text", 0) < 1
+        or manifest.get("parameter_count") != local_count + breakdown["base_text"]
+        or breakdown.get("total") != manifest["parameter_count"]
+    ):
+        raise ValueError("External PEFT parameter inventory differs from loaded model")
+    return manifest, manifest["parameter_count"], identity["files_sha256"]
+
+
+def _adapter_source_parity(
+    path: Path,
+    manifest: dict[str, Any],
+    manifest_sha: str,
+) -> str:
+    """Require the separate scored-source versus unmerged package BF16 check."""
+    receipt = _object(path)
+    expected = {
+        "package_manifest_sha256": manifest_sha,
+        "scored_prediction_manifest_sha256": manifest[
+            "scored_prediction_manifest_sha256"
+        ],
+        "scored_predictions_sha256": manifest["scored_predictions_sha256"],
+        "model_sha256": manifest["model_sha256"],
+        "calibration_sha256": manifest["calibration_sha256"],
+    }
+    if (
+        receipt.get("schema_version") != ADAPTER_PARITY_VERSION
+        or receipt.get("passed") is not True
+        or any(receipt.get(name) != value for name, value in expected.items())
+        or receipt.get("types") != ["choice", "noul", "score"]
+        or type(receipt.get("items")) is not int
+        or receipt["items"] < 1
+        or type(receipt.get("questions")) is not int
+        or receipt["questions"] < 3
+        or receipt.get("invalid_or_missing_n") != 0
+        or receipt.get("categorical_mismatch_n") != 0
+        or receipt.get("predeclared_gate")
+        != {
+            "invalid_or_missing_n": 0,
+            "categorical_mismatch_n": 0,
+            "max_probability_or_score_drift": ADAPTER_MAX_DRIFT,
+        }
+    ):
+        raise ValueError("External PEFT source parity is missing or unbound")
+    drift = receipt.get("max_probability_or_score_drift")
+    if (
+        type(drift) not in (int, float)
+        or not math.isfinite(drift)
+        or not 0 <= drift <= ADAPTER_MAX_DRIFT
+    ):
+        raise ValueError("External PEFT source parity drift exceeds the fixed gate")
+    runtime = receipt.get("native_runtime")
+    if (
+        not isinstance(runtime, dict)
+        or runtime.get("bf16") is not True
+        or runtime.get("one_item_batch") is not True
+        or runtime.get("no_truncation") is not True
+    ):
+        raise ValueError("External PEFT source parity used another runtime")
+    for name in (
+        "gold_free_prompts_sha256",
+        "source_answers_sha256",
+        "package_answers_sha256",
+    ):
+        _sha(receipt.get(name), name)
+    _public_text(path.read_text(encoding="utf-8"), "adapter source parity receipt")
+    return sha_file(path)
 
 
 def _qwen_runtime_contract(root: Path, native_sha: str) -> dict[str, Any]:
@@ -624,6 +774,8 @@ def _score_inputs(
     revision: str,
     calibration_sha: str,
     adapter_version: str,
+    package_manifest_sha: str | None = None,
+    checkpoint_files: dict[str, str] | None = None,
 ) -> dict[str, dict[str, str]]:
     if not isinstance(paths, dict) or set(paths) != set(SCORE_FAMILIES):
         raise ValueError(
@@ -679,6 +831,16 @@ def _score_inputs(
             or native_calibration != calibration_sha
         ):
             raise ValueError(f"{family}: native run used another model package")
+        if (
+            package_manifest_sha is not None
+            and native.get("package_manifest_sha256") != package_manifest_sha
+        ):
+            raise ValueError(f"{family}: native run used another external PEFT package")
+        if (
+            checkpoint_files is not None
+            and native.get("model_files_sha256") != checkpoint_files
+        ):
+            raise ValueError(f"{family}: native run used another external PEFT base")
         binding[family] = {
             "score_sha256": score_sha,
             "predictions_sha256": prediction_sha,
@@ -851,6 +1013,20 @@ def _card(
         "\n".join(f"- {_md(value)}" for value in record["known_overlap"])
         or "- No overlap declared in the reviewed record."
     )
+    external_note = ""
+    if record["architecture"] == EXTERNAL_ADAPTER:
+        external_note = (
+            "This repository contains the native PEFT adapter, tokenizer, "
+            "calibration and Decision 2.0 head. The upstream base weights are "
+            "an external dependency at the immutable revision above; they "
+            "are not copied or merged into this repository. A generic "
+            "`AutoModel` call will not run the custom decision head. Use "
+            '`decision2.Decision2.from_pretrained("native", '
+            'source_path="verified_base_snapshot")` after installing '
+            "`native/requirements.txt`, or let the native loader retrieve "
+            "and hash-check the pinned commit. The reported parameter count "
+            "includes the loaded base text backbone, adapter and head.\n"
+        )
     return f"""---
 license: {record['license_id']}
 {('license_name: noncommercial-research-terms' + chr(10)) if record['license_id'] == 'other' else ''}base_model: {record['base_model']['id']}
@@ -869,6 +1045,8 @@ Native architecture: `{record['architecture']}`. Actual model parameters:
 at immutable revision `{record['base_model']['revision']}`. Native runtime and
 calibration are included in this package; its exact invocation and limits are
 described by the bundled runtime and `PACKAGE_MANIFEST.json`.
+
+{external_note}
 
 ## Same-panel release evaluation
 
@@ -936,6 +1114,8 @@ def assemble(
     score_inputs: dict[str, dict[str, Path]],
     score_key: str,
     output: Path,
+    base_source: Path | None = None,
+    adapter_source_parity_receipt: Path | None = None,
 ) -> dict[str, Any]:
     """Validate a qualified native package and atomically stage public bytes."""
     for path in (
@@ -973,28 +1153,48 @@ def assemble(
     ):
         raise ValueError("Model revision and score key are required")
     _rights(record, model_id, revision)
-    files = _inventory(model_dir)
+    architecture = record.get("architecture")
+    external = architecture == EXTERNAL_ADAPTER
+    if external:
+        if base_source is None or adapter_source_parity_receipt is None:
+            raise ValueError("External PEFT release needs base and source parity")
+    elif base_source is not None or adapter_source_parity_receipt is not None:
+        raise ValueError("External PEFT inputs are invalid for this architecture")
+    files = _inventory(model_dir, allow_adapter_metadata=external)
     if record.get("model_files_sha256") != files:
         raise ValueError("Model files differ from the frozen package record")
-    architecture = record.get("architecture")
     _profile(model_dir, architecture, files)
-    active, support, excluded = (
-        record.get("active_weight_files"),
-        record.get("support_weight_files"),
-        record.get("non_parameter_tensors"),
-    )
-    count = _parameter_count(model_dir, active, support, excluded, files)
+    external_manifest = None
+    source_parity_sha = None
+    checkpoint_files = None
+    if external:
+        assert base_source is not None and adapter_source_parity_receipt is not None
+        external_manifest, count, checkpoint_files = _external_adapter_contract(
+            model_dir, base_source, record, files
+        )
+        source_parity_sha = _adapter_source_parity(
+            adapter_source_parity_receipt,
+            external_manifest,
+            files["MODEL_MANIFEST.json"],
+        )
+    else:
+        count = _parameter_count(
+            model_dir,
+            record.get("active_weight_files"),
+            record.get("support_weight_files"),
+            record.get("non_parameter_tensors"),
+            files,
+        )
     if (
         record.get("parameter_count") != count
         or type(record.get("parameter_count")) is not int
     ):
         raise ValueError("Actual safetensors parameter count differs from declaration")
-    suffix = model_id.rsplit("-", 1)[-1]
-    if abs(count / 1e9 - float(suffix[:-1])) / float(suffix[:-1]) > 0.25:
+    if not _size_compatible(count, model_id):
         raise ValueError(
             "Actual parameter count differs materially from model size name"
         )
-    native_sha = _native_identity(model_dir, record, files)
+    native_sha = _native_identity(model_dir, record, files, external_manifest)
     calibration_name = record.get("calibration_file")
     permitted_calibration = (
         {"calib.json"}
@@ -1025,6 +1225,8 @@ def assemble(
         revision,
         files[calibration_name],
         record["native_adapter_version"],
+        files["MODEL_MANIFEST.json"] if external else None,
+        checkpoint_files,
     )
     _parity(
         parity,
@@ -1077,6 +1279,11 @@ def assemble(
                 encoding="utf-8",
             )
             _verify_qwen_runtime(temporary / "native")
+        elif external:
+            assert base_source is not None
+            from .adapter_bundle import _verify_staged_runtime
+
+            _verify_staged_runtime(temporary / "native", base_source)
         (temporary / "card-artifacts").mkdir()
         for name in (*ARTIFACTS, "manifest.json"):
             shutil.copyfile(artifacts / name, temporary / "card-artifacts" / name)
@@ -1120,6 +1327,11 @@ def assemble(
             "score_inputs_sha256": score_binding,
             "files_sha256": public_files,
         }
+        if external:
+            assert external_manifest is not None and source_parity_sha is not None
+            manifest["external_base"] = external_manifest["base"]
+            manifest["adapter_manifest_sha256"] = files["MODEL_MANIFEST.json"]
+            manifest["adapter_source_parity_sha256"] = source_parity_sha
         (temporary / "PACKAGE_MANIFEST.json").write_text(
             json.dumps(
                 manifest, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False
@@ -1127,7 +1339,7 @@ def assemble(
             + "\n",
             encoding="utf-8",
         )
-        verify(temporary)
+        verify(temporary, base_source=base_source)
         temporary.rename(output)
         return manifest
     finally:
@@ -1135,7 +1347,7 @@ def assemble(
             shutil.rmtree(temporary)
 
 
-def verify(root: Path) -> dict[str, Any]:
+def verify(root: Path, *, base_source: Path | None = None) -> dict[str, Any]:
     """Check all staged public bytes and their model/artifact binding on CPU."""
     if root.is_symlink() or not root.is_dir():
         raise ValueError("Publication package must be a regular directory")
@@ -1145,19 +1357,36 @@ def verify(root: Path) -> dict[str, Any]:
     expected = manifest.get("files_sha256")
     if not isinstance(expected, dict) or not expected:
         raise ValueError("Package file inventory is missing")
-    actual = {
-        path.relative_to(root).as_posix(): sha_file(path)
-        for path in root.rglob("*")
-        if path.is_file()
-        and not path.is_symlink()
-        and path.name != "PACKAGE_MANIFEST.json"
-    }
-    if any(path.is_symlink() for path in root.rglob("*")) or actual != expected:
+    if any(path.is_symlink() for path in root.rglob("*")):
+        raise ValueError("Published package file inventory has changed")
+    external = manifest.get("architecture") == EXTERNAL_ADAPTER
+    if external:
+        native = adapter_runtime._inventory(root / "native", ignore_bytecode=True)
+        actual = {f"native/{name}": digest for name, digest in native.items()}
+        actual.update(
+            {
+                path.relative_to(root).as_posix(): sha_file(path)
+                for path in root.rglob("*")
+                if path.is_file()
+                and not path.is_relative_to(root / "native")
+                and path.name != "PACKAGE_MANIFEST.json"
+            }
+        )
+    else:
+        if base_source is not None:
+            raise ValueError("External base source was supplied to a full package")
+        actual = {
+            path.relative_to(root).as_posix(): sha_file(path)
+            for path in root.rglob("*")
+            if path.is_file() and path.name != "PACKAGE_MANIFEST.json"
+        }
+    if actual != expected:
         raise ValueError("Published package file inventory has changed")
     model_files = {
         name.removeprefix("native/"): digest
         for name, digest in actual.items()
-        if name.startswith("native/") and name != "native/MODEL_MANIFEST.json"
+        if name.startswith("native/")
+        and (external or name != "native/MODEL_MANIFEST.json")
     }
     digest = hashlib.sha256(
         json.dumps(model_files, sort_keys=True, separators=(",", ":")).encode()
@@ -1173,6 +1402,26 @@ def verify(root: Path) -> dict[str, Any]:
         "qwen3.8-decision-head",
     }:
         _verify_qwen_runtime(root / "native")
+    elif external:
+        if base_source is not None:
+            from .adapter_bundle import _verify_staged_runtime
+
+            _verify_staged_runtime(root / "native", base_source)
+        inner = adapter_runtime.verify_bundle(root / "native")
+        record = _object(root / "release-record.json")
+        base = inner["base"]
+        if (
+            manifest.get("external_base") != base
+            or manifest.get("adapter_manifest_sha256")
+            != actual.get("native/MODEL_MANIFEST.json")
+            or manifest.get("native_model_sha256") != inner["model_sha256"]
+            or manifest.get("parameter_count") != inner["parameter_count"]
+            or record.get("base_model", {}).get("id") != base["repo_id"]
+            or record.get("base_model", {}).get("revision") != base["revision"]
+            or record.get("model_id") != inner["model_id"]
+        ):
+            raise ValueError("External PEFT base, adapter or release record changed")
+        _sha(manifest.get("adapter_source_parity_sha256"), "source parity")
     return manifest
 
 
@@ -1196,7 +1445,10 @@ def main() -> None:
         "score_inputs",
         "score_key",
     }
-    if set(config) != required:
+    if not required <= set(config) or set(config) - required - {
+        "base_source",
+        "adapter_source_parity_receipt",
+    }:
         raise ValueError("Release packaging config has missing or unknown fields")
     base = args.config.parent
 
@@ -1228,6 +1480,14 @@ def main() -> None:
         score_inputs=score_inputs,
         score_key=config["score_key"],
         output=args.output,
+        base_source=(
+            source(config["base_source"]) if "base_source" in config else None
+        ),
+        adapter_source_parity_receipt=(
+            source(config["adapter_source_parity_receipt"])
+            if "adapter_source_parity_receipt" in config
+            else None
+        ),
     )
     print(
         json.dumps(

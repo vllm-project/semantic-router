@@ -9,7 +9,7 @@ Face, or replace an unqualified checkpoint with a release model. The earlier
 ## Inputs
 
 Run `python3 -m publication.generate_arena` first. Give the packager a
-**functional, standalone** native model directory and these local files:
+**functional native** model directory and these local files:
 
 | Input | Required binding |
 | --- | --- |
@@ -20,6 +20,7 @@ Run `python3 -m publication.generate_arena` first. Give the packager a
 | `parity_receipt` | Gold-free native package check on 1,600 DEV and 1,430 transfer pilot items, with zero changed categorical answers, p99 probability drift ≤0.005 and maximum drift ≤0.02. |
 | `release_gate` | Passed pretest freeze, authored editorial, overlap, same-panel evaluation, rights, parity and performance reviews, each with an evidence hash. |
 | `provenance_inputs`, `freeze_manifest`, `gate_evidence` | The original local files matching every declared training, freeze and review evidence hash. They are checked but never copied. |
+| `base_source`, `adapter_source_parity_receipt` | Required only for `qwen-external-base-peft`: a local snapshot of the exact pinned upstream commit and the separate BF16 scored-source/package parity receipt. Neither input is copied. |
 
 The record and gate schemas are `decision2-release-package-record/2` and
 `decision2-jevarena-release-gate/1`. The test fixture in
@@ -39,6 +40,25 @@ The packager accepts these functional layouts:
   and all eight portable `decision2/` runtime modules. It constructs the
   existing native `MODEL_MANIFEST.json` inside the copied `native/` directory
   and runs that runtime's CPU byte/lineage verifier before publication.
+- `qwen-external-base-peft`: the unmerged output of
+  `publication.adapter_bundle` with its own exact `MODEL_MANIFEST.json`,
+  LoRA adapter, Decision 2.0 head, tokenizer, CAL and pinned native loader.
+  Supply `base_source` and `adapter_source_parity_receipt`. The packager
+  verifies every local base snapshot file against the inner manifest and
+  requires its repository ID and 40-character commit to match the reviewed
+  package record. The scorer manifests for all five score families must bind
+  the same inner manifest with `package_manifest_sha256`. The separate
+  gold-free BF16 source/package receipt must report all three native types,
+  zero missing or categorical differences and maximum numeric drift ≤`1e-4`.
+  It is distinct from the 1,600 DEV plus 1,430 CSS pilot package parity gate.
+  The output does **not** contain base weights or merged weights. Its count
+  includes the externally loaded text backbone, LoRA and custom head;
+  `active_weight_files` must list exactly the adapter and head, with empty
+  support and excluded-buffer lists. Its `native_identity.scheme` is
+  `external-peft-checkpoint-fingerprint` with a null `file` and the scored
+  PEFT model digest. Ordinary `AutoModel` loading does not run the head; use
+  `decision2.Decision2.from_pretrained` from the `native/` directory and the
+  pinned base.
 - `qwen3.5-semif`: standalone merged SemIf model with original `serve.py`,
   tokenizer, CAL, notices and exact `SHA256SUMS` coverage.
 - `encoder-decision`: native `model.safetensors`, encoder configuration,
@@ -48,7 +68,11 @@ The packager accepts these functional layouts:
   release-qualified.
 
 All layouts need an external gold-free parity receipt for the **exact copied
-model files**. An encoder or SemIf layout check does not prove the runtime can
+model files**. The external-base profile additionally needs the adapter
+source/package parity receipt. A pinned local byte inventory alone cannot
+prove which HF repository owns the snapshot: independently review the HF
+commit and license, and retain that evidence in the rights/provenance gate.
+An encoder or SemIf layout check does not prove the runtime can
 actually import and execute on the release device. Generate its parity receipt
 by running the standalone native package on the authorized evaluation system.
 
@@ -62,6 +86,14 @@ the five `score_inputs` entries has `score`, `predictions`, and
 `native_manifest` paths. `provenance_inputs` names `data_manifest`,
 `run_provenance`, and `training_code`; `gate_evidence` names the seven
 reviews listed in `bundle_arena.GATE_CHECKS`.
+For the external-base profile, add `base_source` and
+`adapter_source_parity_receipt` to the JSON config. The source parity receipt
+is checked locally and only its SHA-256 is copied into
+`PACKAGE_MANIFEST.json`; the possibly environment-specific receipt itself
+remains private. The outer manifest also records the immutable upstream
+reference and its per-file hashes. Verification of a downloaded publication
+bundle without `base_source` checks internal bytes and the immutable reference;
+pass `base_source` to recheck the complete external dependency bytes offline.
 
 ```bash
 PYTHONPATH=src/training/decision2 python3 -m publication.bundle_arena \
@@ -72,7 +104,9 @@ The output must not exist. A successful assembly copies the native model to
 `native/`, writes the new model card with the same-panel table and figures,
 copies reviewed release receipts, and records every public file hash in
 `PACKAGE_MANIFEST.json`. A failed check leaves no output directory. A copied
-bundle can be checked again with `publication.bundle_arena.verify(path)`.
+bundle can be checked again with `publication.bundle_arena.verify(path)` or,
+for an external-base model,
+`publication.bundle_arena.verify(path, base_source=pinned_snapshot)`.
 
 ## Interpretation and limits
 

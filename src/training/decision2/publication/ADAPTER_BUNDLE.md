@@ -121,15 +121,19 @@ release gate.
 
 ## Remaining release integration
 
-`publication.bundle_arena` currently accepts only a self-contained Qwen
-checkpoint for Decision 2.0, so it will reject this external-base artifact.
-To publish an adapter-preserving model, extend that release packager and its
-package record with a separately reviewed external-base profile, verify the
-upstream HF revision and rights, import the exact package runtime in the
-release environment, bind a passing gold-free parity receipt to the package
-manifest, and rerun the complete same-panel release evaluation and candidate
-gate. Frozen candidates, independent authored questions, multilingual review,
-overlap audit, threshold review and model-card evidence remain required.
+`publication.bundle_arena` now has a separate
+`qwen-external-base-peft` profile. It takes this package as `model_dir`, a
+verified pinned `base_source`, and the scored-source/package BF16 parity
+receipt. The package record must identify the same immutable upstream HF
+repository and commit, the same PEFT model fingerprint, and the loaded
+base-text-plus-adapter-plus-head parameter count. All five native scored
+manifests must bind this package's `MODEL_MANIFEST.json` hash. The release
+packager still requires the full DEV/CSS package parity, matched six-axis
+scores, frozen candidates, independent authored questions, multilingual
+review, overlap audit, rights review, threshold review and model-card evidence.
+The published model card explicitly says that the upstream base weights are
+an external dependency and that callers must use the Decision 2.0 native
+loader for the custom head. See `BUNDLE_ARENA.md` for the full contract.
 Freeze the final sticker, card and chart files in a publication inventory
 before uploading; adding them to this prototype changes its exact file
 roster. Verify a downloaded HF snapshot and ordinary package import after
