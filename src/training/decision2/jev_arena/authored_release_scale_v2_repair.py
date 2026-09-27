@@ -17,7 +17,13 @@ from typing import Any
 from jev_arena.authored_release_scale_v1 import file_sha, inspect, write_private
 from jev_arena.authored_release_scale_v2 import _domain_witness_issues
 
-VERSION = "jevarena-authored-release-scale-v2-mass-witness-repair/1"
+VERSION = "jevarena-authored-release-scale-v2-mass-witness-repair/2"
+
+
+def _write_preserving_order(path: Path, source: dict[str, Any]) -> None:
+    """Keep the authored structured-field order used by the prompt renderer."""
+    path.write_text(json.dumps(source, ensure_ascii=False, indent=2) + "\n")
+    path.chmod(0o600)
 
 
 def repair_case(case: dict[str, Any]) -> tuple[dict[str, Any], int]:
@@ -67,7 +73,7 @@ def repair(casebook: Path, output: Path, receipt: Path) -> dict[str, Any]:
         raise ValueError("Unrepaired or unrelated witness change")
     source["cases"] = new_cases
     source["version"] = "authored-release-scale-v2-feasibility-r2"
-    write_private(output, source)
+    _write_preserving_order(output, source)
     record = {
         "version": VERSION,
         "input_casebook_sha256": file_sha(casebook),

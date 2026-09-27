@@ -10,6 +10,7 @@ import pytest
 
 from jev_arena.authored_release_scale_v2 import _distribution, _domain_witness_issues
 from jev_arena.authored_release_scale_v2_audit import _required_gaps
+from jev_arena.authored_release_scale_v2_repair import _write_preserving_order
 from jev_arena.authored_release_scale_v2_witness_audit import audit
 
 
@@ -100,3 +101,9 @@ def test_v2_witness_audit_seals_aggregate_hold(tmp_path: Path) -> None:
     assert result["affected_originals"] == 1
     with pytest.raises(FileExistsError):
         audit(casebook, output)
+
+
+def test_repair_preserves_prompt_field_order(tmp_path: Path) -> None:
+    path = tmp_path / "ordered.private.json"
+    _write_preserving_order(path, {"source": {"z": 1, "a": 2}})
+    assert path.read_text().index('"z"') < path.read_text().index('"a"')
