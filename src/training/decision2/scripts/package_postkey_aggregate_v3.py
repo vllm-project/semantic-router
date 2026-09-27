@@ -25,6 +25,12 @@ PACKAGE_VERSION = "decision2-jevarena-v3-postkey-release-bundle/2"
 GATE_VERSION = "decision2-jevarena-v3-postkey-release-gate/1"
 GATE_STATUS = "passed_postkey_user_directed"
 CARD_MARKER = "**Post-key, user-directed aggregate-priority release.**"
+PARITY_LOOPBACK_SCREEN_VERSION = "decision2-native-parity-loopback-screen/1"
+PARITY_LOOPBACK_STATEMENT = (
+    "Only literal 127.0.0.1 loopback addresses and the exact native "
+    "serve_vllm.sh script are allowed in the frozen runtime; all text is "
+    "screened and other IPs, private paths and credentials remain blocked."
+)
 APACHE_MODEL_ID = "llm-semantic-router/DEV2.0-4B"
 APACHE_SOURCE_ID = "caiovicentino1/Eikos-4B"
 APACHE_SOURCE_REVISION = "582ffb13f19a4da3f455e3db198584190bd7755b"
@@ -156,6 +162,42 @@ def _config_paths(config_path: Path, config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _screen_reviewed_parity(content: str, original_public_text: Any) -> None:
+    """Screen a private receipt without changing its frozen, SHA-bound bytes.
+
+    Only the exact reviewed explanation may contain a literal loopback address.
+    Every other parsed key and value still passes the original privacy scanner.
+    This v1 exception is local to the private bundle; the slim HF export omits
+    the parity receipt entirely.
+    """
+
+    def unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("Native parity receipt has a duplicate JSON key")
+            result[key] = value
+        return result
+
+    receipt = json.loads(content, object_pairs_hook=unique_pairs)
+    if not isinstance(receipt, dict):
+        raise ValueError("Native parity receipt must be a JSON object")
+    statement = receipt.pop("public_text_exception", None)
+    if statement is None:
+        original_public_text(content, "native-parity.json")
+        return
+    if statement != PARITY_LOOPBACK_STATEMENT:
+        raise ValueError("Native parity loopback exception differs from review")
+    original_public_text(
+        PARITY_LOOPBACK_STATEMENT.replace("127.0.0.1", "__REVIEWED_LOOPBACK__"),
+        "native-parity.json",
+    )
+    original_public_text(
+        json.dumps(receipt, ensure_ascii=False, sort_keys=True, allow_nan=False),
+        "native-parity.json",
+    )
+
+
 @contextmanager
 def _amended_bundle(
     frozen: Any, gate: dict[str, Any], strict_hold: dict[str, Any] | None = None
@@ -181,6 +223,9 @@ def _amended_bundle(
     original_text_suffixes = bundle.common.TEXT_SUFFIXES
 
     def reviewed_public_text(content: str, label: str) -> None:
+        if label == "native-parity.json":
+            _screen_reviewed_parity(content, original_public_text)
+            return
         # The unchanged native serve.py uses only loopback in examples/defaults.
         # Screen the original text for secrets and paths, and retain every other
         # address in the normal scanner. This exception cannot change file bytes.

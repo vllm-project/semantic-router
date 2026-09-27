@@ -222,6 +222,58 @@ class PostkeyPackageTest(unittest.TestCase):
                     postkey.bundle.common._public_text(content, label)
         self.assertIs(postkey.bundle.common._public_text, original)
 
+    def test_private_parity_loopback_review_keeps_other_screening(self) -> None:
+        self.assertEqual(
+            postkey.PARITY_LOOPBACK_SCREEN_VERSION,
+            "decision2-native-parity-loopback-screen/1",
+        )
+        original = postkey.bundle.common._public_text
+        frozen = SimpleNamespace(
+            __file__=str(postkey.AMENDMENT),
+            _freeze=lambda *_args: None,
+            SCORER_SOURCE_PATHS={},
+        )
+        reviewed = {
+            "schema_version": "decision2-native-package-parity/1",
+            "public_text_exception": postkey.PARITY_LOOPBACK_STATEMENT,
+            "original_parity_receipt_sha256": "a" * 64,
+        }
+        payload = json.dumps(reviewed, sort_keys=True)
+        with self.assertRaisesRegex(ValueError, "private infrastructure"):
+            original(payload, "native-parity.json")
+        with postkey._amended_bundle(frozen, {"amendment_sha256": "a" * 64}):
+            postkey.bundle.common._public_text(payload, "native-parity.json")
+            self.assertEqual(json.loads(payload), reviewed)
+            for added in (
+                "10.1.2.3",
+                "/data/private-run",
+                "hf_" + "a" * 30,
+                "127.0.0.1",
+            ):
+                bad = {**reviewed, "unreviewed_detail": added}
+                with self.subTest(added=added):
+                    with self.assertRaisesRegex(ValueError, "private infrastructure"):
+                        postkey.bundle.common._public_text(
+                            json.dumps(bad), "native-parity.json"
+                        )
+            bad = {
+                **reviewed,
+                "public_text_exception": reviewed["public_text_exception"]
+                + " Extra allowance.",
+            }
+            with self.assertRaisesRegex(ValueError, "differs from review"):
+                postkey.bundle.common._public_text(
+                    json.dumps(bad), "native-parity.json"
+                )
+            with self.assertRaisesRegex(ValueError, "duplicate JSON key"):
+                postkey.bundle.common._public_text(
+                    payload[:-1] + ', "public_text_exception": "changed"}',
+                    "native-parity.json",
+                )
+            with self.assertRaisesRegex(ValueError, "private infrastructure"):
+                postkey.bundle.common._public_text(payload, "README.md")
+        self.assertIs(postkey.bundle.common._public_text, original)
+
     def test_shell_inventory_exception_keeps_full_screening(self) -> None:
         frozen = SimpleNamespace(
             __file__=str(postkey.AMENDMENT),
