@@ -185,6 +185,14 @@ extraVolumeMounts: []
 #     mountPath: /mnt/ml-models
 #     readOnly: true
 
+# Extra containers (e.g. sidecars) appended to the Router pod after the router container.
+extraContainers: []
+# Example:
+#   - name: classifier
+#     image: ghcr.io/example/classifier:latest
+#     ports:
+#       - containerPort: 8000
+
 # Knowledge base label manifests (labels.json) for routing.signals.kb / global.model_catalog.kbs
 # ConfigMap keys should mirror subpaths under the mount, e.g. privacy/labels.json, mmlu/labels.json
 knowledgeBases:

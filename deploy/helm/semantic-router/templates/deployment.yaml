@@ -180,6 +180,9 @@ spec:
         {{- end }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
+      {{- with .Values.extraContainers }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
       volumes:
       - name: runtime-tmp
         emptyDir: {}
