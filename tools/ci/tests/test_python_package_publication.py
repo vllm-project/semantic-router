@@ -118,6 +118,49 @@ class PythonPublisherContractTests(unittest.TestCase):
                 self.workflows[filename].jobs["pypi"]["with"]["prebuilt-dist"]
             )
 
+    def test_first_tag_push_uses_head_instead_of_zero_before_sha(self) -> None:
+        package = self.workflows["package-check.yml"]
+        step = next(
+            step
+            for step in package.jobs["package"]["steps"]
+            if step.get("name") == "Qualify the final candidate"
+        )
+        head = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True
+        ).strip()
+        previous = subprocess.check_output(
+            ["git", "rev-parse", "HEAD^"], cwd=REPO_ROOT, text=True
+        ).strip()
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            executable = directory / "python"
+            executable.write_text(
+                '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n',
+                encoding="utf-8",
+            )
+            executable.chmod(0o755)
+            capture = directory / "arguments"
+            for before, expected in (("0" * 40, head), (previous, previous)):
+                with self.subTest(before=before):
+                    subprocess.run(
+                        ["bash", "-e", "-c", step["run"]],
+                        cwd=REPO_ROOT,
+                        env={
+                            **os.environ,
+                            "PATH": f"{directory}:{os.environ['PATH']}",
+                            "CAPTURE": str(capture),
+                            "BASE_REF": before,
+                            "GITHUB_SHA": head,
+                            "MODE": "release",
+                            "TAG": "v0.4.0",
+                        },
+                        check=True,
+                    )
+                    arguments = capture.read_text(encoding="utf-8").splitlines()
+                    self.assertEqual(
+                        arguments[arguments.index("--base-ref") + 1], expected
+                    )
+
     def test_prebuilt_publication_installs_qualification_dependency_before_verify(
         self,
     ) -> None:
