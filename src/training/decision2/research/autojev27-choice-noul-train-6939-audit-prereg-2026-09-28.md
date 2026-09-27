@@ -82,3 +82,84 @@ inference apply to both arms. Source-disjoint SELECT and later held-out
 transfer, calibration and retention—not this TRAIN screen—decide usefulness.
 
 **No full Choice/Noul teacher result exists at this prospective freeze.**
+
+## Sole frozen run: result and limits
+
+The one native run completed in **1,105 wall seconds = 0.3069 GPU-hours**
+within the 3,600-second cap. All **6,939/6,939** responses passed the native
+type, option-key, finite-mass and normalization checks; no context/candidate
+overflow or invalid response occurred. The task-owned container exited and
+its GPU returned to zero allocated memory. The mode-0600 aggregate SHA-256 is
+`5c5dc9aca484569cb4ec03f5ce4d3a2ce93256f209f95b67d9eac2c282ef8488`.
+The separately retained 6,939-row, mode-0600 private probability artifact
+has SHA-256
+`8cf211e5af88920de556dc84aa0fcb8b16677fdfd5209abb04db0ffe8e8b195c`;
+its exact roster, TRAIN, script and model hashes were rechecked and it has no
+gold, state or option descriptions. It remains private and is **not** a
+student-training authorization.
+
+| TRAIN slice | Rows | Unique-max agreement | Ties | Mean gold probability | Half Brier |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| All Choice/Noul | 6,939 | 5,381 (77.55%) | 124 | 0.6985 | 0.1471 |
+| Choice | 3,908 | 2,852 (72.98%) | 90 | 0.6414 | 0.1741 |
+| Noul | 3,031 | 2,529 (83.44%) | 34 | 0.7722 | 0.1123 |
+| English | 5,792 | 4,607 (79.54%) | 77 | 0.7213 | 0.1373 |
+| Chinese | 1,147 | 774 (67.48%) | 47 | 0.5835 | 0.1968 |
+
+| TRAIN source | Rows | Unique-max agreement | Mean gold probability | Half Brier |
+| --- | ---: | ---: | ---: | ---: |
+| GoEmotions official TRAIN | 2,800 | 2,214 (79.07%) | 0.7079 | 0.1479 |
+| stage4 composition | 1,653 | 989 (59.83%) | 0.5016 | 0.2387 |
+| stage3 replay | 612 | 516 (84.31%) | 0.7829 | 0.1015 |
+| CosmosQA | 448 | 363 (81.03%) | 0.7441 | 0.1282 |
+| targeted original generator | 450 | 450 (100.00%) | 0.9509 | 0.0092 |
+| SQuAD2 answerability | 334 | 303 (90.72%) | 0.8670 | 0.0692 |
+| SNLI | 272 | 227 (83.46%) | 0.7699 | 0.1257 |
+| original generator | 250 | 219 (87.60%) | 0.8506 | 0.0719 |
+| FLUTE | 120 | 100 (83.33%) | 0.6982 | 0.1110 |
+
+Choice difficulty is highly mechanism-dependent. The preregistered exact
+option-count strata can be aggregated without changing predictions: 2–4
+options 2,414/3,076 (78.5%); 5–8 options 181/362 (50.0%); 9–17 options
+183/335 (54.6%); and 31–128 options 74/135 (54.8%). The wide bins hide
+heterogeneous families: for example 127-option items were 0/15 whereas
+105-option items were 20/21. Among families with at least 25 rows, stage4
+arithmetic was **60/224 (26.8%)**, automaton **46/137 (33.6%)**, relations
+**149/274 (54.4%)**, and boolean **161/277 (58.1%)**. These weak training
+slices argue against unconditional KL on every teacher distribution. The
+targeted-generator perfect score is same-family TRAIN agreement, not
+out-of-source transfer.
+
+Noul is almost globally balanced (true 1,517, false 1,514), yet the teacher
+agreed with false labels **1,372/1,514 (90.6%)** and true labels
+**1,157/1,517 (76.3%)**. There is also source-level imbalance: SQuAD2 has
+191 true/143 false, stage3 replay 49 true/71 false. A student should not
+inherit the teacher's false preference through indiscriminate soft replay.
+
+The overall English/Chinese gap is confounded by source composition. A
+post-result CPU join of the unchanged private artifact and exact TRAIN labels
+found stage4 composition at 852/5,792 English rows but 801/1,147 Chinese
+rows. Within that source, agreement was 515/852 (60.4%) English and 474/801
+(59.2%) Chinese; in the original programmatic source it was 174/199 (87.4%)
+and 45/51 (88.2%). The aggregate 79.5% versus 67.5% is therefore **not**
+evidence of a language-only teacher deficit. These crossed slices were
+post hoc, use no new GPU/model calls, and remain exploratory.
+
+The earlier 96-row pilot gave AutoJev 26/32 Choice and 26/32 Noul, compared
+with Eikos 21/32 and 26/32 on that same pilot. The complete AutoJev Choice
+result is lower than its small pilot, and there is no corresponding full-TRAIN
+Eikos run; the pilot is not a full-data teacher ranking. The separate Score
+audit found 324/516 (62.8%) unique-max agreement, with its own weak high-level
+and dense-table slices. None of these TRAIN numbers demonstrates student
+gain, JevArena performance, or model-release quality.
+
+**Recommendation, not an executed arm:** the next eligible
+official-Qwen/own-1.0 student ablation should compare a matched hard-label
+control against the same hard labels plus low-weight, source-aware KL,
+predefining how wrong/tied teacher maxima and high-risk stage4 arithmetic,
+automaton, high-option and Noul-true rows are masked or downweighted. Keep
+identical row schedules and token/update budgets; give the control matching
+per-row weighting. Score, Noul true/false, long-input, calibration and
+source-disjoint transfer need explicit gates. Use TRAIN labels only to form
+training masks, never SELECT/CAL or formal labels. No student run was started
+by this audit.
