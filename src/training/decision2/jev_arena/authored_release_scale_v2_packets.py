@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import secrets
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -96,6 +97,9 @@ def seal(
     packet_receipt = {
         "version": VERSION,
         "status": "BLIND_PACKET_SEALED_REVIEW_PENDING",
+        "sealed_at_utc": datetime.now(timezone.utc).isoformat(),
+        "candidate_source_commit": receipt["source_commit"],
+        "sealer_sha256": file_sha(Path(__file__)),
         "candidate_receipt_sha256": file_sha(prepared / "receipt.private.json"),
         "preflight_sha256": file_sha(preflight),
         "witness_audit_sha256": file_sha(witness_audit),
