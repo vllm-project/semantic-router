@@ -12,7 +12,7 @@ protocol. No v2 score or publication bundle is reinterpreted as v3.
 | Development | TRAIN-disjoint SELECT/CAL, typed DEV 1,600 with about 400 related groups, CSS pilot 1,430 across three tasks; a small frozen daily subset may reduce cost | Select, diagnose and fit calibration. A public test repeatedly consulted here is development data, not blind confirmation. |
 | JevArena v3 sealed core | Fresh typed FINAL 1,600, CSS held-out 6,547 across 15 tasks, and 1,200–1,480 independently authored, human-reviewed sealed originals | Primary same-panel 1.0/2.0/open-model release comparison. Total 9,347–9,627 original questions; variants do not increase the independent count. |
 | Public cross-checks | JevBench public 231 split by difficulty; Decision Bench v4 1,041 text-evaluable plus 30 visual-only N/E | Separately labeled public rankings and task tables. They never enter v3's headline or blind denominator. |
-| External Decision Index | Complete version 0.2.1: 150,759 scheduled / 150,317 scoreable Choice/Noul requests, if its exact row and scoring port passes | One broad external evaluation per frozen package. Same-edition published 1.0 rows may be reused here; not for JevArena paired intervals. No Score claim or Space-official rank from a local run. |
+| External Decision Index | Complete version 0.2.1: 150,759 scheduled / 150,317 scoreable Choice/Noul requests, if its exact row and scoring port passes | Optional post-publication evaluation for frozen packages. Same-edition published 1.0 rows may be reused here; not for JevArena paired intervals. It is not a first-release gate. No Score claim or Space-official rank from a local run. |
 
 For each model, all four tracks bind that model's one pinned package
 manifest, native inference adapter and calibration. Each track has its own
@@ -60,7 +60,9 @@ same runtime and panel. A missing panel, unqualified human review, failed
 parity or post-key model selection keeps the release on HOLD; public or
 external results cannot substitute for the sealed core.
 
-Decision Index 0.2.1 remains a valuable external stress test, but its large
+The first model release requires JevArena v3 and the separately labeled
+JevBench public-231 result. Decision Bench remains a useful public appendix;
+Decision Index 0.2.1 is a post-publication preference, not a blocker. Its large
 row count measures performance on 38 mostly public benchmark projections,
 not 150,317 independent private cases. Its current public 0.2 kit must be
 ported and verified, including 30,419 added rows and the unresolved Home
