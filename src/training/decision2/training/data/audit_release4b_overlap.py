@@ -47,7 +47,7 @@ def read_jsonl(path: Path, *, prompt: bool) -> list[dict[str, Any]]:
             if (
                 not isinstance(row, dict)
                 or not isinstance(row.get("id"), str)
-                or not isinstance(row.get("state"), (str, dict))
+                or not isinstance(row.get("state"), (str, dict, list))
                 or row["id"] in ids
             ):
                 raise ValueError(f"{path.name}:{number}: invalid or repeated ID/state")

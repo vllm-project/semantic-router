@@ -44,6 +44,11 @@ class ReleaseOverlapAuditTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(len(read_jsonl(path, prompt=True)), 1)
+            path.write_text(
+                json.dumps({"id": "eval/2", "state": ["case"], "questions": {}}) + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(len(read_jsonl(path, prompt=True)), 1)
 
 
 if __name__ == "__main__":
