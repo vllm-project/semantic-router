@@ -22,7 +22,9 @@ precedes the Lux FINAL/CSS15 predictions and scores.
 The fixed executable for each panel is `python -m inference.run --backend lux
 --model-path /model --model-revision <revision> --input
 /panels/<panel>.prompts.jsonl --output /out/<panel>.predictions.jsonl --device
-cuda:0`. `/model` and `/panels` are read-only mounts and contain no gold.
+cuda:0`. Run with `PYTHONPATH=/code:/opt/decision-fla`, preserving the Lux
+image's bundled FLA source path while adding only our exact mirrored adapter.
+`/model` and `/panels` are read-only mounts and contain no gold.
 The earlier independent 32-question gold-free prompt SHA-256 is
 `ce16f6107b8a8da6d0e5ef501cc8360da07a7232ecd7289d5a437d1d77767b67`.
 Its prior answer-map receipt is a screening reference from an older wrapper,
@@ -67,3 +69,7 @@ published release dependencies: PyTorch `2.12.0+git6bbd260`, HIP
 `7.2.53211`, Transformers `5.17.0`, Triton `3.7.1` and FLA `0.5.2`.
 The remaining qualified runtime and smoke requirements stay unchanged; if the
 native release profile or smoke differs, stop without formal inference.
+An immediate second attempt with the qualified image also stopped before any
+answers: the orchestration set `PYTHONPATH=/code`, masking the image's default
+`/opt/decision-fla` path. The final environment above includes both paths.
+Both failed attempts stay in the compute budget and private failure log.
