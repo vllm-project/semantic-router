@@ -84,4 +84,4 @@ conventions must not be mixed. CAL did not repair the Score collapse.
 calibration-data arm is needed to test whether the level-0 collapse is caused
 by the present Score mix. It must start from an eligible initializer with a
 matched control and new development protocol; this failed KL weight is not
-retuned from the observed DEV outcome.
+adjusted from the observed DEV outcome.

@@ -101,3 +101,19 @@ The point-estimate JevArena gain over Kai, its interval crossing zero, and
 Choice/Score regressions are recorded in the separate same-panel result and
 visible in the product card. Package parity establishes byte-for-byte
 reproducibility of that result, not an independent new ability gain.
+
+## Public first release
+
+After the exact-revision checks, the owner made
+[DEV2.0-0.6B](https://huggingface.co/llm-semantic-router/DEV2.0-0.6B)
+public and added it to the public
+[Decision 2.0 collection](https://huggingface.co/collections/llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00).
+An unauthenticated HF CLI check found the model `private=false`, the same
+revision `2b7781e8f640715c18c45217ae1b6f05d5a03347`, and the 29-file
+inventory above. An unauthenticated collection check found `private=false`
+and exactly this model as its first item. The README, owl banner and all
+three score figures downloaded without credentials at that revision. The
+public visibility change did not alter the model revision or its parity
+evidence. The card reports the +2.582 v3 point estimate versus Kai and the
+[-2.032, +7.846] paired interval; it does not call the post-key panel an
+untouched blind test or claim every skill improved.
