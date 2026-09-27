@@ -83,6 +83,40 @@ the scored native collector rejects that form. Exact-output parity applies to
 the canonical explicit-criteria roster; test that convenience form separately
 before documenting its behavior for callers.
 
+## Package-native JevArena predictions
+
+`publication.package_native_arena` executes the **copied package loader** and
+its copied question validator. It does not import a current development
+`training.model` module for inference. The CLI requires a local immutable base,
+the frozen package-manifest SHA-256, a model ID and an immutable model revision.
+Until a model repository commit exists, use the explicit
+`package-sha256:MANIFEST_DIGEST` development revision; a release run uses its
+actual 40-character model commit. The package supplies CAL, context limit and
+temperature by type; the CLI offers no overrides.
+
+```bash
+PYTHONPATH=src/training/decision2 python3 -m publication.package_native_arena \
+  --package NEW_ADAPTER_PACKAGE --source PINNED_BASE_SNAPSHOT \
+  --expected-package-sha256 MANIFEST_DIGEST \
+  --input GOLD_FREE_PANEL.jsonl --output NEW_PREDICTIONS.jsonl \
+  --model-id llm-semantic-router/dev-2.0-27b \
+  --model-revision package-sha256:MANIFEST_DIGEST --device cuda:0
+```
+
+The input contains only `id`, `state` and `questions`; answer fields are
+rejected before GPU loading. Invalid questions are passed through the copied
+native validator and counted as failures. Missing, malformed, tied Choice and
+over-budget answers remain explicit invalid rows. The output has the same
+row-level input hashes and gold-free JSONL/companion-manifest shape as the
+native scored collector, including `adapter_version` set to
+`decision2-peft-package-native-v1`, `package_manifest_sha256`, full model and
+base identities, CAL hash and per-question counts. Frozen input and package
+bytes are checked again after inference, before the atomic output appears.
+The scorer still checks panel identity, invalidity and answer correctness;
+the collector does not read gold or assign accuracy. This entrypoint does not
+by itself satisfy the authored panel, transfer, parity, runtime, rights or
+release gate.
+
 ## Remaining release integration
 
 `publication.bundle_arena` currently accepts only a self-contained Qwen
