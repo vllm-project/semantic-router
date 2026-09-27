@@ -453,6 +453,10 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "rights": {
             "added_rows": "internally authored synthetic v6, private TRAIN only",
             "parent_source_rights_preserved": True,
+            "parent_rights_ledger": source_rights,
+            "retained_train_source_counts": dict(
+                sorted(collections.Counter(row["source"] for row in merged).items())
+            ),
             "external_text_copied_into_added_rows": False,
         },
         "outputs": {
