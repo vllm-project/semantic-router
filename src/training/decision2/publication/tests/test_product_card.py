@@ -47,6 +47,10 @@ class ProductCardTest(unittest.TestCase):
         for kind in ("choice", "noul", "score"):
             self.assertIn(f'"type": "{kind}"', example)
         self.assertNotIn("internal gate", card.lower())
+        self.assertIn("jevarena-task-matrix.svg", card)
+        self.assertIn("jevarena-rank.svg", card)
+        self.assertIn("jevbench-public-rank.svg", card)
+        self.assertNotIn("pareto", card.lower())
 
     def test_exact_direct_source_is_required(self) -> None:
         with self.assertRaisesRegex(ValueError, "Direct weight source"):

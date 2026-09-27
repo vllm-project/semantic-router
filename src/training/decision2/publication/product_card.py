@@ -16,10 +16,8 @@ SHA = re.compile(r"[0-9a-f]{40}\Z")
 ASSET = re.compile(r"assets/[A-Za-z0-9][A-Za-z0-9_.-]*\.(?:png|svg)\Z")
 FIGURES = (
     "jevarena-rank.svg",
-    "jevarena-pareto.svg",
     "jevarena-task-matrix.svg",
     "jevbench-public-rank.svg",
-    "jevbench-public-pareto.svg",
 )
 
 
@@ -170,7 +168,7 @@ transfer tasks. Invalid and missing answers count as failures.
 
 {chart_lines}
 
-Ranks and Pareto labels apply only to the displayed same-panel roster. See
+Ranks apply only to the displayed same-panel roster. See
 [evaluation methods and hashes](evaluation/EVALUATION.md) and the
 [public manifest](evaluation/manifest.json) for panel versions and scope.
 
