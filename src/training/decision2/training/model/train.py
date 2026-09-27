@@ -26,6 +26,7 @@ import torch
 from .data import check_partition_isolation, file_sha256, load_partition
 from .decision_model import PROMPT_VERSION, DecisionModel, collate, encode
 from .infer import checkpoint_fingerprint
+from .inline_replay import attach_inline_teacher
 from .lora import LORA_FORMAT, adapter_parameters, attach_lora
 from .loss import LOSS_VERSION, per_example_loss
 from .plan import epoch_batches, planned_updates, replay_count, validate_resume_state
@@ -245,6 +246,18 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--replay-fraction", type=float, default=0.0)
     parser.add_argument("--replay-kl-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--inline-teacher",
+        help="Private source probabilities for existing TRAIN rows; adds no samples",
+    )
+    parser.add_argument(
+        "--inline-teacher-roster-sha256",
+        help="Precommitted SHA-256 of ordered inline {id,input_sha256} roster",
+    )
+    parser.add_argument("--inline-teacher-control-sha256")
+    parser.add_argument("--inline-teacher-parity-roster-sha256")
+    parser.add_argument("--inline-teacher-source-model-sha256")
+    parser.add_argument("--inline-teacher-source-receipt-sha256")
     parser.add_argument("--objective", choices=("ce", "ce_brier"), default="ce")
     parser.add_argument("--brier-weight", type=float, default=0.5)
     parser.add_argument(
@@ -374,6 +387,43 @@ def validate_args(args: argparse.Namespace) -> None:
         )
     if not math.isfinite(args.replay_kl_weight) or args.replay_kl_weight < 0:
         raise ValueError("replay_kl_weight must be finite and nonnegative")
+    if args.inline_teacher:
+        if (
+            args.replay
+            or args.replay_fraction
+            or not isinstance(args.inline_teacher_roster_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", args.inline_teacher_roster_sha256)
+            or not isinstance(args.inline_teacher_control_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", args.inline_teacher_control_sha256)
+            or not isinstance(args.inline_teacher_parity_roster_sha256, str)
+            or not re.fullmatch(
+                r"[0-9a-f]{64}", args.inline_teacher_parity_roster_sha256
+            )
+            or not isinstance(args.inline_teacher_source_model_sha256, str)
+            or not re.fullmatch(
+                r"[0-9a-f]{64}", args.inline_teacher_source_model_sha256
+            )
+            or not isinstance(args.inline_teacher_source_receipt_sha256, str)
+            or not re.fullmatch(
+                r"[0-9a-f]{64}", args.inline_teacher_source_receipt_sha256
+            )
+            or args.replay_kl_weight <= 0
+        ):
+            raise ValueError(
+                "Inline teacher needs a frozen roster and positive KL weight, "
+                "without appended replay rows"
+            )
+    elif any(
+        value is not None
+        for value in (
+            args.inline_teacher_roster_sha256,
+            args.inline_teacher_control_sha256,
+            args.inline_teacher_parity_roster_sha256,
+            args.inline_teacher_source_model_sha256,
+            args.inline_teacher_source_receipt_sha256,
+        )
+    ):
+        raise ValueError("Inline identity hashes need --inline-teacher")
     if not math.isfinite(args.brier_weight) or args.brier_weight < 0:
         raise ValueError("brier_weight must be finite and nonnegative")
     if (
@@ -523,11 +573,15 @@ def main() -> None:
     }
     if args.replay:
         data_sha["replay"] = file_sha256(args.replay)
+    if args.inline_teacher:
+        data_sha["inline_teacher"] = file_sha256(args.inline_teacher)
     code_files = (
         (*SOURCE_FILES, "lora.py") if args.train_mode == "lora" else SOURCE_FILES
     )
     if args.init_kind == "decision2-lora":
         code_files = (*code_files, "infer.py")
+    if args.inline_teacher:
+        code_files = (*code_files, "inline_replay.py")
     source_code_sha = {
         name: file_sha256(Path(__file__).with_name(name)) for name in code_files
     }
@@ -598,6 +652,19 @@ def main() -> None:
                 source_kind=args.init_kind,
                 source_fingerprint=source,
             )
+    inline_teacher_count = 0
+    if args.inline_teacher:
+        inline_teacher_count = attach_inline_teacher(
+            args.inline_teacher,
+            train_rows,
+            train_sha256=data_sha["train"],
+            source_files_sha256=source["files_sha256"],
+            expected_source_model_sha256=args.inline_teacher_source_model_sha256,
+            expected_materialization_receipt_sha256=args.inline_teacher_source_receipt_sha256,
+            expected_roster_sha256=args.inline_teacher_roster_sha256,
+            expected_control_baseline_sha256=args.inline_teacher_control_sha256,
+            expected_parity_roster_sha256=args.inline_teacher_parity_roster_sha256,
+        )
     model = model.float().to(device)
     if args.train_mode == "head":
         model.backbone.requires_grad_(False)
@@ -657,6 +724,18 @@ def main() -> None:
         "brier_weight": args.brier_weight,
         "replay_fraction": args.replay_fraction,
         "replay_kl_weight": args.replay_kl_weight,
+        **(
+            {
+                "inline_teacher_roster_sha256": args.inline_teacher_roster_sha256,
+                "inline_teacher_control_sha256": args.inline_teacher_control_sha256,
+                "inline_teacher_parity_roster_sha256": args.inline_teacher_parity_roster_sha256,
+                "inline_teacher_source_model_sha256": args.inline_teacher_source_model_sha256,
+                "inline_teacher_source_receipt_sha256": args.inline_teacher_source_receipt_sha256,
+                "inline_teacher_count": inline_teacher_count,
+            }
+            if args.inline_teacher
+            else {}
+        ),
         "train_mode": args.train_mode,
         "planned_updates": planned,
         "train_count": len(train_items),
