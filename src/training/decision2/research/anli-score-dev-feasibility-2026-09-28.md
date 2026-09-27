@@ -1,8 +1,9 @@
 # ANLI as an open three-level Score development diagnostic
 
-**Decision: HOLD pending a complete input-only overlap inventory.** This is a
-CPU-only source and prompt screen. It is not a model evaluation, data admission,
-blind release result, or JevArena score. GPU use: **0 GPU-hours**.
+**Decision: bounded lexical screen passed; ANLI is eligible only as an open
+development diagnostic.** This is a CPU-only source and prompt screen. It is
+not a model evaluation, training-data admission, blind release result, or
+JevArena score. GPU use: **0 GPU-hours**.
 
 The candidate is the three public development rounds of
 [`facebook/anli`](https://huggingface.co/datasets/facebook/anli/blob/main/README.md),
@@ -37,10 +38,14 @@ The three source parquet SHA-256 values, in R1/R2/R3 order, are
 and `61775ec09351f6011ce4dc9ea313f457bba6e11d7665d34d95c111665023a83e`.
 The tokenizer is pinned to official revision
 `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`; the audit receipt records
-individual tokenizer-file hashes. The private, aggregate-only receipt SHA-256
-is `38f176a5d7bf70c7835c9d6d8209e74cfedfc2985c937a58addf2c8e82701fee`.
-Neither source text nor row-level IDs, targets, explanations, predictions, or
-private infrastructure appear in this note or receipt.
+individual tokenizer-file hashes. The initial CPU receipt, before a complete
+protected inventory was available, had SHA-256
+`38f176a5d7bf70c7835c9d6d8209e74cfedfc2985c937a58addf2c8e82701fee`
+and correctly returned `HOLD_MISSING_PROTECTED_INVENTORY`. The later
+aggregate-only overlap receipt has SHA-256
+`05e9f0dd4c9754d8c44d404096b5e10794959d1f82b2fad47e0b9b7231bbe49f`.
+Neither receipt or this note contains source text, row-level IDs, targets,
+explanations, predictions, or private infrastructure.
 
 ## Why the source is informative, and what it cannot prove
 
@@ -63,26 +68,46 @@ priority, state update, arbitrary Score rubrics, multilingual transfer, or
 open-ended response quality. A development comparison must report each round,
 three-class accuracy/macro-F1, class confusion and calibration separately.
 
-## Missing admission check
+## Eight-role input-only overlap screen
 
-The prior protected-input candidate is not a validated eight-role projected
-inventory. In particular, the rights-clean TRAIN, SELECT and CAL input roles
-must be present alongside typed DEV/FINAL, the human-transfer pilot/final
-prompts and the public supplement. Existing candidate prompts also require
-strict input-only projection so answer-like nested fields are not interpreted
-as evaluation keys. This audit therefore **did not claim an exact or near
-overlap result** and reports `HOLD_MISSING_PROTECTED_INVENTORY`. No protected
-answer key was opened. The reusable checker is fail-closed on missing roles
-and emits only aggregate row-pair counts if a complete, hash-pinned projected
-inventory is later supplied.
+A later, versioned **strict input-only** protected inventory was supplied and
+verified at manifest SHA-256
+`26bbaf82eb1c30c0f2093c70d27718fab6731ea8c80e9a451547b03bd30897e1`.
+The loader checked the manifest schema, every relative role-file hash, exact
+role row count and projected input-only row schema before comparison. The
+screen covered eight required core roles and 20,263 role rows in aggregate;
+some roles may represent related material, so this is not an independent
+question count.
 
-The next bounded CPU action is to finish and attest that eight-role projection,
-then run exact and bounded near input-overlap screening and a small blind
-rubric-alignment review. If clean, ANLI dev can become an explicitly open
-development diagnostic with source attribution; it must never be folded into
-the sealed JevArena release main score or labeled an independent blind test.
+| Reference role | Projected input rows | Exact raw / normalized / bounded near / same ID matches |
+| --- | ---: | ---: |
+| Rights-clean TRAIN | 7,455 | 0 / 0 / 0 / 0 |
+| Rights-clean SELECT | 700 | 0 / 0 / 0 / 0 |
+| Rights-clean CAL | 700 | 0 / 0 / 0 / 0 |
+| Typed DEV | 1,600 | 0 / 0 / 0 / 0 |
+| Typed FINAL, input only | 1,600 | 0 / 0 / 0 / 0 |
+| Human-transfer pilot, input only | 1,430 | 0 / 0 / 0 / 0 |
+| Human-transfer final, input only | 6,547 | 0 / 0 / 0 / 0 |
+| Public supplemental prompts | 231 | 0 / 0 / 0 / 0 |
+
+The comparison used only ANLI premise/hypothesis source text and all
+projected reference input fields; publisher labels and explanations, and
+protected answer keys, were not inputs to the overlap algorithm. Exact
+matching considers input spans of at least 20 normalized characters. The
+bounded near method uses 64-bit SimHash candidates and confirms similar
+strings with Hamming distance at most 8, relative length difference at most
+8%, and SequenceMatcher ratio at least 0.94. It is not an exhaustive semantic
+or paraphrase detector. Twenty-seven unreviewed optional inventory roles were
+excluded. A zero among the eight core roles cannot certify source-corpus
+independence, especially given the HotpotQA and other publisher context
+sources described above.
+
+The next bounded action is a blinded rubric-alignment review, particularly for
+`neutral`, before relying on the mapped Score diagnostic. Any subsequent model
+scores remain **open development** results. ANLI must never be folded into the
+sealed JevArena main score or labeled an independent untouched release test.
 
 Reproduction: `training/data/audit_anli_score_diagnostic.py` and its synthetic
 contract tests. The script checks pinned source and tokenizer bytes, native
-prompt lengths, grouped source statistics and complete protected-role presence;
-it runs no model and requires no GPU.
+prompt lengths, grouped source statistics and strict protected-role presence,
+hashes and input schema; it runs no model and requires no GPU.
