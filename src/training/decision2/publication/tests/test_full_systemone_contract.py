@@ -9,6 +9,7 @@ import unittest
 from contextlib import nullcontext
 from unittest.mock import patch
 
+from publication.adapter_runtime import Decision2 as AdapterDecision2
 from publication.full_bundle import MODEL_SOURCES
 from publication.full_runtime_api import Decision2
 from training.model import infer
@@ -153,6 +154,68 @@ class FullSystemOneContractTest(unittest.TestCase):
                 runtime.system_one(
                     state={1: "non-JSON key"}, questions={"q": {"type": "noul"}}
                 )
+
+    def test_adapter_and_full_packages_return_the_same_system_one_shape(self):
+        model_sources = types.ModuleType("publication.decision_model")
+        model_sources.encode = lambda row, _tokenizer, _limit: {
+            "id": row["id"],
+            "ids": [1, 2],
+            "keys": [option["key"] for option in row["options"]],
+        }
+        model_sources.collate = lambda encoded, _pad: {"items": encoded}
+
+        def predict(*, items):
+            values = {
+                "choice": [0.0, 0.0],
+                "noul": [-1.0, 1.0],
+                "score": [0.0, 1.0, 2.0],
+            }
+            return [_Vector(values[row["id"].rsplit("/", 1)[-1]]) for row in items]
+
+        manifest = {
+            "model_id": "test/decision-model",
+            "max_length": 100,
+            "temperature_by_type": {"choice": 1.0, "noul": 1.0, "score": 1.0},
+        }
+        runtime_args = {
+            "model": predict,
+            "tokenizer": types.SimpleNamespace(pad_token_id=0, eos_token_id=None),
+            "device": types.SimpleNamespace(type="cpu"),
+            "manifest": manifest,
+            "torch": types.SimpleNamespace(
+                is_tensor=lambda _: False, inference_mode=nullcontext
+            ),
+        }
+        questions = {
+            "choice": {
+                "type": "choice",
+                "instructions": "Where to route?",
+                "criteria": {"first": None, "second": "Other"},
+            },
+            "noul": {"type": "noul", "instructions": "Is this urgent?"},
+            "score": {
+                "type": "score",
+                "instructions": "How urgent?",
+                "criteria": ["Low", "Medium", "High"],
+            },
+        }
+        with patch.dict(
+            sys.modules,
+            {"publication.decision_model": model_sources, "publication.infer": infer},
+        ):
+            full = Decision2(**runtime_args).system_one(
+                state=[{"status": "failed"}], questions=questions
+            )
+            adapter = AdapterDecision2(**runtime_args).system_one(
+                state=[{"status": "failed"}], questions=questions
+            )
+            with self.assertRaisesRegex(ValueError, "state must be"):
+                AdapterDecision2(**runtime_args).system_one(
+                    state=42, questions=questions
+                )
+        self.assertEqual(adapter, full)
+        self.assertIn("confidence", adapter["answers"]["choice"])
+        self.assertIn("legend", adapter["answers"]["score"])
 
 
 if __name__ == "__main__":

@@ -382,10 +382,16 @@ class Decision2:
         self, *, state: Any, questions: dict[str, dict[str, Any]]
     ) -> dict[str, Any]:
         from .decision_model import collate, encode
-        from .infer import normalized_answer, question_to_row
+        from .infer import _api_json_payload, product_answer, question_to_row
 
         if not isinstance(questions, dict) or not questions:
             raise ValueError("questions must be a nonempty mapping")
+        if not _api_json_payload(state):
+            raise ValueError("state must be text, an object, or an array")
+        try:
+            json.dumps(state, ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("state must contain JSON data") from exc
         answers: dict[str, Any] = {}
         jobs = []
         tokens = 0
@@ -438,11 +444,12 @@ class Decision2:
                 raise RuntimeError("Model returned a different number of answers")
             for (qid, row, encoded), values in zip(jobs, logits):
                 try:
-                    answers[qid] = normalized_answer(
+                    answers[qid] = product_answer(
                         row["task_type"],
                         encoded["keys"],
                         values[: len(encoded["keys"])].float().cpu().tolist(),
                         self.manifest["temperature_by_type"][row["task_type"]],
+                        [option["description"] for option in row["options"]],
                     )
                 except ValueError:
                     answers[qid] = {

@@ -13,6 +13,8 @@ The primary source is the project's [Decision 1.0 paper](https://vllm-sr.ai/deci
 
 The current 0.6B candidate differs substantially from Kai, but its shared causal readout follows the existing Decision 1.0 decoder branch's basic candidate-scoring design. It is not evidence by itself of a new superior architecture. The paper also says its families were released systems with different recipes, not a controlled comparison of attention direction or head sharing.
 
+At 0.8B, 2B, 4B and 9B, the completed eligible 2.0 experiments either continue our corresponding 1.0 decision weights or adapt official Qwen3.5 weights with the same basic causal candidate-head family. They test initialization, data and optimization more than a new topology. The 27B work adds an official Qwen3.8 text backbone and a new size tier, but still uses a candidate head; it has no qualified formal result. Across the family, architectural innovation remains a research goal, not a demonstrated release property.
+
 ## Same-panel evidence and limits
 
 On post-key JevArena v3, the private 0.6B package scores **38.520** versus Kai's **35.938**. Its paired gain interval is **[-2.032, +7.846]**, so the composite gain is not statistically established. Choice falls from Kai's **277/800** to **109/800**, and Score from **98/400** to **80/400**; Noul rises from **404/800** to **458/800**. The separate 231-item public JevBench result is **143** versus **114**. Neither result establishes a size frontier, and the type regressions are material for System One use.
