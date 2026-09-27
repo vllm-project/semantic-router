@@ -374,7 +374,7 @@ def table(
     lines = [
         "# Decision 2.0: JevArena v3 first-release panel",
         "",
-        "JevArena v3 scores 8,147 sealed-core items: 1,600 typed FINAL decisions and 6,547 human-labeled items across 15 transfer tasks. Its headline is the geometric mean of typed and transfer fractions. Missing and invalid answers count as failures. The JevBench public 231-item rerun is separate and does not enter the JevArena score.",
+        "JevArena v3 scores 8,147 sealed-core items: 1,600 typed FINAL decisions and 6,547 human-labeled items across 15 transfer tasks. Typed FINAL is the macro average across four semantic families; human transfer is the median of 15 task-level macro-F1 scores. The headline is 100 times the geometric mean of those two fractions. Missing and invalid answers count as failures. The JevBench public 231-item rerun is separate and does not enter the JevArena score.",
         "",
         "| JevArena rank | Model | Actual parameters | JevArena v3 | Typed FINAL | Human transfer | JevBench public rank / raw | Easy | Standard | Hard |",
         "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
