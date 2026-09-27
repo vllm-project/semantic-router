@@ -1,12 +1,14 @@
 # Gemma 4 ~26B: prospective full Decision development arm
 
-**Status: CPU lock and audit PASS; full GPU training has not started and needs
-separate review.** This implements the staged arm proposed in the
+**Status at freeze: CPU lock and audit PASS; GPU execution was pending separate
+review.** The subsequent one-cell execution and HOLD decision are recorded in
+the [signed result](gemma4-full-development-arm-result-2026-09-28.md).
+This implements the staged arm proposed in the
 [Gemma/Qwen development plan](gemma4-qwen27-development-arm-prereg-2026-09-27.md).
 The preceding single-GPU [three-type long-input gate](gemma4-long-train-gate-prereg-2026-09-27.md)
 passed at 4,090/4,076/4,044 tokens with exact package reload. Those three
-TRAIN updates measured feasibility, not decision quality. This document does
-not authorize the full run or a formal evaluation.
+TRAIN updates measured feasibility, not decision quality. This prospective
+document did not authorize the full run or a formal evaluation.
 
 ## Frozen source, task path and cohort
 
@@ -132,4 +134,4 @@ restricted rows.
 The model, source and data hashes must match before a future GPU run. The
 lock's exact code digests are retained privately; changing even a comment
 invalidates it and requires a new signed, reviewed lock. No full development
-optimizer update has been executed under this lock.
+optimizer update had been executed under this lock when it was frozen.
