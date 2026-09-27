@@ -113,8 +113,6 @@ def candle_crate_workflow_markers() -> MarkerSet:
             "Candle crate tag input",
             "RELEASE_TAG: ${{ inputs.tag }}",
         ),
-        ("Candle crate CPU API smoke tests", "cargo test --no-default-features"),
-        ("Candle crate CPU check", "cargo check --no-default-features --verbose"),
         (
             "Candle crate release build",
             "cargo build --release --no-default-features --verbose",

@@ -119,6 +119,7 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-error-matrix",
 	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
 	"protocol-codec-anthropic-backend-midstream-error-matrix",
+	"protocol-codec-anthropic-backend-agent-client-replay",
 }
 
 // ReadinessContract covers 503 readiness responses when models are not loaded.

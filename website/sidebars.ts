@@ -500,7 +500,21 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
-        'benchmarking/sr-bench',
+        {
+          type: 'category',
+          label: 'sr-bench 1.0',
+          link: {
+            type: 'doc',
+            id: 'benchmarking/sr-bench/index',
+          },
+          items: [
+            'benchmarking/sr-bench/shared-worker',
+            'benchmarking/sr-bench/tasks-and-targets',
+            'benchmarking/sr-bench/plan-and-run',
+            'benchmarking/sr-bench/iterate',
+            'benchmarking/sr-bench/results',
+          ],
+        },
       ],
     },
     {

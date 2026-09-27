@@ -105,7 +105,9 @@ jobs:
 
       - name: Run Looper benchmarks
         id: looper
-        if: always() # report Looper status even if the component step failed
+        # Keep the second suite after a failure, but release the runner when a
+        # newer PR run cancels this one.
+        if: ${{ always() && !cancelled() }}
         run: |
           set -o pipefail
           export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release

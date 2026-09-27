@@ -41,11 +41,10 @@ jobs:
             --output-dir .agent-harness/recipe-conformance static-all
 
       - id: plan
-        name: Materialize live CPU shards
+        name: Materialize live CPU recipe matrix
         run: |
           python tools/calibration/recipe/recipe_conformance.py \
             plan-all \
-            --shards 3 \
             --github-output "$GITHUB_OUTPUT"
 
       - name: Publish static coverage summary
@@ -70,7 +69,6 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix: ${{ fromJSON(needs.inventory.outputs.matrix) }}
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
