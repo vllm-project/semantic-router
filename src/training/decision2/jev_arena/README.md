@@ -141,3 +141,37 @@ PYTHONPATH=/work/source python3 -m jev_arena.authored_v9_pilot \
   --private-salt /work/private/authored-salt.bin \
   --output-dir /work/private/authored-v9-dev12
 ```
+
+## Authored release v2 blind human review
+
+After a mechanically valid v2 packet is sealed, assign its independently
+salted `original-review-a`, `original-review-b` and `paired-review` files to
+three different human reviewers. Keep all files in private storage. Reviewers
+see only their own gold-free packet and editable form, never the oracle,
+parent joins, proofs, model output or another review. The form requires a
+native typed answer, evidence citations from both sources, paragraph-level
+notes, and explicit ambiguity, necessity, realism, shortcut and rights
+judgments. A negative quality judgment is recorded, not converted into a
+passing review. For the long case, the reviewer must inspect every paragraph.
+
+`authored_release_scale_v2_review.py` creates a private form and seals each
+completed form with the packet hash, reviewer identity digest and UTC time.
+It validates native answer types and complete row coverage without opening a
+key. A separate adjudicator must verify that the three reviewers are human,
+independent of the author and one another, and that their reviews were sealed
+before any key was opened. No automatic seal constitutes release approval.
+
+```bash
+PYTHONPATH=/work/source python3 -m jev_arena.authored_release_scale_v2_review template \
+  --packet /work/private/r4-packets/original-review-a.private.jsonl \
+  --packet-receipt /work/private/r4-packets/receipt.private.json \
+  --role original-review-a --output /work/private/review-a-form.private.jsonl
+
+PYTHONPATH=/work/source python3 -m jev_arena.authored_release_scale_v2_review seal \
+  --packet /work/private/r4-packets/original-review-a.private.jsonl \
+  --packet-receipt /work/private/r4-packets/receipt.private.json \
+  --role original-review-a \
+  --answers /work/private/review-a-form.private.jsonl \
+  --reviewer-id-file /work/private/reviewer-a-id.private.txt \
+  --output /work/private/review-a-sealed
+```
