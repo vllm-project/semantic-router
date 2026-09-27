@@ -90,4 +90,36 @@ device or automatic retry is allowed. Preserve the first failed receipt as a
 separate negative event. A corrected launch still cannot justify an optimizer
 run by itself.
 
-**Corrected-launch outcome:** pending.
+## Corrected-launch outcome
+
+**NARROW PASS, 9B Base full arm remains HOLD.** The corrected single-container
+probe ran 54 seconds (0.015 one-GPU-hour), exited 0 and was not OOM-killed.
+It completed all **34/34** real TRAIN backward calls: 16 in the frozen
+update-107 order, the 75-token short and 4,089-token longest controls, and
+the same 16 in order again. The private phase ledger contains 34 starts and
+completions for both forward and backward and four complete rounds (106
+events total). All losses and gradients were finite; trainable tensor bytes
+were identical before and after. Peak allocated device memory was
+116,537,272,832 bytes (approximately 108.5 GiB), comparable to the failed
+optimizer arm's last observed high-water mark. The host kernel tail did not
+change across this short run. The container and reservation were removed and
+the accelerator returned idle.
+
+Private receipt SHA-256:
+`dc0a6617cbc16596255e29fb5e32227b94e301aa549b060d3d28ab3813c19524`;
+private phase-ledger SHA-256:
+`0fa7d3f54dc2a2c88f4ec091b1f37a61aa57636b52656ab49bd54f407f8b7dd0`;
+private console SHA-256:
+`9f14a8e216b7d4170b199e85fcd428618f9bf04524452e4f5918567f119eb191`.
+No evaluation predictions or weights were created.
+
+This rules out a deterministic failure of those encoded TRAIN inputs under
+**this** short, no-update step-64-state cell. It does not recover the actual
+step-106 weights/RNG, exercise optimizer steps 65–106, prove that the original
+faulting operation is safe, or establish a viable 458-update training path.
+The original fault could depend on accumulated optimizer/runtime state or a
+different transient condition; the operator remains unidentified. **Do not
+resume or repeat the Base optimizer arm in the unchanged image.** The next
+discriminating experiment is a separately pinned operator/runtime mitigation
+stress cell with native zero-step output parity, followed at most by the one
+fresh full arm allowed by the parent fault audit if that mitigation passes.
