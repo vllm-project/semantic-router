@@ -9,8 +9,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.plan_final_eval import BASELINES, sha_file
 from jev_arena.jevbench_public import FILES, SOURCE_REVISION, SOURCE_URL
+from scripts.plan_final_eval import BASELINES, sha_file
 from scripts.plan_first_release_v3 import (
     GATE_DOCUMENT,
     PLAN_VERSION,
@@ -217,6 +217,32 @@ class FirstReleasePlanTests(unittest.TestCase):
                 model_root=self.model_root,
                 external_root=self.external_root,
             )
+
+    def test_same_size_requires_measured_parameter_ratio(self) -> None:
+        roster = json.loads(self.roster_path.read_text(encoding="utf-8"))
+        roster["candidate_size_b"]["d2-4b"] = 6.0
+        write_json(self.roster_path, roster)
+        with self.assertRaisesRegex(ValueError, "Comparator size relation is false"):
+            checked_roster(
+                self.roster_path,
+                candidates=[self.candidate],
+                source_root=SOURCE_ROOT,
+                model_root=self.model_root,
+                external_root=self.external_root,
+            )
+        roster["pairs"][0]["size_relation"] = "nearest"
+        roster["pairs"][0][
+            "rationale"
+        ] = "Actual loaded parameters differ by more than the frozen ratio."
+        write_json(self.roster_path, roster)
+        _models, pairs, _attestations, _sizes, _roster_sha = checked_roster(
+            self.roster_path,
+            candidates=[self.candidate],
+            source_root=SOURCE_ROOT,
+            model_root=self.model_root,
+            external_root=self.external_root,
+        )
+        self.assertEqual(pairs[0]["size_relation"], "nearest")
 
     def test_prediction_audit_refuses_changed_source_before_any_label_access(
         self,

@@ -17,6 +17,18 @@ import shlex
 from pathlib import Path
 from typing import Any
 
+from jev_arena.jevbench_public import (
+    BUILD_VERSION as PUBLIC_BUILD_VERSION,
+)
+from jev_arena.jevbench_public import (
+    FILES as PUBLIC_FILES,
+)
+from jev_arena.jevbench_public import (
+    SOURCE_REVISION as PUBLIC_SOURCE_REVISION,
+)
+from jev_arena.jevbench_public import (
+    SOURCE_URL as PUBLIC_SOURCE_URL,
+)
 from scripts.plan_final_eval import (
     BASELINES,
     CSS_EVALUATION_ITEMS,
@@ -28,12 +40,6 @@ from scripts.plan_final_eval import (
     sha_file,
     shell,
     source_command,
-)
-from jev_arena.jevbench_public import (
-    BUILD_VERSION as PUBLIC_BUILD_VERSION,
-    FILES as PUBLIC_FILES,
-    SOURCE_REVISION as PUBLIC_SOURCE_REVISION,
-    SOURCE_URL as PUBLIC_SOURCE_URL,
 )
 
 PLAN_VERSION = "decision2-first-release-v3-plan/1"
@@ -256,10 +262,22 @@ def checked_roster(
     selected = [catalog[key] for key in keys]
     if not any(model.group == "open" for model in selected):
         raise ValueError("First-release roster needs an open-model control")
+    sizes = roster.get("candidate_size_b")
+    candidate_by_key = {entry["key"]: entry for entry in candidates}
+    if not isinstance(sizes, dict) or set(sizes) != set(candidate_by_key):
+        raise ValueError(
+            "Actual loaded parameter count is required for every candidate"
+        )
+    if any(
+        type(size) not in (int, float) or not 0 < size < 1000 for size in sizes.values()
+    ):
+        raise ValueError("Candidate loaded parameter counts must be positive")
+    attestations = _baseline_attestations(
+        roster, selected, source_root, model_root, external_root
+    )
     pairs = roster.get("pairs")
     if not isinstance(pairs, list) or len(pairs) != len(candidates):
         raise ValueError("Every candidate needs one predeclared 1.0 comparator")
-    candidate_by_key = {entry["key"]: entry for entry in candidates}
     seen = set()
     for pair in pairs:
         if not isinstance(pair, dict) or set(pair) != {
@@ -275,7 +293,14 @@ def checked_roster(
         if baseline_key not in keys or catalog[baseline_key].group != "decision1":
             raise ValueError("Comparator must be a selected Decision 1.0 model")
         size = candidate_by_key[candidate_key]["size"]
-        same = baseline_key in SAME_SIZE_COMPARATOR.get(size, set())
+        candidate_size = sizes[candidate_key]
+        comparator_size = attestations[baseline_key]["size_b"]
+        size_ratio = max(candidate_size, comparator_size) / min(
+            candidate_size, comparator_size
+        )
+        same = (
+            baseline_key in SAME_SIZE_COMPARATOR.get(size, set()) and size_ratio <= 1.25
+        )
         if (same and pair["size_relation"] != "same") or (
             not same and pair["size_relation"] != "nearest"
         ):
@@ -286,18 +311,6 @@ def checked_roster(
         ):
             raise ValueError("Nearest-size comparison requires a disclosed rationale")
         seen.add(candidate_key)
-    sizes = roster.get("candidate_size_b")
-    if not isinstance(sizes, dict) or set(sizes) != set(candidate_by_key):
-        raise ValueError(
-            "Actual loaded parameter count is required for every candidate"
-        )
-    if any(
-        type(size) not in (int, float) or not 0 < size < 1000 for size in sizes.values()
-    ):
-        raise ValueError("Candidate loaded parameter counts must be positive")
-    attestations = _baseline_attestations(
-        roster, selected, source_root, model_root, external_root
-    )
     gate_hash = _sha(roster.get("gate_document_sha256"), "gate_document_sha256")
     if sha_file(source_root / GATE_DOCUMENT) != gate_hash:
         raise ValueError(
@@ -687,13 +700,14 @@ def build_plan(
             "jevbench_public": "jevarena-jevbench-public-score/1",
         },
         "prekey_freeze_requires": [
+            "Lock the candidate roster, comparator pairs, policy and code before generating predictions.",
             "Hash and verify all 8147 gold-free prediction rows before reading either held-out answer file.",
-            "Bind typed/CSS gold digests, all prediction digests, package and adapter digests, roster, exact source hashes, numeric gate document and formula in jevarena-v3-freeze/1.",
-            "Write the v3 freeze receipt and its SHA into the rank manifest before running any scoring command; record times and hashes outside the evaluation directory.",
+            "After prediction seals and audit, bind typed/CSS gold digests, plan/audit receipts, all prediction digests, package and adapter identities, exact source hashes, numeric policy and formula in jevarena-v3-freeze/2.",
+            "Seal the v3 pre-key receipt and its SHA before first label access; record candidate-lock, prediction-seal, receipt-seal and label-access times in an independently reviewed event log.",
             "JevBench public231 is separately scored and required for release; it never changes T, H or the v3 rank.",
         ],
         "release_integration_requires": [
-            "The pre-key v3 freeze and publication gate must verify comparison_pairs_sha256 and each candidate-to-1.0 mapping; the arena scorer does not yet enforce this relationship.",
+            "The pre-key v3 freeze and publication gate must verify comparison_pairs_sha256 and each candidate-to-1.0 mapping.",
             "A matching plan and gold-free audit are necessary evidence, never an automatic publication pass.",
         ],
     }

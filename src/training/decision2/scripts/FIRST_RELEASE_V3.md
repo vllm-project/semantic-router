@@ -52,7 +52,10 @@ and exact numeric values before planning. Every selected 2.0 size needs one
 predeclared 1.0 comparator; an actual-size mismatch must say `nearest` and
 include a substantial rationale. At least one separate open-model control is
 required. The `candidate_size_b` and baseline `size_b` values must be measured
-loaded parameter counts, not rounded model names.
+loaded parameter counts, not rounded model names. `same` additionally requires
+the preregistered family match and a measured maximum/minimum parameter ratio
+at most 1.25; larger ratios require `nearest` and cannot support an equal-size
+win claim.
 
 Each baseline attestation points to a private JSON receipt with the same
 `model_id`, `revision`, `native_model_sha256`, `adapter_sha256`, and
@@ -116,14 +119,17 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SOURCE_ROOT" python3 -m scripts.plan_firs
 
 The audit revalidates candidate package/CAL/parity, baseline package files,
 source code, gate document, full gold-free prompt IDs and input hashes,
-8,147 sealed-core plus 231 public predictions per model, native prediction manifests and the saved raw
-prediction SHA list. It never reads `typed-final.gold.jsonl` or the CSS gold
+8,147 sealed-core plus 231 public predictions per model, native prediction
+manifests and the saved raw prediction SHA list. It never reads
+`typed-final.gold.jsonl` or the CSS gold
 file. Save the audit and SHA in the private ledger.
 
 Only after that audit, a separate pre-key freeze receipt must bind the typed
 and CSS **gold digests**, every model's three prediction digests, native model,
 adapter and calibration identities, the candidate lock, numeric policy and
-source hashes, under `jevarena-v3-freeze/1`. Write the receipt with exclusive
+source hashes, under `jevarena-v3-freeze/2`. The auditable event order is
+candidate and policy lock, complete prediction seals, gold-free audit,
+pre-key receipt seal, then first label access. Write the receipt with exclusive
 creation and record its time and SHA. Replace the placeholder in the planned
 `arena_roster` template with that actual receipt SHA; write both the arena and
 public roster files. The v3 scorer independently verifies the freeze receipt.
