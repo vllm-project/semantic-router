@@ -10,6 +10,7 @@ import pytest
 
 from jev_arena.authored_release_scale_v2 import _distribution, _domain_witness_issues
 from jev_arena.authored_release_scale_v2_audit import _required_gaps
+from jev_arena.authored_release_scale_v2_packets import _blind_rows
 from jev_arena.authored_release_scale_v2_repair import _write_preserving_order
 from jev_arena.authored_release_scale_v2_witness_audit import audit
 
@@ -107,3 +108,20 @@ def test_repair_preserves_prompt_field_order(tmp_path: Path) -> None:
     path = tmp_path / "ordered.private.json"
     _write_preserving_order(path, {"source": {"z": 1, "a": 2}})
     assert path.read_text().index('"z"') < path.read_text().index('"a"')
+
+
+def test_blind_packet_removes_source_ids_and_uses_independent_salts() -> None:
+    native = [
+        {
+            "id": "private-case",
+            "state": "Two records",
+            "questions": {"decision": {"type": "noul"}},
+        }
+    ]
+    first, first_join = _blind_rows(native, b"a" * 32)
+    second, second_join = _blind_rows(native, b"b" * 32)
+    assert first[0]["review_id"] != second[0]["review_id"]
+    assert first_join[first[0]["review_id"]] == "private-case"
+    assert second_join[second[0]["review_id"]] == "private-case"
+    assert "private-case" not in json.dumps(first)
+    assert "answer" not in json.dumps(first)
