@@ -136,14 +136,27 @@ def attest(model_dir: Path, run: Path, model_id: str, revision: str) -> dict[str
     model_dir, run = model_dir.resolve(strict=True), run.resolve(strict=True)
     # The historical native serve.py documents a local-only HTTP default.
     # Preserve its frozen bytes while screening every non-loopback address.
+    shell_files = {
+        path.relative_to(model_dir).as_posix() for path in model_dir.rglob("*.sh")
+    }
+    if shell_files != {"serve_vllm.sh"}:
+        raise ValueError("Frozen SemIf package needs only its native serve script")
     original_ip_pattern = bundle.IP_ADDRESS
+    original_model_suffixes, original_text_suffixes = (
+        bundle.MODEL_SUFFIXES,
+        bundle.TEXT_SUFFIXES,
+    )
     bundle.IP_ADDRESS = re.compile(
         r"\b(?!127\.0\.0\.1\b)(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b"
     )
+    bundle.MODEL_SUFFIXES = original_model_suffixes | {".sh"}
+    bundle.TEXT_SUFFIXES = original_text_suffixes | {".sh"}
     try:
         files = bundle._inventory(model_dir)
     finally:
         bundle.IP_ADDRESS = original_ip_pattern
+        bundle.MODEL_SUFFIXES = original_model_suffixes
+        bundle.TEXT_SUFFIXES = original_text_suffixes
     bundle._profile(model_dir, "qwen3.5-semif", files)
     native_sha = files["SHA256SUMS"]
     bundle._native_identity(
@@ -195,7 +208,7 @@ def attest(model_dir: Path, run: Path, model_id: str, revision: str) -> dict[str
         "historical_model_id": historical_manifest["model_id"],
         "original_parity_receipt_sha256": _sha(old_path),
         "verification_source_sha256": _sha(Path(__file__)),
-        "public_text_exception": "Only literal 127.0.0.1 loopback addresses are allowed in the frozen native runtime; other IPs, private paths and credential patterns remain blocked.",
+        "public_text_exception": "Only literal 127.0.0.1 loopback addresses and the exact native serve_vllm.sh script are allowed in the frozen runtime; all text is screened and other IPs, private paths and credentials remain blocked.",
         "derivation": "Gold-free exact native answer/probability equality: selected source, merged package, and independent fresh package process; original reports and checkpoint bytes unchanged.",
     }
 
