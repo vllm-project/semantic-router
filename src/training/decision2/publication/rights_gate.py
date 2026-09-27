@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -12,8 +13,14 @@ CLEAN_SCOPE = "trained weights/modelcard only; no raw source rows, SELECT/CAL ro
 NONCOMMERCIAL_SCHEMA = "decision2-noncommercial-research-attestation/1"
 NONCOMMERCIAL_SCOPE = "noncommercial research model weights/modelcard only; no raw rows"
 RESEARCH_DATA_SCHEMAS = frozenset(
-    {"decision2-balanced-human-5824/1", "decision2-nox4b-structured-replay/1"}
+    {
+        "decision2-balanced-human-5824/1",
+        "decision2-nox4b-structured-replay/1",
+        "decision2-human-structured-replay/1",
+    }
 )
+STRUCTURED_REPLAY_SCHEMA = "decision2-human-structured-replay/1"
+SHA = re.compile(r"[0-9a-f]{64}\Z")
 OLD_HOLDOUT_SHA = {
     "select": "d8b1197830fe96a6554b49ee72c12f4755da00d0a819fb514725dc957b687e38",
     "cal": "bf5bbf29693928a2559ce0aff10e9d6b5b1541b50698634fcdb7725902412dcf",
@@ -52,6 +59,38 @@ def _source_rights(value: Any) -> None:
             or entry["rows"] < 1
         ):
             raise ValueError("Clean data manifest has incomplete source rights")
+
+
+def _structured_weight_review(
+    statement: dict[str, Any], source_counts: dict[str, int]
+) -> dict[str, Any]:
+    """Require an external, exact-source decision; no builder can infer rights."""
+    review = statement.get("public_weight_review")
+    if not isinstance(review, dict):
+        raise ValueError("Structured replay needs a reviewed public-weight decision")
+    decisions = review.get("source_decisions")
+    if (
+        review.get("decision") != "approved_noncommercial_public_weights"
+        or not isinstance(review.get("reviewer_role"), str)
+        or not review["reviewer_role"].strip()
+        or not isinstance(review.get("review_record_sha256"), str)
+        or not SHA.fullmatch(review["review_record_sha256"])
+        or not isinstance(decisions, dict)
+        or set(decisions) != set(source_counts)
+    ):
+        raise ValueError("Structured replay public-weight review is incomplete")
+    for source, decision in decisions.items():
+        if (
+            not isinstance(decision, dict)
+            or decision.get("status") != "approved"
+            or decision.get("rows") != source_counts[source]
+            or not isinstance(decision.get("terms"), str)
+            or not decision["terms"].strip()
+            or not isinstance(decision.get("evidence"), str)
+            or not decision["evidence"].strip()
+        ):
+            raise ValueError("Structured replay source decision is incomplete")
+    return review
 
 
 def verify_rights(
@@ -147,7 +186,16 @@ def verify_rights(
         raise ValueError(
             "Pilot attestation is only defined for the frozen CSS SELECT/CAL"
         )
+    if schema == STRUCTURED_REPLAY_SCHEMA and any(
+        partition_rows[role] != sum(OLD_HOLDOUT_COUNTS[role].values())
+        for role in ("select", "cal")
+    ):
+        raise ValueError(
+            "Structured replay holdout row counts differ from frozen splits"
+        )
     statement = json.loads(attestation_path.read_text(encoding="utf-8"))
+    if not isinstance(statement, dict):
+        raise ValueError("Rights attestation must be a JSON object")
     groups = statement.get("source_groups")
     holdout_groups = statement.get("holdout_groups")
     conditions = statement.get("rights_conditions")
@@ -197,6 +245,11 @@ def verify_rights(
         raise ValueError(
             "Noncommercial rights attestation differs from exact run/data/source receipts"
         )
+    review = (
+        _structured_weight_review(statement, source_counts)
+        if schema == STRUCTURED_REPLAY_SCHEMA
+        else None
+    )
     return {
         "mode": "noncommercial_research",
         "publication_scope": NONCOMMERCIAL_SCOPE,
@@ -207,4 +260,7 @@ def verify_rights(
         "source_groups": groups,
         "holdout_groups": holdout_groups,
         "limitations": statement.get("limitations", []),
+        "public_weight_review_sha256": (
+            review["review_record_sha256"] if review is not None else None
+        ),
     }

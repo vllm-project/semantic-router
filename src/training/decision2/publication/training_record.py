@@ -25,6 +25,7 @@ HF_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 SHA = re.compile(r"[a-f0-9]{64}\Z")
 REVISION = re.compile(r"[a-f0-9]{40}\Z")
 CHECKPOINT = re.compile(r"checkpoint-[0-9]{7}\Z")
+STRUCTURED_REPLAY_SCHEMA = "decision2-human-structured-replay/1"
 
 
 def _read(path: Path) -> dict[str, Any]:
@@ -108,6 +109,42 @@ def _data_counts(value: Any, label: str) -> dict[str, int]:
     ):
         raise ValueError(f"Training data manifest lacks valid {label} counts")
     return value
+
+
+def _training_counts(data: dict[str, Any]) -> dict[str, Any]:
+    """Select the full TRAIN inventory, never the added-only replay inventory."""
+    structured = data.get("schema_version") == STRUCTURED_REPLAY_SCHEMA
+    counts = data.get("merged_counts" if structured else "counts")
+    if not isinstance(counts, dict):
+        raise ValueError("Training data manifest lacks source and task-type counts")
+    if structured:
+        added = data.get("added_counts")
+        if not isinstance(added, dict):
+            raise ValueError("Structured replay lacks added-row inventory")
+        for field in ("source", "task_type"):
+            added_field = _data_counts(added.get(field), f"added {field}")
+            merged_field = _data_counts(counts.get(field), f"merged {field}")
+            if any(
+                value == 0 for value in (*added_field.values(), *merged_field.values())
+            ):
+                raise ValueError(
+                    "Structured replay inventory contains empty source or type"
+                )
+            if any(
+                value > merged_field.get(name, 0) for name, value in added_field.items()
+            ):
+                raise ValueError("Structured added rows exceed merged TRAIN inventory")
+        if sum(added["source"].values()) != sum(added["task_type"].values()):
+            raise ValueError("Structured added source/type inventories differ")
+        selected_ids = data.get("selected_added_ids")
+        if (
+            not isinstance(selected_ids, list)
+            or len(selected_ids) != sum(added["source"].values())
+            or any(not isinstance(item, str) or not item for item in selected_ids)
+            or len(set(selected_ids)) != len(selected_ids)
+        ):
+            raise ValueError("Structured replay added IDs differ from added counts")
+    return counts
 
 
 def bind_training_record(
@@ -310,9 +347,7 @@ def bind_training_record(
             raise ValueError(
                 f"Training data manifest {role} row count differs from run"
             )
-    counts = data.get("counts")
-    if not isinstance(counts, dict):
-        raise ValueError("Training data manifest lacks source and task-type counts")
+    counts = _training_counts(data)
     source_counts = _data_counts(counts.get("source"), "source")
     type_counts = _data_counts(counts.get("task_type"), "task-type")
     if (
@@ -370,7 +405,14 @@ def bind_training_record(
         record["evaluation_interpretation"], "evaluation interpretation"
     )
     limitations = _notes(record["limitations"], "limitations")
-    builder_limitations = _notes(data.get("limitations"), "builder limitations")
+    builder_limitations = _notes(
+        data.get(
+            "limits"
+            if data.get("schema_version") == STRUCTURED_REPLAY_SCHEMA
+            else "limitations"
+        ),
+        "builder limitations",
+    )
     rights = verify_rights(
         data=data,
         data_manifest_path=data_manifest_path,

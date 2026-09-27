@@ -559,6 +559,98 @@ class BundleTests(unittest.TestCase):
             (self.output / "README.md").read_text(),
         )
 
+    def test_structured_replay_bundle_requires_reviewed_merged_sources(self):
+        partitions = {"train": self.partitions["train"], **OLD_HOLDOUT_SHA}
+        provenance_path = self.run_dir / "provenance.json"
+        provenance = json.loads(provenance_path.read_text())
+        provenance["contract"]["data_sha256"] = partitions
+        provenance["select_examples"] = 600
+        provenance["cal_examples_audited_only"] = 900
+        write_json(provenance_path, provenance)
+        data = json.loads(self.data_manifest.read_text())
+        data["schema_version"] = "decision2-human-structured-replay/1"
+        data["merged_counts"] = data.pop("counts")
+        data["added_counts"] = {
+            "source": {"legacy": 1},
+            "task_type": {"choice": 1},
+        }
+        data["selected_added_ids"] = ["added-1"]
+        data["limits"] = data.pop("limitations")
+        data["outputs"] = {
+            "human_structured_replay.train.jsonl": {
+                "sha256": partitions["train"],
+                "rows": 100,
+            },
+            "select.jsonl": {"sha256": partitions["select"], "rows": 600},
+            "cal.jsonl": {"sha256": partitions["cal"], "rows": 900},
+        }
+        write_json(self.data_manifest, data)
+        calibration = json.loads(self.calibration.read_text())
+        calibration["cal_sha256"] = partitions["cal"]
+        calibration["provenance_sha256"] = sha_file(provenance_path)
+        write_json(self.calibration, calibration)
+        scored = json.loads(self.scored_manifest.read_text())
+        scored["calibration"]["file_sha256"] = sha_file(self.calibration)
+        write_json(self.scored_manifest, scored)
+        attestation_path = self.root / "structured-attestation.json"
+        condition = {
+            "terms": "Reviewed noncommercial research scope; no raw rows.",
+            "evidence": "https://github.com/cardiffnlp/tweeteval",
+        }
+        write_json(
+            attestation_path,
+            {
+                "schema_version": "decision2-noncommercial-research-attestation/1",
+                "noncommercial_use": True,
+                "publication_scope": "noncommercial research model weights/modelcard only; no raw rows",
+                "no_raw_training_rows": True,
+                "data_manifest_sha256": sha_file(self.data_manifest),
+                "training_provenance_sha256": sha_file(provenance_path),
+                "data_sha256": partitions,
+                "source_counts": {"legacy": 100},
+                "source_groups": {"legacy": "pilot_source"},
+                "holdout_source_counts": OLD_HOLDOUT_COUNTS,
+                "holdout_groups": {
+                    role: dict.fromkeys(counts, "pilot_source")
+                    for role, counts in OLD_HOLDOUT_COUNTS.items()
+                },
+                "rights_conditions": {"pilot_source": condition},
+                "public_weight_review": {
+                    "decision": "approved_noncommercial_public_weights",
+                    "reviewer_role": "project rights reviewer",
+                    "review_record_sha256": "d" * 64,
+                    "source_decisions": {
+                        "legacy": {
+                            "status": "approved",
+                            "rows": 100,
+                            "terms": "Reviewed weight release scope",
+                            "evidence": "source-specific review receipt",
+                        }
+                    },
+                },
+            },
+        )
+        manifest = bundle(
+            checkpoint=self.checkpoint,
+            calibration=self.calibration,
+            card_artifacts=self.artifacts,
+            scored_manifest=self.scored_manifest,
+            training_record=self.training_record,
+            run_dir=self.run_dir,
+            training_data_manifest=self.data_manifest,
+            rights_attestation=attestation_path,
+            score_key="d2-4b",
+            model_id="llm-semantic-router/DEV2.0-4B",
+            base_model_id="Qwen/Qwen3.5-4B-Base",
+            license_id="other",
+            output=self.output,
+        )
+        self.assertEqual(manifest["rights_mode"], "noncommercial_research")
+        public = json.loads((self.output / "training-provenance.json").read_text())
+        self.assertEqual(public["verification"]["source_counts"], {"legacy": 100})
+        self.assertEqual(public["builder_limitations"], data["limits"])
+        self.assertEqual(public["rights"]["public_weight_review_sha256"], "d" * 64)
+
     def test_old_codename_and_wrong_size_are_rejected(self):
         for size in ("0.6B", "0.8B", "2B", "4B", "9B", "27B"):
             self.assertIsNotNone(
