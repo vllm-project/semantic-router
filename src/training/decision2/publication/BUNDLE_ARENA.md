@@ -18,20 +18,43 @@ Run `python3 -m publication.generate_arena` first. Give the packager a
 | `package_record` | Reviewed model ID, selected revision, architecture, immutable base revision, actual parameter inventory, TRAIN/SELECT/CAL counts, TRAIN language counts, evaluation language scope, source terms and limitations. |
 | `score_inputs` | For each of `synthetic`, `css`, `public`, `dbv4`, `authored`: the scorer report, exact scored prediction file and native prediction manifest. |
 | `parity_receipt` | Gold-free native package check on 1,600 DEV and 1,430 transfer pilot items, with zero changed categorical answers, p99 probability drift ≤0.005 and maximum drift ≤0.02. |
-| `release_gate` | Passed pretest freeze, authored editorial, overlap, same-panel evaluation, rights, parity and performance reviews, each with an evidence hash. |
+| `release_gate` | Passed pretest freeze, authored editorial, overlap, same-panel evaluation, rights, parity and performance reviews, each with an evidence hash. The packager rechecks the copied gate against the copied record, parity and artifact manifest. |
 | `provenance_inputs`, `freeze_manifest`, `gate_evidence` | The original local files matching every declared training, freeze and review evidence hash. They are checked but never copied. |
 | `base_source`, `adapter_source_parity_receipt` | Required only for `qwen-external-base-peft`: a local snapshot of the exact pinned upstream commit and the separate BF16 scored-source/package parity receipt. Neither input is copied. |
 
 The record and gate schemas are `decision2-release-package-record/2` and
 `decision2-jevarena-release-gate/1`. The test fixture in
 `publication/tests/test_bundle_arena.py` gives a complete small example; its
-model size is mocked only to keep the CPU test fast. A real package counts
+model size and editorial judgments are synthetic CPU fixtures, never release
+evidence. A real package counts
 every active safetensors tensor from its header, subtracting only explicitly
 named buffers. Every other safetensors file must be classified as a support
 weight file. The count must agree exactly with the record and JevArena roster
 and be within 25% of the nominal model name. The record's per-language TRAIN
 counts must sum to the exact TRAIN row count; the card states the evaluation
 language coverage so English-heavy panels are not read as multilingual proof.
+
+The private `authored_editorial` evidence must use
+`decision2-authored-editorial-receipt/1`. A bare `passed` flag and file hash do
+not qualify. Its 1,200–1,480 rows identify distinct independent originals,
+native type, source family, author, domain, operation, document form, template
+and length band. Each row contains two original blind reviews, one paired
+blind review, a second paired review for at least 15% of each type, and a
+separate adjudication. Each blind review records a direct native answer,
+citations to both sources, paragraph inspection and explicit ambiguity,
+realism, shortcut and rights judgments. The adjudication records agreement
+with the independently held oracle, semantic independence, overlap,
+provenance and rights decisions. The gate requires at least 360 accepted
+originals per native type, the preregistered domain/operation/template caps
+and length mix, no unresolved material errors, distinct opaque identities per
+case, and review seals before key access followed by adjudication. The
+receipt's prompt, target and pretest-freeze hashes must match the frozen
+release panel and the separate freeze file. Reviewer answers, citations,
+identity commitments and the private oracle stay outside the public package.
+**The program can check receipt structure, declared identities and chronology;
+it cannot establish that these identities are real humans, that the reviewers
+were blind, or that their evidence citations are correct. An independent
+release owner must verify those facts and retain the signed private records.**
 
 The packager accepts these functional layouts:
 
@@ -107,6 +130,15 @@ copies reviewed release receipts, and records every public file hash in
 bundle can be checked again with `publication.bundle_arena.verify(path)` or,
 for an external-base model,
 `publication.bundle_arena.verify(path, base_source=pinned_snapshot)`.
+The record, parity, gate, freeze and artifact manifest are each parsed and
+hashed from a single byte snapshot. Copied record, parity, gate and artifact
+manifest files use exactly those validated bytes. Model and artifact copies
+are checked against the prevalidated inventory, and input receipts and
+external evidence are rechecked before the package is atomically renamed.
+`verify()` checks the internal gate/record/parity/artifact cross-bind and the
+release declarations again, even when an attacker recomputes the outer file
+inventory. External private review files are intentionally absent and require
+the separate release audit at publication time.
 
 ## Interpretation and limits
 

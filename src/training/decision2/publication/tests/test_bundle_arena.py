@@ -38,6 +38,90 @@ def safe_weights(
     path.write_bytes(len(header).to_bytes(8, "little") + header + bytes(size))
 
 
+def digest(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+def authored_receipt(freeze_sha: str, panel: dict[str, str]) -> dict:
+    packet_at = "2026-09-01T00:00:00+00:00"
+    review_at = "2026-09-01T01:00:00+00:00"
+    key_at = "2026-09-01T02:00:00+00:00"
+    adjudicated_at = "2026-09-01T03:00:00+00:00"
+
+    def review(index: int, role: str, answer: str | bool | int) -> dict:
+        return {
+            "reviewer_identity_sha256": digest(f"reviewer-{role}"),
+            "review_sha256": digest(f"sealed-{role}-{index}"),
+            "sealed_at_utc": review_at,
+            "native_answer": answer,
+            "source_a_evidence": "First document, decision rule paragraph",
+            "source_b_evidence": "Second document, dated evidence paragraph",
+            "both_sources_necessary": True,
+            "ambiguity": "none",
+            "document_realism": "plausible",
+            "shortcut_risk": "none",
+            "rights_concern": False,
+            "all_paragraphs_checked": True,
+            "paragraph_notes": "Checked each paragraph for relevant evidence",
+        }
+
+    rows = []
+    kinds = ("choice", "noul", "score")
+    for index in range(1200):
+        kind = kinds[index % 3]
+        answer = {"choice": "A", "noul": True, "score": 1}[kind]
+        rows.append(
+            {
+                "original_id_sha256": digest(f"original-{index}"),
+                "source_family_sha256": digest(f"source-{index}"),
+                "author_identity_sha256": digest("author"),
+                "type": kind,
+                "domain": f"domain-{index % 12}",
+                "operation": f"operation-{index % 20}",
+                "form_family": f"form-{index % 9}",
+                "template_sha256": digest(f"template-{index % 40}"),
+                "length_band": (
+                    "short"
+                    if index % 20 < 6
+                    else "medium" if index % 20 < 13 else "long"
+                ),
+                "original_review_a": review(index, "original-a", answer),
+                "original_review_b": review(index, "original-b", answer),
+                "paired_review": review(index, "paired", answer),
+                "paired_second_review": (
+                    review(index, "paired-second", answer) if index // 3 < 60 else None
+                ),
+                "adjudication": {
+                    "adjudicator_identity_sha256": digest("adjudicator"),
+                    "adjudication_sha256": digest(f"adjudicated-{index}"),
+                    "completed_at_utc": adjudicated_at,
+                    "verdict": "accepted",
+                    "original_answer": answer,
+                    "paired_answer": answer,
+                    "oracle_agreement": True,
+                    "semantic_independence_passed": True,
+                    "overlap_passed": True,
+                    "provenance_passed": True,
+                    "rights_passed": True,
+                    "unresolved_material_errors": 0,
+                },
+            }
+        )
+    return {
+        "schema_version": bundle_arena.AUTHORED_EDITORIAL_VERSION,
+        "status": "passed",
+        "pretest_freeze_sha256": freeze_sha,
+        "authored_prompts_sha256": panel["authored_prompts"],
+        "authored_targets_sha256": panel["authored_targets"],
+        "packet_sealed_at_utc": packet_at,
+        "key_opened_at_utc": key_at,
+        "completed_at_utc": "2026-09-01T04:00:00+00:00",
+        "independent_originals": 1200,
+        "type_counts": dict.fromkeys(kinds, 400),
+        "rows": rows,
+    }
+
+
 class ArenaBundleTests(unittest.TestCase):
     def setUp(self) -> None:
         temp = tempfile.TemporaryDirectory()
@@ -356,12 +440,29 @@ class ArenaBundleTests(unittest.TestCase):
         }
         write(self.parity_path, self.parity)
         self.freeze_manifest = self.root / "pretest-freeze.json"
-        write(self.freeze_manifest, {"frozen": True})
+        write(
+            self.freeze_manifest,
+            {
+                "status": "frozen",
+                "authored_prompts_sha256": self.panel_hashes["authored_prompts"],
+                "authored_targets_sha256": self.panel_hashes["authored_targets"],
+            },
+        )
+        self.authored_evidence = authored_receipt(
+            bundle_arena.sha_file(self.freeze_manifest), self.panel_hashes
+        )
         self.gate_evidence = {
             name: self.root / f"gate-{name}.json" for name in bundle_arena.GATE_CHECKS
         }
         for name, path in self.gate_evidence.items():
-            write(path, {"review": name, "status": "passed"})
+            write(
+                path,
+                (
+                    self.authored_evidence
+                    if name == "authored_editorial"
+                    else {"review": name, "status": "passed"}
+                ),
+            )
         self.gate_path = self.root / "release-gate.json"
         self.gate = {
             "schema_version": bundle_arena.GATE_VERSION,
@@ -404,6 +505,13 @@ class ArenaBundleTests(unittest.TestCase):
                 score_key="d2-0.8",
                 output=self.root / name,
             )
+
+    def rewrite_authored_receipt(self) -> None:
+        write(self.gate_evidence["authored_editorial"], self.authored_evidence)
+        self.gate["checks"]["authored_editorial"]["evidence_sha256"] = (
+            bundle_arena.sha_file(self.gate_evidence["authored_editorial"])
+        )
+        write(self.gate_path, self.gate)
 
     def test_assembles_exact_same_panel_package_and_detects_tampering(self) -> None:
         result = self.assemble()
@@ -469,13 +577,141 @@ class ArenaBundleTests(unittest.TestCase):
         self.gate_evidence["authored_editorial"].write_text("changed\n")
         with self.assertRaisesRegex(ValueError, "External evidence changed"):
             self.assemble()
+        write(self.gate_evidence["authored_editorial"], self.authored_evidence)
+        self.provenance_inputs["data_manifest"].write_text("changed\n")
+        with self.assertRaisesRegex(ValueError, "External evidence changed"):
+            self.assemble()
+
+    def test_rejects_bare_or_incomplete_authored_editorial_evidence(self) -> None:
         write(
             self.gate_evidence["authored_editorial"],
             {"review": "authored_editorial", "status": "passed"},
         )
-        self.provenance_inputs["data_manifest"].write_text("changed\n")
-        with self.assertRaisesRegex(ValueError, "External evidence changed"):
+        self.gate["checks"]["authored_editorial"]["evidence_sha256"] = (
+            bundle_arena.sha_file(self.gate_evidence["authored_editorial"])
+        )
+        write(self.gate_path, self.gate)
+        with self.assertRaisesRegex(ValueError, "Authored editorial receipt"):
             self.assemble()
+        self.assertFalse((self.root / "bundle").exists())
+
+    def test_authored_row_reviews_are_distinct_complete_and_before_key(self) -> None:
+        row = self.authored_evidence["rows"][0]
+        row["original_review_b"]["reviewer_identity_sha256"] = row["original_review_a"][
+            "reviewer_identity_sha256"
+        ]
+        self.rewrite_authored_receipt()
+        with self.assertRaisesRegex(ValueError, "reviewers and adjudicator overlap"):
+            self.assemble()
+        row["original_review_b"]["reviewer_identity_sha256"] = digest(
+            "reviewer-original-b"
+        )
+        row["original_review_a"]["sealed_at_utc"] = self.authored_evidence[
+            "key_opened_at_utc"
+        ]
+        self.rewrite_authored_receipt()
+        with self.assertRaisesRegex(ValueError, "before key access"):
+            self.assemble()
+        row["original_review_a"]["sealed_at_utc"] = "2026-09-01T01:00:00+00:00"
+        row["original_review_a"]["source_a_evidence"] = ""
+        self.rewrite_authored_receipt()
+        with self.assertRaisesRegex(ValueError, "editorial concerns"):
+            self.assemble()
+
+    def test_authored_count_type_and_second_review_cannot_be_faked(self) -> None:
+        rows = self.authored_evidence["rows"]
+        rows[1]["original_id_sha256"] = rows[0]["original_id_sha256"]
+        self.rewrite_authored_receipt()
+        with self.assertRaisesRegex(ValueError, "repeats an original"):
+            self.assemble()
+        rows[1]["original_id_sha256"] = digest("original-1")
+        rows[0]["paired_second_review"] = None
+        self.rewrite_authored_receipt()
+        with self.assertRaisesRegex(ValueError, "second-review coverage"):
+            self.assemble()
+        rows[0]["paired_second_review"] = authored_receipt(
+            self.authored_evidence["pretest_freeze_sha256"], self.panel_hashes
+        )["rows"][0]["paired_second_review"]
+        self.authored_evidence["type_counts"]["choice"] = 401
+        self.rewrite_authored_receipt()
+        with self.assertRaisesRegex(ValueError, "allocation"):
+            self.assemble()
+
+    def test_rejects_gate_source_mutation_after_validation(self) -> None:
+        original = bundle_arena._external_evidence
+
+        def mutate_gate(*args: object, **kwargs: object) -> dict[str, str]:
+            result = original(*args, **kwargs)
+            changed = json.loads(self.gate_path.read_text())
+            changed["status"] = "blocked"
+            write(self.gate_path, changed)
+            return result
+
+        with patch.object(bundle_arena, "_external_evidence", side_effect=mutate_gate):
+            with self.assertRaisesRegex(
+                ValueError, "release gate changed while packaging"
+            ):
+                self.assemble()
+        self.assertFalse((self.root / "bundle").exists())
+
+    def test_rejects_freeze_source_mutation_after_validation(self) -> None:
+        original = bundle_arena._external_evidence
+
+        def mutate_freeze(*args: object, **kwargs: object) -> dict[str, str]:
+            result = original(*args, **kwargs)
+            write(self.freeze_manifest, {"status": "reopened"})
+            return result
+
+        with patch.object(
+            bundle_arena, "_external_evidence", side_effect=mutate_freeze
+        ):
+            with self.assertRaisesRegex(ValueError, "pretest_freeze"):
+                self.assemble()
+        self.assertFalse((self.root / "bundle").exists())
+
+    def test_authored_receipt_must_bind_frozen_panel(self) -> None:
+        self.authored_evidence["authored_prompts_sha256"] = "f" * 64
+        self.rewrite_authored_receipt()
+        with self.assertRaisesRegex(ValueError, "not bound to freeze"):
+            self.assemble()
+
+    def test_verify_rechecks_internal_gate_after_inventory_rewrite(self) -> None:
+        self.assemble()
+        package = self.root / "bundle"
+        copied_gate = package / "release-gate.json"
+        forged = json.loads(copied_gate.read_text())
+        forged["package_record_sha256"] = "f" * 64
+        write(copied_gate, forged)
+        manifest_path = package / "PACKAGE_MANIFEST.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["release_gate_sha256"] = bundle_arena.sha_file(copied_gate)
+        manifest["files_sha256"]["release-gate.json"] = manifest["release_gate_sha256"]
+        write(manifest_path, manifest)
+        with self.assertRaisesRegex(ValueError, "bound to other bytes"):
+            bundle_arena.verify(package)
+
+    def test_verify_rechecks_record_rights_after_inventory_rewrite(self) -> None:
+        self.assemble()
+        package = self.root / "bundle"
+        copied_record = package / "release-record.json"
+        forged = json.loads(copied_record.read_text())
+        forged["license_id"] = "apache-2.0"
+        write(copied_record, forged)
+        copied_gate = package / "release-gate.json"
+        gate = json.loads(copied_gate.read_text())
+        gate["package_record_sha256"] = bundle_arena.sha_file(copied_record)
+        write(copied_gate, gate)
+        manifest_path = package / "PACKAGE_MANIFEST.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["package_record_sha256"] = bundle_arena.sha_file(copied_record)
+        manifest["release_gate_sha256"] = bundle_arena.sha_file(copied_gate)
+        manifest["files_sha256"]["release-record.json"] = manifest[
+            "package_record_sha256"
+        ]
+        manifest["files_sha256"]["release-gate.json"] = manifest["release_gate_sha256"]
+        write(manifest_path, manifest)
+        with self.assertRaisesRegex(ValueError, "Restricted source terms"):
+            bundle_arena.verify(package)
 
     def test_rejects_unsafe_or_partial_model_directory(self) -> None:
         (self.model / "raw-data.jsonl").write_text("private row\n")
@@ -747,9 +983,10 @@ class ExternalAdapterArenaBundleTests(unittest.TestCase):
             (package / "native/model/adapter/adapter_model.safetensors").exists()
         )
         self.assertIn("generic `AutoModel`", (package / "README.md").read_text())
-        self.assertEqual(
-            bundle_arena.verify(package, base_source=self.adapter.source), result
-        )
+        with patch.object(bundle_arena, "_size_compatible", return_value=True):
+            self.assertEqual(
+                bundle_arena.verify(package, base_source=self.adapter.source), result
+            )
         imported = subprocess.run(
             [
                 sys.executable,
@@ -763,15 +1000,18 @@ class ExternalAdapterArenaBundleTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(imported.returncode, 0, imported.stderr)
-        self.assertEqual(bundle_arena.verify(package), result)
+        with patch.object(bundle_arena, "_size_compatible", return_value=True):
+            self.assertEqual(bundle_arena.verify(package), result)
         nested_manifest = package / "card-artifacts/PACKAGE_MANIFEST.json"
         nested_manifest.write_text("untracked", encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "inventory has changed"):
-            bundle_arena.verify(package)
+        with patch.object(bundle_arena, "_size_compatible", return_value=True):
+            with self.assertRaisesRegex(ValueError, "inventory has changed"):
+                bundle_arena.verify(package)
         nested_manifest.unlink()
         (self.adapter.source / "config.json").write_text("{}\n", encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "Upstream source files differ"):
-            bundle_arena.verify(package, base_source=self.adapter.source)
+        with patch.object(bundle_arena, "_size_compatible", return_value=True):
+            with self.assertRaisesRegex(ValueError, "Upstream source files differ"):
+                bundle_arena.verify(package, base_source=self.adapter.source)
 
     def test_external_release_rejects_unbound_source_parity(self) -> None:
         self.source_parity_value["passed"] = False

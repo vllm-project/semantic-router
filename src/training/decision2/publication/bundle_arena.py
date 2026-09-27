@@ -16,6 +16,8 @@ import math
 import re
 import shutil
 import tempfile
+from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +32,7 @@ EXTERNAL_ADAPTER = "qwen-external-base-peft"
 RECORD_VERSION = "decision2-release-package-record/2"
 PARITY_VERSION = "decision2-native-package-parity/1"
 GATE_VERSION = "decision2-jevarena-release-gate/1"
+AUTHORED_EDITORIAL_VERSION = "decision2-authored-editorial-receipt/1"
 MODEL_ID = re.compile(r"llm-semantic-router/dev-2\.0-(?:0\.6b|0\.8b|2b|4b|8b|9b|27b)\Z")
 SHA256 = re.compile(r"[a-f0-9]{64}\Z")
 IMMUTABLE_REVISION = re.compile(r"[a-f0-9]{40}(?:[a-f0-9]{24})?\Z")
@@ -101,12 +104,18 @@ def _sha(value: Any, label: str) -> str:
 
 
 def _object(path: Path) -> dict[str, Any]:
+    return _json_snapshot(path)[0]
+
+
+def _json_snapshot(path: Path) -> tuple[dict[str, Any], bytes, str]:
+    """Parse and hash one read, so a later copy can use the validated bytes."""
     if path.is_symlink() or not path.is_file():
         raise ValueError(f"Expected a regular JSON file: {path.name}")
-    value = json.loads(path.read_text(encoding="utf-8"))
+    payload = path.read_bytes()
+    value = json.loads(payload)
     if not isinstance(value, dict):
         raise ValueError(f"{path.name} must be a JSON object")
-    return value
+    return value, payload, hashlib.sha256(payload).hexdigest()
 
 
 def _public_text(text: str, label: str) -> None:
@@ -673,8 +682,8 @@ def _release_artifacts(
     model_id: str,
     revision: str,
     score_key: str,
+    manifest: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    manifest = _object(artifacts / "manifest.json")
     if (
         manifest.get("publication_version") != ARTIFACT_VERSION
         or manifest.get("phase") != "release"
@@ -934,13 +943,229 @@ def _gate(
         _sha(check.get("evidence_sha256"), f"{name} evidence")
 
 
+def _utc(value: Any, label: str) -> datetime:
+    if not isinstance(value, str):
+        raise ValueError(f"{label} needs an explicit UTC time")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{label} needs an explicit UTC time") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(None):
+        raise ValueError(f"{label} needs an explicit UTC time")
+    return parsed
+
+
+def _review_row(
+    review: Any, kind: str, packet_at: datetime, key_at: datetime
+) -> tuple[str, Any]:
+    fields = {
+        "reviewer_identity_sha256",
+        "review_sha256",
+        "sealed_at_utc",
+        "native_answer",
+        "source_a_evidence",
+        "source_b_evidence",
+        "both_sources_necessary",
+        "ambiguity",
+        "document_realism",
+        "shortcut_risk",
+        "rights_concern",
+        "all_paragraphs_checked",
+        "paragraph_notes",
+    }
+    if not isinstance(review, dict) or set(review) != fields:
+        raise ValueError("Authored review is not a complete row-level judgment")
+    reviewer = _sha(review["reviewer_identity_sha256"], "reviewer identity")
+    _sha(review["review_sha256"], "sealed review")
+    sealed = _utc(review["sealed_at_utc"], "review seal")
+    if not packet_at < sealed < key_at:
+        raise ValueError("Authored review was not sealed before key access")
+    answer = review["native_answer"]
+    if (
+        (kind == "choice" and (not isinstance(answer, str) or not answer.strip()))
+        or (kind == "noul" and not isinstance(answer, bool))
+        or (kind == "score" and (type(answer) is not int or not 0 <= answer <= 2))
+    ):
+        raise ValueError("Authored reviewer gave an invalid native answer")
+    if any(
+        not isinstance(review[field], str) or not review[field].strip()
+        for field in ("source_a_evidence", "source_b_evidence", "paragraph_notes")
+    ) or (
+        review["both_sources_necessary"] is not True
+        or review["ambiguity"] != "none"
+        or review["document_realism"] != "plausible"
+        or review["shortcut_risk"] != "none"
+        or review["rights_concern"] is not False
+        or review["all_paragraphs_checked"] is not True
+    ):
+        raise ValueError("Authored review has unresolved editorial concerns")
+    return reviewer, answer
+
+
+def _authored_editorial(
+    evidence: dict[str, Any],
+    freeze: dict[str, Any],
+    freeze_sha: str,
+    panel: dict[str, Any],
+    coverage: dict[str, Any],
+) -> None:
+    """Check receipt completeness and consistency, not the reviewers' humanity."""
+    count = coverage.get("sealed_authored_items")
+    if (
+        evidence.get("schema_version") != AUTHORED_EDITORIAL_VERSION
+        or evidence.get("status") != "passed"
+        or evidence.get("pretest_freeze_sha256") != freeze_sha
+        or evidence.get("authored_prompts_sha256") != panel.get("authored_prompts")
+        or evidence.get("authored_targets_sha256") != panel.get("authored_targets")
+        or freeze.get("status") != "frozen"
+        or freeze.get("authored_prompts_sha256") != panel.get("authored_prompts")
+        or freeze.get("authored_targets_sha256") != panel.get("authored_targets")
+        or type(count) is not int
+        or not 1200 <= count <= 1480
+        or evidence.get("independent_originals") != count
+    ):
+        raise ValueError("Authored editorial receipt is absent or not bound to freeze")
+    packet_at = _utc(evidence.get("packet_sealed_at_utc"), "blind packet seal")
+    key_at = _utc(evidence.get("key_opened_at_utc"), "editorial key access")
+    completed_at = _utc(evidence.get("completed_at_utc"), "adjudication completion")
+    if not packet_at < key_at < completed_at:
+        raise ValueError("Authored editorial chronology is invalid")
+    rows = evidence.get("rows")
+    if not isinstance(rows, list) or len(rows) != count:
+        raise ValueError("Authored editorial lacks every independent row")
+    ids: set[str] = set()
+    kinds: Counter[str] = Counter()
+    domains: Counter[str] = Counter()
+    operations: Counter[str] = Counter()
+    forms: set[str] = set()
+    templates: Counter[str] = Counter()
+    bands: Counter[str] = Counter()
+    second_by_kind: Counter[str] = Counter()
+    fields = {
+        "original_id_sha256",
+        "source_family_sha256",
+        "author_identity_sha256",
+        "type",
+        "domain",
+        "operation",
+        "form_family",
+        "template_sha256",
+        "length_band",
+        "original_review_a",
+        "original_review_b",
+        "paired_review",
+        "paired_second_review",
+        "adjudication",
+    }
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != fields:
+            raise ValueError("Authored editorial row is incomplete")
+        original = _sha(row["original_id_sha256"], "authored original")
+        _sha(row["source_family_sha256"], "source family")
+        author = _sha(row["author_identity_sha256"], "authored author")
+        template = _sha(row["template_sha256"], "document template")
+        if original in ids:
+            raise ValueError("Authored editorial repeats an original")
+        ids.add(original)
+        kind = row["type"]
+        if kind not in {"choice", "noul", "score"}:
+            raise ValueError("Authored editorial has an unknown native type")
+        for name in ("domain", "operation", "form_family"):
+            if not isinstance(row[name], str) or not row[name].strip():
+                raise ValueError("Authored editorial omits allocation provenance")
+        if row["length_band"] not in {"short", "medium", "long"}:
+            raise ValueError("Authored editorial omits a valid length band")
+        kinds[kind] += 1
+        domains[row["domain"]] += 1
+        operations[row["operation"]] += 1
+        forms.add(row["form_family"])
+        templates[template] += 1
+        bands[row["length_band"]] += 1
+        reviews = [
+            _review_row(row[name], kind, packet_at, key_at)
+            for name in ("original_review_a", "original_review_b", "paired_review")
+        ]
+        if row["paired_second_review"] is not None:
+            reviews.append(
+                _review_row(row["paired_second_review"], kind, packet_at, key_at)
+            )
+            second_by_kind[kind] += 1
+        adjudication = row["adjudication"]
+        if not isinstance(adjudication, dict) or set(adjudication) != {
+            "adjudicator_identity_sha256",
+            "adjudication_sha256",
+            "completed_at_utc",
+            "verdict",
+            "original_answer",
+            "paired_answer",
+            "oracle_agreement",
+            "semantic_independence_passed",
+            "overlap_passed",
+            "provenance_passed",
+            "rights_passed",
+            "unresolved_material_errors",
+        }:
+            raise ValueError("Authored row has no complete adjudication")
+        adjudicator = _sha(
+            adjudication["adjudicator_identity_sha256"], "adjudicator identity"
+        )
+        _sha(adjudication["adjudication_sha256"], "adjudication receipt")
+        adjudicated_at = _utc(adjudication["completed_at_utc"], "adjudication")
+        if not key_at < adjudicated_at <= completed_at:
+            raise ValueError("Authored adjudication predates key access")
+        if (
+            len({author, adjudicator, *(identity for identity, _ in reviews)})
+            != len(reviews) + 2
+        ):
+            raise ValueError("Authored author, reviewers and adjudicator overlap")
+        if (
+            any(answer != adjudication["original_answer"] for _, answer in reviews[:2])
+            or any(answer != adjudication["paired_answer"] for _, answer in reviews[2:])
+            or adjudication["verdict"] != "accepted"
+            or any(
+                adjudication[name] is not True
+                for name in (
+                    "oracle_agreement",
+                    "semantic_independence_passed",
+                    "overlap_passed",
+                    "provenance_passed",
+                    "rights_passed",
+                )
+            )
+            or type(adjudication["unresolved_material_errors"]) is not int
+            or adjudication["unresolved_material_errors"] != 0
+        ):
+            raise ValueError("Authored row has unresolved adjudication")
+    if (
+        evidence.get("type_counts") != dict(kinds)
+        or any(kinds[kind] < 360 for kind in ("choice", "noul", "score"))
+        or len(domains) < 12
+        or len(forms) < 9
+        or any(value > count * 0.12 for value in domains.values())
+        or any(value > count * 0.05 for value in operations.values())
+        or any(value > count * 0.03 for value in templates.values())
+        or not 0.25 <= bands["short"] / count <= 0.35
+        or not 0.30 <= bands["medium"] / count <= 0.45
+        or not 0.25 <= bands["long"] / count <= 0.40
+        or any(second_by_kind[kind] < math.ceil(kinds[kind] * 0.15) for kind in kinds)
+    ):
+        raise ValueError(
+            "Authored editorial allocation or second-review coverage failed"
+        )
+
+
 def _external_evidence(
     record: dict[str, Any],
     gate: dict[str, Any],
     provenance_inputs: dict[str, Path],
     freeze_manifest: Path,
     gate_evidence: dict[str, Path],
-) -> None:
+    *,
+    freeze: dict[str, Any],
+    freeze_sha: str,
+    panel: dict[str, Any],
+    coverage: dict[str, Any],
+) -> dict[str, str]:
     training = record["training"]
     expected = {
         "data_manifest": training["data_manifest_sha256"],
@@ -958,6 +1183,8 @@ def _external_evidence(
         "pretest_freeze": freeze_manifest,
         **{f"gate:{name}": path for name, path in gate_evidence.items()},
     }
+    observed: dict[str, str] = {}
+    authored_payload: bytes | None = None
     for name, path in paths.items():
         if path.is_symlink() or not path.is_file():
             raise ValueError(f"External evidence is missing or linked: {name}")
@@ -970,8 +1197,22 @@ def _external_evidence(
                 else gate["checks"][name.removeprefix("gate:")]["evidence_sha256"]
             )
         )
-        if sha_file(path) != wanted:
+        if name == "pretest_freeze":
+            digest = freeze_sha
+        else:
+            payload = path.read_bytes()
+            digest = hashlib.sha256(payload).hexdigest()
+            if name == "gate:authored_editorial":
+                authored_payload = payload
+        if digest != wanted:
             raise ValueError(f"External evidence changed after review: {name}")
+        observed[name] = digest
+    assert authored_payload is not None
+    authored = json.loads(authored_payload)
+    if not isinstance(authored, dict):
+        raise ValueError("Authored editorial receipt must be a JSON object")
+    _authored_editorial(authored, freeze, freeze_sha, panel, coverage)
+    return observed
 
 
 def _md(value: str) -> str:
@@ -1028,8 +1269,8 @@ def _card(
             "includes the loaded base text backbone, adapter and head.\n"
         )
     return f"""---
-license: {record['license_id']}
-{('license_name: noncommercial-research-terms' + chr(10)) if record['license_id'] == 'other' else ''}base_model: {record['base_model']['id']}
+license: {record["license_id"]}
+{("license_name: noncommercial-research-terms" + chr(10)) if record["license_id"] == "other" else ""}base_model: {record["base_model"]["id"]}
 tags:
 - decision-model
 - typed-decision
@@ -1040,9 +1281,9 @@ tags:
 
 # {model_id}
 
-Native architecture: `{record['architecture']}`. Actual model parameters:
-**{count:,}**. Source model: [{record['base_model']['id']}](https://huggingface.co/{record['base_model']['id']})
-at immutable revision `{record['base_model']['revision']}`. Native runtime and
+Native architecture: `{record["architecture"]}`. Actual model parameters:
+**{count:,}**. Source model: [{record["base_model"]["id"]}](https://huggingface.co/{record["base_model"]["id"]})
+at immutable revision `{record["base_model"]["revision"]}`. Native runtime and
 calibration are included in this package; its exact invocation and limits are
 described by the bundled runtime and `PACKAGE_MANIFEST.json`.
 
@@ -1050,7 +1291,7 @@ described by the bundled runtime and `PACKAGE_MANIFEST.json`.
 
 ## Same-panel release evaluation
 
-JevArena rank **#{row['rank']}**, six-axis score **{row['score']:.2f}** on the
+JevArena rank **#{row["rank"]}**, six-axis score **{row["score"]:.2f}** on the
 frozen release panel. Missing and invalid answers count as misses. Ranks apply
 only to the matched roster in the table. The public JevBench subset is an
 independent 231-item rerun, not an official closed-set rank.
@@ -1071,16 +1312,16 @@ under comparable conditions; this package does not invent missing measurements.
 
 ## Training, rights and limitations
 
-TRAIN {record['training']['train_rows']:,}; SELECT {record['training']['select_rows']:,};
-CAL {record['training']['cal_rows']:,}. Selection policy:
-{_md(record['training']['selection_policy'])}. Scope: `{rights['scope']}`.
+TRAIN {record["training"]["train_rows"]:,}; SELECT {record["training"]["select_rows"]:,};
+CAL {record["training"]["cal_rows"]:,}. Selection policy:
+{_md(record["training"]["selection_policy"])}. Scope: `{rights["scope"]}`.
 No raw upstream text or benchmark labels are bundled.
 
 | TRAIN language | Rows | Share |
 | --- | ---: | ---: |
 {train_languages}
 
-Evaluation language coverage: {_md(record['evaluation_language_scope'])}.
+Evaluation language coverage: {_md(record["evaluation_language_scope"])}.
 
 | Source | Terms | Attribution | Use | Redistribution |
 | --- | --- | --- | --- | --- |
@@ -1129,8 +1370,9 @@ def assemble(
     ):
         if path.is_symlink():
             raise ValueError("Input symlinks are not allowed")
-    model_dir, artifacts = model_dir.resolve(strict=True), artifacts.resolve(
-        strict=True
+    model_dir, artifacts = (
+        model_dir.resolve(strict=True),
+        artifacts.resolve(strict=True),
     )
     output = output.resolve()
     if (
@@ -1139,8 +1381,12 @@ def assemble(
         or output.is_relative_to(artifacts)
     ):
         raise FileExistsError("Output exists or is inside an input directory")
-    record, parity, gate = (
-        _object(path) for path in (package_record, parity_receipt, release_gate)
+    record, record_bytes, record_sha = _json_snapshot(package_record)
+    parity, parity_bytes, parity_sha = _json_snapshot(parity_receipt)
+    gate, gate_bytes, gate_sha = _json_snapshot(release_gate)
+    freeze, _, freeze_sha = _json_snapshot(freeze_manifest)
+    artifact_input, artifact_bytes, artifact_sha = _json_snapshot(
+        artifacts / "manifest.json"
     )
     model_id, revision = record.get("model_id"), record.get("model_revision")
     if not isinstance(model_id, str) or not MODEL_ID.fullmatch(model_id):
@@ -1210,7 +1456,13 @@ def assemble(
     if record.get("calibration_sha256") != files.get(calibration_name):
         raise ValueError("Native CAL artifact differs from provenance")
     artifacts_manifest, row = _release_artifacts(
-        artifacts, arena_rank, public_rank, model_id, revision, score_key
+        artifacts,
+        arena_rank,
+        public_rank,
+        model_id,
+        revision,
+        score_key,
+        artifact_input,
     )
     if not math.isclose(row["size_b"], count / 1e9, rel_tol=0, abs_tol=1e-9):
         raise ValueError("JevArena parameter count differs from actual package weights")
@@ -1238,18 +1490,32 @@ def assemble(
     )
     _gate(
         gate,
-        record_sha=sha_file(package_record),
-        parity_sha=sha_file(parity_receipt),
-        artifact_sha=sha_file(artifacts / "manifest.json"),
+        record_sha=record_sha,
+        parity_sha=parity_sha,
+        artifact_sha=artifact_sha,
         native_sha=native_sha,
         model_files_digest=model_files_digest,
         model_id=model_id,
         revision=revision,
     )
-    _external_evidence(record, gate, provenance_inputs, freeze_manifest, gate_evidence)
+    external_hashes = _external_evidence(
+        record,
+        gate,
+        provenance_inputs,
+        freeze_manifest,
+        gate_evidence,
+        freeze=freeze,
+        freeze_sha=freeze_sha,
+        panel=artifacts_manifest["panel_sha256"],
+        coverage=row["coverage"],
+    )
     # Records copied to the public repository contain only reviewed, screened text.
-    for path in (package_record, parity_receipt, release_gate):
-        _public_text(path.read_text(encoding="utf-8"), path.name)
+    for path, payload in (
+        (package_record, record_bytes),
+        (parity_receipt, parity_bytes),
+        (release_gate, gate_bytes),
+    ):
+        _public_text(payload.decode("utf-8"), path.name)
     sticker = Path(__file__).with_name("decision-2-sticker-chibi-v4.png")
     if not sticker.is_file() or sticker.is_symlink():
         raise ValueError("Family sticker asset is missing")
@@ -1286,15 +1552,26 @@ def assemble(
             _verify_staged_runtime(temporary / "native", base_source)
         (temporary / "card-artifacts").mkdir()
         for name in (*ARTIFACTS, "manifest.json"):
-            shutil.copyfile(artifacts / name, temporary / "card-artifacts" / name)
+            target = temporary / "card-artifacts" / name
+            if name == "manifest.json":
+                target.write_bytes(artifact_bytes)
+                expected_hash = artifact_sha
+            else:
+                shutil.copyfile(artifacts / name, target)
+                expected_hash = artifact_input["artifacts_sha256"][name]
+            if sha_file(target) != expected_hash:
+                raise ValueError(f"Release artifact changed during packaging: {name}")
             if name in ARTIFACTS:
-                shutil.copyfile(artifacts / name, temporary / name)
-        for source, name in (
-            (package_record, "release-record.json"),
-            (parity_receipt, "native-parity.json"),
-            (release_gate, "release-gate.json"),
+                shutil.copyfile(target, temporary / name)
+        for payload, digest, name in (
+            (record_bytes, record_sha, "release-record.json"),
+            (parity_bytes, parity_sha, "native-parity.json"),
+            (gate_bytes, gate_sha, "release-gate.json"),
         ):
-            shutil.copyfile(source, temporary / name)
+            target = temporary / name
+            target.write_bytes(payload)
+            if sha_file(target) != digest:
+                raise ValueError(f"Reviewed release receipt changed in package: {name}")
         shutil.copyfile(sticker, temporary / sticker.name)
         (temporary / "README.md").write_text(
             _card(
@@ -1302,7 +1579,7 @@ def assemble(
                 record,
                 row,
                 count,
-                (artifacts / "score-table.md").read_text(encoding="utf-8"),
+                (temporary / "score-table.md").read_text(encoding="utf-8"),
             ),
             encoding="utf-8",
         )
@@ -1319,11 +1596,11 @@ def assemble(
             "parameter_count": count,
             "native_model_sha256": native_sha,
             "model_files_sha256": model_files_digest,
-            "artifact_manifest_sha256": sha_file(artifacts / "manifest.json"),
+            "artifact_manifest_sha256": artifact_sha,
             "panel_sha256": artifacts_manifest["panel_sha256"],
-            "package_record_sha256": sha_file(package_record),
-            "parity_receipt_sha256": sha_file(parity_receipt),
-            "release_gate_sha256": sha_file(release_gate),
+            "package_record_sha256": record_sha,
+            "parity_receipt_sha256": parity_sha,
+            "release_gate_sha256": gate_sha,
             "score_inputs_sha256": score_binding,
             "files_sha256": public_files,
         }
@@ -1340,6 +1617,25 @@ def assemble(
             encoding="utf-8",
         )
         verify(temporary, base_source=base_source)
+        for name, path, digest in (
+            ("release record", package_record, record_sha),
+            ("native parity", parity_receipt, parity_sha),
+            ("release gate", release_gate, gate_sha),
+            ("artifact manifest", artifacts / "manifest.json", artifact_sha),
+        ):
+            if path.is_symlink() or not path.is_file() or sha_file(path) != digest:
+                raise ValueError(f"Validated {name} changed while packaging")
+        for name, path in {
+            **{f"gate:{key}": value for key, value in gate_evidence.items()},
+            **provenance_inputs,
+            "pretest_freeze": freeze_manifest,
+        }.items():
+            if (
+                path.is_symlink()
+                or not path.is_file()
+                or sha_file(path) != external_hashes[name]
+            ):
+                raise ValueError(f"External evidence changed while packaging: {name}")
         temporary.rename(output)
         return manifest
     finally:
@@ -1397,6 +1693,67 @@ def verify(root: Path, *, base_source: Path | None = None) -> dict[str, Any]:
         "artifact_manifest_sha256"
     ):
         raise ValueError("Card artifact manifest changed")
+    record = _object(root / "release-record.json")
+    parity = _object(root / "native-parity.json")
+    gate = _object(root / "release-gate.json")
+    artifacts = _object(root / "card-artifacts/manifest.json")
+    model_id, revision = manifest.get("model_id"), manifest.get("model_revision")
+    count = manifest.get("parameter_count")
+    if (
+        not isinstance(model_id, str)
+        or not MODEL_ID.fullmatch(model_id)
+        or not isinstance(revision, str)
+        or not revision
+        or type(count) is not int
+        or count <= 0
+        or not _size_compatible(count, model_id)
+        or record.get("architecture") != manifest.get("architecture")
+        or record.get("parameter_count") != count
+        or record.get("model_files_sha256") != model_files
+        or not isinstance(record.get("native_identity"), dict)
+        or record["native_identity"].get("sha256")
+        != manifest.get("native_model_sha256")
+        or actual.get("release-record.json") != manifest.get("package_record_sha256")
+        or actual.get("native-parity.json") != manifest.get("parity_receipt_sha256")
+        or actual.get("release-gate.json") != manifest.get("release_gate_sha256")
+    ):
+        raise ValueError("Publication manifest, record or receipt binding changed")
+    _rights(record, model_id, revision)
+    calibration = record.get("calibration_file")
+    calibration_sha = actual.get(f"native/{calibration}")
+    if calibration_sha is None or calibration_sha != record.get("calibration_sha256"):
+        raise ValueError("Native CAL differs from release record")
+    if (
+        artifacts.get("publication_version") != ARTIFACT_VERSION
+        or artifacts.get("phase") != "release"
+        or artifacts.get("panel_sha256") != manifest.get("panel_sha256")
+        or not isinstance(artifacts.get("artifacts_sha256"), dict)
+        or set(artifacts["artifacts_sha256"]) != set(ARTIFACTS)
+        or any(
+            actual.get(f"card-artifacts/{name}") != artifacts["artifacts_sha256"][name]
+            or actual.get(name) != artifacts["artifacts_sha256"][name]
+            for name in ARTIFACTS
+        )
+    ):
+        raise ValueError("Publication artifact manifest or duplicated artifact changed")
+    _parity(
+        parity,
+        model_id,
+        revision,
+        manifest["native_model_sha256"],
+        digest,
+        calibration_sha,
+    )
+    _gate(
+        gate,
+        record_sha=actual["release-record.json"],
+        parity_sha=actual["native-parity.json"],
+        artifact_sha=actual["card-artifacts/manifest.json"],
+        native_sha=manifest["native_model_sha256"],
+        model_files_digest=digest,
+        model_id=model_id,
+        revision=revision,
+    )
     if manifest.get("architecture") in {
         "qwen3.5-decision-head",
         "qwen3.8-decision-head",
@@ -1408,7 +1765,6 @@ def verify(root: Path, *, base_source: Path | None = None) -> dict[str, Any]:
 
             _verify_staged_runtime(root / "native", base_source)
         inner = adapter_runtime.verify_bundle(root / "native")
-        record = _object(root / "release-record.json")
         base = inner["base"]
         if (
             manifest.get("external_base") != base
