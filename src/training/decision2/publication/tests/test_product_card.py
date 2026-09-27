@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import unittest
 
 from publication.product_card import ProductCard, render
@@ -63,6 +64,19 @@ class ProductCardTest(unittest.TestCase):
         self.assertIn("jevarena-rank.svg", card)
         self.assertIn("jevbench-public-rank.svg", card)
         self.assertNotIn("pareto", card.lower())
+
+    def test_06b_example_preserves_previously_exercised_code(self) -> None:
+        card = render(
+            specimen(
+                model_id="llm-semantic-router/DEV2.0-0.6B",
+                direct_weight_source="Qwen/Qwen3-0.6B-Base",
+            )
+        )
+        example = card.split("```python\n", 1)[1].split("\n```", 1)[0]
+        self.assertEqual(
+            hashlib.sha256(example.encode()).hexdigest(),
+            "e568ea27f0541c0ee1d1d33f62efcf9097fd09a68f894b91971b25c4d848da6f",
+        )
 
     def test_exact_direct_source_is_required(self) -> None:
         with self.assertRaisesRegex(ValueError, "Direct weight source"):

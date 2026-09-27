@@ -125,21 +125,21 @@ tags:
 
 {tagline}
 
-Give it a state and the questions your application needs answered. Supply the
-options or rubric at runtime; get structured answers and probabilities back.
+Ask Choice, Noul and Score questions about one state. Supply the options or
+rubric at runtime, and get structured decisions with probabilities.
 
 ## Measured decisions
 
 {measured_summary}
 
-The comparison uses the same **8,147-item JevArena v3** panel for every model.
-The **231 public JevBench v1.2** questions are shown separately.
+All models below were tested on the same **8,147-item JevArena v3** panel.
+The **231 public JevBench v1.2** questions are separate.
 
 {table}
 
 {chart_lines}
 
-{evaluation_scope} Ranks cover only the models shown here.
+{evaluation_scope} Ranks include only the models shown here.
 [Full results and methods](evaluation/EVALUATION.md) ·
 [Evaluation manifest](evaluation/manifest.json)
 
@@ -189,7 +189,7 @@ result = model.system_one(
 print(result["answers"])
 ```
 
-This repository is a model download, not a hosted API.
+The download includes the local decision runtime; it does not start a hosted endpoint.
 
 ## Architecture
 
