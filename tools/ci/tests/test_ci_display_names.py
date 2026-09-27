@@ -107,7 +107,13 @@ class DisplayNameTests(unittest.TestCase):
                 key: json.loads(value) for key, value in github_outputs(plan).items()
             }
             self.assertEqual(plan, before)
-            self.assertEqual(output["plan"], before)
+            self.assertEqual(
+                output["plan"],
+                {
+                    "profile": plan["profile"],
+                    "quality_context": plan["quality_context"],
+                },
+            )
             self.assertEqual(set(output["dispatch"]), set(EXECUTOR_JOBS))
             actual = []
             for job, rows in output["dispatch"].items():
@@ -132,6 +138,15 @@ class DisplayNameTests(unittest.TestCase):
                 for image in row["build_images"]
             ]
             self.assertEqual(sorted(rebuilt), plan["build_images"])
+
+    def test_release_job_outputs_fit_github_limit(self):
+        plan = make_plan([], source_sha="a" * 40, profile="release")
+        outputs = github_outputs(plan)
+        encoded_size = sum(
+            len(f"{key}={value}\n".encode("utf-16-le"))
+            for key, value in outputs.items()
+        )
+        self.assertLess(encoded_size, 1_048_576)
 
     def test_local_contracts_use_environment_shards_and_native_feature_is_evidence(
         self,

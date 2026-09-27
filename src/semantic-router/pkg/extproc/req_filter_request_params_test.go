@@ -22,7 +22,7 @@ func TestApplySemanticRequestParamsNilDecision(t *testing.T) {
 func TestApplySemanticRequestParamsBlocksAndCapsNeutralFields(t *testing.T) {
 	r := &OpenAIRouter{}
 	payload, err := config.NewStructuredPayload(map[string]interface{}{
-		"blocked_params":   []string{"frequency_penalty", "custom_evil_field"},
+		"blocked_params":   []string{"frequency_penalty", "prompt_cache_key", "custom_evil_field"},
 		"max_tokens_limit": 500,
 		"max_n":            1,
 		"strip_unknown":    true,
@@ -38,6 +38,7 @@ func TestApplySemanticRequestParamsBlocksAndCapsNeutralFields(t *testing.T) {
 	}
 	request := llmprotocol.Request{
 		Model:          "m",
+		PromptCacheKey: "codex-session",
 		CandidateCount: llmprotocol.Int64(5),
 		Sampling: llmprotocol.Sampling{
 			MaxOutputTokens:  llmprotocol.Int64(9000),
@@ -48,7 +49,7 @@ func TestApplySemanticRequestParamsBlocksAndCapsNeutralFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !changed || request.Sampling.FrequencyPenalty != nil || request.Sampling.MaxOutputTokens == nil ||
+	if !changed || request.PromptCacheKey != "" || request.Sampling.FrequencyPenalty != nil || request.Sampling.MaxOutputTokens == nil ||
 		*request.Sampling.MaxOutputTokens != 500 || request.CandidateCount == nil || *request.CandidateCount != 1 {
 		t.Fatalf("semantic request params = %+v, changed=%v", request, changed)
 	}

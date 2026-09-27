@@ -37,8 +37,13 @@ class RequestStore:
         header_values: dict[str, list[str]] = {}
         for name, value in (headers or {}).items():
             normalized = name.lower()
-            if normalized == SESSION_HEADER or normalized.startswith(
-                _OBSERVED_HEADER_PREFIX
+            if (
+                normalized == SESSION_HEADER
+                or normalized.startswith(_OBSERVED_HEADER_PREFIX)
+                or (
+                    normalized == "anthropic-beta"
+                    and session_id.startswith("anthropic-per-message-effort-")
+                )
             ):
                 observed_headers[normalized] = value
                 header_values.setdefault(normalized, []).append(value)
@@ -46,6 +51,11 @@ class RequestStore:
             "body": deepcopy(body),
             "body_sha256": hashlib.sha256(raw_body).hexdigest(),
             "body_bytes": len(raw_body),
+            # Expose only presence, never the client credential itself. Azure
+            # ingress E2E uses this to catch a key leaking to the provider.
+            "api_key_present": any(
+                name.lower() == "api-key" for name in (headers or {})
+            ),
             "headers": observed_headers,
             "header_values": header_values,
         }
