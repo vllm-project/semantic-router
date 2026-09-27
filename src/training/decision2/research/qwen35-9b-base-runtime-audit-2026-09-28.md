@@ -34,7 +34,7 @@ as a model result. No GPU cell was run for this audit.
   maximum. The separately completed Posttrained 458-step arm shows the image
   is not deterministically broken for every 9B training sequence.
 
-**Working hypothesis:** the pinned PyTorch/ROCm HSA runtime interacts badly
+**Working hypothesis:** the pinned PyTorch/ROCm device runtime interacts badly
 with a long-lived, combined Qwen3.5 hybrid-attention autograd graph or its
 memory/stream state. The kernel record and cross-node failures make this more
 plausible than a Python label error, one bad accelerator, gradient
