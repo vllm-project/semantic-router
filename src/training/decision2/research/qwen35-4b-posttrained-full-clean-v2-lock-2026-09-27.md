@@ -123,3 +123,32 @@ later 29,325-row hard/replay stage, versus this arm's 4.194M native input
 tokens, a nominal ~177× count gap across non-matched tokenization, sources,
 objectives and schedules. The gap is a limitation and hypothesis, not a
 causal explanation or an expected Posttrained gain.
+
+## Sealed CPU lock and launch audit
+
+The signed preparer source is revision `f9b405dd5cf92aaf2e333133d44d2e12eeb37c19`,
+SHA-256 `f6ec4578dfcc8a59bc4b23e349fbead4c6d9c430347fd27beebe2a94752710d3`.
+The first **no-device** invocation stopped before creating a lock because the
+operator omitted a container bind mount; its private log SHA-256 is
+`36d93d2300d8f0067bda06e7d85db492471df5ca8c0c35887c8d3cc293882990`.
+It did not consume a GPU or change the archived admission. A corrected fresh
+private directory produced full-arm lock SHA-256
+`7a3fe34eef8a4845edb71bead0aa12660993d0b81ad3a99184714f69e37809cd`.
+A second fresh no-device process independently verified the lock, source,
+TRAIN/SELECT/CAL hashes and exact trainer code. Its private log SHA-256 is
+`d43773097880cba1501e1baf0f38df84e1911ff28950a9db8bfc14f5830736b9`.
+The local and remote exact Python mirror has 57 files and canonical digest
+`8d7809920cd48f38b9f2980f2e888006ae3f07753714ec666a8cec6fff009118`.
+
+The separately signed single-shot
+[`launch_qwen35_4b_posttrained_full.py`](../scripts/launch_qwen35_4b_posttrained_full.py)
+defaults to dry-run. Its source SHA-256 is
+`77d1a8fdd0bc18be559cfa38bdd4d9eea2a39efe65afb9b0bd67b31a939a076c`.
+It rechecks the sealed lock, trainer mirror, source and data bytes, pinned
+image and selected render-device node before creating one named container.
+Its exact-container-ID watchdog is armed before starting training and stops
+that container at 10,800 seconds; no other container or process is a cleanup
+target. The complete training receipt, logs, checkpoints and SELECT predictions
+remain private. The repository training-contract suite completed successfully
+before launch. The lock and scripts do not authorize CAL model use, DEV/CSS
+evaluation, formal evaluation, upload or release.
