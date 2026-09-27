@@ -39,11 +39,33 @@ Additional domain-specific comparators should stay on relevant slices: [GLiNER2.
 8. [This-That](https://arxiv.org/abs/2609.23886) reports that additional training on five known synthetic families failed to transfer to 13 others. [Decider-4B](https://huggingface.co/Mapika/decider-4b) reports that hard-label replay sharpened probabilities and hurt sampled behavior, then soft replay restored much of it. Together they favor new source families, matched-token ablations, old-model soft replay, and development gates that protect old tasks. These are research hypotheses for our architecture; they are not a published Jev training recipe.
 9. [Calibration OOD probe](https://github.com/scienthoon/jev-ood-calibration), [Eikos's calibration section](https://huggingface.co/caiovicentino1/Eikos-4B), and our CAL observation all point to the same risk: a temperature learned on easy examples can be actively harmful on hard target distributions. Keep Choice/Noul/Score and answer-count bands distinct, report pre/post calibration metrics, and permit T=1 when independent calibration does not transport. [Classic temperature scaling](https://arxiv.org/abs/1706.04599) supplies the method, not a transport guarantee.
 
+## Later same-panel 4B evidence
+
+The pinned native Decider-4B v2.1 scored **61.882** on our JevArena v3
+8,147-item core and **192/231** on the public JevBench subset, compared with
+own Nox 1.0 **56.470/173** and our official-Qwen3.5-4B-Base first candidate
+**53.218/171**. Decider minus own Nox was +5.411 v3 points, paired 95% interval
+[+0.505,+10.538]. Its typed Score accuracy was only **114/400**, so the peer
+is not uniformly strong. The [signed same-panel result](decider4b-v3-peer-result-2026-09-27.md)
+records exact revisions, hashes and the post-key limitation.
+
+The [Decider 4B card](https://huggingface.co/Mapika/decider-4b) reports a
+1,892,408-item, 742M-token full-weight initial supervised stage, then a
+29,325-row hard-decision/soft-replay LoRA stage. Our 4B first candidate saw
+7,455 TRAIN items and 4.19M native tokens through a LoRA/head recipe. The
+reported token counts differ by about 177×, with tokenizer, objective and
+parameter-update differences, so this is **a scale/breadth hypothesis, not a
+causal attribution**. The card says only about 60% of its first-stage mixture
+has a public construction recipe; the rest cannot be assumed reproducible.
+An independently audited broader source mixture and a matched-budget
+architecture/readout experiment are more informative than tuning repeatedly
+on our exposed development set.
+
 ## Implications for Decision 2.0 training and release
 
 - **Training:** Compare (A) current candidate-conditioned head, (B) token-logit readout, and (C) mean-pooled option/rubric readout with a frozen common backbone/data/budget where feasible. Introduce adversarial rubric bindings, boundary cases, multi-hop rules and realistic abstention cases from *new* families. Keep soft replay and token-/type-/language-matched controls to separate new-data gains from exposure and forgetting.
 - **Calibration:** Fit only after checkpoint selection on a separate difficult, balanced CAL. Measure transportation to both synthetic and human-label development panels. Report per-type Brier, NLL, ECE, risk/coverage and invalid/truncation, before and after fit. Do not interpret a lower ECE on one panel as a universal gain.
 - **Evaluation:** Retain the existing frozen family-disjoint synthetic final and human-label CSS 15-task final; add a distinct public regression panel and paired robustness battery. Compare exact model revisions under identical typed inputs, and show each model's native admission and projection policy. Separate quality, calibration, speed and cost. Family-level and task-level lower tails matter more than one weighted overall score.
-- **Release:** The collection may be **Decision 2.0** while model repositories use `dev-2.0-xxb`; each card should disclose architecture, exact sources/licenses, freeze/selection/calibration/final hashes, self-contained runtime, size-specific 2.0 vs 1.0 and open-model rows, task matrix, rank graphic and any failed release gate. Published 1.0 scores remain historical development context.
+- **Release:** The collection is **Decision 2.0** and first-release repositories use `DEV2.0-*` names. A product card leads with its own owl banner, user-facing typed usage and same-panel results; concise method/source/limits follow, and reproducibility hashes live in an evaluation appendix. Only eligible own-1.0 or official general-model starting weights can become Decision 2.0 packages. Show JevArena and public-231 rank plus model-by-task matrix; no first-release Pareto graphic. Published 1.0 historical scores remain context and are not mixed into new ranks.
 
 The companion JSON files in `source/` pin the card and repository revisions and their README/card hashes. They verify artifact identity and accessibility, **not** author performance claims. The raw catalog snapshot remains local because the derived audit needs only factual metadata and attribution.
