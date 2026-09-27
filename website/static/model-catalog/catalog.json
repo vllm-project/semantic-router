@@ -33121,6 +33121,351 @@
       }
     },
     {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1R-7B",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1r-7b-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.831
+      },
+      "model": "tii/falcon-h1r-7b",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1R 7B"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1R-7B",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1r-7b-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.613
+      },
+      "model": "tii/falcon-h1r-7b",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1R 7B"
+      }
+    },
+    {
+      "benchmark": "huggingfaceh4/math-500@1.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1R-7B",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1r-7b-math-500@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.974
+      },
+      "model": "tii/falcon-h1r-7b",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1R 7B"
+      }
+    },
+    {
+      "benchmark": "allenai/ifbench@1.0.0",
+      "benchmark_profile": "prompt-loose",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1R-7B",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1r-7b-ifbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.534
+      },
+      "model": "tii/falcon-h1r-7b",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1R 7B"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1R-7B",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1r-7b-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.111
+      },
+      "model": "tii/falcon-h1r-7b",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1R 7B"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1-0.5b-instruct-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.0438
+      },
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1 0.5B Instruct"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1-0.5b-instruct-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.2795
+      },
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1 0.5B Instruct"
+      }
+    },
+    {
+      "benchmark": "huggingfaceh4/math-500@1.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1-0.5b-instruct-math-500@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.584
+      },
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1 0.5B Instruct"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1-0.5b-instruct-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.7202
+      },
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1 0.5B Instruct"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1-0.5b-instruct-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.3103
+      },
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1 0.5B Instruct"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1-34b-instruct-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.1667
+      },
+      "model": "tii/falcon-h1-34b-instruct",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1 34B Instruct"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1-34b-instruct-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.4966
+      },
+      "model": "tii/falcon-h1-34b-instruct",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1 34B Instruct"
+      }
+    },
+    {
+      "benchmark": "huggingfaceh4/math-500@1.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1-34b-instruct-math-500@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.838
+      },
+      "model": "tii/falcon-h1-34b-instruct",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1 34B Instruct"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1-34b-instruct-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.8937
+      },
+      "model": "tii/falcon-h1-34b-instruct",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1 34B Instruct"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct",
+        "verification": "claimed"
+      },
+      "id": "tii/falcon-h1-34b-instruct-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.5873
+      },
+      "model": "tii/falcon-h1-34b-instruct",
+      "observed_at": "2026-09-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "variant": "Falcon H1 34B Instruct"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/critpt@1.0.0",
       "benchmark_profile": "independent-standard",
       "evidence": {
@@ -81530,6 +81875,970 @@
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "tii/falcon-h1r-7b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "tii/falcon-h1r-7b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "tii/falcon-h1r-7b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "tii/falcon-h1r-7b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "tii/falcon-h1r-7b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "tii/falcon-h1r-7b",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "tii/falcon-h1r-7b-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.613,
+          "status": "available",
+          "value": 0.613,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "tii/falcon-h1r-7b",
+      "provenance": [
+        "tii/falcon-h1r-7b-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "tii/falcon-h1r-7b",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "tii/falcon-h1r-7b",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "tii/falcon-h1r-7b",
+      "provenance": [
+        "tii/falcon-h1r-7b-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "tii/falcon-h1-0.5b-instruct-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.3103,
+          "status": "available",
+          "value": 0.3103,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 31.03
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "provenance": [
+        "tii/falcon-h1-0.5b-instruct-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 31.03,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "tii/falcon-h1-0.5b-instruct-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.2795,
+          "status": "available",
+          "value": 0.2795,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "provenance": [
+        "tii/falcon-h1-0.5b-instruct-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.3103,
+          "status": "available",
+          "value": 0.3103,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "tii/falcon-h1-0.5b-instruct",
+      "provenance": [
+        "tii/falcon-h1-0.5b-instruct-gpqa-diamond@1.0.0",
+        "tii/falcon-h1-0.5b-instruct-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "tii/falcon-h1-34b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "tii/falcon-h1-34b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "tii/falcon-h1-34b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "tii/falcon-h1-34b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "tii/falcon-h1-34b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "tii/falcon-h1-34b-instruct-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.5873,
+          "status": "available",
+          "value": 0.5873,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 58.730000000000004
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "tii/falcon-h1-34b-instruct",
+      "provenance": [
+        "tii/falcon-h1-34b-instruct-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 58.730000000000004,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "tii/falcon-h1-34b-instruct-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.4966,
+          "status": "available",
+          "value": 0.4966,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "tii/falcon-h1-34b-instruct",
+      "provenance": [
+        "tii/falcon-h1-34b-instruct-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "tii/falcon-h1-34b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "tii/falcon-h1-34b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.5873,
+          "status": "available",
+          "value": 0.5873,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "tii/falcon-h1-34b-instruct",
+      "provenance": [
+        "tii/falcon-h1-34b-instruct-gpqa-diamond@1.0.0",
+        "tii/falcon-h1-34b-instruct-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "xai/grok-4.6",
       "provenance": [],
       "reasoning_effort": "low",
@@ -92809,6 +94118,161 @@
         "chat",
         "reasoning",
         "tools",
+        "coding",
+        "long_context"
+      ],
+      "description": "TII's 7B hybrid Falcon model designed for efficient test time scaling and advanced reasoning.",
+      "display_name": "Falcon-H1R 7B",
+      "distribution": {
+        "license": "Falcon-LLM License",
+        "source": "https://huggingface.co/tiiuae/Falcon-H1R-7B",
+        "type": "open_weights"
+      },
+      "family": "falcon-h1r",
+      "id": "tii/falcon-h1r-7b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "7B",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "TII"
+      },
+      "publisher": "TII / Falcon",
+      "released_at": "2026-01-05",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "hybrid",
+        "coding",
+        "multilingual"
+      ],
+      "verification": {
+        "authority": "Technology Innovation Institute",
+        "source": "https://huggingface.co/tiiuae/Falcon-H1R-7B",
+        "status": "claimed",
+        "verified_at": "2026-09-27"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "coding"
+      ],
+      "description": "TII's compact 0.5B Falcon-H1 instruct model designed for efficient multilingual chat, reasoning and lightweight deployment.",
+      "display_name": "Falcon-H1 0.5B Instruct",
+      "distribution": {
+        "license": "Falcon-LLM License",
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct",
+        "type": "open_weights"
+      },
+      "family": "falcon-h1",
+      "id": "tii/falcon-h1-0.5b-instruct",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 16384
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "0.5B",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "TII"
+      },
+      "publisher": "TII / Falcon",
+      "released_at": "2025-05-21",
+      "tags": [
+        "open_weights",
+        "instruct",
+        "hybrid",
+        "multilingual",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "Technology Innovation Institute",
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct",
+        "status": "claimed",
+        "verified_at": "2026-09-27"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "coding",
+        "long_context"
+      ],
+      "description": "TII's flagship 34B Falcon-H1 instruct model for high capability multilingual reasoning, coding and general purpose chat.",
+      "display_name": "Falcon-H1 34B Instruct",
+      "distribution": {
+        "license": "Falcon-LLM License",
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct",
+        "type": "open_weights"
+      },
+      "family": "falcon-h1",
+      "id": "tii/falcon-h1-34b-instruct",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "34B",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "TII"
+      },
+      "publisher": "TII / Falcon",
+      "released_at": "2025-05-21",
+      "tags": [
+        "open_weights",
+        "instruct",
+        "hybrid",
+        "multilingual",
+        "flagship",
+        "reasoning",
+        "coding"
+      ],
+      "verification": {
+        "authority": "Technology Innovation Institute",
+        "source": "https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct",
+        "status": "claimed",
+        "verified_at": "2026-09-27"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
         "structured_output",
         "vision",
         "long_context"
@@ -98663,6 +100127,51 @@
             "source": "https://huggingface.co/ibm-granite/granite-4.2-3b",
             "status": "claimed",
             "verified_at": "2026-09-17"
+          }
+        },
+        {
+          "catalog": "tii/falcon-h1r-7b",
+          "id": "tiiuae/Falcon-H1R-7B",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/tiiuae/Falcon-H1R-7B",
+            "status": "claimed",
+            "verified_at": "2026-09-27"
+          }
+        },
+        {
+          "catalog": "tii/falcon-h1-0.5b-instruct",
+          "id": "tiiuae/Falcon-H1-0.5B-Instruct",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct",
+            "status": "claimed",
+            "verified_at": "2026-09-27"
+          }
+        },
+        {
+          "catalog": "tii/falcon-h1-34b-instruct",
+          "id": "tiiuae/Falcon-H1-34B-Instruct",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct",
+            "status": "claimed",
+            "verified_at": "2026-09-27"
           }
         }
       ],

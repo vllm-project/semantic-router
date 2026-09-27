@@ -775,3 +775,36 @@ models:
     status: claimed
     verified_at: 2026-09-17
     source: https://huggingface.co/ibm-granite/granite-4.2-3b
+- catalog: tii/falcon-h1r-7b
+  relationship: self_hosted
+  id: tiiuae/Falcon-H1R-7B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-27
+    source: https://huggingface.co/tiiuae/Falcon-H1R-7B
+- catalog: tii/falcon-h1-0.5b-instruct
+  relationship: self_hosted
+  id: tiiuae/Falcon-H1-0.5B-Instruct
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-27
+    source: https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct
+- catalog: tii/falcon-h1-34b-instruct
+  relationship: self_hosted
+  id: tiiuae/Falcon-H1-34B-Instruct
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-27
+    source: https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct
