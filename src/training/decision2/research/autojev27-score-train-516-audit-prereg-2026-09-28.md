@@ -148,3 +148,32 @@ SELECT, Score-class calibration, long-input and source-disjoint transfer,
 including dense-table and high-level slices, before considering any
 JevArena/JevBench or release result. No student arm or promotion follows
 automatically from this source audit.
+
+### Post hoc CPU slices from the unchanged private artifact
+
+After the sealed result, the fixed-result
+[`autojev_score_train_posthoc.py`](autojev_score_train_posthoc.py) (signed code
+commit `30148cbda76fd475cfa10fbebd0ebb744edd0aa8`) joined only the pinned
+TRAIN bytes and the two exact private result SHA values. It made **no model
+call and used no GPU**. Its private mode-0600 slice receipt SHA-256 is
+`1be46a22c97448a172b8de12600f7f5c8110d6bba335555c053f9747076bc642`.
+These comparisons were *not* preregistered primary metrics; they are
+descriptive follow-up for designing a future control.
+
+| TRAIN slice | Rows | Correct | Ties | Mean gold probability | Half Brier / row |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 3 levels, all languages | 102 | 75 | 2 | 0.6129 | 0.1738 |
+| 4–8 levels, all languages | 414 | 249 | 18 | 0.4165 | 0.2637 |
+| English, all levels | 293 | 185 | 9 | 0.4430 | 0.2498 |
+| Chinese, all levels | 223 | 139 | 11 | 0.4716 | 0.2409 |
+| English, 3 levels | 50 | 35 | 1 | 0.6113 | 0.1753 |
+| English, 4–8 levels | 243 | 150 | 8 | 0.4084 | 0.2651 |
+| Chinese, 3 levels | 52 | 40 | 1 | 0.6144 | 0.1723 |
+| Chinese, 4–8 levels | 171 | 99 | 10 | 0.4281 | 0.2617 |
+
+The 3-level to 4–8-level gap is **73.5% versus 60.1%** agreement. Aggregate
+English/Chinese agreement is **63.1%/62.3%**, but their level/source mixes
+differ. Both language slices are synthetic TRAIN questions, so this is not a
+real-world multilingual transfer finding. The next student ablation should
+report language crossed with level count and source family before attributing
+any gain to multilingual generalization.
