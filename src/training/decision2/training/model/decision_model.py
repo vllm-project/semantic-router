@@ -29,8 +29,16 @@ QWEN3_TYPED_ARCHITECTURE = (
 QWEN3_INTERACTION_ARCHITECTURE = (
     "qwen3-text-endpoints-global-query-candidate-interaction-v1"
 )
+SCORE_CARDINALITY_ARCHITECTURE = (
+    "qwen3.5-text-endpoints-global-query-score-cardinality-residual-v1"
+)
 TASK_TYPES = ("choice", "noul", "score")
-HEAD_VARIANTS = ("shared", "type-separated", "candidate-interaction")
+HEAD_VARIANTS = (
+    "shared",
+    "type-separated",
+    "candidate-interaction",
+    "score-cardinality",
+)
 
 
 def _payload(value: Any) -> str:
@@ -209,8 +217,13 @@ class DecisionModel(nn.Module):
             raise ValueError("Unsupported decision head variant")
 
         config = AutoConfig.from_pretrained(path, local_files_only=True)
-        if head_variant != "shared" and config.model_type != "qwen3":
+        if (
+            head_variant in ("type-separated", "candidate-interaction")
+            and config.model_type != "qwen3"
+        ):
             raise ValueError("The experimental head ablations require Qwen3")
+        if head_variant == "score-cardinality" and config.model_type != "qwen3_5":
+            raise ValueError("Score-cardinality treatment requires Qwen3.5")
         if config.model_type == "qwen3_5":
             from transformers import Qwen3_5ForConditionalGeneration
 
@@ -227,6 +240,8 @@ class DecisionModel(nn.Module):
             architecture = QWEN3_TYPED_ARCHITECTURE
         elif head_variant == "candidate-interaction":
             architecture = QWEN3_INTERACTION_ARCHITECTURE
+        elif head_variant == "score-cardinality":
+            architecture = SCORE_CARDINALITY_ARCHITECTURE
         tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
         full, info = model_class.from_pretrained(
             path,
@@ -252,6 +267,10 @@ class DecisionModel(nn.Module):
             from .candidate_interaction_head import CandidateInteractionHead
 
             head = CandidateInteractionHead(backbone.config.hidden_size, head_dim)
+        elif head_variant == "score-cardinality":
+            from .score_cardinality_head import ScoreCardinalityHead
+
+            head = ScoreCardinalityHead(backbone.config.hidden_size, head_dim)
         else:
             head = CandidateHead(backbone.config.hidden_size, head_dim)
         metadata = {
@@ -348,15 +367,20 @@ class DecisionModel(nn.Module):
             QWEN3_ARCHITECTURE,
             QWEN3_TYPED_ARCHITECTURE,
             QWEN3_INTERACTION_ARCHITECTURE,
+            SCORE_CARDINALITY_ARCHITECTURE,
         ):
             raise ValueError("Checkpoint is not a Decision 2.0 dynamic-option model")
         expected_variant = {
             QWEN3_TYPED_ARCHITECTURE: "type-separated",
             QWEN3_INTERACTION_ARCHITECTURE: "candidate-interaction",
+            SCORE_CARDINALITY_ARCHITECTURE: "score-cardinality",
         }.get(architecture, "shared")
         if variant != expected_variant:
             raise ValueError("Checkpoint architecture and head variant disagree")
-        if variant != "shared" and metadata.get("checkpoint_format") == LORA_FORMAT:
+        if (
+            variant in ("type-separated", "candidate-interaction")
+            and metadata.get("checkpoint_format") == LORA_FORMAT
+        ):
             raise ValueError(
                 "Experimental-head LoRA checkpoints are not supported by this ablation"
             )
@@ -384,6 +408,7 @@ class DecisionModel(nn.Module):
                     contract["base_revision"],
                     metadata["head_dim"],
                     source_stage=source_kind,
+                    head_variant=variant,
                 )
             elif source_kind == "decision1":
                 source_model, _ = cls.from_decision1(source_path, metadata["head_dim"])
@@ -466,6 +491,12 @@ class DecisionModel(nn.Module):
                 metadata["head_dim"],
                 metadata["interaction_dim"],
             )
+        elif variant == "score-cardinality":
+            from .score_cardinality_head import ScoreCardinalityHead
+
+            head = ScoreCardinalityHead(
+                backbone.config.hidden_size, metadata["head_dim"]
+            )
         else:
             head = CandidateHead(backbone.config.hidden_size, metadata["head_dim"])
         head.load_state_dict(
@@ -483,6 +514,7 @@ class DecisionModel(nn.Module):
         candidate_mask: torch.Tensor,
         query_positions: torch.Tensor,
         task_type_ids: torch.Tensor | None = None,
+        score_level_indices: torch.Tensor | None = None,
         **unused: Any,
     ) -> torch.Tensor:
         hidden = self.backbone(
@@ -498,6 +530,16 @@ class DecisionModel(nn.Module):
             if task_type_ids is None:
                 raise ValueError("Experimental-head inference needs task_type_ids")
             scores = self.head(candidates, query, task_type_ids, candidate_mask)
+        elif self.metadata.get("head_variant") == "score-cardinality":
+            if task_type_ids is None or score_level_indices is None:
+                raise ValueError("Score-cardinality inference needs type and level IDs")
+            scores = self.head(
+                candidates,
+                query,
+                task_type_ids,
+                candidate_mask,
+                score_level_indices,
+            )
         else:
             scores = self.head(candidates, query)
         return scores.masked_fill(~candidate_mask, -float("inf"))

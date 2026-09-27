@@ -544,6 +544,10 @@ def main() -> None:
         adapter_sources["candidate_interaction_head.py"] = file_sha256(
             Path(__file__).with_name("candidate_interaction_head.py")
         )
+    elif checkpoint_metadata.get("head_variant") == "score-cardinality":
+        adapter_sources["score_cardinality_head.py"] = file_sha256(
+            Path(__file__).with_name("score_cardinality_head.py")
+        )
     if calibration is not None:
         adapter_sources["calibration.py"] = file_sha256(
             Path(__file__).with_name("calibration.py")
