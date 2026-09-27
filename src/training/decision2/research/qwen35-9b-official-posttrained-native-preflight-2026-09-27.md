@@ -52,3 +52,18 @@ are used here.
 Stop on any missing source file, invalid type, OOM, nonfinite result, timeout,
 or failed native/parity gate. Preserve unsuccessful receipts and do not change
 the rule within this version.
+
+## Completed admission receipt
+
+Both independent source starts returned 700 valid SELECT answers with
+byte-identical prediction SHA-256
+`f2838de7611c8d3296825f81ff41d839d3a1573863801e02e5ce400b0f800133`.
+Their initial SELECT accuracy was 231/700 and family macro 0.301133. A new
+one-update source start finished with finite loss 1.428079 and gradient
+norm 13.920302, reaching 269/700 and family macro 0.359330; this is an
+optimization smoke, not evidence of generalization. The saved checkpoint's
+native 32-row, batch-size-two reload reproduced all categories and
+probabilities exactly (zero drift), comparison SHA-256
+`3a8e165b2a3a1ce188072a477216a19357025ee6b8e33d6ada3240b1f2a5ee77`.
+The four stages used 53.2, 51.1, 93.9 and 34.4 GPU seconds, under both
+frozen admission caps. No CAL, DEV, CSS, public231 or formal labels were used.
