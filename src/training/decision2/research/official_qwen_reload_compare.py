@@ -31,7 +31,7 @@ def audit(args: argparse.Namespace) -> dict:
     selected = load_partition(args.select, "select")[: args.rows]
     if len(selected) != args.rows or args.rows % args.batch_size:
         raise ValueError("Fixed slice must contain complete native batch pairs")
-    checkpoint = args.run / "checkpoint-0000001"
+    checkpoint = args.run / f"checkpoint-{args.checkpoint_step:07d}"
     model, tokenizer = DecisionModel.from_checkpoint(
         checkpoint, source_path=args.source_path
     )
@@ -55,7 +55,9 @@ def audit(args: argparse.Namespace) -> dict:
         output=args.output,
         tag="reload",
     )
-    original = _predictions(args.run / "select-step-0000001-predictions.jsonl")
+    original = _predictions(
+        args.run / f"select-step-{args.checkpoint_step:07d}-predictions.jsonl"
+    )
     reloaded = _predictions(args.output / "reload-predictions.jsonl")
     if set(reloaded) != {row["id"] for row in selected}:
         raise ValueError("Reload slice IDs differ")
@@ -107,11 +109,14 @@ def main() -> None:
     parser.add_argument("--select", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--rows", type=int, default=32)
+    parser.add_argument("--checkpoint-step", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--max-length", type=int, default=8192)
     parser.add_argument("--p99-limit", type=float, default=0.005)
     parser.add_argument("--max-limit", type=float, default=0.02)
     args = parser.parse_args()
+    if args.checkpoint_step < 1:
+        parser.error("--checkpoint-step must be positive")
     args.output.mkdir(parents=True, exist_ok=False)
     print(json.dumps(audit(args), sort_keys=True))
 
