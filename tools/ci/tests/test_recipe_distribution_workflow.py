@@ -132,6 +132,17 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
                 needs(self.release_workflow.jobs[job_name]),
                 msg=f"{job_name} must fail closed behind release validation",
             )
+        for job_name in ("helm-build", "python-build"):
+            self.assertEqual(needs(self.release_workflow.jobs[job_name]), {"validate"})
+            self.assertTrue(self.release_workflow.jobs[job_name]["with"]["build-only"])
+        for job_name in ("docker", "helm", "pypi", "crate"):
+            job = self.release_workflow.jobs[job_name]
+            self.assertTrue(
+                {"images", "helm-build", "python-build"}.issubset(needs(job))
+            )
+            for dependency in ("images", "helm-build", "python-build"):
+                self.assertIn(f"needs.{dependency}.result == 'success'", job["if"])
+        self.assertTrue(self.release_workflow.jobs["helm"]["with"]["prebuilt-chart"])
 
     def test_pypi_wheel_dynamically_checks_the_bound_release_snapshot(self) -> None:
         publish_path = REPO_ROOT / ".github" / "workflows" / "pypi-publish.yml"

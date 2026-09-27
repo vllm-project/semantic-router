@@ -83,7 +83,7 @@ class PythonPublisherContractTests(unittest.TestCase):
         )
         self.assertEqual(
             self.publisher.jobs["testpypi"]["if"],
-            "github.event_name == 'workflow_dispatch'",
+            "github.event_name == 'workflow_dispatch' && !inputs.build-only",
         )
         callers = {
             workflow.path.name
@@ -126,8 +126,11 @@ class PythonPublisherContractTests(unittest.TestCase):
         self.assertTrue(
             self.workflows["main.yml"].jobs["pypi"]["with"]["prebuilt-dist"]
         )
-        self.assertFalse(
+        self.assertTrue(
             self.workflows["release.yml"].jobs["pypi"]["with"]["prebuilt-dist"]
+        )
+        self.assertTrue(
+            self.workflows["release.yml"].jobs["python-build"]["with"]["build-only"]
         )
 
     def test_first_tag_push_uses_head_instead_of_zero_before_sha(self) -> None:
