@@ -1,5 +1,45 @@
 # Model-card artifacts from frozen reports
 
+## Slim first-release Hugging Face tree
+
+The private v3 package retains the full release gate, prediction bindings,
+review receipts and all generated artifacts. After its exact verifier passes,
+`publication.export_hf_v3` creates a separate, smaller 4B repository directory
+without changing any native model or chart bytes:
+
+```text
+README.md                    Apache-2.0 model card and owl banner link
+LICENSE                      Apache-2.0 text
+LICENSE-Eikos, LICENSE-Qwen   inherited model license texts
+NOTICE, ATTRIBUTIONS.md      inherited notice and source credits
+model/                       complete byte-identical native model directory
+assets/                      owl banner and six frozen rank/matrix/Pareto figures
+evaluation/EVALUATION.md     concise first-release protocol
+evaluation/manifest.json     public file hashes and private-package binding
+```
+
+The original Decision 1.0 Nox-4B mosaic owl is reused **without changing its
+pixels**, with a new SVG `DEV2.0-4B` name-card layout. Obtain the pinned banner
+through HF CLI from `llm-semantic-router/Decision-1.0-Nox-4B` at revision
+`cde2a68dbaa557ea65dc458104d410a0802ee259`, file
+`assets/decision-nox-4b-header.png`. The exporter requires its exact SHA-256.
+Run the full private verifier first, then:
+
+```bash
+PYTHONPATH=src/training/decision2 python3 -m publication.export_hf_v3 \
+  --private-package /ABS/verified-private-v3-package \
+  --owl-banner /ABS/decision-nox-4b-header.png \
+  --output /ABS/new-DEV2.0-4B-hf-repository
+PYTHONPATH=src/training/decision2 python3 -m publication.export_hf_v3 \
+  --verify /ABS/new-DEV2.0-4B-hf-repository
+```
+
+The exporter checks the private package's complete SHA-256 inventory and
+passes only a package whose 4B release gate and Apache-2.0 declarations are
+already present. It refuses symlinks, altered native files, altered charts,
+unrecognized owl pixels and extra public root files. The private verification
+bundle remains untouched and is not uploaded as the model repository.
+
 ## JevArena v3 first release
 
 The separate [`generate_arena_v3`](generate_arena_v3.py) and
