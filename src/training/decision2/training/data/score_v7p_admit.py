@@ -211,21 +211,42 @@ def _replay(
     selected = []
     for kind in ("choice", "noul"):
         eligible = [
-            rows[0]
+            rows
             for rows in by_group.values()
-            if len(rows) == 1
-            and rows[0]["task_type"] == kind
-            and rows[0]["language"] == "en"
-            and rows[0]["id"] in lengths
+            if all(
+                row["task_type"] == kind
+                and row["language"] == "en"
+                and row["id"] in lengths
+                for row in rows
+            )
+            and len(rows) <= REPLAY_PER_TYPE
         ]
         eligible.sort(
-            key=lambda row: hashlib.sha256(
-                f"v7p-replay/1/{row['id']}".encode()
+            key=lambda rows: hashlib.sha256(
+                f"v7p-replay/1/{rows[0]['group_id']}".encode()
             ).hexdigest()
         )
-        if len(eligible) < REPLAY_PER_TYPE:
-            raise ValueError(f"Too few eligible independent {kind} replay groups")
-        selected.extend(eligible[:REPLAY_PER_TYPE])
+        # Exact cardinality with complete source groups. The frozen hash order
+        # is independent of token length, labels, SELECT, and model outcomes.
+        mask = (1 << (REPLAY_PER_TYPE + 1)) - 1
+        reachable = 1
+        snapshots = [reachable]
+        for group in eligible:
+            reachable = (reachable | (reachable << len(group))) & mask
+            snapshots.append(reachable)
+        if not (reachable >> REPLAY_PER_TYPE) & 1:
+            raise ValueError(f"Cannot select 1024 complete {kind} replay rows")
+        remaining = REPLAY_PER_TYPE
+        chosen: list[list[dict[str, Any]]] = []
+        for index in range(len(eligible) - 1, -1, -1):
+            if (snapshots[index] >> remaining) & 1:
+                continue
+            group = eligible[index]
+            chosen.append(group)
+            remaining -= len(group)
+        if remaining:
+            raise AssertionError("Group subset reconstruction failed")
+        selected.extend(row for group in reversed(chosen) for row in group)
     return selected
 
 

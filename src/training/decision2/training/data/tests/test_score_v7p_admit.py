@@ -66,3 +66,24 @@ def test_replay_uses_singleton_groups_with_no_row_reuse() -> None:
     assert len({row["id"] for row in replay}) == 2048
     assert len({row["group_id"] for row in replay}) == 2048
     assert {row["task_type"] for row in replay} == {"choice", "noul"}
+
+
+def test_replay_can_use_multirow_groups_without_splitting_them() -> None:
+    parent = []
+    lengths = {}
+    for kind in ("choice", "noul"):
+        for index in range(260):
+            for variant in range(4):
+                row = {
+                    "id": f"{kind}-{index}-{variant}",
+                    "group_id": f"{kind}-g{index}",
+                    "task_type": kind,
+                    "language": "en",
+                }
+                parent.append(row)
+                lengths[row["id"]] = 100
+    replay = admit._replay(parent, lengths)
+    assert len(replay) == 2048
+    sizes = {group: len(rows) for group, rows in admit._groups(replay).items()}
+    assert len(sizes) == 512
+    assert set(sizes.values()) == {4}
