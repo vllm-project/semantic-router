@@ -72,6 +72,28 @@ selector. The earlier v6 source/QA receipts do not substitute for this audit.
 
 ## Frozen start, optimizer, panels and stop rules
 
+### Feasibility amendment before any optimizer (2026-09-27)
+
+The first CPU admission code incorrectly required a replay source group to
+contain *only* eligible English rows. It failed before writing matched arms:
+the parent has only 971 eligible Noul rows in wholly English groups, below
+the frozen 1,024-row replay target. A second CPU attempt that preserved full
+multilingual groups also failed for the same reason. Neither attempt ran a
+model, scored a selector, inspected v3 labels or changed the agreed A/B
+contrast. Both failures remain part of the preflight record.
+
+The prospectively corrected sampler treats each existing parent TRAIN group's
+**eligible English projection** as one indivisible unit. It selects all
+eligible English rows from a chosen group; other-language rows remain in the
+same parent TRAIN partition but are outside this English pilot. A group with
+any English row exceeding 1,024 native tokens is excluded in full. The
+original 1,024 Choice + 1,024 Noul common replay rows, Score 240/240,
+2,288-row arm count, A/B raw ≤1% and padded ≤5% exposure gates remain fixed.
+The TRAIN/SELECT/CAL and benchmark group boundaries are unchanged. This
+amendment changes a mistaken feasibility assumption, not the experimental
+question or a measured model-result threshold. The amended sampler and tests
+must be signed before the next CPU admission run.
+
 The existing trainer supports `ce` and `ce_brier`, but its direct-LoRA parity
 gate currently hardcodes the **old v6 A/B TRAIN hashes**. This is an explicit
 implementation blocker: **do not pass a forged old receipt or edit the old

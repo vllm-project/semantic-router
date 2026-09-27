@@ -87,3 +87,23 @@ def test_replay_can_use_multirow_groups_without_splitting_them() -> None:
     sizes = {group: len(rows) for group, rows in admit._groups(replay).items()}
     assert len(sizes) == 512
     assert set(sizes.values()) == {4}
+
+
+def test_replay_english_projection_does_not_require_chinese_parent_rows() -> None:
+    parent = []
+    lengths = {}
+    for kind in ("choice", "noul"):
+        for index in range(1024):
+            for language in ("en", "zh"):
+                row = {
+                    "id": f"{kind}-{index}-{language}",
+                    "group_id": f"{kind}-g{index}",
+                    "task_type": kind,
+                    "language": language,
+                }
+                parent.append(row)
+                lengths[row["id"]] = 100
+    replay = admit._replay(parent, lengths)
+    assert len(replay) == 2048
+    assert {row["language"] for row in replay} == {"en"}
+    assert len({row["group_id"] for row in replay}) == 2048

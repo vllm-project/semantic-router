@@ -210,17 +210,18 @@ def _replay(
     by_group = _groups(parent)
     selected = []
     for kind in ("choice", "noul"):
-        eligible = [
-            rows
-            for rows in by_group.values()
-            if all(
-                row["task_type"] == kind
-                and row["language"] == "en"
-                and row["id"] in lengths
+        eligible = []
+        for rows in by_group.values():
+            # A parent group may also have other languages or task types in
+            # TRAIN. Preserve the entire eligible English projection, rather
+            # than require the irrelevant rows to enter this English pilot.
+            projection = [
+                row
                 for row in rows
-            )
-            and len(rows) <= REPLAY_PER_TYPE
-        ]
+                if row["task_type"] == kind and row["language"] == "en"
+            ]
+            if projection and all(row["id"] in lengths for row in projection):
+                eligible.append(projection)
         eligible.sort(
             key=lambda rows: hashlib.sha256(
                 f"v7p-replay/1/{rows[0]['group_id']}".encode()
