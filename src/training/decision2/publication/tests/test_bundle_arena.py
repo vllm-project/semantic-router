@@ -42,6 +42,37 @@ def digest(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
+def original_roster_digest() -> str:
+    ids = sorted(digest(f"original-{index}") for index in range(1200))
+    return hashlib.sha256(json.dumps(ids, separators=(",", ":")).encode()).hexdigest()
+
+
+def allowed_answers(kind: str) -> list[str] | list[bool] | list[int]:
+    return {
+        "choice": ["A", "B", "C", "HOLD"],
+        "noul": [False, True],
+        "score": [0, 1, 2, 3, 4],
+    }[kind]
+
+
+def native_contract_digest() -> str:
+    kinds = ("choice", "noul", "score")
+    rows = [
+        [
+            digest(f"original-{index}"),
+            kinds[index % 3],
+            allowed_answers(kinds[index % 3]),
+            allowed_answers(kinds[index % 3]),
+        ]
+        for index in range(1200)
+    ]
+    return hashlib.sha256(
+        json.dumps(
+            sorted(rows, key=lambda item: item[0]), separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+
+
 def authored_receipt(freeze_sha: str, panel: dict[str, str]) -> dict:
     packet_at = "2026-09-01T00:00:00+00:00"
     review_at = "2026-09-01T01:00:00+00:00"
@@ -69,13 +100,15 @@ def authored_receipt(freeze_sha: str, panel: dict[str, str]) -> dict:
     kinds = ("choice", "noul", "score")
     for index in range(1200):
         kind = kinds[index % 3]
-        answer = {"choice": "A", "noul": True, "score": 1}[kind]
+        answer = {"choice": "A", "noul": True, "score": 4}[kind]
         rows.append(
             {
                 "original_id_sha256": digest(f"original-{index}"),
                 "source_family_sha256": digest(f"source-{index}"),
                 "author_identity_sha256": digest("author"),
                 "type": kind,
+                "original_allowed_answers": allowed_answers(kind),
+                "paired_allowed_answers": allowed_answers(kind),
                 "domain": f"domain-{index % 12}",
                 "operation": f"operation-{index % 20}",
                 "form_family": f"form-{index % 9}",
@@ -113,6 +146,8 @@ def authored_receipt(freeze_sha: str, panel: dict[str, str]) -> dict:
         "pretest_freeze_sha256": freeze_sha,
         "authored_prompts_sha256": panel["authored_prompts"],
         "authored_targets_sha256": panel["authored_targets"],
+        "original_roster_sha256": original_roster_digest(),
+        "authored_native_contracts_sha256": native_contract_digest(),
         "packet_sealed_at_utc": packet_at,
         "key_opened_at_utc": key_at,
         "completed_at_utc": "2026-09-01T04:00:00+00:00",
@@ -280,6 +315,7 @@ class ArenaBundleTests(unittest.TestCase):
                     "model_sha256": self.native_sha,
                     "calibration_sha256": self.calibration_sha,
                     "adapter_version": "native-adapter/1",
+                    "adapter_sha256": "6" * 64,
                     "predictions_sha256": bundle_arena.sha_file(prediction),
                 },
             )
@@ -289,6 +325,8 @@ class ArenaBundleTests(unittest.TestCase):
                 report["prediction_manifest_sha256"] = bundle_arena.sha_file(
                     native_path
                 )
+            if family == "authored":
+                report["selection_lock_sha256"] = "7" * 64
             write(score_path, report)
             self.score_inputs[family] = {
                 "score": score_path,
@@ -440,17 +478,66 @@ class ArenaBundleTests(unittest.TestCase):
         }
         write(self.parity_path, self.parity)
         self.freeze_manifest = self.root / "pretest-freeze.json"
-        write(
-            self.freeze_manifest,
-            {
-                "status": "frozen",
-                "authored_prompts_sha256": self.panel_hashes["authored_prompts"],
-                "authored_targets_sha256": self.panel_hashes["authored_targets"],
-            },
+        roster = sorted(
+            (entry["model_id"], entry["revision"])
+            for entry in json.loads(self.arena_rank.read_text())["models"]
         )
+        roster_sha = hashlib.sha256(
+            json.dumps(roster, separators=(",", ":")).encode()
+        ).hexdigest()
+        formula_sha = bundle_arena.sha_file(
+            Path(__file__).resolve().parents[2] / "jev_arena/arena_v2.py"
+        )
+        self.selected_candidate = {
+            "model_id": self.model_id,
+            "model_revision": self.revision,
+            "native_model_sha256": self.native_sha,
+            "model_files_sha256": self.files_digest,
+            "calibration_sha256": self.calibration_sha,
+            "adapter_version": self.record["native_adapter_version"],
+            "adapter_sha256": "6" * 64,
+        }
+        self.freeze = {
+            "schema_version": bundle_arena.PRETEST_FREEZE_VERSION,
+            "status": "frozen",
+            "frozen_at_utc": "2026-09-02T00:00:00+00:00",
+            "candidate_roster_sha256": roster_sha,
+            "selected_candidate": self.selected_candidate,
+            "formula_version": "jevarena-ranking/2",
+            "formula_sha256": formula_sha,
+            "selection_lock_sha256": "7" * 64,
+            "authored_prompts_sha256": self.panel_hashes["authored_prompts"],
+            "authored_targets_sha256": self.panel_hashes["authored_targets"],
+            "original_roster_sha256": original_roster_digest(),
+            "authored_native_contracts_sha256": native_contract_digest(),
+        }
+        write(self.freeze_manifest, self.freeze)
         self.authored_evidence = authored_receipt(
             bundle_arena.sha_file(self.freeze_manifest), self.panel_hashes
         )
+        self.candidate_evidence = {
+            "schema_version": bundle_arena.CANDIDATE_FREEZE_VERSION,
+            "status": "passed",
+            "pretest_freeze_sha256": bundle_arena.sha_file(self.freeze_manifest),
+            "selected_candidate": self.selected_candidate,
+            "formula_sha256": formula_sha,
+            "selection_lock_sha256": "7" * 64,
+            "reviewer_identity_sha256": digest("freeze-reviewer"),
+            "timestamp_log_sha256": digest("private-append-only-log"),
+            "first_protected_label_opened_at_utc": "2026-09-02T02:00:00+00:00",
+            "protected_prediction_seals": {
+                family: {
+                    "native_manifest_sha256": bundle_arena.sha_file(
+                        self.score_inputs[family]["native_manifest"]
+                    ),
+                    "predictions_sha256": bundle_arena.sha_file(
+                        self.score_inputs[family]["predictions"]
+                    ),
+                    "sealed_at_utc": "2026-09-02T01:00:00+00:00",
+                }
+                for family in ("synthetic", "css", "authored")
+            },
+        }
         self.gate_evidence = {
             name: self.root / f"gate-{name}.json" for name in bundle_arena.GATE_CHECKS
         }
@@ -460,7 +547,11 @@ class ArenaBundleTests(unittest.TestCase):
                 (
                     self.authored_evidence
                     if name == "authored_editorial"
-                    else {"review": name, "status": "passed"}
+                    else (
+                        self.candidate_evidence
+                        if name == "candidate_freeze"
+                        else {"review": name, "status": "passed"}
+                    )
                 ),
             )
         self.gate_path = self.root / "release-gate.json"
@@ -511,6 +602,45 @@ class ArenaBundleTests(unittest.TestCase):
         self.gate["checks"]["authored_editorial"]["evidence_sha256"] = (
             bundle_arena.sha_file(self.gate_evidence["authored_editorial"])
         )
+        write(self.gate_path, self.gate)
+
+    def rewrite_candidate_receipt(self) -> None:
+        write(self.gate_evidence["candidate_freeze"], self.candidate_evidence)
+        self.gate["checks"]["candidate_freeze"]["evidence_sha256"] = (
+            bundle_arena.sha_file(self.gate_evidence["candidate_freeze"])
+        )
+        write(self.gate_path, self.gate)
+
+    def refresh_candidate_freeze(self) -> None:
+        self.selected_candidate.update(
+            {
+                "native_model_sha256": self.native_sha,
+                "model_files_sha256": self.files_digest,
+                "calibration_sha256": self.calibration_sha,
+                "adapter_version": self.record["native_adapter_version"],
+            }
+        )
+        self.freeze["selected_candidate"] = self.selected_candidate
+        write(self.freeze_manifest, self.freeze)
+        freeze_sha = bundle_arena.sha_file(self.freeze_manifest)
+        self.authored_evidence["pretest_freeze_sha256"] = freeze_sha
+        self.candidate_evidence["pretest_freeze_sha256"] = freeze_sha
+        self.candidate_evidence["selected_candidate"] = self.selected_candidate
+        for family, seal in self.candidate_evidence[
+            "protected_prediction_seals"
+        ].items():
+            seal["native_manifest_sha256"] = bundle_arena.sha_file(
+                self.score_inputs[family]["native_manifest"]
+            )
+        for name, value in (
+            ("authored_editorial", self.authored_evidence),
+            ("candidate_freeze", self.candidate_evidence),
+        ):
+            write(self.gate_evidence[name], value)
+            self.gate["checks"][name]["evidence_sha256"] = bundle_arena.sha_file(
+                self.gate_evidence[name]
+            )
+        self.gate["pretest_freeze_sha256"] = freeze_sha
         write(self.gate_path, self.gate)
 
     def test_assembles_exact_same_panel_package_and_detects_tampering(self) -> None:
@@ -673,6 +803,57 @@ class ArenaBundleTests(unittest.TestCase):
         self.authored_evidence["authored_prompts_sha256"] = "f" * 64
         self.rewrite_authored_receipt()
         with self.assertRaisesRegex(ValueError, "not bound to freeze"):
+            self.assemble()
+
+    def test_authored_row_roster_must_match_freeze(self) -> None:
+        self.authored_evidence["rows"][0]["original_id_sha256"] = digest(
+            "different-original"
+        )
+        self.rewrite_authored_receipt()
+        with self.assertRaisesRegex(ValueError, "differ from frozen roster"):
+            self.assemble()
+
+    def test_native_answer_domain_rejects_invalid_choice_and_drift(self) -> None:
+        row = self.authored_evidence["rows"][0]
+        row["original_review_a"]["native_answer"] = "made-up"
+        self.rewrite_authored_receipt()
+        with self.assertRaisesRegex(ValueError, "invalid native answer"):
+            self.assemble()
+        row["original_review_a"]["native_answer"] = "A"
+        row["original_allowed_answers"].append("EXTRA")
+        self.rewrite_authored_receipt()
+        with self.assertRaisesRegex(ValueError, "contracts differ from freeze"):
+            self.assemble()
+
+    def test_candidate_freeze_rejects_late_freeze_or_changed_adapter(self) -> None:
+        self.candidate_evidence["protected_prediction_seals"]["synthetic"][
+            "sealed_at_utc"
+        ] = self.freeze["frozen_at_utc"]
+        self.rewrite_candidate_receipt()
+        with self.assertRaisesRegex(ValueError, "chronology is invalid"):
+            self.assemble()
+        self.candidate_evidence["protected_prediction_seals"]["synthetic"][
+            "sealed_at_utc"
+        ] = "2026-09-02T01:00:00+00:00"
+        self.candidate_evidence["selected_candidate"] = {
+            **self.selected_candidate,
+            "adapter_sha256": "f" * 64,
+        }
+        self.rewrite_candidate_receipt()
+        with self.assertRaisesRegex(ValueError, "does not bind evaluated model"):
+            self.assemble()
+
+    def test_candidate_freeze_rejects_formula_or_prediction_receipt_drift(self) -> None:
+        self.candidate_evidence["formula_sha256"] = "f" * 64
+        self.rewrite_candidate_receipt()
+        with self.assertRaisesRegex(ValueError, "does not bind evaluated model"):
+            self.assemble()
+        self.candidate_evidence["formula_sha256"] = self.freeze["formula_sha256"]
+        self.candidate_evidence["protected_prediction_seals"]["authored"][
+            "native_manifest_sha256"
+        ] = ("f" * 64)
+        self.rewrite_candidate_receipt()
+        with self.assertRaisesRegex(ValueError, "protected prediction seal differs"):
             self.assemble()
 
     def test_verify_rechecks_internal_gate_after_inventory_rewrite(self) -> None:
@@ -914,7 +1095,7 @@ class ExternalAdapterArenaBundleTests(unittest.TestCase):
                 "model_files_sha256": release.files_digest,
             }
         )
-        write(release.gate_path, release.gate)
+        release.refresh_candidate_freeze()
         self.source_parity = release.root / "adapter-source-parity.json"
         self.source_parity_value = {
             "schema_version": bundle_arena.ADAPTER_PARITY_VERSION,

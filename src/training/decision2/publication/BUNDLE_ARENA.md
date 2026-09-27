@@ -34,11 +34,29 @@ and be within 25% of the nominal model name. The record's per-language TRAIN
 counts must sum to the exact TRAIN row count; the card states the evaluation
 language coverage so English-heavy panels are not read as multilingual proof.
 
+The pretest freeze uses `decision2-jevarena-pretest-freeze/1`. It names the
+selected model revision, native model, model-file and calibration digests,
+native adapter version and SHA-256, the complete candidate model/revision
+roster digest, the authored selection-lock digest, and the `jevarena-ranking/2`
+formula with its exact source SHA-256. It records a UTC freeze time. The
+private `candidate_freeze` audit uses
+`decision2-candidate-freeze-audit/1` and binds the freeze, selected candidate,
+formula, and the exact native-manifest and prediction digests for the
+protected typed, transfer and authored FINAL panels. Its declared sequence
+must satisfy **freeze < every protected prediction seal < first protected
+label access**. The packager checks the identities and this chronology; an
+independent release owner must inspect the separate append-only timestamp log
+to establish that the asserted times are genuine. The current prediction
+collector does not itself provide a trusted UTC timestamp, so a self-filled
+audit JSON cannot qualify a release without that external attestation.
+
 The private `authored_editorial` evidence must use
 `decision2-authored-editorial-receipt/1`. A bare `passed` flag and file hash do
 not qualify. Its 1,200–1,480 rows identify distinct independent originals,
 native type, source family, author, domain, operation, document form, template
-and length band. Each row contains two original blind reviews, one paired
+and length band. Original and paired views each declare their frozen native
+answer vocabulary, allowing any valid ordered Score rubric length and checking
+Choice labels against the actual criteria. Each row contains two original blind reviews, one paired
 blind review, a second paired review for at least 15% of each type, and a
 separate adjudication. Each blind review records a direct native answer,
 citations to both sources, paragraph inspection and explicit ambiguity,
@@ -49,7 +67,10 @@ originals per native type, the preregistered domain/operation/template caps
 and length mix, no unresolved material errors, distinct opaque identities per
 case, and review seals before key access followed by adjudication. The
 receipt's prompt, target and pretest-freeze hashes must match the frozen
-release panel and the separate freeze file. Reviewer answers, citations,
+release panel and the separate freeze file. The freeze and editorial receipt
+also commit to the same SHA-256 of the sorted, unique original-ID roster and
+the canonical per-row native answer contracts; the packager recomputes both
+digests from every row. Reviewer answers, citations,
 identity commitments and the private oracle stay outside the public package.
 **The program can check receipt structure, declared identities and chronology;
 it cannot establish that these identities are real humans, that the reviewers

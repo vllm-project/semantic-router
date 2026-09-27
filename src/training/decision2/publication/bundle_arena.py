@@ -33,6 +33,8 @@ RECORD_VERSION = "decision2-release-package-record/2"
 PARITY_VERSION = "decision2-native-package-parity/1"
 GATE_VERSION = "decision2-jevarena-release-gate/1"
 AUTHORED_EDITORIAL_VERSION = "decision2-authored-editorial-receipt/1"
+CANDIDATE_FREEZE_VERSION = "decision2-candidate-freeze-audit/1"
+PRETEST_FREEZE_VERSION = "decision2-jevarena-pretest-freeze/1"
 MODEL_ID = re.compile(r"llm-semantic-router/dev-2\.0-(?:0\.6b|0\.8b|2b|4b|8b|9b|27b)\Z")
 SHA256 = re.compile(r"[a-f0-9]{64}\Z")
 IMMUTABLE_REVISION = re.compile(r"[a-f0-9]{40}(?:[a-f0-9]{24})?\Z")
@@ -683,7 +685,7 @@ def _release_artifacts(
     revision: str,
     score_key: str,
     manifest: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], str]:
     if (
         manifest.get("publication_version") != ARTIFACT_VERSION
         or manifest.get("phase") != "release"
@@ -772,7 +774,13 @@ def _release_artifacts(
         raise ValueError("Artifact panel fingerprint differs from ranking")
     if manifest.get("coverage") != row.get("coverage"):
         raise ValueError("Artifact coverage differs from selected release row")
-    return manifest, row
+    roster = sorted((entry["model_id"], entry["revision"]) for entry in arena["models"])
+    if len(set(roster)) != len(roster):
+        raise ValueError("JevArena candidate roster repeats a model revision")
+    roster_sha = hashlib.sha256(
+        json.dumps(roster, separators=(",", ":")).encode()
+    ).hexdigest()
+    return manifest, row, roster_sha
 
 
 def _score_inputs(
@@ -840,6 +848,7 @@ def _score_inputs(
             or native_calibration != calibration_sha
         ):
             raise ValueError(f"{family}: native run used another model package")
+        adapter_sha = _sha(native.get("adapter_sha256"), f"{family} native adapter")
         if (
             package_manifest_sha is not None
             and native.get("package_manifest_sha256") != package_manifest_sha
@@ -854,7 +863,12 @@ def _score_inputs(
             "score_sha256": score_sha,
             "predictions_sha256": prediction_sha,
             "native_manifest_sha256": native_sha_file,
+            "adapter_sha256": adapter_sha,
         }
+        if family == "authored":
+            binding[family]["selection_lock_sha256"] = _sha(
+                score.get("selection_lock_sha256"), "authored selection lock"
+            )
     return binding
 
 
@@ -956,7 +970,10 @@ def _utc(value: Any, label: str) -> datetime:
 
 
 def _review_row(
-    review: Any, kind: str, packet_at: datetime, key_at: datetime
+    review: Any,
+    allowed: list[Any],
+    packet_at: datetime,
+    key_at: datetime,
 ) -> tuple[str, Any]:
     fields = {
         "reviewer_identity_sha256",
@@ -981,11 +998,7 @@ def _review_row(
     if not packet_at < sealed < key_at:
         raise ValueError("Authored review was not sealed before key access")
     answer = review["native_answer"]
-    if (
-        (kind == "choice" and (not isinstance(answer, str) or not answer.strip()))
-        or (kind == "noul" and not isinstance(answer, bool))
-        or (kind == "score" and (type(answer) is not int or not 0 <= answer <= 2))
-    ):
+    if not any(type(answer) is type(option) and answer == option for option in allowed):
         raise ValueError("Authored reviewer gave an invalid native answer")
     if any(
         not isinstance(review[field], str) or not review[field].strip()
@@ -1000,6 +1013,23 @@ def _review_row(
     ):
         raise ValueError("Authored review has unresolved editorial concerns")
     return reviewer, answer
+
+
+def _allowed_answers(kind: str, allowed: Any) -> list[Any]:
+    if not isinstance(allowed, list) or not 2 <= len(allowed) <= 64:
+        raise ValueError("Authored native answer vocabulary is invalid")
+    if kind == "choice":
+        valid = all(isinstance(value, str) and value.strip() for value in allowed)
+        valid = valid and len(set(allowed)) == len(allowed)
+    elif kind == "noul":
+        valid = allowed in ([False, True], [True, False])
+    else:
+        valid = all(type(value) is int for value in allowed) and allowed == list(
+            range(len(allowed))
+        )
+    if not valid:
+        raise ValueError("Authored native answer vocabulary is invalid")
+    return allowed
 
 
 def _authored_editorial(
@@ -1020,6 +1050,10 @@ def _authored_editorial(
         or freeze.get("status") != "frozen"
         or freeze.get("authored_prompts_sha256") != panel.get("authored_prompts")
         or freeze.get("authored_targets_sha256") != panel.get("authored_targets")
+        or evidence.get("original_roster_sha256")
+        != freeze.get("original_roster_sha256")
+        or evidence.get("authored_native_contracts_sha256")
+        != freeze.get("authored_native_contracts_sha256")
         or type(count) is not int
         or not 1200 <= count <= 1480
         or evidence.get("independent_originals") != count
@@ -1034,6 +1068,7 @@ def _authored_editorial(
     if not isinstance(rows, list) or len(rows) != count:
         raise ValueError("Authored editorial lacks every independent row")
     ids: set[str] = set()
+    native_contracts: list[list[Any]] = []
     kinds: Counter[str] = Counter()
     domains: Counter[str] = Counter()
     operations: Counter[str] = Counter()
@@ -1046,6 +1081,8 @@ def _authored_editorial(
         "source_family_sha256",
         "author_identity_sha256",
         "type",
+        "original_allowed_answers",
+        "paired_allowed_answers",
         "domain",
         "operation",
         "form_family",
@@ -1068,8 +1105,11 @@ def _authored_editorial(
             raise ValueError("Authored editorial repeats an original")
         ids.add(original)
         kind = row["type"]
-        if kind not in {"choice", "noul", "score"}:
+        if not isinstance(kind, str) or kind not in {"choice", "noul", "score"}:
             raise ValueError("Authored editorial has an unknown native type")
+        original_allowed = _allowed_answers(kind, row["original_allowed_answers"])
+        paired_allowed = _allowed_answers(kind, row["paired_allowed_answers"])
+        native_contracts.append([original, kind, original_allowed, paired_allowed])
         for name in ("domain", "operation", "form_family"):
             if not isinstance(row[name], str) or not row[name].strip():
                 raise ValueError("Authored editorial omits allocation provenance")
@@ -1082,12 +1122,17 @@ def _authored_editorial(
         templates[template] += 1
         bands[row["length_band"]] += 1
         reviews = [
-            _review_row(row[name], kind, packet_at, key_at)
-            for name in ("original_review_a", "original_review_b", "paired_review")
+            _review_row(row[name], original_allowed, packet_at, key_at)
+            for name in ("original_review_a", "original_review_b")
         ]
+        reviews.append(
+            _review_row(row["paired_review"], paired_allowed, packet_at, key_at)
+        )
         if row["paired_second_review"] is not None:
             reviews.append(
-                _review_row(row["paired_second_review"], kind, packet_at, key_at)
+                _review_row(
+                    row["paired_second_review"], paired_allowed, packet_at, key_at
+                )
             )
             second_by_kind[kind] += 1
         adjudication = row["adjudication"]
@@ -1136,6 +1181,22 @@ def _authored_editorial(
             or adjudication["unresolved_material_errors"] != 0
         ):
             raise ValueError("Authored row has unresolved adjudication")
+    roster_sha = hashlib.sha256(
+        json.dumps(sorted(ids), separators=(",", ":")).encode()
+    ).hexdigest()
+    if roster_sha != _sha(evidence.get("original_roster_sha256"), "authored roster"):
+        raise ValueError("Authored editorial row IDs differ from frozen roster")
+    native_contracts_sha = hashlib.sha256(
+        json.dumps(
+            sorted(native_contracts, key=lambda item: item[0]),
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    if native_contracts_sha != _sha(
+        evidence.get("authored_native_contracts_sha256"), "authored native contracts"
+    ):
+        raise ValueError("Authored native answer contracts differ from freeze")
     if (
         evidence.get("type_counts") != dict(kinds)
         or any(kinds[kind] < 360 for kind in ("choice", "noul", "score"))
@@ -1154,6 +1215,65 @@ def _authored_editorial(
         )
 
 
+def _candidate_freeze(
+    freeze: dict[str, Any],
+    freeze_sha: str,
+    evidence: dict[str, Any],
+    candidate: dict[str, Any],
+    roster_sha: str,
+    score_binding: dict[str, dict[str, str]],
+) -> None:
+    """Check declared freeze order and bytes; timestamp authenticity is external."""
+    formula_sha = sha_file(
+        Path(__file__).resolve().parents[1] / "jev_arena/arena_v2.py"
+    )
+    authored_lock = score_binding["authored"]["selection_lock_sha256"]
+    if (
+        freeze.get("schema_version") != PRETEST_FREEZE_VERSION
+        or freeze.get("status") != "frozen"
+        or freeze.get("candidate_roster_sha256") != roster_sha
+        or freeze.get("selected_candidate") != candidate
+        or freeze.get("formula_version") != "jevarena-ranking/2"
+        or freeze.get("formula_sha256") != formula_sha
+        or freeze.get("selection_lock_sha256") != authored_lock
+        or evidence.get("schema_version") != CANDIDATE_FREEZE_VERSION
+        or evidence.get("status") != "passed"
+        or evidence.get("pretest_freeze_sha256") != freeze_sha
+        or evidence.get("selected_candidate") != candidate
+        or evidence.get("formula_sha256") != formula_sha
+        or evidence.get("selection_lock_sha256") != authored_lock
+    ):
+        raise ValueError("Candidate freeze or formula does not bind evaluated model")
+    frozen_at = _utc(freeze.get("frozen_at_utc"), "candidate freeze")
+    label_opened_at = _utc(
+        evidence.get("first_protected_label_opened_at_utc"), "formal label access"
+    )
+    _sha(evidence.get("timestamp_log_sha256"), "independent timestamp log")
+    _sha(evidence.get("reviewer_identity_sha256"), "freeze reviewer identity")
+    seals = evidence.get("protected_prediction_seals")
+    if not isinstance(seals, dict) or set(seals) != {
+        "synthetic",
+        "css",
+        "authored",
+    }:
+        raise ValueError("Protected FINAL predictions lack sealed receipts")
+    for family, seal in seals.items():
+        binding = score_binding[family]
+        if (
+            not isinstance(seal, dict)
+            or set(seal)
+            != {"native_manifest_sha256", "predictions_sha256", "sealed_at_utc"}
+            or seal["native_manifest_sha256"] != binding["native_manifest_sha256"]
+            or seal["predictions_sha256"] != binding["predictions_sha256"]
+        ):
+            raise ValueError(f"{family}: protected prediction seal differs")
+        sealed_at = _utc(seal["sealed_at_utc"], f"{family} prediction seal")
+        if not frozen_at < sealed_at < label_opened_at:
+            raise ValueError(
+                f"{family}: freeze, prediction and label chronology is invalid"
+            )
+
+
 def _external_evidence(
     record: dict[str, Any],
     gate: dict[str, Any],
@@ -1165,6 +1285,9 @@ def _external_evidence(
     freeze_sha: str,
     panel: dict[str, Any],
     coverage: dict[str, Any],
+    candidate: dict[str, Any],
+    roster_sha: str,
+    score_binding: dict[str, dict[str, str]],
 ) -> dict[str, str]:
     training = record["training"]
     expected = {
@@ -1185,6 +1308,7 @@ def _external_evidence(
     }
     observed: dict[str, str] = {}
     authored_payload: bytes | None = None
+    candidate_payload: bytes | None = None
     for name, path in paths.items():
         if path.is_symlink() or not path.is_file():
             raise ValueError(f"External evidence is missing or linked: {name}")
@@ -1204,6 +1328,8 @@ def _external_evidence(
             digest = hashlib.sha256(payload).hexdigest()
             if name == "gate:authored_editorial":
                 authored_payload = payload
+            elif name == "gate:candidate_freeze":
+                candidate_payload = payload
         if digest != wanted:
             raise ValueError(f"External evidence changed after review: {name}")
         observed[name] = digest
@@ -1212,6 +1338,13 @@ def _external_evidence(
     if not isinstance(authored, dict):
         raise ValueError("Authored editorial receipt must be a JSON object")
     _authored_editorial(authored, freeze, freeze_sha, panel, coverage)
+    assert candidate_payload is not None
+    candidate_evidence = json.loads(candidate_payload)
+    if not isinstance(candidate_evidence, dict):
+        raise ValueError("Candidate freeze receipt must be a JSON object")
+    _candidate_freeze(
+        freeze, freeze_sha, candidate_evidence, candidate, roster_sha, score_binding
+    )
     return observed
 
 
@@ -1455,7 +1588,7 @@ def assemble(
         raise ValueError("Native CAL filename differs from architecture contract")
     if record.get("calibration_sha256") != files.get(calibration_name):
         raise ValueError("Native CAL artifact differs from provenance")
-    artifacts_manifest, row = _release_artifacts(
+    artifacts_manifest, row, roster_sha = _release_artifacts(
         artifacts,
         arena_rank,
         public_rank,
@@ -1480,6 +1613,18 @@ def assemble(
         files["MODEL_MANIFEST.json"] if external else None,
         checkpoint_files,
     )
+    adapter_shas = {entry["adapter_sha256"] for entry in score_binding.values()}
+    if len(adapter_shas) != 1:
+        raise ValueError("Same-panel native runs used different adapter bytes")
+    candidate = {
+        "model_id": model_id,
+        "model_revision": revision,
+        "native_model_sha256": native_sha,
+        "model_files_sha256": model_files_digest,
+        "calibration_sha256": files[calibration_name],
+        "adapter_version": record["native_adapter_version"],
+        "adapter_sha256": next(iter(adapter_shas)),
+    }
     _parity(
         parity,
         model_id,
@@ -1508,6 +1653,9 @@ def assemble(
         freeze_sha=freeze_sha,
         panel=artifacts_manifest["panel_sha256"],
         coverage=row["coverage"],
+        candidate=candidate,
+        roster_sha=roster_sha,
+        score_binding=score_binding,
     )
     # Records copied to the public repository contain only reviewed, screened text.
     for path, payload in (
