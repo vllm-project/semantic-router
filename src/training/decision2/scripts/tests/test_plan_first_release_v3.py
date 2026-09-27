@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import struct
@@ -10,6 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from inference.run import digest as native_digest
 from jev_arena.jevbench_public import FILES, SOURCE_REVISION, SOURCE_URL
 from scripts.baseline_attestation_v3 import build_attestation
 from scripts.plan_final_eval import BASELINES, sha_file
@@ -17,6 +19,7 @@ from scripts.plan_first_release_v3 import (
     GATE_DOCUMENT,
     PLAN_VERSION,
     ROSTER_VERSION,
+    _baseline_prediction_hashes,
     audit_prekey_predictions,
     build_plan,
     checked_roster,
@@ -46,6 +49,11 @@ class FirstReleasePlanTests(unittest.TestCase):
             package = self.model_root / model.model_dir
             package.mkdir(parents=True)
             (package / "config.json").write_text("{}\n", encoding="utf-8")
+            if model.key == "nox":
+                (package / "bundle-manifest.json").write_text("{}\n", encoding="utf-8")
+            else:
+                (package / "decision_config.json").write_text("{}\n", encoding="utf-8")
+                (package / "SHA256SUMS").write_text("fixture\n", encoding="utf-8")
             header = json.dumps(
                 {"weight": {"dtype": "F32", "shape": [4], "data_offsets": [0, 16]}}
             ).encode()
@@ -119,6 +127,57 @@ class FirstReleasePlanTests(unittest.TestCase):
         self.css.write_text("", encoding="utf-8")
         self.candidate_freeze = self.root / "candidate-freeze.json"
         write_json(self.candidate_freeze, {"frozen": True})
+
+    def test_composite_native_row_digests_follow_adapter_recipes(self) -> None:
+        cases = (
+            (
+                "kev",
+                {
+                    "provenance.json": "1" * 64,
+                    "head.pt": "2" * 64,
+                    "adapter_model.safetensors": "3" * 64,
+                },
+                {},
+                {
+                    "model_config_sha256": native_digest(
+                        {
+                            "provenance": "1" * 64,
+                            "head": "2" * 64,
+                            "adapter": "3" * 64,
+                        }
+                    )
+                },
+            ),
+            (
+                "jevk5-4b",
+                {
+                    "jevk5_config.json": "4" * 64,
+                    "model.safetensors": "5" * 64,
+                    "SHA256SUMS": "6" * 64,
+                },
+                {"jevk5/runtime.py": "7" * 64, "jevk5/prompt.py": "8" * 64},
+                {
+                    "model_config_sha256": "4" * 64,
+                    "model_weight_sha256": "5" * 64,
+                    "release_manifest_sha256": "6" * 64,
+                    "runtime_source_sha256": native_digest(
+                        {"jevk5/runtime.py": "7" * 64, "jevk5/prompt.py": "8" * 64}
+                    ),
+                },
+            ),
+        )
+        for key, files, runtime_files, expected in cases:
+            with self.subTest(key=key):
+                path = self.root / f"{key}.native-receipt.json"
+                write_json(path, {"files": files, "runtime_files": runtime_files})
+                model = next(item for item in BASELINES if item.key == key)
+                self.assertEqual(
+                    _baseline_prediction_hashes(
+                        model,
+                        {"receipt_path": str(path), "receipt_sha256": sha_file(path)},
+                    ),
+                    expected,
+                )
 
     def test_plan_is_separate_v3_two_axis_with_public_crosscheck(self) -> None:
         models, pairs, attestations, sizes, roster_sha = checked_roster(
@@ -384,13 +443,26 @@ class FirstReleasePlanTests(unittest.TestCase):
                         native = next(
                             item for item in self.models if item.key == model["key"]
                         )
+                        package = self.model_root / native.model_dir
                         row.update(
                             {
                                 "backend": native.backend,
                                 "revision_attested": True,
                                 "runtime_matches_validated": True,
+                                "model_config_sha256": sha_file(
+                                    package
+                                    / (
+                                        "bundle-manifest.json"
+                                        if native.key == "nox"
+                                        else "decision_config.json"
+                                    )
+                                ),
                             }
                         )
+                        if native.key == "eikos4b":
+                            row["release_manifest_sha256"] = sha_file(
+                                package / "SHA256SUMS"
+                            )
                     rows.append(row)
                 path.write_text(
                     "".join(
@@ -431,7 +503,47 @@ class FirstReleasePlanTests(unittest.TestCase):
             bad_pair_plan = {**plan, "comparison_pairs_sha256": "0" * 64}
             with self.assertRaisesRegex(ValueError, "comparison pairs changed"):
                 audit_prekey_predictions(bad_pair_plan)
+            for field, wrong in (
+                ("native_model_sha256", "0" * 64),
+                ("adapter_sha256", "0" * 64),
+                ("calibration_sha256", "0" * 64),
+                ("revision", "wrong-revision"),
+            ):
+                with self.subTest(field=field):
+                    bad_identity_plan = copy.deepcopy(plan)
+                    bad_identity_plan["model_roster"][0][field] = wrong
+                    with self.assertRaisesRegex(
+                        ValueError, "planned baseline identity differs"
+                    ):
+                        audit_prekey_predictions(bad_identity_plan)
             first = Path(plan["inference"][0]["paths"]["typed"])
+            original = first.read_text(encoding="utf-8")
+            rows = [json.loads(line) for line in original.splitlines()]
+            rows[0].pop("revision_attested")
+            first.write_text(
+                "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "native runtime differs"):
+                audit_prekey_predictions(plan)
+            rows[0]["revision_attested"] = True
+            rows[0]["model_config_sha256"] = "0" * 64
+            first.write_text(
+                "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "native runtime differs"):
+                audit_prekey_predictions(plan)
+            first.write_text(original, encoding="utf-8")
+            open_control = Path(plan["inference"][1]["paths"]["typed"])
+            open_original = open_control.read_text(encoding="utf-8")
+            open_rows = [json.loads(line) for line in open_original.splitlines()]
+            open_rows[0]["release_manifest_sha256"] = "0" * 64
+            open_control.write_text(
+                "".join(json.dumps(row) + "\n" for row in open_rows),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "native runtime differs"):
+                audit_prekey_predictions(plan)
+            open_control.write_text(open_original, encoding="utf-8")
             first.write_text(
                 first.read_text(encoding="utf-8").replace(
                     "typed-0", "typed-tampered", 1

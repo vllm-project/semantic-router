@@ -105,6 +105,16 @@ blocks planning. This check does not prove the native loader actually uses
 every file: preserve the loader count receipt and native prediction/parity
 evidence separately. Never use the rounded model name as `size_b`.
 
+The gold-free prediction audit checks each planned baseline identity against
+its reverified attestation and requires `revision_attested: true` in every
+native row. It also compares native per-row config, weight, release-manifest
+and runtime-source digests with the exact attested files where the native
+adapter exposes those fields. Kev's composite fingerprint follows its native
+three-file recipe. A config digest is not the whole package digest: adapters
+that do not emit a full-package per-run digest still require the byte-complete
+attestation at planning and pre-key audit, plus separately retained native run
+evidence. Do not claim a config match alone proves weight identity at runtime.
+
 The numeric rules are in
 [`jev-arena-v3-first-release-gates-2026-09-27.md`](../research/jev-arena-v3-first-release-gates-2026-09-27.md).
 The roster binds the exact SHA-256 of that document. The planner also hashes

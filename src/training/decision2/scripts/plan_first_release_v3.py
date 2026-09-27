@@ -76,6 +76,41 @@ SAME_SIZE_COMPARATOR = {
     "4B": {"nox"},
     "9B": {"lux"},
 }
+BASELINE_ROW_FILES = {
+    "decider": {"model_config_sha256": "decider_config.json"},
+    "eikos4b": {
+        "model_config_sha256": "decision_config.json",
+        "release_manifest_sha256": "SHA256SUMS",
+    },
+    "eos": {"model_config_sha256": "MODEL_MANIFEST.json"},
+    "kai": {"model_config_sha256": "native/MANIFEST.json"},
+    "laya": {
+        "model_config_sha256": "rl_agent_config.json",
+        "model_weights_sha256": "model.safetensors",
+    },
+    "lex": {"model_config_sha256": "native/MANIFEST.json"},
+    "lux": {"model_config_sha256": "bundle-manifest.json"},
+    "nox": {"model_config_sha256": "bundle-manifest.json"},
+    "sol": {"model_config_sha256": "bundle-manifest.json"},
+    "this-that": {
+        "model_config_sha256": "config.json",
+        "model_weights_sha256": "model.safetensors",
+    },
+    "jevk5-2b": {
+        "model_config_sha256": "jevk5_config.json",
+        "model_weight_sha256": "model.safetensors",
+    },
+    "jevk5-4b": {
+        "model_config_sha256": "jevk5_config.json",
+        "model_weight_sha256": "model.safetensors",
+        "release_manifest_sha256": "SHA256SUMS",
+    },
+    "jevk5-9b": {
+        "model_config_sha256": "jevk5_config.json",
+        "model_weight_sha256": "model.safetensors",
+        "release_manifest_sha256": "SHA256SUMS",
+    },
+}
 SHA = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -152,6 +187,45 @@ def _baseline_attestations(
         )
         attestations[key] = item
     return attestations
+
+
+def _baseline_prediction_hashes(
+    model: NativeModel, attestation: dict[str, Any]
+) -> dict[str, str]:
+    """Use only native row digests with an exact attested file or defined recipe."""
+    receipt_path = Path(attestation["receipt_path"])
+    if sha_file(receipt_path) != attestation["receipt_sha256"]:
+        raise ValueError(f"{model.key}: baseline receipt changed during audit")
+    receipt = _object(receipt_path)
+    files = receipt["files"]
+    expected = {}
+    for field, name in BASELINE_ROW_FILES.get(model.key, {}).items():
+        if name not in files:
+            raise ValueError(f"{model.key}: attested package lacks {field} source")
+        expected[field] = files[name]
+    if model.key == "kev":
+        # Kev's field is a digest of three file digests, not one file SHA.
+        names = {
+            "provenance": "provenance.json",
+            "head": "head.pt",
+            "adapter": "adapter_model.safetensors",
+        }
+        if any(name not in files for name in names.values()):
+            raise ValueError("kev: attested package lacks fingerprint sources")
+        payload = {field: files[name] for field, name in names.items()}
+        expected["model_config_sha256"] = hashlib.sha256(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
+        ).hexdigest()
+    if model.module == "inference.jevk5":
+        runtime = receipt["runtime_files"]
+        names = ("jevk5/runtime.py", "jevk5/prompt.py")
+        if any(name not in runtime for name in names):
+            raise ValueError(f"{model.key}: attested runtime lacks source files")
+        payload = {name: runtime[name] for name in names}
+        expected["runtime_source_sha256"] = hashlib.sha256(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
+        ).hexdigest()
+    return expected
 
 
 def checked_roster(
@@ -654,7 +728,7 @@ def audit_prekey_predictions(plan: dict[str, Any]) -> dict[str, Any]:
         model_root=Path(plan["model_root"]),
         external_root=Path(plan["external_root"]),
     )
-    if {
+    if len(plan["model_roster"]) != len(models) or {
         model.key if isinstance(model, NativeModel) else model["key"]
         for model in models
     } != {row["key"] for row in plan["model_roster"]}:
@@ -664,6 +738,13 @@ def audit_prekey_predictions(plan: dict[str, Any]) -> dict[str, Any]:
         or pairs != plan["comparison_pairs"]
     ):
         raise ValueError("Predeclared 1.0 comparison pairs changed since v3 planning")
+    baseline_by_key = {
+        model.key: model for model in models if isinstance(model, NativeModel)
+    }
+    baseline_row_hashes = {
+        key: _baseline_prediction_hashes(model, attestations[key])
+        for key, model in baseline_by_key.items()
+    }
     for row in plan["model_roster"]:
         key = row["key"]
         expected = (
@@ -671,6 +752,23 @@ def audit_prekey_predictions(plan: dict[str, Any]) -> dict[str, Any]:
         )
         if row["size_b"] != expected:
             raise ValueError(f"{key}: loaded parameter count changed")
+        if key in baseline_by_key:
+            baseline = baseline_by_key[key]
+            attestation = attestations[key]
+            expected_identity = {
+                "group": baseline.group,
+                "model_id": baseline.model_id,
+                "revision": baseline.revision,
+                "native_model_sha256": attestation["native_model_sha256"],
+                "adapter_sha256": attestation["adapter_sha256"],
+                "calibration_sha256": attestation["calibration_sha256"],
+            }
+            if any(
+                row.get(field) != value for field, value in expected_identity.items()
+            ):
+                raise ValueError(
+                    f"{key}: planned baseline identity differs from attestation"
+                )
     if any(
         sha_file(source_root / name) != digest
         for name, digest in plan["source_sha256"].items()
@@ -726,9 +824,6 @@ def audit_prekey_predictions(plan: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Public gold-free prompts changed")
     hash_lines = []
     frozen_by_key = {row["key"]: row for row in frozen}
-    baseline_by_key = {
-        model.key: model for model in models if isinstance(model, NativeModel)
-    }
     for model in plan["inference"]:
         model_hashes = {}
         for panel, name in model["paths"].items():
@@ -783,7 +878,13 @@ def audit_prekey_predictions(plan: dict[str, Any]) -> dict[str, Any]:
                         baseline = baseline_by_key[model["key"]]
                         if (
                             row.get("backend") != baseline.backend
-                            or row.get("revision_attested") is False
+                            or row.get("revision_attested") is not True
+                            or any(
+                                row.get(field) != digest
+                                for field, digest in baseline_row_hashes[
+                                    model["key"]
+                                ].items()
+                            )
                             or (
                                 baseline.group == "decision1"
                                 and row.get("runtime_matches_validated") is not True
