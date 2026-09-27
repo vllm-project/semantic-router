@@ -9,6 +9,7 @@ only and cannot certify the independent release audit by itself.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import shutil
@@ -16,6 +17,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from jev_arena.arena_v3 import SCORER_SOURCE_PATHS
+from jev_arena.compare_v3 import DEFAULT_REPLICATES, DEFAULT_SEED
 from jev_arena.render import pareto_svg as public_pareto_svg
 from jev_arena.render import ranking_svg as public_ranking_svg
 
@@ -31,7 +34,7 @@ from .generate_arena import (
 )
 from .render_arena_v3 import axis_matrix_svg, pareto_svg, ranking_svg, task_matrix_svg
 
-VERSION = "decision-model-card-artifacts/4"
+VERSION = "decision-model-card-artifacts/5"
 FIGURES = (
     "jevarena-rank.svg",
     "jevarena-pareto.svg",
@@ -203,6 +206,7 @@ def _pair(
         "old",
         "typed_comparison",
         "transfer_comparison",
+        "joint_comparison",
         "new_typed_report",
         "old_typed_report",
         "new_transfer_report",
@@ -229,6 +233,7 @@ def _pair(
         if sha_file(paths[name]) != row["report_sha256"][field]:
             raise ValueError(f"{name}: scorer report differs from v3 ranking")
     typed, transfer = reports["typed_comparison"], reports["transfer_comparison"]
+    joint = reports["joint_comparison"]
     if (
         typed.get("schema_version") != "typed-decision-comparison/1"
         or typed.get("split") != "final"
@@ -284,6 +289,58 @@ def _pair(
     ]
     if typed_ci[0] > typed_ci[1] or transfer_ci[0] > transfer_ci[1]:
         raise ValueError("Paired 95% interval is reversed")
+    if (
+        joint.get("schema_version") != "jevarena-v3-paired-aggregate/1"
+        or joint.get("models")
+        != {"left": newer["model_id"], "right": older["model_id"]}
+        or joint.get("typed_gold_sha256") != arena["panel_sha256"]["typed_gold_sha256"]
+        or joint.get("css_gold_sha256") != arena["panel_sha256"]["css_gold_sha256"]
+        or joint.get("predictions_sha256")
+        != {
+            "left": {
+                "typed": reports["new_typed_report"]["predictions_sha256"],
+                "css": reports["new_transfer_report"]["predictions_sha256"],
+            },
+            "right": {
+                "typed": reports["old_typed_report"]["predictions_sha256"],
+                "css": reports["old_transfer_report"]["predictions_sha256"],
+            },
+        }
+        or joint.get("replicates") != DEFAULT_REPLICATES
+        or joint.get("seed") != DEFAULT_SEED
+        or joint.get("source_sha256")
+        != {name: sha_file(path) for name, path in SCORER_SOURCE_PATHS.items()}
+        or joint.get("panel_sha256")
+        != hashlib.sha256(
+            json.dumps(
+                arena["panel_sha256"], sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
+    ):
+        raise ValueError("Joint v3 comparison is not bound to the frozen panel")
+    points = joint.get("point", {})
+    left, right, delta = (points.get(name, {}) for name in ("left", "right", "delta"))
+    for name, field in (("T", "typed"), ("H", "transfer"), ("score", "score")):
+        expected_left = newer["axes"][field] if name != "score" else newer["score"]
+        expected_right = older["axes"][field] if name != "score" else older["score"]
+        if any(
+            type(value) not in (int, float)
+            or not math.isclose(value, expected, abs_tol=1e-9)
+            for value, expected in (
+                (left.get(name), expected_left),
+                (right.get(name), expected_right),
+                (delta.get(name), expected_left - expected_right),
+            )
+        ):
+            raise ValueError("Joint v3 paired points differ from the ranking")
+    score_ci = joint.get("ci95", {})
+    if (
+        not isinstance(score_ci, dict)
+        or any(type(score_ci.get(key)) not in (int, float) for key in ("low", "high"))
+        or not all(math.isfinite(score_ci[key]) for key in ("low", "high"))
+        or score_ci["low"] > score_ci["high"]
+    ):
+        raise ValueError("Joint v3 score interval is missing or reversed")
     return {
         "new": new,
         "old": old,
@@ -295,6 +352,8 @@ def _pair(
             transfer_result.get("difference_a_minus_b"), "transfer delta"
         ),
         "transfer_ci95": transfer_ci,
+        "joint_delta": delta["score"],
+        "joint_ci95": [score_ci["low"], score_ci["high"]],
         "report_sha256": {name: sha_file(path) for name, path in paths.items()},
     }
 
@@ -342,10 +401,10 @@ def table(
         "",
         "## Paired Decision 2.0 vs 1.0 differences",
         "",
-        "Intervals resample independent four-variant typed groups and paired samples within the 15 transfer tasks. They apply to the two component differences, not automatically to the geometric-mean headline.",
+        "The joint interval resamples independent four-variant typed groups and CSS tasks with paired items. Component intervals are shown separately and do not substitute for the joint interval.",
         "",
-        "| Decision 2.0 | Matched 1.0 | Typed Δ [95% CI] | Transfer Δ [95% CI] |",
-        "| --- | --- | ---: | ---: |",
+        "| Decision 2.0 | Matched 1.0 | JevArena score Δ [95% CI] | Typed Δ [95% CI] | Transfer Δ [95% CI] |",
+        "| --- | --- | ---: | ---: | ---: |",
     ]
     for pair in comparisons:
         lines.append(
@@ -354,6 +413,7 @@ def table(
                 (
                     _safe(models[pair["new"]][0]["label"]),
                     _safe(models[pair["old"]][0]["label"]),
+                    f"{pair['joint_delta']:+.2f} [{pair['joint_ci95'][0]:+.2f}, {pair['joint_ci95'][1]:+.2f}] points",
                     f"{_delta(pair['typed_delta'])} [{_delta(pair['typed_ci95'][0])}, {_delta(pair['typed_ci95'][1])}]",
                     f"{_delta(pair['transfer_delta'])} [{_delta(pair['transfer_ci95'][0])}, {_delta(pair['transfer_ci95'][1])}]",
                 )

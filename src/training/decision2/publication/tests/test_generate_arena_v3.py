@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import tempfile
@@ -9,6 +10,7 @@ import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from jev_arena.arena_v3 import SCORER_SOURCE_PATHS
 from publication.generate_arena_v3 import FIGURES, generate, sha_file
 
 
@@ -144,6 +146,36 @@ class ArenaV3ArtifactTests(unittest.TestCase):
                 },
             },
         )
+        panel_hashes = self.arena["panel_sha256"]
+        write(
+            self.root / "joint-pair.json",
+            {
+                "schema_version": "jevarena-v3-paired-aggregate/1",
+                "models": {"left": self.entries[0][3], "right": self.entries[1][3]},
+                "typed_gold_sha256": panel_hashes["typed_gold_sha256"],
+                "css_gold_sha256": panel_hashes["css_gold_sha256"],
+                "panel_sha256": hashlib.sha256(
+                    json.dumps(
+                        panel_hashes, sort_keys=True, separators=(",", ":")
+                    ).encode()
+                ).hexdigest(),
+                "predictions_sha256": {
+                    "left": {"typed": "1" * 64, "css": "4" * 64},
+                    "right": {"typed": "2" * 64, "css": "5" * 64},
+                },
+                "replicates": 5000,
+                "seed": 20260927,
+                "source_sha256": {
+                    name: sha_file(path) for name, path in SCORER_SOURCE_PATHS.items()
+                },
+                "point": {
+                    "left": {"T": 0.6, "H": 0.6, "score": 60.0},
+                    "right": {"T": 0.5, "H": 0.5, "score": 50.0},
+                    "delta": {"T": 0.1, "H": 0.1, "score": 10.0},
+                },
+                "ci95": {"low": 2.0, "high": 17.0},
+            },
+        )
         self.config = {
             "arena_rank": "arena.json",
             "jevbench_public_rank": "public.json",
@@ -153,6 +185,7 @@ class ArenaV3ArtifactTests(unittest.TestCase):
                     "old": "old",
                     "typed_comparison": "typed-pair.json",
                     "transfer_comparison": "transfer-pair.json",
+                    "joint_comparison": "joint-pair.json",
                     "new_typed_report": "new-typed.json",
                     "old_typed_report": "old-typed.json",
                     "new_transfer_report": "new-css.json",
@@ -173,6 +206,7 @@ class ArenaV3ArtifactTests(unittest.TestCase):
         self.assertIn("JevBench public", table)
         self.assertNotIn("six-axis", table)
         self.assertIn("+10.00 pp [+2.00 pp, +18.00 pp]", table)
+        self.assertIn("+10.00 [+2.00, +17.00] points", table)
         for name in FIGURES:
             ET.parse(output / name)
             self.assertEqual(
@@ -209,6 +243,20 @@ class ArenaV3ArtifactTests(unittest.TestCase):
         self.arena["models"][0]["label"] = "private 192.168.1.10"
         write(self.root / "arena.json", self.arena)
         with self.assertRaisesRegex(ValueError, "private infrastructure"):
+            generate(self.root / "config.json", self.root / "bad")
+
+    def test_rejects_unbound_joint_interval(self) -> None:
+        joint = json.loads((self.root / "joint-pair.json").read_text())
+        joint["predictions_sha256"]["left"]["css"] = "9" * 64
+        write(self.root / "joint-pair.json", joint)
+        with self.assertRaisesRegex(ValueError, "Joint v3 comparison"):
+            generate(self.root / "config.json", self.root / "bad")
+        joint["predictions_sha256"]["left"]["css"] = "4" * 64
+        joint["ci95"]["low"] = 18.0
+        write(self.root / "joint-pair.json", joint)
+        with self.assertRaisesRegex(
+            ValueError, "joint v3 score interval|Joint v3 score interval"
+        ):
             generate(self.root / "config.json", self.root / "bad")
 
     def test_rejects_fabricated_rank_or_pareto_label(self) -> None:

@@ -65,6 +65,7 @@ independence or historical timing.
       "old": "decision1-key",
       "typed_comparison": "reports/typed-paired.json",
       "transfer_comparison": "reports/css-paired.json",
+      "joint_comparison": "reports/v3-joint-paired.json",
       "new_typed_report": "reports/d2-typed.json",
       "old_typed_report": "reports/d1-typed.json",
       "new_transfer_report": "reports/d2-css.json",
@@ -80,8 +81,9 @@ PYTHONPATH=src/training/decision2 python3 -m publication.generate_arena_v3 \
 ```
 
 The generator requires matching rosters, v3's exact two axes, 8,147 sealed
-items, the public231 panel, and prediction-bound 2.0/1.0 paired reports. It
-emits a score table and separate JevArena and JevBench rank/Pareto SVGs plus
+items, the public231 panel, and prediction-bound 2.0/1.0 component and joint
+paired reports. It displays the joint v3 score interval beside the separate
+typed and transfer intervals. It emits a score table and separate JevArena and JevBench rank/Pareto SVGs plus
 two-axis and model-by-task matrices. The card and chart style follows the
 earlier Decision family; the mosaic sticker remains a distinct 2.0 asset.
 Ranks and Pareto status are relative to the identical displayed roster.
@@ -96,6 +98,9 @@ packager: `model_dir`, `artifacts`, `arena_rank`, `public_rank`,
 pinned external-base PEFT package, also set `base_source` and
 `adapter_source_parity_receipt`. New v3 inputs are `aggregate_pair_report`,
 `old_typed_report` and `old_css_report`.
+The `aggregate_pair_report` must be byte-identical to the card config's
+`joint_comparison`; the package gate checks its hash against the published
+artifact manifest before applying the numeric thresholds.
 
 `score_inputs` has **exactly** `typed`, `css`, and `public`; each contains
 `score`, `predictions`, and `native_manifest` paths. No authored or Decision

@@ -153,6 +153,9 @@ class NumericReleaseGateTests(unittest.TestCase):
             "ci95": {"low": 1.0, "high": 18.0},
         }
         write(self.paths["aggregate"], self.aggregate)
+        self.artifacts["comparison_pairs"][0]["report_sha256"]["joint_comparison"] = (
+            bundle.common.sha_file(self.paths["aggregate"])
+        )
         self.freeze = {
             "comparison_pairs": [
                 {
@@ -170,7 +173,11 @@ class NumericReleaseGateTests(unittest.TestCase):
             },
         }
 
-    def check(self) -> dict[str, str]:
+    def check(self, *, bind_joint: bool = True) -> dict[str, str]:
+        if bind_joint:
+            self.artifacts["comparison_pairs"][0]["report_sha256"][
+                "joint_comparison"
+            ] = bundle.common.sha_file(self.paths["aggregate"])
         return bundle._numeric_release_gate(
             pair_report=self.paths["aggregate"],
             old_typed_report=self.paths["old_typed"],
@@ -191,6 +198,14 @@ class NumericReleaseGateTests(unittest.TestCase):
         write(self.paths["aggregate"], self.aggregate)
         with self.assertRaisesRegex(ValueError, "lower bound"):
             self.check()
+
+    def test_rejects_joint_report_changed_after_card_generation(self) -> None:
+        self.aggregate["ci95"]["low"] = 2.0
+        write(self.paths["aggregate"], self.aggregate)
+        with self.assertRaisesRegex(
+            ValueError, "score reports differ from paired card"
+        ):
+            self.check(bind_joint=False)
 
     def test_rejects_axis_regression_even_with_positive_aggregate_ci(self) -> None:
         self.new_row["axes"]["transfer"] = 0.49
@@ -472,6 +487,28 @@ class FullV3PackageTests(unittest.TestCase):
         )
         css_compare["predictions_b_sha256"] = "5" * 64
         write(self.root / "transfer-pair.json", css_compare)
+        joint_compare = json.loads((self.root / "joint-pair.json").read_text())
+        joint_compare["models"]["left"] = model_id
+        joint_compare["predictions_sha256"]["left"] = {
+            "typed": bundle.common.sha_file(self.score_inputs["typed"]["predictions"]),
+            "css": bundle.common.sha_file(self.score_inputs["css"]["predictions"]),
+        }
+        joint_compare["predictions_sha256"]["right"] = {
+            "typed": "4" * 64,
+            "css": "5" * 64,
+        }
+        joint_compare["coverage"] = {
+            "typed_items": 1600,
+            "typed_independent_groups": 400,
+            "css_evaluation_items": 6547,
+            "css_evaluation_tasks": 15,
+        }
+        joint_compare["bootstrap"] = {
+            "fixed_css_label_universe": True,
+            "confidence_level": 0.95,
+        }
+        joint_compare["ci95"] = {"low": 1.0, "high": 18.0}
+        write(self.root / "joint-pair.json", joint_compare)
         cards.config["comparison_pairs"][0]["new_typed_report"] = "typed.score.json"
         cards.config["comparison_pairs"][0]["new_transfer_report"] = "css.score.json"
         write(self.root / "arena.json", cards.arena)
@@ -608,7 +645,7 @@ class FullV3PackageTests(unittest.TestCase):
         self.artifacts.rename(self.root / "pre-freeze-artifacts")
         self.artifacts = self.root / "v3-artifacts"
         self.artifact_manifest = generate(self.root / "config.json", self.artifacts)
-        self.aggregate_path = self.root / "v3-aggregate.json"
+        self.aggregate_path = self.root / "joint-pair.json"
         panel_sha = hashlib.sha256(
             json.dumps(panel, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
@@ -655,6 +692,12 @@ class FullV3PackageTests(unittest.TestCase):
                 },
                 "ci95": {"low": 1.0, "high": 18.0},
             },
+        )
+        self.assertEqual(
+            bundle.common.sha_file(self.aggregate_path),
+            self.artifact_manifest["comparison_pairs"][0]["report_sha256"][
+                "joint_comparison"
+            ],
         )
         self.comparison_binding = {
             "aggregate_pair_report_sha256": bundle.common.sha_file(self.aggregate_path),

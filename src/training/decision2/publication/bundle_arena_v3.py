@@ -591,7 +591,8 @@ def _numeric_release_gate(
         raise ValueError("Unknown frozen comparator size relation")
     report_hashes = pair_spec.get("report_sha256", {})
     if (
-        common.sha_file(old_typed_report) != report_hashes.get("old_typed_report")
+        common.sha_file(pair_report) != report_hashes.get("joint_comparison")
+        or common.sha_file(old_typed_report) != report_hashes.get("old_typed_report")
         or common.sha_file(old_css_report) != report_hashes.get("old_transfer_report")
         or common.sha_file(new_typed_report) != report_hashes.get("new_typed_report")
         or common.sha_file(new_css_report) != report_hashes.get("new_transfer_report")
