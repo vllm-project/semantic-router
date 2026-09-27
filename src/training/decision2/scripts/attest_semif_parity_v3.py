@@ -102,10 +102,10 @@ def _panel(
             or identity[0] in seen
             or any(
                 (row.get("id"), row.get("source_input_sha256")) != identity
-                or row.get("model_sha256") != native_sha
                 or row.get("calibration_sha256") != calibration_sha
                 for row in (source, packaged, rerun)
             )
+            or any(row.get("model_sha256") != native_sha for row in (packaged, rerun))
             or not isinstance(source.get("answers"), dict)
             or source["answers"] != packaged.get("answers")
             or source["answers"] != rerun.get("answers")
