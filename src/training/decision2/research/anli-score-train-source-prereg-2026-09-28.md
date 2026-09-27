@@ -23,7 +23,7 @@ previously screened ANLI dev rounds are openly labeled **development** data.
   especially neutral, requires a separate blinded semantic review.
 - Source license is CC BY-NC 4.0. Publisher paper describes HotpotQA-derived
   Wikipedia for R1/R2 and several additional original corpora for R3; these
-  source conditions and any re-use risk must be recorded before candidate
+  source conditions and any reuse risk must be recorded before candidate
   redistribution or model release. This screen does not infer weight rights
   from the dataset card.
 
