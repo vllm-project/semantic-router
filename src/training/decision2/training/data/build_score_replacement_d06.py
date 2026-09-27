@@ -305,7 +305,16 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     if len(secret) != 32:
         raise ValueError("Blind packet secret must be exactly 32 bytes")
     rights = json.loads(args.parent_manifest.read_text(encoding="utf-8"))
-    if not isinstance(rights.get("source_rights"), dict):
+    source_rights = rights.get("source_rights")
+    if (
+        not isinstance(source_rights, list)
+        or not source_rights
+        or any(
+            not isinstance(entry, dict)
+            or not {"source", "license", "evidence", "rows"} <= entry.keys()
+            for entry in source_rights
+        )
+    ):
         raise ValueError("Parent source-rights ledger is absent")
     v6_manifest = json.loads(args.v6_manifest.read_text(encoding="utf-8"))
     if (
