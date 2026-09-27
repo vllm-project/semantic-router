@@ -56,3 +56,14 @@ The previous 0.6B formal set has already been keyed in this project. A later
 formal result will be labeled a post-key same-panel comparison, with an
 independent corroboration requirement for any release claim. Historical
 Decision Index values guide peer selection only and never enter these scores.
+
+## Device-only restart amendment before optimizer update
+
+The first container launch (`r1`) exited during model transfer to the GPU,
+before baseline inference or any optimizer update. Its runtime passed both
+`ROCR_VISIBLE_DEVICES=5` and `HIP_VISIBLE_DEVICES=5`, which double-filtered
+the single exposed GPU. A separate no-data, read-only device probe with only
+`ROCR_VISIBLE_DEVICES=5` returned one available GPU. Preserve the `r1` exit
+and log. Start a fresh `r2` output with only the ROCr visibility setting;
+all model, code, data, optimizer, budget, selector, gate and stop thresholds
+above remain exactly fixed. This amendment is signed before `r2` starts.
