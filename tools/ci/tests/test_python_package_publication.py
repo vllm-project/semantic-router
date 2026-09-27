@@ -128,9 +128,7 @@ class PythonPublisherContractTests(unittest.TestCase):
         head = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True
         ).strip()
-        previous = subprocess.check_output(
-            ["git", "rev-parse", "HEAD^"], cwd=REPO_ROOT, text=True
-        ).strip()
+        previous = "a" * 40
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             executable = directory / "python"
