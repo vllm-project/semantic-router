@@ -82,10 +82,37 @@ jobs:
       tag: ${{ needs.validate.outputs.tag }}
       multiarch: true
 
+  helm-build:
+    name: Package Helm Chart
+    needs: validate
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/helm-publish.yml
+    with:
+      build-only: true
+      mode: release
+      version: ${{ needs.validate.outputs.version }}
+      tag: ${{ needs.validate.outputs.tag }}
+
+  python-build:
+    name: Build Python Distribution
+    needs: validate
+    uses: ./.github/workflows/pypi-publish.yml
+    with:
+      build-only: true
+      version: ${{ needs.validate.outputs.version }}
+      tag: ${{ needs.validate.outputs.tag }}
+      catalog_snapshot: ${{ needs.validate.outputs.catalog_snapshot }}
+
   docker:
     name: Publish Images
-    needs: [validate, images]
-    if: github.event_name == 'push' && needs.images.result == 'success'
+    needs: [validate, images, helm-build, python-build]
+    if: >-
+      github.event_name == 'push'
+      && needs.images.result == 'success'
+      && needs.helm-build.result == 'success'
+      && needs.python-build.result == 'success'
     permissions:
       contents: read
       actions: read
@@ -100,14 +127,19 @@ jobs:
 
   helm:
     name: Publish Helm Chart
-    needs: [validate, images]
-    if: github.event_name == 'push' && needs.images.result == 'success'
+    needs: [validate, images, helm-build, python-build]
+    if: >-
+      github.event_name == 'push'
+      && needs.images.result == 'success'
+      && needs.helm-build.result == 'success'
+      && needs.python-build.result == 'success'
     permissions:
       contents: read
       actions: read
       packages: write
     uses: ./.github/workflows/helm-publish.yml
     with:
+      prebuilt-chart: true
       mode: release
       version: ${{ needs.validate.outputs.version }}
       tag: ${{ needs.validate.outputs.tag }}
@@ -115,20 +147,28 @@ jobs:
 
   pypi:
     name: Publish Python Package
-    needs: [validate, images]
-    if: github.event_name == 'push' && needs.images.result == 'success'
+    needs: [validate, images, helm-build, python-build]
+    if: >-
+      github.event_name == 'push'
+      && needs.images.result == 'success'
+      && needs.helm-build.result == 'success'
+      && needs.python-build.result == 'success'
     uses: ./.github/workflows/pypi-publish.yml
     with:
       version: ${{ needs.validate.outputs.version }}
       tag: ${{ needs.validate.outputs.tag }}
       catalog_snapshot: ${{ needs.validate.outputs.catalog_snapshot }}
-      prebuilt-dist: false
+      prebuilt-dist: true
     secrets: inherit
 
   crate:
     name: Publish Rust Crate
-    needs: [validate, images]
-    if: github.event_name == 'push' && needs.images.result == 'success'
+    needs: [validate, images, helm-build, python-build]
+    if: >-
+      github.event_name == 'push'
+      && needs.images.result == 'success'
+      && needs.helm-build.result == 'success'
+      && needs.python-build.result == 'success'
     uses: ./.github/workflows/publish-crate.yml
     with:
       version: ${{ needs.validate.outputs.version }}
