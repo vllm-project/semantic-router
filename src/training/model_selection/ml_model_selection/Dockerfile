@@ -7,7 +7,9 @@
 #   docker build -t ml-training-service -f src/training/model_selection/ml_model_selection/Dockerfile .
 #
 # Run:
-#   docker run -p 8686:8686 -v /data:/app/data ml-training-service
+#   docker run --network container:dashboard ml-training-service
+# Share the dashboard network namespace; the API binds to loopback only.
+# Configure persistent data volumes separately for the deployment.
 
 # ---- Stage 1: Build dependencies (CPU-only PyTorch for smaller image) ----
 FROM python:3.11-slim AS builder
@@ -58,8 +60,7 @@ USER nonroot
 ENV HF_HOME=/app/data/.cache/huggingface
 ENV PYTHONUNBUFFERED=1
 ENV ML_SERVICE_PORT=8686
-
-EXPOSE 8686
+ENV ML_SERVICE_HOST=127.0.0.1
 
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=30s \
     CMD curl -f http://localhost:8686/api/health || exit 1

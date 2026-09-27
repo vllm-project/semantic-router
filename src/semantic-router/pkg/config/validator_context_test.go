@@ -132,9 +132,16 @@ func TestContextBoundsMatches(t *testing.T) {
 		count  int
 		want   bool
 	}{
-		{bounded, 9, false}, {bounded, 10, true}, {bounded, 20, true}, {bounded, 21, false},
-		{open, 9, false}, {open, 10, true}, {open, 1 << 40, true},
-		{exact, 9, false}, {exact, 10, true}, {exact, 11, false},
+		{bounded, 9, false},
+		{bounded, 10, true},
+		{bounded, 20, true},
+		{bounded, 21, false},
+		{open, 9, false},
+		{open, 10, true},
+		{open, 1 << 40, true},
+		{exact, 9, false},
+		{exact, 10, true},
+		{exact, 11, false},
 	}
 	for _, c := range checks {
 		if got := c.bounds.Matches(c.count); got != c.want {

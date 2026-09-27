@@ -18,15 +18,17 @@ const (
 	TargetPreserve    TargetMode = "preserve"
 	TargetExtractive  TargetMode = "extractive"
 	TargetRecoverable TargetMode = "recoverable"
+	TargetTruncate    TargetMode = "truncate"
 )
 
 type TargetKind string
 
 const (
-	TargetToolOutput TargetKind = "tool_output"
-	TargetHistory    TargetKind = "history"
-	TargetRAG        TargetKind = "rag"
-	TargetMemory     TargetKind = "memory"
+	TargetToolOutput  TargetKind = "tool_output"
+	TargetHistory     TargetKind = "history"
+	TargetRAG         TargetKind = "rag"
+	TargetMemory      TargetKind = "memory"
+	TargetCurrentUser TargetKind = "current_user"
 )
 
 type FailureMode string
@@ -83,6 +85,7 @@ type TargetPolicy struct {
 }
 
 type Targets struct {
+	CurrentUser TargetPolicy
 	ToolOutputs TargetPolicy
 	History     TargetPolicy
 	RAG         TargetPolicy

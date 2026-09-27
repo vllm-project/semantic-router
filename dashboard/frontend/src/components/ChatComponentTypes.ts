@@ -70,6 +70,7 @@ export interface Message {
   images?: InlineMessageImage[]
   timestamp: Date
   isStreaming?: boolean
+  incomplete?: string
   headers?: Record<string, string>
   choices?: Choice[]
   thinkingProcess?: string

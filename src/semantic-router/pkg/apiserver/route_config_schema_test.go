@@ -87,6 +87,27 @@ func TestConfigSchemaRouteSupportsProgressiveViews(t *testing.T) {
 	if section.Body.Len() >= len(configschema.Document()) {
 		t.Fatalf("section view should be smaller than full schema: section=%d full=%d", section.Body.Len(), len(configschema.Document()))
 	}
+	var sectionDirectory map[string]any
+	if err := json.Unmarshal(section.Body.Bytes(), &sectionDirectory); err != nil {
+		t.Fatalf("decode section directory: %v", err)
+	}
+	sectionMetadata, _ := sectionDirectory["x-vllm-sr-view"].(map[string]any)
+	if sectionMetadata["detail"] != "summary" || sectionDirectory["$defs"] != nil {
+		t.Fatalf("section did not return a compact field directory: %#v", sectionDirectory)
+	}
+
+	expanded := httptest.NewRecorder()
+	server.handleConfigSchema(expanded, httptest.NewRequest(http.MethodGet, "/api/v1/config/schema?view=section&path=global.router.learning&expanded=true", nil))
+	if expanded.Code != http.StatusOK || expanded.Header().Get("Content-Type") != "application/schema+json" {
+		t.Fatalf("expanded status=%d content-type=%q", expanded.Code, expanded.Header().Get("Content-Type"))
+	}
+	var expandedDocument map[string]any
+	if err := json.Unmarshal(expanded.Body.Bytes(), &expandedDocument); err != nil {
+		t.Fatalf("decode expanded section: %v", err)
+	}
+	if expandedDocument["$defs"] == nil {
+		t.Fatal("expanded section omitted referenced definitions")
+	}
 
 	surface := httptest.NewRecorder()
 	server.handleConfigSchema(surface, httptest.NewRequest(http.MethodGet, "/api/v1/config/schema?view=surface&kind=algorithm&name=static", nil))

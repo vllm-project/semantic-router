@@ -59,8 +59,12 @@ fn main() -> Result<()> {
     // Step 2: Load base model
     println!("\nLoading ModernBERT-base-32k base model...");
     let base_vb = unsafe {
-        VarBuilder::from_mmaped_safetensors(&[base_weights_path.clone()], DType::F32, &device)
-            .map_err(|e| anyhow!("Failed to load base model weights: {}", e))?
+        VarBuilder::from_mmaped_safetensors(
+            std::slice::from_ref(&base_weights_path),
+            DType::F32,
+            &device,
+        )
+        .map_err(|e| anyhow!("Failed to load base model weights: {}", e))?
     };
     let base_model = ModernBert::load(base_vb, &config)
         .map_err(|e| anyhow!("Failed to load base ModernBert model: {}", e))?;
@@ -113,8 +117,12 @@ fn main() -> Result<()> {
 
         // Load classifier
         let classifier_vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(&[model_weights_path.clone()], DType::F32, &device)
-                .map_err(|e| anyhow!("Failed to load classifier weights: {}", e))?
+            VarBuilder::from_mmaped_safetensors(
+                std::slice::from_ref(&model_weights_path),
+                DType::F32,
+                &device,
+            )
+            .map_err(|e| anyhow!("Failed to load classifier weights: {}", e))?
         };
 
         let classifier_weight = classifier_vb

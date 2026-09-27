@@ -11,6 +11,7 @@ import ConfigPageTaxonomyClassifierEditor from './ConfigPageTaxonomyClassifierEd
 import ConfigPageTaxonomyClassifierDetail from './ConfigPageTaxonomyClassifierDetail'
 import ConfigPageKnowledgeBasePicker from './ConfigPageKnowledgeBasePicker'
 import type { OpenEditModal } from './configPageRouterSectionSupport'
+import { waitForKnowledgeBaseActivation } from './knowledgeBaseActivation'
 import styles from './ConfigPageTaxonomyClassifiers.module.css'
 import {
   classifierDraftFromRecord,
@@ -156,6 +157,7 @@ export default function ConfigPageTaxonomyClassifiers({
         const message = await response.text()
         throw new Error(message || `HTTP ${response.status}: ${response.statusText}`)
       }
+      await waitForKnowledgeBaseActivation(await response.json())
       if (nextSelection) {
         setSelectedKnowledgeBaseName(nextSelection)
       }
@@ -475,6 +477,7 @@ export default function ConfigPageTaxonomyClassifiers({
           const message = await response.text()
           throw new Error(message || `HTTP ${response.status}: ${response.statusText}`)
         }
+        await waitForKnowledgeBaseActivation(await response.json())
         if (selectedKnowledgeBaseName === knowledgeBase.name) {
           setSelectedKnowledgeBaseName('')
         }

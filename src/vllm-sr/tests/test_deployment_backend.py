@@ -53,7 +53,8 @@ class TestResolveTarget:
 
 
 class TestContainerBackend:
-    def test_deploy_delegates_to_start_vllm_sr(self, monkeypatch):
+    @pytest.mark.parametrize("startup_timeout", [None, 7200])
+    def test_deploy_delegates_to_start_vllm_sr(self, monkeypatch, startup_timeout):
         captured = {}
         lifecycle_lock = MagicMock()
         monkeypatch.setattr(
@@ -83,6 +84,11 @@ class TestContainerBackend:
             pull_policy="always",
             enable_observability=False,
             runtime_config_lock=runtime_lock,
+            **(
+                {"startup_timeout": startup_timeout}
+                if startup_timeout is not None
+                else {}
+            ),
         )
 
         assert captured["source_config_file"] == "/tmp/source-config.yaml"
@@ -95,6 +101,7 @@ class TestContainerBackend:
         assert captured["pull_policy"] == "always"
         assert captured["enable_observability"] is False
         assert captured["runtime_config_lock"] is runtime_lock
+        assert captured["startup_timeout"] == (startup_timeout or 1800)
         lifecycle_lock.__enter__.assert_called_once_with()
         lifecycle_lock.__exit__.assert_called_once()
 

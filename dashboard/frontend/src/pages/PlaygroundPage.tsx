@@ -29,6 +29,7 @@ const PlaygroundPage = () => {
       <div className={styles.chatWrapper}>
         <ChatComponent
           endpoint="/api/router/v1/chat/completions"
+          feedbackInsightsBasePath="/insights"
           invocation={invocation}
           onInvocationConsumed={handleInvocationConsumed}
         />

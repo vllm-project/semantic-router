@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_ExactRoundTripAndPartitionIsolation(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -37,6 +38,7 @@ func TestValkeyCacheIntegration_ExactRoundTripAndPartitionIsolation(t *testing.T
 	assert.False(t, miss.Found)
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_ExactMaxAge(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -87,6 +89,7 @@ func TestValkeyCacheIntegration_ExactMaxAge(t *testing.T) {
 	assert.Equal(t, HitKindMiss, staleResult.HitKind)
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_LegacyStringOverwrite(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()

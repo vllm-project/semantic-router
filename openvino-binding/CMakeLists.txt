@@ -144,11 +144,13 @@ set(SOURCES
     
     # FFI layer (C API for Go CGO)
     cpp/src/ffi/openvino_semantic_router_ffi.cpp
+    cpp/src/ffi/owned_model.cpp
 )
 
 set(HEADERS
     # C API header (public interface)
     cpp/include/openvino_semantic_router.h
+    cpp/include/owned_model.h
     
     # Core headers
     cpp/include/core/types.h

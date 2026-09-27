@@ -63,11 +63,11 @@ test.describe('FeedbackButtons', () => {
 
   test('thumbs up sends correct feedback payload', async ({ page }) => {
     let feedbackPayload: Record<string, unknown> | null = null
-    let idempotencyKey: string | null = null
+    let browserIdempotencyKey: string | undefined
 
     await page.route('**/api/router/api/v1/observability/outcomes', async (route) => {
       feedbackPayload = route.request().postDataJSON()
-      idempotencyKey = route.request().headers()['idempotency-key'] ?? null
+      browserIdempotencyKey = route.request().headers()['idempotency-key']
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -86,7 +86,7 @@ test.describe('FeedbackButtons', () => {
     await thumbsUp.click()
 
     expect(feedbackPayload).not.toBeNull()
-    expect(idempotencyKey).toBeTruthy()
+    expect(browserIdempotencyKey).toBeUndefined()
     expect(feedbackPayload!.replay_id).toBe(MOCK_REPLAY_ID)
     expect(feedbackPayload!.source).toBe('user')
     expect(feedbackPayload!.target).toBe('model')
@@ -94,6 +94,10 @@ test.describe('FeedbackButtons', () => {
     expect(feedbackPayload!.verdict).toBe('good_fit')
     expect((feedbackPayload!.metadata as Record<string, unknown>).decision).toBe('tech')
     await expect(page.getByText('Feedback Sent!')).toBeVisible({ timeout: 3000 })
+    await expect(page.getByRole('link', { name: 'View in Insights' })).toHaveAttribute(
+      'href',
+      `/insights/${MOCK_REPLAY_ID}`,
+    )
   })
 
   test('renders svg icons for both feedback directions', async ({ page }) => {
@@ -132,11 +136,9 @@ test.describe('FeedbackButtons', () => {
 
   test('thumbs down sends underpowered outcome', async ({ page }) => {
     let feedbackPayload: Record<string, unknown> | null = null
-    let idempotencyKey: string | null = null
 
     await page.route('**/api/router/api/v1/observability/outcomes', async (route) => {
       feedbackPayload = route.request().postDataJSON()
-      idempotencyKey = route.request().headers()['idempotency-key'] ?? null
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -155,7 +157,6 @@ test.describe('FeedbackButtons', () => {
 
     await expect(thumbsDown).toHaveAttribute('aria-pressed', 'true')
     expect(feedbackPayload).not.toBeNull()
-    expect(idempotencyKey).toBeTruthy()
     expect(feedbackPayload!.replay_id).toBe(MOCK_REPLAY_ID)
     expect(feedbackPayload!.target_ref).toBe(MOCK_MODEL)
     expect(feedbackPayload!.verdict).toBe('underpowered')

@@ -19,7 +19,7 @@ from typing import Any
 
 import yaml
 
-from .crossref import artifact_identity_digest
+from .crossref import artifact_identity_digest, file_digest
 from .manifest import load_manifest
 
 __all__ = [
@@ -37,7 +37,6 @@ __all__ = [
 ]
 
 CODE_REPO = "vllm-project/semantic-router"
-DIGEST_CHUNK_BYTES = 1024 * 1024
 # Length of a full git commit sha. Anything shorter is a prefix or a branch name.
 REVISION_LENGTH = 40
 TRACKED_PACKAGES = (
@@ -48,6 +47,16 @@ TRACKED_PACKAGES = (
     "peft",
     "numpy",
     "scikit-learn",
+)
+# What an artifact is made of, including the pytorch_model.bin shards a
+# checkpoint without safetensors ships. The manifest that hashes an artifact and
+# the download that fetches it read the same tuple.
+ARTIFACT_INCLUDE_GLOBS = (
+    "*.json",
+    "*.safetensors",
+    "*.bin",
+    "*.txt",
+    "*.model",
 )
 
 
@@ -75,14 +84,6 @@ def resolve_hf_revision(repo_id: str, repo_type: str = "model") -> str:
             f"{repo_id} did not resolve to a 40-character commit sha (got {sha!r})"
         )
     return sha
-
-
-def file_digest(path: Path) -> str:
-    hasher = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(DIGEST_CHUNK_BYTES), b""):
-            hasher.update(chunk)
-    return f"sha256:{hasher.hexdigest()}"
 
 
 def split_digest(rows: Iterable[tuple[str, int]]) -> str:
@@ -212,13 +213,7 @@ def build_artifact_manifest(
     torch_dtype: str | None = None,
     tokenizer_class: str | None = None,
     served_paths: Sequence[str] = (),
-    include_globs: Sequence[str] = (
-        "*.json",
-        "*.safetensors",
-        "*.bin",
-        "*.txt",
-        "*.model",
-    ),
+    include_globs: Sequence[str] = ARTIFACT_INCLUDE_GLOBS,
     description: str | None = None,
 ) -> dict[str, Any]:
     """Hash the artifact on disk into a manifest whose identity is reproducible."""
@@ -298,6 +293,7 @@ def build_evaluation_manifest(
     abstention: dict[str, Any],
     performance: dict[str, Any],
     slices: list[dict[str, Any]] | None = None,
+    discrimination: dict[str, Any] | None = None,
     description: str | None = None,
 ) -> dict[str, Any]:
     harness: dict[str, Any] = {
@@ -329,6 +325,8 @@ def build_evaluation_manifest(
     }
     if slices:
         manifest["slices"] = slices
+    if discrimination:
+        manifest["discrimination"] = discrimination
     if description:
         manifest["description"] = description
     return manifest

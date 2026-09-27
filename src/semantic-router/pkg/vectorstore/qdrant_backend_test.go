@@ -2,20 +2,17 @@ package vectorstore
 
 import (
 	"context"
-	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 )
 
 var _ = Describe("QdrantBackend", func() {
-	skipQdrant := os.Getenv("SKIP_QDRANT_TESTS") != "false"
-
-	Context("integration tests", func() {
+	Context("integration tests", Label("storage", "storage:qdrant"), func() {
 		BeforeEach(func() {
-			if skipQdrant {
-				Skip("Skipping Qdrant tests (set SKIP_QDRANT_TESTS=false to enable)")
-			}
+			storagetest.Require(GinkgoT(), "qdrant")
 		})
 
 		It("should insert and search chunks", func() {

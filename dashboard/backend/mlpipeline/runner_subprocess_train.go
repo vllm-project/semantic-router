@@ -18,7 +18,7 @@ import (
 // Otherwise, train.py is invoked once per algorithm (embeddings are cached between runs).
 func (r *Runner) runTrainSubprocess(ctx context.Context, benchmarkDataPath string, req TrainRequest) (string, error) {
 	job := r.createJob("train")
-	jobDir := r.TrainDir()
+	jobDir := r.JobDir(job.ID)
 	if err := ensureDir(jobDir); err != nil {
 		return "", fmt.Errorf("failed to create job dir: %w", err)
 	}
@@ -63,6 +63,7 @@ type trainExecutionPlan struct {
 	device       string
 	algorithms   []string
 	runs         []string
+	outputDir    string
 	cacheDir     string
 	pythonEnv    []string
 	commonArgs   []string
@@ -89,6 +90,7 @@ func (r *Runner) buildTrainExecutionPlan(jobDir string, req TrainRequest) trainE
 		device:       device,
 		algorithms:   algorithms,
 		runs:         runs,
+		outputDir:    jobDir,
 		cacheDir:     filepath.Join(jobDir, ".cache"),
 		pythonEnv:    trainPythonEnv(),
 		commonArgs:   buildTrainCommonArgs(req),
@@ -160,7 +162,7 @@ func (r *Runner) runTrainAlgorithms(ctx context.Context, jobID, benchmarkDataPat
 		args := []string{
 			filepath.Join(r.trainingDir, "train.py"),
 			"--data-file", benchmarkDataPath,
-			"--output-dir", r.TrainDir(),
+			"--output-dir", plan.outputDir,
 			"--device", plan.device,
 			"--algorithm", algFlag,
 			"--cache-dir", plan.cacheDir,

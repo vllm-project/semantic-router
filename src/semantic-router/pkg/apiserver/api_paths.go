@@ -5,6 +5,7 @@ package apiserver
 const (
 	apiRootPath = "/api/v1"
 
+	apiStatusPath         = apiRootPath + "/status"
 	apiConfigPath         = apiRootPath + "/config"
 	apiConfigSchemaPath   = apiConfigPath + "/schema"
 	apiConfigValidatePath = apiConfigPath + "/validate"
@@ -30,6 +31,6 @@ const (
 	apiStorageMemoriesPath       = apiStoragePath + "/memories"
 	apiStorageVectorStoresPath   = apiStoragePath + "/vector-stores"
 	apiStorageFilesPath          = apiStoragePath + "/files"
-	apiResponseCachePath         = apiRootPath + "/response-cache"
-	apiContextCompressionPath    = apiRootPath + "/context-compression"
+	apiResponseCachePath         = apiStoragePath + "/response-cache"
+	apiContextCompressionPath    = apiRootPath + "/plugins/context_compression"
 )

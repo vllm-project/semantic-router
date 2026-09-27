@@ -5,6 +5,7 @@ package apiserver
 import (
 	"bytes"
 	"net/http"
+	"reflect"
 	"strings"
 )
 
@@ -60,8 +61,23 @@ func (s *ClassificationAPIServer) handleConfigPlan(
 	s.writeJSONResponse(w, http.StatusOK, routerConfigPlanResponse{
 		Valid:         true,
 		Mode:          req.Mode,
-		Changed:       !bytes.Equal(current, candidate),
+		Changed:       !equivalentConfigDocuments(current, candidate),
 		CurrentETag:   configDocumentETag(current),
 		CandidateETag: configDocumentETag(candidate),
 	})
+}
+
+func equivalentConfigDocuments(current, candidate []byte) bool {
+	if bytes.Equal(current, candidate) {
+		return true
+	}
+	currentDocument, currentErr := decodeYAMLDocument(current)
+	if currentErr != nil {
+		return false
+	}
+	candidateDocument, candidateErr := decodeYAMLDocument(candidate)
+	if candidateErr != nil {
+		return false
+	}
+	return reflect.DeepEqual(currentDocument, candidateDocument)
 }

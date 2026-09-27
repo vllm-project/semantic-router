@@ -11,6 +11,7 @@ from typing import Any
 import click
 import yaml
 
+from cli.commands.recipe_builtin import builtin
 from cli.recipe_package import RecipePackageError, pack_recipe
 from cli.router_management_client import RouterManagementClient
 
@@ -18,6 +19,9 @@ from cli.router_management_client import RouterManagementClient
 @click.group()
 def recipe() -> None:
     """Validate, plan, apply, inspect, or package routing recipes."""
+
+
+recipe.add_command(builtin)
 
 
 def _connection_options(command):

@@ -187,7 +187,8 @@ var _ = Describe("Response Jailbreak Filter", func() {
 			Expect(resp).NotTo(BeNil())
 			Expect(ctx.ResponseJailbreakDetected).To(BeTrue())
 			Expect(ctx.ResponseJailbreakType).To(Equal(classification.JailbreakClassificationErrorType))
-			Expect(ctx.ResponseJailbreakConfidence).To(BeNumerically("~", 1.0, 0.001))
+			Expect(ctx.ResponseJailbreakConfidence).To(BeZero())
+			Expect(ctx.ResponseJailbreakScoreAvailable).To(BeFalse())
 		})
 
 		// A failure is reported through whatever the decision's action asks

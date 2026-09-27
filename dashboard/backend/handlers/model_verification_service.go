@@ -188,7 +188,7 @@ func (service *modelVerificationService) verifyTarget(ctx context.Context, targe
 }
 
 func modelVerificationTargetKey(target modelVerificationTarget) string {
-	payload, _ := json.Marshal(struct {
+	payload, _ := json.Marshal(struct { //nolint:gosec // G117: the key only hashes the request target and is never logged or persisted
 		Model         string            `json:"model"`
 		ProviderModel string            `json:"provider_model"`
 		Backend       string            `json:"backend"`

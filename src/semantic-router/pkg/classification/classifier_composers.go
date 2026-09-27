@@ -1,10 +1,10 @@
 package classification
 
 import (
+	"context"
 	"slices"
 	"strings"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -216,7 +216,11 @@ func (c *Classifier) GetQueryEmbedding(text string) []float64 {
 
 	// Use the candle binding to get the embedding
 	// GetEmbedding returns ([]float32, error) with auto-detected dimension
-	embedding32, err := candle_binding.GetEmbedding(text, 0)
+	provider, err := c.EmbeddingForModel("", 0, 0)
+	if err != nil {
+		return nil
+	}
+	embedding32, err := provider.Embed(context.Background(), text)
 	if err != nil {
 		logging.Debugf("Failed to get query embedding: %v", err)
 		return nil

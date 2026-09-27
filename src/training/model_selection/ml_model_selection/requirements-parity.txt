@@ -1,0 +1,5 @@
+# CPU-only training/export/runtime parity checks; no embedding models or Torch.
+numpy==2.5.3
+scikit-learn==1.9.1
+scipy==1.18.1
+pytest==9.1.1

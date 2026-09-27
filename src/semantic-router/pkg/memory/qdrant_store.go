@@ -50,11 +50,19 @@ func NewQdrantStore(opts QdrantStoreOptions) (*QdrantStore, error) {
 		embCfg = *opts.EmbeddingConfig
 	}
 
+	dimension, err := StorageDimension(opts.QdrantConfig.Dimension, embCfg)
+	if err != nil {
+		return nil, err
+	}
+	copied := *opts.QdrantConfig
+	copied.Dimension = dimension
+	embCfg.Dimension = dimension
+
 	s := &QdrantStore{
 		client:          opts.Client,
 		collectionName:  collectionName,
 		config:          opts.Config,
-		qdrantConfig:    opts.QdrantConfig,
+		qdrantConfig:    &copied,
 		enabled:         true,
 		embeddingConfig: embCfg,
 	}
@@ -82,9 +90,6 @@ func (s *QdrantStore) ensureCollection(ctx context.Context) error {
 	}
 
 	dim := s.qdrantConfig.Dimension
-	if dim <= 0 {
-		dim = 384
-	}
 
 	if err := s.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: s.collectionName,
@@ -192,6 +197,9 @@ func memoryToPayload(mem *Memory) map[string]any {
 }
 
 func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !s.enabled {
 		return fmt.Errorf("qdrant store is not enabled")
 	}
@@ -208,7 +216,7 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 	emb := mem.Embedding
 	if len(emb) == 0 {
 		var err error
-		emb, err = GenerateEmbedding(mem.Content, s.embeddingConfig)
+		emb, err = embedForWrite(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}
@@ -246,7 +254,7 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		return nil, nil
 	}
 
-	emb, err := GenerateEmbedding(opts.Query, s.embeddingConfig)
+	emb, err := GenerateEmbeddingWithContext(ctx, opts.Query, s.embeddingConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -329,7 +337,7 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 	emb := mem.Embedding
 	if len(emb) == 0 {
 		var err error
-		emb, err = GenerateEmbedding(mem.Content, s.embeddingConfig)
+		emb, err = embedForWrite(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}

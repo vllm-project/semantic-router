@@ -14,7 +14,7 @@ import { useModelHubPageController } from './modelHubPageController'
 import styles from './ModelHubPage.module.css'
 
 const ModelHubPage: React.FC = () => {
-  const { catalog, error } = useBuiltInModelCatalog()
+  const { catalog, error, loading, source, retry } = useBuiltInModelCatalog()
   const hub = useModelHubPageController(catalog)
   const [searchParameters, setSearchParameters] = useSearchParams()
   const arenaRoute = useMemo(() => parseModelHubArenaRoute(searchParameters), [searchParameters])
@@ -32,8 +32,18 @@ const ModelHubPage: React.FC = () => {
     <main className={styles.container} data-testid="model-hub-page">
       <HubHero stats={hub.stats} />
       {error ? (
-        <div className={styles.notice} role="status">
-          Live catalog unavailable. Showing the identical bundled release snapshot. {error}
+        <div className={styles.notice}>
+          <div role="status">
+            <strong>
+              {source === 'bundled'
+                ? 'Showing the catalog bundled with this Dashboard.'
+                : 'Showing the last catalog loaded from the server.'}
+            </strong>
+            <span>Server catalog could not be refreshed. {error}</span>
+          </div>
+          <button type="button" onClick={retry} disabled={loading}>
+            {loading ? 'Retrying…' : 'Retry'}
+          </button>
         </div>
       ) : null}
 

@@ -15,14 +15,15 @@ func (s *ClassificationAPIServer) handleConfigSchema(w http.ResponseWriter, r *h
 		Path:        r.URL.Query().Get("path"),
 		SurfaceKind: r.URL.Query().Get("kind"),
 		SurfaceName: r.URL.Query().Get("name"),
+		Expanded:    r.URL.Query().Get("expanded") == "true",
 	})
 	if err != nil {
 		var viewError *configschema.ViewError
 		if errors.As(err, &viewError) {
-			http.Error(w, viewError.Error(), http.StatusBadRequest)
+			s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_SCHEMA_VIEW", viewError.Error())
 			return
 		}
-		http.Error(w, "Config schema is unavailable", http.StatusInternalServerError)
+		s.writeErrorResponse(w, http.StatusInternalServerError, "SCHEMA_UNAVAILABLE", "Config schema is unavailable")
 		return
 	}
 	w.Header().Set("Content-Type", representation.ContentType)

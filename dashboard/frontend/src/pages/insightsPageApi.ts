@@ -25,8 +25,8 @@ export function fetchInsightsRecord(recordId: string) {
   )
 }
 
-export function fetchInsightsTrajectory(sessionId: string) {
-  const query = new URLSearchParams({ session_id: sessionId })
+export function fetchInsightsTrajectory(sessionId: string, recipe: string) {
+  const query = new URLSearchParams({ session_id: sessionId, recipe })
   return fetchInsightsJSON<InsightsTrajectory>(
     `/api/router/api/v1/observability/replays/trajectory?${query.toString()}`,
     'record trace',

@@ -20,11 +20,14 @@ public:
     // Initialize embedding model
     bool initialize(
         const std::string& model_path,
-        const std::string& device = "CPU"
+        const std::string& device = "CPU",
+        int pad_token_id = 50283
     );
     
     // Generate embedding for text
-    std::vector<float> generateEmbedding(const std::string& text, int max_length = 512);
+    std::vector<float> generateEmbedding(const std::string& text, int max_length = 512,
+                                         bool reject_overflow = false, int* original_tokens = nullptr,
+                                         const std::vector<int>& end_tokens = {});
     
     // Compute similarity between two texts
     float computeSimilarity(const std::string& text1, const std::string& text2, int max_length = 512);
@@ -48,6 +51,7 @@ public:
     bool isInitialized() const { return model_ && model_->compiled_model != nullptr; }
     
 private:
+    int pad_token_id_ = 50283;
     std::shared_ptr<core::ModelInstance> model_;
     core::OVNativeTokenizer tokenizer_;
     std::mutex mutex_;

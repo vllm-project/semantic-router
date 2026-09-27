@@ -29,8 +29,8 @@ type PolarityGuardConfig struct {
 // PolarityGuardNLIConfig tunes the NLI polarity tier.
 //
 // The tier does not bind its own model: the native binding holds exactly one
-// NLI model, so it reuses the hallucination explainer configured under
-// global.model_catalog.modules.hallucination_mitigation.explainer.
+// NLI model. It uses the global hallucination_explainer binding, or the global
+// module default at global.model_catalog.modules.hallucination_mitigation.explainer.
 type PolarityGuardNLIConfig struct {
 	// ContradictionThreshold rejects the candidate when the contradiction
 	// probability exceeds it. Defaults to DefaultPolarityContradictionThreshold.

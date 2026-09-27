@@ -150,6 +150,49 @@ func TestSelectModelFromCandidatesUsesFirstValidDefaultCandidateOnInvalidContext
 	}
 }
 
+func TestSelectionEvidenceReasoningReachesRouteDiagnostics(t *testing.T) {
+	const reasoning = "multi_factor; intelligence{index=vllm-sr/intelligence@1.0.0 effort=high score=75.00 coverage=100%}"
+	registry := selection.NewRegistry()
+	registry.Register(selection.MethodStatic, selectionResultSelector{result: &selection.SelectionResult{
+		SelectedModel: "model-b", Score: 0.5, Method: selection.MethodStatic,
+		Tier: selection.TierSupported, Reasoning: reasoning,
+	}})
+	router := &OpenAIRouter{ModelSelector: registry}
+	requestContext := &RequestContext{}
+	selected, _, err := router.selectModelFromCandidates(&selection.SelectionContext{
+		CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+	}, nil, requestContext)
+	if err != nil || selected == nil || selected.Model != "model-b" {
+		t.Fatalf("selection = %#v, %v", selected, err)
+	}
+	diagnostics := buildReplayRouteDiagnostics(requestContext, "auto", selected.Model, "test", 0, 0)
+	if diagnostics.SelectionReasoning != reasoning {
+		t.Fatalf("selection reasoning = %q", diagnostics.SelectionReasoning)
+	}
+}
+
+func TestSelectionResultPreservesSelectedCandidateEffort(t *testing.T) {
+	candidates := []config.ModelRef{
+		{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}},
+		{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+	}
+	registry := selection.NewRegistry()
+	registry.Register(selection.MethodStatic, selectionResultSelector{result: &selection.SelectionResult{
+		SelectedModel: "model", SelectedCandidate: &candidates[1],
+		Method: selection.MethodStatic, Tier: selection.TierSupported,
+	}})
+	router := &OpenAIRouter{ModelSelector: registry}
+	selected, _, err := router.selectModelFromCandidates(&selection.SelectionContext{
+		CandidateModels: candidates,
+	}, nil, &RequestContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected == nil || selected.ReasoningEffort != "high" {
+		t.Fatalf("selected candidate = %+v, want high effort", selected)
+	}
+}
+
 func TestPromptSelectionDoesNotResolveBaseModelThroughLoRAAlias(t *testing.T) {
 	candidates := []config.ModelRef{
 		{Model: "model-b", LoRAName: "model-a"},
@@ -188,8 +231,8 @@ func TestSelectModelFromCandidatesPropagatesRequestCancellation(t *testing.T) {
 		requestContext,
 	)
 
-	if !cancelled {
-		t.Fatal("selector did not observe request cancellation")
+	if cancelled {
+		t.Fatal("already-cancelled request must be rejected before invoking the selector")
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want context cancellation", err)
@@ -232,7 +275,7 @@ func TestSelectModelFromCandidatesPreservesFailClosedPolicy(t *testing.T) {
 	}
 }
 
-func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testing.T) {
+func TestSelectModelFromCandidatesStagesSingleCandidateUntilDispatch(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
 
@@ -251,9 +294,18 @@ func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testin
 		t.Fatalf("expected static method, got %q", method)
 	}
 
+	if _, ok := sessiontelemetry.GetRouterSessionSnapshot("single-candidate-session", time.Now()); ok {
+		t.Fatal("selection published ownership before dispatch")
+	}
+	if err := commitAgenticSessionDecision(reqCtx); err != nil {
+		t.Fatal(err)
+	}
+	if err := commitAgenticSessionDecision(reqCtx); err != nil {
+		t.Fatal(err)
+	}
 	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot("single-candidate-session", time.Now())
-	if !ok {
-		t.Fatal("expected router memory snapshot for single-candidate selection")
+	if !ok || snapshot.TurnCount != 1 {
+		t.Fatal("expected exactly one committed single-candidate dispatch")
 	}
 	if snapshot.CurrentModel != "model-a" {
 		t.Fatalf("expected current model model-a, got %q", snapshot.CurrentModel)

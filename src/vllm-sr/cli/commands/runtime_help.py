@@ -14,6 +14,12 @@ multiple model endpoints through one canonical config or the Dashboard.
 
 Ports are configured in the selected config under the listeners section.
 
+Local startup waits up to 1800 seconds for Router readiness, or Dashboard
+readiness during first-run setup. Use --startup-timeout SECONDS for a different
+positive budget when model loading or GPU compilation needs more time.
+The wait begins after containers start. It does not change inference deadlines.
+Timeout exits the CLI with an error and leaves containers available for inspection.
+
 DEPLOYMENT TARGETS:
 
 \b
@@ -45,6 +51,8 @@ Examples:
   vllm-sr serve
   # User-owned single or multi-model topology
   vllm-sr serve --config my-models.yaml
+  # Explicitly replace Dashboard-edited runtime state from reviewed source YAML
+  vllm-sr serve --config my-models.yaml --replace-active-config
   # Deploy a user-owned config to Kubernetes
   vllm-sr serve --target k8s --config my-models.yaml --namespace my-ns
   # Runtime policy and image overrides
@@ -55,5 +63,6 @@ Examples:
   vllm-sr serve --log-level debug
   # AMD ROCm image, device passthrough, and router internal GPU defaults
   vllm-sr serve --platform amd
+  vllm-sr serve --platform amd --startup-timeout 7200
   VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
 """

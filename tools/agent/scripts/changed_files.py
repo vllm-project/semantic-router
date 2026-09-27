@@ -54,10 +54,18 @@ def run_git(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def resolve_base_ref(base_ref: str | None) -> str | None:
-    requested = base_ref or os.getenv("BASE_REF") or "origin/main"
-    for candidate in (requested, "HEAD^"):
-        if run_git("rev-parse", "--verify", candidate).returncode == 0:
+    requested = base_ref or os.getenv("BASE_REF")
+    candidates = (requested,) if requested else ("origin/main", "HEAD^")
+    for candidate in candidates:
+        if (
+            run_git(
+                "rev-parse", "--verify", "--end-of-options", f"{candidate}^{{commit}}"
+            ).returncode
+            == 0
+        ):
             return candidate
+    if requested:
+        raise ValueError(f"invalid base ref '{requested}'")
     return None
 
 
@@ -72,7 +80,9 @@ def git_changed_files(base_ref: str | None) -> list[str]:
             merge_base = result.stdout.strip()
 
     if merge_base:
-        result = run_git("diff", "--name-only", "-z", f"{merge_base}...HEAD")
+        result = run_git(
+            "diff", "--name-only", "--no-renames", "-z", f"{merge_base}...HEAD"
+        )
         if result.returncode == 0:
             changed.update(
                 normalize_changed_path(path)
@@ -83,9 +93,9 @@ def git_changed_files(base_ref: str | None) -> list[str]:
     # Local checks must include work that has not been committed yet. `git diff
     # HEAD` covers staged and unstaged tracked paths; the final query adds
     # untracked paths without pulling ignored build artifacts into the result.
-    result = run_git("diff", "--name-only", "-z", "HEAD")
+    result = run_git("diff", "--name-only", "--no-renames", "-z", "HEAD")
     if result.returncode != 0:
-        result = run_git("diff", "--cached", "--name-only", "-z")
+        result = run_git("diff", "--cached", "--name-only", "--no-renames", "-z")
     if result.returncode == 0:
         changed.update(
             normalize_changed_path(path) for path in result.stdout.split("\0") if path

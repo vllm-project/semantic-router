@@ -186,3 +186,22 @@ models, and the synthesis model receives the collected results. Bound breadth,
 completion tokens, concurrency, and timeouts before production use. See a
 complete example:
 [`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml).
+
+## Optional trace transport
+
+Router-generated `reasoning_mom_responses` evidence is preserved in OpenAI Chat Completions JSON
+and SSE responses, including tool-call responses where the algorithm supports
+them. The trace is optional: if adding it would exceed the complete response
+limit or an individual SSE frame limit, the router omits the whole trace while
+serving the valid answer. It does not truncate trace JSON or answer text.
+
+OpenAI Responses and Anthropic Messages responses omit this Chat-specific
+extension. Both an unsupported target protocol and a size-based omission emit a
+`x-vsr-protocol-warnings` response header with action `dropped`, field `reasoning_mom_responses`,
+and reason `router_extension_unsupported_protocol` or
+`router_extension_size_limit`. The warning also accompanies immediate Looper
+responses. Required answer content remains subject to the normal protocol
+limits; an answer that cannot fit is rejected.
+
+Provider fields do not acquire router provenance by using the same name. The
+router validates provider content separately from its internal trace data.

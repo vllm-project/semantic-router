@@ -97,3 +97,76 @@ def test_management_client_discovers_one_config_schema_view(
         "kind": "algorithm",
         "name": "multi_factor",
     }
+
+
+def test_management_client_requests_expanded_section_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    def request(method: str, url: str, **kwargs: Any) -> _Response:
+        calls.append((method, url, kwargs))
+        return _Response()
+
+    monkeypatch.setattr("cli.router_management_client.requests.request", request)
+
+    RouterManagementClient("http://localhost:8080").get_config_schema(
+        view="section",
+        path="routing",
+        expanded=True,
+    )
+
+    assert calls[0][2]["params"] == {
+        "view": "section",
+        "path": "routing",
+        "expanded": "true",
+    }
+
+
+class _UnresolvedResponse(_Response):
+    ok = False
+    status_code = 503
+
+    def json(self) -> dict[str, Any]:
+        return {
+            "original_text": "hello",
+            "decision_error": "decision unresolved",
+            "applied_unknown_policies": {"guarded": "fail_request"},
+        }
+
+
+class _LegacyErrorResponse(_Response):
+    ok = False
+    status_code = 503
+
+    def json(self) -> dict[str, Any]:
+        return {"error": {"code": "CLASSIFICATION_ERROR", "message": "classifier down"}}
+
+
+def test_management_client_renders_decision_unresolved_503(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "cli.router_management_client.requests.request",
+        lambda *args, **kwargs: _UnresolvedResponse(),
+    )
+
+    with pytest.raises(ValueError) as excinfo:
+        RouterManagementClient("http://localhost:8080").preview_route({"text": "hello"})
+
+    message = str(excinfo.value)
+    assert "503" in message
+    assert "decision unresolved" in message
+    assert "guarded=fail_request" in message
+
+
+def test_management_client_keeps_legacy_503_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "cli.router_management_client.requests.request",
+        lambda *args, **kwargs: _LegacyErrorResponse(),
+    )
+
+    with pytest.raises(ValueError, match="503: CLASSIFICATION_ERROR: classifier down"):
+        RouterManagementClient("http://localhost:8080").preview_route({"text": "hello"})

@@ -25,6 +25,9 @@ from .embedder_evaluation import (
     load_evaluation_data,
     test_layer_reduction,
 )
+from .representation_sentence_transformers import (
+    configure_sentence_transformer_representation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +89,7 @@ def _load_model(args) -> SentenceTransformer:
     )
     if args.max_seq_length:
         model.max_seq_length = args.max_seq_length
+    configure_sentence_transformer_representation(model)
     info = get_model_info(model)
     logger.info("Model: %s parameters", f"{info['num_params']:,}")
     logger.info("Layers: %s (attr: %s)", info["num_layers"], info["layer_attr"])
@@ -126,6 +130,16 @@ def _load_training_dataset(args):
 
 
 def _build_loss(args, model):
+    contract = configure_sentence_transformer_representation(model)
+    if (
+        contract is not None
+        and (args.use_adaptive_layer or args.use_2d_matryoshka)
+        and contract["intermediate_normalization"] != "none"
+    ):
+        raise ValueError(
+            "Native ModernBERT adaptive losses expose raw intermediate states; "
+            "the explicit contract must declare intermediate_normalization=none"
+        )
     base_loss = losses.MultipleNegativesRankingLoss(model=model)
     dimensions = [int(value) for value in args.matryoshka_dims.split(",")]
     if args.use_adaptive_layer and args.use_matryoshka:
@@ -211,8 +225,8 @@ def _print_usage(final_output_dir: str) -> None:
 model = SentenceTransformer("{final_output_dir}")
 embeddings = model.encode(["Hello world", "你好世界", "Hallo Welt"])
 
-# For faster inference (with adaptive layers):
-# model[0].auto_model.layers = model[0].auto_model.layers[:6]
+# For an explicit representation_contract, use its FP32 mean pooling reader.
+# An early physical exit may also require final_norm=Identity; follow metadata.
 """
     )
 

@@ -742,3 +742,36 @@ models:
     status: claimed
     verified_at: 2026-09-09
     source: https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507
+- catalog: ibm/granite-4.2-30b
+  relationship: self_hosted
+  id: ibm-granite/granite-4.2-30b
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-17
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+- catalog: ibm/granite-4.2-8b
+  relationship: self_hosted
+  id: ibm-granite/granite-4.2-8b
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-17
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+- catalog: ibm/granite-4.2-3b
+  relationship: self_hosted
+  id: ibm-granite/granite-4.2-3b
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-17
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b

@@ -13,7 +13,8 @@ the public configuration is intentionally smaller than the research system.
 
 ## Key Advantages
 
-- Balances configured quality metadata with configured cost.
+- Balances versioned intelligence evidence with configured cost.
+- Resolves static evidence from the candidate's exact reasoning effort.
 - Keeps the candidate set bounded by the matched decision.
 - Keeps the experimental value calculation separate from route eligibility.
 
@@ -56,6 +57,14 @@ See a complete example:
 - Capability estimates start from configured model metadata and defaults.
   AutoMix does not learn from the public outcome endpoint; retune estimates
   explicitly when traffic or models change.
+- Intelligence coverage never changes the quality value. It breaks a tie only
+  when the final AutoMix values and static intelligence scores are equal.
+  Model-level learned quality is not assigned static benchmark coverage.
+- An explicit reasoning effort uses only its exact evidence bucket. Missing
+  evidence remains unavailable rather than falling back to another effort or
+  becoming zero.
+- Selection diagnostics report the static score and coverage used, or mark the
+  evidence unavailable.
 - `verification_threshold`, configured costs, `cost_quality_tradeoff`, and
   `discount_factor` affect the one-model score. `max_escalations` and
   `use_logprob_verification` currently do not.

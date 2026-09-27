@@ -1,6 +1,7 @@
 // topology/types.ts - Topology Page Type Definitions
 
 import { ReactNode } from 'react'
+import type { SafetySignal } from '../../types/config'
 import type {
   AlgorithmType as CanonicalAlgorithmType,
   PluginType as CanonicalPluginType,
@@ -40,8 +41,12 @@ export interface KeywordSignalConfig {
 
 export interface EmbeddingSignalConfig {
   threshold: number
-  candidates: string[]
-  aggregation_method: 'max' | 'avg' | 'min'
+  candidates?: string[]
+  image_candidates?: string[]
+  negative_candidates?: string[]
+  negative_image_candidates?: string[]
+  aggregation_method?: 'max' | 'mean' | 'any'
+  query_modality?: 'text' | 'image' | 'audio'
 }
 
 export interface DomainSignalConfig {
@@ -319,8 +324,20 @@ export interface TestQueryResult {
   highlightedPath: string[]
   isAccurate: boolean
   evaluatedRules?: EvaluatedRule[]
+  evalTrace?: Array<Record<string, unknown>>
+  signalErrors?: Record<string, string>
+  appliedUnknownPolicies?: Record<string, string>
+  decisionError?: string
+  selectedModel?: string
+  recommendedModels?: string[]
+  selectionStatus?: string
+  selectionMethod?: string
+  selectionReason?: string
   routingLatency?: number
   warning?: string
+  decisionConfidence?: number | null
+  decisionConfidenceAvailable?: boolean
+  signalErrorMatches?: Record<string, boolean>
   isFallbackDecision?: boolean // True if matched decision is a system fallback
   fallbackReason?: string // Reason for fallback (e.g., "low_confidence", "no_match")
 }
@@ -330,8 +347,9 @@ export interface MatchedSignal {
   name: string
   matched: boolean
   value?: number
-  confidence?: number
-  score?: number
+  confidence?: number | null
+  confidenceAvailable?: boolean
+  score?: number | null
   reason?: string
   needsBackend?: boolean
 }
@@ -339,6 +357,7 @@ export interface MatchedSignal {
 export interface EvaluatedRule {
   decisionName: string
   condition: string
+  state?: string
   result: boolean
   priority: number
   matchedConditions?: number
@@ -409,12 +428,7 @@ export interface ConfigData {
     keywords: string[]
     case_sensitive?: boolean
   }>
-  embedding_rules?: Array<{
-    name: string
-    threshold: number
-    candidates: string[]
-    aggregation_method?: 'max' | 'avg' | 'min'
-  }>
+  embedding_rules?: Array<EmbeddingSignalConfig & { name: string }>
   fact_check_rules?: Array<{
     name: string
     description?: string
@@ -568,12 +582,7 @@ export interface ConfigData {
       keywords: string[]
       case_sensitive?: boolean
     }>
-    embeddings?: Array<{
-      name: string
-      threshold: number
-      candidates: string[]
-      aggregation_method?: 'max' | 'avg' | 'min'
-    }>
+    embeddings?: Array<EmbeddingSignalConfig & { name: string }>
     domains?: Array<{
       name: string
       description?: string
@@ -633,6 +642,7 @@ export interface ConfigData {
       }>
       description?: string
     }>
+    safety?: SafetySignal[]
     jailbreak?: Array<{
       name: string
       threshold?: number

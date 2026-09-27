@@ -1,0 +1,16 @@
+{
+  "architectures": [
+    "ModernBertModel"
+  ],
+  "hidden_size": 4,
+  "num_hidden_layers": 2,
+  "max_position_embeddings": 32768,
+  "pad_token_id": 0,
+  "representation_contract": {
+    "version": 1,
+    "pooling": "cls",
+    "intermediate_normalization": "final_norm",
+    "final_normalization": "final_norm",
+    "head_dtype": "float32"
+  }
+}

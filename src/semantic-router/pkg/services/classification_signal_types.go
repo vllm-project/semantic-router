@@ -1,11 +1,15 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
 const (
@@ -13,12 +17,14 @@ const (
 	EvalSelectionPlannedFinal      = "planned_final"
 	EvalSelectionFallback          = "fallback"
 	EvalSelectionExecutionRequired = "execution_required"
+	EvalSelectionNotRequired       = "not_required"
 	EvalSelectionUnavailable       = "unavailable"
 	EvalSelectionFailed            = "failed"
 )
 
 // IntentRequest represents a request for intent classification.
 type IntentRequest struct {
+	ExpectedConfigHash  string            `json:"-"`
 	Text                string            `json:"text,omitempty"`
 	Messages            []IntentMessage   `json:"messages,omitempty"`
 	Tools               []json.RawMessage `json:"tools,omitempty"`
@@ -31,6 +37,28 @@ type IntentRequest struct {
 	Model               string            `json:"model,omitempty"`
 	Metadata            map[string]string `json:"metadata,omitempty"`
 	Options             *IntentOptions    `json:"options,omitempty"`
+	PreviewContext      *PreviewContext   `json:"preview_context,omitempty"`
+}
+
+// PreviewContext supplies routing identity, never credentials or a state update.
+// A sampling seed reproduces this preview's draw, not a later live request.
+type PreviewContext struct {
+	SessionID      string `json:"session_id,omitempty"`
+	ConversationID string `json:"conversation_id,omitempty"`
+	SamplingSeed   *int64 `json:"sampling_seed,omitempty"`
+}
+
+// SelectionProvenance distinguishes a stateless route from an observation of
+// mutable routing inputs. State hashes are receipts, not execution preconditions.
+type SelectionProvenance struct {
+	Mode           string `json:"mode"`
+	ConfigHash     string `json:"config_hash"`
+	StateDependent bool   `json:"state_dependent"`
+	StateHash      string `json:"state_hash,omitempty"`
+	CapturedAt     string `json:"captured_at,omitempty"`
+	Sampled        bool   `json:"sampled"`
+	SamplingSeed   *int64 `json:"sampling_seed,omitempty"`
+	Caveat         string `json:"caveat,omitempty"`
 }
 
 // IntentOptions contains options for intent classification.
@@ -57,6 +85,7 @@ type MatchedSignals struct {
 	Modality      []string `json:"modality,omitempty"`
 	Authz         []string `json:"authz,omitempty"`
 	Jailbreak     []string `json:"jailbreak,omitempty"`
+	Safety        []string `json:"safety,omitempty"`
 	PII           []string `json:"pii,omitempty"`
 	KB            []string `json:"kb,omitempty"`
 	Conversation  []string `json:"conversation,omitempty"`
@@ -69,9 +98,10 @@ type MatchedSignals struct {
 
 // DecisionResult represents the result of decision evaluation.
 type DecisionResult struct {
-	DecisionName string   `json:"decision_name"`
-	Confidence   float64  `json:"confidence"`
-	MatchedRules []string `json:"matched_rules"`
+	DecisionName        string   `json:"decision_name"`
+	Confidence          float64  `json:"confidence"`
+	ConfidenceAvailable *bool    `json:"confidence_available,omitempty"`
+	MatchedRules        []string `json:"matched_rules"`
 }
 
 // EvalDecisionResult represents the decision result for eval scenarios (without confidence).
@@ -86,29 +116,39 @@ type EvalDecisionResult struct {
 
 // EvalResponse represents the eval classification response with comprehensive signal information.
 type EvalResponse struct {
+	ConfigHash             string                                  `json:"config_hash,omitempty"`
+	SignalErrorMatches     map[string]bool                         `json:"signal_error_matches,omitempty"`
 	OriginalText           string                                  `json:"original_text"` // The evaluated user turn or fallback query text
 	RequestedModel         string                                  `json:"requested_model,omitempty"`
 	Recipe                 config.RecipeName                       `json:"recipe,omitempty"`
 	DecisionResult         *EvalDecisionResult                     `json:"decision_result,omitempty"`
 	EvalTrace              []decision.DecisionTrace                `json:"eval_trace,omitempty"`         // Per-decision evaluation trace (when ?trace=true)
 	RecommendedModels      []string                                `json:"recommended_models,omitempty"` // All models from matched decision's modelRefs
-	SelectedModel          string                                  `json:"selected_model,omitempty"`     // Concrete selector result or configured final-output model
-	SelectionStatus        string                                  `json:"selection_status,omitempty"`   // selected, planned_final, fallback, execution_required, unavailable, or failed
+	SelectedModel          string                                  `json:"selected_model,omitempty"`     // Concrete selector result or configured final-output model; absent for immediate responses
+	SelectionStatus        string                                  `json:"selection_status,omitempty"`   // selected, planned_final, fallback, execution_required, not_required, unavailable, or failed
 	SelectionMethod        string                                  `json:"selection_method,omitempty"`
 	SelectionReason        string                                  `json:"selection_reason,omitempty"`
+	SelectionProvenance    *SelectionProvenance                    `json:"selection_provenance,omitempty"`
+	SelectionTrace         *selectiontrace.MultiFactorObjective    `json:"selection_trace,omitempty"`
 	RoutingDecision        string                                  `json:"routing_decision,omitempty"`
 	Metrics                *classification.SignalMetricsCollection `json:"metrics"`                      // Performance and confidence for each signal
 	SignalConfidences      map[string]float64                      `json:"signal_confidences,omitempty"` // Real ML confidence scores per signal, e.g. "domain:economics" -> 0.81
 	SignalValues           map[string]float64                      `json:"signal_values,omitempty"`      // Raw signal values per signal when exposed, e.g. "structure:many_questions" -> 4
 	SignalErrors           map[string]string                       `json:"signal_errors,omitempty"`
 	AppliedUnknownPolicies map[string]string                       `json:"applied_unknown_policies,omitempty"`
+	DecisionRanking        *decision.RankingTrace                  `json:"decision_ranking,omitempty"` // How selection ordered the matched decisions
 	DecisionError          string                                  `json:"decision_error,omitempty"`
 }
 
-// EvalModelSelectionInput is the content-minimized selection contract passed
-// from classification to the live Router selector. It intentionally excludes
-// raw tool schemas and message bodies beyond the current semantic query.
+// EvalModelSelectionInput carries the evaluated request and derived conversation
+// facts to the live selector. Request content remains local to this call and is
+// excluded from the returned selection provenance.
 type EvalModelSelectionInput struct {
+	Context           context.Context
+	PreviewContext    *PreviewContext
+	ConversationFacts classification.ConversationFacts
+	SemanticRequest   *llmprotocol.Request
+	Demand            selection.CandidateDemand
 	Recipe            config.RecipeName
 	Decision          *config.Decision
 	Query             string
@@ -121,6 +161,8 @@ type EvalModelSelection struct {
 	Status        string
 	Method        string
 	Reason        string
+	Provenance    *SelectionProvenance
+	MultiFactor   *selectiontrace.MultiFactorObjective
 }
 
 // EvalModelSelector performs a non-generating selection preview with the same
@@ -131,10 +173,12 @@ type EvalModelSelector interface {
 
 // IntentResponse represents the response from intent classification.
 type IntentResponse struct {
-	Classification   Classification     `json:"classification"`
-	Probabilities    map[string]float64 `json:"probabilities,omitempty"`
-	RecommendedModel string             `json:"recommended_model,omitempty"`
-	RoutingDecision  string             `json:"routing_decision,omitempty"`
+	ProbabilitiesAvailable bool               `json:"probabilities_available"`
+	SignalErrorMatches     map[string]bool    `json:"signal_error_matches,omitempty"`
+	Classification         Classification     `json:"classification"`
+	Probabilities          map[string]float64 `json:"probabilities,omitempty"`
+	RecommendedModel       string             `json:"recommended_model,omitempty"`
+	RoutingDecision        string             `json:"routing_decision,omitempty"`
 
 	// Signal-driven fields
 	MatchedSignals         *MatchedSignals   `json:"matched_signals,omitempty"`
@@ -145,7 +189,8 @@ type IntentResponse struct {
 
 // Classification represents basic classification result.
 type Classification struct {
-	Category         string  `json:"category"`
-	Confidence       float64 `json:"confidence"`
-	ProcessingTimeMs int64   `json:"processing_time_ms"`
+	Category            string  `json:"category"`
+	Confidence          float64 `json:"confidence"`
+	ConfidenceAvailable *bool   `json:"confidence_available,omitempty"`
+	ProcessingTimeMs    int64   `json:"processing_time_ms"`
 }

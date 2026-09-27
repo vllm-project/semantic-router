@@ -12,6 +12,7 @@ import (
 // Separated from EvaluateAllSignalsWithContext to keep cyclomatic complexity under the linter limit.
 func (c *Classifier) signalReadiness() map[string]bool {
 	return map[string]bool{
+		config.SignalTypeSafety:        len(c.safetyClassifiers) > 0,
 		config.SignalTypeKeyword:       c.keywordClassifier != nil,
 		config.SignalTypeEmbedding:     c.keywordEmbeddingClassifier != nil,
 		config.SignalTypeDomain:        c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil,
@@ -123,22 +124,13 @@ func (c *Classifier) EvaluateAllSignalsWithRequestFacts(
 	imageURL string,
 	requestFacts RequestFacts,
 ) *SignalResults {
-	return c.evaluateAllSignalsWithContext(
-		text,
-		contextText,
-		currentUserText,
-		priorUserMessages,
-		nonUserMessages,
-		hasPriorAssistantReply,
-		forceEvaluateAll,
-		uncompressedText,
-		skipCompressionSignals,
-		convFacts,
-		imageURL,
-		requestFacts,
-		nil,
-		false,
-	)
+	return c.evaluateAllSignalsWithContext(SignalEvaluationInput{
+		Text: text, ContextText: contextText, CurrentUserText: currentUserText,
+		PriorUserMessages: priorUserMessages, NonUserMessages: nonUserMessages,
+		HasPriorAssistantReply: hasPriorAssistantReply, ForceEvaluateAll: forceEvaluateAll,
+		UncompressedText: uncompressedText, SkipCompressionSignals: skipCompressionSignals,
+		ConversationFacts: convFacts, ImageURL: imageURL, RequestFacts: requestFacts,
+	}, nil, false)
 }
 
 // EvaluateAllSignalsWithRequestFactsForDecisions scopes signal usage to one
@@ -158,44 +150,20 @@ func (c *Classifier) EvaluateAllSignalsWithRequestFactsForDecisions(
 	requestFacts RequestFacts,
 	decisions []config.Decision,
 ) *SignalResults {
-	return c.evaluateAllSignalsWithContext(
-		text,
-		contextText,
-		currentUserText,
-		priorUserMessages,
-		nonUserMessages,
-		hasPriorAssistantReply,
-		forceEvaluateAll,
-		uncompressedText,
-		skipCompressionSignals,
-		convFacts,
-		imageURL,
-		requestFacts,
-		decisions,
-		true,
-	)
+	return c.evaluateAllSignalsWithContext(SignalEvaluationInput{
+		Text: text, ContextText: contextText, CurrentUserText: currentUserText,
+		PriorUserMessages: priorUserMessages, NonUserMessages: nonUserMessages,
+		HasPriorAssistantReply: hasPriorAssistantReply, ForceEvaluateAll: forceEvaluateAll,
+		UncompressedText: uncompressedText, SkipCompressionSignals: skipCompressionSignals,
+		ConversationFacts: convFacts, ImageURL: imageURL, RequestFacts: requestFacts,
+	}, decisions, true)
 }
 
-func (c *Classifier) evaluateAllSignalsWithContext(
-	text string,
-	contextText string,
-	currentUserText string,
-	priorUserMessages []string,
-	nonUserMessages []string,
-	hasPriorAssistantReply bool,
-	forceEvaluateAll bool,
-	uncompressedText string,
-	skipCompressionSignals map[string]bool,
-	convFacts ConversationFacts,
-	imageURL string,
-	requestFacts RequestFacts,
-	signalScope []config.Decision,
-	signalScopeSet bool,
-) *SignalResults {
+func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, signalScope []config.Decision, signalScopeSet bool) *SignalResults {
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
 	switch {
-	case forceEvaluateAll:
+	case input.ForceEvaluateAll:
 		usedSignals = c.getAllSignalTypes()
 		logging.Debugf("[Signal Computation] Force evaluate all signals mode enabled")
 	case signalScopeSet:
@@ -204,7 +172,16 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 		usedSignals = c.getUsedSignals()
 	}
 
-	textForSignal := textForSignalFunc(text, uncompressedText, skipCompressionSignals)
+	boundedText := textForSignalFunc(input.Text, input.UncompressedText, input.SkipCompressionSignals)
+	textForSignal := func(signalType string) string {
+		if c.hasLongContextClassifier(signalType) {
+			if input.UncompressedText != "" && input.SkipCompressionSignals[signalType] {
+				return input.UncompressedText
+			}
+			return input.Text
+		}
+		return boundedText(signalType)
+	}
 	ready := c.signalReadiness()
 
 	results := &SignalResults{
@@ -214,44 +191,21 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 		SignalErrors:       make(map[string]string),
 		SignalErrorMatches: make(map[string]bool),
 	}
-	if requestFacts.Context == nil {
+	if input.RequestFacts.Context == nil {
 		// The legacy, context-free classifier APIs do not have a caller context.
 		// Keep those APIs working while ensuring every request-aware path passes
 		// its supplied context all the way to remote category HTTP calls.
-		requestFacts.Context = context.Background()
+		input.RequestFacts.Context = context.Background()
 	}
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	imgArg := imageURL
-
-	// Allocate a request-scoped image embedding cache only when an image is
-	// actually attached. Two signals - complexity (image rules) and embedding
-	// (image-modality rules) - independently pull image embeddings via FFI;
-	// the cache lets whichever runs first donate its result to the other,
-	// turning two SigLIP forward passes into one. With no image attached,
-	// neither signal touches the cache, so leaving it nil is correct.
-	var imgCache *requestImageEmbeddingCache
-	if imgArg != "" {
-		imgCache = newRequestImageEmbeddingCache()
+	var mediaCache *requestMediaEmbeddingCache
+	if input.ImageURL != "" || input.Audio != "" {
+		mediaCache = newRequestMediaEmbeddingCache()
 	}
+	dispatchers := c.buildSignalDispatchers(input, results, &mu, textForSignal, mediaCache, usedSignals)
 
-	dispatchers := c.buildSignalDispatchers(
-		results,
-		&mu,
-		textForSignal,
-		contextText,
-		currentUserText,
-		priorUserMessages,
-		nonUserMessages,
-		hasPriorAssistantReply,
-		imgArg,
-		imgCache,
-		convFacts,
-		requestFacts.Context,
-		requestFacts,
-		usedSignals,
-	)
 	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
 
 	wg.Wait()

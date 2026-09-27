@@ -3,8 +3,8 @@
 # Builds the C++ shared library (libopenvino_semantic_router.so) and runs Go tests
 # =============================================================================
 # Usage:
-#   docker build -f openvino-binding/Dockerfile -t openvino-binding .
-#   docker run --rm openvino-binding
+#   docker build --platform linux/amd64 --target tester \
+#     -f openvino-binding/Dockerfile .
 # =============================================================================
 
 # Use golang image to copy Go toolchain (avoids network download)
@@ -49,13 +49,11 @@ RUN mkdir -p openvino-binding/build && \
     cmake .. && \
     make -j$(nproc) && \
     echo "=== Verifying library ===" && \
-    ls -la libopenvino_semantic_router.so && \
-    nm -D libopenvino_semantic_router.so | grep -c "T " || true
+    test -s libopenvino_semantic_router.so
 
 # Copy Go module and source files
 COPY openvino-binding/go.mod ./openvino-binding/
-COPY openvino-binding/semantic-router.go ./openvino-binding/
-COPY openvino-binding/semantic-router_test.go ./openvino-binding/
+COPY openvino-binding/*.go ./openvino-binding/
 
 # Download Go dependencies
 RUN cd openvino-binding && go mod download
@@ -74,20 +72,13 @@ RUN cd openvino-binding && \
 # =============================================================================
 FROM builder AS tester
 
-# Copy test models and conversion scripts
-COPY openvino-binding/test_models/ ./openvino-binding/test_models/
-COPY openvino-binding/scripts/ ./openvino-binding/scripts/
-COPY openvino-binding/convert_modernbert_models.py ./openvino-binding/
-
-# Convert test tokenizers
-RUN cd openvino-binding && \
-    python3 scripts/convert_test_tokenizers.py 2>/dev/null || \
-    echo "Note: test tokenizer conversion skipped (models may not be available)"
-
-# Run Go tests (some may fail without full models)
-RUN cd openvino-binding && \
-    go test -v -timeout 10m -count=1 ./... 2>&1; \
-    echo "Test stage completed (failures expected without pre-converted models)"
+# The binding image tests owned handles and published Vela weights. Router-owned
+# runtime integration additionally runs in native CI with the shared libraries.
+COPY openvino-binding/requirements-test.txt ./openvino-binding/
+RUN pip install --no-cache-dir -r openvino-binding/requirements-test.txt
+COPY . .
+ENV HF_HUB_DISABLE_XET=1
+RUN make verify-openvino-published
 
 # =============================================================================
 # Final stage: minimal runtime with built library

@@ -8,12 +8,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -129,4 +132,18 @@ func TestHandleNLIClassification_Success(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&got))
 	assert.Equal(t, "entailment", got.Label)
 	assert.InDelta(t, 0.91, got.Confidence, 0.01)
+}
+
+func TestNLIUsesSharedInputAndAdmissionErrorMapping(t *testing.T) {
+	for _, tc := range []struct {
+		err    error
+		status int
+	}{{binding.ErrInputLimit, http.StatusBadRequest}, {admission.ErrQueueFull, http.StatusTooManyRequests}, {services.ErrClassifierUnavailable, http.StatusServiceUnavailable}} {
+		api := &ClassificationAPIServer{classificationSvc: &nliTestService{nliReady: true, err: tc.err}}
+		response := httptest.NewRecorder()
+		api.handleNLIClassification(response, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"premise":"a","hypothesis":"b"}`)))
+		if response.Code != tc.status {
+			t.Fatalf("%v status=%d body=%s", tc.err, response.Code, response.Body.String())
+		}
+	}
 }

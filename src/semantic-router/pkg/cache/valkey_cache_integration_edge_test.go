@@ -5,17 +5,17 @@ package cache
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_EmptyQuery(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -28,6 +28,7 @@ func TestValkeyCacheIntegration_EmptyQuery(t *testing.T) {
 	t.Logf("Empty query search hit: %v", hit)
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_LargeResponseBody(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -50,6 +51,7 @@ func TestValkeyCacheIntegration_LargeResponseBody(t *testing.T) {
 	}
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_SpecialCharactersInQuery(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -79,6 +81,7 @@ func TestValkeyCacheIntegration_SpecialCharactersInQuery(t *testing.T) {
 	}
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_StatsAccuracy(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -112,6 +115,7 @@ func TestValkeyCacheIntegration_StatsAccuracy(t *testing.T) {
 		stats.TotalEntries, stats.HitCount, stats.MissCount, stats.HitRatio)
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_ErrorScenarios(t *testing.T) {
 	t.Run("Invalid Valkey host", func(t *testing.T) {
 		valkeyConfig := &config.ValkeyConfig{}
@@ -130,21 +134,16 @@ func TestValkeyCacheIntegration_ErrorScenarios(t *testing.T) {
 		valkeyConfig.Development.AutoCreateIndex = true
 
 		_, err := NewValkeyCache(ValkeyCacheOptions{
-			Enabled:        true,
-			Config:         valkeyConfig,
-			EmbeddingModel: "bert",
+			EmbeddingProvider: storagetest.Vectors{Size: 384},
+			Enabled:           true,
+			Config:            valkeyConfig,
+			EmbeddingModel:    "bert",
 		})
 		assert.Error(t, err, "Should fail to connect to invalid host")
 	})
 
 	t.Run("Index creation disabled when index doesn't exist", func(t *testing.T) {
-		if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
-			t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
-		}
-
-		if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-			t.Skipf("Failed to initialize BERT model: %v", err)
-		}
+		storagetest.Require(t, "valkey")
 
 		host, port := valkeyIntegrationAddr()
 		valkeyConfig := &config.ValkeyConfig{}
@@ -164,9 +163,10 @@ func TestValkeyCacheIntegration_ErrorScenarios(t *testing.T) {
 		valkeyConfig.Development.AutoCreateIndex = false
 
 		_, err := NewValkeyCache(ValkeyCacheOptions{
-			Enabled:        true,
-			Config:         valkeyConfig,
-			EmbeddingModel: "bert",
+			EmbeddingProvider: storagetest.Vectors{Size: 384},
+			Enabled:           true,
+			Config:            valkeyConfig,
+			EmbeddingModel:    "bert",
 		})
 		assert.Error(t, err, "Should fail when index doesn't exist and auto-creation is disabled")
 		assert.Contains(t, err.Error(), "does not exist", "Error should mention index doesn't exist")

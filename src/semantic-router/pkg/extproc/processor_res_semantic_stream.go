@@ -126,6 +126,12 @@ func observeProtocolStream(
 	diagnostics []llmprotocol.Diagnostic,
 ) {
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
+	// Streaming headers have already been emitted. Keep late compatibility
+	// warnings observable through the same counter and structured diagnostics
+	// as buffered responses instead of retaining them only in request state.
+	for _, diagnostic := range diagnostics {
+		recordProtocolDiagnostic(ctx, normalizeProtocol(string(ctx.SourceFormat)), normalizeProtocol(string(ctx.TargetFormat)), diagnostic)
+	}
 	ctx.SemanticStreamState.observe(events)
 }
 
@@ -154,7 +160,7 @@ func recordStreamingTTFT(ctx *RequestContext) {
 		return
 	}
 
-	metrics.RecordModelTTFT(ctx.RequestModel, ttft)
+	metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
 	ctx.TTFTSeconds = ttft
 	ctx.TTFTRecorded = true
 	latency.UpdateTTFT(ctx.RequestModel, ttft)
@@ -173,7 +179,7 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	if ctx.ProtocolResponseStream != nil {
 		return nil
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return err
 	}
@@ -183,21 +189,19 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		Options:     clientStreamOptions(ctx),
 		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
 	}
-	var mutation protocolcodec.StreamEventMutation
+	mutation := clientStreamMutation(ctx, source)
 	if responseID := responseObjectPublicID(ctx); responseID != "" {
 		streamContext.ResponseID = responseID
-		mutation = func(event *llmprotocol.Event) error {
-			event.ResponseID = responseID
-			return nil
-		}
 	}
 	stream, err := engine.NewStreamWithMutation(source, target, streamContext, mutation)
 	if err != nil {
 		return err
 	}
 	ctx.ProtocolResponseStream = stream
-	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 && !streamUsageRequestedByClient(ctx) {
-		ctx.PublicChatUsageFilter = protocolcodec.NewChatUsageStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes)
+	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 {
+		ctx.PublicChatUsageFilter = protocolcodec.NewChatPublicStreamFilter(
+			llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, streamUsageRequestedByClient(ctx),
+		)
 	}
 	ctx.SemanticStreamState = &semanticResponseStreamState{
 		usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
@@ -260,6 +264,9 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				item.toolCall = &llmprotocol.ToolCall{}
 			}
 			if event.ToolCall != nil {
+				if event.ToolCall.Kind != "" {
+					item.toolCall.Kind = event.ToolCall.Kind
+				}
 				if event.ToolCall.ID != "" {
 					item.toolCall.ID = event.ToolCall.ID
 				}
@@ -368,6 +375,8 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 	ctx.InflightToken = 0
 
 	usage := r.takeNeutralResponseUsage(ctx)
+	// Decoded stream events carry the client-facing model, not the provider's.
+	observeUpstreamResponse(ctx, "", usage)
 	r.reportSemanticStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
@@ -376,8 +385,10 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			"request_id": ctx.RequestID,
 			"error":      responseErr.Error(),
 		})
+		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
 		return
 	}
+	recordPrimaryOutputDigest(ctx, semanticResponse)
 	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
 	encoded, err := r.encodeClientResponse(*semanticResponse, ctx)
 	if err != nil {
@@ -386,6 +397,7 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			"format":     ctx.SourceFormat,
 			"error":      err.Error(),
 		})
+		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_encode_failed", true)
 		return
 	}
 	r.updateResponseCache(ctx, encoded)
@@ -399,7 +411,11 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	completionLatency time.Duration,
 	usage responseUsageMetrics,
 ) {
-	if ctx == nil || usage.invalid {
+	if ctx == nil {
+		return
+	}
+	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
+	if usage.invalid {
 		return
 	}
 	totalTokens := responseUsageTotal(usage)
@@ -422,12 +438,10 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 		completionLatency.Seconds(),
 		int64(usage.promptTokens),
 		int64(usage.completionTokens),
-		false,
-		false,
 	)
 	if usage.completionTokens > 0 && completionLatency > 0 {
 		timePerToken := completionLatency.Seconds() / float64(usage.completionTokens)
-		metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
+		metrics.RecordModelResponseDurationPerOutputToken(ctx.RequestModel, timePerToken)
 		latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 	}
 	replayUsage := r.recordResponseCost(ctx, completionLatency, usage)

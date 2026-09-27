@@ -42,8 +42,9 @@ func TestFaithfulnessVerifierScoresBySpanCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if res.Disposition != DispositionApprove || res.Kind != VerifierKindFaithfulness {
-		t.Fatalf("disposition/kind = %q/%q", res.Disposition, res.Kind)
+	if res.Disposition != DispositionTie || res.Kind != VerifierKindFaithfulness {
+		t.Fatalf("disposition/kind = %q/%q, want %q/%q (faithfulness is evidence, never a decision)",
+			res.Disposition, res.Kind, DispositionTie, VerifierKindFaithfulness)
 	}
 	if len(res.Scores) != 2 {
 		t.Fatalf("len(scores) = %d, want 2", len(res.Scores))

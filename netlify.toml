@@ -1,0 +1,6 @@
+# Production stays on Netlify's Git integration. PR previews are requested with
+# /netlify and uploaded by .github/workflows/netlify-preview.yml.
+# Also disable automatic Deploy Previews and branch deploys in the Netlify UI;
+# that prevents queueing builds even for PRs that predate this file.
+[build]
+  ignore = 'if [ "$CONTEXT" = "production" ] && [ "$BRANCH" = "main" ]; then exit 1; else exit 0; fi'

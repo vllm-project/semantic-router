@@ -177,4 +177,12 @@ RECIPE speed {
     expect(mutated).toContain('keywords: ["after"]')
     expect(mutated).toContain('keywords: ["unchanged"]')
   })
+
+  it('keeps bindings-only default routing visible and isolates recipe bindings', () => {
+    const binding = { deployment: 'shared', contract: 'embedding.v1', adapter: 'mmbert' }
+    const ast: ASTProgram = { ...scopedAst, modelBindings: { embedding: binding } }
+    expect(chooseDefaultBuilderRoutingScope(ast)).toBe('global')
+    expect(resolveBuilderRoutingScope(ast, 'global')?.modelBindings).toEqual({ embedding: binding })
+    expect(resolveBuilderRoutingScope(ast, 'recipe:balanced')?.modelBindings).toBeUndefined()
+  })
 })

@@ -4,8 +4,55 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+func TestWindowedCompletedSamplesExpireWithoutStaleLatency(t *testing.T) {
+	if err := InitializeWindowedMetrics(config.WindowedMetricsConfig{Enabled: false}); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewWindowedMetricsManager(config.WindowedMetricsConfig{Enabled: true, TimeWindows: []string{"1m"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const model = "expired-window-fixture"
+	manager.RecordRequest(RequestData{Timestamp: time.Now(), Model: model, LatencySeconds: 45, PromptTokens: 7, CompletionTokens: 3})
+	manager.computeWindowedMetrics()
+	if testutil.ToFloat64(ModelTokensWindowed.WithLabelValues(model, "prompt", "1m")) != 7 {
+		t.Fatal("sample not observed")
+	}
+	buffer := manager.requestBuffers[model]
+	buffer.mutex.Lock()
+	for i := range buffer.data {
+		buffer.data[i].Timestamp = time.Now().Add(-2 * time.Minute)
+	}
+	buffer.mutex.Unlock()
+	manager.computeWindowedMetrics()
+	if testutil.ToFloat64(ModelTokensWindowed.WithLabelValues(model, "prompt", "1m")) != 0 {
+		t.Fatal("expired token count remained visible")
+	}
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range families {
+		switch family.GetName() {
+		case "llm_model_utilization_percentage", "llm_model_queue_depth_estimated", "llm_model_error_rate_windowed":
+			t.Fatalf("retired unsupported family still exported: %s", family.GetName())
+		case "llm_model_latency_windowed_seconds", "llm_model_latency_p50_windowed_seconds", "llm_model_latency_p95_windowed_seconds", "llm_model_latency_p99_windowed_seconds":
+			for _, metric := range family.Metric {
+				for _, label := range metric.Label {
+					if label.GetName() == "model" && label.GetValue() == model {
+						t.Fatal("expired latency still appears as a measurement")
+					}
+				}
+			}
+		}
+	}
+}
 
 // TestNewWindowedMetricsManager tests the creation of a new WindowedMetricsManager
 func TestNewWindowedMetricsManager(t *testing.T) {
@@ -348,55 +395,6 @@ func TestWindowedMetricsManagerRecordRequest(t *testing.T) {
 
 	if bufferCount != 3 {
 		t.Errorf("Buffer count = %d, want 3 (max models)", bufferCount)
-	}
-}
-
-// TestActiveRequestTracking tests queue depth tracking
-func TestActiveRequestTracking(t *testing.T) {
-	manager, err := NewWindowedMetricsManager(config.WindowedMetricsConfig{
-		Enabled:              true,
-		QueueDepthEstimation: true,
-	})
-	if err != nil {
-		t.Fatalf("NewWindowedMetricsManager() error = %v", err)
-	}
-
-	// Increment active requests
-	manager.IncrementActiveRequests("model1")
-	manager.IncrementActiveRequests("model1")
-	manager.IncrementActiveRequests("model1")
-
-	// Check count
-	manager.activeMutex.RLock()
-	count := manager.activeRequests["model1"]
-	manager.activeMutex.RUnlock()
-
-	if count != 3 {
-		t.Errorf("Active requests count = %d, want 3", count)
-	}
-
-	// Decrement
-	manager.DecrementActiveRequests("model1")
-	manager.DecrementActiveRequests("model1")
-
-	manager.activeMutex.RLock()
-	count = manager.activeRequests["model1"]
-	manager.activeMutex.RUnlock()
-
-	if count != 1 {
-		t.Errorf("Active requests count after decrement = %d, want 1", count)
-	}
-
-	// Decrement beyond zero (should not go negative)
-	manager.DecrementActiveRequests("model1")
-	manager.DecrementActiveRequests("model1")
-
-	manager.activeMutex.RLock()
-	count = manager.activeRequests["model1"]
-	manager.activeMutex.RUnlock()
-
-	if count != 0 {
-		t.Errorf("Active requests count should not go negative, got %d", count)
 	}
 }
 

@@ -1226,4 +1226,4 @@ model-onboarding path.
 - [Terminal-Bench 2.1](https://github.com/harbor-framework/terminal-bench-2-1)
 - [Unified Config Contract v0.3](./unified-config-contract-v0-3)
 - [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor)
-- [Evaluation Plane](../benchmarking/evaluation-plane)
+- [sr-bench 1.0](../benchmarking/sr-bench)

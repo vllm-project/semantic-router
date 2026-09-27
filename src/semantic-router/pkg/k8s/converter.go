@@ -184,8 +184,12 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 			Name:                      signal.Name,
 			SimilarityThreshold:       signal.Threshold,
 			Candidates:                signal.Candidates,
+			ImageCandidates:           signal.ImageCandidates,
+			NegativeCandidates:        signal.NegativeCandidates,
+			NegativeImageCandidates:   signal.NegativeImageCandidates,
 			AggregationMethodConfiged: config.AggregationMethod(signal.AggregationMethod),
 			QueryModality:             config.QueryModality(signal.QueryModality),
+			PrototypeScoring:          convertPrototypeScoring(signal.PrototypeScoring),
 		})
 	}
 

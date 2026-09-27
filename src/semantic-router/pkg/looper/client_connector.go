@@ -32,6 +32,9 @@ type modelConnector interface {
 	Close() error
 }
 
+// maxErrorBodyBytes limits the diagnostic body retained for non-2xx responses.
+const maxErrorBodyBytes int64 = 8 * 1024
+
 var chatCompletionOperation = connector.Operation{
 	Name:              "looper_chat_completion",
 	Method:            http.MethodPost,
@@ -60,10 +63,9 @@ func NewConnectorClient(cfg *config.LooperConfig) (*Client, error) {
 		return nil, fmt.Errorf("create Looper connector: %w", err)
 	}
 	return &Client{
-		connector:        remote,
-		endpoint:         cfg.Endpoint,
-		headers:          cfg.Headers,
-		maxResponseBytes: cfg.GetMaxResponseBytes(),
+		connector: remote,
+		endpoint:  cfg.Endpoint,
+		headers:   cfg.Headers,
 	}, nil
 }
 

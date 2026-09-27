@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <numeric>
+#include <limits>
 #include <vector>
 
 #include "ck_flash_attn.h"
@@ -45,7 +46,8 @@ static std::vector<float> reference_sdpa_f32(
     const std::vector<half_t>& k_f16,
     const std::vector<half_t>& v_f16,
     const std::vector<half_t>& bias_f16,
-    int batch, int nhead, int seqlen_q, int seqlen_k, int hdim, float scale)
+    int batch, int nhead, int seqlen_q, int seqlen_k, int hdim, float scale,
+    int window_left, int window_right, bool broadcast_bias)
 {
     // Upcast inputs to FP32
     auto upcast = [](const std::vector<half_t>& src) {
@@ -71,9 +73,9 @@ static std::vector<float> reference_sdpa_f32(
             size_t qo_base = ((size_t)b * nhead + h) * seqlen_q * hdim;
             size_t k_base  = ((size_t)b * nhead + h) * seqlen_k * hdim;
             size_t v_base  = ((size_t)b * nhead + h) * seqlen_k * hdim;
-            size_t bias_base = has_bias
-                ? ((size_t)b * nhead + h) * seqlen_q * seqlen_k
-                : 0;
+            size_t bias_base = has_bias ? (broadcast_bias
+                ? (size_t)b * seqlen_k
+                : ((size_t)b * nhead + h) * seqlen_q * seqlen_k) : 0;
 
             // For each query position
             for (int sq = 0; sq < seqlen_q; sq++) {
@@ -87,12 +89,16 @@ static std::vector<float> reference_sdpa_f32(
                     }
                     scores[sk] = dot * scale;
                     if (has_bias) {
-                        scores[sk] += bias[bias_base + sq * seqlen_k + sk];
+                        scores[sk] += bias[bias_base + (broadcast_bias ? 0 : sq * seqlen_k) + sk];
                     }
+                    if ((window_left >= 0 && sk < sq - window_left) ||
+                        (window_right >= 0 && sk > sq + window_right))
+                        scores[sk] = -std::numeric_limits<float>::infinity();
                 }
 
                 // Softmax (numerically stable)
                 float max_s = *std::max_element(scores.begin(), scores.end());
+                if (!std::isfinite(max_s)) continue; // fully masked row has zero output
                 float sum_exp = 0.0f;
                 for (int sk = 0; sk < seqlen_k; sk++) {
                     scores[sk] = expf(scores[sk] - max_s);
@@ -167,6 +173,11 @@ struct TestConfig {
     bool use_bias;
     float max_abs_tol;
     float min_cosine_tol;
+    int window_left = -1;
+    int window_right = -1;
+    bool broadcast_bias = false;
+    int pad_tokens = 0;
+    bool left_padding = false;
 };
 
 static bool run_test(const TestConfig& cfg) {
@@ -174,7 +185,8 @@ static bool run_test(const TestConfig& cfg) {
     const size_t n_qo = (size_t)cfg.batch * cfg.nhead * cfg.seqlen_q * cfg.hdim;
     const size_t n_kv = (size_t)cfg.batch * cfg.nhead * cfg.seqlen_k * cfg.hdim;
     const size_t n_bias = cfg.use_bias
-        ? (size_t)cfg.batch * cfg.nhead * cfg.seqlen_q * cfg.seqlen_k
+        ? (cfg.broadcast_bias ? (size_t)cfg.batch * cfg.seqlen_k
+           : (size_t)cfg.batch * cfg.nhead * cfg.seqlen_q * cfg.seqlen_k)
         : 0;
 
     // Generate random FP16 inputs in [-0.5, 0.5]
@@ -195,8 +207,19 @@ static bool run_test(const TestConfig& cfg) {
         h_bias.resize(n_bias);
         srand(999);
         for (size_t i = 0; i < n_bias; i++) {
-            // Simulate a padding mask: ~10% of positions masked with -1e4
-            float val = (rand() % 10 == 0) ? -1e4f : 0.0f;
+            float val;
+            if (cfg.broadcast_bias) {
+                // One key-padding row per batch, broadcast across heads and Q.
+                // Vary lengths by batch so a bad batch stride cannot pass.
+                int batch_index = i / cfg.seqlen_k;
+                int key = i % cfg.seqlen_k;
+                int padding = cfg.pad_tokens + batch_index;
+                bool masked = cfg.left_padding ? key < padding
+                    : key >= cfg.seqlen_k - padding;
+                val = masked ? -65504.0f : 0.0f;
+            } else {
+                val = (rand() % 10 == 0) ? -1e4f : 0.0f;
+            }
             h_bias[i] = to_f16(val);
         }
     }
@@ -204,7 +227,8 @@ static bool run_test(const TestConfig& cfg) {
     // ── Reference SDPA (CPU, FP32) ──
     std::vector<float> ref_out = reference_sdpa_f32(
         h_q, h_k, h_v, h_bias,
-        cfg.batch, cfg.nhead, cfg.seqlen_q, cfg.seqlen_k, cfg.hdim, scale);
+        cfg.batch, cfg.nhead, cfg.seqlen_q, cfg.seqlen_k, cfg.hdim, scale,
+        cfg.window_left, cfg.window_right, cfg.broadcast_bias);
 
     // ── CK Flash Attention (GPU, FP16) ──
     void *d_q, *d_k, *d_v, *d_o;
@@ -226,10 +250,12 @@ static bool run_test(const TestConfig& cfg) {
     hipStream_t stream;
     HIP_CHECK(hipStreamCreate(&stream));
 
-    int32_t nhead_bias = cfg.use_bias ? cfg.nhead : 0;
+    int32_t nhead_bias = cfg.use_bias ? (cfg.broadcast_bias ? 1 : cfg.nhead) : 0;
+    int32_t mask_type = (cfg.window_left >= 0 || cfg.window_right >= 0) ? 1 : 0;
     int rc = ck_flash_attn_fwd(
         stream, d_q, d_k, d_v, d_bias, d_o,
-        cfg.batch, cfg.nhead, cfg.seqlen_q, cfg.seqlen_k, cfg.hdim, nhead_bias, scale);
+        cfg.batch, cfg.nhead, cfg.seqlen_q, cfg.seqlen_k, cfg.hdim, nhead_bias, scale,
+        cfg.window_left, cfg.window_right, mask_type, cfg.broadcast_bias ? 1 : 0);
     HIP_CHECK(hipStreamSynchronize(stream));
 
     if (rc != 0) {
@@ -256,11 +282,11 @@ static bool run_test(const TestConfig& cfg) {
              && (m.cosine_sim >= cfg.min_cosine_tol)
              && (rc == 0);
 
-    printf("  %s  B=%d H=%d Sq=%4d Sk=%4d D=%d bias=%d  "
+    printf("  %s  B=%d H=%d Sq=%4d Sk=%4d D=%d bias=%d wl=%d wr=%d broadcast=%d  "
            "max_ae=%.4e mean_ae=%.4e rmse=%.4e cos=%.8f\n",
            pass ? "PASS" : "FAIL",
            cfg.batch, cfg.nhead, cfg.seqlen_q, cfg.seqlen_k,
-           cfg.hdim, cfg.use_bias,
+           cfg.hdim, cfg.use_bias, cfg.window_left, cfg.window_right, cfg.broadcast_bias,
            m.max_abs_err, m.mean_abs_err, m.rmse, m.cosine_sim);
 
     if (!pass) {
@@ -323,6 +349,17 @@ int main() {
         // Cross-attention style (Sq != Sk)
         {1, 12,  64, 128, 64, false, 0.05f, 0.9995f},
         {1, 12, 128,  64, 64, false, 0.05f, 0.9995f},
+
+        // Inclusive ModernBERT window: |q-k| <= 64. Non-tile-aligned sizes
+        // exercise both window endpoints and the kernel's sequence padding.
+        {1,  1,  129, 129, 64, false, 0.05f, 0.9995f, 64, 64},
+        {2, 12,  257, 257, 64, false, 0.05f, 0.9990f, 64, 64},
+
+        // The rewriter's actual [B,1,1,S] padding bias: global/local attention,
+        // multiple heads/batches, and both left and right padding.
+        {2, 12, 129, 129, 64, true, 0.05f, 0.9990f, -1, -1, true, 17},
+        {2, 12, 257, 257, 64, true, 0.05f, 0.9990f, 64, 64, true, 17},
+        {2, 12, 257, 257, 64, true, 0.05f, 0.9990f, 64, 64, true, 17, true},
     };
 
     int n_pass = 0, n_fail = 0;

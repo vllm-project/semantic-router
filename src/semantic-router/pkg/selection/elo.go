@@ -386,13 +386,14 @@ func (e *EloSelector) Select(ctx context.Context, selCtx *SelectionContext) (*Se
 	}
 
 	return &SelectionResult{
-		SelectedModel: bestModel.Model,
-		LoRAName:      bestModel.LoRAName,
-		Score:         bestScore,
-		Confidence:    confidence,
-		Method:        MethodElo,
-		Reasoning:     reasoning,
-		AllScores:     allScores,
+		SelectedModel:     bestModel.Model,
+		SelectedCandidate: bestModel,
+		LoRAName:          bestModel.LoRAName,
+		Score:             bestScore,
+		Confidence:        confidence,
+		Method:            MethodElo,
+		Reasoning:         reasoning,
+		AllScores:         allScores,
 	}, nil
 }
 

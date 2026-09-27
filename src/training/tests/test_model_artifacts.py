@@ -19,6 +19,7 @@ class ModelArtifactIndexTest(unittest.TestCase):
 
     def test_collection_counts_and_unique_artifacts(self) -> None:
         collections = self.manifest["collections"]
+        self.assertEqual(len(collections["vela-10-router-models"]), 11)
         self.assertEqual(len(collections["mom-multilingual-embed"]), 5)
         self.assertEqual(len(collections["mom-multilingual-class"]), 14)
         artifacts = [

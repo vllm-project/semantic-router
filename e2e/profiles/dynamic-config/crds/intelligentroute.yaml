@@ -2,7 +2,7 @@ apiVersion: vllm.ai/v1alpha1
 kind: IntelligentRoute
 metadata:
   name: ai-gateway-route
-  namespace: default
+  namespace: vllm-semantic-router-system
 spec:
   signals:
     # EmbeddingSignal configurations for semantic similarity routing

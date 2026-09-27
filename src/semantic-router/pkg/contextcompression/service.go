@@ -33,9 +33,9 @@ func NewService() *Service {
 
 func (s *Service) Capabilities(recoveryAvailable bool) Capabilities {
 	return Capabilities{
-		Strategies:             []string{"extractive", "recoverable"},
+		Strategies:             []string{"extractive", "recoverable", "truncate"},
 		ScoringMethods:         []string{"bm25", "embedding", "hybrid"},
-		Targets:                []string{"tool_output", "history", "rag", "memory"},
+		Targets:                []string{"tool_output", "history", "rag", "memory", "current_user"},
 		Recovery:               recoveryAvailable,
 		JSONStructurePreserved: true,
 		MultimodalPreserved:    true,
@@ -273,6 +273,9 @@ func (s *Service) plan(
 		plan.FallbackReason = "embedding_unavailable"
 	}
 	sort.SliceStable(candidates, func(left, right int) bool {
+		if (candidates[left].plan.Kind == TargetCurrentUser) != (candidates[right].plan.Kind == TargetCurrentUser) {
+			return candidates[right].plan.Kind == TargetCurrentUser
+		}
 		if candidates[left].plan.Score == candidates[right].plan.Score {
 			return candidates[left].plan.OriginalTokens > candidates[right].plan.OriginalTokens
 		}
@@ -309,6 +312,9 @@ func candidateForBlock(
 	block *TextBlockIR,
 ) (plannedCandidate, bool) {
 	kind := block.Source
+	if request.Policy.Targets.CurrentUser.Mode == TargetTruncate && request.Request.currentUserTextBlock(message, block) {
+		kind = TargetCurrentUser
+	}
 	if !request.Request.compressionBlockAllowed(message, block) {
 		return plannedCandidate{}, false
 	}
@@ -328,6 +334,9 @@ func candidateForBlock(
 	if targetTokens <= 0 {
 		targetTokens = max(1, minTokens/2)
 	}
+	if kind == TargetCurrentUser {
+		targetTokens = 1 // The shared request budget sets the actual head/tail allowance.
+	}
 	query := request.Request.QueryFor(block)
 	return plannedCandidate{
 		block: block,
@@ -339,7 +348,7 @@ func candidateForBlock(
 			OriginalTokens: tokens,
 			TargetTokens:   targetTokens,
 			Query:          query,
-			Score:          lexicalScore(query, block.Text),
+			Score:          candidateScore(kind, query, block.Text),
 		},
 	}, true
 }
@@ -391,13 +400,10 @@ func (s *Service) applyCandidate(
 	candidate plannedCandidate,
 	recoveryBytes *int,
 ) (bool, Result, string, error) {
-	block := candidate.block
-	compressed := CompressToolOutput(
-		block.Text,
-		candidate.plan.Query,
-		candidate.plan.OriginalTokens,
-		candidate.plan.TargetTokens,
-	)
+	compressed := compressCandidateText(request.Model, counter, candidate)
+	if candidate.plan.Mode == TargetTruncate {
+		return compressed.Applied, compressed, "", nil
+	}
 	if candidate.plan.Mode == TargetExtractive {
 		if !compressed.Applied {
 			return false, compressed, "", nil
@@ -495,6 +501,8 @@ func (s *Service) failureResult(
 
 func policyForTarget(targets Targets, kind TargetKind) TargetPolicy {
 	switch kind {
+	case TargetCurrentUser:
+		return targets.CurrentUser
 	case TargetRAG:
 		return targets.RAG
 	case TargetMemory:
@@ -564,7 +572,10 @@ func allocateGlobalBudget(
 	needed := max(0, originalTokens-targetRequest)
 	for index := range candidates {
 		if needed <= 0 {
-			break
+			if candidates[index].plan.Kind == TargetCurrentUser {
+				candidates[index].plan.TargetTokens = candidates[index].plan.OriginalTokens
+			}
+			continue
 		}
 		potential := max(0, candidates[index].plan.OriginalTokens-candidates[index].plan.TargetTokens)
 		if potential > needed {

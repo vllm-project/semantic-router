@@ -5,22 +5,52 @@
 ##@ Docs
 
 DOCS_TRANSLATION_LOCALE ?= zh-Hans
+DOCS_VENV ?= $(CURDIR)/website/.venv
+DOCS_VENV_PYTHON = $(DOCS_VENV)/bin/python
+DOCS_PYTHON ?= $(if $(wildcard $(DOCS_VENV_PYTHON)),$(DOCS_VENV_PYTHON),$(if $(wildcard $(CURDIR)/.venv-agent/bin/python),$(CURDIR)/.venv-agent/bin/python,python3))
 
-docs-install: ## Install documentation website dependencies
+.PHONY: docs-cli docs-cli-check docs-cli-test docs-community-check docs-community-test docs-generated-check
+docs-cli: ## Generate the CLI command reference from the registered Click command tree
+	@$(DOCS_PYTHON) tools/docs/generate_cli_reference.py
+
+docs-cli-check: ## Reject a stale CLI command reference without rewriting it
+	@$(DOCS_PYTHON) tools/docs/generate_cli_reference.py --check
+
+docs-cli-test: ## Test command discovery and CLI reference drift detection
+	@$(DOCS_PYTHON) -m unittest discover -s tools/docs/tests -p 'test_*.py'
+
+docs-community-check: ## Check source provenance of the published GitHub statistics snapshots offline
+	@node website/scripts/generate-contributor-rank.mjs --check-source
+	@node website/scripts/generate-committer-activity.mjs --check-source
+
+docs-community-test: ## Test offline snapshot provenance and stale-refresh rejection
+	@node --test website/scripts/lib/generated-source.test.mjs
+
+docs-generated-check: MODEL_CATALOG_PYTHON = $(DOCS_PYTHON)
+docs-generated-check: model-catalog-generated-check docs-cli-check docs-config-check docs-community-check agent-skill-check ## Check generated website contracts without native builds or rewriting
+
+.PHONY: docs-python-install docs-install docs-build
+docs-python-install: ## Install generated-reference dependencies in an isolated documentation environment
+	@if [ ! -x "$(DOCS_VENV_PYTHON)" ]; then \
+		"$(DOCS_PYTHON)" -m venv "$(DOCS_VENV)"; \
+	fi
+	@"$(DOCS_VENV_PYTHON)" -m pip install --disable-pip-version-check -r tools/docs/requirements.txt
+
+docs-install: docs-python-install ## Install documentation website dependencies
 	@$(LOG_TARGET)
 	cd website && npm install
 
 docs-dev: docs-install ## Start documentation website in dev mode
 	@$(LOG_TARGET)
-	cd website && npm start
+	cd website && VLLM_SR_DOCS_PYTHON="$(DOCS_VENV_PYTHON)" npm start
 
 docs-dev-zh: docs-install ## Start documentation website in dev mode
 	@$(LOG_TARGET)
-	cd website && npm run start:zh
+	cd website && VLLM_SR_DOCS_PYTHON="$(DOCS_VENV_PYTHON)" npm run start:zh
 
 docs-build: docs-install ## Build static documentation website
 	@$(LOG_TARGET)
-	cd website && npm run build
+	cd website && VLLM_SR_DOCS_PYTHON="$(DOCS_VENV_PYTHON)" npm run build
 
 docs-serve: docs-build ## Serve built documentation website
 	@$(LOG_TARGET)
@@ -95,15 +125,16 @@ install-crd-ref-docs: ## Install crd-ref-docs tool
 docs-crd: install-crd-ref-docs ## Generate CRD API reference documentation
 	@$(LOG_TARGET)
 	@CRD_REF_DOCS_BIN="$(CRD_REF_DOCS_BIN)" \
-		tools/crd/generate-reference.sh website/docs/api/crd-reference.md
+		tools/codegen/crd/generate-reference.sh website/docs/api/crd-reference.md
 
 .PHONY: docs-crd-check
 docs-crd-check: install-crd-ref-docs ## Check that generated CRD documentation is current
 	@$(LOG_TARGET)
-	@tmp_file=$$(mktemp); \
+	@set -eu; \
+	tmp_file=$$(mktemp); \
 	trap 'rm -f -- "$$tmp_file"' EXIT; \
 	CRD_REF_DOCS_BIN="$(CRD_REF_DOCS_BIN)" \
-		tools/crd/generate-reference.sh "$$tmp_file"; \
+		tools/codegen/crd/generate-reference.sh "$$tmp_file"; \
 	if ! cmp -s website/docs/api/crd-reference.md "$$tmp_file"; then \
 		echo "Generated CRD reference is out of date. Run make docs-crd."; \
 		diff -u website/docs/api/crd-reference.md "$$tmp_file" || true; \
@@ -126,11 +157,20 @@ docs-all: docs-crd docs-config docs-build ## Generate all documentation (CRD + c
 
 ##@ Apiserver API Reference (issue #2774)
 
-OPENAPI_GEN := tools/openapi-gen
+OPENAPI_GEN := tools/codegen/openapi
 APISERVER_OPENAPI_JSON := website/static/openapi/apiserver/apiserver.openapi.json
 APISERVER_REFERENCE_MD := website/docs/api/apiserver.md
 APISERVER_INDEX_BEGIN := <!-- BEGIN-GENERATED-ENDPOINT-INDEX -->
 APISERVER_INDEX_END := <!-- END-GENERATED-ENDPOINT-INDEX -->
+
+.PHONY: generated-contract-check generated-contract-generate
+generated-contract-check: config-schema-check api-docs-check agent-skill-check docs-generated-check docs-crd-check ## Check all generated public references without rewriting
+
+# OpenAPI embeds the config schema: regenerate it before exporting API docs.
+generated-contract-generate: config-schema-generate ## Regenerate OpenAPI, config contracts, and the public skill package in dependency order
+	@$(MAKE) api-docs-generate
+	@$(MAKE) agent-skill-sync
+	@$(MAKE) model-catalog-generate docs-cli docs-config docs-crd
 
 .PHONY: api-docs-openapi
 api-docs-openapi: $(if $(CI),rust-ci,rust) ## Export committed apiserver OpenAPI JSON artifact from the route catalog
@@ -138,8 +178,7 @@ api-docs-openapi: $(if $(CI),rust-ci,rust) ## Export committed apiserver OpenAPI
 	@mkdir -p $(dir $(APISERVER_OPENAPI_JSON))
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
+		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format json -o ../../$(APISERVER_OPENAPI_JSON)
 	@echo "Wrote $(APISERVER_OPENAPI_JSON)"
 
@@ -148,10 +187,9 @@ api-docs-generate: api-docs-openapi ## Regenerate the apiserver reference endpoi
 	@$(LOG_TARGET)
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
+		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format index -o /tmp/apiserver-endpoint-index.md
-	@python3 tools/agent/scripts/embed_generated_index.py \
+	@python3 tools/codegen/embed_generated_index.py \
 		--markdown "$(APISERVER_REFERENCE_MD)" \
 		--index /tmp/apiserver-endpoint-index.md \
 		--begin "$(APISERVER_INDEX_BEGIN)" \
@@ -165,15 +203,13 @@ api-docs-check: $(if $(CI),rust-ci,rust) ## Fail if committed api docs artifacts
 	cp "$(APISERVER_REFERENCE_MD)" "$$TMPDIR_CHECK/apiserver.md" && \
 	cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
+		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format json -o "$$TMPDIR_CHECK/apiserver.openapi.json" && \
 		CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
+		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format index -o "$$TMPDIR_CHECK/apiserver-endpoint-index.md" && \
 	cd ../.. && \
-	python3 tools/agent/scripts/embed_generated_index.py \
+	python3 tools/codegen/embed_generated_index.py \
 		--markdown "$$TMPDIR_CHECK/apiserver.md" \
 		--index "$$TMPDIR_CHECK/apiserver-endpoint-index.md" \
 		--begin "$(APISERVER_INDEX_BEGIN)" \

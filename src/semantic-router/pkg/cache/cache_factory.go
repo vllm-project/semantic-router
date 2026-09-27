@@ -34,6 +34,7 @@ func hybridCacheOptionsFromConfig(config CacheConfig) HybridCacheOptions {
 		HNSWEfConstruction:  config.HNSWEfConstruction,
 		Milvus:              config.Milvus,
 		EmbeddingModel:      config.EmbeddingModel,
+		EmbeddingProvider:   config.EmbeddingProvider,
 	}
 }
 

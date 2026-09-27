@@ -14,6 +14,13 @@ func (s *Store) PruneInactiveSessions(ctx context.Context, now time.Time) error 
 		now = time.Now()
 	}
 	cutoff := now.Add(-inactiveAuthSessionRetention).Unix()
+	if _, err := s.db.ExecContext(
+		ctx,
+		`DELETE FROM playground_feedback_replays WHERE expires_at <= ?`,
+		now.Unix(),
+	); err != nil {
+		return err
+	}
 	_, err := s.db.ExecContext(
 		ctx,
 		`DELETE FROM auth_sessions

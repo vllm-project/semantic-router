@@ -3,6 +3,8 @@ package extproc
 import (
 	"errors"
 	"slices"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -32,5 +34,27 @@ func TestResourceScopeClosesInReverseOrderOnceAndJoinsErrors(t *testing.T) {
 	}
 	if !slices.Equal(order, []int{2, 1}) {
 		t.Fatalf("second close changed order to %v", order)
+	}
+}
+
+func TestResourceScopeConcurrentCloseIsIdempotent(t *testing.T) {
+	var calls atomic.Int32
+	scope := newResourceScope()
+	scope.add(func() error {
+		calls.Add(1)
+		return nil
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(8)
+	for i := 0; i < 8; i++ {
+		go func() {
+			defer wg.Done()
+			_ = scope.close()
+		}()
+	}
+	wg.Wait()
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("closer calls = %d, want 1", got)
 	}
 }

@@ -658,51 +658,23 @@ impl RmsNorm {
     /// assert_eq!(output.dims(), &[2, 128, 1024]);
     /// ```
     pub fn forward(&self, x: &Tensor) -> UnifiedResult<Tensor> {
-        // ⚠️ CRITICAL: Using f64 precision for RMS normalization
-        // This is to achieve >0.99 cosine similarity with Python reference
-        // RmsNorm is sensitive to precision as it involves square root and division
-
-        // Step 0: Convert input to f64
-        let x_f64 = x
-            .to_dtype(candle_core::DType::F64)
-            .map_err(|e| from_candle_error(e, "RmsNorm: x to f64", None))?;
-
-        // Step 1: Square the input in f64
-        let x_squared = x_f64
+        let x_squared = x
             .sqr()
             .map_err(|e| from_candle_error(e, "RmsNorm: compute x^2", None))?;
-
-        // Step 2: Compute mean along last dimension, keeping dimension
         let mean_squared = x_squared
             .mean_keepdim(candle_core::D::Minus1)
             .map_err(|e| from_candle_error(e, "RmsNorm: compute mean(x^2)", None))?;
-
-        // Step 3: Add epsilon and take square root in f64
-        // RMS = sqrt(mean(x^2) + eps)
         let mean_plus_eps = (mean_squared + self.eps)
             .map_err(|e| from_candle_error(e, "RmsNorm: add epsilon", None))?;
         let rms = mean_plus_eps
             .sqrt()
             .map_err(|e| from_candle_error(e, "RmsNorm: compute sqrt", None))?;
-
-        // Step 4: Normalize by dividing by RMS in f64
-        let normalized_f64 = x_f64
+        let normalized = x
             .broadcast_div(&rms)
             .map_err(|e| from_candle_error(e, "RmsNorm: normalize (x / rms)", None))?;
-
-        // Step 5: Convert weight to f64 and apply scaling
-        let weight_f64 = self
-            .weight
-            .to_dtype(candle_core::DType::F64)
-            .map_err(|e| from_candle_error(e, "RmsNorm: weight to f64", None))?;
-        let output_f64 = normalized_f64
-            .broadcast_mul(&weight_f64)
-            .map_err(|e| from_candle_error(e, "RmsNorm: scale by weight", None))?;
-
-        // Step 6: Convert back to f32 for subsequent layers
-        output_f64
-            .to_dtype(candle_core::DType::F32)
-            .map_err(|e| from_candle_error(e, "RmsNorm: output to f32", None))
+        normalized
+            .broadcast_mul(&self.weight)
+            .map_err(|e| from_candle_error(e, "RmsNorm: scale by weight", None))
     }
 }
 
@@ -1097,9 +1069,7 @@ impl Qwen3Attention {
 
     /// Compute attention with the shared memory-bounded kernel.
     ///
-    /// The scores are still formed and normalized in f64, as before, so this is the
-    /// same arithmetic the reference comparison was validated against; only the
-    /// `(b, heads, seq, seq)` score matrix is no longer materialized. Masking is
+    /// The `(b, heads, seq, seq)` score matrix is never materialized. Masking is
     /// causal plus padding, which is what `embedding_forward` used to encode in a
     /// `(b, 1, seq, seq)` mask.
     ///
@@ -1124,17 +1094,9 @@ impl Qwen3Attention {
         v: &Tensor,
         attention_mask: Option<&Tensor>,
     ) -> UnifiedResult<Tensor> {
-        let to_f64 = |t: &Tensor, what: &str| {
-            t.to_dtype(candle_core::DType::F64)
-                .map_err(|e| from_candle_error(e, &format!("Qwen3Attention: {what} to f64"), None))
-        };
-        let q_f64 = to_f64(q, "Q")?;
-        let k_f64 = to_f64(k, "K")?;
-        let v_f64 = to_f64(v, "V")?;
-
         let pad_mask = match attention_mask {
             Some(mask) => Some(
-                prepare_padding_mask(mask, candle_core::DType::F64)
+                prepare_padding_mask(mask, q.dtype())
                     .map_err(|e| from_candle_error(e, "Qwen3Attention: padding mask", None))?,
             ),
             None => None,
@@ -1146,62 +1108,32 @@ impl Qwen3Attention {
             scale: self.scaling,
             q_offset: 0,
         };
-        let attn_output_f64 = chunked_sdpa(&q_f64, &k_f64, &v_f64, pad_mask.as_ref(), &cfg)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: chunked attention", None))?;
-
-        // Convert back to f32 for subsequent layers
-        attn_output_f64
-            .to_dtype(candle_core::DType::F32)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: output to f32", None))
+        chunked_sdpa(q, k, v, pad_mask.as_ref(), &cfg)
+            .map_err(|e| from_candle_error(e, "Qwen3Attention: chunked attention", None))
     }
 
-    /// Compute attention using Flash Attention 2 (when feature is enabled)
-    ///
-    /// Flash Attention 2 is an optimized attention mechanism that:
-    /// - **2-3x faster** than standard attention for long sequences
-    /// - **40-50% memory savings** by avoiding materialization of attention scores
-    /// - **Numerically identical** to standard attention (no approximation)
-    ///
-    /// # Requirements
-    /// - CUDA-capable GPU with compute capability >= 8.0 (Ampere or newer)
-    /// - `flash-attn` feature enabled: `cargo build --features flash-attn`
-    ///
-    /// # Arguments
-    /// - `q`: Query tensor, shape [batch, num_heads, seq_len, head_dim]
-    /// - `k`: Key tensor (already repeated for GQA), shape [batch, num_heads, seq_len, head_dim]
-    /// - `v`: Value tensor (already repeated for GQA), shape [batch, num_heads, seq_len, head_dim]
-    /// - `attention_mask`: Optional `(batch, seq_len)` 0/1 padding mask (ignored here)
-    ///
-    /// # Returns
-    /// Attention output tensor, shape [batch, num_heads, seq_len, head_dim]
-    ///
-    /// # Implementation Status
-    /// - **COMPLETED**: Integrated `candle-flash-attn` crate
-    /// - **COMPLETED**: Handles attention masks (non-causal for embedding models)
-    /// - **COMPLETED**: Validated numerical consistency with standard attention
-    ///
-    /// # References
-    /// - Flash Attention 2 Paper: <https://arxiv.org/abs/2205.14135>
-    /// - TEI Gemma3 Implementation: backends/candle/src/models/gemma3.rs
-    /// - Research Report: analysis/api-flash-attn-research.md
-    ///
-    /// # Example
-    /// ```ignore
-    /// // Build with: cargo build --features flash-attn
-    /// let q = Tensor::randn((2, 16, 32768, 128), DType::F16, &device)?;  // 32K context
-    /// let k = Tensor::randn((2, 16, 32768, 128), DType::F16, &device)?;
-    /// let v = Tensor::randn((2, 16, 32768, 128), DType::F16, &device)?;
-    /// let output = attention.compute_attention_flash(&q, &k, &v, None)?;
-    /// // 2-3x faster than standard attention for 32K sequences
-    /// ```
+    /// Use flash attention for eligible unmasked CUDA F16/BF16 inputs.
+    /// Other inputs retain the shared attention path without changing precision.
     #[cfg(feature = "flash-attn")]
     fn compute_attention_flash(
         &self,
         q: &Tensor,
         k: &Tensor,
         v: &Tensor,
-        _attention_mask: Option<&Tensor>,
+        attention_mask: Option<&Tensor>,
     ) -> UnifiedResult<Tensor> {
+        if !q.device().is_cuda()
+            || attention_mask.is_some()
+            || !matches!(
+                q.dtype(),
+                candle_core::DType::F16 | candle_core::DType::BF16
+            )
+            || k.dtype() != q.dtype()
+            || v.dtype() != q.dtype()
+        {
+            return self.compute_attention_standard(q, k, v, attention_mask);
+        }
+
         // Flash Attention 2 implementation using candle-flash-attn
         //
         // Reference:
@@ -1231,37 +1163,22 @@ impl Qwen3Attention {
             .map_err(|e| from_candle_error(e, "Flash Attention: transpose V", None))?;
 
         // Step 2: Call Flash Attention 2
-        // Note: Qwen3-Embedding uses non-causal attention (unlike GPT)
-        // softmax_scale = 1 / sqrt(head_dim)
-        let attn_output = flash_attn(
-            &q_flash,
-            &k_flash,
-            &v_flash,
-            self.scaling as f32, // softmax scaling factor
-            false,               // causal: false (Qwen3-Embedding is non-causal)
-        )
-        .map_err(|e| UnifiedError::Processing {
-            operation: "Flash Attention 2: flash_attn".to_string(),
-            source: e.to_string(),
-            input_context: Some(format!(
-                "Q shape: {:?}, K shape: {:?}, V shape: {:?}",
-                q_flash.dims(),
-                k_flash.dims(),
-                v_flash.dims()
-            )),
-        })?;
+        let attn_output = flash_attn(&q_flash, &k_flash, &v_flash, self.scaling as f32, false)
+            .map_err(|e| UnifiedError::Processing {
+                operation: "Flash Attention 2: flash_attn".to_string(),
+                source: e.to_string(),
+                input_context: Some(format!(
+                    "Q shape: {:?}, K shape: {:?}, V shape: {:?}",
+                    q_flash.dims(),
+                    k_flash.dims(),
+                    v_flash.dims()
+                )),
+            })?;
 
         // Step 3: Transpose back to [batch, num_heads, seq_len, head_dim]
         let output = attn_output
             .transpose(1, 2)
             .map_err(|e| from_candle_error(e, "Flash Attention: transpose output", None))?;
-
-        // Note: attention_mask handling
-        // Flash Attention 2 handles padding via sequence lengths (cu_seqlens) in varlen mode
-        // Current implementation: Works correctly for non-padded sequences (standard use case)
-        // FUTURE ENHANCEMENT: Implement varlen Flash Attention for batched variable-length sequences
-        // Reference: flash_attn_varlen_func in PyTorch Flash Attention
-        // (This is an advanced optimization for specific batching scenarios)
 
         Ok(output)
     }

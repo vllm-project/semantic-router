@@ -21,8 +21,8 @@
 //! - TEI Implementation: backends/candle/src/models/qwen3.rs
 //! - GemmaEmbedding: https://huggingface.co/google/embeddinggemma-300m
 
-use anyhow::Result;
-use candle_core::{IndexOp, Tensor};
+use anyhow::{ensure, Result};
+use candle_core::{DType, IndexOp, Tensor};
 
 /// Mean pooling implementation
 ///
@@ -55,33 +55,33 @@ use candle_core::{IndexOp, Tensor};
 /// - TEI implementation: backends/candle/src/models/mod.rs
 /// - Official GemmaEmbedding: uses mean pooling
 pub fn mean_pool(hidden_states: &Tensor, attention_mask: &Tensor) -> Result<Tensor> {
-    // Algorithm:
-    // 1. Expand attention_mask: [batch, seq_len] -> [batch, seq_len, hidden]
-    // 2. Apply mask: masked_hidden = hidden_states * mask_expanded
-    // 3. Sum over sequence: sum_hidden = sum(masked_hidden, dim=1)
-    // 4. Count valid tokens: sum_mask = sum(mask_expanded, dim=1)
-    // 5. Average: embeddings = sum_hidden / sum_mask
+    let (batch, sequence, _) = hidden_states.dims3()?;
+    ensure!(
+        attention_mask.dims() == [batch, sequence],
+        "mean pooling mask must match the hidden-state batch and sequence"
+    );
+    ensure!(batch > 0 && sequence > 0, "mean pooling requires tokens");
+    let output_dtype = hidden_states.dtype();
+    let accumulation_dtype = match output_dtype {
+        DType::F16 | DType::BF16 | DType::F32 => DType::F32,
+        DType::F64 => DType::F64,
+        _ => anyhow::bail!("mean pooling requires floating-point hidden states"),
+    };
+    let mask = attention_mask.to_dtype(accumulation_dtype)?;
+    let count = mask.sum_keepdim(1)?;
+    ensure!(
+        count.to_dtype(DType::F32)?.min_all()?.to_scalar::<f32>()? > 0.,
+        "mean pooling requires a valid token in every sequence"
+    );
 
-    // Step 1: Expand attention_mask to match hidden_states dimensions
-    let mask_expanded = attention_mask
-        .unsqueeze(2)? // [batch, seq_len, 1]
-        .expand(hidden_states.dims())? // [batch, seq_len, hidden]
-        .to_dtype(hidden_states.dtype())?; // Match dtype
-
-    // Step 2: Apply mask to hidden states
-    let masked_hidden = hidden_states.mul(&mask_expanded)?;
-
-    // Step 3: Sum over sequence dimension (dim=1)
-    let sum_hidden = masked_hidden.sum(1)?; // [batch, hidden]
-
-    // Step 4: Count valid tokens
-    let sum_mask = mask_expanded.sum(1)?; // [batch, hidden]
-
-    // Step 5: Average (handle division by zero gracefully)
-    // Note: sum_mask should never be zero if attention_mask is valid
-    let embeddings = sum_hidden.div(&sum_mask)?;
-
-    Ok(embeddings)
+    // A finite FP16 hidden state can overflow when summed over a long sequence.
+    // Accumulate both values and counts in FP32, then restore the model dtype
+    // for any following projection. Broadcasting avoids a full hidden-size mask.
+    let summed = hidden_states
+        .to_dtype(accumulation_dtype)?
+        .broadcast_mul(&mask.unsqueeze(2)?)?
+        .sum(1)?;
+    Ok(summed.broadcast_div(&count)?.to_dtype(output_dtype)?)
 }
 
 /// Last token pooling implementation

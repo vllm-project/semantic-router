@@ -196,6 +196,21 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 }
 
 func mergeProgram(dst, src *Program) {
+	if src.ModelBindings != nil {
+		if dst.ModelBindings == nil {
+			dst.ModelBindings = cloneModelBindings(src.ModelBindings)
+		} else {
+			for name, binding := range src.ModelBindings {
+				dst.ModelBindings[name] = binding
+			}
+		}
+	}
+	if src.CandidateRequirements != nil {
+		dst.CandidateRequirements = src.CandidateRequirements.Clone()
+	}
+	if src.DataPolicy != nil {
+		dst.DataPolicy = src.DataPolicy.Clone()
+	}
 	if src.Strategy != "" {
 		dst.Strategy = src.Strategy
 	}
@@ -600,7 +615,7 @@ func valToValue(v *Val) Value {
 		}
 		return ArrayValue{Items: items}
 	case v.Object != nil:
-		return ObjectValue{Fields: entriesToMap(v.Object)}
+		return ObjectValue{Fields: entriesToMap(v.Object.Fields)}
 	case v.BareStr != nil:
 		return StringValue{V: *v.BareStr}
 	}

@@ -1,11 +1,20 @@
 import type { ReactNode } from 'react'
 
 import type { FieldConfig } from '../components/EditModal'
+import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import { normalizeStringList } from '../components/structuredFieldEditorSupport'
 import type { ViewSection } from '../components/ViewModal'
 import type { NormalizedModel, RoutingModelCard } from './configPageSupport'
-import { modelReasoningFormData, normalizeModelLoras } from './configPageModelFormSupport'
-import { getModelStructuredFormFields } from './configPageModelFormFields'
+import {
+  effectiveModelCardFormData,
+  modelReasoningFormData,
+  normalizeModelLoras,
+} from './configPageModelFormSupport'
+import {
+  getModelStructuredFormFields,
+  modelAPIFormatField,
+  modelReasoningFamilyField,
+} from './configPageModelFormFields'
 import {
   ModelBackendRefsEditor,
   ModelCapabilitiesEditor,
@@ -49,19 +58,18 @@ const addOnlyFields: FieldConfig[] = [
   },
 ]
 
-const reasoningFields = (reasoningFamilyNames: string[]): FieldConfig[] => [
+const reasoningFields = (
+  reasoningFamilyNames: string[],
+  catalog: BuiltInModelCatalog | null,
+): FieldConfig[] => [
+  modelReasoningFamilyField(reasoningFamilyNames, catalog),
   {
-    name: 'reasoning_family',
-    label: 'Reasoning Family',
-    type: 'select',
-    options: reasoningFamilyNames,
-    description: 'Optional for custom models. Built-in models inherit this automatically.',
-  },
-  {
+    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
     name: 'reasoning_type',
     label: 'Inline Reasoning Type',
     type: 'select',
     options: [
+      '',
       'reasoning_effort',
       'reasoning_mode',
       'chat_template_kwargs',
@@ -70,12 +78,14 @@ const reasoningFields = (reasoningFamilyNames: string[]): FieldConfig[] => [
     description: 'Use only when no built-in family matches a custom model.',
   },
   {
+    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
     name: 'reasoning_parameter',
     label: 'Inline Reasoning Parameter',
     type: 'text',
     placeholder: 'e.g., enable_thinking',
   },
   {
+    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
     name: 'reasoning_activation_parameter',
     label: 'Inline Reasoning Activation Parameter',
     type: 'text',
@@ -83,6 +93,7 @@ const reasoningFields = (reasoningFamilyNames: string[]): FieldConfig[] => [
     description: 'Optional activation flag used alongside a reasoning-effort parameter.',
   },
   {
+    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
     name: 'reasoning_effort_flags',
     label: 'Inline Effort Flags',
     type: 'text',
@@ -90,18 +101,21 @@ const reasoningFields = (reasoningFamilyNames: string[]): FieldConfig[] => [
     description: 'Advanced: map effort names to boolean chat-template flags.',
   },
   {
+    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
     name: 'reasoning_levels',
     label: 'Inline Reasoning Levels',
     type: 'text',
     placeholder: 'low, medium, high',
   },
   {
+    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
     name: 'reasoning_default',
     label: 'Inline Reasoning Default',
     type: 'text',
     placeholder: 'medium',
   },
   {
+    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
     name: 'reasoning_modes',
     label: 'Supported Reasoning Modes',
     type: 'text',
@@ -109,12 +123,14 @@ const reasoningFields = (reasoningFamilyNames: string[]): FieldConfig[] => [
     description: 'Optional mode controls independent from the effort ladder.',
   },
   {
+    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
     name: 'reasoning_default_mode',
     label: 'Default Reasoning Mode',
     type: 'select',
-    options: ['enabled', 'adaptive', 'disabled'],
+    options: ['', 'enabled', 'adaptive', 'disabled'],
   },
   {
+    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
     name: 'reasoning_disabled',
     label: 'Inline Reasoning Disabled Value',
     type: 'text',
@@ -123,7 +139,10 @@ const reasoningFields = (reasoningFamilyNames: string[]): FieldConfig[] => [
   },
 ]
 
-const identityFields = (mode: 'add' | 'edit'): FieldConfig[] => [
+const identityFields = (
+  mode: 'add' | 'edit',
+  catalog: BuiltInModelCatalog | null,
+): FieldConfig[] => [
   {
     name: 'catalog',
     label: 'Built-in Catalog Model',
@@ -142,13 +161,7 @@ const identityFields = (mode: 'add' | 'edit'): FieldConfig[] => [
     description:
       'Concrete upstream model identifier stored under providers.models[].provider_model_id',
   },
-  {
-    name: 'api_format',
-    label: 'API Format',
-    type: 'text',
-    placeholder: 'e.g., openai',
-    description: 'Provider-specific wire format stored under providers.models[].api_format',
-  },
+  modelAPIFormatField(catalog),
   { name: 'param_size', label: 'Parameter Size', type: 'text', placeholder: 'e.g., 8B' },
   {
     name: 'context_window_size',
@@ -173,11 +186,12 @@ const identityFields = (mode: 'add' | 'edit'): FieldConfig[] => [
 export const modelDialogFields = (
   reasoningFamilyNames: string[],
   mode: 'add' | 'edit',
+  catalog: BuiltInModelCatalog | null = null,
 ): FieldConfig[] => [
   ...(mode === 'add' ? addOnlyFields : []),
-  ...identityFields(mode).slice(0, 1),
-  ...reasoningFields(reasoningFamilyNames),
-  ...identityFields(mode).slice(1),
+  ...identityFields(mode, catalog).slice(0, 1),
+  ...reasoningFields(reasoningFamilyNames, catalog),
+  ...identityFields(mode, catalog).slice(1),
   ...getModelStructuredFormFields(),
 ]
 
@@ -207,18 +221,13 @@ export const newModelFormData = (): Record<string, unknown> => ({
 })
 
 export const editModelFormData = (model: NormalizedModel): Record<string, unknown> => ({
+  model_name: model.name,
   catalog: model.catalog || '',
   ...modelReasoningFormData(model.reasoning),
   provider_model_id: model.provider_model_id || '',
-  api_format: model.api_format || '',
+  api_format: model.api_format_override || '',
   external_model_ids: model.external_model_ids || {},
-  param_size: model.card_override?.param_size || '',
-  context_window_size: model.card_override?.context_window_size || '',
-  description: model.card_override?.description || '',
-  capabilities: model.card_override?.capabilities || [],
-  loras: model.card_override?.loras || [],
-  tags: model.card_override?.tags || [],
-  modality: model.card_override?.modality || '',
+  ...effectiveModelCardFormData(model),
   backend_refs: model.backend_refs || [],
   pricing: model.pricing || {},
   reliability: model.reliability || {},
@@ -232,7 +241,10 @@ const baseModelViewSection = (model: NormalizedModel, defaultModel: string): Vie
     { label: 'Reasoning Family', value: model.reasoning_family || 'N/A' },
     { label: 'Is Default', value: model.name === defaultModel ? 'Yes' : 'No' },
     { label: 'Provider Model ID', value: model.provider_model_id || 'N/A' },
-    { label: 'API Format', value: model.api_format || 'N/A' },
+    {
+      label: 'API Format',
+      value: model.api_format || (model.backend_refs?.length ? 'Unresolved' : 'Not connected'),
+    },
     { label: 'Modality', value: model.modality || 'N/A' },
     { label: 'Param Size', value: model.param_size || 'N/A' },
     {

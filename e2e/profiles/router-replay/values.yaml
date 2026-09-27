@@ -14,17 +14,32 @@ config:
         backend_refs:
           - name: test-endpoint
             provider: vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: openai/shadow-candidate
         backend_refs:
           - name: shadow-endpoint
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: openai/shadow-unreachable
         backend_refs:
           - name: shadow-unreachable-endpoint
             endpoint: 127.0.0.1:9
+            weight: 1
+      - name: openai/shadow-timeout
+        backend_refs:
+          - name: shadow-timeout-endpoint
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
+      - name: openai/shadow-malformed
+        backend_refs:
+          - name: shadow-malformed-endpoint
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
+      - name: openai/shadow-queue
+        backend_refs:
+          - name: shadow-queue-endpoint
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
   routing:
     decisions:
@@ -50,6 +65,9 @@ config:
       - name: openai/gpt-oss-20b
       - name: openai/shadow-candidate
       - name: openai/shadow-unreachable
+      - name: openai/shadow-timeout
+      - name: openai/shadow-malformed
+      - name: openai/shadow-queue
   entrypoints:
     - model_names: ["vllm-sr/replay-first"]
       recipe: replay-first
@@ -59,6 +77,12 @@ config:
       recipe: shadow-ok
     - model_names: ["vllm-sr/shadow-down"]
       recipe: shadow-down
+    - model_names: ["vllm-sr/shadow-timeout"]
+      recipe: shadow-timeout
+    - model_names: ["vllm-sr/shadow-malformed"]
+      recipe: shadow-malformed
+    - model_names: ["vllm-sr/shadow-queue"]
+      recipe: shadow-queue
   recipes:
     - name: replay-first
       routing:
@@ -120,7 +144,7 @@ config:
                 configuration:
                   enabled: true
                   max_records: 1000
-                  capture_request_body: false
+                  capture_request_body: true
                   capture_response_body: true
                   max_body_bytes: 65536
               - type: shadow_dispatch
@@ -131,6 +155,102 @@ config:
                   max_concurrency: 2
                   max_queue_depth: 8
                   timeout_seconds: 20
+                  max_response_bytes: 1048576
+                  max_retries: 0
+                  capture_response_body: false
+    - name: shadow-timeout
+      routing:
+        strategy: priority
+        signals: {}
+        decisions:
+          - name: shadow_timeout_decision
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: openai/gpt-oss-20b
+                use_reasoning: false
+            plugins:
+              - type: router_replay
+                configuration:
+                  enabled: true
+                  max_records: 1000
+                  capture_request_body: false
+                  capture_response_body: true
+                  max_body_bytes: 65536
+              - type: shadow_dispatch
+                configuration:
+                  enabled: true
+                  model: openai/shadow-timeout
+                  sample_rate: 1.0
+                  max_concurrency: 1
+                  max_queue_depth: 1
+                  timeout_seconds: 5
+                  max_response_bytes: 1048576
+                  max_retries: 0
+                  capture_response_body: false
+    - name: shadow-malformed
+      routing:
+        strategy: priority
+        signals: {}
+        decisions:
+          - name: shadow_malformed_decision
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: openai/gpt-oss-20b
+                use_reasoning: false
+            plugins:
+              - type: router_replay
+                configuration:
+                  enabled: true
+                  max_records: 1000
+                  capture_request_body: false
+                  capture_response_body: true
+                  max_body_bytes: 65536
+              - type: shadow_dispatch
+                configuration:
+                  enabled: true
+                  model: openai/shadow-malformed
+                  sample_rate: 1.0
+                  max_concurrency: 1
+                  max_queue_depth: 1
+                  timeout_seconds: 5
+                  max_response_bytes: 1048576
+                  max_retries: 0
+                  capture_response_body: false
+    - name: shadow-queue
+      routing:
+        strategy: priority
+        signals: {}
+        decisions:
+          - name: shadow_queue_decision
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: openai/gpt-oss-20b
+                use_reasoning: false
+            plugins:
+              - type: router_replay
+                configuration:
+                  enabled: true
+                  max_records: 1000
+                  capture_request_body: false
+                  capture_response_body: true
+                  max_body_bytes: 65536
+              - type: shadow_dispatch
+                configuration:
+                  enabled: true
+                  model: openai/shadow-queue
+                  sample_rate: 1.0
+                  max_concurrency: 1
+                  max_queue_depth: 1
+                  timeout_seconds: 30
                   max_response_bytes: 1048576
                   max_retries: 0
                   capture_response_body: false
@@ -215,12 +335,15 @@ config:
           enabled: false
     stores:
       response_cache:
+        enabled: false
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
       vector_store:
         embedding_model: mmbert
-    integrations: {}
+    integrations:
+      tools:
+        enabled: false
     model_catalog:
       kbs: []
       modules:

@@ -42,7 +42,9 @@ func (v *FaithfulnessVerifier) Kind() VerifierKind { return VerifierKindFaithful
 
 // Verify implements Verifier. req.TrustedContext is the source material,
 // req.Task the question; each candidate is scored and its unsupported spans
-// are carried in the candidate's Flags.
+// are carried in the candidate's Flags. It measures evidence and never decides,
+// so it reports tie and leaves accept/rerank/escalate policy to the caller
+// (issue #2857).
 func (v *FaithfulnessVerifier) Verify(ctx context.Context, req *VerifierRequest) (*VerifierResult, error) {
 	if v.detect == nil {
 		return nil, NewVerifierError(VerifierFailureUnavailable, fmt.Errorf("hallucination detector backend not configured"))
@@ -67,7 +69,7 @@ func (v *FaithfulnessVerifier) Verify(ctx context.Context, req *VerifierRequest)
 		}
 	}
 	return &VerifierResult{
-		Disposition: DispositionApprove,
+		Disposition: DispositionTie,
 		Confidence:  &best,
 		Kind:        v.Kind(),
 		Version:     v.version,

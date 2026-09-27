@@ -1,11 +1,17 @@
 import { useMemo, useState } from 'react'
 
 import useBuiltInModelCatalog from '../hooks/useBuiltInModelCatalog'
+import type { BuiltInModelCatalog } from '../types/modelCatalog'
+import {
+  buildEffectiveEvaluationGroups,
+  type EffectiveEvaluationGroup,
+} from './configPageEffectiveEvaluations'
 import type { ConnectedModelInput } from './ConfigPageConnectModelsDialog'
 import {
   buildEvaluationRecordsConfig,
   evaluationRecordsFields,
   evaluationRecordsFormData,
+  evaluationModelViewSections,
 } from './configPageEvaluationRecordsSupport'
 import {
   buildAddedModelConfig,
@@ -36,6 +42,7 @@ import {
   reasoningFamilyViewSections,
 } from './configPageReasoningFamilySupport'
 import type { NormalizedModel } from './configPageSupport'
+import { modelFormDataForSave } from './configPageModelFormSupport'
 import { useModelLiveVerification } from './useModelLiveVerification'
 
 function useModelInventoryFilters(props: ConfigPageModelsSectionProps) {
@@ -85,17 +92,20 @@ function useModelInventoryFilters(props: ConfigPageModelsSectionProps) {
   }
 }
 
-function useModelFormActions(props: ConfigPageModelsSectionProps) {
+function useModelFormActions(props: ConfigPageModelsSectionProps, catalog: BuiltInModelCatalog) {
   const reasoningFamilyNames = Object.keys(props.reasoningFamilies)
   const edit = (model: NormalizedModel) => {
     props.openEditModal(
       `Edit Model: ${model.name}`,
       editModelFormData(model),
-      modelDialogFields(reasoningFamilyNames, 'edit'),
+      modelDialogFields(reasoningFamilyNames, 'edit', catalog),
       async (data) => {
         if (!props.config) return
-        validateModelStructuredFields(data)
-        await props.saveConfig(buildEditedModelConfig(props.config, model, data, props.isPythonCLI))
+        const submitted = modelFormDataForSave(data)
+        validateModelStructuredFields(submitted)
+        await props.saveConfig(
+          buildEditedModelConfig(props.config, model, submitted, props.isPythonCLI),
+        )
       },
       'edit',
     )
@@ -104,13 +114,14 @@ function useModelFormActions(props: ConfigPageModelsSectionProps) {
     props.openEditModal(
       'Add New Model',
       newModelFormData(),
-      modelDialogFields(reasoningFamilyNames, 'add'),
+      modelDialogFields(reasoningFamilyNames, 'add', catalog),
       async (data) => {
         if (!props.config) return
-        validateModelStructuredFields(data)
-        const modelName = validateNewModelName(data.model_name, props.models)
+        const submitted = modelFormDataForSave(data)
+        validateModelStructuredFields(submitted)
+        const modelName = validateNewModelName(submitted.model_name, props.models)
         await props.saveConfig(
-          buildAddedModelConfig(props.config, modelName, data, props.isPythonCLI),
+          buildAddedModelConfig(props.config, modelName, submitted, props.isPythonCLI),
         )
       },
       'add',
@@ -206,8 +217,20 @@ function useReasoningFamilyInventory(props: ConfigPageModelsSectionProps) {
   return { search, setSearch, rows, view }
 }
 
-function useEvaluationRecordInventory(props: ConfigPageModelsSectionProps) {
-  const records = props.config?.evaluation?.records ?? []
+function useEvaluationRecordInventory(
+  props: ConfigPageModelsSectionProps,
+  catalog: BuiltInModelCatalog,
+) {
+  const groups = useMemo(
+    () => buildEffectiveEvaluationGroups(props.config, props.models, catalog),
+    [props.config, props.models, catalog],
+  )
+  const view = (group: EffectiveEvaluationGroup) => {
+    props.openViewModal(
+      `Evaluation Evidence: ${group.modelName}`,
+      evaluationModelViewSections(group),
+    )
+  }
   const manage = () => {
     if (!props.config) return
     props.openEditModal(
@@ -221,18 +244,18 @@ function useEvaluationRecordInventory(props: ConfigPageModelsSectionProps) {
       'edit',
     )
   }
-  return { records, manage }
+  return { groups, manage, view }
 }
 
 export function useConfigPageModelsSectionController(props: ConfigPageModelsSectionProps) {
+  const { catalog, error: catalogError } = useBuiltInModelCatalog()
   const filters = useModelInventoryFilters(props)
-  const forms = useModelFormActions(props)
+  const forms = useModelFormActions(props, catalog)
   const deletion = useModelDeletion(props, filters.referenceCounts)
   const reasoning = useReasoningFamilyInventory(props)
-  const evaluations = useEvaluationRecordInventory(props)
+  const evaluations = useEvaluationRecordInventory(props, catalog)
   const [connectOpen, setConnectOpen] = useState(false)
   const liveVerification = useModelLiveVerification(props.config)
-  const { catalog, error: catalogError } = useBuiltInModelCatalog()
   const toggleExpand = (model: NormalizedModel) => {
     props.onExpandedModelsChange((previous) => {
       const next = new Set(previous)

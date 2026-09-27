@@ -1,17 +1,33 @@
 # Classifier Model Evaluation
 
-`mom_collection_eval.py` evaluates the merged and LoRA variants registered in
-`constants.py`:
+`mom_collection_eval.py` defaults to the Router's served classifier collection:
+Vela Feedback (five classes), FactCheck, Domain (`intent` CLI key), PII,
+and Guard (`jailbreak` key). Vela native
+snapshots are pinned to the immutable revisions in the Router registry.
 
-- feedback;
-- jailbreak;
-- fact-check;
-- intent;
-- PII.
+`--collection legacy-mom` explicitly selects the previous five mmBERT-32K
+models and their legacy adapter entries. The filename remains compatible.
+Loading preserves each artifact's tokenizer, context configuration, pooling and
+complete classification head. Wrong label orders or missing head parameters
+fail before scoring. The generic `--use_lora` path supports only the explicit
+legacy collection.
 
-It reports classification metrics, latency summaries, and confusion matrices
-where applicable. The registry defines the default model, dataset, label
-mapping, text field, and split for each task.
+The default datasets are **historical source diagnostics**, not independent
+Vela release benchmarks. In particular, the old Feedback dataset has no
+NO_FEEDBACK gold examples. Results retain all five classes, their support,
+unsupported labels, and full-contract macro F1; zero support does not establish
+quality for that class. Use a separately held-out custom dataset for five-class
+coverage. FactCheck predicts whether external factual knowledge is needed,
+not factual truth.
+
+Guard detects instruction attacks. Its `benign`/`jailbreak` class names do not
+make the previous mixed toxicity/jailbreak dataset compatible. Served Guard
+therefore requires `--custom_dataset`: a JSON array or CSV with complete `text`
+and independently reviewed `label` values (`benign`/`jailbreak`, or 0/1 in that
+order). Unknown annotations must be resolved or excluded before evaluation;
+they are never silently converted to benign. `safe`/`unsafe` aliases remain
+exclusive to the legacy collection. No default Guard quality score is emitted
+without compatible data.
 
 ## Install
 
@@ -26,12 +42,16 @@ Evaluate one merged model:
 
 ```bash
 python mom_collection_eval.py --model feedback --device cpu --limit 100
+
+python mom_collection_eval.py --model jailbreak --device cpu \
+  --custom_dataset reviewed-attacks.json
 ```
 
 Evaluate several models or their LoRA variants:
 
 ```bash
 python mom_collection_eval.py \
+  --collection legacy-mom \
   --model feedback jailbreak fact-check intent pii \
   --use_lora \
   --device cuda
@@ -41,6 +61,10 @@ Useful options:
 
 | Option | Purpose |
 |---|---|
+| `--collection` | `served` (default) or explicit `legacy-mom` |
+| `--revision` | explicit revision for an override or legacy artifact |
+| `--dtype` | native loading precision; default `float32`, without autocast |
+| `--max_length` | full-input token budget (default 32768); over-budget input fails |
 | `--model_id` | override the registered checkpoint for a single-model run |
 | `--custom_dataset` | use a local JSON or CSV dataset |
 | `--language` | filter rows when the dataset exposes a supported language field |
@@ -52,7 +76,18 @@ Useful options:
 Use underscores in option names, as shown by
 `python mom_collection_eval.py --help`.
 
+Download evaluation native snapshots with `make download-eval-models`. Production
+`make download-models` continues to use the Router's downloader, including its
+runtime artifact validation. Existing `download-mmbert-*` targets remain legacy
+utilities; they do not download Vela. Legacy adapters must declare an available
+base and save every newly initialized task-head parameter; otherwise evaluation
+rejects them instead of scoring a random head.
+
 ## Results
+
+This evaluator uses native full-input argmax inference; it does not reproduce
+Router Guard/PII scanning windows or FactCheck threshold decisions. The loaded
+precision, pooling, model revision and token budget are recorded in each result.
 
 The default output directory is `src/training/model_eval/results/`. JSON files
 contain the metrics and run metadata; text-classification tasks also produce a
@@ -66,3 +101,115 @@ size. A small `--limit` run is a functional smoke test, not a quality result.
 configuration fragments. Review the generated thresholds and model references
 before deployment; generation does not prove that the fragment is suitable for
 your workload.
+
+## Quality baseline
+
+`quality_baseline.py` measures the artifact a maintained configuration actually
+loads, resolved from `config/config.yaml` rather than from `constants.py`. It
+uses the same immutable pins for published Vela models and takes the class order
+from the artifact's own mapping, reports calibration and
+threshold behaviour alongside accuracy, and writes provenance manifests next to
+the result.
+
+```
+python src/training/model_eval/quality_baseline.py \
+    --task fact-check --device cuda --output-dir baseline/fact-check
+
+# From src/training/model_eval. The served artifacts predate the training-run
+# manifests, so this reports one missing run_ref per artifact until a run
+# publishes one. Everything else has to pass.
+python -m provenance.cli validate baseline/fact-check/manifests
+
+python src/training/model_eval/gap_report.py \
+    --baseline baseline/*/*_baseline.json --output baseline/gap-report.md
+```
+
+`--artifact-repo` measures a candidate instead of the served artifact, and
+`--artifact-dir` with `--artifact-manifest` measures a locally trained artifact
+before anything is published. Both are recorded in the result, so a candidate
+number is never mistaken for the baseline.
+
+The baseline runner's historical `jailbreak` dataset is restricted to the
+explicit original mmBERT merged/adapter artifacts. It rejects current Guard
+before accessing that dataset. Use the custom-data collection evaluator above
+for reviewed instruction-attack annotations.
+
+A referenced manifest supplies the identity every number is published under, so
+it also selects the bytes: the run downloads the repository and revision the
+manifest names, and re-hashes the files it lists, whether they came from the Hub
+or from `--artifact-dir`. A directory that does not hash to the manifest, or an
+`--artifact-repo` the manifest does not describe, fails before scoring starts.
+
+The inventory identifies known task bindings and reports other classifier
+artifacts as coverage gaps. A generic `classifiers` signal is not assumed to be
+Guard merely because it uses a classification head. Complexity scores embedding
+prototypes against candidate phrases rather than loading a classifier, so there
+is no artifact to measure until #2568 adds a trained-classifier mode.
+
+Where a task declares `positive_labels`, the router thresholds the probability
+mass on those classes rather than taking an argmax, so the baseline reports what
+that gate does. `operating_points` gives recall and false-positive rate at each
+threshold, and `discrimination` gives AUC and recall at a false-positive budget,
+which fix no threshold and so compare two artifacts built to different threshold
+conventions.
+
+## Guard metric contract
+
+A guard signal runs on every request, the router compares its score with a
+configured threshold rather than taking an argmax, and its failures concentrate
+in slices a pooled number averages away. `guard_metrics.py` is what a guard
+candidate is scored against under #3194: separation, recall at a stated benign
+false-positive budget, the same macro-averaged over word-count bands so length
+cannot carry the score, calibration of the score itself, and named slices that
+are never pooled into one row. Separation and the budget come from
+`provenance.metrics`, so these numbers and the ones in an evaluation manifest
+are the same computation.
+
+`jailbreak_guard_eval.py` scores a checkpoint and writes that report. The model
+defaults to the served Guard entry in the registry; the evaluation set never
+does, because the historical jailbreak split labels toxicity where the signal
+answers about instruction attacks.
+
+It scores the way the router scans. A prompt longer than one window is read in
+overlapping windows and the riskiest window is the score, which is what
+`classifier_jailbreak_window.go` compares with the threshold. Truncating to the
+first window instead would report a different number on exactly the inputs a
+guard is judged on: on the four fixed cases in #3831 the first window of two
+benign public descriptions reads 1.7e-07 and 3.9e-07 while the second reads
+0.9462 and 0.9755, so a truncated score allows what the router blocks.
+`--window-size` and `--window-overlap` default to the `prompt_guard.window`
+entry in `config/config.yaml`, so the scan follows the shipped configuration
+rather than a constant kept here.
+
+```bash
+python src/training/model_eval/jailbreak_guard_eval.py \
+    --model llm-semantic-router/Vela-1.0-Encoder-307M-Guard \
+    --dataset local:guard-eval-v1.json --dataset-version v1 \
+    --label-col attack --slice-col source --slice-col language \
+    --dev-dataset local:guard-dev-v1.json --budget 0.01 \
+    --bootstrap 2000 --output report.json
+```
+
+`--dataset-version` and `--slice-col` are what let a number say which version
+and which slice it belongs to, so fixed regression rows can travel with the set
+as their own slice instead of being averaged into it. `--dev-dataset` chooses
+the operating point on a separate split at the stated budget, and the report
+records where the threshold came from. Running a candidate with `--baseline`
+pointing at an earlier report adds routing agreement, the rows the two disagree
+on attributed to whichever was right, and the exact McNemar probability for
+that split.
+
+A band or a slice that carries one class reports its rates and no separation.
+A band where no threshold stays inside the budget counts as zero recall in the
+band macro rather than dropping out of it, because a guard that can only stay
+in budget by flagging nothing catches nothing there.
+
+`gap_report.py` sorts findings by who has to act on them. `identity`, `runtime`
+and `coverage` are fixed in the config, the registry or the harness.
+`calibration` and `threshold` are fixed by recalibrating or by moving the
+configured threshold, so they are integration gaps too. Only `quality` says the
+artifact itself is the problem and asks for a retrain or a different checkpoint.
+That is the split #3194 wants, and it means a gap can be routed without
+rereading the numbers.
+
+See `provenance/README.md` for the manifest contract and what fails validation.

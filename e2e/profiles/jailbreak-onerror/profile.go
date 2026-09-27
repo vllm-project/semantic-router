@@ -1,6 +1,6 @@
 // Package jailbreakonerror provides the e2e test profile for #2918's
 // PromptGuardConfig.OnError contract. It deploys the router with
-// prompt_guard.protocol pointed at a deliberately unreachable endpoint and
+// prompt_guard.backend pointed at a deliberately unreachable endpoint and
 // on_error: block, then verifies that a classify failure closes the request
 // instead of silently letting it through.
 package jailbreakonerror
@@ -21,16 +21,16 @@ const (
 )
 
 var resourceManifests = []string{
-	"deploy/kubernetes/hallucination/mock-vllm.yaml",
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 	"deploy/kubernetes/jailbreak-onerror/gwapi-resources.yaml",
 }
 
 // waitDeployments are the mock backends the profile must wait on before
-// running tests. mock-vllm exists only to satisfy config validation (a
+// running tests. provider-mocker exists only to satisfy config validation (a
 // modelRef needs a real backend) - the request path under test never
 // reaches it, since on_error: block short-circuits before model selection.
 var waitDeployments = []helpers.DeploymentRef{
-	{Namespace: "default", Name: "mock-vllm"},
+	{Namespace: "default", Name: "provider-mocker"},
 }
 
 // Profile implements the PromptGuardConfig.OnError test profile.

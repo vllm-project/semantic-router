@@ -2,6 +2,7 @@ version: v0.3
 listeners: []
 providers:
   defaults:
+    model: qwen2.5:3b
   models:
   - name: qwen2.5:3b
     reasoning:
@@ -33,12 +34,18 @@ routing:
       description: Technical questions
   modelCards:
   - name: qwen2.5:3b
+  model_bindings:
+    embedding:
+      deployment: embedding-onnx
+      contract: embedding.v1
+      adapter: mmbert
+      head: onnx/model.onnx
 global:
   model_catalog:
     embeddings:
       semantic:
         use_cpu: true
-        mmbert_model_path: onnx-binding/mmbert-32k-yarn-onnx
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         embedding_config:
           model_type: mmbert
     modules:
@@ -53,6 +60,15 @@ global:
         enabled: false
       feedback_detector:
         enabled: false
+    deployments:
+      embedding-onnx:
+        artifact: models/Vela-1.0-Encoder-307M-Embedding
+        provider: ort
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 32768
+          overflow: reject
   router: {}
   services:
     response_api:

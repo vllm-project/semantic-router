@@ -25,7 +25,7 @@ func (c *Classifier) initializeFeedbackDetector() error {
 		return nil
 	}
 
-	detector, err := NewFeedbackDetector(&c.Config.FeedbackDetector)
+	detector, err := NewFeedbackDetector(&c.Config.FeedbackDetector, c.models)
 	if err != nil {
 		return fmt.Errorf("failed to create feedback detector: %w", err)
 	}
@@ -34,7 +34,7 @@ func (c *Classifier) initializeFeedbackDetector() error {
 		return fmt.Errorf("failed to initialize feedback detector: %w", err)
 	}
 
-	detector.SetAdmissioner(c.admissionRegistry.For(admissionDeploymentFeedbackDetector))
+	// The owned backend admits at its physical resource.
 
 	c.feedbackDetector = detector
 	return nil
@@ -52,8 +52,8 @@ func (c *Classifier) ClassifyFeedback(ctx context.Context, text string) (*Feedba
 	}
 
 	if result != nil {
-		logging.Infof("Feedback classification: feedback_type=%s, confidence=%.3f",
-			result.FeedbackType, result.Confidence)
+		logging.Infof("Feedback classification: feedback_type=%s, confidence_available=%v",
+			result.FeedbackType, result.ConfidenceAvailable)
 	}
 
 	return result, nil

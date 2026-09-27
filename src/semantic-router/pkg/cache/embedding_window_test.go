@@ -32,13 +32,14 @@ var _ = Describe("Semantic cache embedding window", func() {
 
 	BeforeEach(func() {
 		backend := NewInMemoryCache(InMemoryCacheOptions{
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			Enabled:             true,
 			SimilarityThreshold: 0.8,
 			MaxEntries:          100,
 			TTLSeconds:          300,
 			EmbeddingModel:      "bert",
 		})
-		adapter = NewLegacyBackendAdapter(backend, InMemoryCacheType).WithEmbeddingModel("bert")
+		adapter = NewLegacyBackendAdapter(backend, InMemoryCacheType).WithEmbeddingModel("bert").WithEmbeddingProvider(cacheTestEmbeddingProvider())
 	})
 
 	It("does not serve one long prompt's response to another sharing its prefix", func() {

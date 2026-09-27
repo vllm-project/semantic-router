@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -32,6 +33,7 @@ type ComplexityClassifier struct {
 	hasImageCandidates bool   // True if any rule uses image_candidates
 	prototypeCfg       config.PrototypeScoringConfig
 	provider           embedding.Provider
+	multiModalProvider embedding.Provider
 
 	// boundaries holds each rule's resolved cut points, keyed by rule name.
 	// Resolving at construction means a malformed pair fails at startup rather
@@ -92,6 +94,10 @@ func NewComplexityClassifier(
 		provider = providers[0]
 	}
 
+	var multimodal embedding.Provider
+	if len(providers) > 1 {
+		multimodal = providers[1]
+	}
 	c := &ComplexityClassifier{
 		rules:                   rules,
 		hardEmbeddings:          make(map[string]map[string][]float32),
@@ -106,6 +112,7 @@ func NewComplexityClassifier(
 		hasImageCandidates:      config.HasImageCandidatesInRules(rules),
 		prototypeCfg:            prototypeCfg.WithDefaults(),
 		provider:                provider,
+		multiModalProvider:      multimodal,
 	}
 
 	c.boundaries = make(map[string]config.ComplexityBoundaries, len(rules))
@@ -164,7 +171,7 @@ func (c *ComplexityClassifier) ClassifyWithImage(query string, imageURL string) 
 }
 
 func (c *ComplexityClassifier) ClassifyDetailedWithImage(query string, imageURL string) ([]ComplexityRuleResult, error) {
-	return c.classifyDetailedWithImageCached(query, imageURL, nil)
+	return c.classifyDetailedWithImageCached(context.Background(), query, imageURL, nil)
 }
 
 // classifyDetailedWithImageCached is the cache-aware variant of
@@ -173,18 +180,18 @@ func (c *ComplexityClassifier) ClassifyDetailedWithImage(query string, imageURL 
 // the same (imageURL, targetDim=0) pair within this request. Text-side
 // embeddings (text and mmText) are not cached because no other signal
 // currently consumes the multimodal text embedding.
-func (c *ComplexityClassifier) classifyDetailedWithImageCached(query string, imageURL string, cache *requestImageEmbeddingCache) ([]ComplexityRuleResult, error) {
+func (c *ComplexityClassifier) classifyDetailedWithImageCached(ctx context.Context, query string, imageURL string, cache *requestMediaEmbeddingCache) ([]ComplexityRuleResult, error) {
 	if len(c.rules) == 0 {
 		return nil, nil
 	}
 
-	queryEmbeddings, err := c.loadQueryEmbeddingsCached(query, imageURL, cache)
+	queryEmbeddings, err := c.loadQueryEmbeddingsCached(ctx, query, imageURL, cache)
 	if err != nil {
 		return nil, err
 	}
-	scoreOptions := defaultPrototypeScoreOptions(c.prototypeCfg)
 	results := make([]ComplexityRuleResult, 0, len(c.rules))
 	for _, rule := range c.rules {
+		scoreOptions := defaultPrototypeScoreOptions(rule.PrototypeScoring.Resolve(c.prototypeCfg))
 		result := c.classifyRuleWithEmbeddings(rule, queryEmbeddings, scoreOptions)
 		logComplexityRuleResult(rule, result, queryEmbeddings.image != nil)
 		results = append(results, result)
