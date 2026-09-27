@@ -42,7 +42,8 @@ those private records.
 
 The two CSS invalid answers are the same over-budget answers in source and
 package. They remain failures in CSS accuracy. The comparator checked all
-3,030 scorer point decisions, 4,800 DEV and 7,758 CSS numeric values. Its
+3,030 native answer states, including 3,028 valid scorer point decisions,
+4,800 DEV and 7,758 CSS numeric values. Its
 zero-mismatch, p99 ≤0.005 and maximum ≤0.02 thresholds all pass. Private
 detail SHA-256 values are `cfad1d2cf743216fe750a5eec45d0e32ce30caaa47d13b44d9c0f8f52c9d44c2`
 for DEV and `4da411a51cd4d9ae9414b5f774c54cde3c9267b8563b47d0e804156f52033573`
