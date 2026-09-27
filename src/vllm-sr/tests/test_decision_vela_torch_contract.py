@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -289,6 +290,151 @@ def test_cpu_loader_requires_pinned_manifest_before_import(
         VelaTorchRuntime.load(_artifact(tmp_path), max_length=1024, backend="cpu")
 
     assert imported == []
+
+
+def test_clean_vela_loads_without_historical_inventory_or_state_layout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from decision_runtime import artifacts  # noqa: PLC0415
+
+    native_root = _artifact(tmp_path)
+    root = tmp_path / "data"
+    relocated = {
+        "decision_config.json": "metadata.json",
+        "encoder/config.json": "weights/config.json",
+        "encoder/model.safetensors": "weights/encoder-v2.safetensors",
+        "decision_heads.safetensors": "heads-v2.safetensors",
+        "choice_encoder.safetensors": "choice-v2.safetensors",
+        "score_encoder.safetensors": "score-v2.safetensors",
+        "tokenizer/tokenizer.json": "tokens/tokenizer.json",
+        "tokenizer/tokenizer_config.json": "tokens/tokenizer_config.json",
+    }
+    for source, destination in relocated.items():
+        path = root / destination
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes((native_root / source).read_bytes())
+    payload = b'{"format_version":1}'
+    config_path = root.parent / "config.json"
+    config_path.write_bytes(payload)
+    files = tuple(f"data/{relative}" for relative in relocated.values())
+    monkeypatch.setattr(
+        artifacts,
+        "parse_decision_config",
+        lambda data, *, model_name, family: SimpleNamespace(
+            files=files,
+            data_root_relative="data",
+            model_config="data/metadata.json",
+        ),
+        raising=False,
+    )
+    assert (
+        vela_torch._validate_artifact(
+            root,
+            max_length=1024,
+            backend="cpu",
+            repository_config=SimpleNamespace(model_config="data/metadata.json"),
+            repository_root=root.parent,
+        ).inventory
+        is None
+    )
+
+    class FrameworkReached(Exception):
+        pass
+
+    monkeypatch.setattr(
+        vela_torch,
+        "_required_module",
+        lambda name: (_ for _ in ()).throw(FrameworkReached(name)),
+    )
+    with pytest.raises(FrameworkReached, match="torch"):
+        VelaTorchRuntime.load(
+            root,
+            max_length=1024,
+            backend="cpu",
+            expected_config_sha256=hashlib.sha256(payload).hexdigest(),
+            config_path=config_path,
+            model_name="Decision-1.0-Kai-0.6B",
+        )
+
+
+def test_clean_vela_missing_head_tensor_never_uses_random_initialization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _artifact(tmp_path)
+    (root / "INVENTORY.json").unlink()
+    (root / "STATE_LAYOUT.json").unlink()
+    monkeypatch.setattr(
+        vela_torch,
+        "_verified_repository_config",
+        lambda *a, **k: SimpleNamespace(
+            model_config="native/decision_config.json",
+            backbone_config="native/encoder/config.json",
+            backbone_weights=("native/encoder/model.safetensors",),
+            decision_weights={
+                "decision_heads": "native/decision_heads.safetensors",
+                "choice_encoder": "native/choice_encoder.safetensors",
+                "score_encoder": "native/score_encoder.safetensors",
+            },
+            tokenizer_json="native/tokenizer/tokenizer.json",
+        ),
+    )
+    monkeypatch.setattr(vela_torch, "_validate_encoder_config", lambda *a: None)
+    tensor = SimpleNamespace(shape=(2, 2), dtype="fp32")
+
+    class Encoder:
+        def state_dict(self):
+            return {"embeddings.weight": tensor}
+
+        def load_state_dict(self, *args, **kwargs):
+            return None
+
+    class Model:
+        def state_dict(self):
+            return {
+                "encoder.embeddings.weight": tensor,
+                "choice_blocks.0.weight": tensor,
+                "score_blocks.0.weight": tensor,
+                "type_embedding.weight": tensor,
+            }
+
+        def load_state_dict(self, *args, **kwargs):
+            pytest.fail("initialized head must not fill a missing checkpoint tensor")
+
+    def load_file(path, *, device):
+        if path.endswith("encoder/model.safetensors"):
+            return {"embeddings.weight": tensor}
+        if path.endswith("choice_encoder.safetensors"):
+            return {"choice_blocks.0.weight": tensor}
+        if path.endswith("score_encoder.safetensors"):
+            return {"score_blocks.0.weight": tensor}
+        return {}  # The released decision_heads file omitted type_embedding.weight.
+
+    fake_torch = SimpleNamespace(
+        float32="fp32",
+        device=lambda name: SimpleNamespace(type=name),
+        isfinite=lambda value: SimpleNamespace(all=lambda: True),
+    )
+    fake_transformers = SimpleNamespace(
+        __version__=SUPPORTED_TRANSFORMERS_VERSION,
+        AutoConfig=SimpleNamespace(from_pretrained=lambda *a, **k: object()),
+        AutoModel=SimpleNamespace(from_config=lambda *a, **k: Encoder()),
+    )
+    modules = {
+        "torch": fake_torch,
+        "transformers": fake_transformers,
+        "safetensors.torch": SimpleNamespace(load_file=load_file),
+    }
+    monkeypatch.setattr(vela_torch, "_required_module", modules.__getitem__)
+    monkeypatch.setattr(vela_torch, "_vela_model", lambda *a: Model())
+    with pytest.raises(VelaRuntimeError, match="tensor keys"):
+        VelaTorchRuntime.load(
+            root,
+            max_length=1024,
+            backend="cpu",
+            expected_config_sha256="a" * 64,
+            config_path=root.parent / "config.json",
+            model_name="Decision-1.0-Kai-0.6B",
+        )
 
 
 def test_cpu_loader_uses_cpu_device_without_rocm_guard(

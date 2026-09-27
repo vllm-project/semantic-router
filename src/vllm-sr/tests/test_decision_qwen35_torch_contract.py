@@ -579,6 +579,191 @@ def test_cpu_loader_rejects_wrong_manifest_before_import(
     assert imported == []
 
 
+def test_clean_qwen_loader_accepts_pinned_config_without_runtime_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from decision_runtime import artifacts  # noqa: PLC0415
+
+    root = _artifact(tmp_path)
+    (root / "runtime.json").unlink()
+    (root / "release/weights").mkdir(parents=True)
+    (root / "release/tokens").mkdir()
+    (root / "release/metadata.json").write_bytes(
+        (root / "decision_config.json").read_bytes()
+    )
+    (root / "decision_config.json").unlink()
+    (root / "release/weights/config.json").write_bytes(
+        (root / "backbone/config.json").read_bytes()
+    )
+    (root / "release/weights/model.safetensors").write_bytes(b"fixture")
+    (root / "release/tokens/tokenizer.json").write_bytes(
+        (root / "tokenizer.json").read_bytes()
+    )
+    (root / "release/tokens/tokenizer_config.json").write_bytes(
+        (root / "tokenizer_config.json").read_bytes()
+    )
+    (root / "release/head.safetensors").write_bytes(b"fixture")
+    payload = b'{"format_version":1}'
+    config_path = root / "config.json"
+    config_path.write_bytes(payload)
+    files = (
+        "release/weights/config.json",
+        "release/weights/model.safetensors",
+        "release/metadata.json",
+        "release/head.safetensors",
+        "release/tokens/tokenizer.json",
+        "release/tokens/tokenizer_config.json",
+    )
+    monkeypatch.setattr(
+        artifacts,
+        "parse_decision_config",
+        lambda data, *, model_name, family: SimpleNamespace(
+            files=files,
+            model_config="release/metadata.json",
+            backbone_config="release/weights/config.json",
+            backbone_index=None,
+            backbone_weights=("release/weights/model.safetensors",),
+        ),
+        raising=False,
+    )
+
+    class FrameworkReached(Exception):
+        pass
+
+    monkeypatch.setattr(
+        qwen35_torch,
+        "_required_module",
+        lambda name: (_ for _ in ()).throw(FrameworkReached(name)),
+    )
+    with pytest.raises(FrameworkReached, match="torch"):
+        Qwen35TorchRuntime.load(
+            root,
+            temperature=1.0,
+            max_length=1024,
+            backend="cpu",
+            config_path=config_path,
+            expected_config_sha256=hashlib.sha256(payload).hexdigest(),
+            model_name="Decision-1.0-Sol-2B",
+        )
+    with pytest.raises(Qwen35RuntimeError, match="config digest mismatch"):
+        Qwen35TorchRuntime.load(
+            root,
+            temperature=1.0,
+            max_length=1024,
+            backend="cpu",
+            config_path=config_path,
+            expected_config_sha256="0" * 64,
+            model_name="Decision-1.0-Sol-2B",
+        )
+
+
+def test_clean_qwen_loader_rejects_incomplete_shard_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from decision_runtime import artifacts  # noqa: PLC0415
+
+    root = _artifact(tmp_path)
+    payload = b'{"format_version":1}'
+    config_path = root / "config.json"
+    config_path.write_bytes(payload)
+    weights = tuple(
+        f"backbone/model-{number:05d}-of-00002.safetensors" for number in (1, 2)
+    )
+    index = "backbone/model.safetensors.index.json"
+    (root / index).write_text(
+        json.dumps({"weight_map": {"layer.weight": Path(weights[0]).name}})
+    )
+    for name in weights:
+        (root / name).write_bytes(b"fixture")
+    monkeypatch.setattr(
+        artifacts,
+        "parse_decision_config",
+        lambda *args, **kwargs: SimpleNamespace(
+            files=(*weights, index),
+            backbone_config="backbone/config.json",
+            backbone_index=index,
+            backbone_weights=weights,
+        ),
+        raising=False,
+    )
+    with pytest.raises(Qwen35RuntimeError, match="weight index"):
+        qwen35_torch._verified_repository_config(
+            root,
+            config_path=config_path,
+            expected_sha256=hashlib.sha256(payload).hexdigest(),
+            model_name="Decision-1.0-Nox-4B",
+        )
+
+
+def test_clean_qwen_backbone_requires_every_model_tensor(tmp_path: Path) -> None:
+    expected = {
+        "embed_tokens.weight": SimpleNamespace(shape=(3, 2)),
+        "layers.0.weight": SimpleNamespace(shape=(2, 2)),
+    }
+
+    class Reader:
+        def __init__(self, tensors):
+            self.tensors = tensors
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def keys(self):
+            return self.tensors.keys()
+
+        def get_slice(self, name):
+            return SimpleNamespace(get_shape=lambda: self.tensors[name])
+
+    tensors = {"embed_tokens.weight": (3, 2)}
+
+    def safe_open(*args, **kwargs):
+        return Reader(tensors)
+
+    backbone = SimpleNamespace(state_dict=lambda: expected)
+    with pytest.raises(Qwen35RuntimeError, match="model architecture"):
+        qwen35_torch._validate_backbone_tensors(
+            backbone,
+            root=tmp_path,
+            weight_files=("backbone/model.safetensors",),
+            safe_open=safe_open,
+        )
+    tensors["layers.0.weight"] = (2, 2)
+    qwen35_torch._validate_backbone_tensors(
+        backbone,
+        root=tmp_path,
+        weight_files=("backbone/model.safetensors",),
+        safe_open=safe_open,
+    )
+    index = tmp_path / "backbone/model.safetensors.index.json"
+    index.parent.mkdir(exist_ok=True)
+    index.write_text(
+        json.dumps({"weight_map": {"embed_tokens.weight": "model.safetensors"}})
+    )
+    with pytest.raises(Qwen35RuntimeError, match="weight index"):
+        qwen35_torch._validate_backbone_tensors(
+            backbone,
+            root=tmp_path,
+            weight_files=("backbone/model.safetensors",),
+            index_file="backbone/model.safetensors.index.json",
+            safe_open=safe_open,
+        )
+    with pytest.raises(Qwen35RuntimeError, match="model architecture"):
+        qwen35_torch._complete_backbone(
+            (
+                backbone,
+                {
+                    "missing_keys": ["layers.0.weight"],
+                    "unexpected_keys": [],
+                    "mismatched_keys": [],
+                    "error_msgs": [],
+                },
+            )
+        )
+
+
 def test_cpu_loader_converts_verified_body_to_fp32(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

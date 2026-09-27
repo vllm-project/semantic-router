@@ -45,8 +45,16 @@ REVISION = "7185f514f54b8f93c55998b1e8f9c5cc67f0d029"
 CONTENT_ID = "a" * 64
 
 
-def _observed_manifest(profile):
-    return ArtifactManifestIdentity(profile.artifact.manifest_path, "d" * 64, 100)
+def _observed_manifest(profile, profile_id: str):
+    # These fixtures exercise older pinned revisions even when the current
+    # packaged profile selects a clean root config instead of a manifest.
+    if profile.family == "vela":
+        path = "native/MANIFEST.json"
+    elif profile_id == "Decision-1.0-Eos-0.8B":
+        path = "MODEL_MANIFEST.json"
+    else:
+        path = "bundle-manifest.json"
+    return ArtifactManifestIdentity(path, "d" * 64, 100)
 
 
 def _config(root: Path, **changes) -> RuntimeLaunchConfig:
@@ -240,7 +248,7 @@ def test_graph_assembly_wires_events_to_the_server_metrics(
         data_root=tmp_path,
         revision=revision,
         content_id=CONTENT_ID,
-        manifest=_observed_manifest(profile),
+        manifest=_observed_manifest(profile, profile_id),
     )
     resident = SimpleNamespace(max_length=profile.max_input_tokens, tokenizer=object())
 
@@ -308,7 +316,7 @@ def test_qwen_loader_uses_verified_manifest_layout(
     artifact = SimpleNamespace(
         data_root=tmp_path,
         files=(ArtifactFile(calibration_path, calibration_path, "b" * 64, 1),),
-        manifest=_observed_manifest(profile),
+        manifest=_observed_manifest(profile, profile_id),
     )
     calls = []
     sentinel = object()
@@ -348,7 +356,7 @@ def test_eos_rocm_execution_policy_reaches_family_loader(monkeypatch, tmp_path: 
     artifact = SimpleNamespace(
         data_root=tmp_path,
         files=(ArtifactFile("temperature.json", "temperature.json", "b" * 64, 1),),
-        manifest=_observed_manifest(profile),
+        manifest=_observed_manifest(profile, "Decision-1.0-Eos-0.8B"),
         content_id="c" * 64,
     )
     binder = object()
@@ -396,7 +404,7 @@ def test_profiled_qwen_graph_receives_verified_artifact_identity(
     artifact = SimpleNamespace(
         data_root=tmp_path,
         content_id=CONTENT_ID,
-        manifest=_observed_manifest(profile),
+        manifest=_observed_manifest(profile, profile_id),
     )
     calls = []
     monkeypatch.setattr(qwen35, "qwen_temperature", lambda *a, **k: 1.0)
@@ -496,6 +504,106 @@ def test_qwen_calibration_is_read_from_verified_snapshot(tmp_path: Path):
         qwen_temperature(artifact, fallback=9.0)
 
 
+def test_clean_qwen_uses_repository_calibration_and_suppresses_legacy_graph(
+    monkeypatch, tmp_path: Path
+):
+    from decision_runtime import qwen35_rocm_binder, qwen35_torch  # noqa: PLC0415
+    from decision_runtime.families.qwen35 import ADAPTER  # noqa: PLC0415
+
+    profile_id = "Decision-1.0-Nox-4B"
+    profile = load_runtime_profile(
+        profile_id, revision="0bb833504965c0eabdb9630b7bbd385cb2fe5cd4"
+    )
+    assert profile.prompt_policy.choice_null_description == "render_key"
+    (tmp_path / "temperature.json").write_text('{"temperature":1.625}')
+    artifact = SimpleNamespace(
+        root=tmp_path,
+        data_root=tmp_path,
+        repository_id=f"llm-semantic-router/{profile_id}",
+        content_id="a" * 64,
+        config=ArtifactManifestIdentity("config.json", "b" * 64, 20),
+        manifest=None,
+        repository_config=SimpleNamespace(
+            temperature=None, temperature_file="temperature.json"
+        ),
+        files=(ArtifactFile("temperature.json", "temperature.json", "c" * 64, 21),),
+    )
+    calls = []
+    monkeypatch.setattr(
+        qwen35_rocm_binder, "create_qwen_rocm_profile_binder", lambda: object()
+    )
+    monkeypatch.setattr(
+        qwen35_torch.Qwen35TorchRuntime,
+        "load",
+        lambda root, **options: calls.append((root, options)),
+    )
+    ADAPTER.load(
+        artifact,
+        profile,
+        "rocm",
+        physical_batch_size=8,
+        graph_event_recorder=lambda event: None,
+    )
+    assert calls[0][1]["temperature"] == 1.625
+    assert calls[0][1]["expected_config_sha256"] == "b" * 64
+    assert "enable_rocm_graph" not in calls[0][1]
+    request = _request("A service is down.")
+    choice = DecisionRow(
+        f"llm-semantic-router/{profile_id}",
+        request.state,
+        "owner",
+        request.questions["owner"],
+    )
+    tokenizer = _QwenTokenizer()
+    ADAPTER.encode_rows((choice,), tokenizer, profile)
+    assert any(
+        '"description":"platform","key":"platform"' in segment
+        for segment in tokenizer.segments
+    )
+    assert not any('"description":null' in segment for segment in tokenizer.segments)
+
+
+@pytest.mark.parametrize(
+    ("model_name", "temperature"),
+    (
+        ("Decision-1.0-Sol-2B", 1.125),
+        ("Decision-1.0-Nox-4B", 1.625),
+        ("Decision-1.0-Lux-9B", 1.875),
+    ),
+)
+def test_clean_qwen_file_calibration_for_all_large_models(
+    tmp_path: Path, model_name: str, temperature: float
+):
+    from decision_runtime.families.qwen35 import qwen_temperature  # noqa: PLC0415
+
+    (tmp_path / "temperature.json").write_text(
+        json.dumps({"temperature": temperature}), encoding="utf-8"
+    )
+    artifact = SimpleNamespace(
+        root=tmp_path,
+        repository_id=f"llm-semantic-router/{model_name}",
+        config=ArtifactManifestIdentity("config.json", "b" * 64, 20),
+        manifest=None,
+        repository_config=SimpleNamespace(
+            temperature=None, temperature_file="temperature.json"
+        ),
+        files=(ArtifactFile("temperature.json", "temperature.json", "c" * 64, 21),),
+    )
+    assert qwen_temperature(artifact, fallback=9.0) == temperature
+
+
+def test_clean_eos_inline_calibration_overrides_profile_fallback(tmp_path: Path):
+    from decision_runtime.families.qwen35 import qwen_temperature  # noqa: PLC0415
+
+    artifact = SimpleNamespace(
+        root=tmp_path,
+        config=ArtifactManifestIdentity("config.json", "b" * 64, 20),
+        manifest=None,
+        repository_config=SimpleNamespace(temperature=1.0375, temperature_file=None),
+    )
+    assert qwen_temperature(artifact, fallback=9.0) == 1.0375
+
+
 def test_vela_loader_receives_native_data_root_and_manifest_digest(
     monkeypatch, tmp_path: Path
 ):
@@ -504,7 +612,7 @@ def test_vela_loader_receives_native_data_root_and_manifest_digest(
     profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
     model = SimpleNamespace(profile=profile)
     artifact = SimpleNamespace(
-        data_root=tmp_path / "native", manifest=_observed_manifest(profile)
+        data_root=tmp_path / "native", manifest=_observed_manifest(profile, PROFILE_ID)
     )
     calls = []
 
@@ -520,6 +628,37 @@ def test_vela_loader_receives_native_data_root_and_manifest_digest(
         "backend": "cpu",
         "expected_manifest_sha256": artifact.manifest.sha256,
     }
+
+
+def test_clean_vela_loader_receives_root_config_identity(monkeypatch, tmp_path: Path):
+    from decision_runtime import vela_torch  # noqa: PLC0415
+    from decision_runtime.families.vela import ADAPTER  # noqa: PLC0415
+
+    profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
+    artifact = SimpleNamespace(
+        root=tmp_path,
+        data_root=tmp_path / "native",
+        repository_id=MODEL,
+        config=ArtifactManifestIdentity("config.json", "b" * 64, 20),
+        manifest=None,
+    )
+    calls = []
+    monkeypatch.setattr(
+        vela_torch.VelaTorchRuntime,
+        "load",
+        lambda root, **options: calls.append((root, options)),
+    )
+    ADAPTER.load(
+        artifact,
+        profile,
+        "cpu",
+        physical_batch_size=8,
+        graph_event_recorder=None,
+    )
+    assert calls[0][0] == tmp_path / "native"
+    assert calls[0][1]["expected_config_sha256"] == "b" * 64
+    assert calls[0][1]["config_path"] == tmp_path / "config.json"
+    assert calls[0][1]["model_name"] == PROFILE_ID
 
 
 class _VelaTokenizer:

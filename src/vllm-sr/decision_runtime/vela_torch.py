@@ -8,9 +8,11 @@ are loaded only by ``VelaTorchRuntime.load`` so normal CLI paths stay light.
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib
 import json
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from types import MethodType
@@ -60,7 +62,7 @@ class ValidatedVelaArtifact:
     """Release data verified before importing any accelerator dependency."""
 
     config: dict[str, Any]
-    inventory: dict[str, dict[str, tuple[int, ...]]]
+    inventory: dict[str, dict[str, tuple[int, ...]]] | None
 
 
 @dataclass(slots=True)
@@ -83,13 +85,47 @@ class VelaTorchRuntime:
         backend: Literal["cpu", "rocm", "cuda"],
         device: str | None = None,
         expected_manifest_sha256: str | None = None,
+        expected_config_sha256: str | None = None,
+        config_path: Path | None = None,
+        model_name: str | None = None,
     ) -> VelaTorchRuntime:
         """Load the exact native data layout without executing bundled code."""
 
         root = Path(artifact_root).resolve(strict=True)
-        if backend == "cpu" and expected_manifest_sha256 is None:
-            raise VelaRuntimeError("CPU Vela requires a pinned release manifest digest")
-        artifact = _validate_artifact(root, max_length=max_length, backend=backend)
+        if expected_manifest_sha256 is not None and expected_config_sha256 is not None:
+            raise VelaRuntimeError("Vela release has conflicting identities")
+        repository_config = (
+            _verified_repository_config(
+                root,
+                config_path=config_path,
+                expected_sha256=expected_config_sha256,
+                model_name=model_name,
+            )
+            if expected_config_sha256 is not None
+            else None
+        )
+        if repository_config is None and (
+            config_path is not None or model_name is not None
+        ):
+            raise VelaRuntimeError("Vela release config identity is incomplete")
+        if (
+            backend == "cpu"
+            and expected_manifest_sha256 is None
+            and repository_config is None
+        ):
+            raise VelaRuntimeError(
+                "CPU Vela requires a pinned release manifest or config digest"
+            )
+        repository_root = (
+            Path(config_path).parent if repository_config is not None else root
+        )
+        artifact = _validate_artifact(
+            root,
+            max_length=max_length,
+            backend=backend,
+            repository_config=repository_config,
+            repository_root=repository_root,
+        )
         if expected_manifest_sha256 is not None:
             try:
                 verify_release_manifest(
@@ -115,8 +151,13 @@ class VelaTorchRuntime:
         )
         _validate_device(torch, selected, backend=backend)
         try:
+            encoder_directory = (
+                repository_root / Path(repository_config.backbone_config).parent
+                if repository_config is not None
+                else root / "encoder"
+            )
             encoder_config = transformers.AutoConfig.from_pretrained(
-                root / "encoder",
+                encoder_directory,
                 local_files_only=True,
                 trust_remote_code=False,
             )
@@ -127,46 +168,79 @@ class VelaTorchRuntime:
                 torch_dtype=torch.float32,
                 attn_implementation="sdpa",
             )
-            base_state = safetensors.load_file(
-                str(root / "encoder/model.safetensors"), device="cpu"
+            encoder_weight = (
+                repository_root / repository_config.backbone_weights[0]
+                if repository_config is not None
+                else root / "encoder/model.safetensors"
+            )
+            base_state = safetensors.load_file(str(encoder_weight), device="cpu")
+            encoder_shapes = (
+                artifact.inventory["encoder_shapes"]
+                if artifact.inventory is not None
+                else _state_shapes(encoder.state_dict())
             )
             _validate_tensor_inventory(
                 torch,
                 base_state,
-                artifact.inventory["encoder_shapes"],
+                encoder_shapes,
                 label="Vela shared encoder",
             )
             encoder.load_state_dict(base_state, strict=True)
             if backend == "rocm":
                 _install_rocm_layout_guard(torch, encoder)
             model = _vela_model(torch, encoder, artifact.config["head"])
+            model_state = model.state_dict()
+            native_groups = (
+                _native_tensor_groups(model_state, encoder_shapes)
+                if artifact.inventory is None
+                else artifact.inventory
+            )
             persisted = {}
-            for filename, inventory_key in (
-                ("decision_heads.safetensors", "head_shapes"),
-                ("choice_encoder.safetensors", "choice_suffix_shapes"),
-                ("score_encoder.safetensors", "score_suffix_shapes"),
+            for role, filename, inventory_key in (
+                ("decision_heads", "decision_heads.safetensors", "head_shapes"),
+                (
+                    "choice_encoder",
+                    "choice_encoder.safetensors",
+                    "choice_suffix_shapes",
+                ),
+                ("score_encoder", "score_encoder.safetensors", "score_suffix_shapes"),
             ):
-                state = safetensors.load_file(str(root / filename), device="cpu")
+                weight_path = (
+                    repository_root / repository_config.decision_weights[role]
+                    if repository_config is not None
+                    else root / filename
+                )
+                state = safetensors.load_file(str(weight_path), device="cpu")
                 _validate_tensor_inventory(
                     torch,
                     state,
-                    artifact.inventory[inventory_key],
+                    native_groups[inventory_key],
                     label=f"Vela {inventory_key}",
                 )
                 overlap = set(persisted).intersection(state)
                 if overlap:
                     raise VelaRuntimeError("Vela state files are not disjoint")
                 persisted.update(state)
-            state = model.state_dict()
-            _validate_model_inventory(torch, state, artifact.inventory)
-            unknown = set(persisted) - set(state)
-            if unknown:
-                raise VelaRuntimeError("Vela checkpoint contains unknown state tensors")
-            state.update(persisted)
-            model.load_state_dict(state, strict=True)
+            if artifact.inventory is not None:
+                _validate_model_inventory(torch, model_state, artifact.inventory)
+            else:
+                expected_persisted = set(model_state) - {
+                    f"encoder.{name}" for name in encoder_shapes
+                }
+                if set(persisted) != expected_persisted:
+                    raise VelaRuntimeError(
+                        "Vela checkpoint does not contain every model tensor"
+                    )
+            model_state.update(persisted)
+            model.load_state_dict(model_state, strict=True)
             model.to(selected).eval()
+            tokenizer_directory = (
+                repository_root / Path(repository_config.tokenizer_json).parent
+                if repository_config is not None
+                else root / "tokenizer"
+            )
             tokenizer = transformers.AutoTokenizer.from_pretrained(
-                root / "tokenizer",
+                tokenizer_directory,
                 local_files_only=True,
                 trust_remote_code=False,
             )
@@ -467,8 +541,64 @@ def _install_rocm_layout_guard(torch, encoder) -> None:
         attention.forward = MethodType(guarded_forward, attention)
 
 
+def _verified_repository_config(
+    root: Path,
+    *,
+    config_path: Path | None,
+    expected_sha256: str,
+    model_name: str | None,
+) -> Any:
+    """Bind native weights to the immutable clean repository's root config."""
+
+    if (
+        config_path is None
+        or not isinstance(model_name, str)
+        or not isinstance(expected_sha256, str)
+        or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+    ):
+        raise VelaRuntimeError("Vela release config identity is invalid")
+    path = Path(config_path)
+    try:
+        if path.is_symlink() or path.name != "config.json":
+            raise VelaRuntimeError("Vela release config path is invalid")
+        path = path.resolve(strict=True)
+        payload = path.read_bytes()
+    except OSError as error:
+        raise VelaRuntimeError("Vela release config is missing") from error
+    if hashlib.sha256(payload).hexdigest() != expected_sha256:
+        raise VelaRuntimeError("Vela release config digest mismatch")
+    from .artifacts import ArtifactError, parse_decision_config  # noqa: PLC0415
+
+    try:
+        config = parse_decision_config(payload, model_name=model_name, family="vela")
+    except (ArtifactError, ValueError) as error:
+        raise VelaRuntimeError("Vela release config layout is invalid") from error
+    if (path.parent / config.data_root_relative).resolve(strict=True) != root:
+        raise VelaRuntimeError("Vela release data root does not match config")
+    for relative in config.files:
+        candidate = path.parent / relative
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError as error:
+            raise VelaRuntimeError(
+                f"verified Vela artifact is missing {relative}"
+            ) from error
+        if (
+            candidate.is_symlink()
+            or not resolved.is_relative_to(root)
+            or not resolved.is_file()
+        ):
+            raise VelaRuntimeError(f"unsafe Vela release file: {relative}")
+    return config
+
+
 def _validate_artifact(
-    root: Path, *, max_length: int, backend: str
+    root: Path,
+    *,
+    max_length: int,
+    backend: str,
+    repository_config: Any | None = None,
+    repository_root: Path | None = None,
 ) -> ValidatedVelaArtifact:
     if backend not in {"cpu", "rocm", "cuda"}:
         raise VelaRuntimeError("Vela Torch backend must be cpu, rocm, or cuda")
@@ -478,7 +608,11 @@ def _validate_artifact(
         or max_length < MIN_VELA_INPUT_TOKENS
     ):
         raise VelaRuntimeError("Vela max input length is invalid")
-    config = _read_json(root / "decision_config.json")
+    config = _read_json(
+        (repository_root / repository_config.model_config)
+        if repository_config is not None and repository_root is not None
+        else root / "decision_config.json"
+    )
     # Provenance labels do not define the execution contract. Compatibility
     # depends on tensor layout and fields used to interpret those tensors.
     head = config.get("head")
@@ -502,22 +636,16 @@ def _validate_artifact(
         raise VelaRuntimeError("Vela max input length exceeds the release packing")
     if max_length > _ENCODER_MAX_POSITIONS:
         raise VelaRuntimeError("Vela max input length exceeds encoder positions")
-    for relative in (
-        "encoder/config.json",
-        "encoder/model.safetensors",
-        "decision_heads.safetensors",
-        "choice_encoder.safetensors",
-        "score_encoder.safetensors",
-        "tokenizer/tokenizer.json",
-        "tokenizer/tokenizer_config.json",
-        "INVENTORY.json",
-        "STATE_LAYOUT.json",
-    ):
+    required = () if repository_config is not None else INFERENCE_FILES
+    for relative in required:
         if not (root / relative).is_file():
             raise VelaRuntimeError(f"verified Vela artifact is missing {relative}")
-    # This sidecar is manifest-verified provenance, not an execution input.
-    _read_json(root / "STATE_LAYOUT.json")
-    inventory = _validate_inventory(_read_json(root / "INVENTORY.json"))
+    if repository_config is not None:
+        inventory = None
+    else:
+        # This sidecar is manifest-verified provenance, not an execution input.
+        _read_json(root / "STATE_LAYOUT.json")
+        inventory = _validate_inventory(_read_json(root / "INVENTORY.json"))
     return ValidatedVelaArtifact(config=config, inventory=inventory)
 
 
@@ -569,6 +697,44 @@ def _validate_inventory_names(inventory: dict[str, dict[str, tuple[int, ...]]]) 
     for group, prefixes in allowed_prefixes.items():
         if any(not name.startswith(prefixes) for name in inventory[group]):
             raise VelaRuntimeError(f"Vela tensor-inventory names are invalid: {group}")
+
+
+def _state_shapes(state: dict[str, Any]) -> dict[str, tuple[int, ...]]:
+    if not state:
+        raise VelaRuntimeError("Vela model has no state tensors")
+    return {name: tuple(tensor.shape) for name, tensor in state.items()}
+
+
+def _native_tensor_groups(
+    state: dict[str, Any], encoder_shapes: dict[str, tuple[int, ...]]
+) -> dict[str, dict[str, tuple[int, ...]]]:
+    """Derive exact clean-release tensor inventories from the owned model."""
+
+    shapes = _state_shapes(state)
+    encoder_names = {f"encoder.{name}" for name in encoder_shapes}
+    if not encoder_names <= shapes.keys():
+        raise VelaRuntimeError("Vela encoder tensors do not match the model")
+    groups = {
+        "head_shapes": {
+            name: shape
+            for name, shape in shapes.items()
+            if name.startswith(("type_embedding.", "heads.", "scorers."))
+        },
+        "choice_suffix_shapes": {
+            name: shape
+            for name, shape in shapes.items()
+            if name.startswith(("choice_blocks.", "choice_final_norm."))
+        },
+        "score_suffix_shapes": {
+            name: shape
+            for name, shape in shapes.items()
+            if name.startswith(("score_blocks.", "score_final_norm."))
+        },
+    }
+    grouped = encoder_names.union(*(group.keys() for group in groups.values()))
+    if grouped != shapes.keys() or any(not group for group in groups.values()):
+        raise VelaRuntimeError("Vela model tensor layout is unsupported")
+    return groups
 
 
 def _validate_tensor_inventory(torch, state, expected, *, label: str) -> None:

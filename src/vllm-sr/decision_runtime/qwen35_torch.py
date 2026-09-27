@@ -12,6 +12,7 @@ import importlib
 import inspect
 import json
 import math
+import re
 import types
 from collections.abc import Callable
 from contextlib import nullcontext
@@ -20,7 +21,10 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Protocol
 
 from .qwen35_inputs import EncodedQwenRow
-from .release_artifacts import ReleaseArtifactError, verify_release_manifest
+from .release_artifacts import (
+    ReleaseArtifactError,
+    verify_release_manifest,
+)
 
 SUPPORTED_TRANSFORMERS_VERSION = "5.17.0"
 RELEASED_MAX_INPUT_TOKENS = 16_384
@@ -165,6 +169,9 @@ class Qwen35TorchRuntime:
         physical_batch_size: int = 8,
         rocm_profile_binder: QwenRocmProfileBinder | None = None,
         expected_manifest_sha256: str | None = None,
+        expected_config_sha256: str | None = None,
+        config_path: Path | None = None,
+        model_name: str | None = None,
         enable_rocm_graph: bool = False,
         artifact_content_id: str | None = None,
         graph_event_recorder: Callable[[str], None] | None = None,
@@ -173,6 +180,22 @@ class Qwen35TorchRuntime:
         """Load verified data files with the distribution-owned implementation."""
 
         root = Path(artifact_root).resolve(strict=True)
+        if expected_manifest_sha256 is not None and expected_config_sha256 is not None:
+            raise Qwen35RuntimeError("Qwen release has conflicting identities")
+        release_config = (
+            _verified_repository_config(
+                root,
+                config_path=config_path,
+                expected_sha256=expected_config_sha256,
+                model_name=model_name,
+            )
+            if expected_config_sha256 is not None
+            else None
+        )
+        if release_config is None and (
+            config_path is not None or model_name is not None
+        ):
+            raise Qwen35RuntimeError("Qwen release config identity is incomplete")
         rocm_profile = _validate_configuration(
             root,
             temperature=temperature,
@@ -182,6 +205,7 @@ class Qwen35TorchRuntime:
             native_rocm_max_physical_batch_size=native_rocm_max_physical_batch_size,
             attention=attention,
             physical_batch_size=physical_batch_size,
+            repository_config=release_config,
         )
         if type(enable_rocm_graph) is not bool:
             raise Qwen35RuntimeError("Qwen graph policy must be boolean")
@@ -200,9 +224,13 @@ class Qwen35TorchRuntime:
             raise Qwen35RuntimeError(
                 "Qwen ROCm graph requires a verified strict B8 profile"
             )
-        if backend == "cpu" and expected_manifest_sha256 is None:
+        if (
+            backend == "cpu"
+            and expected_manifest_sha256 is None
+            and release_config is None
+        ):
             raise Qwen35RuntimeError(
-                "CPU Qwen requires a pinned release manifest digest"
+                "CPU Qwen requires a pinned release manifest or config digest"
             )
         if expected_manifest_sha256 is not None:
             try:
@@ -246,15 +274,40 @@ class Qwen35TorchRuntime:
             modeling = importlib.import_module(
                 "transformers.models.qwen3_5.modeling_qwen3_5"
             )
-            backbone = modeling.Qwen3_5TextModel.from_pretrained(
-                root / "backbone",
-                dtype=body_dtype,
-                local_files_only=True,
-                trust_remote_code=False,
-                attn_implementation=attention,
+            load_options = {
+                "dtype": body_dtype,
+                "local_files_only": True,
+                "trust_remote_code": False,
+                "attn_implementation": attention,
+            }
+            if release_config is not None:
+                load_options["output_loading_info"] = True
+            backbone_directory = (
+                root / Path(release_config.backbone_config).parent
+                if release_config is not None
+                else root / "backbone"
             )
+            loaded = modeling.Qwen3_5TextModel.from_pretrained(
+                backbone_directory, **load_options
+            )
+            backbone = (
+                _complete_backbone(loaded) if release_config is not None else loaded
+            )
+            if release_config is not None:
+                _validate_backbone_tensors(
+                    backbone,
+                    root=root,
+                    weight_files=release_config.backbone_weights,
+                    index_file=release_config.backbone_index,
+                    safe_open=_required_module("safetensors").safe_open,
+                )
             backbone.config.use_cache = False
-            metadata = _read_json(root / "decision_config.json")
+            model_config_path = (
+                release_config.model_config
+                if release_config is not None
+                else "decision_config.json"
+            )
+            metadata = _read_json(root / model_config_path)
             head_dim = metadata.get("head_dim")
             if (
                 isinstance(head_dim, bool)
@@ -263,16 +316,24 @@ class Qwen35TorchRuntime:
             ):
                 raise Qwen35RuntimeError("Decision head dimension is invalid")
             head = _candidate_head(torch, backbone.config.hidden_size, head_dim)
-            head_state = safetensors.load_file(
-                str(root / "decision_head.safetensors"), device="cpu"
+            head_path = (
+                release_config.decision_weights["decision_head"]
+                if release_config is not None
+                else "decision_head.safetensors"
             )
+            head_state = safetensors.load_file(str(root / head_path), device="cpu")
             head.load_state_dict(head_state, strict=True)
             model = _decision_model(torch, backbone, head)
             model.to(selected).eval()
             if backend == "cpu" or gated_delta_kernel_policy == "native_torch":
                 _install_instance_native_gated_delta_kernels(model, modeling)
+            tokenizer_directory = (
+                root / Path(release_config.tokenizer_json).parent
+                if release_config is not None
+                else root
+            )
             tokenizer = transformers.AutoTokenizer.from_pretrained(
-                root,
+                tokenizer_directory,
                 local_files_only=True,
                 trust_remote_code=False,
             )
@@ -637,6 +698,134 @@ def _collate(torch, rows, tokenizer, *, device):
     }
 
 
+def _verified_repository_config(
+    root: Path,
+    *,
+    config_path: Path | None,
+    expected_sha256: str,
+    model_name: str | None,
+) -> Any:
+    """Bind the clean model layout to its selected immutable root config."""
+
+    if (
+        config_path is None
+        or not isinstance(model_name, str)
+        or not isinstance(expected_sha256, str)
+        or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+    ):
+        raise Qwen35RuntimeError("Qwen release config identity is invalid")
+    path = Path(config_path)
+    try:
+        if path.is_symlink() or path.resolve(strict=True) != root / "config.json":
+            raise Qwen35RuntimeError("Qwen release config path is invalid")
+        payload = path.read_bytes()
+    except OSError as error:
+        raise Qwen35RuntimeError("Qwen release config is missing") from error
+    if hashlib.sha256(payload).hexdigest() != expected_sha256:
+        raise Qwen35RuntimeError("Qwen release config digest mismatch")
+    from .artifacts import ArtifactError, parse_decision_config  # noqa: PLC0415
+
+    try:
+        config = parse_decision_config(payload, model_name=model_name, family="qwen3.5")
+    except (ArtifactError, ValueError) as error:
+        raise Qwen35RuntimeError("Qwen release config layout is invalid") from error
+    backbone_directory = Path(config.backbone_config).parent
+    if Path(config.backbone_config).name != "config.json" or any(
+        Path(relative).parent != backbone_directory
+        or not relative.endswith(".safetensors")
+        for relative in config.backbone_weights
+    ):
+        raise Qwen35RuntimeError("Qwen release weight layout is invalid")
+    if config.backbone_index is None:
+        if (
+            len(config.backbone_weights) != 1
+            or Path(config.backbone_weights[0]).name != "model.safetensors"
+        ):
+            raise Qwen35RuntimeError("Qwen release weight layout is invalid")
+    elif Path(config.backbone_index).parent != backbone_directory:
+        raise Qwen35RuntimeError("Qwen release weight index layout is invalid")
+    if config.backbone_index is not None:
+        index = _read_json(root / config.backbone_index)
+        weight_map = index.get("weight_map")
+        if (
+            not isinstance(weight_map, dict)
+            or not weight_map
+            or any(
+                not isinstance(key, str) or not key or not isinstance(value, str)
+                for key, value in weight_map.items()
+            )
+            or set(weight_map.values())
+            != {Path(relative).name for relative in config.backbone_weights}
+        ):
+            raise Qwen35RuntimeError("Qwen release weight index is invalid")
+    return config
+
+
+def _complete_backbone(loaded: Any) -> Any:
+    """Reject a checkpoint that Transformers partially initialized."""
+
+    fields = ("missing_keys", "unexpected_keys", "mismatched_keys", "error_msgs")
+    if (
+        not isinstance(loaded, tuple)
+        or len(loaded) != 2
+        or loaded[0] is None
+        or not isinstance(loaded[1], dict)
+        or not set(fields) <= loaded[1].keys()
+        or any(loaded[1][field] for field in fields)
+    ):
+        raise Qwen35RuntimeError(
+            "Qwen backbone tensors do not match the model architecture"
+        )
+    return loaded[0]
+
+
+def _validate_backbone_tensors(
+    backbone: Any,
+    *,
+    root: Path,
+    weight_files: tuple[str, ...],
+    index_file: str | None = None,
+    safe_open: Callable[..., Any],
+) -> None:
+    """Compare shard metadata to the actual owned model, without reloading tensors."""
+
+    expected = {
+        name: tuple(tensor.shape) for name, tensor in backbone.state_dict().items()
+    }
+    if not expected:
+        raise Qwen35RuntimeError("Qwen backbone has no model tensors")
+    observed: dict[str, tuple[int, ...]] = {}
+    locations: dict[str, str] = {}
+    try:
+        for relative in weight_files:
+            with safe_open(
+                str(root / relative), framework="pt", device="cpu"
+            ) as reader:
+                for name in reader.keys():
+                    if name in observed:
+                        raise Qwen35RuntimeError(
+                            "Qwen backbone shard contains duplicate tensors"
+                        )
+                    observed[name] = tuple(reader.get_slice(name).get_shape())
+                    locations[name] = Path(relative).name
+    except Qwen35RuntimeError:
+        raise
+    except Exception as error:
+        raise Qwen35RuntimeError(
+            "Qwen backbone tensor metadata could not be verified"
+        ) from error
+    if observed != expected:
+        raise Qwen35RuntimeError(
+            "Qwen backbone tensors do not match the model architecture"
+        )
+    if index_file is not None:
+        index = _read_json(root / index_file)
+        if index.get("weight_map") != locations:
+            raise Qwen35RuntimeError(
+                "Qwen weight index does not match the checkpoint tensors"
+            )
+
+
 def _validate_configuration(
     root: Path,
     *,
@@ -647,6 +836,7 @@ def _validate_configuration(
     native_rocm_max_physical_batch_size: int | None = None,
     attention: str,
     physical_batch_size: int,
+    repository_config: Any | None = None,
 ) -> ValidatedQwenRocmProfile | None:
     if backend not in {"cpu", "rocm", "cuda"}:
         raise Qwen35RuntimeError("Qwen Torch backend must be cpu, rocm, or cuda")
@@ -689,20 +879,27 @@ def _validate_configuration(
                 "Qwen native Torch ROCm physical batch size "
                 f"{physical_batch_size} exceeds qualified maximum {maximum}"
             )
-    for relative in (
-        "backbone/config.json",
-        "decision_config.json",
-        "decision_head.safetensors",
-        "runtime.json",
-        "tokenizer.json",
-        "tokenizer_config.json",
-    ):
+    required_files = (
+        INFERENCE_FILES if repository_config is None else repository_config.files
+    )
+    for relative in required_files:
         if not (root / relative).is_file():
             raise Qwen35RuntimeError(f"verified Qwen artifact is missing {relative}")
     # Prompt rendering belongs to this runtime; the checkpoint's prompt_version
     # is author metadata and does not define the executable model structure.
-    _read_json(root / "decision_config.json")
-    if backend == "rocm" and gated_delta_kernel_policy == "accelerated":
+    _read_json(
+        root
+        / (
+            repository_config.model_config
+            if repository_config is not None
+            else "decision_config.json"
+        )
+    )
+    if (
+        repository_config is None
+        and backend == "rocm"
+        and gated_delta_kernel_policy == "accelerated"
+    ):
         profile = _validated_rocm_profile(root)
         if profile is not None and (
             physical_batch_size > profile.physical_batch_size_max

@@ -83,15 +83,28 @@ class VelaFamilyAdapter:
         from ..vela_torch import VelaTorchRuntime  # noqa: PLC0415
 
         manifest = getattr(artifact, "manifest", None)
-        if manifest is None:
-            raise FamilyLoadError("verified Decision artifact has no manifest identity")
-        if manifest.path != "native/MANIFEST.json":
+        config = getattr(artifact, "config", None)
+        if (manifest is None) == (config is None):
+            raise FamilyLoadError("verified Decision artifact has no unique identity")
+        if manifest is not None and manifest.path != "native/MANIFEST.json":
             raise FamilyLoadError("Vela release manifest layout is unsupported")
+        if config is not None and config.path != "config.json":
+            raise FamilyLoadError("Vela release config layout is unsupported")
+        config_options = (
+            {
+                "expected_config_sha256": config.sha256,
+                "config_path": artifact.root / config.path,
+                "model_name": artifact.repository_id.rsplit("/", 1)[-1],
+            }
+            if config is not None
+            else {}
+        )
         return VelaTorchRuntime.load(
             artifact.data_root,
             max_length=profile.max_input_tokens,
             backend=backend,
-            expected_manifest_sha256=manifest.sha256,
+            expected_manifest_sha256=manifest.sha256 if manifest is not None else None,
+            **config_options,
         )
 
 

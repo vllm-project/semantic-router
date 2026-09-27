@@ -169,10 +169,13 @@ class Qwen35FamilyAdapter:
         from ..qwen35_torch import Qwen35TorchRuntime  # noqa: PLC0415
 
         manifest = getattr(artifact, "manifest", None)
-        if manifest is None:
-            raise FamilyLoadError("verified Decision artifact has no manifest identity")
-        if manifest.path not in {"MODEL_MANIFEST.json", "bundle-manifest.json"}:
+        config = getattr(artifact, "config", None)
+        if (manifest is None) == (config is None):
+            raise FamilyLoadError("verified Decision artifact has no unique identity")
+        if manifest is not None and manifest.path not in self.manifest_paths:
             raise FamilyLoadError("Qwen release manifest layout is unsupported")
+        if config is not None and config.path != "config.json":
+            raise FamilyLoadError("Qwen release config layout is unsupported")
         kernel_policy = profile.execution.get(backend, BackendExecutionPolicy())
         binder = None
         if backend == "rocm":
@@ -190,7 +193,17 @@ class Qwen35FamilyAdapter:
                     kernel_policy.graph_prewarm_padded_tokens
                 ),
             }
-            if profile.use_short_b8_graph(backend, physical_batch_size)
+            if config is None
+            and profile.use_short_b8_graph(backend, physical_batch_size)
+            else {}
+        )
+        config_options = (
+            {
+                "expected_config_sha256": config.sha256,
+                "config_path": artifact.root / config.path,
+                "model_name": artifact.repository_id.rsplit("/", 1)[-1],
+            }
+            if config is not None
             else {}
         )
         return Qwen35TorchRuntime.load(
@@ -203,8 +216,11 @@ class Qwen35FamilyAdapter:
             physical_batch_size=physical_batch_size,
             rocm_profile_binder=binder,
             expected_manifest_sha256=(
-                manifest.sha256 if manifest.path == "MODEL_MANIFEST.json" else None
+                manifest.sha256
+                if manifest is not None and manifest.path == "MODEL_MANIFEST.json"
+                else None
             ),
+            **config_options,
             **graph_options,
         )
 
@@ -212,20 +228,43 @@ class Qwen35FamilyAdapter:
 def qwen_temperature(artifact: VerifiedArtifact, *, fallback: float | None) -> float:
     """Read calibration from the verified snapshot, not its template revision."""
 
-    # Test assemblers may inject a synthetic artifact without a receipt. Real
-    # materializations always include manifest identity and selected file data.
-    if getattr(artifact, "manifest", None) is None:
+    config = getattr(artifact, "config", None)
+    manifest = getattr(artifact, "manifest", None)
+    # Test assemblers may inject a synthetic artifact without a receipt.
+    if config is None and manifest is None:
         if fallback is None:
             raise FamilyLoadError("Qwen release has no calibration temperature")
         return fallback
 
-    selected = {item.manifest_path for item in artifact.files}
-    source = "temperature.json" if "temperature.json" in selected else "runtime.json"
+    if config is not None:
+        if manifest is not None or config.path != "config.json":
+            raise FamilyLoadError("Qwen release identity is inconsistent")
+        release = getattr(artifact, "repository_config", None)
+        if release is None:
+            raise FamilyLoadError("Qwen release config was not verified")
+        if release.temperature is not None:
+            return _positive_temperature(release.temperature)
+        source = release.temperature_file
+        if source is None or source not in {
+            item.manifest_path for item in artifact.files
+        }:
+            raise FamilyLoadError("Qwen calibration file was not verified")
+        temperature_path = artifact.root / source
+    else:
+        selected = {item.manifest_path for item in artifact.files}
+        source = (
+            "temperature.json" if "temperature.json" in selected else "runtime.json"
+        )
+        temperature_path = artifact.data_root / source
     try:
-        metadata = json.loads((artifact.data_root / source).read_bytes())
+        metadata = json.loads(temperature_path.read_bytes())
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise FamilyLoadError("Qwen calibration metadata is invalid") from error
     temperature = metadata.get("temperature") if isinstance(metadata, dict) else None
+    return _positive_temperature(temperature)
+
+
+def _positive_temperature(temperature: object) -> float:
     if isinstance(temperature, bool) or not isinstance(temperature, (int, float)):
         raise FamilyLoadError("Qwen calibration temperature is invalid")
     try:
