@@ -56,8 +56,9 @@ substitution, or post-hoc temperature choice is allowed.
    per-input SHA-256 and native model receipt. Stop a panel on process failure,
    out-of-memory, repeated invalid native output, or a 90-minute wall timeout.
    A failed/partial file is retained and reported, never silently resumed as a
-   complete score. Maximum experiment budget is 3 GPU-hours, including smoke
-   and all three panels; record load/inference wall times and GPU-hours.
+   complete score. The parent task reserved GPU 2 for this arm and capped the
+   experiment at **2 GPU-hours total**, including smoke and all three panels;
+   stop at that limit and record load/inference wall times and GPU-hours.
 4. Hash and seal every complete prediction file **before** reading any panel
    gold. Then score once with the frozen scripts. Report overall and per-type
    typed accuracy, CSS task macro-F1/median, public tier accuracy, invalid
