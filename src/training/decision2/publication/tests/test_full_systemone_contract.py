@@ -12,6 +12,7 @@ from unittest.mock import patch
 from publication.adapter_runtime import Decision2 as AdapterDecision2
 from publication.full_bundle import MODEL_SOURCES
 from publication.full_runtime_api import Decision2
+from publication.runtime_api import Decision2 as LegacyBundleDecision2
 from training.model import infer
 
 
@@ -155,7 +156,7 @@ class FullSystemOneContractTest(unittest.TestCase):
                     state={1: "non-JSON key"}, questions={"q": {"type": "noul"}}
                 )
 
-    def test_adapter_and_full_packages_return_the_same_system_one_shape(self):
+    def test_all_package_paths_return_the_same_system_one_shape(self):
         model_sources = types.ModuleType("publication.decision_model")
         model_sources.encode = lambda row, _tokenizer, _limit: {
             "id": row["id"],
@@ -209,11 +210,15 @@ class FullSystemOneContractTest(unittest.TestCase):
             adapter = AdapterDecision2(**runtime_args).system_one(
                 state=[{"status": "failed"}], questions=questions
             )
+            legacy = LegacyBundleDecision2(**runtime_args).system_one(
+                state=[{"status": "failed"}], questions=questions
+            )
             with self.assertRaisesRegex(ValueError, "state must be"):
                 AdapterDecision2(**runtime_args).system_one(
                     state=42, questions=questions
                 )
         self.assertEqual(adapter, full)
+        self.assertEqual(legacy, full)
         self.assertIn("confidence", adapter["answers"]["choice"])
         self.assertIn("legend", adapter["answers"]["score"])
 
