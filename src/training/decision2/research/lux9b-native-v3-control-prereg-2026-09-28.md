@@ -17,7 +17,7 @@ precedes the Lux FINAL/CSS15 predictions and scores.
 | Typed FINAL | 1,600 items / 2,000 answers, input SHA-256 `e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd`; separate gold SHA-256 `707dd28dfbab10d124d437434023729f319501542e999e536fce9b7ff7f2361e`. |
 | CSS15 | 6,547 items / 6,547 answers, input SHA-256 `7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6`; separate gold SHA-256 `1cda9623032138bb7b124be0c1b0a4239c06bed7be3169264e6eb31805c19ba4`. |
 | Fixed metrics | Typed scorer SHA-256 `d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc`; CSS scorer SHA-256 `cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca`; v3 score `100 × sqrt(T × H)`. Pair to frozen JPT with `jev_arena/compare_v3.py`, 5,000 paired bootstrap draws, seed `20260927`. |
-| Compute | One isolated live-idle MI325X GPU on the other authorized 8-GPU node. Preloaded published weight package, exact gold-free prompts and pinned offline ROCm image `sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54`; no new weight download, training or restart of unrelated jobs. Budget **at most 0.5 GPU-hour**, including smoke/load/typed/CSS; hard wall cap 30 minutes. |
+| Compute | One isolated live-idle MI325X GPU on the other authorized 8-GPU node. Preloaded published weight package, exact gold-free prompts and pinned offline Lux runtime image `sha256:ce895822fc48bb6864911d4488a3946f3a18fd3dd2ec90c8a0a49b259145f2fb`; no new weight download, training or restart of unrelated jobs. Budget **at most 0.5 GPU-hour**, including smoke/load/typed/CSS and the failed prerequisite check below; hard wall cap 30 minutes. |
 
 The fixed executable for each panel is `python -m inference.run --backend lux
 --model-path /model --model-revision <revision> --input
@@ -54,3 +54,16 @@ than silently changing the protocol.
 Raw prompts, labels, predictions, private paths, host details and logs stay in
 the private research directory. The repository and unified gist receive only
 aggregate findings and non-sensitive digests. No HF upload or publication.
+
+## Preflight correction before any answer collection
+
+The first smoke launch used the generic pinned image
+`sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54`.
+It stopped during native model import with `ModuleNotFoundError: No module named
+'fla'`. It emitted **zero predictions** and read no formal gold. This is a
+runtime prerequisite failure, not a model score or a license to relax the
+model consistency gate. The already cached Lux image above reports the exact
+published release dependencies: PyTorch `2.12.0+git6bbd260`, HIP
+`7.2.53211`, Transformers `5.17.0`, Triton `3.7.1` and FLA `0.5.2`.
+The remaining qualified runtime and smoke requirements stay unchanged; if the
+native release profile or smoke differs, stop without formal inference.
