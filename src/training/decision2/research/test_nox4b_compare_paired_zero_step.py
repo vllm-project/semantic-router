@@ -2,7 +2,7 @@
 
 import unittest
 
-from .nox4b_compare_paired_zero_step import CELLS, compare
+from research.nox4b_compare_paired_zero_step import CELLS, compare
 
 
 def row(probability: float) -> dict:
