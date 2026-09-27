@@ -40,6 +40,13 @@ The fixed arm and stop rules were registered in
 
 No GPU time or scored evaluation labels were used for this preflight.
 
+An initial zero-step package check later failed in the parity *checker* before
+emitting a result: the checker incorrectly required a Noul-only `probability`
+field on Choice and Score rows. Native prediction schemas were inspected by
+type, and the checker was amended to compare the exact field set, relevant
+categorical fields and every present numeric field. This failure is retained;
+it did not start recovery training or access formal labels.
+
 ## Remaining gates
 
 The next discriminating step is a zero-step native parity check against the

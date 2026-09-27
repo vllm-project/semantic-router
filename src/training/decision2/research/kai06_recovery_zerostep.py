@@ -22,9 +22,13 @@ def compare(reference: list[dict], actual: list[dict]) -> dict:
     max_drift = 0.0
     changed = 0
     for before, after in zip(reference, actual):
+        if set(before) != set(after):
+            raise ValueError("Native prediction fields changed")
         for key in ("id", "question_id", "type", "candidate_ids", "input_tokens"):
             if before[key] != after[key]:
                 raise ValueError(f"Native prediction identity changed: {key}")
+        if "choice_id" in before and before["choice_id"] != after["choice_id"]:
+            raise ValueError("Native selected choice changed")
         if max(
             range(len(before["probabilities"])), key=before["probabilities"].__getitem__
         ) != max(
@@ -38,7 +42,9 @@ def compare(reference: list[dict], actual: list[dict]) -> dict:
                 if not math.isfinite(a) or not math.isfinite(b):
                     raise ValueError("Nonfinite prediction")
                 max_drift = max(max_drift, abs(a - b))
-        for key in ("confidence", "probability"):
+        for key in ("confidence", "probability", "expected_value", "score"):
+            if key not in before:
+                continue
             a, b = before[key], after[key]
             if not math.isfinite(a) or not math.isfinite(b):
                 raise ValueError("Nonfinite prediction")
