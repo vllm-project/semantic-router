@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from benchmark.generate import FINAL_FAMILIES
+from jev_arena.arena_v3 import REQUIRED_PROTOCOL_SOURCES, _pair_digest
 from publication import bundle_arena_v3 as bundle
 from publication.generate_arena_v3 import generate
 from publication.tests import test_bundle_arena as legacy_fixture
@@ -73,6 +74,7 @@ class NumericReleaseGateTests(unittest.TestCase):
         self.new_row = {
             "key": "new",
             "model_id": "org/dev-2.0-4b",
+            "size_b": 4.2,
             "axes": {"typed": 0.6, "transfer": 0.6},
             "score": 60.0,
         }
@@ -80,6 +82,7 @@ class NumericReleaseGateTests(unittest.TestCase):
             "key": "old",
             "group": "decision1",
             "model_id": "org/Decision-1.0-Nox-4B",
+            "size_b": 4.0,
             "axes": {"typed": 0.5, "transfer": 0.5},
             "score": 50.0,
         }
@@ -130,11 +133,10 @@ class NumericReleaseGateTests(unittest.TestCase):
                 "right": {"typed": "4" * 64, "css": "6" * 64},
             },
             "replicates": 5000,
-            "seed": 17,
+            "seed": bundle.DEFAULT_SEED,
             "source_sha256": {
-                "comparison": bundle.common.sha_file(bundle.SCORERS["paired_v3"]),
-                "typed_score": bundle.common.sha_file(bundle.SCORERS["typed"]),
-                "css_score": bundle.common.sha_file(bundle.SCORERS["css"]),
+                name: bundle.common.sha_file(path)
+                for name, path in bundle.SCORERS.items()
             },
             "coverage": {
                 "typed_items": 1600,
@@ -151,6 +153,22 @@ class NumericReleaseGateTests(unittest.TestCase):
             "ci95": {"low": 1.0, "high": 18.0},
         }
         write(self.paths["aggregate"], self.aggregate)
+        self.freeze = {
+            "comparison_pairs": [
+                {
+                    "candidate": "new",
+                    "comparator": "old",
+                    "size_relation": "same",
+                    "rationale": "",
+                }
+            ],
+            "_validated_plan": {
+                "model_roster": [
+                    {"key": "new", "size_b": 4.2},
+                    {"key": "old", "size_b": 4.0},
+                ]
+            },
+        }
 
     def check(self) -> dict[str, str]:
         return bundle._numeric_release_gate(
@@ -161,6 +179,7 @@ class NumericReleaseGateTests(unittest.TestCase):
             new_css_report=self.paths["new_css"],
             artifact_manifest=self.artifacts,
             arena=self.arena,
+            freeze=self.freeze,
             score_key="new",
             row=self.new_row,
             score_binding=self.binding,
@@ -221,6 +240,27 @@ class NumericReleaseGateTests(unittest.TestCase):
             bundle.common.sha_file(self.paths["new_typed"])
         )
         with self.assertRaisesRegex(ValueError, "coverage-adjusted typed Brier"):
+            self.check()
+
+    def test_rejects_postkey_comparator_and_wrong_measured_size(self) -> None:
+        self.freeze["comparison_pairs"][0]["comparator"] = "other"
+        with self.assertRaisesRegex(ValueError, "differs from pre-key pair"):
+            self.check()
+        self.freeze["comparison_pairs"][0]["comparator"] = "old"
+        self.old_row["size_b"] = 3.0
+        self.freeze["_validated_plan"]["model_roster"][1]["size_b"] = 3.0
+        with self.assertRaisesRegex(ValueError, "measured 1.25 ratio"):
+            self.check()
+
+    def test_rejects_postkey_bootstrap_seed_or_draw_count(self) -> None:
+        self.aggregate["seed"] += 1
+        write(self.paths["aggregate"], self.aggregate)
+        with self.assertRaisesRegex(ValueError, "bootstrap is missing or unbound"):
+            self.check()
+        self.aggregate["seed"] = bundle.DEFAULT_SEED
+        self.aggregate["replicates"] += 1
+        write(self.paths["aggregate"], self.aggregate)
+        with self.assertRaisesRegex(ValueError, "bootstrap is missing or unbound"):
             self.check()
 
 
@@ -442,10 +482,11 @@ class FullV3PackageTests(unittest.TestCase):
         panel = cards.arena["panel_sha256"]
         self.freeze_path = self.root / "v3-freeze.json"
         self.freeze = {
-            "schema_version": "jevarena-v3-freeze/1",
+            "schema_version": "jevarena-v3-freeze/2",
             "status": "prekey_frozen",
             "candidate_lock_sha256": "a" * 64,
             "protocol_sha256": bundle.common.sha_file(bundle.POLICY),
+            "prekey_frozen_at_utc": "2026-09-02T01:30:00+00:00",
             "score_sources_sha256": {
                 name: bundle.common.sha_file(path)
                 for name, path in bundle.SCORERS.items()
@@ -462,7 +503,7 @@ class FullV3PackageTests(unittest.TestCase):
                         family: bundle.common.sha_file(
                             self.score_inputs[family]["predictions"]
                         )
-                        for family in ("typed", "css")
+                        for family in bundle.SCORE_FAMILIES
                     },
                 },
                 "old": {
@@ -471,10 +512,95 @@ class FullV3PackageTests(unittest.TestCase):
                     "native_model_sha256": None,
                     "adapter_sha256": "b" * 64,
                     "calibration_sha256": "c" * 64,
-                    "predictions_sha256": {"typed": "4" * 64, "css": "5" * 64},
+                    "predictions_sha256": {
+                        "typed": "4" * 64,
+                        "css": "5" * 64,
+                        "public": "7" * 64,
+                    },
                 },
             },
         }
+        source_root = Path(__file__).resolve().parents[2]
+        pairs = [
+            {
+                "candidate": "new",
+                "comparator": "old",
+                "size_relation": "same",
+                "rationale": "",
+            }
+        ]
+        pair_sha = _pair_digest(pairs)
+        prompts = {
+            "typed": "8" * 64,
+            "css": "9" * 64,
+            "public": cards.public["panel_sha256"]["prompts_sha256"],
+        }
+        self.plan_path = self.root / "v3-plan.json"
+        self.audit_path = self.root / "v3-prekey-audit.json"
+        write(
+            self.plan_path,
+            {
+                "plan_version": "decision2-first-release-v3-plan/1",
+                "candidate_freeze_sha256": self.freeze["candidate_lock_sha256"],
+                "gate_document_sha256": self.freeze["protocol_sha256"],
+                "comparison_pairs": pairs,
+                "comparison_pairs_sha256": pair_sha,
+                "source_root": str(source_root),
+                "source_sha256": {
+                    name: bundle.common.sha_file(source_root / name)
+                    for name in REQUIRED_PROTOCOL_SOURCES
+                },
+                "model_roster": [
+                    {
+                        "key": row["key"],
+                        "group": row["group"],
+                        "size_b": row["size_b"],
+                        **{
+                            field: self.freeze["models"][row["key"]][field]
+                            for field in (
+                                "model_id",
+                                "revision",
+                                "native_model_sha256",
+                                "adapter_sha256",
+                                "calibration_sha256",
+                            )
+                        },
+                    }
+                    for row in cards.arena["models"]
+                ],
+                "css_prompts": {"sha256": prompts["css"]},
+                "public_panel": {"prompts_sha256": prompts["public"]},
+            },
+        )
+        write(
+            self.audit_path,
+            {
+                "status": "gold_free_prekey_predictions_verified",
+                "comparison_pairs_sha256": pair_sha,
+                "prompt_sha256": prompts,
+                "models": {
+                    key: value["predictions_sha256"]
+                    for key, value in self.freeze["models"].items()
+                },
+                "raw_hashes_sha256": "b" * 64,
+            },
+        )
+        self.freeze.update(
+            {
+                "plan": {
+                    "path": str(self.plan_path),
+                    "sha256": bundle.common.sha_file(self.plan_path),
+                },
+                "prediction_audit": {
+                    "path": str(self.audit_path),
+                    "sha256": bundle.common.sha_file(self.audit_path),
+                },
+                "comparison_pairs": pairs,
+                "comparison_pairs_sha256": pair_sha,
+                "prompt_sha256": prompts,
+                "raw_prediction_hashes_sha256": "b" * 64,
+            }
+        )
         write(self.freeze_path, self.freeze)
         cards.arena["freeze_sha256"] = bundle.common.sha_file(self.freeze_path)
         write(self.root / "arena.json", cards.arena)
@@ -507,9 +633,8 @@ class FullV3PackageTests(unittest.TestCase):
                     "right": {"typed": "4" * 64, "css": "5" * 64},
                 },
                 "source_sha256": {
-                    "comparison": bundle.common.sha_file(bundle.SCORERS["paired_v3"]),
-                    "typed_score": bundle.common.sha_file(bundle.SCORERS["typed"]),
-                    "css_score": bundle.common.sha_file(bundle.SCORERS["css"]),
+                    name: bundle.common.sha_file(path)
+                    for name, path in bundle.SCORERS.items()
                 },
                 "coverage": {
                     "typed_items": 1600,
@@ -522,7 +647,7 @@ class FullV3PackageTests(unittest.TestCase):
                     "confidence_level": 0.95,
                 },
                 "replicates": 5000,
-                "seed": 17,
+                "seed": bundle.DEFAULT_SEED,
                 "point": {
                     "left": {"T": 0.6, "H": 0.6, "score": 60.0},
                     "right": {"T": 0.5, "H": 0.5, "score": 50.0},
@@ -571,6 +696,38 @@ class FullV3PackageTests(unittest.TestCase):
         self.gate_evidence = {
             name: self.root / f"v3-gate-{name}.json" for name in bundle.GATE_CHECKS
         }
+        self.prediction_seals = {
+            key: {
+                family: {
+                    "predictions_sha256": model["predictions_sha256"][family],
+                    "sealed_at_utc": "2026-09-02T01:00:00+00:00",
+                    **(
+                        {
+                            "native_manifest_sha256": self.score_binding[family][
+                                "native_manifest_sha256"
+                            ]
+                        }
+                        if key == "new"
+                        else {}
+                    ),
+                }
+                for family in bundle.SCORE_FAMILIES
+            }
+            for key, model in self.freeze["models"].items()
+        }
+        self.timestamp_log_path = self.root / "v3-timestamp-log.json"
+        write(
+            self.timestamp_log_path,
+            {
+                "schema_version": bundle.TIMESTAMP_LOG_VERSION,
+                "candidate_lock_sha256": self.freeze["candidate_lock_sha256"],
+                "candidate_locked_at_utc": "2026-09-02T00:00:00+00:00",
+                "prediction_seals": self.prediction_seals,
+                "prekey_freeze_sha256": bundle.common.sha_file(self.freeze_path),
+                "prekey_frozen_at_utc": self.freeze["prekey_frozen_at_utc"],
+                "first_label_opened_at_utc": "2026-09-02T02:00:00+00:00",
+            },
+        )
         for name, path in self.gate_evidence.items():
             evidence = {
                 "schema_version": (
@@ -596,21 +753,13 @@ class FullV3PackageTests(unittest.TestCase):
                         "candidate_lock_sha256": self.freeze["candidate_lock_sha256"],
                         "candidate": self.candidate,
                         "protocol_sha256": self.freeze["protocol_sha256"],
-                        "timestamp_log_sha256": "b" * 64,
-                        "frozen_at_utc": "2026-09-02T00:00:00+00:00",
+                        "timestamp_log_path": str(self.timestamp_log_path),
+                        "timestamp_log_sha256": bundle.common.sha_file(
+                            self.timestamp_log_path
+                        ),
+                        "candidate_locked_at_utc": "2026-09-02T00:00:00+00:00",
                         "first_label_opened_at_utc": "2026-09-02T02:00:00+00:00",
-                        "prediction_seals": {
-                            family: {
-                                "predictions_sha256": self.score_binding[family][
-                                    "predictions_sha256"
-                                ],
-                                "native_manifest_sha256": self.score_binding[family][
-                                    "native_manifest_sha256"
-                                ],
-                                "sealed_at_utc": "2026-09-02T01:00:00+00:00",
-                            }
-                            for family in ("typed", "css")
-                        },
+                        "prediction_seals": self.prediction_seals,
                     }
                 )
             if name == "release_thresholds":
@@ -685,7 +834,7 @@ class FullV3PackageTests(unittest.TestCase):
     def test_rejects_unbound_freeze_and_blocked_review(self) -> None:
         self.freeze["candidate_lock_sha256"] = "9" * 64
         write(self.freeze_path, self.freeze)
-        with self.assertRaisesRegex(ValueError, "gate is missing"):
+        with self.assertRaisesRegex(ValueError, "freeze receipt digest changed"):
             self.assemble()
 
     def test_rejects_threshold_receipt_without_joint_comparison_binding(self) -> None:
@@ -704,6 +853,36 @@ class FullV3PackageTests(unittest.TestCase):
         self.gate["checks"]["train_eval_overlap"]["status"] = "blocked"
         write(self.gate_path, self.gate)
         with self.assertRaisesRegex(ValueError, "review is blocked"):
+            self.assemble()
+
+    def test_rejects_postkey_audit_tamper_and_false_chronology(self) -> None:
+        audit = json.loads(self.audit_path.read_text())
+        audit["models"]["new"]["public"] = "0" * 64
+        write(self.audit_path, audit)
+        with self.assertRaisesRegex(
+            ValueError, "gold-free audit: receipt digest changed"
+        ):
+            self.assemble()
+
+        audit["models"]["new"]["public"] = self.freeze["models"]["new"][
+            "predictions_sha256"
+        ]["public"]
+        write(self.audit_path, audit)
+        evidence_path = self.gate_evidence["candidate_freeze"]
+        evidence = json.loads(evidence_path.read_text())
+        evidence["candidate_locked_at_utc"] = "2026-09-02T01:15:00+00:00"
+        log = json.loads(self.timestamp_log_path.read_text())
+        log["candidate_locked_at_utc"] = evidence["candidate_locked_at_utc"]
+        write(self.timestamp_log_path, log)
+        evidence["timestamp_log_sha256"] = bundle.common.sha_file(
+            self.timestamp_log_path
+        )
+        write(evidence_path, evidence)
+        self.gate["checks"]["candidate_freeze"]["evidence_sha256"] = (
+            bundle.common.sha_file(evidence_path)
+        )
+        write(self.gate_path, self.gate)
+        with self.assertRaisesRegex(ValueError, "chronology is invalid"):
             self.assemble()
 
 

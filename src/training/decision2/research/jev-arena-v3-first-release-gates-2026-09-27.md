@@ -19,9 +19,11 @@ calibration, package manifests, thresholds and prediction output paths.
   public result is required as a separately labeled first-release cross-check.
 - Each proposed Decision 2.0 model is paired with the frozen native Decision
   1.0 model for its actual size. The comparison is rerun on exactly the same
-  v3 panels. A model size with no credible corresponding 1.0 comparator must
-  name that limitation before scoring and use a predeclared nearest-size
-  comparator; it may not claim an equal-size win.
+  v3 panels. `same` requires measured loaded parameter counts with
+  `max(candidate, comparator)/min(candidate, comparator) <= 1.25` and the
+  corresponding Decision 1.0 catalog model. Otherwise the pretest roster must
+  state `nearest` with a substantial rationale before scoring; it may not
+  claim an equal-size win.
 
 ## Numeric first-release gate
 
@@ -30,7 +32,8 @@ For a candidate to be labeled a **validated Decision 2.0 improvement**:
 1. Both `T` and `H` point estimates must be strictly greater than the paired
    1.0 comparator. The v3 aggregate score must also be greater.
 2. The 95% paired interval for the **candidate minus 1.0 v3 score** must have
-   a lower bound above zero. Use 5,000 fixed-seed replicates. Preserve paired
+   a lower bound above zero. Use exactly 5,000 replicates with seed `20260927`.
+   Preserve paired
    model answers, sample typed independent groups within family, and sample
    CSS tasks then records within each sampled task. Report axis intervals as
    well; do not infer a significant gain on an individual axis from the

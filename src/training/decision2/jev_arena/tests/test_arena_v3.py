@@ -14,8 +14,10 @@ from transfer.build import EVALUATION_TASKS, PANEL_VERSION
 
 from jev_arena.arena_v3 import (
     FREEZE_VERSION,
+    REQUIRED_PROTOCOL_SOURCES,
     ROSTER_VERSION,
     SCORER_SOURCE_PATHS,
+    _pair_digest,
     rank,
 )
 
@@ -118,11 +120,65 @@ def fixture(root: Path) -> tuple[Path, Path]:
             "predictions_sha256": {
                 "typed": typed["predictions_sha256"],
                 "css": css["predictions_sha256"],
+                "public": ("5" if key == "small" else "6") * 64,
             },
         }
+    source_root = Path(__file__).resolve().parents[2]
+    prompt_shas = {"typed": "c" * 64, "css": "d" * 64, "public": "f" * 64}
+    pair_sha = _pair_digest([])
+    plan = {
+        "plan_version": "decision2-first-release-v3-plan/1",
+        "candidate_freeze_sha256": "e" * 64,
+        "gate_document_sha256": "7" * 64,
+        "comparison_pairs": [],
+        "comparison_pairs_sha256": pair_sha,
+        "source_root": str(source_root),
+        "source_sha256": {
+            name: hashlib.sha256((source_root / name).read_bytes()).hexdigest()
+            for name in REQUIRED_PROTOCOL_SOURCES
+        },
+        "model_roster": [
+            {
+                "key": row["key"],
+                "group": row["group"],
+                "size_b": row["size_b"],
+                **{
+                    name: frozen_models[row["key"]][name]
+                    for name in (
+                        "model_id",
+                        "revision",
+                        "native_model_sha256",
+                        "adapter_sha256",
+                        "calibration_sha256",
+                    )
+                },
+            }
+            for row in rows
+        ],
+        "css_prompts": {"sha256": prompt_shas["css"]},
+        "public_panel": {"prompts_sha256": prompt_shas["public"]},
+    }
+    audit = {
+        "status": "gold_free_prekey_predictions_verified",
+        "comparison_pairs_sha256": pair_sha,
+        "prompt_sha256": prompt_shas,
+        "models": {
+            key: model["predictions_sha256"] for key, model in frozen_models.items()
+        },
+        "raw_hashes_sha256": "9" * 64,
+    }
+    plan_path, audit_path = root / "plan.json", root / "audit.json"
+    plan_sha, audit_sha = write(plan_path, plan), write(audit_path, audit)
     freeze = {
         "schema_version": FREEZE_VERSION,
         "status": "prekey_frozen",
+        "plan": {"path": str(plan_path), "sha256": plan_sha},
+        "prediction_audit": {"path": str(audit_path), "sha256": audit_sha},
+        "comparison_pairs": [],
+        "comparison_pairs_sha256": pair_sha,
+        "prekey_frozen_at_utc": "2026-09-02T01:30:00+00:00",
+        "prompt_sha256": prompt_shas,
+        "raw_prediction_hashes_sha256": audit["raw_hashes_sha256"],
         "score_sources_sha256": {
             name: hashlib.sha256(path.read_bytes()).hexdigest()
             for name, path in SCORER_SOURCE_PATHS.items()
@@ -231,6 +287,72 @@ class JevArenaV3Test(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "scoring source changed"):
                 rank(manifest)
 
+    def test_prekey_plan_and_gold_free_audit_are_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, freeze_path = fixture(root)
+            freeze = json.loads(freeze_path.read_text())
+            roster = json.loads(manifest.read_text())
+            freeze.pop("plan")
+            roster["freeze_sha256"] = write(freeze_path, freeze)
+            write(manifest, roster)
+            with self.assertRaisesRegex(ValueError, "pre-key plan"):
+                rank(manifest)
+
+            manifest, freeze_path = fixture(root)
+            freeze = json.loads(freeze_path.read_text())
+            audit_path = Path(freeze["prediction_audit"]["path"])
+            audit = json.loads(audit_path.read_text())
+            audit["models"]["small"]["public"] = "0" * 64
+            freeze["prediction_audit"]["sha256"] = write(audit_path, audit)
+            roster = json.loads(manifest.read_text())
+            roster["freeze_sha256"] = write(freeze_path, freeze)
+            write(manifest, roster)
+            with self.assertRaisesRegex(ValueError, "audited full-panel predictions"):
+                rank(manifest)
+
+    def test_prekey_plan_detects_unfrozen_gate_code(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, freeze_path = fixture(root)
+            freeze = json.loads(freeze_path.read_text())
+            plan_path = Path(freeze["plan"]["path"])
+            plan = json.loads(plan_path.read_text())
+            plan["source_sha256"]["publication/bundle_arena_v3.py"] = "0" * 64
+            freeze["plan"]["sha256"] = write(plan_path, plan)
+            roster = json.loads(manifest.read_text())
+            roster["freeze_sha256"] = write(freeze_path, freeze)
+            write(manifest, roster)
+            with self.assertRaisesRegex(ValueError, "protocol source changed"):
+                rank(manifest)
+
+    def test_prekey_pair_mapping_covers_each_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, freeze_path = fixture(root)
+            freeze = json.loads(freeze_path.read_text())
+            plan_path = Path(freeze["plan"]["path"])
+            plan = json.loads(plan_path.read_text())
+            plan["model_roster"][0]["group"] = "decision2"
+            freeze["plan"]["sha256"] = write(plan_path, plan)
+            roster = json.loads(manifest.read_text())
+            roster["freeze_sha256"] = write(freeze_path, freeze)
+            write(manifest, roster)
+            with self.assertRaisesRegex(ValueError, "pairs do not cover"):
+                rank(manifest)
+
+    def test_prekey_freeze_time_is_utc(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, freeze_path = fixture(root)
+            freeze = json.loads(freeze_path.read_text())
+            freeze["prekey_frozen_at_utc"] = "2026-09-02T09:30:00+08:00"
+            roster = json.loads(manifest.read_text())
+            roster["freeze_sha256"] = write(freeze_path, freeze)
+            write(manifest, roster)
+            with self.assertRaisesRegex(ValueError, "freeze time needs UTC"):
+                rank(manifest)
+
     def test_invalid_answers_stay_in_full_denominator(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -259,11 +381,36 @@ class JevArenaV3Test(unittest.TestCase):
             manifest, freeze_path = fixture(root)
             roster = json.loads(manifest.read_text())
             roster["models"][0]["group"] = "decision2"
+            roster["models"][1]["group"] = "decision1"
+            freeze = json.loads(freeze_path.read_text())
+            plan_path = Path(freeze["plan"]["path"])
+            plan = json.loads(plan_path.read_text())
+            plan["model_roster"][0]["group"] = "decision2"
+            plan["model_roster"][1]["group"] = "decision1"
+            pairs = [
+                {
+                    "candidate": "small",
+                    "comparator": "large",
+                    "size_relation": "nearest",
+                    "rationale": "Synthetic nearest-size baseline for this test",
+                }
+            ]
+            plan["comparison_pairs"] = freeze["comparison_pairs"] = pairs
+            plan["comparison_pairs_sha256"] = freeze["comparison_pairs_sha256"] = (
+                _pair_digest(pairs)
+            )
+            audit_path = Path(freeze["prediction_audit"]["path"])
+            audit = json.loads(audit_path.read_text())
+            audit["comparison_pairs_sha256"] = _pair_digest(pairs)
+            freeze["prediction_audit"]["sha256"] = write(audit_path, audit)
+            freeze["plan"]["sha256"] = write(plan_path, plan)
+            roster["freeze_sha256"] = write(freeze_path, freeze)
             write(manifest, roster)
             with self.assertRaisesRegex(ValueError, "native model fingerprint"):
                 rank(manifest)
-            freeze = json.loads(freeze_path.read_text())
             freeze["models"]["small"]["native_model_sha256"] = "9" * 64
+            plan["model_roster"][0]["native_model_sha256"] = "9" * 64
+            freeze["plan"]["sha256"] = write(plan_path, plan)
             roster["freeze_sha256"] = write(freeze_path, freeze)
             write(manifest, roster)
             css_path = root / "small-css.json"

@@ -8,6 +8,38 @@ are required for the first card but reported as an independent public rerun.
 Decision Bench, Decision Index, and new authored questions are not v3 release
 axes; independently authored questions can extend a later v3.1 protocol.
 
+## Private pre-key freeze
+
+`jevarena-v3-freeze/2` is required for the first release. Earlier `/1`
+receipts cannot be relabeled or used for ranking. After the candidate lock,
+run every native model on all three gold-free prompt panels, save the raw
+prediction hash list, and run `scripts.plan_first_release_v3 audit-predictions`
+against the recorded plan SHA. That audit checks exact IDs and input hashes for
+all 1,600 typed, 6,547 CSS and 231 public predictions per model. Then write
+the pre-key receipt before the first protected label access or score command.
+
+The private receipt requires `plan` and `prediction_audit` objects, each with
+`path` and `sha256`; `comparison_pairs` and its canonical
+`comparison_pairs_sha256`; `candidate_lock_sha256`, `protocol_sha256`,
+`prekey_frozen_at_utc`, `prompt_sha256` for typed/CSS/public,
+`raw_prediction_hashes_sha256`, `panels` with typed/CSS gold digests,
+`score_sources_sha256`, and `models`. Each model binds its ID, revision,
+native-model, adapter and calibration hashes, plus prediction hashes for
+typed/CSS/public. The scorer checks the plan and audit bytes, all model and
+prompt bindings, and the source hashes for the v3 ranker, paired comparison,
+their directly used metric/panel helpers and the publication gate. Keep plan,
+audit and receipt paths private; only their hashes enter public artifacts.
+
+The independent freeze review uses
+`decision2-jevarena-v3-freeze-audit/2`. Its private `timestamp_log_path` must
+match `timestamp_log_sha256`. The log records the candidate-lock digest/time,
+all three prediction seals for every model, the pre-key receipt digest/time,
+and first protected label access. The checker requires candidate lock before
+every prediction seal, every seal before the pre-key receipt, and that receipt
+before first label access. The release owner must authenticate the external
+append-only log and reviewer identity; matching JSON fields alone do not prove
+independence or historical timing.
+
 ## Gold-free publication inputs
 
 1. Run `jev_arena.arena_v3` with its exact pre-key freeze to obtain
@@ -94,10 +126,10 @@ weights into the publication repository.
 The release gate schema is `decision2-jevarena-v3-release-gate/1`. All six
 reviews must pass and carry exact source hashes:
 
-- `candidate_freeze`: `decision2-jevarena-v3-freeze-audit/1`, binding the v3
-  pre-key freeze, candidate model, scorer and policy versions, and typed/CSS
-  prediction seals. Its declared chronology must satisfy freeze before
-  prediction seals before first protected label access.
+- `candidate_freeze`: `decision2-jevarena-v3-freeze-audit/2`, binding the v3
+  pre-key freeze, candidate model, scorer and policy versions, and all-model
+  typed/CSS/public prediction seals. Its declared chronology is candidate
+  lock, predictions, pre-key receipt, then first protected label access.
 - `train_eval_overlap`, `same_panel_evaluation`, `rights_and_provenance`,
   `native_parity`, `release_thresholds`: each uses
   `decision2-jevarena-v3-release-check/1`, a reviewer commitment, a source
@@ -108,7 +140,7 @@ The `release_thresholds` review must bind the pre-key policy and the exact
 joint paired-bootstrap report and 1.0 comparator scorer reports. The program
 recomputes the numeric rules from those reports: both T and H strictly
 increase, the joint v3 aggregate paired 95% interval has lower bound above
-zero with at least 5,000 fixed-seed replicates, no Choice/Noul/Score accuracy
+zero with exactly 5,000 replicates and seed `20260927`, no Choice/Noul/Score accuracy
 drop exceeds 0.02, invalid/missing fractions on each axis do not exceed
 `max(0.02, comparator + 0.01)`, and coverage-adjusted typed Brier does not
 exceed the comparator plus 0.03. The coverage adjustment assigns normalized
@@ -119,6 +151,12 @@ preregistration is
 [`jev-arena-v3-first-release-gates-2026-09-27.md`](../research/jev-arena-v3-first-release-gates-2026-09-27.md),
 whose SHA-256 must match the pre-key freeze. A failing dimension remains
 HOLD; public231 cannot compensate for a sealed-core failure.
+
+The artifact comparison must use the exact candidate-to-Decision-1.0 pair in
+the pre-key plan. A `same` size relation requires measured loaded parameter
+counts with `max(candidate, comparator)/min(candidate, comparator) <= 1.25`.
+Otherwise the frozen relation must be `nearest` with its predeclared rationale;
+the release cannot claim an equal-size improvement.
 
 **An evidence JSON with a reviewer identity and timestamp is a structured
 assertion, not proof that the reviewer was independent or that the chronology

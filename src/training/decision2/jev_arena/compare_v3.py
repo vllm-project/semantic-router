@@ -26,7 +26,10 @@ from benchmark.score import DataError, evaluate_answer, load_jsonl, score_suite
 from transfer.build import EVALUATION_TASKS, PANEL_VERSION, sha_file
 from transfer.compare import interval95
 from transfer.score import evaluate as evaluate_css
-from transfer.score import read_jsonl, score as score_css
+from transfer.score import read_jsonl
+from transfer.score import score as score_css
+
+from jev_arena.arena_v3 import SCORER_SOURCE_PATHS
 
 SCHEMA_VERSION = "jevarena-v3-paired-aggregate/1"
 DEFAULT_REPLICATES = 5000
@@ -291,13 +294,7 @@ def compare(
             },
         },
         "source_sha256": {
-            "comparison": sha_file(Path(__file__)),
-            "typed_score": sha_file(
-                Path(__file__).resolve().parents[1] / "benchmark/score.py"
-            ),
-            "css_score": sha_file(
-                Path(__file__).resolve().parents[1] / "transfer/score.py"
-            ),
+            name: sha_file(path) for name, path in SCORER_SOURCE_PATHS.items()
         },
         "coverage": {
             "typed_items": 1600,

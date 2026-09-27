@@ -9,10 +9,12 @@ need an independent release audit; a successful rank is not that audit.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
 import statistics
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -23,17 +25,26 @@ from jev_arena.arena import _load, _pareto, _score, _sha
 
 ARENA_VERSION = "jevarena-ranking/3"
 ROSTER_VERSION = "jevarena-v3-roster/1"
-FREEZE_VERSION = "jevarena-v3-freeze/1"
+FREEZE_VERSION = "jevarena-v3-freeze/2"
 TYPES = ("choice", "noul", "score")
 AXES = ("typed", "transfer")
 PANEL_HASH_KEYS = ("typed_gold_sha256", "css_gold_sha256")
-PREDICTION_KEYS = ("typed", "css")
+SCORED_KEYS = ("typed", "css")
+PREDICTION_KEYS = (*SCORED_KEYS, "public")
 SCORER_SOURCE_PATHS = {
     "arena_v3": Path(__file__),
+    "arena_base": Path(__file__).with_name("arena.py"),
     "paired_v3": Path(__file__).with_name("compare_v3.py"),
     "typed": Path(__file__).resolve().parents[1] / "benchmark/score.py",
+    "typed_panel": Path(__file__).resolve().parents[1] / "benchmark/generate.py",
     "css": Path(__file__).resolve().parents[1] / "transfer/score.py",
+    "css_panel": Path(__file__).resolve().parents[1] / "transfer/build.py",
+    "css_compare": Path(__file__).resolve().parents[1] / "transfer/compare.py",
 }
+REQUIRED_PROTOCOL_SOURCES = {
+    path.relative_to(Path(__file__).resolve().parents[1]).as_posix()
+    for path in SCORER_SOURCE_PATHS.values()
+} | {"publication/bundle_arena_v3.py", "scripts/plan_first_release_v3.py"}
 ENTRY_FIELDS = {
     "key",
     "label",
@@ -76,6 +87,142 @@ def _close(actual: Any, expected: float, name: str) -> float:
     if not math.isclose(value, expected, rel_tol=0, abs_tol=1e-10):
         raise ValueError(f"{name}: disagrees with component scores")
     return value
+
+
+def _receipt(reference: Any, base: Path, name: str) -> dict[str, Any]:
+    if not isinstance(reference, dict) or set(reference) != {"path", "sha256"}:
+        raise ValueError(f"{name}: expected a path and SHA-256")
+    path = Path(_name(reference["path"], f"{name}.path"))
+    if not path.is_absolute():
+        path = base / path
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f"{name}: receipt is missing or linked")
+    if _sha(path) != _digest(reference["sha256"], f"{name}.sha256"):
+        raise ValueError(f"{name}: receipt digest changed")
+    return _load(path)
+
+
+def _pair_digest(pairs: Any) -> str:
+    if not isinstance(pairs, list) or any(
+        not isinstance(pair, dict)
+        or set(pair) != {"candidate", "comparator", "size_relation", "rationale"}
+        or not isinstance(pair["candidate"], str)
+        or not pair["candidate"]
+        or not isinstance(pair["comparator"], str)
+        or not pair["comparator"]
+        or not isinstance(pair["size_relation"], str)
+        or pair["size_relation"] not in {"same", "nearest"}
+        or not isinstance(pair["rationale"], str)
+        for pair in pairs
+    ):
+        raise ValueError("Freeze lacks predeclared comparison pairs")
+    ordered = sorted(pairs, key=lambda pair: pair["candidate"])
+    encoded = json.dumps(
+        ordered, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _prekey_evidence(
+    freeze: dict[str, Any], path: Path, keys: set[str]
+) -> dict[str, Any]:
+    plan = _receipt(freeze.get("plan"), path.parent, "pre-key plan")
+    audit = _receipt(freeze.get("prediction_audit"), path.parent, "gold-free audit")
+    if plan.get("plan_version") != "decision2-first-release-v3-plan/1":
+        raise ValueError("Pre-key freeze lacks the v3 first-release plan")
+    if audit.get("status") != "gold_free_prekey_predictions_verified":
+        raise ValueError("Pre-key freeze lacks a passed gold-free prediction audit")
+    if plan.get("candidate_freeze_sha256") != freeze.get(
+        "candidate_lock_sha256"
+    ) or plan.get("gate_document_sha256") != freeze.get("protocol_sha256"):
+        raise ValueError("Pre-key plan candidate lock or policy differs")
+    pairs = freeze.get("comparison_pairs")
+    pair_sha = _digest(freeze.get("comparison_pairs_sha256"), "comparison_pairs_sha256")
+    if (
+        _pair_digest(pairs) != pair_sha
+        or plan.get("comparison_pairs") != pairs
+        or plan.get("comparison_pairs_sha256") != pair_sha
+        or audit.get("comparison_pairs_sha256") != pair_sha
+    ):
+        raise ValueError("Predeclared comparison pairs differ from plan or audit")
+    root = Path(_name(plan.get("source_root"), "plan.source_root")).resolve()
+    if root != Path(__file__).resolve().parents[1]:
+        raise ValueError("Pre-key plan points to another source checkout")
+    source_hashes = plan.get("source_sha256")
+    if not isinstance(source_hashes, dict) or not REQUIRED_PROTOCOL_SOURCES.issubset(
+        source_hashes
+    ):
+        raise ValueError("Pre-key plan omits executable scoring or gate sources")
+    for relative, digest in source_hashes.items():
+        if (
+            not isinstance(relative, str)
+            or Path(relative).is_absolute()
+            or ".." in Path(relative).parts
+            or _sha(root / relative) != _digest(digest, f"source {relative}")
+        ):
+            raise ValueError(f"Pre-key protocol source changed: {relative}")
+    roster = plan.get("model_roster")
+    if (
+        not isinstance(roster, list)
+        or len(roster) != len(keys)
+        or any(not isinstance(row, dict) for row in roster)
+        or {row.get("key") for row in roster} != keys
+    ):
+        raise ValueError("Pre-key plan model roster differs from freeze")
+    planned_groups = {row["key"]: row.get("group") for row in roster}
+    candidate_keys = {
+        key for key, group in planned_groups.items() if group == "decision2"
+    }
+    if (
+        len(pairs) != len(candidate_keys)
+        or {pair["candidate"] for pair in pairs} != candidate_keys
+        or any(planned_groups.get(pair["comparator"]) != "decision1" for pair in pairs)
+    ):
+        raise ValueError("Pre-key pairs do not cover the Decision 2.0 roster")
+    for row in roster:
+        model = freeze["models"][row["key"]]
+        if any(
+            model[field] != row[planned]
+            for field, planned in (
+                ("model_id", "model_id"),
+                ("revision", "revision"),
+                ("native_model_sha256", "native_model_sha256"),
+                ("adapter_sha256", "adapter_sha256"),
+                ("calibration_sha256", "calibration_sha256"),
+            )
+        ):
+            raise ValueError(f"{row['key']}: pre-key model identity differs from plan")
+    audited_models = audit.get("models")
+    if not isinstance(audited_models, dict) or set(audited_models) != keys:
+        raise ValueError("Gold-free audit lacks the full model roster")
+    for key in keys:
+        if audited_models[key] != freeze["models"][key]["predictions_sha256"]:
+            raise ValueError(
+                f"{key}: audited full-panel predictions differ from freeze"
+            )
+    prompts = audit.get("prompt_sha256")
+    if not isinstance(prompts, dict) or set(prompts) != set(PREDICTION_KEYS):
+        raise ValueError("Gold-free audit lacks all three prompt panels")
+    for name in PREDICTION_KEYS:
+        _digest(prompts[name], f"{name} prompt SHA-256")
+    if (
+        freeze.get("prompt_sha256") != prompts
+        or prompts["css"] != plan.get("css_prompts", {}).get("sha256")
+        or prompts["public"] != plan.get("public_panel", {}).get("prompts_sha256")
+        or freeze.get("raw_prediction_hashes_sha256") != audit.get("raw_hashes_sha256")
+    ):
+        raise ValueError("Gold-free prompt or prediction inventory differs")
+    _digest(audit.get("raw_hashes_sha256"), "raw prediction hash list")
+    when = freeze.get("prekey_frozen_at_utc")
+    if not isinstance(when, str):
+        raise ValueError("Pre-key receipt needs an explicit UTC freeze time")
+    try:
+        parsed = datetime.fromisoformat(when)
+    except ValueError as exc:
+        raise ValueError("Pre-key receipt has an invalid freeze time") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(None):
+        raise ValueError("Pre-key receipt freeze time needs UTC")
+    return plan
 
 
 def _summary(summary: Any, name: str) -> tuple[int, int, int, float]:
@@ -242,6 +389,7 @@ def _freeze(path: Path, manifest: dict[str, Any], keys: set[str]) -> dict[str, A
             raise ValueError(f"{key}: incomplete frozen prediction digests")
         for name in PREDICTION_KEYS:
             _digest(predictions[name], f"{key}.{name}.predictions_sha256")
+    freeze["_validated_plan"] = _prekey_evidence(freeze, path, keys)
     return freeze
 
 
@@ -266,6 +414,7 @@ def rank(manifest_path: Path) -> dict[str, Any]:
     if not freeze_path.is_absolute():
         freeze_path = manifest_path.parent / freeze_path
     freeze = _freeze(freeze_path, manifest, set(keys))
+    planned = {row["key"]: row for row in freeze["_validated_plan"]["model_roster"]}
     rows: list[dict[str, Any]] = []
     expected_hashes = freeze["panels"]
     for entry in entries:
@@ -277,6 +426,9 @@ def rank(manifest_path: Path) -> dict[str, Any]:
         revision = _name(entry["revision"], f"{key}.revision")
         if (model_id, revision) != (frozen["model_id"], frozen["revision"]):
             raise ValueError(f"{key}: frozen model identity mismatch")
+        expected = planned[key]
+        if entry["group"] != expected["group"] or entry["size_b"] != expected["size_b"]:
+            raise ValueError(f"{key}: roster group or measured size differs from plan")
         if entry["group"] == "decision2" and frozen["native_model_sha256"] is None:
             raise ValueError(f"{key}: Decision 2.0 requires a native model fingerprint")
         size = entry["size_b"]
@@ -293,7 +445,7 @@ def rank(manifest_path: Path) -> dict[str, Any]:
         ):
             path = Path(_name(entry[field], f"{key}.{field}"))
             paths[name] = path if path.is_absolute() else manifest_path.parent / path
-        typed, css = (_load(paths[name]) for name in PREDICTION_KEYS)
+        typed, css = (_load(paths[name]) for name in SCORED_KEYS)
         panel_hashes = {
             "typed_gold_sha256": typed.get("gold_sha256"),
             "css_gold_sha256": css.get("gold_sha256"),

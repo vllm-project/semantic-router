@@ -18,8 +18,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from jev_arena.arena_v3 import SCORER_SOURCE_PATHS
 from jev_arena.arena_v3 import _css as score_css_axis
+from jev_arena.arena_v3 import _freeze as checked_freeze
 from jev_arena.arena_v3 import _typed as score_typed_axis
+from jev_arena.compare_v3 import DEFAULT_REPLICATES, DEFAULT_SEED
 from jev_arena.jevbench_public import SCORE_VERSION as PUBLIC_SCORE_VERSION
 
 from . import adapter_runtime
@@ -30,7 +33,8 @@ from .generate_arena_v3 import VERSION as ARTIFACT_VERSION
 VERSION = "decision2-jevarena-v3-release-bundle/1"
 GATE_VERSION = "decision2-jevarena-v3-release-gate/1"
 CHECK_VERSION = "decision2-jevarena-v3-release-check/1"
-FREEZE_AUDIT_VERSION = "decision2-jevarena-v3-freeze-audit/1"
+FREEZE_AUDIT_VERSION = "decision2-jevarena-v3-freeze-audit/2"
+TIMESTAMP_LOG_VERSION = "decision2-jevarena-v3-timestamp-log/1"
 SCORE_FAMILIES = ("typed", "css", "public")
 GATE_CHECKS = (
     "candidate_freeze",
@@ -44,12 +48,7 @@ POLICY = (
     Path(__file__).resolve().parents[1]
     / "research/jev-arena-v3-first-release-gates-2026-09-27.md"
 )
-SCORERS = {
-    "arena_v3": Path(__file__).resolve().parents[1] / "jev_arena/arena_v3.py",
-    "paired_v3": Path(__file__).resolve().parents[1] / "jev_arena/compare_v3.py",
-    "typed": Path(__file__).resolve().parents[1] / "benchmark/score.py",
-    "css": Path(__file__).resolve().parents[1] / "transfer/score.py",
-}
+SCORERS = SCORER_SOURCE_PATHS
 
 
 def _context_digest(
@@ -348,6 +347,7 @@ def _external_evidence(
     freeze_manifest: Path,
     gate_evidence: dict[str, Path],
     *,
+    freeze: dict[str, Any],
     arena: dict[str, Any],
     row: dict[str, Any],
     candidate: dict[str, Any],
@@ -355,10 +355,10 @@ def _external_evidence(
     comparison_binding: dict[str, str],
     context_sha: str,
 ) -> dict[str, str]:
-    freeze, _, freeze_sha = common._json_snapshot(freeze_manifest)
+    _, _, freeze_sha = common._json_snapshot(freeze_manifest)
     if (
         freeze_sha != arena["freeze_sha256"]
-        or freeze.get("schema_version") != "jevarena-v3-freeze/1"
+        or freeze.get("schema_version") != "jevarena-v3-freeze/2"
         or freeze.get("status") != "prekey_frozen"
         or freeze.get("panels") != arena["panel_sha256"]
         or freeze.get("models", {}).get(row["key"])
@@ -370,7 +370,7 @@ def _external_evidence(
             "calibration_sha256": candidate["calibration_sha256"],
             "predictions_sha256": {
                 name: score_binding[name]["predictions_sha256"]
-                for name in ("typed", "css")
+                for name in SCORE_FAMILIES
             },
         }
     ):
@@ -441,7 +441,7 @@ def _external_evidence(
         common._sha(
             evidence.get("source_evidence_sha256"), f"{check_name} source evidence"
         )
-        _utc(evidence.get("reviewed_at_utc"), f"{check_name} review time")
+        reviewed = _utc(evidence.get("reviewed_at_utc"), f"{check_name} review time")
         if check_name == "candidate_freeze":
             if (
                 evidence.get("pretest_freeze_sha256") != freeze_sha
@@ -451,30 +451,66 @@ def _external_evidence(
                 or evidence.get("protocol_sha256") != protocol_sha
             ):
                 raise ValueError("Candidate audit differs from pre-key freeze")
-            common._sha(evidence.get("timestamp_log_sha256"), "external timestamp log")
-            frozen = _utc(evidence.get("frozen_at_utc"), "candidate freeze time")
+            log_name = evidence.get("timestamp_log_path")
+            if not isinstance(log_name, str) or not log_name:
+                raise ValueError("External timestamp log path is missing")
+            log_path = Path(log_name)
+            if log_path.is_symlink() or not log_path.is_file():
+                raise ValueError("External timestamp log is missing or linked")
+            if common.sha_file(log_path) != common._sha(
+                evidence.get("timestamp_log_sha256"), "external timestamp log"
+            ):
+                raise ValueError("External timestamp log digest differs")
+            log = common._object(log_path)
+            lock_time = _utc(
+                evidence.get("candidate_locked_at_utc"), "candidate lock time"
+            )
+            prekey_time = _utc(
+                freeze.get("prekey_frozen_at_utc"), "pre-key receipt time"
+            )
             label_open = _utc(
                 evidence.get("first_label_opened_at_utc"), "first label access"
             )
             seals = evidence.get("prediction_seals")
-            if not isinstance(seals, dict) or set(seals) != {"typed", "css"}:
-                raise ValueError("Both sealed-core prediction seals are required")
-            for family, seal in seals.items():
-                if (
-                    not isinstance(seal, dict)
-                    or seal.get("predictions_sha256")
-                    != score_binding[family]["predictions_sha256"]
-                    or seal.get("native_manifest_sha256")
-                    != score_binding[family]["native_manifest_sha256"]
-                ):
-                    raise ValueError(f"{family}: pre-key prediction seal differs")
-                sealed = _utc(
-                    seal.get("sealed_at_utc"), f"{family} prediction seal time"
-                )
-                if not frozen < sealed < label_open:
+            if not isinstance(seals, dict) or set(seals) != set(freeze["models"]):
+                raise ValueError("Pre-key prediction seals lack the full model roster")
+            for model_key, panels in seals.items():
+                if not isinstance(panels, dict) or set(panels) != set(SCORE_FAMILIES):
                     raise ValueError(
-                        "Freeze, prediction and label chronology is invalid"
+                        f"{model_key}: three prediction seals are required"
                     )
+                for family, seal in panels.items():
+                    expected = freeze["models"][model_key]["predictions_sha256"][family]
+                    if (
+                        not isinstance(seal, dict)
+                        or seal.get("predictions_sha256") != expected
+                        or (
+                            model_key == row["key"]
+                            and seal.get("native_manifest_sha256")
+                            != score_binding[family]["native_manifest_sha256"]
+                        )
+                    ):
+                        raise ValueError(
+                            f"{model_key}.{family}: pre-key prediction seal differs"
+                        )
+                    sealed = _utc(
+                        seal.get("sealed_at_utc"),
+                        f"{model_key}.{family} prediction seal time",
+                    )
+                    if not lock_time < sealed < prekey_time < label_open < reviewed:
+                        raise ValueError(
+                            "Candidate lock, prediction, pre-key and label chronology is invalid"
+                        )
+            if log != {
+                "schema_version": TIMESTAMP_LOG_VERSION,
+                "candidate_lock_sha256": freeze["candidate_lock_sha256"],
+                "candidate_locked_at_utc": evidence["candidate_locked_at_utc"],
+                "prediction_seals": seals,
+                "prekey_freeze_sha256": freeze_sha,
+                "prekey_frozen_at_utc": freeze["prekey_frozen_at_utc"],
+                "first_label_opened_at_utc": evidence["first_label_opened_at_utc"],
+            }:
+                raise ValueError("External timestamp log differs from reviewed events")
         elif check_name == "release_thresholds":
             if (
                 evidence.get("predeclared_policy_sha256") != protocol_sha
@@ -505,6 +541,7 @@ def _numeric_release_gate(
     new_css_report: Path,
     artifact_manifest: dict[str, Any],
     arena: dict[str, Any],
+    freeze: dict[str, Any],
     score_key: str,
     row: dict[str, Any],
     score_binding: dict[str, dict[str, str]],
@@ -526,6 +563,32 @@ def _numeric_release_gate(
     if len(old_rows) != 1 or old_rows[0].get("group") != "decision1":
         raise ValueError("Frozen comparator is absent from the V3 roster")
     old_row = old_rows[0]
+    frozen_pairs = [
+        pair for pair in freeze["comparison_pairs"] if pair["candidate"] == score_key
+    ]
+    if len(frozen_pairs) != 1 or frozen_pairs[0]["comparator"] != old_key:
+        raise ValueError("Publication comparator differs from pre-key pair")
+    frozen_pair = frozen_pairs[0]
+    planned = {item["key"]: item for item in freeze["_validated_plan"]["model_roster"]}
+    if (
+        row["size_b"] != planned[score_key]["size_b"]
+        or old_row["size_b"] != planned[old_key]["size_b"]
+    ):
+        raise ValueError("Paired measured model sizes differ from pre-key plan")
+    ratio = max(row["size_b"], old_row["size_b"]) / min(
+        row["size_b"], old_row["size_b"]
+    )
+    if frozen_pair["size_relation"] == "same":
+        if ratio > 1.25 + 1e-12:
+            raise ValueError("Same-size comparator exceeds measured 1.25 ratio")
+    elif frozen_pair["size_relation"] == "nearest":
+        if (
+            not isinstance(frozen_pair["rationale"], str)
+            or len(frozen_pair["rationale"].strip()) < 20
+        ):
+            raise ValueError("Nearest-size comparator lacks a predeclared rationale")
+    else:
+        raise ValueError("Unknown frozen comparator size relation")
     report_hashes = pair_spec.get("report_sha256", {})
     if (
         common.sha_file(old_typed_report) != report_hashes.get("old_typed_report")
@@ -559,8 +622,9 @@ def _numeric_release_gate(
             },
         }
         or type(aggregate.get("replicates")) is not int
-        or aggregate["replicates"] < 5000
+        or aggregate["replicates"] != DEFAULT_REPLICATES
         or type(aggregate.get("seed")) is not int
+        or aggregate["seed"] != DEFAULT_SEED
         or aggregate.get("coverage")
         != {
             "typed_items": 1600,
@@ -571,9 +635,7 @@ def _numeric_release_gate(
     ):
         raise ValueError("Joint v3 paired bootstrap is missing or unbound")
     if aggregate.get("source_sha256") != {
-        "comparison": common.sha_file(SCORERS["paired_v3"]),
-        "typed_score": common.sha_file(SCORERS["typed"]),
-        "css_score": common.sha_file(SCORERS["css"]),
+        name: common.sha_file(path) for name, path in SCORERS.items()
     }:
         raise ValueError("Joint paired bootstrap scoring source differs from freeze")
     bootstrap = aggregate.get("bootstrap", {})
@@ -968,6 +1030,11 @@ def assemble(
         score_key,
         artifact_manifest,
     )
+    freeze = checked_freeze(
+        freeze_manifest,
+        {"freeze_sha256": arena["freeze_sha256"]},
+        {item["key"] for item in arena["models"]},
+    )
     public_rank_obj = common._object(public_rank)
     if not math.isclose(row["size_b"], count / 1e9, rel_tol=0, abs_tol=1e-9):
         raise ValueError("V3 score parameter count differs from loaded model")
@@ -1001,6 +1068,7 @@ def assemble(
         new_css_report=score_inputs["css"]["score"],
         artifact_manifest=artifact_manifest,
         arena=arena,
+        freeze=freeze,
         score_key=score_key,
         row=row,
         score_binding=binding,
@@ -1046,6 +1114,7 @@ def assemble(
         provenance_inputs,
         freeze_manifest,
         gate_evidence,
+        freeze=freeze,
         arena=arena,
         row=row,
         candidate=candidate,
