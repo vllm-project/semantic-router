@@ -1,6 +1,6 @@
 # Gemma 4 ~26B: three-type near-4K TRAIN numeric gate
 
-**Status: frozen CPU preparation, GPU not launched.** This is a bounded
+**Status: PASS, bounded GPU cell complete.** This is a bounded
 amendment to the [27B development-arm plan](gemma4-qwen27-development-arm-prereg-2026-09-27.md).
 The official source-versus-fresh-adapter 32-prompt hidden-state identity
 and the short Score TRAIN-row one-step numerical/reload gates passed earlier.
@@ -96,3 +96,27 @@ the one GPU cell is considered for execution.
 | Private offline launcher | `a893feef140075c994ba075781428803f762ba8e1a1fd3b66f761444c2e90836` |
 | Private frozen lock | `a163de3415f9487dfde94fabcf071c6adbf7b1a5e03cbf45704cf79db533ccaf` |
 | Positive no-GPU meta receipt | `d3a9500fdcac696d191c8964a49b9f00354f12d72ba419b6f6a5672490437b45` |
+
+## Bounded cell outcome
+
+The single approved GPU cell used the exact frozen source, TRAIN rows, code,
+launcher and lock. It exited successfully and released the GPU. All three
+ordered updates completed: Choice 4,090 tokens/10 options, Noul 4,076/2,
+Score 4,044/3. Their TRAIN losses were 2.7730, 0.9277 and 1.2580, with
+finite unclipped gradient norms 42.14, 32.79 and 33.97. Each step gave
+nonzero gradient and changed weights in all 60 targeted LoRA B modules,
+with ten changed head tensors. The independent source-plus-package reload
+gave maximum logit drift **0.0** on each of the three locked TRAIN rows,
+against the frozen `1e-3` limit. Peak allocated memory was 55,061,123,072
+bytes. The launcher measured 107 wall seconds, conservatively **0.02972
+GPU-hour**, below the 45-minute cap. No SELECT, CAL or evaluation labels were
+read; no task quality result was measured. This outcome authorizes neither
+full development training nor formal evaluation by itself.
+
+| Private receipt or package component | SHA-256 |
+| --- | --- |
+| Timing receipt | `8b5286ec1678abdce2ffc84e63e8f48eb6974d0b1ef945a05e9276226711b7f1` |
+| Numerical/reload result | `cfaa871d3c424209c4bad2bae9bcba3089df1d80288f6702f50a46293baab47e` |
+| Container log | `fd40684369fc66c8bde9fed79b954c60439ce4c3c301e042cffbbf35ad16fc86` |
+| Saved adapter safetensors | `72c67c7b90761542b77670866134aa6d817442947d0b326baaffd6a78dce8ad4` |
+| Saved Decision head | `f37706d7bed1622c66d380312d17c7f87f2154dbc2ec97676ca2dafe40b68f10` |
