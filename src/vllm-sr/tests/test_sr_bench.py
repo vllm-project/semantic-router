@@ -24,6 +24,9 @@ from cli.sr_bench.transport import (
     final_content,
     mom_usage,
     normalize_usage,
+    request_phase,
+    session_phase,
+    usage_presence,
 )
 
 
@@ -36,6 +39,8 @@ class Target(BaseHTTPRequestHandler):
         self.server.requests.append(body)
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
+        if self.server.session_phase:
+            self.send_header("X-VSR-Session-Phase", self.server.session_phase)
         if self.server.ack:
             self.send_header("X-SR-Bench-Config-Hash", self.server.ack)
         self.end_headers()
@@ -92,6 +97,7 @@ def target():
     server.truncated = False
     server.delay = 0
     server.ack = None
+    server.session_phase = None
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield server
@@ -144,6 +150,7 @@ def wait_run(store, run_id):
 
 
 def test_live_http_usage_final_channel_and_idempotency(tmp_path, target):
+    target.session_phase = "tool_loop"
     store = Store(tmp_path)
     engine = Engine(store)
     run = engine.start(manifest(target), request_key="once")
@@ -160,10 +167,30 @@ def test_live_http_usage_final_channel_and_idempotency(tmp_path, target):
         "cache_write_tokens": 1,
         "output_tokens": 3,
     }
+    assert score["continuity"]["model_switches_by_phase"] == {}
+    assert score["cache_read_call_count"] == 1
+    assert score["cache_read_tokens"] == 2
+    assert score["cache_read_prompt_tokens"] == 10
+    assert score["cache_read_ratio"] == 0.2
+    assert store.calls(run["id"], summary=True)[0]["phase"] == "tool_loop"
     assert score["cost_usd"] == pytest.approx(18.2 / 1_000_000)
     assert score["accuracy"] == 1 and score["total"] == 1
     assert list((tmp_path / "runs" / run["id"]).glob("*/*.sse"))
     assert store.calls(run["id"])[0]["reasoning"] == "The answer might be B."
+
+
+def test_derived_tool_loop_phase_is_saved_in_call_summary(tmp_path, target):
+    store = Store(tmp_path)
+    document = manifest(target)
+    document["cases"][0]["messages"] = [
+        {"role": "assistant", "tool_calls": [{"id": "call-1"}]},
+        {"role": "tool", "tool_call_id": "call-1", "content": "done"},
+    ]
+    run = Engine(store).start(document)
+
+    assert wait_run(store, run["id"])["status"] == "completed"
+    call = store.calls(run["id"], summary=True)[0]
+    assert call["phase"] == "tool_loop"
 
 
 @pytest.mark.parametrize("field", ["sampling", "benchmark_options", "plan_sha256"])
@@ -511,6 +538,97 @@ def test_final_only_and_bucket_validation():
         )
 
 
+def test_cache_usage_presence_distinguishes_missing_and_explicit_zero():
+    missing = {
+        "prompt_tokens": 4,
+        "completion_tokens": 1,
+    }
+    reported = {
+        "prompt_tokens": 4,
+        "completion_tokens": 1,
+        "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_creation_tokens": 0,
+        },
+    }
+    assert usage_presence(missing) == (False, False)
+    assert usage_presence(reported) == (True, True)
+    assert normalize_usage(missing) == {
+        "input_tokens": 4,
+        "cached_input_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 1,
+    }
+    aliased = {
+        "prompt_tokens": 4,
+        "completion_tokens": 1,
+        "input_tokens_details": {"cached_tokens": 0, "created_cache_tokens": 0},
+    }
+    assert usage_presence(aliased) == (True, True)
+    assert normalize_usage(aliased) == normalize_usage(reported)
+    provider_alias = {
+        "prompt_tokens": 10,
+        "completion_tokens": 1,
+        "prompt_tokens_details": {"cached_tokens": 2, "cache_write_tokens": 3},
+    }
+    assert usage_presence(provider_alias) == (True, True)
+    assert normalize_usage(provider_alias) == {
+        "input_tokens": 8,
+        "cached_input_tokens": 2,
+        "cache_write_tokens": 0,
+        "output_tokens": 1,
+    }
+    conflicting_writes = {
+        "prompt_tokens": 10,
+        "completion_tokens": 1,
+        "prompt_tokens_details": {
+            "cache_creation_tokens": 1,
+            "created_cache_tokens": 2,
+        },
+        "cache_creation_input_tokens": 3,
+    }
+    assert usage_presence(conflicting_writes) == (False, True)
+    with pytest.raises(CallFailure, match="Conflicting cache-write token usage"):
+        normalize_usage(conflicting_writes)
+
+
+def test_session_phase_prefers_router_header_and_derives_router_phase_names():
+    turn = [{"role": "user", "content": "hello"}]
+    tool_result = [
+        {"role": "assistant", "tool_calls": [{"id": "call-1"}]},
+        {"role": "tool", "tool_call_id": "call-1", "content": "done"},
+    ]
+    adjacent_user_after_tool = [
+        *tool_result,
+        {"role": "user", "content": "continue"},
+    ]
+    non_adjacent_user_after_tool = [
+        *tool_result,
+        {"role": "assistant", "content": "Here is the result."},
+        {"role": "user", "content": "continue"},
+    ]
+    structured_tool_result = [
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_result", "tool_call_id": "call-1"}],
+        }
+    ]
+    user_after_structured_tool_result = [
+        *structured_tool_result,
+        {"role": "user", "content": "continue"},
+    ]
+    assert request_phase(turn) == "user_turn"
+    assert request_phase(tool_result) == "tool_loop"
+    assert request_phase(adjacent_user_after_tool) == "tool_loop"
+    assert request_phase(non_adjacent_user_after_tool) == "user_turn"
+    assert request_phase(structured_tool_result) == "tool_loop"
+    assert request_phase(user_after_structured_tool_result) == "tool_loop"
+    assert session_phase(turn, {"x-vsr-session-phase": "provider_state"}) == (
+        "provider_state"
+    )
+    assert session_phase(turn, {"x-vsr-session-phase": "  "}) == "user_turn"
+
+
 def test_cancellation_retains_evidence_and_does_not_dispatch_rest(tmp_path, target):
     target.delay = 0.2
     store = Store(tmp_path)
@@ -539,7 +657,6 @@ def test_cost_reservation_rejects_before_generation(tmp_path, target):
 
 
 def test_multimodel_four_bucket_cost_receipt():
-
     prices = {
         "a": {"input": 1, "cached_input": 0.1, "cache_write": 2, "output": 3},
         "b": {"input": 2, "cached_input": 0.2, "cache_write": 4, "output": 6},
@@ -567,6 +684,10 @@ def test_multimodel_four_bucket_cost_receipt():
     assert result["cost_usd"] == pytest.approx(54.6 / 1_000_000)
     assert result["usage"]["input_tokens"] == 14
     assert result["inference_call_count"] == 2
+    assert result["cache_read_reported"] is None
+    assert result["cache_write_reported"] is None
+    assert all(call["cache_read_reported"] is None for call in result["model_usage"])
+    assert all(call["cache_write_reported"] is None for call in result["model_usage"])
     receipt["complete"] = False
     assert (
         mom_usage({"x-vsr-model-usage": json.dumps(receipt)}, None, prices)["cost_usd"]
@@ -585,7 +706,6 @@ def test_arc_multiple_test_grids_are_atomic():
 
 
 def test_offline_replay_regrade_and_export_never_infer(tmp_path, target):
-
     store = Store(tmp_path)
     engine = Engine(store)
     m = manifest(target)
@@ -651,7 +771,6 @@ def test_offline_replay_regrade_and_export_never_infer(tmp_path, target):
 
 
 def test_training_export_refuses_unknown_split(tmp_path, target):
-
     store = Store(tmp_path)
     run = Engine(store).start(manifest(target))
     wait_run(store, run["id"])
@@ -724,7 +843,6 @@ def test_native_target_params_are_frozen_sent_and_journaled(tmp_path, target):
 def test_registered_adapter_preflights_all_cases_and_executes_shared_client(
     tmp_path, target, monkeypatch
 ):
-
     adapters.list_adapters()
     monkeypatch.setattr(adapters, "_adapters", dict(adapters._adapters))
     seen = []

@@ -43,6 +43,21 @@ its task is counted only in `multi_inference_tasks`. A switch is reported as a
 fact, not a penalty. sr-bench sends no session identity, so these runs measure
 routing without session state.
 
+Subject call receipts also include `phase`. sr-bench uses the Router's
+`x-vsr-session-phase` response header when it is available, and otherwise derives
+`tool_loop` or `user_turn` from the request's latest messages.
+`model_switches_by_phase` counts a switch under the phase of the later request.
+Provider cache fields retain their presence separately from their numeric values:
+`cache_read_reported` and `cache_write_reported` are true only when the provider
+sent the corresponding field, including an explicit zero. The target and
+benchmark metrics expose `cache_read_ratio` and `cache_read_call_count`; only
+subject calls with `cache_read_reported=true` are included, so missing cache
+usage stays unknown instead of becoming a zero-hit observation. Older stored
+runs remain readable: missing phases group under `unknown`, and cache-read
+metrics report a null ratio with a zero sample count. If a reported cache-read
+call lacks normalized prompt usage, its sample is counted but the ratio remains
+null because its denominator is unknown.
+
 The full sr-bench score uses fixed benchmark weights: MMLU-Pro 10%, SimpleQA 10%,
 GPQA 15%, HLE 15%, ARC 10%, LiveCodeBench 10%, SciCode 10%, Terminal-Bench 10% and
 τ³ 10%. It requires all nine complete benchmarks. A subset macro result retains

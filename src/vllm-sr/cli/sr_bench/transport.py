@@ -8,6 +8,7 @@ import re
 import socket
 import threading
 import time
+from collections.abc import Mapping
 from contextlib import suppress
 from http import HTTPStatus
 
@@ -18,6 +19,9 @@ from .activity import CHECKPOINT_SECONDS
 
 MAX_USAGE_RECEIPT_BYTES = 12288
 MAX_RECEIPT_CALLS = 256
+SESSION_PHASE_HEADER = "x-vsr-session-phase"
+USER_TURN_PHASE = "user_turn"
+TOOL_LOOP_PHASE = "tool_loop"
 
 
 # Shared internal transport/harness contract; preserving its exception identity.
@@ -34,6 +38,62 @@ def final_content(content):
         if "<think>" in content:
             return ""
     return content.strip()
+
+
+def _is_tool_result_message(message: dict) -> bool:
+    if message.get("role") in {"tool", "function"}:
+        return True
+    content = message.get("content")
+    return isinstance(content, list) and any(
+        isinstance(part, dict) and part.get("type") == "tool_result" for part in content
+    )
+
+
+def request_phase(messages: list[dict]) -> str:
+    """Apply the Router's tool-loop rule to the request's latest messages."""
+    if not messages or not isinstance(messages[-1], dict):
+        return USER_TURN_PHASE
+    latest = messages[-1]
+    role = latest.get("role")
+    if _is_tool_result_message(latest) or (
+        role == "assistant" and latest.get("tool_calls")
+    ):
+        return TOOL_LOOP_PHASE
+    if role == "user" and len(messages) > 1:
+        previous = messages[-2]
+        if isinstance(previous, dict) and _is_tool_result_message(previous):
+            return TOOL_LOOP_PHASE
+    return USER_TURN_PHASE
+
+
+def session_phase(
+    messages: list[dict], response_headers: Mapping[str, str] | None = None
+) -> str:
+    """Prefer the Router phase while retaining a bounded request fallback."""
+    value = (response_headers or {}).get(SESSION_PHASE_HEADER)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return request_phase(messages)
+
+
+def usage_presence(raw: object) -> tuple[bool, bool]:
+    """Return whether cache-read and cache-write fields were actually present."""
+    if not isinstance(raw, dict):
+        return False, False
+    details = raw.get("prompt_tokens_details") or raw.get("input_tokens_details") or {}
+    if not isinstance(details, dict):
+        return False, False
+    read_reported = (
+        details.get("cached_tokens") is not None
+        or raw.get("cache_read_input_tokens") is not None
+    )
+    write_reported = (
+        details.get("cache_creation_tokens") is not None
+        or details.get("created_cache_tokens") is not None
+        or details.get("cache_write_tokens") is not None
+        or raw.get("cache_creation_input_tokens") is not None
+    )
+    return read_reported, write_reported
 
 
 def normalize_usage(raw):
@@ -91,7 +151,14 @@ def cost_for(usage, model, prices):
     )
 
 
-def mom_usage(response_headers, response_usage, prices):
+def mom_usage(
+    response_headers,
+    response_usage,
+    prices,
+    *,
+    cache_read_reported: bool | None = None,
+    cache_write_reported: bool | None = None,
+):
     """Account every traced child call; never price MoM tokens as its final model."""
     raw = response_headers.get("x-vsr-model-usage")
     if raw:
@@ -115,19 +182,22 @@ def mom_usage(response_headers, response_usage, prices):
             if not isinstance(call, dict) or not isinstance(call.get("model"), str):
                 raise CallFailure("Invalid MoM child identity")
             raw_usage = call.get("usage") or {}
-            usage = normalize_usage(
-                {
-                    **raw_usage,
-                    "cache_read_input_tokens": raw_usage.get("cached_input_tokens", 0),
-                    "cache_creation_input_tokens": raw_usage.get(
-                        "cache_write_tokens", 0
-                    ),
-                }
-            )
+            normalized_usage = {**raw_usage}
+            if "cached_input_tokens" in raw_usage:
+                normalized_usage["cache_read_input_tokens"] = raw_usage[
+                    "cached_input_tokens"
+                ]
+            if "cache_write_tokens" in raw_usage:
+                normalized_usage["cache_creation_input_tokens"] = raw_usage[
+                    "cache_write_tokens"
+                ]
+            usage = normalize_usage(normalized_usage)
             breakdown.append(
                 {
                     **call,
                     "usage": usage,
+                    "cache_read_reported": None,
+                    "cache_write_reported": None,
                     "cost_usd": cost_for(usage, call["model"], prices),
                 }
             )
@@ -158,6 +228,8 @@ def mom_usage(response_headers, response_usage, prices):
             "model_usage": breakdown,
             "inference_call_count": len(calls),
             "usage_complete": complete,
+            "cache_read_reported": None,
+            "cache_write_reported": None,
         }
     if response_headers.get("x-vsr-inference-call-count") == "1":
         selected = response_headers.get("x-vsr-selected-model")
@@ -167,12 +239,16 @@ def mom_usage(response_headers, response_usage, prices):
                 "cost_usd": cost_for(response_usage, selected, prices),
                 "inference_call_count": 1,
                 "usage_complete": response_usage is not None,
+                "cache_read_reported": cache_read_reported,
+                "cache_write_reported": cache_write_reported,
             }
     return {
         "usage": None,
         "cost_usd": None,
         "inference_call_count": None,
         "usage_complete": False,
+        "cache_read_reported": cache_read_reported,
+        "cache_write_reported": cache_write_reported,
     }
 
 
@@ -238,6 +314,9 @@ def chat(
     ttft = None
     tool_calls = {}
     raw_usage = {}
+    cache_read_reported = None
+    cache_write_reported = None
+    observed_session_phase = request_phase(messages)
     done = False
     response = None
     stop = threading.Event()
@@ -262,6 +341,9 @@ def chat(
             "finish_reason": finish,
             "raw_usage": raw_usage,
             "tool_calls": list(tool_calls.values()),
+            "phase": observed_session_phase,
+            "cache_read_reported": cache_read_reported,
+            "cache_write_reported": cache_write_reported,
             "cost_usd": (
                 cost_for(usage, model, target.get("prices", {}))
                 if target["kind"] == "single"
@@ -302,6 +384,7 @@ def chat(
             raise CallFailure(f"Target HTTP {response.status_code}")
         if "text/event-stream" not in response.headers.get("content-type", ""):
             raise CallFailure("Target did not return a streaming response")
+        observed_session_phase = session_phase(messages, response.headers)
         if output_policy == "native" and target["kind"] == "mom":
             native_evidence = native_output.from_headers(target, response.headers)
 
@@ -330,6 +413,7 @@ def chat(
         def consume(lines):
             nonlocal content, reasoning, usage, model, finish, ttft, raw_usage, done
             nonlocal provider_model_observed
+            nonlocal cache_read_reported, cache_write_reported
             data = "\n".join(x[5:].lstrip() for x in lines if x.startswith("data:"))
             if not data:
                 return
@@ -346,6 +430,7 @@ def chat(
             if obj.get("usage"):
                 raw_usage = obj["usage"]
                 usage = normalize_usage(raw_usage)
+                cache_read_reported, cache_write_reported = usage_presence(raw_usage)
             for choice in obj.get("choices", []):
                 if choice.get("index", 0) != 0:
                     continue
@@ -450,7 +535,15 @@ def chat(
         )
         result["response_usage"] = result["usage"]
         if target["kind"] == "mom":
-            result.update(mom_usage(response.headers, usage, target.get("prices", {})))
+            result.update(
+                mom_usage(
+                    response.headers,
+                    usage,
+                    target.get("prices", {}),
+                    cache_read_reported=cache_read_reported,
+                    cache_write_reported=cache_write_reported,
+                )
+            )
         else:
             result["inference_call_count"] = 1
         result["cost_complete"] = result["cost_usd"] is not None
