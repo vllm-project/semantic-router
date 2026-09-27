@@ -129,11 +129,15 @@ exited zero and no readout was repeated after scoring.
 
 **Prospective ablation to review, not yet authorized:** keep the same official
 Qwen source, LoRA/head architecture, 7,455-row order, 466 updates and encoded
-token budget. Change only the training loss weight on the 2,240 already
-audited source-disjoint human-labeled Choice rows from `1.0` to `1.5`,
-normalizing each accumulation window by summed weights. This tests whether
-greater genuine-label gradient mass improves *transfer* without adding data
-or tailoring to typed FINAL/CSS15. Compare with this completed fixed control
+token budget. Change only the training loss weight on the 2,120
+human-labeled Choice rows from official GoEmotions TRAIN, COSMOS QA and SNLI
+from `1.0` to `1.5`, normalizing each accumulation window by summed weights.
+The 120 FLUTE training rows retain weight `1.0` because FLUTE is itself one
+of the CSS15 evaluation tasks. Audit original IDs and source families before
+training; a dataset split alone is not independent task transfer. This tests
+whether greater genuine-label gradient mass improves *cross-task transfer*
+without adding data or tailoring to typed FINAL/CSS15. Compare with this
+completed fixed control
 on disjoint SELECT and one fixed typed DEV/CSS pilot screen, report all typed
 types and every pilot task, and require no Score collapse. Before any step,
 freeze the exact row IDs, code/data hashes, zero-step parity, token trace,
