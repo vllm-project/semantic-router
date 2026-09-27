@@ -22,6 +22,13 @@ Gemma repository revision as
 `25,805,936,206` BF16 safetensors parameters across the complete repository.
 That metadata count includes whatever tensors the complete multimodal package
 stores; it is not yet a measured text-only runtime count.
+At that revision, HF CLI downloaded only `config.json` for a read-only CPU
+preflight; its SHA-256 is
+`ed0c1eb3633de771906e9ba004a44cc5635bcc06ee2062077c3d2e88a50707d3`.
+The pinned training image has Transformers 5.17.0 and imports
+`Gemma4ForConditionalGeneration`. This establishes parser availability, not
+weight-load or GPU execution parity. The configuration declares 30 text
+layers, 128 experts with eight selected per token, and separate vision config.
 
 Before a Gemma optimizer arm, pin its immutable HF revision using HF CLI on an
 authorized experiment node, audit the exact tensor inventory and text-only
