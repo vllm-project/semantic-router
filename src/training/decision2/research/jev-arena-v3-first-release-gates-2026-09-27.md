@@ -9,8 +9,9 @@ calibration, package manifests, thresholds and prediction output paths.
 
 ## Panel, comparators and score
 
-- Typed FINAL has 1,600 Choice/Noul/Score answers in about 400 independent
-  related groups. `T` is the preregistered family-macro accuracy; invalid,
+- Typed FINAL has 1,600 input items with 2,000 Choice/Noul/Score answers in
+  about 400 independent related groups. The evidence-join family asks both a
+  Choice and a Noul question per item. `T` is the preregistered family-macro accuracy; invalid,
   missing and over-budget answers are wrong.
 - CSS evaluation has 6,547 human-labeled answers in 15 tasks. `H` is the
   median task macro-F1, with invalid and missing answers retained as misses.
@@ -43,7 +44,8 @@ For a candidate to be labeled a **validated Decision 2.0 improvement**:
    slice regression hidden by the macro score.
 4. On each sealed axis, the invalid-or-missing fraction must be at most
    `max(0.02, comparator_fraction + 0.01)`; the score still counts all such
-   answers as wrong. Typed Brier uses a coverage adjustment, with `n=1600`,
+   answers as wrong. Typed Brier uses a coverage adjustment, with `n=2000`
+   scored answers from the 1,600 input items,
    `m=probability_n` accepted probability answers and `B=overall.brier` over
    those answers: `B*=(m*B + (n-m))/n`. The penalty `1` is the worst-case
    bound for the existing half-squared-error multiclass Brier policy.

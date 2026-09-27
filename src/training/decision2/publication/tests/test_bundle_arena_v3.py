@@ -64,9 +64,9 @@ class NumericReleaseGateTests(unittest.TestCase):
         self.panels = {"typed_gold_sha256": "1" * 64, "css_gold_sha256": "2" * 64}
         self.new = {
             "overall": {
-                "n": 1600,
+                "n": 2000,
                 "invalid_or_missing_n": 0,
-                "probability_n": 1600,
+                "probability_n": 2000,
                 "brier": 0.20,
             },
             "by_type": {
@@ -76,9 +76,9 @@ class NumericReleaseGateTests(unittest.TestCase):
         }
         self.old = {
             "overall": {
-                "n": 1600,
+                "n": 2000,
                 "invalid_or_missing_n": 0,
-                "probability_n": 1600,
+                "probability_n": 2000,
                 "brier": 0.20,
             },
             "by_type": {
@@ -207,7 +207,9 @@ class NumericReleaseGateTests(unittest.TestCase):
             },
         }
 
-    def check(self, *, bind_joint: bool = True) -> dict[str, str]:
+    def check(
+        self, *, bind_joint: bool = True, postkey_aggregate_priority: bool = False
+    ) -> dict[str, str]:
         if bind_joint:
             self.artifacts["comparison_pairs"][0]["report_sha256"][
                 "joint_comparison"
@@ -224,6 +226,7 @@ class NumericReleaseGateTests(unittest.TestCase):
             score_key="new",
             row=self.new_row,
             score_binding=self.binding,
+            postkey_aggregate_priority=postkey_aggregate_priority,
         )
 
     def test_requires_joint_positive_paired_interval(self) -> None:
@@ -290,6 +293,49 @@ class NumericReleaseGateTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "coverage-adjusted typed Brier"):
             self.check()
+
+    def test_typed_invalid_guardrail_uses_answer_count(self) -> None:
+        self.new["overall"].update(invalid_or_missing_n=40, probability_n=1960)
+        write(self.paths["new_typed"], self.new)
+        self.artifacts["comparison_pairs"][0]["report_sha256"]["new_typed_report"] = (
+            bundle.common.sha_file(self.paths["new_typed"])
+        )
+        self.check()
+        self.new["overall"]["invalid_or_missing_n"] = 41
+        write(self.paths["new_typed"], self.new)
+        self.artifacts["comparison_pairs"][0]["report_sha256"]["new_typed_report"] = (
+            bundle.common.sha_file(self.paths["new_typed"])
+        )
+        with self.assertRaisesRegex(ValueError, "invalid/missing guardrail"):
+            self.check()
+
+    def test_probability_table_uses_answer_count(self) -> None:
+        table = bundle._typed_probability_table(self.new, self.old)
+        self.assertIn("2,000/2,000", table)
+        self.assertIn("1,600 typed items contain 2,000 scored answers", table)
+
+    def test_explicit_postkey_policy_accepts_disclosed_slice_tradeoff(self) -> None:
+        self.new["by_type"]["score"]["accuracy_all"] = 0.47
+        write(self.paths["new_typed"], self.new)
+        self.artifacts["comparison_pairs"][0]["report_sha256"]["new_typed_report"] = (
+            bundle.common.sha_file(self.paths["new_typed"])
+        )
+        with self.assertRaisesRegex(ValueError, "score slice regression"):
+            self.check()
+        self.check(postkey_aggregate_priority=True)
+
+    def test_postkey_policy_requires_three_point_composite_gain(self) -> None:
+        self.new_row["axes"] = {"typed": 0.529, "transfer": 0.529}
+        self.new_row["score"] = 52.9
+        self.aggregate["point"]["left"] = {"T": 0.529, "H": 0.529, "score": 52.9}
+        self.aggregate["point"]["delta"] = {
+            "T": 0.029,
+            "H": 0.029,
+            "score": 2.9,
+        }
+        write(self.paths["aggregate"], self.aggregate)
+        with self.assertRaisesRegex(ValueError, "below \\+3.0"):
+            self.check(postkey_aggregate_priority=True)
 
     def test_rejects_postkey_comparator_and_wrong_measured_size(self) -> None:
         self.freeze["comparison_pairs"][0]["comparator"] = "other"
@@ -369,19 +415,19 @@ class FullV3PackageTests(unittest.TestCase):
                         "gold_sha256": cards.arena["panel_sha256"]["typed_gold_sha256"],
                         "model": {"id": model_id, "revision": revision},
                         "overall": {
-                            "n": 1600,
-                            "valid_n": 1600,
-                            "correct_n": 960,
+                            "n": 2000,
+                            "valid_n": 2000,
+                            "correct_n": 1200,
                             "accuracy_all": 0.6,
                             "invalid_or_missing_n": 0,
-                            "probability_n": 1600,
+                            "probability_n": 2000,
                             "brier": 0.2,
                         },
                         "by_family": {
                             name: {
-                                "n": 400,
-                                "valid_n": 400,
-                                "correct_n": 240,
+                                "n": 800 if name == "evidence_join" else 400,
+                                "valid_n": 800 if name == "evidence_join" else 400,
+                                "correct_n": 480 if name == "evidence_join" else 240,
                                 "accuracy_all": 0.6,
                                 "invalid_or_missing_n": 0,
                             }
@@ -396,9 +442,9 @@ class FullV3PackageTests(unittest.TestCase):
                                 "invalid_or_missing_n": 0,
                             }
                             for kind, n in (
-                                ("choice", 600),
-                                ("noul", 500),
-                                ("score", 500),
+                                ("choice", 800),
+                                ("noul", 800),
+                                ("score", 400),
                             )
                         },
                         "macro_family_accuracy": 0.6,
@@ -483,9 +529,9 @@ class FullV3PackageTests(unittest.TestCase):
             {
                 "predictions_sha256": "4" * 64,
                 "overall": {
-                    "n": 1600,
+                    "n": 2000,
                     "invalid_or_missing_n": 0,
-                    "probability_n": 1600,
+                    "probability_n": 2000,
                     "brier": 0.2,
                 },
                 "by_type": {

@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from benchmark.generate import FINAL_FAMILIES
+from benchmark.generate import FINAL_FAMILIES, generate
 from transfer.build import EVALUATION_TASKS, PANEL_VERSION
 
 from jev_arena.arena_v3 import (
@@ -40,15 +40,19 @@ def summary(n: int, correct: int) -> dict:
 def panel(root: Path, key: str, quality: float) -> tuple[dict, dict]:
     model_id, revision = f"example/{key}", f"revision-{key}"
     typed_by_family = {
-        family: summary(400, round(400 * quality)) for family in FINAL_FAMILIES
+        family: summary(
+            800 if family == "evidence_join" else 400,
+            round((800 if family == "evidence_join" else 400) * quality),
+        )
+        for family in FINAL_FAMILIES
     }
-    typed_total = 4 * round(400 * quality)
-    choice_correct = round(534 * quality)
-    noul_correct = round(533 * quality)
+    typed_total = sum(row["correct_n"] for row in typed_by_family.values())
+    choice_correct = round(800 * quality)
+    noul_correct = round(800 * quality)
     typed_by_type = {
-        "choice": summary(534, choice_correct),
-        "noul": summary(533, noul_correct),
-        "score": summary(533, typed_total - choice_correct - noul_correct),
+        "choice": summary(800, choice_correct),
+        "noul": summary(800, noul_correct),
+        "score": summary(400, typed_total - choice_correct - noul_correct),
     }
     typed = {
         "schema_version": "typed-decision-report/2",
@@ -57,10 +61,10 @@ def panel(root: Path, key: str, quality: float) -> tuple[dict, dict]:
         "gold_sha256": "a" * 64,
         "predictions_sha256": ("1" if key == "small" else "2") * 64,
         "model": {"id": model_id, "revision": revision},
-        "overall": summary(1600, typed_total),
+        "overall": summary(2000, typed_total),
         "by_family": typed_by_family,
         "by_type": typed_by_type,
-        "macro_family_accuracy": typed_total / 1600,
+        "macro_family_accuracy": quality,
     }
     css_tasks = {}
     css_correct = 0
@@ -231,6 +235,25 @@ def fixture(root: Path) -> tuple[Path, Path]:
 
 
 class JevArenaV3Test(unittest.TestCase):
+    def test_final_generator_has_five_answers_per_four_items(self) -> None:
+        items = generate("final", b"count-contract", 1)
+        self.assertEqual(len(items), 16)
+        self.assertEqual(sum(len(item["questions"]) for item in items), 20)
+        by_family = {
+            family: sum(
+                len(item["questions"]) for item in items if item["family"] == family
+            )
+            for family in FINAL_FAMILIES
+        }
+        self.assertEqual(by_family["evidence_join"], 8)
+        self.assertTrue(
+            all(
+                count == 4
+                for name, count in by_family.items()
+                if name != "evidence_join"
+            )
+        )
+
     def test_two_sealed_axes_rank_without_public_benchmarks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             manifest, _ = fixture(Path(temporary))
@@ -243,6 +266,10 @@ class JevArenaV3Test(unittest.TestCase):
                 [row["key"] for row in report["models"]], ["large", "small"]
             )
             self.assertEqual(report["policy"]["axes"], ["typed", "transfer"])
+            self.assertEqual(
+                report["policy"]["typed_answer_count_erratum"],
+                "jevarena-v3-typed-answer-count/1",
+            )
             top = report["models"][0]
             self.assertEqual(top["coverage"]["sealed_core_items"], 8147)
             self.assertEqual(len(top["task_scores"]["transfer"]), 15)
@@ -255,6 +282,19 @@ class JevArenaV3Test(unittest.TestCase):
                 )
             )
             self.assertTrue(all(row["pareto_frontier"] for row in report["models"]))
+
+    def test_item_and_answer_counts_are_distinct(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, _ = fixture(root)
+            typed_path = root / "small-typed.json"
+            typed = json.loads(typed_path.read_text())
+            self.assertEqual(typed["items"], 1600)
+            self.assertEqual(typed["overall"]["n"], 2000)
+            typed["overall"] = summary(1600, 960)
+            write(typed_path, typed)
+            with self.assertRaisesRegex(ValueError, "counts disagree"):
+                rank(manifest)
 
     def test_incomplete_final_panel_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -25,6 +25,7 @@ from transfer.build import EVALUATION_TASKS, PANEL_VERSION, PILOT_TASKS
 from jev_arena.arena import _load, _pareto, _score, _sha
 
 ARENA_VERSION = "jevarena-ranking/3"
+ANSWER_COUNT_ERRATUM = "jevarena-v3-typed-answer-count/1"
 ROSTER_VERSION = "jevarena-v3-roster/1"
 FREEZE_VERSION = "jevarena-v3-freeze/2"
 CHRONOLOGY_VERSION = "jevarena-v3-prekey-chronology/1"
@@ -342,7 +343,28 @@ def _typed(
     by_type, type_counts = _partition(
         report.get("by_type"), set(TYPES), "typed.by_type"
     )
-    if overall[:3] != family_counts or overall[:3] != type_counts or overall[0] != 1600:
+    # The 1,600 input items contain 2,000 scored answers: evidence_join asks
+    # both a Choice and a Noul question on each of its 400 items.
+    expected_family_answers = {
+        "constraint_competition": 400,
+        "exception_stack": 400,
+        "evidence_join": 800,
+        "resource_ledger": 400,
+    }
+    expected_type_answers = {"choice": 800, "noul": 800, "score": 400}
+    if (
+        overall[:3] != family_counts
+        or overall[:3] != type_counts
+        or overall[0] != 2000
+        or any(
+            report["by_family"][name]["n"] != count
+            for name, count in expected_family_answers.items()
+        )
+        or any(
+            report["by_type"][name]["n"] != count
+            for name, count in expected_type_answers.items()
+        )
+    ):
         raise ValueError("Typed overall, family and task-type counts disagree")
     return (
         _close(
@@ -574,6 +596,7 @@ def rank(manifest_path: Path) -> dict[str, Any]:
         "freeze_sha256": _sha(freeze_path),
         "panel_sha256": expected_hashes,
         "policy": {
+            "typed_answer_count_erratum": ANSWER_COUNT_ERRATUM,
             "score": "100 times the geometric mean of typed and transfer fractions.",
             "axes": list(AXES),
             "public_benchmarks": "JevBench and Decision Bench are excluded from this sealed-core score.",

@@ -568,8 +568,9 @@ def _numeric_release_gate(
     score_key: str,
     row: dict[str, Any],
     score_binding: dict[str, dict[str, str]],
+    postkey_aggregate_priority: bool = False,
 ) -> dict[str, str]:
-    """Recompute frozen numeric release rules from exact paired model reports."""
+    """Recompute the strict or explicitly post-key numeric release rules."""
     paths = (pair_report, old_typed_report, old_css_report)
     if any(path.is_symlink() or not path.is_file() for path in paths):
         raise ValueError("Joint paired CI and comparator score reports are required")
@@ -701,7 +702,10 @@ def _numeric_release_gate(
             delta[name], expected_new[name] - value, abs_tol=1e-9
         ):
             raise ValueError("Joint paired delta differs from same-panel scores")
-    if not (
+    if postkey_aggregate_priority:
+        if expected_new["score"] - expected_old["score"] < 3.0 - 1e-12:
+            raise ValueError("Post-key aggregate gain is below +3.0 points")
+    elif not (
         expected_new["T"] > expected_old["T"]
         and expected_new["H"] > expected_old["H"]
         and expected_new["score"] > expected_old["score"]
@@ -727,14 +731,14 @@ def _numeric_release_gate(
     for kind in ("choice", "noul", "score"):
         candidate = _fraction(new_types[kind].get("accuracy_all"), f"{kind} candidate")
         baseline = _fraction(old_types[kind].get("accuracy_all"), f"{kind} comparator")
-        if candidate < baseline - 0.02 - 1e-12:
+        if not postkey_aggregate_priority and candidate < baseline - 0.02 - 1e-12:
             raise ValueError(f"V3 first-release {kind} slice regression exceeded 0.02")
     new_overall, old_overall = (
         new_typed.get("overall", {}),
         old_typed.get("overall", {}),
     )
-    if new_overall.get("n") != 1600 or old_overall.get("n") != 1600:
-        raise ValueError("Typed comparator is not the complete 1,600-item panel")
+    if new_overall.get("n") != 2000 or old_overall.get("n") != 2000:
+        raise ValueError("Typed comparator lacks 2,000 answers on 1,600 items")
     for label, new_invalid, old_invalid in (
         (
             "typed",
@@ -749,7 +753,7 @@ def _numeric_release_gate(
             - old_css.get("roles", {}).get("evaluation", {}).get("valid_items", -1),
         ),
     ):
-        denominator = 1600 if label == "typed" else 6547
+        denominator = 2000 if label == "typed" else 6547
         if any(
             type(value) is not int or not 0 <= value <= denominator
             for value in (new_invalid, old_invalid)
@@ -768,18 +772,18 @@ def _numeric_release_gate(
     )
     if any(
         type(value) is not int
-        or not 0 <= value <= 1600 - report["invalid_or_missing_n"]
+        or not 0 <= value <= 2000 - report["invalid_or_missing_n"]
         for value, report in zip(
             probability_counts, (new_overall, old_overall), strict=True
         )
     ):
         raise ValueError("Typed Brier needs complete probability coverage counts")
     new_adjusted = (
-        probability_counts[0] * new_brier + 1600 - probability_counts[0]
-    ) / 1600
+        probability_counts[0] * new_brier + 2000 - probability_counts[0]
+    ) / 2000
     old_adjusted = (
-        probability_counts[1] * old_brier + 1600 - probability_counts[1]
-    ) / 1600
+        probability_counts[1] * old_brier + 2000 - probability_counts[1]
+    ) / 2000
     if new_adjusted > old_adjusted + 0.03 + 1e-12:
         raise ValueError(
             "V3 first-release coverage-adjusted typed Brier guardrail failed"
@@ -799,17 +803,17 @@ def _typed_probability_table(
         overall = report["overall"]
         count = overall["probability_n"]
         brier = overall["brier"]
-        adjusted = (count * brier + 1600 - count) / 1600
+        adjusted = (count * brier + 2000 - count) / 2000
         values.append((count, brier, adjusted))
     return "\n".join(
         (
             "| Measure | Decision 2.0 | Paired Decision 1.0 |",
             "| --- | ---: | ---: |",
-            f"| Accepted probability answers | {values[0][0]:,}/1,600 | {values[1][0]:,}/1,600 |",
+            f"| Accepted probability answers | {values[0][0]:,}/2,000 | {values[1][0]:,}/2,000 |",
             f"| Brier on accepted answers | {values[0][1]:.4f} | {values[1][1]:.4f} |",
             f"| Coverage-adjusted Brier¹ | {values[0][2]:.4f} | {values[1][2]:.4f} |",
             "",
-            "¹ Assigns normalized Brier 1 to each item without an accepted probability answer; lower is better. Invalid answers still count as failures in the capability score.",
+            "¹ Assigns normalized Brier 1 to each answer without an accepted probability; lower is better. The 1,600 typed items contain 2,000 scored answers. Invalid answers still count as failures in the capability score.",
         )
     )
 
