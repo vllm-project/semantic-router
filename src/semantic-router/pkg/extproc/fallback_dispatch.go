@@ -302,6 +302,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	ctx.TraceContext = attemptCtx
 	origSemanticRequest := ctx.SemanticRequest
 	origRateLimitCtx := ctx.RateLimitCtx
+	origDiags := ctx.ProtocolDiagnostics
 	var candidateSucceeded bool
 	defer func() {
 		ctx.TraceContext = origTraceContext
@@ -309,13 +310,13 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			ctx.VSRSelectedCandidate = origSelectedCandidate
 			ctx.SemanticRequest = origSemanticRequest
 			ctx.RateLimitCtx = origRateLimitCtx
+			ctx.ProtocolDiagnostics = origDiags
 		}
 	}()
 	candidateModel := candidateModelIdentity(*candidateRef)
 	primaryModel := ctx.FallbackRecord.InitialModel
 	primaryStatusCode := ctx.UpstreamStatusCode
 	origPath := ctx.ResponsePath
-	origDiags := ctx.ProtocolDiagnostics
 	wasStreaming := ctx.IsStreamingResponse
 	useReasoning := r.candidateReasoningChoice(ctx, candidateModel)
 	dispatch, err := r.resolveProviderDispatch(candidateModel, ctx.VSRSelectedDecisionName, useReasoning)
@@ -393,10 +394,16 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		return nil, fallback.EvaluationResult{CanFallback: true}, engineErr
 	}
 
-	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, *reqCopy, ctx.ProtocolEnvelope)
+	projected, projectionDiagnostics, projectionErr := r.projectAnthropicRequestForBackendWithDiagnostics(*reqCopy, dispatch.logicalModel, dispatch.targetFormat)
+	if projectionErr != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
+	}
+	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, projected, ctx.ProtocolEnvelope)
 	if encodeErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, encodeErr
 	}
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
 
 	requestBody := encoded.Body
 	adaptedBody, adaptErr := r.adaptProviderRequest(encoded.Body, dispatch, ctx)
@@ -467,14 +474,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		return nil, evalResult, engineErr
 	}
 
-	var mutation protocolcodec.ResponseMutation
-	if responseID := responseObjectPublicID(ctx); responseID != "" {
-		mutation = func(response *llmprotocol.Response) error {
-			response.ID = responseID
-			return nil
-		}
-	}
-
+	mutation := clientResponseMutation(ctx, dispatch.targetFormat)
 	translated, translateErr := responseEngine.TranslateResponse(dispatch.targetFormat, ctx.SourceFormat, resBody, mutation)
 	if translateErr != nil {
 		attemptOutcome.Error = translateErr

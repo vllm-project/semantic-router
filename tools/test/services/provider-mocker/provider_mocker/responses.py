@@ -5,9 +5,11 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from .provider_boundary import SESSION_HEADER, parse_provider_request
 from .responses_wire import (
+    build_responses_custom_tool_response,
     build_responses_image_generation_response,
     build_responses_response,
     build_responses_tool_response,
+    generate_responses_custom_tool_stream,
     generate_responses_image_generation_stream,
     generate_responses_midstream_error,
     generate_responses_stream,
@@ -23,13 +25,14 @@ router = APIRouter()
 
 @router.post("/v1/responses")
 async def responses(request: Request):
+    raw_body = await request.body()
     body, error_response = await parse_provider_request(request, "openai_responses")
     if error_response is not None:
         return error_response
     assert body is not None
     await apply_fixture_delay()
     session_id = request.headers.get(SESSION_HEADER) or "__global__"
-    request.app.state.request_store.record(session_id, body, request.headers)
+    request.app.state.request_store.record(session_id, body, request.headers, raw_body)
     if response_input_contains(body, "__mock_provider_error__"):
         return JSONResponse(
             status_code=429,
@@ -42,6 +45,16 @@ async def responses(request: Request):
                 }
             },
         )
+    if response_input_contains(body, "__mock_responses_custom_tool__") and body.get(
+        "tools"
+    ):
+        if body.get("stream"):
+            return StreamingResponse(
+                generate_responses_custom_tool_stream(body),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+            )
+        return build_responses_custom_tool_response(body)
     if response_has_tool_result(body):
         body = {**body, "input": "tool result accepted"}
     elif response_input_contains(body, "__mock_tool_call__") and body.get("tools"):

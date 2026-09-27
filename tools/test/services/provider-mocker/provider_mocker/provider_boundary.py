@@ -1,5 +1,6 @@
 """HTTP request boundary and bounded request observation for the simulator."""
 
+import hashlib
 from collections import OrderedDict
 from collections.abc import Mapping
 from copy import deepcopy
@@ -25,7 +26,8 @@ class RequestStore:
         self,
         session_id: str,
         body: dict[str, Any],
-        headers: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None,
+        raw_body: bytes,
     ) -> None:
         if session_id in self._store:
             self._store.move_to_end(session_id)
@@ -35,13 +37,25 @@ class RequestStore:
         header_values: dict[str, list[str]] = {}
         for name, value in (headers or {}).items():
             normalized = name.lower()
-            if normalized == SESSION_HEADER or normalized.startswith(
-                _OBSERVED_HEADER_PREFIX
+            if (
+                normalized == SESSION_HEADER
+                or normalized.startswith(_OBSERVED_HEADER_PREFIX)
+                or (
+                    normalized == "anthropic-beta"
+                    and session_id.startswith("anthropic-per-message-effort-")
+                )
             ):
                 observed_headers[normalized] = value
                 header_values.setdefault(normalized, []).append(value)
         self._store[session_id] = {
             "body": deepcopy(body),
+            "body_sha256": hashlib.sha256(raw_body).hexdigest(),
+            "body_bytes": len(raw_body),
+            # Expose only presence, never the client credential itself. Azure
+            # ingress E2E uses this to catch a key leaking to the provider.
+            "api_key_present": any(
+                name.lower() == "api-key" for name in (headers or {})
+            ),
             "headers": observed_headers,
             "header_values": header_values,
         }

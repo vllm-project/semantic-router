@@ -31,6 +31,12 @@
 {{- if and $rejectMultiReplicaLocalLearningState $routerMultiReplica $localLearningStateEnabled -}}
 {{- fail "multi-replica router deployments cannot use Router Learning local state; disable global.router.learning, use one router replica, or set safetyGuards.rejectMultiReplicaLocalLearningState=false after accepting replica-local learning divergence" -}}
 {{- end }}
+{{- $customModelsMount := false -}}
+{{- range .Values.extraVolumeMounts -}}
+{{- if eq (.mountPath | default "") "/app/models" -}}
+{{- $customModelsMount = true -}}
+{{- end -}}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -94,6 +100,17 @@ spec:
           name: classify-api
           protocol: TCP
         env:
+          # Persist management API config writes through the Kubernetes API;
+          # the mounted ConfigMap file cannot be replaced in place.
+          - name: VLLM_SR_K8S_CONFIGMAP_NAME
+            value: {{ include "semantic-router.configMapName" . | quote }}
+          - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          # Retain Router API config versions across ConfigMap rollout restarts.
+          - name: VLLM_SR_CONFIG_BACKUP_DIR
+            value: /app/models/.vllm-sr/config-backups
           - name: POD_NAMESPACE
             valueFrom:
               fieldRef:
@@ -130,8 +147,10 @@ spec:
         {{- with .Values.extraVolumeMounts }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- if not $customModelsMount }}
         - name: models-volume
           mountPath: /app/models
+        {{- end }}
         {{- if .Values.startupProbe.enabled }}
         # Startup and readiness require an activated serving generation.
         startupProbe:
@@ -172,6 +191,7 @@ spec:
         configMap:
           name: {{ .Values.knowledgeBases.existingConfigMap | quote }}
       {{- end }}
+      {{- if not $customModelsMount }}
       {{- if .Values.persistence.enabled }}
       - name: models-volume
         persistentVolumeClaim:
@@ -179,6 +199,7 @@ spec:
       {{- else }}
       - name: models-volume
         emptyDir: {}
+      {{- end }}
       {{- end }}
       {{- with .Values.extraVolumes }}
       {{- toYaml . | nindent 6 }}
