@@ -41,7 +41,9 @@ HOST_PATH = re.compile(
     r"(?<![A-Za-z0-9:/])/(?:home|root|data|work|mnt|tmp|private|Users|var|opt)/[^\s\"'<>]+"
     r"|\b[A-Za-z]:[\\/](?:Users|Documents|ProgramData|Windows)[\\/][^\s\"'<>]+"
 )
-PUBLIC_MODEL_ID = re.compile(r"llm-semantic-router/dev-2\.0-(?:27b|9b|4b|2b|0\.8b)\Z")
+PUBLIC_MODEL_ID = re.compile(
+    r"llm-semantic-router/DEV2\.0-(?:0\.6B|0\.8B|2B|4B|9B|27B)\Z"
+)
 HF_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 REVISION = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 LICENSE = re.compile(r"[a-z0-9][a-z0-9.-]*\Z")
@@ -459,7 +461,7 @@ def bundle(
     """Validate all inputs, then atomically create a new publishable directory."""
     if not PUBLIC_MODEL_ID.fullmatch(model_id) or not HF_ID.fullmatch(base_model_id):
         raise ValueError(
-            "Model must be llm-semantic-router/dev-2.0-xxb and base must be a Hugging Face ID"
+            "Model must use the llm-semantic-router/DEV2.0-<size>B family and base must be a Hugging Face ID"
         )
     if not REVISION.fullmatch(score_key) or not LICENSE.fullmatch(license_id):
         raise ValueError("Score key or SPDX license ID is invalid")
@@ -537,10 +539,10 @@ def bundle(
         license_id=license_id,
     )
     card_manifest, selected = _card_artifacts(card_artifacts, score_key)
-    published_size = model_id.removeprefix("llm-semantic-router/dev-2.0-")
+    published_size = model_id.removeprefix("llm-semantic-router/DEV2.0-")
     if (
         selected.get("size") is not None
-        and str(selected["size"]).lower() != published_size
+        and str(selected["size"]).upper() != published_size
     ):
         raise ValueError("Score artifact size differs from the published model ID")
     _screen_file(scored_manifest)

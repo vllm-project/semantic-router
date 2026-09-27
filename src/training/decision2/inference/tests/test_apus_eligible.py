@@ -42,7 +42,7 @@ class APUSFinalAppendixTest(unittest.TestCase):
             path = Path(directory) / "freeze.json"
             candidate = {
                 "key": "d2-9b",
-                "model_id": "llm-semantic-router/dev-2.0-9b",
+                "model_id": "llm-semantic-router/DEV2.0-9B",
                 "selected_checkpoint": "checkpoint-1",
                 **dict.fromkeys(
                     (
@@ -152,7 +152,7 @@ class APUSFinalAppendixTest(unittest.TestCase):
             freeze_path = root / "freeze.json"
             entry = {
                 "key": "d2-9b",
-                "model_id": "llm-semantic-router/dev-2.0-9b",
+                "model_id": "llm-semantic-router/DEV2.0-9B",
                 "selected_checkpoint": "checkpoint-1",
                 **dict.fromkeys(
                     (

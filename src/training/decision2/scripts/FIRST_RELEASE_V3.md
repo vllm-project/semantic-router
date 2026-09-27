@@ -36,8 +36,15 @@ historical v2 meaning.
    the complete fixed-backend reports in that full-execution directory. The
    planner verifies all receipt hashes, package/CAL/collector identity, two
    independent CSS runs, selected-source/package parity, validity and the
-   exact FLA-to-PyTorch reference runtime keys. The v2 freeze checker and v2
-   command path retain their historical behavior.
+   exact FLA-to-PyTorch reference runtime keys. Historical v2 reports remain
+   unchanged; newly generated publication artifacts use the public ID family.
+   The candidate `model_id`, each repeat/full/combined-parity receipt, and
+   every Eikos prediction manifest must all use
+   `llm-semantic-router/DEV2.0-4B`. Recollect the two CSS repeat runs and
+   complete DEV/CSS-pilot/public predictions using the new collector source,
+   rerun the gold-free direct parity reports, reseal combined parity and
+   execution receipts, then create a new prospectively reviewed candidate
+   lock. Historical lowercase-ID receipts cannot qualify this lock.
 2. The frozen gold-free CSS evaluation prompt file with its pinned 6,547-row
    SHA-256. This planner does not read the CSS label file.
 3. A pinned public JevBench panel directory with `manifest.json` and

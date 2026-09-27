@@ -58,7 +58,7 @@ MODEL_ROOT_FILES = {
 }
 MODEL_ADAPTER_FILES = {"adapter_config.json", "adapter_model.safetensors"}
 NONFUNCTIONAL_CHECKPOINT_FILES = {"checkpoint.json", "trainer_state.pt"}
-MODEL_ID = re.compile(r"llm-semantic-router/dev-2\.0-(?:0\.6b|0\.8b|2b|4b|8b|9b|27b)\Z")
+MODEL_ID = re.compile(r"llm-semantic-router/DEV2\.0-(?:0\.6B|0\.8B|2B|4B|9B|27B)\Z")
 SAFE_VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+!_-]*\Z")
 
 

@@ -75,9 +75,9 @@ class FirstReleasePlanTests(unittest.TestCase):
             self.attestations.append(json.loads(attestation.read_text()))
         self.candidate = {
             "key": "d2-4b",
-            "label": "dev-2.0-4b",
+            "label": "DEV2.0-4B",
             "size": "4B",
-            "model_id": "llm-semantic-router/dev-2.0-4b",
+            "model_id": "llm-semantic-router/DEV2.0-4B",
             "selected_checkpoint": "checkpoint-0232",
             "architecture": "eikos_semif",
             "package_dir": str(self.root / "candidate-package"),

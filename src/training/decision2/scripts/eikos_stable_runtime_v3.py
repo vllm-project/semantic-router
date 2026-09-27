@@ -91,7 +91,8 @@ def _manifest(
 ) -> None:
     value = json.loads(_artifact(receipt, directory, name).read_text(encoding="utf-8"))
     if (
-        value.get("model_sha256") != candidate["model_sha256"]
+        value.get("model_id") != candidate["model_id"]
+        or value.get("model_sha256") != candidate["model_sha256"]
         or value.get("calibration_sha256") != candidate["calibration_sha256"]
         or value.get("model_revision") != candidate["selected_checkpoint"]
         or value.get("collector_source_sha256") != collector_sha
@@ -135,6 +136,7 @@ def verified_stable_runtime(
         drift = comparison.get("max_option_probability_drift")
         if (
             repeat.get("schema_version") != REPEAT_SCHEMA
+            or repeat.get("model_id") != candidate["model_id"]
             or repeat.get("package_sha256") != candidate["model_sha256"]
             or repeat.get("calibration_sha256") != candidate["calibration_sha256"]
             or repeat.get("collector_sha256") != collector_sha
@@ -147,6 +149,7 @@ def verified_stable_runtime(
             or not math.isfinite(drift)
             or drift > 1e-6
             or full.get("schema_version") != FULL_SCHEMA
+            or full.get("model_id") != candidate["model_id"]
             or full.get("all_gates_pass") is not True
             or full.get("combined_parity_pass") is not True
             or full.get("runtime_image_id") != repeat.get("runtime_image_id")
@@ -154,6 +157,7 @@ def verified_stable_runtime(
             or parity_path != full_path.parent / "parity-dev-css.receipt.json"
             or full.get("artifact_sha256", {}).get(parity_path.name)
             != specs["full_parity"]["sha256"]
+            or parity.get("model_id") != candidate["model_id"]
             or parity.get("model_sha256") != candidate["model_sha256"]
             or parity.get("calibration_sha256") != candidate["calibration_sha256"]
             or parity.get("selected_checkpoint") != candidate["selected_checkpoint"]

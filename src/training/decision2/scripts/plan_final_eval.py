@@ -30,6 +30,7 @@ CSS_PROMPTS_SHA256 = "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294d
 CSS_EVALUATION_ITEMS = 6547
 ALLOWED_SELECTION_SOURCES = {"train", "select", "cal", "synthetic_dev", "css_pilot"}
 EIKOS_ARCHITECTURE = "eikos_semif"
+PUBLIC_SIZES = frozenset({"0.6B", "0.8B", "2B", "4B", "9B", "27B"})
 EIKOS_PARITY_PANELS = {
     "dev": ("a17ec4b675bbc3da96dba8f31af8f25c9b02cc96ff048fb7de899bdd8b6cf79a", 1600),
     "css_pilot": (
@@ -47,8 +48,8 @@ PINNED_PROTOCOL_SHA256 = {
     "transfer/build.py": "717e31b62d1f9d09b30f1ae2365b2e59cdf0cf40209dda5e9e08b921a1fc184d",
     "publication/generate.py": "a975a1ce9b15a8300d47efe9c6f8bef6d1650ae5599a6789131731c536ce5659",
     "publication/load.py": "08df30c54d4243983c2a8508f74598afd9e469a487be3f390de66d79be0b064d",
-    "publication/render.py": "3207b364fa596fd2bc46c927d3bb2e336c89764a72d725a54ef48cf931b4ad15",
-    "publication/bundle.py": "b1c1064ffbcfd0fba5a19509d2a5e76ca7935a261d02b8c5d6c8861e5b7c99ed",
+    "publication/render.py": "1111b8919da234726b4e7d284fe657c4fcb3912dacfde1613a87ccd2b2f657fa",
+    "publication/bundle.py": "a479126ecc07e3fe9c0cce0492dca19f1a404c7105512b89e834f8c782bd04dd",
     "publication/training_record.py": "310c38f9aeb6eb13f4d10283b40412dcb6189fded8c467dfb1977a800cf714bb",
     "inference/run.py": "b49054f1aef7a35c0a65b88dd5c1f1e5e252bb96dc210c7ef9e1d83942bb45ce",
     "inference/kev.py": "5439c971654a8edc5e14c314b5846fb214d6ffc6dfc6c6f9f2d00e51ac206fc9",
@@ -343,9 +344,9 @@ def frozen_eikos_candidate(entry: dict[str, Any]) -> dict[str, Any]:
     if (
         entry["key"] != "d2-4b"
         or entry["size"] != "4B"
-        or entry["model_id"] != "llm-semantic-router/dev-2.0-4b"
+        or entry["model_id"] != "llm-semantic-router/DEV2.0-4B"
     ):
-        raise ValueError("Eikos candidate must be the requested dev-2.0-4b identity")
+        raise ValueError("Eikos candidate must be the requested DEV2.0-4B identity")
     if any(
         not _is_sha(entry[name])
         for name in (
@@ -555,11 +556,11 @@ def frozen_candidates(lock_path: Path) -> tuple[list[dict[str, Any]], str]:
         size = entry["size"]
         if (
             not isinstance(size, str)
-            or re.fullmatch(r"(?:[1-9][0-9]*|0\.[1-9][0-9]*)B", size) is None
-            or model_id != f"llm-semantic-router/dev-2.0-{size.lower()}"
+            or size not in PUBLIC_SIZES
+            or model_id != f"llm-semantic-router/DEV2.0-{size}"
         ):
             raise ValueError(
-                f"{key}: model ID must use the requested dev-2.0-xxb size name"
+                f"{key}: model ID must use the requested DEV2.0-<size>B family name"
             )
         if any(
             not isinstance(entry[name], str) or not entry[name]

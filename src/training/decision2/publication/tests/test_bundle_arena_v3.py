@@ -107,7 +107,7 @@ class NumericReleaseGateTests(unittest.TestCase):
             write(self.paths[name], value)
         self.new_row = {
             "key": "new",
-            "model_id": "org/dev-2.0-4b",
+            "model_id": "org/DEV2.0-4B",
             "size_b": 4.2,
             "axes": {"typed": 0.6, "transfer": 0.6},
             "score": 60.0,

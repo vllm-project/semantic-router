@@ -20,9 +20,9 @@ with this shape; use actual SHA-256 values and paths, never placeholders:
   "candidates": [
     {
       "key": "d2-9b",
-      "label": "dev-2.0-9b",
+      "label": "DEV2.0-9B",
       "size": "9B",
-      "model_id": "llm-semantic-router/dev-2.0-9b",
+      "model_id": "llm-semantic-router/DEV2.0-9B",
       "run_dir": "/ABS/complete-run",
       "cal_data": "/ABS/audited-cal.jsonl",
       "calibration": "/ABS/per-type-calibration.json",

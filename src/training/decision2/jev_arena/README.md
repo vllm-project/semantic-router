@@ -119,7 +119,7 @@ PYTHONPATH=/work/source python3 -m jev_arena.jevbench_public build \
 PYTHONPATH=/work/source python3 -m jev_arena.jevbench_public score \
   --panel-dir /work/bench/jevbench-public-231 \
   --predictions /work/bench/jevbench-public-231/model.predictions.jsonl \
-  --model-id llm-semantic-router/dev-2.0-4b \
+  --model-id llm-semantic-router/DEV2.0-4B \
   --model-revision IMMUTABLE_REVISION \
   --output /work/bench/jevbench-public-231/model.score.json
 ```

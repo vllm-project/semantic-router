@@ -44,6 +44,18 @@ def _weights(path: Path, shapes: dict[str, list[int]]) -> None:
 
 
 class AdapterBundleTests(unittest.TestCase):
+    def test_public_model_id_family(self) -> None:
+        for size in ("0.6B", "0.8B", "2B", "4B", "9B", "27B"):
+            self.assertIsNotNone(
+                adapter_bundle.MODEL_ID.fullmatch(f"llm-semantic-router/DEV2.0-{size}")
+            )
+        self.assertIsNone(
+            adapter_bundle.MODEL_ID.fullmatch("llm-semantic-router/dev-2.0-4b")
+        )
+        self.assertIsNone(
+            adapter_bundle.MODEL_ID.fullmatch("llm-semantic-router/DEV2.0-8B")
+        )
+
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -171,7 +183,7 @@ class AdapterBundleTests(unittest.TestCase):
             dependency_lock=self.lock,
             base_repo_id="Qwen/Qwen3.5-0.8B-Base",
             base_revision="a" * 40,
-            model_id="llm-semantic-router/dev-2.0-0.8b",
+            model_id="llm-semantic-router/DEV2.0-0.8B",
             output=self.root / output,
         )
 
@@ -267,7 +279,7 @@ class AdapterBundleTests(unittest.TestCase):
                 dependency_lock=self.lock,
                 base_repo_id="Qwen/example",
                 base_revision="main",
-                model_id="llm-semantic-router/dev-2.0-0.8b",
+                model_id="llm-semantic-router/DEV2.0-0.8B",
                 output=self.root / "bad-revision",
             )
         lock = json.loads(self.lock.read_text(encoding="utf-8"))

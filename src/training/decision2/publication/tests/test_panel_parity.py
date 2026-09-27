@@ -240,7 +240,7 @@ class PanelParityTests(unittest.TestCase):
             package_manifest,
             {
                 "bundle_version": package_native_arena.PACKAGE_VERSION,
-                "model_id": "llm-semantic-router/dev-2.0-27b",
+                "model_id": "llm-semantic-router/DEV2.0-27B",
                 "model_sha256": self.model,
                 "calibration_sha256": self.calibration,
                 "max_length": 4096,

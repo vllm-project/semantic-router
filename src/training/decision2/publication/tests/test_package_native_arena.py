@@ -14,7 +14,7 @@ from pathlib import Path
 from jev_arena.jevbench_public import _native_manifest
 from publication import package_native_arena as arena
 
-MODEL_ID = "llm-semantic-router/dev-2.0-27b"
+MODEL_ID = "llm-semantic-router/DEV2.0-27B"
 
 
 def _package_contract() -> dict:

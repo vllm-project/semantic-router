@@ -119,6 +119,21 @@ class PublishedDeterminismReceiptTest(unittest.TestCase):
                     captured["manifest"]["runtime"]["gated_delta_backend"],
                     "torch-reference",
                 )
+                self.assertEqual(
+                    captured["manifest"]["model_id"],
+                    "llm-semantic-router/DEV2.0-4B",
+                )
+                self.assertEqual(
+                    captured["predictions"][0]["model_id"],
+                    "llm-semantic-router/DEV2.0-4B",
+                )
+                with self.assertRaisesRegex(ValueError, "DEV2.0-4B"):
+                    published_infer.collect(
+                        model_path=root,
+                        prompts=prompts,
+                        output=root / "old-id.jsonl",
+                        model_id="llm-semantic-router/dev-2.0-4b",
+                    )
             self.assertTrue(captured["flag_at_load"])
             self.assertTrue(
                 captured["manifest"]["runtime"]["torch_deterministic_algorithms"]

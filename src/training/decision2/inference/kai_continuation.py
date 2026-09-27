@@ -10,16 +10,16 @@ from __future__ import annotations
 import argparse
 import json
 import math
-from pathlib import Path, PurePosixPath
 import sys
 import time
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from inference.kai_lex import MODELS, runtime_report, verify_native_bundle
 from inference.run import digest, file_digest, load_prompts, synchronize
 
 VERSION = "kai-native-continuation-v1"
-MODEL_ID = "llm-semantic-router/dev-2.0-0.6b"
+MODEL_ID = "llm-semantic-router/DEV2.0-0.6B"
 MODEL_NAME = "dev-2.0-0.6b"
 PARENT_MANIFEST_SHA = "c1bf07ab1c4c3fa1f819256d3de858d1ed87869bdfa663553280d7e78b88bee4"
 

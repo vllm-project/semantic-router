@@ -17,6 +17,7 @@ from scripts.plan_final_eval import (
     build_plan,
     frozen_candidates,
     frozen_css_prompts,
+    frozen_eikos_candidate,
     protocol_sources,
     sha_file,
 )
@@ -35,9 +36,9 @@ class FinalPlanTests(unittest.TestCase):
         self.assertEqual(len({model.key for model in BASELINES}), 15)
         candidate = {
             "key": "d2-9b",
-            "label": "dev-2.0-9b",
+            "label": "DEV2.0-9B",
             "size": "9B",
-            "model_id": "llm-semantic-router/dev-2.0-9b",
+            "model_id": "llm-semantic-router/DEV2.0-9B",
             "selected_checkpoint": "checkpoint-0000025",
             "checkpoint": "/private/run/checkpoint-0000025",
             "source_path": "/private/source",
@@ -107,9 +108,9 @@ class FinalPlanTests(unittest.TestCase):
             lock_path = root / "lock.json"
             entry = {
                 "key": "d2-9b",
-                "label": "dev-2.0-9b",
+                "label": "DEV2.0-9B",
                 "size": "9B",
-                "model_id": "llm-semantic-router/dev-2.0-9b",
+                "model_id": "llm-semantic-router/DEV2.0-9B",
                 "run_dir": str(root / "run"),
                 "cal_data": str(root / "cal.jsonl"),
                 "calibration": str(cal),
@@ -134,9 +135,18 @@ class FinalPlanTests(unittest.TestCase):
                 "model_id"
             ] = "llm-semantic-router/Decision-2.0-Lux-9B"
             lock_path.write_text(json.dumps(lock), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "dev-2.0-xxb"):
+            with self.assertRaisesRegex(ValueError, "DEV2.0"):
                 frozen_candidates(lock_path)
             lock["candidates"][0]["model_id"] = "llm-semantic-router/dev-2.0-9b"
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "DEV2.0"):
+                frozen_candidates(lock_path)
+            lock["candidates"][0]["model_id"] = "llm-semantic-router/DEV2.0-9B"
+            lock["candidates"][0]["size"] = "8B"
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "DEV2.0"):
+                frozen_candidates(lock_path)
+            lock["candidates"][0]["size"] = "9B"
             lock_path.write_text(json.dumps(lock), encoding="utf-8")
             selected = {
                 "name": "checkpoint-0000025",
@@ -268,9 +278,9 @@ class FinalPlanTests(unittest.TestCase):
                 parity_paths[panel] = str(parity)
             entry = {
                 "key": "d2-4b",
-                "label": "dev-2.0-4b",
+                "label": "DEV2.0-4B",
                 "size": "4B",
-                "model_id": "llm-semantic-router/dev-2.0-4b",
+                "model_id": "llm-semantic-router/DEV2.0-4B",
                 "architecture": "eikos_semif",
                 "run_dir": str(run),
                 "source_path": str(source),
@@ -326,6 +336,10 @@ class FinalPlanTests(unittest.TestCase):
                 candidates, _ = frozen_candidates(lock)
                 self.assertEqual(candidates[0]["architecture"], "eikos_semif")
                 self.assertEqual(candidates[0]["max_length"], 16000)
+                with self.assertRaisesRegex(ValueError, "DEV2.0-4B"):
+                    frozen_eikos_candidate(
+                        {**entry, "model_id": "llm-semantic-router/dev-2.0-4b"}
+                    )
                 plan = build_plan(
                     candidates=candidates,
                     freeze_sha="f" * 64,

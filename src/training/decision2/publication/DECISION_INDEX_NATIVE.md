@@ -20,7 +20,7 @@ or benchmark payload can contain restricted data or local paths.
 PYTHONPATH=<Decision2-source-root>:<Decision-Index-kit-root> \
 python -m decision_index run \
   --engine publication.decision_index_native_engine:NativeDecisionIndexEngine \
-  --option model_id=llm-semantic-router/dev-2.0-27b \
+  --option model_id=llm-semantic-router/DEV2.0-27B \
   --option package_manifest_sha256=<64-hex-digest> \
   --option device=cuda:0 \
   --rows <gold-free-runner-rows> --out <private-output-directory>

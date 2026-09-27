@@ -158,12 +158,24 @@ def authored_receipt(freeze_sha: str, panel: dict[str, str]) -> dict:
 
 
 class ArenaBundleTests(unittest.TestCase):
+    def test_public_model_id_family(self) -> None:
+        for size in ("0.6B", "0.8B", "2B", "4B", "9B", "27B"):
+            self.assertIsNotNone(
+                bundle_arena.MODEL_ID.fullmatch(f"llm-semantic-router/DEV2.0-{size}")
+            )
+        self.assertIsNone(
+            bundle_arena.MODEL_ID.fullmatch("llm-semantic-router/dev-2.0-4b")
+        )
+        self.assertIsNone(
+            bundle_arena.MODEL_ID.fullmatch("llm-semantic-router/DEV2.0-8B")
+        )
+
     def setUp(self) -> None:
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.model = self.root / "functional-model"
-        self.model_id = "llm-semantic-router/dev-2.0-0.8b"
+        self.model_id = "llm-semantic-router/DEV2.0-0.8B"
         self.revision = "checkpoint-000064"
         source_sha = "d" * 64
         write(

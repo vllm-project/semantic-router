@@ -30,7 +30,7 @@ from training.model.data import file_sha256
 from training.model.infer import write_output
 
 ADAPTER_VERSION = "decision2-eikos-semif-native-v1"
-MODEL_ID = "llm-semantic-router/dev-2.0-4b"
+MODEL_ID = "llm-semantic-router/DEV2.0-4B"
 
 
 def use_torch_reference_gated_delta() -> dict[str, str]:
@@ -79,6 +79,7 @@ def package_identity(
         "max_one_pass": 100,
     }
     if (
+        # Already exported packages retain their original provenance name.
         receipt.get("model_name") != "dev-2.0-4b"
         or receipt.get("source_revision") != "582ffb13f19a4da3f455e3db198584190bd7755b"
         or decision_config != expected_config

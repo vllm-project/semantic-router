@@ -40,6 +40,7 @@ class EikosStableRuntimeTests(unittest.TestCase):
         self.candidate = {
             "key": "d2-4b",
             "architecture": "eikos_semif",
+            "model_id": "llm-semantic-router/DEV2.0-4B",
             "model_sha256": "a" * 64,
             "calibration_sha256": "b" * 64,
             "selected_checkpoint": "checkpoint-0232",
@@ -63,6 +64,7 @@ class EikosStableRuntimeTests(unittest.TestCase):
             repeat_artifacts[predictions.name] = sha_file(predictions)
         self.repeat = {
             "schema_version": REPEAT_SCHEMA,
+            "model_id": self.candidate["model_id"],
             "package_sha256": self.candidate["model_sha256"],
             "calibration_sha256": self.candidate["calibration_sha256"],
             "collector_sha256": self.collector_sha,
@@ -92,6 +94,7 @@ class EikosStableRuntimeTests(unittest.TestCase):
             },
         }
         self.parity = {
+            "model_id": self.candidate["model_id"],
             "model_sha256": self.candidate["model_sha256"],
             "calibration_sha256": self.candidate["calibration_sha256"],
             "selected_checkpoint": self.candidate["selected_checkpoint"],
@@ -132,6 +135,7 @@ class EikosStableRuntimeTests(unittest.TestCase):
             full_artifacts[name] = sha_file(self.full_dir / name)
         self.full = {
             "schema_version": FULL_SCHEMA,
+            "model_id": self.candidate["model_id"],
             "all_gates_pass": True,
             "combined_parity_pass": True,
             "runtime_image_id": self.repeat["runtime_image_id"],
@@ -151,6 +155,7 @@ class EikosStableRuntimeTests(unittest.TestCase):
 
     def manifest(self, count: int) -> dict:
         return {
+            "model_id": self.candidate["model_id"],
             "model_sha256": self.candidate["model_sha256"],
             "calibration_sha256": self.candidate["calibration_sha256"],
             "model_revision": self.candidate["selected_checkpoint"],
@@ -167,6 +172,9 @@ class EikosStableRuntimeTests(unittest.TestCase):
         }
 
     def write_receipts(self) -> None:
+        parity_path = self.full_dir / "parity-dev-css.receipt.json"
+        write_json(parity_path, self.parity)
+        self.full["artifact_sha256"][parity_path.name] = sha_file(parity_path)
         write_json(self.repeat_dir / "execution.receipt.json", self.repeat)
         write_json(self.full_dir / "execution.receipt.json", self.full)
         write_json(
@@ -197,6 +205,34 @@ class EikosStableRuntimeTests(unittest.TestCase):
 
     def test_complete_fixed_backend_receipts_pass(self) -> None:
         self.assertEqual(set(self.verify()), {"d2-4b"})
+
+    def test_rejects_old_model_id_in_each_receipt_and_manifest(self) -> None:
+        old_id = "llm-semantic-router/dev-2.0-4b"
+        for receipt in (self.repeat, self.full, self.parity):
+            receipt["model_id"] = old_id
+            self.write_receipts()
+            with self.assertRaisesRegex(ValueError, "identity/gate differs"):
+                self.verify()
+            receipt["model_id"] = self.candidate["model_id"]
+        for directory, receipt, name in (
+            (self.repeat_dir, self.repeat, "r1.predictions.jsonl.manifest.json"),
+            (self.full_dir, self.full, "package-dev.predictions.jsonl.manifest.json"),
+        ):
+            path = directory / name
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            manifest["model_id"] = old_id
+            write_json(path, manifest)
+            receipt["artifact_sha256"][name] = sha_file(path)
+            if directory == self.repeat_dir:
+                receipt["r1"]["manifest_sha256"] = sha_file(path)
+            self.write_receipts()
+            with self.assertRaisesRegex(ValueError, "backend differs"):
+                self.verify()
+            manifest["model_id"] = self.candidate["model_id"]
+            write_json(path, manifest)
+            receipt["artifact_sha256"][name] = sha_file(path)
+            if directory == self.repeat_dir:
+                receipt["r1"]["manifest_sha256"] = sha_file(path)
 
     def test_rejects_fla_even_when_all_receipt_hashes_are_refrozen(self) -> None:
         name = "r2.predictions.jsonl.manifest.json"

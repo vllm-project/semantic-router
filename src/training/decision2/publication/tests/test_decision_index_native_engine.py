@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from publication import decision_index_native_engine as bridge
 
-MODEL = "llm-semantic-router/dev-2.0-27b"
+MODEL = "llm-semantic-router/DEV2.0-27B"
 DIGEST = "a" * 64
 
 

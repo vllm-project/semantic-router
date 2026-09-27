@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from training.eikos.parity_receipt import combine
+from training.eikos.published_infer import MODEL_ID
 
 
 class ParityReceiptTest(unittest.TestCase):
@@ -43,8 +44,10 @@ class ParityReceiptTest(unittest.TestCase):
                 dev_prompts=paths["dev"][1],
                 css_prompts=paths["css"][1],
                 output=root / "combined.json",
+                model_id=MODEL_ID,
             )
             self.assertTrue(combined["predeclared_gate_pass"])
+            self.assertEqual(combined["model_id"], MODEL_ID)
             self.assertEqual(combined["total_items"], 3030)
             self.assertEqual(combined["model_sha256"], "a" * 64)
             paths["css"][1].write_text("changed\n", encoding="utf-8")
@@ -55,6 +58,16 @@ class ParityReceiptTest(unittest.TestCase):
                     dev_prompts=paths["dev"][1],
                     css_prompts=paths["css"][1],
                     output=root / "not-created.json",
+                    model_id=MODEL_ID,
+                )
+            with self.assertRaisesRegex(ValueError, "model ID"):
+                combine(
+                    dev_report=paths["dev"][0],
+                    css_report=paths["css"][0],
+                    dev_prompts=paths["dev"][1],
+                    css_prompts=paths["css"][1],
+                    output=root / "wrong-model.json",
+                    model_id="llm-semantic-router/dev-2.0-4b",
                 )
 
 

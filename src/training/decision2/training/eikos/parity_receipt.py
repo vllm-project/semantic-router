@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from training.eikos.io import atomic_json
+from training.eikos.published_infer import MODEL_ID
 from training.model.data import file_sha256
 
 
@@ -18,9 +19,12 @@ def combine(
     dev_prompts: Path,
     css_prompts: Path,
     output: Path,
+    model_id: str,
 ) -> dict[str, Any]:
     if output.exists():
         raise FileExistsError(output)
+    if model_id != MODEL_ID:
+        raise ValueError(f"Eikos 4B Decision 2.0 model ID must be {MODEL_ID}")
     panels = {}
     for name, report_path, prompts, expected in (
         ("dev", dev_report, dev_prompts, 1600),
@@ -49,6 +53,7 @@ def combine(
             raise ValueError(f"Direct parity panels disagree on {field}")
     combined = {
         "role": "gold-free package parity across independent DEV and CSS pilot prompts",
+        "model_id": model_id,
         "model_sha256": dev["candidate_manifest_sha256"],
         "selected_adapter_sha256": dev["adapter_weights_sha256"],
         "calibration_sha256": dev["calibration_sha256"],
@@ -84,6 +89,7 @@ def main() -> None:
     parser.add_argument("--dev-prompts", type=Path, required=True)
     parser.add_argument("--css-prompts", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--model-id", required=True)
     args = parser.parse_args()
     print(
         json.dumps(
@@ -93,6 +99,7 @@ def main() -> None:
                 dev_prompts=args.dev_prompts,
                 css_prompts=args.css_prompts,
                 output=args.output,
+                model_id=args.model_id,
             ),
             sort_keys=True,
         )

@@ -48,7 +48,7 @@ PYTHONPATH=src/training/decision2 python3 -m publication.adapter_bundle \
   --calibration CAL_REPORT --scored-manifest NATIVE_PREDICTION_MANIFEST \
   --dependency-lock SCORED_RUNTIME_VERSIONS \
   --base-repo-id OWNER/BASE --base-revision FORTY_HEX_COMMIT \
-  --model-id llm-semantic-router/dev-2.0-27b \
+  --model-id llm-semantic-router/DEV2.0-27B \
   --output NEW_ADAPTER_PACKAGE
 ```
 
@@ -103,7 +103,7 @@ PYTHONPATH=src/training/decision2 python3 -m publication.package_native_arena \
   --package NEW_ADAPTER_PACKAGE --source PINNED_BASE_SNAPSHOT \
   --expected-package-sha256 MANIFEST_DIGEST \
   --input GOLD_FREE_PANEL.jsonl --output NEW_PREDICTIONS.jsonl \
-  --model-id llm-semantic-router/dev-2.0-27b \
+  --model-id llm-semantic-router/DEV2.0-27B \
   --model-revision package-sha256:MANIFEST_DIGEST --device cuda:0
 ```
 

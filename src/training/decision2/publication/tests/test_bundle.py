@@ -316,7 +316,7 @@ class BundleTests(unittest.TestCase):
             run_dir=self.run_dir,
             training_data_manifest=self.data_manifest,
             score_key="d2-4b",
-            model_id="llm-semantic-router/dev-2.0-4b",
+            model_id="llm-semantic-router/DEV2.0-4B",
             base_model_id="Qwen/Qwen3.5-4B-Base",
             license_id="apache-2.0",
             output=self.output,
@@ -538,7 +538,7 @@ class BundleTests(unittest.TestCase):
             training_data_manifest=self.data_manifest,
             rights_attestation=attestation_path,
             score_key="d2-4b",
-            model_id="llm-semantic-router/dev-2.0-4b",
+            model_id="llm-semantic-router/DEV2.0-4B",
             base_model_id="Qwen/Qwen3.5-4B-Base",
             license_id="other",
             output=self.output,
@@ -560,11 +560,14 @@ class BundleTests(unittest.TestCase):
         )
 
     def test_old_codename_and_wrong_size_are_rejected(self):
-        self.assertIsNotNone(
-            PUBLIC_MODEL_ID.fullmatch("llm-semantic-router/dev-2.0-27b")
-        )
+        for size in ("0.6B", "0.8B", "2B", "4B", "9B", "27B"):
+            self.assertIsNotNone(
+                PUBLIC_MODEL_ID.fullmatch(f"llm-semantic-router/DEV2.0-{size}")
+            )
         self.assertIsNone(PUBLIC_MODEL_ID.fullmatch("llm-semantic-router/dev-2.0-0.5b"))
-        with self.assertRaisesRegex(ValueError, "dev-2.0-xxb"):
+        self.assertIsNone(PUBLIC_MODEL_ID.fullmatch("llm-semantic-router/dev-2.0-4b"))
+        self.assertIsNone(PUBLIC_MODEL_ID.fullmatch("llm-semantic-router/DEV2.0-8B"))
+        with self.assertRaisesRegex(ValueError, "DEV2.0"):
             bundle(
                 checkpoint=self.checkpoint,
                 calibration=self.calibration,

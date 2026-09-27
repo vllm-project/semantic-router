@@ -121,6 +121,11 @@ python3 -m training.eikos.export \
   --output /work/models/dev-2.0-4b-eikos-candidate
 ```
 
+Existing package provenance keeps the historical `model_name: dev-2.0-4b`
+and package path. The public repository and every newly collected native
+prediction use `llm-semantic-router/DEV2.0-4B`; this change does not alter
+the model weights or the functional package checksum.
+
 The standalone folder serves with its copied `serve.py`; for example,
 `python3 serve.py --model . --device cuda:0`. Its `decision_config.json`
 points to the embedded `calib.json`. The source Eikos contribution carries
@@ -161,8 +166,16 @@ python3 -m training.eikos.published_infer \
   --model-path /work/models/dev-2.0-4b-eikos-candidate \
   --input /work/runs/dev.prompts.jsonl \
   --output /work/runs/eikos4b-rights-clean-v1-r1/published-dev.predictions.jsonl \
-  --model-id llm-semantic-router/dev-2.0-4b \
+  --model-id llm-semantic-router/DEV2.0-4B \
   --model-revision "$(python3 -c 'import json; print(json.load(open("/work/runs/eikos4b-rights-clean-v1-r1/NATIVE_BEST.json"))["checkpoint"])')"
 ```
+
+When sealing the two gold-free direct parity reports for the v3 stable
+runtime, pass `--model-id llm-semantic-router/DEV2.0-4B` to
+`training.eikos.parity_receipt`. The combined receipt and all repeated and
+full-run execution receipts must carry that exact `model_id` and bind the
+matching prediction manifests. Recollect predictions and reseal those
+receipts after this collector source changes; old lowercase-ID manifests
+cannot qualify the new v3 candidate lock.
 
 Run CPU tests with `python3 -m unittest discover -s training/eikos/tests -q`.

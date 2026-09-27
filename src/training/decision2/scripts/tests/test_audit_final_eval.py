@@ -25,7 +25,7 @@ class FinalAuditTests(unittest.TestCase):
                 "id": "one",
                 "answers": {"q": {"type": "choice", "choice": "a"}},
                 "source_input_sha256": "a" * 64,
-                "model_id": "llm-semantic-router/dev-2.0-4b",
+                "model_id": "llm-semantic-router/DEV2.0-4B",
                 "model_revision": "checkpoint-0160",
                 "model_sha256": "b" * 64,
                 "calibration_sha256": "c" * 64,

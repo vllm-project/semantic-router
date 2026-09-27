@@ -32,13 +32,13 @@ The configuration names relative report paths:
   "jevbench_public_rank": "reports/jevbench-public-rank.json",
   "comparison_pairs": [
     {
-      "new": "dev-2.0-0.8b",
+      "new": "DEV2.0-0.8B",
       "old": "decision-1.0-eos",
       "typed_comparison": "reports/typed-pair.json",
       "transfer_comparison": "reports/transfer-pair.json",
-      "new_typed_report": "reports/dev-2.0-0.8b-typed.json",
+      "new_typed_report": "reports/DEV2.0-0.8B-typed.json",
       "old_typed_report": "reports/eos-typed.json",
-      "new_transfer_report": "reports/dev-2.0-0.8b-transfer.json",
+      "new_transfer_report": "reports/DEV2.0-0.8B-transfer.json",
       "old_transfer_report": "reports/eos-transfer.json"
     }
   ]
@@ -194,15 +194,16 @@ python3 -m publication.bundle \
   --run-dir /ABS/completed-training-run \
   --training-data-manifest /ABS/balanced_human_5824.manifest.json \
   --score-key d2-4b \
-  --model-id llm-semantic-router/dev-2.0-4b \
+  --model-id llm-semantic-router/DEV2.0-4B \
   --base-model-id Qwen/Qwen3.5-4B-Base \
   --license apache-2.0 \
   --output /ABS/new-decision2-hf-bundle
 ```
 
-`--model-id` must be one of `llm-semantic-router/dev-2.0-9b`,
-`llm-semantic-router/dev-2.0-4b`, `llm-semantic-router/dev-2.0-2b`, or
-`llm-semantic-router/dev-2.0-0.8b`; the size must agree with the selected
+`--model-id` must be one of `llm-semantic-router/DEV2.0-0.6B`,
+`llm-semantic-router/DEV2.0-0.8B`, `llm-semantic-router/DEV2.0-2B`,
+`llm-semantic-router/DEV2.0-4B`, `llm-semantic-router/DEV2.0-9B`, or
+`llm-semantic-router/DEV2.0-27B`; the size must agree with the selected
 score artifact. The Hugging Face collection title is **Decision 2.0** and is
 created separately after model repositories pass release review.
 
