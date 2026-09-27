@@ -5,10 +5,19 @@ import unittest
 from pathlib import Path
 
 from training.model.inline_replay import SCHEMA, attach_inline_teacher, roster_sha256
+from training.model.inline_teacher import source_pairs_for_selection
 from training.model.tests.test_data import row
 
 
 class InlineReplayTest(unittest.TestCase):
+    def test_parity_preserves_original_select_batch_mates(self):
+        rows = [{"id": f"r{index}"} for index in range(5)]
+        pairs = source_pairs_for_selection(rows, {"r0", "r3", "r4"})
+        self.assertEqual(
+            [[row["id"] for row in pair] for pair in pairs],
+            [["r0", "r1"], ["r2", "r3"], ["r4"]],
+        )
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

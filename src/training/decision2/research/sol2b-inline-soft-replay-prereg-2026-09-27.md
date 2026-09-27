@@ -96,6 +96,13 @@ runtime cannot achieve this parity. Freeze the container digest, local source
 commit, source/teacher/calibration hashes, exact command and zero-step receipt
 before the first update.
 
+The historical SELECT output used batch size two in original partition order.
+The parity probe must retain each chosen row's original batch mate and padding;
+single-row BF16 inference is not an equal-shape comparison. This was corrected
+after a pre-optimizer dry run exceeded the probability-drift threshold, before
+any teacher artifact or treatment update was written. The strict `1e-4`
+threshold and fixed 32-row roster remain unchanged.
+
 Start the full one-epoch optimizer schedule; **do not** set `max_steps=128`
 because that changes the learning-rate schedule. Externally stop only after
 the complete atomic checkpoint128 and its SELECT receipt are sealed. The

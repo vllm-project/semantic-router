@@ -94,7 +94,13 @@ def write_once(path: Path, document: dict) -> None:
 def native_probabilities(
     model: DecisionModel, tokenizer: object, row: dict, max_length: int
 ) -> tuple[dict, dict]:
-    item = encode(row, tokenizer, max_length)
+    return native_probabilities_batch(model, tokenizer, [row], max_length)[0]
+
+
+def native_probabilities_batch(
+    model: DecisionModel, tokenizer: object, rows: list[dict], max_length: int
+) -> list[tuple[dict, dict]]:
+    items = [encode(row, tokenizer, max_length) for row in rows]
     pad_id = (
         tokenizer.pad_token_id
         if tokenizer.pad_token_id is not None
@@ -104,12 +110,27 @@ def native_probabilities(
         raise ValueError("Source tokenizer lacks pad and EOS tokens")
     batch = {
         key: value.to("cuda:0") if torch.is_tensor(value) else value
-        for key, value in collate([item], pad_id).items()
+        for key, value in collate(items, pad_id).items()
     }
     with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
         logits = model(**batch)
-    probabilities = logits.float().softmax(-1)[0, : len(item["keys"])].cpu().tolist()
-    return item, dict(zip(item["keys"], probabilities))
+    probabilities = logits.float().softmax(-1).cpu().tolist()
+    return [
+        (item, dict(zip(item["keys"], all_prob[: len(item["keys"])])))
+        for item, all_prob in zip(items, probabilities)
+    ]
+
+
+def source_pairs_for_selection(
+    rows: list[dict], selected_ids: set[str]
+) -> list[list[dict]]:
+    """Preserve historical batch mates and padding for selected SELECT rows."""
+    pairs = []
+    for start in range(0, len(rows), 2):
+        pair = rows[start : start + 2]
+        if any(row["id"] in selected_ids for row in pair):
+            pairs.append(pair)
+    return pairs
 
 
 def verify_zero_step_parity(
@@ -144,42 +165,58 @@ def verify_zero_step_parity(
     if len(references) != len(rows):
         raise ValueError("Control zero-step coverage differs from SELECT")
     largest_drift = 0.0
-    for row in chosen:
-        item, probabilities = native_probabilities(model, tokenizer, row, max_length)
-        reference = references[row["id"]]
-        if (
-            reference["prompt_sha256"] != item["prompt_sha256"]
-            or reference["token_ids_sha256"] != item["token_ids_sha256"]
-            or reference["task_type"] != row["task_type"]
-        ):
-            raise ValueError("Control zero-step native input differs")
-        answer = reference["answer"]
-        if row["task_type"] == "noul":
-            reference_probabilities = {
-                "false": 1.0 - answer["noul"],
-                "true": answer["noul"],
-            }
-        else:
-            reference_probabilities = answer["probabilities"]
-        if set(reference_probabilities) != set(probabilities):
-            raise ValueError("Control zero-step option keys differ")
-        drift = max(
-            abs(probabilities[key] - reference_probabilities[key])
-            for key in probabilities
-        )
-        if not math.isfinite(drift):
-            raise ValueError("Nonfinite zero-step probability drift")
-        largest_drift = max(largest_drift, drift)
-        maximum = max(probabilities.values())
-        winners = [
-            key for key, value in probabilities.items() if abs(value - maximum) <= 1e-8
-        ]
-        prediction = winners[0] if len(winners) == 1 else None
-        if row["task_type"] == "noul":
-            p_true = probabilities["true"]
-            prediction = None if p_true == 0.5 else "true" if p_true > 0.5 else "false"
-        if prediction != reference["prediction_key"]:
-            raise ValueError("Control zero-step categorical prediction differs")
+    checked = 0
+    selected_ids = {row["id"] for row in chosen}
+    # The historical SELECT baseline was evaluated in batches of two in the
+    # original partition order. Keep each selected row's original batch mate:
+    # changing padding/shape can change BF16 probabilities even with identical
+    # model weights and token IDs.
+    for pair in source_pairs_for_selection(rows, selected_ids):
+        actuals = native_probabilities_batch(model, tokenizer, pair, max_length)
+        for row, (item, probabilities) in zip(pair, actuals):
+            if row["id"] not in selected_ids:
+                continue
+            checked += 1
+            reference = references[row["id"]]
+            if (
+                reference["prompt_sha256"] != item["prompt_sha256"]
+                or reference["token_ids_sha256"] != item["token_ids_sha256"]
+                or reference["task_type"] != row["task_type"]
+            ):
+                raise ValueError("Control zero-step native input differs")
+            answer = reference["answer"]
+            if row["task_type"] == "noul":
+                reference_probabilities = {
+                    "false": 1.0 - answer["noul"],
+                    "true": answer["noul"],
+                }
+            else:
+                reference_probabilities = answer["probabilities"]
+            if set(reference_probabilities) != set(probabilities):
+                raise ValueError("Control zero-step option keys differ")
+            drift = max(
+                abs(probabilities[key] - reference_probabilities[key])
+                for key in probabilities
+            )
+            if not math.isfinite(drift):
+                raise ValueError("Nonfinite zero-step probability drift")
+            largest_drift = max(largest_drift, drift)
+            maximum = max(probabilities.values())
+            winners = [
+                key
+                for key, value in probabilities.items()
+                if abs(value - maximum) <= 1e-8
+            ]
+            prediction = winners[0] if len(winners) == 1 else None
+            if row["task_type"] == "noul":
+                p_true = probabilities["true"]
+                prediction = (
+                    None if p_true == 0.5 else "true" if p_true > 0.5 else "false"
+                )
+            if prediction != reference["prediction_key"]:
+                raise ValueError("Control zero-step categorical prediction differs")
+    if checked != 32:
+        raise ValueError("Zero-step parity checked an incomplete roster")
     if largest_drift > 1e-4:
         raise ValueError("Control zero-step probability drift exceeds 1e-4")
     return {
