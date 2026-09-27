@@ -86,15 +86,21 @@ jobs:
             --destination .
           echo "chart=$(ls semantic-router-*.tgz)" >> "$GITHUB_OUTPUT"
 
-      - name: Qualify the final chart archive
+      - name: Lint and render development chart
+        if: inputs.mode != 'release'
+        env:
+          CHART: ${{ steps.package.outputs.chart }}
+        run: |
+          helm lint "$CHART"
+          helm template qualification "$CHART" > "$RUNNER_TEMP/rendered-chart.yaml"
+          test -s "$RUNNER_TEMP/rendered-chart.yaml"
+
+      - name: Record chart archive identity
         env:
           CHART: ${{ steps.package.outputs.chart }}
           VERSION: ${{ steps.versions.outputs.chart_version }}
           APP_VERSION: ${{ steps.versions.outputs.app_version }}
         run: |
-          helm lint "$CHART"
-          helm template qualification "$CHART" > "$RUNNER_TEMP/rendered-chart.yaml"
-          test -s "$RUNNER_TEMP/rendered-chart.yaml"
           python3 -m pip install PyYAML==6.0.3
           helm show chart "$CHART" > "$RUNNER_TEMP/chart-metadata.yaml"
           python3 - <<'PY_METADATA'
