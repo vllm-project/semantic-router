@@ -2,7 +2,10 @@
 
 import pytest
 
-from training.data.build_kai06_recovery1024 import select_whole_groups
+from training.data.build_kai06_recovery1024 import (
+    select_replay_groups,
+    select_whole_groups,
+)
 
 
 def test_select_preserves_components_and_exact_budget():
@@ -25,3 +28,19 @@ def test_select_preserves_components_and_exact_budget():
     )
     with pytest.raises(ValueError, match="Cannot select"):
         select_whole_groups(rows, 6, source="tweeteval_train:hate", kind="Choice")
+
+
+def test_replay_excludes_components_in_full_human_catalogue():
+    clean = [
+        {
+            "id": component,
+            "component_id": component,
+            "question": {"type": "Choice"},
+        }
+        for component in ("shared", "clean-only")
+    ]
+    human = [{"component_id": "shared"}]
+    chosen = select_replay_groups(clean, human, kind="Choice", quota=1)
+    assert [row["component_id"] for row in chosen] == ["clean-only"]
+    with pytest.raises(ValueError, match="Cannot select"):
+        select_replay_groups(clean, human, kind="Choice", quota=2)

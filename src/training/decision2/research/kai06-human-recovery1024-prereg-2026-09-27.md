@@ -23,6 +23,10 @@ were previously accessed.
   irony, emotion and sentiment (320 total). Replay 256 clean-v2 Choice,
   320 Noul and 128 Score native records. The 1,024 rows are one fixed arm;
   no quota, source or seed search after seeing outcomes.
+  Clean replay components already represented anywhere in the human-source
+  catalogue are excluded before deterministic selection; one failed CPU-only
+  materialization exposed this cross-catalogue duplication before any output
+  dataset, training run or development score existed.
 - Continue for exactly 16 logical steps at batch size 64, microbatch 8,
   maximum full input 1,024 tokens, no truncation, seed 20260927, encoder
   learning rate `5e-6`, decision-head rate `2e-5`, minimum rate `5e-7`,

@@ -85,6 +85,35 @@ def select_whole_groups(
     return selected
 
 
+def select_replay_groups(
+    clean: list[dict[str, Any]],
+    human: list[dict[str, Any]],
+    *,
+    kind: str,
+    quota: int,
+) -> list[dict[str, Any]]:
+    """Select complete clean groups absent from the full human catalogue."""
+    clean_groups: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    for row in clean:
+        clean_groups[row["component_id"]].append(row)
+    human_component_ids = {row["component_id"] for row in human}
+    candidates = sorted(
+        (_key(group_id), group_id, group)
+        for group_id, group in clean_groups.items()
+        if group_id not in human_component_ids
+        and all(row["question"]["type"] == kind for row in group)
+    )
+    picked = []
+    for _, _, group in candidates:
+        if len(picked) + len(group) <= quota:
+            picked.extend(group)
+        if len(picked) == quota:
+            break
+    if len(picked) != quota:
+        raise ValueError(f"Cannot select {quota} clean replay {kind} rows")
+    return picked
+
+
 def build(
     clean_train: Path,
     clean_manifest: Path,
@@ -114,24 +143,8 @@ def build(
             source=f"tweeteval_train:{bucket}",
             kind="Choice",
         )
-    clean_groups: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
-    for row in clean:
-        clean_groups[row["component_id"]].append(row)
     for kind, quota in REPLAY_QUOTAS.items():
-        candidates = sorted(
-            (_key(group_id), group_id, group)
-            for group_id, group in clean_groups.items()
-            if all(row["question"]["type"] == kind for row in group)
-        )
-        picked = []
-        for _, _, group in candidates:
-            if len(picked) + len(group) <= quota:
-                picked.extend(group)
-            if len(picked) == quota:
-                break
-        if len(picked) != quota:
-            raise ValueError(f"Cannot select {quota} clean replay {kind} rows")
-        chosen += picked
+        chosen += select_replay_groups(clean, human, kind=kind, quota=quota)
     ids = [row["id"] for row in chosen]
     components = [row["component_id"] for row in chosen]
     if len(chosen) != 1024 or len(set(ids)) != len(ids):
