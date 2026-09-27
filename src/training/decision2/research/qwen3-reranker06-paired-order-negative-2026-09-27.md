@@ -35,10 +35,10 @@ unchanged native candidate-renderer and control-trainer SHA-256 values were
 `2892c0b577c5867d03c66ea72871077e26cf1144e2a605d9d1225b882971b9a1`
 and `eafdaa1de3e04188b34023060f69c319515b0e2ccbd42b384278b7bc35bd7142`.
 Local focused tests and full `make check` passed. The runtime was one visible
-BF16 AMD GPU in image `sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54`,
-with PyTorch `2.12.0+git6bbd260`, ROCm `7.2.53211`, Transformers `5.17.0`,
-and PEFT `0.21.0`. The isolated inference/training container had networking
-disabled.
+BF16 AMD GPU in an image whose exact digest is retained in the private run
+receipt, with PyTorch `2.12.0+git6bbd260`, ROCm `7.2.53211`, Transformers
+`5.17.0`, and PEFT `0.21.0`. The isolated inference/training container had
+networking disabled.
 
 ## Preflight and fixed treatment
 
