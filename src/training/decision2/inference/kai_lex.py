@@ -18,7 +18,7 @@ from typing import Any
 
 from inference.run import digest, file_digest, load_prompts, local_revision, synchronize
 
-ADAPTER_VERSION = "kai-lex-native-v1"
+ADAPTER_VERSION = "kai-lex-native-v2"
 MODELS = {
     "kai": {
         "model_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
@@ -44,6 +44,13 @@ QUALIFIED_RUNTIME = {
     "device_architecture": "gfx942",
 }
 OVERFLOW = re.compile(r"\bexceeds 1024 tokens; no implicit truncation\b")
+NO_STATE_ROOM = "Complete question and candidates leave no room for state"
+
+
+def is_context_overflow(error: ValueError) -> bool:
+    """Recognize only documented native over-budget errors, never truncate."""
+    message = str(error)
+    return bool(OVERFLOW.search(message)) or message == NO_STATE_ROOM
 
 
 def verify_native_bundle(path: Path, backend: str, revision: str) -> dict[str, Any]:
@@ -306,7 +313,7 @@ def collect(
                 response = client.system_one(**payload)
                 invalid_reason = None
             except ValueError as exc:
-                if not OVERFLOW.search(str(exc)):
+                if not is_context_overflow(exc):
                     raise
                 invalid_reason = "context_overflow"
                 overflow_count += 1

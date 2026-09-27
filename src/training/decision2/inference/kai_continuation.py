@@ -15,10 +15,15 @@ import time
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from inference.kai_lex import MODELS, runtime_report, verify_native_bundle
+from inference.kai_lex import (
+    MODELS,
+    is_context_overflow,
+    runtime_report,
+    verify_native_bundle,
+)
 from inference.run import digest, file_digest, load_prompts, synchronize
 
-VERSION = "kai-native-continuation-v1"
+VERSION = "kai-native-continuation-v2"
 MODEL_ID = "llm-semantic-router/DEV2.0-0.6B"
 MODEL_NAME = "dev-2.0-0.6b"
 PARENT_MANIFEST_SHA = "c1bf07ab1c4c3fa1f819256d3de858d1ed87869bdfa663553280d7e78b88bee4"
@@ -240,7 +245,7 @@ def collect(
                 response = client.system_one(**payload)
                 invalid = None
             except ValueError as error:
-                if "exceeds 1024 tokens; no implicit truncation" not in str(error):
+                if not is_context_overflow(error):
                     raise
                 invalid = "context_overflow"
                 overflows += 1

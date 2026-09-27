@@ -92,6 +92,16 @@ class KaiLexAdapterTests(unittest.TestCase):
         )
         self.assertEqual({row["id"] for row in predictions}, {"one", "two"})
 
+    def test_question_and_candidates_exhaust_context_without_truncation(self):
+        self.assertTrue(
+            kai_lex.is_context_overflow(
+                ValueError("Complete question and candidates leave no room for state")
+            )
+        )
+        self.assertFalse(
+            kai_lex.is_context_overflow(ValueError("model inference failed"))
+        )
+
     def test_resume_rejects_changed_prompt(self):
         receipt = {
             **self.identity,
