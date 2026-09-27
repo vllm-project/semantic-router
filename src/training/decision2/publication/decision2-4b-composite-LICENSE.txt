@@ -1,0 +1,48 @@
+Decision 2.0 4B composite license and attribution notice
+
+Original Decision 2.0 fine-tuning contributions
+
+To the extent that the llm-semantic-router contributors hold Copyright and
+Similar Rights in original fine-tuning contributions to DEV2.0-4B, those
+contributions are licensed under Creative Commons Attribution-ShareAlike 4.0
+International (CC BY-SA 4.0):
+https://creativecommons.org/licenses/by-sa/4.0/legalcode
+
+This grant has no noncommercial restriction. It applies only to rights the
+contributors are authorized to license. It does not relicense the upstream
+model, training datasets, or third-party material. Recipients must satisfy
+the applicable terms for each component of the combined model package.
+
+Inherited model terms
+
+- Eikos-4B contributions are distributed under the MIT License. The exact
+  upstream text and copyright notice are in LICENSE-Eikos. Source model:
+  https://huggingface.co/caiovicentino1/Eikos-4B
+  Pinned revision: 582ffb13f19a4da3f455e3db198584190bd7755b
+- The Qwen3.5-4B-Base ancestry is distributed under Apache License 2.0.
+  The inherited license text is in LICENSE-Qwen. Source model:
+  https://huggingface.co/Qwen/Qwen3.5-4B-Base
+- The inherited Eikos NOTICE is preserved verbatim in NOTICE. It includes
+  third-party training-data and SemIf acknowledgments. The Decision 2.0
+  model card lists additional training-data sources and their terms.
+
+Modification notice
+
+DEV2.0-4B was fine-tuned from the pinned Eikos-4B weights for typed decisions
+using a separate Decision 2.0 training mix, selected using a separate
+selection set, and calibrated using a separate calibration set. The model
+weights, calibration and accompanying inference files differ from the
+upstream Eikos package. The source authors have not endorsed this derivative.
+
+Training data attribution
+
+The separate fine-tuning mix includes 272 Stanford Natural Language
+Inference (SNLI) records and 334 Stanford Question Answering Dataset 2.0
+(SQuAD 2.0) records. Each source identifies CC BY-SA 4.0 terms:
+https://nlp.stanford.edu/projects/snli/
+https://rajpurkar.github.io/SQuAD-explorer/
+
+Training-data text is not distributed in this model repository. The dataset
+licenses remain with their sources; this notice does not offer new rights in
+the source datasets. Source counts, attribution, use and redistribution
+details for the remainder of the training mix are in the model card.

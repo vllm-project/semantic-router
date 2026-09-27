@@ -17,6 +17,123 @@ def write(path: Path, value: object) -> None:
 
 
 class PostkeyPackageTest(unittest.TestCase):
+    @staticmethod
+    def composite_record() -> dict[str, object]:
+        return {
+            "model_id": postkey.COMPOSITE_MODEL_ID,
+            "license_id": "other",
+            "base_model": {
+                "id": postkey.COMPOSITE_SOURCE_ID,
+                "revision": postkey.COMPOSITE_SOURCE_REVISION,
+            },
+            "rights": {
+                "status": "passed",
+                "scope": "unrestricted_weights_card",
+                "reviewed_by": "independent-reviewer",
+            },
+        }
+
+    def test_composite_license_rejects_unreviewed_or_nc_record(self) -> None:
+        record = self.composite_record()
+        postkey._composite_record(record)
+        for field, value in (
+            ("status", "pending_independent_review"),
+            ("scope", "noncommercial_research_weights_card"),
+            ("reviewed_by", ""),
+        ):
+            altered = self.composite_record()
+            altered["rights"][field] = value
+            with self.assertRaisesRegex(ValueError, "reviewed exact 4B"):
+                postkey._composite_record(altered)
+        record["base_model"]["revision"] = "0" * 40
+        with self.assertRaisesRegex(ValueError, "reviewed exact 4B"):
+            postkey._composite_record(record)
+
+    def test_composite_card_names_real_grant_and_all_inherited_terms(self) -> None:
+        original = (
+            "---\nlicense: other\nlicense_name: noncommercial-research-terms\n"
+            "base_model: caiovicentino1/Eikos-4B\n---\n"
+            "# llm-semantic-router/DEV2.0-4B\n"
+            "## Same-panel first-release evaluation\n"
+        )
+        card = postkey._composite_card(original)
+        self.assertIn("license_name: decision2-4b-composite-cc-by-sa-4.0", card)
+        self.assertIn("/DEV2.0-4B/blob/main/LICENSE", card)
+        self.assertIn("`LICENSE-Eikos`", card)
+        self.assertIn("`LICENSE-Qwen`", card)
+        self.assertIn("`NOTICE`", card)
+        self.assertNotIn("noncommercial-research-terms", card)
+        with self.assertRaisesRegex(ValueError, "unique old card metadata"):
+            postkey._composite_card(card)
+
+    def test_additive_license_preserves_native_files_and_binds_card(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            native = root / "native"
+            native.mkdir()
+            original = {
+                "LICENSE": b"Eikos MIT notice\n",
+                "LICENSE-Qwen": b"Qwen Apache notice\n",
+                "NOTICE": b"Inherited data notice\n",
+            }
+            for name, payload in original.items():
+                (native / name).write_bytes(payload)
+            write(root / "release-record.json", self.composite_record())
+            write(root / "PACKAGE_MANIFEST.json", {"files_sha256": {}})
+            (root / "README.md").write_text(
+                "---\nlicense: other\nlicense_name: noncommercial-research-terms\n"
+                "---\n# llm-semantic-router/DEV2.0-4B\n"
+                "## Same-panel first-release evaluation\n",
+                encoding="utf-8",
+            )
+            diagnostic = root / "diagnostic.json"
+            strict = root / "strict.json"
+            write(diagnostic, {"status": "postkey"})
+            write(strict, {"status": "HOLD"})
+            postkey._extra_files(root, diagnostic, strict)
+            self.assertEqual((root / "LICENSE-Eikos").read_bytes(), original["LICENSE"])
+            self.assertEqual(
+                (root / "LICENSE-Qwen").read_bytes(), original["LICENSE-Qwen"]
+            )
+            self.assertEqual((root / "NOTICE").read_bytes(), original["NOTICE"])
+            for name, payload in original.items():
+                self.assertEqual((native / name).read_bytes(), payload)
+            manifest = json.loads((root / "PACKAGE_MANIFEST.json").read_text())
+            self.assertEqual(
+                manifest["composite_license_sha256"],
+                postkey.bundle.common.sha_file(root / "LICENSE"),
+            )
+            self.assertEqual(
+                manifest["files_sha256"]["README.md"],
+                postkey.bundle.common.sha_file(root / "README.md"),
+            )
+            postkey._verify_composite_package(root, manifest, self.composite_record())
+            (root / "NOTICE").write_text("changed attribution\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "inherited notice changed"):
+                postkey._verify_composite_package(
+                    root, manifest, self.composite_record()
+                )
+            (root / "NOTICE").write_bytes(original["NOTICE"])
+            (root / "README.md").write_text(
+                (root / "README.md")
+                .read_text(encoding="utf-8")
+                .replace("/blob/main/LICENSE", "/blob/main/WRONG-LICENSE"),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "inherited notice changed"):
+                postkey._verify_composite_package(
+                    root, manifest, self.composite_record()
+                )
+
+    def test_immutable_addendum_allows_only_explicit_loopback(self) -> None:
+        postkey._checked_addendum_text("reviewed 127.0.0.1", postkey.EXTRA[0])
+        for content, label in (
+            ("private 10.1.2.3", postkey.EXTRA[0]),
+            ("loopback 127.0.0.1", "original-strict-hold.json"),
+        ):
+            with self.assertRaisesRegex(ValueError, "private infrastructure"):
+                postkey._checked_addendum_text(content, label)
+
     def test_card_discloses_exact_original_score_tradeoff(self) -> None:
         frozen = SimpleNamespace(
             __file__=str(postkey.AMENDMENT),

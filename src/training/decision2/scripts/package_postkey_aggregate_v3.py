@@ -21,10 +21,19 @@ from typing import Any
 
 from publication import bundle_arena_v3 as bundle
 
-PACKAGE_VERSION = "decision2-jevarena-v3-postkey-release-bundle/1"
+PACKAGE_VERSION = "decision2-jevarena-v3-postkey-release-bundle/2"
 GATE_VERSION = "decision2-jevarena-v3-postkey-release-gate/1"
 GATE_STATUS = "passed_postkey_user_directed"
 CARD_MARKER = "**Post-key, user-directed aggregate-priority release.**"
+COMPOSITE_MODEL_ID = "llm-semantic-router/DEV2.0-4B"
+COMPOSITE_SOURCE_ID = "caiovicentino1/Eikos-4B"
+COMPOSITE_SOURCE_REVISION = "582ffb13f19a4da3f455e3db198584190bd7755b"
+COMPOSITE_LICENSE_NAME = "decision2-4b-composite-cc-by-sa-4.0"
+COMPOSITE_LICENSE_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "publication/decision2-4b-composite-LICENSE.txt"
+)
+COMPOSITE_FILES = ("LICENSE", "LICENSE-Eikos", "LICENSE-Qwen", "NOTICE")
 AMENDMENT = (
     Path(__file__).resolve().parents[1]
     / "research/jev-arena-v3-postkey-answer-count-erratum-2026-09-27.md"
@@ -338,29 +347,150 @@ def _validate_addenda(
     return gate
 
 
+def _composite_record(record: dict[str, Any]) -> None:
+    rights = record.get("rights", {})
+    source = record.get("base_model", {})
+    if (
+        record.get("model_id") != COMPOSITE_MODEL_ID
+        or record.get("license_id") != "other"
+        or source.get("id") != COMPOSITE_SOURCE_ID
+        or source.get("revision") != COMPOSITE_SOURCE_REVISION
+        or rights.get("status") != "passed"
+        or rights.get("scope") != "unrestricted_weights_card"
+        or not isinstance(rights.get("reviewed_by"), str)
+        or not rights["reviewed_by"].strip()
+    ):
+        raise ValueError("Composite license requires a reviewed exact 4B release scope")
+
+
+def _composite_card(card: str) -> str:
+    original = "license: other\nlicense_name: noncommercial-research-terms\n"
+    if card.count(original) != 1:
+        raise ValueError(
+            "Composite license cannot replace the unique old card metadata"
+        )
+    updated = card.replace(
+        original,
+        "license: other\n"
+        f"license_name: {COMPOSITE_LICENSE_NAME}\n"
+        f"license_link: https://huggingface.co/{COMPOSITE_MODEL_ID}/blob/main/LICENSE\n",
+        1,
+    )
+    anchor = "## Same-panel first-release evaluation\n"
+    if updated.count(anchor) != 1:
+        raise ValueError("Composite license has no unique model-card section")
+    disclosure = (
+        "## License and upstream notices\n\n"
+        "The top-level `LICENSE` grants CC BY-SA 4.0 only for original Decision "
+        "2.0 fine-tuning contributions to the extent we hold the relevant "
+        "rights; it imposes no noncommercial restriction. The inherited "
+        "Eikos MIT and Qwen Apache-2.0 terms remain in `LICENSE-Eikos` and "
+        "`LICENSE-Qwen`, with Eikos's `NOTICE` preserved verbatim. This "
+        "fine-tune used 272 SNLI and 334 SQuAD 2.0 records under CC BY-SA "
+        "4.0; no source records are redistributed here. The data-source "
+        "table below gives further attribution and source-specific terms. "
+        "The native SemIf interface emits decisions and probabilities, but "
+        "downloadable weights retain a language-model head; bounded native "
+        "outputs do not prove that other uses cannot reproduce source text.\n\n"
+    )
+    return updated.replace(anchor, disclosure + anchor, 1)
+
+
+def _checked_addendum_text(content: str, label: str) -> None:
+    if label == EXTRA[0]:
+        # The immutable erratum names the literal loopback address in its
+        # explanation of native serving. Keep screening all other addresses.
+        content = bundle.common.IP_ADDRESS.sub(
+            lambda match: (
+                "__REVIEWED_IPV4_LOOPBACK__"
+                if match.group() == "127.0.0.1"
+                else match.group()
+            ),
+            content,
+        )
+    bundle.common._public_text(content, label)
+
+
 def _extra_files(package: Path, diagnostic: Path, strict_hold: Path) -> None:
+    record = bundle.common._object(package / "release-record.json")
+    _composite_record(record)
     for source, name in (
         (AMENDMENT, EXTRA[0]),
         (diagnostic, EXTRA[1]),
         (strict_hold, EXTRA[2]),
     ):
-        bundle.common._public_text(source.read_text(encoding="utf-8"), name)
+        _checked_addendum_text(source.read_text(encoding="utf-8"), name)
         target = package / name
         shutil.copyfile(source, target)
+    license_text = COMPOSITE_LICENSE_SOURCE.read_text(encoding="utf-8")
+    bundle.common._public_text(license_text, "LICENSE")
+    (package / "LICENSE").write_text(license_text, encoding="utf-8")
+    for source_name, target_name in (
+        ("LICENSE", "LICENSE-Eikos"),
+        ("LICENSE-Qwen", "LICENSE-Qwen"),
+        ("NOTICE", "NOTICE"),
+    ):
+        source = package / "native" / source_name
+        if source.is_symlink() or not source.is_file():
+            raise ValueError(f"Missing exact inherited notice: {source_name}")
+        shutil.copyfile(source, package / target_name)
+    card_path = package / "README.md"
+    card = _composite_card(card_path.read_text(encoding="utf-8"))
+    bundle.common._public_text(card, "README.md")
+    card_path.write_text(card, encoding="utf-8")
     manifest_path = package / "PACKAGE_MANIFEST.json"
     manifest = bundle.common._object(manifest_path)
     inventory = manifest.get("files_sha256")
     if not isinstance(inventory, dict):
         raise TypeError("Incomplete staged package inventory")
-    for name in EXTRA:
+    for name in (*EXTRA, *COMPOSITE_FILES, "README.md"):
         inventory[name] = bundle.common.sha_file(package / name)
     manifest["postkey_amendment_sha256"] = inventory[EXTRA[0]]
     manifest["postkey_rank_diagnostic_sha256"] = inventory[EXTRA[1]]
     manifest["original_strict_hold_sha256"] = inventory[EXTRA[2]]
+    manifest["composite_license_sha256"] = inventory["LICENSE"]
+    manifest["inherited_notices_sha256"] = {
+        name: inventory[name] for name in COMPOSITE_FILES[1:]
+    }
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def _verify_composite_package(
+    package: Path, manifest: dict[str, Any], record: dict[str, Any]
+) -> None:
+    _composite_record(record)
+    for name in COMPOSITE_FILES:
+        if (package / name).is_symlink() or not (package / name).is_file():
+            raise ValueError(f"Missing composite license or inherited notice: {name}")
+    expected_license_sha = bundle.common.sha_file(COMPOSITE_LICENSE_SOURCE)
+    card = (package / "README.md").read_text(encoding="utf-8")
+    if (
+        bundle.common.sha_file(package / "LICENSE") != expected_license_sha
+        or manifest.get("composite_license_sha256") != expected_license_sha
+        or manifest.get("inherited_notices_sha256")
+        != {
+            target: bundle.common.sha_file(package / "native" / source)
+            for source, target in (
+                ("LICENSE", "LICENSE-Eikos"),
+                ("LICENSE-Qwen", "LICENSE-Qwen"),
+                ("NOTICE", "NOTICE"),
+            )
+        }
+        or any(
+            bundle.common.sha_file(package / name)
+            != manifest["inherited_notices_sha256"][name]
+            for name in COMPOSITE_FILES[1:]
+        )
+        or f"license_name: {COMPOSITE_LICENSE_NAME}\n" not in card
+        or f"license_link: https://huggingface.co/{COMPOSITE_MODEL_ID}/blob/main/LICENSE\n"
+        not in card
+        or "## License and upstream notices\n" not in card
+        or "license_name: noncommercial-research-terms" in card
+    ):
+        raise ValueError("Composite license or exact inherited notice changed")
 
 
 def verify(package: Path, frozen: Any) -> dict[str, Any]:
@@ -369,6 +499,8 @@ def verify(package: Path, frozen: Any) -> dict[str, Any]:
     for name in EXTRA:
         if (package / name).is_symlink() or not (package / name).is_file():
             raise ValueError(f"Missing post-key package disclosure: {name}")
+    record = bundle.common._object(package / "release-record.json")
+    _verify_composite_package(package, manifest, record)
     if (
         manifest.get("bundle_version") != PACKAGE_VERSION
         or manifest.get("postkey_amendment_sha256")
