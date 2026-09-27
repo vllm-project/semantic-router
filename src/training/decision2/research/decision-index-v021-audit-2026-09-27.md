@@ -26,9 +26,12 @@ bundle's rounded headline was 0.0051 index points.
 
 ## Panel and scoring
 
-The edition is `release-v2.1` / **Decision Index 0.2.1**: 120,340 scheduled
-requests across 43 static suite benchmarks, 442 common exclusions, 119,898
-scoreable rows, and **38 benchmarks in the headline**. Six interactive
+The edition is `release-v2.1` / **Decision Index 0.2.1**: the Space reports
+120,340 scheduled base requests and 119,898 scoreable base rows after 442
+common exclusions. Its separately reported seven added benchmarks contribute
+30,419 more requests with no common exclusions. Thus a **complete run requires
+150,759 scheduled / 150,317 scoreable requests** across 43 static suite
+benchmarks, with **38 benchmarks in the headline**. Six interactive
 environments have not been run for any entrant and are outside the index.
 RouterBench, SGD, MMLU, ARC-Easy, and ARC-Challenge remain displayed but outside
 the 38-item headline. Original upstream tasks are projected to typed decisions;
@@ -95,9 +98,11 @@ The public kit's [README](https://github.com/apolinario/decision-index/blob/19ad
 [`editions.py`](https://github.com/apolinario/decision-index/blob/19ad28ec9485493cc4f7fc07d91c178f948e6434/decision_index/editions.py),
 and [`index02.py`](https://github.com/apolinario/decision-index/blob/19ad28ec9485493cc4f7fc07d91c178f948e6434/decision_index/scoring/index02.py)
 rebuild and score **0.2**. That edition has 121,057 scheduled / 120,615
-scoreable requests, 40 headline benchmarks, five equal-weight areas, and no
-0.2.1 `gold` weighting. The same Space archive gives Jev 51.67 and Eos 17.49
-on 0.2, versus Jev 57.89 and Eos 18.41 on 0.2.1. Running the old kit and
+scoreable base requests, plus the same 30,419 added requests, for a complete
+151,476 scheduled / 151,034 scoreable run. It has 40 headline benchmarks,
+five equal-weight areas, and no 0.2.1 `gold` weighting. The same Space archive
+gives Jev 51.67 and Eos 17.49 on 0.2, versus Jev 57.89 and Eos 18.41 on
+0.2.1. Running the old kit and
 labeling its score `0.2.1` would be a version error.
 
 The public Space repository contains the static aggregate JSON and pages,
@@ -108,9 +113,10 @@ not identified in this audit. The public kit can rebuild 0.2 source rows from
 pinned upstream datasets under their individual terms (including gated and
 nonredistributable sources); its README says approximately 7 GB of downloads
 and 17 GB of workspace. The 0.2/0.2.1 source corpus hash matches, but 0.2.1
-has 717 fewer scheduled requests and several changed scoring rules. A future
-0.2.1 port must reconstruct its exact row exclusions and score all 65
-published rows to rounding parity before accepting a new entrant's result.
+has 717 fewer scheduled **base** requests and several changed scoring rules.
+A 0.2.1 port must reconstruct its exact row exclusions and score all 68 rows
+in the current snapshot to rounding parity before accepting a new entrant's
+result.
 
 Minimal verifiable port: retain the kit's hash-checked 0.2 source rows,
 added rows, typed Choice/Noul runner, native metric implementations, and
@@ -127,6 +133,16 @@ counts where available, and compare an independently run native engine with
 the same packaged checkpoint. Aggregate-score parity alone cannot certify
 identical per-request predictions or latency. No such 0.2.1 port or
 exact-output validation has been completed here.
+
+The public 0.2 rows identify ToolRet/BRIGHT candidates and relevance labels,
+so their 315/330 no-relevant-candidate removals are derivable. The Home
+generator also reconstructs 24 duplicate test pairs and 48 test rows equal
+to development states, leaving 88 cases. However, the 0.2.1 methodology does
+not name which member of each duplicate pair is retained; those members
+have different question/option keys. Keeping the first member is a
+deterministic **provisional** port rule, not proof of exact 0.2.1 row identity.
+The complete-run count also includes 30,419 separately reported added rows;
+`suite.scoreable` alone is not the full denominator.
 
 The kit's 0.2 [submission instructions](https://github.com/apolinario/decision-index/blob/19ad28ec9485493cc4f7fc07d91c178f948e6434/README.md#submitting-a-model-to-the-leaderboard)
 ask for complete, untouched run artifacts linked in a GitHub pull request.
@@ -161,12 +177,12 @@ Decision 2.0 inference code is file-oriented, so a bridge and response parity
 tests are still required. Run the kit's 86-request compatibility pass first
 (two requests per benchmark/subtrack), then the complete fixed edition; log
 checkpoint/source/corpus/scorer hashes and every invalid reason. The full run
-gate requires all 119,898 scoreable rows to reach a valid answer or certified
+gate requires all 150,317 scoreable rows to reach a valid answer or certified
 model failure, with no evaluator defects. The 1.0 Space scores may be reused
 for this **external exact-edition** comparison, while paired JevArena claims
 still need 1.0 and 2.0 reruns on the same JevArena panel.
 
-Do not run the approximately 120,000-request external suite for all six
+Do not run the approximately 151,000-request external suite for all six
 candidate sizes while their native release gates and the exact 0.2.1 scorer
 are unresolved. Freeze one qualifying candidate per size first; then run
 full-index inference once per accepted package and seek author adjudication
@@ -192,8 +208,9 @@ Both differ from the historical bundle hashes above. The old 0.2 methodology
 bundle remains SHA-256 `903cee829e68a7cb4592f91ba55558a5c725f8c80692cf0c846efa8b34f67b2f`.
 
 The 0.2.1 **evaluation panel, five area weights, 13 gold weights, scoring
-rules, 119,898 scoreable rows, Jev record, and all six Decision 1.0 records
-are unchanged** from `99decba`. Board membership changed: JPT 0.8B, JPT 9B,
+rules, 150,317 scoreable rows including the separately reported added set,
+Jev record, and all six Decision 1.0 records are unchanged** from `99decba`.
+Board membership changed: JPT 0.8B, JPT 9B,
 and Lavoir were added; the earlier reflex 27B record was replaced by the
 full-coverage reflex 27B v2 record. The 0.2.1 board therefore now contains
 67 open models plus Jev (68 rows), versus 64 open models plus Jev in archived

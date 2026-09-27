@@ -20,11 +20,17 @@ the public 0.2 kit and the published Decision 1.0 reference rows.
   hashes in the private run manifest. An identical source hash is necessary,
   not sufficient, for 0.2.1 equivalence.
 - Implement an explicit 0.2.1 edition, leaving 0.2 unchanged. Freeze the
-  exact 120,340 scheduled / 119,898 scoreable request manifest, 442 common
-  exclusions, 38 headline benchmark IDs, 13 gold benchmark IDs, five area
-  weights, and the documented native metric/chance-baseline changes. The
+  exact 120,340 scheduled / 119,898 scoreable **base** request manifest,
+  30,419 added requests, and the complete 150,759 scheduled / 150,317
+  scoreable request roster. Freeze 442 common base exclusions, 38 headline
+  benchmark IDs, 13 gold benchmark IDs, five area weights, and the documented
+  native metric/chance-baseline changes. The
   717 requests removed relative to 0.2 must be identified by stable row ID
   and a reproducible rule, not by model outputs.
+- The documented Home duplicate rule determines 24 duplicate state pairs,
+  but currently does not identify which member of each pair survives. Their
+  questions and options differ. A first-in-source choice is provisional
+  until an independent row identity or authoritative reference resolves it.
 - Before a new model enters the run, test the scorer against all available
   published per-benchmark records and the six Decision 1.0 plus Jev
   area/headline rows. Match the Space's displayed rounding for every
@@ -49,8 +55,8 @@ the public 0.2 kit and the published Decision 1.0 reference rows.
    contract, probability sum, invalid reason, and packaged-versus-source
    parity. This pass is a format diagnostic, not an Index result.
 4. Only after corpus, scorer, and native-engine gates pass, run the full
-   0.2.1 panel once for the frozen candidate. Verify 120,340 scheduled IDs,
-   119,898 scoreable IDs, all per-row outcomes, and every failed or missing
+   0.2.1 panel once for the frozen candidate. Verify 150,759 scheduled IDs,
+   150,317 scoreable IDs, all per-row outcomes, and every failed or missing
    response. Preserve original raw predictions and logs privately; create a
    public-safe hash/summary receipt. A short, failed, or altered-denominator
    run is **incomplete**, with no projected headline.
