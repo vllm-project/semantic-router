@@ -12,12 +12,22 @@ from inference.run import digest, file_digest
 from scripts.seal_autojev27_v3_peer import (
     CONFIG_SHA,
     MODEL_SHA,
+    PANELS,
     SOURCE_SHA,
     audit_panel,
 )
 
 
 class SealAutoJevPeerTest(unittest.TestCase):
+    def test_panel_hashes_match_signed_prereg(self) -> None:
+        prereg_path = (
+            Path(__file__).resolve().parents[2]
+            / "research/autojev27-v3-public-peer-prereg-2026-09-28.md"
+        )
+        prereg = prereg_path.read_text(encoding="utf-8")
+        for _, (_, _, prompt_sha) in PANELS.items():
+            self.assertIn(f"prompt SHA-256 `{prompt_sha}`", prereg)
+
     def test_exact_single_item_and_changed_input(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

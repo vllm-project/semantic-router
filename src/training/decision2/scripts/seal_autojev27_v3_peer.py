@@ -29,7 +29,7 @@ PANELS = {
     "public": (
         231,
         231,
-        "642d3fac1b6521fe33df72f9228e4e364b7be7ea277893207f97da5bc75ddd",
+        "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
     ),
 }
 

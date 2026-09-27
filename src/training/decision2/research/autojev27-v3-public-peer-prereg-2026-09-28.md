@@ -39,3 +39,19 @@ Report typed T, transfer H, `100*sqrt(T*H)`, coverage, per-type/task metrics
 and public easy/standard/hard. Do not use these scores to select a candidate or
 infer Decision 2.0 success. No model training, upload or publication is part
 of this peer run.
+
+## Gold-free clerical erratum before label access
+
+The first sealer implementation copied the public231 hash from the older 27B
+roster plan, where it was missing one `4e` group. The separately signed table
+above was committed **before inference** and recorded the correct hash:
+`642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd`.
+The earlier pinned public231 panel manifest and actual prompt bytes have that
+same correct hash. The older 27B roster plan remains visibly inconsistent
+and cannot itself serve as a passing preflight receipt. The first seal failed
+*before* reading any target file. All three complete primary prediction files
+were hashed and retained immediately; no inference rerun, threshold change or
+model selection followed. A second signed code revision binds the sealer to
+the already signed prereg hash, with a regression test. The failed first audit
+and its reason remain part of the execution record. This corrects copied
+audit metadata; it does not change the benchmark panel.
