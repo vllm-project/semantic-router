@@ -53,3 +53,28 @@ Stop an arm on missing source file, invalid native type, OOM, nonfinite
 value, timeout or failed parity. Preserve its failed receipt and never
 relax a threshold within this protocol. No optimizer beyond one step,
 CAL tuning, DEV/CSS/public or formal comparison occurs during admission.
+
+## Completed paired-source admission receipt
+
+Both arms completed the prescribed full native input audit and two fresh
+SELECT700 zero-step starts. Base returned 233/700 at family macro 0.332642
+in each start; its byte-identical prediction SHA-256 is
+`eee4bce8ef52657735b1ad222564d09fcb5e38368350b900f901a5bcd05db0b8`.
+Posttrained returned 264/700 at family macro 0.362400 in each start;
+its byte-identical prediction SHA-256 is
+`c2134e9e40d6f45aa6a744a7779ebce9cb3f66010b5062c61caacba5c24ce882`.
+Every row was valid and each arm had zero category/probability drift.
+
+Independent one-update smoke starts had finite losses and gradients:
+Base loss 1.30418, gradient norm 10.263 and SELECT245/700; Posttrained
+loss 1.37767, gradient norm 13.956 and SELECT230/700. The Posttrained
+one-step decrease is retained as an optimization warning, not a reason to
+change its recipe or choose a source before the complete arm. Both saved
+checkpoints passed exact same-batch 32-row reload, with zero category and
+probability drift; identical comparison SHA-256
+`3a8e165b2a3a1ce188072a477216a19357025ee6b8e33d6ada3240b1f2a5ee77`.
+Base zero starts/smoke/reload used 39.7/41.7/69.5/19.9 GPU seconds
+(0.0474 GPU-hour); Posttrained used 37.1/43.4/70.3/23.2 seconds
+(0.0483 GPU-hour). Both pass the frozen numerical and time caps. Neither
+one-step checkpoint enters full training; the separately signed matched
+complete-arm protocol applies to both.
