@@ -31,6 +31,7 @@
       "revision": "6f5b557e037f5edb25c7dc92dbc6553e5a19c015",
       "native_source_revision": "ee63c1515980491a742f0bd0685c8dc5ca1f00c3",
       "size_relation": "same_if_measured_ratio_lte_1.25",
+      "gold_free_repeat_rule": "zero_category_changes; max_probability_drift_lte_0.02; disclose_p99_and_stable_invalid",
       "qualification": "native_package_download_attestation_and_repeatability_pending"
     }
   ],

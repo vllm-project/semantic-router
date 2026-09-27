@@ -64,6 +64,19 @@ attestations, a fixed
 gold-free smoke with two-process repeatability, and then complete predictions
 on the exact same v3 and public-subset prompt bytes. Reuse only predictions
 whose panel, model, adapter, and revision digests already match this roster.
+Lux and JevK5 retain the existing strict smoke maximum probability drift
+`1e-6`. AutoJev uses a separately fixed external-peer rule: zero categorical
+changes and maximum option probability drift ≤`0.02` across the same 32
+gold-free questions in two fresh processes. Both maximum and p99 drift and
+stable native invalid counts are reported. This tolerance is only a peer
+qualification/sensitivity bound; it does not weaken the candidate's full
+package parity. AutoJev's **first** complete v3/public run after roster
+freeze is the primary run, regardless of its eventual score. No second run
+may replace it by reference to gold labels. If the external-peer smoke misses
+the fixed rule, AutoJev is HOLD from the launch rank, and any exploratory
+score is separately labeled. Earlier comparator failures under a stricter
+policy remain failures in their original protocol and are not retroactively
+reclassified.
 At the time of this policy, none of the three controls has verified full v3
 predictions. The cited Decision Index 0.2.1 AutoJev balanced-skill 56.40 and
 Jebadiah 54.67 figures are **opponent-selection context only**, not scores on

@@ -99,6 +99,19 @@ def test_exact_two_process_probabilities_and_categories(tmp_path: Path) -> None:
         )["gate_pass"]
         is False
     )
+    assert (
+        compare(
+            prompts,
+            first,
+            second,
+            model_id="example/nox",
+            revision="revision",
+            backend="nox",
+            adapter_version="native-published-v2",
+            max_probability_drift=0.02,
+        )["gate_pass"]
+        is True
+    )
     _rows(second, changed=True)
     result = compare(
         prompts,

@@ -282,6 +282,7 @@ def main() -> None:
     audit.add_argument("--revision", required=True)
     audit.add_argument("--backend", required=True)
     audit.add_argument("--adapter-version", required=True)
+    audit.add_argument("--max-probability-drift", type=float, default=1e-6)
     audit.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "prepare":
@@ -295,6 +296,7 @@ def main() -> None:
             revision=args.revision,
             backend=args.backend,
             adapter_version=args.adapter_version,
+            max_probability_drift=args.max_probability_drift,
         )
         _exclusive(
             args.output, (json.dumps(result, sort_keys=True, indent=2) + "\n").encode()

@@ -257,6 +257,7 @@ def _baseline_repeatability(
     roster: dict[str, Any],
     selected: list[NativeModel],
     attestations: dict[str, dict[str, Any]],
+    max_probability_drift_by_key: dict[str, float] | None = None,
 ) -> dict[str, dict[str, str]]:
     """Rebuild the pinned panel and both native runs for every baseline."""
     panel = roster.get("baseline_repeat_panel")
@@ -285,6 +286,14 @@ def _baseline_repeatability(
     if not isinstance(declared, list) or len(declared) != len(selected):
         raise ValueError("Every selected baseline needs a two-process smoke receipt")
     by_key = {model.key: model for model in selected}
+    drift_limits = max_probability_drift_by_key or {}
+    if any(
+        key not in by_key
+        or not isinstance(limit, (int, float))
+        or not 0 <= limit <= 0.02
+        for key, limit in drift_limits.items()
+    ):
+        raise ValueError("External comparator drift policy is invalid")
     verified: dict[str, dict[str, str]] = {}
     for item in declared:
         if not isinstance(item, dict) or set(item) != {
@@ -335,7 +344,7 @@ def _baseline_repeatability(
             revision=model.revision,
             backend=model.backend,
             adapter_version=adapter_version,
-            max_probability_drift=1e-6,
+            max_probability_drift=drift_limits.get(key, 1e-6),
         )
         if receipt != rebuilt or rebuilt["gate_pass"] is not True:
             raise ValueError(f"{key}: two-process native repeatability gate failed")

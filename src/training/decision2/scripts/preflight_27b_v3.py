@@ -204,7 +204,12 @@ def _comparators(
         != autojev_release["loaded_parameters"]
     ):
         raise ValueError("AutoJev native release differs from full package attestation")
-    repeats = _baseline_repeatability(roster, selected, attestations)
+    repeats = _baseline_repeatability(
+        roster,
+        selected,
+        attestations,
+        max_probability_drift_by_key={"autojev27b": 0.02},
+    )
     for item in roster["baseline_repeatability"]:
         if item["key"] != "autojev27b":
             continue
