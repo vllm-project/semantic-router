@@ -34,6 +34,13 @@ evidence relation, not long context or unseen release quality. Original
 corpus reuse and semantic independence remain unproven; it contributes no
 new model result and no JevArena release item.
 
+The separate [ANLI TRAIN source screen](anli-score-train-source-audit-2026-09-28.md)
+froze 12,000 rows across 930 whole premise groups before inspecting source
+labels. One group (26 rows) exactly overlaps public ANLI DEV input, leaving
+an unfilled technical upper bound of 11,974 rows/929 groups. Original-source
+terms, repeated-pair quality and the native three-level Score mapping still
+need independent review. **Training admission is zero; no GPU arm ran.**
+
 Authenticated HF CLI readback on 2026-09-28 reconfirmed the private Decision
 2.0 collection contains only `DEV2.0-0.6B`. That private repository has 30
 standardized files at revision `7ac568e6ce99cdeb7cf423b4984a4f87dba8a204`;
@@ -65,6 +72,7 @@ The [ConTRoL CPU screen](qwen35-4b-context-nli-source-screen-2026-09-28.md),
 [27B whole-group capacity envelope](qwen38-27b-train-group-envelope-2026-09-28.md),
 [eight-role input-only projection](goldfree-core-inventory-result-2026-09-28.md),
 [ANLI open Score diagnostic](anli-score-dev-feasibility-2026-09-28.md),
+[ANLI TRAIN source HOLD](anli-score-train-source-audit-2026-09-28.md),
 [Lux process-isolation result](lux9b-release-example-process-isolation-result-2026-09-28.md), and
 [Lux batch-shape result](lux9b-release-example-batch-shape-result-2026-09-28.md)
 all remain negative or conditional. None authorizes a new model upload. Continue
