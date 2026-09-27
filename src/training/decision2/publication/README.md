@@ -1,6 +1,34 @@
-# Model-card artifacts from frozen reports
+# Decision 2.0 first-release product repository
 
-## Slim first-release Hugging Face tree
+Each eligible size is published from its own verified weight package and a
+fresh, product-facing [card](product_card.py). The card leads with the owned
+owl model-name banner, purpose, runnable Choice/Noul/Score examples and
+same-panel results. Its evaluated-model roster has a JevArena v3 rank,
+model-by-task matrix and separate public JevBench rank. **Do not publish a
+Pareto chart** in the first-release card or assets. Keep private gate notes,
+raw predictions, training data and temporary files out of the model repo.
+
+The final whitelist is adjusted only to the actual native loading path and
+verified again after downloading the exact HF revision:
+
+```text
+README.md                  concise product card and working examples
+LICENSE                    Apache-2.0 for our released content
+NOTICE, ATTRIBUTIONS.md    applicable source and artwork credits
+model/                     directly loadable native weights/config/tokenizer
+decision2/                 only modules required by the public native API
+assets/                    model-name owl banner, v3/public rank and task matrix
+evaluation/EVALUATION.md   concise panel and method description
+evaluation/manifest.json   public panel/package/file digests
+```
+
+The weights may live at the repository root only if the actual loading and
+HF readback tests require it. A package built from a LoRA adapter must make
+its pinned official or own-1.0 source dependency explicit and verify it at
+load time. A materialized full checkpoint includes its own backbone. The
+README and `hf download` example must match the package that was scored.
+
+## Historical private 4B staging exporter: not a release path
 
 The private v3 package retains the full release gate, prediction bindings,
 review receipts and all generated artifacts. After its exact verifier passes,
@@ -67,6 +95,11 @@ PYTHONPATH=src/training/decision2 python3 \
 The private verification bundle remains untouched. The public manifest names
 both the scored native identity and the reduced runtime identity; it does not
 claim that the regenerated SHA256SUMS is byte-identical to the scored one.
+This exporter targets an older third-party-start research package and its
+Eikos-specific identity; it is **not** eligible for Decision 2.0 publication.
+Do not turn its private repository public or copy its Pareto figures into a
+new card. Build eligible official-Qwen or own-1.0 models in a clean repository
+history under the current product whitelist above.
 
 ## JevArena v3 first release
 
@@ -79,9 +112,9 @@ are not first-release gates. See [BUNDLE_ARENA_V3.md](BUNDLE_ARENA_V3.md)
 for the exact inputs, pre-key freeze, numeric comparison and package audit.
 The six-axis v2 commands below remain unchanged for historical reproducibility.
 
-## JevArena six-axis release artifacts
+## Historical JevArena six-axis artifacts
 
-`python3 -m publication.generate_arena` creates the Decision 2.0 release
+`python3 -m publication.generate_arena` created the older Decision 2.0
 tables and six SVG figures: separate JevArena and 231-item public JevBench
 rank/Pareto charts, plus JevArena axis and model-by-task matrices. It accepts
 only a completed `jevarena-ranking/2` **release** report and a matched
