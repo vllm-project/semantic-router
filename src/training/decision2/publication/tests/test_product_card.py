@@ -39,14 +39,14 @@ class ProductCardTest(unittest.TestCase):
     def test_product_first_and_three_type_example(self) -> None:
         card = render(specimen())
         self.assertLess(
-            card.index("## Measured decisions"),
             card.index("## Three ways to decide"),
+            card.index("## Download and decide"),
         )
         self.assertLess(
-            card.index("## Three ways to decide"), card.index("## Download and decide")
+            card.index("## Download and decide"), card.index("## Measured decisions")
         )
         self.assertLess(
-            card.index("## Download and decide"), card.index("## Architecture")
+            card.index("## Measured decisions"), card.index("## Architecture")
         )
         self.assertIn("| Choice | Route requests |", card)
         self.assertIn("| Noul | Check evidence |", card)

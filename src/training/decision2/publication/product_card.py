@@ -128,21 +128,6 @@ tags:
 Ask Choice, Noul and Score questions about one state. Supply the options or
 rubric at runtime, and get structured decisions with probabilities.
 
-## Measured decisions
-
-{measured_summary}
-
-All models below were tested on the same **8,147-item JevArena v3** panel.
-The **231 public JevBench v1.2** questions are separate.
-
-{table}
-
-{chart_lines}
-
-{evaluation_scope} Ranks include only the models shown here.
-[Full results and methods](evaluation/EVALUATION.md) ·
-[Evaluation manifest](evaluation/manifest.json)
-
 ## Three ways to decide
 
 | Decision | Use it to | Returns |
@@ -190,6 +175,21 @@ print(result["answers"])
 ```
 
 The download includes the local decision runtime; it does not start a hosted endpoint.
+
+## Measured decisions
+
+{measured_summary}
+
+All models below were tested on the same **8,147-item JevArena v3** panel.
+The **231 public JevBench v1.2** questions are separate.
+
+{table}
+
+{chart_lines}
+
+{evaluation_scope} Ranks include only the models shown here.
+[Full results and methods](evaluation/EVALUATION.md) ·
+[Evaluation manifest](evaluation/manifest.json)
 
 ## Architecture
 
