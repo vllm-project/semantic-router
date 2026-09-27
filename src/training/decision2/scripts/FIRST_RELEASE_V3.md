@@ -49,25 +49,58 @@ historical v2 meaning.
    SHA-256. This planner does not read the CSS label file.
 3. A pinned public JevBench panel directory with `manifest.json` and
    `prompts.jsonl`. The public target file is not opened by this planner.
-4. A private roster JSON, schema `decision2-first-release-v3-pretest-roster/1`:
+4. A private roster JSON, schema `decision2-first-release-v3-pretest-roster/2`:
 
 ```json
 {
-  "schema_version": "decision2-first-release-v3-pretest-roster/1",
+  "schema_version": "decision2-first-release-v3-pretest-roster/2",
   "candidate_keys": ["d2-4b"],
   "candidate_size_b": {"d2-4b": 4.2},
-  "baseline_keys": ["nox", "eikos4b"],
+  "baseline_repeat_panel": {
+    "choice32_path": "/PRIVATE/choice32.prompts.jsonl",
+    "typed_dev_path": "/PRIVATE/typed-dev.prompts.jsonl",
+    "prompts_path": "/PRIVATE/baseline-repeat32.prompts.jsonl",
+    "manifest_path": "/PRIVATE/baseline-repeat32.manifest.json"
+  },
+  "baseline_keys": ["nox", "OPEN_CONTROL_KEY"],
   "baseline_attestations": [
     {
       "key": "nox",
       "model_id": "llm-semantic-router/Decision-1.0-Nox-4B",
       "revision": "PINNED_HF_REVISION",
-      "size_b": 4.0,
+      "size_b": 4.208383488,
       "native_model_sha256": "LOWERCASE_64_HEX",
       "adapter_sha256": "LOWERCASE_64_HEX",
       "calibration_sha256": null,
       "receipt_path": "/PRIVATE/nox-package-receipt.json",
       "receipt_sha256": "LOWERCASE_64_HEX"
+    },
+    {
+      "key": "OPEN_CONTROL_KEY",
+      "model_id": "PINNED_OPEN_MODEL_ID",
+      "revision": "PINNED_HF_REVISION",
+      "size_b": 4.2,
+      "native_model_sha256": "LOWERCASE_64_HEX",
+      "adapter_sha256": "LOWERCASE_64_HEX",
+      "calibration_sha256": null,
+      "receipt_path": "/PRIVATE/open-control-package-receipt.json",
+      "receipt_sha256": "LOWERCASE_64_HEX"
+    }
+  ],
+  "baseline_repeatability": [
+    {
+      "key": "nox",
+      "receipt_path": "/PRIVATE/nox-repeat32.receipt.json",
+      "receipt_sha256": "LOWERCASE_64_HEX",
+      "first_predictions_path": "/PRIVATE/nox-repeat32.first.jsonl",
+      "second_predictions_path": "/PRIVATE/nox-repeat32.second.jsonl"
+    },
+    {
+      "key": "OPEN_CONTROL_KEY",
+      "receipt_path": "/PRIVATE/open-repeat32.receipt.json",
+      "receipt_sha256": "LOWERCASE_64_HEX",
+      "first_predictions_path": "/PRIVATE/open-repeat32.first.jsonl",
+      "second_predictions_path": "/PRIVATE/open-repeat32.second.jsonl"
     }
   ],
   "pairs": [
@@ -77,8 +110,14 @@ historical v2 meaning.
 }
 ```
 
-The example is illustrative and incomplete: add the `eikos4b` attestation
-and exact numeric values before planning. Every selected 2.0 size needs one
+The example is illustrative and deliberately cannot run with
+`OPEN_CONTROL_KEY`: replace it with a pinned catalog key only after that
+model's native loader, two-process repeatability and all-file attestation pass
+a new prospective gold-free preflight. Replace every placeholder and rounded
+size with measured exact values before planning. Earlier Eikos 4B and Decider
+smokes failed their frozen repeatability thresholds; neither is currently an
+eligible first-release control merely because it remains in the catalog.
+Every selected 2.0 size needs one
 predeclared 1.0 comparator; an actual-size mismatch must say `nearest` and
 include a substantial rationale. At least one separate open-model control is
 required. The `candidate_size_b` and baseline `size_b` values must be measured
@@ -86,6 +125,20 @@ loaded parameter counts, not rounded model names. `same` additionally requires
 the preregistered family match and a measured maximum/minimum parameter ratio
 at most 1.25; larger ratios require `nearest` and cannot support an equal-size
 win claim.
+
+Every selected 1.0 or open baseline also needs a separate two-process smoke
+receipt. The planner reconstructs the fixed 32 gold-free prompts from the
+source files named in `baseline_repeat_panel`, compares the rebuilt bytes and
+manifest with the stored files, and requires prompt SHA-256
+`3376ed4093c7efb591519912b88605960923cf33fd19d8adfa5018eb02270a55`.
+For each baseline it rehashes the receipt and both prediction files, reruns
+the native comparison against the pinned model ID, revision, backend and
+adapter version, and requires zero category changes and maximum option
+probability drift at most `1e-6`. All 32 rows must match the rebuilt input
+fingerprints and the same attested package config, weights and runtime source
+digests used for full evaluation. Missing or failed smoke evidence blocks the
+plan before any sealed prediction. The plan saves each baseline's smoke and
+package attestation hashes; the gold-free pre-key audit verifies them again.
 
 Each baseline attestation points to a private JSON receipt with the same
 `model_id`, `revision`, `native_model_sha256`, `adapter_sha256`, and

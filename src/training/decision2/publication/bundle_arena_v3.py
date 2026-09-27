@@ -863,7 +863,7 @@ tags:
 - jevarena-v3
 ---
 
-![Decision 2.0 mosaic sticker mascot](decision-2-sticker-chibi-v4.png)
+![Decision 2.0 crossroads fox mosaic sticker](decision-2-sticker-crossroads-fox-v5.png)
 
 # {model_id}
 
@@ -1152,7 +1152,7 @@ def assemble(
         ("release-gate.json", gate_bytes),
     ):
         common._public_text(payload.decode("utf-8"), name)
-    sticker = Path(__file__).with_name("decision-2-sticker-chibi-v4.png")
+    sticker = Path(__file__).with_name("decision-2-sticker-crossroads-fox-v5.png")
     if sticker.is_symlink() or not sticker.is_file():
         raise ValueError("Decision 2.0 sticker asset is missing")
     output.parent.mkdir(parents=True, exist_ok=True)

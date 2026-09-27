@@ -175,7 +175,7 @@ def _prekey_evidence(
 ) -> dict[str, Any]:
     plan = _receipt(freeze.get("plan"), path.parent, "pre-key plan")
     audit = _receipt(freeze.get("prediction_audit"), path.parent, "gold-free audit")
-    if plan.get("plan_version") != "decision2-first-release-v3-plan/1":
+    if plan.get("plan_version") != "decision2-first-release-v3-plan/2":
         raise ValueError("Pre-key freeze lacks the v3 first-release plan")
     if audit.get("status") != "gold_free_prekey_predictions_verified":
         raise ValueError("Pre-key freeze lacks a passed gold-free prediction audit")

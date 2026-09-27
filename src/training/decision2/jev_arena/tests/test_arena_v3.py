@@ -127,7 +127,7 @@ def fixture(root: Path) -> tuple[Path, Path]:
     prompt_shas = {"typed": "c" * 64, "css": "d" * 64, "public": "f" * 64}
     pair_sha = _pair_digest([])
     plan = {
-        "plan_version": "decision2-first-release-v3-plan/1",
+        "plan_version": "decision2-first-release-v3-plan/2",
         "candidate_freeze_sha256": "e" * 64,
         "gate_document_sha256": "7" * 64,
         "formula": "100*sqrt(T*H)",

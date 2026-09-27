@@ -14,13 +14,16 @@ from unittest.mock import patch
 from inference.run import digest as native_digest
 from jev_arena.jevbench_public import FILES, SOURCE_REVISION, SOURCE_URL
 from scripts.baseline_attestation_v3 import build_attestation
+from scripts import baseline_repeat_smoke_v3 as smoke
 from scripts.eikos_stable_runtime_v3 import FLA_BACKEND, TORCH_BACKEND
 from scripts.plan_final_eval import BASELINES, sha_file
+from scripts import plan_first_release_v3 as planner
 from scripts.plan_first_release_v3 import (
     GATE_DOCUMENT,
     PLAN_VERSION,
     ROSTER_VERSION,
     _baseline_prediction_hashes,
+    _baseline_repeatability,
     audit_prekey_predictions,
     build_plan,
     checked_roster,
@@ -86,6 +89,118 @@ class FirstReleasePlanTests(unittest.TestCase):
             "calibration": str(self.root / "candidate-cal.json"),
             "max_length": 16000,
         }
+        choice32 = self.root / "choice32.prompts.jsonl"
+        typed_dev = self.root / "typed-dev.prompts.jsonl"
+
+        def prompt(index: int, kind: str) -> dict:
+            question = (
+                {"type": "choice", "options": {"A": "yes", "B": "no"}}
+                if kind == "choice"
+                else {"type": kind}
+            )
+            return {
+                "id": f"{kind}-{index}",
+                "state": f"state {index}",
+                "questions": {"q": question},
+            }
+
+        choice32.write_text(
+            "".join(json.dumps(prompt(i, "choice")) + "\n" for i in range(32))
+        )
+        typed_dev.write_text(
+            "".join(
+                json.dumps(prompt(i, ("choice", "noul", "score")[i % 3])) + "\n"
+                for i in range(1600)
+            )
+        )
+        for name, digest in (
+            ("CSS32_SHA", sha_file(choice32)),
+            ("TYPED_DEV_SHA", sha_file(typed_dev)),
+        ):
+            patcher = patch.object(smoke, name, digest)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        smoke_prompts = self.root / "repeat32.prompts.jsonl"
+        smoke_manifest = self.root / "repeat32.manifest.json"
+        smoke.prepare(choice32, typed_dev, smoke_prompts, smoke_manifest)
+        patcher = patch.object(
+            planner, "BASELINE_SMOKE_PROMPTS_SHA", sha_file(smoke_prompts)
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.repeat_panel = {
+            "choice32_path": str(choice32),
+            "typed_dev_path": str(typed_dev),
+            "prompts_path": str(smoke_prompts),
+            "manifest_path": str(smoke_manifest),
+        }
+        self.repeatability = []
+        for model, attestation in zip(self.models, self.attestations, strict=True):
+            row_hashes = _baseline_prediction_hashes(model, attestation)
+            first = self.root / f"{model.key}.repeat-first.jsonl"
+            second = self.root / f"{model.key}.repeat-second.jsonl"
+            repeated = []
+            for item in smoke.rows(smoke_prompts):
+                kind = item["questions"]["q"]["type"]
+                answer = (
+                    {
+                        "type": "choice",
+                        "choice": "A",
+                        "probabilities": {"A": 0.7, "B": 0.3},
+                    }
+                    if kind == "choice"
+                    else (
+                        {"type": "noul", "noul": 0.7}
+                        if kind == "noul"
+                        else {
+                            "type": "score",
+                            "score": 0.7,
+                            "probabilities": {"0": 0.3, "1": 0.7},
+                        }
+                    )
+                )
+                repeated.append(
+                    {
+                        "id": item["id"],
+                        "answers": {"q": answer},
+                        "source_input_sha256": native_digest(
+                            {"state": item["state"], "questions": item["questions"]}
+                        ),
+                        "model_id": model.model_id,
+                        "model_revision": model.revision,
+                        "backend": model.backend,
+                        "adapter_version": "native-published-v2",
+                        "revision_attested": True,
+                        "runtime_matches_validated": True,
+                        "usage": {"input_tokens": 100},
+                        **row_hashes,
+                    }
+                )
+            content = "".join(json.dumps(row) + "\n" for row in repeated)
+            first.write_text(content)
+            second.write_text(content)
+            receipt = self.root / f"{model.key}.repeat-receipt.json"
+            write_json(
+                receipt,
+                smoke.compare(
+                    smoke_prompts,
+                    first,
+                    second,
+                    model_id=model.model_id,
+                    revision=model.revision,
+                    backend=model.backend,
+                    adapter_version="native-published-v2",
+                ),
+            )
+            self.repeatability.append(
+                {
+                    "key": model.key,
+                    "receipt_path": str(receipt),
+                    "receipt_sha256": sha_file(receipt),
+                    "first_predictions_path": str(first),
+                    "second_predictions_path": str(second),
+                }
+            )
         self.roster_path = self.root / "roster.json"
         write_json(
             self.roster_path,
@@ -93,8 +208,10 @@ class FirstReleasePlanTests(unittest.TestCase):
                 "schema_version": ROSTER_VERSION,
                 "candidate_keys": ["d2-4b"],
                 "candidate_size_b": {"d2-4b": 4.2e-9},
+                "baseline_repeat_panel": self.repeat_panel,
                 "baseline_keys": ["nox", "eikos4b"],
                 "baseline_attestations": self.attestations,
+                "baseline_repeatability": self.repeatability,
                 "pairs": [
                     {
                         "candidate": "d2-4b",
@@ -278,6 +395,174 @@ class FirstReleasePlanTests(unittest.TestCase):
                 model_root=self.model_root,
                 external_root=self.external_root,
             )
+
+    def test_roster_requires_pinned_two_process_smoke_for_every_baseline(self) -> None:
+        roster = json.loads(self.roster_path.read_text())
+        roster["baseline_repeatability"] = self.repeatability[:1]
+        write_json(self.roster_path, roster)
+        with self.assertRaisesRegex(ValueError, "Every selected baseline"):
+            checked_roster(
+                self.roster_path,
+                candidates=[self.candidate],
+                source_root=SOURCE_ROOT,
+                model_root=self.model_root,
+                external_root=self.external_root,
+            )
+        roster["baseline_repeatability"] = self.repeatability
+        roster["baseline_repeatability"][0]["second_predictions_path"] = roster[
+            "baseline_repeatability"
+        ][0]["first_predictions_path"]
+        write_json(self.roster_path, roster)
+        with self.assertRaisesRegex(ValueError, "two distinct native runs"):
+            checked_roster(
+                self.roster_path,
+                candidates=[self.candidate],
+                source_root=SOURCE_ROOT,
+                model_root=self.model_root,
+                external_root=self.external_root,
+            )
+
+    def test_roster_rejects_changed_smoke_prompt_manifest(self) -> None:
+        manifest = Path(self.repeat_panel["manifest_path"])
+        contents = json.loads(manifest.read_text())
+        contents["types"]["choice"] += 1
+        write_json(manifest, contents)
+        with self.assertRaisesRegex(ValueError, "pinned gold-free build"):
+            checked_roster(
+                self.roster_path,
+                candidates=[self.candidate],
+                source_root=SOURCE_ROOT,
+                model_root=self.model_root,
+                external_root=self.external_root,
+            )
+
+    def test_roster_rejects_unattested_smoke_weights_and_failed_drift(self) -> None:
+        item = self.repeatability[0]
+        first = Path(item["first_predictions_path"])
+        second = Path(item["second_predictions_path"])
+        receipt = Path(item["receipt_path"])
+        records = [json.loads(line) for line in first.read_text().splitlines()]
+        records[0]["model_config_sha256"] = "0" * 64
+        content = "".join(json.dumps(row) + "\n" for row in records)
+        first.write_text(content)
+        second.write_text(content)
+        write_json(
+            receipt,
+            smoke.compare(
+                Path(self.repeat_panel["prompts_path"]),
+                first,
+                second,
+                model_id=self.models[0].model_id,
+                revision=self.models[0].revision,
+                backend=self.models[0].backend,
+                adapter_version="native-published-v2",
+            ),
+        )
+        roster = json.loads(self.roster_path.read_text())
+        roster["baseline_repeatability"][0]["receipt_sha256"] = sha_file(receipt)
+        write_json(self.roster_path, roster)
+        with self.assertRaisesRegex(ValueError, "package differs from attestation"):
+            checked_roster(
+                self.roster_path,
+                candidates=[self.candidate],
+                source_root=SOURCE_ROOT,
+                model_root=self.model_root,
+                external_root=self.external_root,
+            )
+        records[0]["model_config_sha256"] = _baseline_prediction_hashes(
+            self.models[0], self.attestations[0]
+        )["model_config_sha256"]
+        records[0]["answers"]["q"]["probabilities"] = {"A": 0.69, "B": 0.31}
+        first.write_text("".join(json.dumps(row) + "\n" for row in records))
+        write_json(
+            receipt,
+            smoke.compare(
+                Path(self.repeat_panel["prompts_path"]),
+                first,
+                second,
+                model_id=self.models[0].model_id,
+                revision=self.models[0].revision,
+                backend=self.models[0].backend,
+                adapter_version="native-published-v2",
+            ),
+        )
+        roster["baseline_repeatability"][0]["receipt_sha256"] = sha_file(receipt)
+        write_json(self.roster_path, roster)
+        with self.assertRaisesRegex(ValueError, "repeatability gate failed"):
+            checked_roster(
+                self.roster_path,
+                candidates=[self.candidate],
+                source_root=SOURCE_ROOT,
+                model_root=self.model_root,
+                external_root=self.external_root,
+            )
+
+    def test_kev_smoke_matches_composite_package_fingerprint(self) -> None:
+        kev = next(model for model in BASELINES if model.key == "kev")
+        package_receipt = self.root / "kev-package-receipt.json"
+        write_json(
+            package_receipt,
+            {
+                "files": {
+                    "provenance.json": "1" * 64,
+                    "head.pt": "2" * 64,
+                    "adapter_model.safetensors": "3" * 64,
+                },
+                "runtime_files": {},
+            },
+        )
+        attestation = {
+            "receipt_path": str(package_receipt),
+            "receipt_sha256": sha_file(package_receipt),
+            "adapter_sha256": "4" * 64,
+        }
+        fingerprint = _baseline_prediction_hashes(kev, attestation)[
+            "model_config_sha256"
+        ]
+        first, second = self.root / "kev-first.jsonl", self.root / "kev-second.jsonl"
+        rows = [
+            json.loads(line)
+            for line in Path(self.repeatability[0]["first_predictions_path"])
+            .read_text()
+            .splitlines()
+        ]
+        for row in rows:
+            row.update(
+                model_id=kev.model_id,
+                model_revision=kev.revision,
+                backend=kev.backend,
+                model_config_sha256=fingerprint,
+            )
+        content = "".join(json.dumps(row) + "\n" for row in rows)
+        first.write_text(content)
+        second.write_text(content)
+        receipt = self.root / "kev-repeat-receipt.json"
+        write_json(
+            receipt,
+            smoke.compare(
+                Path(self.repeat_panel["prompts_path"]),
+                first,
+                second,
+                model_id=kev.model_id,
+                revision=kev.revision,
+                backend=kev.backend,
+                adapter_version="native-published-v2",
+            ),
+        )
+        roster = {
+            "baseline_repeat_panel": self.repeat_panel,
+            "baseline_repeatability": [
+                {
+                    "key": kev.key,
+                    "receipt_path": str(receipt),
+                    "receipt_sha256": sha_file(receipt),
+                    "first_predictions_path": str(first),
+                    "second_predictions_path": str(second),
+                }
+            ],
+        }
+        verified = _baseline_repeatability(roster, [kev], {kev.key: attestation})
+        self.assertEqual(verified[kev.key]["receipt_sha256"], sha_file(receipt))
 
     def test_same_size_requires_measured_parameter_ratio(self) -> None:
         roster = json.loads(self.roster_path.read_text(encoding="utf-8"))
@@ -532,6 +817,16 @@ class FirstReleasePlanTests(unittest.TestCase):
             self.assertEqual(
                 audited["comparison_pairs_sha256"], plan["comparison_pairs_sha256"]
             )
+            baseline_path = Path(plan["inference"][0]["paths"]["public"])
+            baseline_rows = baseline_path.read_text()
+            altered_rows = [json.loads(line) for line in baseline_rows.splitlines()]
+            del altered_rows[0]["model_id"]
+            baseline_path.write_text(
+                "".join(json.dumps(row) + "\n" for row in altered_rows)
+            )
+            with self.assertRaisesRegex(ValueError, "model identity differs"):
+                audit_prekey_predictions(plan)
+            baseline_path.write_text(baseline_rows)
             native_path = Path(
                 plan["inference"][-1]["paths"]["public"] + ".manifest.json"
             )
@@ -545,6 +840,10 @@ class FirstReleasePlanTests(unittest.TestCase):
             bad_pair_plan = {**plan, "comparison_pairs_sha256": "0" * 64}
             with self.assertRaisesRegex(ValueError, "comparison pairs changed"):
                 audit_prekey_predictions(bad_pair_plan)
+            bad_smoke_plan = copy.deepcopy(plan)
+            bad_smoke_plan["baseline_repeatability"]["nox"]["receipt_sha256"] = "0" * 64
+            with self.assertRaisesRegex(ValueError, "repeatability receipts changed"):
+                audit_prekey_predictions(bad_smoke_plan)
             for field, wrong in (
                 ("native_model_sha256", "0" * 64),
                 ("adapter_sha256", "0" * 64),

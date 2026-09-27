@@ -51,7 +51,7 @@ def fixture(root: Path) -> dict:
         )
     ]
     plan = {
-        "plan_version": "decision2-first-release-v3-plan/1",
+        "plan_version": "decision2-first-release-v3-plan/2",
         "source_root": str(SOURCE_ROOT),
         "source_sha256": {
             name: hashlib.sha256((SOURCE_ROOT / name).read_bytes()).hexdigest()

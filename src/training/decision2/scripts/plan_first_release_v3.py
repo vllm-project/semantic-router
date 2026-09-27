@@ -29,7 +29,16 @@ from jev_arena.jevbench_public import (
 from jev_arena.jevbench_public import (
     SOURCE_URL as PUBLIC_SOURCE_URL,
 )
+from inference.run import ADAPTER_VERSION as DECISION_NATIVE_ADAPTER_VERSION
 from scripts.baseline_attestation_v3 import verify_attestation
+from scripts.baseline_repeat_smoke_v3 import (
+    PROMPTS_SHA as BASELINE_SMOKE_PROMPTS_SHA,
+)
+from scripts.baseline_repeat_smoke_v3 import (
+    SCHEMA as BASELINE_SMOKE_SCHEMA,
+)
+from scripts.baseline_repeat_smoke_v3 import compare as compare_baseline_smoke
+from scripts.baseline_repeat_smoke_v3 import prepared_panel, rows_predictions
 from scripts.eikos_stable_runtime_v3 import stable_backend, verified_stable_runtime
 from scripts.plan_final_eval import (
     BASELINES,
@@ -44,8 +53,8 @@ from scripts.plan_final_eval import (
     source_command,
 )
 
-PLAN_VERSION = "decision2-first-release-v3-plan/1"
-ROSTER_VERSION = "decision2-first-release-v3-pretest-roster/1"
+PLAN_VERSION = "decision2-first-release-v3-plan/2"
+ROSTER_VERSION = "decision2-first-release-v3-pretest-roster/2"
 GATE_DOCUMENT = "research/jev-arena-v3-first-release-gates-2026-09-27.md"
 SOURCE_FILES = (
     "benchmark/generate.py",
@@ -59,6 +68,7 @@ SOURCE_FILES = (
     "jev_arena/jevbench_public.py",
     "jev_arena/public_rank.py",
     "jev_arena/render.py",
+    "inference/run.py",
     "publication/adapter_runtime.py",
     "publication/bundle_arena.py",
     "publication/generate_arena.py",
@@ -67,6 +77,7 @@ SOURCE_FILES = (
     "publication/bundle_arena_v3.py",
     "scripts/plan_final_eval.py",
     "scripts/baseline_attestation_v3.py",
+    "scripts/baseline_repeat_smoke_v3.py",
     "scripts/eikos_stable_runtime_v3.py",
     "scripts/plan_first_release_v3.py",
     "scripts/freeze_first_release_v3.py",
@@ -230,6 +241,120 @@ def _baseline_prediction_hashes(
     return expected
 
 
+def _regular_private_input(value: Any, field: str) -> Path:
+    path = _abs_path(value, field)
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f"{field} must be an existing regular private file")
+    return path
+
+
+def _baseline_repeatability(
+    roster: dict[str, Any],
+    selected: list[NativeModel],
+    attestations: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, str]]:
+    """Rebuild the pinned panel and both native runs for every baseline."""
+    panel = roster.get("baseline_repeat_panel")
+    if not isinstance(panel, dict) or set(panel) != {
+        "choice32_path",
+        "typed_dev_path",
+        "prompts_path",
+        "manifest_path",
+    }:
+        raise ValueError("Baseline repeatability panel is missing or incomplete")
+    paths = {
+        name: _regular_private_input(value, f"baseline_repeat_panel.{name}")
+        for name, value in panel.items()
+    }
+    payload, identity = prepared_panel(paths["choice32_path"], paths["typed_dev_path"])
+    if (
+        sha_file(paths["prompts_path"]) != BASELINE_SMOKE_PROMPTS_SHA
+        or paths["prompts_path"].read_bytes() != payload
+        or _object(paths["manifest_path"]) != identity
+        or identity.get("schema_version") != BASELINE_SMOKE_SCHEMA
+    ):
+        raise ValueError(
+            "Baseline repeatability panel differs from pinned gold-free build"
+        )
+    declared = roster.get("baseline_repeatability")
+    if not isinstance(declared, list) or len(declared) != len(selected):
+        raise ValueError("Every selected baseline needs a two-process smoke receipt")
+    by_key = {model.key: model for model in selected}
+    verified: dict[str, dict[str, str]] = {}
+    for item in declared:
+        if not isinstance(item, dict) or set(item) != {
+            "key",
+            "receipt_path",
+            "receipt_sha256",
+            "first_predictions_path",
+            "second_predictions_path",
+        }:
+            raise ValueError("Incomplete baseline repeatability receipt reference")
+        key = item["key"]
+        if key not in by_key or key in verified:
+            raise ValueError("Unknown or duplicate baseline repeatability key")
+        model = by_key[key]
+        receipt_path, first, second = (
+            _regular_private_input(item[name], f"{key}.{name}")
+            for name in (
+                "receipt_path",
+                "first_predictions_path",
+                "second_predictions_path",
+            )
+        )
+        if len({receipt_path, first, second, paths["prompts_path"]}) != 4:
+            raise ValueError(f"{key}: repeatability needs two distinct native runs")
+        receipt_sha = _sha(item["receipt_sha256"], f"{key}.receipt_sha256")
+        if sha_file(receipt_path) != receipt_sha:
+            raise ValueError(f"{key}: baseline smoke receipt digest changed")
+        receipt = _object(receipt_path)
+        adapter_version = receipt.get("adapter_version")
+        if (
+            receipt.get("schema_version") != BASELINE_SMOKE_SCHEMA
+            or receipt.get("model_id") != model.model_id
+            or receipt.get("revision") != model.revision
+            or receipt.get("backend") != model.backend
+            or not isinstance(adapter_version, str)
+            or not adapter_version
+            or (
+                model.module in {"inference.run", "inference.kev"}
+                and adapter_version != DECISION_NATIVE_ADAPTER_VERSION
+            )
+        ):
+            raise ValueError(f"{key}: smoke identity differs from pinned catalog")
+        rebuilt = compare_baseline_smoke(
+            paths["prompts_path"],
+            first,
+            second,
+            model_id=model.model_id,
+            revision=model.revision,
+            backend=model.backend,
+            adapter_version=adapter_version,
+            max_probability_drift=1e-6,
+        )
+        if receipt != rebuilt or rebuilt["gate_pass"] is not True:
+            raise ValueError(f"{key}: two-process native repeatability gate failed")
+        row_hashes = _baseline_prediction_hashes(model, attestations[key])
+        for prediction_path in (first, second):
+            for row in rows_predictions(prediction_path):
+                if any(
+                    row.get(field) != digest for field, digest in row_hashes.items()
+                ):
+                    raise ValueError(
+                        f"{key}: smoke prediction package differs from attestation"
+                    )
+        verified[key] = {
+            "receipt_sha256": receipt_sha,
+            "prompts_sha256": BASELINE_SMOKE_PROMPTS_SHA,
+            "manifest_sha256": sha_file(paths["manifest_path"]),
+            "first_predictions_sha256": sha_file(first),
+            "second_predictions_sha256": sha_file(second),
+            "package_attestation_sha256": attestations[key]["receipt_sha256"],
+            "adapter_sha256": attestations[key]["adapter_sha256"],
+        }
+    return verified
+
+
 def checked_roster(
     path: Path,
     *,
@@ -274,6 +399,9 @@ def checked_roster(
     attestations = _baseline_attestations(
         roster, selected, source_root, model_root, external_root
     )
+    repeatability = _baseline_repeatability(roster, selected, attestations)
+    for key, qualification in repeatability.items():
+        attestations[key]["repeatability"] = qualification
     pairs = roster.get("pairs")
     if not isinstance(pairs, list) or len(pairs) != len(candidates):
         raise ValueError("Every candidate needs one predeclared 1.0 comparator")
@@ -611,6 +739,10 @@ def build_plan(
         "v3_eikos_stable_runtime": stable_runtime,
         "pretest_roster_path": str(roster_path),
         "pretest_roster_sha256": roster_sha256,
+        "baseline_repeatability": {
+            key: attestation["repeatability"]
+            for key, attestation in attestations.items()
+        },
         "comparison_pairs_sha256": pair_digest(pairs),
         "comparison_pairs": pairs,
         "gate_document_sha256": sha_file(source_root / GATE_DOCUMENT),
@@ -752,6 +884,10 @@ def audit_prekey_predictions(plan: dict[str, Any]) -> dict[str, Any]:
         for model in models
     } != {row["key"] for row in plan["model_roster"]}:
         raise ValueError("Native model roster changed since v3 planning")
+    if plan.get("baseline_repeatability") != {
+        key: attestation["repeatability"] for key, attestation in attestations.items()
+    }:
+        raise ValueError("Baseline repeatability receipts changed since v3 planning")
     if (
         pair_digest(pairs) != plan["comparison_pairs_sha256"]
         or pairs != plan["comparison_pairs"]
@@ -877,7 +1013,7 @@ def audit_prekey_predictions(plan: dict[str, Any]) -> dict[str, Any]:
                             f"{model['key']} {panel}:{number}: input or answer IDs differ"
                         )
                     if (
-                        row.get("model_id", model["model_id"]) != model["model_id"]
+                        row.get("model_id") != model["model_id"]
                         or row.get("model_revision") != model["revision"]
                     ):
                         raise ValueError(

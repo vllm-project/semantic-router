@@ -19,6 +19,7 @@ from inference.run import digest
 CSS32_SHA = "06b5b13b8a51452ca7f8bae588bb43c7faa6b21d9498d262440041f32c541312"
 TYPED_DEV_SHA = "a17ec4b675bbc3da96dba8f31af8f25c9b02cc96ff048fb7de899bdd8b6cf79a"
 SCHEMA = "decision2-v3-baseline-repeat-smoke/1"
+PROMPTS_SHA = "3376ed4093c7efb591519912b88605960923cf33fd19d8adfa5018eb02270a55"
 
 
 def sha(path: Path) -> str:
@@ -66,13 +67,10 @@ def _exclusive(path: Path, content: bytes) -> None:
         os.fsync(stream.fileno())
 
 
-def prepare(
-    css32: Path, typed_dev: Path, output: Path, manifest: Path
-) -> dict[str, Any]:
+def prepared_panel(css32: Path, typed_dev: Path) -> tuple[bytes, dict[str, Any]]:
+    """Rebuild the fixed gold-free panel without writing or reading labels."""
     if sha(css32) != CSS32_SHA or sha(typed_dev) != TYPED_DEV_SHA:
         raise ValueError("Gold-free source digest changed")
-    if output == manifest or output.exists() or manifest.exists():
-        raise ValueError("Outputs must be distinct and absent")
     css, typed = rows(css32), rows(typed_dev)
     if len(css) != 32 or len(typed) != 1600:
         raise ValueError("Source panel length changed")
@@ -120,6 +118,15 @@ def prepare(
         },
         "scope": "gold-free runtime repeatability only; no score or selection",
     }
+    return payload, identity
+
+
+def prepare(
+    css32: Path, typed_dev: Path, output: Path, manifest: Path
+) -> dict[str, Any]:
+    if output == manifest or output.exists() or manifest.exists():
+        raise ValueError("Outputs must be distinct and absent")
+    payload, identity = prepared_panel(css32, typed_dev)
     _exclusive(output, payload)
     try:
         _exclusive(
@@ -256,7 +263,7 @@ def main() -> None:
     audit.add_argument("--second", type=Path, required=True)
     audit.add_argument("--model-id", required=True)
     audit.add_argument("--revision", required=True)
-    audit.add_argument("--backend", choices=("nox", "eikos"), required=True)
+    audit.add_argument("--backend", required=True)
     audit.add_argument("--adapter-version", required=True)
     audit.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

@@ -1,13 +1,15 @@
 # Decision 2.0 visual direction
 
-Two original sticker mascots remain under visual review. The newer candidate,
-`decision-2-sticker-crossroads-fox-v5.png`, is a cute pixel-mosaic fox with a
+The JevArena v3 first-release card uses
+`decision-2-sticker-crossroads-fox-v5.png`. It is a cute pixel-mosaic fox with a
 forked tail for branching choices and a three-facet gem for Choice, Noul and
 Score. Its chunky pixels and distinct tail silhouette aim to stay recognizable
 at Hugging Face thumbnail sizes. The earlier chibi owl,
 `decision-2-sticker-chibi-v4.png`, is retained as an alternative design study.
-Neither asset is a claim about evaluation quality, and the final card/collection
-must choose one consistent mascot after a small-size visual check.
+The historical v2 packager still references the owl; the first-release v3
+package and card use the fox consistently. Neither asset is a claim about
+evaluation quality. Review the final card and collection together at thumbnail
+size before uploading.
 
 | Role | Color |
 | --- | --- |
@@ -22,4 +24,4 @@ The palette is shared by rank, parameter-count Pareto and score-matrix SVGs.
 Use the mascot as a small visual anchor alongside the title, not over a data
 plot. Every chart keeps a textual title, direct labels, a plain-language scope
 caveat and alternative text; color alone never encodes rank or frontier status.
-The mascot is provisional until the card and collection are reviewed together.
+Use the fox consistently on the v3 card and collection.

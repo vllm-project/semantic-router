@@ -613,7 +613,7 @@ class FullV3PackageTests(unittest.TestCase):
         write(
             self.plan_path,
             {
-                "plan_version": "decision2-first-release-v3-plan/1",
+                "plan_version": "decision2-first-release-v3-plan/2",
                 "formula": "100*sqrt(T*H)",
                 "candidate_freeze_sha256": self.freeze["candidate_lock_sha256"],
                 "gate_document_sha256": self.freeze["protocol_sha256"],
@@ -938,6 +938,12 @@ class FullV3PackageTests(unittest.TestCase):
         self.assertIn("8,147", card)
         self.assertIn("Authored questions are reserved for v3.1", card)
         self.assertIn("Coverage-adjusted Brier", card)
+        self.assertIn("decision-2-sticker-crossroads-fox-v5.png", card)
+        self.assertTrue(
+            (
+                self.root / "v3-package/decision-2-sticker-crossroads-fox-v5.png"
+            ).is_file()
+        )
         bundle.verify(self.root / "v3-package")
 
     def test_rejects_unbound_freeze_and_blocked_review(self) -> None:
