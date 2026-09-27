@@ -127,6 +127,27 @@ class PackageNativeArenaTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsupported state type"):
             arena.load_gold_free(path)
 
+    def test_evidence_join_target_is_input_not_gold(self) -> None:
+        path = self.root / "evidence-join.jsonl"
+        row = _row()
+        row["state"] = {
+            "target": {"entity": "XENTITY", "item": "XITEM"},
+            "registry": [{"entity": "XENTITY", "active": True}],
+            "attestations": [],
+        }
+        path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+        self.assertEqual(arena.load_gold_free(path), [row])
+        for bad in (
+            {"target": {"entity": "XENTITY", "item": "XITEM", "gold": "yes"}},
+            {"target": "XENTITY"},
+            {"nested": {"target": {"entity": "XENTITY", "item": "XITEM"}}},
+            {"target": {"entity": "XENTITY", "item": "XITEM"}, "label": "yes"},
+        ):
+            row["state"] = bad
+            path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "state answer field"):
+                arena.load_gold_free(path)
+
     def test_sealed_import_uses_package_files_only(self) -> None:
         package = self.root / "bundle"
         code = package / "decision2"

@@ -74,12 +74,24 @@ def _reject_constant(value: str) -> Any:
     raise ValueError(f"Prompt JSON contains a nonfinite value: {value}")
 
 
-def _contains_answer_field(value: Any) -> bool:
+def _contains_answer_field(value: Any, *, state_root: bool = False) -> bool:
     if isinstance(value, dict):
-        return any(
-            key.strip().casefold() in ANSWER_FIELDS or _contains_answer_field(child)
-            for key, child in value.items()
-        )
+        for key, child in value.items():
+            # The frozen evidence-join task names its requested entity/item
+            # pair `state.target`. It is task input, not a gold answer. Accept
+            # only this exact top-level shape; every other answer-like field
+            # still fails before loading the model.
+            if (
+                state_root
+                and key == "target"
+                and isinstance(child, dict)
+                and set(child) == {"entity", "item"}
+                and all(isinstance(part, str) and part for part in child.values())
+            ):
+                continue
+            if key.strip().casefold() in ANSWER_FIELDS or _contains_answer_field(child):
+                return True
+        return False
     if isinstance(value, list):
         return any(_contains_answer_field(child) for child in value)
     return False
@@ -108,7 +120,7 @@ def load_gold_free(path: Path) -> list[dict[str, Any]]:
                 raise ValueError(f"Prompt line {number} has a missing or duplicate ID")
             if not isinstance(row["state"], (str, dict)):
                 raise ValueError(f"Prompt line {number} has an unsupported state type")
-            if _contains_answer_field(row["state"]):
+            if _contains_answer_field(row["state"], state_root=True):
                 raise ValueError(f"Prompt line {number} contains a state answer field")
             questions = row["questions"]
             if (
