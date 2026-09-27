@@ -1,0 +1,84 @@
+{
+  "version": "decision2-eos08-temperature-transport/1",
+  "gold_sha256": {
+    "dev": "c7a8b86bda0d0d6120e572b94dfc756bf10264108554af76307141ae02fbf5dc",
+    "css": "9a7274760dc4ced5ce5219b300974a1cf54c7d5e7e0c7de05d78bb33f2959391"
+  },
+  "runs": {
+    "eos_continuation": {
+      "checkpoint": "checkpoint-0000160",
+      "model_sha256": "305d757d4dc53622894b08e5738568799220a0bf184f41100cba00acdb258f86",
+      "calibration": "calibration-hard900.json",
+      "calibration_sha256": "6047fb2724175d7b286f60dcb187012b138a1571b93b9238a872f34e22a6b228",
+      "cal_rows": 900,
+      "panels": {
+        "dev": {
+          "predictions": "dev.cal.predictions.jsonl",
+          "predictions_sha256": "808fa373159c69455a03b9445df02005c052e50b1a549c66f1b280662b41f641",
+          "manifest_sha256": "a1e59f4409de0c06e5a253ac75886bbab11b9ef508c0e5153a52a75d4d5a080d",
+          "score": "dev.cal.score.json",
+          "score_sha256": "bb21896cea15e31fef9acdccbf5ef00a324cc008636e87a72254969591f32169",
+          "n": 1600
+        },
+        "css": {
+          "predictions": "css-pilot.cal.predictions.jsonl",
+          "predictions_sha256": "1d3b156543759f216854ddf09469fcb0a3aaa8024b0bfbef4c66b0e37a723e80",
+          "manifest_sha256": "3188defff9a7d8c980727321284ef70e69d86cea497fd34cbe6e7fe500d472e5",
+          "score": "css-pilot.cal.score.json",
+          "score_sha256": "9dfd8347837ba6d7ce09e7accf66b3ab7122dd3e4b7009ba008f6fe3340daa5d",
+          "n": 1430
+        }
+      }
+    },
+    "qwen35_base": {
+      "checkpoint": "checkpoint-0000466",
+      "model_sha256": "bfa87b54fac58799efe2a26c9082166cbfedc2890c63d01298a73b0e55d497bd",
+      "calibration": "calibration-native-v1.json",
+      "calibration_sha256": "18653158dfc6426e2f5aa139612a4c59979d2435b456cb16e3759ff8fc44280f",
+      "cal_rows": 700,
+      "panels": {
+        "dev": {
+          "predictions": "dev-native-0000466.jsonl",
+          "predictions_sha256": "aeef9c6b82627371854723446d72ebb4e7920af2391d71a1c0864c4e46dbd057",
+          "manifest_sha256": "b2989b35a107f1d38c645746c8bfdf0b115faad1501dcb2f2f8b8b699c05e135",
+          "score": "dev-native-0000466.score.json",
+          "score_sha256": "9303fe1d42259e741e379b82729a105a6469ae0a59ddaf592e401aa01fac016f",
+          "n": 1600
+        },
+        "css": {
+          "predictions": "css-native-0000466.jsonl",
+          "predictions_sha256": "3ae26ad1faf2b7b7bab83efb1ec9e109a13f6f3bfde8074f68db929ca85c37ee",
+          "manifest_sha256": "c96600a83b4f0bc3ea7456f7a002ff57426219c5d8a1c54a79964a456cf98b7e",
+          "score": "css-native-0000466.score.json",
+          "score_sha256": "034fb0d6aca854f6e896dee90947daef94345eb3e127cf6fb4b3808318b58106",
+          "n": 1430
+        }
+      }
+    },
+    "qwen35_posttrained": {
+      "checkpoint": "checkpoint-0000466",
+      "model_sha256": "469795c06cd37152ace164fb91904b727813389e27a6cfc6a19e47ee57d5a8ac",
+      "calibration": "calibration-native-v1.json",
+      "calibration_sha256": "0f6630b362f92dbc1f2ba7c4704e1a584f73233fad98be93222d62e3a8903af9",
+      "cal_rows": 700,
+      "panels": {
+        "dev": {
+          "predictions": "dev-native-0000466.jsonl",
+          "predictions_sha256": "9f1f2efc32db919a4a2e512a8325b547b4a3662ce5b9e6f8f51021d4ee1c0b28",
+          "manifest_sha256": "70a526d53f5e828f92b0caeb13b75a4bff669203c10110dcc9ed8d607dabdd22",
+          "score": "dev-native-0000466.score.json",
+          "score_sha256": "c9d9f17e97dabf849754c934fe0880b3b558864d603faacc4c64ba1a5e9a652f",
+          "n": 1600
+        },
+        "css": {
+          "predictions": "css-native-0000466.jsonl",
+          "predictions_sha256": "af7119d64428c35686a5f6a1e8b98b628f216148a33511426e75d1d1831588ad",
+          "manifest_sha256": "1b4c110a61d204b9d4bcefed427fc7152578775e8478bd46ae334ebb20413259",
+          "score": "css-native-0000466.score.json",
+          "score_sha256": "25a389e75ab179740f47181b3c0c18963de3a890732379a4c43ec666d8ad9ee6",
+          "n": 1430
+        }
+      }
+    }
+  }
+}
