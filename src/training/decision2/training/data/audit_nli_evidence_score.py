@@ -356,7 +356,7 @@ def overlap_screen(
             continue
         rare = sorted(
             (gram for gram in source_grams if gram in index),
-            key=lambda gram: len(index[gram]),
+            key=lambda gram: (len(index[gram]), gram),
         )[:6]
         candidate_ids = {
             candidate

@@ -133,3 +133,15 @@ def test_exact_group_overlap_and_protected_answer_refusal(tmp_path: Path) -> Non
     )
     with pytest.raises(ValueError, match="non-prompt"):
         read_protected(manifest, [])
+
+
+def test_near_overlap_tied_rare_grams_have_stable_priority() -> None:
+    left = "aaaaabbbbbcccccddddd"
+    right = "zzzzzwwwwwvvvvvuuuuu"
+    pair = Pair(left + " " + right, "short", "neutral", "source-group", "x", 0)
+
+    # Both protected leaves are fully contained in the source, but the
+    # recall-limited scanner only searches the six rarest shared grams.
+    # Equal-frequency gram ties must not depend on set/hash iteration order.
+    overlaps = overlap_screen([pair], [("left", left), ("right", right)])
+    assert overlaps["role_group_counts"] == {"left": {"exact": 0, "near": 1}}
