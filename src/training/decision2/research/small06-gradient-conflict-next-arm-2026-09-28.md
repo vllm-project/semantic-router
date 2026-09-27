@@ -1,8 +1,9 @@
 # 0.6B: test task-gradient interference before another full run
 
-**Status: design only.** No GPU diagnostic, optimizer update, new model score,
-or release decision follows from this note. Freeze the implementation and all
-thresholds before executing it. The [official-base v3 comparison](qwen3-06b-official-full466-v3-postkey-result-2026-09-27.md)
+**Status: opt-in preflight implemented; no real-source gradient receipt yet.**
+No GPU diagnostic, optimizer update, new model score, or release decision
+follows from this note. Freeze the implementation and all thresholds before
+executing it. The [official-base v3 comparison](qwen3-06b-official-full466-v3-postkey-result-2026-09-27.md)
 is a post-key same-panel result, not a fresh blind test.
 
 ## Evidence and hypothesis
@@ -93,3 +94,30 @@ If the conflict or performance gate fails, do **not** sweep projection orders
 or thresholds on SELECT. Prioritize an independently admitted, genuinely
 source-disjoint Choice/three-level Score corpus, since the current label
 coverage and mechanism mismatch remain the stronger unresolved explanation.
+
+## Implemented read-only preflight boundary
+
+[`gradient_conflict_preflight.py`](../training/model/gradient_conflict_preflight.py)
+recreates the exact epoch-0 row order with the control scheduler and takes the
+first eight accumulation windows containing all three types. Its default CPU
+mode only hashes the private TRAIN, verifies pinned official source files,
+tokenizes every row, checks the 4,094,489-token total, and emits an aggregate
+roster receipt. Explicit `--measure --device cuda` additionally reloads the
+same official source and random head, uses BF16 backbone autocast, measures
+each window's ordinary and per-type backbone gradients, and applies **zero**
+optimizer steps. It never accepts SELECT, CAL or benchmark keys. The receipt
+has an allowlisted schema: window index, type counts, native token count,
+roster hash, gradient norms/cosines and technical status, with no IDs, text or
+labels. CPU synthetic tests independently compare the grouped gradient norm
+against ordinary `.backward()` and verify unchanged parameters. CPU test
+success is implementation evidence, **not** a measured Qwen conflict result.
+
+The future real-source measurement requires one BF16 GPU, the pinned official
+source and private TRAIN, and enough HBM for four FP32 backbone-gradient
+accumulators (roughly 9.6 GB before model, activations and temporary grads).
+The loop stops after six minutes (0.10 GPU-hour); reserve at most 0.20
+GPU-hour for source loading, tokenization and the measurement. A conflict
+receipt passing three of eight windows is only permission to implement the
+separate same-schedule one-update parity gate, not permission for the full
+466-update arm or a publication claim. If it fails, record HOLD without
+changing the window roster or threshold.
