@@ -129,3 +129,27 @@ The newer Choice source auditor scans all input text fields but pins the old
 manifest digest, so it too needs a prospective manifest/version lock before
 use. Existing exact-quota HOLD receipts and teacher/data rights gates remain
 unchanged. GPU-hours for this follow-up: **0**.
+
+### Prospective full-input overlap screen, synthetic-only
+
+`training.data.audit_27b_full_input_overlap` adds a separate pure CPU screen
+for a future admission protocol. It extracts the entire input surface from
+`state`, `questions`/`instructions`, and `options`: each field, structured
+text leaves, and the combined request. Exact raw and NFKC-normalized SHA-256
+row-pair matches are counted; approximate matches use the existing eight-band
+64-bit SimHash candidate rule followed by Hamming, length and edit-ratio
+checks. Reports contain aggregate counts only, never source strings or IDs.
+The eleven synthetic tests demonstrate question-only and option-only matches
+that the frozen state-only screen would miss, a near match, a clean match,
+and explicit HOLD when rights-clean TRAIN/SELECT/CAL are absent. The future
+screen also requires the scheduled rows to equal their projected TRAIN input
+and stops on any unvetted optional role. Short spans are kept in the combined
+request but are not checked as separate spans below the declared threshold;
+approximate matching still cannot establish semantic non-overlap.
+
+**No real overlap run has occurred.** The existing 32-role candidate is still
+invalid for strict admission and lacks the three partition roles. A new
+manifest with source-specific input attestation, optional-role decisions,
+rights and teacher-mask checks, then a prospectively signed schedule/overlap
+rule is required before GPU work. The two original exact-quota failures and
+all prior receipts remain unchanged. GPU-hours: **0**.

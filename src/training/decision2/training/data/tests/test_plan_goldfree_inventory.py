@@ -10,6 +10,10 @@ from unittest.mock import patch
 
 from publication.package_native_arena import input_digest, load_gold_free
 
+from training.data.audit_27b_full_input_overlap import (
+    audit_core_full_input,
+    full_input_overlap_rows,
+)
 from training.data.audit_27b_teacher_admission import _contains_gold_key
 from training.data.plan_goldfree_inventory import (
     CORE_ROLES,
@@ -144,6 +148,130 @@ class ProtectedInventoryProjectionTests(unittest.TestCase):
                 ]
                 with self.assertRaisesRegex(ValueError, "strict input-only"):
                     validate_core_rows(roles)
+
+
+class FullInputOverlapTests(unittest.TestCase):
+    def test_question_only_overlap_is_visible_beyond_state(self) -> None:
+        question = "Which signed certificate verifies this shipment before release?"
+        left = [
+            {
+                "id": "train-id",
+                "state": "Shipment A has a long unique history.",
+                "instructions": question,
+            }
+        ]
+        right = [
+            {
+                "id": "eval-id",
+                "state": "Unrelated state for shipment B.",
+                "instructions": json.dumps({"label": question}),
+            }
+        ]
+        result = full_input_overlap_rows(left, right)
+        self.assertGreater(result["counts"]["exact_normalized"], 0)
+        self.assertNotIn("train-id", json.dumps(result))
+        self.assertNotIn(question, json.dumps(result))
+
+    def test_option_only_overlap_is_visible_beyond_state(self) -> None:
+        option = "The request lacks the required signed proof of current ownership."
+        left = [
+            {
+                "id": "train",
+                "state": "Unique train state.",
+                "options": [{"key": "a", "description": option}],
+            }
+        ]
+        right = [
+            {
+                "id": "eval",
+                "state": "Unique eval state.",
+                "options": json.dumps([{"key": "z", "description": option}]),
+            }
+        ]
+        self.assertGreater(
+            full_input_overlap_rows(left, right)["counts"]["exact_normalized"], 0
+        )
+
+    def test_near_question_overlap_is_detected(self) -> None:
+        question = (
+            "The customs officer compared invoice numbers, container seals, "
+            "ownership certificates, dated signatures, warehouse logs, and "
+            "inspection records before deciding whether the shipment qualified "
+            "for release."
+        )
+        changed = question.replace("shipment", "shipmentx", 1)
+        left = [
+            {"id": "train", "state": "Unique train state.", "instructions": question}
+        ]
+        right = [{"id": "eval", "state": "Unique eval state.", "instructions": changed}]
+        result = full_input_overlap_rows(left, right)
+        self.assertGreater(result["counts"]["near"], 0)
+
+    def test_partition_absence_is_explicit_hold(self) -> None:
+        roles = {
+            role: [{"id": role, "state": "Synthetic placeholder input"}]
+            for role in NATIVE_ROLE_COUNTS
+        }
+        result = audit_core_full_input([], roles)
+        self.assertEqual(result["status"], "HOLD_MISSING_PARTITION_ROLES")
+        self.assertEqual(set(result["missing_roles"]), set(PARTITION_ROLE_COUNTS))
+
+    def test_core_pass_and_schedule_identity_hold(self) -> None:
+        source = {
+            "id": "train-row",
+            "split": "train",
+            "state": "A regulatory claim concerns blue lantern imports and customs duty.",
+            "instructions": "Decide whether the special exemption applies to this blue lantern.",
+            "options": [
+                {"key": "a", "description": "A customs exemption applies here."},
+                {"key": "b", "description": "The usual customs duty applies here."},
+            ],
+            "task_type": "choice",
+        }
+        source["input_sha256"] = digest(
+            {field: source[field] for field in INPUT_FIELDS}
+        )
+        roles = {
+            role: [{"id": role, "state": "Distinct synthetic evidence for " + role * 8}]
+            for role in NATIVE_ROLE_COUNTS
+        }
+        roles["rights_clean_train"] = [project_partition_row(source, "train")]
+        roles["rights_clean_select"] = [
+            {
+                "id": "select-id",
+                "state": "An unrelated orange bicycle ownership record with many clauses.",
+            }
+        ]
+        roles["rights_clean_cal"] = [
+            {
+                "id": "cal-id",
+                "state": "A separate purple compass service agreement for repair.",
+            }
+        ]
+        with patch.dict(NATIVE_ROLE_COUNTS, dict.fromkeys(NATIVE_ROLE_COUNTS, 1)):
+            with patch.dict(
+                PARTITION_ROLE_COUNTS,
+                {
+                    role: (split, 1)
+                    for role, (split, _) in PARTITION_ROLE_COUNTS.items()
+                },
+            ):
+                result = audit_core_full_input([source], roles)
+                self.assertEqual(result["status"], "PASS_BOUNDED_FULL_INPUT_SCREEN")
+                changed = dict(source, instructions="A different instruction")
+                changed["input_sha256"] = digest(
+                    {field: changed[field] for field in INPUT_FIELDS}
+                )
+                self.assertEqual(
+                    audit_core_full_input([changed], roles)["status"],
+                    "HOLD_SCHEDULE_INPUT_IDENTITY",
+                )
+                self.assertEqual(
+                    audit_core_full_input([source], {**roles, "unvetted": []})[
+                        "status"
+                    ],
+                    "HOLD_UNATTESTED_OPTIONAL_ROLES",
+                )
 
 
 if __name__ == "__main__":
