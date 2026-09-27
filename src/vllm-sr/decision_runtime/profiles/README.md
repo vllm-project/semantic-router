@@ -1,11 +1,12 @@
 # Decision model profiles
 
 `vela/` and `qwen35/` contain one data-only template per model. A template owns
-the manifest location, prompt policy, calibration fallback, input limit, dtype,
-and initial physical batch size. The catalog supplies the canonical model ID
-and selected revision. The family artifact selector reads the selected
-snapshot's manifest to choose model files, including a complete Qwen weight
-layout; changing weight shards does not require editing a packaged file list.
+the prompt policy, calibration fallback, input limit, dtype, and initial
+physical batch size. The catalog supplies the canonical model ID and selected
+revision. The selected model snapshot's root `config.json` owns its file paths;
+profiles do not pin weight layouts, file hashes, or repository revisions.
+Changing weight shards does not require editing a packaged profile.
+
 An optional `execution` section groups model-specific choices by hardware
 backend. Eos selects instance-local native GatedDeltaNet on ROCm with a B8
 batch bound and groups at most two physical forwards from one request before
@@ -23,9 +24,9 @@ detecting a device does not qualify it. Promotion of an image or a model/device
 pair still needs the release qualification and performance evidence.
 
 To add a model, register its exact identity and family in the canonical catalog,
-add a template to that family's directory, and test the artifact selection,
-prompt semantics, and supported backend. To add a family, implement the narrow
-adapter in `../families/` (input preparation, batch compatibility, profile
+add a template to that family's directory, and test descriptor-based artifact
+selection, prompt semantics, and supported backend. To add a family, implement
+the narrow adapter in `../families/` (input preparation, batch compatibility, profile
 policy, and owned loader), register its catalog identity and profile directory
 in `../family_registry.py`, and add artifact verification and an image
 environment before registering templates. The shared row scheduler and runtime

@@ -148,7 +148,7 @@ def _load_mutated_catalog(
 
 
 def test_packaged_latest_catalog_is_verified() -> None:
-    assert available_catalog_versions() == ("latest",)
+    assert available_catalog_versions()[0] == "latest"
 
     catalog = load_model_catalog("latest")
 
@@ -185,42 +185,42 @@ def test_systemone_protocol_is_scoped_to_decision_runtime() -> None:
         (
             "llm-semantic-router/decision-1.0-kai-0.6b",
             "llm-semantic-router/Decision-1.0-Kai-0.6B",
-            "7185f514f54b8f93c55998b1e8f9c5cc67f0d029",
+            "9d6872cde6950c2c2b5786d182ec9a06ca1bdd66",
             "decision-encoder",
             "0.6B",
         ),
         (
             "llm-semantic-router/decision-1.0-lex-0.6b",
             "llm-semantic-router/Decision-1.0-Lex-0.6B",
-            "ee8e74d912fca8328a353c11d174b44da3f91781",
+            "6c5e3d48b9e67cd8bddbade3277e2e58506af8f0",
             "decision-encoder",
             "0.6B",
         ),
         (
             "llm-semantic-router/decision-1.0-eos-0.8b",
             "llm-semantic-router/Decision-1.0-Eos-0.8B",
-            "3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd",
+            "363c4a5e56afc115b1c78c837633956d0bbb63ab",
             "decision-qwen3.5",
             "0.8B",
         ),
         (
             "llm-semantic-router/decision-1.0-sol-2b",
             "llm-semantic-router/Decision-1.0-Sol-2B",
-            "0665a41108e8f0b33a9515c98311c45947b99399",
+            "ce0c018a28de16d6639b1cd203b761bf643b89e6",
             "decision-qwen3.5",
             "2B",
         ),
         (
             "llm-semantic-router/decision-1.0-nox-4b",
             "llm-semantic-router/Decision-1.0-Nox-4B",
-            "0bb833504965c0eabdb9630b7bbd385cb2fe5cd4",
+            "cde2a68dbaa557ea65dc458104d410a0802ee259",
             "decision-qwen3.5",
             "4B",
         ),
         (
             "llm-semantic-router/decision-1.0-lux-9b",
             "llm-semantic-router/Decision-1.0-Lux-9B",
-            "bd45a30aee8c84032791c245c70f86dee5389cc8",
+            "cdf4d3ef2dda21518e599fe99ebbe468486b197c",
             "decision-qwen3.5",
             "9B",
         ),

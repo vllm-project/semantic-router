@@ -31,37 +31,37 @@ from decision_runtime.runtime_profile import (
 
 MODELS = {
     "llm-semantic-router/Decision-1.0-Kai-0.6B": (
-        "7185f514f54b8f93c55998b1e8f9c5cc67f0d029",
+        "9d6872cde6950c2c2b5786d182ec9a06ca1bdd66",
         "vela",
         1024,
         None,
     ),
     "llm-semantic-router/Decision-1.0-Lex-0.6B": (
-        "ee8e74d912fca8328a353c11d174b44da3f91781",
+        "6c5e3d48b9e67cd8bddbade3277e2e58506af8f0",
         "vela",
         1024,
         None,
     ),
     "llm-semantic-router/Decision-1.0-Eos-0.8B": (
-        "3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd",
+        "363c4a5e56afc115b1c78c837633956d0bbb63ab",
         "qwen3.5",
         16384,
         1.0389139156246665,
     ),
     "llm-semantic-router/Decision-1.0-Sol-2B": (
-        "0665a41108e8f0b33a9515c98311c45947b99399",
+        "ce0c018a28de16d6639b1cd203b761bf643b89e6",
         "qwen3.5",
         16384,
         1.3003552029656025,
     ),
     "llm-semantic-router/Decision-1.0-Nox-4B": (
-        "0bb833504965c0eabdb9630b7bbd385cb2fe5cd4",
+        "cde2a68dbaa557ea65dc458104d410a0802ee259",
         "qwen3.5",
         16384,
         1.3231350559653137,
     ),
     "llm-semantic-router/Decision-1.0-Lux-9B": (
-        "bd45a30aee8c84032791c245c70f86dee5389cc8",
+        "cdf4d3ef2dda21518e599fe99ebbe468486b197c",
         "qwen3.5",
         16384,
         2.0054410339959294,
@@ -96,6 +96,8 @@ def test_catalog_exactly_selects_revision_profile(model_id: str) -> None:
     assert resolved.repository_id == model_id
     assert resolved.profile.revision == revision
     assert resolved.profile.family == family
+    assert resolved.profile.artifact.config_path == "config.json"
+    assert resolved.profile.artifact.manifest_path is None
     assert resolved.profile.max_input_tokens == max_tokens
     assert resolved.profile.physical_batch_size == DEFAULT_PHYSICAL_BATCH_SIZE
     assert resolved.profile.temperature == temperature
@@ -138,6 +140,8 @@ def test_profile_package_has_exact_catalog_model_set() -> None:
     }
 
     assert profile_files == {model_id.rsplit("/", 1)[-1] for model_id in MODELS}
+    for model_id in MODELS:
+        assert "artifact" not in json.loads(_packaged_profile(model_id).read_bytes())
 
 
 def test_family_registry_owns_catalog_binding_profile_layout_and_adapter() -> None:
@@ -172,7 +176,7 @@ def test_profile_and_family_registration_do_not_import_torch() -> None:
             "-c",
             "from decision_runtime.runtime_profile import load_runtime_profile; "
             "import sys; "
-            "load_runtime_profile('Decision-1.0-Eos-0.8B', revision='3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd'); "
+            "load_runtime_profile('Decision-1.0-Eos-0.8B', revision='363c4a5e56afc115b1c78c837633956d0bbb63ab'); "
             "assert 'torch' not in sys.modules",
         ],
         check=True,
@@ -329,12 +333,14 @@ def test_profile_parser_rejects_traversal_and_revision_fields() -> None:
     revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
     packaged = _packaged_profile("llm-semantic-router/Decision-1.0-Kai-0.6B")
     document = json.loads(packaged.read_bytes())
+    document["artifact"] = {"manifest_path": "native/MANIFEST.json"}
     document["artifact"]["manifest_path"] = "../weights.safetensors"
 
     with pytest.raises(RuntimeProfileError, match="unsafe path"):
         parse_runtime_profile(json.dumps(document).encode(), revision=revision)
 
     document = json.loads(packaged.read_bytes())
+    document["artifact"] = {"manifest_path": "native/MANIFEST.json"}
     document["artifact"]["files"] = ["backbone/model.safetensors"]
     with pytest.raises(RuntimeProfileError, match="fields do not match"):
         parse_runtime_profile(json.dumps(document).encode(), revision=revision)

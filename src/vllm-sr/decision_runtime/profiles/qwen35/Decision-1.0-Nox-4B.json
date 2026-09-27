@@ -1,7 +1,6 @@
 {
   "schema_version": 4,
   "family": "qwen3.5",
-  "artifact": {"manifest_path": "bundle-manifest.json"},
   "max_input_tokens": 16384,
   "dtype": {
     "backbone": "bfloat16",

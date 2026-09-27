@@ -41,8 +41,9 @@ and Sol, start two instances on different ports, then send each request to the
 port for its chosen model. The HTTP contract stays the same across models; the
 model ID in each request must match the instance receiving it.
 
-At startup, `decision serve` checks the selected model files and whether the model can
-run on the chosen backend. `--backend auto` detects the host backend; an
+At startup, `decision serve` downloads the catalog-pinned model-only snapshot,
+validates the paths declared by its root `config.json`, and checks whether the
+model can run on the chosen backend. `--backend auto` detects the host backend; an
 explicit `--backend` requests one. If the model cannot run there, startup
 fails. `/ready` succeeds only after the model is loaded. See
 [models and backends](./models.md) for the current support matrix and

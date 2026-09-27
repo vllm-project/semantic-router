@@ -21,7 +21,7 @@ from decision_runtime.catalog_adapter import ResolvedRuntimeModel
 MODEL = "llm-semantic-router/Decision-1.0-Kai-0.6B"
 EOS_MODEL = "llm-semantic-router/Decision-1.0-Eos-0.8B"
 SOL_MODEL = "llm-semantic-router/Decision-1.0-Sol-2B"
-REVISION = "7185f514f54b8f93c55998b1e8f9c5cc67f0d029"
+REVISION = "9d6872cde6950c2c2b5786d182ec9a06ca1bdd66"
 IMAGE = f"example.test/decision-runtime-rocm@sha256:{'a' * 64}"
 LOCAL_IMAGE_ID = f"sha256:{'9' * 64}"
 

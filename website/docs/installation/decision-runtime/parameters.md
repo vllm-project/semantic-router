@@ -16,7 +16,7 @@ that one model instance starts and handles traffic; the
 | `--backend rocm` or `--backend cpu` | Choose the intended execution path explicitly. The [model table](./models.md) shows which paths exist in the current build. `--backend cuda` is accepted by the CLI, but no Decision CUDA executor is installed yet. |
 | `--gpu-device INDEX` | On ROCm, limit this instance to one visible GPU index. Without it, the container sees all visible GPUs; it does not reserve them for this instance. |
 | `--cpu-threads N` | On CPU, set the Torch/BLAS thread limit. The default is the smaller of 8 and the container's CPU allowance. |
-| `--revision SHA` | Use a full 40-character commit SHA for another revision of the same catalog model. Omit it to use the catalog revision. |
+| `--revision SHA` | Use a full 40-character commit SHA for another revision of the same catalog model. Omit it to use the catalog-pinned model-only release. The alternate snapshot must retain a compatible Decision artifact layout. |
 
 ## Request capacity
 

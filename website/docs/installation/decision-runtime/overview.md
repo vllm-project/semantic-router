@@ -28,6 +28,11 @@ vllm-sr decision serve llm-semantic-router/Decision-1.0-Kai-0.6B \
 uses the matching image recorded by that CLI release. Check the
 [model and backend table](./models.md) for supported combinations.
 
+The CLI downloads the pinned model-only Hugging Face snapshot, reads its root
+`config.json` for artifact paths, and serves it with the Decision Runtime in the
+selected image. The model repository does not supply executable loader code;
+these checkpoints are not standalone Transformers `AutoModel` packages.
+
 Wait for the model to load, then check readiness:
 
 ```bash

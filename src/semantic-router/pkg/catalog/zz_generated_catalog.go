@@ -90994,7 +90994,7 @@ const builtInCatalogJSON = `{
         "monogram": "K"
       },
       "publisher": "vLLM Semantic Router",
-      "revision": "7185f514f54b8f93c55998b1e8f9c5cc67f0d029",
+      "revision": "9d6872cde6950c2c2b5786d182ec9a06ca1bdd66",
       "tags": [
         "open_weights",
         "decision_model",
@@ -91002,9 +91002,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "vLLM Semantic Router",
-        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/tree/7185f514f54b8f93c55998b1e8f9c5cc67f0d029",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/tree/9d6872cde6950c2c2b5786d182ec9a06ca1bdd66",
         "status": "claimed",
-        "verified_at": "2026-09-23"
+        "verified_at": "2026-09-27"
       }
     },
     {
@@ -91041,7 +91041,7 @@ const builtInCatalogJSON = `{
         "monogram": "L"
       },
       "publisher": "vLLM Semantic Router",
-      "revision": "ee8e74d912fca8328a353c11d174b44da3f91781",
+      "revision": "6c5e3d48b9e67cd8bddbade3277e2e58506af8f0",
       "tags": [
         "open_weights",
         "decision_model",
@@ -91049,9 +91049,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "vLLM Semantic Router",
-        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/tree/ee8e74d912fca8328a353c11d174b44da3f91781",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/tree/6c5e3d48b9e67cd8bddbade3277e2e58506af8f0",
         "status": "claimed",
-        "verified_at": "2026-09-23"
+        "verified_at": "2026-09-27"
       }
     },
     {
@@ -91088,7 +91088,7 @@ const builtInCatalogJSON = `{
         "monogram": "E"
       },
       "publisher": "vLLM Semantic Router",
-      "revision": "3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd",
+      "revision": "363c4a5e56afc115b1c78c837633956d0bbb63ab",
       "tags": [
         "open_weights",
         "decision_model",
@@ -91096,9 +91096,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "vLLM Semantic Router",
-        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B/tree/3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B/tree/363c4a5e56afc115b1c78c837633956d0bbb63ab",
         "status": "claimed",
-        "verified_at": "2026-09-23"
+        "verified_at": "2026-09-27"
       }
     },
     {
@@ -91135,7 +91135,7 @@ const builtInCatalogJSON = `{
         "monogram": "S"
       },
       "publisher": "vLLM Semantic Router",
-      "revision": "0665a41108e8f0b33a9515c98311c45947b99399",
+      "revision": "ce0c018a28de16d6639b1cd203b761bf643b89e6",
       "tags": [
         "open_weights",
         "decision_model",
@@ -91143,9 +91143,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "vLLM Semantic Router",
-        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/tree/0665a41108e8f0b33a9515c98311c45947b99399",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/tree/ce0c018a28de16d6639b1cd203b761bf643b89e6",
         "status": "claimed",
-        "verified_at": "2026-09-23"
+        "verified_at": "2026-09-27"
       }
     },
     {
@@ -91182,7 +91182,7 @@ const builtInCatalogJSON = `{
         "monogram": "N"
       },
       "publisher": "vLLM Semantic Router",
-      "revision": "0bb833504965c0eabdb9630b7bbd385cb2fe5cd4",
+      "revision": "cde2a68dbaa557ea65dc458104d410a0802ee259",
       "tags": [
         "open_weights",
         "decision_model",
@@ -91190,9 +91190,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "vLLM Semantic Router",
-        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/tree/0bb833504965c0eabdb9630b7bbd385cb2fe5cd4",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/tree/cde2a68dbaa557ea65dc458104d410a0802ee259",
         "status": "claimed",
-        "verified_at": "2026-09-23"
+        "verified_at": "2026-09-27"
       }
     },
     {
@@ -91229,7 +91229,7 @@ const builtInCatalogJSON = `{
         "monogram": "L"
       },
       "publisher": "vLLM Semantic Router",
-      "revision": "bd45a30aee8c84032791c245c70f86dee5389cc8",
+      "revision": "cdf4d3ef2dda21518e599fe99ebbe468486b197c",
       "tags": [
         "open_weights",
         "decision_model",
@@ -91237,9 +91237,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "vLLM Semantic Router",
-        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/tree/bd45a30aee8c84032791c245c70f86dee5389cc8",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/tree/cdf4d3ef2dda21518e599fe99ebbe468486b197c",
         "status": "claimed",
-        "verified_at": "2026-09-23"
+        "verified_at": "2026-09-27"
       }
     },
     {
@@ -96189,9 +96189,9 @@ const builtInCatalogJSON = `{
           ],
           "relationship": "self_hosted",
           "verification": {
-            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/tree/7185f514f54b8f93c55998b1e8f9c5cc67f0d029",
+            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/tree/9d6872cde6950c2c2b5786d182ec9a06ca1bdd66",
             "status": "claimed",
-            "verified_at": "2026-09-23"
+            "verified_at": "2026-09-27"
           }
         },
         {
@@ -96203,9 +96203,9 @@ const builtInCatalogJSON = `{
           ],
           "relationship": "self_hosted",
           "verification": {
-            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/tree/ee8e74d912fca8328a353c11d174b44da3f91781",
+            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/tree/6c5e3d48b9e67cd8bddbade3277e2e58506af8f0",
             "status": "claimed",
-            "verified_at": "2026-09-23"
+            "verified_at": "2026-09-27"
           }
         },
         {
@@ -96217,9 +96217,9 @@ const builtInCatalogJSON = `{
           ],
           "relationship": "self_hosted",
           "verification": {
-            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B/tree/3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd",
+            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B/tree/363c4a5e56afc115b1c78c837633956d0bbb63ab",
             "status": "claimed",
-            "verified_at": "2026-09-23"
+            "verified_at": "2026-09-27"
           }
         },
         {
@@ -96231,9 +96231,9 @@ const builtInCatalogJSON = `{
           ],
           "relationship": "self_hosted",
           "verification": {
-            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/tree/0665a41108e8f0b33a9515c98311c45947b99399",
+            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/tree/ce0c018a28de16d6639b1cd203b761bf643b89e6",
             "status": "claimed",
-            "verified_at": "2026-09-23"
+            "verified_at": "2026-09-27"
           }
         },
         {
@@ -96245,9 +96245,9 @@ const builtInCatalogJSON = `{
           ],
           "relationship": "self_hosted",
           "verification": {
-            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/tree/0bb833504965c0eabdb9630b7bbd385cb2fe5cd4",
+            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/tree/cde2a68dbaa557ea65dc458104d410a0802ee259",
             "status": "claimed",
-            "verified_at": "2026-09-23"
+            "verified_at": "2026-09-27"
           }
         },
         {
@@ -96259,9 +96259,9 @@ const builtInCatalogJSON = `{
           ],
           "relationship": "self_hosted",
           "verification": {
-            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/tree/bd45a30aee8c84032791c245c70f86dee5389cc8",
+            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/tree/cdf4d3ef2dda21518e599fe99ebbe468486b197c",
             "status": "claimed",
-            "verified_at": "2026-09-23"
+            "verified_at": "2026-09-27"
           }
         }
       ],

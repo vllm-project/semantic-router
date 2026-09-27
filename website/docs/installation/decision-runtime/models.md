@@ -8,6 +8,13 @@ Each `vllm-sr decision serve` instance serves one model. Copy its full ID into t
 [API request](./api.md). After launch, `GET /v1/models` shows the ID that the
 instance accepts.
 
+The Hugging Face repositories contain model data and metadata, not a bundled
+server. Serving requires a Decision-enabled vLLM Semantic Router CLI and its
+matching Decision Runtime image. The runtime reads each selected snapshot's
+root `config.json` to find its weights and tokenizer; the packaged execution
+profile supplies family, prompt, and hardware policy without pinning individual
+model files.
+
 | Model ID | Input limit | Current execution paths |
 | --- | ---: | --- |
 | `llm-semantic-router/Decision-1.0-Kai-0.6B` | 1,024 tokens | ROCm `gfx942`; Linux CPU |
@@ -29,9 +36,10 @@ build, and native Apple MLX launch is not yet available. See
 
 ## Model revisions
 
-Without `--revision`, `decision serve` uses the model catalog's pinned revision. To try a
-different revision of the **same model**, provide its full 40-character commit
-SHA. The runtime verifies the selected files before loading and checks that
-the revision still fits the model's runtime profile. A different revision still
+Without `--revision`, `decision serve` uses the model catalog's pinned model-only
+release revision. To try a different revision of the **same model**, provide its
+full 40-character commit SHA. The runtime verifies the selected files before
+loading and checks that their layout fits the model family. Profiles are not
+bound to a specific model-file hash or revision, but a different revision still
 needs validation on the intended device before production use. The
 [launch parameters](./parameters.md) explain the relevant options.
