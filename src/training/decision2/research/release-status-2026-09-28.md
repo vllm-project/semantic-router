@@ -32,11 +32,13 @@ The [ConTRoL CPU screen](qwen35-4b-context-nli-source-screen-2026-09-28.md),
 [0.8B Score-only CPU hold](eos08-human-evidence-score-cpu-hold-2026-09-28.md),
 [VitaminC Score source screen](score-vitaminc-source-screen-2026-09-28.md),
 [TREC passage Score diagnostic HOLD](trec23-passage-score-diagnostic-audit-2026-09-28.md),
+[F1000RD human recommendation source HOLD](f1000rd-score-source-screen-2026-09-28.md),
 [27B teacher contrast screen](qwen38-27b-train-teacher-residual-screen-2026-09-28.md),
 [blind review](qwen35-4b-control-native-blind-review-2026-09-28.md),
 [second independent review](qwen35-4b-control-second-independent-review-2026-09-28.md),
 [2B clinical-evidence source screen](sol2b-evidence-inference-next-arm-screen-2026-09-28.md),
 [Score human-source screen](score-human-ordinal-sources-2026-09-28.md),
+[LogiQA 2.0 Choice source proposal](small06-logiqa2-choice-source-proposal-2026-09-28.md),
 [Lux process-isolation result](lux9b-release-example-process-isolation-result-2026-09-28.md), and
 [Lux batch-shape result](lux9b-release-example-batch-shape-result-2026-09-28.md)
 all remain negative or conditional. None authorizes a new model upload. Continue
