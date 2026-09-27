@@ -13,7 +13,13 @@ from training.eikos.repeatability import compare, load, sha
 EXPECTED_ITEMS = 1430
 
 
-def _manifest(predictions: Path, prompts: Path, package: Path) -> dict[str, Any]:
+def _manifest(
+    predictions: Path,
+    prompts: Path,
+    package: Path,
+    *,
+    require_torch_reference_gated_delta: bool = False,
+) -> dict[str, Any]:
     manifest_path = Path(str(predictions) + ".manifest.json")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("predictions_sha256") != sha(predictions):
@@ -39,6 +45,13 @@ def _manifest(predictions: Path, prompts: Path, package: Path) -> dict[str, Any]
         or runtime.get("flash_linear_attention") != "0.5.2"
     ):
         raise ValueError("Native receipt lacks frozen deterministic FLA runtime")
+    if require_torch_reference_gated_delta and (
+        runtime.get("gated_delta_backend_before")
+        != "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule"
+        or runtime.get("gated_delta_backend")
+        != "transformers.models.qwen3_5.modeling_qwen3_5.torch_chunk_gated_delta_rule"
+    ):
+        raise ValueError("Native receipt lacks the attested PyTorch reference")
     return manifest
 
 
@@ -49,12 +62,23 @@ def audit(
     prompts: Path,
     package: Path,
     output: Path,
+    require_torch_reference_gated_delta: bool = False,
 ) -> dict[str, Any]:
     if output.exists():
         raise FileExistsError(output)
     left, right = (
-        _manifest(predictions_a, prompts, package),
-        _manifest(predictions_b, prompts, package),
+        _manifest(
+            predictions_a,
+            prompts,
+            package,
+            require_torch_reference_gated_delta=require_torch_reference_gated_delta,
+        ),
+        _manifest(
+            predictions_b,
+            prompts,
+            package,
+            require_torch_reference_gated_delta=require_torch_reference_gated_delta,
+        ),
     )
     for key in (
         "adapter_version",
@@ -104,6 +128,7 @@ def main() -> None:
     parser.add_argument("--prompts", type=Path, required=True)
     parser.add_argument("--package", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--require-torch-reference-gated-delta", action="store_true")
     args = parser.parse_args()
     report = audit(
         predictions_a=args.predictions_a,
@@ -111,6 +136,7 @@ def main() -> None:
         prompts=args.prompts,
         package=args.package,
         output=args.output,
+        require_torch_reference_gated_delta=args.require_torch_reference_gated_delta,
     )
     print(
         json.dumps(

@@ -8,6 +8,7 @@ binds every answer to the exact package digest, and writes an atomic manifest.
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import math
 import time
@@ -30,6 +31,34 @@ from training.model.infer import write_output
 
 ADAPTER_VERSION = "decision2-eikos-semif-native-v1"
 MODEL_ID = "llm-semantic-router/dev-2.0-4b"
+
+
+def use_torch_reference_gated_delta() -> dict[str, str]:
+    """Replace the installed Qwen3.5 FLA prefill with its PyTorch reference."""
+    from transformers.models.qwen3_5 import modeling_qwen3_5
+
+    selected = modeling_qwen3_5.torch_chunk_gated_delta_rule
+    closure = inspect.getclosurevars(selected).nonlocals
+    implementation = closure.get("implementation")
+    reference = getattr(selected, "__wrapped__", None)
+    if (
+        closure.get("is_new_implementation") is not True
+        or getattr(implementation, "__module__", None)
+        != "fla.ops.gated_delta_rule.chunk"
+        or getattr(implementation, "__name__", None) != "chunk_gated_delta_rule"
+        or getattr(reference, "__module__", None) != modeling_qwen3_5.__name__
+        or getattr(reference, "__name__", None) != "torch_chunk_gated_delta_rule"
+    ):
+        raise ValueError("Installed Qwen3.5 gated-delta wrapper is not using FLA")
+    modeling_qwen3_5.torch_chunk_gated_delta_rule = reference
+    return {
+        "gated_delta_backend_before": (
+            "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule"
+        ),
+        "gated_delta_backend": (
+            "transformers.models.qwen3_5.modeling_qwen3_5.torch_chunk_gated_delta_rule"
+        ),
+    }
 
 
 def package_identity(
@@ -109,6 +138,7 @@ def collect(
     max_items: int | None = None,
     rights_attestation: Path | None = None,
     deterministic_algorithms: bool = False,
+    torch_reference_gated_delta: bool = False,
 ) -> dict[str, Any]:
     if model_id != MODEL_ID:
         raise ValueError(f"Eikos 4B Decision 2.0 model ID must be {MODEL_ID}")
@@ -134,6 +164,9 @@ def collect(
         if max_items < 1:
             raise ValueError("max_items must be positive")
         rows = rows[:max_items]
+    gated_delta_backend = (
+        use_torch_reference_gated_delta() if torch_reference_gated_delta else {}
+    )
     native = load_decider(model_path, None, model_path / "calib.json", device=device)
     import fla
 
@@ -149,6 +182,7 @@ def collect(
         "torch_deterministic_algorithms": torch.are_deterministic_algorithms_enabled(),
         "qualification": "BF16 ROCm source-author parity unvalidated; package-native PyTorch path",
     }
+    runtime.update(gated_delta_backend)
     predictions = []
     counts = {
         "items": 0,
@@ -258,6 +292,7 @@ def main() -> None:
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--max-items", type=int)
     parser.add_argument("--deterministic-algorithms", action="store_true")
+    parser.add_argument("--torch-reference-gated-delta", action="store_true")
     parser.add_argument(
         "--rights-attestation",
         type=Path,
@@ -276,6 +311,7 @@ def main() -> None:
                 max_items=args.max_items,
                 rights_attestation=args.rights_attestation,
                 deterministic_algorithms=args.deterministic_algorithms,
+                torch_reference_gated_delta=args.torch_reference_gated_delta,
             ),
             sort_keys=True,
         )

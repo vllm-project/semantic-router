@@ -72,7 +72,36 @@ class DeterministicRepeatTest(unittest.TestCase):
             )
             self.assertTrue(report["predeclared_numeric_repeat_gate_pass"])
             self.assertEqual(report["comparison"]["categorical_mismatch_n"], 0)
+            for manifest_path in manifests:
+                attested = json.loads(manifest_path.read_text(encoding="utf-8"))
+                attested["runtime"][
+                    "gated_delta_backend_before"
+                ] = "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule"
+                attested["runtime"][
+                    "gated_delta_backend"
+                ] = "transformers.models.qwen3_5.modeling_qwen3_5.torch_chunk_gated_delta_rule"
+                manifest_path.write_text(json.dumps(attested), encoding="utf-8")
+            reference_report = audit(
+                predictions_a=paths[0],
+                predictions_b=paths[1],
+                prompts=prompts,
+                package=package,
+                output=root / "reference.json",
+                require_torch_reference_gated_delta=True,
+            )
+            self.assertTrue(reference_report["predeclared_numeric_repeat_gate_pass"])
             bad = json.loads(manifests[1].read_text(encoding="utf-8"))
+            bad["runtime"].pop("gated_delta_backend")
+            manifests[1].write_text(json.dumps(bad), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "attested PyTorch reference"):
+                audit(
+                    predictions_a=paths[0],
+                    predictions_b=paths[1],
+                    prompts=prompts,
+                    package=package,
+                    output=root / "reference-rejected.json",
+                    require_torch_reference_gated_delta=True,
+                )
             bad["runtime"]["torch_deterministic_algorithms"] = False
             manifests[1].write_text(json.dumps(bad), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "deterministic FLA"):

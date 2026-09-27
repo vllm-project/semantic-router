@@ -29,7 +29,7 @@ class PublishedDeterminismReceiptTest(unittest.TestCase):
                     }
                 },
             }
-            captured = {}
+            captured = {"events": []}
             torch_state = {"enabled": False}
             fake_torch = SimpleNamespace(
                 __version__="test",
@@ -46,6 +46,7 @@ class PublishedDeterminismReceiptTest(unittest.TestCase):
             )
 
             def load_native(*args, **kwargs):
+                captured["events"].append("load")
                 captured["flag_at_load"] = torch_state["enabled"]
                 return SimpleNamespace(
                     decide_all=lambda **payload: {
@@ -81,6 +82,14 @@ class PublishedDeterminismReceiptTest(unittest.TestCase):
                 ),
                 patch.object(published_infer, "load_prompts", return_value=[row]),
                 patch.object(published_infer, "load_decider", side_effect=load_native),
+                patch.object(
+                    published_infer,
+                    "use_torch_reference_gated_delta",
+                    side_effect=lambda: (
+                        captured["events"].append("select")
+                        or {"gated_delta_backend": "torch-reference"}
+                    ),
+                ),
                 patch.object(published_infer, "synchronize"),
                 patch.object(published_infer, "write_output", side_effect=write_output),
                 patch.object(published_infer, "version", return_value="test"),
@@ -94,6 +103,21 @@ class PublishedDeterminismReceiptTest(unittest.TestCase):
                     prompts=prompts,
                     output=root / "out.jsonl",
                     deterministic_algorithms=True,
+                )
+                self.assertEqual(captured["events"], ["load"])
+                self.assertNotIn("gated_delta_backend", captured["manifest"]["runtime"])
+                captured["events"].clear()
+                published_infer.collect(
+                    model_path=root,
+                    prompts=prompts,
+                    output=root / "reference.jsonl",
+                    deterministic_algorithms=True,
+                    torch_reference_gated_delta=True,
+                )
+                self.assertEqual(captured["events"], ["select", "load"])
+                self.assertEqual(
+                    captured["manifest"]["runtime"]["gated_delta_backend"],
+                    "torch-reference",
                 )
             self.assertTrue(captured["flag_at_load"])
             self.assertTrue(

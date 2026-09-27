@@ -30,11 +30,21 @@ manifest. Abort if the installed wrapper is already using PyTorch, the fallback
 cannot be verified, or package load reports missing/newly initialized weights.
 Leave the collector's default path unchanged.
 
-First run one bounded preflight on the **first 32 prompts in frozen input order**.
-Stop if it has not finished within **300 seconds of process start**, if any of
-32 answers is invalid, if the requested backend is not attested, or if package
-loading reports missing/newly initialized weights. Preserve the preflight
-receipt and stop this arm on failure. Do not adjust the limit after seeing it.
+First run one bounded preflight on a **fixed length-stratified set of 32
+prompts**. Rank all 1,430 IDs by the original first process's gold-free
+`usage.input_tokens`, then ID to break ties. Select ranks
+`floor(i * 1425 / 27)` for `i = 0..27`, plus ranks `1426..1429` (the four
+longest). Emit their original prompt JSONL bytes in original input order.
+The selected ID-list SHA-256 is
+`1865807c6be717d992cab8b83b6c0e53d2e2dc6c8dcd60291ad375d1ee5ecde8`;
+the resulting 32-row prompt SHA-256 is
+`06b5b13b8a51452ca7f8bae588bb43c7faa6b21d9498d262440041f32c541312`.
+These hashes were computed before treatment execution, without labels. The
+selected token lengths range from 133 to 5,157. Stop if the preflight has not
+finished within **300 seconds of process start**, if any of 32 answers is
+invalid, if the requested backend is not attested, or if package loading
+reports missing/newly initialized weights. Preserve the preflight receipt and
+stop this arm on failure. Do not adjust the limit after seeing it.
 
 Only after that preflight passes, run **exactly two fresh independent full
 1,430-item processes**, sequentially on the same physical GPU, with distinct
