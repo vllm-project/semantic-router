@@ -195,6 +195,8 @@ def build(
         return f"{value * 100:.2f}%"
 
     table = [
+        "JevArena v3: 8,147 original items; JevBench public: 231 questions.",
+        "",
         "| JevArena rank | Model | Actual parameters | v3 score ↑ | Typed T ↑ | Human transfer H ↑ | JevBench public ↑ |",
         "| ---: | --- | ---: | ---: | ---: | ---: | ---: |",
     ]
