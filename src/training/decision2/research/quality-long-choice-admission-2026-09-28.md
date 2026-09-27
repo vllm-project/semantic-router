@@ -85,18 +85,29 @@ A separate 48-row answer-blind review packet, with and without article, and
 separate key were sealed privately. Packet/key SHA-256 values are
 `37ae7833977d53b617f876952aedd4800e108d50fabaa6a6afe46218f09aeac8`
 and `395fd5ff136ed22548205f0b0264770ba5693fd5d70fbd49151346a9155216f5`.
-No independent answer-blind reviewer has yet completed that evidence-necessity
-judgment. The [authors' question-only baseline](https://nyu-mll.github.io/quality/)
-is a further reason to test shortcut behavior rather than assuming long text
-creates long-context reasoning.
+An independent answer-blind reviewer assessed all **24 paired questions / 48
+views** under a criterion frozen before opening the packet: identifiable
+article evidence, inability to answer the article-removed view from shortcuts,
+unambiguous options, and legible document. Only **7/24 pairs** passed all
+four conditions; **17/24** were rejected. This is a small, conservatively
+selected diagnostic, not a full-corpus quality estimate or a comparison to
+the publisher answer key. The reviewer did not open the key or rights ledger,
+run a model, or use GPU. Its private item-level receipt SHA-256 is
+`927d89f63c9fdc2274a585183932a49abb7d44f97b036f4745d0b1527deaccf2`;
+the public-safe private summary SHA-256 is
+`d5be46ca721453dbefcb39fa02b3fa297bd210ba6903bc83ff5540fad5fdc23f`.
+The [authors' question-only baseline](https://nyu-mll.github.io/quality/)
+reinforces the need to test shortcuts rather than assuming long text creates
+long-context reasoning.
 
 ## Next decision
 
-Complete work-level rights and attribution review, quarantine all unresolved
-works, and have independent reviewers score the sealed full-article versus
-article-removed packet for answerability and decisive evidence. Then recheck
-the resulting whole-article roster against optional historical roles and a
-separate semantic-duplicate review. Only a source-disjoint, untruncated,
+The blind review keeps the **entire proposed QuALITY training arm on HOLD**.
+Before reconsidering it, quarantine or repair ambiguous and shortcut-prone
+questions, expand independent paired review beyond 24 articles, and complete
+work-level rights and attribution review. Then recheck any resulting
+whole-article roster against optional historical roles and a separate
+semantic-duplicate review. Only a source-disjoint, untruncated,
 evidence-dependent roster can enter a new signed matched-token training plan.
 Its initial gate must check both Choice recovery and Score retention on the
 already fixed development panels. No optimizer run is authorized by this
