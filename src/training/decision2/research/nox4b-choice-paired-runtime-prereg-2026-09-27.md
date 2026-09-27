@@ -16,8 +16,10 @@ and Choice accuracy when the dataset, model initialization, schedule, option
 renderer and native head are identical? The only treatment difference is the
 weight of 2,240 Choice rows from `google_goemotions_official_train` (1,400),
 `legacy:cosmos_qa` (448), `legacy:snli` (272), and
-`css_flute_official_train` (120). The control passes the same four source IDs
-with weight 1.0. All other examples have weight 1.0 in both arms. Within an
+`css_flute_official_train` (120). The original control command requested the
+same four source IDs at weight 1.0; the execution correction below explains
+why it must instead omit the inactive source list. All other examples have
+weight 1.0 in both arms. Within an
 accumulation window, each arm normalizes by its own sum of weights.
 
 | Frozen input | Identity |
@@ -89,3 +91,27 @@ conclusion per bounded GPU-hour, not utilization for its own sake. Decider 4B
 and Hopper were selected from Decision Index 0.2.1 as peer candidates, but
 their historical Index values are never mixed with our development or formal
 scores. They require same-panel native reruns before any rank entry.
+
+## Execution correction, 2026-09-27 10:46 UTC
+
+The first **control** zero-step process failed in argument validation before
+model/data loading: the trainer enforces `(weight != 1.0) == bool(source_ids)`.
+The requested `source_ids=[four IDs], weight=1.0` combination is invalid.
+The parallel **treatment** zero-step process exited successfully and wrote its
+unscored baseline, but no comparator ran, no control baseline exists yet, no
+optimizer update occurred and no development score was read before this
+correction. The failed control process used approximately 4.5 seconds of
+allocated GPU time; retain its private log.
+
+For both control zero-step runs and its later training process, omit
+`--choice-source` and `--choice-source-weight`; the validated defaults are an
+empty source list and weight 1.0 for **every** TRAIN row. The treatment keeps
+the exact four source IDs and weight 1.5. Both arms still load precisely the
+same 7,455 rows and encode them in the same order; the only non-metadata loss
+difference is the weight of the 2,240 predeclared rows. Recompute and compare
+all four zero-step predictions as originally specified before any update.
+All SHA-256 identities, numerical gates, model initialization, learning-rate
+schedule, fixed step128 observation, GPU-hour cap, datasets and downstream
+promotion rules above are unchanged. This is an execution correction made
+before training or outcome comparison, not a retrospective pass for the
+failed process.
