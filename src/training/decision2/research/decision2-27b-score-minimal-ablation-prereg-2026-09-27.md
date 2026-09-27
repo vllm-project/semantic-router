@@ -94,6 +94,44 @@ amendment changes a mistaken feasibility assumption, not the experimental
 question or a measured model-result threshold. The amended sampler and tests
 must be signed before the next CPU admission run.
 
+### Candidate data and CPU preflight receipt (2026-09-27)
+
+The amended, signed admission implementation `5ef8a81a0` completed a CPU-only
+audit. New candidate TRAIN contains 120 complete three-level groups; 80 are
+assigned to A and the remaining 40 are unused. Fresh SELECT contains 80
+separate complete groups. Twenty-eight SHA-pinned gold-free prompt inventories
+were checked; 59 source comparisons had zero exact or bounded-near matches.
+The near check uses SimHash candidate indexing and is not a proof against all
+semantic paraphrases. The private matched-arm manifest SHA-256 is
+`7ec0a50bed02f0c5117e1dae70e69f540f7f5f7800bc500c34ae403796823933`.
+The A/C TRAIN SHA-256 is
+`bca73ec87e4cfa270d3214a03fe032b06c7a9b6b81f53d302975ed4cb2869cc0`;
+B is `ae625dcb3f1e1b925c5ae6b7f8a82442bf270c63b7696c29b4ac24ccfa2de949`.
+Both arms have 2,288 distinct rows and longest native input 1,013 tokens.
+A/B raw native-token counts are 438,000/438,186; dynamic microbatch-1 padded
+counts are 446,480/446,408. The differences are 0.0425% and 0.0161%.
+
+Independent rendered-document oracle and structural source-necessity checks
+passed on all 80 used TRAIN groups and 80 SELECT groups: perturbing Document A
+or B separately changes the positive grade to 1, joining a scoped current
+veto changes it to 0, and archived-notice perturbation preserves the result.
+The gold-free blind-review packet and sealed key are separate; review status
+is **PENDING**. Source identity and the frozen 32-item gold-free roster pass a
+CPU-only integrity check under the pinned container image. There has been
+**no v7p optimizer step, GPU preflight, selector scoring or v3 FINAL/CSS15
+access**. No 27B release decision follows from this preflight.
+
+The independent reviewer receives only the 80 TRAIN and 80 SELECT packets,
+each containing all three randomly ordered variants of a case with opaque
+review IDs. It receives no sealed key, labelled source file or model output.
+Before unsealing the key, it must provide an immutable answer for every item,
+whether the evidence is sufficient, and group-level ambiguity or shortcut
+findings. All 160 groups must be covered. Any unresolved answer mismatch,
+unsupported label or ambiguous group blocks this fixed pilot; a passing
+subset cannot silently replace a rejected group from the 40 unused TRAIN
+buffer. A reviewer may recommend design changes, which require a new version
+and independent selector rather than revising the frozen rows after scoring.
+
 The existing trainer supports `ce` and `ce_brier`, but its direct-LoRA parity
 gate currently hardcodes the **old v6 A/B TRAIN hashes**. This is an explicit
 implementation blocker: **do not pass a forged old receipt or edit the old
