@@ -172,16 +172,16 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 	}
 	var diagnostics llmprotocol.Diagnostics
 	if usageUnavailable(response.Usage) {
-		// The Messages wire requires usage fields, so the encoder emits an
-		// explicit zero-valued usage object. A backend that omitted usage is
-		// an accounting omission, not a lossy translation: rejecting the
-		// response here would turn a successful completion into a 502 for
-		// every non-streaming Anthropic request against such backends. The
-		// streaming encoder already tolerates unavailable usage the same way.
-		appendAccountingOmission(
-			&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1,
-			"usage", "backend response omitted usage; emitted an explicit zero-valued usage object",
-		)
+		// Messages requires usage, so an unavailable projection becomes an
+		// explicit zero-valued usage object (see encodeAnthropicUsage). Record
+		// the approximation instead of failing the translation: OpenAI
+		// backends may omit usage on non-streaming responses, and the streaming
+		// path already projects the same zero-valued object for this case.
+		diagnostics = appendDiagnostics(diagnostics, llmprotocol.Diagnostics{{
+			Source: envelope.Format, Target: llmprotocol.AnthropicMessagesV1, Field: "usage",
+			Action: llmprotocol.DiagnosticApproximated,
+			Reason: "Messages requires usage; emitted an explicit zero-valued usage object",
+		}}, policy.Limits.Diagnostics)
 	}
 	appendAnthropicPartialCacheOmission(&diagnostics, policy, envelope.Format, response.Usage)
 	if len(response.Alternatives) > 0 {

@@ -34,8 +34,8 @@
             "action": "dropped"
           },
           {
-            "field": "usage",
-            "action": "dropped"
+            "action": "approximated",
+            "field": "usage"
           }
         ]
       }
