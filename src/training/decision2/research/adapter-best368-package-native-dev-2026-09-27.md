@@ -117,7 +117,7 @@ model card. The 27-question parity smoke was too small to detect this drift.
 
 The original scored container was recovered read-only after the initial
 parity note. Its exact image digest is retained only in the private runtime
-comparison receipt. Reading package metadata inside that image independently records
+comparison receipt. Package metadata in that image independently records
 Python 3.12.13, Torch `2.12.0+git6bbd260`, Transformers 5.17.0, PEFT 0.21.0,
 safetensors 0.8.0 and huggingface_hub 1.31.0. The current package image has
 the same versions and matching SHA-256 for the inspected Qwen3.5 model,
@@ -132,6 +132,27 @@ observed source-to-package drift is consistent with BF16 runtime or device
 numerics, especially near decision ties, but a unique cause has **not** been
 isolated. All 20 changed CSS choices had old top-two probability gaps below
 0.054 (median 0.0099). No complete panel was rerun for this diagnosis.
+
+A bounded, gold-free follow-up selected those **20 CSS Choice disagreements**
+using prediction differences alone. Its prompt subset SHA-256 is
+`3e545308c27348a6f581ec219eaf5201d7947a3bf675841fe8c7749020b5b33f`.
+The original six-file source adapter was run once on exactly the same physical
+GPU instance and runtime image as the new package CSS panel, with the same
+checkpoint, external base, CAL and prompt bytes. Its 20-item prediction SHA-256
+is `9b60f841837cd97cacd3a45e5b938a9cadf41b22601ef117706875d115bc1deb`;
+the private execution receipt is
+`cc31b2adadd595aed2960eced5c49db68a2bb44746b73995bc57e4ce8a971ca6`.
+All **20/20 complete answer objects, including every probability, were
+identical** to the already saved package predictions. All 20 still differed
+in Choice from the old source predictions made on the other machine. This
+rules out a package API effect for these 20 inputs under controlled same-GPU
+conditions, and localizes the observed gap to cross-machine/image/device
+execution conditions. It does **not** identify a unique low-level cause or
+prove full-panel parity. An initial diagnosis launch had an empty base bind
+path and exited before loading the model; its private failure receipt SHA-256
+is `10e96c92f4c46bc64e14279755b24a194ed07d74c5473e79b2a096eceb7e9923`.
+The corrected run alone produced the 20-item receipt. The original public
+231-item panel was not repeated.
 
 The external-base release profile's CPU source/package contract matched the
 same 35-entry checkpoint/base map and model SHA, and the earlier nine-item
