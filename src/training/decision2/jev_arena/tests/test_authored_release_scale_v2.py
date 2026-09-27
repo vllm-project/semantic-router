@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from collections import Counter
 import json
+from collections import Counter
 from pathlib import Path
 
 import pytest
 
-from jev_arena.authored_release_scale_v2_audit import _required_gaps
 from jev_arena.authored_release_scale_v2 import _distribution, _domain_witness_issues
+from jev_arena.authored_release_scale_v2_audit import _required_gaps
 from jev_arena.authored_release_scale_v2_witness_audit import audit
 
 
