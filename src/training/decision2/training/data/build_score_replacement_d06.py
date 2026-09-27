@@ -257,12 +257,16 @@ def _matched_score_groups(
     }
 
 
-def _blind_packet(rows: list[dict[str, Any]], secret: bytes) -> tuple[bytes, bytes]:
+def _blind_packet(
+    rows: list[dict[str, Any]], secret: bytes
+) -> tuple[bytes, bytes, bytes]:
     packet, key = [], []
+    group_aliases: dict[str, list[str]] = collections.defaultdict(list)
     for row in rows:
         alias = hmac.new(
             secret, f"{SEED}\0{row['id']}".encode(), hashlib.sha256
         ).hexdigest()[:24]
+        group_aliases[row["group_id"]].append(alias)
         packet.append(
             {
                 "review_id": alias,
@@ -284,7 +288,23 @@ def _blind_packet(rows: list[dict[str, Any]], secret: bytes) -> tuple[bytes, byt
     packet.sort(key=lambda row: _hash(f"{SEED}\0packet\0{row['review_id']}"))
     if len({row["review_id"] for row in packet}) != len(packet):
         raise ValueError("Blind alias collision")
-    return pilot.jsonl_bytes(packet), pilot.jsonl_bytes(key)
+    pairs = []
+    for source_group, members in group_aliases.items():
+        if len(members) != 3:
+            raise ValueError("Blind review requires complete three-level groups")
+        group_alias = hmac.new(
+            secret, f"{SEED}\0group\0{source_group}".encode(), hashlib.sha256
+        ).hexdigest()[:24]
+        pairs.append(
+            {
+                "review_group_id": group_alias,
+                "review_ids": sorted(
+                    members, key=lambda alias: _hash(f"{SEED}\0pair\0{alias}")
+                ),
+            }
+        )
+    pairs.sort(key=lambda row: _hash(f"{SEED}\0pair-order\0{row['review_group_id']}"))
+    return pilot.jsonl_bytes(packet), pilot.jsonl_bytes(key), pilot.jsonl_bytes(pairs)
 
 
 def build(args: argparse.Namespace) -> dict[str, Any]:
@@ -391,11 +411,12 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     )
     if abs(merged_tokens - PARENT_TOKENS) * 200 > PARENT_TOKENS:
         raise ValueError("D exceeds the prospective +/-0.5% native-token budget")
-    packet, key = _blind_packet(candidate, secret)
+    packet, key, pairs = _blind_packet(candidate, secret)
     outputs = {
         "candidate-score384.jsonl": pilot.jsonl_bytes(candidate),
         "train-d.jsonl": pilot.jsonl_bytes(merged),
         "blind-review.jsonl": packet,
+        "blind-group-review.jsonl": pairs,
         "sealed-review-key.jsonl": key,
     }
     args.output_dir.mkdir(parents=True, mode=0o700)
