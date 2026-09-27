@@ -1,4 +1,4 @@
-"""The public HF tree is slim without changing native model or figure bytes."""
+"""The legacy 4B export remains reproducible but cannot publish third-party starts."""
 
 from __future__ import annotations
 
@@ -104,14 +104,48 @@ class SlimExportTest(unittest.TestCase):
         with patch.object(
             export, "OWL_SHA256", hashlib.sha256(self.owl.read_bytes()).hexdigest()
         ):
-            return export.export(self.source, self.owl, self.output)
+            return export.export(self.source, self.owl, self.output, research_only=True)
+
+    def test_official_export_rejects_third_party_decision_start(self) -> None:
+        with self.assertRaisesRegex(ValueError, "own Decision 1.0 or unmodified"):
+            export.export(self.source, self.owl, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_legacy_export_never_certifies_official_release(self) -> None:
+        with patch.object(export, "_require_official_lineage"):
+            with self.assertRaisesRegex(ValueError, "research-only"):
+                export.export(self.source, self.owl, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_official_lineage_predicate_requires_pinned_own_or_qwen_source(
+        self,
+    ) -> None:
+        for source_id in (
+            "llm-semantic-router/Decision-1.0-Nox-4B",
+            "Qwen/Qwen3.5-4B-Base",
+            "Qwen/Qwen3.8-27B",
+        ):
+            export._require_official_lineage(
+                {"base_model": {"id": source_id, "revision": "a" * 40}}
+            )
+        for source_id in (
+            "caiovicentino1/Eikos-4B",
+            "Mapika/decider-4b",
+            "Qwen/ThirdPartyDecision-4B",
+        ):
+            with self.assertRaisesRegex(ValueError, "Official Decision 2.0"):
+                export._require_official_lineage(
+                    {"base_model": {"id": source_id, "revision": "a" * 40}}
+                )
 
     def test_slim_tree_preserves_exact_native_and_figures(self) -> None:
         result = self._export()
         self.assertEqual(result["model_id"], export.MODEL_ID)
+        self.assertEqual(result["publication_scope"], "research_only")
         self.assertEqual(
             {path.name for path in self.output.iterdir()},
             {
+                export.RESEARCH_MARKER,
                 "README.md",
                 "ATTRIBUTIONS.md",
                 "LICENSE",
@@ -155,13 +189,19 @@ class SlimExportTest(unittest.TestCase):
             (self.output / "ATTRIBUTIONS.md").read_text(),
         )
         card = (self.output / "README.md").read_text()
+        self.assertIn("**Research only.**", card)
         self.assertIn("DEV2.0-4B mosaic owl", card)
         self.assertIn("assets/jevarena-rank.svg", card)
         self.assertNotIn("crossroads fox", card)
         self.assertNotIn("CC BY-SA", card)
         self.assertNotIn("PACKAGE_MANIFEST.json", card)
         self.assertNotIn("release-gate.json", export._inventory(self.output))
-        self.assertEqual(export.verify(self.output)["parameter_count"], 4_205_751_296)
+        with self.assertRaisesRegex(ValueError, "not an official release"):
+            export.verify(self.output)
+        self.assertEqual(
+            export.verify(self.output, allow_research_only=True)["parameter_count"],
+            4_205_751_296,
+        )
 
     def test_source_tampering_is_rejected(self) -> None:
         (self.source / "native" / "model.safetensors").write_bytes(b"tampered")
@@ -173,7 +213,7 @@ class SlimExportTest(unittest.TestCase):
         self._export()
         (self.output / "model" / "model.safetensors").write_bytes(b"tampered")
         with self.assertRaisesRegex(ValueError, "inventory changed"):
-            export.verify(self.output)
+            export.verify(self.output, allow_research_only=True)
 
     def test_broken_card_reference_is_rejected_even_if_rehashed(self) -> None:
         self._export()
@@ -186,11 +226,11 @@ class SlimExportTest(unittest.TestCase):
         manifest["files_sha256"]["README.md"] = export._sha(card_path)
         manifest_path.write_text(json.dumps(manifest))
         with self.assertRaisesRegex(ValueError, "Broken local model-card reference"):
-            export.verify(self.output)
+            export.verify(self.output, allow_research_only=True)
 
     def test_unpinned_owl_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "pinned owned asset"):
-            export.export(self.source, self.owl, self.output)
+            export.export(self.source, self.owl, self.output, research_only=True)
         self.assertFalse(self.output.exists())
 
 

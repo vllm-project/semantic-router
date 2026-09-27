@@ -1,10 +1,11 @@
-"""Export a verified private v3 package to a small public Hugging Face tree.
+"""Export a verified private v3 package to a small Hugging Face tree.
 
 The full package and its review receipts remain in private storage. This
-export copies every native model byte unchanged and keeps only model-card,
-license, chart and concise evaluation material at the public repository root.
-Run the private package verifier before calling this command; this exporter
-also rehashes the complete input inventory and its own output inventory.
+legacy exporter is specific to an Eikos-initialized research package. Its
+output is research-only and must not be published as Decision 2.0. A future
+official exporter needs an independently verified Decision 1.0 or Qwen source
+and a new product card. Run the private package verifier before calling this
+command; this exporter also rehashes the input and output inventories.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from .generate_arena_v3 import FIGURES
 
 VERSION = "decision2-hf-slim-export/2"
 MODEL_ID = "llm-semantic-router/DEV2.0-4B"
+RESEARCH_MARKER = "RESEARCH_ONLY_DO_NOT_PUBLISH.txt"
 OWL_SHA256 = "58dbd7cf5ff49b760a162c32366bd5312a2acfded1273b79b937afcd31ca6ee4"
 OWL_SOURCE_REVISION = "cde2a68dbaa557ea65dc458104d410a0802ee259"
 BANNER = "decision-2-4b-banner.svg"
@@ -277,14 +279,42 @@ def _evaluation(source_manifest: dict[str, Any]) -> str:
     return value
 
 
-def export(source: Path, owl: Path, output: Path) -> dict[str, Any]:
+def _require_official_lineage(record: dict[str, Any]) -> None:
+    """Reject a third-party Decision weight start before any official export."""
+    base = record.get("base_model", {})
+    model_id = base.get("id") if isinstance(base, dict) else None
+    revision = base.get("revision") if isinstance(base, dict) else None
+    if (
+        not isinstance(model_id, str)
+        or not isinstance(revision, str)
+        or re.fullmatch(r"[0-9a-f]{40}", revision) is None
+        or not (
+            re.fullmatch(r"llm-semantic-router/Decision-1\.0-[A-Za-z0-9.-]+", model_id)
+            or re.fullmatch(r"Qwen/Qwen[A-Za-z0-9.-]+", model_id)
+        )
+    ):
+        raise ValueError(
+            "Official Decision 2.0 export requires own Decision 1.0 or "
+            "unmodified official Qwen initialization"
+        )
+
+
+def export(
+    source: Path, owl: Path, output: Path, *, research_only: bool = False
+) -> dict[str, Any]:
     if output.exists():
         raise FileExistsError(output)
     manifest, source_files = _checked_source(source)
+    record = _json(source / "release-record.json")
+    if not research_only:
+        _require_official_lineage(record)
+        raise ValueError(
+            "This legacy 4B exporter is research-only; an official release needs "
+            "a new product-card export and independently verified model lineage"
+        )
     owl_bytes = owl.read_bytes()
     if owl.is_symlink() or hashlib.sha256(owl_bytes).hexdigest() != OWL_SHA256:
         raise ValueError("1.0 owl banner differs from the pinned owned asset")
-    record = _json(source / "release-record.json")
     output.parent.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix=f".{output.name}.export-", dir=output.parent))
     try:
@@ -319,10 +349,19 @@ def export(source: Path, owl: Path, output: Path) -> dict[str, Any]:
             shutil.copyfile(source / relative, stage / "assets" / name)
             if _sha(stage / "assets" / name) != source_files[relative]:
                 raise ValueError(f"Chart changed during export: {name}")
-        (stage / "README.md").write_text(
-            _card((source / "README.md").read_text(encoding="utf-8")),
-            encoding="utf-8",
-        )
+        card = _card((source / "README.md").read_text(encoding="utf-8"))
+        if research_only:
+            warning = (
+                "> **Research only.** This package starts from a third-party "
+                "Decision model and is not eligible for official Decision 2.0 "
+                "publication. Do not upload this tree or add it to the "
+                "Decision 2.0 collection.\n\n"
+            )
+            if "---\n\n" not in card:
+                raise ValueError("Research card lacks a YAML front-matter boundary")
+            card = card.replace("---\n\n", "---\n\n" + warning, 1)
+            (stage / RESEARCH_MARKER).write_text(warning, encoding="utf-8")
+        (stage / "README.md").write_text(card, encoding="utf-8")
         (stage / "ATTRIBUTIONS.md").write_text(_attributions(record), encoding="utf-8")
         (stage / "evaluation").mkdir()
         (stage / "evaluation" / "EVALUATION.md").write_text(
@@ -331,6 +370,7 @@ def export(source: Path, owl: Path, output: Path) -> dict[str, Any]:
         files = _inventory(stage)
         public = {
             "schema_version": VERSION,
+            "publication_scope": "research_only" if research_only else "official",
             "model_id": MODEL_ID,
             "model_revision": manifest["model_revision"],
             "parameter_count": manifest["parameter_count"],
@@ -352,7 +392,7 @@ def export(source: Path, owl: Path, output: Path) -> dict[str, Any]:
             json.dumps(public, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
-        verify(stage)
+        verify(stage, allow_research_only=research_only)
         stage.rename(output)
         return public
     finally:
@@ -360,13 +400,20 @@ def export(source: Path, owl: Path, output: Path) -> dict[str, Any]:
             shutil.rmtree(stage)
 
 
-def verify(root: Path) -> dict[str, Any]:
+def verify(root: Path, *, allow_research_only: bool = False) -> dict[str, Any]:
     manifest = _json(root / "evaluation" / "manifest.json")
     if (
         manifest.get("schema_version") != VERSION
         or manifest.get("model_id") != MODEL_ID
     ):
         raise ValueError("Unknown HF export identity")
+    scope = manifest.get("publication_scope", "research_only")
+    if scope not in ("official", "research_only"):
+        raise ValueError("Unknown HF publication scope")
+    if scope == "official":
+        raise ValueError("This legacy 4B verifier cannot certify an official release")
+    if scope == "research_only" and not allow_research_only:
+        raise ValueError("Research-only model tree is not an official release")
     observed = _inventory(root)
     observed.pop("evaluation/manifest.json", None)
     if observed != manifest.get("files_sha256"):
@@ -396,14 +443,17 @@ def verify(root: Path) -> dict[str, Any]:
         raise ValueError("Public card differs from the slim release layout")
     if "Apache License" not in (root / "LICENSE").read_text(encoding="utf-8"):
         raise ValueError("Public root license is not an Apache license text")
-    if set(root.iterdir()) != {
+    expected_root = {
         root / "README.md",
         root / "ATTRIBUTIONS.md",
         *(root / name for name in ROOT_SOURCES),
         root / "assets",
         root / "model",
         root / "evaluation",
-    }:
+    }
+    if scope == "research_only":
+        expected_root.add(root / RESEARCH_MARKER)
+    if set(root.iterdir()) != expected_root:
         raise ValueError("Public root contains an unexpected temporary file")
     for relative in ("README.md", "ATTRIBUTIONS.md", "evaluation/EVALUATION.md"):
         document = root / relative
@@ -427,16 +477,26 @@ def main() -> None:
     parser.add_argument("--owl-banner", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--verify", type=Path)
+    parser.add_argument(
+        "--research-only",
+        action="store_true",
+        help="Permit a marked private research export; never upload it as Decision 2.0",
+    )
     args = parser.parse_args()
     if args.verify is not None:
-        result = verify(args.verify)
+        result = verify(args.verify, allow_research_only=args.research_only)
     else:
         if any(
             value is None
             for value in (args.private_package, args.owl_banner, args.output)
         ):
             parser.error("Export requires --private-package, --owl-banner and --output")
-        result = export(args.private_package, args.owl_banner, args.output)
+        result = export(
+            args.private_package,
+            args.owl_banner,
+            args.output,
+            research_only=args.research_only,
+        )
     print(json.dumps({"model_id": result["model_id"], "version": VERSION}))
 
 
