@@ -105,6 +105,19 @@ predictions or invent equivalence with TypeSafe's unpublished confidence
 formula. Keep explicit unknown/abstain as a supplied Choice candidate; do not
 silently introduce an extra output class.
 
+## Runtime addendum: 2026-09-28
+
+The System One contract gaps in the preceding section describe the package
+and source at the time of the 2026-09-27 audit. They were repaired in source
+and in the **private** 0.6B package at exact revision
+`2e83b687fa8d22eb8c6765277682e3c1e798d6a1`. The
+[package refresh receipt](qwen3-06b-systemone-contract-refresh-2026-09-28.md)
+records unchanged weights and benchmark row conversion, old/new native answer
+parity, a structured request GPU probe and an exact Hub readback. The
+confidence value is the product's disclosed entropy-based function; TypeSafe
+does not publish a numerical reference formula. The 0.6B Choice/Score quality
+regressions and all architecture conclusions above remain unchanged.
+
 ## Priority experiments before a stronger 0.6B claim
 
 1. **Decision-contract gate, no optimizer:** Add an independent runtime matrix

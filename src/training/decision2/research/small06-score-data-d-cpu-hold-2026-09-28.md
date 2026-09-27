@@ -1,6 +1,6 @@
 # 0.6B Score data contrast D: CPU construction and review HOLD
 
-**Disposition: HOLD pending independent gold-blind editorial review.** This is
+**Disposition: HOLD after independent gold-blind AI editorial review.** This is
 a private TRAIN candidate, not a model result or permission to run a GPU arm.
 The previously completed shared-head 0.6B control and failed type-separated
 head arm remain unchanged. No SELECT, CAL, typed DEV/FINAL, CSS, JevBench or HF
@@ -79,15 +79,30 @@ The answer-free individual and grouped packets have SHA-256 values
 and `d4a0a743ac816d1a1bc8f485fc7882b3bd1c506a9024d2d5f8c0f94d0b9bd899`.
 Their key is separate and not for reviewers.
 
+## Subsequent blind review
+
+A separate AI reviewer inspected all 128 answer-free grouped triplets before
+the key comparison. Its blind receipt SHA-256 is
+`98f33b6118b423cf9e280b1343557e6f4123a87ccabb99b25bd7f5fc03ed1478`;
+the later key-comparison receipt SHA-256 is
+`479d4b1d2c8599f94f47e5216de62e639eab9e70b00abaad4004d2fd03eeff07`.
+The reviewer reconstructed all 384 labels correctly and found no ambiguous
+answer in these packets. It also found material shortcuts: the eligible
+filter never changes the answer in the 96 evidence rows, and the two core
+controls share the latest timestamp in all 96 relevant rows. Some Chinese
+renderings were stiff. These are data-quality failures for the intended
+generalization contrast, even though the answer oracle is internally
+consistent. This was AI review, not human annotation or a new model score.
+The candidate remains HOLD; no GPU arm should train on it as this contrast.
+
 ## Interpretation and next gate
 
 This treatment isolates the *training-data composition* hypothesis from the
 failed type-separated-head treatment; it does not show that 0.6B Score,
 Choice, Noul, transfer, calibration or composite score improved. These four
 programmatic mechanisms are short and structured, so they cannot establish
-real-world or long-context transfer. The private candidate remains HOLD until
-independent answer/evidence, Chinese naturalness, ambiguity, paired source
-necessity and shortcut review is sealed and compared with the hidden key.
+real-world or long-context transfer. The blind review above found shortcuts;
+it does not clear the candidate for training.
 Near-overlap algorithms cannot rule out every semantic paraphrase. Any
 material review failure requires a new prospectively specified treatment,
 not deletion of unfavorable rows from this frozen roster.
