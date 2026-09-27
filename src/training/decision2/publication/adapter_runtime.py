@@ -218,13 +218,9 @@ def verify_bundle(
         or HF_ID.fullmatch(base["repo_id"]) is None
         or not isinstance(base.get("revision"), str)
         or REVISION.fullmatch(base["revision"]) is None
-        or base.get("source_kind") not in {"base", "posttrained", "decision1"}
+        or base.get("source_kind") not in {None, "base", "posttrained", "decision1"}
     ):
         raise ValueError("Adapter package needs a pinned upstream repository commit")
-    if base["source_kind"] == "decision1" and not base["repo_id"].startswith(
-        "llm-semantic-router/Decision-1.0-"
-    ):
-        raise ValueError("Decision 1.0 source must be an own-family repository")
     files = _digest_map(manifest.get("files_sha256"), "package files")
     if "MODEL_MANIFEST.json" in files or _inventory(root, ignore_bytecode=True) != {
         **files,
@@ -251,13 +247,23 @@ def verify_bundle(
         (root / "model/decision_config.json").read_text(encoding="utf-8")
     )
     contract = metadata.get("lora") if isinstance(metadata, dict) else None
+    source_kind = base.get("source_kind")
+    if source_kind is None and isinstance(contract, dict):
+        # Qwen-only packages made before this field remain readable.
+        source_kind = contract.get("source_kind")
     if (
         not isinstance(contract, dict)
-        or contract.get("source_kind") != base["source_kind"]
+        or source_kind not in {"base", "posttrained", "decision1"}
+        or contract.get("source_kind") != source_kind
     ):
         raise ValueError("Package source kind differs from adapter contract")
+    if source_kind == "decision1" and (
+        base.get("source_kind") != "decision1"
+        or not base["repo_id"].startswith("llm-semantic-router/Decision-1.0-")
+    ):
+        raise ValueError("Decision 1.0 source must be an own-family repository")
     if (
-        base["source_kind"] in {"base", "posttrained"}
+        source_kind in {"base", "posttrained"}
         and contract.get("base_revision") != base["revision"]
     ):
         raise ValueError("Package Qwen revision differs from adapter contract")
@@ -273,7 +279,7 @@ def verify_bundle(
         identity = checkpoint_fingerprint(root / "model", source)
         if identity.get("model_sha256") != manifest.get("model_sha256"):
             raise ValueError("PEFT checkpoint and upstream base identity disagree")
-        breakdown = _parameter_breakdown(root, source, base["source_kind"])
+        breakdown = _parameter_breakdown(root, source, source_kind)
         if metadata.get("text_parameter_count") != breakdown["base_text"]:
             raise ValueError(
                 "Pinned base parameter count differs from checkpoint metadata"

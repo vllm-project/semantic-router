@@ -272,6 +272,14 @@ class AdapterBundleTests(unittest.TestCase):
                 output=self.root / "incompatible-origin",
             )
 
+    def test_existing_qwen_package_without_source_kind_stays_readable(self) -> None:
+        self.assemble()
+        path = self.root / "bundle/MODEL_MANIFEST.json"
+        manifest = json.loads(path.read_text())
+        del manifest["base"]["source_kind"]
+        _json(path, manifest)
+        adapter_bundle._verify_staged_runtime(self.root / "bundle", self.source)
+
     def test_normal_python_import_keeps_package_verifiable(self) -> None:
         self.assemble()
         script = (
