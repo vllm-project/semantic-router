@@ -1,7 +1,7 @@
 # Official Qwen3.5 4B Posttrained: corrected runtime admission v2
 
-**Status: prospective CPU-only protocol; no v2 GPU stage authorized or
-started.** The [v1 attempt](qwen35-4b-posttrained-admission-lock-2026-09-27.md)
+**Status: CPU full-weight preflight passed and new lock sealed; no v2 GPU stage
+authorized or started.** The [v1 attempt](qwen35-4b-posttrained-admission-lock-2026-09-27.md)
 remains a separate HOLD, with no model forward pass. This record changes only
 the interpreter used inside the same immutable image. It does not revise the
 previous result, reuse its lock, select a model, or authorize the 466-update
@@ -64,3 +64,25 @@ Passing all admission gates would justify separately reviewing the prospective
 466-update development arm, not launching it automatically or making a release
 claim. The known Base v3 HOLD and 2B Posttrained Score collapse remain live
 risks; the source hypothesis is untested until valid development readout.
+
+## CPU-only execution and review handle
+
+The signed local runner revision is `f1a280acfd467b6ab4dc20312d2fd3732ae95060`;
+its SHA-256 is
+`a9d67d6d2412cd5352aad55fb1b423c04687a69e828ab0ea06e426c0a571267a`.
+The local `make test-training-contracts` gate and eight directly relevant
+admission/source unit tests passed before mirroring. The exact code mirror ran
+the pinned image with no GPU device and no network. The CPU source loader
+completed on all 723 weight tensors, yielded **4,205,751,296 text parameters**
+on CPU, and encoded a representative SELECT item from each native type.
+The private CPU preflight receipt has SHA-256
+`49f85678b61cc80353d95a25453f811d9b5395cccc0b08712508490d80abd726`.
+Its `visible_gpu_count` is zero. A separate fresh no-device process reopened
+the lock and returned `CPU_LOCK_VERIFIED` with the same SHA-256:
+`cb2690675dc1d6d39370acbf4445ea667b0d08ee54c369077ee8c9f55fcfb86a`.
+The two private CPU console logs have SHA-256
+`f4d39e3266c3fb26a8ef91a77fc6769135f0069361d9dee0a82a4288f5e96ab9`
+and `9748bd0cc1fc19d70e000d2c8d775d11bc75e4f7943b5dde9e5bc8bb0c5e6b1a`.
+The lock and preflight receipt are mode `0600` under a mode `0700` experiment
+directory. No prediction, training update, formal label access, or GPU use
+occurred under this v2 lock. Independent review is the next gate.
