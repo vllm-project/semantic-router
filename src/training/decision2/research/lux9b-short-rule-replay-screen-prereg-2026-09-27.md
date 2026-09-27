@@ -76,3 +76,29 @@ Formal typed FINAL/CSS15 labels have previously been opened for another 4B
 arm. Any later formal 9B comparison must be described as a **post-key
 prospective same-panel** run with its model, predictions and formula sealed
 before this 9B score, not as a virgin blind test.
+
+## CPU feasibility and zero-step receipt, before optimizer start
+
+The fixed builder retained all **270/270** short source groups, zero
+exact/normalized/near exclusions and zero overlength rows. The merged TRAIN
+has **6,094** rows, SHA
+`a9264ff9f97cba440d71317b514b6f1f9828146d8047d2ac229812013260e9eb`;
+Lux-tokenized human/addition input counts are 1,846,849 / 135,143, so the
+addition is **6.8185%** of training input tokens. The builder SHA is
+`91ff157da550d3a875b14bc0225b52d09a31a4368ca6fce0189ae763c3678029`.
+This is a gold-free data audit, not a model result.
+
+The fixed 32 SELECT inputs passed a one-process native source-to-fresh-LoRA
+comparison before any optimizer update: 32/32 valid, zero category changes,
+maximum probability drift **0**, private receipt SHA
+`9ff0d5247667fad57b3fb9d6137591fef3cd97db1e60db1c07bf33b6087872a6`;
+model elapsed 28.33 seconds. The same pinned reference backend is required
+for the one-step and 128-step arms. A later backend substitution needs a
+separate zero-step gate and cannot inherit this receipt.
+
+The trainer defaults omitted above are frozen here before optimization:
+`eval_batch=2`, `epochs=1`, `weight_decay=0.01`, `warmup_ratio=0.05`,
+`backbone_lr=1e-6` (frozen backbone), and gradient checkpointing enabled.
+One-step preflight uses the same data/source/objective with `max_steps=1` and
+`save_every=1`. The 128-step arm uses `max_steps=128`, `save_every=32` and a
+distinct output directory; no one-step weights are transferred.
