@@ -24,8 +24,23 @@ from typing import Any
 ADAPTER_VERSION = "decision2-peft-package-native-v1"
 PACKAGE_VERSION = "decision2-peft-adapter-package/1"
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
-REVISION = re.compile(r"(?:[0-9a-f]{40}|package-sha256:[0-9a-f]{64})\Z")
+REVISION = re.compile(r"package-sha256:[0-9a-f]{64}\Z")
 KINDS = {"choice", "noul", "score"}
+ANSWER_FIELDS = {
+    "answer",
+    "answers",
+    "correct",
+    "correct_option",
+    "expected",
+    "gold",
+    "gold_answer",
+    "gold_label",
+    "ground_truth",
+    "label",
+    "labels",
+    "target",
+    "targets",
+}
 
 
 def _sha_file(path: Path) -> str:
@@ -59,6 +74,17 @@ def _reject_constant(value: str) -> Any:
     raise ValueError(f"Prompt JSON contains a nonfinite value: {value}")
 
 
+def _contains_answer_field(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(
+            key.strip().casefold() in ANSWER_FIELDS or _contains_answer_field(child)
+            for key, child in value.items()
+        )
+    if isinstance(value, list):
+        return any(_contains_answer_field(child) for child in value)
+    return False
+
+
 def load_gold_free(path: Path) -> list[dict[str, Any]]:
     """Reject labels, duplicate IDs/keys and malformed prompt containers."""
     if path.is_symlink() or not path.is_file():
@@ -80,6 +106,10 @@ def load_gold_free(path: Path) -> list[dict[str, Any]]:
                 )
             if not isinstance(row["id"], str) or not row["id"] or row["id"] in seen:
                 raise ValueError(f"Prompt line {number} has a missing or duplicate ID")
+            if not isinstance(row["state"], (str, dict)):
+                raise ValueError(f"Prompt line {number} has an unsupported state type")
+            if _contains_answer_field(row["state"]):
+                raise ValueError(f"Prompt line {number} contains a state answer field")
             questions = row["questions"]
             if (
                 not isinstance(questions, dict)
@@ -89,16 +119,7 @@ def load_gold_free(path: Path) -> list[dict[str, Any]]:
                 raise ValueError(f"Prompt line {number} has invalid question IDs")
             if any(
                 isinstance(question, dict)
-                and set(question)
-                & {
-                    "answer",
-                    "correct",
-                    "correct_option",
-                    "expected",
-                    "gold",
-                    "label",
-                    "target",
-                }
+                and any(key.strip().casefold() in ANSWER_FIELDS for key in question)
                 for question in questions.values()
             ):
                 raise ValueError(
@@ -128,17 +149,14 @@ def _package_manifest(
     if SHA256.fullmatch(expected_sha256) is None:
         raise ValueError("Expected package manifest SHA-256 is invalid")
     if REVISION.fullmatch(model_revision) is None:
-        raise ValueError("Model revision must be an immutable commit or package digest")
+        raise ValueError("Pre-release model revision must be a package digest")
     manifest_path = package / "MODEL_MANIFEST.json"
     if manifest_path.is_symlink() or not manifest_path.is_file():
         raise ValueError("Package manifest is missing or linked")
     actual = _sha_file(manifest_path)
     if actual != expected_sha256:
         raise ValueError("Package manifest differs from frozen SHA-256")
-    if (
-        model_revision.startswith("package-sha256:")
-        and model_revision.split(":", 1)[1] != actual
-    ):
+    if model_revision.split(":", 1)[1] != actual:
         raise ValueError("Development model revision differs from package bytes")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if (

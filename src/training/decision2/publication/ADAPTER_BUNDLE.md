@@ -89,10 +89,12 @@ before documenting its behavior for callers.
 its copied question validator. It does not import a current development
 `training.model` module for inference. The CLI requires a local immutable base,
 the frozen package-manifest SHA-256, a model ID and an immutable model revision.
-Until a model repository commit exists, use the explicit
-`package-sha256:MANIFEST_DIGEST` development revision; a release run uses its
-actual 40-character model commit. The package supplies CAL, context limit and
-temperature by type; the CLI offers no overrides.
+This pre-release collector accepts only the exact
+`package-sha256:MANIFEST_DIGEST` development revision. It refuses a bare HF
+commit string because that would not prove the downloaded repository matches
+the evaluated package. A future release collector must verify the downloaded
+repository bytes before binding its actual commit. The package supplies CAL,
+context limit and temperature by type; the CLI offers no overrides.
 Create the output directory with mode `0700` before running; the collector
 requires that mode and creates prediction and manifest files with mode `0600`.
 
@@ -105,8 +107,11 @@ PYTHONPATH=src/training/decision2 python3 -m publication.package_native_arena \
   --model-revision package-sha256:MANIFEST_DIGEST --device cuda:0
 ```
 
-The input contains only `id`, `state` and `questions`; answer fields are
-rejected before GPU loading. Invalid questions are passed through the copied
+The input contains only `id`, `state` and `questions`. State may be a native
+string or structured object; explicit answer/gold fields anywhere in a
+structured state, and answer fields on a question, are rejected before GPU
+loading. This is a field screen, not proof against semantic leakage in prose.
+Invalid questions are passed through the copied
 native validator and counted as failures. Missing, malformed, tied Choice and
 over-budget answers remain explicit invalid rows. The output has the same
 row-level input hashes and gold-free JSONL/companion-manifest shape as the

@@ -114,6 +114,18 @@ class PackageNativeArenaTests(unittest.TestCase):
         path.write_text(json.dumps(row) + "\n", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "question answer field"):
             arena.load_gold_free(path)
+        row = _row()
+        row["state"] = {"facts": [{"status": "pending"}]}
+        path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+        self.assertEqual(arena.load_gold_free(path), [row])
+        row["state"]["facts"][0]["gold_label"] = "approved"
+        path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "state answer field"):
+            arena.load_gold_free(path)
+        row["state"] = ["unsupported"]
+        path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "unsupported state type"):
+            arena.load_gold_free(path)
 
     def test_sealed_import_uses_package_files_only(self) -> None:
         package = self.root / "bundle"
@@ -145,7 +157,11 @@ class PackageNativeArenaTests(unittest.TestCase):
         self.assertEqual(actual, digest)
         self.assertEqual(contract["max_length"], 4096)
         with self.assertRaisesRegex(ValueError, "frozen SHA"):
-            arena._package_manifest(package, "0" * 64, MODEL_ID, "f" * 40)
+            arena._package_manifest(
+                package, "0" * 64, MODEL_ID, f"package-sha256:{digest}"
+            )
+        with self.assertRaisesRegex(ValueError, "Pre-release model revision"):
+            arena._package_manifest(package, digest, MODEL_ID, "f" * 40)
         with self.assertRaisesRegex(ValueError, "revision differs"):
             arena._package_manifest(
                 package, digest, MODEL_ID, "package-sha256:" + "0" * 64
