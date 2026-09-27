@@ -9,9 +9,9 @@ TABLE = """# Decision 2.0: JevArena v3 first-release panel
 
 JevArena v3 scores 8,147 items. JevBench v1.2 public is separate.
 
-| JevArena rank | Model | Actual parameters | JevArena v3 |
-| ---: | --- | ---: | ---: |
-| 1 | Candidate | 25.688B | 60.00 |
+| Rank | Model | Parameters | JevArena v3 ↑ | JevBench public ↑ |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | Candidate | 25.688B | 60.00 | 200/231 |
 """
 
 

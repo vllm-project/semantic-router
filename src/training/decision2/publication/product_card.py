@@ -72,9 +72,8 @@ def render(card: ProductCard) -> str:
         raise ValueError("Loaded parameter count must be measured")
     table = _text(card.evidence_table, "evidence table")
     if (
-        "| JevArena rank | Model | Actual parameters |" not in table
-        or "JevBench v1.2 public" not in table
-        or "8,147" not in table
+        "| Rank | Model | Parameters | JevArena v3 ↑ |" not in table
+        or "| JevBench public ↑ |" not in table
     ):
         raise ValueError("A scored v3 and public231 table is required")
     name = card.model_id.rsplit("/", 1)[1]
@@ -201,7 +200,6 @@ The starting weights are
 [{card.direct_weight_source}](https://huggingface.co/{card.direct_weight_source});
 their exact revision is in the [evaluation manifest](evaluation/manifest.json).
 {teacher}
-
 ### Limits
 
 {limits}

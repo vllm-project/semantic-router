@@ -203,16 +203,14 @@ def build(
         return f"{value * 100:.2f}%"
 
     table = [
-        "JevArena v3: 8,147 original items; JevBench v1.2 public: 231 questions.",
-        "",
-        "| JevArena rank | Model | Actual parameters | v3 score ↑ | Typed T ↑ | Human transfer H ↑ | JevBench v1.2 public ↑ |",
-        "| ---: | --- | ---: | ---: | ---: | ---: | ---: |",
+        "| Rank | Model | Parameters | JevArena v3 ↑ | Human transfer ↑ | JevBench public ↑ |",
+        "| ---: | --- | ---: | ---: | ---: | ---: |",
     ]
     for row in ordered:
         table.append(
             f"| {row['rank']} | {row['label']} | {row['parameters']:,} | "
-            f"{row['score']:.3f} | {pct(row['axes']['typed'])} | "
-            f"{pct(row['axes']['transfer'])} | {row['public_correct']}/231 |"
+            f"{row['score']:.3f} | {pct(row['axes']['transfer'])} | "
+            f"{row['public_correct']}/231 |"
         )
     table += [
         "",
@@ -236,10 +234,10 @@ def build(
         banner="assets/DEV2.0-0.6B-owl-banner.png",
         tagline="A compact model for choices, yes/no checks and ordered scores.",
         measured_summary=(
-            "On this matched panel, DEV2.0-0.6B gains **2.58 points** over Kai "
-            "1.0 overall and improves on human-labeled transfer. Its Choice "
-            "and Score results are lower; the overall paired interval includes "
-            "zero."
+            "DEV2.0-0.6B scores **38.52** on JevArena v3 versus Kai 1.0's "
+            "35.94. Human-task transfer improves, while Choice and Score fall. "
+            "The paired interval includes zero, so the overall gain is not "
+            "established."
         ),
         use_cases=(
             "Choose among supplied routes or options with explicit criteria.",
@@ -261,9 +259,9 @@ def build(
         ),
         evidence_table="\n".join(table),
         evaluation_scope=(
-            "The JevBench result is the reproducible public subset, not an official "
-            "closed leaderboard. JevArena is a same-panel post-key comparison; "
-            "independent confirmation remains open."
+            "JevBench here is its public subset, not an official full-benchmark "
+            "rank. JevArena is a same-panel comparison after project-level "
+            "access to its answers; fresh independent confirmation remains open."
         ),
     )
     (output / "README.md").write_text(render(card), encoding="utf-8")
