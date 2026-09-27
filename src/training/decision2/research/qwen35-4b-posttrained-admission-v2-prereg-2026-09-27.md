@@ -1,0 +1,66 @@
+# Official Qwen3.5 4B Posttrained: corrected runtime admission v2
+
+**Status: prospective CPU-only protocol; no v2 GPU stage authorized or
+started.** The [v1 attempt](qwen35-4b-posttrained-admission-lock-2026-09-27.md)
+remains a separate HOLD, with no model forward pass. This record changes only
+the interpreter used inside the same immutable image. It does not revise the
+previous result, reuse its lock, select a model, or authorize the 466-update
+arm.
+
+The archived successful Base zero-step, one-update, and full-run containers
+used the exact image ID
+`sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54`
+and invoked `/usr/bin/python`, which contains Transformers `5.17.0` and
+PyTorch `2.12.0+git6bbd260`. Their source loader is the same
+`decision_model.py` SHA-256
+`ee3db820db73011d60e99b98c3067e33d85c8f4cbae08b53ea0604869ffba0ca`.
+The v1 admission script instead invoked the image's separate Vela Python with
+Transformers `4.57.6`; `AutoConfig` rejected the shared `qwen3_5` model type
+before any model forward pass. Both official 4B source configurations have
+identical SHA-256
+`ddc63e1c717afa86c865bb5e01313d89d72bb53b97ad4a8a03ba8510c0621670`.
+
+## Corrected CPU gate and immutable inputs
+
+The v2 runner is schema `decision2-qwen35-4b-posttrained-admission/2`. It
+refuses any interpreter other than `/usr/bin/python` or package version other
+than the archived Base runtime, in both CPU and GPU phases. The frozen image,
+official Posttrained source revision
+`851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`, source shards, rights-clean
+v2 TRAIN 7,455 / SELECT 700 / CAL 700, objective, native renderer, rank-16
+LoRA, head, seed, and maximum stage durations remain those of the
+[prospective source ablation](qwen35-4b-posttrained-vs-base-prereg-2026-09-27.md).
+The completed Base control is never repeated. No formal or public benchmark
+label is available to this gate.
+
+Before writing a **new** private lock, `prepare` must run inside the pinned
+image without any GPU device or network access. It must verify every frozen
+source/data/code hash, then fully load the official Posttrained weights into
+CPU memory via the actual `DecisionModel.from_base` source path. The resulting
+model must report `qwen3_5`, the pinned revision and Posttrained stage, and
+all parameters must remain on CPU. The source tokenizer must natively encode
+one SELECT item from each of Choice, Noul, and Score within 8,192 tokens;
+prompt/token hashes are sealed in the private preflight receipt. No score or
+prediction is computed. This gate tests the precise loader that v1 missed,
+not the model's accuracy or inference repeatability.
+
+The private output directory must be new, empty, mode `0700`. The runner
+writes its CPU preflight receipt and then a mode-`0600` lock binding that
+receipt, the same immutable image and source, all data/code hashes, interpreter
+and package versions, and the fixed bounded GPU protocol. A second fresh
+no-device process must reopen and verify that lock. Any CPU load failure,
+hash mismatch, unsupported type, missing item, overlength input, accidental
+GPU exposure, or runtime mismatch is **HOLD**. The complete preflight log and
+receipt remain private. No lock is treated as permission to start GPU work.
+
+Only after independent review of the new lock may an operator consider the
+original bounded order: two fresh zero-step starts on all SELECT700 rows,
+CPU pair comparison requiring zero category changes and probability drift
+p99 ≤`.005` / max ≤`.02`, one fresh-source TRAIN optimizer update with finite
+loss/gradient, and a separate 32-row checkpoint reload under the same parity
+limits. The exact phase caps remain 540, 540, 360 and 180 seconds, combined
+0.45 GPU-hour maximum, with **no retries**. A failed phase stops this lock.
+Passing all admission gates would justify separately reviewing the prospective
+466-update development arm, not launching it automatically or making a release
+claim. The known Base v3 HOLD and 2B Posttrained Score collapse remain live
+risks; the source hypothesis is untested until valid development readout.

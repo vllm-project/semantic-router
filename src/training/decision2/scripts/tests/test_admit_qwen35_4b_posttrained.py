@@ -7,7 +7,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.admit_qwen35_4b_posttrained import _probs, _train_args, compare
+from scripts.admit_qwen35_4b_posttrained import (
+    RUNTIME_PYTHON,
+    _probs,
+    _train_args,
+    _validate_runtime,
+    compare,
+)
 
 
 def record(identifier: str, task_type: str, probability: float) -> dict:
@@ -78,6 +84,8 @@ class AdmissionContractTests(unittest.TestCase):
         }
         zero = _train_args(lock, Path("/out/zero-a"), zero=True)
         one = _train_args(lock, Path("/out/one"), zero=False)
+        self.assertEqual(zero[0], RUNTIME_PYTHON)
+        self.assertEqual(one[0], RUNTIME_PYTHON)
         self.assertIn("--zero-step-only", zero)
         self.assertNotIn("--zero-step-only", one)
         self.assertEqual(one[one.index("--max-steps") + 1], "1")
@@ -85,6 +93,16 @@ class AdmissionContractTests(unittest.TestCase):
         self.assertEqual(one[one.index("--objective") + 1], "ce_brier")
         self.assertEqual(one[one.index("--init-kind") + 1], "posttrained")
         self.assertEqual(one[one.index("--accumulation") + 1], "16")
+
+    def test_runtime_is_the_exact_base_control_interpreter(self) -> None:
+        expected = _validate_runtime("/usr/bin/python", "5.17.0", "2.12.0+git6bbd260")
+        self.assertEqual(expected["python"], RUNTIME_PYTHON)
+        for python, transformers_version in (
+            ("/opt/vllm-sr/venvs/vela/bin/python", "4.57.6"),
+            ("/usr/bin/python", "4.57.6"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Runtime interpreter"):
+                _validate_runtime(python, transformers_version, "2.12.0+git6bbd260")
 
     def test_rejects_missing_or_nonfinite_probabilities(self) -> None:
         row = record("1", "choice", 0.7)
