@@ -31,7 +31,8 @@ from training.data.audit_anli_score_train_source import (
 from training.model.data import file_sha256
 
 REVIEW_SALT = "decision2-anli-score-rubric-review-v1"
-REVIEW_GROUPS_PER_ROUND = 3
+REVIEW_GROUPS_BY_ROUND = {1: 3, 2: 3, 3: 2}
+REVIEW_ITEMS_PER_GROUP = 3
 MIN_GROUP_ROWS = 3
 MAX_GROUP_ROWS = 12
 SOURCE_TO_SCORE = {0: 2, 1: 1, 2: 0}
@@ -88,7 +89,7 @@ def build_packet(
     answers = []
     counts = {}
     seen_ids = set()
-    for round_id in (1, 2, 3):
+    for round_id, group_quota in REVIEW_GROUPS_BY_ROUND.items():
         eligible = sorted(
             (
                 group
@@ -100,15 +101,27 @@ def build_packet(
             ),
             key=_rank,
         )
-        if len(eligible) < REVIEW_GROUPS_PER_ROUND:
+        if len(eligible) < group_quota:
             raise ValueError("Insufficient complete, three-relation review groups")
-        chosen = eligible[:REVIEW_GROUPS_PER_ROUND]
+        chosen = eligible[:group_quota]
         counts[f"r{round_id}_groups"] = len(chosen)
-        counts[f"r{round_id}_rows"] = sum(len(groups[group]) for group in chosen)
+        counts[f"r{round_id}_rows"] = len(chosen) * REVIEW_ITEMS_PER_GROUP
         for group in chosen:
             group_id = f"r{round_id}-{_rank(group)[0][:20]}"
             items = []
-            for row in sorted(groups[group], key=lambda item: item.position):
+            rows_by_label: dict[int, list[TrainRow]] = collections.defaultdict(list)
+            for row in groups[group]:
+                rows_by_label[row.label].append(row)
+            review_rows = [
+                min(
+                    rows_by_label[label],
+                    key=lambda row: hashlib.sha256(
+                        (REVIEW_SALT + "\0" + group + "\0" + str(row.position)).encode()
+                    ).hexdigest(),
+                )
+                for label in sorted(SOURCE_TO_SCORE)
+            ]
+            for row in sorted(review_rows, key=lambda item: item.position):
                 review_id = _review_id(round_id, group, row.position)
                 if review_id in seen_ids:
                     raise ValueError("Review ID collision")
@@ -129,7 +142,15 @@ def build_packet(
                         "mapped_native_score": SOURCE_TO_SCORE[row.label],
                     }
                 )
-            packet_groups.append({"review_group_id": group_id, "items": items})
+            packet_groups.append(
+                {
+                    "review_group_id": group_id,
+                    "source_group_rows": len(groups[group]),
+                    "items": items,
+                }
+            )
+    if len(answers) != sum(REVIEW_GROUPS_BY_ROUND.values()) * REVIEW_ITEMS_PER_GROUP:
+        raise ValueError("Blind packet size changed")
     return (
         {
             "schema": "decision2-anli-score-rubric-blind-packet/1",
@@ -137,7 +158,9 @@ def build_packet(
                 "For every claim, use only the supplied evidence and native 0/1/2 "
                 "criteria. Give one score and a brief evidence-based reason. "
                 "Flag any ambiguous, unsupported, misleading, or shortcut-prone "
-                "item and assess each complete premise group together. Do not "
+                "item and assess each supplied three-item review group together. "
+                "A review group samples a larger source group and does not "
+                "establish whole-source quality. Do not "
                 "consult the separate source-label key."
             ),
             "native_score_instructions": SCORE_INSTRUCTIONS,
