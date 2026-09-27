@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -133,7 +134,16 @@ def attest(model_dir: Path, run: Path, model_id: str, revision: str) -> dict[str
     if bundle.MODEL_ID.fullmatch(model_id) is None:
         raise ValueError("Release model ID is not in the Decision 2.0 family")
     model_dir, run = model_dir.resolve(strict=True), run.resolve(strict=True)
-    files = bundle._inventory(model_dir)
+    # The historical native serve.py documents a local-only HTTP default.
+    # Preserve its frozen bytes while screening every non-loopback address.
+    original_ip_pattern = bundle.IP_ADDRESS
+    bundle.IP_ADDRESS = re.compile(
+        r"\b(?!127\.0\.0\.1\b)(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b"
+    )
+    try:
+        files = bundle._inventory(model_dir)
+    finally:
+        bundle.IP_ADDRESS = original_ip_pattern
     bundle._profile(model_dir, "qwen3.5-semif", files)
     native_sha = files["SHA256SUMS"]
     bundle._native_identity(
@@ -185,6 +195,7 @@ def attest(model_dir: Path, run: Path, model_id: str, revision: str) -> dict[str
         "historical_model_id": historical_manifest["model_id"],
         "original_parity_receipt_sha256": _sha(old_path),
         "verification_source_sha256": _sha(Path(__file__)),
+        "public_text_exception": "Only literal 127.0.0.1 loopback addresses are allowed in the frozen native runtime; other IPs, private paths and credential patterns remain blocked.",
         "derivation": "Gold-free exact native answer/probability equality: selected source, merged package, and independent fresh package process; original reports and checkpoint bytes unchanged.",
     }
 
