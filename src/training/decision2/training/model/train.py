@@ -25,6 +25,7 @@ import torch
 
 from .data import check_partition_isolation, file_sha256, load_partition
 from .decision_model import PROMPT_VERSION, DecisionModel, collate, encode
+from .external_teacher import attach_external_teacher
 from .infer import checkpoint_fingerprint
 from .inline_replay import attach_inline_teacher
 from .lora import LORA_FORMAT, adapter_parameters, attach_lora
@@ -268,6 +269,10 @@ def parse_args() -> argparse.Namespace:
         help="Private source probabilities for existing TRAIN rows; adds no samples",
     )
     parser.add_argument(
+        "--external-teacher",
+        help="Pinned external teacher distributions for eligible original TRAIN rows only",
+    )
+    parser.add_argument(
         "--inline-teacher-roster-sha256",
         help="Precommitted SHA-256 of ordered inline {id,input_sha256} roster",
     )
@@ -455,6 +460,38 @@ def validate_args(args: argparse.Namespace) -> None:
         )
     if not math.isfinite(args.replay_kl_weight) or args.replay_kl_weight < 0:
         raise ValueError("replay_kl_weight must be finite and nonnegative")
+    if args.external_teacher and (
+        args.inline_teacher
+        or args.replay
+        or args.replay_fraction != 0
+        or args.init_kind != "base"
+        or args.base_revision != TYPED_HEAD_SOURCE_REVISION
+        or args.train_mode != "full"
+        or args.head_variant != "shared"
+        or args.choice_source
+        or args.choice_source_weight != 1.0
+        or args.objective != "ce_brier"
+        or args.brier_weight != 0.5
+        or args.replay_kl_weight != 0.05
+        or args.ordinal_weight != 0
+        or args.epochs != 1
+        or args.max_steps not in (None, 1)
+        or args.microbatch != 1
+        or args.accumulation != 16
+        or args.eval_batch != 2
+        or args.max_length != 8192
+        or args.head_dim != 256
+        or args.backbone_lr != 2e-5
+        or args.head_lr != 2e-4
+        or args.weight_decay != 0.01
+        or args.warmup_ratio != 0.05
+        or args.save_every != 64
+        or args.seed != 20260926
+        or not args.gradient_checkpointing
+    ):
+        raise ValueError(
+            "External teacher arm must match the frozen official-Qwen full466 control"
+        )
     if (
         not math.isfinite(args.choice_source_weight)
         or args.choice_source_weight < 1.0
@@ -725,6 +762,8 @@ def main() -> None:
         data_sha["replay"] = file_sha256(args.replay)
     if args.inline_teacher:
         data_sha["inline_teacher"] = file_sha256(args.inline_teacher)
+    if args.external_teacher:
+        data_sha["external_teacher"] = file_sha256(args.external_teacher)
     code_files = (
         (*SOURCE_FILES, "lora.py") if args.train_mode == "lora" else SOURCE_FILES
     )
@@ -736,6 +775,8 @@ def main() -> None:
         code_files = (*code_files, "infer.py")
     if args.inline_teacher:
         code_files = (*code_files, "inline_replay.py")
+    if args.external_teacher:
+        code_files = (*code_files, "external_teacher.py")
     source_code_sha = {
         name: file_sha256(Path(__file__).with_name(name)) for name in code_files
     }
@@ -824,6 +865,21 @@ def main() -> None:
             expected_control_baseline_sha256=args.inline_teacher_control_sha256,
             expected_parity_roster_sha256=args.inline_teacher_parity_roster_sha256,
         )
+    external_teacher_summary = None
+    if args.external_teacher:
+        if (
+            data_sha["select"] != TYPED_HEAD_PARTITIONS["select"]
+            or data_sha["cal"] != TYPED_HEAD_PARTITIONS["cal"]
+        ):
+            raise ValueError(
+                "External teacher SELECT or CAL differs from archived control"
+            )
+        external_teacher_summary = attach_external_teacher(
+            args.external_teacher,
+            train_rows,
+            train_sha256=data_sha["train"],
+            source_files_sha256=source["files_sha256"],
+        )
     model = model.float().to(device)
     if args.train_mode == "head":
         model.backbone.requires_grad_(False)
@@ -863,6 +919,15 @@ def main() -> None:
         args.epochs,
         args.max_steps,
     )
+    if args.external_teacher and (
+        len(train_items) != 7455
+        or sum(train_lengths) != 4_094_489
+        or max(train_lengths) > 8192
+        or planned != (1 if args.max_steps == 1 else 466)
+    ):
+        raise ValueError(
+            "External teacher token exposure or schedule differs from control"
+        )
     contract = {
         "prompt_version": PROMPT_VERSION,
         "loss_version": loss_version,
@@ -894,6 +959,11 @@ def main() -> None:
         "choice_source": args.choice_source,
         "choice_source_weight": args.choice_source_weight,
         "weighted_choice_count": len(weighted_train_ids),
+        **(
+            {"external_teacher": external_teacher_summary}
+            if external_teacher_summary is not None
+            else {}
+        ),
         **(
             {
                 "inline_teacher_roster_sha256": args.inline_teacher_roster_sha256,
