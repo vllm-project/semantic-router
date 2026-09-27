@@ -25,15 +25,17 @@ PACKAGE_VERSION = "decision2-jevarena-v3-postkey-release-bundle/2"
 GATE_VERSION = "decision2-jevarena-v3-postkey-release-gate/1"
 GATE_STATUS = "passed_postkey_user_directed"
 CARD_MARKER = "**Post-key, user-directed aggregate-priority release.**"
-COMPOSITE_MODEL_ID = "llm-semantic-router/DEV2.0-4B"
-COMPOSITE_SOURCE_ID = "caiovicentino1/Eikos-4B"
-COMPOSITE_SOURCE_REVISION = "582ffb13f19a4da3f455e3db198584190bd7755b"
-COMPOSITE_LICENSE_NAME = "decision2-4b-composite-cc-by-sa-4.0"
-COMPOSITE_LICENSE_SOURCE = (
-    Path(__file__).resolve().parents[1]
-    / "publication/decision2-4b-composite-LICENSE.txt"
+APACHE_MODEL_ID = "llm-semantic-router/DEV2.0-4B"
+APACHE_SOURCE_ID = "caiovicentino1/Eikos-4B"
+APACHE_SOURCE_REVISION = "582ffb13f19a4da3f455e3db198584190bd7755b"
+APACHE_LICENSE_SOURCE = (
+    Path(__file__).resolve().parents[1] / "publication/decision2-4b-apache-LICENSE.txt"
 )
-COMPOSITE_FILES = ("LICENSE", "LICENSE-Eikos", "LICENSE-Qwen", "NOTICE")
+APACHE_NOTICE_SOURCE = (
+    Path(__file__).resolve().parents[1] / "publication/decision2-4b-apache-NOTICE.txt"
+)
+APACHE_FILES = ("LICENSE", "NOTICE")
+INHERITED_FILES = ("LICENSE", "LICENSE-Qwen", "NOTICE")
 AMENDMENT = (
     Path(__file__).resolve().parents[1]
     / "research/jev-arena-v3-postkey-answer-count-erratum-2026-09-27.md"
@@ -347,51 +349,51 @@ def _validate_addenda(
     return gate
 
 
-def _composite_record(record: dict[str, Any]) -> None:
+def _apache_record(record: dict[str, Any]) -> None:
     rights = record.get("rights", {})
     source = record.get("base_model", {})
     if (
-        record.get("model_id") != COMPOSITE_MODEL_ID
-        or record.get("license_id") != "other"
-        or source.get("id") != COMPOSITE_SOURCE_ID
-        or source.get("revision") != COMPOSITE_SOURCE_REVISION
+        record.get("model_id") != APACHE_MODEL_ID
+        or record.get("license_id") != "apache-2.0"
+        or source.get("id") != APACHE_SOURCE_ID
+        or source.get("revision") != APACHE_SOURCE_REVISION
         or rights.get("status") != "passed"
         or rights.get("scope") != "unrestricted_weights_card"
         or not isinstance(rights.get("reviewed_by"), str)
         or not rights["reviewed_by"].strip()
     ):
-        raise ValueError("Composite license requires a reviewed exact 4B release scope")
+        raise ValueError("Apache release requires a reviewed exact 4B release scope")
 
 
-def _composite_card(card: str) -> str:
-    original = "license: other\nlicense_name: noncommercial-research-terms\n"
-    if card.count(original) != 1:
-        raise ValueError(
-            "Composite license cannot replace the unique old card metadata"
-        )
-    updated = card.replace(
-        original,
-        "license: other\n"
-        f"license_name: {COMPOSITE_LICENSE_NAME}\n"
-        f"license_link: https://huggingface.co/{COMPOSITE_MODEL_ID}/blob/main/LICENSE\n",
-        1,
+def _apache_card(card: str) -> str:
+    if card.count("license: apache-2.0\n") != 1:
+        raise ValueError("Apache card needs one matching license identifier")
+    if "license_name:" in card or "license_link:" in card:
+        raise ValueError("Apache card must use the standard Hub license identifier")
+    sources_header = "| Source | Terms | Attribution | Use | Redistribution |\n"
+    overlap_header = "Known training/evaluation overlap:\n"
+    if card.count(sources_header) != 1 or card.count(overlap_header) != 1:
+        raise ValueError("Apache card lacks a unique private-source table")
+    before, source_table = card.split(sources_header, 1)
+    _, after = source_table.split(overlap_header, 1)
+    updated = (
+        before
+        + "Fine-tuning source identities, permissions and record-level provenance "
+        "are audited in the private dataset manifest. No source rows are "
+        "distributed with this model.\n\n" + overlap_header + after
     )
     anchor = "## Same-panel first-release evaluation\n"
     if updated.count(anchor) != 1:
-        raise ValueError("Composite license has no unique model-card section")
+        raise ValueError("Apache card has no unique model-card section")
     disclosure = (
         "## License and upstream notices\n\n"
-        "The top-level `LICENSE` grants CC BY-SA 4.0 only for original Decision "
-        "2.0 fine-tuning contributions to the extent we hold the relevant "
-        "rights; it imposes no noncommercial restriction. The inherited "
-        "Eikos MIT and Qwen Apache-2.0 terms remain in `LICENSE-Eikos` and "
-        "`LICENSE-Qwen`, with Eikos's `NOTICE` preserved verbatim. This "
-        "fine-tune used 272 SNLI and 334 SQuAD 2.0 records under CC BY-SA "
-        "4.0; no source records are redistributed here. The data-source "
-        "table below gives further attribution and source-specific terms. "
-        "The native SemIf interface emits decisions and probabilities, but "
-        "downloadable weights retain a language-model head; bounded native "
-        "outputs do not prove that other uses cannot reproduce source text.\n\n"
+        "Decision 2.0 contributions are released under Apache-2.0. The "
+        "top-level `LICENSE` contains that license and `NOTICE` identifies "
+        "the modified upstream model. The inherited Eikos MIT terms and "
+        "Qwen Apache-2.0 terms remain in `native/LICENSE` and "
+        "`native/LICENSE-Qwen`, with the original `native/NOTICE` unchanged. "
+        "Those upstream terms continue to apply to their components. No "
+        "fine-tuning source records are distributed here.\n\n"
     )
     return updated.replace(anchor, disclosure + anchor, 1)
 
@@ -413,7 +415,7 @@ def _checked_addendum_text(content: str, label: str) -> None:
 
 def _extra_files(package: Path, diagnostic: Path, strict_hold: Path) -> None:
     record = bundle.common._object(package / "release-record.json")
-    _composite_record(record)
+    _apache_record(record)
     for source, name in (
         (AMENDMENT, EXTRA[0]),
         (diagnostic, EXTRA[1]),
@@ -422,20 +424,19 @@ def _extra_files(package: Path, diagnostic: Path, strict_hold: Path) -> None:
         _checked_addendum_text(source.read_text(encoding="utf-8"), name)
         target = package / name
         shutil.copyfile(source, target)
-    license_text = COMPOSITE_LICENSE_SOURCE.read_text(encoding="utf-8")
-    bundle.common._public_text(license_text, "LICENSE")
-    (package / "LICENSE").write_text(license_text, encoding="utf-8")
-    for source_name, target_name in (
-        ("LICENSE", "LICENSE-Eikos"),
-        ("LICENSE-Qwen", "LICENSE-Qwen"),
-        ("NOTICE", "NOTICE"),
-    ):
+    for source_name in INHERITED_FILES:
         source = package / "native" / source_name
         if source.is_symlink() or not source.is_file():
             raise ValueError(f"Missing exact inherited notice: {source_name}")
-        shutil.copyfile(source, package / target_name)
+    for name, source in (
+        ("LICENSE", APACHE_LICENSE_SOURCE),
+        ("NOTICE", APACHE_NOTICE_SOURCE),
+    ):
+        content = source.read_text(encoding="utf-8")
+        bundle.common._public_text(content, name)
+        (package / name).write_text(content, encoding="utf-8")
     card_path = package / "README.md"
-    card = _composite_card(card_path.read_text(encoding="utf-8"))
+    card = _apache_card(card_path.read_text(encoding="utf-8"))
     bundle.common._public_text(card, "README.md")
     card_path.write_text(card, encoding="utf-8")
     manifest_path = package / "PACKAGE_MANIFEST.json"
@@ -443,14 +444,16 @@ def _extra_files(package: Path, diagnostic: Path, strict_hold: Path) -> None:
     inventory = manifest.get("files_sha256")
     if not isinstance(inventory, dict):
         raise TypeError("Incomplete staged package inventory")
-    for name in (*EXTRA, *COMPOSITE_FILES, "README.md"):
+    for name in (*EXTRA, *APACHE_FILES, "README.md"):
         inventory[name] = bundle.common.sha_file(package / name)
     manifest["postkey_amendment_sha256"] = inventory[EXTRA[0]]
     manifest["postkey_rank_diagnostic_sha256"] = inventory[EXTRA[1]]
     manifest["original_strict_hold_sha256"] = inventory[EXTRA[2]]
-    manifest["composite_license_sha256"] = inventory["LICENSE"]
+    manifest["apache_license_sha256"] = inventory["LICENSE"]
+    manifest["apache_notice_sha256"] = inventory["NOTICE"]
     manifest["inherited_notices_sha256"] = {
-        name: inventory[name] for name in COMPOSITE_FILES[1:]
+        name: bundle.common.sha_file(package / "native" / name)
+        for name in INHERITED_FILES
     }
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -458,39 +461,37 @@ def _extra_files(package: Path, diagnostic: Path, strict_hold: Path) -> None:
     )
 
 
-def _verify_composite_package(
+def _verify_apache_package(
     package: Path, manifest: dict[str, Any], record: dict[str, Any]
 ) -> None:
-    _composite_record(record)
-    for name in COMPOSITE_FILES:
+    _apache_record(record)
+    for name in APACHE_FILES:
         if (package / name).is_symlink() or not (package / name).is_file():
-            raise ValueError(f"Missing composite license or inherited notice: {name}")
-    expected_license_sha = bundle.common.sha_file(COMPOSITE_LICENSE_SOURCE)
+            raise ValueError(f"Missing Apache license or notice: {name}")
+    for name in INHERITED_FILES:
+        if (package / "native" / name).is_symlink() or not (
+            package / "native" / name
+        ).is_file():
+            raise ValueError(f"Missing exact inherited notice: {name}")
+    expected_license_sha = bundle.common.sha_file(APACHE_LICENSE_SOURCE)
+    expected_notice_sha = bundle.common.sha_file(APACHE_NOTICE_SOURCE)
     card = (package / "README.md").read_text(encoding="utf-8")
     if (
         bundle.common.sha_file(package / "LICENSE") != expected_license_sha
-        or manifest.get("composite_license_sha256") != expected_license_sha
+        or bundle.common.sha_file(package / "NOTICE") != expected_notice_sha
+        or manifest.get("apache_license_sha256") != expected_license_sha
+        or manifest.get("apache_notice_sha256") != expected_notice_sha
         or manifest.get("inherited_notices_sha256")
         != {
-            target: bundle.common.sha_file(package / "native" / source)
-            for source, target in (
-                ("LICENSE", "LICENSE-Eikos"),
-                ("LICENSE-Qwen", "LICENSE-Qwen"),
-                ("NOTICE", "NOTICE"),
-            )
+            name: bundle.common.sha_file(package / "native" / name)
+            for name in INHERITED_FILES
         }
-        or any(
-            bundle.common.sha_file(package / name)
-            != manifest["inherited_notices_sha256"][name]
-            for name in COMPOSITE_FILES[1:]
-        )
-        or f"license_name: {COMPOSITE_LICENSE_NAME}\n" not in card
-        or f"license_link: https://huggingface.co/{COMPOSITE_MODEL_ID}/blob/main/LICENSE\n"
-        not in card
+        or "license: apache-2.0\n" not in card
         or "## License and upstream notices\n" not in card
         or "license_name: noncommercial-research-terms" in card
+        or "| Source | Terms | Attribution | Use | Redistribution |" in card
     ):
-        raise ValueError("Composite license or exact inherited notice changed")
+        raise ValueError("Apache license or exact inherited notice changed")
 
 
 def verify(package: Path, frozen: Any) -> dict[str, Any]:
@@ -500,7 +501,7 @@ def verify(package: Path, frozen: Any) -> dict[str, Any]:
         if (package / name).is_symlink() or not (package / name).is_file():
             raise ValueError(f"Missing post-key package disclosure: {name}")
     record = bundle.common._object(package / "release-record.json")
-    _verify_composite_package(package, manifest, record)
+    _verify_apache_package(package, manifest, record)
     if (
         manifest.get("bundle_version") != PACKAGE_VERSION
         or manifest.get("postkey_amendment_sha256")

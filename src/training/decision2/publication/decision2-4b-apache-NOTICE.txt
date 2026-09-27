@@ -1,0 +1,14 @@
+DEV2.0-4B
+Copyright 2026 llm-semantic-router contributors
+
+This model was fine-tuned from caiovicentino1/Eikos-4B at revision
+582ffb13f19a4da3f455e3db198584190bd7755b. The Decision 2.0
+contributors changed the model weights, calibration, and accompanying
+inference files. Eikos contributors have not endorsed this model.
+
+The inherited Eikos MIT license and copyright notice are preserved in
+native/LICENSE. The inherited Qwen3.5-4B-Base Apache-2.0 license is
+preserved in native/LICENSE-Qwen. The exact inherited Eikos notices are
+preserved in native/NOTICE. Their terms remain applicable to those
+components. This repository does not distribute the fine-tuning source
+records or evaluation labels.

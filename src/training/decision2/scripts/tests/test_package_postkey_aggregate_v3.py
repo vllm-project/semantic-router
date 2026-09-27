@@ -18,13 +18,13 @@ def write(path: Path, value: object) -> None:
 
 class PostkeyPackageTest(unittest.TestCase):
     @staticmethod
-    def composite_record() -> dict[str, object]:
+    def apache_record() -> dict[str, object]:
         return {
-            "model_id": postkey.COMPOSITE_MODEL_ID,
-            "license_id": "other",
+            "model_id": postkey.APACHE_MODEL_ID,
+            "license_id": "apache-2.0",
             "base_model": {
-                "id": postkey.COMPOSITE_SOURCE_ID,
-                "revision": postkey.COMPOSITE_SOURCE_REVISION,
+                "id": postkey.APACHE_SOURCE_ID,
+                "revision": postkey.APACHE_SOURCE_REVISION,
             },
             "rights": {
                 "status": "passed",
@@ -33,41 +33,49 @@ class PostkeyPackageTest(unittest.TestCase):
             },
         }
 
-    def test_composite_license_rejects_unreviewed_or_nc_record(self) -> None:
-        record = self.composite_record()
-        postkey._composite_record(record)
+    def test_apache_license_rejects_unreviewed_or_nc_record(self) -> None:
+        record = self.apache_record()
+        postkey._apache_record(record)
         for field, value in (
             ("status", "pending_independent_review"),
             ("scope", "noncommercial_research_weights_card"),
             ("reviewed_by", ""),
         ):
-            altered = self.composite_record()
+            altered = self.apache_record()
             altered["rights"][field] = value
             with self.assertRaisesRegex(ValueError, "reviewed exact 4B"):
-                postkey._composite_record(altered)
+                postkey._apache_record(altered)
         record["base_model"]["revision"] = "0" * 40
         with self.assertRaisesRegex(ValueError, "reviewed exact 4B"):
-            postkey._composite_record(record)
+            postkey._apache_record(record)
+        record = self.apache_record()
+        record["license_id"] = "other"
+        with self.assertRaisesRegex(ValueError, "reviewed exact 4B"):
+            postkey._apache_record(record)
 
-    def test_composite_card_names_real_grant_and_all_inherited_terms(self) -> None:
+    def test_apache_card_names_real_grant_and_all_inherited_terms(self) -> None:
         original = (
-            "---\nlicense: other\nlicense_name: noncommercial-research-terms\n"
+            "---\nlicense: apache-2.0\n"
             "base_model: caiovicentino1/Eikos-4B\n---\n"
             "# llm-semantic-router/DEV2.0-4B\n"
             "## Same-panel first-release evaluation\n"
+            "| Source | Terms | Attribution | Use | Redistribution |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| SNLI | CC BY-SA 4.0 | Stanford | research | no rows |\n"
+            "Known training/evaluation overlap:\n"
         )
-        card = postkey._composite_card(original)
-        self.assertIn("license_name: decision2-4b-composite-cc-by-sa-4.0", card)
-        self.assertIn("/DEV2.0-4B/blob/main/LICENSE", card)
-        self.assertIn("`LICENSE-Eikos`", card)
-        self.assertIn("`LICENSE-Qwen`", card)
+        card = postkey._apache_card(original)
+        self.assertIn("license: apache-2.0", card)
+        self.assertIn("`native/LICENSE`", card)
+        self.assertIn("`native/LICENSE-Qwen`", card)
         self.assertIn("`NOTICE`", card)
-        self.assertNotIn("noncommercial-research-terms", card)
-        with self.assertRaisesRegex(ValueError, "unique old card metadata"):
-            postkey._composite_card(card)
+        self.assertNotIn("SNLI", card)
+        self.assertNotIn("CC BY-SA", card)
+        with self.assertRaisesRegex(ValueError, "unique private-source table"):
+            postkey._apache_card(card)
 
-    def test_composite_card_accepts_actual_v3_card(self) -> None:
-        record = self.composite_record()
+    def test_apache_card_accepts_actual_v3_card(self) -> None:
+        record = self.apache_record()
         record.update(
             architecture="qwen3.5-semif",
             training={
@@ -91,20 +99,21 @@ class PostkeyPackageTest(unittest.TestCase):
             }
         ]
         native_card = postkey.bundle._card(
-            postkey.COMPOSITE_MODEL_ID,
+            postkey.APACHE_MODEL_ID,
             record,
             {"rank": 1, "score": 62.67},
             4_205_751_296,
             "| Model | Score |\n| --- | ---: |\n| Candidate | 62.67 |\n",
             "| Model | Brier |\n| --- | ---: |\n| Candidate | 0.12 |",
         )
-        card = postkey._composite_card(native_card)
+        card = postkey._apache_card(native_card)
         self.assertEqual(card.count("## License and upstream notices"), 1)
         self.assertEqual(card.count("## Same-panel first-release evaluation"), 1)
-        self.assertIn("license_name: decision2-4b-composite-cc-by-sa-4.0", card)
+        self.assertIn("license: apache-2.0", card)
+        self.assertNotIn("| Source | Terms |", card)
         self.assertIn("8,147", card)
 
-    def test_additive_license_preserves_native_files_and_binds_card(self) -> None:
+    def test_apache_license_preserves_native_files_and_binds_card(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             native = root / "native"
@@ -116,12 +125,16 @@ class PostkeyPackageTest(unittest.TestCase):
             }
             for name, payload in original.items():
                 (native / name).write_bytes(payload)
-            write(root / "release-record.json", self.composite_record())
+            write(root / "release-record.json", self.apache_record())
             write(root / "PACKAGE_MANIFEST.json", {"files_sha256": {}})
             (root / "README.md").write_text(
-                "---\nlicense: other\nlicense_name: noncommercial-research-terms\n"
+                "---\nlicense: apache-2.0\n"
                 "---\n# llm-semantic-router/DEV2.0-4B\n"
-                "## Same-panel first-release evaluation\n",
+                "## Same-panel first-release evaluation\n"
+                "| Source | Terms | Attribution | Use | Redistribution |\n"
+                "| --- | --- | --- | --- | --- |\n"
+                "| SNLI | CC BY-SA 4.0 | Stanford | research | no rows |\n"
+                "Known training/evaluation overlap:\n",
                 encoding="utf-8",
             )
             diagnostic = root / "diagnostic.json"
@@ -129,39 +142,38 @@ class PostkeyPackageTest(unittest.TestCase):
             write(diagnostic, {"status": "postkey"})
             write(strict, {"status": "HOLD"})
             postkey._extra_files(root, diagnostic, strict)
-            self.assertEqual((root / "LICENSE-Eikos").read_bytes(), original["LICENSE"])
             self.assertEqual(
-                (root / "LICENSE-Qwen").read_bytes(), original["LICENSE-Qwen"]
+                (root / "LICENSE").read_bytes(),
+                postkey.APACHE_LICENSE_SOURCE.read_bytes(),
             )
-            self.assertEqual((root / "NOTICE").read_bytes(), original["NOTICE"])
+            self.assertEqual(
+                (root / "NOTICE").read_bytes(),
+                postkey.APACHE_NOTICE_SOURCE.read_bytes(),
+            )
             for name, payload in original.items():
                 self.assertEqual((native / name).read_bytes(), payload)
             manifest = json.loads((root / "PACKAGE_MANIFEST.json").read_text())
             self.assertEqual(
-                manifest["composite_license_sha256"],
+                manifest["apache_license_sha256"],
                 postkey.bundle.common.sha_file(root / "LICENSE"),
             )
             self.assertEqual(
                 manifest["files_sha256"]["README.md"],
                 postkey.bundle.common.sha_file(root / "README.md"),
             )
-            postkey._verify_composite_package(root, manifest, self.composite_record())
-            (root / "NOTICE").write_text("changed attribution\n", encoding="utf-8")
+            postkey._verify_apache_package(root, manifest, self.apache_record())
+            (native / "NOTICE").write_text("changed attribution\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "inherited notice changed"):
-                postkey._verify_composite_package(
-                    root, manifest, self.composite_record()
-                )
-            (root / "NOTICE").write_bytes(original["NOTICE"])
+                postkey._verify_apache_package(root, manifest, self.apache_record())
+            (native / "NOTICE").write_bytes(original["NOTICE"])
             (root / "README.md").write_text(
                 (root / "README.md")
                 .read_text(encoding="utf-8")
-                .replace("/blob/main/LICENSE", "/blob/main/WRONG-LICENSE"),
+                .replace("license: apache-2.0", "license: other"),
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "inherited notice changed"):
-                postkey._verify_composite_package(
-                    root, manifest, self.composite_record()
-                )
+                postkey._verify_apache_package(root, manifest, self.apache_record())
 
     def test_immutable_addendum_allows_only_explicit_loopback(self) -> None:
         postkey._checked_addendum_text("reviewed 127.0.0.1", postkey.EXTRA[0])
