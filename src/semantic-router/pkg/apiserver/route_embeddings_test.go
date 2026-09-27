@@ -225,8 +225,19 @@ func fakeProvider(backend string) embedding.Provider {
 	return p
 }
 
+// fakeMediaProvider returns a prepared provider that advertises every input
+// modality, standing in for a generation that prepared an image/audio encoder.
+func fakeMediaProvider() embedding.Provider {
+	fp, _ := embedding.NewFuncProvider("synthetic", 2, func(context.Context, string) ([]float32, error) {
+		return []float32{1, 0}, nil
+	})
+	return &apiMediaProvider{FuncProvider: fp}
+}
+
 // A zero-value server acquires a nil embedding set. Every handler must
-// surface 503 EMBEDDING_NOT_READY rather than a 500 or protocol error.
+// surface 503 EMBEDDING_NOT_READY rather than a 500 or protocol error. Media
+// inputs reach that answer too: an unprepared generation has no image or audio
+// model, which is an unavailable model, not an unsupported input.
 func TestEmbeddingEndpointsReturn503WhenNotReady(t *testing.T) {
 	s := &ClassificationAPIServer{}
 
@@ -240,6 +251,24 @@ func TestEmbeddingEndpointsReturn503WhenNotReady(t *testing.T) {
 			"embeddings",
 			"/api/v1/embeddings",
 			`{"texts":["hi"]}`,
+			s.handleEmbeddings,
+		},
+		{
+			"embeddings with image",
+			"/api/v1/embeddings",
+			`{"texts":["hi"],"images":["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQABAA0w0e0GAAAAAElFTkSuQmCC"]}`,
+			s.handleEmbeddings,
+		},
+		{
+			"embeddings with audio",
+			"/api/v1/embeddings",
+			`{"audios":["` + apiAudioFixture() + `"]}`,
+			s.handleEmbeddings,
+		},
+		{
+			"embeddings with named audio model",
+			"/api/v1/embeddings",
+			`{"model":"multimodal","audios":["` + apiAudioFixture() + `"]}`,
 			s.handleEmbeddings,
 		},
 		{
@@ -333,33 +362,56 @@ func TestCheckEmbeddingReadinessMultimodalTextPassesWithMultimodalPrepared(t *te
 	}
 }
 
-func TestCheckEmbeddingReadinessImageRequestRequiresMultimodal(t *testing.T) {
-	textOnly := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+func TestCheckEmbeddingReadinessImageRequestRequiresPreparedImageModel(t *testing.T) {
 	images := []string{"data:image/png;base64,aGVsbG8="}
-	err := checkEmbeddingReadiness(textOnly, EmbeddingRequest{Images: images})
-	if err == nil {
-		t.Fatal("expected image request to be rejected when multimodal is not prepared")
+	textOnly := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(textOnly, EmbeddingRequest{Images: images}); !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected image request to be not ready without an image model, got %v", err)
 	}
 	both := embedding.NewSet(map[string]embedding.Provider{
 		"qwen3":      fakeProvider("candle"),
-		"multimodal": fakeProvider("candle"),
+		"multimodal": fakeMediaProvider(),
 	}, "qwen3")
 	if err := checkEmbeddingReadiness(both, EmbeddingRequest{Images: images}); err != nil {
-		t.Fatalf("expected image request to pass when multimodal is prepared, got %v", err)
+		t.Fatalf("expected image request to be ready when a prepared model advertises images, got %v", err)
 	}
 }
 
-// Media selection resolves the generation's own model name, so readiness must
-// judge that name rather than the catalog's "multimodal" alias.
-func TestCheckEmbeddingReadinessImageAcceptsSelectedScopedModel(t *testing.T) {
-	fp, _ := embedding.NewFuncProvider("synthetic", 2, func(context.Context, string) ([]float32, error) { return []float32{1, 0}, nil })
-	scoped := embedding.NewSet(map[string]embedding.Provider{"mmbert": &apiMediaProvider{FuncProvider: fp}}, "mmbert")
+// Readiness follows the generation's own advertised capabilities, not the
+// catalog's "multimodal" alias, so a scoped deployment answers for the model it
+// prepared and a text-only generation is still never asked to encode an image.
+func TestCheckEmbeddingReadinessImageFollowsPreparedCapabilities(t *testing.T) {
+	scoped := embedding.NewSet(map[string]embedding.Provider{"mmbert": fakeMediaProvider()}, "mmbert")
 	images := []string{"data:image/png;base64,aGVsbG8="}
 	if err := checkEmbeddingReadiness(scoped, EmbeddingRequest{Model: "mmbert", Texts: []string{"hi"}, Images: images}); err != nil {
 		t.Fatalf("expected a selected scoped model to serve images, got %v", err)
 	}
-	if err := checkEmbeddingReadiness(scoped, EmbeddingRequest{Texts: []string{"hi"}, Images: images}); !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
-		t.Fatalf("expected an unresolved auto request to require multimodal, got %v", err)
+	if err := checkEmbeddingReadiness(scoped, EmbeddingRequest{Texts: []string{"hi"}, Images: images}); err != nil {
+		t.Fatalf("expected an image-capable generation to serve an auto request, got %v", err)
+	}
+	textOnly := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(textOnly, EmbeddingRequest{Texts: []string{"hi"}, Images: images}); !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected an auto image request to be not ready for a text-only generation, got %v", err)
+	}
+}
+
+// Audio is an embedding input like text and image, so an audio-only request
+// needs a prepared audio model whether or not it names one.
+func TestCheckEmbeddingReadinessAudioRequiresPreparedAudioModel(t *testing.T) {
+	audios := []string{apiAudioFixture()}
+	if err := checkEmbeddingReadiness(nil, EmbeddingRequest{Audios: audios}); !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected audio-only request to be not ready without a prepared set, got %v", err)
+	}
+	textOnly := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(textOnly, EmbeddingRequest{Audios: audios}); !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected audio request to be not ready for a text-only generation, got %v", err)
+	}
+	if err := checkEmbeddingReadiness(textOnly, EmbeddingRequest{Model: "multimodal", Audios: audios}); !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected an unprepared model name to be not ready for audio, got %v", err)
+	}
+	omni := embedding.NewSet(map[string]embedding.Provider{"mmbert": fakeMediaProvider()}, "mmbert")
+	if err := checkEmbeddingReadiness(omni, EmbeddingRequest{Audios: audios}); err != nil {
+		t.Fatalf("expected a prepared audio model to serve audio, got %v", err)
 	}
 }
 
@@ -372,13 +424,13 @@ func TestCheckEmbeddingReadinessMixedRequestNeedsBothFamilies(t *testing.T) {
 	if err := checkEmbeddingReadiness(textOnly, mixed); err == nil {
 		t.Fatal("expected mixed request to be rejected when multimodal is not prepared")
 	}
-	imageOnly := embedding.NewSet(map[string]embedding.Provider{"multimodal": fakeProvider("candle")}, "qwen3")
+	imageOnly := embedding.NewSet(map[string]embedding.Provider{"multimodal": fakeMediaProvider()}, "qwen3")
 	if err := checkEmbeddingReadiness(imageOnly, mixed); err == nil {
 		t.Fatal("expected mixed request to be rejected when no text model is prepared")
 	}
 	both := embedding.NewSet(map[string]embedding.Provider{
 		"qwen3":      fakeProvider("candle"),
-		"multimodal": fakeProvider("candle"),
+		"multimodal": fakeMediaProvider(),
 	}, "qwen3")
 	if err := checkEmbeddingReadiness(both, mixed); err != nil {
 		t.Fatalf("expected mixed request to pass when both are prepared, got %v", err)

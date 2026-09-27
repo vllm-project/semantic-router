@@ -40,23 +40,43 @@ func isEmbeddingModelNotReady(err error) bool {
 
 // checkEmbeddingReadiness validates that the models required for the request
 // are prepared in the acquired embedding generation. Text inputs require a
-// prepared text-model family; image inputs require a prepared image model.
-// Readiness derives from the private set of providers this generation actually
-// prepared, never from process-global flags, so a request is judged against the
-// models its own runtime owns. This prevents a text-ready-only deployment from
-// attempting image inference (which would 500) and a multimodal-only deployment
-// from being rejected for text-only requests.
+// prepared text-model family; image and audio inputs require a prepared model
+// advertising that modality. Readiness derives from the private set of providers
+// this generation actually prepared, never from process-global flags, so a
+// request is judged against the models its own runtime owns. This prevents a
+// text-ready-only deployment from attempting image inference (which would 500)
+// and a multimodal-only deployment from being rejected for text-only requests.
+//
+// It answers the generation-level question, so it runs before media selection:
+// an input this generation never prepared is an unavailable model, not an
+// unsupported one. Media selection still owns the per-model answer, so an
+// unsupported dimension, layer, or encoder on a ready deployment stays a client
+// error.
 func checkEmbeddingReadiness(set *embedding.Set, req EmbeddingRequest) error {
-	if len(req.Texts) == 0 && len(req.Images) == 0 {
+	if len(req.Texts) == 0 && len(req.Images) == 0 && len(req.Audios) == 0 {
 		return nil
 	}
 	if len(req.Texts) > 0 && !textEmbeddingReady(set, req.Model) {
 		return candle_binding.ErrEmbeddingModelNotReady
 	}
-	if len(req.Images) > 0 && !imageEmbeddingReady(set, req.Model) {
+	if len(req.Images) > 0 && !mediaEmbeddingReady(set, req.Model, "image") {
+		return candle_binding.ErrEmbeddingModelNotReady
+	}
+	if len(req.Audios) > 0 && !mediaEmbeddingReady(set, req.Model, "audio") {
 		return candle_binding.ErrEmbeddingModelNotReady
 	}
 	return nil
+}
+
+// unresolvedEmbeddingModel reports whether the request left model selection to
+// this generation, so every readiness predicate agrees on the same names.
+func unresolvedEmbeddingModel(model string) bool {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case "", "auto":
+		return true
+	default:
+		return false
+	}
 }
 
 // textEmbeddingReady reports whether the text portion's selected model family
@@ -65,27 +85,30 @@ func checkEmbeddingReadiness(set *embedding.Set, req EmbeddingRequest) error {
 // configured primary); a multimodal-only generation must not satisfy text
 // inputs. An explicit family must be present in the set.
 func textEmbeddingReady(set *embedding.Set, model string) bool {
-	switch strings.ToLower(strings.TrimSpace(model)) {
-	case "", "auto":
+	if unresolvedEmbeddingModel(model) {
 		return set.Has("qwen3") || set.Has("gemma") || set.Has("mmbert") || set.Has("")
-	default:
-		return set.Has(model)
 	}
+	return set.Has(model)
 }
 
-// imageEmbeddingReady reports whether the request's own model can encode
-// images. Media selection already resolved an explicit or selected family from
-// this generation's advertised capabilities, so a scoped alias such as
-// "mmbert" is as ready as the catalog's "multimodal" name. An unresolved auto
-// request has chosen no model yet and keeps the canonical multimodal
-// requirement, so a text-only generation is never asked to encode an image.
-func imageEmbeddingReady(set *embedding.Set, model string) bool {
-	switch strings.ToLower(strings.TrimSpace(model)) {
-	case "", "auto":
-		return set.Has("multimodal")
-	default:
-		return set.Has(model)
+// mediaEmbeddingReady reports whether this generation has a prepared model that
+// can serve the media modality. An explicit or already selected name is judged
+// by its own presence, so a scoped alias such as "mmbert" is as ready as the
+// catalog's "multimodal" name. An unresolved auto request has chosen no model
+// yet, so any prepared model advertising the modality satisfies it; the catalog
+// alias is not a readiness signal, and a generation that advertises the
+// modality without a usable encoder for this specific request keeps the client
+// error media selection reports.
+func mediaEmbeddingReady(set *embedding.Set, model, modality string) bool {
+	if unresolvedEmbeddingModel(model) {
+		for _, prepared := range set.Models() {
+			if slices.Contains(prepared.Modalities, modality) {
+				return true
+			}
+		}
+		return false
 	}
+	return set.Has(model)
 }
 
 // classifyEmbeddingError maps a buildEmbeddingResults error to the HTTP status,
@@ -138,17 +161,19 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 	}
 	cfg, prepared, release, prepareErr := s.acquireEmbeddingRuntimeForRecipe(request.Recipe)
 	defer release()
-	req, ok := s.prepareEmbeddingRequest(w, request, prepared)
-	if !ok {
-		return
-	}
 	if prepareErr != nil {
 		s.writeEmbeddingRuntimeError(w, prepareErr)
 		return
 	}
-	if err := checkEmbeddingReadiness(prepared, req); err != nil {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			fmt.Sprintf("failed to generate embedding: %v", err))
+	// Availability of the models this generation prepared is decided before media
+	// selection, which would otherwise report an unprepared deployment's media
+	// inputs as an unsupported client error.
+	if err := checkEmbeddingReadiness(prepared, request); err != nil {
+		s.writeEmbeddingNotReady(w, "generate embedding", err)
+		return
+	}
+	req, ok := s.prepareEmbeddingRequest(w, request, prepared)
+	if !ok {
 		return
 	}
 	results, totalProcessingTime, err := buildOwnedEmbeddingResults(r.Context(), prepared, req)
@@ -319,8 +344,7 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 	}
 
 	if checkErr := checkEmbeddingReadiness(prepared, request); checkErr != nil {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			fmt.Sprintf("failed to calculate similarity: %v", checkErr))
+		s.writeEmbeddingNotReady(w, "calculate similarity", checkErr)
 		return
 	}
 
@@ -381,8 +405,7 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		LatencyPriority: req.LatencyPriority,
 		Texts:           []string{req.Query},
 	}); checkErr != nil {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			fmt.Sprintf("failed to calculate batch similarity: %v", checkErr))
+		s.writeEmbeddingNotReady(w, "calculate batch similarity", checkErr)
 		return
 	}
 	response, err := ownedBatchSimilarity(r.Context(), prepared, req)
@@ -476,6 +499,14 @@ func formatLayerList(layers []int) string {
 		parts[i] = strconv.Itoa(l)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// writeEmbeddingNotReady reports an input whose models this generation never
+// prepared. The client sent a supported request, so the deployment, not the
+// request, is unavailable.
+func (s *ClassificationAPIServer) writeEmbeddingNotReady(w http.ResponseWriter, action string, err error) {
+	s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+		fmt.Sprintf("failed to %s: %v", action, err))
 }
 
 func (s *ClassificationAPIServer) writeEmbeddingRuntimeError(w http.ResponseWriter, err error) {
