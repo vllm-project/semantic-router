@@ -30,6 +30,7 @@ from jev_arena.jevbench_public import (
     SOURCE_URL as PUBLIC_SOURCE_URL,
 )
 from scripts.baseline_attestation_v3 import verify_attestation
+from scripts.eikos_stable_runtime_v3 import stable_backend, verified_stable_runtime
 from scripts.plan_final_eval import (
     BASELINES,
     CSS_EVALUATION_ITEMS,
@@ -66,6 +67,7 @@ SOURCE_FILES = (
     "publication/bundle_arena_v3.py",
     "scripts/plan_final_eval.py",
     "scripts/baseline_attestation_v3.py",
+    "scripts/eikos_stable_runtime_v3.py",
     "scripts/plan_first_release_v3.py",
     "scripts/freeze_first_release_v3.py",
 )
@@ -336,6 +338,7 @@ def build_plan(
     python: str,
     kai_lex_python: str,
     fla_path: str,
+    stable_runtime: dict[str, Any],
 ) -> dict[str, Any]:
     if evaluation_root.exists():
         raise FileExistsError("Evaluation root must be absent for a fresh v3 run")
@@ -353,6 +356,13 @@ def build_plan(
         _sha(manifest.get(field), f"public.{field}")
     public_manifest_sha = sha_file(public_panel / "manifest.json")
     source_hashes = _source_hashes(source_root, models)
+    eikos_keys = {
+        model["key"]
+        for model in models
+        if isinstance(model, dict) and model.get("architecture") == EIKOS_ARCHITECTURE
+    }
+    if set(stable_runtime) != eikos_keys:
+        raise ValueError("v3 stable-runtime locks differ from Eikos candidates")
     final_prompts = evaluation_root / "typed-final.prompts.jsonl"
     final_gold = evaluation_root / "typed-final.gold.jsonl"
     css_gold = css_prompts.with_name("css-evaluation.gold.jsonl")
@@ -376,19 +386,24 @@ def build_plan(
             ("css", css_prompts),
             ("public", public_prompts),
         ):
-            commands.extend(
-                native_command(
-                    model,
-                    prompts=prompt,
-                    output=pred[panel],
-                    model_root=model_root,
-                    external_root=external_root,
-                    source_root=source_root,
-                    python=python,
-                    kai_lex_python=kai_lex_python,
-                    fla_path=fla_path,
-                )
+            panel_commands = native_command(
+                model,
+                prompts=prompt,
+                output=pred[panel],
+                model_root=model_root,
+                external_root=external_root,
+                source_root=source_root,
+                python=python,
+                kai_lex_python=kai_lex_python,
+                fla_path=fla_path,
             )
+            if key in eikos_keys:
+                panel_commands = [
+                    command
+                    + " --deterministic-algorithms --torch-reference-gated-delta"
+                    for command in panel_commands
+                ]
+            commands.extend(panel_commands)
         predictions.append(
             {
                 "key": key,
@@ -423,7 +438,7 @@ def build_plan(
             "--output",
             public_report,
         ]
-        if candidate:
+        if candidate and key not in eikos_keys:
             public_command += [
                 "--prediction-manifest",
                 Path(str(pred["public"]) + ".manifest.json"),
@@ -593,6 +608,7 @@ def build_plan(
         "formula": "100*sqrt(T*H)",
         "candidate_freeze_sha256": candidate_freeze_sha256,
         "candidate_freeze_path": str(candidate_freeze_path),
+        "v3_eikos_stable_runtime": stable_runtime,
         "pretest_roster_path": str(roster_path),
         "pretest_roster_sha256": roster_sha256,
         "comparison_pairs_sha256": pair_digest(pairs),
@@ -717,6 +733,9 @@ def audit_prekey_predictions(plan: dict[str, Any]) -> dict[str, Any]:
     if sha_file(candidate_freeze) != plan["candidate_freeze_sha256"]:
         raise ValueError("Candidate lock changed since v3 planning")
     frozen, _ = frozen_candidates(candidate_freeze)
+    stable_runtime = verified_stable_runtime(candidate_freeze, frozen, source_root)
+    if stable_runtime != plan.get("v3_eikos_stable_runtime"):
+        raise ValueError("v3 stable-runtime receipts changed since planning")
     if {row["key"] for row in frozen} != {
         row["key"] for row in plan["model_roster"] if row["group"] == "decision2"
     }:
@@ -921,6 +940,28 @@ def audit_prekey_predictions(plan: dict[str, Any]) -> dict[str, Any]:
                     raise ValueError(
                         f"{model['key']} {panel}: native manifest binding differs"
                     )
+                if identity.get("architecture") == EIKOS_ARCHITECTURE:
+                    if (
+                        receipt.get("collector_source_sha256")
+                        != plan["source_sha256"]["training/eikos/published_infer.py"]
+                        or receipt.get("calibration_sha256")
+                        != identity["calibration_sha256"]
+                        or receipt.get("counts", {}).get("items")
+                        != len(prompt_inputs[panel])
+                        or receipt.get("evaluated_items") != len(prompt_inputs[panel])
+                        or not stable_backend(receipt.get("runtime"))
+                    ):
+                        raise ValueError(
+                            f"{model['key']} {panel}: stable native backend differs"
+                        )
+                elif receipt.get("adapter_files_sha256", {}).get("infer.py") != plan[
+                    "source_sha256"
+                ]["training/model/infer.py"] or not isinstance(
+                    receipt.get("torch_version"), str
+                ):
+                    raise ValueError(
+                        f"{model['key']} {panel}: native adapter/runtime differs"
+                    )
                 hash_lines.append(f"{sha_file(manifest)}  {manifest}")
         model["audited_prediction_sha256"] = model_hashes
     raw = Path(plan["evaluation_root"]) / "RAW_PREDICTIONS.sha256"
@@ -988,6 +1029,9 @@ def main() -> None:
         for name in ("kai_lex_python", "fla_path"):
             _abs_path(getattr(args, name), name)
         candidates, candidate_sha = frozen_candidates(args.candidate_freeze)
+        stable_runtime = verified_stable_runtime(
+            args.candidate_freeze, candidates, args.source_root
+        )
         css = frozen_css_prompts(args.css_prompts)
         models, pairs, attestations, sizes, roster_sha = checked_roster(
             args.roster,
@@ -1015,6 +1059,7 @@ def main() -> None:
             python=args.python,
             kai_lex_python=args.kai_lex_python,
             fla_path=args.fla_path,
+            stable_runtime=stable_runtime,
         )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
 

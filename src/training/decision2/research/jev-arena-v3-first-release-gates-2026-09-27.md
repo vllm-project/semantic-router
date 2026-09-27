@@ -81,9 +81,12 @@ same-process selected-LoRA/merged-package parity passed on DEV 1,600 and CSS
 pilot 1,430, but the original FLA path later failed an independent-process
 repeatability gate. A prospectively chosen PyTorch reference path passed two
 independent complete CSS pilot processes with zero categorical and probability
-drift. That path still needs fixed-backend score screening and new
-selected-source/package parity before a candidate freeze. All existing DEV,
-pilot and public results are development evidence; this model has no v3 `T`,
-`H` or paired interval. The signed freeze must verify the eventual stable
-package and receipt hashes anew, and pair it with native Decision 1.0 Nox 4B
-on the sealed panels.
+drift. The same pinned stable backend subsequently passed complete DEV 1,600
+and CSS pilot 1,430 selected-source/package parity with zero categorical
+mismatches and zero probability drift. Package-only DEV, CSS pilot and public
+231 runs passed their designated validity checks; their diagnostic correct
+counts were 1,443/1,600, 788/1,430 and 195/231. The signed candidate lock
+must bind and reverify the stable-runtime execution and parity receipts,
+package, CAL and collector hashes before the v3 roster or predictions. These
+development results do not provide v3 `T`, `H` or a paired interval. The sealed
+comparison remains against native Decision 1.0 Nox 4B.

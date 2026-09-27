@@ -15,6 +15,29 @@ historical v2 meaning.
    source/adapter/head/tokenizer hashes, CAL lineage, and, for Eikos SemIf,
    standalone package rights and full DEV/CSS-pilot parity receipts. Never put
    FINAL or CSS evaluation in `selection_sources`.
+   For `d2-4b`, the v3 lock additionally needs `v3_eikos_stable_runtime` at
+   the lock top level. It binds the independent CSS repeatability execution,
+   full DEV/CSS-pilot/public execution, and combined stable-backend parity
+   receipts with absolute private paths and SHA-256s:
+
+```json
+{
+  "v3_eikos_stable_runtime": {
+    "d2-4b": {
+      "repeat_execution": {"path": "/PRIVATE/repeat/execution.receipt.json", "sha256": "LOWERCASE_64_HEX"},
+      "full_execution": {"path": "/PRIVATE/full/execution.receipt.json", "sha256": "LOWERCASE_64_HEX"},
+      "full_parity": {"path": "/PRIVATE/full/parity-dev-css.receipt.json", "sha256": "LOWERCASE_64_HEX"}
+    }
+  }
+}
+```
+
+   Set the candidate's `parity_reports.dev` and `parity_reports.css_pilot` to
+   the complete fixed-backend reports in that full-execution directory. The
+   planner verifies all receipt hashes, package/CAL/collector identity, two
+   independent CSS runs, selected-source/package parity, validity and the
+   exact FLA-to-PyTorch reference runtime keys. The v2 freeze checker and v2
+   command path retain their historical behavior.
 2. The frozen gold-free CSS evaluation prompt file with its pinned 6,547-row
    SHA-256. This planner does not read the CSS label file.
 3. A pinned public JevBench panel directory with `manifest.json` and
@@ -144,7 +167,13 @@ private typed FINAL seed and gold-free prompts **only after** the candidate
 freeze is locked. The typed generator also writes labels; keep those bytes
 inaccessible to the model-selection process. Native inference commands then
 produce typed, CSS and public predictions with one frozen model identity per
-run. Hash all raw predictions before using any scoring command.
+run. All three Eikos commands explicitly enable deterministic algorithms and
+the verified PyTorch reference gated-delta backend. Hash all raw predictions
+before using any scoring command. The Eikos public scorer uses the same 231
+answer rows without its optional generic manifest argument; the pre-key audit
+instead verifies the Eikos native manifest, including package/CAL, collector
+and stable runtime identity. Other candidate public commands retain the
+generic manifest argument.
 
 The saved plan also contains `comparison_pairs` and their canonical
 `comparison_pairs_sha256`. That digest fixes which 1.0 model each candidate
@@ -166,9 +195,9 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SOURCE_ROOT" python3 -m scripts.plan_firs
 The audit revalidates candidate package/CAL/parity, baseline package files,
 source code, gate document, full gold-free prompt IDs and input hashes,
 8,147 sealed-core plus 231 public predictions per model, native prediction
-manifests and the saved raw prediction SHA list. It never reads
-`typed-final.gold.jsonl` or the CSS gold
-file. Save the audit and SHA in the private ledger.
+manifests, the exact Eikos stable backend in each of its three manifests, and
+the saved raw prediction SHA list. It never reads `typed-final.gold.jsonl`
+or the CSS gold file. Save the audit and SHA in the private ledger.
 
 Only after that audit, a separate pre-key freeze receipt must bind the typed
 and CSS **gold digests**, every model's three prediction digests, native model,

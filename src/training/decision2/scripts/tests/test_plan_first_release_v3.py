@@ -14,6 +14,7 @@ from unittest.mock import patch
 from inference.run import digest as native_digest
 from jev_arena.jevbench_public import FILES, SOURCE_REVISION, SOURCE_URL
 from scripts.baseline_attestation_v3 import build_attestation
+from scripts.eikos_stable_runtime_v3 import FLA_BACKEND, TORCH_BACKEND
 from scripts.plan_final_eval import BASELINES, sha_file
 from scripts.plan_first_release_v3 import (
     GATE_DOCUMENT,
@@ -127,6 +128,7 @@ class FirstReleasePlanTests(unittest.TestCase):
         self.css.write_text("", encoding="utf-8")
         self.candidate_freeze = self.root / "candidate-freeze.json"
         write_json(self.candidate_freeze, {"frozen": True})
+        self.stable_runtime = {"d2-4b": {"fixture": "verified upstream"}}
 
     def test_composite_native_row_digests_follow_adapter_recipes(self) -> None:
         cases = (
@@ -206,6 +208,7 @@ class FirstReleasePlanTests(unittest.TestCase):
             python="python3",
             kai_lex_python="/private/kai-python",
             fla_path="/private/fla",
+            stable_runtime=self.stable_runtime,
         )
         self.assertEqual(plan["plan_version"], PLAN_VERSION)
         self.assertEqual(plan["formula"], "100*sqrt(T*H)")
@@ -218,6 +221,14 @@ class FirstReleasePlanTests(unittest.TestCase):
             command for model in plan["inference"] for command in model["commands"]
         )
         self.assertIn("training.eikos.published_infer", inference)
+        eikos = plan["inference"][-1]["commands"]
+        self.assertEqual(len(eikos), 3)
+        self.assertTrue(
+            all("--deterministic-algorithms" in command for command in eikos)
+        )
+        self.assertTrue(
+            all("--torch-reference-gated-delta" in command for command in eikos)
+        )
         self.assertIn("inference.run", inference)
         self.assertIn("inference.eikos", inference)
         self.assertIn("--input", inference)
@@ -230,6 +241,8 @@ class FirstReleasePlanTests(unittest.TestCase):
         self.assertIn("benchmark.score", score)
         self.assertIn("transfer.score", score)
         self.assertIn("jev_arena.jevbench_public", score)
+        eikos_score = plan["scoring_commands_after_prekey_freeze"][-1]["commands"][-1]
+        self.assertNotIn("--prediction-manifest", eikos_score)
         self.assertNotIn("arena_v2", score)
         self.assertNotIn("decision_bench", score)
         self.assertNotIn("authored", score)
@@ -321,11 +334,15 @@ class FirstReleasePlanTests(unittest.TestCase):
             python="python3",
             kai_lex_python="/private/kai-python",
             fla_path="/private/fla",
+            stable_runtime=self.stable_runtime,
         )
         plan["source_sha256"]["benchmark/score.py"] = "0" * 64
         with patch(
             "scripts.plan_first_release_v3.frozen_candidates",
             return_value=([self.candidate], "x"),
+        ), patch(
+            "scripts.plan_first_release_v3.verified_stable_runtime",
+            return_value=self.stable_runtime,
         ):
             with self.assertRaisesRegex(ValueError, "Protocol source changed"):
                 audit_prekey_predictions(plan)
@@ -397,6 +414,7 @@ class FirstReleasePlanTests(unittest.TestCase):
             python="python3",
             kai_lex_python="/private/kai-python",
             fla_path="/private/fla",
+            stable_runtime=self.stable_runtime,
         )
         typed_path = panels["typed"][0]
         typed_path.parent.mkdir(parents=True, exist_ok=True)
@@ -484,7 +502,18 @@ class FirstReleasePlanTests(unittest.TestCase):
                             },
                             "input_sha256": sha_file(panels[panel][0]),
                             "input_items": len(rows),
+                            "evaluated_items": len(rows),
+                            "counts": {"items": len(rows)},
                             "predictions_sha256": sha_file(path),
+                            "calibration_sha256": self.candidate["calibration_sha256"],
+                            "collector_source_sha256": sha_file(
+                                SOURCE_ROOT / "training/eikos/published_infer.py"
+                            ),
+                            "runtime": {
+                                "torch_deterministic_algorithms": True,
+                                "gated_delta_backend_before": FLA_BACKEND,
+                                "gated_delta_backend": TORCH_BACKEND,
+                            },
                         },
                     )
                     hashes.append(f"{sha_file(native_receipt)}  {native_receipt}")
@@ -494,12 +523,25 @@ class FirstReleasePlanTests(unittest.TestCase):
         with patch(
             "scripts.plan_first_release_v3.frozen_candidates",
             return_value=([self.candidate], "x"),
+        ), patch(
+            "scripts.plan_first_release_v3.verified_stable_runtime",
+            return_value=self.stable_runtime,
         ):
             audited = audit_prekey_predictions(plan)
             self.assertEqual(audited["status"], "gold_free_prekey_predictions_verified")
             self.assertEqual(
                 audited["comparison_pairs_sha256"], plan["comparison_pairs_sha256"]
             )
+            native_path = Path(
+                plan["inference"][-1]["paths"]["public"] + ".manifest.json"
+            )
+            native = json.loads(native_path.read_text(encoding="utf-8"))
+            native["runtime"]["gated_delta_backend"] = FLA_BACKEND
+            write_json(native_path, native)
+            with self.assertRaisesRegex(ValueError, "stable native backend differs"):
+                audit_prekey_predictions(plan)
+            native["runtime"]["gated_delta_backend"] = TORCH_BACKEND
+            write_json(native_path, native)
             bad_pair_plan = {**plan, "comparison_pairs_sha256": "0" * 64}
             with self.assertRaisesRegex(ValueError, "comparison pairs changed"):
                 audit_prekey_predictions(bad_pair_plan)
