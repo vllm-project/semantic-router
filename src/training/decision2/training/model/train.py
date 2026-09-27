@@ -247,6 +247,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--replay-fraction", type=float, default=0.0)
     parser.add_argument("--replay-kl-weight", type=float, default=0.0)
     parser.add_argument(
+        "--choice-source",
+        action="append",
+        default=[],
+        help="Exact TRAIN source whose Choice rows receive the fixed source weight",
+    )
+    parser.add_argument("--choice-source-weight", type=float, default=1.0)
+    parser.add_argument(
         "--inline-teacher",
         help="Private source probabilities for existing TRAIN rows; adds no samples",
     )
@@ -387,6 +394,13 @@ def validate_args(args: argparse.Namespace) -> None:
         )
     if not math.isfinite(args.replay_kl_weight) or args.replay_kl_weight < 0:
         raise ValueError("replay_kl_weight must be finite and nonnegative")
+    if (
+        not math.isfinite(args.choice_source_weight)
+        or args.choice_source_weight < 1.0
+        or len(set(args.choice_source)) != len(args.choice_source)
+        or (args.choice_source_weight != 1.0) != bool(args.choice_source)
+    ):
+        raise ValueError("Weighted Choice needs unique source IDs and weight >= 1")
     if args.inline_teacher:
         if (
             args.replay
@@ -566,6 +580,20 @@ def main() -> None:
             "cal": cal_rows,
         }
     )
+    weighted_train_ids = {
+        row["id"]
+        for row in train_rows
+        if row["task_type"] == "choice" and row["source"] in args.choice_source
+    }
+    if args.choice_source and (
+        not weighted_train_ids
+        or set(args.choice_source) - {row["source"] for row in train_rows}
+    ):
+        raise ValueError("Choice source roster is empty or contains absent source")
+    train_weights = [
+        args.choice_source_weight if row["id"] in weighted_train_ids else 1.0
+        for row in train_rows
+    ]
     data_sha = {
         "train": file_sha256(args.train),
         "select": file_sha256(args.select),
@@ -724,6 +752,9 @@ def main() -> None:
         "brier_weight": args.brier_weight,
         "replay_fraction": args.replay_fraction,
         "replay_kl_weight": args.replay_kl_weight,
+        "choice_source": args.choice_source,
+        "choice_source_weight": args.choice_source_weight,
+        "weighted_choice_count": len(weighted_train_ids),
         **(
             {
                 "inline_teacher_roster_sha256": args.inline_teacher_roster_sha256,
@@ -988,14 +1019,28 @@ def main() -> None:
             window_end = min(window + args.accumulation, len(batches))
             window_batches = batches[window:window_end]
             window_count = sum(len(batch) for batch in window_batches)
+            window_weight = sum(
+                train_weights[index] if source_name == "train" else 1.0
+                for batch_ids in window_batches
+                for source_name, index in batch_ids
+            )
             factor = learning_factor(step, planned, args.warmup_ratio)
             for group in optimizer.param_groups:
                 group["lr"] = group["peak_lr"] * factor
             optimizer.zero_grad(set_to_none=True)
             sums = dict.fromkeys(("total", "ce", "brier", "replay_kl"), 0.0)
+            weighted_total = 0.0
             correct = tokens = replay_seen = 0
             started = time.perf_counter()
             for batch_ids in window_batches:
+                item_weights = torch.tensor(
+                    [
+                        train_weights[index] if source_name == "train" else 1.0
+                        for source_name, index in batch_ids
+                    ],
+                    device=device,
+                    dtype=torch.float32,
+                )
                 items = [
                     (
                         train_items[index]
@@ -1024,10 +1069,11 @@ def main() -> None:
                         replay_mask=batch["replay_mask"],
                         replay_kl_weight=args.replay_kl_weight,
                     )
-                    loss = terms["total"].sum() / window_count
+                    loss = (terms["total"] * item_weights).sum() / window_weight
                 if not torch.isfinite(loss):
                     raise RuntimeError("Nonfinite loss")
                 loss.backward()
+                weighted_total += (terms["total"].detach() * item_weights).sum().item()
                 for name in sums:
                     sums[name] += terms[name].detach().sum().item()
                 correct += (logits.argmax(-1) == batch["labels"]).sum().item()
@@ -1046,8 +1092,14 @@ def main() -> None:
                     "step": step,
                     "epoch": epoch,
                     "examples": window_count,
+                    "weighted_choice_examples": sum(
+                        source_name == "train" and train_weights[index] > 1.0
+                        for batch_ids in window_batches
+                        for source_name, index in batch_ids
+                    ),
                     "replay_examples": replay_seen,
-                    "loss": sums["total"] / window_count,
+                    "loss": weighted_total / window_weight,
+                    "unweighted_loss": sums["total"] / window_count,
                     "ce": sums["ce"] / window_count,
                     "brier": sums["brier"] / window_count,
                     "replay_kl": sums["replay_kl"] / max(1, replay_seen),
