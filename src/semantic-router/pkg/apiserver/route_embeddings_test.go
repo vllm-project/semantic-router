@@ -272,7 +272,6 @@ func TestEmbeddingEndpointsReturn503WhenNotReady(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestCheckEmbeddingReadinessNilSetReturnsNotReady(t *testing.T) {
@@ -347,6 +346,20 @@ func TestCheckEmbeddingReadinessImageRequestRequiresMultimodal(t *testing.T) {
 	}, "qwen3")
 	if err := checkEmbeddingReadiness(both, EmbeddingRequest{Images: images}); err != nil {
 		t.Fatalf("expected image request to pass when multimodal is prepared, got %v", err)
+	}
+}
+
+// Media selection resolves the generation's own model name, so readiness must
+// judge that name rather than the catalog's "multimodal" alias.
+func TestCheckEmbeddingReadinessImageAcceptsSelectedScopedModel(t *testing.T) {
+	fp, _ := embedding.NewFuncProvider("synthetic", 2, func(context.Context, string) ([]float32, error) { return []float32{1, 0}, nil })
+	scoped := embedding.NewSet(map[string]embedding.Provider{"mmbert": &apiMediaProvider{FuncProvider: fp}}, "mmbert")
+	images := []string{"data:image/png;base64,aGVsbG8="}
+	if err := checkEmbeddingReadiness(scoped, EmbeddingRequest{Model: "mmbert", Texts: []string{"hi"}, Images: images}); err != nil {
+		t.Fatalf("expected a selected scoped model to serve images, got %v", err)
+	}
+	if err := checkEmbeddingReadiness(scoped, EmbeddingRequest{Texts: []string{"hi"}, Images: images}); !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected an unresolved auto request to require multimodal, got %v", err)
 	}
 }
 

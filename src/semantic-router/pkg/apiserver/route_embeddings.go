@@ -40,7 +40,7 @@ func isEmbeddingModelNotReady(err error) bool {
 
 // checkEmbeddingReadiness validates that the models required for the request
 // are prepared in the acquired embedding generation. Text inputs require a
-// prepared text-model family; image inputs require the multimodal provider.
+// prepared text-model family; image inputs require a prepared image model.
 // Readiness derives from the private set of providers this generation actually
 // prepared, never from process-global flags, so a request is judged against the
 // models its own runtime owns. This prevents a text-ready-only deployment from
@@ -53,7 +53,7 @@ func checkEmbeddingReadiness(set *embedding.Set, req EmbeddingRequest) error {
 	if len(req.Texts) > 0 && !textEmbeddingReady(set, req.Model) {
 		return candle_binding.ErrEmbeddingModelNotReady
 	}
-	if len(req.Images) > 0 && !set.Has("multimodal") {
+	if len(req.Images) > 0 && !imageEmbeddingReady(set, req.Model) {
 		return candle_binding.ErrEmbeddingModelNotReady
 	}
 	return nil
@@ -68,6 +68,21 @@ func textEmbeddingReady(set *embedding.Set, model string) bool {
 	switch strings.ToLower(strings.TrimSpace(model)) {
 	case "", "auto":
 		return set.Has("qwen3") || set.Has("gemma") || set.Has("mmbert") || set.Has("")
+	default:
+		return set.Has(model)
+	}
+}
+
+// imageEmbeddingReady reports whether the request's own model can encode
+// images. Media selection already resolved an explicit or selected family from
+// this generation's advertised capabilities, so a scoped alias such as
+// "mmbert" is as ready as the catalog's "multimodal" name. An unresolved auto
+// request has chosen no model yet and keeps the canonical multimodal
+// requirement, so a text-only generation is never asked to encode an image.
+func imageEmbeddingReady(set *embedding.Set, model string) bool {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case "", "auto":
+		return set.Has("multimodal")
 	default:
 		return set.Has(model)
 	}
@@ -245,79 +260,6 @@ func validateEmbeddingImages(images []string) (string, string, bool) {
 		}
 	}
 	return "", "", true
-}
-
-func buildEmbeddingResults(req EmbeddingRequest) ([]EmbeddingResult, int64, error) {
-	results := make([]EmbeddingResult, 0, len(req.Texts)+len(req.Images))
-	var totalProcessingTime int64
-
-	for _, text := range req.Texts {
-		output, err := embeddingOutput(req, text)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		processingTime := int64(output.ProcessingTimeMs)
-		results = append(results, EmbeddingResult{
-			Text:             text,
-			Embedding:        output.Embedding,
-			Dimension:        len(output.Embedding),
-			ModelUsed:        output.ModelType,
-			ProcessingTimeMs: processingTime,
-		})
-
-		totalProcessingTime += processingTime
-	}
-
-	for i, image := range req.Images {
-		// Canonicalize so the FFI's case-sensitive ";base64," scan finds the
-		// payload boundary (validation already guaranteed a safe data URI).
-		encodeInput := image
-		if canonical, ok := imageurl.CanonicalDataURL(image); ok {
-			encodeInput = canonical
-		}
-		output, err := candle_binding.MultiModalEncodeImageFromBase64(encodeInput, req.Dimension)
-		if err != nil {
-			// The image already passed the safe-data-URI + base64-decode gate, so
-			// an encode failure here is input-caused (undecodable image bytes);
-			// surface it as a 400 rather than a 500.
-			return nil, 0, &mediaEncodeError{modality: "image", index: i, err: err}
-		}
-
-		processingTime := int64(output.ProcessingTimeMs)
-		results = append(results, EmbeddingResult{
-			Modality:         output.Modality,
-			Embedding:        output.Embedding,
-			Dimension:        len(output.Embedding),
-			ModelUsed:        "multi-modal-embed",
-			ProcessingTimeMs: processingTime,
-		})
-
-		totalProcessingTime += processingTime
-	}
-
-	return results, totalProcessingTime, nil
-}
-
-func embeddingOutput(req EmbeddingRequest, text string) (*candle_binding.EmbeddingOutput, error) {
-	switch req.Model {
-	case "auto", "":
-		return candle_binding.GetEmbeddingWithMetadata(text, req.QualityPriority, req.LatencyPriority, req.Dimension)
-	case "mmbert":
-		return candle_binding.GetEmbedding2DMatryoshka(text, req.Model, req.TargetLayer, req.Dimension)
-	case "multimodal":
-		output, err := candle_binding.MultiModalEncodeText(text, req.Dimension)
-		if err != nil {
-			return nil, err
-		}
-		return &candle_binding.EmbeddingOutput{
-			Embedding:        output.Embedding,
-			ModelType:        "multimodal",
-			ProcessingTimeMs: output.ProcessingTimeMs,
-		}, nil
-	default:
-		return candle_binding.GetEmbeddingWithModelType(text, req.Model, req.Dimension)
-	}
 }
 
 // parseSimilarityRequest parses, validates, and defaults a SimilarityRequest.
