@@ -9,6 +9,7 @@ from training.qwen3_reranker06.paired_order import (
     aligned_indices,
     reverse_choice,
 )
+from training.qwen3_reranker06.paired_postsave import categorical
 
 
 class PairedOrderTests(unittest.TestCase):
@@ -49,6 +50,19 @@ class PairedOrderTests(unittest.TestCase):
             aligned_indices(["a", "a"], ["a", "a"], [0])
         with self.assertRaises(ValueError):
             reverse_choice({"type": "score", "criteria": ["low", "high"]})
+
+    def test_postsave_categorical_projection(self) -> None:
+        self.assertEqual(
+            categorical({"type": "choice", "choice": "m7"}), ("choice", "m7")
+        )
+        self.assertEqual(categorical({"type": "noul", "noul": 0.51}), ("noul", True))
+        self.assertEqual(
+            categorical({"type": "score", "native_level": 2}), ("score", 2)
+        )
+        self.assertEqual(
+            categorical({"type": "choice", "error": "context_overflow"}),
+            ("choice", ("invalid", "context_overflow")),
+        )
 
 
 if __name__ == "__main__":
