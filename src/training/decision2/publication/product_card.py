@@ -124,20 +124,17 @@ tags:
 
 {tagline}
 
-## Decisions it makes
+Give the model a state, named questions, and your criteria. It evaluates the
+evidence and returns decisions with probabilities.
 
-Supply a state, questions and your own criteria. Each answer is a probability-based
-decision over the supplied evidence.
-
-| Question | Use | Output |
+| Decision | Use it to | Returns |
 | --- | --- | --- |
 {uses}
 
-## Results
+## Measured capability
 
-The models below were rerun on the same JevArena v3 panel of **8,147 original
-items** and, separately, the **231 public JevBench v1.2 questions**. Public
-JevBench results are not a closed-set official ranking.
+The models below were evaluated on the same **8,147-item JevArena v3** panel.
+The **231 public JevBench v1.2** questions are reported separately.
 
 {table}
 
@@ -145,17 +142,19 @@ JevBench results are not a closed-set official ranking.
 
 {evaluation_scope}
 
-Ranks cover only the displayed models. See the [evaluation methods and
-hashes](evaluation/EVALUATION.md) and [public manifest](evaluation/manifest.json)
-for the panel and scoring details.
+Ranks cover only the displayed models and test versions.
+[All tasks and methods](evaluation/EVALUATION.md) ·
+[Evaluation manifest](evaluation/manifest.json)
 
-## Use with System One
+## Download and decide
 
-Download the model and run the included native decision runtime on a BF16-capable GPU:
+Download the full model repository:
 
 ```bash
 hf download {card.model_id} --local-dir {name}
 ```
+
+Run a SystemOne-style request on a BF16-capable GPU:
 
 ```python
 import os
@@ -187,20 +186,20 @@ result = model.system_one(
 print(result["answers"])
 ```
 
-The runtime evaluates the supplied state and questions directly. It does not
-retrieve missing evidence or provide a chat interface.
+This repository is a model download, not a hosted API.
 
-## Model details
+## Architecture and limits
 
 {method}
 
-The direct starting weights are
-[{card.direct_weight_source}](https://huggingface.co/{card.direct_weight_source})
-at revision `{card.source_revision}`. The native inference package loads
-**{card.loaded_parameters:,} parameters**, including its decision head.
-{teacher}See [attributions](ATTRIBUTIONS.md) and [license](LICENSE).
-
-## Limits
+It loads **{card.loaded_parameters:,} parameters**, including the decision head.
+The starting weights are
+[{card.direct_weight_source}](https://huggingface.co/{card.direct_weight_source});
+their exact revision is in the [evaluation manifest](evaluation/manifest.json).
+{teacher}
 
 {limits}
+
+The model uses the supplied evidence; it does not retrieve missing facts.
+[License](LICENSE) · [Attributions](ATTRIBUTIONS.md)
 """

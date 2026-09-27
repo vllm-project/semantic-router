@@ -36,16 +36,24 @@ def specimen(**changes: object) -> ProductCard:
 class ProductCardTest(unittest.TestCase):
     def test_product_first_and_three_type_example(self) -> None:
         card = render(specimen())
-        self.assertLess(card.index("## Decisions it makes"), card.index("## Results"))
-        self.assertLess(card.index("## Results"), card.index("## Use with System One"))
         self.assertLess(
-            card.index("## Use with System One"), card.index("## Model details")
+            card.index("| Decision | Use it to | Returns |"),
+            card.index("## Measured capability"),
+        )
+        self.assertLess(
+            card.index("## Measured capability"), card.index("## Download and decide")
+        )
+        self.assertLess(
+            card.index("## Download and decide"),
+            card.index("## Architecture and limits"),
         )
         self.assertIn("| Choice | Route requests |", card)
         self.assertIn("| Noul | Check evidence |", card)
         self.assertIn("| Score | Apply ordered rubrics |", card)
         self.assertIn("base_model: Qwen/Qwen3.8-27B", card)
         self.assertIn("25,688,227,840 parameters", card)
+        self.assertNotIn("1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0", card)
+        self.assertIn("[evaluation manifest](evaluation/manifest.json)", card)
         example = card.split("```python\n", 1)[1].split("\n```", 1)[0]
         ast.parse(example)
         for kind in ("choice", "noul", "score"):
