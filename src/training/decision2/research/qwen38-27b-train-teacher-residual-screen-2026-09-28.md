@@ -66,6 +66,19 @@ HOLD. The first receipt remains preserved; this amendment precedes any 27B
 weight load, gradient, teacher-mask result, SELECT/DEV result or formal/public
 score. No sampler search after model outcomes is allowed.
 
+**CPU admission outcome:** The exact-subset implementation was mirrored byte
+for byte and rerun once on the same pinned private inputs. It again returned
+`WHOLE_GROUP_QUOTA`, now indicating that at least one fixed source/type quota
+has no exact whole-group subset after the 4,096-token filter. The private
+second receipt is preserved alongside the first. Frozen input hashes,
+manifest shape/source ledger counts, complete teacher row/option identity and
+CPU tokenizer lengths passed far enough to reach this stop. The teacher mask
+and protected-inventory overlap checks were **not reached**, so this is not
+an admission PASS. No 27B weights or optimizer were loaded; GPU-hours remain
+zero. Under the frozen quotas, this arm stays HOLD. A future experiment could
+preregister a different group-aware quota rule, but that would be a new arm,
+not a retry or a retroactive reinterpretation of these receipts.
+
 The auxiliary mask is determined once from TRAIN provenance, TRAIN gold and
 the pinned teacher vectors, never from model or SELECT outcomes. A row is
 eligible only with a unique teacher top level equal to TRAIN gold and gold
