@@ -1,15 +1,15 @@
 ---
-title: 使用 Envoy AI Gateway 部署
-description: 由 Semantic Router 负责模型选择或 Responses 状态，由 Envoy AI Gateway 负责提供商和网关策略。
+title: 使用 Agent Router 部署
+description: 由 Semantic Router 负责模型选择或 Responses 状态，由 Agent Router（原 Envoy AI Gateway）负责提供商和网关策略。
 translation:
   source_commit: "29e20acc0914caf09f92de44be45473db8fbf5a5"
   source_file: "docs/installation/k8s/ai-gateway.md"
   outdated: false
 ---
 
-# 使用 Envoy AI Gateway 部署
+# 使用 Agent Router 部署
 
-当 Envoy AI Gateway 已经负责南北向流量和提供商集成时，使用此拓扑。Semantic Router 可以根据请求含义选择模型，也可以仅作为 ExtProc 服务运行，用于 OpenAI Responses 状态和协议转换。Envoy AI Gateway 仍负责 Gateway API 资源、提供商凭证、速率限制和流量策略。
+当 Agent Router（原 Envoy AI Gateway）已经负责南北向流量和提供商集成时，使用此拓扑。Semantic Router 可以根据请求含义选择模型，也可以仅作为 ExtProc 服务运行，用于 OpenAI Responses 状态和协议转换。Agent Router 仍负责 Gateway API 资源、提供商凭证、速率限制和流量策略。
 
 对于大型请求体或 Semantic Router 的流式立即响应，另见 [Streamed ExtProc 与立即响应](./streamed-extproc)。该指南说明如何将 ExtProc 过滤器的请求体从 `BUFFERED` 切换到 `STREAMED`，以及流式 Chat Completions 客户端如何接收 looper 或 `fast_response` 立即响应。
 
@@ -19,10 +19,10 @@ translation:
 
 - **Semantic Router** 评估所选配方，并选择逻辑模型或提供商别名。
 - **Envoy Gateway** 提供 Kubernetes Gateway API 数据面。
-- **Envoy AI Gateway** 转换提供商 API，并应用网关侧的认证、速率限制和流量策略。
+- **Agent Router** 转换提供商 API，并应用网关侧的认证、速率限制和流量策略。
 - **模型提供商** 服务所选模型。本指南使用演示后端，不安装生产推理容量。
 
-提供商支持独立于 Semantic Router 变化。请使用 [Envoy AI Gateway 提供商文档](https://aigateway.envoyproxy.io/docs/capabilities/llm-integrations/supported-providers/) 选择 `AIServiceBackend` 和凭证策略，再将提供商名称绑定到 Semantic Router 配置所用的别名。
+提供商支持独立于 Semantic Router 变化。请使用 [Agent Router 提供商文档](https://theagentrouter.ai/docs/capabilities/llm-integrations/supported-providers/) 选择 `AIServiceBackend` 和凭证策略，再将提供商名称绑定到 Semantic Router 配置所用的别名。
 
 ## 仅提供 Responses 状态、不选择模型
 
@@ -53,7 +53,7 @@ helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
 
 需要：
 
-- Kubernetes `1.32` 或更高，以匹配固定的 Envoy AI Gateway `v1.0.x` 与 Envoy Gateway `v1.8.x` 兼容集；演示可用 [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)；
+- Kubernetes `1.32` 或更高，以匹配固定的 Agent Router `v1.0.x` 与 Envoy Gateway `v1.8.x` 兼容集；演示可用 [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)；
 - Gateway API `v1.5.x` CRD。下面默认的 Envoy Gateway Helm 安装会安装兼容集合；若平台自行管理这些 CRD，安装 chart 前请核对版本；
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)；
 - [Helm](https://helm.sh/docs/intro/install/)；以及
@@ -94,7 +94,7 @@ kubectl get pods -n vllm-semantic-router-system
 
 ## 步骤 3：安装 Envoy Gateway
 
-安装 Envoy AI Gateway `v1.0.0` 所支持的 Envoy Gateway 版本：
+安装 Agent Router `v1.0.0` 所支持的 Envoy Gateway 版本：
 
 ```bash
 export AIGW_VERSION=v1.0.0
@@ -109,9 +109,9 @@ helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
 kubectl wait --timeout=2m -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
 ```
 
-## 步骤 4：安装 Envoy AI Gateway
+## 步骤 4：安装 Agent Router
 
-先安装 AI Gateway CRD，再安装控制器。这些版本遵循上游 [`v1.0.x` 兼容矩阵](https://aigateway.envoyproxy.io/docs/compatibility/)。
+先安装 AI Gateway CRD，再安装控制器。这些版本遵循上游 [`v1.0.x` 兼容矩阵](https://theagentrouter.ai/docs/compatibility/)。
 
 ```bash
 # Install Envoy AI Gateway CRDs
