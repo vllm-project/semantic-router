@@ -237,7 +237,7 @@ def build(
         tagline="A compact, native Choice / Noul / Score decision model for structured decisions over supplied context.",
         use_cases=(
             "Choose among supplied routes or options with explicit criteria.",
-            "Judge a yes/no proposition and return a calibrated probability.",
+            "Judge a yes/no proposition and return a probability estimate.",
             "Score an ordered set of levels from the evidence in context.",
         ),
         direct_weight_source="Qwen/Qwen3-0.6B-Base",
