@@ -50,3 +50,23 @@ experiments retain their recorded outcomes and are not repeated here.
    not initialize the full run. No 4B JevArena v3 or release claim follows
    from SELECT; post-key formal comparisons need separately frozen packages
    and prediction files.
+
+## Completed admission receipt
+
+The read-only native input audit admitted all 7,455 TRAIN, 700 SELECT and
+700 CAL rows at 8,192 tokens without truncation. TRAIN contained 4,194,465
+tokens; the audit JSON SHA-256 is
+`ab20abda6f9790dc2b9fa786179142679dcf105eef7758da4a27a47924b5de1b`.
+Both independent zero-step SELECT700 starts exited successfully with 700
+valid answers. Their prediction files are byte-identical, SHA-256
+`e3d340489fa1ee438af07ec83eadc968ba86028085ac4443ffb38336e84506c7`;
+the baseline had 220/700 correct and family-macro accuracy 0.270463.
+The one-update smoke independently initialized the pinned official source,
+finished with finite loss and gradient, and reached 244/700, family-macro
+accuracy 0.328925. Its normalized Brier rose from 0.353846 to 0.452716,
+which is recorded as an early optimization signal, not a release result.
+The exact same-batch 32-row native checkpoint reload passed with zero
+category changes and zero probability drift. Four stages used 56.3, 56.1,
+88.5 and 28.1 GPU seconds, respectively, under the admission caps. These
+results admit a separately frozen full training arm; no formal labels were
+used in this preflight.
