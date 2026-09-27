@@ -43,7 +43,11 @@ PROTECTED_ROLES = {
 }
 
 
-def _clean(text: str) -> str:
+def _clean(text: Any) -> str:
+    if not isinstance(text, str):
+        text = json.dumps(
+            text, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
     return SPACE_PATTERN.sub(
         " ", NUMBER_PATTERN.sub("n", ID_PATTERN.sub("id", text.lower()))
     ).strip()
