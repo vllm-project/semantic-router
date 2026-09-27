@@ -1,6 +1,9 @@
 # 0.8B fixed-checkpoint temperature transport diagnostic
 
-Status: **preregistered, not yet scored**. This is a read-only development
+Status: **preregistered before scoring** in signed commit `ad0f286dd`;
+the completed result is in
+[the fixed-checkpoint diagnostic](eos08-temperature-transport-result-2026-09-27.md).
+This is a read-only development
 diagnostic of three already completed checkpoints. It does not fit a new
 temperature, select a checkpoint, change the release scalar, reopen FINAL, or
 use the public JevBench subset. No optimizer or model inference is planned.
