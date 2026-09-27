@@ -993,6 +993,11 @@ profiles:
       - e2e/profiles/multi-endpoint/**
       - e2e/config/config.multi-endpoint.yaml
       - tools/dev/examples/multi-endpoint.sh
+      - e2e/testcases/jailbreak_detection*.go
+      - e2e/testcases/testdata/jailbreak_detection_cases.json
+      - src/semantic-router/pkg/classification/classifier_jailbreak*.go
+      - src/semantic-router/pkg/classification/classifier_signal_jailbreak*.go
+      - src/semantic-router/pkg/extproc/request_jailbreak_input*.go
   authz-rbac:
     display_name: Authorization Policies
     owner: e2e
