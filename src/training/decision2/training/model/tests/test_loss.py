@@ -106,6 +106,36 @@ class LossTest(unittest.TestCase):
                 ordinal_weight=1.0,
             )
 
+    def test_ordinal_branch_preserves_non_score_loss_and_gradient(self):
+        import torch
+
+        from training.model.loss import per_example_loss
+
+        values = torch.tensor([[1.2, -0.3, 0.7], [-0.4, 0.9, -0.2]])
+        labels = torch.tensor([2, 1])
+        mask = torch.tensor([[True, True, True], [True, True, False]])
+        plain_logits = values.clone().requires_grad_()
+        ordinal_logits = values.clone().requires_grad_()
+        plain = per_example_loss(
+            plain_logits, labels, mask, objective="ce_brier", brier_weight=0.5
+        )
+        ordinal = per_example_loss(
+            ordinal_logits,
+            labels,
+            mask,
+            objective="ce_brier",
+            brier_weight=0.5,
+            task_type_ids=torch.tensor([0, 1]),
+            score_level_indices=torch.tensor([[0, 1, 2], [0, 1, 0]]),
+            ordinal_weight=1.0,
+        )
+        plain["total"].sum().backward()
+        ordinal["total"].sum().backward()
+        torch.testing.assert_close(plain["total"], ordinal["total"], rtol=0, atol=0)
+        torch.testing.assert_close(
+            plain_logits.grad, ordinal_logits.grad, rtol=0, atol=0
+        )
+
     def test_score_level_keys_survive_native_encode_and_collate(self):
         from training.model.decision_model import collate, encode
 
