@@ -70,6 +70,41 @@ The adapter digest is the source SHA-256 of the selected native inference
 module. Hosted Jev has no local package and is compared on a separate track.
 The roster and receipts stay private; they may expose local paths.
 
+Use `scripts.baseline_attestation_v3` to create each roster item and its
+receipt; do not hand-write the digests or size. Its `build` command takes one
+pinned key from `plan_final_eval.BASELINES`, the exact inference model root,
+source root, and external native-runtime root. The two output files must have
+new paths in a caller-owned `0700` private directory; the tool creates each
+as `0600`, refuses overwrite, and prints neither contents nor paths. For
+example, with private variables already set:
+
+```bash
+PYTHONPATH="$SOURCE_ROOT" python3 -m scripts.baseline_attestation_v3 build \
+  --key sol --source-root "$SOURCE_ROOT" --model-root "$MODEL_ROOT" \
+  --external-root "$EXTERNAL_ROOT" \
+  --loaded-parameter-count "$NATIVE_LOADER_PARAMETER_COUNT" \
+  --receipt-output "$PRIVATE_RECEIPT" \
+  --attestation-output "$PRIVATE_ATTESTATION"
+PYTHONPATH="$SOURCE_ROOT" python3 -m scripts.baseline_attestation_v3 verify \
+  --key sol --source-root "$SOURCE_ROOT" --model-root "$MODEL_ROOT" \
+  --external-root "$EXTERNAL_ROOT" \
+  --attestation-output "$PRIVATE_ATTESTATION"
+```
+
+Record `NATIVE_LOADER_PARAMETER_COUNT` from the exact native loader's unique
+`model.parameters()` count, before building; it must equal the independently
+counted elements in all package safetensors files. Include
+`--calibration-file "$CAL_FILE"` when the adapter loads a separate CAL file;
+an in-package CAL remains covered by the full package hash. The receipt
+records the integer count, exact `size_b = count / 1e9`, all weight filenames,
+and the pinned adapter/CAL hashes. The tool rejects symlinks, special files,
+unsafe output permissions, duplicate tensor names, malformed safetensors,
+non-safetensors-only weights and any count mismatch. Its verification runs
+again inside the v3 planner, so a changed package, runtime, adapter or CAL
+blocks planning. This check does not prove the native loader actually uses
+every file: preserve the loader count receipt and native prediction/parity
+evidence separately. Never use the rounded model name as `size_b`.
+
 The numeric rules are in
 [`jev-arena-v3-first-release-gates-2026-09-27.md`](../research/jev-arena-v3-first-release-gates-2026-09-27.md).
 The roster binds the exact SHA-256 of that document. The planner also hashes

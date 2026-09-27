@@ -29,6 +29,7 @@ from jev_arena.jevbench_public import (
 from jev_arena.jevbench_public import (
     SOURCE_URL as PUBLIC_SOURCE_URL,
 )
+from scripts.baseline_attestation_v3 import verify_attestation
 from scripts.plan_final_eval import (
     BASELINES,
     CSS_EVALUATION_ITEMS,
@@ -64,6 +65,7 @@ SOURCE_FILES = (
     "publication/render_arena_v3.py",
     "publication/bundle_arena_v3.py",
     "scripts/plan_final_eval.py",
+    "scripts/baseline_attestation_v3.py",
     "scripts/plan_first_release_v3.py",
 )
 SAME_SIZE_COMPARATOR = {
@@ -134,99 +136,19 @@ def _baseline_attestations(
     by_key = {model.key: model for model in selected}
     attestations: dict[str, dict[str, Any]] = {}
     for item in declared:
-        if not isinstance(item, dict) or set(item) != {
-            "key",
-            "model_id",
-            "revision",
-            "size_b",
-            "native_model_sha256",
-            "adapter_sha256",
-            "calibration_sha256",
-            "receipt_path",
-            "receipt_sha256",
-        }:
-            raise ValueError("Baseline attestation has missing or unknown fields")
+        if not isinstance(item, dict) or not isinstance(item.get("key"), str):
+            raise ValueError("Malformed baseline attestation")
         key = item["key"]
         if key not in by_key or key in attestations:
             raise ValueError("Unknown or duplicate baseline attestation")
         model = by_key[key]
-        if model.key == "jev":
-            raise ValueError(
-                "Hosted Jev has no local package attestation; evaluate it separately"
-            )
-        if (item["model_id"], item["revision"]) != (model.model_id, model.revision):
-            raise ValueError(f"{key}: baseline model ID/revision changed")
-        size = item["size_b"]
-        if type(size) not in (int, float) or not 0 < size < 1000:
-            raise ValueError(f"{key}: actual loaded size_b must be positive")
-        for field in ("native_model_sha256", "adapter_sha256", "receipt_sha256"):
-            _sha(item[field], f"{key}.{field}")
-        if item["calibration_sha256"] is not None:
-            _sha(item["calibration_sha256"], f"{key}.calibration_sha256")
-        receipt_path = _abs_path(item["receipt_path"], f"{key}.receipt_path")
-        if sha_file(receipt_path) != item["receipt_sha256"]:
-            raise ValueError(f"{key}: baseline package receipt changed")
-        receipt = _object(receipt_path)
-        for field in (
-            "model_id",
-            "revision",
-            "native_model_sha256",
-            "adapter_sha256",
-            "calibration_sha256",
-        ):
-            if receipt.get(field) != item[field]:
-                raise ValueError(f"{key}: baseline package receipt identity differs")
-        adapter_path = source_root / (model.module.replace(".", "/") + ".py")
-        if sha_file(adapter_path) != item["adapter_sha256"]:
-            raise ValueError(f"{key}: native adapter source changed")
-        package = model_root / model.model_dir
-        if receipt.get("package_path") != str(package):
-            raise ValueError(f"{key}: attested package is not the inference package")
-        files = receipt.get("files")
-        if not isinstance(files, dict) or not files:
-            raise ValueError(f"{key}: package receipt needs nonempty file hashes")
-        observed_files = {
-            path.relative_to(package).as_posix()
-            for path in package.rglob("*")
-            if path.is_file()
-        }
-        if set(files) != observed_files:
-            raise ValueError(f"{key}: package receipt omits or adds package files")
-        for relative, digest in files.items():
-            if (
-                not isinstance(relative, str)
-                or Path(relative).is_absolute()
-                or ".." in Path(relative).parts
-            ):
-                raise ValueError(f"{key}: unsafe package file path")
-            if sha_file(package / relative) != _sha(digest, f"{key}.{relative}"):
-                raise ValueError(f"{key}: package file changed: {relative}")
-        canonical = json.dumps(files, sort_keys=True, separators=(",", ":")).encode()
-        if hashlib.sha256(canonical).hexdigest() != item["native_model_sha256"]:
-            raise ValueError(f"{key}: native package fingerprint differs")
-        if model.source_dir:
-            runtime = external_root / model.source_dir
-            if receipt.get("runtime_path") != str(runtime):
-                raise ValueError(f"{key}: external native runtime path differs")
-            runtime_files = receipt.get("runtime_files")
-            if not isinstance(runtime_files, dict) or not runtime_files:
-                raise ValueError(f"{key}: external runtime needs file hashes")
-            observed_runtime_files = {
-                path.relative_to(runtime).as_posix()
-                for path in runtime.rglob("*")
-                if path.is_file()
-            }
-            if set(runtime_files) != observed_runtime_files:
-                raise ValueError(f"{key}: runtime receipt omits or adds files")
-            for relative, digest in runtime_files.items():
-                if (
-                    not isinstance(relative, str)
-                    or Path(relative).is_absolute()
-                    or ".." in Path(relative).parts
-                ):
-                    raise ValueError(f"{key}: unsafe runtime file path")
-                if sha_file(runtime / relative) != _sha(digest, f"{key}.{relative}"):
-                    raise ValueError(f"{key}: native runtime changed: {relative}")
+        verify_attestation(
+            item,
+            model,
+            source_root=source_root,
+            model_root=model_root,
+            external_root=external_root,
+        )
         attestations[key] = item
     return attestations
 

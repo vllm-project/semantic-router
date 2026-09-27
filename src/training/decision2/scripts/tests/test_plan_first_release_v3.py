@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import struct
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from jev_arena.jevbench_public import FILES, SOURCE_REVISION, SOURCE_URL
+from scripts.baseline_attestation_v3 import build_attestation
 from scripts.plan_final_eval import BASELINES, sha_file
 from scripts.plan_first_release_v3 import (
     GATE_DOCUMENT,
@@ -44,39 +46,24 @@ class FirstReleasePlanTests(unittest.TestCase):
             package = self.model_root / model.model_dir
             package.mkdir(parents=True)
             (package / "config.json").write_text("{}\n", encoding="utf-8")
-            files = {"config.json": sha_file(package / "config.json")}
-            native_hash = hashlib.sha256(
-                json.dumps(files, sort_keys=True, separators=(",", ":")).encode()
-            ).hexdigest()
-            adapter_hash = sha_file(
-                SOURCE_ROOT / (model.module.replace(".", "/") + ".py")
+            header = json.dumps(
+                {"weight": {"dtype": "F32", "shape": [4], "data_offsets": [0, 16]}}
+            ).encode()
+            (package / "model.safetensors").write_bytes(
+                struct.pack("<Q", len(header)) + header + b"\0" * 16
             )
             receipt = self.root / f"{model.key}.receipt.json"
-            write_json(
-                receipt,
-                {
-                    "model_id": model.model_id,
-                    "revision": model.revision,
-                    "native_model_sha256": native_hash,
-                    "adapter_sha256": adapter_hash,
-                    "calibration_sha256": None,
-                    "package_path": str(package),
-                    "files": files,
-                },
+            attestation = self.root / f"{model.key}.attestation.json"
+            build_attestation(
+                model,
+                source_root=SOURCE_ROOT,
+                model_root=self.model_root,
+                external_root=self.external_root,
+                receipt_output=receipt,
+                attestation_output=attestation,
+                loaded_parameter_count=4,
             )
-            self.attestations.append(
-                {
-                    "key": model.key,
-                    "model_id": model.model_id,
-                    "revision": model.revision,
-                    "size_b": 4.0,
-                    "native_model_sha256": native_hash,
-                    "adapter_sha256": adapter_hash,
-                    "calibration_sha256": None,
-                    "receipt_path": str(receipt),
-                    "receipt_sha256": sha_file(receipt),
-                }
-            )
+            self.attestations.append(json.loads(attestation.read_text()))
         self.candidate = {
             "key": "d2-4b",
             "label": "dev-2.0-4b",
@@ -96,7 +83,7 @@ class FirstReleasePlanTests(unittest.TestCase):
             {
                 "schema_version": ROSTER_VERSION,
                 "candidate_keys": ["d2-4b"],
-                "candidate_size_b": {"d2-4b": 4.2},
+                "candidate_size_b": {"d2-4b": 4.2e-9},
                 "baseline_keys": ["nox", "eikos4b"],
                 "baseline_attestations": self.attestations,
                 "pairs": [
@@ -167,7 +154,7 @@ class FirstReleasePlanTests(unittest.TestCase):
         self.assertEqual(plan["comparison_pairs"][0]["comparator"], "nox")
         self.assertEqual(len(plan["inference"]), 3)
         self.assertEqual(len(plan["paired_ci_commands_after_prekey_freeze"]), 1)
-        self.assertEqual(plan["model_roster"][-1]["size_b"], 4.2)
+        self.assertEqual(plan["model_roster"][-1]["size_b"], 4.2e-9)
         inference = "\n".join(
             command for model in plan["inference"] for command in model["commands"]
         )
@@ -209,7 +196,9 @@ class FirstReleasePlanTests(unittest.TestCase):
         (self.model_root / self.models[0].model_dir / "config.json").write_text(
             "changed\n", encoding="utf-8"
         )
-        with self.assertRaisesRegex(ValueError, "package file changed"):
+        with self.assertRaisesRegex(
+            ValueError, "package, runtime, or calibration differs"
+        ):
             checked_roster(
                 self.roster_path,
                 candidates=[self.candidate],
@@ -220,7 +209,7 @@ class FirstReleasePlanTests(unittest.TestCase):
 
     def test_same_size_requires_measured_parameter_ratio(self) -> None:
         roster = json.loads(self.roster_path.read_text(encoding="utf-8"))
-        roster["candidate_size_b"]["d2-4b"] = 6.0
+        roster["candidate_size_b"]["d2-4b"] = 6e-9
         write_json(self.roster_path, roster)
         with self.assertRaisesRegex(ValueError, "Comparator size relation is false"):
             checked_roster(
