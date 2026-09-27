@@ -95,8 +95,16 @@ class PythonPublisherContractTests(unittest.TestCase):
         for step in self.publisher.jobs["build"]["steps"]:
             self.assertNotIn("secrets.", str(step))
 
-    def test_publisher_and_pr_cli_gate_exercise_installed_wheel(self) -> None:
+    def test_release_builds_distribution_without_runtime_wheel_smoke(self) -> None:
         steps = self.publisher.jobs["build"]["steps"]
+        stable = next(
+            step
+            for step in steps
+            if step.get("name") == "Build stable package and manifest"
+        )
+        self.assertIn("--build-only", stable["run"])
+        self.assertIn("mv .agent-harness/package/dist src/vllm-sr/dist", stable["run"])
+        self.assertEqual(stable["if"], "inputs.channel != 'dev'")
         smoke_index = next(
             index
             for index, step in enumerate(steps)
@@ -108,15 +116,19 @@ class PythonPublisherContractTests(unittest.TestCase):
             if step.get("uses", "").startswith("actions/upload-artifact@")
         )
         self.assertLess(smoke_index, upload_index)
+        self.assertEqual(steps[smoke_index]["if"], "inputs.channel == 'dev'")
+        self.assertEqual(steps[upload_index]["with"]["path"], "src/vllm-sr/dist/*")
         self.assertEqual(needs(self.publisher.jobs["pypi"]), {"build"})
         package = self.workflows["package-check.yml"]
         self.assertIn("package_contract.py", str(package.jobs))
         implementation = (REPO_ROOT / "tools/ci/package_contract.py").read_text()
         self.assertIn("check_wheel(wheels[0])", implementation)
-        for filename in ("main.yml", "release.yml"):
-            self.assertTrue(
-                self.workflows[filename].jobs["pypi"]["with"]["prebuilt-dist"]
-            )
+        self.assertTrue(
+            self.workflows["main.yml"].jobs["pypi"]["with"]["prebuilt-dist"]
+        )
+        self.assertFalse(
+            self.workflows["release.yml"].jobs["pypi"]["with"]["prebuilt-dist"]
+        )
 
     def test_first_tag_push_uses_head_instead_of_zero_before_sha(self) -> None:
         package = self.workflows["package-check.yml"]
@@ -181,7 +193,9 @@ class PythonPublisherContractTests(unittest.TestCase):
         self.assertLess(install_index, verify_index)
         self.assertLess(verify_index, publish_index)
         install = steps[install_index]
-        self.assertEqual(install["if"], "inputs.prebuilt-dist")
+        self.assertEqual(
+            install["if"], "inputs.prebuilt-dist || inputs.channel != 'dev'"
+        )
         self.assertIn("PyYAML==6.0.3", install["run"])
         self.assertIn("PyYAML==6.0.3", str(self.workflows["package-check.yml"].jobs))
 

@@ -36,7 +36,6 @@ class PullRequestGateContractTests(unittest.TestCase):
         for filename, job in (
             ("pr.yml", "pr-gate"),
             ("ci.yml", "gate"),
-            ("release.yml", "gate"),
         ):
             with self.subTest(workflow=filename):
                 workflow = yaml.safe_load(
