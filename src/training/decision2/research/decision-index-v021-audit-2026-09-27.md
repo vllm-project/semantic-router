@@ -176,3 +176,43 @@ audits, and task-level grouping, while preserving its own sealed typed,
 transfer, robustness, and multilingual strata. The public Index panel is
 not a dedicated multilingual evaluation and does not replace those strata
 or a hidden independent test set.
+
+## Current Space snapshot addendum (2026-09-27 UTC)
+
+The immutable `99decba` snapshot above remains a historical audit. The Space
+subsequently advanced to Git revision
+[`ed7d683e6626a4a5ace0086b8bdedd8b1cc58cf4`](https://huggingface.co/spaces/multimodalart/jev-decision-index/tree/ed7d683e6626a4a5ace0086b8bdedd8b1cc58cf4).
+At this revision, the archived [0.2 index](https://huggingface.co/spaces/multimodalart/jev-decision-index/blob/ed7d683e6626a4a5ace0086b8bdedd8b1cc58cf4/data/index-v2.json)
+is unchanged (SHA-256 `fad0e6b0ee996de2543c2aecb73325464338b8437286ebc8162b652efd8d51bc`).
+The current [0.2.1 index](https://huggingface.co/spaces/multimodalart/jev-decision-index/blob/ed7d683e6626a4a5ace0086b8bdedd8b1cc58cf4/data/index-v0.2.1.json)
+has SHA-256 `5444deeacd9bd6ea9e8ccf008f99f1223fe1d43af6e40739259aec804284ec55`;
+its [methodology bundle](https://huggingface.co/spaces/multimodalart/jev-decision-index/blob/ed7d683e6626a4a5ace0086b8bdedd8b1cc58cf4/data/methodology-v0.2.1.json)
+has SHA-256 `235384612203690889a4d82ff22dab16fd3c65a6c8f5db0ef28b361f9ed9f665`.
+Both differ from the historical bundle hashes above. The old 0.2 methodology
+bundle remains SHA-256 `903cee829e68a7cb4592f91ba55558a5c725f8c80692cf0c846efa8b34f67b2f`.
+
+The 0.2.1 **evaluation panel, five area weights, 13 gold weights, scoring
+rules, 119,898 scoreable rows, Jev record, and all six Decision 1.0 records
+are unchanged** from `99decba`. Board membership changed: JPT 0.8B, JPT 9B,
+and Lavoir were added; the earlier reflex 27B record was replaced by the
+full-coverage reflex 27B v2 record. The 0.2.1 board therefore now contains
+67 open models plus Jev (68 rows), versus 64 open models plus Jev in archived
+0.2 (65 rows). The current 0.2.1 release notes add the reflex replacement;
+the version-to-version protocol changes described above remain the same.
+
+| Model | Archived 0.2 skill /100, UI rank /65 | Current 0.2.1 skill /100, UI rank /68 |
+| --- | ---: | ---: |
+| Jev | 51.67, 2 | 57.89, 1 |
+| Decision 1.0 Kai | 7.03, 50 | 6.52, 55 |
+| Decision 1.0 Lex | 4.31, 58 | 4.54, 61 |
+| Decision 1.0 Eos | 17.49, 43 | 18.41, 45 |
+| Decision 1.0 Sol | 22.90, 39 | 25.32, 40 |
+| Decision 1.0 Nox | 31.06, 28 | 34.36, 30 |
+| Decision 1.0 Lux | 38.98, 12 | 43.49, 14 |
+
+The UI shares a rank when adjacent headline scores differ by at most 0.25
+points; the denominator includes Jev. Rank movement combines changed panel
+scoring and changed entrants, so it is not a controlled measure of model
+improvement. The 0.2 public kit still has no native 0.2.1 edition. Future
+citations must pin the index bundle revision as well as its edition; the
+`99decba` ranks /65 above must not be presented as the current board.
