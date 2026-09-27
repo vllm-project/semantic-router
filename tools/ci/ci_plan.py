@@ -305,6 +305,7 @@ def github_outputs(plan: dict) -> dict[str, str]:
         # callers only need these fields to select their workflow behavior.
         "plan": {
             "profile": plan["profile"],
+            "base_sha": plan["base_sha"],
             "quality_context": plan["quality_context"],
         },
         "dispatch": dispatch,
