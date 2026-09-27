@@ -18,9 +18,10 @@ publication was used.
 | Package-native adapter | `decision2-peft-package-native-v1` |
 | Signed collector source | `c47834ba15adf694a0c64812a4f26fd3baf4e51c` |
 | Exact collector source archive | `35a7a34ce0ef8db100eaab6674009b971e3d65e1038baefffe982e755ea1f354` |
-| Runtime image used for all three panels | `sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54` |
+| Runtime image used for all three panels | Exact private image digest retained in the launch plan |
 | Private launch plan | `9de99a0c0f155f9b43427ef8c48e3e408179b43cb44d34659637151be64233f3` |
 | Private score plan | `63d7a9f7886d47b0ef27a0963b525234c81a35892771f59bab18b6e1c8fcda62` |
+| Private historic/current runtime comparison | `0b5b2bd100d69764d85ab5566e9d64b3fd4df066aa5a0c151aa757d373c6c828` |
 
 Each panel used the same clean package, the same frozen per-type CAL, an
 unchanged 4,096-token no-truncation limit, BF16 GPU backbone and FP32 head.
@@ -71,11 +72,40 @@ adapter digest is therefore intentionally different. The fixed full-panel
 parity gate requires zero categorical changes, p99 absolute probability/Score
 drift at most 0.005 and maximum at most 0.02.
 
-| Panel | Historic source score | Current package score | Categorical changes | p99 / maximum scalar drift | Private comparison receipt SHA-256 |
+| Panel | Historic source score | Current package score | Raw string-label changes | p99 / maximum scalar drift | Private comparison receipt SHA-256 |
 | --- | ---: | ---: | ---: | ---: | --- |
 | Typed DEV1,600 | 1,213/1,600 | 1,211/1,600 | 0 | 0.04978 / 0.19126 | `e8cc2a17918d10bd540f59de15023d83f94381da7d38aad603ee172b6908c688` |
 | CSS pilot1,430 | 842/1,430 | 845/1,430 | 20 | 0.03296 / 0.20856 | `71341f21cb104b66268bf1cf4cf3faed91a14e3dc354386068f940834737bb66` |
 | Public subset231 | 199/231 | 200/231 | 1 hard Score decision | 0.02499 / 0.06753 | `4fb57c60c3b088c0374fbb90ba7f1e4bbe08a7ac788f6fde7b8d8375f6b9cfc9` |
+
+"Raw string-label changes" compares answer string fields. It does not count
+Noul probability crossing 0.5 or a Score probability argmax changing. The
+same pinned scorer was applied again to both prediction files, with identical
+gold or target bytes. Its point-decision comparison explains every aggregate
+difference:
+
+| Panel | Scorer point-decision flips | Correctness changes | Private paired-score receipt SHA-256 |
+| --- | --- | --- | --- |
+| Typed DEV1,600 | 3 Noul threshold flips; 3 Score argmax flips | Noul 3 losses; Score 2 gains, 1 loss; **net -2** | `ef768f7479ecdc0e77066c3731b48e0be3309a8e9894f00091a5716667883a3a` |
+| CSS pilot1,430 | 20 Choice flips | 8 gains, 5 losses, 7 unchanged-wrong; **net +3** | `c95a7cb95f3367613ba909042376b1c123a474fc87e823b23f330fa67985ce86` |
+| Public subset231 | 1 Score argmax flip | 1 gain; **net +1** | `0dd237cd5013d655c48a3b93dedc82f54727a04389186c9bfef396395a10b9da` |
+
+The original and new DEV score reports both declare
+`typed-decision-report/2` and the same gold SHA-256
+`c7a8b86bda0d0d6120e572b94dfc756bf10264108554af76307141ae02fbf5dc`;
+the historic score report SHA-256 is
+`130366b06a530226511edbd32694b3c7de5c8c6d5bb223dc60c129896362289f`.
+Likewise, both CSS reports declare `css-transfer-score/2`, use gold SHA-256
+`9a7274760dc4ced5ce5219b300974a1cf54c7d5e7e0c7de05d78bb33f2959391`,
+and the historic score report SHA-256 is
+`9ab10ddd450c5a5ea86da0db6490572eab353312fe9cfb4ce3232bfda23660ca`.
+Both public reports declare `jevarena-jevbench-public-score/1` and share
+target SHA-256 `abc17b971d13807a15b3cdb43062f4cd876aad9d7314e72365724904e88b937f`;
+the historic score report SHA-256 is
+`2dfb64e045e9a9ffe77180bf596e37b0b7f144e8bbbd6ede0a61b4e75261e87d`.
+The original scorer source hash was not saved with those old reports; the
+current pinned scorer reproduces their exact point totals from the old
+predictions. It then produces the new totals from the new predictions.
 
 All three panels **fail** full-panel numeric parity. The 199→200 public
 change and the CSS/DEV differences are runtime/package evaluation differences
@@ -86,9 +116,8 @@ model card. The 27-question parity smoke was too small to detect this drift.
 ## Runtime provenance and bounded diagnosis
 
 The original scored container was recovered read-only after the initial
-parity note. Its exact image is
-`sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1`.
-Reading package metadata inside that exact image now independently records
+parity note. Its exact image digest is retained only in the private runtime
+comparison receipt. Reading package metadata inside that image independently records
 Python 3.12.13, Torch `2.12.0+git6bbd260`, Transformers 5.17.0, PEFT 0.21.0,
 safetensors 0.8.0 and huggingface_hub 1.31.0. The current package image has
 the same versions and matching SHA-256 for the inspected Qwen3.5 model,
