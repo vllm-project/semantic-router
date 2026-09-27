@@ -1,4 +1,4 @@
-"""Audit the pinned 0.6B source's complete native training input exposure."""
+"""Audit pinned official Qwen source token exposure before native training."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 import collections
 import json
 import math
+import re
 from pathlib import Path
 
 from training.model.data import (
@@ -30,6 +31,10 @@ def _quantile(values: list[int], fraction: float) -> int:
 def audit(args: argparse.Namespace) -> dict:
     from transformers import AutoTokenizer
 
+    if not args.source_model.startswith("Qwen/") or not re.fullmatch(
+        r"[0-9a-f]{40}", args.source_revision
+    ):
+        raise ValueError("Official Qwen source and immutable revision are required")
     paths = {name: getattr(args, name) for name in EXPECTED}
     digests = {name: file_sha256(path) for name, path in paths.items()}
     if digests != EXPECTED:
@@ -70,9 +75,9 @@ def audit(args: argparse.Namespace) -> dict:
             "overlength_ids": overlength,
         }
     result = {
-        "schema": "decision2-qwen3-06-native-input-preflight/1",
-        "source_model": "Qwen/Qwen3-0.6B-Base",
-        "source_revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+        "schema": "decision2-official-qwen-native-input-preflight/2",
+        "source_model": args.source_model,
+        "source_revision": args.source_revision,
         "max_length": args.max_length,
         "input_sha256": digests,
         "partitions": summaries,
@@ -92,6 +97,8 @@ def audit(args: argparse.Namespace) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-path", required=True, type=Path)
+    parser.add_argument("--source-model", required=True)
+    parser.add_argument("--source-revision", required=True)
     for name in EXPECTED:
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--max-length", type=int, default=8192)
