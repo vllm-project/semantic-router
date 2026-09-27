@@ -80,9 +80,8 @@ def _row(
             or public.get("model_id") != expected_id
         ):
             raise ValueError(f"{key}: peer identity differs")
-    else:
-        if typed.get("model", {}).get("id") != "research/qwen3-06b-official-full466":
-            raise ValueError("Official 0.6B scored candidate differs")
+    elif typed.get("model", {}).get("id") != "research/qwen3-06b-official-full466":
+        raise ValueError("Official 0.6B scored candidate differs")
     task_scores = {task: item["macro_f1_all"] for task, item in css["tasks"].items()}
     typed_scores = {
         kind: item["accuracy_all"] for kind, item in typed["by_type"].items()
@@ -234,10 +233,10 @@ def build(
         banner="assets/DEV2.0-0.6B-owl-banner.png",
         tagline="A compact model for choices, yes/no checks and ordered scores.",
         measured_summary=(
-            "DEV2.0-0.6B scores **38.52** on JevArena v3 versus Kai 1.0's "
-            "35.94. Human-task transfer improves, while Choice and Score fall. "
-            "The paired interval includes zero, so the overall gain is not "
-            "established."
+            "**38.52** on JevArena v3 versus **35.94** for Kai 1.0. "
+            "Human-task transfer improves; Choice and Score decline. The "
+            "paired interval includes zero, so the overall difference "
+            "remains uncertain."
         ),
         use_cases=(
             "Choose among supplied routes or options with explicit criteria.",
@@ -253,15 +252,15 @@ def build(
             "returns probabilities without generating chat text."
         ),
         limitations=(
-            "Choice and Score declined against Kai 1.0 on this panel, despite stronger human-task transfer; the table shows each type.",
-            "The +2.582-point v3 difference has a paired 95% interval of [-2.032, +7.846], so the overall gain remains uncertain.",
-            "Fifteen long transfer inputs exceeded the 8,192-token limit and counted as failures. Review important decisions against source evidence.",
+            "Choice and Score are weaker than Kai 1.0 on this panel; Noul and human-task transfer are stronger.",
+            "The +2.582-point JevArena difference has a paired 95% interval of [-2.032, +7.846].",
+            "Fifteen transfer inputs exceeded the 8,192-token limit and counted as failures. Review important decisions against source evidence.",
         ),
         evidence_table="\n".join(table),
         evaluation_scope=(
-            "JevBench here is its public subset, not an official full-benchmark "
-            "rank. JevArena is a same-panel comparison after project-level "
-            "access to its answers; fresh independent confirmation remains open."
+            "JevBench covers its public 231 questions, not the full closed "
+            "benchmark. JevArena answers were available during development, "
+            "so this comparison still needs independent confirmation."
         ),
     )
     (output / "README.md").write_text(render(card), encoding="utf-8")
