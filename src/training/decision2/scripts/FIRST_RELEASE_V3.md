@@ -149,6 +149,8 @@ and every file under `runtime_files`. The planner rehashes all listed package
 and runtime files and rejects omissions or additions. Compute
 `native_model_sha256` as SHA-256 of the compact, lexically sorted JSON
 serialization of the `files` map (`sort_keys=True`, separators `(',', ':')`).
+Kev's composite digest instead covers all three package/source file maps and
+its native loader count receipt, while `files` retains its package-only meaning.
 The adapter digest is the source SHA-256 of the selected native inference
 module. Hosted Jev has no local package and is compared on a separate track.
 The roster and receipts stay private; they may expose local paths.
@@ -197,6 +199,22 @@ three-file recipe. A config digest is not the whole package digest: adapters
 that do not emit a full-package per-run digest still require the byte-complete
 attestation at planning and pre-key audit, plus separately retained native run
 evidence. Do not claim a config match alone proves weight identity at runtime.
+
+Kev is a composite package: its published package contains a LoRA adapter and
+`head.pt`, while its native FP32 loader reads a separately pinned Qwen Base and
+merges the LoRA into the text backbone. Build its private attestation with the
+same command plus `--native-loaded-count-receipt "$NATIVE_COUNT_RECEIPT"`. The
+count receipt must come from the same pinned native loader revision. The
+attestation hashes every file in the Kev package, Qwen Base local directory,
+and author runtime tree; checks their pinned revisions and release provenance;
+and binds the count receipt SHA-256. Its loaded size is 4,207,062,528
+parameters: 4,205,751,296 text backbone plus 1,311,232 pointer head. The
+adapter's 32,464,896 tensor elements are merged, so they are not additional
+inference parameters. The full Qwen download also contains visual and MTP
+tensors that this native loader does not instantiate. Verification rehashes
+the count receipt and every component file. For all other baselines, the
+original packaged safetensors count equals native loader count rule remains
+strict. Keep private receipts and package paths out of public reports.
 
 The numeric rules are in
 [`jev-arena-v3-first-release-gates-2026-09-27.md`](../research/jev-arena-v3-first-release-gates-2026-09-27.md).
