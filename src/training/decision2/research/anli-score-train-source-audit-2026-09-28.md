@@ -85,6 +85,29 @@ review. Do not use the 11,974-row upper bound to claim a passed gate, run a
 GPU arm or release weights. The open ANLI DEV rounds are development diagnostics,
 never untouched release tests.
 
+### Native rubric review packet
+
+A signed [blind-packet builder](../training/data/prepare_anli_score_blind_review.py)
+at `9f99fb43b` generated a **private 24-item review packet** from the
+unchanged selected TRAIN candidate and pinned parent source-screen receipt.
+It samples eight premise groups, allocated 3/3/2 across the source rounds,
+and three distinct source relations per group. The original sampled groups
+contain 4–12 rows; the packet covers three claims per group and is **not** a
+complete review of those groups or of the candidate source. The relation
+balanced review selection occurred after the aggregate source audit; it is a
+rubric diagnostic, not the predeclared training selector or an independent
+evaluation set. The reviewer sees native Score inputs but not source labels,
+mapped answers or reasons. The answer key and review inputs are separate
+private files. Packet SHA-256:
+`ffe307e908623bfcc9a8894a71aaa19b2900f9d80543d954bbcb838038ee116a`;
+aggregate receipt SHA-256:
+`cdd4c89fa2521a25d0841e829f2ba6cce4c2af1873598193f51436282bb90fe5`.
+All 24 requests have the exact native Score input keys, and the packet
+contains eight groups with three requests each. Source-file, tokenizer and
+parent-receipt hashes matched the frozen audit. The packet was generated on
+an authorized private CPU environment with **0 GPU-hours**. Independent
+semantic review has not yet returned, so admitted training rows remain **0**.
+
 ## Single conditional causal experiment
 
 If a later version independently clears every gate, the narrowest useful
