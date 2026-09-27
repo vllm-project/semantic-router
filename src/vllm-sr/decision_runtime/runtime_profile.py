@@ -50,7 +50,7 @@ class UnsupportedRuntimeBackendError(RuntimeProfileError):
 
 @dataclass(frozen=True, slots=True)
 class ArtifactManifestIdentity:
-    """Observed manifest identity from one selected immutable snapshot."""
+    """Observed descriptor identity from one selected immutable snapshot."""
 
     path: str
     sha256: str
@@ -59,14 +59,16 @@ class ArtifactManifestIdentity:
 
 @dataclass(frozen=True, slots=True)
 class ArtifactSelection:
-    """Manifest location for one model-family layout.
+    """Repository descriptor locations for one model-family layout.
 
     ``files`` is an explicit selection seam for alternate in-memory test
-    layouts. Packaged profiles select files from the snapshot manifest instead.
+    layouts. Packaged profiles prefer the root config at a pinned revision and
+    retain the manifest only for older published commits.
     """
 
-    manifest_path: str
+    manifest_path: str | None = None
     files: tuple[str, ...] = ()
+    config_path: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,14 +215,16 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
     required = {
         "schema_version",
         "family",
-        "artifact",
         "max_input_tokens",
         "dtype",
         "physical_batch_size",
         "calibration",
         "prompt_policy",
     }
-    if set(root) not in (required, required | {"execution"}):
+    if not required <= set(root) or not set(root) <= required | {
+        "artifact",
+        "execution",
+    }:
         raise RuntimeProfileError("profile fields do not match the runtime contract")
     if (
         type(root["schema_version"]) is not int
@@ -232,7 +236,11 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
     if not isinstance(family, str) or family_registration(family) is None:
         raise RuntimeProfileError("profile.family is unsupported")
 
-    artifact = _parse_artifact(root["artifact"])
+    artifact = (
+        _parse_artifact(root["artifact"])
+        if "artifact" in root
+        else ArtifactSelection(config_path="config.json")
+    )
     max_input_tokens = _positive_int(root["max_input_tokens"], "max_input_tokens")
     physical_batch_size = _positive_int(
         root["physical_batch_size"], "physical_batch_size"
@@ -266,11 +274,21 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
 
 def _parse_artifact(value: object) -> ArtifactSelection:
     artifact = _mapping(value, "artifact")
-    _exact_keys(artifact, {"manifest_path"}, "artifact")
+    if set(artifact) not in ({"manifest_path"}, {"manifest_path", "config_path"}):
+        raise RuntimeProfileError("artifact fields do not match the runtime contract")
     manifest_path = validate_relative_artifact_path(
         artifact["manifest_path"], field="artifact.manifest_path"
     )
-    return ArtifactSelection(manifest_path=manifest_path)
+    config_path = (
+        validate_relative_artifact_path(
+            artifact["config_path"], field="artifact.config_path"
+        )
+        if "config_path" in artifact
+        else None
+    )
+    if config_path is not None and config_path != "config.json":
+        raise RuntimeProfileError("artifact.config_path must be root config.json")
+    return ArtifactSelection(manifest_path=manifest_path, config_path=config_path)
 
 
 def _parse_calibration(value: object) -> float | None:

@@ -49,6 +49,27 @@ def _inventory(names: set[str]) -> dict[str, ArtifactFile]:
     return {name: ArtifactFile(name, name, "a" * 64, 1) for name in names}
 
 
+def _legacy_model(model_id: str, *, revision: str | None = None):
+    """Keep manifest fixture tests independent of config-first profiles."""
+
+    model = resolve_decision_runtime_model(model_id, revision=revision)
+    manifest_path = (
+        "native/MANIFEST.json"
+        if model.profile.family == "vela"
+        else (
+            "MODEL_MANIFEST.json"
+            if model_id.endswith("Eos-0.8B")
+            else "bundle-manifest.json"
+        )
+    )
+    return replace(
+        model,
+        profile=replace(
+            model.profile, artifact=ArtifactSelection(manifest_path=manifest_path)
+        ),
+    )
+
+
 @pytest.mark.parametrize(
     "failure", [OSError("secret-bearing URL"), ValueError("bad id")]
 )
@@ -213,9 +234,7 @@ def test_artifact_receipt_binds_repository_and_revision(tmp_path: Path) -> None:
 
 
 def test_qwen_file_selection_accepts_new_weight_shards_without_repo_code() -> None:
-    model = resolve_decision_runtime_model(
-        "llm-semantic-router/Decision-1.0-Sol-2B", revision="c" * 40
-    )
+    model = _legacy_model("llm-semantic-router/Decision-1.0-Sol-2B", revision="c" * 40)
     names = {
         "backbone/config.json",
         "backbone/model.safetensors.index.json",
@@ -243,7 +262,7 @@ def test_qwen_file_selection_accepts_new_weight_shards_without_repo_code() -> No
 
 
 def test_vela_file_selection_preserves_required_optional_and_sorted_order() -> None:
-    model = resolve_decision_runtime_model(MODEL_ID)
+    model = _legacy_model(MODEL_ID)
     selected_names = {*VELA_REQUIRED_FILES, "tokenizer/special_tokens_map.json"}
     inventory = _inventory(selected_names | {"code/untrusted.py"})
 
@@ -269,7 +288,7 @@ def test_vela_file_selection_preserves_required_optional_and_sorted_order() -> N
 def test_qwen_manifest_layouts_preserve_selection_and_inert_guard(
     model_id: str, guard_allowed: bool
 ) -> None:
-    model = resolve_decision_runtime_model(model_id)
+    model = _legacy_model(model_id)
     selected_names = {
         "backbone/config.json",
         "backbone/model.safetensors",
@@ -298,7 +317,7 @@ def test_qwen_manifest_layouts_preserve_selection_and_inert_guard(
 
 
 def test_known_manifest_layout_rejects_wrong_or_unknown_family() -> None:
-    model = resolve_decision_runtime_model(MODEL_ID)
+    model = _legacy_model(MODEL_ID)
     wrong_layout = replace(
         model,
         profile=replace(
@@ -317,7 +336,7 @@ def test_known_manifest_layout_rejects_wrong_or_unknown_family() -> None:
 
 
 def test_unknown_manifest_layout_needs_explicit_file_selection() -> None:
-    model = resolve_decision_runtime_model(MODEL_ID)
+    model = _legacy_model(MODEL_ID)
     unknown_layout = replace(
         model,
         profile=replace(
@@ -332,7 +351,7 @@ def test_unknown_manifest_layout_needs_explicit_file_selection() -> None:
 def test_eos_new_revision_materializes_three_shards_from_its_own_manifest(
     tmp_path: Path,
 ) -> None:
-    model = resolve_decision_runtime_model(
+    model = _legacy_model(
         "llm-semantic-router/Decision-1.0-Eos-0.8B", revision="c" * 40
     )
     names = (
@@ -480,7 +499,7 @@ def test_missing_selected_file_and_repository_code_are_rejected(tmp_path: Path) 
 
 
 def test_only_pinned_qwen_guard_python_is_selected_as_inert_data() -> None:
-    sol = resolve_decision_runtime_model("llm-semantic-router/Decision-1.0-Sol-2B")
+    sol = _legacy_model("llm-semantic-router/Decision-1.0-Sol-2B")
     guard = "code/profile_guard.py"
     selected = replace(
         sol,
@@ -545,7 +564,7 @@ def test_new_commit_with_valid_self_manifest_needs_no_packaged_profile(
     tmp_path: Path,
 ) -> None:
     revision = "c" * 40
-    model = resolve_decision_runtime_model(MODEL_ID, revision=revision)
+    model = _legacy_model(MODEL_ID, revision=revision)
     assert model.template_id == "Decision-1.0-Kai-0.6B"
     payloads = {name: f"snapshot:{name}".encode() for name in VELA_REQUIRED_FILES}
     manifest_payload = json.dumps(

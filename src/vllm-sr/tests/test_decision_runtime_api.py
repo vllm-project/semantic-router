@@ -12,7 +12,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from decision_fake_backend import FakeDecisionBackend  # noqa: E402
-from decision_runtime.api import ARTIFACT_RESPONSE_HEADERS, create_app  # noqa: E402
+from decision_runtime.api import (  # noqa: E402
+    ARTIFACT_RESPONSE_HEADERS,
+    CONFIG_ARTIFACT_RESPONSE_HEADERS,
+    create_app,
+)
 from decision_runtime.backend import (  # noqa: E402
     BackendInputTooLargeError,
     BackendOverloadedError,
@@ -441,6 +445,7 @@ def test_artifact_header_source_requires_one_matching_complete_identity():
     for invalid in (
         dict(valid, model="another-model"),
         dict(valid, revision="main"),
+        dict(valid, config_sha256="d" * 64),
         {key: value for key, value in valid.items() if key != "content_sha256"},
     ):
         with pytest.raises(ValueError, match="artifact provenance"):
@@ -453,6 +458,32 @@ def test_artifact_header_source_requires_one_matching_complete_identity():
                 DecisionEngine(FakeDecisionBackend([unsafe_model])),
                 artifact_provenance=dict(valid, model=unsafe_model.name),
             )
+
+
+def test_root_config_provenance_uses_its_own_header_and_status_key():
+    provenance = {
+        "model": MODEL.name,
+        "revision": "a" * 40,
+        "config_sha256": "b" * 64,
+        "content_sha256": "c" * 64,
+    }
+    app = create_app(
+        DecisionEngine(FakeDecisionBackend([MODEL])),
+        artifact_provenance=provenance,
+    )
+
+    async def scenario():
+        async with _client(app) as client:
+            assert (await client.get("/api/status")).json()["artifact"] == provenance
+            response = await client.post("/v1/systemone", json=payload())
+            assert response.status_code == 200
+            assert {
+                key: response.headers[header]
+                for key, header in CONFIG_ARTIFACT_RESPONSE_HEADERS.items()
+            } == provenance
+            assert ARTIFACT_RESPONSE_HEADERS["manifest_sha256"] not in response.headers
+
+    asyncio.run(scenario())
 
 
 def test_openapi_preserves_strict_single_state_schema():

@@ -44,6 +44,12 @@ ARTIFACT_RESPONSE_HEADERS = {
     "manifest_sha256": "X-Decision-Artifact-Manifest-Sha256",
     "content_sha256": "X-Decision-Artifact-Content-Sha256",
 }
+CONFIG_ARTIFACT_RESPONSE_HEADERS = {
+    "model": "X-Decision-Artifact-Model",
+    "revision": "X-Decision-Artifact-Revision",
+    "config_sha256": "X-Decision-Artifact-Config-Sha256",
+    "content_sha256": "X-Decision-Artifact-Content-Sha256",
+}
 MAX_ARTIFACT_MODEL_ID_LENGTH = 128
 ARTIFACT_MODEL_ASCII_MIN = 33
 ARTIFACT_MODEL_ASCII_MAX = 126
@@ -84,9 +90,14 @@ def create_app(
     attested_artifact = (
         dict(artifact_provenance) if artifact_provenance is not None else None
     )
+    artifact_headers = (
+        CONFIG_ARTIFACT_RESPONSE_HEADERS
+        if attested_artifact is not None and "config_sha256" in attested_artifact
+        else ARTIFACT_RESPONSE_HEADERS
+    )
     if attested_artifact is not None and (
         len(model_names) != 1
-        or set(attested_artifact) != set(ARTIFACT_RESPONSE_HEADERS)
+        or set(attested_artifact) != set(artifact_headers)
         or attested_artifact["model"] != model_names[0]
         or not isinstance(attested_artifact["model"], str)
         or not 1 <= len(attested_artifact["model"]) <= MAX_ARTIFACT_MODEL_ID_LENGTH
@@ -104,7 +115,14 @@ def create_app(
             )
             for key, length in (
                 ("revision", 40),
-                ("manifest_sha256", 64),
+                (
+                    (
+                        "config_sha256"
+                        if artifact_headers is CONFIG_ARTIFACT_RESPONSE_HEADERS
+                        else "manifest_sha256"
+                    ),
+                    64,
+                ),
                 ("content_sha256", 64),
             )
         )
@@ -186,7 +204,7 @@ def create_app(
             if attested_artifact is not None:
                 # These internal transport headers bind this successful result
                 # to the resident artifact without changing the public JSON.
-                for field, header in ARTIFACT_RESPONSE_HEADERS.items():
+                for field, header in artifact_headers.items():
                     http_response.headers[header] = attested_artifact[field]
             outcome = "success"
             return response

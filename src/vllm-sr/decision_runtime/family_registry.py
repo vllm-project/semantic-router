@@ -23,6 +23,8 @@ class FamilyRegistration:
     catalog_family: str
     profile_directory: str
     manifest_paths: frozenset[str]
+    legacy_manifest_preference: tuple[str, ...]
+    config_runtime_family: str
     adapter_module: str
     image_environment: str
     rocm_target: str | None
@@ -39,6 +41,8 @@ _FAMILIES = (
         "decision-encoder",
         "vela",
         frozenset({"native/MANIFEST.json"}),
+        ("native/MANIFEST.json",),
+        "vela-encoder",
         "decision_runtime.families.vela",
         "vela",
         "gfx942",
@@ -49,6 +53,8 @@ _FAMILIES = (
         "decision-qwen3.5",
         "qwen35",
         frozenset({"MODEL_MANIFEST.json", "bundle-manifest.json"}),
+        ("MODEL_MANIFEST.json", "bundle-manifest.json"),
+        "qwen3.5-decision",
         "decision_runtime.families.qwen35",
         "qwen35",
         "gfx942",
@@ -66,6 +72,12 @@ if (
     or any(not item.manifest_paths for item in _FAMILIES)
     or len({path for item in _FAMILIES for path in item.manifest_paths})
     != sum(len(item.manifest_paths) for item in _FAMILIES)
+    or len({item.config_runtime_family for item in _FAMILIES}) != len(_FAMILIES)
+    or any(
+        set(item.legacy_manifest_preference) != item.manifest_paths
+        or len(item.legacy_manifest_preference) != len(item.manifest_paths)
+        for item in _FAMILIES
+    )
     or any(
         _IMAGE_ENV_NAME.fullmatch(item.image_environment) is None for item in _FAMILIES
     )

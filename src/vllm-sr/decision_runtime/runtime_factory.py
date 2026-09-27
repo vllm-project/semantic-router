@@ -104,20 +104,28 @@ def assemble_runtime(
         max_queue=config.max_queue,
         max_active_rows=backend.max_pending_rows,
     )
-    manifest = getattr(artifact, "manifest", None)
-    provenance = (
-        {
-            "model": model.catalog.model_id,
-            "revision": artifact.revision,
-            "manifest_sha256": manifest.sha256,
-            "content_sha256": artifact.content_id,
-        }
-        if manifest is not None
-        else None
-    )
     return AssembledRuntime(
-        backend=backend, scheduler=scheduler, artifact_provenance=provenance
+        backend=backend,
+        scheduler=scheduler,
+        artifact_provenance=_artifact_provenance(model, artifact),
     )
+
+
+def _artifact_provenance(
+    model: ResolvedRuntimeModel, artifact: VerifiedArtifact
+) -> dict[str, str] | None:
+    config = getattr(artifact, "config", None)
+    descriptor = config or getattr(artifact, "manifest", None)
+    if descriptor is None:
+        return None
+    return {
+        "model": model.catalog.model_id,
+        "revision": artifact.revision,
+        "config_sha256" if config is not None else "manifest_sha256": (
+            descriptor.sha256
+        ),
+        "content_sha256": artifact.content_id,
+    }
 
 
 def _validate_config(config: RuntimeLaunchConfig) -> None:
