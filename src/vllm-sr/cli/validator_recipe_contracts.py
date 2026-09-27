@@ -217,10 +217,7 @@ def _validate_entrypoints(
                 ValidationError(
                     f"Entrypoint references unknown recipe '{entrypoint.recipe}'",
                     field=f"entrypoints.{index}.recipe",
-                    hint=(
-                        "Change this to the name of a recipe defined under "
-                        "recipes."
-                    ),
+                    hint=("Change this to the name of a recipe defined under recipes."),
                 )
             )
         for model_name in entrypoint.model_names:

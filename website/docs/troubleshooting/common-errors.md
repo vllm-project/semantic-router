@@ -38,9 +38,22 @@ vllm-sr validate --config config.yaml
 Follow the field path in the validation error. Do not add missing fields to a
 random nested block; canonical fields are location-sensitive.
 
+### `failed to read config file`
+
+The process cannot open the path it received. Check:
+
+- whether `--config` is relative to the current working directory;
+- whether the same path exists inside the Router container;
+- the file and parent-directory permissions; and
+- whether a managed Recipe generated its runtime config in a different
+  workspace.
+
+Use `vllm-sr status` to identify the active workspace before inspecting
+container mounts.
+
 ## Entrypoint / Recipe Validation
 
-`vllm-sr validate` includes a repair hint for common multi-recipe wiring errors.
+`vllm-sr config validate` (or `vllm-sr validate`) includes a repair hint for common multi-recipe wiring errors.
 
 ### Unknown recipe
 
@@ -115,19 +128,6 @@ entrypoints:
 See the
 [entrypoints and recipes tutorial](../tutorials/global/entrypoints-and-recipes.md)
 and [recipes tutorial](../tutorials/global/recipes.md) for complete examples.
-
-### `failed to read config file`
-
-The process cannot open the path it received. Check:
-
-- whether `--config` is relative to the current working directory;
-- whether the same path exists inside the Router container;
-- the file and parent-directory permissions; and
-- whether a managed Recipe generated its runtime config in a different
-  workspace.
-
-Use `vllm-sr status` to identify the active workspace before inspecting
-container mounts.
 
 ## Response cache cannot start
 

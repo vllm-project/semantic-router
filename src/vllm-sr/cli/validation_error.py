@@ -4,9 +4,7 @@
 class ValidationError:
     """Validation error."""
 
-    def __init__(
-        self, message: str, field: str | None = None, hint: str | None = None
-    ):
+    def __init__(self, message: str, field: str | None = None, hint: str | None = None):
         self.message = message
         self.field = field
         self.hint = hint
