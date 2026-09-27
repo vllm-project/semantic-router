@@ -36,9 +36,9 @@ class BlindReviewPacketTests(unittest.TestCase):
     def test_group_complete_native_inputs_and_separate_answer_key(self) -> None:
         rows = source_rows()
         packet, key, counts = build_packet(rows, rows, set())
-        self.assertEqual(len(packet["groups"]), 9)
-        self.assertEqual(sum(counts[f"r{n}_rows"] for n in (1, 2, 3)), 27)
-        self.assertEqual(len(key["answers"]), 27)
+        self.assertEqual(len(packet["groups"]), 8)
+        self.assertEqual(sum(counts[f"r{n}_rows"] for n in (1, 2, 3)), 24)
+        self.assertEqual(len(key["answers"]), 24)
         self.assertNotIn("mapped_native_score", json.dumps(packet))
         self.assertNotIn('"label"', json.dumps(packet))
         self.assertNotIn('"reason"', json.dumps(packet))
@@ -48,6 +48,7 @@ class BlindReviewPacketTests(unittest.TestCase):
         )
         for group in packet["groups"]:
             self.assertEqual(len(group["items"]), 3)
+            self.assertEqual(group["source_group_rows"], 3)
             for item in group["items"]:
                 self.assertEqual(
                     set(item["request"]),
@@ -64,7 +65,7 @@ class BlindReviewPacketTests(unittest.TestCase):
         rows = source_rows(4)
         group = rows[0].group
         packet, _, counts = build_packet(rows, rows, {normalize(rows[1].hypothesis)})
-        self.assertEqual(sum(counts[f"r{n}_rows"] for n in (1, 2, 3)), 27)
+        self.assertEqual(sum(counts[f"r{n}_rows"] for n in (1, 2, 3)), 24)
         self.assertFalse(
             any(
                 group == normalize(item["request"]["state"]["evidence"])
@@ -89,6 +90,25 @@ class BlindReviewPacketTests(unittest.TestCase):
         rows = source_rows(2)
         with self.assertRaisesRegex(ValueError, "Insufficient"):
             build_packet(rows, rows, set())
+
+    def test_larger_source_group_is_sampled_three_ways(self) -> None:
+        rows = source_rows()
+        extra = TrainRow(
+            1,
+            99,
+            rows[0].premise,
+            "A distinct extra claim with an entailment relation.",
+            0,
+            False,
+        )
+        packet, key, _ = build_packet(rows + [extra], rows + [extra], set())
+        self.assertEqual(len(key["answers"]), 24)
+        self.assertEqual({len(group["items"]) for group in packet["groups"]}, {3})
+        self.assertEqual(
+            {answer["mapped_native_score"] for answer in key["answers"]},
+            {0, 1, 2},
+        )
+        self.assertIn(4, {group["source_group_rows"] for group in packet["groups"]})
 
 
 if __name__ == "__main__":
