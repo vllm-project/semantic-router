@@ -62,26 +62,34 @@ appears with its article and with that article withheld; its source answer is
 in a separately permission-restricted key. Blind packet and key SHA-256 are
 `5a7053d6d3b7c81c19f9a4d955744b9fa5876edb38df72badd35144792c3bfe5`
 and `50e53c890ac08ab015556aafb2527378c8753329197f02531eeefe54d0cdc8a6`.
-The aggregate private receipt SHA-256 is
+The aggregate private packet receipt SHA-256 is
 `386a570f2129142dba82dca6c8e270b97f2ddef042cd169eb2c47f418c20dee6`.
 The private files have mode `0600` under a `0700` directory. No source text,
 key, prompt, private path or row identifier appears in this note.
 
-## Next bounded decision
+## Independent answer-blind review and decision
 
-1. Have a reviewer who has **not seen the separate key** judge whether each
-   article-present prompt has a uniquely supported answer and whether the
-   article-removed counterpart lacks it. Treat unclear items as failures.
-   An initial triage gate of at least 18/24 genuinely passage-dependent,
-   unambiguous pairs was fixed before review. The packet has not been reviewed.
-2. If the triage fails, stop this source. If it passes, first resolve passage
-   provenance and noncommercial/derived-use obligations, then extend the
-   input-only overlap screen to the proposed complete article-group schedule
-   and inspect source split/corpus reuse. Keep any restricted passages private.
-3. Only after those gates, design a matched-token, source-disjoint Choice
-   substitution arm against the existing official-base 0.6B control. Require
-   separate Choice, Noul, Score, migration and calibration reporting; do not
-   attribute a future total-score gain to this CPU source screen.
+An independent reviewer locked an article-removed rubric before opening the
+article-present questions. The reviewer had no access to the separate answer
+key, model outputs or benchmark gold. Under the predeclared conservative gate,
+only **6/24** pairs were passage-dependent, unambiguous and readable; **18/24**
+failed. The initial gate required at least **18/24**. In the reviewed sample,
+19 article-present cases had clear supporting evidence, four had partial
+evidence and one had insufficient evidence; removing the article left ten
+answerable from common knowledge or option cues and five more with possible
+shortcuts. Four pairs had severe multiple-answer ambiguity, two moderate
+ambiguity and one obvious text corruption. These categories overlap. The
+private per-item review, preregistered removed-article rubric and public-safe
+summary have SHA-256 values `aa908dc9850c24489d66252b4593cf9bde003cb05bef3e8bee99a48ed4fb8797`,
+`386a4a004e699d6df34ef5644c627000985d8d4250dae2ccf5328d1bee0b0949`
+and `802f13f05b6f795b05aa1510b708ea86166f99203352d80242c8dd53a893d0c9`.
+The reviewer did not inspect the answer key even after recording the verdict.
+
+**Stop whole-source admission.** At most, a new prospectively specified
+item-level filter could retain individually supported, unambiguous questions,
+followed by a larger independent quality sample, rights check and complete
+source/semantic overlap audit before any matched-token training arm. This
+review does not establish performance, and it cannot repair Noul or Score.
 
 Reproduction is `training/data/audit_race06_choice_source.py` with its
 synthetic tests. It refuses changed archive, tokenizer, native renderer or
