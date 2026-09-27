@@ -80,7 +80,21 @@ def render(card: ProductCard) -> str:
     tagline = _text(card.tagline, "tagline")
     method = _text(card.method, "method")
     evaluation_scope = _text(card.evaluation_scope, "evaluation scope")
-    uses = _bullets(card.use_cases, "use case")
+    if len(card.use_cases) != 3:
+        raise ValueError("Choice, Noul and Score each need one use case")
+    uses = "\n".join(
+        f"| {kind} | {_text(purpose, 'use case')} | {result} |"
+        for kind, purpose, result in zip(
+            ("Choice", "Noul", "Score"),
+            card.use_cases,
+            (
+                "Selected option and probabilities",
+                "Probability of yes",
+                "Expected level and probabilities",
+            ),
+            strict=True,
+        )
+    )
     limits = _bullets(card.limitations, "limitation")
     teacher = (
         "Teacher-assisted training was used; teacher identities and data terms "
@@ -110,13 +124,34 @@ tags:
 
 {tagline}
 
-## Where it helps
+## Decisions it makes
 
+Supply a state, questions and your own criteria. Each answer is a probability-based
+decision over the supplied evidence.
+
+| Question | Use | Output |
+| --- | --- | --- |
 {uses}
 
-## Try Choice, Noul and Score
+## Results
 
-Download the model and run its included native decision runtime on a BF16-capable GPU:
+The models below were rerun on the same JevArena v3 panel of **8,147 original
+items** and, separately, the **231 public JevBench v1.2 questions**. Public
+JevBench results are not a closed-set official ranking.
+
+{table}
+
+{chart_lines}
+
+{evaluation_scope}
+
+Ranks cover only the displayed models. See the [evaluation methods and
+hashes](evaluation/EVALUATION.md) and [public manifest](evaluation/manifest.json)
+for the panel and scoring details.
+
+## Use with System One
+
+Download the model and run the included native decision runtime on a BF16-capable GPU:
 
 ```bash
 hf download {card.model_id} --local-dir {name}
@@ -152,31 +187,10 @@ result = model.system_one(
 print(result["answers"])
 ```
 
-Choice returns a selected candidate and probabilities. Noul returns a probability
-for a yes/no proposition. Score returns an expected ordered level and its
-distribution. Answers are conditional on the supplied state and criteria; the
-model does not retrieve missing evidence.
+The runtime evaluates the supplied state and questions directly. It does not
+retrieve missing evidence or provide a chat interface.
 
-## Measured results
-
-The table compares models evaluated with the same JevArena v3 protocol and a
-separate rerun of the **JevBench v1.2 public 231-question panel**. Its raw
-accuracy is not the upstream multi-axis score or closed benchmark. JevArena
-uses 8,147 original items; its
-headline combines typed decision accuracy and the median of 15 human-labeled
-transfer tasks. Invalid and missing answers count as failures.
-
-{evaluation_scope}
-
-{table}
-
-{chart_lines}
-
-Ranks apply only to the displayed same-panel roster. See
-[evaluation methods and hashes](evaluation/EVALUATION.md) and the
-[public manifest](evaluation/manifest.json) for panel versions and scope.
-
-## How it was made
+## Model details
 
 {method}
 

@@ -251,10 +251,10 @@ def build(
             "No third-party decision model supplied the starting weights."
         ),
         limitations=(
-            "On this panel, Choice was 109/800 versus Kai's 277/800, and Score was 80/400 versus 98/400; do not treat the higher aggregate as uniform improvement.",
-            "Fifteen long human-transfer inputs exceeded the 8,192-token budget and counted as failures.",
-            "The v3 point estimate is 2.582 points above Kai, but its paired 95% interval is [-2.032, +7.846]; this does not establish a statistically certain improvement.",
-            "The test panel had been inspected earlier; independent confirmation is pending. Recheck important decisions against source evidence.",
+            "Choice (109/800 vs Kai's 277/800) and Score (80/400 vs 98/400) regressed on this panel; the aggregate gain is not uniform.",
+            "Fifteen transfer inputs exceeded the 8,192-token limit and counted as failures.",
+            "The +2.582 v3 margin has paired 95% interval [-2.032, +7.846]. This is a post-key comparison, and independent confirmation is pending.",
+            "Verify important decisions against source evidence.",
         ),
         evidence_table="\n".join(table),
         evaluation_scope=(

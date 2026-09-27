@@ -7,7 +7,7 @@ from publication.product_card import ProductCard, render
 
 TABLE = """# Decision 2.0: JevArena v3 first-release panel
 
-JevArena v3 scores 8,147 items. JevBench public is separate.
+JevArena v3 scores 8,147 items. JevBench v1.2 public is separate.
 
 | JevArena rank | Model | Actual parameters | JevArena v3 |
 | ---: | --- | ---: | ---: |
@@ -36,10 +36,14 @@ def specimen(**changes: object) -> ProductCard:
 class ProductCardTest(unittest.TestCase):
     def test_product_first_and_three_type_example(self) -> None:
         card = render(specimen())
+        self.assertLess(card.index("## Decisions it makes"), card.index("## Results"))
+        self.assertLess(card.index("## Results"), card.index("## Use with System One"))
         self.assertLess(
-            card.index("## Where it helps"), card.index("## Measured results")
+            card.index("## Use with System One"), card.index("## Model details")
         )
-        self.assertLess(card.index("## Try Choice"), card.index("## Measured results"))
+        self.assertIn("| Choice | Route requests |", card)
+        self.assertIn("| Noul | Check evidence |", card)
+        self.assertIn("| Score | Apply ordered rubrics |", card)
         self.assertIn("base_model: Qwen/Qwen3.8-27B", card)
         self.assertIn("25,688,227,840 parameters", card)
         example = card.split("```python\n", 1)[1].split("\n```", 1)[0]
@@ -59,6 +63,10 @@ class ProductCardTest(unittest.TestCase):
     def test_no_unscored_table(self) -> None:
         with self.assertRaisesRegex(ValueError, "scored v3"):
             render(specimen(evidence_table="Development result only"))
+
+    def test_requires_three_decision_use_cases(self) -> None:
+        with self.assertRaisesRegex(ValueError, "each need one use case"):
+            render(specimen(use_cases=("Only one",)))
 
 
 if __name__ == "__main__":
