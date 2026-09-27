@@ -3,6 +3,10 @@ name: Python Package Publisher
 on:
   workflow_call:
     inputs:
+      build-only:
+        description: Build the distribution for a later gated publisher in this run.
+        type: boolean
+        default: false
       prebuilt-dist:
         description: Promote the exact distribution qualified by package-check.yml.
         type: boolean
@@ -195,7 +199,7 @@ jobs:
 
   testpypi:
     name: Publish to TestPyPI
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.build-only
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -215,7 +219,9 @@ jobs:
   pypi:
     name: Publish to PyPI
     if: >-
-      !cancelled() && !failure()
+      always() && !cancelled() && !failure()
+      && !inputs.build-only
+      && (inputs.prebuilt-dist || needs.build.result == 'success')
       && github.repository == 'vllm-project/semantic-router'
       && github.event_name == 'push'
       && ((inputs.channel == 'dev' && github.ref == 'refs/heads/main')
