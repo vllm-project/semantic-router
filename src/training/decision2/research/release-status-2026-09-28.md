@@ -15,7 +15,7 @@ comparisons, not newly blinded tests. All model repositories remain private.
 | 2B | Own Sol1 continuation: same-panel v3 **43.960** vs Sol1 **45.580** and Decider2B **49.499**; public231 **162** vs **161** and **175**. Official Qwen3.5 Base/Posttrained arms failed development promotion. A proposed Sol soft replay stopped at its frozen BF16 zero-step probability-parity gate before any optimizer update. Evidence Inference 2.0 TRAIN provides a possible human-labeled three-class source, but its middle class is not a proven ordinal effect magnitude and no new row is admitted. | HOLD. | Resolve the proposed source rubric, article rights and source-disjoint overlap before a matched-token official-Posttrained arm; retain the parity failure and formal result as recorded. |
 | 4B | Official Qwen3.5-4B-Base: same-panel v3 **53.218** vs own Nox1 **56.470** and Decider4B **61.882**; public231 **171** vs **173** and **192**. Own Nox continuation's SELECT gain did not survive typed DEV. Independent ConTRoL blind reviews agreed on **27/30** relations; each matched source labels on **21–22/30**, corroborating three likely label errors and leaving one further conflict for adjudication. | HOLD. A third-party-initialized private research package is ineligible for the formal lineage. | Resolve the disputed source labels, embedded-passage rights and unscanned long-input overlap before any source admission. A matched arm must separately retain Score. No GPU training yet. |
 | 9B | Official Qwen3.5-9B Posttrained shared-head development proxy **61.255** vs Lux1 historical DEV **70.326**; three-level Score **174/400**. A matched 90-parameter Score-cardinality residual arm completed 458 updates and selected BEST448 on SELECT **644/700**, but its single sealed DEV/CSS pilot readout was typed **T .808125**, Score **237/400**, human-transfer **H .501403**, proxy **63.655**. This improves the shared-head control's T .683125/Score174/proxy61.255, yet CSS H falls from .54927 and the predeclared Score≥245 and proxy≥65 promotion gates both fail. The new arm used **0.941439 GPU-hour** including technical probes and readout. Current Lux1 package passed a separate gold-free cross-process repeatability gate; an older different-bundle example remains invalid for current-package parity. | HOLD; no qualified formal 2.0 score, public231 run, or new 9B package. | Check own-Lux soft-distribution coverage, source overlap and zero-step parity as a separate preflight before any retention arm; the Score-cardinality result does not authorize one. A future promising candidate also needs a current-package Lux1 same-panel comparator. |
-| ~27B | Official Qwen3.8-27B selected development proxy **68.53** vs native AutoJev27 peer **79.15**; Score **162/400**. Official Gemma4-26B-A4B arm did not pass SELECT. An independent Score-source CPU gate admitted **0/160** sampled TRAIN/SELECT items. The fixed **2,560-row/160-step** teacher contrast stopped at CPU admission twice: exact whole-group source/type quotas were infeasible. A later gold-free CPU envelope found **7,324/7,455** context-admissible rows and a prospective pooled source-quota alternative with minimal L1 shift **2**, but **1,400 groups span types** and teacher mask, rights and protected overlap remain unverified. A new pinned input-only inventory now projects all eight core roles, including TRAIN/SELECT/CAL, with **20,263** role records; 27 optional roles remain excluded. A distinct pooled-quota schedule is now materialized with 2,560 rows/507 Score and a two-row L1 shift, but 600 cross-type groups are partially selected; no teacher-mask, rights or actual full-input overlap admission has passed. GPU use for this addition is zero. | HOLD; no qualified formal 27B score. | Audit the materialized pooled-quota schedule for cross-type group treatment, complete-input overlap, teacher-mask thresholds, source rights and semantics before any GPU run. Preserve both strict-quota failures; no formal panel yet. |
+| ~27B | Official Qwen3.8-27B selected development proxy **68.53** and Score **162/400**; no qualified 2.0 formal score. Separately, a pinned native AutoJev27 external peer measured same-panel v3 **72.310** and public231 **200**, establishing a stronger actual formal target than its earlier DEV proxy **79.15**. Official Gemma4-26B-A4B arm did not pass SELECT. An independent Score-source CPU gate admitted **0/160** sampled TRAIN/SELECT items. The fixed **2,560-row/160-step** teacher contrast stopped at CPU admission twice: exact whole-group source/type quotas were infeasible. A distinct pooled-quota schedule then materialized 2,560 rows/507 Score with a two-row source-quota shift. Its CPU audit passed exact teacher identity/mask (990 eligible, including 63 three-level Score), rights-ledger coverage and zero exact complete-input matches over seven protected roles, but **600/2,158** selected source groups omit cross-type rows and bounded state-evidence near review found **52 SELECT plus 89 CAL** pairs. The schedule used zero GPU-hours. | HOLD; no qualified formal 27B 2.0 score. The pooled schedule also fails its group and near-overlap admission, independently of its teacher pass. | Review near pairs and test a fresh group-atomic schedule under the same budget on CPU. Preserve both strict-quota failures and the pooled HOLD; no optimizer run from any of them. |
 
 The architecture conclusion from the [project paper review](architecture-gap-paper-2026-09-28.md)
 is narrow: 0.6B changes from Kai's bidirectional typed encoder to an official
@@ -41,13 +41,24 @@ contrast, not a causal explanation for the observed 0.6B regression. No
 replacement source currently passes its answer-blind quality gate, so the
 new 0.6B GPU arm remains HOLD.
 
+The [AutoJev27 same-panel external peer](autojev27-v3-public-peer-result-2026-09-28.md)
+is a measured comparison, not a Decision 2.0 result. It reached v3 **72.3101**
+(typed `T=.886875`, human-transfer `H=.589571`) and public231 **200/231**.
+The sealed same predictions were scored after a signed public-hash erratum;
+the result note retains the exact sequence and GPU-hours. The v3 labels had
+already been accessed earlier in this project, so this is a post-key
+same-panel result, not a new blinded test.
+
 A distinct [27B pooled-quota schedule candidate](qwen38-27b-pooled-schedule-candidate-2026-09-28.md)
 was materialized on the authorized remote CPU from pinned TRAIN and tokenizer
 bytes: 2,560 rows/160 updates, 507 Score rows and minimum source-quota L1
-shift of two rows. **Six hundred** source groups are partially selected across
-task types. No teacher-mask, complete-input overlap or rights admission has
-passed; this creates no new trained weight or model score and does not reverse
-the previous strict-quota failures. GPU-hours for the schedule screen: zero.
+shift of two rows. Its separate [CPU admission](qwen38-27b-pooled-admission-result-2026-09-28.md)
+verified teacher mask and declared rights-ledger coverage, but **600** source
+groups are incomplete across task types and 141 SELECT/CAL near-state pairs
+need review. Exact complete-input overlap was zero over seven protected
+roles. The pooled schedule is **HOLD** despite those passing checks; it creates
+no new trained weight or model score and does not reverse the previous
+strict-quota failures. GPU-hours for the schedule and admission: zero.
 
 An [ANLI open-development Score diagnostic](anli-score-dev-feasibility-2026-09-28.md)
 now passes a bounded input-only exact/near screen against the eight core
