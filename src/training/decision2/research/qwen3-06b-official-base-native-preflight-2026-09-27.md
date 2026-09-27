@@ -55,3 +55,17 @@ score.
 JevArena typed FINAL/CSS15 and the public231 comparison are not read during
 this preflight. Earlier own-Kai and Bosun v3/public231 measurements retain
 their historical meanings. Any post-key formal run is reported as such.
+
+## One-step reload comparator correction, before retry
+
+The first saved-checkpoint probe used a sorted-by-ID 32-row slice. Its batches
+paired different items and padding lengths from the trainer's complete
+SELECT700 pass, so the measured max probability drift of `0.0051023` with no
+category changes is **HOLD for that probe**, not evidence of a model-weight
+serialization error. The planned same-condition comparison must preserve the
+trainer's original SELECT order and adjacent batch-size-two pairs. Signed
+comparator code is corrected before rerun; the checkpoint, weights, source,
+data, threshold and frozen 32-row count remain unchanged. The old failed
+receipt is retained. A passing same-batch comparison would establish only
+same-condition reload parity; batch-shape sensitivity remains a separate
+diagnostic and is not hidden by this correction.

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 
@@ -19,10 +18,9 @@ def _rows(path: Path) -> dict[str, dict]:
 
 
 def audit(args: argparse.Namespace) -> dict:
-    selected = sorted(
-        load_partition(args.select, "select"),
-        key=lambda row: hashlib.sha256(row["id"].encode()).hexdigest(),
-    )[:32]
+    # Trainer's full SELECT pass uses adjacent pairs at batch_size=2. Keep
+    # those exact batch shapes when comparing its in-process output to a reload.
+    selected = load_partition(args.select, "select")[:32]
     checkpoint = args.run / "checkpoint-0000001"
     model, tokenizer = DecisionModel.from_checkpoint(checkpoint)
     if model.metadata["architecture"] != QWEN3_ARCHITECTURE:
