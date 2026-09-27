@@ -92,7 +92,7 @@ def main() -> None:
     shard_hashes = sorted(
         value
         for name, value in fingerprint["files_sha256"].items()
-        if name.startswith("model-") and name.endswith(".safetensors")
+        if name.startswith("model.safetensors-") and name.endswith(".safetensors")
     )
     if shard_hashes != sorted(SOURCE_SHARDS):
         raise ValueError("Official source weight shards differ")
