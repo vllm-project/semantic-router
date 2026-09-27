@@ -56,4 +56,38 @@ authorize resuming or repeating the failed optimizer arm.
 
 ## Outcome
 
-Pending the one frozen GPU diagnostic.
+**INDETERMINATE; no backward occurred.** The single launcher ran for two
+seconds, exited 1 before model loading and wrote no row-phase events. The
+inside-container BF16/device admission check rejected the environment because
+no accelerator was visible. The container was not OOM-killed, the host GPU
+remained idle, no tensors or weights were loaded or changed, and the task-owned
+container and reservation were removed. Private receipt SHA-256:
+`e647d6bc4b572071ff345718143ea3ff8e1bdbb882ee33c07afada1f5e09acad`;
+private launcher log SHA-256:
+`0f4e1cdbb50ec4e3f2090947ddb4f720df3b0ce3324ac2abcf57e7a3ce881704`.
+There were zero GPU-compute hours and two seconds of launcher wall time.
+
+A read-only host bus-to-render-node inspection then showed that the selected
+device node was a virtual partition rather than the physical idle accelerator.
+The exact corrected mapping is retained only in the private execution record.
+No same-protocol automatic retry was run. The faulting native backward operator
+is still unidentified; this launcher failure neither reproduces nor clears
+the original SIGSEGV. The 9B Base arm remains HOLD.
+
+## Prospective device-only amendment, signed before corrected launch
+
+The failed launcher performed no model or GPU work. A second, final technical
+launch is admitted with **only** the corrected physical GPU device mapping.
+The private mode-0600 bus-to-device receipt has SHA-256
+`710a0f0b9d4fd7036d877cf1f6e87aed8a3be12f83d58df7208ed1b0e7f6f693`.
+It matches the requested idle accelerator's physical PCI bus to its actual
+render node, unlike the virtual node mistakenly used on the first launch.
+Recheck the bus/node mapping and zero utilization immediately before launch;
+stop if either differs. The original source, step-64 weights, exact TRAIN
+schedule, controls, pinned image, probe script, no-network setting, 600-second
+cap and finite/unchanged-weight stop rules above are **unchanged**. No other
+device or automatic retry is allowed. Preserve the first failed receipt as a
+separate negative event. A corrected launch still cannot justify an optimizer
+run by itself.
+
+**Corrected-launch outcome:** pending.
