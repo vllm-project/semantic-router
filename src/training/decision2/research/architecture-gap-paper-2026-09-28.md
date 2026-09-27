@@ -21,6 +21,8 @@ On post-key JevArena v3, the private 0.6B package scores **38.520** versus Kai's
 
 The same-start, same-data 0.6B type-separated-head contrast failed its frozen SELECT gates (**553/700**, macro **0.74583** versus shared-head control **562/700**, **0.77259**). An official Qwen3-0.6B Posttrained source contrast also missed them (**548/700**, **0.75065**). Adding a Score-only ranked-probability loss reached **276/700**, macro **0.38075**, while only improving its targeted Score slice from **32/90** to **38/90**. These negatives do not show that specialized heads or ordinal objectives are generally ineffective; they rule out the particular frozen implementations and budgets tested here.
 
+A previously completed same-source candidate-interaction head also missed the SELECT gate after all 466 steps: its fixed best was **333/700**, macro **0.43174**. It adds leave-self-out candidate attention to Choice and Score, starts with the shared head's exact zero-step logits, and was stopped before any transfer or formal panel. Its [frozen protocol](small06-candidate-interaction-prereg-2026-09-28.md) and [result receipt](small06-candidate-interaction-full466-result-2026-09-28.md) rule out repeating that specific run as a new architecture experiment.
+
 ## Next discriminating sequence
 
 1. Finish the prospectively frozen, source-aware external-teacher KL contrast on official Qwen3-0.6B-Base. Keep hard labels on every TRAIN row, restrict soft targets to eligible Choice/Noul rows, and promote only if both SELECT gates beat the archived hard-label control. This tests a training objective, not an architecture change.
