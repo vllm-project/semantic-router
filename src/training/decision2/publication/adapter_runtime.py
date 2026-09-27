@@ -21,6 +21,8 @@ SHA = re.compile(r"[0-9a-f]{64}\Z")
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
 HF_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 REQUIRED_PACKAGES = ("torch", "transformers", "peft", "safetensors", "huggingface_hub")
+QWEN35_ARCHITECTURE = "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp"
+QWEN3_ARCHITECTURE = "qwen3-text-endpoints-global-query-shared-bilinear-mlp"
 DTYPE_BYTES = {
     "F32": 4,
     "F16": 2,
@@ -171,9 +173,18 @@ def _tensor_counts(path: Path) -> dict[str, int]:
     return counts
 
 
-def _parameter_breakdown(root: Path, source: Path, source_kind: str) -> dict[str, int]:
+def _parameter_breakdown(
+    root: Path, source: Path, source_kind: str, architecture: str
+) -> dict[str, int]:
     base = 0
     names: set[str] = set()
+    if architecture not in {QWEN35_ARCHITECTURE, QWEN3_ARCHITECTURE}:
+        raise ValueError("Unsupported Decision 2.0 architecture")
+    if source_kind == "decision1" and architecture != QWEN35_ARCHITECTURE:
+        raise ValueError("Own Decision 1.0 source has incompatible architecture")
+    text_prefix = (
+        "model." if architecture == QWEN3_ARCHITECTURE else "model.language_model."
+    )
     weight_root = source / "backbone" if source_kind == "decision1" else source
     weights = sorted(weight_root.glob("*.safetensors"))
     if not weights or any(path.suffix == ".bin" for path in weight_root.iterdir()):
@@ -183,7 +194,7 @@ def _parameter_breakdown(root: Path, source: Path, source_kind: str) -> dict[str
             if name in names:
                 raise ValueError("Duplicate base tensor in multiple shards")
             names.add(name)
-            if source_kind == "decision1" or name.startswith("model.language_model."):
+            if source_kind == "decision1" or name.startswith(text_prefix):
                 base += count
     adapter = sum(
         _tensor_counts(root / "model/adapter/adapter_model.safetensors").values()
@@ -279,7 +290,9 @@ def verify_bundle(
         identity = checkpoint_fingerprint(root / "model", source)
         if identity.get("model_sha256") != manifest.get("model_sha256"):
             raise ValueError("PEFT checkpoint and upstream base identity disagree")
-        breakdown = _parameter_breakdown(root, source, source_kind)
+        breakdown = _parameter_breakdown(
+            root, source, source_kind, metadata.get("architecture")
+        )
         if metadata.get("text_parameter_count") != breakdown["base_text"]:
             raise ValueError(
                 "Pinned base parameter count differs from checkpoint metadata"

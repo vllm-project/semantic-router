@@ -60,6 +60,8 @@ MODEL_ADAPTER_FILES = {"adapter_config.json", "adapter_model.safetensors"}
 NONFUNCTIONAL_CHECKPOINT_FILES = {"checkpoint.json", "trainer_state.pt"}
 MODEL_ID = re.compile(r"llm-semantic-router/DEV2\.0-(?:0\.6B|0\.8B|2B|4B|9B|27B)\Z")
 SAFE_VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+!_-]*\Z")
+QWEN35_ARCHITECTURE = "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp"
+QWEN3_ARCHITECTURE = "qwen3-text-endpoints-global-query-shared-bilinear-mlp"
 
 
 def _object(path: Path) -> dict[str, Any]:
@@ -149,13 +151,20 @@ def _model_files(checkpoint: Path) -> dict[str, str]:
 def _full_parameter_count(
     source: Path, checkpoint: Path, metadata: dict[str, Any], source_kind: str
 ) -> dict[str, int]:
-    # The native loader retains ``full.model.language_model`` and discards the
-    # upstream vision/lm-head components. Count those loaded text tensors, not
-    # merely the much smaller adapter. Cross-check the training-time count.
+    # Match the exact loaded Qwen3.5 text model or Qwen3 decoder, excluding
+    # vision and language-model output heads.
     weight_root = source / "backbone" if source_kind == "decision1" else source
     weights = sorted(weight_root.glob("*.safetensors"))
     if not weights or any(path.suffix == ".bin" for path in weight_root.iterdir()):
         raise ValueError("Pinned source requires safetensors text weights")
+    architecture = metadata.get("architecture")
+    if architecture not in {QWEN35_ARCHITECTURE, QWEN3_ARCHITECTURE}:
+        raise ValueError("Unsupported Decision 2.0 architecture")
+    if source_kind == "decision1" and architecture != QWEN35_ARCHITECTURE:
+        raise ValueError("Own Decision 1.0 source has incompatible architecture")
+    text_prefix = (
+        "model." if architecture == QWEN3_ARCHITECTURE else "model.language_model."
+    )
     all_names: set[str] = set()
     base_count = 0
     for path in weights:
@@ -163,7 +172,7 @@ def _full_parameter_count(
             if name in all_names:
                 raise ValueError("Duplicate source tensor across shards")
             all_names.add(name)
-            if source_kind == "decision1" or name.startswith("model.language_model."):
+            if source_kind == "decision1" or name.startswith(text_prefix):
                 base_count += count
     expected = metadata.get("text_parameter_count")
     if type(expected) is not int or expected < 1 or base_count != expected:
@@ -267,8 +276,7 @@ def assemble(
     contract = metadata.get("lora")
     if (
         metadata.get("checkpoint_format") != LORA_FORMAT
-        or metadata.get("architecture")
-        != "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp"
+        or metadata.get("architecture") not in {QWEN35_ARCHITECTURE, QWEN3_ARCHITECTURE}
         or metadata.get("prompt_version")
         != "decision2-segmented-options-global-query-v1"
         or not isinstance(contract, dict)

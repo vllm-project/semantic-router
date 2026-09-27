@@ -208,6 +208,45 @@ class AdapterBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Upstream source files differ"):
             adapter_bundle._verify_staged_runtime(self.root / "bundle", self.source)
 
+    def test_official_qwen3_decoder_package_counts_loaded_weights(self) -> None:
+        _json(self.source / "config.json", {"model_type": "qwen3"})
+        _weights(
+            self.source / "model.safetensors",
+            {
+                "model.embed_tokens.weight": [2, 3],
+                "lm_head.weight": [1, 2],
+            },
+        )
+        metadata = json.loads((self.checkpoint / "decision_config.json").read_text())
+        metadata["architecture"] = adapter_bundle.QWEN3_ARCHITECTURE
+        metadata["backbone_model_type"] = "qwen3"
+        metadata["lora"]["source_fingerprint"] = source_fingerprint(self.source)
+        _json(self.checkpoint / "decision_config.json", metadata)
+        identity = checkpoint_fingerprint(self.checkpoint, self.source)
+        calibration = json.loads(self.calibration.read_text())
+        calibration["model_sha256"] = identity["model_sha256"]
+        _json(self.calibration, calibration)
+        scored = json.loads(self.scored.read_text())
+        scored["model_sha256"] = identity["model_sha256"]
+        scored["model_files_sha256"] = identity["files_sha256"]
+        scored["calibration"]["file_sha256"] = adapter_runtime._hash(self.calibration)
+        _json(self.scored, scored)
+
+        manifest = adapter_bundle.assemble(
+            checkpoint=self.checkpoint,
+            source=self.source,
+            calibration=self.calibration,
+            scored_manifest=self.scored,
+            dependency_lock=self.lock,
+            base_repo_id="Qwen/Qwen3-0.6B-Base",
+            base_revision="a" * 40,
+            model_id="llm-semantic-router/DEV2.0-0.6B",
+            output=self.root / "qwen3-bundle",
+        )
+        self.assertEqual(manifest["parameter_breakdown"]["base_text"], 6)
+        self.assertEqual(manifest["parameter_count"], 12)
+        adapter_bundle._verify_staged_runtime(self.root / "qwen3-bundle", self.source)
+
     def test_own_decision1_source_keeps_unmerged_adapter_and_full_count(self) -> None:
         (self.source / "model.safetensors").unlink()
         _json(self.source / "backbone/config.json", {"model_type": "qwen3_5_text"})
