@@ -68,13 +68,14 @@ class SelectorObjective:
     @property
     def objective_id(self) -> str:
         """Identity of this rule, so a trained artifact pins the objective it used."""
+        # float() so an int from YAML or the CLI hashes the same as its float.
         parts = (
             f"v{self.version}",
-            f"q{self.quality_weight!r}",
-            f"l{self.latency_weight!r}",
-            f"c{self.cost_weight!r}",
-            f"ls{self.latency_scale_ms!r}",
-            f"cs{self.cost_scale!r}",
+            f"q{float(self.quality_weight)!r}",
+            f"l{float(self.latency_weight)!r}",
+            f"c{float(self.cost_weight)!r}",
+            f"ls{float(self.latency_scale_ms)!r}",
+            f"cs{float(self.cost_scale)!r}",
         )
         return _digest(*parts)
 

@@ -144,6 +144,12 @@ def test_ties_break_on_model_ref_for_reproducibility():
     assert [name for name, _ in SelectorObjective().rank(snapshot)] == ["a", "b"]
 
 
+def test_objective_id_ignores_int_vs_float_spelling():
+    as_int = SelectorObjective(quality_weight=1, latency_weight=0, cost_scale=2)
+    as_float = SelectorObjective(quality_weight=1.0, latency_weight=0.0, cost_scale=2.0)
+    assert as_int.objective_id == as_float.objective_id
+
+
 def test_objective_id_tracks_the_weights():
     """An artifact has to pin the rule it was trained under."""
     base = SelectorObjective()
