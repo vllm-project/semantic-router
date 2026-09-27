@@ -31,3 +31,27 @@ manifests, comparator report, runtime and elapsed GPU time. On failure,
 report the mismatch and keep the candidate on runtime HOLD; do not change
 the threshold or search another runtime after seeing results. No pilot gold,
 typed FINAL, CSS evaluation labels or model selection are involved.
+
+## Completed gold-free result
+
+Both independent native processes completed all 1,430 CSS pilot prompts with
+zero invalid outputs. Their manifests agree on the frozen package, CAL,
+collector, prompt bytes and runtime, including FLA 0.5.2 and
+`torch_deterministic_algorithms=true`. The first/second prediction SHA-256s
+are `b750c2de4f19b35613c8e397aed9ad1af52c54b875b79c6b8bc38818e9ba141f`
+and `806caa5dedf644fd175c1ea7274923f85039d080c3d7f866fb45e9ec7cd3f48b`.
+The private comparator report SHA-256 is
+`6b90d434988f3db05723c404fc9e2b005e449755840101a0509b12c4218c5fa3`.
+
+The preregistered repeat gate **failed**: 11/1,430 categorical decisions
+changed, maximum option-probability drift was 0.065913, p99 drift was 0.035414,
+and 278 rows had drift above 0.02. Per-request synchronized latency summed
+to 78.68 and 79.24 seconds in the two runs, a combined 0.0439 GPU-hour
+lower bound that omits model loading and setup. The initial first launch
+failed before writing output because an overridden `PYTHONPATH` hid the pinned
+FLA installation; the corrected launch retained the same model, data and
+thresholds. Both successful prediction files and manifests are preserved.
+
+**Decision:** 4B clean-v2 stays on runtime HOLD. Same-process LoRA/package
+parity does not imply cross-process repeatability. Investigate the inference
+numeric path without opening FINAL labels or selecting a favorable repeat.
