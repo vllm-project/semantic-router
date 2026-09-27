@@ -329,6 +329,8 @@ class FirstReleasePlanTests(unittest.TestCase):
         )
         self.assertEqual(plan["plan_version"], PLAN_VERSION)
         self.assertEqual(plan["formula"], "100*sqrt(T*H)")
+        self.assertIn("publication/adapter_parity.py", plan["source_sha256"])
+        self.assertIn("publication/adapter_bundle.py", plan["source_sha256"])
         self.assertEqual(len(plan["comparison_pairs_sha256"]), 64)
         self.assertEqual(plan["comparison_pairs"][0]["comparator"], "nox")
         self.assertEqual(len(plan["inference"]), 3)
