@@ -19,7 +19,6 @@ from typing import Any
 
 from jev_arena.arena_v3 import SCORER_SOURCE_PATHS
 from jev_arena.compare_v3 import DEFAULT_REPLICATES, DEFAULT_SEED
-from jev_arena.render import pareto_svg as public_pareto_svg
 from jev_arena.render import ranking_svg as public_ranking_svg
 
 from .generate_arena import (
@@ -32,7 +31,13 @@ from .generate_arena import (
     relative,
     sha_file,
 )
-from .render_arena_v3 import axis_matrix_svg, pareto_svg, ranking_svg, task_matrix_svg
+from .render_arena_v3 import (
+    axis_matrix_svg,
+    pareto_svg,
+    public_pareto_svg,
+    ranking_svg,
+    task_matrix_svg,
+)
 
 VERSION = "decision-model-card-artifacts/5"
 FIGURES = (

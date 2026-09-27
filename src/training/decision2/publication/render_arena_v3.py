@@ -7,10 +7,11 @@ ranking, and neither authored questions nor public subsets enter the v3 axes.
 from __future__ import annotations
 
 import math
+import textwrap
 from html import escape
 from typing import Any
 
-from jev_arena.render import GRID, INK, MUTED, PAPER, WIDTH, _color, _svg, _text
+from jev_arena.render import GRID, INK, MUTED, PAPER, _color, _svg, _text
 
 
 def _rows(report: dict[str, Any]) -> list[dict[str, Any]]:
@@ -75,26 +76,79 @@ def ranking_svg(report: dict[str, Any]) -> str:
 
 
 def pareto_svg(report: dict[str, Any]) -> str:
-    rows = _rows(report)
+    return _pareto_svg(
+        _rows(report),
+        title="JevArena v3: size and sealed-core score",
+        subtitle="Actual parameters (billions, log scale) vs v3 score",
+        caveat="Filled points are Pareto-efficient only within this same-panel roster",
+        label_size=12,
+        colored_labels=False,
+    )
+
+
+def public_pareto_svg(report: dict[str, Any]) -> str:
+    """Render the v3 card's separate public panel without changing v2 figures."""
+    if report.get("schema_version") != "jevarena-jevbench-public-rank/1":
+        raise ValueError("V3 public Pareto needs the pinned public ranking")
+    rows = report.get("models")
+    if not isinstance(rows, list) or len(rows) < 2:
+        raise ValueError("V3 public Pareto needs at least two models")
+    return _pareto_svg(
+        rows,
+        title="JevBench public-only: size and score",
+        subtitle="Actual parameter count (billions, log scale) vs score · filled = Pareto frontier",
+        caveat="Independent rerun · excludes private and sealed questions · not an official JevBench rank",
+        label_size=11,
+        colored_labels=True,
+    )
+
+
+def _label_baselines(
+    rows: list[dict[str, Any]], y: Any, *, top: int, bottom: int, size: int
+) -> dict[str, float]:
+    """Space direct labels by at least one text line even for near-tied scores."""
+    gap = size + 6
+    labels: dict[str, float] = {}
+    previous = float(top + size)
+    for row in sorted(rows, key=lambda item: (y(item["score"]), item["key"])):
+        natural = y(row["score"]) - 12
+        baseline = max(natural, previous)
+        labels[row["key"]] = baseline
+        previous = baseline + gap
+    if labels:
+        excess = max(labels.values()) - (bottom - 10)
+        if excess > 0:
+            labels = {key: value - excess for key, value in labels.items()}
+        if min(labels.values()) < top + size:
+            raise ValueError("Too many Pareto labels for a legible chart")
+    return labels
+
+
+def _pareto_svg(
+    rows: list[dict[str, Any]],
+    *,
+    title: str,
+    subtitle: str,
+    caveat: str,
+    label_size: int,
+    colored_labels: bool,
+) -> str:
     if any(
         type(row.get("size_b")) not in (int, float)
         or not math.isfinite(row["size_b"])
         or row["size_b"] <= 0
+        or type(row.get("score")) not in (int, float)
+        or not math.isfinite(row["score"])
+        or not 0 <= row["score"] <= 100
         for row in rows
     ):
-        raise ValueError("V3 Pareto needs actual positive parameter counts")
-    title = "JevArena v3: size and sealed-core score"
-    caveat = "Filled points are Pareto-efficient only within this same-panel roster"
+        raise ValueError("V3 Pareto needs actual parameters and finite scores")
+    if len({row["key"] for row in rows}) != len(rows):
+        raise ValueError("V3 Pareto model keys are not unique")
     parts = _svg(670, title, caveat)
     parts += [
         _text(32, 42, title, size=24, weight=700),
-        _text(
-            32,
-            67,
-            "Actual parameters (billions, log scale) vs v3 score",
-            size=13,
-            fill=MUTED,
-        ),
+        _text(32, 67, subtitle, size=13, fill=MUTED),
     ]
     left, right, top, bottom = 105, 960, 113, 562
     log_min = math.log10(min(row["size_b"] for row in rows)) - 0.14
@@ -116,24 +170,24 @@ def pareto_svg(report: dict[str, Any]) -> str:
         parts.append(
             _text(left - 12, yy + 5, str(tick), size=12, anchor="end", fill=MUTED)
         )
+    ticks = set()
     for power in range(math.floor(log_min), math.ceil(log_max) + 1):
         for multiple in (1, 2, 5):
             tick = 10**power * multiple
             if log_min <= math.log10(tick) <= log_max:
-                xx = x(tick)
-                parts.append(
-                    f'<line x1="{xx:.1f}" y1="{top}" x2="{xx:.1f}" y2="{bottom}" stroke="{GRID}"/>'
-                )
-                parts.append(
-                    _text(
-                        xx,
-                        bottom + 21,
-                        f"{tick:g}",
-                        size=11,
-                        anchor="middle",
-                        fill=MUTED,
-                    )
-                )
+                ticks.add(tick)
+    if max(row["size_b"] for row in rows) / min(row["size_b"] for row in rows) < 1.1:
+        # Coarse log ticks otherwise show only 5B for an all-4.2B roster.
+        ticks.add(sorted(row["size_b"] for row in rows)[len(rows) // 2])
+    for tick in sorted(ticks):
+        xx = x(tick)
+        parts.append(
+            f'<line x1="{xx:.1f}" y1="{top}" x2="{xx:.1f}" y2="{bottom}" stroke="{GRID}"/>'
+        )
+        label = f"{tick:.2f}" if tick not in (1, 2, 5, 10, 20, 50, 100) else f"{tick:g}"
+        parts.append(
+            _text(xx, bottom + 21, label, size=11, anchor="middle", fill=MUTED)
+        )
     frontier = sorted(
         (row for row in rows if row.get("pareto_frontier")),
         key=lambda row: (row["size_b"], row["score"]),
@@ -145,6 +199,7 @@ def pareto_svg(report: dict[str, Any]) -> str:
         parts.append(
             f'<polyline points="{points}" fill="none" stroke="#f4b642" stroke-width="2" stroke-dasharray="6 5"/>'
         )
+    label_y = _label_baselines(rows, y, top=top, bottom=bottom, size=label_size)
     for row in sorted(rows, key=lambda value: bool(value.get("pareto_frontier"))):
         xx, yy = x(row["size_b"]), y(row["score"])
         color = _color(row["group"])
@@ -152,7 +207,32 @@ def pareto_svg(report: dict[str, Any]) -> str:
         parts.append(
             f'<circle cx="{xx:.1f}" cy="{yy:.1f}" r="8" fill="{fill}" stroke="{color}" stroke-width="2.5"/>'
         )
-        parts.append(_text(xx + 13, yy - 12, row["label"], size=12, weight=600))
+        baseline = label_y[row["key"]]
+        if abs(baseline - (yy - 12)) > 1:
+            parts.append(
+                f'<line class="label-leader" x1="{xx + 9:.1f}" y1="{yy:.1f}" '
+                f'x2="{xx + 12:.1f}" y2="{baseline - 4:.1f}" '
+                f'stroke="{color}" stroke-width="1"/>'
+            )
+        parts.append(
+            _text(
+                xx + 13,
+                baseline,
+                row["label"],
+                size=label_size,
+                weight=600 if not colored_labels else 400,
+                fill=color if colored_labels else INK,
+            )
+        )
+    parts.append(
+        _text(
+            (left + right) / 2,
+            bottom + 53,
+            "Model size (B parameters)",
+            size=13,
+            anchor="middle",
+        )
+    )
     parts += [_text(32, 643, caveat, size=11, fill=MUTED), "</svg>"]
     return "\n".join(parts) + "\n"
 
@@ -218,9 +298,11 @@ def task_matrix_svg(report: dict[str, Any]) -> str:
     columns = [("typed", kind, f"Typed / {kind.title()}") for kind in typed] + [
         ("transfer", task, f"Transfer / {task.replace('_', ' ')}") for task in transfer
     ]
-    x0, pitch, cell_width = 275, 88, 81
-    width = max(WIDTH, x0 + pitch * len(columns) + 35)
-    height = 262 + 45 * len(rows)
+    # Six columns per band keep the same 18 cells legible when HF fits the SVG
+    # to a model-card width. One 18-column strip shrinks 12px values to ~5px.
+    x0, pitch, cell_width = 260, 110, 100
+    width, band_height = 950, 85 + 45 * len(rows)
+    height = 130 + 3 * band_height
     caveat = (
         "Typed: accuracy; transfer: macro-F1 with invalid answers counted as failure"
     )
@@ -228,41 +310,72 @@ def task_matrix_svg(report: dict[str, Any]) -> str:
     parts += [
         _text(32, 42, "JevArena v3: model by task", size=24, weight=700),
         _text(
-            32, 67, "Three typed tasks and 15 human transfer tasks", size=13, fill=MUTED
+            32,
+            67,
+            "Three typed tasks and 15 human transfer tasks · three panels",
+            size=13,
+            fill=MUTED,
         ),
     ]
-    for index, (_, _, label) in enumerate(columns):
-        xx = x0 + index * pitch + cell_width / 2
-        parts.append(
-            f'<text x="{xx:.1f}" y="194" transform="rotate(-55 {xx:.1f} 194)" fill="{INK}" font-family="system-ui, sans-serif" font-size="11" font-weight="600">{escape(label)}</text>'
-        )
-    for index, row in enumerate(rows):
-        yy = 207 + index * 45
-        parts.append(
-            _text(32, yy + 19, f"{row['rank']}. {row['label']}", size=13, weight=600)
-        )
-        for column, (axis, key, _) in enumerate(columns):
-            score = row["task_scores"][axis][key]
-            if (
-                type(score) not in (int, float)
-                or not math.isfinite(score)
-                or not 0 <= score <= 1
-            ):
-                raise ValueError("V3 task matrix contains an invalid score")
-            shade = f"#{round(255 * (1 - score) + 49 * score):02x}{round(231 * (1 - score) + 91 * score):02x}{round(197 * (1 - score) + 255 * score):02x}"
-            xx = x0 + column * pitch
+    band_names = (
+        "Typed decisions (left) · human transfer (right)",
+        "Human transfer · tasks 4–9 of 15",
+        "Human transfer · tasks 10–15 of 15",
+    )
+    for band, heading in enumerate(band_names):
+        top = 90 + band * band_height
+        if band:
             parts.append(
-                f'<rect x="{xx}" y="{yy}" width="{cell_width}" height="29" rx="7" fill="{shade}"/>'
+                f'<line x1="32" y1="{top - 9}" x2="918" y2="{top - 9}" stroke="{GRID}"/>'
             )
+        parts.append(_text(32, top + 17, heading, size=13, weight=600))
+        for index, (axis, key, label) in enumerate(columns[band * 6 : band * 6 + 6]):
+            column_x = x0 + index * pitch
+            center = column_x + cell_width / 2
+            display = label.partition(" / ")[2]
+            lines = textwrap.wrap(display, width=15, break_long_words=False)
+            if not lines or len(lines) > 2:
+                raise ValueError("V3 task matrix label cannot fit its column")
+            parts.append(
+                f'<text x="{center:.1f}" y="{top + 41}" '
+                f'aria-label="{escape(label, quote=True)}" fill="{INK}" '
+                'font-family="system-ui, sans-serif" font-size="12" '
+                'font-weight="600" text-anchor="middle">'
+            )
+            for line_index, line in enumerate(lines):
+                parts.append(
+                    f'<tspan x="{center:.1f}" dy="{15 if line_index else 0}">{escape(line)}</tspan>'
+                )
+            parts.append("</text>")
+            for row_index, row in enumerate(rows):
+                score = row["task_scores"][axis][key]
+                if (
+                    type(score) not in (int, float)
+                    or not math.isfinite(score)
+                    or not 0 <= score <= 1
+                ):
+                    raise ValueError("V3 task matrix contains an invalid score")
+                yy = top + 82 + row_index * 45
+                shade = f"#{round(255 * (1 - score) + 49 * score):02x}{round(231 * (1 - score) + 91 * score):02x}{round(197 * (1 - score) + 255 * score):02x}"
+                parts.append(
+                    f'<rect x="{column_x}" y="{yy}" width="{cell_width}" height="29" rx="7" fill="{shade}"/>'
+                )
+                parts.append(
+                    _text(
+                        center,
+                        yy + 20,
+                        f"{100 * score:.1f}",
+                        size=13,
+                        weight=700,
+                        anchor="middle",
+                        fill="#fff" if score >= 0.85 else INK,
+                    )
+                )
+        for row_index, row in enumerate(rows):
+            yy = top + 82 + row_index * 45
             parts.append(
                 _text(
-                    xx + cell_width / 2,
-                    yy + 20,
-                    f"{100 * score:.1f}",
-                    size=12,
-                    weight=700,
-                    anchor="middle",
-                    fill="#fff" if score >= 0.85 else INK,
+                    32, yy + 19, f"{row['rank']}. {row['label']}", size=13, weight=600
                 )
             )
     parts += [_text(32, height - 24, caveat, size=11, fill=MUTED), "</svg>"]
