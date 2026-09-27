@@ -121,10 +121,21 @@ jobs:
         with:
           fetch-depth: 0
       - run: python3 -m pip install PyYAML==6.0.3
+      - id: base
+        name: Resolve the base the merge ref applies to
+        env:
+          EVENT_BEFORE: ${{ github.event.before }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            sha="$(git rev-parse --verify "$GITHUB_SHA^1")"
+          else
+            sha="$EVENT_BEFORE"
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - id: plan
         env:
           PROFILE: ${{ inputs.profile }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
           FULL: ${{ inputs.full }}
           DRAFT: ${{ inputs.draft }}
           VERIFICATION: ${{ inputs.verification }}
