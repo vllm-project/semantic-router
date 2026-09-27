@@ -15,6 +15,7 @@ was trained under.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -40,6 +41,20 @@ class SelectorObjective:
     version: int = OBJECTIVE_VERSION
 
     def __post_init__(self) -> None:
+        if self.version != OBJECTIVE_VERSION:
+            raise ValueError(
+                f"unsupported objective version {self.version!r}, "
+                f"this build implements v{OBJECTIVE_VERSION}"
+            )
+        for name in (
+            "quality_weight",
+            "latency_weight",
+            "cost_weight",
+            "latency_scale_ms",
+            "cost_scale",
+        ):
+            if not math.isfinite(getattr(self, name)):
+                raise ValueError(f"{name} must be finite")
         for name in ("quality_weight", "latency_weight", "cost_weight"):
             if getattr(self, name) < 0:
                 raise ValueError(f"{name} must be non-negative")
@@ -64,13 +79,18 @@ class SelectorObjective:
         return _digest(*parts)
 
     def utility(self, outcome) -> float:
-        """Weighted utility of one CandidateOutcome, ignoring success; for ordering only."""
-        speed = 1.0 / (
-            1.0 + max(0.0, float(outcome.latency_ms)) / self.latency_scale_ms
-        )
-        thrift = 1.0 / (1.0 + max(0.0, float(outcome.cost)) / self.cost_scale)
+        """Weighted sum ignoring success, for ordering only; NaN raises (max(0, nan) reads as instant)."""
+        quality = float(outcome.quality)
+        latency_ms = float(outcome.latency_ms)
+        cost = float(outcome.cost)
+        if not math.isfinite(quality) or math.isnan(latency_ms) or math.isnan(cost):
+            raise ValueError(
+                f"{outcome.model_ref}: quality must be finite, latency and cost not NaN"
+            )
+        speed = 1.0 / (1.0 + max(0.0, latency_ms) / self.latency_scale_ms)
+        thrift = 1.0 / (1.0 + max(0.0, cost) / self.cost_scale)
         return (
-            self.quality_weight * float(outcome.quality)
+            self.quality_weight * quality
             + self.latency_weight * speed
             + self.cost_weight * thrift
         )
@@ -89,16 +109,22 @@ class SelectorObjective:
         return [(o.model_ref, self.score(o)) for o in ordered]
 
     def best(self, snapshot) -> tuple[str, float]:
-        """The winning candidate for one query."""
-        ranked = self.rank(snapshot)
-        if not ranked:
+        """The winning candidate for one query, in O(k) rather than a full sort."""
+        if not snapshot.outcomes:
             raise ValueError("snapshot has no candidate outcomes")
-        return ranked[0]
+        winner = min(snapshot.outcomes, key=self.sort_key)
+        return winner.model_ref, self.score(winner)
 
 
 def label_snapshots(
     snapshots: Sequence, objective: SelectorObjective | None = None
 ) -> dict[str, tuple[str, float]]:
-    """Best candidate per query, keyed by query_id rather than raw query text."""
+    """Best candidate per query, keyed by query_id; a repeated query_id raises."""
     rule = objective or SelectorObjective()
-    return {snapshot.query_id: rule.best(snapshot) for snapshot in snapshots}
+    labels: dict[str, tuple[str, float]] = {}
+    for snapshot in snapshots:
+        query_id = snapshot.query_id
+        if query_id in labels:
+            raise ValueError(f"duplicate query_id {query_id} in snapshots")
+        labels[query_id] = rule.best(snapshot)
+    return labels

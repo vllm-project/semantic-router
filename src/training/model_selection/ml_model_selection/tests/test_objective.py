@@ -8,7 +8,11 @@ import pytest
 SERVICE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SERVICE_DIR))
 
-from objective import SelectorObjective, label_snapshots  # noqa: E402
+from objective import (
+    OBJECTIVE_VERSION,
+    SelectorObjective,
+    label_snapshots,
+)  # noqa: E402
 from query_outcome_set import CandidateOutcome, QueryOutcomeSet  # noqa: E402
 
 FAST_MS = 100.0
@@ -120,7 +124,7 @@ def test_failures_still_order_among_themselves():
         _outcome("bad", quality=0.10, success=False),
         _outcome("less-bad", quality=0.80, success=False),
     )
-    assert SelectorObjective().best(snapshot)[0] == "less-bad"
+    assert SelectorObjective().best(snapshot) == ("less-bad", 0.0)
 
 
 def test_scoring_is_independent_of_the_other_candidates():
@@ -168,6 +172,10 @@ def test_labels_are_keyed_by_query_identity():
         {"latency_scale_ms": 0.0},
         {"cost_scale": -1.0},
         {"quality_weight": 0.0, "latency_weight": 0.0, "cost_weight": 0.0},
+        {"quality_weight": float("nan")},
+        {"latency_weight": float("inf")},
+        {"latency_scale_ms": float("inf")},
+        {"version": OBJECTIVE_VERSION + 1},
     ],
 )
 def test_incoherent_objectives_are_rejected(kwargs):
@@ -178,3 +186,47 @@ def test_incoherent_objectives_are_rejected(kwargs):
 def test_empty_snapshot_has_no_winner():
     with pytest.raises(ValueError):
         SelectorObjective().best(_snapshot())
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"quality": float("nan")},
+        {"quality": float("inf")},
+        {"quality": 0.5, "latency_ms": float("nan")},
+        {"quality": 0.5, "cost": float("nan")},
+    ],
+)
+def test_nan_outcomes_raise_instead_of_ranking(fields):
+    """max(0.0, nan) is 0.0, so a NaN latency used to score as an instant call."""
+    snapshot = _snapshot(_outcome("bad", **fields), _outcome("ok", quality=0.1))
+    with pytest.raises(ValueError):
+        SelectorObjective().best(snapshot)
+
+
+def test_infinite_latency_saturates_to_no_speed_credit():
+    stalled = _outcome("m", quality=0.0, latency_ms=float("inf"))
+    assert SelectorObjective().score(stalled) == 0.0
+
+
+def test_best_agrees_with_rank():
+    snapshot = _snapshot(
+        _outcome("c", quality=0.5, success=False),
+        _outcome("b", quality=0.6),
+        _outcome("a", quality=0.6),
+        _outcome("d", quality=0.9, latency_ms=SLOW_MS),
+    )
+    objective = SelectorObjective()
+    assert objective.best(snapshot) == objective.rank(snapshot)[0]
+
+
+def test_empty_snapshot_list_labels_nothing():
+    assert label_snapshots([]) == {}
+
+
+def test_duplicate_query_ids_raise_rather_than_overwrite():
+    first = _snapshot(_outcome("a", quality=0.9))
+    second = _snapshot(_outcome("b", quality=0.9))
+    assert first.query_id == second.query_id
+    with pytest.raises(ValueError):
+        label_snapshots([first, second])
