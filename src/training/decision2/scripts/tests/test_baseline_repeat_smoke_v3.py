@@ -140,3 +140,49 @@ def test_input_or_runtime_tamper_fails(tmp_path: Path) -> None:
             backend="nox",
             adapter_version="native-published-v2",
         )
+
+
+def test_same_native_overflow_is_repeatable_but_mismatch_fails(tmp_path: Path) -> None:
+    prompts = tmp_path / "prompts.jsonl"
+    prompts.write_text(
+        "".join(
+            json.dumps(
+                {"id": str(i), "state": "state", "questions": {"q": {"type": "noul"}}}
+            )
+            + "\n"
+            for i in range(32)
+        )
+    )
+    first, second = tmp_path / "first.jsonl", tmp_path / "second.jsonl"
+    for path in (first, second):
+        _rows(path)
+        records = [json.loads(line) for line in path.read_text().splitlines()]
+        records[0]["answers"]["q"] = {
+            "type": "noul",
+            "error": "context_overflow",
+        }
+        path.write_text("".join(json.dumps(row) + "\n" for row in records))
+    result = compare(
+        prompts,
+        first,
+        second,
+        model_id="example/nox",
+        revision="revision",
+        backend="nox",
+        adapter_version="native-published-v2",
+    )
+    assert result["gate_pass"] is True
+    assert result["stable_invalid_n"] == 1
+    records = [json.loads(line) for line in second.read_text().splitlines()]
+    records[0]["answers"]["q"]["error"] = "candidate_limit"
+    second.write_text("".join(json.dumps(row) + "\n" for row in records))
+    with pytest.raises(ValueError, match="invalid answer differs"):
+        compare(
+            prompts,
+            first,
+            second,
+            model_id="example/nox",
+            revision="revision",
+            backend="nox",
+            adapter_version="native-published-v2",
+        )

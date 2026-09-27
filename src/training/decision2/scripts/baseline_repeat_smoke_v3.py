@@ -175,6 +175,7 @@ def compare(
         raise ValueError("Incomplete smoke predictions")
     drifts: list[float] = []
     changed: list[str] = []
+    stable_invalid = 0
     for index, prompt in enumerate(inputs):
         pair = [records[index] for records in outputs]
         expected_sha = digest(
@@ -205,6 +206,20 @@ def compare(
             expected_type = prompt["questions"][question]["type"]
             if left.get("type") != expected_type or right.get("type") != expected_type:
                 raise ValueError("Native answer type differs")
+            # An unsupported native input remains on the panel and scores as
+            # failure. It can still pass a repeatability smoke if both fresh
+            # processes return the same explicit invalid reason.
+            if "error" in left or "error" in right:
+                if (
+                    set(left) != {"type", "error"}
+                    or set(right) != {"type", "error"}
+                    or left["error"] != right["error"]
+                    or left["error"] not in {"context_overflow", "candidate_limit"}
+                ):
+                    raise ValueError("Native invalid answer differs across processes")
+                stable_invalid += 1
+                drifts.append(0.0)
+                continue
             a, b = _probabilities(left), _probabilities(right)
             if (
                 not a
@@ -237,6 +252,8 @@ def compare(
         },
         "gate_pass": not changed and max(drifts) <= max_probability_drift,
     }
+    if stable_invalid:
+        result["stable_invalid_n"] = stable_invalid
     return result
 
 

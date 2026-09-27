@@ -1,0 +1,61 @@
+{
+  "schema_version": "decision2-27b-v3-roster-plan/1",
+  "status": "prequalification_not_a_release_freeze",
+  "candidate": {
+    "model_id": "llm-semantic-router/DEV2.0-27B",
+    "upstream_base_id": "Qwen/Qwen3.8-27B",
+    "upstream_base_revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "native_model_sha256": "d9f4990427156a7712325de16f6105659fc00015d44c3e2f9331f52481d350d2",
+    "package_status": "uppercase_package_full_native_parity_passed",
+    "package_manifest_sha256": "47f1e934062ec5d8f75dc6b74812c4fbfaf2d567f1a099f7f9f5cb2d41ffe782",
+    "native_parity_receipt_sha256": "d53236dabc9c4e09479f6eef72aff1bb367426ecd9ee6f7c2f1603a4b95c4426"
+  },
+  "comparators": [
+    {
+      "key": "lux",
+      "model_id": "llm-semantic-router/Decision-1.0-Lux-9B",
+      "revision": "bd45a30aee8c84032791c245c70f86dee5389cc8",
+      "size_relation": "nearest",
+      "qualification": "full_panel_pending"
+    },
+    {
+      "key": "jevk5-9b",
+      "model_id": "alibiserikbay/JevK5-9B",
+      "revision": "d6521a18a86999190e9d775c915af3d6d6772fc4",
+      "size_relation": "nearest",
+      "qualification": "full_panel_pending"
+    },
+    {
+      "key": "autojev27b",
+      "model_id": "denis-pplx/autojev-27b",
+      "revision": "6f5b557e037f5edb25c7dc92dbc6553e5a19c015",
+      "native_source_revision": "ee63c1515980491a742f0bd0685c8dc5ca1f00c3",
+      "size_relation": "same_if_measured_ratio_lte_1.25",
+      "qualification": "native_package_download_attestation_and_repeatability_pending"
+    }
+  ],
+  "additional_same_size_opponent": {
+    "model_id": "frontier-infra/jebadiah-27b",
+    "status": "hold_unqualified",
+    "reason": "Exact weight revision and reproducible native three-type adapter have not been independently attested"
+  },
+  "gold_free_panels": {
+    "typed_final": {
+      "items": 1600,
+      "scored_answers": 2000,
+      "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd"
+    },
+    "css15": {
+      "items": 6547,
+      "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6"
+    },
+    "jevbench_public_subset": {
+      "items": 231,
+      "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e364b7be7ea277893207f97da5bc75ddd",
+      "aggregate_role": "separate_public_rank"
+    }
+  },
+  "jevarena_v3_aggregate": "100*sqrt(T*H)",
+  "label_exposure": "same_panel_not_virgin_blind; typed FINAL and CSS15 labels were opened in an earlier excluded 4B research run",
+  "next_gate": "Qualify all three fixed comparators before any 27B candidate FINAL prediction"
+}
