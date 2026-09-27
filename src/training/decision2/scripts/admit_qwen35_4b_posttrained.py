@@ -1,4 +1,4 @@
-"""Locked, bounded admission for the official Qwen3.5-4B Posttrained source.
+"""Version 2 bounded admission for the official Qwen3.5-4B Posttrained source.
 
 ``prepare`` and ``compare-zero`` are CPU-only. ``zero-a``, ``zero-b``,
 ``one`` and ``reload`` are GPU stages and must not run before independent
@@ -9,6 +9,7 @@ the owner's private experiment directory. No formal benchmark is accepted.
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import json
 import math
@@ -28,9 +29,12 @@ from scripts.preflight_qwen35_4b_posttrained_cpu import (
 from training.model.data import check_partition_isolation, load_partition
 from training.model.source import source_fingerprint
 
-SCHEMA = "decision2-qwen35-4b-posttrained-admission/1"
+SCHEMA = "decision2-qwen35-4b-posttrained-admission/2"
 SOURCE_ID = "Qwen/Qwen3.5-4B"
 IMAGE_ID = "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+RUNTIME_PYTHON = "/usr/bin/python"
+TRANSFORMERS_VERSION = "5.17.0"
+TORCH_VERSION = "2.12.0+git6bbd260"
 CPU_AUDIT_SHA256 = "0c45417d4cc8f3e4c32edc55aec3c230e0922476500acc1fabc3b5c2151ac82b"
 DATA_SHA256 = {
     "train": "61740be433c6cd714810a9908432ad29597c570d0d267d2731ab78cdad243755",
@@ -67,6 +71,10 @@ PROTOCOL = {
     "lora_dropout": 0.05,
     "objective": "ce_brier",
     "brier_weight": 0.5,
+    "runtime_python": RUNTIME_PYTHON,
+    "transformers_version": TRANSFORMERS_VERSION,
+    "torch_version": TORCH_VERSION,
+    "cpu_full_weight_source_load": True,
 }
 
 
@@ -106,6 +114,80 @@ def _private_root(root: Path) -> Path:
     if not root.is_dir() or stat.S_IMODE(root.stat().st_mode) != 0o700:
         raise ValueError("Experiment directory must exist and have mode 0700")
     return root
+
+
+def _validate_runtime(
+    python: str, transformers_version: str, torch_version: str
+) -> dict[str, str]:
+    if (
+        python != RUNTIME_PYTHON
+        or transformers_version != TRANSFORMERS_VERSION
+        or torch_version != TORCH_VERSION
+    ):
+        raise RuntimeError(
+            "Runtime interpreter or package version differs from Base control"
+        )
+    return {
+        "python": python,
+        "transformers": transformers_version,
+        "torch": torch_version,
+    }
+
+
+def _runtime() -> dict[str, str]:
+    import torch
+    import transformers
+
+    return _validate_runtime(
+        sys.executable, transformers.__version__, torch.__version__
+    )
+
+
+def _require_no_gpu() -> None:
+    import torch
+
+    if torch.cuda.device_count() != 0:
+        raise RuntimeError("CPU preflight must not expose any GPU")
+
+
+def _cpu_full_weight_source_load(source: Path, select: Path) -> dict[str, Any]:
+    """Prove the exact native model loader works before any GPU allocation."""
+    _require_no_gpu()
+    from training.model.decision_model import DecisionModel, encode
+
+    model, tokenizer = DecisionModel.from_base(
+        source,
+        POSTTRAINED_REVISION,
+        head_dim=256,
+        source_stage="posttrained",
+    )
+    if (
+        model.metadata.get("backbone_model_type") != "qwen3_5"
+        or model.metadata.get("source_stage") != "posttrained"
+        or model.metadata.get("base_revision") != POSTTRAINED_REVISION
+        or any(parameter.device.type != "cpu" for parameter in model.parameters())
+    ):
+        raise ValueError("CPU full-weight loader changed source or placement")
+    rows = load_partition(select, "select")
+    probes = {}
+    for task_type in TYPES:
+        row = next(row for row in rows if row["task_type"] == task_type)
+        item = encode(row, tokenizer, 8192)
+        probes[task_type] = {
+            "token_count": len(item["ids"]),
+            "prompt_sha256": item["prompt_sha256"],
+            "token_ids_sha256": item["token_ids_sha256"],
+        }
+    result = {
+        "source_revision": POSTTRAINED_REVISION,
+        "text_parameter_count": model.metadata["text_parameter_count"],
+        "head_dim": model.metadata["head_dim"],
+        "native_type_probes": probes,
+        "visible_gpu_count": 0,
+    }
+    del model, tokenizer
+    gc.collect()
+    return result
 
 
 def _revision(source: Path) -> str:
@@ -149,7 +231,11 @@ def _data(paths: dict[str, Path]) -> dict[str, Any]:
 
 
 def prepare(args: argparse.Namespace) -> dict[str, Any]:
+    runtime = _runtime()
+    _require_no_gpu()
     output = _private_root(args.output_root)
+    if any(output.iterdir()):
+        raise FileExistsError("New admission output directory must be empty")
     paths = {role: getattr(args, role).resolve(strict=True) for role in COUNT}
     source = args.source.resolve(strict=True)
     audit_path = args.cpu_audit.resolve(strict=True)
@@ -171,19 +257,38 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("CPU audit did not admit exact source/input parity")
     if args.image_id != IMAGE_ID:
         raise ValueError("Training image ID differs from completed Base control")
+    source_fingerprint = _source(source)
+    data_sha256 = _data(paths)
+    full_load = _cpu_full_weight_source_load(source, paths["select"])
+    cpu_receipt = {
+        "schema_version": SCHEMA,
+        "phase": "cpu-full-weight-source-load",
+        "image_id": IMAGE_ID,
+        "runtime": runtime,
+        "source_fingerprint": source_fingerprint,
+        "data_sha256": data_sha256,
+        "full_load": full_load,
+        "code_sha256": _code_hashes(),
+        "status": "PASS",
+    }
+    _write_once(output / "cpu-runtime-preflight.json", cpu_receipt)
     result = {
         "schema_version": SCHEMA,
         "status": "LOCKED_NO_GPU",
         "source_id": SOURCE_ID,
         "source_revision": POSTTRAINED_REVISION,
         "source_path": str(source),
-        "source_fingerprint": _source(source),
+        "source_fingerprint": source_fingerprint,
         "data_paths": {role: str(path) for role, path in paths.items()},
-        "data_sha256": _data(paths),
+        "data_sha256": data_sha256,
         "cpu_audit_path": str(audit_path),
         "cpu_audit_sha256": CPU_AUDIT_SHA256,
         "image_id": IMAGE_ID,
         "code_sha256": _code_hashes(),
+        "runtime": runtime,
+        "cpu_runtime_preflight_sha256": sha256_file(
+            output / "cpu-runtime-preflight.json"
+        ),
         "output_root": str(output),
         "protocol": PROTOCOL,
     }
@@ -192,6 +297,7 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _lock(path: Path) -> dict[str, Any]:
+    runtime = _runtime()
     if path.is_symlink() or not path.is_file():
         raise ValueError("Lock must be a regular private file")
     root = _private_root(path.parent)
@@ -207,11 +313,25 @@ def _lock(path: Path) -> dict[str, Any]:
         or lock.get("output_root") != str(root)
         or lock.get("cpu_audit_sha256") != CPU_AUDIT_SHA256
         or lock.get("code_sha256") != _code_hashes()
+        or lock.get("runtime") != runtime
         or lock.get("protocol") != PROTOCOL
     ):
         raise ValueError("Admission lock or code changed")
     if sha256_file(Path(lock["cpu_audit_path"])) != CPU_AUDIT_SHA256:
         raise ValueError("CPU audit report changed")
+    cpu_preflight = root / "cpu-runtime-preflight.json"
+    if sha256_file(cpu_preflight) != lock.get("cpu_runtime_preflight_sha256"):
+        raise ValueError("CPU full-weight runtime preflight changed after lock")
+    report = json.loads(cpu_preflight.read_text(encoding="utf-8"))
+    if (
+        report.get("status") != "PASS"
+        or report.get("runtime") != runtime
+        or report.get("source_fingerprint") != lock.get("source_fingerprint")
+        or report.get("data_sha256") != lock.get("data_sha256")
+        or report.get("code_sha256") != lock.get("code_sha256")
+        or report.get("full_load", {}).get("visible_gpu_count") != 0
+    ):
+        raise ValueError("CPU full-weight preflight did not match lock")
     if _source(Path(lock["source_path"])) != lock["source_fingerprint"]:
         raise ValueError("Source files changed after lock")
     if (
@@ -225,7 +345,7 @@ def _lock(path: Path) -> dict[str, Any]:
 def _train_args(lock: dict[str, Any], output: Path, *, zero: bool) -> list[str]:
     data = lock["data_paths"]
     command = [
-        sys.executable,
+        RUNTIME_PYTHON,
         "-m",
         "training.model.train",
         "--model-path",
@@ -352,6 +472,7 @@ def compare(first: Path, second: Path, n: int) -> dict[str, Any]:
 
 
 def _require_gpu() -> None:
+    _runtime()
     import torch
 
     if torch.cuda.device_count() != 1 or not torch.cuda.is_bf16_supported():
@@ -622,6 +743,7 @@ def main() -> None:
             )
         )
     elif args.phase == "verify":
+        _require_no_gpu()
         _lock(args.lock)
         print(
             json.dumps(
@@ -629,6 +751,7 @@ def main() -> None:
             )
         )
     elif args.phase == "compare-zero":
+        _require_no_gpu()
         result = _zero_gate(args.lock)
         print(json.dumps(result, sort_keys=True))
     elif args.phase == "reload":
