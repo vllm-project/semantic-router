@@ -368,31 +368,68 @@ func TestFullDuplex_PassthroughTrailersFollowTheBody(t *testing.T) {
 	}
 }
 
-// recvFailsAfterStream returns err, not EOF, once its requests run out.
-type recvFailsAfterStream struct {
+// failAfterRequestsStream calls fail instead of returning EOF once its
+// requests run out, and records how many responses were sent by then.
+type failAfterRequestsStream struct {
 	MockStream
-	err error
+	fail       func() error
+	sentBefore int
 }
 
-func (s *recvFailsAfterStream) Recv() (*ext_proc.ProcessingRequest, error) {
+func (s *failAfterRequestsStream) Recv() (*ext_proc.ProcessingRequest, error) {
 	if s.RecvIndex >= len(s.Requests) {
-		return nil, s.err
+		s.sentBefore = len(s.Responses)
+		return nil, s.fail()
 	}
 	return s.MockStream.Recv()
 }
 
-func TestFullDuplex_StreamErrorSendsHeldHeaderReplyFirst(t *testing.T) {
+func TestFullDuplex_HeldHeaderReplyOnStreamError(t *testing.T) {
 	// With failure_mode_allow, Envoy forwards the request after a stream error.
-	// The header stage's removal of client-supplied internal headers must still
-	// apply. A body chunk over the gRPC receive limit ends the stream this way.
-	stream := &recvFailsAfterStream{
-		MockStream: *NewMockStream([]*ext_proc.ProcessingRequest{fullDuplexHeadersRequest(false)}),
-		err:        status.Error(codes.ResourceExhausted, "grpc: received message larger than max"),
+	// The header stage's removal of internal headers applies only if the held
+	// reply reached Envoy before the error.
+	tests := []struct {
+		name string
+		fail func() error
+		code codes.Code
+		// wantHeaderReply: the Router ends the stream itself, so the header
+		// reply goes out before the error status. Otherwise grpc-go has already
+		// sent the status, and nothing more is sent.
+		wantHeaderReply bool
+	}{
+		{
+			// Recv panics, as in panicOnRecvStream, standing in for a panic in
+			// the body stage.
+			name:            "panic in the Router",
+			fail:            func() error { panic("simulated CGO OOM panic") },
+			code:            codes.Internal,
+			wantHeaderReply: true,
+		},
+		{
+			// A real stream is already closed here; this one stays open, so a
+			// send after the error would show up.
+			name:            "receive error",
+			fail:            func() error { return status.Error(codes.ResourceExhausted, "grpc: received message larger than max") },
+			code:            codes.ResourceExhausted,
+			wantHeaderReply: false,
+		},
 	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stream := &failAfterRequestsStream{
+				MockStream: *NewMockStream([]*ext_proc.ProcessingRequest{fullDuplexHeadersRequest(false)}),
+				fail:       test.fail,
+			}
 
-	require.Error(t, fullDuplexRoutingRouter().Process(stream))
+			assert.Equal(t, test.code, status.Code(fullDuplexRoutingRouter().Process(stream)))
 
-	require.Len(t, stream.Responses, 1)
-	mutation := stream.Responses[0].GetRequestHeaders().GetResponse().GetHeaderMutation()
-	assert.Contains(t, mutation.GetRemoveHeaders(), headers.VSRInternalAuth)
+			if !test.wantHeaderReply {
+				assert.Len(t, stream.Responses, stream.sentBefore, "nothing is sent after a receive error")
+				return
+			}
+			require.Len(t, stream.Responses, 1)
+			mutation := stream.Responses[0].GetRequestHeaders().GetResponse().GetHeaderMutation()
+			assert.Contains(t, mutation.GetRemoveHeaders(), headers.VSRInternalAuth)
+		})
+	}
 }

@@ -99,6 +99,9 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 	for {
 		req, err := stream.Recv()
 		if err != nil {
+			// grpc-go has already sent the status after any receive error but
+			// EOF, and Process sends nothing at EOF, so drop a held header reply.
+			ctx.fullDuplexHold = nil
 			return r.handleProcessReceiveError(ctx, err)
 		}
 

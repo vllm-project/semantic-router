@@ -61,9 +61,10 @@ func flushHeldRequestHeaderReply(
 }
 
 // sendHeldHeaderReplyBeforeError sends a held header reply before the Router
-// ends the stream with an error, so the header stage's own mutations apply
-// whatever the gateway's failure policy does next, as when the reply went out
-// at once. Process calls it after recovering a panic, so it recovers its own.
+// ends the stream with its own error, such as a recovered panic, so the header
+// stage's own mutations can still apply if the gateway fails open, as when the
+// reply went out at once. Process calls it after recovering a panic, so it
+// recovers a panicking Send itself.
 func sendHeldHeaderReplyBeforeError(stream ext_proc.ExternalProcessor_ProcessServer, ctx *RequestContext) {
 	defer func() {
 		if rec := recover(); rec != nil {
