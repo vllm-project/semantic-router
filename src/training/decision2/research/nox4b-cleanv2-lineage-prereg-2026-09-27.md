@@ -121,7 +121,7 @@ download readback and an accurate product model card.
 ## Preflight record
 
 The first one-step container attempt stopped in the device gate before model
-loading or optimization: exposing only one `/dev/dri/renderD*` device did not
+loading or optimization: exposing only one DRM render device did not
 make a BF16 CUDA/ROCm device visible to the trainer. Its output directory is
 retained as a failed attempt. A separate read-only probe with the full
 `/dev/dri` mapping and `HIP_VISIBLE_DEVICES=0`, `ROCR_VISIBLE_DEVICES=0`, and
