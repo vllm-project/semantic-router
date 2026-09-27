@@ -1,0 +1,94 @@
+{
+  "candidate": {
+    "adapter_sha256": "33dae46ec1aa812f0a75365e2757a60f17b8d9474fdd15d9a45524437c1b7d56",
+    "adapter_version": "decision2-typed-benchmark-adapter-v2-calibrated",
+    "base_model": "Qwen/Qwen3.5-4B-Base",
+    "base_revision": "1001bb4d826a52d1f399e183466143f4da7b741b",
+    "best_sha256": "e96277b9e0b07b7ef8c8df4b2fcbb71b7bdb9e8b4b8ed58816d8381dc221e3b6",
+    "best_step": 466,
+    "cal_sha256": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a",
+    "calibration_sha256": "a63b5d34d7f6f5d2c21c3573db6e64341b0cd13798f9aa004305572ef4d50652",
+    "complete_sha256": "a8543f3b8173cecfe7028444a6e3b015a98c1a6cdd80757d362cc299dd4490c9",
+    "inference": "one item at a time; all item questions batched; no truncation",
+    "loaded_parameters": 4240848384,
+    "max_length": 8192,
+    "model_id": "research/qwen35-4b-official-best466",
+    "model_revision": "dc2a8267ec7315a48aa1b2c31e7157e79e50582c4061177bed32ca0ed2735372",
+    "model_sha256": "dc2a8267ec7315a48aa1b2c31e7157e79e50582c4061177bed32ca0ed2735372",
+    "parameter_receipt_sha256": "3d42e8a135df98c02d94717c31eaf5e87bc00061764c29137885052d38995d63",
+    "repeat_receipt_sha256": "c3223972f3919f25090e9c60b135b6e914956076836d2434b0ab70ef7ace2ee1",
+    "temperature_source": "selected_checkpoint_disjoint_CAL700",
+    "train_sha256": "61740be433c6cd714810a9908432ad29597c570d0d267d2731ab78cdad243755",
+    "training_provenance_sha256": "49b58711f9645af6806374d89dfce3db453460cf2921ae8777742290356ec7c8"
+  },
+  "comparators": {
+    "kev": {
+      "adapter_sha256": "5439c971654a8edc5e14c314b5846fb214d6ffc6dfc6c6f9f2d00e51ac206fc9",
+      "adapter_version": "native-published-v2",
+      "calibration_sha256": "dd633435998ecc751ac538717a3742e32149500fabf7d7276287dbf0693f347c",
+      "loaded_parameters": 4207062528,
+      "model_id": "jaredpalmer/kev-4b",
+      "name": "Kev 4B",
+      "prediction_sha256": {
+        "css": "59b5b368fbbd63c0ff86fafc97bfbe9d2c94645a9c97471b3680ac0aa5f2f09f",
+        "public": "66c363aac534e72d0e616c6487128a28bdaa913a0bd8a4d8eb5f37fa57a97a29",
+        "typed": "c85b2097a1edab3e126498e236debc28753dd3049a15c49013bd5822fa13e95e"
+      },
+      "weight_revision": "139fdd94f1b6a6ad80cc15e08fcb99cac885a101"
+    },
+    "nox": {
+      "adapter_sha256": "b49054f1aef7a35c0a65b88dd5c1f1e5e252bb96dc210c7ef9e1d83942bb45ce",
+      "adapter_version": "native-published-v2",
+      "calibration_sha256": "69d80e5b215e2c1e6872f146fdb7ea5aa95c9fd678ef96208960d50e4e7b635d",
+      "loaded_parameters": 4208383488,
+      "model_id": "llm-semantic-router/Decision-1.0-Nox-4B",
+      "name": "Decision 1.0 Nox 4B",
+      "prediction_sha256": {
+        "css": "82b1c5288b5611ef33e1dcc40f68d035035cd50f72542ed28b7e2c50e3e50f42",
+        "public": "b3e8da460f12ea8f5337aa8a46781b0fb8df04963ff6b00d269e7cf5755ab639",
+        "typed": "7bc10f9e8616ad3d87eb1e54294ce0c22a13f263dcfeb353e84505427b572f6b"
+      },
+      "weight_revision": "0bb833504965c0eabdb9630b7bbd385cb2fe5cd4"
+    }
+  },
+  "development_gate_commit": "d020da3581da37ece446b4d37a0301bc40652798",
+  "execution_order": "lock best466, calibration and comparators; candidate gold-free typed/css/public predictions; seal all predictions; score",
+  "invalid_policy": "missing, invalid and over-budget answers fail at full denominator",
+  "not_a_never_unsealed_blind_test": true,
+  "overlap_audit_sha256": "0b7f5324b40e17a1add57d6b7ef345960c971cb5838daa0d1bb7e0e2e65c7351",
+  "paired_bootstrap": {
+    "replicates": 5000,
+    "seed": 20260927
+  },
+  "panel": {
+    "css": {
+      "answer_slots": 6547,
+      "items": 6547,
+      "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6"
+    },
+    "public": {
+      "answer_slots": 231,
+      "items": 231,
+      "manifest_sha256": "e0e7c67701cf05f996d3b4eac09abf1bb3e6bb363cfe007089acd3644a38ed35",
+      "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd"
+    },
+    "typed": {
+      "answer_slots": 2000,
+      "items": 1600,
+      "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd"
+    }
+  },
+  "prior_freeze_sha256": "40eeb4a7300ae36e27c6a01fded8471f6be7410145bb48716d482208aa44adab",
+  "publication_role": "internal research protocol, not a model card",
+  "release_gate": "candidate JevArena v3 main score >= same-panel own Nox 1.0 score + 3.0 points; disclose all regressions",
+  "schema": "decision2-official-qwen4b-v3-postkey-roster/1",
+  "score_rule": "100 * sqrt(typed_FINAL_four_family_macro_accuracy * CSS15_task_median_macro_F1)",
+  "scoring_sources_sha256": {
+    "benchmark/score.py": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "jev_arena/arena_v3.py": "3d5b4aea031efb0d05ae7a501983868fe3bb9e42ca37e23fce5da8c002720cd8",
+    "jev_arena/compare_v3.py": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "jev_arena/jevbench_public.py": "aec840b6497beeae8b63e9270670c22506265c086a84e889bc82f694146518cf",
+    "transfer/score.py": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca"
+  },
+  "status": "prospective_same_panel_after_project_label_access"
+}
