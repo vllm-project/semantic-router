@@ -119,3 +119,30 @@ registered control under the prospective decision rule. Any formal
 JevArena/JevBench evaluation requires a separately frozen package and
 protocol; neither a source identity pass nor a development win qualifies the
 Gemma arm for publication.
+
+## Approved zero-step identity result
+
+After separate review and approval, the single locked GPU cell ran on an
+available device. Both independent BF16 loads completed all 32 synthetic,
+unlabeled inputs. The official source and the freshly inserted **untrained**
+q/o LoRA produced maximum absolute drift **0.0** across selected hidden
+states, below the frozen `1e-4` tolerance. The strict adapter count and fresh
+zero-B checks passed. Loaded parameters remained 25,233,141,760 text and
+25,805,933,872 total, with the output embedding tied. No decision head was
+scored, optimizer run, formal label read, or model quality evaluated.
+
+The runner exited with status 0 after 111 seconds, a conservative **0.03083
+GPU-hour**. Its source, adapter and comparison receipt SHA-256s are
+`c82c043a0282ad2534470983146f8437ccff8f60bb6aba2dc86a11ad112b3858`,
+`dc9b2dd052457785484f6195beaac5041e441f9698a0019d5c97497cc9d54457`,
+and `80ed1da6f56dd68382bc1c50d3dfa99a41720fb264fb083a357b5d9e9be0b4e1`.
+The timing receipt SHA-256 is
+`b6eecf0986d79079e93c2a0111b9d4112a69c7713f16240eab6ce0bdbee0a44c`;
+the source, adapter and comparison log SHA-256s are respectively
+`1740755a6140d06dd69217f453b1540e3883ede0948670b54748f30eb387a2c2`,
+`057ce08303be682dc32414e1d69ffded894e226b0f8821a9454aa305c230477e`,
+and `50e241dca4f939a24a2527272efea42829d6106fc16dd96eca66b3aa45be6643`.
+The selected device returned to its pre-run memory baseline and task
+containers exited. Private receipts remain private. This admits only the
+zero-step adapter/source identity; optimizer, transfer and score remain
+untested and subject to their separate gates.
