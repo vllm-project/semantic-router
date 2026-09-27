@@ -31,3 +31,36 @@ The same-TRAIN, source-aware AutoJev soft-target contrast also failed its frozen
 2. Only after a high-quality data arm passes CPU and small-model controls, compare Kai continuation and an official-base causal candidate under the same data/token budget and native System One protocol. Report the Choice/Score tradeoff even if the frozen composite rises.
 
 No model should be described as architecture SOTA or Pareto-optimal until a same-panel size-matched comparison supports that claim. The published 1.0 paper's 3,766-item, 54-slice suite and post-hoc weighted overall are context, not numbers to merge into v3.
+
+## Prospective option-isolation hypothesis, not a model result
+
+The current causal endpoint for option *i* can attend to options before *i*.
+The final query sees all options, so replacing only the head with a set module
+does not make its input representations permutation-equivariant. The existing
+0.6B arm has only **69/400** jointly correct original/reordered Choice pairs
+on typed DEV, though this diagnostic alone cannot apportion the error between
+training data, causal position and the head. The failed candidate-interaction
+arm did not remove the causal information asymmetry.
+
+A distinct architecture experiment would encode each candidate against the
+same state and question, without other candidates or their keys, then apply a
+shared scalar readout followed by a softmax. This construction is equivariant
+to option reordering if the render, encoder and scorer contain no option index
+or key signal. A symmetric set-interaction layer could subsequently restore
+comparative information; it must not silently reintroduce order embeddings.
+The cost is up to one backbone pass per option without verified shared-prefix
+cache reuse, which could be unacceptable for 255-option System One Choice.
+It may also lose tasks whose answer is defined only relative to the complete
+candidate set. Both are release-relevant limits, not implementation details.
+
+Before allocating training GPU-hours, freeze a small native CPU shape and
+permutation test, a realistic 2/3/10/255-option memory and latency envelope,
+and a data/token-matched training contrast from the same official 0.6B start.
+Count complete input token exposure, not just optimizer steps; report paired
+Choice/Score, human transfer and probability quality on independent groups.
+Any gain on the existing post-key v3 panel remains post-key corroboration.
+This idea is motivated by the measured position weakness and by independent
+research on [option-permutation vulnerabilities](https://proceedings.mlr.press/v235/zong24b.html)
+and [permutation-aware optimization](https://aclanthology.org/2026.acl-long.1621/).
+Those papers do not demonstrate that this architecture improves System One
+decisions; reduced order sensitivity and improved accuracy are separate claims.
