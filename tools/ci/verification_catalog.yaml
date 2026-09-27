@@ -367,11 +367,11 @@ full_cpu:
     Local deployment: [local.cli]
     Kubernetes Operator: [operator]
     agentgateway: [e2e.agentgateway]
-    Envoy AI Gateway: [e2e.envoy-ai-gateway]
+    Agent Router: [e2e.envoy-ai-gateway]
     AIBrix: [e2e.aibrix]
     Istio Gateway: [e2e.istio]
     llm-d: [e2e.llm-d]
-    Streaming with Envoy AI Gateway: [e2e.streaming]
+    Streaming with Agent Router: [e2e.streaming]
   excluded:
     cuda: No CUDA runner is declared in this CPU inventory; image build is not device qualification.
     rocm: No ROCm runner is declared in this CPU inventory; image build is not device qualification.
