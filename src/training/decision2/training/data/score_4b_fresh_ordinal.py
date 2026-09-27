@@ -525,6 +525,15 @@ def _load_goldfree_inventory(
                     "options",
                     "state",
                 },
+                {
+                    "group_id",
+                    "review_id",
+                    "operation",
+                    "instructions",
+                    "language",
+                    "options",
+                    "state",
+                },
             ]
             if set(obj) not in allowed or not isinstance(obj["state"], (dict, str)):
                 raise ValueError(f"Protected input contains non-prompt fields: {role}")
