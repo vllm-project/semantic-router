@@ -31,7 +31,7 @@ def _answers_digest(rows: list[dict[str, Any]]) -> str:
 
 def _native_values(
     question: dict[str, Any], answer: dict[str, Any]
-) -> tuple[list[float], str | bool] | None:
+) -> tuple[list[float], str | bool | None] | None:
     kind = question["type"]
     if kind == "noul":
         probability = answer.get("noul")
@@ -41,7 +41,8 @@ def _native_values(
             or not 0 <= probability <= 1
         ):
             return None
-        return [float(probability)], probability >= 0.5
+        point = None if probability == 0.5 else probability > 0.5
+        return [float(probability)], point
 
     criteria = question.get("criteria")
     if kind == "choice" and isinstance(criteria, dict):
@@ -82,7 +83,10 @@ def _native_values(
         or not math.isclose(score, expected, abs_tol=1e-5)
     ):
         return None
-    return [*map(float, values), float(score)], keys[values.index(max(values))]
+    maximum = max(values)
+    winners = [key for key, value in zip(keys, values) if abs(value - maximum) <= 1e-8]
+    point = winners[0] if len(winners) == 1 else None
+    return [*map(float, values), float(score)], point
 
 
 def compare_answers(

@@ -413,6 +413,22 @@ class ParityContractTests(unittest.TestCase):
             adapter_parity.compare_answers(self.prompts, tied, tied)["passed"]
         )
 
+    def test_near_tie_noul_and_score_follow_scorer_decisions(self) -> None:
+        source = json.loads(json.dumps(self.predictions))
+        package = json.loads(json.dumps(self.predictions))
+        source[0]["answers"]["b"]["noul"] = 0.5
+        package[0]["answers"]["b"]["noul"] = 0.500001
+        source[0]["answers"]["c"].update(
+            {"score": 0.5, "probabilities": {"0": 0.5, "1": 0.5}}
+        )
+        package[0]["answers"]["c"].update(
+            {"score": 0.499999, "probabilities": {"0": 0.500001, "1": 0.499999}}
+        )
+        result = adapter_parity.compare_answers(self.prompts, source, package)
+        self.assertEqual(result["categorical_mismatch_n"], 2)
+        self.assertLess(result["max_probability_or_score_drift"], 0.005)
+        self.assertFalse(result["passed"])
+
 
 if __name__ == "__main__":
     unittest.main()
