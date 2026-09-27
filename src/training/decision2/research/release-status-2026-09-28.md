@@ -13,7 +13,7 @@ comparisons, not newly blinded tests. All model repositories remain private.
 | 0.6B | Official Qwen3-0.6B-Base full-backbone/shared-head package is private. Same-panel v3 **38.520** vs own Kai1 **35.938** and Bosun **38.524**; paired 95% gain interval vs Kai1 **[-2.032,+7.846]**. Public231 **143** vs Kai1 **114**, Bosun **133**. Choice **109/800** vs Kai1 **277/800** and Score **80/400** vs **98/400** regress; Noul **458/800** vs **404/800** improves. Fixed gradient projection completed 466 updates but failed SELECT at **547/700** versus ordinary control **562/700** and frozen threshold **569/700**; Score remained **32/90**, at **0.311 GPU-hour**. LogiQA 2.0 Choice source is HOLD after duplicate/ID audit. QuALITY's pinned source audit leaves an upper bound of **144 TRAIN article groups / 2,424 questions** and zero eight-role lexical overlaps, but independent answer-blind evidence-necessity review passed only **7/24** pairs. RACE's fixed 128-article/477-question screen found no eight-role lexical hits, but passages are short and independent blind review passed only **6/24** against a frozen **18/24** evidence-necessity threshold. Zero QuALITY or RACE rows are admitted. | Private first package exists; stronger SOTA/large-gain claim HOLD. No new projected package or formal score. | Keep QuALITY and RACE source-wide arms HOLD. Prioritize truly evidence-dependent Choice and independent Score/transfer evidence; a prospective item filter requires new independent review. Do not repeat failed projection, head, teacher or shortcut-prone data arms. |
 | 0.8B | Own Eos1 continuation: development proxy changed only **+0.163** and Score fell to **85/400**. A Score-only OCNLI replacement failed CPU admission: longest possible 192 rows carried **31,789** native tokens against a frozen **155,681** minimum. A separate VitaminC real-revision Score source had 820 sampled rows across 256 pages but median native length **180**; its protected-role overlap is unresolved. TREC DL 2023 remains a supplemental diagnostic HOLD: **8** conflicting near-duplicate grade classes and only **1,604/22,327** judged rows joined to source text. A frozen HelpSteer2 correctness pilot received independent answer-blind review: only **17/24** absolute Score grades were within one human grade, and the reviewer flagged construct/factual ambiguity throughout; it remains TRAIN HOLD. | HOLD; no qualified formal 2.0 result. | Find a genuinely long, source-disjoint, quality-checked Score corpus, or separately pre-register an equal-token short-source control. None of the screened external sources is admitted. |
 | 2B | Own Sol1 continuation: same-panel v3 **43.960** vs Sol1 **45.580** and Decider2B **49.499**; public231 **162** vs **161** and **175**. Official Qwen3.5 Base/Posttrained arms failed development promotion. A proposed Sol soft replay stopped at its frozen BF16 zero-step probability-parity gate before any optimizer update. Evidence Inference 2.0 TRAIN provides a possible human-labeled three-class source, but its middle class is not a proven ordinal effect magnitude and no new row is admitted. | HOLD. | Resolve the proposed source rubric, article rights and source-disjoint overlap before a matched-token official-Posttrained arm; retain the parity failure and formal result as recorded. |
-| 4B | Official Qwen3.5-4B-Base: same-panel v3 **53.218** vs own Nox1 **56.470** and Decider4B **61.882**; public231 **171** vs **173** and **192**. Own Nox continuation's SELECT gain did not survive typed DEV. Independent ConTRoL blind reviews agreed on **27/30** relations; each matched source labels on **21–22/30**, corroborating three likely label errors and leaving one further conflict for adjudication. | HOLD. A third-party-initialized private research package is ineligible for the formal lineage. | Resolve the disputed source labels, embedded-passage rights and unscanned long-input overlap before any source admission. A matched arm must separately retain Score. No GPU training yet. |
+| 4B | Official Qwen3.5-4B-Base: same-panel v3 **53.218** vs own Nox1 **56.470** and Decider4B **61.882**; public231 **171** vs **173** and **192**. Own Nox continuation's SELECT gain did not survive typed DEV. Independent ConTRoL blind reviews agreed on **27/30** relations; each matched source labels on **21–22/30**, corroborating three likely label errors and leaving one further conflict for adjudication. A one-run external Kev TRAIN-only teacher screen stopped before aggregate scoring on a native probability validation mismatch (**0.0103 GPU-hour** upper bound); it supplies no student score. | HOLD. A third-party-initialized private research package is ineligible for the formal lineage. | Resolve the disputed source labels, embedded-passage rights and unscanned long-input overlap before any source admission. A matched arm must separately retain Score. A distinct Kev signal experiment first needs a publisher-rounding-aware validation protocol; no student GPU training yet. |
 | 9B | Official Qwen3.5-9B Posttrained shared-head development proxy **61.255** vs Lux1 historical DEV **70.326**; three-level Score **174/400**. A matched 90-parameter Score-cardinality residual arm completed 458 updates and selected BEST448 on SELECT **644/700**, but its single sealed DEV/CSS pilot readout was typed **T .808125**, Score **237/400**, human-transfer **H .501403**, proxy **63.655**. This improves the shared-head control's T .683125/Score174/proxy61.255, yet CSS H falls from .54927 and the predeclared Score≥245 and proxy≥65 promotion gates both fail. The new arm used **0.941439 GPU-hour** including technical probes and readout. Current Lux1 package passed a separate gold-free cross-process repeatability gate; an older different-bundle example remains invalid for current-package parity. | HOLD; no qualified formal 2.0 score, public231 run, or new 9B package. | Check own-Lux soft-distribution coverage, source overlap and zero-step parity as a separate preflight before any retention arm; the Score-cardinality result does not authorize one. A future promising candidate also needs a current-package Lux1 same-panel comparator. |
 | ~27B | Official Qwen3.8-27B selected development proxy **68.53** and Score **162/400**; no qualified 2.0 formal score. Separately, a pinned native AutoJev27 external peer measured same-panel v3 **72.310** and public231 **200**, establishing a stronger actual formal target than its earlier DEV proxy **79.15**. Official Gemma4-26B-A4B arm did not pass SELECT. An independent Score-source CPU gate admitted **0/160** sampled TRAIN/SELECT items. The fixed **2,560-row/160-step** teacher contrast stopped at CPU admission twice: exact whole-group source/type quotas were infeasible. A distinct pooled-quota schedule then materialized 2,560 rows/507 Score with a two-row source-quota shift. Its CPU audit passed exact teacher identity/mask (990 eligible, including 63 three-level Score), rights-ledger coverage and zero exact complete-input matches over seven protected roles, but **600/2,158** selected source groups omit cross-type rows and bounded state-evidence near review found **52 SELECT plus 89 CAL** pairs. The schedule used zero GPU-hours. | HOLD; no qualified formal 27B 2.0 score. The pooled schedule also fails its group and near-overlap admission, independently of its teacher pass. | Review near pairs and test a fresh group-atomic schedule under the same budget on CPU. Preserve both strict-quota failures and the pooled HOLD; no optimizer run from any of them. |
 
@@ -49,6 +49,25 @@ the result note retains the exact sequence and GPU-hours. The v3 labels had
 already been accessed earlier in this project, so this is a post-key
 same-panel result, not a new blinded test.
 
+The [Kev-4B TRAIN-only teacher screen](kev4b-external-teacher-train-screen-result-2026-09-28.md)
+stopped at its frozen probability-validity rule before producing aggregate
+Choice/Noul/Score statistics. The publisher rounds probabilities to four
+decimal places, while the pilot validator required an unrounded `1e-5` sum
+tolerance; the exact offending vector was not retained, so this is a static
+protocol explanation rather than a proven row-level cause. No teacher or
+student was promoted, and the sole GPU run consumed at most **0.0103
+GPU-hour**.
+
+The [Sol 2B formal-gap audit](sol2b-formal-gap-next-arm-2026-09-28.md)
+read existing same-panel reports without new scoring. Its largest peer gap is
+typed constraint competition: the eligible 2.0 candidate scored **74/400**,
+own Sol1 **58/400**, and Decider2B **346/400**. The candidate nevertheless
+regressed against Sol1 on evidence, exceptions, Score and task-median CSS
+transfer, yielding v3 **43.960 versus 45.580**. A prospective 512-group,
+four-domain, program-oracled policy-conflict data substitution is now
+predeclared with retained human/Score rows, matched token budget and CPU
+quality/overlap gates. No replacement data are admitted or trained yet.
+
 A distinct [27B pooled-quota schedule candidate](qwen38-27b-pooled-schedule-candidate-2026-09-28.md)
 was materialized on the authorized remote CPU from pinned TRAIN and tokenizer
 bytes: 2,560 rows/160 updates, 507 Score rows and minimum source-quota L1
@@ -59,6 +78,17 @@ need review. Exact complete-input overlap was zero over seven protected
 roles. The pooled schedule is **HOLD** despite those passing checks; it creates
 no new trained weight or model score and does not reverse the previous
 strict-quota failures. GPU-hours for the schedule and admission: zero.
+
+A separate [group-atomic CPU capacity witness](qwen38-27b-group-atomic-capacity-2026-09-28.md)
+excluded all 61 source groups touched by 83 TRAIN rows with bounded near-state
+signals against SELECT/CAL, plus overlength groups. Only **419 Score rows**
+remain, making the earlier frozen Score≥460 minimum infeasible under these
+exclusions. A distinct exploratory Score≥400 sensitivity can select 2,560
+whole-group rows with near-matched native token exposure and 971 masked
+teacher rows. The 128-seed capacity search and selected seed 96 are disclosed;
+this is **not** an admitted training schedule. A new version must freeze its
+mix, control and stop rules and independently pass complete-input and source
+audits before any GPU work. This capacity screen used zero GPU-hours.
 
 An [ANLI open-development Score diagnostic](anli-score-dev-feasibility-2026-09-28.md)
 now passes a bounded input-only exact/near screen against the eight core
