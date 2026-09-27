@@ -14,6 +14,7 @@ import json
 import math
 import os
 import re
+import stat
 import sys
 import time
 from collections.abc import Callable
@@ -432,6 +433,15 @@ def write_predictions(
     path: Path, predictions: list[dict[str, Any]], manifest: dict[str, Any]
 ) -> dict[str, Any]:
     """Publish a complete gold-free output and receipt without overwrites."""
+    parent = path.parent
+    if (
+        parent.is_symlink()
+        or not parent.is_dir()
+        or stat.S_IMODE(parent.stat().st_mode) != 0o700
+    ):
+        raise ValueError(
+            "Prediction output directory must already exist with mode 0700"
+        )
     companion = path.with_name(path.name + ".manifest.json")
     pending = path.with_name(path.name + ".pending")
     companion_pending = companion.with_name(companion.name + ".pending")
@@ -442,8 +452,18 @@ def write_predictions(
         raise FileExistsError(
             "Prediction, manifest or interrupted output already exists"
         )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with pending.open("x", encoding="utf-8") as stream:
+
+    def private_writer(target: Path) -> Any:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        descriptor = os.open(target, flags, 0o600)
+        try:
+            os.fchmod(descriptor, 0o600)
+            return os.fdopen(descriptor, "w", encoding="utf-8")
+        except BaseException:
+            os.close(descriptor)
+            raise
+
+    with private_writer(pending) as stream:
         for record in predictions:
             stream.write(
                 json.dumps(
@@ -454,7 +474,7 @@ def write_predictions(
         stream.flush()
         os.fsync(stream.fileno())
     result = {**manifest, "predictions_sha256": _sha_file(pending)}
-    with companion_pending.open("x", encoding="utf-8") as stream:
+    with private_writer(companion_pending) as stream:
         json.dump(result, stream, ensure_ascii=False, indent=2, allow_nan=False)
         stream.write("\n")
         stream.flush()
@@ -463,7 +483,7 @@ def write_predictions(
         raise FileExistsError("Prediction or manifest appeared during writing")
     os.replace(companion_pending, companion)
     os.replace(pending, path)
-    descriptor = os.open(path.parent, os.O_RDONLY)
+    descriptor = os.open(parent, os.O_RDONLY)
     try:
         os.fsync(descriptor)
     finally:

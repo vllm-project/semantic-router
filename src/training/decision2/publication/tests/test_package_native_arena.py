@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import stat
 import sys
 import tempfile
 import unittest
@@ -203,6 +205,15 @@ class PackageNativeArenaTests(unittest.TestCase):
         predictions = self.root / "predictions.jsonl"
         saved = arena.write_predictions(predictions, output, receipt)
         self.assertEqual(saved["predictions_sha256"], arena._sha_file(predictions))
+        self.assertEqual(stat.S_IMODE(predictions.stat().st_mode), 0o600)
+        self.assertEqual(
+            stat.S_IMODE(
+                predictions.with_name(predictions.name + ".manifest.json")
+                .stat()
+                .st_mode
+            ),
+            0o600,
+        )
         self.assertEqual(
             _native_manifest(
                 predictions.with_name(predictions.name + ".manifest.json"),
@@ -216,6 +227,29 @@ class PackageNativeArenaTests(unittest.TestCase):
         )
         with self.assertRaises(FileExistsError):
             arena.write_predictions(predictions, output, receipt)
+
+    def test_prediction_output_rejects_nonprivate_directory(self) -> None:
+        output = self.root / "visible" / "predictions.jsonl"
+        output.parent.mkdir(mode=0o755)
+        os.chmod(output.parent, 0o755)
+        with self.assertRaisesRegex(ValueError, "mode 0700"):
+            arena.write_predictions(output, [], {})
+        self.assertFalse(output.exists())
+
+    def test_prediction_files_remain_0600_with_restrictive_umask(self) -> None:
+        output = self.root / "private.jsonl"
+        previous = os.umask(0o377)
+        try:
+            arena.write_predictions(output, [], {})
+        finally:
+            os.umask(previous)
+        self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
+        self.assertEqual(
+            stat.S_IMODE(
+                output.with_name(output.name + ".manifest.json").stat().st_mode
+            ),
+            0o600,
+        )
 
     def test_invalid_and_missing_answers_count_as_failure(self) -> None:
         row = _row()

@@ -93,6 +93,8 @@ Until a model repository commit exists, use the explicit
 `package-sha256:MANIFEST_DIGEST` development revision; a release run uses its
 actual 40-character model commit. The package supplies CAL, context limit and
 temperature by type; the CLI offers no overrides.
+Create the output directory with mode `0700` before running; the collector
+requires that mode and creates prediction and manifest files with mode `0600`.
 
 ```bash
 PYTHONPATH=src/training/decision2 python3 -m publication.package_native_arena \
