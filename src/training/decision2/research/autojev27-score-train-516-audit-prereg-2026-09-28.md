@@ -83,3 +83,68 @@ and runtime source tree SHA-256
 No GPU teacher question has been evaluated in this audit. The physical GPU
 must be checked again against live processes and containers immediately
 before the single run.
+
+## One frozen native run: result and limitations
+
+The sole run completed in 126 wall seconds, **0.0350 GPU-hours**, within the
+900-second cap. All 516 native distributions passed type, level-key, finite
+mass and normalization checks; there were **zero invalid/overflow**, 20
+maximum-probability ties, and **324/516 = 62.79%** unique-max agreement with the
+TRAIN oracle. The overall mean gold probability was **0.4553** and mean half
+Brier **0.2459**. Ties count as wrong. The aggregate SHA-256 is
+`ff703bd206ae9958bd4afc6afbfc90c583cb85ef4a8263ddc6ba7ea7156f59ec`.
+The separate 516-row distribution artifact was admitted under the frozen
+internal-source/structural rules, remains private mode 0600, and has SHA-256
+`072cd519657caaa883eea1f5077789e5bacbf85f8ee20ab44cd562acc317701b`.
+It contains no raw text, option descriptions or gold labels. Source, code,
+TRAIN and roster hashes match the CPU lock. The task-owned container exited
+and the reserved GPU returned to idle memory.
+
+| Native levels | Rows | Correct | Ties | Mean gold probability | Half Brier / row |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 | 102 | 75 | 2 | 0.6129 | 0.1738 |
+| 4 | 59 | 34 | 3 | 0.5225 | 0.2230 |
+| 5 | 211 | 153 | 6 | 0.4399 | 0.2357 |
+| 6 | 58 | 28 | 4 | 0.3751 | 0.2990 |
+| 7 | 47 | 18 | 2 | 0.2999 | 0.3468 |
+| 8 | 39 | 16 | 3 | 0.3320 | 0.3243 |
+
+| TRAIN family | Rows | Correct | Ties | Mean gold probability | Half Brier / row |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| stage4 ordinal | 279 | 157 | 11 | 0.4699 | 0.2509 |
+| targeted quantized median | 150 | 120 | 3 | 0.4472 | 0.2195 |
+| stage4 dense table | 55 | 19 | 6 | 0.2827 | 0.3554 |
+| stage3 logic replay | 32 | 28 | 0 | 0.6636 | 0.1382 |
+
+| Gold class | Rows | Correct | Ties | Mean gold probability | Half Brier / row |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 109 | 96 | 3 | 0.5634 | 0.1623 |
+| 1 | 106 | 76 | 7 | 0.5190 | 0.2040 |
+| 2 | 111 | 72 | 3 | 0.4968 | 0.2249 |
+| 3 | 87 | 39 | 4 | 0.3639 | 0.3057 |
+| 4 | 62 | 28 | 1 | 0.3179 | 0.3427 |
+| 5 | 27 | 9 | 1 | 0.2969 | 0.3560 |
+| 6 | 9 | 2 | 1 | 0.2546 | 0.3988 |
+| 7 | 5 | 2 | 0 | 0.3422 | 0.3149 |
+
+The larger audit substantially tempers the earlier 25/32 Score pilot: the
+pilot was not representative of the 516 rows. Apparent difficulty increases
+with option count and gold level, and dense-table items are a clear weak
+family. These factors are confounded by construction, and classes 6–7 have
+only 9 and 5 rows. The data are synthetic related families, not independent
+real-world transfer. No current 2.0 student has improved from these teacher
+vectors. An unconditional KL target across all 516 would also expose the
+student to 192 wrong or tied teacher maxima; it is not justified by this
+audit alone.
+
+**Next discriminating experiment, not yet executed:** pre-register a
+matched-budget official-Qwen or own-1.0 Score student control using the same
+TRAIN rows, token count, updates, initializer and native inference. Compare
+hard-label CE against a fixed hard-CE plus low-weight teacher-KL arm; keep
+hard labels active on every row and pre-specify how wrong/tied teacher vectors
+are masked or downweighted using TRAIN labels. Give the control the identical
+row schedule and masking weights, replacing KL with CE where needed. Evaluate
+SELECT, Score-class calibration, long-input and source-disjoint transfer,
+including dense-table and high-level slices, before considering any
+JevArena/JevBench or release result. No student arm or promotion follows
+automatically from this source audit.
