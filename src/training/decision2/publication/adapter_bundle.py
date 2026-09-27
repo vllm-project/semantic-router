@@ -70,6 +70,32 @@ def _object(path: Path) -> dict[str, Any]:
 
 
 def _screen_public_file(path: Path) -> None:
+    if path.name == "tokenizer.json":
+        # Qwen's public BPE merge tokens include "/" and "//" as values.
+        # They are tokenizer data, not filesystem paths. Keep the general
+        # absolute-value rejection for every other tokenizer JSON position.
+        content = path.read_text(encoding="utf-8")
+        _public_text(content, path.name)
+
+        def reject_paths(value: Any, location: tuple[str, ...] = ()) -> None:
+            if isinstance(value, str) and value.startswith("/"):
+                merge_token = (
+                    len(location) == 4
+                    and location[:2] == ("model", "merges")
+                    and location[2].isdigit()
+                    and location[3] in {"0", "1"}
+                )
+                if not merge_token:
+                    raise ValueError("Absolute path value found in tokenizer.json")
+            elif isinstance(value, dict):
+                for key, item in value.items():
+                    reject_paths(item, (*location, str(key)))
+            elif isinstance(value, list):
+                for index, item in enumerate(value):
+                    reject_paths(item, (*location, str(index)))
+
+        reject_paths(json.loads(content))
+        return
     _screen_file(path)
     if path.suffix == ".safetensors":
         with path.open("rb") as source:

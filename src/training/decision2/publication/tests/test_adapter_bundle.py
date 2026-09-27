@@ -229,6 +229,22 @@ class AdapterBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "private infrastructure"):
             self.assemble()
 
+    def test_tokenizer_merge_slashes_are_data_but_other_absolute_values_fail(
+        self,
+    ) -> None:
+        tokenizer = self.root / "tokenizer.json"
+        _json(tokenizer, {"model": {"merges": [["/", "a"], ["b", "//"]]}})
+        adapter_bundle._screen_public_file(tokenizer)
+        _json(
+            tokenizer,
+            {
+                "model": {"merges": [["/", "a"]]},
+                "metadata": {"cache_path": "/etc/secret"},
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "Absolute path value"):
+            adapter_bundle._screen_public_file(tokenizer)
+
     def test_missing_base_and_tampered_loader_are_rejected(self) -> None:
         self.assemble()
         with self.assertRaises(FileNotFoundError):
