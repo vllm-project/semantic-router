@@ -70,7 +70,6 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix: ${{ fromJSON(needs.inventory.outputs.matrix) }}
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
