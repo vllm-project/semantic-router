@@ -200,6 +200,59 @@ def inspect(snapshot: Path, *, require_weights: bool = True) -> dict[str, Any]:
     return result
 
 
+def verify_loaded_state(
+    model: Any, snapshot: Path, inventory: dict[str, Any]
+) -> dict[str, int | bool]:
+    """Account for tied LM head and persisted buffers in official shards."""
+    from safetensors import safe_open
+
+    weight_map = json.loads(
+        (snapshot / "model.safetensors.index.json").read_text(encoding="utf-8")
+    )["weight_map"]
+    state = model.state_dict()
+    expected = set(weight_map) | {"lm_head.weight"}
+    if set(state) != expected:
+        raise RuntimeError(
+            "Loaded state keys differ from official index plus tied LM head"
+        )
+    text = model.model.language_model
+    if model.lm_head.weight.data_ptr() != text.embed_tokens.weight.data_ptr():
+        raise RuntimeError("Omitted official LM head is not tied to token embeddings")
+    for shard_name in sorted(set(weight_map.values())):
+        with safe_open(
+            str(snapshot / shard_name), framework="pt", device="cpu"
+        ) as shard:
+            for key in sorted(shard.keys()):
+                if tuple(state[key].shape) != tuple(shard.get_slice(key).get_shape()):
+                    raise RuntimeError(f"Loaded official tensor shape differs: {key}")
+    buffers = dict(model.named_buffers())
+    stored_buffer_count = sum(
+        state[key].numel() for key in weight_map if key in buffers
+    )
+    loaded_total_count = sum(parameter.numel() for parameter in model.parameters())
+    loaded_text_count = sum(parameter.numel() for parameter in text.parameters())
+    text_stored_buffers = sum(
+        state[key].numel()
+        for key in weight_map
+        if key.startswith("model.language_model.") and key in buffers
+    )
+    if (
+        loaded_total_count + stored_buffer_count != inventory["stored_parameter_count"]
+        or loaded_text_count + text_stored_buffers
+        != inventory["stored_parameter_groups"]["language_model"]
+    ):
+        raise RuntimeError(
+            "Loaded parameters plus stored buffers differ from official shards"
+        )
+    return {
+        "loaded_text_parameters": loaded_text_count,
+        "loaded_total_parameters": loaded_total_count,
+        "stored_buffer_elements": stored_buffer_count,
+        "stored_text_buffer_elements": text_stored_buffers,
+        "lm_head_tied": True,
+    }
+
+
 def zero_step(snapshot: Path, *, device: str, result: dict[str, Any]) -> dict[str, Any]:
     import torch
     from transformers import AutoTokenizer, Gemma4ForConditionalGeneration
@@ -226,10 +279,7 @@ def zero_step(snapshot: Path, *, device: str, result: dict[str, Any]) -> dict[st
     model.eval()
     text = model.model.language_model
     text.config.use_cache = False
-    loaded_text_count = sum(parameter.numel() for parameter in text.parameters())
-    expected_text_count = result["weights"]["stored_parameter_groups"]["language_model"]
-    if loaded_text_count != expected_text_count:
-        raise RuntimeError("Loaded text parameter count differs from stored tensors")
+    loaded = verify_loaded_state(model, snapshot, result["weights"])
     torch.manual_seed(264)
     head = CandidateHead(text.config.hidden_size).to(device)
     head.eval()
@@ -263,14 +313,10 @@ def zero_step(snapshot: Path, *, device: str, result: dict[str, Any]) -> dict[st
                 "wrapper_hidden_max_abs_drift": maximum_drift,
             }
     torch.cuda.synchronize()
-    loaded_total_count = sum(parameter.numel() for parameter in model.parameters())
-    if loaded_total_count != result["weights"]["stored_parameter_count"]:
-        raise RuntimeError("Loaded total parameter count differs from stored tensors")
     return {
         **result,
         "probe_version": PROBE_VERSION,
-        "loaded_text_parameters": loaded_text_count,
-        "loaded_total_parameters": loaded_total_count,
+        **loaded,
         "device_name": torch.cuda.get_device_name(0),
         "torch_version": torch.__version__,
         "gpu_peak_bytes": torch.cuda.max_memory_allocated(),

@@ -22,6 +22,16 @@ parameter count. The official model-card 25.2B headline and the measured
 shard SHA-256s and the immutable revision live in a private audit receipt;
 none of these observations imply a Decision benchmark score.
 
+A no-GPU meta instantiation reproduces the index's larger declared parameter
+count, while the checkpoint omits precisely the `lm_head.weight` key and
+the configuration declares tied word embeddings. The stored tensors also
+include persistent scalar buffers: their element counts cannot be equated to
+`sum(model.parameters())`. The GPU check requires all pinned shard keys and
+shapes to match the loaded state, permits only the tied head alias beyond the
+index, checks that the output head actually shares embedding storage, and
+reconciles loaded parameters plus stored buffers to the stored tensor count.
+Both parameter and stored-tensor counts will be reported separately.
+
 The pinned configuration declares `Gemma4ForConditionalGeneration` with a
 `Gemma4TextModel` language submodule, hidden size 2,816 and 262,144 maximum
 positions. The qualified training image can instantiate this structure on

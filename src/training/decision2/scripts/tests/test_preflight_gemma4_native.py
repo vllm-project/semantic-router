@@ -82,6 +82,44 @@ class GemmaSourceProbeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "pinned official revision"):
             probe.local_revision(self.root)
 
+    def test_loaded_state_accounts_for_tied_head_and_persisted_buffer(self) -> None:
+        class TinyOfficial(torch.nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.model = torch.nn.Module()
+                self.model.language_model = torch.nn.Module()
+                self.model.language_model.embed_tokens = torch.nn.Embedding(3, 4)
+                self.model.language_model.register_buffer("layer_scalar", torch.ones(1))
+                self.model.vision_tower = torch.nn.Linear(3, 2, bias=False)
+                self.lm_head = torch.nn.Linear(4, 3, bias=False)
+                self.lm_head.weight = self.model.language_model.embed_tokens.weight
+
+        model = TinyOfficial()
+        shard_name = "model-00001-of-00001.safetensors"
+        state = model.state_dict()
+        stored = {
+            key: value.clone().contiguous()
+            for key, value in state.items()
+            if key != "lm_head.weight"
+        }
+        save_file(stored, str(self.root / shard_name))
+        index = {
+            "metadata": {},
+            "weight_map": dict.fromkeys(stored, shard_name),
+        }
+        (self.root / "model.safetensors.index.json").write_text(
+            json.dumps(index), encoding="utf-8"
+        )
+        inventory = probe.tensor_inventory(self.root)
+        counts = probe.verify_loaded_state(model, self.root, inventory)
+        self.assertEqual(counts["loaded_text_parameters"], 12)
+        self.assertEqual(counts["loaded_total_parameters"], 18)
+        self.assertEqual(counts["stored_buffer_elements"], 1)
+        self.assertEqual(inventory["stored_parameter_count"], 19)
+        model.lm_head.weight = torch.nn.Parameter(torch.zeros((3, 4)))
+        with self.assertRaisesRegex(RuntimeError, "not tied"):
+            probe.verify_loaded_state(model, self.root, inventory)
+
     def test_receipt_must_be_new_in_owner_private_directory(self) -> None:
         private = self.root / "private"
         private.mkdir(mode=0o700)
