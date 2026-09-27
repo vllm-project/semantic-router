@@ -194,6 +194,22 @@ jobs:
           name: candle-release-libraries
           path: release-assets/rust
 
+      - name: Verify Rust release assets
+        env:
+          CANDLE_CRATE_VERSION: ${{ needs.validate.outputs.candle_version }}
+        run: |
+          set -euo pipefail
+          for asset in \
+            release-assets/rust/release/libcandle_semantic_router.a \
+            release-assets/rust/release/libcandle_semantic_router.so \
+            "release-assets/rust/package/candle-semantic-router-${CANDLE_CRATE_VERSION}.crate" \
+            release-assets/rust/package/qualified.sha256; do
+            if [[ ! -s "$asset" ]]; then
+              echo "::error::Missing or empty Rust release asset: $asset"
+              exit 1
+            fi
+          done
+
       - name: Resolve lowercase registry owner
         id: owner
         run: |
@@ -211,9 +227,11 @@ jobs:
           prerelease: false
           overwrite_files: false
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             release-assets/python/*
-            release-assets/rust/*
+            release-assets/rust/release/*
+            release-assets/rust/package/*
           body: |
             ## Release ${{ needs.validate.outputs.tag }}
 
