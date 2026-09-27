@@ -316,7 +316,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--head-dim", type=int, default=256)
     parser.add_argument(
         "--head-variant",
-        choices=("shared", "type-separated"),
+        choices=("shared", "type-separated", "candidate-interaction"),
         default="shared",
         help="Explicit experimental readout; existing checkpoints remain shared",
     )
@@ -389,7 +389,7 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("Exact LoRA resume requires --source-path")
     if args.resume and args.train_mode != "lora" and args.source_path:
         raise ValueError("--source-path applies only to LoRA resume")
-    if args.head_variant == "type-separated" and (
+    if args.head_variant in ("type-separated", "candidate-interaction") and (
         args.init_kind != "base"
         or args.train_mode != "full"
         or args.base_revision != TYPED_HEAD_SOURCE_REVISION
@@ -696,9 +696,9 @@ def main() -> None:
         "select": file_sha256(args.select),
         "cal": file_sha256(args.cal),
     }
-    if args.head_variant == "type-separated":
+    if args.head_variant in ("type-separated", "candidate-interaction"):
         if data_sha != TYPED_HEAD_PARTITIONS:
-            raise ValueError("Typed-head ablation data differs")
+            raise ValueError("Experimental-head ablation data differs")
         if (
             not resume
             and {
@@ -707,9 +707,9 @@ def main() -> None:
             }
             != TYPED_HEAD_SOURCE_FILES
         ):
-            raise ValueError("Typed-head ablation official source differs")
+            raise ValueError("Experimental-head ablation official source differs")
         if (len(train_rows), len(select_rows), len(cal_rows)) != (7455, 700, 700):
-            raise ValueError("Typed-head ablation partition counts differ")
+            raise ValueError("Experimental-head ablation partition counts differ")
     if args.replay:
         data_sha["replay"] = file_sha256(args.replay)
     if args.inline_teacher:
@@ -719,6 +719,8 @@ def main() -> None:
     )
     if args.head_variant == "type-separated":
         code_files = (*code_files, "type_separated_head.py")
+    elif args.head_variant == "candidate-interaction":
+        code_files = (*code_files, "candidate_interaction_head.py")
     if args.init_kind == "decision2-lora":
         code_files = (*code_files, "infer.py")
     if args.inline_teacher:
@@ -834,8 +836,11 @@ def main() -> None:
     select_items = [encode(row, tokenizer, args.max_length) for row in select_rows]
     # Cal data is parsed and hashed for split isolation, but never tokenized or evaluated here.
     train_lengths = [len(item["ids"]) for item in train_items]
-    if args.head_variant == "type-separated" and sum(train_lengths) != 4_094_489:
-        raise ValueError("Typed-head ablation tokenizer exposure differs")
+    if (
+        args.head_variant in ("type-separated", "candidate-interaction")
+        and sum(train_lengths) != 4_094_489
+    ):
+        raise ValueError("Experimental-head ablation tokenizer exposure differs")
     replay_lengths = [len(item["ids"]) for item in replay_items]
     planned = planned_updates(
         len(train_items),

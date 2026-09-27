@@ -540,6 +540,10 @@ def main() -> None:
         adapter_sources["type_separated_head.py"] = file_sha256(
             Path(__file__).with_name("type_separated_head.py")
         )
+    elif checkpoint_metadata.get("head_variant") == "candidate-interaction":
+        adapter_sources["candidate_interaction_head.py"] = file_sha256(
+            Path(__file__).with_name("candidate_interaction_head.py")
+        )
     if calibration is not None:
         adapter_sources["calibration.py"] = file_sha256(
             Path(__file__).with_name("calibration.py")

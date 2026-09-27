@@ -1,0 +1,44 @@
+{
+  "code_sha256": {
+    "scripts/preflight_qwen06_candidate_interaction.py": "76c48da8baf4b805e81d59fc2da06b6fd5d1801fac74b5f4c997d56a7afebf85",
+    "scripts/preflight_qwen06_type_head.py": "401324b21d215dbd42e72c6da690855e5284fdf828f88f0539ea964abe4828a3",
+    "training/model/candidate_interaction_head.py": "6562206ba28dc9c023a4b62e86a752b55ba4f8ca0148ba9e70721818efb5d407",
+    "training/model/data.py": "632bd60555f63459ff08ffe82c8263ca6a96f75360bc8c06469fcb10f1e2e99c",
+    "training/model/decision_model.py": "a039c22252a8b797846b4c6baa2393b1decf85ec26f3825d4edf0cb5052a17d7",
+    "training/model/infer.py": "2393f685687983648b86c59af4932f6b4ccb43a9a5188a9ada1761ee757fee96",
+    "training/model/loss.py": "5b07dbe3b0fa55d95df25dcb20733b7b5e76b306ced414195ef715c5ba007b7a",
+    "training/model/plan.py": "c39d706e1217dbc41c4f8e4f2e8d66b69058baa2e1c26abd8f194fea374cbfcb",
+    "training/model/source.py": "ef7b30171c4befb26163ea4d3d6e5add9dc602228a476d6f0ead9d40b450c7e3",
+    "training/model/train.py": "0be035fd40839063edca0c5a60a986debac514b103f97bf7af3d1723c1addcfe"
+  },
+  "full_arm_planned_updates": 466,
+  "max_length": 8192,
+  "one_step_gpu_seconds_cap": 180,
+  "optimizer_updates": 1,
+  "parity_max_drift": 0.001,
+  "partition_rows": {
+    "cal": 700,
+    "select": 700,
+    "train": 7455
+  },
+  "partition_sha256": {
+    "cal": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a",
+    "select": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6",
+    "train": "61740be433c6cd714810a9908432ad29597c570d0d267d2731ab78cdad243755"
+  },
+  "schema": "decision2-qwen06-candidate-interaction-technical-gate/1",
+  "seed": 20260926,
+  "select32_by_type": {
+    "choice": 12,
+    "noul": 10,
+    "score": 10
+  },
+  "source_file_sha256": {
+    "config.json": "504a6b58c4271583724e66584b6b7698aea18450209df6b2f7582df0e89cee59",
+    "model.safetensors": "cd2a512003e2f9f3cd3c32a9c3573f820bb28c940f73c57b1ddaa983d9223eba"
+  },
+  "source_id": "Qwen/Qwen3-0.6B-Base",
+  "source_revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+  "train_tokens": 4094489,
+  "zero_step_gpu_seconds_cap": 540
+}
