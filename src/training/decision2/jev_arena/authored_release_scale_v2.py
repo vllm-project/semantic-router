@@ -24,7 +24,7 @@ from jev_arena.authored_release_scale_v1 import (
     write_private,
 )
 
-VERSION = "jevarena-authored-release-scale-v2/dev-feasibility-1"
+VERSION = "jevarena-authored-release-scale-v2/dev-feasibility-2"
 
 
 def _domain_witness_issues(case: dict[str, Any]) -> list[str]:
@@ -71,12 +71,28 @@ def _domain_witness_issues(case: dict[str, Any]) -> list[str]:
 
 
 def _write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.write_text(
-        "".join(
-            json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows
-        )
-    )
+    path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows))
     path.chmod(0o600)
+
+
+def _verify_serialized_prompts(
+    cases: list[dict[str, Any]], expected: list[dict[str, Any]], path: Path
+) -> None:
+    actual = [json.loads(line) for line in path.read_text().splitlines()]
+    if len(actual) != len(cases):
+        raise ValueError("Serialized authored prompt count differs")
+    for case, before, after in zip(cases, expected, actual, strict=True):
+        for key in ("id", "state", "questions"):
+            if json.dumps(before[key], ensure_ascii=False) != json.dumps(
+                after[key], ensure_ascii=False
+            ):
+                raise ValueError("Serialized authored native prompt changed")
+        question = after["questions"]["decision"]
+        if (
+            OPERATIONS[case["operation"]] == "choice"
+            and list(question["criteria"]) != case["option_order"]
+        ):
+            raise ValueError("Serialized Choice option order differs from casebook")
 
 
 def _distribution(
@@ -199,6 +215,8 @@ def prepare(
         path = output / f"{name}.private.jsonl"
         _write_rows(path, rows)
         hashes[name] = file_sha(path)
+    _verify_serialized_prompts(cases, originals, output / "originals.private.jsonl")
+    _verify_serialized_prompts(cases, variants, output / "variants.private.jsonl")
     receipt = {
         "version": VERSION,
         "status": "PRIVATE_V2_CANDIDATE_PREFLIGHT_PENDING_NO_BLIND_PACKET",

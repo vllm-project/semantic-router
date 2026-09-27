@@ -45,10 +45,30 @@ def _blind_rows(
 def _write_packet(path: Path, rows: list[dict[str, Any]]) -> None:
     path.write_text(
         "".join(
-            json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows
+            # Choice criteria order is part of the native input contract.
+            json.dumps(row, ensure_ascii=False) + "\n"
+            for row in rows
         )
     )
     path.chmod(0o600)
+
+
+def _validate_written_packet(
+    path: Path, source: list[dict[str, Any]], joins: dict[str, str]
+) -> None:
+    by_id = {row["id"]: row for row in source}
+    written = _rows(path)
+    if len(by_id) != len(source) or len(written) != len(source):
+        raise ValueError("Review packet/source count or identity changed")
+    if {row["review_id"] for row in written} != set(joins):
+        raise ValueError("Review packet opaque IDs changed")
+    for row in written:
+        original = by_id[joins[row["review_id"]]]
+        for field in ("state", "questions"):
+            if json.dumps(row[field], ensure_ascii=False) != json.dumps(
+                original[field], ensure_ascii=False
+            ):
+                raise ValueError("Review packet changed native input or option order")
 
 
 def seal(
@@ -91,6 +111,7 @@ def seal(
         packet, lookup = _blind_rows(source, salt)
         path = output / f"{name}.private.jsonl"
         _write_packet(path, packet)
+        _validate_written_packet(path, source, lookup)
         packet_hashes[name] = file_sha(path)
         joins[name] = {"salt_hex": salt.hex(), "opaque_to_source_id": lookup}
     write_private(output / "joins.private.json", joins)
