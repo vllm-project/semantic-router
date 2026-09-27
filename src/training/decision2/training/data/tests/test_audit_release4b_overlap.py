@@ -35,6 +35,16 @@ class ReleaseOverlapAuditTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "not a gold-free prompt"):
                 read_jsonl(path, prompt=True)
 
+    def test_structured_state_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "prompts.jsonl"
+            path.write_text(
+                json.dumps({"id": "eval/1", "state": {"case": {}}, "questions": {}})
+                + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(len(read_jsonl(path, prompt=True)), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
