@@ -234,7 +234,7 @@ def build(
     card = ProductCard(
         model_id="llm-semantic-router/DEV2.0-0.6B",
         banner="assets/DEV2.0-0.6B-owl-banner.png",
-        tagline="A compact, native Choice / Noul / Score decision model for structured decisions over supplied context.",
+        tagline="A compact Choice, Noul and Score decision model for supplied evidence.",
         use_cases=(
             "Choose among supplied routes or options with explicit criteria.",
             "Judge a yes/no proposition and return a probability estimate.",
@@ -245,7 +245,7 @@ def build(
         loaded_parameters=597_103_104,
         method=(
             "A causal text backbone reads the state and each question. A native "
-            "candidate head scores the supplied options or ordered levels and "
+            "candidate head scores supplied options or ordered levels and "
             "returns calibrated probabilities without generating chat text."
         ),
         limitations=(
@@ -255,10 +255,9 @@ def build(
         ),
         evidence_table="\n".join(table),
         evaluation_scope=(
-            "The displayed roster is DEV2.0-0.6B, Decision 1.0 Kai-0.6B and "
-            "Bosun-v3.1-0.6B. All three were evaluated on the same v3 and "
-            "public-231 panels. The 2.0 candidate improves human-task transfer "
-            "and public JevBench over Kai, with a substantial typed Choice tradeoff."
+            "The JevBench result is the reproducible public subset, not an official "
+            "closed leaderboard. JevArena is a same-panel post-key comparison; "
+            "independent confirmation remains open."
         ),
     )
     (output / "README.md").write_text(render(card), encoding="utf-8")
