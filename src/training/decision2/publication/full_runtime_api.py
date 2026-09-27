@@ -259,8 +259,7 @@ class Decision2:
         self, *, state: Any, questions: dict[str, dict[str, Any]]
     ) -> dict[str, Any]:
         """Answer independently supplied typed questions without truncation."""
-        from .decision_model import collate, encode
-        from .infer import normalized_answer, question_to_row
+        from .infer import _api_json_payload, product_answer, question_to_row
 
         if (
             not isinstance(questions, dict)
@@ -268,8 +267,15 @@ class Decision2:
             or any(not isinstance(key, str) or not key for key in questions)
         ):
             raise ValueError("questions must be a nonempty mapping of question IDs")
-        # This also rejects NaN and non-JSON state before the model sees it.
-        _canonical(state)
+        if not _api_json_payload(state):
+            raise ValueError("state must be text, an object, or an array")
+        # Reject non-JSON and nonfinite state before the model sees it.
+        try:
+            _canonical(state)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("state must contain JSON data") from exc
+        from .decision_model import collate, encode
+
         answers: dict[str, dict[str, Any]] = {}
         jobs: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
         usage_tokens = 0
@@ -323,11 +329,12 @@ class Decision2:
                 )
             for (qid, row, encoded), values in zip(jobs, logits):
                 try:
-                    answers[qid] = normalized_answer(
+                    answers[qid] = product_answer(
                         row["task_type"],
                         encoded["keys"],
                         values[: len(encoded["keys"])].float().cpu().tolist(),
                         self.temperatures[row["task_type"]],
+                        [option["description"] for option in row["options"]],
                     )
                 except ValueError:
                     answers[qid] = {

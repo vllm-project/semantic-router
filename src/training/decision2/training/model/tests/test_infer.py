@@ -11,6 +11,7 @@ from training.model.infer import (
     checkpoint_fingerprint,
     load_prompts,
     normalized_answer,
+    product_answer,
     prompt_input_sha256,
     question_to_row,
     run_prompts,
@@ -77,6 +78,10 @@ class InferContractTest(unittest.TestCase):
         self.assertEqual(counts["valid_questions"], 3)
         self.assertEqual(counts["truncated_questions"], 0)
         self.assertEqual(record["input_sha256"], prompt_input_sha256(prompt))
+        # The keyed v3 benchmark adapter keeps its old response schema; the
+        # product-only fields are added later by Decision2.system_one.
+        self.assertNotIn("confidence", record["answers"]["c"])
+        self.assertNotIn("legend", record["answers"]["s"])
         gold = {
             "c": {
                 "type": "choice",
@@ -128,6 +133,19 @@ class InferContractTest(unittest.TestCase):
         self.assertEqual(
             [option["key"] for option in choice["options"]], ["alpha", "beta"]
         )
+        self.assertEqual(choice["instructions"], "Choose")
+        self.assertEqual(
+            question_to_row(
+                prompt,
+                "c",
+                {
+                    "type": "choice",
+                    "instructions": "Choose",
+                    "criteria": {"a": "", "b": "B"},
+                },
+            )["options"][0]["description"],
+            "",
+        )
         score = question_to_row(prompt, "s", prompt["questions"]["s"])
         self.assertEqual(
             [option["key"] for option in score["options"]], ["0", "1", "2"]
@@ -151,6 +169,130 @@ class InferContractTest(unittest.TestCase):
                 load_prompts(path)
             path.write_text(json.dumps(prompt) + "\n")
             self.assertEqual(len(load_prompts(path)), 1)
+
+    def test_structured_system_one_questions_and_native_limits(self):
+        prompt = item()
+        prompt["state"] = [{"record": {"priority": 3}}]
+        choice = question_to_row(
+            prompt,
+            "c",
+            {
+                "type": "choice",
+                "instructions": {
+                    "question": "Choose from `candidate`",
+                    "candidate": [1, 2],
+                },
+                "criteria": {"a": None, "b": {"rule": ["one", "two"]}},
+            },
+        )
+        self.assertEqual(choice["state"], prompt["state"])
+        self.assertIsNone(choice["options"][0]["description"])
+        self.assertEqual(choice["options"][1]["description"], {"rule": ["one", "two"]})
+        noul = question_to_row(
+            prompt,
+            "n",
+            {
+                "type": "noul",
+                "instructions": ["Is it true?"],
+                "criteria": {"true": {"meaning": "yes"}},
+            },
+        )
+        self.assertEqual(
+            [option["key"] for option in noul["options"]], ["false", "true"]
+        )
+        self.assertEqual(noul["options"][1]["description"], {"meaning": "yes"})
+        self.assertEqual(
+            [
+                option["key"]
+                for option in question_to_row(
+                    prompt, "n", {"type": "noul", "instructions": "Yes?"}
+                )["options"]
+            ],
+            ["false", "true"],
+        )
+        score = question_to_row(
+            prompt,
+            "s",
+            {
+                "type": "score",
+                "instructions": ["Rate", {"scope": "record"}],
+                "criteria": [{"level": number} for number in range(10)],
+            },
+        )
+        self.assertEqual(
+            [option["key"] for option in score["options"]], [str(i) for i in range(10)]
+        )
+        self.assertEqual(
+            len(
+                question_to_row(
+                    prompt,
+                    "c",
+                    {
+                        "type": "choice",
+                        "instructions": "Choose",
+                        "criteria": {str(i): None for i in range(255)},
+                    },
+                )["options"]
+            ),
+            255,
+        )
+        for bad in (
+            {
+                "type": "choice",
+                "instructions": {},
+                "criteria": {"a": None, "b": object()},
+            },
+            {"type": "noul", "instructions": "Yes?", "criteria": {"other": "maybe"}},
+            {"type": "score", "instructions": "Rate", "criteria": [None, "high"]},
+            {"type": "score", "instructions": "Rate", "criteria": ["x"] * 11},
+            {
+                "type": "choice",
+                "instructions": "Choose",
+                "criteria": {str(i): None for i in range(256)},
+            },
+            {
+                "type": "choice",
+                "instructions": {"x": float("nan")},
+                "criteria": {"a": None, "b": None},
+            },
+        ):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                question_to_row(prompt, "bad", bad)
+
+    def test_product_fields_preserve_benchmark_probabilities(self):
+        cases = (
+            ("choice", ["a", "b"], [2.0, 0.0], [None, {"label": "B"}]),
+            ("noul", ["false", "true"], [0.0, 2.0], ["No", "Yes"]),
+            (
+                "score",
+                ["0", "1", "2"],
+                [0.0, 1.0, 2.0],
+                ["Low", {"middle": 1}, ["High"]],
+            ),
+        )
+        for kind, keys, logits, descriptions in cases:
+            with self.subTest(kind=kind):
+                benchmark = normalized_answer(kind, keys, logits, 1.0)
+                product = product_answer(kind, keys, logits, 1.0, descriptions)
+                self.assertEqual({name: product[name] for name in benchmark}, benchmark)
+                if kind == "noul":
+                    self.assertNotIn("confidence", product)
+                else:
+                    self.assertGreaterEqual(product["confidence"], 0.0)
+                    self.assertLessEqual(product["confidence"], 1.0)
+        self.assertEqual(
+            product["legend"], {"0": "Low", "1": '{"middle":1}', "2": '["High"]'}
+        )
+        tie = product_answer(
+            "choice", ["first", "second"], [0.0, 0.0], 1.0, [None, None]
+        )
+        self.assertEqual(
+            normalized_answer("choice", ["first", "second"], [0.0, 0.0], 1.0)["choice"],
+            None,
+        )
+        self.assertEqual(tie["choice"], "first")
+        self.assertEqual(tie["probabilities"], {"first": 0.5, "second": 0.5})
+        self.assertEqual(tie["confidence"], 0.0)
 
     def test_model_and_output_hash_receipts(self):
         with tempfile.TemporaryDirectory() as directory:

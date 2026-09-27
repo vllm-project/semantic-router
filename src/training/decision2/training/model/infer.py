@@ -85,29 +85,43 @@ def question_to_row(
         raise ValueError("unsupported or malformed question type")
     kind = question["type"]
     instructions = question.get("instructions")
-    if not isinstance(instructions, str) or not instructions:
+    if not _api_json_payload(instructions, require_nonempty_text=True):
         raise ValueError("missing question instructions")
     criteria = question.get("criteria")
     if kind == "score":
         if not isinstance(criteria, list) or not 2 <= len(criteria) <= 10:
             raise ValueError("score criteria must be an ordered list of 2..10 levels")
-        if any(not isinstance(description, str) for description in criteria):
-            raise ValueError("score criteria descriptions must be strings")
+        if any(not _api_json_payload(description) for description in criteria):
+            raise ValueError(
+                "score criteria descriptions must be text or structured data"
+            )
         options = [
             {"key": str(index), "description": description}
             for index, description in enumerate(criteria)
         ]
     else:
+        if kind == "noul":
+            if criteria is None:
+                criteria = {}
+            if not isinstance(criteria, dict) or set(criteria) - {"false", "true"}:
+                raise ValueError("noul requires only false and true criteria")
+            if len(criteria) < 2:
+                criteria = {
+                    "false": criteria.get("false", "No"),
+                    "true": criteria.get("true", "Yes"),
+                }
         if not isinstance(criteria, dict) or not 2 <= len(criteria) <= MAX_OPTIONS:
             raise ValueError(
                 "choice/noul criteria must be an object with 2..255 options"
             )
         if any(
-            not isinstance(key, str) or not key or not isinstance(description, str)
+            not isinstance(key, str)
+            or not key
+            or not _api_json_payload(description, nullable=kind == "choice")
             for key, description in criteria.items()
         ):
             raise ValueError(
-                "choice/noul criteria need nonempty string keys and string descriptions"
+                "choice/noul criteria need nonempty string keys and valid descriptions"
             )
         if kind == "noul" and set(criteria) != {"false", "true"}:
             raise ValueError("noul requires false and true criteria")
@@ -124,6 +138,37 @@ def question_to_row(
         "label": 0,  # Required by the shared encoder; never read by inference.
         "family": "benchmark-unknown",  # Family/gold are absent from prompt input.
     }
+
+
+def _api_json_payload(
+    value: Any, *, nullable: bool = False, require_nonempty_text: bool = False
+) -> bool:
+    """Validate API text/object/array payloads and optional Choice null."""
+    if value is None:
+        return nullable
+    if not isinstance(value, (str, dict, list)) or (
+        require_nonempty_text and value == ""
+    ):
+        return False
+
+    def json_value(part: Any) -> bool:
+        if part is None or isinstance(part, (str, bool, int)):
+            return True
+        if isinstance(part, float):
+            return math.isfinite(part)
+        if isinstance(part, list):
+            return all(json_value(child) for child in part)
+        if isinstance(part, dict):
+            return all(
+                isinstance(key, str) and json_value(child)
+                for key, child in part.items()
+            )
+        return False
+
+    try:
+        return json_value(value)
+    except RecursionError:
+        return False
 
 
 def normalized_answer(
@@ -164,6 +209,39 @@ def normalized_answer(
         "choice": keys[winner] if winner is not None else None,
         "probabilities": probability_map,
     }
+
+
+def product_answer(
+    kind: str,
+    keys: list[str],
+    logits: list[float],
+    temperature: float,
+    descriptions: list[Any],
+) -> dict[str, Any]:
+    """Add System One response fields without changing benchmark normalization.
+
+    Confidence is this product's normalized-entropy measure, not a claim of
+    numerical equivalence with TypeSafe's undocumented confidence formula.
+    """
+    answer = normalized_answer(kind, keys, logits, temperature)
+    if kind == "noul":
+        return answer
+    if len(descriptions) != len(keys):
+        raise ValueError("candidate descriptions do not match the model answer")
+    probabilities = list(answer["probabilities"].values())
+    entropy = -sum(p * math.log(p) for p in probabilities if p > 0)
+    answer["confidence"] = max(0.0, min(1.0, 1.0 - entropy / math.log(len(keys))))
+    if kind == "score":
+        answer["legend"] = {
+            key: description if isinstance(description, str) else canonical(description)
+            for key, description in zip(keys, descriptions)
+        }
+    elif answer["choice"] is None:
+        # The public Choice schema requires a key. Resolve exact ties in the
+        # caller's original order, leaving the distribution unchanged.
+        maximum = max(probabilities)
+        answer["choice"] = keys[probabilities.index(maximum)]
+    return answer
 
 
 def prompt_input_sha256(item: dict[str, Any]) -> str:
@@ -488,8 +566,9 @@ def main() -> None:
             for key, value in collate(encoded, pad_id).items()
         }
         torch.cuda.synchronize(device)
-        with torch.inference_mode(), torch.autocast(
-            device_type="cuda", dtype=torch.bfloat16
+        with (
+            torch.inference_mode(),
+            torch.autocast(device_type="cuda", dtype=torch.bfloat16),
         ):
             logits = model(**batch)
         torch.cuda.synchronize(device)
