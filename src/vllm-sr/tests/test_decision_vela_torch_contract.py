@@ -338,15 +338,15 @@ def test_clean_vela_loads_without_historical_inventory_or_state_layout(
         is None
     )
 
-    class FrameworkReached(Exception):
+    class FrameworkReachedError(Exception):
         pass
 
     monkeypatch.setattr(
         vela_torch,
         "_required_module",
-        lambda name: (_ for _ in ()).throw(FrameworkReached(name)),
+        lambda name: (_ for _ in ()).throw(FrameworkReachedError(name)),
     )
-    with pytest.raises(FrameworkReached, match="torch"):
+    with pytest.raises(FrameworkReachedError, match="torch"):
         VelaTorchRuntime.load(
             root,
             max_length=1024,

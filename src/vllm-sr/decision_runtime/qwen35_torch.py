@@ -767,7 +767,7 @@ def _complete_backbone(loaded: Any) -> Any:
     fields = ("missing_keys", "unexpected_keys", "mismatched_keys", "error_msgs")
     if (
         not isinstance(loaded, tuple)
-        or len(loaded) != 2
+        or len(loaded) != 2  # noqa: PLR2004 - model and loading information
         or loaded[0] is None
         or not isinstance(loaded[1], dict)
         or not set(fields) <= loaded[1].keys()
@@ -801,7 +801,9 @@ def _validate_backbone_tensors(
             with safe_open(
                 str(root / relative), framework="pt", device="cpu"
             ) as reader:
-                for name in reader.keys():
+                # The safetensors reader exposes keys() but is not an iterator.
+                tensor_names = reader.keys()
+                for name in tensor_names:
                     if name in observed:
                         raise Qwen35RuntimeError(
                             "Qwen backbone shard contains duplicate tensors"

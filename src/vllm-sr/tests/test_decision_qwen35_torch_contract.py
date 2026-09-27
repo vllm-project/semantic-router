@@ -627,15 +627,15 @@ def test_clean_qwen_loader_accepts_pinned_config_without_runtime_file(
         raising=False,
     )
 
-    class FrameworkReached(Exception):
+    class FrameworkReachedError(Exception):
         pass
 
     monkeypatch.setattr(
         qwen35_torch,
         "_required_module",
-        lambda name: (_ for _ in ()).throw(FrameworkReached(name)),
+        lambda name: (_ for _ in ()).throw(FrameworkReachedError(name)),
     )
-    with pytest.raises(FrameworkReached, match="torch"):
+    with pytest.raises(FrameworkReachedError, match="torch"):
         Qwen35TorchRuntime.load(
             root,
             temperature=1.0,

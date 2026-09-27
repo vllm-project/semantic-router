@@ -529,9 +529,7 @@ def test_clean_qwen_uses_repository_calibration_and_suppresses_legacy_graph(
         files=(ArtifactFile("temperature.json", "temperature.json", "c" * 64, 21),),
     )
     calls = []
-    monkeypatch.setattr(
-        qwen35_rocm_binder, "create_qwen_rocm_profile_binder", lambda: object()
-    )
+    monkeypatch.setattr(qwen35_rocm_binder, "create_qwen_rocm_profile_binder", object)
     monkeypatch.setattr(
         qwen35_torch.Qwen35TorchRuntime,
         "load",
