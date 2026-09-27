@@ -62,6 +62,21 @@ An independently audited broader source mixture and a matched-budget
 architecture/readout experiment are more informative than tuning repeatedly
 on our exposed development set.
 
+[Kev's public training recipe](https://github.com/jaredpalmer/kev/blob/main/README.md)
+describes a smaller but broader decision mixture: 10,000 examples from ten
+public sources, 896 generated policy cases and 1,680 rows from 60 rule
+structures, followed by two-epoch LoRA training for its 0.8B/4B/9B releases.
+Later deltas add date-count and evidence-removal cases with old-data replay;
+the 27B recipe also reports 1,400 buried-question long-input examples and
+soft targets on ambiguous records. Its earlier
+[0.5B data card](https://github.com/jaredpalmer/kev/blob/main/MODEL_CARD.md)
+names Banking77, BoolQ, AG News, MNLI, SST-5 and Yelp Review Full as six
+human-labeled training sources. These are concrete source/coverage hypotheses
+for Decision 2.0, not transferable benchmark numbers. Their original record
+IDs, labels, terms and overlap with our transfer tasks must be checked before
+use. Replaying an entire model's training rows would confound source breadth,
+token exposure, answer rubric and readout, so test those separately.
+
 ## Implications for Decision 2.0 training and release
 
 - **Training:** Compare (A) current candidate-conditioned head, (B) token-logit readout, and (C) mean-pooled option/rubric readout with a frozen common backbone/data/budget where feasible. Introduce adversarial rubric bindings, boundary cases, multi-hop rules and realistic abstention cases from *new* families. Keep soft replay and token-/type-/language-matched controls to separate new-data gains from exposure and forgetting.
