@@ -23,15 +23,16 @@ class SlimExportTest(unittest.TestCase):
         (self.source / "native" / "config.json").write_text('{"model_type":"test"}\n')
         (self.source / "native" / "SHA256SUMS").write_text("model bytes pinned\n")
         (self.source / "native" / "model.safetensors").write_bytes(b"model weights")
+        (self.source / "native" / "LICENSE").write_text("Eikos MIT terms\n")
+        (self.source / "native" / "LICENSE-Qwen").write_text("Qwen Apache terms\n")
+        (self.source / "native" / "NOTICE").write_text("Original Eikos notice\n")
         (self.source / "card-artifacts").mkdir()
         for name in export.CHARTS:
             (self.source / "card-artifacts" / name).write_text(
                 '<svg xmlns="http://www.w3.org/2000/svg"/>\n'
             )
-        for name in export.ROOT_COPY:
-            (self.source / name).write_text(
-                "Apache License\nVersion 2.0\n" if name == "LICENSE" else name + "\n"
-            )
+        (self.source / "LICENSE").write_text("Apache License\nVersion 2.0\n")
+        (self.source / "NOTICE").write_text("Decision 2.0 modification notice\n")
         source_card = (
             "---\nlicense: apache-2.0\n---\n\n"
             + export.CARD_FOX
@@ -121,6 +122,21 @@ class SlimExportTest(unittest.TestCase):
             (self.output / "assets" / export.CHARTS[0]).read_bytes(),
             (self.source / "card-artifacts" / export.CHARTS[0]).read_bytes(),
         )
+        self.assertEqual(
+            (self.output / "LICENSE-Eikos").read_bytes(),
+            (self.source / "native" / "LICENSE").read_bytes(),
+        )
+        self.assertEqual(
+            (self.output / "LICENSE-Qwen").read_bytes(),
+            (self.source / "native" / "LICENSE-Qwen").read_bytes(),
+        )
+        self.assertEqual(
+            (self.output / "NOTICE").read_bytes(), (self.source / "NOTICE").read_bytes()
+        )
+        self.assertIn(
+            "[Eikos native notice](model/NOTICE)",
+            (self.output / "ATTRIBUTIONS.md").read_text(),
+        )
         card = (self.output / "README.md").read_text()
         self.assertIn("DEV2.0-4B mosaic owl", card)
         self.assertIn("assets/jevarena-rank.svg", card)
@@ -140,6 +156,19 @@ class SlimExportTest(unittest.TestCase):
         self._export()
         (self.output / "model" / "model.safetensors").write_bytes(b"tampered")
         with self.assertRaisesRegex(ValueError, "inventory changed"):
+            export.verify(self.output)
+
+    def test_broken_card_reference_is_rejected_even_if_rehashed(self) -> None:
+        self._export()
+        card_path = self.output / "README.md"
+        card_path.write_text(
+            card_path.read_text() + "\n![missing](assets/missing.svg)\n"
+        )
+        manifest_path = self.output / "evaluation" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["files_sha256"]["README.md"] = export._sha(card_path)
+        manifest_path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, "Broken local model-card reference"):
             export.verify(self.output)
 
     def test_unpinned_owl_is_rejected(self) -> None:

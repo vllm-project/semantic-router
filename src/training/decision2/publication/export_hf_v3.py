@@ -33,7 +33,12 @@ CARD_FOX = (
     "(decision-2-sticker-crossroads-fox-v5.png)"
 )
 CHARTS = tuple(FIGURES)
-ROOT_COPY = ("LICENSE", "LICENSE-Eikos", "LICENSE-Qwen", "NOTICE")
+ROOT_SOURCES = {
+    "LICENSE": "LICENSE",
+    "NOTICE": "NOTICE",
+    "LICENSE-Eikos": "native/LICENSE",
+    "LICENSE-Qwen": "native/LICENSE-Qwen",
+}
 
 
 def _sha(path: Path) -> str:
@@ -83,8 +88,8 @@ def _checked_source(source: Path) -> tuple[dict[str, Any], dict[str, str]]:
         raise ValueError("Private package release gate is not passed")
     if not (source / "native" / "SHA256SUMS").is_file():
         raise ValueError("Native model lacks its exact SHA256SUMS")
-    for name in ROOT_COPY:
-        if f"{name}" not in actual:
+    for name, relative in ROOT_SOURCES.items():
+        if relative not in actual:
             raise ValueError(f"Private package lacks inherited license/notice: {name}")
     return manifest, actual
 
@@ -196,13 +201,14 @@ def _attributions(record: dict[str, Any]) -> str:
         "This model adapts [Eikos-4B](https://huggingface.co/caiovicentino1/Eikos-4B)",
         "at revision `582ffb13f19a4da3f455e3db198584190bd7755b`.",
         "Its underlying Qwen model and tokenizer retain their original",
-        "Apache-2.0 notice. The Eikos MIT license and NOTICE are preserved",
-        "byte-for-byte; these inherited terms remain alongside our Apache-2.0",
+        "Apache-2.0 terms. The Eikos MIT license and native NOTICE are preserved",
+        "byte-for-byte in `model/`; these inherited terms remain alongside our Apache-2.0",
         "license. No raw training records are included in this model repository.",
         "",
         "Inherited license texts:",
         "[Eikos MIT](LICENSE-Eikos), [Qwen Apache-2.0](LICENSE-Qwen),",
-        "and [Eikos notice](NOTICE).",
+        "and [Eikos native notice](model/NOTICE). Our modification notice is",
+        "in the root [NOTICE](NOTICE).",
         "",
         "The owl artwork is reused from the Decision 1.0 Nox-4B banner",
         f"at revision `{OWL_SOURCE_REVISION}` (source PNG SHA-256",
@@ -261,9 +267,9 @@ def export(source: Path, owl: Path, output: Path) -> dict[str, Any]:
             shutil.copyfile(source / relative, destination)
             if _sha(destination) != source_files[relative]:
                 raise ValueError(f"Native model changed during export: {relative}")
-        for name in ROOT_COPY:
-            shutil.copyfile(source / name, stage / name)
-            if _sha(stage / name) != source_files[name]:
+        for name, relative in ROOT_SOURCES.items():
+            shutil.copyfile(source / relative, stage / name)
+            if _sha(stage / name) != source_files[relative]:
                 raise ValueError(f"License or notice changed during export: {name}")
         (stage / "assets").mkdir()
         (stage / "assets" / BANNER).write_text(_banner(owl_bytes), encoding="utf-8")
@@ -335,12 +341,25 @@ def verify(root: Path) -> dict[str, Any]:
     if set(root.iterdir()) != {
         root / "README.md",
         root / "ATTRIBUTIONS.md",
-        *(root / name for name in ROOT_COPY),
+        *(root / name for name in ROOT_SOURCES),
         root / "assets",
         root / "model",
         root / "evaluation",
     }:
         raise ValueError("Public root contains an unexpected temporary file")
+    for relative in ("README.md", "ATTRIBUTIONS.md", "evaluation/EVALUATION.md"):
+        document = root / relative
+        for target in re.findall(
+            r"\]\(([^)]+)\)", document.read_text(encoding="utf-8")
+        ):
+            if target.startswith(("https://", "http://", "#", "mailto:")):
+                continue
+            target_path = (document.parent / target.split("#", 1)[0]).resolve()
+            if (
+                not target_path.is_relative_to(root.resolve())
+                or not target_path.is_file()
+            ):
+                raise ValueError(f"Broken local model-card reference: {relative}")
     return manifest
 
 
