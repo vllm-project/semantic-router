@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as F
 
 LOSS_VERSION = "decision2-valid-k-ce-plus-optional-brier-and-replay-kl-v1"
+ORDINAL_LOSS_VERSION = "decision2-valid-k-ce-brier-plus-score-rps-v1"
 
 
 def per_example_loss(
@@ -20,6 +21,9 @@ def per_example_loss(
     teacher_probs: torch.Tensor | None = None,
     replay_mask: torch.Tensor | None = None,
     replay_kl_weight: float = 0.0,
+    task_type_ids: torch.Tensor | None = None,
+    score_level_indices: torch.Tensor | None = None,
+    ordinal_weight: float = 0.0,
 ) -> dict[str, torch.Tensor]:
     """Return per-example terms; caller controls accumulation sample weighting.
 
@@ -33,6 +37,10 @@ def per_example_loss(
         raise ValueError("brier_weight must be finite and nonnegative")
     if not math.isfinite(replay_kl_weight) or replay_kl_weight < 0:
         raise ValueError("replay_kl_weight must be finite and nonnegative")
+    if not math.isfinite(ordinal_weight) or ordinal_weight < 0:
+        raise ValueError("ordinal_weight must be finite and nonnegative")
+    if ordinal_weight and objective != "ce_brier":
+        raise ValueError("Ordinal Score loss needs ce_brier")
     if (
         logits.ndim != 2
         or candidate_mask.shape != logits.shape
@@ -74,6 +82,29 @@ def per_example_loss(
             raise ValueError("Non-replay rows must have zero teacher probabilities")
     elif replay_kl_weight:
         raise ValueError("Positive replay_kl_weight needs replay tensors")
+    if ordinal_weight:
+        if (
+            task_type_ids is None
+            or task_type_ids.shape != labels.shape
+            or task_type_ids.dtype != torch.long
+            or task_type_ids.device != logits.device
+            or torch.any((task_type_ids < 0) | (task_type_ids > 2))
+        ):
+            raise ValueError("Ordinal loss needs valid task_type_ids")
+        if (
+            score_level_indices is None
+            or score_level_indices.shape != logits.shape
+            or score_level_indices.dtype != torch.long
+            or score_level_indices.device != logits.device
+        ):
+            raise ValueError("Ordinal loss needs score_level_indices")
+        for row in torch.nonzero(task_type_ids == 2).flatten().tolist():
+            offered = score_level_indices[row, candidate_mask[row]]
+            if len(offered) > 10:
+                raise ValueError("Score has more than the 10 System One levels")
+            expected = torch.arange(len(offered), device=logits.device)
+            if not torch.equal(offered.sort().values, expected):
+                raise ValueError("Score levels must enumerate 0..K-1")
 
     with torch.autocast(device_type=logits.device.type, enabled=False):
         masked = logits.float().masked_fill(~candidate_mask, -float("inf"))
@@ -92,9 +123,31 @@ def per_example_loss(
                 safe_teacher.log() - safe_log_student
             )
             kl = (per_candidate * candidate_mask).sum(-1) * replay_mask
+        ordinal = torch.zeros_like(ce)
+        if ordinal_weight:
+            probabilities = log_probabilities.exp().masked_fill(~candidate_mask, 0.0)
+            ordered = torch.zeros_like(probabilities).scatter_add(
+                1, score_level_indices, probabilities
+            )
+            thresholds = torch.arange(logits.shape[1], device=logits.device)[None, :]
+            level_count = candidate_mask.sum(-1)
+            gold_level = score_level_indices.gather(1, labels[:, None])
+            threshold_mask = thresholds < (level_count - 1)[:, None]
+            target_cdf = (thresholds >= gold_level).float()
+            ordinal = (
+                ((ordered.cumsum(-1) - target_cdf).square() * threshold_mask).sum(-1)
+                / (level_count - 1)
+            ) * (task_type_ids == 2)
         total = (
             ce
             + (brier_weight * brier if objective == "ce_brier" else 0.0)
             + replay_kl_weight * kl
+            + ordinal_weight * ordinal
         )
-        return {"total": total, "ce": ce, "brier": brier, "replay_kl": kl}
+        return {
+            "total": total,
+            "ce": ce,
+            "brier": brier,
+            "replay_kl": kl,
+            "ordinal": ordinal,
+        }

@@ -78,6 +78,11 @@ def encode(row: dict[str, Any], tokenizer: Any, max_length: int) -> dict[str, An
         "query_position": len(ids) - 1,
         "label": row["label"],
         "keys": [option["key"] for option in row["options"]],
+        "score_level_indices": (
+            [int(option["key"]) for option in row["options"]]
+            if row["task_type"] == "score"
+            else list(range(len(row["options"])))
+        ),
         "task_type": row["task_type"],
         "family": row["family"],
         "teacher_probs": (
@@ -99,6 +104,7 @@ def collate(items: list[dict[str, Any]], pad_id: int) -> dict[str, Any]:
     attention_mask = torch.zeros_like(input_ids)
     positions = torch.zeros((len(items), width), dtype=torch.long)
     candidate_mask = torch.zeros((len(items), width), dtype=torch.bool)
+    score_level_indices = torch.zeros((len(items), width), dtype=torch.long)
     teacher_probs = torch.zeros((len(items), width), dtype=torch.float32)
     replay_mask = torch.zeros(len(items), dtype=torch.bool)
     for index, item in enumerate(items):
@@ -118,6 +124,14 @@ def collate(items: list[dict[str, Any]], pad_id: int) -> dict[str, Any]:
         attention_mask[index, : len(item["ids"])] = 1
         positions[index, :count] = torch.tensor(endpoints, dtype=torch.long)
         candidate_mask[index, :count] = True
+        levels = item.get("score_level_indices")
+        if levels is None:
+            levels = (
+                [int(key) for key in item["keys"]]
+                if item["task_type"] == "score"
+                else list(range(count))
+            )
+        score_level_indices[index, :count] = torch.tensor(levels, dtype=torch.long)
         if item["teacher_probs"] is not None:
             teacher_probs[index, :count] = torch.tensor(
                 item["teacher_probs"], dtype=torch.float32
@@ -128,6 +142,7 @@ def collate(items: list[dict[str, Any]], pad_id: int) -> dict[str, Any]:
         "attention_mask": attention_mask,
         "candidate_positions": positions,
         "candidate_mask": candidate_mask,
+        "score_level_indices": score_level_indices,
         "query_positions": torch.tensor(
             [item["query_position"] for item in items], dtype=torch.long
         ),

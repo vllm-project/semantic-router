@@ -63,6 +63,74 @@ class LossTest(unittest.TestCase):
                 replay_kl_weight=0.2,
             )
 
+    def test_score_ordinal_loss_respects_level_keys_not_option_positions(self):
+        import torch
+
+        from training.model.loss import per_example_loss
+
+        logits = torch.zeros((2, 3), requires_grad=True)
+        labels = torch.tensor([0, 2])
+        mask = torch.tensor([[True, True, True], [True, True, True]])
+        levels = torch.tensor([[2, 0, 1], [0, 1, 2]])
+        terms = per_example_loss(
+            logits,
+            labels,
+            mask,
+            objective="ce_brier",
+            task_type_ids=torch.tensor([2, 0]),
+            score_level_indices=levels,
+            ordinal_weight=1.0,
+        )
+        torch.testing.assert_close(
+            terms["ordinal"], torch.tensor([5 / 18, 0.0]), atol=1e-6, rtol=0
+        )
+        torch.testing.assert_close(
+            terms["total"], terms["ce"] + 0.5 * terms["brier"] + terms["ordinal"]
+        )
+        terms["total"].sum().backward()
+        self.assertTrue(torch.isfinite(logits.grad).all())
+
+    def test_score_ordinal_loss_rejects_invalid_level_mapping(self):
+        import torch
+
+        from training.model.loss import per_example_loss
+
+        with self.assertRaisesRegex(ValueError, "enumerate 0..K-1"):
+            per_example_loss(
+                torch.zeros(1, 3),
+                torch.tensor([0]),
+                torch.ones(1, 3, dtype=torch.bool),
+                objective="ce_brier",
+                task_type_ids=torch.tensor([2]),
+                score_level_indices=torch.tensor([[0, 0, 2]]),
+                ordinal_weight=1.0,
+            )
+
+    def test_score_level_keys_survive_native_encode_and_collate(self):
+        from training.model.decision_model import collate, encode
+
+        class Tokenizer:
+            def encode(self, text, *, add_special_tokens):
+                return [ord(character) % 127 for character in text]
+
+        row = {
+            "id": "score-permuted",
+            "state": "evidence",
+            "instructions": "grade",
+            "options": [
+                {"key": "2", "description": "strong"},
+                {"key": "0", "description": "weak"},
+                {"key": "1", "description": "medium"},
+            ],
+            "label": 0,
+            "task_type": "score",
+            "family": "ordinal-test",
+        }
+        item = encode(row, Tokenizer(), 2048)
+        batch = collate([item], pad_id=0)
+        self.assertEqual(batch["score_level_indices"].tolist(), [[2, 0, 1]])
+        self.assertEqual(batch["labels"].tolist(), [0])
+
 
 if __name__ == "__main__":
     unittest.main()

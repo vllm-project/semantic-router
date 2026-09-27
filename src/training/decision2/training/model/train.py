@@ -28,7 +28,7 @@ from .decision_model import PROMPT_VERSION, DecisionModel, collate, encode
 from .infer import checkpoint_fingerprint
 from .inline_replay import attach_inline_teacher
 from .lora import LORA_FORMAT, adapter_parameters, attach_lora
-from .loss import LOSS_VERSION, per_example_loss
+from .loss import LOSS_VERSION, ORDINAL_LOSS_VERSION, per_example_loss
 from .plan import epoch_batches, planned_updates, replay_count, validate_resume_state
 from .source import source_fingerprint
 
@@ -278,6 +278,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--objective", choices=("ce", "ce_brier"), default="ce")
     parser.add_argument("--brier-weight", type=float, default=0.5)
     parser.add_argument(
+        "--ordinal-weight",
+        type=float,
+        default=0.0,
+        help="Optional normalized ranked-probability loss on Score rows only",
+    )
+    parser.add_argument(
         "--train-mode", choices=("full", "head", "lora"), default="full"
     )
     parser.add_argument("--lora-rank", type=int, default=16)
@@ -403,6 +409,7 @@ def validate_args(args: argparse.Namespace) -> None:
         or args.choice_source_weight != 1
         or args.objective != "ce_brier"
         or args.brier_weight != 0.5
+        or args.ordinal_weight != 0
         or args.epochs != 1
         or args.max_steps != 466
         or args.microbatch != 1
@@ -494,6 +501,10 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("Inline identity hashes need --inline-teacher")
     if not math.isfinite(args.brier_weight) or args.brier_weight < 0:
         raise ValueError("brier_weight must be finite and nonnegative")
+    if not math.isfinite(args.ordinal_weight) or args.ordinal_weight < 0:
+        raise ValueError("ordinal_weight must be finite and nonnegative")
+    if args.ordinal_weight and args.objective != "ce_brier":
+        raise ValueError("Ordinal Score loss requires ce_brier")
     if (
         args.lora_rank < 1
         or args.lora_alpha < 1
@@ -821,8 +832,9 @@ def main() -> None:
             gradient_checkpointing_kwargs={"use_reentrant": False}
         )
     model.backbone.config.use_cache = False
+    loss_version = ORDINAL_LOSS_VERSION if args.ordinal_weight else LOSS_VERSION
     model.metadata.update(
-        {"training_mode": args.train_mode, "loss_version": LOSS_VERSION}
+        {"training_mode": args.train_mode, "loss_version": loss_version}
     )
     pad_id = (
         tokenizer.pad_token_id
@@ -853,7 +865,7 @@ def main() -> None:
     )
     contract = {
         "prompt_version": PROMPT_VERSION,
-        "loss_version": LOSS_VERSION,
+        "loss_version": loss_version,
         "model_source": source,
         "data_sha256": data_sha,
         "epochs": args.epochs,
@@ -876,6 +888,7 @@ def main() -> None:
         "base_revision": args.base_revision,
         "objective": args.objective,
         "brier_weight": args.brier_weight,
+        **({"ordinal_weight": args.ordinal_weight} if args.ordinal_weight else {}),
         "replay_fraction": args.replay_fraction,
         "replay_kl_weight": args.replay_kl_weight,
         "choice_source": args.choice_source,
@@ -1160,7 +1173,7 @@ def main() -> None:
             for group in optimizer.param_groups:
                 group["lr"] = group["peak_lr"] * factor
             optimizer.zero_grad(set_to_none=True)
-            sums = dict.fromkeys(("total", "ce", "brier", "replay_kl"), 0.0)
+            sums = dict.fromkeys(("total", "ce", "brier", "replay_kl", "ordinal"), 0.0)
             weighted_total = 0.0
             correct = tokens = replay_seen = 0
             started = time.perf_counter()
@@ -1200,6 +1213,9 @@ def main() -> None:
                         teacher_probs=batch["teacher_probs"],
                         replay_mask=batch["replay_mask"],
                         replay_kl_weight=args.replay_kl_weight,
+                        task_type_ids=batch["task_type_ids"],
+                        score_level_indices=batch["score_level_indices"],
+                        ordinal_weight=args.ordinal_weight,
                     )
                     loss = (terms["total"] * item_weights).sum() / window_weight
                 if not torch.isfinite(loss):
@@ -1235,6 +1251,7 @@ def main() -> None:
                     "ce": sums["ce"] / window_count,
                     "brier": sums["brier"] / window_count,
                     "replay_kl": sums["replay_kl"] / max(1, replay_seen),
+                    "ordinal": sums["ordinal"] / window_count,
                     "accuracy": correct / window_count,
                     "tokens": tokens,
                     "learning_rates": {
