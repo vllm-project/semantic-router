@@ -1,6 +1,7 @@
 package embedding
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -74,6 +75,41 @@ func TestContentIdentityCanonicalArtifactsAndRejectsUnverified(t *testing.T) {
 		if _, err := ResolveProviderIdentity(nil, ConsumerSettings{ModelType: provider}); !errors.Is(err, ErrIdentityUnsupported) {
 			t.Fatalf("%s: %v", provider, err)
 		}
+	}
+}
+
+func TestNamespaceIdentityKeysCandleBERTByEncoderVersion(t *testing.T) {
+	embed := func(context.Context, string) ([]float32, error) {
+		return nil, errors.New("identity resolution ran inference")
+	}
+	candle, err := NewFuncProvider("candle", 384, embed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ort, err := NewFuncProvider("ort", 384, embed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	memory := ConsumerSettings{ModelType: "bert", InputPolicy: "memory-content-v1"}
+	identity, err := ResolveNamespaceIdentity(candle, memory)
+	if err != nil || identity.Descriptor.Dimension != 384 || !strings.HasPrefix(identity.Fingerprint, candleBERTNamespace+":") {
+		t.Fatalf("Candle BERT namespace: %+v %v", identity, err)
+	}
+	cache := memory
+	cache.InputPolicy = "response-cache-v1"
+	if other, _ := ResolveNamespaceIdentity(candle, cache); other.Fingerprint == identity.Fingerprint {
+		t.Fatal("memory and cache inputs shared a namespace")
+	}
+	if _, err = ResolveNamespaceIdentity(candle, ConsumerSettings{ModelType: "bert", Dimension: 256, InputPolicy: "memory-content-v1"}); err == nil {
+		t.Fatal("namespace accepted a width the provider does not produce")
+	}
+	for _, provider := range []Provider{nil, ort} {
+		if _, err = ResolveNamespaceIdentity(provider, memory); !errors.Is(err, ErrIdentityUnsupported) {
+			t.Fatalf("unchanged BERT runtime acquired a namespace: %v", err)
+		}
+	}
+	if _, err = ResolveNamespaceIdentity(candle, ConsumerSettings{ModelType: "mmbert", InputPolicy: "memory-content-v1"}); !errors.Is(err, ErrIdentityUnsupported) {
+		t.Fatalf("other models must keep requiring a content descriptor: %v", err)
 	}
 }
 

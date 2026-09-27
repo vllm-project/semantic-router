@@ -8,7 +8,7 @@ providers:
       reasoning:
         family: qwen3
       backend_refs:
-        - name: mock-vllm
+        - name: provider-mocker
           provider: vllm
           endpoint: 127.0.0.1:8002
           weight: 1

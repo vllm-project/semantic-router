@@ -76,8 +76,9 @@ into a built-in model or provision its runtime dependencies.
 When a managed recipe is mounted, Dashboard shows its Model Card and probe
 catalog. **Run** sends a probe to Playground, **Edit** prepares an editable
 request, and **Validate** evaluates routing without generating a model answer.
-See [Models and Recipes](../../website/docs/installation/models-and-recipes.md)
-for the user workflow.
+See [Configuration Workflows](../../website/docs/installation/configuration-workflows.md)
+for the Dashboard and probe workflow, and [Entrypoints and Recipes](../../website/docs/tutorials/global/entrypoints-and-recipes.md)
+for how virtual model names resolve to recipe-scoped routing policies.
 
 ## For contributors
 

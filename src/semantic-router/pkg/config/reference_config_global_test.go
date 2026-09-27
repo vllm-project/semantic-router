@@ -1,12 +1,18 @@
 package config
 
-import "reflect"
+import (
+	"reflect"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+)
 
 func assertReferenceConfigRouterGlobalCoverage(t testingT, router map[string]interface{}) {
 	modelSelection := mustMapAt(t, router, "model_selection")
 	learning := mustMapAt(t, router, "learning")
 
 	assertMapCoversStructFields(t, router, reflect.TypeOf(CanonicalRouterGlobal{}), "global.router")
+	assertMapCoversStructFields(t, mustMapAt(t, router, "fallback"), reflect.TypeOf(fallback.FallbackPolicy{}), "global.router.fallback")
+	assertMapCoversStructFields(t, mustMapAt(t, router, "fallback", "circuit_breaker"), reflect.TypeOf(fallback.CircuitBreakerConfig{}), "global.router.fallback.circuit_breaker")
 	assertMapCoversStructFields(t, mustMapAt(t, router, "streamed_body"), reflect.TypeOf(CanonicalStreamedBody{}), "global.router.streamed_body")
 	assertMapCoversStructFields(t, mustMapAt(t, router, "skip_processing"), reflect.TypeOf(SkipProcessingConfig{}), "global.router.skip_processing")
 	assertMapCoversStructFields(t, modelSelection, reflect.TypeOf(ModelSelectionConfig{}), "global.router.model_selection")

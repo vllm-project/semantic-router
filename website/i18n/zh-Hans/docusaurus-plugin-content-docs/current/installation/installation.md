@@ -30,6 +30,16 @@ import {
 - Python 3.10 或更高版本
 - Docker；Linux 可以回退到 Podman
 
+使用 curl 安装脚本时，可传入 `--runtime podman` 强制使用 Podman，或传入
+`--runtime skip` 跳过容器运行时准备。例如：
+
+```bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable --runtime skip
+```
+
+这些参数属于安装脚本。`vllm-sr serve --runtime` 用于选择容器运行时
+（`docker` 或 `podman`）；`skip` 不是 `serve` 的运行时选项。
+
 ## 安装
 
 <Tabs groupId="install-method" defaultValue="curl" values={[

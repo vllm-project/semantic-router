@@ -26,6 +26,7 @@ export default function DatasetInventory({
   selectedDatasetId = '',
   onSelectDataset,
   onBackToDatasets,
+  onPrepare,
 }: {
   datasets: Dataset[]
   runs: Run[]
@@ -35,6 +36,7 @@ export default function DatasetInventory({
   selectedDatasetId?: string
   onSelectDataset?: (id: string) => void
   onBackToDatasets?: () => void
+  onPrepare?: () => void
 }) {
   const [query, setQuery] = useState('')
   const [profile, setProfile] = useState('all')
@@ -89,10 +91,17 @@ export default function DatasetInventory({
           <h2>Dataset library</h2>
           <p>Choose a case set. Explore its coverage and questions before evaluating.</p>
         </div>
-        <span className={shared.badge}>
-          {number(datasets.length)} {datasets.length === 1 ? 'dataset' : 'datasets'} ·{' '}
-          {number(allBenchmarks.length)} {allBenchmarks.length === 1 ? 'benchmark' : 'benchmarks'}
-        </span>
+        <div className={shared.actions}>
+          <span className={shared.badge}>
+            {number(datasets.length)} {datasets.length === 1 ? 'dataset' : 'datasets'} ·{' '}
+            {number(allBenchmarks.length)} {allBenchmarks.length === 1 ? 'benchmark' : 'benchmarks'}
+          </span>
+          {onPrepare && (
+            <button type="button" onClick={onPrepare}>
+              <ProductIcon name="database" /> Prepare dataset
+            </button>
+          )}
+        </div>
       </div>
       <div className={styles.modes} role="group" aria-label="Filter by evaluation mode">
         <button
@@ -171,7 +180,7 @@ export default function DatasetInventory({
           <p>
             {datasets.length
               ? 'Try another benchmark or mode.'
-              : 'Prepare a case set with the CLI to start exploring questions here.'}
+              : 'Choose Prepare dataset to download a benchmark and explore its questions here.'}
           </p>
         </div>
       )}

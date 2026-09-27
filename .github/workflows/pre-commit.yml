@@ -97,7 +97,7 @@ jobs:
             ${{ runner.os }}-precommit-
       - name: Install Reference Generator Dependencies
         run: python -m pip install -r tools/docs/requirements.txt
-      # Check committed references before any website command can regenerate them.
+      # Verify committed references before website builds consume them.
       - name: Check Generated References
         run: make docs-generated-check docs-cli-test docs-community-test docs-check-translation-coverage
       - name: Check Changed Source

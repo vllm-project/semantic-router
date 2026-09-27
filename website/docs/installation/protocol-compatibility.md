@@ -92,14 +92,18 @@ instead of being silently dropped.
 | --- | --- | --- | --- |
 | Text, image input, and file input | Supported | Supported | Supported |
 | Tools, parallel tool calls, and strict tool schemas | Supported | Supported | Supported |
+| Custom (free-form) tools and their calls | Supported | Supported | Not supported |
+| Text verbosity (`low`, `medium`, `high`) | Supported | Supported | Not forwarded; reported as `dropped` |
 | Strict JSON Schema output | Supported | Supported | Supported |
 | Buffered and streaming responses | Supported | Supported | Supported |
 | Reasoning content and effort | Supported | Supported | Supported |
+| Reasoning summary requests (`reasoning.summary`) | Not forwarded; reported as `dropped` | Supported; reported as `dropped` if the provider uses `chat_template_kwargs` for reasoning controls | Not forwarded; reported as `dropped` |
 | JSON object mode without a schema | Supported | Supported | Not supported |
 | Audio input | Supported | Not supported | Not supported |
 | Hosted image-generation lifecycle | Not supported | Supported | Not supported |
 | Multiple response candidates | Supported | Not supported | Not supported |
 | Prompt-cache directives | Supported | Not supported | Supported |
+| Prompt cache key (`prompt_cache_key`) | Supported | Supported | Not forwarded; reported as `dropped` |
 | Reasoning token budget | Supported extension | Not supported | Supported |
 | Seed and frequency or presence penalties | Supported | Not supported | Not supported |
 | `top_k` sampling | Supported extension | Not supported | Supported for nonnegative values |
@@ -112,10 +116,31 @@ an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
 
+For an Anthropic Messages client using a Chat Completions or Responses backend,
+`thinking.type: adaptive` uses the backend model's default reasoning behavior;
+`output_config.effort` is retained. `thinking.display: omitted` removes reasoning
+from the translated response, including streaming output. Explicit
+`thinking.type: disabled` requires a configured reasoning family and an
+effective backend reasoning-off control. Unsupported controls fail with a typed
+request error. A `context_management` edit of `clear_thinking_20251015` with
+`keep: all` has no effect and is omitted for these backends; edits that would
+change history are rejected. Anthropic `cache_control` boundaries are omitted
+when the selected backend uses Responses, which cannot represent them. The
+prompt and tool result still dispatch, and `x-vsr-protocol-warnings` reports a
+`dropped` diagnostic for `cache_control`.
+
 A Responses client can still use `previous_response_id` with a Chat
 Completions or Messages backend. The Router retrieves and materializes the
 retained history, removes Router-owned object controls, and then encodes the
 stateless request in the selected backend format.
+
+Responses custom tools use `type: custom` with a flattened `format` object.
+Their `custom_tool_call` and `custom_tool_call_output` items retain free-form
+input, tool results, and call IDs through Chat or Responses backends, including
+buffered and streaming responses. A Messages backend rejects them with
+`unsupported_capability`. Responses `text.verbosity` maps to the Chat
+`verbosity` field. Messages has no equivalent, so the Router drops this output
+detail hint and reports `text.verbosity` in `x-vsr-protocol-warnings`.
 
 ## Configure a backend format
 
@@ -178,3 +203,33 @@ Envoy ExtProc boundary, and in an 18-cell deployment matrix: three client
 formats by three backend formats by buffered or streaming mode. See the
 [implemented codec design](../proposals/multi-protocol-adaptor) for the full
 verification and extension contract.
+
+## Codex CLI
+
+Codex CLI uses the Responses endpoint and sends several compatibility fields.
+The Router handles them as follows:
+
+| Field | Router behavior |
+| --- | --- |
+| `prompt_cache_key` | Forwarded to `openai` and `responses` backends. A route to an `anthropic` backend omits it and reports `dropped`, because Messages has no equivalent. A decision's `request_params.blocked_params` can remove it before dispatch. |
+| `include: ["reasoning.encrypted_content"]` | Accepted and not forwarded. The Router never relays provider-encrypted reasoning, so reasoning items carry no `encrypted_content`. Other `include` values remain unsupported. |
+| `client_metadata` | Accepted and not forwarded, because it carries Codex telemetry rather than model input. |
+| `text.verbosity` | Forwarded to `responses` backends, mapped to `verbosity` for `openai` Chat backends, and reported as `dropped` for `anthropic` Messages backends. The only accepted values are `low`, `medium`, and `high`. |
+
+Each accepted but unforwarded field appears as a `dropped` entry in
+`x-vsr-protocol-warnings`.
+
+Codex can also request reasoning summaries. The Router forwards
+`reasoning.summary` to a Responses backend. A Chat Completions or Messages
+backend cannot request a summary, so the Router accepts the turn and reports
+the dropped setting in `x-vsr-protocol-warnings`. Multi-agent namespace tools
+and hosted web search remain unsupported; disable those in the Codex
+`config.toml` that points at the Router. These settings were checked with
+Codex CLI 0.156.1:
+
+```toml
+web_search = "disabled"
+
+[features]
+multi_agent = false
+```

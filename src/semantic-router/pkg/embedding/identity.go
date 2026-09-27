@@ -9,6 +9,8 @@ import (
 	"math"
 	"sort"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // ErrIdentityUnsupported means this provider has no verified local representation
@@ -79,6 +81,29 @@ func (s *Set) ResolveIdentity(settings ConsumerSettings) (ContentIdentity, error
 		return ContentIdentity{}, err
 	}
 	return ResolveProviderIdentity(provider, settings)
+}
+
+// candleBERTNamespace keys Candle `bert` vectors, which have no content
+// descriptor. Bump it whenever a Candle BERT change moves stored vectors.
+const candleBERTNamespace = "candle-bert-unpadded-mean-v1"
+
+// ResolveNamespaceIdentity isolates persisted memory and cache vectors. Candle
+// BERT is keyed by candleBERTNamespace; other `bert` runtimes keep their storage.
+func ResolveNamespaceIdentity(provider Provider, settings ConsumerSettings) (ContentIdentity, error) {
+	if !strings.EqualFold(strings.TrimSpace(settings.ModelType), "bert") {
+		return ResolveProviderIdentity(provider, settings)
+	}
+	if provider == nil || provider.Backend() != config.EmbeddingBackendCandle {
+		return ContentIdentity{}, ErrIdentityUnsupported
+	}
+	dimension, err := ResolveDimension(provider, settings.Dimension)
+	if err != nil {
+		return ContentIdentity{}, err
+	}
+	return ContentIdentity{
+		Fingerprint: fmt.Sprintf("%s:dimension=%d:%s", candleBERTNamespace, dimension, settings.InputPolicy),
+		Descriptor:  RuntimeDescriptor{ModelType: "bert", Dimension: dimension},
+	}, nil
 }
 
 // IdentityFromDescriptor combines the native representation with the caller's

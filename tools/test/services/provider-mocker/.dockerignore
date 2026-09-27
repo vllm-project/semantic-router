@@ -1,0 +1,8 @@
+*
+!Dockerfile
+!requirements.txt
+!provider_mocker/
+!provider_mocker/**
+**/__pycache__/
+**/*.pyc
+**/*.pyo

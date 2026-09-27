@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   inventory:
-    name: Recipe Inventory
+    name: Inventory
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -41,11 +41,10 @@ jobs:
             --output-dir .agent-harness/recipe-conformance static-all
 
       - id: plan
-        name: Materialize live CPU shards
+        name: Materialize live CPU recipe matrix
         run: |
           python tools/calibration/recipe/recipe_conformance.py \
             plan-all \
-            --shards 3 \
             --github-output "$GITHUB_OUTPUT"
 
       - name: Publish static coverage summary
@@ -64,13 +63,12 @@ jobs:
           retention-days: 30
 
   live-cpu:
-    name: Recipe Preview (${{ matrix.shard }})
+    name: Preview (${{ matrix.shard }})
     needs: inventory
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix: ${{ fromJSON(needs.inventory.outputs.matrix) }}
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -145,7 +143,7 @@ jobs:
           retention-days: 30
 
   report:
-    name: Recipe Results
+    name: Results
     if: ${{ !cancelled() && needs.inventory.result == 'success' }}
     needs:
       - inventory

@@ -2,6 +2,7 @@ package vectorstore
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"testing"
 )
@@ -600,6 +601,68 @@ func TestGenericHybridRerank_TopK(t *testing.T) {
 
 	if len(results) > 2 {
 		t.Errorf("topK=2 but got %d results", len(results))
+	}
+}
+
+func TestMemoryBackend_HybridSearch_NonPositiveTopKReturnsAllResults(t *testing.T) {
+	backend := NewMemoryBackend(MemoryBackendConfig{})
+	ctx := context.Background()
+	if err := backend.CreateCollection(ctx, "vs_unlimited", 3); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	chunks := make([]EmbeddedChunk, 60)
+	for i := range chunks {
+		chunks[i] = EmbeddedChunk{
+			ID:        fmt.Sprintf("c%d", i),
+			FileID:    "f1",
+			Content:   "common candidate content",
+			Embedding: []float32{1, 0, 0},
+		}
+	}
+	if err := backend.InsertChunks(ctx, "vs_unlimited", chunks); err != nil {
+		t.Fatalf("InsertChunks: %v", err)
+	}
+
+	for _, topK := range []int{0, -1} {
+		results, err := backend.HybridSearch(ctx, "vs_unlimited", "common", []float32{1, 0, 0}, topK, 0, nil, nil)
+		if err != nil {
+			t.Fatalf("HybridSearch(topK=%d): %v", topK, err)
+		}
+		if len(results) != len(chunks) {
+			t.Errorf("HybridSearch(topK=%d) returned %d results, want %d", topK, len(results), len(chunks))
+		}
+	}
+}
+
+func TestGenericHybridRerank_NonPositiveTopKReturnsAllCandidates(t *testing.T) {
+	backend := NewMemoryBackend(MemoryBackendConfig{})
+	ctx := context.Background()
+	if err := backend.CreateCollection(ctx, "vs_unlimited", 3); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	chunks := make([]EmbeddedChunk, 60)
+	for i := range chunks {
+		chunks[i] = EmbeddedChunk{
+			ID:        fmt.Sprintf("c%d", i),
+			FileID:    "f1",
+			Content:   "common candidate content",
+			Embedding: []float32{1, 0, 0},
+		}
+	}
+	if err := backend.InsertChunks(ctx, "vs_unlimited", chunks); err != nil {
+		t.Fatalf("InsertChunks: %v", err)
+	}
+
+	for _, topK := range []int{0, -1} {
+		results, err := GenericHybridRerank(ctx, backend, "vs_unlimited", "common", []float32{1, 0, 0}, topK, 0, nil, nil)
+		if err != nil {
+			t.Fatalf("GenericHybridRerank(topK=%d): %v", topK, err)
+		}
+		if len(results) != len(chunks) {
+			t.Errorf("GenericHybridRerank(topK=%d) returned %d results, want %d", topK, len(results), len(chunks))
+		}
 	}
 }
 

@@ -49,7 +49,7 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 	if semanticNeeded {
 		var err error
 		cacheConfig, identity, err = cache.PrepareEmbeddingNamespace(cacheConfig, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-			return embedding.ResolveProviderIdentity(cacheConfig.EmbeddingProvider, settings)
+			return embedding.ResolveNamespaceIdentity(cacheConfig.EmbeddingProvider, settings)
 		})
 		if err != nil {
 			return nil, "", fmt.Errorf("bind semantic cache embedding: %w", err)

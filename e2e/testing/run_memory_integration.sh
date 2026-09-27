@@ -28,7 +28,7 @@ values = {
     "MILVUS_CONTAINER_NAME": layout.milvus_container_name,
     "MILVUS_HOST_PORT": layout.milvus_port,
     "MILVUS_HEALTH_PORT": layout.host_port(9091, name="milvus_health_port"),
-    "LLM_KATAN_HOST_PORT": layout.host_port(8000, name="llm_katan_port"),
+    "PROVIDER_MOCKER_HOST_PORT": layout.host_port(8000, name="provider_mocker_port"),
     "ROUTER_API_HEALTH_URL": f"http://localhost:{layout.api_port}/ready",
     "ROUTER_ENDPOINT": f"http://localhost:{layout.host_port(8888, name='memory_listener_port')}",
     "STACK_CONTAINERS": " ".join((*layout.runtime_container_names,
@@ -41,7 +41,7 @@ PY_LAYOUT
 )"
 eval "${layout_variables}"
 export VLLM_SR_STACK_NAME VLLM_SR_PORT_OFFSET
-LLM_KATAN_CONTAINER="${VLLM_SR_STACK_NAME}-llm-katan"
+PROVIDER_MOCKER_CONTAINER="${VLLM_SR_STACK_NAME}-provider-mocker"
 TEST_DIR="${MEMORY_TEST_DIR:-$(mktemp -d -t vsr-memory-test-XXXXXX)}"
 mkdir -p "${TEST_DIR}"
 TEST_DIR="$(cd "${TEST_DIR}" && pwd)"
@@ -60,19 +60,22 @@ if [[ "${MODEL_DIR}" != /* ]]; then
 fi
 MODEL_MOUNT_DIR="${TEST_DIR}/models"
 USE_DETERMINISTIC_MEMORY_EMBEDDINGS="${USE_DETERMINISTIC_MEMORY_EMBEDDINGS:-0}"
-export MILVUS_CONTAINER_NAME MILVUS_HOST_PORT MILVUS_HEALTH_PORT
+# ROUTER_CONTAINER lets the shutdown phase stop the router and read the
+# receipts it logs on its way out; no endpoint survives to report them.
+export MILVUS_CONTAINER_NAME MILVUS_HOST_PORT MILVUS_HEALTH_PORT ROUTER_CONTAINER
 export MILVUS_DATA_DIR="${TEST_DIR}/milvus-data"
 export MILVUS_BIND_ADDRESS=127.0.0.1
 
 VLLM_SR_PID=""
+FAULT_PROXY_PID=""
 STACK_STARTED=0
 MILVUS_STARTED=0
-KATAN_STARTED=0
+PROVIDER_STARTED=0
 NETWORK_CREATED=0
 
 # A named collision belongs to another invocation. Never adopt it, stop it, or
 # collect its logs; CLI stop removes every resource with this stack identity.
-for container in ${STACK_CONTAINERS} "${LLM_KATAN_CONTAINER}"; do
+for container in ${STACK_CONTAINERS} "${PROVIDER_MOCKER_CONTAINER}"; do
     if "${CONTAINER_RUNTIME}" inspect "${container}" >/dev/null 2>&1; then
         echo "Refusing to reuse existing memory-test container: ${container}" >&2
         exit 1
@@ -124,22 +127,27 @@ cleanup() {
             "${CONTAINER_RUNTIME}" logs "${container}" >"${ARTIFACT_DIR}/${container}.predump.log" 2>&1 || true
         done
     fi
-    if [[ "${KATAN_STARTED}" == "1" ]]; then
-        "${CONTAINER_RUNTIME}" logs "${LLM_KATAN_CONTAINER}" >"${ARTIFACT_DIR}/${LLM_KATAN_CONTAINER}.predump.log" 2>&1 || true
+    if [[ "${PROVIDER_STARTED}" == "1" ]]; then
+        "${CONTAINER_RUNTIME}" logs "${PROVIDER_MOCKER_CONTAINER}" >"${ARTIFACT_DIR}/${PROVIDER_MOCKER_CONTAINER}.predump.log" 2>&1 || true
     fi
     if [[ "${MILVUS_STARTED}" == "1" ]]; then
         "${CONTAINER_RUNTIME}" logs "${MILVUS_CONTAINER_NAME}" >"${ARTIFACT_DIR}/${MILVUS_CONTAINER_NAME}.predump.log" 2>&1 || true
     fi
     [[ ! -f "${SERVE_LOG}" ]] || cp "${SERVE_LOG}" "${ARTIFACT_DIR}/serve.log" || true
     [[ ! -f "${TEST_DIR}/router-startup.log" ]] || cp "${TEST_DIR}/router-startup.log" "${ARTIFACT_DIR}/router-startup.log" || true
+    [[ ! -f "${TEST_DIR}/fault-proxy.log" ]] || cp "${TEST_DIR}/fault-proxy.log" "${ARTIFACT_DIR}/fault-proxy.log" || true
 
     if [[ -n "${VLLM_SR_PID}" ]] && kill -0 "${VLLM_SR_PID}" 2>/dev/null; then
         kill "${VLLM_SR_PID}" 2>/dev/null || true
         wait "${VLLM_SR_PID}" 2>/dev/null || true
     fi
-    if [[ "${KATAN_STARTED}" == "1" ]]; then
-        "${CONTAINER_RUNTIME}" stop "${LLM_KATAN_CONTAINER}" >/dev/null 2>&1 || true
-        "${CONTAINER_RUNTIME}" rm "${LLM_KATAN_CONTAINER}" >/dev/null 2>&1 || true
+    if [[ -n "${FAULT_PROXY_PID}" ]] && kill -0 "${FAULT_PROXY_PID}" 2>/dev/null; then
+        kill "${FAULT_PROXY_PID}" 2>/dev/null || true
+        wait "${FAULT_PROXY_PID}" 2>/dev/null || true
+    fi
+    if [[ "${PROVIDER_STARTED}" == "1" ]]; then
+        "${CONTAINER_RUNTIME}" stop "${PROVIDER_MOCKER_CONTAINER}" >/dev/null 2>&1 || true
+        "${CONTAINER_RUNTIME}" rm "${PROVIDER_MOCKER_CONTAINER}" >/dev/null 2>&1 || true
     fi
     if [[ "${MILVUS_STARTED}" == "1" ]]; then
         make -C "${REPO_ROOT}" stop-milvus >/dev/null 2>&1 || true
@@ -165,7 +173,7 @@ trap 'exit 143' TERM
 
 echo "Using memory integration temp dir: ${TEST_DIR}"
 
-python3 -m pip install -U requests pymilvus
+python3 -m pip install -U requests pymilvus grpcio
 
 prepare_model_dir() {
     mkdir -p "${MODEL_DIR}"
@@ -210,13 +218,37 @@ except Exception as e:
     sleep 2
 done
 
+# The test controls only write RPCs; retrieval and generation initialization
+# still reach real Milvus. The ephemeral port avoids collisions between stacks.
+python3 "${SCRIPT_DIR}/memory_tests/milvus_fault_proxy.py" \
+    --upstream "127.0.0.1:${MILVUS_HOST_PORT}" --listen-host 0.0.0.0 \
+    --ready-file "${TEST_DIR}/fault-proxy.json" >"${TEST_DIR}/fault-proxy.log" 2>&1 &
+FAULT_PROXY_PID=$!
+for _ in $(seq 1 50); do
+    [[ ! -s "${TEST_DIR}/fault-proxy.json" ]] || break
+    if ! kill -0 "${FAULT_PROXY_PID}" 2>/dev/null; then
+        cat "${TEST_DIR}/fault-proxy.log" >&2
+        exit 1
+    fi
+    sleep 0.1
+done
+if [[ ! -s "${TEST_DIR}/fault-proxy.json" ]]; then
+    echo "ERROR: Milvus fault proxy did not become ready after 50 attempts" >&2
+    cat "${TEST_DIR}/fault-proxy.log" >&2
+    exit 1
+fi
+MEMORY_FAULT_CONTROL_URL="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["control_url"])' "${TEST_DIR}/fault-proxy.json")"
+export MEMORY_FAULT_CONTROL_URL
+
 cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
-python3 - "${CONFIG_FILE}" "${LLM_KATAN_CONTAINER}" "${MILVUS_CONTAINER_NAME}" <<'PY_CONFIG'
+python3 - "${CONFIG_FILE}" "${PROVIDER_MOCKER_CONTAINER}" "${TEST_DIR}/fault-proxy.json" <<'PY_CONFIG'
 from pathlib import Path
+import json
 import sys
 path = Path(sys.argv[1])
 text = path.read_text().replace("host.docker.internal:8000", f"{sys.argv[2]}:8000")
-text = text.replace("host.docker.internal:19530", f"{sys.argv[3]}:19530")
+port = json.loads(Path(sys.argv[3]).read_text())["port"]
+text = text.replace("host.docker.internal:19530", f"host.docker.internal:{port}")
 path.write_text(text)
 PY_CONFIG
 
@@ -225,31 +257,32 @@ NETWORK_CREATED=1
 "${CONTAINER_RUNTIME}" network connect "${VLLM_SR_NETWORK}" "${MILVUS_CONTAINER_NAME}"
 echo "Milvus connected to ${VLLM_SR_NETWORK} as ${MILVUS_CONTAINER_NAME}"
 
-"${CONTAINER_RUNTIME}" run -d --name "${LLM_KATAN_CONTAINER}" \
+"${CONTAINER_RUNTIME}" run -d --name "${PROVIDER_MOCKER_CONTAINER}" \
     --network "${VLLM_SR_NETWORK}" \
-    -p "127.0.0.1:${LLM_KATAN_HOST_PORT}:8000" \
-    "${LLM_KATAN_IMAGE:-${DOCKER_REGISTRY}/llm-katan:${DOCKER_TAG}}" \
-    llm-katan --model dummy --host 0.0.0.0 --port 8000 --served-model-name qwen3 --backend echo >/dev/null
-KATAN_STARTED=1
+    -p "127.0.0.1:${PROVIDER_MOCKER_HOST_PORT}:8000" \
+    -e PROVIDER_MOCKER_SCENARIO=memory \
+    -e PROVIDER_MOCKER_MODEL=qwen3 \
+    "${PROVIDER_MOCKER_IMAGE:-semantic-router-ci/provider-mocker:e2e-test}" >/dev/null
+PROVIDER_STARTED=1
 
 for _ in $(seq 1 30); do
-    if curl -s "http://localhost:${LLM_KATAN_HOST_PORT}/health" >/dev/null 2>&1; then
-        echo "llm-katan ready"
+    if curl -s "http://localhost:${PROVIDER_MOCKER_HOST_PORT}/health" >/dev/null 2>&1; then
+        echo "provider-mocker ready"
         break
     fi
 
-    if ! "${CONTAINER_RUNTIME}" ps --filter "name=^${LLM_KATAN_CONTAINER}$" --format '{{.Names}}' | grep -Fxq "${LLM_KATAN_CONTAINER}"; then
-        echo "llm-katan container exited unexpectedly"
-        "${CONTAINER_RUNTIME}" logs "${LLM_KATAN_CONTAINER}" || true
+    if ! "${CONTAINER_RUNTIME}" ps --filter "name=^${PROVIDER_MOCKER_CONTAINER}$" --format '{{.Names}}' | grep -Fxq "${PROVIDER_MOCKER_CONTAINER}"; then
+        echo "provider-mocker container exited unexpectedly"
+        "${CONTAINER_RUNTIME}" logs "${PROVIDER_MOCKER_CONTAINER}" || true
         exit 1
     fi
 
     sleep 1
 done
 
-if ! curl -s "http://localhost:${LLM_KATAN_HOST_PORT}/health" >/dev/null 2>&1; then
-    echo "llm-katan did not become healthy"
-    "${CONTAINER_RUNTIME}" logs "${LLM_KATAN_CONTAINER}" || true
+if ! curl -s "http://localhost:${PROVIDER_MOCKER_HOST_PORT}/health" >/dev/null 2>&1; then
+    echo "provider-mocker did not become healthy"
+    "${CONTAINER_RUNTIME}" logs "${PROVIDER_MOCKER_CONTAINER}" || true
     exit 1
 fi
 
@@ -325,6 +358,24 @@ PY
 
 cd "${REPO_ROOT}/e2e/testing"
 PYTHONUNBUFFERED=1 \
+ROUTER_ENDPOINT="${ROUTER_ENDPOINT}" \
+ROUTER_HEALTH_ENDPOINT="${ROUTER_API_HEALTH_URL}" \
+MILVUS_ADDRESS="localhost:${MILVUS_HOST_PORT}" \
+MILVUS_COLLECTION="${memory_collection}" \
+python3 09-memory-features-test.py
+
+# Shutdown receipts can only be read from the router's own log, because
+# stopping it takes the metrics endpoint and the Replay API with it. Run that
+# scenario last, against the stack the main suite leaves behind, so no other
+# test depends on a router this phase is about to end.
+# Derive the phase report from the main one so CI evidence collection picks it
+# up from the same directory instead of leaving it loose in the checkout.
+main_report="${MEMORY_TEST_REPORT_PATH:-memory-test-report.json}"
+shutdown_report="${MEMORY_TEST_SHUTDOWN_REPORT_PATH:-${main_report%.json}-shutdown.json}"
+
+PYTHONUNBUFFERED=1 \
+MEMORY_TEST_PHASE=shutdown \
+MEMORY_TEST_REPORT_PATH="${shutdown_report}" \
 ROUTER_ENDPOINT="${ROUTER_ENDPOINT}" \
 ROUTER_HEALTH_ENDPOINT="${ROUTER_API_HEALTH_URL}" \
 MILVUS_ADDRESS="localhost:${MILVUS_HOST_PORT}" \

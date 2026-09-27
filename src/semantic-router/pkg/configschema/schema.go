@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/invopop/jsonschema"
 
@@ -112,6 +113,12 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 		moduleRoot+"/pkg/catalog",
 	); err != nil {
 		return nil, fmt.Errorf("load catalog Go comments: %w", err)
+	}
+	if err := reflector.AddGoComments(
+		"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback",
+		moduleRoot+"/pkg/fallback",
+	); err != nil {
+		return nil, fmt.Errorf("load fallback Go comments: %w", err)
 	}
 
 	// Publish the steady-state Router contract. CanonicalConfigDocument also
@@ -214,6 +221,15 @@ func schemaTypeMapper(value reflect.Type) *jsonschema.Schema {
 			OneOf: []*jsonschema.Schema{
 				{Type: "integer", Minimum: json.Number("1")},
 				{Type: "string", Const: "auto"},
+			},
+		}
+	}
+	if value == reflect.TypeOf(time.Duration(0)) {
+		return &jsonschema.Schema{
+			Description: "A duration string (e.g. '30s', '100ms') or nanoseconds integer.",
+			OneOf: []*jsonschema.Schema{
+				{Type: "string"},
+				{Type: "integer"},
 			},
 		}
 	}
