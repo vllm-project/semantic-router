@@ -216,12 +216,10 @@ def build(secret: bytes, role: str, groups: int) -> list[dict[str, Any]]:
                 "id": f"{group}_l{level}",
                 "state": state,
                 "instructions": (
-                    "Use only the latest current records for the named case. "
-                    "A current scoped disqualifier that started by the review "
-                    "day gives level 0, even if a requirement is unresolved. "
-                    "Ignore archived notices and other cases. Otherwise level "
-                    "1 means at least one of requirements A and B is unresolved; "
-                    "level 2 requires both verified. Choose exactly one level."
+                    "Use the named case's latest records. A matching current "
+                    "veto effective by review day gives 0. Otherwise unresolved "
+                    "A or B gives 1; both verified gives 2. Ignore archived "
+                    "notices and other cases."
                 ),
                 "options": [
                     {"key": str(i), "description": description}
