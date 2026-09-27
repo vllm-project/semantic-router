@@ -19,7 +19,12 @@ from typing import Any
 import pyarrow.parquet as pq
 
 from training.data.audit_27b_full_input_overlap import full_input_overlap_rows
-from training.data.plan_goldfree_inventory import CORE_ROLES, validate_core_rows
+from training.data.plan_goldfree_inventory import (
+    CORE_ROLES,
+    NATIVE_ROLE_COUNTS,
+    PARTITION_ROLE_COUNTS,
+    validate_core_rows,
+)
 from training.model.data import file_sha256
 from training.model.decision_model import PROMPT_VERSION, encode
 from training.model.infer import question_to_row
@@ -61,6 +66,7 @@ SCORE_CRITERIA = [
     "The evidence supports the claim.",
 ]
 INPUT_COLUMNS = ["uid", "premise", "hypothesis", "label", "reason"]
+PROTECTED_SCHEMA = "decision2-projected-core-inputs-v1"
 
 
 @dataclass(frozen=True)
@@ -265,39 +271,78 @@ def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def load_projected_roles(manifest: Path) -> dict[str, list[dict[str, Any]]]:
+def _sha256_string(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(char in "0123456789abcdef" for char in value)
+    )
+
+
+def load_projected_roles(
+    manifest: Path, *, expected_sha256: str
+) -> dict[str, list[dict[str, Any]]]:
     """Load only a complete pinned eight-role input projection.
 
     An incomplete candidate is returned as role names with empty rows so the
     overlap gate reports precisely which roles are missing before any prompt
     file is opened. A complete manifest must pass strict projection checks.
     """
-    if manifest.is_symlink() or not manifest.is_file():
-        raise ValueError("Protected inventory manifest is missing or linked")
-    entries = json.loads(
+    if (
+        manifest.is_symlink()
+        or not manifest.is_file()
+        or not _sha256_string(expected_sha256)
+        or file_sha256(manifest) != expected_sha256
+    ):
+        raise ValueError("Pinned protected inventory manifest is missing or changed")
+    document = json.loads(
         manifest.read_text(encoding="utf-8"), object_pairs_hook=_unique_keys
     )
     if (
-        not isinstance(entries, list)
-        or not entries
-        or any(
-            not isinstance(entry, dict)
-            or set(entry) != {"role", "path", "sha256"}
-            or not isinstance(entry["role"], str)
-            or not isinstance(entry["path"], str)
-            or not isinstance(entry["sha256"], str)
-            for entry in entries
-        )
+        not isinstance(document, dict)
+        or set(document)
+        != {"schema", "roles", "excluded_optional_role_count", "source_manifest_sha256"}
+        or document["schema"] != PROTECTED_SCHEMA
+        or not isinstance(document["roles"], dict)
+        or not document["roles"]
+        or type(document["excluded_optional_role_count"]) is not int
+        or document["excluded_optional_role_count"] < 0
+        or not _sha256_string(document["source_manifest_sha256"])
     ):
         raise ValueError("Protected inventory manifest schema changed")
-    indexed = {entry["role"]: entry for entry in entries}
-    if len(indexed) != len(entries):
-        raise ValueError("Protected inventory has duplicate roles")
+    indexed = document["roles"]
     if set(indexed) != CORE_ROLES:
         return {role: [] for role in indexed}
     roles = {}
     for role, entry in sorted(indexed.items()):
-        path = Path(entry["path"])
+        required = {"path", "rows", "sha256", "source_sha256"}
+        if role in NATIVE_ROLE_COUNTS:
+            required.add("native_input_digest_list_sha256")
+        expected_rows = (
+            NATIVE_ROLE_COUNTS[role]
+            if role in NATIVE_ROLE_COUNTS
+            else PARTITION_ROLE_COUNTS[role][1]
+        )
+        if (
+            not isinstance(entry, dict)
+            or set(entry) != required
+            or type(entry["rows"]) is not int
+            or entry["rows"] != expected_rows
+            or not isinstance(entry["path"], str)
+            or not _sha256_string(entry["sha256"])
+            or not _sha256_string(entry["source_sha256"])
+            or (
+                role in NATIVE_ROLE_COUNTS
+                and not _sha256_string(entry["native_input_digest_list_sha256"])
+            )
+        ):
+            raise ValueError("Protected inventory role schema changed")
+        relative = Path(entry["path"])
+        if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+            raise ValueError("Protected inventory path escapes its manifest")
+        path = manifest.parent / relative
+        if not path.resolve().is_relative_to(manifest.parent.resolve()):
+            raise ValueError("Protected inventory path escapes its manifest")
         if (
             path.is_symlink()
             or not path.is_file()
@@ -320,6 +365,7 @@ def audit(
     tokenizer_directory: Path,
     *,
     protected_roles: dict[str, list[dict[str, Any]]] | None = None,
+    protected_inventory_sha256: str | None = None,
 ) -> dict[str, Any]:
     pairs, source_hashes = read_dev(source_directory)
     for name, expected in TOKENIZER_FILES.items():
@@ -333,6 +379,10 @@ def audit(
     )
     profile = source_profile(pairs)
     overlap = overlap_profile(pairs, protected_roles)
+    if protected_inventory_sha256 is not None:
+        if not _sha256_string(protected_inventory_sha256):
+            raise ValueError("Invalid protected inventory SHA-256")
+        overlap["protected_inventory_sha256"] = protected_inventory_sha256
     return {
         "schema": "decision2-anli-score-dev-feasibility/1",
         "source": SOURCE_ID,
@@ -369,14 +419,24 @@ def main() -> None:
     parser.add_argument("--dev-directory", type=Path, required=True)
     parser.add_argument("--tokenizer-directory", type=Path, required=True)
     parser.add_argument("--protected-inventory", type=Path)
+    parser.add_argument("--protected-inventory-sha256")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if bool(args.protected_inventory) != bool(args.protected_inventory_sha256):
+        parser.error("Protected inventory path and SHA-256 must be supplied together")
     roles = (
-        load_projected_roles(args.protected_inventory)
+        load_projected_roles(
+            args.protected_inventory, expected_sha256=args.protected_inventory_sha256
+        )
         if args.protected_inventory
         else None
     )
-    result = audit(args.dev_directory, args.tokenizer_directory, protected_roles=roles)
+    result = audit(
+        args.dev_directory,
+        args.tokenizer_directory,
+        protected_roles=roles,
+        protected_inventory_sha256=args.protected_inventory_sha256,
+    )
     write_once(args.output, result)
     print(
         json.dumps(

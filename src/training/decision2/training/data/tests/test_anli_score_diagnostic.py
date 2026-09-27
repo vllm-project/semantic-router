@@ -111,14 +111,18 @@ class AnliScoreDiagnosticTests(unittest.TestCase):
             manifest = Path(directory) / "candidate.json"
             manifest.write_text(
                 json.dumps(
-                    [
-                        {"role": role, "path": "/nonexistent", "sha256": "0" * 64}
-                        for role in NATIVE_ROLE_COUNTS
-                    ]
+                    {
+                        "schema": anli.PROTECTED_SCHEMA,
+                        "roles": {role: {} for role in NATIVE_ROLE_COUNTS},
+                        "excluded_optional_role_count": 27,
+                        "source_manifest_sha256": "0" * 64,
+                    }
                 ),
                 encoding="utf-8",
             )
-            roles = anli.load_projected_roles(manifest)
+            roles = anli.load_projected_roles(
+                manifest, expected_sha256=file_sha256(manifest)
+            )
             result = anli.overlap_profile([pair(1, "premise", "hypothesis")], roles)
             self.assertEqual(result["status"], "HOLD_MISSING_PROTECTED_ROLES")
             self.assertEqual(set(result["missing_roles"]), set(PARTITION_ROLE_COUNTS))
@@ -126,6 +130,84 @@ class AnliScoreDiagnosticTests(unittest.TestCase):
                 anli.overlap_profile([], None)["status"],
                 "HOLD_MISSING_PROTECTED_INVENTORY",
             )
+
+    def test_versioned_projected_manifest_hashes_and_gold_rejection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entries = {}
+            for role in CORE_ROLES:
+                path = root / f"{role}.jsonl"
+                path.write_text(
+                    json.dumps(
+                        {"id": role, "state": f"Synthetic input only for {role}."}
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                entries[role] = {
+                    "path": path.name,
+                    "rows": 1,
+                    "sha256": file_sha256(path),
+                    "source_sha256": "1" * 64,
+                }
+                if role in NATIVE_ROLE_COUNTS:
+                    entries[role]["native_input_digest_list_sha256"] = "2" * 64
+            document = {
+                "schema": anli.PROTECTED_SCHEMA,
+                "roles": entries,
+                "excluded_optional_role_count": 27,
+                "source_manifest_sha256": "3" * 64,
+            }
+            manifest = root / "manifest.json"
+
+            def seal() -> str:
+                manifest.write_text(json.dumps(document), encoding="utf-8")
+                return file_sha256(manifest)
+
+            with patch.dict(NATIVE_ROLE_COUNTS, dict.fromkeys(NATIVE_ROLE_COUNTS, 1)):
+                with patch.dict(
+                    PARTITION_ROLE_COUNTS,
+                    {
+                        name: (split, 1)
+                        for name, (split, _) in PARTITION_ROLE_COUNTS.items()
+                    },
+                ):
+                    original_sha = seal()
+                    loaded = anli.load_projected_roles(
+                        manifest, expected_sha256=original_sha
+                    )
+                    self.assertEqual(set(loaded), CORE_ROLES)
+                    self.assertTrue(all(len(rows) == 1 for rows in loaded.values()))
+                    with self.assertRaisesRegex(ValueError, "changed"):
+                        anli.load_projected_roles(manifest, expected_sha256="0" * 64)
+
+                    document["roles"]["extra_unvetted"] = {}
+                    extra_sha = seal()
+                    extra = anli.load_projected_roles(
+                        manifest, expected_sha256=extra_sha
+                    )
+                    self.assertEqual(
+                        anli.overlap_profile([], extra)["status"],
+                        "HOLD_UNATTESTED_OPTIONAL_ROLES",
+                    )
+                    del document["roles"]["extra_unvetted"]
+
+                    path = root / "rights_clean_cal.jsonl"
+                    path.write_text(
+                        json.dumps(
+                            {
+                                "id": "rights_clean_cal",
+                                "state": "Visible input",
+                                "answer": 1,
+                            }
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                    )
+                    document["roles"]["rights_clean_cal"]["sha256"] = file_sha256(path)
+                    leaked_sha = seal()
+                    with self.assertRaisesRegex(ValueError, "input-only"):
+                        anli.load_projected_roles(manifest, expected_sha256=leaked_sha)
 
     def test_complete_synthetic_reference_flags_source_overlap(self) -> None:
         source = pair(
