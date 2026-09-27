@@ -15,6 +15,7 @@ import subprocess
 import unicodedata
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 REVISION = "f84977c40dbfef70c9cab48037b7becfc8e45f73"
 SPLITS = ("train", "dev", "test")
@@ -56,6 +57,36 @@ def percentile(values: list[int], q: float) -> int | None:
     return ordered[round((len(ordered) - 1) * q)]
 
 
+def url_key(value: str) -> str:
+    """Normalize only URL identity; never emit the source URL."""
+    if not value:
+        return ""
+    parsed = urlsplit(value.strip())
+    host = (parsed.hostname or "").casefold().removeprefix("www.")
+    path = parsed.path.rstrip("/").casefold()
+    return f"{host}{path}" if host else ""
+
+
+def native_choice_tokens(article: str, question: dict[str, Any], tokenizer: Any) -> int:
+    """Count the production segmented Choice prompt without loading a label."""
+    from training.model.decision_model import segments
+
+    row = {
+        "state": article,
+        "instructions": question["question"],
+        "task_type": "choice",
+        "options": [
+            {"key": chr(ord("A") + index), "description": option}
+            for index, option in enumerate(question["options"])
+        ],
+    }
+    prefix, options, suffix = segments(row)
+    return sum(
+        len(tokenizer.encode(part, add_special_tokens=False))
+        for part in (prefix, *options, suffix)
+    )
+
+
 def summarize(root: Path, tokenizer_dir: Path | None = None) -> dict[str, Any]:
     revision = subprocess.check_output(
         ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
@@ -69,7 +100,13 @@ def summarize(root: Path, tokenizer_dir: Path | None = None) -> dict[str, Any]:
     by_split: dict[str, dict[str, Any]] = {}
     article_ids: dict[str, set[str]] = {}
     article_hashes: dict[str, set[str]] = {}
+    title_author_hashes: dict[str, set[str]] = {}
+    title_hashes: dict[str, set[str]] = {}
+    title_to_articles: dict[str, dict[str, set[str]]] = {}
+    url_hashes: dict[str, set[str]] = {}
     question_hashes: dict[str, set[str]] = {}
+    article_questions_by_split: dict[str, collections.Counter[str]] = {}
+    fully_fitting_by_split: dict[str, dict[str, bool]] = {}
     all_question_ids: set[str] = set()
     tokenizer = None
     if tokenizer_dir is not None:
@@ -91,9 +128,17 @@ def summarize(root: Path, tokenizer_dir: Path | None = None) -> dict[str, Any]:
         high_context_votes = 0
         context_votes = 0
         article_counts: collections.Counter[str] = collections.Counter()
+        article_questions: collections.Counter[str] = collections.Counter()
         token_proxy_lengths: list[int] = []
+        native_token_lengths: list[int] = []
+        fully_native_fitting: dict[str, bool] = {}
+        title_author_to_ids: dict[str, set[str]] = collections.defaultdict(set)
         article_ids[split] = set()
         article_hashes[split] = set()
+        title_author_hashes[split] = set()
+        title_hashes[split] = set()
+        title_to_articles[split] = collections.defaultdict(set)
+        url_hashes[split] = set()
         question_hashes[split] = set()
         with path.open(encoding="utf-8") as stream:
             for line in stream:
@@ -105,7 +150,21 @@ def summarize(root: Path, tokenizer_dir: Path | None = None) -> dict[str, Any]:
                     raise ValueError("Empty article")
                 article_ids[split].add(article_id)
                 article_hashes[split].add(digest(norm(article)))
+                title = norm(row["title"])
+                author = norm(row["author"])
+                if title:
+                    title_hash = digest(title)
+                    title_hashes[split].add(title_hash)
+                    title_to_articles[split][title_hash].add(article_id)
+                    if author:
+                        title_author = digest((title, author))
+                        title_author_hashes[split].add(title_author)
+                        title_author_to_ids[title_author].add(article_id)
+                normalized_url = url_key(row["url"])
+                if normalized_url:
+                    url_hashes[split].add(digest(normalized_url))
                 article_counts[article_id] += 1
+                fully_native_fitting.setdefault(article_id, True)
                 lengths.append(len(article.split()))
                 article_tokens = (
                     len(tokenizer.encode(article, add_special_tokens=False))
@@ -139,6 +198,7 @@ def summarize(root: Path, tokenizer_dir: Path | None = None) -> dict[str, Any]:
                         )
                     )
                     question_total += 1
+                    article_questions[article_id] += 1
                     if tokenizer is not None and article_tokens is not None:
                         # Raw content only; native System One adds framing.
                         token_proxy_lengths.append(
@@ -153,6 +213,12 @@ def summarize(root: Path, tokenizer_dir: Path | None = None) -> dict[str, Any]:
                                 for x in options
                             )
                         )
+                        native_length = native_choice_tokens(
+                            article, question, tokenizer
+                        )
+                        native_token_lengths.append(native_length)
+                        if native_length > 8192:
+                            fully_native_fitting[article_id] = False
                     if gold is not None:
                         answer_positions[gold] += 1
                     difficulty[int(question["difficult"])] += 1
@@ -164,6 +230,8 @@ def summarize(root: Path, tokenizer_dir: Path | None = None) -> dict[str, Any]:
                             high_context_votes += rating in (3, 4)
         if any(count != 2 for count in article_counts.values()):
             raise ValueError("Expected exactly two writer sets per article")
+        article_questions_by_split[split] = article_questions
+        fully_fitting_by_split[split] = fully_native_fitting
         by_split[split] = {
             "source_file_sha256": sha(path),
             "writer_sets": sets,
@@ -180,6 +248,9 @@ def summarize(root: Path, tokenizer_dir: Path | None = None) -> dict[str, Any]:
             "license_writer_sets": dict(sorted(license_articles.items())),
             "license_questions": dict(sorted(license_questions.items())),
             "source_writer_sets": dict(sorted(source_articles.items())),
+            "distinct_title_author_cross_article_groups": sum(
+                len(ids) > 1 for ids in title_author_to_ids.values()
+            ),
             "context_votes_3_or_4": high_context_votes,
             "context_votes_total": context_votes,
             "raw_content_token_proxy": (
@@ -189,6 +260,26 @@ def summarize(root: Path, tokenizer_dir: Path | None = None) -> dict[str, Any]:
                     "p99": percentile(token_proxy_lengths, 0.99),
                     "at_most_8192": sum(n <= 8192 for n in token_proxy_lengths),
                     "at_most_4096": sum(n <= 4096 for n in token_proxy_lengths),
+                }
+                if tokenizer is not None
+                else None
+            ),
+            "native_system_one_choice_tokens": (
+                {
+                    "median": percentile(native_token_lengths, 0.5),
+                    "p90": percentile(native_token_lengths, 0.9),
+                    "p99": percentile(native_token_lengths, 0.99),
+                    "max": max(native_token_lengths),
+                    "at_most_8192": sum(n <= 8192 for n in native_token_lengths),
+                    "at_most_4096": sum(n <= 4096 for n in native_token_lengths),
+                    "fully_fitting_article_groups_at_8192": sum(
+                        fully_native_fitting.values()
+                    ),
+                    "questions_in_fully_fitting_article_groups_at_8192": sum(
+                        article_questions[article_id]
+                        for article_id, fits in fully_native_fitting.items()
+                        if fits
+                    ),
                 }
                 if tokenizer is not None
                 else None
@@ -203,16 +294,45 @@ def summarize(root: Path, tokenizer_dir: Path | None = None) -> dict[str, Any]:
                 "normalized_articles": len(
                     article_hashes[left] & article_hashes[right]
                 ),
+                "normalized_title_author": len(
+                    title_author_hashes[left] & title_author_hashes[right]
+                ),
+                "normalized_title": len(title_hashes[left] & title_hashes[right]),
+                "normalized_url": len(url_hashes[left] & url_hashes[right]),
                 "normalized_question_article_options": len(
                     question_hashes[left] & question_hashes[right]
                 ),
             }
+    reused_titles = title_hashes["train"] & (title_hashes["dev"] | title_hashes["test"])
+    held_train_articles = {
+        article_id
+        for title in reused_titles
+        for article_id in title_to_articles["train"][title]
+    }
+    clean_train_articles = article_ids["train"] - held_train_articles
     return {
         "source": "https://github.com/nyu-mll/quality",
         "revision": revision,
         "version": "v1.0.1.htmlstripped",
         "splits": by_split,
         "cross_split_overlaps": overlaps,
+        "train_title_collision_hold": {
+            "title_keys": len(reused_titles),
+            "article_groups": len(held_train_articles),
+            "questions": sum(
+                article_questions_by_split["train"][article_id]
+                for article_id in held_train_articles
+            ),
+            "remaining_8192_fit_article_groups": sum(
+                fully_fitting_by_split["train"][article_id]
+                for article_id in clean_train_articles
+            ),
+            "remaining_questions_in_whole_8192_fit_groups": sum(
+                article_questions_by_split["train"][article_id]
+                for article_id in clean_train_articles
+                if fully_fitting_by_split["train"][article_id]
+            ),
+        },
         "tokenizer_sha256": (
             {
                 name: sha(tokenizer_dir / name)

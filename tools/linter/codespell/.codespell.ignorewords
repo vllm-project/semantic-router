@@ -126,5 +126,8 @@ regrading
 # Model reasoning-mode toggle terms (not spelling errors)
 nothink
 
+# American National Corpus acronym in the QuALITY article-rights URL
+anc
+
 # Correct French plural in localized intent-option descriptions
 recommandations
