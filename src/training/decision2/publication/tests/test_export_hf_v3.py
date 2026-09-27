@@ -21,11 +21,17 @@ class SlimExportTest(unittest.TestCase):
         self.source.mkdir()
         (self.source / "native").mkdir()
         (self.source / "native" / "config.json").write_text('{"model_type":"test"}\n')
-        (self.source / "native" / "SHA256SUMS").write_text("model bytes pinned\n")
         (self.source / "native" / "model.safetensors").write_bytes(b"model weights")
         (self.source / "native" / "LICENSE").write_text("Eikos MIT terms\n")
         (self.source / "native" / "LICENSE-Qwen").write_text("Qwen Apache terms\n")
         (self.source / "native" / "NOTICE").write_text("Original Eikos notice\n")
+        (self.source / "native" / "decision2_provenance.json").write_text(
+            '{"training_source_rights":"CC BY-SA 4.0"}\n'
+        )
+        native_files = export._inventory(self.source / "native")
+        (self.source / "native" / "SHA256SUMS").write_text(
+            "".join(f"{digest}  {name}\n" for name, digest in native_files.items())
+        )
         (self.source / "card-artifacts").mkdir()
         for name in export.CHARTS:
             (self.source / "card-artifacts" / name).write_text(
@@ -82,7 +88,9 @@ class SlimExportTest(unittest.TestCase):
                     "model_id": export.MODEL_ID,
                     "model_revision": "checkpoint-0232",
                     "parameter_count": 4_205_751_296,
-                    "native_model_sha256": "7e005ef609553d973c3a6232840436d1384657a19f5765e42752ebcc04906e39",
+                    "native_model_sha256": export._sha(
+                        self.source / "native" / "SHA256SUMS"
+                    ),
                     "panel_sha256": {"typed": "a" * 64},
                     "files_sha256": files,
                 }
@@ -102,7 +110,7 @@ class SlimExportTest(unittest.TestCase):
         result = self._export()
         self.assertEqual(result["model_id"], export.MODEL_ID)
         self.assertEqual(
-            set(path.name for path in self.output.iterdir()),
+            {path.name for path in self.output.iterdir()},
             {
                 "README.md",
                 "ATTRIBUTIONS.md",
@@ -117,6 +125,15 @@ class SlimExportTest(unittest.TestCase):
         )
         self.assertEqual(
             (self.output / "model" / "model.safetensors").read_bytes(), b"model weights"
+        )
+        self.assertFalse((self.output / "model" / "decision2_provenance.json").exists())
+        self.assertNotIn(
+            "decision2_provenance.json",
+            (self.output / "model" / "SHA256SUMS").read_text(),
+        )
+        self.assertNotEqual(
+            result["scored_native_model_sha256"],
+            result["public_runtime_manifest_sha256"],
         )
         self.assertEqual(
             (self.output / "assets" / export.CHARTS[0]).read_bytes(),

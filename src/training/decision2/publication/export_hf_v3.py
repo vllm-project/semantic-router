@@ -23,7 +23,7 @@ from typing import Any
 from . import bundle_arena as common
 from .generate_arena_v3 import FIGURES
 
-VERSION = "decision2-hf-slim-export/1"
+VERSION = "decision2-hf-slim-export/2"
 MODEL_ID = "llm-semantic-router/DEV2.0-4B"
 OWL_SHA256 = "58dbd7cf5ff49b760a162c32366bd5312a2acfded1273b79b937afcd31ca6ee4"
 OWL_SOURCE_REVISION = "cde2a68dbaa557ea65dc458104d410a0802ee259"
@@ -39,6 +39,8 @@ ROOT_SOURCES = {
     "LICENSE-Eikos": "native/LICENSE",
     "LICENSE-Qwen": "native/LICENSE-Qwen",
 }
+PRIVATE_NATIVE_METADATA = "decision2_provenance.json"
+NATIVE_MANIFEST = "SHA256SUMS"
 
 
 def _sha(path: Path) -> str:
@@ -52,7 +54,7 @@ def _sha(path: Path) -> str:
 def _json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
-        raise ValueError(f"Expected a JSON object: {path.name}")
+        raise TypeError(f"Expected a JSON object: {path.name}")
     return value
 
 
@@ -86,8 +88,31 @@ def _checked_source(source: Path) -> tuple[dict[str, Any], dict[str, str]]:
     gate = _json(source / "release-gate.json")
     if gate.get("status") not in ("passed", "passed_postkey_user_directed"):
         raise ValueError("Private package release gate is not passed")
-    if not (source / "native" / "SHA256SUMS").is_file():
+    native = source / "native"
+    if f"native/{PRIVATE_NATIVE_METADATA}" not in actual:
+        raise ValueError("Frozen source lacks its private provenance binding")
+    if f"native/{NATIVE_MANIFEST}" not in actual:
         raise ValueError("Native model lacks its exact SHA256SUMS")
+    listed = {}
+    for line in (native / NATIVE_MANIFEST).read_text(encoding="utf-8").splitlines():
+        digest, separator, name = line.partition("  ")
+        if (
+            separator != "  "
+            or name in listed
+            or not re.fullmatch(r"[0-9a-f]{64}", digest)
+        ):
+            raise ValueError("Frozen native SHA256SUMS is malformed")
+        listed[name] = digest
+    native_files = {
+        name.removeprefix("native/"): digest
+        for name, digest in actual.items()
+        if name.startswith("native/") and name != f"native/{NATIVE_MANIFEST}"
+    }
+    if (
+        listed != native_files
+        or manifest.get("native_model_sha256") != actual[f"native/{NATIVE_MANIFEST}"]
+    ):
+        raise ValueError("Frozen native manifest does not cover the scored package")
     for name, relative in ROOT_SOURCES.items():
         if relative not in actual:
             raise ValueError(f"Private package lacks inherited license/notice: {name}")
@@ -178,10 +203,14 @@ def _card(source_card: str) -> str:
     card += (
         "\n## Download and native inference\n\n"
         f"`hf download {MODEL_ID} --local-dir DEV2.0-4B` downloads the complete "
-        "model. The byte-identical native model files are in `model/`; point the "
+        "model. Weights, configuration, tokenizer, calibration and native code "
+        "are byte-identical to those evaluated, under `model/`; point the "
         "Decision 2.0 Eikos-compatible native loader at that directory. The "
         "model uses a Decision-specific readout, so a generic text-generation "
-        "answer is not its evaluated decision output.\n\n"
+        "answer is not its evaluated decision output. The public "
+        "`model/SHA256SUMS` is regenerated over inference files after removing "
+        "non-runtime private provenance; the original scored package is bound "
+        "by digest in the evaluation manifest.\n\n"
         "[Apache-2.0 license](LICENSE) · [Upstream notices](ATTRIBUTIONS.md).\n"
     )
     common._public_text(card, "README.md")
@@ -223,7 +252,7 @@ def _attributions(record: dict[str, Any]) -> str:
 def _evaluation(source_manifest: dict[str, Any]) -> str:
     panel = source_manifest.get("panel_sha256", {})
     if not isinstance(panel, dict):
-        raise ValueError("Package has no panel digests")
+        raise TypeError("Package has no panel digests")
     lines = [
         "# Evaluation protocol",
         "",
@@ -262,11 +291,21 @@ def export(source: Path, owl: Path, output: Path) -> dict[str, Any]:
         for relative in source_files:
             if not relative.startswith("native/"):
                 continue
+            if relative in {
+                f"native/{PRIVATE_NATIVE_METADATA}",
+                f"native/{NATIVE_MANIFEST}",
+            }:
+                continue
             destination = stage / "model" / relative.removeprefix("native/")
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source / relative, destination)
             if _sha(destination) != source_files[relative]:
                 raise ValueError(f"Native model changed during export: {relative}")
+        runtime_files = _inventory(stage / "model")
+        (stage / "model" / NATIVE_MANIFEST).write_text(
+            "".join(f"{digest}  {name}\n" for name, digest in runtime_files.items()),
+            encoding="utf-8",
+        )
         for name, relative in ROOT_SOURCES.items():
             shutil.copyfile(source / relative, stage / name)
             if _sha(stage / name) != source_files[relative]:
@@ -295,7 +334,12 @@ def export(source: Path, owl: Path, output: Path) -> dict[str, Any]:
             "model_id": MODEL_ID,
             "model_revision": manifest["model_revision"],
             "parameter_count": manifest["parameter_count"],
-            "native_model_sha256": manifest["native_model_sha256"],
+            "scored_native_model_sha256": manifest["native_model_sha256"],
+            "public_runtime_manifest_sha256": _sha(stage / "model" / NATIVE_MANIFEST),
+            "private_native_provenance_sha256": source_files[
+                f"native/{PRIVATE_NATIVE_METADATA}"
+            ],
+            "inference_files_sha256": runtime_files,
             "source_private_package_manifest_sha256": _sha(
                 source / "PACKAGE_MANIFEST.json"
             ),
@@ -327,6 +371,20 @@ def verify(root: Path) -> dict[str, Any]:
     observed.pop("evaluation/manifest.json", None)
     if observed != manifest.get("files_sha256"):
         raise ValueError("Public HF export inventory changed")
+    model = root / "model"
+    if (model / PRIVATE_NATIVE_METADATA).exists():
+        raise ValueError("Private native provenance leaked into public model")
+    runtime_files = _inventory(model)
+    runtime_files.pop(NATIVE_MANIFEST, None)
+    if runtime_files != manifest.get("inference_files_sha256"):
+        raise ValueError("Public inference file inventory changed")
+    wanted_sums = "".join(
+        f"{digest}  {name}\n" for name, digest in runtime_files.items()
+    )
+    if (model / NATIVE_MANIFEST).read_text(encoding="utf-8") != wanted_sums or _sha(
+        model / NATIVE_MANIFEST
+    ) != manifest.get("public_runtime_manifest_sha256"):
+        raise ValueError("Public native SHA256SUMS differs from inference files")
     card = (root / "README.md").read_text(encoding="utf-8")
     if (
         CARD_FOX in card

@@ -4,15 +4,18 @@
 
 The private v3 package retains the full release gate, prediction bindings,
 review receipts and all generated artifacts. After its exact verifier passes,
-`publication.export_hf_v3` creates a separate, smaller 4B repository directory
-without changing any native model or chart bytes:
+`publication.export_hf_v3` creates a separate, smaller 4B repository directory.
+Weights, tokenizer, model configuration, calibration, native inference code,
+licenses and charts retain their exact bytes. The export leaves private
+non-runtime training provenance in the verified source package and regenerates
+the public `model/SHA256SUMS` over the reduced inference file set:
 
 ```text
 README.md                    Apache-2.0 model card and owl banner link
 LICENSE                      Apache-2.0 text
 LICENSE-Eikos, LICENSE-Qwen   inherited model license texts
 NOTICE, ATTRIBUTIONS.md      inherited notice and source credits
-model/                       complete byte-identical native model directory
+model/                       byte-identical inference files, new SHA256SUMS
 assets/                      owl banner and six frozen rank/matrix/Pareto figures
 evaluation/EVALUATION.md     concise first-release protocol
 evaluation/manifest.json     public file hashes and private-package binding
@@ -36,9 +39,34 @@ PYTHONPATH=src/training/decision2 python3 -m publication.export_hf_v3 \
 
 The exporter checks the private package's complete SHA-256 inventory and
 passes only a package whose 4B release gate and Apache-2.0 declarations are
-already present. It refuses symlinks, altered native files, altered charts,
-unrecognized owl pixels and extra public root files. The private verification
-bundle remains untouched and is not uploaded as the model repository.
+already present. The public manifest records both the original scored model
+identity and the new public runtime manifest digest. It refuses symlinks,
+altered inference files, altered charts, unrecognized owl pixels and extra
+public root files. Revalidate native predictions on the exported directory
+against the frozen gold-free outputs before publication; the old provenance-
+requiring `published_infer.package_identity` does not apply to this reduced
+public runtime. Use the **same ROCm/PyTorch/Transformers/FLA image and GPU
+architecture as the scored run**. The parity command checks the original
+prediction manifest, full prompt/prediction hashes, deterministic gated-delta
+backend, runtime versions and every categorical/probability output. Run it for
+each scored panel (typed FINAL, human transfer and public JevBench), keeping
+the resulting receipt in private storage:
+
+```bash
+PYTHONPATH=src/training/decision2 python3 \
+  src/training/decision2/scripts/verify_public_hf_runtime_parity_v3.py \
+  --private-package /ABS/verified-private-v3-package \
+  --public-export /ABS/new-DEV2.0-4B-hf-repository \
+  --prompts /ABS/frozen-panel.prompts.jsonl \
+  --scored-predictions /ABS/frozen-panel.predictions.jsonl \
+  --scored-native-manifest /ABS/frozen-panel.predictions.jsonl.manifest.json \
+  --output /ABS/private-panel-parity-receipt.json \
+  --device cuda:0
+```
+
+The private verification bundle remains untouched. The public manifest names
+both the scored native identity and the reduced runtime identity; it does not
+claim that the regenerated SHA256SUMS is byte-identical to the scored one.
 
 ## JevArena v3 first release
 
