@@ -116,21 +116,23 @@ def test_matcher_replaces_complete_old_groups_with_fixed_row_count():
 def test_blind_packet_has_no_source_id_or_gold():
     rows = [
         {
-            "id": "private-v6-id-0",
+            "id": f"private-v6-id-{i}",
             "group_id": "private-group",
             "family": "score_route_depth",
             "language": "en",
-            "label": 2,
-            "state": {"links": []},
+            "label": i,
+            "state": {"links": [], "variant": i},
             "instructions": "Follow the links.",
             "options": [{"key": str(i), "description": str(i)} for i in range(3)],
         }
+        for i in range(3)
     ]
-    packet_bytes, key_bytes = _blind_packet(rows, b"x" * 32)
-    packet = json.loads(packet_bytes)
-    key = json.loads(key_bytes)
+    packet_bytes, key_bytes, pairs_bytes = _blind_packet(rows, b"x" * 32)
+    packet = [json.loads(line) for line in packet_bytes.splitlines()]
+    key = [json.loads(line) for line in key_bytes.splitlines()]
+    pairs = [json.loads(line) for line in pairs_bytes.splitlines()]
     assert "private-v6-id-0" not in packet_bytes.decode()
-    assert "private-group" not in packet_bytes.decode()
-    assert "label" not in packet
-    assert key["label"] == 2
-    assert key["review_id"] == packet["review_id"]
+    assert "private-group" not in packet_bytes.decode() + pairs_bytes.decode()
+    assert all("label" not in item for item in packet)
+    assert {item["label"] for item in key} == {0, 1, 2}
+    assert set(pairs[0]["review_ids"]) == {item["review_id"] for item in packet}
