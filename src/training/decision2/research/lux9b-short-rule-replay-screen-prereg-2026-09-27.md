@@ -102,3 +102,18 @@ The trainer defaults omitted above are frozen here before optimization:
 One-step preflight uses the same data/source/objective with `max_steps=1` and
 `save_every=1`. The 128-step arm uses `max_steps=128`, `save_every=32` and a
 distinct output directory; no one-step weights are transferred.
+
+## One-step numerical feasibility, before 128-step start
+
+The one-step arm completed and did not contribute initialization weights to
+the planned 128-step arm. Baseline SELECT600 was 322/600, matching the
+historical own-Lux source count. Step 1 used 16 examples / 4,609 input tokens;
+loss 2.46328, gradient norm 14.61228 and all other logged values were finite.
+Peak GPU allocation was 32.85 GiB. Step-1 SELECT remained 322/600. Private
+provenance, completion, and SELECT receipt SHAs are respectively
+`5e02b664373bd6fde4d76c8f6fcbeb12fb3d9263a59523f07716d97892faa37b`,
+`c27de0a3e1dd1fa6140c93d23e9ba72dac6e7b66dad07533b0f4d2d552f57825`,
+and `5c53704a56b4678eb2b52f7c1d99877bdedeeedf8a92f3b053038729ecd90572`.
+The observed one-step compute took 9.84 seconds; the 128-step arm retains the
+already frozen 2 GPU-hour cap and will stop on a projected overrun. No
+development, public, or formal evaluation was performed on step 1.
