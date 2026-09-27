@@ -74,6 +74,23 @@ def _rows(path: Path) -> list[dict[str, Any]]:
     return _rows_bytes(path.read_bytes())
 
 
+def _calibration_file_sha256(manifest: dict[str, Any]) -> str | None:
+    """Read either native sidecar layout without accepting contradictory CALs."""
+    direct = manifest.get("calibration_sha256")
+    nested = manifest.get("calibration")
+    if nested is not None:
+        if not isinstance(nested, dict):
+            raise ValueError("Prediction calibration binding is malformed")
+        nested = nested.get("file_sha256")
+        if not isinstance(nested, str):
+            raise ValueError("Prediction calibration binding is missing")
+    if direct is not None and not isinstance(direct, str):
+        raise ValueError("Prediction calibration binding is malformed")
+    if direct is not None and nested is not None and direct != nested:
+        raise ValueError("Prediction calibration bindings disagree")
+    return direct if direct is not None else nested
+
+
 def _bound_predictions(
     path: Path,
     *,
@@ -94,7 +111,7 @@ def _bound_predictions(
         or manifest.get("input_sha256") != prompts_sha256
         or manifest.get("input_items") != items
         or manifest.get("model_sha256") != model_sha256
-        or manifest.get("calibration_sha256") != calibration_sha256
+        or _calibration_file_sha256(manifest) != calibration_sha256
     ):
         raise ValueError("Prediction manifest does not bind this panel/model/CAL")
     if (

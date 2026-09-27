@@ -149,6 +149,49 @@ class PanelParityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "does not bind"):
             self._compare(panel)
 
+    def test_source_nested_calibration_binding_and_conflicts(self) -> None:
+        panel = self._panel("dev")
+        manifest = panel[1].with_name(panel[1].name + ".manifest.json")
+        original = json.loads(manifest.read_text())
+        nested = dict(original)
+        del nested["calibration_sha256"]
+        nested["calibration"] = {"file_sha256": self.calibration}
+        _write_json(manifest, nested)
+        self.assertTrue(self._compare(panel)["gate_pass"])
+
+        for replacement, error in (
+            ({"calibration": {"file_sha256": "f" * 64}}, "does not bind"),
+            ({}, "does not bind"),
+            ({"calibration": {}}, "binding is missing"),
+            (
+                {
+                    "calibration_sha256": self.calibration,
+                    "calibration": {"file_sha256": "f" * 64},
+                },
+                "bindings disagree",
+            ),
+            (
+                {
+                    "calibration_sha256": self.calibration,
+                    "calibration": {"file_sha256": self.calibration},
+                },
+                None,
+            ),
+        ):
+            with self.subTest(replacement=replacement):
+                bound = {
+                    key: value
+                    for key, value in original.items()
+                    if key != "calibration_sha256"
+                }
+                bound.update(replacement)
+                _write_json(manifest, bound)
+                if error is None:
+                    self.assertTrue(self._compare(panel)["gate_pass"])
+                else:
+                    with self.assertRaisesRegex(ValueError, error):
+                        self._compare(panel)
+
     def test_boundary_point_flips_fail_despite_small_probability_drift(self) -> None:
         left = json.loads(json.dumps(self.answers))
         right = json.loads(json.dumps(self.answers))
