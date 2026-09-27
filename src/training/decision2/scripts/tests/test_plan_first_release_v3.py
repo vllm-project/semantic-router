@@ -242,7 +242,7 @@ class FirstReleasePlanTests(unittest.TestCase):
         self.assertIn("transfer.score", score)
         self.assertIn("jev_arena.jevbench_public", score)
         eikos_score = plan["scoring_commands_after_prekey_freeze"][-1]["commands"][-1]
-        self.assertNotIn("--prediction-manifest", eikos_score)
+        self.assertIn("--prediction-manifest", eikos_score)
         self.assertNotIn("arena_v2", score)
         self.assertNotIn("decision_bench", score)
         self.assertNotIn("authored", score)

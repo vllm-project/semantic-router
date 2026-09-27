@@ -18,6 +18,40 @@ from publication.tests import test_generate_arena_v3 as artifact_fixture
 from transfer.build import EVALUATION_TASKS, PANEL_VERSION
 
 
+class EikosCollectorBindingTests(unittest.TestCase):
+    def test_native_adapter_is_exact_collector_and_stable_full_run(self) -> None:
+        from scripts.eikos_stable_runtime_v3 import FLA_BACKEND, TORCH_BACKEND
+
+        native = {
+            "collector_source_sha256": bundle.common.sha_file(bundle.EIKOS_COLLECTOR),
+            "input_items": 231,
+            "evaluated_items": 231,
+            "counts": {"items": 231},
+            "max_items": None,
+            "runtime": {
+                "torch_deterministic_algorithms": True,
+                "gated_delta_backend_before": FLA_BACKEND,
+                "gated_delta_backend": TORCH_BACKEND,
+            },
+        }
+        self.assertEqual(
+            bundle._native_adapter_sha(native, "public"),
+            native["collector_source_sha256"],
+        )
+        for altered in (
+            native | {"collector_source_sha256": "a" * 64},
+            native | {"evaluated_items": 230},
+            native | {"max_items": 230},
+            native | {"adapter_sha256": "b" * 64},
+            native
+            | {
+                "runtime": native["runtime"] | {"torch_deterministic_algorithms": False}
+            },
+        ):
+            with self.assertRaises(ValueError):
+                bundle._native_adapter_sha(altered, "public")
+
+
 def write(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
 

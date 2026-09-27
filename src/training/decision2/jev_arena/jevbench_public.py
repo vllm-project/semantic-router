@@ -287,11 +287,62 @@ def _native_manifest(
         raise ValueError(
             "Native prediction manifest model/input/output binding differs"
         )
-    for field in ("model_sha256", "adapter_sha256"):
-        value = receipt.get(field)
+    value = receipt.get("model_sha256")
+    if not isinstance(value, str) or len(value) != 64:
+        raise ValueError("Native prediction manifest is missing model_sha256")
+    if "collector_source_sha256" in receipt:
+        # Eikos' native collector predates the decision-head adapter field. Its
+        # source digest is the adapter identity frozen by the v3 release plan.
+        from scripts.eikos_stable_runtime_v3 import stable_backend
+
+        collector = (
+            Path(__file__).resolve().parents[1] / "training/eikos/published_infer.py"
+        )
+        if (
+            receipt.get("adapter_sha256") is not None
+            or receipt.get("collector_source_sha256") != sha_file(collector)
+            or receipt.get("calibration", {}).get("file_sha256")
+            != receipt.get("calibration_sha256")
+            or receipt.get("evaluated_items") != count
+            or receipt.get("max_items") is not None
+            or not stable_backend(receipt.get("runtime"))
+        ):
+            raise ValueError("Eikos native manifest collector/runtime binding differs")
+    else:
+        value = receipt.get("adapter_sha256")
         if not isinstance(value, str) or len(value) != 64:
-            raise ValueError(f"Native prediction manifest is missing {field}")
+            raise ValueError("Native prediction manifest is missing adapter_sha256")
     return receipt
+
+
+def _native_row_identity(
+    row: dict[str, Any],
+    native: dict[str, Any],
+    expected_input: str,
+    model_id: str,
+    model_revision: str,
+) -> bool:
+    if "collector_source_sha256" in native:
+        return (
+            row.get("model_id") == model_id
+            and row.get("model_revision") == model_revision
+            and row.get("model_sha256") == native["model_sha256"]
+            and row.get("calibration_sha256") == native["calibration_sha256"]
+            and row.get("adapter_version") == native.get("adapter_version")
+            and row.get("backend") == "eikos-semif-native"
+            and row.get("source_input_sha256") == expected_input
+        )
+    return (
+        row.get("model_id") in (None, model_id)
+        and row.get("model_revision") in (None, model_revision)
+        and row.get("model_sha256") == native["model_sha256"]
+        and row.get("adapter_sha256") == native["adapter_sha256"]
+        and row.get("input_sha256") == expected_input
+        and (
+            "calibration" not in native
+            or row.get("calibration_sha256") == native["calibration"]["file_sha256"]
+        )
+    )
 
 
 def score(
@@ -340,20 +391,14 @@ def score(
     for row in _read_jsonl(predictions_path):
         item_id = row.get("id")
         native_identity = (
-            (
-                native is not None
-                and row.get("model_id") in (None, model_id)
-                and row.get("model_revision") in (None, model_revision)
-                and row.get("model_sha256") == native["model_sha256"]
-                and row.get("adapter_sha256") == native["adapter_sha256"]
-                and row.get("input_sha256") == expected[item_id]["source_input_sha256"]
-                and (
-                    "calibration" not in native
-                    or row.get("calibration_sha256")
-                    == native["calibration"]["file_sha256"]
-                )
+            _native_row_identity(
+                row,
+                native,
+                expected[item_id]["source_input_sha256"],
+                model_id,
+                model_revision,
             )
-            if item_id in expected
+            if native is not None and item_id in expected
             else False
         )
         inline_identity = (
@@ -365,7 +410,11 @@ def score(
             or item_id in predictions
             or row.get("source_input_sha256")
             != expected[item_id]["source_input_sha256"]
-            or not (inline_identity or native_identity)
+            or not (
+                native_identity
+                if native is not None and "collector_source_sha256" in native
+                else inline_identity or native_identity
+            )
         ):
             raise ValueError(
                 "Unknown, duplicate, stale-input or wrong-model JevBench prediction"

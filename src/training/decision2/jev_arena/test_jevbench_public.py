@@ -13,6 +13,7 @@ from jev_arena.jevbench_public import (
     _ece_15,
     _evaluate,
     _native_manifest,
+    _native_row_identity,
     _valid_probs,
     input_digest,
 )
@@ -105,6 +106,74 @@ class PublicScoreTest(unittest.TestCase):
             )
             predictions.write_text('{"id":"other"}\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "binding differs"):
+                _native_manifest(
+                    receipt_path, predictions, prompts, "candidate", "checkpoint-1", 1
+                )
+
+    def test_eikos_collector_receipt_requires_source_and_stable_full_run(self) -> None:
+        from scripts.eikos_stable_runtime_v3 import FLA_BACKEND, TORCH_BACKEND
+
+        collector = (
+            Path(__file__).resolve().parents[1] / "training/eikos/published_infer.py"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            prompts, predictions, receipt_path = (
+                root / "prompts.jsonl",
+                root / "predictions.jsonl",
+                root / "receipt.json",
+            )
+            prompts.write_text("{}\n", encoding="utf-8")
+            predictions.write_text("{}\n", encoding="utf-8")
+            digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+            receipt = {
+                "model_id": "candidate",
+                "model_revision": "checkpoint-1",
+                "predictions_sha256": digest(predictions),
+                "input_sha256": digest(prompts),
+                "input_items": 1,
+                "evaluated_items": 1,
+                "counts": {"items": 1},
+                "max_items": None,
+                "model_sha256": "a" * 64,
+                "calibration_sha256": "c" * 64,
+                "calibration": {"file_sha256": "c" * 64},
+                "collector_source_sha256": digest(collector),
+                "adapter_version": "eikos-native/1",
+                "runtime": {
+                    "torch_deterministic_algorithms": True,
+                    "gated_delta_backend_before": FLA_BACKEND,
+                    "gated_delta_backend": TORCH_BACKEND,
+                },
+            }
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+            native = _native_manifest(
+                receipt_path, predictions, prompts, "candidate", "checkpoint-1", 1
+            )
+            row = {
+                "model_id": "candidate",
+                "model_revision": "checkpoint-1",
+                "model_sha256": "a" * 64,
+                "calibration_sha256": "c" * 64,
+                "adapter_version": "eikos-native/1",
+                "backend": "eikos-semif-native",
+                "source_input_sha256": "d" * 64,
+            }
+            self.assertTrue(
+                _native_row_identity(row, native, "d" * 64, "candidate", "checkpoint-1")
+            )
+            self.assertFalse(
+                _native_row_identity(
+                    row | {"model_sha256": "b" * 64},
+                    native,
+                    "d" * 64,
+                    "candidate",
+                    "checkpoint-1",
+                )
+            )
+            receipt["runtime"]["torch_deterministic_algorithms"] = False
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "collector/runtime"):
                 _native_manifest(
                     receipt_path, predictions, prompts, "candidate", "checkpoint-1", 1
                 )

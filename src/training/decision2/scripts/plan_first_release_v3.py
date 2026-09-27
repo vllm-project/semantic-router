@@ -438,7 +438,7 @@ def build_plan(
             "--output",
             public_report,
         ]
-        if candidate and key not in eikos_keys:
+        if candidate:
             public_command += [
                 "--prediction-manifest",
                 Path(str(pred["public"]) + ".manifest.json"),

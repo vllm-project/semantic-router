@@ -24,6 +24,7 @@ from jev_arena.arena_v3 import _freeze as checked_freeze
 from jev_arena.arena_v3 import _typed as score_typed_axis
 from jev_arena.compare_v3 import DEFAULT_REPLICATES, DEFAULT_SEED
 from jev_arena.jevbench_public import SCORE_VERSION as PUBLIC_SCORE_VERSION
+from scripts.eikos_stable_runtime_v3 import stable_backend
 
 from . import adapter_runtime
 from . import bundle_arena as common
@@ -48,7 +49,29 @@ POLICY = (
     Path(__file__).resolve().parents[1]
     / "research/jev-arena-v3-first-release-gates-2026-09-27.md"
 )
+EIKOS_COLLECTOR = (
+    Path(__file__).resolve().parents[1] / "training/eikos/published_infer.py"
+)
 SCORERS = SCORER_SOURCE_PATHS
+
+
+def _native_adapter_sha(native: dict[str, Any], family: str) -> str:
+    if "collector_source_sha256" not in native:
+        return common._sha(native.get("adapter_sha256"), f"{family} adapter")
+    # Eikos' collector source is its frozen adapter identity. The full-run
+    # receipt must retain the qualified backend and every original item.
+    if (
+        native.get("adapter_sha256") is not None
+        or native.get("collector_source_sha256") != common.sha_file(EIKOS_COLLECTOR)
+        or native.get("input_items")
+        != {"typed": 1600, "css": 6547, "public": 231}[family]
+        or native.get("evaluated_items") != native.get("input_items")
+        or native.get("counts", {}).get("items") != native.get("input_items")
+        or native.get("max_items") is not None
+        or not stable_backend(native.get("runtime"))
+    ):
+        raise ValueError(f"{family}: Eikos native collector/runtime differs")
+    return common._sha(native["collector_source_sha256"], f"{family} collector")
 
 
 def _context_digest(
@@ -271,7 +294,7 @@ def _score_inputs(
             or native_cal != calibration_sha
         ):
             raise ValueError(f"{family}: native inference used another model package")
-        adapter_sha = common._sha(native.get("adapter_sha256"), f"{family} adapter")
+        adapter_sha = _native_adapter_sha(native, family)
         if adapter_sha != row["adapter_sha256"]:
             raise ValueError(f"{family}: native adapter differs from v3 freeze")
         if (
