@@ -26,6 +26,14 @@ same-panel result establishes a Decision 2.0 Pareto frontier. The product
 card should show matched ranks and task matrix, not this internal gate ledger
 or a Pareto chart.
 
+An [ANLI open-development Score diagnostic](anli-score-dev-feasibility-2026-09-28.md)
+now passes a bounded input-only exact/near screen against the eight core
+roles: 3,200 public development pairs, 2,842 independent normalized premise
+groups and zero lexical row-pair hits in every role. It tests short
+evidence relation, not long context or unseen release quality. Original
+corpus reuse and semantic independence remain unproven; it contributes no
+new model result and no JevArena release item.
+
 Authenticated HF CLI readback on 2026-09-28 reconfirmed the private Decision
 2.0 collection contains only `DEV2.0-0.6B`. That private repository has 30
 standardized files at revision `7ac568e6ce99cdeb7cf423b4984a4f87dba8a204`;
