@@ -1,11 +1,14 @@
+import json
 import unittest
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from training.eikos.verify_export import (
     PUBLICATION_DOCUMENTS,
     compare_answers,
+    verify,
     verify_sums,
 )
 
@@ -76,6 +79,117 @@ class FunctionalPackageRosterTest(unittest.TestCase):
             (folder / "unlisted.py").write_text("pass", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "file set differs"):
                 verify_sums(folder)
+
+
+class TorchReferenceDirectParityTest(unittest.TestCase):
+    def test_switch_precedes_both_loads_and_hashes_both_predictions(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            merged = root / "merged"
+            merged.mkdir()
+            (merged / "calib.json").write_text("{}", encoding="utf-8")
+            (merged / "SHA256SUMS").write_text("package", encoding="utf-8")
+            calibration_sha = sha256(b"{}").hexdigest()
+            adapter_sha = "a" * 64
+            (merged / "decision2_provenance.json").write_text(
+                json.dumps(
+                    {
+                        "source_revision": "582ffb13f19a4da3f455e3db198584190bd7755b",
+                        "source_release": {},
+                        "selected_checkpoint": "checkpoint-0232",
+                        "adapter_weights_sha256": adapter_sha,
+                        "calibration_sha256": calibration_sha,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            selection = {
+                "name": "checkpoint-0232",
+                "adapter": root / "adapter",
+                "adapter_weights_sha256": adapter_sha,
+            }
+            row = {
+                "id": "item/1",
+                "state": "state",
+                "questions": {"label": {"type": "choice"}},
+            }
+            answer = {
+                "type": "choice",
+                "choice": "A",
+                "probabilities": {"A": 0.75, "B": 0.25},
+            }
+            events = []
+
+            class FakeDecider:
+                def decide_all(self, **kwargs):
+                    return {"label": (answer, 4)}
+
+            def load(*args, **kwargs):
+                events.append("load")
+                return FakeDecider()
+
+            def switch():
+                events.append("switch")
+                return {"gated_delta_backend": "torch-reference"}
+
+            selected = root / "selected.jsonl"
+            packaged = root / "packaged.jsonl"
+            output = root / "parity.json"
+            prompts = root / "unused.prompts.jsonl"
+            prompts.write_text(json.dumps(row) + "\n", encoding="utf-8")
+            with (
+                patch("training.eikos.verify_export.verify_sums", return_value=1),
+                patch(
+                    "training.eikos.verify_export.selected_checkpoint",
+                    return_value=selection,
+                ),
+                patch("training.eikos.verify_export.load_prompts", return_value=[row]),
+                patch("training.eikos.verify_export.load_decider", side_effect=load),
+                patch(
+                    "training.eikos.verify_export.shared_answer",
+                    side_effect=lambda q, a: a,
+                ),
+                patch(
+                    "torch.use_deterministic_algorithms",
+                    side_effect=lambda enabled: events.append("deterministic"),
+                ),
+                patch("torch.are_deterministic_algorithms_enabled", return_value=True),
+                patch(
+                    "training.eikos.published_infer.use_torch_reference_gated_delta",
+                    side_effect=switch,
+                ),
+            ):
+                report = verify(
+                    model_path=root,
+                    run=root,
+                    merged=merged,
+                    prompts=prompts,
+                    reference=None,
+                    output=output,
+                    direct_selected=True,
+                    deterministic_algorithms=True,
+                    torch_reference_gated_delta=True,
+                    selected_predictions=selected,
+                    merged_predictions=packaged,
+                )
+            self.assertEqual(events, ["deterministic", "switch", "load", "load"])
+            self.assertTrue(report["predeclared_gate"]["pass"])
+            self.assertTrue(report["runtime"]["torch_deterministic_algorithms"])
+            self.assertEqual(
+                report["runtime"]["gated_delta_backend"], "torch-reference"
+            )
+            self.assertEqual(
+                report["selected_predictions_sha256"],
+                sha256(selected.read_bytes()).hexdigest(),
+            )
+            self.assertEqual(
+                report["merged_predictions_sha256"],
+                sha256(packaged.read_bytes()).hexdigest(),
+            )
+            self.assertEqual(
+                json.loads(selected.read_text().splitlines()[0])["answers"]["label"],
+                answer,
+            )
 
 
 if __name__ == "__main__":

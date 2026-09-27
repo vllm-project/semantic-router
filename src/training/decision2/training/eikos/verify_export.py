@@ -15,7 +15,7 @@ from typing import Any
 from inference.eikos import shared_answer
 from inference.run import digest, load_prompts
 
-from training.eikos.io import atomic_json
+from training.eikos.io import atomic_json, atomic_jsonl
 from training.eikos.native import load_decider, selected_checkpoint
 from training.model.data import file_sha256
 
@@ -113,6 +113,10 @@ def verify(
     max_items: int | None = None,
     repeat_selected: bool = False,
     direct_selected: bool = False,
+    deterministic_algorithms: bool = False,
+    torch_reference_gated_delta: bool = False,
+    selected_predictions: Path | None = None,
+    merged_predictions: Path | None = None,
 ) -> dict[str, Any]:
     if repeat_selected and direct_selected:
         raise ValueError("Repeat control and direct parity are different checks")
@@ -122,6 +126,16 @@ def verify(
         )
     if output.exists():
         raise FileExistsError(output)
+    if (selected_predictions is None) != (merged_predictions is None):
+        raise ValueError("Direct parity requires both prediction output paths")
+    if selected_predictions is not None:
+        if not direct_selected:
+            raise ValueError("Prediction output paths require direct selected parity")
+        if len({output, selected_predictions, merged_predictions}) != 3:
+            raise ValueError("Direct parity output paths must differ")
+        for prediction_path in (selected_predictions, merged_predictions):
+            if prediction_path.exists():
+                raise FileExistsError(prediction_path)
     checked_files = verify_sums(merged)
     selection = selected_checkpoint(run, model_path)
     receipt = json.loads(
@@ -134,6 +148,7 @@ def verify(
         or receipt["calibration_sha256"] != file_sha256(merged / "calib.json")
     ):
         raise ValueError("Candidate provenance does not bind selected native LoRA")
+    model_sha256 = file_sha256(merged / "SHA256SUMS")
     rows = load_prompts(prompts)
     if max_items is not None:
         if max_items < 1:
@@ -160,6 +175,20 @@ def verify(
                 "Reference predictions do not use the selected LoRA/calibration"
             )
 
+    runtime = {}
+    if deterministic_algorithms:
+        import torch
+
+        torch.use_deterministic_algorithms(True)
+        runtime["torch_deterministic_algorithms"] = (
+            torch.are_deterministic_algorithms_enabled()
+        )
+    if torch_reference_gated_delta:
+        # This must run before either native model is loaded. Keep the default
+        # comparator path unchanged for prior frozen parity receipts.
+        from training.eikos.published_infer import use_torch_reference_gated_delta
+
+        runtime.update(use_torch_reference_gated_delta())
     decider = load_decider(
         model_path if repeat_selected else merged,
         selection["adapter"] if repeat_selected else None,
@@ -177,6 +206,8 @@ def verify(
     drifts = []
     pmax_drifts = []
     largest: list[dict[str, Any]] = []
+    selected_prediction_rows: list[dict[str, Any]] = []
+    merged_prediction_rows: list[dict[str, Any]] = []
     for row in rows:
         payload = {"state": row["state"], "questions": row["questions"]}
         if direct_selected:
@@ -193,8 +224,32 @@ def verify(
         results = decider.decide_all(**payload)
         if set(results) != set(prior_answers):
             raise ValueError("Packaged question set changed")
+        merged_answers = {
+            key: shared_answer(row["questions"][key], answer)
+            for key, (answer, _) in results.items()
+        }
+        if selected_predictions is not None:
+            selected_prediction_rows.append(
+                {
+                    "id": row["id"],
+                    "answers": prior_answers,
+                    "source_input_sha256": digest(payload),
+                    "checkpoint": selection["name"],
+                    "adapter_weights_sha256": selection["adapter_weights_sha256"],
+                    "calibration_sha256": receipt["calibration_sha256"],
+                }
+            )
+            merged_prediction_rows.append(
+                {
+                    "id": row["id"],
+                    "answers": merged_answers,
+                    "source_input_sha256": digest(payload),
+                    "model_sha256": model_sha256,
+                    "calibration_sha256": receipt["calibration_sha256"],
+                }
+            )
         for key, (answer, _) in results.items():
-            shared = shared_answer(row["questions"][key], answer)
+            shared = merged_answers[key]
             same, drift, pmax_drift = compare_answers(prior_answers[key], shared)
             if not same:
                 mismatches.append(f"{row['id']}:{key}")
@@ -215,6 +270,9 @@ def verify(
     max_drift = max(drifts)
     mean_drift = sum(drifts) / len(drifts)
     gate = len(mismatches) == 0 and p99 <= 0.005 and max_drift <= 0.02
+    if selected_predictions is not None:
+        atomic_jsonl(selected_predictions, selected_prediction_rows)
+        atomic_jsonl(merged_predictions, merged_prediction_rows)
     report = {
         "role": (
             "gold-free direct selected-LoRA versus merged package parity"
@@ -235,7 +293,7 @@ def verify(
             )
         ),
         "candidate": str(merged),
-        "candidate_manifest_sha256": file_sha256(merged / "SHA256SUMS"),
+        "candidate_manifest_sha256": model_sha256,
         "candidate_files_checked": checked_files,
         "source_release": receipt["source_release"],
         "selected_checkpoint": selection["name"],
@@ -245,6 +303,15 @@ def verify(
         "reference_prediction_sha256": (
             file_sha256(reference) if reference is not None else None
         ),
+        **(
+            {
+                "selected_predictions_sha256": file_sha256(selected_predictions),
+                "merged_predictions_sha256": file_sha256(merged_predictions),
+            }
+            if selected_predictions is not None
+            else {}
+        ),
+        **({"runtime": runtime} if runtime else {}),
         "items": len(rows),
         "answers": len(drifts),
         "choice_mismatch_n": len(mismatches),
@@ -284,6 +351,10 @@ def main() -> None:
     parser.add_argument("--max-items", type=int)
     parser.add_argument("--repeat-selected", action="store_true")
     parser.add_argument("--direct-selected", action="store_true")
+    parser.add_argument("--deterministic-algorithms", action="store_true")
+    parser.add_argument("--torch-reference-gated-delta", action="store_true")
+    parser.add_argument("--selected-predictions", type=Path)
+    parser.add_argument("--merged-predictions", type=Path)
     args = parser.parse_args()
     print(
         json.dumps(
@@ -298,6 +369,10 @@ def main() -> None:
                 max_items=args.max_items,
                 repeat_selected=args.repeat_selected,
                 direct_selected=args.direct_selected,
+                deterministic_algorithms=args.deterministic_algorithms,
+                torch_reference_gated_delta=args.torch_reference_gated_delta,
+                selected_predictions=args.selected_predictions,
+                merged_predictions=args.merged_predictions,
             ),
             sort_keys=True,
         )
