@@ -42,7 +42,9 @@ It does not continue the prior failed 8,192-token run or use its weights.
    exact source and rerun the same first 32 SELECT inputs, batch size two.
    Require zero category changes, p99 absolute option-probability drift at most
    .005 and maximum at most .02 against the original step-one predictions.
-   Compare all 32 IDs and all candidate probabilities.
+   Compare all 32 IDs and all candidate probabilities using the checked-in
+   `scripts.verify_native_select_reload` implementation. Freeze its hash before
+   reload, along with the original SELECT prediction hash.
 
 A failed gate leaves 9B optimizer development on HOLD with its failure receipt.
 A pass only admits a separately frozen full development arm with new budget
