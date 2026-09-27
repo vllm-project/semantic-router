@@ -1,6 +1,9 @@
 # 0.8B: one Score-only human-evidence substitution
 
-**Disposition: CPU admission first; no optimizer is authorized by this note.**
+**Disposition: CPU token-budget HOLD; no optimizer is authorized.** The
+[completed CPU admission](eos08-human-evidence-score-cpu-hold-2026-09-28.md)
+found that even the 192 longest non-news source rows fall far below the frozen
+±1% native-token rule. Do not launch this arm.
 This is a prospective experiment, not a model result or a release claim. Its
 purpose is to separate an ordinal-data failure from an optimization/head
 failure without repeating the completed 0.8B controls. It supersedes neither
