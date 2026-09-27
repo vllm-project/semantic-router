@@ -66,6 +66,44 @@ class PostkeyPackageTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unique old card metadata"):
             postkey._composite_card(card)
 
+    def test_composite_card_accepts_actual_v3_card(self) -> None:
+        record = self.composite_record()
+        record.update(
+            architecture="qwen3.5-semif",
+            training={
+                "train_rows": 7455,
+                "select_rows": 700,
+                "cal_rows": 700,
+                "selection_policy": "frozen SELECT",
+                "language_counts": {"en": 6085, "zh": 1370},
+            },
+            evaluation_language_scope="English and Chinese",
+            known_overlap=[],
+            limitations=["Research model."],
+        )
+        record["rights"]["sources"] = [
+            {
+                "name": "Eikos",
+                "license": "MIT",
+                "attribution": "Eikos contributors",
+                "use_scope": "model weights",
+                "redistribution": "with notice",
+            }
+        ]
+        native_card = postkey.bundle._card(
+            postkey.COMPOSITE_MODEL_ID,
+            record,
+            {"rank": 1, "score": 62.67},
+            4_205_751_296,
+            "| Model | Score |\n| --- | ---: |\n| Candidate | 62.67 |\n",
+            "| Model | Brier |\n| --- | ---: |\n| Candidate | 0.12 |",
+        )
+        card = postkey._composite_card(native_card)
+        self.assertEqual(card.count("## License and upstream notices"), 1)
+        self.assertEqual(card.count("## Same-panel first-release evaluation"), 1)
+        self.assertIn("license_name: decision2-4b-composite-cc-by-sa-4.0", card)
+        self.assertIn("8,147", card)
+
     def test_additive_license_preserves_native_files_and_binds_card(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
