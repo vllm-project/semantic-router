@@ -1,0 +1,172 @@
+{
+  "added_ids": [
+    56,
+    57,
+    58,
+    59,
+    61,
+    62,
+    64
+  ],
+  "areas": [
+    {
+      "benchmarks": [
+        25,
+        30,
+        31,
+        32,
+        33,
+        43,
+        44,
+        45,
+        57,
+        58
+      ],
+      "id": "knowledge",
+      "weight": 0.2585
+    },
+    {
+      "benchmarks": [
+        11,
+        12,
+        28,
+        29,
+        38,
+        39,
+        40,
+        41,
+        42,
+        59
+      ],
+      "id": "language",
+      "weight": 0.2585
+    },
+    {
+      "benchmarks": [
+        4,
+        5,
+        36,
+        37,
+        56,
+        61
+      ],
+      "id": "retrieval",
+      "weight": 0.2002
+    },
+    {
+      "benchmarks": [
+        1,
+        2,
+        3,
+        9,
+        62
+      ],
+      "id": "tools",
+      "weight": 0.1828
+    },
+    {
+      "benchmarks": [
+        20,
+        21,
+        22,
+        23,
+        48,
+        50,
+        64
+      ],
+      "id": "arts",
+      "weight": 0.1
+    }
+  ],
+  "chance": {
+    "1": 0.2592,
+    "11": 0.3085,
+    "12": 0.3324,
+    "2": 0.1341,
+    "20": 0.5,
+    "21": 0.5,
+    "22": 0.0078,
+    "23": 0.5,
+    "25": 0.25,
+    "28": 0.5,
+    "29": 0.25,
+    "3": 0.0189,
+    "30": 0.175,
+    "31": 0.0819,
+    "32": 0.371,
+    "33": 0.0131,
+    "36": 0.116,
+    "37": 0.2027,
+    "38": 0.031,
+    "39": 0.3201,
+    "4": 0.0127,
+    "40": 0.2227,
+    "41": 0.3333,
+    "42": 0.486,
+    "43": 0.3697,
+    "44": 0.5,
+    "45": 0.1641,
+    "48": 0.0,
+    "5": 0.006,
+    "50": 0.311,
+    "56": 0.5,
+    "57": 0.1109,
+    "58": 0.3101,
+    "59": 0.5177,
+    "61": 0.5,
+    "62": 0.25,
+    "64": 0.2,
+    "9": 0.0
+  },
+  "edition": "0.2.1",
+  "expected_drops": {
+    "bright": 330,
+    "home": 72,
+    "toolret": 315
+  },
+  "gold_ids": [
+    57,
+    58,
+    25,
+    45,
+    12,
+    28,
+    29,
+    4,
+    5,
+    36,
+    1,
+    3,
+    48
+  ],
+  "gold_weight": 1.2,
+  "index_sha256": "5444deeacd9bd6ea9e8ccf008f99f1223fe1d43af6e40739259aec804284ec55",
+  "kit_files_sha256": {
+    "data/index-0.2.json": "d7165596fe3f9ae10690089b7175d5bdb1973677257c914ce6b3cfa91ac3dcd1",
+    "scoring/added.py": "e71523b85638963dcf6da58c8cd16a5b218a5c64dce45f82fdea7910003d175f",
+    "scoring/index.py": "ee8d3b9677ed9e0ffba7eda40a0cae35cb4d89cbc79864cbf37514d5ccaa9d24",
+    "scoring/index02.py": "7e95e78766a7a4a446e2ad62ae73fde6625f836aabdbfa58fe4b49e2d8ca7c44",
+    "scoring/report.py": "5d9887ab7382f4c1bb9e0f2f305678a7481d4b4fdeb3324298686e8e6a2b3435",
+    "suite/build/home_appliance.py": "89666f0c5af54cc7d35addcb1feb29cb6ed022dfa6de8f2419ee96325e3c6bc3"
+  },
+  "kit_revision": "19ad28ec9485493cc4f7fc07d91c178f948e6434",
+  "methodology_sha256": "235384612203690889a4d82ff22dab16fd3c65a6c8f5db0ef28b361f9ed9f665",
+  "not_in_index": [
+    6,
+    10,
+    24,
+    26,
+    27
+  ],
+  "panel_id": "decision-index-0.2.1",
+  "space_revision": "ed7d683e6626a4a5ace0086b8bdedd8b1cc58cf4",
+  "suite": {
+    "added_requests": 30419,
+    "added_rows_sha256": "7429f3c9cdddb772c1cfc42bb2a45e8516b0032152b746e6929f1c8b52f4ce89",
+    "base_requests": 120340,
+    "base_rows_sha256": "b2b56d6fb636837ca469e689087bdbf373dda8de7638aa2da6793e6eda0792d5",
+    "base_scoreable": 119898,
+    "common_exclusions": 442,
+    "common_exclusions_sha256": "331df32d4b719c7db43214d0e5d85859d39c3b2eb7d0b3812214cce150155e81"
+  }
+}
