@@ -7,15 +7,25 @@ type VideoProps = {
   poster: string
   title: string
   landscape?: boolean
+  showcase?: boolean
   children: React.ReactNode
 }
 
-export function ArticleVideo({ src, poster, title, landscape = false, children }: VideoProps) {
+export function ArticleVideo({
+  src,
+  poster,
+  title,
+  landscape = false,
+  showcase = false,
+  children,
+}: VideoProps) {
   const videoUrl = useBaseUrl(src)
   const posterUrl = useBaseUrl(poster)
 
   return (
-    <figure className={styles.videoFigure}>
+    <figure
+      className={showcase ? `${styles.videoFigure} ${styles.showcaseVideoFigure}` : styles.videoFigure}
+    >
       <video
         className={landscape ? `${styles.video} ${styles.landscapeVideo}` : styles.video}
         controls

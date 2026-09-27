@@ -10,9 +10,12 @@ import (
 
 type chatStreamDecoder struct {
 	streamState
-	framer             sseFramer
-	contentIndexes     map[chatContentKey]int
-	nextContentIndexes map[int]int
+	framer               sseFramer
+	contentIndexes       map[chatContentKey]int
+	nextContentIndexes   map[int]int
+	toolKinds            map[int]llmprotocol.ToolKind
+	providerReported     bool
+	nativeReasonReported bool
 }
 
 type chatContentKey struct {
@@ -31,6 +34,7 @@ func (OpenAIChatCodec) NewDecoder(context llmprotocol.StreamContext, policy llmp
 		framer:             newSSEFramer(policy.Limits.SSEFrameBytes),
 		contentIndexes:     make(map[chatContentKey]int),
 		nextContentIndexes: make(map[int]int),
+		toolKinds:          make(map[int]llmprotocol.ToolKind),
 	}
 }
 
@@ -43,6 +47,7 @@ type chatChunkWire struct {
 	Object            string                    `json:"object,omitempty"`
 	Created           int64                     `json:"created,omitempty"`
 	Model             string                    `json:"model,omitempty"`
+	Provider          *string                   `json:"provider,omitempty"`
 	Choices           []chatChunkChoiceWire     `json:"choices,omitempty"`
 	Usage             *chatUsageWire            `json:"usage,omitempty"`
 	Moderation        json.RawMessage           `json:"moderation,omitempty"`
@@ -63,6 +68,9 @@ type chatChunkWire struct {
 	RemoteHost        *string                   `json:"remote_host,omitempty"`
 	RemotePort        *int64                    `json:"remote_port,omitempty"`
 	XGroq             json.RawMessage           `json:"x_groq,omitempty"`
+	// Aggregator gateways may report the handling agent alongside a chunk.
+	// It is transport metadata, not response content.
+	Agent json.RawMessage `json:"agent,omitempty"`
 }
 
 func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
@@ -82,13 +90,14 @@ func (wire chatChunkWire) hasTokenizedToolArguments() bool {
 }
 
 type chatChunkChoiceWire struct {
-	Index         int                 `json:"index"`
-	Delta         chatChunkDeltaWire  `json:"delta"`
-	FinishReason  *string             `json:"finish_reason"`
-	Logprobs      *chatLogprobsWire   `json:"logprobs,omitempty"`
-	StopReason    *chatStopReasonWire `json:"stop_reason,omitempty"`
-	TokenIDs      []int64             `json:"token_ids,omitempty"`
-	RoutedExperts *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	Index              int                 `json:"index"`
+	Delta              chatChunkDeltaWire  `json:"delta"`
+	FinishReason       *string             `json:"finish_reason"`
+	NativeFinishReason *string             `json:"native_finish_reason,omitempty"`
+	Logprobs           *chatLogprobsWire   `json:"logprobs,omitempty"`
+	StopReason         *chatStopReasonWire `json:"stop_reason,omitempty"`
+	TokenIDs           []int64             `json:"token_ids,omitempty"`
+	RoutedExperts      *chatNullOnlyWire   `json:"routed_experts,omitempty"`
 }
 
 type chatChunkDeltaWire struct {
@@ -107,7 +116,8 @@ type chatChunkToolCallWire struct {
 	Index    int                  `json:"index"`
 	ID       string               `json:"id,omitempty"`
 	Type     string               `json:"type,omitempty"`
-	Function chatFunctionCallWire `json:"function"`
+	Function chatFunctionCallWire `json:"function,omitzero"`
+	Custom   *chatCustomCallWire  `json:"custom,omitempty"`
 }
 
 func (decoder *chatStreamDecoder) Push(chunk []byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
@@ -153,6 +163,11 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	if err := validateChatStreamChunk(chunk); err != nil {
 		return nil, diagnostics, err
 	}
+	// Some gateways emit an empty synthetic chunk while waiting for the first
+	// model token. It must not establish the response ID or model identity.
+	if isGatewayChatKeepalive(chunk) {
+		return nil, diagnostics, nil
+	}
 	if err := decoder.observeProviderIdentity(chunk.ID, chunk.Model); err != nil {
 		return nil, diagnostics, err
 	}
@@ -170,6 +185,21 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 	chunk chatChunkWire,
 	diagnostics llmprotocol.Diagnostics,
 ) llmprotocol.Diagnostics {
+	if chunk.Provider != nil && !decoder.providerReported {
+		appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.provider", "upstream provider identity is not model output")
+		decoder.providerReported = true
+	}
+	if !decoder.nativeReasonReported {
+		for _, choice := range chunk.Choices {
+			if choice.NativeFinishReason != nil {
+				appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+					"stream.choices.native_finish_reason", "provider-native finish detail has no neutral representation")
+				decoder.nativeReasonReported = true
+				break
+			}
+		}
+	}
 	if chunk.hasTokenizedToolArguments() {
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
@@ -189,6 +219,12 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			"stream.x_groq", "provider request metadata is not model output",
 		)
 	}
+	if len(chunk.Agent) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Agent), []byte("null")) {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.agent", "gateway agent metadata is not model output",
+		)
+	}
 	if len(chunk.Moderation) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Moderation), []byte("null")) {
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
@@ -202,6 +238,23 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 		)
 	}
 	return diagnostics
+}
+
+// isGatewayChatKeepalive recognizes only the empty chunk shape used by
+// gateway aggregators. A real delta, usage snapshot, or error must continue
+// through identity and content validation even when created is zero.
+func isGatewayChatKeepalive(chunk chatChunkWire) bool {
+	if chunk.ID != "chatcmpl-keepalive" || chunk.Created != 0 || chunk.Model != "keepalive" ||
+		chunk.Usage != nil || chunk.Error != nil || len(chunk.Choices) != 1 {
+		return false
+	}
+	choice := chunk.Choices[0]
+	delta := choice.Delta
+	return choice.Index == 0 && choice.FinishReason == nil && choice.Logprobs == nil &&
+		choice.StopReason == nil && len(choice.TokenIDs) == 0 && choice.RoutedExperts == nil &&
+		delta.Role == "" && delta.Content == nil && delta.Reasoning == nil &&
+		delta.AlternateReasoning == nil && delta.Refusal == nil && delta.Audio == nil &&
+		delta.LegacyFunctionCall == nil && len(delta.ToolCalls) == 0 && len(delta.Annotations) == 0
 }
 
 func validateChatStreamChunk(chunk chatChunkWire) error {
@@ -328,8 +381,14 @@ func (decoder *chatStreamDecoder) decodeChoiceTextEvents(choice chatChunkChoiceW
 }
 
 func chatChoiceNeedsItem(choice chatChunkChoiceWire) bool {
-	return choice.Delta.Content != nil || len(choice.Delta.Annotations) > 0 ||
+	return chatDeltaHasText(choice) || len(choice.Delta.Annotations) > 0 ||
 		choice.Delta.Reasoning != nil || choice.Delta.AlternateReasoning != nil || choice.Delta.Refusal != nil
+}
+
+// Ollama sends "content":"" beside reasoning and tool call deltas. An empty
+// string carries no output, so it must not open or resume a text part.
+func chatDeltaHasText(choice chatChunkChoiceWire) bool {
+	return choice.Delta.Content != nil && *choice.Delta.Content != ""
 }
 
 type chatEventFactory func() ([]llmprotocol.Event, error)
@@ -344,7 +403,7 @@ func (decoder *chatStreamDecoder) chatChoiceEventFactories(choice chatChunkChoic
 }
 
 func (decoder *chatStreamDecoder) decodeContentDelta(choice chatChunkChoiceWire) ([]llmprotocol.Event, error) {
-	if choice.Delta.Content == nil {
+	if !chatDeltaHasText(choice) {
 		return nil, nil
 	}
 	content := llmprotocol.Content{Kind: llmprotocol.ContentText, Text: *choice.Delta.Content}
@@ -418,23 +477,22 @@ func (decoder *chatStreamDecoder) chatContentIndex(itemIndex int, kind llmprotoc
 func (decoder *chatStreamDecoder) decodeToolCalls(calls []chatChunkToolCallWire) ([]llmprotocol.Event, error) {
 	events := make([]llmprotocol.Event, 0, len(calls)*2)
 	for _, call := range calls {
-		if call.Type != "" && call.Type != "function" {
-			return nil, llmprotocol.NewError(
-				llmprotocol.ErrorUnsupportedFeature,
-				"unsupported_tool_call",
-				"only function tool calls enter the model protocol",
-				nil,
-			)
+		delta, deltaErr := decodeChatToolCallDelta(call)
+		if deltaErr != nil {
+			return nil, deltaErr
 		}
 		itemIndex := call.Index + 1
+		if err := decoder.observeToolKind(itemIndex, call, delta.Kind); err != nil {
+			return nil, err
+		}
 		if !decoder.items[itemIndex] {
-			started, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemStarted, ItemIndex: itemIndex, Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{ID: call.ID, Name: call.Function.Name}})
+			started, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemStarted, ItemIndex: itemIndex, Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{Kind: delta.Kind, KindKnown: delta.KindKnown, ID: delta.ID, Name: delta.Name}})
 			if err != nil {
 				return nil, err
 			}
 			events = append(events, started)
 		}
-		event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventToolCallDelta, ItemIndex: itemIndex, ToolCall: &llmprotocol.ToolCall{ID: call.ID, Name: call.Function.Name, Arguments: call.Function.Arguments}})
+		event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventToolCallDelta, ItemIndex: itemIndex, ToolCall: &delta})
 		if err != nil {
 			return nil, err
 		}
@@ -443,13 +501,27 @@ func (decoder *chatStreamDecoder) decodeToolCalls(calls []chatChunkToolCallWire)
 	return events, nil
 }
 
+// An explicit and an omitted function type both decode to the empty kind, so
+// only a delta with a type or a function or custom payload declares its kind.
+func (decoder *chatStreamDecoder) observeToolKind(itemIndex int, call chatChunkToolCallWire, kind llmprotocol.ToolKind) error {
+	if call.Type == "" && call.Custom == nil && call.Function == (chatFunctionCallWire{}) {
+		return nil
+	}
+	if declared, found := decoder.toolKinds[itemIndex]; found && declared != kind {
+		return invalidProviderResponse("stream_tool_identity_mismatch", "Chat stream changed a tool call kind")
+	}
+	decoder.toolKinds[itemIndex] = kind
+	return nil
+}
+
 func (decoder *chatStreamDecoder) completeChoice(reason *string) ([]llmprotocol.Event, error) {
 	if reason == nil {
 		return nil, nil
 	}
-	decoder.stop = decodeChatStop(*reason)
+	stop := decodeChatStop(*reason)
 	if len(decoder.items) == 0 {
-		if decoder.stop == llmprotocol.StopToolCall {
+		decoder.stop = stop
+		if stop == llmprotocol.StopToolCall {
 			return nil, invalidProviderResponse("stream_tool_output_missing", "Chat stream ended with tool_calls but emitted no tool call")
 		}
 		started, err := decoder.next(llmprotocol.Event{
@@ -471,6 +543,16 @@ func (decoder *chatStreamDecoder) completeChoice(reason *string) ([]llmprotocol.
 			active = append(active, itemIndex)
 		}
 	}
+	// OpenRouter repeats the finish reason in its content-free final usage
+	// chunk. Accept the repeat without emitting a second completion, but keep
+	// rejecting a changed terminal reason.
+	if len(active) == 0 {
+		if decoder.stop != stop {
+			return nil, invalidProviderResponse("stream_finish_reason_changed", "Chat stream changed its finish reason")
+		}
+		return nil, nil
+	}
+	decoder.stop = stop
 	sort.Ints(active)
 	events := make([]llmprotocol.Event, 0, len(active))
 	for _, itemIndex := range active {
@@ -610,9 +692,9 @@ func (encoder *chatStreamEncoder) applyToolCallDelta(event llmprotocol.Event, ch
 		index = len(encoder.toolIndexes)
 		encoder.toolIndexes[event.ToolCall.ID] = index
 	}
+	call := encodeChatToolCall(*event.ToolCall)
 	choice.Delta.ToolCalls = []chatChunkToolCallWire{{
-		Index: index, ID: event.ToolCall.ID, Type: "function",
-		Function: chatFunctionCallWire{Name: event.ToolCall.Name, Arguments: event.ToolCall.Arguments},
+		Index: index, ID: call.ID, Type: call.Type, Function: call.Function, Custom: call.Custom,
 	}}
 	return nil
 }

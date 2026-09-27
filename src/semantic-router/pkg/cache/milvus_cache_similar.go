@@ -196,7 +196,9 @@ func (c *MilvusCache) LookupSimilarWithThreshold(ctx context.Context, model stri
 			"metric": metricType, "model": model, "collection": c.collectionName,
 		})
 		metrics.RecordCacheOperation("milvus", "find_similar", "hit", time.Since(start).Seconds())
-		return lookupResultFromTimestamps(selected.ResponseBody, selectedSimilarity, selected.Timestamp, selected.ExpiresAt), nil
+		result := lookupResultFromTimestamps(selected.ResponseBody, selectedSimilarity, selected.Timestamp, selected.ExpiresAt)
+		result.NegationGuard = negationGuardOutcomeFor(queryTokens, selected.Query)
+		return result, nil
 	}
 	logging.LogEvent("cache_miss", map[string]interface{}{
 		"backend": "milvus", "best_similarity": bestSimilarity, "threshold": threshold,

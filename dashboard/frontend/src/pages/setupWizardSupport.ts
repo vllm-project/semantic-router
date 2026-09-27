@@ -9,7 +9,7 @@ import {
 export type SetupStep = 0 | 1 | 2;
 export type { ProviderKind } from "./setupWizardProviderCatalog";
 export type SetupValidationState = "idle" | "validating" | "valid" | "error";
-export type SetupActivationState = "idle" | "activating" | "error";
+export type SetupActivationState = "idle" | "activating" | "persisted" | "error";
 export type SetupRoutingMode = "scratch" | "remote" | "preset";
 export type RemoteImportState = "idle" | "importing" | "imported" | "error";
 export type PresetCatalogState = "loading" | "ready" | "error";
@@ -215,6 +215,23 @@ export function createModelDraft(
     baseUrl: nextRuntimeBaseUrl(existingModels),
     accessKey: "",
     endpointName: "primary",
+  };
+}
+
+export function switchSetupModelProvider(
+  model: ModelDraft,
+  providerKind: ProviderKind,
+): ModelDraft {
+  const previousDefault = getSetupProviderOption(model.providerKind).initialBaseUrl;
+  const nextDefault = getSetupProviderOption(providerKind).initialBaseUrl;
+  const baseUrl = model.baseUrl.trim();
+  const generatedVllmEndpoint = model.providerKind === "vllm" && /^vllm:\d+$/.test(baseUrl);
+  return {
+    ...model,
+    providerKind,
+    baseUrl: !baseUrl || baseUrl === previousDefault || generatedVllmEndpoint
+      ? nextDefault
+      : model.baseUrl,
   };
 }
 

@@ -28,8 +28,16 @@ from execution_batches import (
     image_producers,
     native_batches,
 )
-from provider_mocker_image import IMAGE as MOCKER_IMAGE
-from provider_mocker_image import acquisition, published_from_plan, resolve_published
+from provider_mocker_image import (
+    IMAGE as MOCKER_IMAGE,
+)
+from provider_mocker_image import (
+    PublicationMissingError,
+    acquisition,
+    published_from_plan,
+    resolve_published,
+)
+from release_guard_waiver import planned_waiver
 from verification_catalog import (
     catalog_errors,
     full_cpu_ids,
@@ -61,6 +69,30 @@ def digest(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
+
+
+def resolve_image_sources(plan: dict) -> None:
+    """Reuse exact-input fixtures when available, otherwise qualify them here."""
+    published = published_from_plan(plan)
+    if not published:
+        return
+    try:
+        plan["image_sources"][MOCKER_IMAGE] = resolve_published(published)
+    except PublicationMissingError:
+        if plan["profile"] not in {"pr", "main"}:
+            # Release and nightly runs require an already qualified main image.
+            raise
+        # A failed main gate can leave a valid fixture build unpublished. PRs
+        # still qualify their own exact inputs, without registry write access.
+        published["source"] = "candidate"
+        plan["build_images"] = sorted({*plan["build_images"], MOCKER_IMAGE})
+        if plan["profile"] == "main":
+            # The next successful main gate promotes this sealed candidate.
+            plan["publish_images"] = sorted({*plan["publish_images"], MOCKER_IMAGE})
+            plan["multiarch"] = True
+    plan["plan_sha256"] = digest(
+        {key: value for key, value in plan.items() if key != "plan_sha256"}
+    )
 
 
 def make_plan(
@@ -138,6 +170,8 @@ def make_plan(
             ]
         if record["executor"] == "e2e":
             record["baseline_suite"] = "full" if full else "standard"
+        if waiver := planned_waiver(profile, name):
+            record["known_issue_waiver"] = waiver
         record["dispatch_job"] = dispatch_job(record)
         record["contract_sha256"] = digest(record)
         verifications.append(record)
@@ -265,7 +299,13 @@ def github_outputs(plan: dict) -> dict[str, str]:
         for job, selected in plan["image_producers"].items()
     }
     values = {
-        "plan": plan,
+        # The complete plan is uploaded as ci-plan for the gate. Passing it as a
+        # job output exceeds GitHub's 1 MiB UTF-16 limit for release profiles;
+        # callers only need these fields to select their workflow behavior.
+        "plan": {
+            "profile": plan["profile"],
+            "quality_context": plan["quality_context"],
+        },
         "dispatch": dispatch,
         "worker_labels": {job: list(rows) for job, rows in dispatch.items()},
         "image_producers": producers,
@@ -344,8 +384,19 @@ def previous_release(version: str, tags: list[str]) -> str:
     return max(candidates)[1]
 
 
+def performance_base(version: str, tags: list[str]) -> str:
+    """Choose an implementation that can run the current paired model harness."""
+    # v0.3.0 predates the Vela benchmark contract and pkg/embedding; copying
+    # the current perf harness into that tree cannot compile. This reviewed
+    # v0.4 development anchor introduced the paired Vela CPU benchmarks.
+    if version == "0.4.0":
+        return "12597be5ffae2319d856f230d61ca26248eb9b3b"
+    return previous_release(version, tags)
+
+
 def main() -> int:
-    if len(sys.argv) > 1 and sys.argv[1] == "previous-release":
+    if len(sys.argv) > 1 and sys.argv[1] in {"previous-release", "performance-base"}:
+        command = sys.argv[1]
         parser = argparse.ArgumentParser(
             description="Resolve an ancestor stable release in the same major version"
         )
@@ -356,7 +407,11 @@ def main() -> int:
             ["git", "tag", "--merged", "HEAD"], text=True
         ).splitlines()
         try:
-            ref = previous_release(args.version, tags)
+            ref = (
+                performance_base(args.version, tags)
+                if command == "performance-base"
+                else previous_release(args.version, tags)
+            )
         except ValueError as exc:
             parser.exit(1, str(exc) + "\n")
         with args.github_output.open("a") as stream:
@@ -386,11 +441,7 @@ def main() -> int:
         draft=args.draft,
         requested=tuple(args.verification),
     )
-    if published := published_from_plan(plan):
-        plan["image_sources"][MOCKER_IMAGE] = resolve_published(published)
-        plan["plan_sha256"] = digest(
-            {key: value for key, value in plan.items() if key != "plan_sha256"}
-        )
+    resolve_image_sources(plan)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(plan, indent=2) + "\n")
     if args.github_output:

@@ -140,6 +140,8 @@ global:
 
 `semantic_router.request` span 覆盖整个 ExtProc 请求，包括流式响应和取消。它使用有界的 `traffic.kind` 和路由模板区分推理、目录与健康轮询，不存储 URL 查询参数或资源 ID。信号、决策、算法、插件与实际上游请求是子阶段；`routing.entrypoint`、`routing.recipe`、`decision.name` 和 `routing.algorithm` 记录已解析的路由身份。`routing.backend.resolved` 事件记录选择证据，上游 span 测量提供方响应时间。如果本地响应检查拦截上游 HTTP 200，上游 span 仍记录 200，根 span 记录最终返回给客户端的状态。
 
+上游 span 还带有 OpenTelemetry GenAI 属性，便于支持 GenAI 语义的 trace 后端展示每次提供方调用：`gen_ai.operation.name`（`chat`）、`gen_ai.provider.name`、`gen_ai.request.model`（发往上游的提供方模型 ID），以及提供方上报的 `gen_ai.usage.input_tokens` 和 `gen_ai.usage.output_tokens`。非流式响应还会记录 `gen_ai.response.model`，流式响应暂不记录。提供方未上报的用量保持为空，不做估算；`model.name` 仍为 Router 的逻辑模型名。GenAI 约定在上游仍处于 Development 状态，属性名可能变化。
+
 信号证据事件分别记录有限的实测值和置信度，保留真实零值，缺失数据不填零。投影事件记录实际分数和配置名称，聚合信号阶段不虚构置信度。Trace 不包含原始提示词、信号错误文本或检索异常原文；无法事后补全旧 trace。
 
 本地 `vllm-sr serve` 在 Grafana 中预置 **vLLM Semantic Router**。主面板覆盖公开推理结果、Recipe 流程、后端使用量、插件与响应缓存、遥测健康；折叠的成本和 MoM 面板区分模型上报用量与已支持的 Looper attempt 证据。Recipe 阶段耗时展示实测均值；投影计数展示评估次数，单次分数可在 Insights 查看。模型耗时使用观测均值，避免有限直方图桶把长请求的分位数截断。Prometheus 抓取 Router 和 Jaeger 的内部管理指标。缺少序列表示没有观测，不能当作零流量或健康结果；导出成功只表示 SDK 批次导出完成，不证明所有请求都被采样或持久保存。

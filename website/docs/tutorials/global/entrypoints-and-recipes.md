@@ -95,6 +95,75 @@ Clients can discover entrypoint names through `/v1/models`. Routed responses
 include `x-vsr-selected-recipe`, so operators can confirm which policy handled
 a request without exposing the backend selection contract to the client.
 
+## Limits for agent clients
+
+`/v1/models` tells a client which virtual names exist and how each one
+resolves. It does not report a context window, output limit, or capability for
+them, and the model behind a name can change from one request to the next.
+This is the entry for `vllm-sr/auto`:
+
+```json
+{
+  "id": "vllm-sr/auto",
+  "object": "model",
+  "created": 1790323030,
+  "owned_by": "vllm-semantic-router",
+  "description": "Intelligent Router for Mixture-of-Models",
+  "routing": {
+    "resolution": "virtual",
+    "selectable": true,
+    "default_route": true,
+    "recipe": "default"
+  }
+}
+```
+
+Coding agents and other clients that size a request before sending it need
+these values in their own configuration. Any turn of a session can reach any
+model the recipe can select, including `providers.defaults.model`, so
+configure the client with the intersection of their model cards:
+
+| Client setting | Value |
+| --- | --- |
+| Context window | The smallest `context_window_size` |
+| Output limit | The smallest `max_output_tokens` |
+| Tool calling | On only if every model declares `tools` |
+| Image input | On only if every model declares `vision` or `image_input` |
+| Reasoning settings | Sent only if every model declares `reasoning` |
+
+For a recipe that selects among the three models below, configure a
+32,768-token context window, an 8,192-token output limit, and tool calling.
+Leave image input and reasoning settings off.
+
+```yaml
+routing:
+  modelCards:
+    - name: local-coder
+      context_window_size: 32768
+      max_output_tokens: 8192
+      capabilities: [chat, tools]
+    - name: reasoner
+      context_window_size: 200000
+      max_output_tokens: 64000
+      capabilities: [chat, tools, reasoning]
+    - name: vision-generalist
+      context_window_size: 131072
+      max_output_tokens: 16384
+      capabilities: [chat, tools, vision]
+```
+
+By default, the Router skips a candidate whose declared context window is
+smaller than the estimated input, or whose declared capabilities lack a
+required input such as images. It does not check output limits, so a request
+for 16,384 output tokens can still reach `local-coder`. With
+[`candidate_requirements`](../../installation/configuration#recipe-wide-candidate-and-replay-policies)
+on the recipe, the Router also checks output limits and tool, reasoning, and
+structured-output declarations before scoring. A request that fits only some
+candidates goes to one of them, and one that fits none is rejected before
+dispatch; see [Request budget errors](../../api/router#request-budget-errors).
+A client configured with the intersection keeps every candidate available to
+every request.
+
 ## When to Use
 
 Use named entrypoints and recipes when one deployment must expose more than one
