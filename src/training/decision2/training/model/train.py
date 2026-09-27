@@ -40,6 +40,16 @@ SOURCE_FILES = (
     "source.py",
     "train.py",
 )
+TYPED_HEAD_SOURCE_REVISION = "da87bfb608c14b7cf20ba1ce41287e8de496c0cd"
+TYPED_HEAD_PARTITIONS = {
+    "train": "61740be433c6cd714810a9908432ad29597c570d0d267d2731ab78cdad243755",
+    "select": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6",
+    "cal": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a",
+}
+TYPED_HEAD_SOURCE_FILES = {
+    "config.json": "504a6b58c4271583724e66584b6b7698aea18450209df6b2f7582df0e89cee59",
+    "model.safetensors": "cd2a512003e2f9f3cd3c32a9c3573f820bb28c940f73c57b1ddaa983d9223eba",
+}
 
 
 def utc_now() -> str:
@@ -304,6 +314,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-batch", type=int, default=2)
     parser.add_argument("--max-length", type=int, default=4096)
     parser.add_argument("--head-dim", type=int, default=256)
+    parser.add_argument(
+        "--head-variant",
+        choices=("shared", "type-separated"),
+        default="shared",
+        help="Explicit experimental readout; existing checkpoints remain shared",
+    )
     parser.add_argument("--backbone-lr", type=float, default=1e-6)
     parser.add_argument("--head-lr", type=float, default=1e-4)
     parser.add_argument("--weight-decay", type=float, default=0.01)
@@ -373,6 +389,37 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("Exact LoRA resume requires --source-path")
     if args.resume and args.train_mode != "lora" and args.source_path:
         raise ValueError("--source-path applies only to LoRA resume")
+    if args.head_variant == "type-separated" and (
+        args.init_kind != "base"
+        or args.train_mode != "full"
+        or args.base_revision != TYPED_HEAD_SOURCE_REVISION
+        or args.head_dim != 256
+        or args.seed != 20260926
+        or args.replay
+        or args.inline_teacher
+        or args.choice_source
+        or args.replay_fraction != 0
+        or args.replay_kl_weight != 0
+        or args.choice_source_weight != 1
+        or args.objective != "ce_brier"
+        or args.brier_weight != 0.5
+        or args.epochs != 1
+        or args.max_steps != 466
+        or args.microbatch != 1
+        or args.accumulation != 16
+        or args.eval_batch != 2
+        or args.max_length != 8192
+        or args.backbone_lr != 2e-5
+        or args.head_lr != 2e-4
+        or args.weight_decay != 0.01
+        or args.warmup_ratio != 0.05
+        or args.save_every != 64
+        or not args.gradient_checkpointing
+    ):
+        raise ValueError(
+            "The type-separated ablation must use its frozen official source, "
+            "full 466-step matched schedule and objective without added data or replay"
+        )
     for name in (
         "epochs",
         "microbatch",
@@ -649,6 +696,20 @@ def main() -> None:
         "select": file_sha256(args.select),
         "cal": file_sha256(args.cal),
     }
+    if args.head_variant == "type-separated":
+        if data_sha != TYPED_HEAD_PARTITIONS:
+            raise ValueError("Typed-head ablation data differs")
+        if (
+            not resume
+            and {
+                name: file_sha256(Path(args.model_path) / name)
+                for name in TYPED_HEAD_SOURCE_FILES
+            }
+            != TYPED_HEAD_SOURCE_FILES
+        ):
+            raise ValueError("Typed-head ablation official source differs")
+        if (len(train_rows), len(select_rows), len(cal_rows)) != (7455, 700, 700):
+            raise ValueError("Typed-head ablation partition counts differ")
     if args.replay:
         data_sha["replay"] = file_sha256(args.replay)
     if args.inline_teacher:
@@ -656,6 +717,8 @@ def main() -> None:
     code_files = (
         (*SOURCE_FILES, "lora.py") if args.train_mode == "lora" else SOURCE_FILES
     )
+    if args.head_variant == "type-separated":
+        code_files = (*code_files, "type_separated_head.py")
     if args.init_kind == "decision2-lora":
         code_files = (*code_files, "infer.py")
     if args.inline_teacher:
@@ -678,6 +741,8 @@ def main() -> None:
             source_path=args.source_path,
             trainable_adapter=args.train_mode == "lora",
         )
+        if model.metadata.get("head_variant", "shared") != args.head_variant:
+            raise ValueError("Resume checkpoint head variant differs from the run")
         if (
             args.train_mode == "lora"
             and model.metadata["lora"]["source_fingerprint"] != source
@@ -708,6 +773,7 @@ def main() -> None:
                 args.base_revision,
                 args.head_dim,
                 source_stage=args.init_kind,
+                head_variant=args.head_variant,
             )
         elif args.init_kind == "decision1":
             source = source_fingerprint(Path(args.model_path))
@@ -717,6 +783,8 @@ def main() -> None:
         else:
             source = source_fingerprint(Path(args.model_path))
             model, tokenizer = DecisionModel.from_checkpoint(args.model_path)
+            if model.metadata.get("head_variant", "shared") != args.head_variant:
+                raise ValueError("Initialization checkpoint head variant differs")
             if model.metadata["head_dim"] != args.head_dim:
                 raise ValueError(
                     "--head-dim must match the Decision 2.0 initialization checkpoint"
@@ -766,6 +834,8 @@ def main() -> None:
     select_items = [encode(row, tokenizer, args.max_length) for row in select_rows]
     # Cal data is parsed and hashed for split isolation, but never tokenized or evaluated here.
     train_lengths = [len(item["ids"]) for item in train_items]
+    if args.head_variant == "type-separated" and sum(train_lengths) != 4_094_489:
+        raise ValueError("Typed-head ablation tokenizer exposure differs")
     replay_lengths = [len(item["ids"]) for item in replay_items]
     planned = planned_updates(
         len(train_items),
@@ -823,6 +893,8 @@ def main() -> None:
         "train_count": len(train_items),
         "replay_pool_count": len(replay_items),
     }
+    if args.head_variant != "shared":
+        contract["head_variant"] = args.head_variant
     if args.train_mode == "lora":
         contract["lora"] = {
             "rank": args.lora_rank,

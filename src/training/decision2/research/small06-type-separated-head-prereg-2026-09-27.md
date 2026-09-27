@@ -105,3 +105,76 @@ If quality or token-matching fails, D remains HOLD. D isolates Score-data
 coverage better than mixing new head, replay and data in one run. Its
 development gate should be locked only after that immutable data roster is
 complete; do not infer a v3 or release gain from the present outline.
+
+## Implementation handoff: CPU audit before a separately approved GPU gate
+
+The typed readout is now explicitly wired through `DecisionModel`, collated
+task IDs, full-checkpoint save/reload and native benchmark inference. It has a
+distinct architecture ID and rejects a missing type ID or a contradictory
+checkpoint declaration. Existing shared-head checkpoints continue to load
+through the old path. The trainer's typed mode rejects changes to the official
+source revision, TRAIN/SELECT/CAL hashes and row counts, full 466-step schedule,
+loss, seed, optimizer settings and tokenizer-measured TRAIN token total. The
+native adapter hashes `type_separated_head.py` only for typed checkpoints. No
+old published package or frozen benchmark receipt is rewritten.
+
+The immutable technical lock is
+[`small06-type-separated-head-gate-lock-2026-09-27.json`](small06-type-separated-head-gate-lock-2026-09-27.json).
+It pins source/data/code hashes and two separate one-GPU caps: 540 seconds
+for the zero-step repeat and 180 seconds for the one-update/reload stage. Its
+CPU stage must finish and its output SHA-256 be reviewed before an authorized
+GPU slot is used. The following placeholders refer to private, access-controlled
+paths and must not be committed or copied into a model repository:
+
+```bash
+cd src/training/decision2
+python -m scripts.preflight_qwen06_type_head audit \
+  --lock research/small06-type-separated-head-gate-lock-2026-09-27.json \
+  --source "$PINNED_OFFICIAL_SOURCE" --train "$TRAIN_V2" \
+  --select "$SELECT_V2" --cal "$CAL_V2" \
+  --output "$NEW_PRIVATE_CPU_AUDIT"
+
+# After independent receipt review and a root-approved exclusive GPU slot:
+timeout 720s python -m scripts.preflight_qwen06_type_head run \
+  --lock research/small06-type-separated-head-gate-lock-2026-09-27.json \
+  --source "$PINNED_OFFICIAL_SOURCE" --train "$TRAIN_V2" \
+  --select "$SELECT_V2" --cal "$CAL_V2" \
+  --audit "$NEW_PRIVATE_CPU_AUDIT" \
+  --audit-sha256 "$REVIEWED_AUDIT_SHA256" \
+  --output "$NEW_PRIVATE_GPU_GATE_DIR"
+```
+
+The GPU stage compares two fresh zero-step source starts on all three types,
+checks finite per-type losses/readout gradients, takes exactly one first-window
+optimizer update, then compares 32 mixed-type SELECT outputs before and after
+a full native checkpoint reload under identical adjacent-pair batching.
+Admission requires no category changes and maximum option-probability drift
+at most `1e-3` within both original stage caps. The GPU stage writes a
+separate phase receipt before any optimizer update and another after the
+one-update reload comparison; its final receipt binds both phase hashes.
+The gate is technical only;
+no typed DEV, CSS pilot, JevBench or formal v3 labels are read. A timeout,
+missing receipt, nonfinite result or parity miss is a recorded HOLD without an
+automatic retry.
+
+Only after a reviewed gate PASS may a **separate** full-run authorization use
+the unchanged 466-step treatment command:
+
+```bash
+cd src/training/decision2
+python -m training.model.train \
+  --model-path "$PINNED_OFFICIAL_SOURCE" --init-kind base \
+  --base-revision da87bfb608c14b7cf20ba1ce41287e8de496c0cd \
+  --train "$TRAIN_V2" --select "$SELECT_V2" --cal "$CAL_V2" \
+  --output "$NEW_PRIVATE_FULL_RUN" --head-variant type-separated \
+  --train-mode full --objective ce_brier --brier-weight 0.5 \
+  --epochs 1 --max-steps 466 --microbatch 1 --accumulation 16 \
+  --eval-batch 2 --max-length 8192 --head-dim 256 \
+  --backbone-lr 2e-5 --head-lr 2e-4 --weight-decay 0.01 \
+  --warmup-ratio 0.05 --save-every 64 --seed 20260926 \
+  --gradient-checkpointing
+```
+
+This full run remains **not started** at this handoff. A selected typed
+checkpoint would require a separate native release packager and exact
+download/parity verification; the current 0.6B package remains unchanged.

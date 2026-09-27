@@ -533,6 +533,13 @@ def main() -> None:
         name: file_sha256(Path(__file__).with_name(name))
         for name in ("infer.py", "decision_model.py", "data.py", "lora.py", "source.py")
     }
+    checkpoint_metadata = json.loads(
+        (args.checkpoint / "decision_config.json").read_text(encoding="utf-8")
+    )
+    if checkpoint_metadata.get("head_variant") == "type-separated":
+        adapter_sources["type_separated_head.py"] = file_sha256(
+            Path(__file__).with_name("type_separated_head.py")
+        )
     if calibration is not None:
         adapter_sources["calibration.py"] = file_sha256(
             Path(__file__).with_name("calibration.py")

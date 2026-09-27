@@ -23,6 +23,11 @@ from .source import verify_source
 PROMPT_VERSION = "decision2-segmented-options-global-query-v1"
 ARCHITECTURE = "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp"
 QWEN3_ARCHITECTURE = "qwen3-text-endpoints-global-query-shared-bilinear-mlp"
+QWEN3_TYPED_ARCHITECTURE = (
+    "qwen3-text-endpoints-global-query-type-separated-bilinear-mlp"
+)
+TASK_TYPES = ("choice", "noul", "score")
+HEAD_VARIANTS = ("shared", "type-separated")
 
 
 def _payload(value: Any) -> str:
@@ -124,6 +129,9 @@ def collate(items: list[dict[str, Any]], pad_id: int) -> dict[str, Any]:
             [item["query_position"] for item in items], dtype=torch.long
         ),
         "labels": torch.tensor([item["label"] for item in items], dtype=torch.long),
+        "task_type_ids": torch.tensor(
+            [TASK_TYPES.index(item["task_type"]) for item in items], dtype=torch.long
+        ),
         "teacher_probs": teacher_probs,
         "replay_mask": replay_mask,
     }
@@ -159,9 +167,7 @@ class CandidateHead(nn.Module):
 
 
 class DecisionModel(nn.Module):
-    def __init__(
-        self, backbone: nn.Module, head: CandidateHead, metadata: dict[str, Any]
-    ):
+    def __init__(self, backbone: nn.Module, head: nn.Module, metadata: dict[str, Any]):
         super().__init__()
         self.backbone = backbone
         self.head = head
@@ -175,13 +181,18 @@ class DecisionModel(nn.Module):
         head_dim: int = 256,
         *,
         source_stage: str = "base",
+        head_variant: str = "shared",
     ) -> tuple[DecisionModel, Any]:
         from transformers import AutoConfig, AutoTokenizer
 
         if source_stage not in ("base", "posttrained"):
             raise ValueError("Qwen source stage must be base or posttrained")
+        if head_variant not in HEAD_VARIANTS:
+            raise ValueError("Unsupported decision head variant")
 
         config = AutoConfig.from_pretrained(path, local_files_only=True)
+        if head_variant == "type-separated" and config.model_type != "qwen3":
+            raise ValueError("The type-separated ablation requires Qwen3")
         if config.model_type == "qwen3_5":
             from transformers import Qwen3_5ForConditionalGeneration
 
@@ -194,6 +205,8 @@ class DecisionModel(nn.Module):
             architecture = QWEN3_ARCHITECTURE
         else:
             raise ValueError(f"Unsupported official Qwen backbone: {config.model_type}")
+        if head_variant == "type-separated":
+            architecture = QWEN3_TYPED_ARCHITECTURE
         tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
         full, info = model_class.from_pretrained(
             path,
@@ -211,9 +224,15 @@ class DecisionModel(nn.Module):
             full.model.language_model if config.model_type == "qwen3_5" else full.model
         )
         backbone.config.use_cache = False
-        head = CandidateHead(backbone.config.hidden_size, head_dim)
+        if head_variant == "type-separated":
+            from .type_separated_head import TypeSeparatedCandidateHead
+
+            head = TypeSeparatedCandidateHead(backbone.config.hidden_size, head_dim)
+        else:
+            head = CandidateHead(backbone.config.hidden_size, head_dim)
         metadata = {
             "architecture": architecture,
+            "head_variant": head_variant,
             "backbone_model_type": config.model_type,
             "prompt_version": PROMPT_VERSION,
             "base_revision": revision,
@@ -293,10 +312,25 @@ class DecisionModel(nn.Module):
         metadata = json.loads(
             (path / "decision_config.json").read_text(encoding="utf-8")
         )
-        if metadata.get("prompt_version") != PROMPT_VERSION or metadata.get(
-            "architecture"
-        ) not in (ARCHITECTURE, QWEN3_ARCHITECTURE):
+        architecture = metadata.get("architecture")
+        variant = metadata.get("head_variant", "shared")
+        if metadata.get("prompt_version") != PROMPT_VERSION or architecture not in (
+            ARCHITECTURE,
+            QWEN3_ARCHITECTURE,
+            QWEN3_TYPED_ARCHITECTURE,
+        ):
             raise ValueError("Checkpoint is not a Decision 2.0 dynamic-option model")
+        if variant != (
+            "type-separated" if architecture == QWEN3_TYPED_ARCHITECTURE else "shared"
+        ):
+            raise ValueError("Checkpoint architecture and head variant disagree")
+        if (
+            variant == "type-separated"
+            and metadata.get("checkpoint_format") == LORA_FORMAT
+        ):
+            raise ValueError(
+                "Typed-head LoRA checkpoints are not supported by this ablation"
+            )
         if metadata.get("checkpoint_format") == LORA_FORMAT:
             if source_path is None:
                 raise ValueError(
@@ -368,7 +402,7 @@ class DecisionModel(nn.Module):
             return source_model, tokenizer
         if metadata.get("checkpoint_format") not in (None, "full"):
             raise ValueError("Unknown Decision 2.0 checkpoint format")
-        if metadata["architecture"] == QWEN3_ARCHITECTURE:
+        if architecture in (QWEN3_ARCHITECTURE, QWEN3_TYPED_ARCHITECTURE):
             from transformers import Qwen3Model
 
             backbone_class = Qwen3Model
@@ -383,7 +417,14 @@ class DecisionModel(nn.Module):
             attn_implementation="sdpa",
         )
         backbone.config.use_cache = False
-        head = CandidateHead(backbone.config.hidden_size, metadata["head_dim"])
+        if variant == "type-separated":
+            from .type_separated_head import TypeSeparatedCandidateHead
+
+            head = TypeSeparatedCandidateHead(
+                backbone.config.hidden_size, metadata["head_dim"]
+            )
+        else:
+            head = CandidateHead(backbone.config.hidden_size, metadata["head_dim"])
         head.load_state_dict(
             load_file(str(path / "decision_head.safetensors")), strict=True
         )
@@ -398,6 +439,7 @@ class DecisionModel(nn.Module):
         candidate_positions: torch.Tensor,
         candidate_mask: torch.Tensor,
         query_positions: torch.Tensor,
+        task_type_ids: torch.Tensor | None = None,
         **unused: Any,
     ) -> torch.Tensor:
         hidden = self.backbone(
@@ -406,7 +448,12 @@ class DecisionModel(nn.Module):
         batch = torch.arange(hidden.shape[0], device=hidden.device)
         candidates = hidden[batch[:, None], candidate_positions]
         query = hidden[batch, query_positions]
-        scores = self.head(candidates, query)
+        if self.metadata.get("head_variant", "shared") == "type-separated":
+            if task_type_ids is None:
+                raise ValueError("Typed-head inference needs task_type_ids")
+            scores = self.head(candidates, query, task_type_ids, candidate_mask)
+        else:
+            scores = self.head(candidates, query)
         return scores.masked_fill(~candidate_mask, -float("inf"))
 
     def save(self, path: str | Path, tokenizer: Any) -> None:
