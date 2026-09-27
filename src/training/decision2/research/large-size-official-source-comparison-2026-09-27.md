@@ -16,6 +16,12 @@ are **source descriptions**, not Decision 2.0 performance claims or exact
 loaded text-parameter measurements. A mixture's total loaded parameters and
 active parameters must both be reported; do not compare active Gemma
 parameters with total dense-Qwen parameters as if they were the same size.
+Read-only HF CLI metadata at 2026-09-27 12:43 UTC identifies the official
+Gemma repository revision as
+`4d7ae4984b7db7de8f8457170b3f1a419ee76d52` and reports
+`25,805,936,206` BF16 safetensors parameters across the complete repository.
+That metadata count includes whatever tensors the complete multimodal package
+stores; it is not yet a measured text-only runtime count.
 
 Before a Gemma optimizer arm, pin its immutable HF revision using HF CLI on an
 authorized experiment node, audit the exact tensor inventory and text-only
