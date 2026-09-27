@@ -1,12 +1,21 @@
 # DEV2.0-0.6B product-card and repository audit
 
-Scope: read-only review of the checked-in 0.6B product renderer and the last
-recorded exact-revision private Hub readback. No model, Hub repository, GPU
-experiment, score, or collection was changed in this audit. The private Hub
-revision was **not freshly queried** here; the last recorded authenticated
-readback is `f9cbfb192e89c4cf48d3e1a61c959190ba684df0` in
-`qwen3-06b-product-card-copy-v3-2026-09-28.md`. Recheck the exact revision
-before any later visibility or package change.
+Scope: read-only review of the checked-in 0.6B product renderer and an
+authenticated, exact-revision private Hub readback. No model, Hub repository,
+GPU experiment, score, or collection was changed in this audit. Authenticated
+Hub metadata returned `private=true`, 30 files, and revision
+`f9cbfb192e89c4cf48d3e1a61c959190ba684df0`. A fresh CLI download of
+only `README.md`, `config.json` and `MODEL_MANIFEST.json` at that revision
+matched the earlier recorded SHA-256 values. The complete 30-file model package
+was not redownloaded or reexecuted in this documentation audit; its prior
+package-native parity remains the evidence for the unchanged model bytes.
+The previous README-only refresh's pre-change and readback manifests have the
+same model fingerprint, every model-file hash, calibration hash, prediction
+identity and file list; only the README entry in their file-hash maps differs.
+The manifest itself changed as required to record that README hash. Thus the
+existing `refresh_full_card.py` path can preserve the model identity for a
+future copy change, provided the new content passes its exact whitelist and
+source-metadata checks. A no-op README is deliberately rejected.
 
 ## What already meets the product contract
 
@@ -41,8 +50,8 @@ before any later visibility or package change.
 4. **Repeat the final Hub readback on every new package.** Verify private
    status, exact revision, root `config.json`, strict file inventory, all local
    README links, actual downloaded model and native three-type output parity.
-   The recorded earlier readback applies only to its exact files and cannot
-   certify a newly regenerated family member.
+   This readback applies only to revision `f9cbfb19` and cannot certify a newly
+   regenerated family member.
 
 Primary references: [Hugging Face download stats](https://huggingface.co/docs/hub/models-download-stats),
 [Decision 1.0 Nox-4B card](https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B),
