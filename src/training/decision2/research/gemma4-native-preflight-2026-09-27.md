@@ -100,3 +100,40 @@ occupancy, official source revision, both weight-shard hashes, and the mirrored
 source-script hash. If GPU enumeration or any model check still fails, stop,
 preserve new receipts, and do not search further setup variants or launch
 training. No retry is authorized by this amendment itself.
+
+## Corrected zero-step result
+
+After separate approval, the one corrected GPU-3 cell completed successfully
+with exit status 0 in 112 seconds, or **0.03111 conservative GPU-hour**. Both
+independent BF16 loads produced byte-identical synthetic-probe receipts
+(SHA-256 `a730f0e21250f3035a2fe2413ec95968cf3a1804b2262ee5151d9d78eb86c313`).
+The strict cross-load comparison passed (receipt SHA-256
+`b72269a9e2ea2c8e0e029c1b72dd241baf8a70cad7b83b39ea45e5b9f163b1ef`),
+with unchanged selected categories and maximum logit drift 0 against the
+preregistered `1e-3` cap. The timing receipt SHA-256 is
+`060c2d9248b3e8dd044cbdb90bec2c9a4a89aaf915aaa79c026b778eb2de2ef3`.
+Both task containers exited and the selected GPU returned to 0% allocated
+memory. There was **no training, formal-label access, or Decision score**.
+
+Actual loaded parameters are **25,805,933,872 total** and **25,233,141,760
+text**, excluding the tied `lm_head` alias. A further 2,334 persisted buffer
+elements account exactly for the 25,805,936,206 stored tensor elements; 30 of
+those are in the text model. The loaded output head shares embedding storage.
+Peak allocated GPU memory was 51,744,454,656 bytes. All official shard keys
+and shapes matched the pinned index, and no unexpected or missing language
+weights were accepted.
+
+Choice, Noul, and Score synthetic inputs admitted 102, 100, and 123 tokens
+respectively with zero truncation at the tested 8,192-token cap. All logits
+were finite, and wrapper-versus-text hidden-state drift was 0 against the
+`1e-4` cap. These logits come from an **untrained random decision head**;
+their selected categories carry no quality evidence. Advertised 256K context,
+active-parameter count, calibration, transfer, and task quality remain
+unverified.
+
+The next discriminative experiment is a separate preregistered, matched-data
+development comparison with the existing official Qwen3.8-27B arm. It first
+needs a Gemma-aware MoE adapter target selection and source-reload test, then
+the same training examples, token/step budget, decision-head protocol, and
+SELECT/DEV scoring. A source-only result is insufficient to select Gemma as a
+Decision 2.0 training base or to publish a 27B model.
