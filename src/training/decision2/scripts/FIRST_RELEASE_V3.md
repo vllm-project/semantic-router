@@ -104,9 +104,10 @@ run. Hash all raw predictions before using any scoring command.
 The saved plan also contains `comparison_pairs` and their canonical
 `comparison_pairs_sha256`. That digest fixes which 1.0 model each candidate
 must beat. The same digest and mapping must be bound into the pre-key freeze
-and checked by the publication gate. The JevArena rank scorer itself does not
-validate the candidate-to-1.0 mapping; until that release integration is
-implemented and verified, the command plan is **not** a complete release gate.
+and checked by the publication gate. The JevArena rank scorer validates the
+frozen roster and pair digest; the publication gate validates the exact
+candidate-to-1.0 mapping and numeric comparison. A plan alone is **not** a
+release pass.
 
 After prediction generation, but before opening either held-out label file,
 run the read-only audit with the recorded plan digest:
@@ -126,8 +127,9 @@ file. Save the audit and SHA in the private ledger.
 
 Only after that audit, a separate pre-key freeze receipt must bind the typed
 and CSS **gold digests**, every model's three prediction digests, native model,
-adapter and calibration identities, the candidate lock, numeric policy and
-source hashes, under `jevarena-v3-freeze/2`. The auditable event order is
+adapter and calibration identities, the candidate lock, the plan and audit
+receipt digests, comparison pairs, numeric policy and source hashes, under
+`jevarena-v3-freeze/2`. The auditable event order is
 candidate and policy lock, complete prediction seals, gold-free audit,
 pre-key receipt seal, then first label access. Write the receipt with exclusive
 creation and record its time and SHA. Replace the placeholder in the planned
