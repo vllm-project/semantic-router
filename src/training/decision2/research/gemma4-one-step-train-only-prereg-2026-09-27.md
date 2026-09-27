@@ -80,3 +80,26 @@ The no-device Docker admission and full private-lock check passed on the
 Three focused CPU tests pass. A pass admits only a future
 matched-data development ablation after a separate preregistration and
 review; it does not justify formal JevArena/JevBench access or publication.
+
+## Approved one-step result
+
+After separate approval, the single locked cell passed with exit status 0.
+It finished in **94 seconds = 0.02611 conservative GPU-hour**, below the
+20-minute cap. The one pinned TRAIN row produced finite `(1, 3)` logits and
+loss. The unclipped gradient norm was 16.054; all 60 LoRA B tensors had
+nonzero gradients and changed after the one optimizer step, and 10 head
+tensors changed. The private adapter/head package reloaded onto a second
+independent official source load with exact tensor equality and maximum
+same-input native logit drift **0.0**. Peak allocated GPU memory was
+54,173,890,048 bytes; the selected device returned to its pre-run baseline
+and the task container exited.
+
+The private result, timing and log SHA-256s are respectively
+`bd934a35ff8c4893661f1d59debccc3ce07bea57c847c3c74f06baa9e6044351`,
+`26fceb8bccc3a5fed309487ee93871764b10de2910ee272c99489bf63e33c197`,
+and `7220d9a3e45a5061bbb38224f7f01e71a97df918e1a16bb2704d0497333b45a7`.
+The loss change on the **same TRAIN row** is a numerical smoke observation,
+not transfer or quality evidence. SELECT, CAL and all evaluation labels
+remained unread. This result admits the native Gemma training mechanics for
+a separately preregistered, matched development arm only. It is neither a
+Decision 2.0 score nor a publication candidate.
