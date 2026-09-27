@@ -53,6 +53,19 @@ The **same row IDs, order, tokens, 160 updates and fixed final checkpoint**
 must be used for A and B. No row is drawn from SELECT/CAL, typed DEV/FINAL,
 CSS, JevBench, rejected v6–v8 Score corpora or any new authored pool.
 
+**CPU admission amendment, before model outcomes:** The first CPU-only gate
+returned `WHOLE_GROUP_QUOTA` (private receipt SHA-256
+`b74f04e60f3ccdf45c266ad1d35f7bc03c463af7a3e1d20457b03c432e8f10b2`).
+Several source/type buckets contain multi-row groups, so the greedy skip rule
+above can miss a feasible exact quota. The versioned admission implementation
+now uses deterministic exact subset selection over the same hash-ordered whole
+groups. This changes only the subset solver: **2,560 exposures, 160 updates,
+all admitted Score rows, Choice/Noul type targets and largest-remainder
+source quotas remain frozen**. An infeasible exact group subset still returns
+HOLD. The first receipt remains preserved; this amendment precedes any 27B
+weight load, gradient, teacher-mask result, SELECT/DEV result or formal/public
+score. No sampler search after model outcomes is allowed.
+
 The auxiliary mask is determined once from TRAIN provenance, TRAIN gold and
 the pinned teacher vectors, never from model or SELECT outcomes. A row is
 eligible only with a unique teacher top level equal to TRAIN gold and gold

@@ -54,6 +54,18 @@ class AdmissionContracts(unittest.TestCase):
         with self.assertRaisesRegex(audit.AdmissionHold, "SCORE_ADMITTED_COUNT"):
             audit.select_schedule(rows, {**lengths, "s0": 4097}, total=8, min_score=2)
 
+    def test_whole_group_exact_subset_avoids_false_greedy_hold(self) -> None:
+        groups = [
+            [row("a0", "choice", "human", "a"), row("a1", "choice", "human", "a")],
+            [row("b0", "choice", "human", "b"), row("b1", "choice", "human", "b")],
+            [row("c0", "choice", "human", "c")],
+        ]
+        selected = audit.choose_whole_groups(groups, 3)
+        self.assertEqual(len(selected), 3)
+        self.assertEqual(len({item["group_id"] for item in selected}), 2)
+        with self.assertRaisesRegex(audit.AdmissionHold, "WHOLE_GROUP_QUOTA"):
+            audit.choose_whole_groups(groups[:2], 3)
+
     def test_teacher_row_and_option_identity_are_strict(self) -> None:
         sample = row("x", "score", "synth", "g")
         artifact = {

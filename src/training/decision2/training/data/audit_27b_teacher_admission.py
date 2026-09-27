@@ -228,6 +228,35 @@ def largest_remainder(counts: dict[str, int], target: int) -> dict[str, int]:
     return base
 
 
+def choose_whole_groups(
+    groups: list[list[dict[str, Any]]], target: int
+) -> list[dict[str, Any]]:
+    """Find an exact row quota while preserving deterministic group preference.
+
+    A greedy prefix can falsely fail on a later two-row group and an earlier
+    one-row group. Reachable sums are never replaced, so the hash-sorted group
+    order supplies the same deterministic tie break on every run.
+    """
+    previous: dict[int, tuple[int, int] | None] = {0: None}
+    for index, group in enumerate(groups):
+        size = len(group)
+        for subtotal in sorted(previous, reverse=True):
+            candidate = subtotal + size
+            if candidate <= target and candidate not in previous:
+                previous[candidate] = (subtotal, index)
+        if target in previous:
+            break
+    _check(target in previous, "WHOLE_GROUP_QUOTA")
+    chosen: list[dict[str, Any]] = []
+    subtotal = target
+    while subtotal:
+        step = previous[subtotal]
+        assert step is not None
+        subtotal, index = step
+        chosen.extend(groups[index])
+    return chosen
+
+
 def select_schedule(
     rows: list[dict[str, Any]],
     token_lengths: dict[str, int],
@@ -259,14 +288,7 @@ def select_schedule(
                 (group for (name, _), group in groups.items() if name == source),
                 key=lambda group: _key(f"{task}/{source}/{group[0]['group_id']}"),
             )
-            needed = quota[source]
-            for group in groups_here:
-                if len(group) <= needed:
-                    selected.extend(group)
-                    needed -= len(group)
-                if needed == 0:
-                    break
-            _check(needed == 0, "WHOLE_GROUP_QUOTA")
+            selected.extend(choose_whole_groups(groups_here, quota[source]))
     _check(len(selected) == total, "SCHEDULE_TOTAL")
     selected.sort(key=lambda row: _key(f"row/{row['id']}/{row['input_sha256']}"))
     _check(len({row["id"] for row in selected}) == total, "SCHEDULE_DUPLICATE_ID")
