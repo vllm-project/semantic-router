@@ -1,0 +1,39 @@
+# AutoJev 27B external teacher: bounded TRAIN-only screen
+
+**Status:** prospective source screen, registered before loading this teacher on
+the frozen TRAIN roster. The published
+[AutoJev-27B](https://huggingface.co/denis-pplx/autojev-27b) is an external
+distillation **teacher** and model peer, never a Decision 2.0 weight
+initializer. This screen cannot establish student improvement, JevArena rank,
+or publishable performance.
+
+| Component | Frozen value |
+| --- | --- |
+| Weights | `denis-pplx/autojev-27b@6f5b557e037f5edb25c7dc92dbc6553e5a19c015`; published package manifest tree SHA-256 `d0b1e161c17d60889744b6ccb5fa588bf80f9856f8535e6a04e083ffcf667ca2` |
+| Native runtime | `denis-pplx/autojev-27b` source commit `ee63c1515980491a742f0bd0685c8dc5ca1f00c3`, clean local Git checkout, `inference.autojev27` release verification and unmodified `autojev.model.DecisionModel`/`answer` |
+| TRAIN | rights-clean v2, exactly 7,455 rows, SHA-256 `61740be433c6cd714810a9908432ad29597c570d0d267d2731ab78cdad243755` |
+| Roster | Same deterministic gold-free 96-group selection as the separate Eikos teacher screen, 32 independent groups per Choice/Noul/Score; SHA-256 `18dce35a5ca58864f1b92399344fab679ec98fb7ff4ddd05ee71cfeecebb1722` |
+| Interface | Original TRAIN state, instructions, option descriptions and ordered Score levels rendered to one native typed System One question; no gold label in the request, no chat API, no prompt search |
+| Output | 32-row/type denominators; native valid/invalid/tie, hard-label agreement, gold probability, half Brier sum; private aggregate only, mode 0600, no row text/predictions/labels |
+| Runtime | `decision20-train-fast:host2` image SHA-256 `f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54`; one newly checked exclusive GPU on the first authorized node, 15-minute wall cap including model load, no retry or parameter variation |
+| Script | [`autojev_teacher_train_pilot.py`](autojev_teacher_train_pilot.py), SHA-256 `eabf3c9f9d9a7857519b026fa64c5b950fe6374d7f9af03ecb7e32db25713296` |
+
+Admission order: confirm weight/source revision and untouched manifests; mirror
+the signed local script; CPU-only strict TRAIN hash and roster dry run; verify
+the image and live GPU ownership; then run at most one full 96-row GPU source
+screen. `verify_release` recomputes the full package and source inventory.
+Unsupported native context or candidate limits count as invalid without
+truncation. Any unexpected runtime/format error stops the screen and leaves a
+HOLD, not a substituted chat or projection score. Do not alter thresholds,
+calibration, roster or revision after seeing a result.
+
+All 96 outputs must be structurally valid for AutoJev to be considered for a
+later, separately registered distillation arm. Agreement and probability
+statistics are descriptive only on 32 TRAIN groups/type. Compare with the
+Eikos TRAIN-only screen solely when both used this exact roster and native
+semantics. A future student arm must predeclare allowed official/own weight
+origin, teacher coverage, KL weight, equal student token and step budget,
+source overlap screen, SELECT gate and independent confirmation. No weights or
+probability vectors leave the teacher screen.
+
+**No AutoJev TRAIN result exists at preregistration.**
