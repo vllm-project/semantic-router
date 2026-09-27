@@ -1,0 +1,113 @@
+{
+  "amendment": {
+    "adapter_patch_commit": "d6ccdfdcb4b7358f15180ca789311a858f152cda",
+    "chronology": "Original roster fixed all three candidates, panels, prompts, scorer and formula before any 0.6B predictions. Bosun completed all three panels under the unchanged adapter. Kai1 and Kai2 stopped at 3499/6547 CSS prompts; no gold was read and no 0.6B scores were computed. This amendment freezes new adapter hashes before full Kai retries with new output files. Bosun prediction bytes may be carried forward unchanged.",
+    "failed_attempts": {
+      "kai1": {
+        "css_items": 3499,
+        "partial_css_prediction_sha256": "929bf50ab6c2e23df0e17d815891ee473280ad601ac33945a7037d46ffd6a0a4",
+        "typed_items": 1600,
+        "typed_prediction_sha256": "1b562824722df44eb36b3ab5a20cae9d3dce01fef9425b4080518dba7775e42e"
+      },
+      "kai2": {
+        "css_items": 3499,
+        "partial_css_prediction_sha256": "a4d8b5f1f522a40f95ac02d05fdf829960689bca01cfc4e4800101d9268b6fd7",
+        "typed_items": 1600,
+        "typed_prediction_sha256": "896fdcf10d9bde6e64b878483e94a6a110a391edf2be192d51f113a33809f088"
+      }
+    },
+    "model_weights_changed": false,
+    "original_roster_sha256": "7a7961b58b517cfb414e9d474f5fa9bffcd1ef3cfff95142107d8f23366b1cb4",
+    "ranking_formula_changed": false,
+    "reason": "Both Kai native packers rejected CSS item 3500 because the complete question and candidates left no room for state. The original adapters only recognized a different documented 1024-token overflow string. Inputs remain untruncated; this exact native exception is now counted as invalid and retains the full denominator.",
+    "scoring_before_amendment": false
+  },
+  "first_project_label_access_evidence": {
+    "earlier_4b_prekey_freeze_sha256": "40eeb4a7300ae36e27c6a01fded8471f6be7410145bb48716d482208aa44adab",
+    "earlier_4b_prekey_freeze_utc": "2026-09-27T06:33:02.253586+00:00",
+    "earlier_4b_scoring_receipt_before_utc": "2026-09-27T06:38:00+00:00"
+  },
+  "model_roster": [
+    {
+      "calibration": "raw_probabilities_no_fit",
+      "loaded_parameters": 571909635,
+      "model_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+      "name": "Kai1",
+      "native_adapter": "kai-lex-native-v2",
+      "native_adapter_source_sha256": "62e098ce8473391686512be04ad5684dd3f880cdb7ec5c90ddd361fbf1f6b2b1",
+      "native_manifest_sha256": "c1bf07ab1c4c3fa1f819256d3de858d1ed87869bdfa663553280d7e78b88bee4",
+      "weight_revision": "7185f514f54b8f93c55998b1e8f9c5cc67f0d029"
+    },
+    {
+      "calibration": "raw_probabilities_no_CAL_fit",
+      "completed_run_receipt_sha256": "b4ec2d7727bc07f1a5464be467a13c18a1c3f33525416be00ad46a82886359fe",
+      "immediate_base": "Kai1",
+      "loaded_parameters": 571909635,
+      "model_id": "llm-semantic-router/DEV2.0-0.6B",
+      "name": "Kai2",
+      "native_adapter": "kai-native-continuation-v2",
+      "native_adapter_source_sha256": "2c717138c91cc4cd6657a3efb26c7f04a07bbdd2ea2aa16893a9019f68d96f94",
+      "native_manifest_sha256": "03d90e449078bacd18390ad52c3ba3af7cff86bb507c2c2f9088f0260305d1ab",
+      "weight_revision": "03d90e449078bacd18390ad52c3ba3af7cff86bb507c2c2f9088f0260305d1ab"
+    },
+    {
+      "calibration": "native_raw_probabilities",
+      "loaded_parameters": 606131200,
+      "model_id": "Hanno-Labs/bosun-v3.1-0.6b",
+      "name": "Bosun-v3.1-0.6B",
+      "native_adapter": "bosun-v31-06b-native-predict-v1",
+      "native_adapter_source_sha256": "d6f373ad49782f042a0c335f4ddaec4ef39b48ae254717f000d9320bfd1de005",
+      "official_base_revision": "Qwen/Qwen3-0.6B@c1899de289a04d12100db370d81485cdf75e47ca",
+      "source_manifest_sha256": "89733717fb7f505f5deb140408d5dabc50981c4407d7e85c2f13e6c42630ff07",
+      "weight_revision": "1d8b6f9611f9b64b514ce8b57cd86398fbc31a3b"
+    }
+  ],
+  "not_a_never_unsealed_blind_test": true,
+  "panel": {
+    "css_evaluation_gold_sha256": "1cda9623032138bb7b124be0c1b0a4239c06bed7be3169264e6eb31805c19ba4",
+    "css_evaluation_items": 6547,
+    "css_evaluation_prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+    "css_evaluation_tasks": 15,
+    "jevbench_public_items": 231,
+    "jevbench_public_manifest_sha256": "e0e7c67701cf05f996d3b4eac09abf1bb3e6bb363cfe007089acd3644a38ed35",
+    "jevbench_public_prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+    "typed_final_answer_slots": 2000,
+    "typed_final_gold_sha256": "707dd28dfbab10d124d437434023729f319501542e999e536fce9b7ff7f2361e",
+    "typed_final_items": 1600,
+    "typed_final_prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd"
+  },
+  "publication_role": "internal research protocol; not a product model card",
+  "roster_locked_before_this_roster_predictions": false,
+  "run_order": "Bosun complete under original lock; amended Kai1/Kai2 full new-file retry; hash seal nine complete predictions; only then score.",
+  "schema": "decision2-jevarena-v3-postkey-roster/1",
+  "scoring_lock": {
+    "H": "CSS evaluation 15-task median macro-F1",
+    "T": "typed FINAL four-family macro mean accuracy",
+    "missing_invalid_and_over_budget": "incorrect_at_full_denominator",
+    "paired_bootstrap_replicates": 5000,
+    "paired_bootstrap_seed": 20260927,
+    "paired_comparison": "Kai2_minus_Kai1",
+    "primary_score": "100 * sqrt(T * H)",
+    "ranking": "primary_score_descending; same-panel only; exact ties shared rank",
+    "sensitivity": [
+      "H_without_FLUTE",
+      "FLUTE_task_level_score",
+      "typed_by_family",
+      "public231_easy_standard_hard"
+    ]
+  },
+  "scoring_sources_sha256": {
+    "css": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca",
+    "jevbench_public": "aec840b6497beeae8b63e9270670c22506265c086a84e889bc82f694146518cf",
+    "paired_ci": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "typed": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "v3": "3d5b4aea031efb0d05ae7a501983868fe3bb9e42ca37e23fce5da8c002720cd8"
+  },
+  "shared_inference_source_sha256": "b49054f1aef7a35c0a65b88dd5c1f1e5e252bb96dc210c7ef9e1d83942bb45ce",
+  "source_overlap_caveats": [
+    "Kai2 TRAIN and SELECT/CAL had disjoint source group IDs; exact normalized state overlap with typed and CSS FINAL gold-free prompts was zero.",
+    "Kai2 TRAIN contains 120 FLUTE official-train items; CSS evaluation includes 500 separate FLUTE official-test items. FLUTE is same-dataset supervised evaluation, not unseen-source zero-shot transfer.",
+    "The inherited Kai1 training corpus had a prior audit flagging 42 near CSS rows; exact non-overlap alone does not eliminate semantic or source-family overlap."
+  ],
+  "status": "prospective_same_panel_after_project_label_access"
+}
