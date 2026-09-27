@@ -92,7 +92,7 @@ jobs:
       - name: Measure baseline with identical Vela artifacts
         env:
           HF_HUB_DISABLE_XET: "1"
-          PERF_BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
+          PERF_BASE_REF: ${{ inputs.base-ref || 'HEAD^' }}
         run: make perf-model-baseline PERF_BASE_REF="$PERF_BASE_REF"
 
       - name: Run component benchmarks
