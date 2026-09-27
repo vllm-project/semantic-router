@@ -14,6 +14,7 @@ from pathlib import Path
 
 from inference import joyfox
 from inference.run import digest, load_prompts, synchronize
+
 from training.model.data import file_sha256
 
 DEV_PROMPTS_SHA256 = "a17ec4b675bbc3da96dba8f31af8f25c9b02cc96ff048fb7de899bdd8b6cf79a"

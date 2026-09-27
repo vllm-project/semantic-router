@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from inference.joyfox import MODEL_REVISION, verify_release
+
 from training.model.data import file_sha256, load_partition
 
 from . import pilot, train
@@ -167,9 +168,9 @@ def source_pass(
     receipt_path: Path,
     runtime_image_id: str,
 ) -> dict[str, Any]:
+    import peft
     import torch
     import transformers
-    import peft
 
     if mode not in {"cache", "repeat"} or runtime_image_id != IMAGE_ID:
         raise ValueError("Source pass mode or pinned image ID mismatch")
