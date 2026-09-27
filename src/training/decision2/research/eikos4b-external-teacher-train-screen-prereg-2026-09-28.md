@@ -42,3 +42,20 @@ overlap with protected task sources must be documented before a student is
 promoted.
 
 **No GPU result or distillation conclusion exists at preregistration.**
+
+## CPU roster and runtime lock before GPU
+
+The source code is signed as commit `36ce3428f`; the exact local and SSH
+mirror script SHA-256 is
+`1337811ee0fb8f41769d9ea6488d0a4c4aba6e0994a375593be89e061f201b13`.
+The CPU-only dry run on the unchanged TRAIN bytes selected 96 rows from 96
+groups, roster SHA-256
+`18dce35a5ca58864f1b92399344fab679ec98fb7ff4ddd05ee71cfeecebb1722`.
+The qualified image is `decision20-train-fast:host2` at ID
+`f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54`,
+with PyTorch 2.12.0, Transformers 5.17.0 and FLA 0.5.2. Reserve only
+physical GPU 4 on the first authorized node after a fresh live-memory check.
+The second authorized node's one idle GPU does not currently have this
+frozen TRAIN and source package, so transferring them for a 96-row screen
+would add no useful experimental contrast. No teacher model was loaded and no
+TRAIN answer scored during this lock step.
