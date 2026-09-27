@@ -6,7 +6,7 @@ Use this guide when you need one of the following:
 
 - large OpenAI-compatible request bodies that should not be fully buffered by the gateway before ExtProc sees them;
 - agentgateway `FullDuplexStreamed` ExtProc processing;
-- Envoy AI Gateway or raw Envoy `STREAMED` request body processing, or raw Envoy `FULL_DUPLEX_STREAMED`;
+- Agent Router (formerly Envoy AI Gateway) or raw Envoy `STREAMED` request body processing, or raw Envoy `FULL_DUPLEX_STREAMED`;
 - streamed Chat Completions clients (`"stream": true`) that may be short-circuited by Semantic Router before the upstream backend responds.
 
 ## How it works
@@ -68,9 +68,9 @@ The Operator's standalone Envoy sidecar keeps `request_body_mode: BUFFERED`
 for the reason given in [Raw Envoy](#raw-envoy), so this setting only changes
 behavior when an existing Gateway invokes ExtProc in a streamed mode.
 
-## Envoy AI Gateway / Envoy Gateway
+## Agent Router / Envoy Gateway
 
-For Envoy AI Gateway examples that use `EnvoyPatchPolicy`, change the Semantic Router ExtProc filter from buffered request bodies to streamed request bodies.
+For Agent Router examples that use `EnvoyPatchPolicy`, change the Semantic Router ExtProc filter from buffered request bodies to streamed request bodies.
 
 ```yaml
 apiVersion: gateway.envoyproxy.io/v1alpha1
@@ -116,7 +116,7 @@ A complete Kubernetes example is available in `deploy/kubernetes/streaming/aigw-
 
 If a raw Envoy route table or backend depends on Semantic Router's request headers, as the configuration `vllm-sr serve` generates does, keep its ExtProc filter on `request_body_mode: BUFFERED`. In `STREAMED` mode, Envoy passes the request headers on as soon as Semantic Router answers them. A body that arrives after that answer can still be rewritten, but Envoy no longer applies [header mutations](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ext_proc/v3/external_processor.proto#envoy-v3-api-field-service-ext-proc-v3-commonresponse-header-mutation) to that request. Semantic Router sets the provider credential, the provider request path and the `x-selected-model` routing header at end-of-stream, so such a request reaches Envoy's default route with its original path and the client's own `Authorization` header. Whether a request is affected depends on how long its body takes to arrive, so the failures are intermittent. With `request_body_mode: FULL_DUPLEX_STREAMED`, `request_trailer_mode: SEND` and `global.router.streamed_body` enabled, Envoy applies these header changes, because Semantic Router holds its reply to the request headers until the body is routed. Keep that filter's `failure_mode_allow` at its default, `false`: while the reply is held, a failed ExtProc stream would otherwise let Envoy forward the request with the client's original headers.
 
-The Envoy AI Gateway example above routes on `x-ai-eg-model`, which Semantic Router does not set, so its routing does not depend on these header changes.
+The Agent Router example above routes on `x-ai-eg-model`, which Semantic Router does not set, so its routing does not depend on these header changes.
 
 ## agentgateway
 

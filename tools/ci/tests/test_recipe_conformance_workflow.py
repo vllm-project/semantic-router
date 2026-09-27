@@ -32,6 +32,7 @@ class RecipeConformanceWorkflowTests(unittest.TestCase):
             {"inventory", "live-cpu", "report"},
         )
         self.assertIn("plan-all", self.text)
+        self.assertNotIn("--shards 3", self.text)
         self.assertIn("matrix.recipes_root", self.text)
         self.assertIn("matrix.report_dir", self.text)
         self.assertNotIn("live-cpu-built-in", self.text)

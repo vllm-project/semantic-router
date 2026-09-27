@@ -37,6 +37,7 @@ from provider_mocker_image import (
     published_from_plan,
     resolve_published,
 )
+from release_guard_waiver import planned_waiver
 from verification_catalog import (
     catalog_errors,
     full_cpu_ids,
@@ -169,6 +170,8 @@ def make_plan(
             ]
         if record["executor"] == "e2e":
             record["baseline_suite"] = "full" if full else "standard"
+        if waiver := planned_waiver(profile, name):
+            record["known_issue_waiver"] = waiver
         record["dispatch_job"] = dispatch_job(record)
         record["contract_sha256"] = digest(record)
         verifications.append(record)
@@ -236,17 +239,18 @@ def make_plan(
 
 
 def component_batches(verifications: list[dict]) -> list[dict]:
-    """Pack compatible lightweight contracts without changing their identities."""
+    """Give every selected component contract an independent Actions worker."""
+    workers = load_catalog()["component_workers"]
     return [
-        {"id": name, **worker, "verifications": selected}
-        for name, worker in load_catalog()["component_workers"].items()
-        if (
-            selected := [
-                row
-                for row in verifications
-                if row["executor"] == "tools" and row["worker"] == name
-            ]
-        )
+        {
+            "id": row["id"],
+            "worker": row["worker"],
+            **workers[row["worker"]],
+            "display_name": row["display_name"],
+            "verifications": [row],
+        }
+        for row in verifications
+        if row["executor"] == "tools"
     ]
 
 
