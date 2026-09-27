@@ -21,6 +21,18 @@ PANEL_FIELDS = {
     "public": ("jevbench_public_prompts_sha256", 231),
 }
 MODEL_STEMS = {"Kai1": "kai1", "Kai2": "kai2", "Bosun-v3.1-0.6B": "bosun"}
+MODEL_ADAPTER_PATHS = {
+    "Kai1": "inference/kai_lex.py",
+    "Kai2": "inference/kai_continuation.py",
+    "Bosun-v3.1-0.6B": "inference/bosun06.py",
+}
+SCORER_PATHS = {
+    "typed": "benchmark/score.py",
+    "css": "transfer/score.py",
+    "v3": "jev_arena/arena_v3.py",
+    "paired_ci": "jev_arena/compare_v3.py",
+    "jevbench_public": "jev_arena/jevbench_public.py",
+}
 SCHEMA = "decision2-jevarena-v3-postkey-prediction-seal/1"
 
 
@@ -77,6 +89,7 @@ def _predictions(
 
 def seal(
     roster_path: Path,
+    source_root: Path,
     typed_prompts: Path,
     css_prompts: Path,
     public_prompts: Path,
@@ -93,6 +106,23 @@ def seal(
         or set(model["name"] for model in roster["model_roster"]) != set(MODEL_STEMS)
     ):
         raise ValueError("Unexpected post-key roster or chronology")
+    if (
+        file_digest(source_root / "inference/run.py")
+        != roster["shared_inference_source_sha256"]
+    ):
+        raise ValueError("Shared inference code differs from roster")
+    for name, relative in SCORER_PATHS.items():
+        if (
+            file_digest(source_root / relative)
+            != roster["scoring_sources_sha256"][name]
+        ):
+            raise ValueError(f"{name}: scorer code differs from roster")
+    for model in roster["model_roster"]:
+        if (
+            file_digest(source_root / MODEL_ADAPTER_PATHS[model["name"]])
+            != model["native_adapter_source_sha256"]
+        ):
+            raise ValueError(f"{model['name']}: adapter code differs from roster")
     paths = {"typed": typed_prompts, "css": css_prompts, "public": public_prompts}
     panels = {}
     for panel, path in paths.items():
@@ -134,6 +164,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     for name in (
         "roster",
+        "source_root",
         "typed_prompts",
         "css_prompts",
         "public_prompts",
@@ -144,6 +175,7 @@ def main() -> None:
     args = parser.parse_args()
     receipt = seal(
         args.roster,
+        args.source_root,
         args.typed_prompts,
         args.css_prompts,
         args.public_prompts,
