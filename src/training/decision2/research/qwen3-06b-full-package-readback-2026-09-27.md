@@ -1,9 +1,10 @@
 # Official Qwen3 0.6B full package: exact-revision readback
 
-**Status:** the candidate is staged in a clean **private** Hugging Face model
-repository for final owner review. This receipt does not authorize a public
-visibility change or collection insertion. The scored comparison remains a
-post-key same-panel result, not an untouched blind test.
+**Status:** all checks below ran while the clean Hugging Face model repository
+was **private**. A later HF CLI check found the same exact revision publicly
+visible; visibility and collection placement are handled by the release owner.
+The scored comparison remains a post-key same-panel result, not an untouched
+blind test.
 
 ## Frozen package identity
 
