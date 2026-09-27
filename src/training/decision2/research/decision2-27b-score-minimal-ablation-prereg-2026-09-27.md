@@ -54,15 +54,21 @@ answerability, ambiguity and realism before admitting labels. This experiment
 makes **no multilingual claim**; any Chinese expansion has its own native
 editorial and independent selector gate.
 
-For A and B choose **360 Score rows** and the same **2,048 parent English
-Choice/Noul replay rows** (1,024 of each), hence 2,408 training rows per arm.
-Control Score rows come only from rights-audited parent TRAIN and are
+The rights-clean parent has only **293 English Score rows**, so 360 distinct
+English parent controls do not exist. Generate and audit all 120 new groups,
+but prospectively assign only the first **80 groups = 240 Score rows** to
+this A/B causal pilot. The remaining 40 groups are an unused quality buffer:
+they are neither this run's TRAIN nor SELECT and cannot become a post-hoc
+checkpoint selector. For A and B choose **240 Score rows** and the same
+**2,048 parent English Choice/Noul replay rows** (1,024 of each), hence
+**2,288 training rows per arm**. Control Score rows come only from
+rights-audited parent TRAIN and are
 group-disjoint from replay, SELECT, CAL and all protected panels. Before an
 optimizer: freeze immutable row IDs, source licenses, tokenizer/prompt/code
 revisions, arm hashes, raw native-token sums, dynamic padded-token sums,
 Score-level distribution, longest input and option count. Match A/B raw
 native-token exposure within **1%**, padded exposure within **5%**, equal
-2,408 example count and no native input longer than **1,024 tokens**. If this
+2,288 example count and no native input longer than **1,024 tokens**. If this
 cannot be met with eligible parent control rows, stop and version a new
 design; do not duplicate or shorten a benchmark input to make the budget fit.
 Arm C uses A's exact bytes. Exact/group, bounded near-duplicate and semantic
@@ -143,11 +149,11 @@ receipt mutation. On the same physical GPU/runtime, each new zero-step start
 must match the pinned source on **32/32 categories** with max option drift
 ≤`1e-4`; otherwise no optimizer.
 
-Freeze a one-epoch, 2,408-row, microbatch-1, accumulation-16 run:
-**151 optimizer updates**, BF16 backbone/FP32 head and loss, existing rank-8,
+Freeze a one-epoch, 2,288-row, microbatch-1, accumulation-16 run:
+**143 optimizer updates**, BF16 backbone/FP32 head and loss, existing rank-8,
 alpha-16, dropout-.05 LoRA, AdamW, LoRA LR `2e-5`, head LR `1e-5`, weight
 decay `.01`, warmup `.05`, max length `1024`, seed `20260927`, gradient
-checkpointing, one fixed final checkpoint at step 151 and no early checkpoint
+checkpointing, one fixed final checkpoint at step 143 and no early checkpoint
 search. A/B/C must use the same code/image, hardware class, precision,
 learning-rate schedule, admitted tokens, CAL lineage, native prompt and
 fixed output budget. `SELECT` is for the trainer's baseline/final receipt
@@ -222,7 +228,7 @@ python3 -m training.model.train \
   --train "$ARM_A" --select "$PARENT_SELECT" --cal "$PARENT_CAL" \
   --output "$RUN_ROOT/data-A" --train-mode lora \
   --objective ce --epochs 1 --microbatch 1 --accumulation 16 \
-  --max-length 1024 --max-steps 151 --save-every 151 \
+  --max-length 1024 --max-steps 143 --save-every 143 \
   --lora-rank 8 --lora-alpha 16 --lora-dropout 0.05 \
   --lora-lr 2e-5 --head-lr 1e-5 --weight-decay 0.01 \
   --warmup-ratio 0.05 --seed 20260927

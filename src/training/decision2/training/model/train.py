@@ -289,7 +289,7 @@ def parse_args() -> argparse.Namespace:
         "--direct-lora-parity-sha256",
         help="SHA-256 of the sealed direct-LoRA parity receipt",
     )
-    parser.add_argument("--direct-lora-arm", choices=("A", "B"))
+    parser.add_argument("--direct-lora-arm", choices=("A", "B", "C"))
     parser.add_argument("--output", required=True)
     parser.add_argument("--resume", help="Exact checkpoint-N directory within --output")
     parser.add_argument(
@@ -350,7 +350,7 @@ def validate_args(args: argparse.Namespace) -> None:
             or not args.direct_lora_parity_receipt
             or not isinstance(args.direct_lora_parity_sha256, str)
             or not re.fullmatch(r"[0-9a-f]{64}", args.direct_lora_parity_sha256)
-            or args.direct_lora_arm not in ("A", "B")
+            or args.direct_lora_arm not in ("A", "B", "C")
         ):
             raise ValueError(
                 "Direct LoRA continuation needs --train-mode lora, --source-path, "
@@ -523,6 +523,49 @@ def verify_direct_lora_parity_gate(args: argparse.Namespace) -> None:
         raise ValueError("Direct LoRA parity receipt hash differs")
     receipt = json.loads(path.read_text(encoding="utf-8"))
     arm = args.direct_lora_arm
+    if receipt.get("schema_version") == "decision2-score-v7p-direct-lora-start/2":
+        expected_source = (
+            "d9f4990427156a7712325de16f6105659fc00015d44c3e2f9331f52481d350d2"
+        )
+        arms = receipt.get("arms")
+        if (
+            receipt.get("status") != "PASS"
+            or args.initial_model_sha256 != expected_source
+            or receipt.get("source_model_sha256") != expected_source
+            or not isinstance(receipt.get("roster_sha256"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", receipt["roster_sha256"])
+            or receipt.get("roster_items") != 32
+            or receipt.get("tolerance") != 1e-4
+            or not isinstance(receipt.get("source_files_sha256"), dict)
+            or not receipt["source_files_sha256"]
+            or not isinstance(receipt.get("container_image_id"), str)
+            or not receipt["container_image_id"].startswith("sha256:")
+            or not isinstance(arms, dict)
+            or set(arms) != {"A", "B", "C"}
+            or arm not in arms
+        ):
+            raise ValueError("Direct LoRA v7p receipt or source differs")
+        for name, result in arms.items():
+            train_sha = result.get("train_sha256")
+            pred_sha = result.get("prediction_sha256")
+            drift = result.get("max_absolute_option_probability_drift")
+            if (
+                result.get("status") != "PASS"
+                or not isinstance(train_sha, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", train_sha)
+                or not isinstance(pred_sha, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", pred_sha)
+                or result.get("same_argmax") != 32
+                or type(drift) not in (int, float)
+                or not math.isfinite(drift)
+                or drift > 1e-4
+            ):
+                raise ValueError(f"Direct LoRA v7p zero-step arm {name} failed parity")
+        if arms["C"]["train_sha256"] != arms["A"]["train_sha256"]:
+            raise ValueError("Direct LoRA v7p objective arm changed TRAIN data")
+        if file_sha256(args.train) != arms[arm]["train_sha256"]:
+            raise ValueError("Direct LoRA v7p frozen arm TRAIN differs")
+        return
     expected_train_sha = {
         "A": "6a6ef7d3f2eac2a63cdd61cd806275e67c0aa772e78b45bf0953200f2a776235",
         "B": "1c705c9a8271ce2e526b6bc91affe18d463a52bb86ce99b6b1bcb5007d467b41",

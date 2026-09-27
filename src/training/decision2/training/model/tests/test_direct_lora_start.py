@@ -142,6 +142,64 @@ def test_direct_lora_optimizer_is_gated_by_both_zero_step_starts(
         train.verify_direct_lora_parity_gate(args)
 
 
+def test_v7p_direct_lora_receipt_binds_all_three_arms_without_rewriting_v6(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    args = _args(monkeypatch)
+    args.initial_model_sha256 = (
+        "d9f4990427156a7712325de16f6105659fc00015d44c3e2f9331f52481d350d2"
+    )
+    args.train = str(tmp_path / "arm-a.jsonl")
+    args.direct_lora_parity_receipt = str(tmp_path / "v7p-start.json")
+    args.direct_lora_parity_sha256 = "f" * 64
+    receipt = {
+        "schema_version": "decision2-score-v7p-direct-lora-start/2",
+        "status": "PASS",
+        "source_model_sha256": args.initial_model_sha256,
+        "source_files_sha256": {"base": "1" * 64},
+        "roster_sha256": "2" * 64,
+        "roster_items": 32,
+        "tolerance": 1e-4,
+        "container_image_id": "sha256:" + "3" * 64,
+        "arms": {
+            name: {
+                "status": "PASS",
+                "train_sha256": "a" * 64 if name != "B" else "b" * 64,
+                "prediction_sha256": (
+                    "4" if name == "A" else "5" if name == "B" else "6"
+                )
+                * 64,
+                "same_argmax": 32,
+                "max_absolute_option_probability_drift": 0.0,
+            }
+            for name in ("A", "B", "C")
+        },
+    }
+    path = tmp_path / "v7p-start.json"
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+    monkeypatch.setattr(
+        train,
+        "file_sha256",
+        lambda target: "f" * 64 if str(target) == str(path) else "a" * 64,
+    )
+    train.verify_direct_lora_parity_gate(args)
+    args.direct_lora_arm = "C"
+    train.verify_direct_lora_parity_gate(args)
+    args.direct_lora_arm = "B"
+    with pytest.raises(ValueError, match="frozen arm TRAIN differs"):
+        train.verify_direct_lora_parity_gate(args)
+    args.direct_lora_arm = "A"
+    receipt["arms"]["C"]["same_argmax"] = 31
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+    with pytest.raises(ValueError, match="arm C failed parity"):
+        train.verify_direct_lora_parity_gate(args)
+    receipt["arms"]["C"]["same_argmax"] = 32
+    receipt["arms"]["C"]["train_sha256"] = "c" * 64
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+    with pytest.raises(ValueError, match="objective arm changed TRAIN"):
+        train.verify_direct_lora_parity_gate(args)
+
+
 class _Backbone(nn.Module):
     def __init__(self):
         super().__init__()
