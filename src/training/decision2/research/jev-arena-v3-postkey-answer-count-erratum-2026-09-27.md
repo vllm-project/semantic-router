@@ -69,3 +69,30 @@ external audit checks the original policy/source hashes. A separate versioned
 staging **and verification** path is required before any amended-policy HF
 publication. Merely changing a `status` field or bypassing the SHA checks
 would not be a valid repair.
+
+The additive implementation has four private stages:
+
+1. `scripts/create_strict_hold_receipt_v3.py` binds the unchanged FINAL
+   typed reports, predictions and freeze to the original Score-floor HOLD.
+2. `scripts/generate_postkey_artifacts_v3.py` renders the normal card figures
+   using the original frozen scorer SHA map and the separate rank diagnostic.
+3. `scripts/prepare_postkey_review_v3.py` emits an unsigned review context
+   with exact model, score, comparison and release-context hashes. It can
+   finalize an amended gate **only after** all six independent passed review
+   receipts exist. It neither fabricates reviewer signatures nor turns an
+   incomplete review into a pass.
+4. `scripts/package_postkey_aggregate_v3.py` calls the standard v3 assembler
+   and verifier with the old frozen source/policy binding, the corrected
+   2,000-answer numeric safeguards and an explicit amended gate. The final
+   package has a distinct version, card banner, amendment digest, rank
+   diagnostic and original strict HOLD receipt. It retains the unchanged
+   native model files and their exact hashes. Its only public-file screening
+   exceptions are the literal IPv4 loopback `127.0.0.1` in `serve.py` and
+   the single root `serve_vllm.sh` file. Both remain text screened for other
+   addresses and credentials.
+   Other addresses, credentials, private paths and shell files fail.
+
+The old strict gate remains the correct answer to “did this candidate pass
+the predeclared release criteria?”: **no**. Any publication using the new
+bundle must say “post-key, user-directed aggregate-priority release,” report
+the Score regression and preserve the original HOLD chronology.
