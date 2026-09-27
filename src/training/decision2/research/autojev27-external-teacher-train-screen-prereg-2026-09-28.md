@@ -37,3 +37,17 @@ source overlap screen, SELECT gate and independent confirmation. No weights or
 probability vectors leave the teacher screen.
 
 **No AutoJev TRAIN result exists at preregistration.**
+
+## CPU and runtime lock before GPU
+
+The signed source commit is `028d9cb86de9c19f561a6275e455ef3eb8f6fd47`.
+Its exact script mirror has the SHA-256 above. The CPU-only dry run selected
+96 rows from 96 independent groups and reproduced the fixed roster SHA.
+The separate full package/source verifier recomputed the frozen package SHA,
+26,086,635,760 parameters, model config SHA-256
+`bacbcbb281a53af5ef5cc6c9028601097d155bf981129f18a727219517921dcd`
+and clean runtime source tree SHA-256
+`550ccd857350c6771a1de03e4bcba9fb4412247b58bcdc9e8ac03de2ab9641a5`.
+No native teacher inference or gold scoring occurred in these checks. GPU 4
+on the first authorized node was idle at the precheck; it must be rechecked
+immediately before the single bounded run.
