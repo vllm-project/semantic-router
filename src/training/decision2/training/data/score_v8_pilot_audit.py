@@ -28,6 +28,17 @@ from training.model.data import (
 )
 
 SCHEMA = "decision2-score-v8-pilot-audit/1"
+GLOBAL_CUES = {
+    "dated_update": ("suspended", "review", "active", "unsigned"),
+    "numeric_limits": ("NA", "missing", "current"),
+    "evidence_sufficiency": (
+        "normal observed",
+        "unavailable observed",
+        "outage observed",
+    ),
+    "scoped_exception": ("pending", "signed"),
+    "long_memo": ("unconfirmed", "confirmed", "controlling deadline"),
+}
 
 
 def _blind_rows(path: Path) -> list[dict[str, Any]]:
@@ -113,6 +124,41 @@ def _candidate(rows: list[dict[str, Any]], role: str) -> dict[str, Any]:
     }
 
 
+def _shortcut_inventory(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    for mechanism, cues in GLOBAL_CUES.items():
+        subset = [
+            row for row in rows if row["audit_metadata"]["mechanism"] == mechanism
+        ]
+        cue_counts: dict[str, dict[str, list[int]]] = {}
+        flags = []
+        for cue in cues:
+            by_level = {
+                str(level): sorted(
+                    row["state"].count(cue) for row in subset if row["label"] == level
+                )
+                for level in LEVELS
+            }
+            cue_counts[cue] = by_level
+            for level in LEVELS:
+                own = set(by_level[str(level)])
+                others = {
+                    value
+                    for other in LEVELS
+                    if other != level
+                    for value in by_level[str(other)]
+                }
+                if len(own) == 1 and own.isdisjoint(others):
+                    flags.append(
+                        {"cue": cue, "level": level, "global_count": next(iter(own))}
+                    )
+        summary[mechanism] = {
+            "global_cue_counts_by_level": cue_counts,
+            "single_level_global_cues": flags,
+        }
+    return summary
+
+
 def audit(args: argparse.Namespace) -> dict[str, Any]:
     manifest = json.loads(
         (args.candidate_dir / "manifest.json").read_text(encoding="utf-8")
@@ -190,10 +236,22 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
                 "near_full": finding["near_full"],
             }
     flagged = {name: value for name, value in findings.items() if value["matched_rows"]}
+    shortcuts = _shortcut_inventory([*train, *select])
+    shortcut_flags = {
+        mechanism: value["single_level_global_cues"]
+        for mechanism, value in shortcuts.items()
+        if value["single_level_global_cues"]
+    }
     return {
         "schema_version": SCHEMA,
         "status": (
-            "HOLD_OVERLAP_REVIEW" if flagged else "PENDING_INDEPENDENT_BLIND_REVIEW"
+            "HOLD_OVERLAP_REVIEW"
+            if flagged
+            else (
+                "HOLD_SHORTCUT"
+                if shortcut_flags
+                else "PENDING_INDEPENDENT_BLIND_REVIEW"
+            )
         ),
         "source_sha256": {
             "candidate_manifest": file_sha256(args.candidate_dir / "manifest.json"),
@@ -211,6 +269,8 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
         "protected_roles": protected_receipts,
         "overlap": findings,
         "flagged_comparisons": sorted(flagged),
+        "shortcut_inventory": shortcuts,
+        "flagged_global_cues": shortcut_flags,
         "limitations": [
             "Mechanism families remain shared across TRAIN and SELECT even when source records differ",
             "Approximate near-text matching cannot prove semantic independence",
@@ -249,6 +309,7 @@ def main() -> None:
                 "status": report["status"],
                 "candidate": report["candidate"],
                 "flagged_comparisons": report["flagged_comparisons"],
+                "flagged_global_cues": report["flagged_global_cues"],
             },
             sort_keys=True,
         )

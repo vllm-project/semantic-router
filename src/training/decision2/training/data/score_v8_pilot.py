@@ -19,7 +19,7 @@ from typing import Any
 
 from training.model.data import INPUT_FIELDS, digest, file_sha256, validate_row
 
-VERSION = "decision2-score-v8-multimechanism-pilot/1"
+VERSION = "decision2-score-v8.1-multimechanism-pilot/1"
 MECHANISMS = (
     "dated_update",
     "numeric_limits",
@@ -86,9 +86,14 @@ def _base(rng: random.Random, role: str, mechanism: str, index: int) -> dict[str
     other = "".join(rng.choices(alphabet, k=4)) + str(rng.randrange(100, 999))
     while other == suffix:
         other = "".join(rng.choices(alphabet, k=4)) + str(rng.randrange(100, 999))
+    other2 = "".join(rng.choices(alphabet, k=4)) + str(rng.randrange(100, 999))
+    while other2 in {suffix, other}:
+        other2 = "".join(rng.choices(alphabet, k=4)) + str(rng.randrange(100, 999))
+    deadline = rng.randrange(18, 22)
     return {
         "record": "R-" + suffix,
         "other": "R-" + other,
+        "other2": "R-" + other2,
         "day": rng.randrange(22, 28),
         "organization": ROLE_ORGANIZATIONS[role][MECHANISMS.index(mechanism)],
         "site": "Site " + alphabet[rng.randrange(len(alphabet))],
@@ -97,6 +102,14 @@ def _base(rng: random.Random, role: str, mechanism: str, index: int) -> dict[str
             ("night access", "equipment transfer", "sample collection")
         ),
         "other_activity": "archive disposal",
+        "temp_limit": rng.randrange(6, 10),
+        "shock_limit": rng.randrange(4, 7),
+        "fail_dimension": rng.randrange(2),
+        "missing_dimension": rng.randrange(2),
+        "window": (rng.randrange(8, 12), rng.randrange(13, 17)),
+        "deadline": deadline,
+        "amended_deadline": deadline + rng.randrange(2, 5),
+        "target_position": rng.randrange(3),
         "index": index,
     }
 
@@ -112,62 +125,104 @@ def _facts(
             (base["day"] - 2, base["record"], actions[level], "signed"),
             (base["day"] - 1, base["record"], actions[(level + 1) % 3], "unsigned"),
             (base["day"] + 2, base["record"], actions[(level + 2) % 3], "signed"),
-            (base["day"] - 1, base["other"], actions[(level + 2) % 3], "signed"),
+            (base["day"] - 1, base["other"], "review", "signed"),
         ]
         rng.shuffle(f["events"])
     elif mechanism == "numeric_limits":
-        f["temp_limit"], f["shock_limit"] = rng.randrange(6, 10), rng.randrange(4, 7)
-        f["temp"] = f["temp_limit"] - rng.randrange(0, 3)
-        f["shock"] = f["shock_limit"] - rng.randrange(0, 3)
+        f["temp"] = f["temp_limit"] - 1
+        f["shock"] = f["shock_limit"] - 1
         f["calibration"] = "current"
         if level == 0:
-            if rng.randrange(2):
+            if f["fail_dimension"]:
                 f["temp"] = f["temp_limit"] + 1
             else:
                 f["shock"] = f["shock_limit"] + 1
-            if rng.randrange(2):
-                f["calibration"] = "missing"
         elif level == 1:
-            if rng.randrange(2):
+            if f["missing_dimension"]:
                 f["temp"] = None
             else:
                 f["calibration"] = "missing"
+        f["readings"] = [(f["record"], f["temp"], f["shock"], f["calibration"])]
+        for decoy_id, decoy_level in zip(
+            (f["other"], f["other2"]), (i for i in LEVELS if i != level)
+        ):
+            if decoy_level == 0:
+                reading = (
+                    decoy_id,
+                    f["temp_limit"] + 1,
+                    f["shock_limit"] - 1,
+                    "current",
+                )
+            elif decoy_level == 1:
+                reading = (
+                    (decoy_id, None, f["shock_limit"] - 1, "current")
+                    if f["missing_dimension"]
+                    else (
+                        decoy_id,
+                        f["temp_limit"] - 1,
+                        f["shock_limit"] - 1,
+                        "missing",
+                    )
+                )
+            else:
+                reading = (
+                    decoy_id,
+                    f["temp_limit"] - 1,
+                    f["shock_limit"] - 1,
+                    "current",
+                )
+            f["readings"].append(reading)
+        rng.shuffle(f["readings"])
     elif mechanism == "evidence_sufficiency":
-        f["window"] = (rng.randrange(8, 12), rng.randrange(13, 17))
         f["dispatch"] = "outage"
         f["telemetry"] = ("normal", "unavailable", "outage")[level]
-        # The second source is decisive only after matching site and hours.
-        f["decoy_telemetry"] = ("outage", "normal", "unavailable")[(level + 1) % 3]
+        f["evidence_rows"] = [(f["record"], f["dispatch"], f["telemetry"])]
+        for decoy_id, decoy_level in zip(
+            (f["other"], f["other2"]), (i for i in LEVELS if i != level)
+        ):
+            f["evidence_rows"].append(
+                (decoy_id, "outage", ("normal", "unavailable", "outage")[decoy_level])
+            )
+        rng.shuffle(f["evidence_rows"])
     elif mechanism == "scoped_exception":
         if f["site"] == f["other_site"]:
             f["other_site"] += " East"
-        f["register"] = [
-            (f["other_site"], f["activity"], f["day"] - 3, f["day"] + 3, "signed"),
-            (f["site"], f["other_activity"], f["day"] - 3, f["day"] + 3, "signed"),
-        ]
         if level == 0:
-            f["register"].append(
-                (f["site"], f["activity"], f["day"] - 8, f["day"] - 1, "signed")
-            )
+            target = (f["site"], f["activity"], f["day"] - 8, f["day"] - 1, "signed")
+            decoys = [
+                (f["other_site"], f["activity"], f["day"] - 3, f["day"] + 3, "pending"),
+                (f["site"], f["other_activity"], f["day"] - 3, f["day"] + 3, "signed"),
+            ]
+        elif level == 1:
+            target = (f["site"], f["activity"], f["day"] - 2, f["day"] + 2, "pending")
+            decoys = [
+                (f["other_site"], f["activity"], f["day"] - 3, f["day"] + 3, "signed"),
+                (f["site"], f["other_activity"], f["day"] - 8, f["day"] - 1, "signed"),
+            ]
         else:
-            f["register"].append(
-                (
-                    f["site"],
-                    f["activity"],
-                    f["day"] - 2,
-                    f["day"] + 2,
-                    "pending" if level == 1 else "signed",
-                )
-            )
+            target = (f["site"], f["activity"], f["day"] - 2, f["day"] + 2, "signed")
+            decoys = [
+                (f["other_site"], f["activity"], f["day"] - 3, f["day"] + 3, "pending"),
+                (f["site"], f["other_activity"], f["day"] - 8, f["day"] - 1, "signed"),
+            ]
+        f["register"] = [target, *decoys]
         rng.shuffle(f["register"])
     elif mechanism == "long_memo":
-        f["deadline"] = rng.randrange(18, 22)
-        f["amended_deadline"] = f["deadline"] + rng.randrange(2, 5)
         f["arrival"] = (
             f["amended_deadline"] + 2 if level == 0 else f["amended_deadline"] - 1
         )
         f["arrival_status"] = "unconfirmed" if level == 1 else "confirmed"
-        f["target_position"] = (rng.randrange(3) + level) % 3
+        f["other_delivery"] = []
+        for decoy_id, decoy_level in zip(
+            (f["other"], f["other2"]), (i for i in LEVELS if i != level)
+        ):
+            decoy_arrival = (
+                f["amended_deadline"] + 2
+                if decoy_level == 0
+                else f["amended_deadline"] - 1
+            )
+            status = "unconfirmed" if decoy_level == 1 else "confirmed"
+            f["other_delivery"].append((decoy_id, decoy_arrival, status))
     else:
         raise ValueError(mechanism)
     return f
@@ -260,8 +315,8 @@ def render(f: dict[str, Any], mechanism: str, role: str) -> tuple[str, str]:
     elif mechanism == "numeric_limits":
         reading = lambda value: "NA" if value is None else str(value)
         lines = [
-            f"{record} | {reading(f['temp'])} | {reading(f['shock'])} | {f['calibration']}",
-            f"{f['other']} | {f['temp_limit'] + 2} | {f['shock_limit'] - 1} | current",
+            f"{item} | {reading(temp)} | {reading(shock)} | {calibration}"
+            for item, temp, shock, calibration in f["readings"]
         ]
         if role == "select":
             lines.reverse()
@@ -273,13 +328,13 @@ def render(f: dict[str, Any], mechanism: str, role: str) -> tuple[str, str]:
     elif mechanism == "evidence_sufficiency":
         start, end = f["window"]
         lines = [
-            f"Dispatch diary for {record}, hours {start}-{end}: {f['dispatch']} observed. Meter trace for {record}, hours {start}-{end}: {f['telemetry']} observed.",
-            f"Dispatch diary for {f['other']}, hours {start}-{end}: outage observed. Meter trace for {f['other']}, hours {start}-{end}: {f['decoy_telemetry']} observed.",
+            f"Dispatch diary for {item}, hours {start}-{end}: {dispatch} observed. Meter trace for {item}, hours {start}-{end}: {telemetry} observed."
+            for item, dispatch, telemetry in f["evidence_rows"]
         ]
         if role == "select":
             lines.reverse()
         state = (
-            f"Claim file at the {org}: a service interruption is alleged for {record} during hours {start}-{end}.\nTwo independently maintained extracts follow:\n"
+            f"Claim file at the {org}: a service interruption is alleged for {record} during hours {start}-{end}.\nIndependently maintained extracts follow:\n"
             + "\n".join(lines)
         )
         instructions = "For the named site and same hours, normal service in either independent source contradicts the claim. If no source contradicts but one is unavailable, corroboration is incomplete. Two outage observations corroborate it."
@@ -306,8 +361,14 @@ def render(f: dict[str, Any], mechanism: str, role: str) -> tuple[str, str]:
         paragraphs = [
             f"Section {i + 1}. " + " ".join(block) for i, block in enumerate(blocks)
         ]
-        decoy = f"A separate schedule for {f['other']} set a deadline of day {day + 4} and reported arrival on day {day + 1}."
-        paragraphs.insert(1 if role == "train" else 3, decoy)
+        decoys = [
+            f"For unrelated {item}, a signed amendment sets the controlling deadline to day {f['amended_deadline']}; its delivery notice reports arrival on day {arrival}, evidence status: {status}."
+            for item, arrival, status in f["other_delivery"]
+        ]
+        if role == "select":
+            decoys.reverse()
+        paragraphs.insert(1, decoys[0])
+        paragraphs.insert(3, decoys[1])
         state = (
             f"{org.title()} contract dossier: decide delivery for {record}.\n"
             + "\n\n".join(paragraphs)
@@ -344,7 +405,7 @@ def rendered_oracle(
         matches = re.findall(
             r"(?m)^(R-[A-Z0-9]+) \| (NA|\d+) \| (NA|\d+) \| (current|missing)$", state
         )
-        if spec is None or len(matches) != 2:
+        if spec is None or len(matches) != 3:
             raise ValueError("Numeric document parse failed")
         _, temp, shock, calibration = next(row for row in matches if row[0] == record)
         parsed = {
@@ -360,7 +421,7 @@ def rendered_oracle(
             r"(?m)^Dispatch diary for (R-[A-Z0-9]+), hours (\d+-\d+): (outage|normal|unavailable) observed\. Meter trace for \1, hours \2: (outage|normal|unavailable) observed\.$",
             state,
         )
-        if len(matches) != 2:
+        if len(matches) != 3:
             raise ValueError("Evidence document parse failed")
         _, _, dispatch, telemetry = next(row for row in matches if row[0] == record)
         return oracle({"dispatch": dispatch, "telemetry": telemetry}, mechanism)
@@ -409,7 +470,7 @@ def build(secret: bytes, role: str) -> list[dict[str, Any]]:
         for index in range(GROUPS[role]):
             rng = _rng(secret, role, mechanism, index)
             base = _base(rng, role, mechanism, index)
-            group = f"d2sv8_{role}_{mechanism}_{index:02d}"
+            group = f"d2sv81_{role}_{mechanism}_{index:02d}"
             for level in LEVELS:
                 facts = _facts(base, mechanism, level, rng)
                 state, instructions = render(facts, mechanism, role)
@@ -443,7 +504,7 @@ def build(secret: bytes, role: str) -> list[dict[str, Any]]:
                     "split": role,
                     "source": VERSION,
                     "evaluation_role": role,
-                    "render_template": f"v8-{mechanism}-{role}",
+                    "render_template": f"v8.1-{mechanism}-{role}",
                     "audit_metadata": {
                         "mechanism": mechanism,
                         "record": base["record"],
