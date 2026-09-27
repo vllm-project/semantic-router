@@ -415,6 +415,11 @@ class ArenaBundleTests(unittest.TestCase):
         self.assertIn("| en | 6,085 | 81.6% |", card)
         self.assertIn("Evaluation language coverage: Mostly English", card)
         self.assertEqual(bundle_arena.verify(package), result)
+        nested_manifest = package / "card-artifacts/PACKAGE_MANIFEST.json"
+        nested_manifest.write_text("untracked", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "inventory has changed"):
+            bundle_arena.verify(package)
+        nested_manifest.unlink()
         (package / "native/calibration.json").write_text("tampered")
         with self.assertRaisesRegex(ValueError, "inventory has changed"):
             bundle_arena.verify(package)
@@ -759,6 +764,11 @@ class ExternalAdapterArenaBundleTests(unittest.TestCase):
         )
         self.assertEqual(imported.returncode, 0, imported.stderr)
         self.assertEqual(bundle_arena.verify(package), result)
+        nested_manifest = package / "card-artifacts/PACKAGE_MANIFEST.json"
+        nested_manifest.write_text("untracked", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "inventory has changed"):
+            bundle_arena.verify(package)
+        nested_manifest.unlink()
         (self.adapter.source / "config.json").write_text("{}\n", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "Upstream source files differ"):
             bundle_arena.verify(package, base_source=self.adapter.source)

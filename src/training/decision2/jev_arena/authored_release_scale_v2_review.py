@@ -17,8 +17,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from jev_arena.authored_release_scale_v1 import file_sha
-
 VERSION = "jevarena-authored-human-review/1"
 ROLES = ("original-review-a", "original-review-b", "paired-review")
 FIELDS = frozenset(
@@ -39,8 +37,12 @@ FIELDS = frozenset(
 )
 
 
-def _rows(path: Path) -> list[dict[str, Any]]:
-    result = [json.loads(line) for line in path.read_text().splitlines() if line]
+def _sha(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _rows(payload: bytes) -> list[dict[str, Any]]:
+    result = [json.loads(line) for line in payload.decode().splitlines() if line]
     if not result or any(not isinstance(row, dict) for row in result):
         raise ValueError("Review file must contain nonempty JSON object rows")
     return result
@@ -57,18 +59,22 @@ def _write_private_bytes(path: Path, payload: bytes) -> None:
         stream.write(payload)
 
 
-def _packet(packet: Path, receipt: Path, role: str) -> list[dict[str, Any]]:
+def _packet(
+    packet: Path, receipt: Path, role: str
+) -> tuple[list[dict[str, Any]], bytes, bytes, dict[str, Any]]:
     if role not in ROLES or packet.name != f"{role}.private.jsonl":
         raise ValueError("Unknown or mismatched blind packet role")
-    meta = json.loads(receipt.read_text())
+    packet_bytes = packet.read_bytes()
+    receipt_bytes = receipt.read_bytes()
+    meta = json.loads(receipt_bytes)
     if (
         meta.get("status") != "BLIND_PACKET_SEALED_REVIEW_PENDING"
-        or meta.get("packet_sha256", {}).get(role) != file_sha(packet)
+        or meta.get("packet_sha256", {}).get(role) != _sha(packet_bytes)
         or meta.get("reviewer_assignments") != 0
         or meta.get("human_reviews_completed") != 0
     ):
         raise ValueError("Blind packet seal is missing or changed")
-    rows = _rows(packet)
+    rows = _rows(packet_bytes)
     ids = [row.get("review_id") for row in rows]
     if len(set(ids)) != len(rows) or any(not isinstance(value, str) for value in ids):
         raise ValueError("Blind packet review IDs are invalid")
@@ -78,7 +84,7 @@ def _packet(packet: Path, receipt: Path, role: str) -> list[dict[str, Any]]:
         questions = row["questions"]
         if not isinstance(questions, dict) or len(questions) != 1:
             raise ValueError("Authored review expects one native typed question")
-    return rows
+    return rows, packet_bytes, receipt_bytes, meta
 
 
 def template(packet: Path, receipt: Path, role: str, output: Path) -> None:
@@ -86,7 +92,7 @@ def template(packet: Path, receipt: Path, role: str, output: Path) -> None:
         raise FileExistsError("Review template cannot overwrite an existing file")
     _private(packet)
     _private(receipt)
-    rows = _packet(packet, receipt, role)
+    rows, _, _, _ = _packet(packet, receipt, role)
     output.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     forms = []
     for row in rows:
@@ -194,26 +200,26 @@ def seal(
         raise FileExistsError("Sealed human review cannot be overwritten")
     for path in (packet, packet_receipt, answers, reviewer_id_file):
         _private(path)
-    rows = _packet(packet, packet_receipt, role)
+    rows, packet_bytes, receipt_bytes, receipt = _packet(packet, packet_receipt, role)
     reviewer = reviewer_id_file.read_text().strip()
     if not reviewer or "\n" in reviewer:
         raise ValueError("Private reviewer identity is missing")
-    summary = _validate_answers(rows, _rows(answers))
-    receipt = json.loads(packet_receipt.read_text())
+    answer_bytes = answers.read_bytes()
+    summary = _validate_answers(rows, _rows(answer_bytes))
     sealed_at = datetime.now(timezone.utc)
     if sealed_at <= datetime.fromisoformat(receipt["sealed_at_utc"]):
         raise ValueError("Review cannot predate the blind packet")
     output.mkdir(mode=0o700, parents=True)
     review_copy = output / "review.private.jsonl"
-    _write_private_bytes(review_copy, answers.read_bytes())
+    _write_private_bytes(review_copy, answer_bytes)
     meta = {
         "version": VERSION,
         "status": "HUMAN_REVIEW_SEALED_ADJUDICATION_PENDING",
         "role": role,
         "sealed_at_utc": sealed_at.isoformat(),
-        "packet_receipt_sha256": file_sha(packet_receipt),
-        "packet_sha256": file_sha(packet),
-        "review_sha256": file_sha(review_copy),
+        "packet_receipt_sha256": _sha(receipt_bytes),
+        "packet_sha256": _sha(packet_bytes),
+        "review_sha256": _sha(answer_bytes),
         "reviewer_identity_sha256": hashlib.sha256(reviewer.encode()).hexdigest(),
         **summary,
         "key_opened": False,

@@ -1369,7 +1369,7 @@ def verify(root: Path, *, base_source: Path | None = None) -> dict[str, Any]:
                 for path in root.rglob("*")
                 if path.is_file()
                 and not path.is_relative_to(root / "native")
-                and path.name != "PACKAGE_MANIFEST.json"
+                and path != root / "PACKAGE_MANIFEST.json"
             }
         )
     else:
@@ -1378,7 +1378,7 @@ def verify(root: Path, *, base_source: Path | None = None) -> dict[str, Any]:
         actual = {
             path.relative_to(root).as_posix(): sha_file(path)
             for path in root.rglob("*")
-            if path.is_file() and path.name != "PACKAGE_MANIFEST.json"
+            if path.is_file() and path != root / "PACKAGE_MANIFEST.json"
         }
     if actual != expected:
         raise ValueError("Published package file inventory has changed")

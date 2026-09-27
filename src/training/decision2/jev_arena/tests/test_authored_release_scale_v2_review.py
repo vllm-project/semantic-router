@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from jev_arena import authored_release_scale_v2_review as review_module
 from jev_arena.authored_release_scale_v1 import file_sha, write_private
 from jev_arena.authored_release_scale_v2_review import seal, template
 
@@ -147,3 +148,35 @@ def test_quality_concern_seals_without_claiming_acceptance(tmp_path: Path) -> No
     )
     assert result["quality_flagged_rows"] == 1
     assert result["status"] == "HUMAN_REVIEW_SEALED_ADJUDICATION_PENDING"
+
+
+def test_seal_copies_the_exact_validated_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    packet, receipt, answers, reviewer = _fixture(tmp_path)
+    _completed(answers)
+    validated_answers = answers.read_bytes()
+    validated_packet_sha = file_sha(packet)
+    original = review_module._validate_answers
+
+    def replace_inputs_after_validation(
+        packet_rows: list[dict], review_rows: list[dict]
+    ) -> dict:
+        summary = original(packet_rows, review_rows)
+        modified = [json.loads(line) for line in answers.read_text().splitlines()]
+        modified[0]["native_answer"] = "NOT_AN_OPTION"
+        _private_rows(answers, modified)
+        packet.write_text(packet.read_text() + "\n")
+        packet.chmod(0o600)
+        return summary
+
+    monkeypatch.setattr(
+        review_module, "_validate_answers", replace_inputs_after_validation
+    )
+    seal(packet, receipt, "original-review-a", answers, reviewer, tmp_path / "sealed")
+    sealed = tmp_path / "sealed"
+    assert (sealed / "review.private.jsonl").read_bytes() == validated_answers
+    meta = json.loads((sealed / "receipt.private.json").read_text())
+    assert meta["review_sha256"] == file_sha(sealed / "review.private.jsonl")
+    assert meta["packet_sha256"] == validated_packet_sha
+    assert meta["packet_sha256"] != file_sha(packet)
