@@ -54012,6 +54012,936 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-kai-0.6b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-kai-0.6b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-kai-0.6b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-kai-0.6b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-kai-0.6b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-lex-0.6b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-lex-0.6b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-lex-0.6b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-lex-0.6b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-lex-0.6b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-eos-0.8b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-eos-0.8b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-eos-0.8b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-eos-0.8b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-eos-0.8b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-sol-2b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-sol-2b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-sol-2b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-sol-2b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-sol-2b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-nox-4b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-nox-4b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-nox-4b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-nox-4b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-nox-4b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-lux-9b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-lux-9b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-lux-9b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-lux-9b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "llm-semantic-router/decision-1.0-lux-9b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "meta/muse-spark-1.3",
       "provenance": [],
       "reasoning_effort": "minimal",
@@ -90032,6 +90962,288 @@ const builtInCatalogJSON = `{
     },
     {
       "capabilities": [
+        "decision",
+        "choice",
+        "noul",
+        "score"
+      ],
+      "description": "Compact multilingual Decision 1.0 encoder for runtime-defined Choice, Noul, and Score questions.",
+      "display_name": "Decision 1.0 Kai 0.6B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B",
+        "type": "open_weights"
+      },
+      "evaluation_class": "decision",
+      "family": "decision-encoder",
+      "id": "llm-semantic-router/decision-1.0-kai-0.6b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "0.6B",
+      "presentation": {
+        "logo": "package:vllm",
+        "monochrome": false,
+        "monogram": "K"
+      },
+      "publisher": "vLLM Semantic Router",
+      "revision": "9d6872cde6950c2c2b5786d182ec9a06ca1bdd66",
+      "tags": [
+        "open_weights",
+        "decision_model",
+        "multilingual"
+      ],
+      "verification": {
+        "authority": "vLLM Semantic Router",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/tree/9d6872cde6950c2c2b5786d182ec9a06ca1bdd66",
+        "status": "claimed",
+        "verified_at": "2026-09-27"
+      }
+    },
+    {
+      "capabilities": [
+        "decision",
+        "choice",
+        "noul",
+        "score"
+      ],
+      "description": "English-specialized Decision 1.0 encoder for operational choices, judgments, and scoring rubrics.",
+      "display_name": "Decision 1.0 Lex 0.6B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B",
+        "type": "open_weights"
+      },
+      "evaluation_class": "decision",
+      "family": "decision-encoder",
+      "id": "llm-semantic-router/decision-1.0-lex-0.6b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "0.6B",
+      "presentation": {
+        "logo": "package:vllm",
+        "monochrome": false,
+        "monogram": "L"
+      },
+      "publisher": "vLLM Semantic Router",
+      "revision": "6c5e3d48b9e67cd8bddbade3277e2e58506af8f0",
+      "tags": [
+        "open_weights",
+        "decision_model",
+        "english"
+      ],
+      "verification": {
+        "authority": "vLLM Semantic Router",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/tree/6c5e3d48b9e67cd8bddbade3277e2e58506af8f0",
+        "status": "claimed",
+        "verified_at": "2026-09-27"
+      }
+    },
+    {
+      "capabilities": [
+        "decision",
+        "choice",
+        "noul",
+        "score"
+      ],
+      "description": "Compact Qwen3.5-based Decision 1.0 model for typed decisions and probability distributions.",
+      "display_name": "Decision 1.0 Eos 0.8B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B",
+        "type": "open_weights"
+      },
+      "evaluation_class": "decision",
+      "family": "decision-qwen3.5",
+      "id": "llm-semantic-router/decision-1.0-eos-0.8b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "0.8B",
+      "presentation": {
+        "logo": "package:vllm",
+        "monochrome": false,
+        "monogram": "E"
+      },
+      "publisher": "vLLM Semantic Router",
+      "revision": "363c4a5e56afc115b1c78c837633956d0bbb63ab",
+      "tags": [
+        "open_weights",
+        "decision_model",
+        "multilingual"
+      ],
+      "verification": {
+        "authority": "vLLM Semantic Router",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B/tree/363c4a5e56afc115b1c78c837633956d0bbb63ab",
+        "status": "claimed",
+        "verified_at": "2026-09-27"
+      }
+    },
+    {
+      "capabilities": [
+        "decision",
+        "choice",
+        "noul",
+        "score"
+      ],
+      "description": "Qwen3.5-based Decision 1.0 model balancing typed-decision quality and serving efficiency.",
+      "display_name": "Decision 1.0 Sol 2B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B",
+        "type": "open_weights"
+      },
+      "evaluation_class": "decision",
+      "family": "decision-qwen3.5",
+      "id": "llm-semantic-router/decision-1.0-sol-2b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "2B",
+      "presentation": {
+        "logo": "package:vllm",
+        "monochrome": false,
+        "monogram": "S"
+      },
+      "publisher": "vLLM Semantic Router",
+      "revision": "ce0c018a28de16d6639b1cd203b761bf643b89e6",
+      "tags": [
+        "open_weights",
+        "decision_model",
+        "multilingual"
+      ],
+      "verification": {
+        "authority": "vLLM Semantic Router",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/tree/ce0c018a28de16d6639b1cd203b761bf643b89e6",
+        "status": "claimed",
+        "verified_at": "2026-09-27"
+      }
+    },
+    {
+      "capabilities": [
+        "decision",
+        "choice",
+        "noul",
+        "score"
+      ],
+      "description": "Qwen3.5-based Decision 1.0 model for higher-capacity typed decisions with runtime-defined labels.",
+      "display_name": "Decision 1.0 Nox 4B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B",
+        "type": "open_weights"
+      },
+      "evaluation_class": "decision",
+      "family": "decision-qwen3.5",
+      "id": "llm-semantic-router/decision-1.0-nox-4b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "4B",
+      "presentation": {
+        "logo": "package:vllm",
+        "monochrome": false,
+        "monogram": "N"
+      },
+      "publisher": "vLLM Semantic Router",
+      "revision": "cde2a68dbaa557ea65dc458104d410a0802ee259",
+      "tags": [
+        "open_weights",
+        "decision_model",
+        "multilingual"
+      ],
+      "verification": {
+        "authority": "vLLM Semantic Router",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/tree/cde2a68dbaa557ea65dc458104d410a0802ee259",
+        "status": "claimed",
+        "verified_at": "2026-09-27"
+      }
+    },
+    {
+      "capabilities": [
+        "decision",
+        "choice",
+        "noul",
+        "score"
+      ],
+      "description": "Highest-capacity Decision 1.0 model for typed decisions and runtime-defined candidate sets.",
+      "display_name": "Decision 1.0 Lux 9B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B",
+        "type": "open_weights"
+      },
+      "evaluation_class": "decision",
+      "family": "decision-qwen3.5",
+      "id": "llm-semantic-router/decision-1.0-lux-9b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "9B",
+      "presentation": {
+        "logo": "package:vllm",
+        "monochrome": false,
+        "monogram": "L"
+      },
+      "publisher": "vLLM Semantic Router",
+      "revision": "cdf4d3ef2dda21518e599fe99ebbe468486b197c",
+      "tags": [
+        "open_weights",
+        "decision_model",
+        "multilingual"
+      ],
+      "verification": {
+        "authority": "vLLM Semantic Router",
+        "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/tree/cdf4d3ef2dda21518e599fe99ebbe468486b197c",
+        "status": "claimed",
+        "verified_at": "2026-09-27"
+      }
+    },
+    {
+      "capabilities": [
         "chat",
         "reasoning",
         "tools",
@@ -93434,6 +94646,11 @@ const builtInCatalogJSON = `{
         "monochrome": false,
         "monogram": "v"
       },
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1",
+        "anthropic/messages@1"
+      ],
       "publisher": "vllm-sr.ai",
       "recipe": "balance",
       "roles": [
@@ -93524,6 +94741,11 @@ const builtInCatalogJSON = `{
         "monochrome": false,
         "monogram": "v"
       },
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1",
+        "anthropic/messages@1"
+      ],
       "publisher": "vllm-sr.ai",
       "recipe": "cost",
       "roles": [
@@ -93616,6 +94838,11 @@ const builtInCatalogJSON = `{
         "monochrome": false,
         "monogram": "v"
       },
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1",
+        "anthropic/messages@1"
+      ],
       "publisher": "vllm-sr.ai",
       "recipe": "speed",
       "roles": [
@@ -93710,6 +94937,11 @@ const builtInCatalogJSON = `{
         "monochrome": false,
         "monogram": "v"
       },
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1",
+        "anthropic/messages@1"
+      ],
       "publisher": "vllm-sr.ai",
       "recipe": "accuracy",
       "roles": [
@@ -93819,6 +95051,11 @@ const builtInCatalogJSON = `{
         "monochrome": false,
         "monogram": "v"
       },
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1",
+        "anthropic/messages@1"
+      ],
       "publisher": "vllm-sr.ai",
       "recipe": "vault",
       "roles": [
@@ -93932,6 +95169,31 @@ const builtInCatalogJSON = `{
         }
       ],
       "wire_format": "anthropic.messages.v1"
+    },
+    {
+      "capabilities": [
+        "decision",
+        "noul",
+        "choice",
+        "score",
+        "usage"
+      ],
+      "default_base_path": "/v1",
+      "display_name": "TypeSafe SystemOne",
+      "id": "typesafe/systemone@1",
+      "operations": [
+        {
+          "id": "create",
+          "method": "POST",
+          "path": "/v1/systemone"
+        },
+        {
+          "id": "list_models",
+          "method": "GET",
+          "path": "/v1/models"
+        }
+      ],
+      "wire_format": "typesafe.systemone.v1"
     }
   ],
   "providers": [
@@ -94901,6 +96163,121 @@ const builtInCatalogJSON = `{
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
         "openai/responses@1#list_models"
+      ]
+    },
+    {
+      "auth": {
+        "header": "",
+        "prefix": "",
+        "strategy": "none"
+      },
+      "category": "private_runtime",
+      "conformance": {
+        "status": "unverified"
+      },
+      "default_protocol": "typesafe/systemone@1",
+      "description": "Serve pinned Decision 1.0 models through a private SystemOne endpoint.",
+      "display_name": "Decision Runtime",
+      "id": "decision-runtime",
+      "models": [
+        {
+          "catalog": "llm-semantic-router/decision-1.0-kai-0.6b",
+          "id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+          "lifecycle": "experimental",
+          "protocols": [
+            "typesafe/systemone@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/tree/9d6872cde6950c2c2b5786d182ec9a06ca1bdd66",
+            "status": "claimed",
+            "verified_at": "2026-09-27"
+          }
+        },
+        {
+          "catalog": "llm-semantic-router/decision-1.0-lex-0.6b",
+          "id": "llm-semantic-router/Decision-1.0-Lex-0.6B",
+          "lifecycle": "experimental",
+          "protocols": [
+            "typesafe/systemone@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/tree/6c5e3d48b9e67cd8bddbade3277e2e58506af8f0",
+            "status": "claimed",
+            "verified_at": "2026-09-27"
+          }
+        },
+        {
+          "catalog": "llm-semantic-router/decision-1.0-eos-0.8b",
+          "id": "llm-semantic-router/Decision-1.0-Eos-0.8B",
+          "lifecycle": "experimental",
+          "protocols": [
+            "typesafe/systemone@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B/tree/363c4a5e56afc115b1c78c837633956d0bbb63ab",
+            "status": "claimed",
+            "verified_at": "2026-09-27"
+          }
+        },
+        {
+          "catalog": "llm-semantic-router/decision-1.0-sol-2b",
+          "id": "llm-semantic-router/Decision-1.0-Sol-2B",
+          "lifecycle": "experimental",
+          "protocols": [
+            "typesafe/systemone@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/tree/ce0c018a28de16d6639b1cd203b761bf643b89e6",
+            "status": "claimed",
+            "verified_at": "2026-09-27"
+          }
+        },
+        {
+          "catalog": "llm-semantic-router/decision-1.0-nox-4b",
+          "id": "llm-semantic-router/Decision-1.0-Nox-4B",
+          "lifecycle": "experimental",
+          "protocols": [
+            "typesafe/systemone@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/tree/cde2a68dbaa557ea65dc458104d410a0802ee259",
+            "status": "claimed",
+            "verified_at": "2026-09-27"
+          }
+        },
+        {
+          "catalog": "llm-semantic-router/decision-1.0-lux-9b",
+          "id": "llm-semantic-router/Decision-1.0-Lux-9B",
+          "lifecycle": "experimental",
+          "protocols": [
+            "typesafe/systemone@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/tree/cdf4d3ef2dda21518e599fe99ebbe468486b197c",
+            "status": "claimed",
+            "verified_at": "2026-09-27"
+          }
+        }
+      ],
+      "presentation": {
+        "featured": true,
+        "logo": "package:vllm",
+        "monochrome": false,
+        "monogram": "D"
+      },
+      "protocols": [
+        "typesafe/systemone@1"
+      ],
+      "support_tier": "runtime",
+      "supported_operations": [
+        "typesafe/systemone@1#create",
+        "typesafe/systemone@1#list_models"
       ]
     },
     {

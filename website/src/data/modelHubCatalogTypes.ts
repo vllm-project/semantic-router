@@ -2,7 +2,11 @@ export type SupportTier = 'native' | 'compatible' | 'runtime'
 export type ModelView = 'list' | 'table'
 export type ModelKind = 'physical' | 'virtual'
 export type Distribution = 'proprietary_api' | 'open_weights' | 'router_recipe'
-export type ModelRelationship = 'first_party' | 'managed_cloud' | 'gateway' | 'self_hosted'
+export type ModelRelationship =
+  | 'first_party'
+  | 'managed_cloud'
+  | 'gateway'
+  | 'self_hosted'
 export type ReasoningTransport =
   | 'chat_template_kwargs'
   | 'top_level_effort'
@@ -78,6 +82,8 @@ export interface CatalogModel {
   parameter_size?: string
   released_at?: string
   lifecycle: 'experimental' | 'active' | 'deprecated' | 'removed'
+  evaluation_class?: 'general_llm' | 'decision'
+  protocols?: string[]
   limits?: { context_window_size?: number, max_output_tokens?: number }
   capabilities: string[]
   modalities: { input: string[], output: string[] }
@@ -99,7 +105,13 @@ export interface BenchmarkMetric {
 }
 
 export interface MetricNormalization {
-  type: 'identity' | 'one_minus' | 'linear_clamp' | 'piecewise_linear' | 'logistic' | 'lookup'
+  type:
+    | 'identity'
+    | 'one_minus'
+    | 'linear_clamp'
+    | 'piecewise_linear'
+    | 'logistic'
+    | 'lookup'
   min?: number
   max?: number
   k?: number
@@ -131,7 +143,11 @@ export interface CatalogEvaluation {
   metrics?: Record<string, number | null>
   subject: Record<string, unknown>
   evidence: {
-    provenance: 'vendor_claimed' | 'third_party' | 'vllm_sr_reproduced' | 'operator'
+    provenance:
+      | 'vendor_claimed'
+      | 'third_party'
+      | 'vllm_sr_reproduced'
+      | 'operator'
     verification: string
     source?: string
   }
@@ -189,7 +205,11 @@ export interface CatalogIndexResult {
 
 export interface CatalogReasoningFamily {
   id: string
-  type: 'chat_template_kwargs' | 'reasoning_effort' | 'reasoning_mode' | 'top_level_reasoning_effort'
+  type:
+    | 'chat_template_kwargs'
+    | 'reasoning_effort'
+    | 'reasoning_mode'
+    | 'top_level_reasoning_effort'
   parameter: string
   activation_parameter?: string
   effort_flags?: Record<string, string>

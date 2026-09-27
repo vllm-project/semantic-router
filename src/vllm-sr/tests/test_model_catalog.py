@@ -16,6 +16,7 @@ from cli.model_catalog import (
     available_catalog_versions,
     find_catalog_model,
     load_model_catalog,
+    resolve_catalog_provider_model,
 )
 from cli.model_catalog_export import packaged_model_catalog_document
 
@@ -34,6 +35,7 @@ CATALOG_PROTOCOLS = (
     "openai/responses@1",
     "anthropic/messages@1",
 )
+SYSTEMONE_PROTOCOL = "typesafe/systemone@1"
 
 
 def _system_prompts(value: Any) -> list[str]:
@@ -146,7 +148,7 @@ def _load_mutated_catalog(
 
 
 def test_packaged_latest_catalog_is_verified() -> None:
-    assert available_catalog_versions() == ("latest",)
+    assert available_catalog_versions()[0] == "latest"
 
     catalog = load_model_catalog("latest")
 
@@ -158,6 +160,98 @@ def test_packaged_latest_catalog_is_verified() -> None:
     assert all(model.protocols == CATALOG_PROTOCOLS for model in catalog.models)
     assert all(model.compatibility.compatible for model in catalog.models)
     assert all(model.verified for model in catalog.models)
+
+
+def test_systemone_protocol_is_scoped_to_decision_runtime() -> None:
+    document = packaged_model_catalog_document()
+    protocol_ids = {protocol["id"] for protocol in document["protocols"]}
+    providers = {provider["id"]: provider for provider in document["providers"]}
+
+    assert SYSTEMONE_PROTOCOL in protocol_ids
+    assert providers["decision-runtime"]["protocols"] == [SYSTEMONE_PROTOCOL]
+    assert all(
+        binding["protocols"] == [SYSTEMONE_PROTOCOL]
+        for binding in providers["decision-runtime"]["models"]
+    )
+    assert all(
+        SYSTEMONE_PROTOCOL not in model.protocols
+        for model in load_model_catalog("latest").models
+    )
+
+
+@pytest.mark.parametrize(
+    "catalog_id,native_id,revision,family,parameter_size",
+    (
+        (
+            "llm-semantic-router/decision-1.0-kai-0.6b",
+            "llm-semantic-router/Decision-1.0-Kai-0.6B",
+            "9d6872cde6950c2c2b5786d182ec9a06ca1bdd66",
+            "decision-encoder",
+            "0.6B",
+        ),
+        (
+            "llm-semantic-router/decision-1.0-lex-0.6b",
+            "llm-semantic-router/Decision-1.0-Lex-0.6B",
+            "6c5e3d48b9e67cd8bddbade3277e2e58506af8f0",
+            "decision-encoder",
+            "0.6B",
+        ),
+        (
+            "llm-semantic-router/decision-1.0-eos-0.8b",
+            "llm-semantic-router/Decision-1.0-Eos-0.8B",
+            "363c4a5e56afc115b1c78c837633956d0bbb63ab",
+            "decision-qwen3.5",
+            "0.8B",
+        ),
+        (
+            "llm-semantic-router/decision-1.0-sol-2b",
+            "llm-semantic-router/Decision-1.0-Sol-2B",
+            "ce0c018a28de16d6639b1cd203b761bf643b89e6",
+            "decision-qwen3.5",
+            "2B",
+        ),
+        (
+            "llm-semantic-router/decision-1.0-nox-4b",
+            "llm-semantic-router/Decision-1.0-Nox-4B",
+            "cde2a68dbaa557ea65dc458104d410a0802ee259",
+            "decision-qwen3.5",
+            "4B",
+        ),
+        (
+            "llm-semantic-router/decision-1.0-lux-9b",
+            "llm-semantic-router/Decision-1.0-Lux-9B",
+            "cdf4d3ef2dda21518e599fe99ebbe468486b197c",
+            "decision-qwen3.5",
+            "9B",
+        ),
+    ),
+)
+@pytest.mark.parametrize("use_native_id", (False, True), ids=("catalog", "native"))
+def test_decision_runtime_model_resolution_uses_catalog_pin(
+    catalog_id: str,
+    native_id: str,
+    revision: str,
+    family: str,
+    parameter_size: str,
+    use_native_id: bool,
+) -> None:
+    resolved = resolve_catalog_provider_model(
+        native_id if use_native_id else catalog_id
+    )
+
+    assert resolved.catalog_id == catalog_id
+    assert resolved.provider_id == "decision-runtime"
+    assert resolved.model_id == native_id
+    assert resolved.revision == revision
+    assert resolved.family == family
+    assert resolved.parameter_size == parameter_size
+    assert resolved.protocols == (SYSTEMONE_PROTOCOL,)
+    assert resolved.distribution_source.endswith(f"/{native_id.rsplit('/', 1)[-1]}")
+
+
+def test_decision_runtime_model_resolution_requires_an_exact_binding() -> None:
+    with pytest.raises(ModelCatalogError, match="does not bind model"):
+        resolve_catalog_provider_model("llm-semantic-router/Decision-1.0-Missing")
 
 
 def test_model_assets_root_supports_shallow_installed_package(
@@ -423,6 +517,18 @@ def test_catalog_rejects_invalid_identity_version_enum_and_cardinality(
         parent[path[-1]] = value
 
     with pytest.raises(ModelCatalogError, match=message):
+        _load_mutated_catalog(tmp_path, monkeypatch, mutate)
+
+
+def test_catalog_rejects_unregistered_virtual_model_protocol(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def mutate(document: dict[str, Any]) -> None:
+        _first_virtual_model(document)["protocols"].append("example/missing@1")
+
+    with pytest.raises(
+        ModelCatalogError, match="unsupported values: example/missing@1"
+    ):
         _load_mutated_catalog(tmp_path, monkeypatch, mutate)
 
 

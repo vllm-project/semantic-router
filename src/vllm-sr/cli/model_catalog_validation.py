@@ -95,6 +95,7 @@ _MODEL_KEYS = frozenset(
         "released_at",
         "knowledge_cutoff",
         "lifecycle",
+        "protocols",
         "limits",
         "capabilities",
         "modalities",

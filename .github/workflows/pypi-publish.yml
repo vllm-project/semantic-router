@@ -7,6 +7,14 @@ on:
         description: Promote the exact distribution qualified by package-check.yml.
         type: boolean
         default: false
+      decision_runtime:
+        description: Bind published Decision images to the final package.
+        type: boolean
+        default: false
+      decision_rocm_qualification:
+        description: Verified six-model ROCm qualification for a stable release.
+        type: string
+        default: ""
       channel:
         description: Package channel, stable for releases or dev for validated main commits.
         required: false
@@ -30,7 +38,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to publish to TestPyPI.
+        description: Version to publish as a source-build TestPyPI preview (without released Decision image defaults).
         required: true
         type: string
       tag:
@@ -52,6 +60,10 @@ jobs:
     name: Python Package
     if: ${{ !inputs.prebuilt-dist }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -171,16 +183,33 @@ jobs:
             }
           done
 
+      - uses: actions/download-artifact@v4
+        if: inputs.decision_runtime && inputs.channel != 'dev'
+        with:
+          name: ci-published-decision-runtime-cpu
+          path: .agent-harness/decision-image
+
       - name: Build stable package and manifest
         if: inputs.channel != 'dev'
         env:
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_TAG: ${{ inputs.tag }}
+          DECISION_RUNTIME: ${{ inputs.decision_runtime }}
+          DECISION_ROCM_QUALIFICATION: ${{ inputs.decision_rocm_qualification }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           python -m pip install build twine PyYAML==6.0.3 jsonschema==4.26.0
           TAG="${RELEASE_TAG:-v${RELEASE_VERSION}}"
+          args=()
+          if [[ "$DECISION_RUNTIME" == true ]]; then
+            sudo apt-get update
+            sudo apt-get install -y skopeo
+            printf '%s' "$GHCR_TOKEN" | skopeo login --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+            args+=(--decision-image-receipt .agent-harness/decision-image/published.json --verify-registry)
+          fi
           python tools/ci/package_contract.py --build-only --mode release \
-            --tag "$TAG" --output .agent-harness/package
+            --tag "$TAG" --output .agent-harness/package "${args[@]}"
           mv .agent-harness/package/dist src/vllm-sr/dist
 
       - name: Verify installed wheel capabilities
@@ -215,18 +244,30 @@ jobs:
   pypi:
     name: Publish to PyPI
     if: >-
-      !cancelled() && !failure()
+      always() && !cancelled()
+      && (needs.build.result == 'success' || inputs.prebuilt-dist)
       && github.repository == 'vllm-project/semantic-router'
       && github.event_name == 'push'
       && ((inputs.channel == 'dev' && github.ref == 'refs/heads/main')
         || (inputs.channel == 'stable' && startsWith(github.ref, 'refs/tags/v')))
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Require Decision images for stable packages
+        if: inputs.channel == 'stable'
+        env:
+          DECISION_RUNTIME: ${{ inputs.decision_runtime }}
+        run: |
+          test "$DECISION_RUNTIME" = true
       - uses: actions/download-artifact@v4
         with:
           name: vllm-sr-dist
@@ -241,11 +282,24 @@ jobs:
         env:
           MODE: ${{ inputs.channel == 'dev' && 'main' || 'release' }}
           TAG: ${{ inputs.tag }}
-        run: python tools/ci/package_contract.py --verify-dist --output dist --mode "$MODE" --tag "$TAG"
+          DECISION_RUNTIME: ${{ inputs.decision_runtime }}
+        run: |
+          args=()
+          if [[ "$MODE" == release || "$DECISION_RUNTIME" == true ]]; then
+            args+=(--require-decision-images)
+          fi
+          python tools/ci/package_contract.py --verify-dist --output dist \
+            --mode "$MODE" --tag "$TAG" "${args[@]}"
       - run: pip install twine
 
       - name: Publish verified package
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/*.whl dist/*.tar.gz --skip-existing
+          DECISION_RUNTIME: ${{ inputs.decision_runtime }}
+        run: |
+          if [[ "$DECISION_RUNTIME" == true ]]; then
+            twine upload dist/*.whl dist/*.tar.gz
+          else
+            twine upload dist/*.whl dist/*.tar.gz --skip-existing
+          fi

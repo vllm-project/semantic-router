@@ -10,6 +10,7 @@ project_version_file="${PROJECT_VERSION_FILE:-src/vllm-sr/pyproject.toml}"
 
 dashboard_version=""
 source_revision=""
+decision_args=""
 
 if [[ "${image_name}" == "dashboard" ]]; then
   project_version=$(sed -n 's/^version = "\(.*\)"/\1/p' "${project_version_file}" | head -n1)
@@ -48,6 +49,10 @@ if [[ "${image_name}" == "dashboard" ]]; then
   esac
 fi
 
+if [[ "${image_name}" == decision-runtime-* ]]; then
+  decision_args=$(python3 tools/ci/image_artifacts.py build-args --image "${image_name}")
+fi
+
 {
   echo 'args<<EOF'
   echo 'BUILDKIT_INLINE_CACHE=1'
@@ -63,6 +68,9 @@ fi
   if [[ -n "${dashboard_version}" ]]; then
     echo "DASHBOARD_VERSION=${dashboard_version}"
     echo "VLLM_SR_SOURCE_REVISION=${source_revision}"
+  fi
+  if [[ -n "${decision_args}" ]]; then
+    printf '%s\n' "${decision_args}"
   fi
   echo 'EOF'
 } >> "${GITHUB_OUTPUT}"

@@ -1,0 +1,228 @@
+- id: llm-semantic-router/decision-1.0-kai-0.6b
+  display_name: Decision 1.0 Kai 0.6B
+  description: Compact multilingual Decision 1.0 encoder for runtime-defined Choice,
+    Noul, and Score questions.
+  kind: physical
+  publisher: vLLM Semantic Router
+  presentation:
+    logo: package:vllm
+    monogram: K
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B
+    license: Apache-2.0
+  family: decision-encoder
+  parameter_size: 0.6B
+  revision: 9d6872cde6950c2c2b5786d182ec9a06ca1bdd66
+  lifecycle: active
+  evaluation_class: decision
+  capabilities:
+  - decision
+  - choice
+  - noul
+  - score
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: vLLM Semantic Router
+    status: claimed
+    verified_at: '2026-09-27'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/tree/9d6872cde6950c2c2b5786d182ec9a06ca1bdd66
+  tags:
+  - open_weights
+  - decision_model
+  - multilingual
+- id: llm-semantic-router/decision-1.0-lex-0.6b
+  display_name: Decision 1.0 Lex 0.6B
+  description: English-specialized Decision 1.0 encoder for operational choices,
+    judgments, and scoring rubrics.
+  kind: physical
+  publisher: vLLM Semantic Router
+  presentation:
+    logo: package:vllm
+    monogram: L
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B
+    license: Apache-2.0
+  family: decision-encoder
+  parameter_size: 0.6B
+  revision: 6c5e3d48b9e67cd8bddbade3277e2e58506af8f0
+  lifecycle: active
+  evaluation_class: decision
+  capabilities:
+  - decision
+  - choice
+  - noul
+  - score
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: vLLM Semantic Router
+    status: claimed
+    verified_at: '2026-09-27'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/tree/6c5e3d48b9e67cd8bddbade3277e2e58506af8f0
+  tags:
+  - open_weights
+  - decision_model
+  - english
+- id: llm-semantic-router/decision-1.0-eos-0.8b
+  display_name: Decision 1.0 Eos 0.8B
+  description: Compact Qwen3.5-based Decision 1.0 model for typed decisions and
+    probability distributions.
+  kind: physical
+  publisher: vLLM Semantic Router
+  presentation:
+    logo: package:vllm
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B
+    license: Apache-2.0
+  family: decision-qwen3.5
+  parameter_size: 0.8B
+  revision: 363c4a5e56afc115b1c78c837633956d0bbb63ab
+  lifecycle: active
+  evaluation_class: decision
+  capabilities:
+  - decision
+  - choice
+  - noul
+  - score
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: vLLM Semantic Router
+    status: claimed
+    verified_at: '2026-09-27'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B/tree/363c4a5e56afc115b1c78c837633956d0bbb63ab
+  tags:
+  - open_weights
+  - decision_model
+  - multilingual
+- id: llm-semantic-router/decision-1.0-sol-2b
+  display_name: Decision 1.0 Sol 2B
+  description: Qwen3.5-based Decision 1.0 model balancing typed-decision quality
+    and serving efficiency.
+  kind: physical
+  publisher: vLLM Semantic Router
+  presentation:
+    logo: package:vllm
+    monogram: S
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B
+    license: Apache-2.0
+  family: decision-qwen3.5
+  parameter_size: 2B
+  revision: ce0c018a28de16d6639b1cd203b761bf643b89e6
+  lifecycle: active
+  evaluation_class: decision
+  capabilities:
+  - decision
+  - choice
+  - noul
+  - score
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: vLLM Semantic Router
+    status: claimed
+    verified_at: '2026-09-27'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/tree/ce0c018a28de16d6639b1cd203b761bf643b89e6
+  tags:
+  - open_weights
+  - decision_model
+  - multilingual
+- id: llm-semantic-router/decision-1.0-nox-4b
+  display_name: Decision 1.0 Nox 4B
+  description: Qwen3.5-based Decision 1.0 model for higher-capacity typed decisions
+    with runtime-defined labels.
+  kind: physical
+  publisher: vLLM Semantic Router
+  presentation:
+    logo: package:vllm
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B
+    license: Apache-2.0
+  family: decision-qwen3.5
+  parameter_size: 4B
+  revision: cde2a68dbaa557ea65dc458104d410a0802ee259
+  lifecycle: active
+  evaluation_class: decision
+  capabilities:
+  - decision
+  - choice
+  - noul
+  - score
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: vLLM Semantic Router
+    status: claimed
+    verified_at: '2026-09-27'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/tree/cde2a68dbaa557ea65dc458104d410a0802ee259
+  tags:
+  - open_weights
+  - decision_model
+  - multilingual
+- id: llm-semantic-router/decision-1.0-lux-9b
+  display_name: Decision 1.0 Lux 9B
+  description: Highest-capacity Decision 1.0 model for typed decisions and
+    runtime-defined candidate sets.
+  kind: physical
+  publisher: vLLM Semantic Router
+  presentation:
+    logo: package:vllm
+    monogram: L
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B
+    license: Apache-2.0
+  family: decision-qwen3.5
+  parameter_size: 9B
+  revision: cdf4d3ef2dda21518e599fe99ebbe468486b197c
+  lifecycle: active
+  evaluation_class: decision
+  capabilities:
+  - decision
+  - choice
+  - noul
+  - score
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: vLLM Semantic Router
+    status: claimed
+    verified_at: '2026-09-27'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/tree/cdf4d3ef2dda21518e599fe99ebbe468486b197c
+  tags:
+  - open_weights
+  - decision_model
+  - multilingual

@@ -1,0 +1,83 @@
+id: decision-runtime
+display_name: Decision Runtime
+description: Serve pinned Decision 1.0 models through a private SystemOne endpoint.
+category: private_runtime
+support_tier: runtime
+protocols:
+- typesafe/systemone@1
+default_protocol: typesafe/systemone@1
+supported_operations:
+- typesafe/systemone@1#create
+- typesafe/systemone@1#list_models
+auth:
+  strategy: none
+  header: ''
+  prefix: ''
+presentation:
+  logo: package:vllm
+  monogram: D
+  monochrome: false
+  featured: true
+conformance:
+  status: unverified
+models:
+- catalog: llm-semantic-router/decision-1.0-kai-0.6b
+  relationship: self_hosted
+  id: llm-semantic-router/Decision-1.0-Kai-0.6B
+  protocols:
+  - typesafe/systemone@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: '2026-09-27'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/tree/9d6872cde6950c2c2b5786d182ec9a06ca1bdd66
+- catalog: llm-semantic-router/decision-1.0-lex-0.6b
+  relationship: self_hosted
+  id: llm-semantic-router/Decision-1.0-Lex-0.6B
+  protocols:
+  - typesafe/systemone@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: '2026-09-27'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/tree/6c5e3d48b9e67cd8bddbade3277e2e58506af8f0
+- catalog: llm-semantic-router/decision-1.0-eos-0.8b
+  relationship: self_hosted
+  id: llm-semantic-router/Decision-1.0-Eos-0.8B
+  protocols:
+  - typesafe/systemone@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: '2026-09-27'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B/tree/363c4a5e56afc115b1c78c837633956d0bbb63ab
+- catalog: llm-semantic-router/decision-1.0-sol-2b
+  relationship: self_hosted
+  id: llm-semantic-router/Decision-1.0-Sol-2B
+  protocols:
+  - typesafe/systemone@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: '2026-09-27'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/tree/ce0c018a28de16d6639b1cd203b761bf643b89e6
+- catalog: llm-semantic-router/decision-1.0-nox-4b
+  relationship: self_hosted
+  id: llm-semantic-router/Decision-1.0-Nox-4B
+  protocols:
+  - typesafe/systemone@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: '2026-09-27'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/tree/cde2a68dbaa557ea65dc458104d410a0802ee259
+- catalog: llm-semantic-router/decision-1.0-lux-9b
+  relationship: self_hosted
+  id: llm-semantic-router/Decision-1.0-Lux-9B
+  protocols:
+  - typesafe/systemone@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: '2026-09-27'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/tree/cdf4d3ef2dda21518e599fe99ebbe468486b197c

@@ -51,11 +51,16 @@ class ComponentBatchTests(unittest.TestCase):
         self.assertTrue(passed)
         self.assertEqual({row["id"] for row in receipts}, {"cli-unit", "fleet-sim"})
         self.assertTrue(evaluate_gate(plan, receipts).passed)
-        event_paths = {env["CI_PYTHON_TEST_EVENTS"] for _, env in calls}
+        event_paths = {
+            env["CI_PYTHON_TEST_EVENTS"]
+            for _, env in calls
+            if "CI_PYTHON_TEST_EVENTS" in env
+        }
         self.assertEqual(len(event_paths), 2)
         for row in receipts:
             self.assertEqual(row["source_sha"], SHA)
-            self.assertEqual(len(row["evidence"]["cases"]), 1)
+            expected_cases = 2 if row["id"] == "cli-unit" else 1
+            self.assertEqual(len(row["evidence"]["cases"]), expected_cases)
             self.assertIn(row["id"] + "/python-events.jsonl", raw)
 
     def test_real_subprocess_observers_do_not_leak_between_contracts(self):
@@ -68,14 +73,18 @@ class ComponentBatchTests(unittest.TestCase):
             executable = root / "bin/make"
             executable.write_text(
                 f"#!{sys.executable}\n"
+                "import sys\n"
                 "import unittest\n"
                 "class ObservedContract(unittest.TestCase):\n"
                 "    def test_actual_process(self): self.assertEqual(2 + 2, 4)\n"
+                "ObservedContract.__qualname__ = 'Observed_' + sys.argv[1].replace('-', '_')\n"
                 "result = unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromTestCase(ObservedContract))\n"
                 "raise SystemExit(not result.wasSuccessful())\n"
             )
             executable.chmod(0o755)
             with patch.object(runner, "ROOT", root), patch.object(
+                runner, "install_cpu_torch"
+            ), patch.object(
                 runner.subprocess, "check_output", return_value=SHA
             ), patch.object(
                 runner, "actual_platform", return_value="linux/amd64"
@@ -93,7 +102,10 @@ class ComponentBatchTests(unittest.TestCase):
             ]
             self.assertTrue(evaluate_gate(plan, receipts).passed)
             self.assertEqual(len(receipts), 2)
-            self.assertTrue(all(len(row["evidence"]["cases"]) == 1 for row in receipts))
+            self.assertEqual(
+                {row["id"]: len(row["evidence"]["cases"]) for row in receipts},
+                {"cli-unit": 2, "fleet-sim": 1},
+            )
 
     def test_failed_command_does_not_hide_successful_sibling_or_write_receipt(self):
         passed, plan, receipts, raw, calls = self.run_contracts(
@@ -104,7 +116,8 @@ class ComponentBatchTests(unittest.TestCase):
         self.assertFalse(evaluate_gate(plan, receipts).passed)
         self.assertIn("cli-unit/failure.txt", raw)
         self.assertEqual(
-            [command[1] for command, _ in calls], ["vllm-sr-test", "vllm-sr-sim-test"]
+            [self.stage(command) for command, _ in calls],
+            ["vllm-sr-test", "vllm-sr-sim-test"],
         )
 
     def test_missing_skipped_or_wrong_source_evidence_cannot_qualify(self):
@@ -119,6 +132,7 @@ class ComponentBatchTests(unittest.TestCase):
 
     def test_maintained_entrypoints_all_run_and_each_failure_propagates(self):
         stages = {
+            "cli-unit": ["vllm-sr-test", "torch", "vllm-sr-decision-runtime-test"],
             "learning-tools": ["test-learning-tools", "test-calibration"],
             "soak-tools": ["soak-test", "proxy-tests"],
             "mock-provider": ["test-provider-mocker"],
@@ -144,6 +158,25 @@ class ComponentBatchTests(unittest.TestCase):
                         [self.stage(command) for command, _ in calls],
                         expected[: index + 1],
                     )
+
+    def test_decision_unit_inventory_requires_cpu_torch_without_rocm_model(self):
+        makefile = (ROOT / "tools/make/docker.mk").read_text()
+        target = makefile.split(
+            "vllm-sr-decision-runtime-test: harness-venv-install", 1
+        )[1].split("vllm-sr-test-integration:", 1)[0]
+        self.assertIn("test_decision_runtime_torch_batch_sync.py", target)
+        self.assertNotIn("test_decision_qwen35_rocm_graph_model.py", target)
+        passed, _, receipts, _, calls = self.run_contracts(("cli-unit",))
+        self.assertTrue(passed)
+        self.assertEqual(len(receipts), 1)
+        self.assertEqual(
+            [self.stage(command) for command, _ in calls],
+            ["vllm-sr-test", "torch", "vllm-sr-decision-runtime-test"],
+        )
+        self.assertEqual(
+            calls[1][0][-2:],
+            ["--index-url", "https://download.pytorch.org/whl/cpu"],
+        )
 
     def test_go_and_soak_reports_are_isolated_without_python_observer(self):
         passed, _, receipts, raw, calls = self.run_contracts(("e2e-unit", "soak-tools"))

@@ -247,6 +247,70 @@ class ModelCatalogAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsupported gate scope"):
             audit.gate_failures(report, 1, scope="unknown")
 
+    def test_non_chat_model_without_explicit_class_remains_in_general_gate(
+        self,
+    ) -> None:
+        resources = copy.deepcopy(self.resources)
+        resources["models"].append(
+            {
+                "id": "acme/decision-model",
+                "publisher": "Acme",
+                "kind": "physical",
+                "capabilities": ["decision", "choice", "noul", "score"],
+            }
+        )
+
+        report = audit.build_audit(
+            self.manifest,
+            resources,
+            models={"acme/decision-model"},
+        )
+
+        self.assertEqual(
+            report["physical_models_without_evaluations"], ["acme/decision-model"]
+        )
+        self.assertEqual(report["model_coverage"][0]["evaluation_class"], "general_llm")
+        self.assertTrue(report["model_coverage"][0]["general_evaluation_gate_eligible"])
+        self.assertEqual(
+            [row["model"] for row in audit.gate_failures(report, 5, scope="model")],
+            ["acme/decision-model"],
+        )
+        self.assertEqual(
+            [row["model"] for row in audit.gate_failures(report, 5, scope="effort")],
+            ["acme/decision-model"],
+        )
+
+    def test_explicit_decision_class_stays_unmeasured_outside_general_gate(
+        self,
+    ) -> None:
+        resources = copy.deepcopy(self.resources)
+        resources["models"].append(
+            {
+                "id": "acme/decision-model",
+                "publisher": "Acme",
+                "kind": "physical",
+                "evaluation_class": "decision",
+                "capabilities": ["decision", "choice", "noul", "score"],
+            }
+        )
+
+        report = audit.build_audit(
+            self.manifest,
+            resources,
+            models={"acme/decision-model"},
+        )
+
+        self.assertEqual(
+            report["physical_models_without_evaluations"], ["acme/decision-model"]
+        )
+        self.assertEqual(report["models_without_evaluations"], ["acme/decision-model"])
+        self.assertEqual(report["model_coverage"][0]["evaluation_class"], "decision")
+        self.assertFalse(
+            report["model_coverage"][0]["general_evaluation_gate_eligible"]
+        )
+        self.assertEqual(audit.gate_failures(report, 5, scope="model"), [])
+        self.assertEqual(audit.gate_failures(report, 5, scope="effort"), [])
+
     def test_model_gate_does_not_pool_distinct_provenance_buckets(self) -> None:
         resources = copy.deepcopy(self.resources)
         resources["evaluations"].extend(
@@ -321,7 +385,9 @@ class ModelCatalogAuditTests(unittest.TestCase):
             )
 
         self.assertEqual(result, 1)
-        self.assertIn("1 physical selectable-effort rows", errors.getvalue())
+        self.assertIn(
+            "1 general_llm physical selectable-effort rows", errors.getvalue()
+        )
         self.assertIn("complete=0 partial=1 unmeasured=1", output.getvalue())
 
     def test_json_output_includes_selectable_effort_coverage(self) -> None:

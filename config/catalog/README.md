@@ -90,14 +90,19 @@ vendor-published score with an unspecified effort stays on a separate
 `unspecified` row and is never copied into `low`, `medium`, `high`, or another
 selectable effort.
 
-Evaluation admission and selectable-effort completeness are separate facts.
-Every physical card must have at least five distinct benchmarks in one exact
-model/effort/provenance evidence bucket. A reasoning family may expose
-additional real runtime levels whose effort-specific measurements have not been
-published; those
-levels retain derived evidence gaps. The catalog audit reports selectable
-levels as complete, partial, or unmeasured and can enforce them with a stricter
-opt-in gate, but neither generation nor the Hub copies a score across levels.
+General-LLM evaluation admission and selectable-effort completeness are
+separate facts. A physical card's optional `evaluation_class` defaults to
+`general_llm`; those cards must have at least five distinct benchmarks in one
+exact model/effort/provenance evidence bucket. A specialized physical card may
+declare `evaluation_class: decision`. It remains visible as unmeasured in the
+audit and Hub when no evidence exists, but is excluded from the general-LLM
+benchmark gate until a Decision-specific evaluation contract is added. The
+catalog never fabricates scores to satisfy either class. A reasoning family may
+expose additional real runtime levels whose effort-specific measurements have
+not been published; those levels retain derived evidence gaps. The catalog
+audit reports selectable levels as complete, partial, or unmeasured and can
+enforce them with a stricter opt-in gate, but neither generation nor the Hub
+copies a score across levels.
 For a card without `reasoning_family`, labels such as `enabled`, `disabled`,
 `default`, and `unspecified` describe the published run condition only; they do
 not create a user-configurable selector.

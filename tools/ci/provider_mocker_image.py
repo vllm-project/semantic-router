@@ -7,7 +7,7 @@ import json
 import re
 from http import HTTPStatus
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -133,6 +133,11 @@ def resolve_published(record: dict, client: RegistryClient | None = None) -> dic
     tag = input_tag(fingerprint)
     try:
         client = client or RegistryClient()
+    except (HTTPError, URLError) as error:
+        raise PublicationUnavailableError(
+            "Cannot access the qualified provider-mocker registry"
+        ) from error
+    try:
         manifest, digest = client.document("manifests", tag)
     except HTTPError as error:
         if error.code == HTTPStatus.NOT_FOUND:

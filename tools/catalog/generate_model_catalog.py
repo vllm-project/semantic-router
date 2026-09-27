@@ -86,6 +86,7 @@ from cli.model_bundle import model_bundle_digest  # noqa: E402
 
 SOURCE_SCHEMA = "vllm-sr/catalog-source/v1"
 OUTPUT_SCHEMA = "vllm-sr/model-catalog/v2"
+EVALUATION_CLASSES = frozenset({"general_llm", "decision"})
 RESOURCE_KEYS = (
     "protocols",
     "providers",
@@ -334,11 +335,19 @@ def _validate_models(
     items: list[dict[str, Any]],
     asset_ids: set[str],
     reasoning_ids: set[str],
+    protocol_ids: set[str],
 ) -> None:
     for index, item in enumerate(items):
         path = f"models[{index}]"
         kind = _validate_model_identity(item, path, reasoning_ids)
+        _validate_model_evaluation_class(item, path, kind)
         _validate_model_verification(item, path)
+        _validate_model_protocols(
+            item,
+            path,
+            protocol_ids,
+            required=kind == "virtual",
+        )
         if kind == "virtual":
             _validate_virtual_model(item, path, asset_ids)
         else:
@@ -361,6 +370,8 @@ _MODEL_FIELDS = {
     "released_at",
     "knowledge_cutoff",
     "lifecycle",
+    "evaluation_class",
+    "protocols",
     "limits",
     "capabilities",
     "modalities",
@@ -407,6 +418,20 @@ def _validate_model_identity(
     return str(kind)
 
 
+def _validate_model_evaluation_class(
+    item: dict[str, Any], path: str, kind: str
+) -> None:
+    evaluation_class = item.get("evaluation_class")
+    if kind == "virtual":
+        if evaluation_class is not None:
+            raise CatalogBuildError(
+                f"{path}.evaluation_class is only valid for physical models"
+            )
+        return
+    if evaluation_class is not None and evaluation_class not in EVALUATION_CLASSES:
+        raise CatalogBuildError(f"{path}.evaluation_class is unsupported")
+
+
 def _validate_model_verification(item: dict[str, Any], path: str) -> None:
     verification = _mapping(item.get("verification"), f"{path}.verification")
     _reject_unknown(
@@ -418,6 +443,32 @@ def _validate_model_verification(item: dict[str, Any], path: str) -> None:
         raise CatalogBuildError(f"{path}.verification.status is unsupported")
     if verification.get("source") is not None:
         _validate_https_url(verification["source"], f"{path}.verification.source")
+
+
+def _validate_model_protocols(
+    item: dict[str, Any],
+    path: str,
+    protocol_ids: set[str],
+    *,
+    required: bool,
+) -> None:
+    raw_protocols = item.get("protocols")
+    if raw_protocols is None:
+        if required:
+            raise CatalogBuildError(f"{path}.protocols is required for virtual models")
+        return
+    protocols = _sequence(raw_protocols, f"{path}.protocols")
+    if not protocols:
+        raise CatalogBuildError(f"{path}.protocols cannot be empty")
+    if any(not isinstance(protocol, str) or not protocol for protocol in protocols):
+        raise CatalogBuildError(f"{path}.protocols must contain protocol IDs")
+    if len(protocols) != len(set(protocols)):
+        raise CatalogBuildError(f"{path}.protocols must be unique")
+    unknown = sorted(set(protocols) - protocol_ids)
+    if unknown:
+        raise CatalogBuildError(
+            f"{path}.protocols references unknown protocols: {', '.join(unknown)}"
+        )
 
 
 def _validate_virtual_model(
@@ -543,7 +594,7 @@ def load_and_validate() -> (
     _validate_providers(resources["providers"], resources["protocols"])
     _validate_reasoning(resources["reasoning_families"])
     reasoning_ids = {item["id"] for item in resources["reasoning_families"]}
-    _validate_models(resources["models"], asset_ids, reasoning_ids)
+    _validate_models(resources["models"], asset_ids, reasoning_ids, protocol_ids)
     _validate_inventory_policy(manifest, resources["models"])
     model_ids = {item["id"] for item in resources["models"]}
     providers = {item["id"]: item for item in resources["providers"]}

@@ -41,6 +41,21 @@ def _evaluation_benchmarks_by_bucket(
 
 
 class ModelCatalogCompilerTests(unittest.TestCase):
+    def test_decision_models_declare_specialized_evaluation_class(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        decision_models = [
+            model
+            for model in resources["models"]
+            if model.get("evaluation_class") == "decision"
+        ]
+
+        self.assertEqual(len(decision_models), 6)
+        self.assertEqual(
+            {model["publisher"] for model in decision_models},
+            {"vLLM Semantic Router"},
+        )
+        self.assertTrue(all(model["kind"] == "physical" for model in decision_models))
+
     def test_dashboard_image_context_includes_the_shared_public_snapshot(self) -> None:
         dockerignore = (catalog.REPO_ROOT / ".dockerignore").read_text(encoding="utf-8")
         self.assertIn(
@@ -259,6 +274,70 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                     physical_models[model_id]["lifecycle"], {"active", "experimental"}
                 )
         self.assertIn("openai/gpt-6-astra", physical_models)
+
+    def test_decision_runtime_models_are_pinned_and_systemone_scoped(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        expected = {
+            "llm-semantic-router/decision-1.0-kai-0.6b": (
+                "llm-semantic-router/Decision-1.0-Kai-0.6B",
+                "9d6872cde6950c2c2b5786d182ec9a06ca1bdd66",
+            ),
+            "llm-semantic-router/decision-1.0-lex-0.6b": (
+                "llm-semantic-router/Decision-1.0-Lex-0.6B",
+                "6c5e3d48b9e67cd8bddbade3277e2e58506af8f0",
+            ),
+            "llm-semantic-router/decision-1.0-eos-0.8b": (
+                "llm-semantic-router/Decision-1.0-Eos-0.8B",
+                "363c4a5e56afc115b1c78c837633956d0bbb63ab",
+            ),
+            "llm-semantic-router/decision-1.0-sol-2b": (
+                "llm-semantic-router/Decision-1.0-Sol-2B",
+                "ce0c018a28de16d6639b1cd203b761bf643b89e6",
+            ),
+            "llm-semantic-router/decision-1.0-nox-4b": (
+                "llm-semantic-router/Decision-1.0-Nox-4B",
+                "cde2a68dbaa557ea65dc458104d410a0802ee259",
+            ),
+            "llm-semantic-router/decision-1.0-lux-9b": (
+                "llm-semantic-router/Decision-1.0-Lux-9B",
+                "cdf4d3ef2dda21518e599fe99ebbe468486b197c",
+            ),
+        }
+        models = {model["id"]: model for model in resources["models"]}
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        runtime = providers["decision-runtime"]
+        bindings = {binding["catalog"]: binding for binding in runtime["models"]}
+
+        self.assertEqual(runtime["protocols"], ["typesafe/systemone@1"])
+        self.assertEqual(set(bindings), set(expected))
+        for provider_id, provider in providers.items():
+            if provider_id == "decision-runtime":
+                continue
+            self.assertNotIn("typesafe/systemone@1", provider["protocols"])
+            self.assertTrue(
+                all(
+                    "typesafe/systemone@1" not in binding["protocols"]
+                    for binding in provider.get("models", [])
+                )
+            )
+        for model_id, (repository_id, revision) in expected.items():
+            with self.subTest(model=model_id):
+                self.assertEqual(models[model_id]["revision"], revision)
+                self.assertEqual(bindings[model_id]["id"], repository_id)
+                self.assertEqual(
+                    bindings[model_id]["protocols"], ["typesafe/systemone@1"]
+                )
+
+        virtual_models = [
+            model for model in resources["models"] if model["kind"] == "virtual"
+        ]
+        self.assertTrue(virtual_models)
+        self.assertTrue(
+            all(
+                "typesafe/systemone@1" not in model["protocols"]
+                for model in virtual_models
+            )
+        )
 
     def test_gpt_6_astra_day_zero_contract_is_complete(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()

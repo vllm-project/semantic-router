@@ -22,11 +22,34 @@ python -m venv .venv
 pip install -e .
 ```
 
-Local `serve` requires Docker or Podman on Linux, macOS, or WSL2. A native
-Windows Python environment can run config and catalog commands, but it cannot
-run the local container stack.
+## Serve a Decision 1.0 model
+
+`vllm-sr decision serve MODEL` starts one catalog model as a standalone SystemOne
+service. An installed Decision-enabled CLI release selects the image for the
+detected backend automatically; `--image` is an advanced development override.
+See the
+[Decision Runtime guide](https://vllm-sr.ai/docs/installation/decision-runtime/overview)
+for launch and API examples, or the
+[image build guide](https://github.com/vllm-project/semantic-router/tree/main/src/vllm-sr/decision_runtime/image) for source-checkout testing.
+
+Decision Runtime supports Kai, Lex, Eos, Sol, Nox, and Lux on qualified ROCm
+hardware. Kai, Lex, and Eos can also run on Linux CPU. See the
+[model and backend table](https://vllm-sr.ai/docs/installation/decision-runtime/models)
+for current support and model IDs.
+
+`POST /v1/systemone` accepts one state with Noul, Choice, or Score questions.
+`POST /v1/systemone/batches` applies the same questions to several states; it
+is a Decision extension, not an official SystemOne SDK method. Every request
+names the model served on that port. See
+[API examples and SDK usage](https://vllm-sr.ai/docs/installation/decision-runtime/api) and
+[launch options](https://vllm-sr.ai/docs/installation/decision-runtime/parameters).
 
 ## Start a local stack
+
+The general `vllm-sr serve` stack requires Docker or Podman on Linux, macOS,
+or WSL2. This platform list does not apply to Decision Runtime, whose current
+qualified backends are listed above. A native Windows Python environment can
+run config and catalog commands, but it cannot run the local container stack.
 
 ```bash
 # Start Router, Envoy, Dashboard, and observability.

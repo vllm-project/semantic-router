@@ -118,6 +118,23 @@ class ModelCatalogValidationTests(unittest.TestCase):
         model["parameter_size"] = "7B"
         catalog._validate_physical_model(model, "models[0]")
 
+    def test_evaluation_class_is_explicit_and_physical_only(self) -> None:
+        catalog._validate_model_evaluation_class({}, "models[0]", "physical")
+        catalog._validate_model_evaluation_class(
+            {"evaluation_class": "general_llm"}, "models[0]", "physical"
+        )
+        catalog._validate_model_evaluation_class(
+            {"evaluation_class": "decision"}, "models[0]", "physical"
+        )
+        with self.assertRaisesRegex(catalog.CatalogBuildError, "unsupported"):
+            catalog._validate_model_evaluation_class(
+                {"evaluation_class": "other"}, "models[0]", "physical"
+            )
+        with self.assertRaisesRegex(catalog.CatalogBuildError, "physical models"):
+            catalog._validate_model_evaluation_class(
+                {"evaluation_class": "decision"}, "models[0]", "virtual"
+            )
+
     def test_creator_inventory_policy_ignores_virtual_recipe_publishers(self) -> None:
         manifest = {
             "inventory": {

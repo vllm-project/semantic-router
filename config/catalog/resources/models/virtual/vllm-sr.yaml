@@ -15,6 +15,10 @@
   generation: 1
   policy_version: 3.0.0
   lifecycle: active
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
   capabilities:
   - chat
   - reasoning
@@ -84,6 +88,10 @@
   generation: 1
   policy_version: 3.0.0
   lifecycle: active
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
   capabilities:
   - chat
   - reasoning
@@ -151,6 +159,10 @@
   generation: 1
   policy_version: 3.0.0
   lifecycle: active
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
   capabilities:
   - chat
   - reasoning
@@ -220,6 +232,10 @@
   generation: 1
   policy_version: 3.0.0
   lifecycle: active
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
   capabilities:
   - chat
   - reasoning
@@ -305,6 +321,10 @@
   generation: 1
   policy_version: 3.0.0
   lifecycle: active
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
   capabilities:
   - chat
   - reasoning
