@@ -1,4 +1,44 @@
-# JevArena: one development/release decision evaluation protocol
+# JevArena: versioned decision evaluation protocols
+
+## JevArena v3 first-release sealed core
+
+`arena_v3.py` is a separate, prospective release ranker for the existing
+1,600-item typed FINAL and 6,547-item, 15-task CSS evaluation panel: **8,147
+original questions** per model. Its capability score is
+`100 * sqrt(T * H)`, where `T` is typed Choice/Noul/Score family-macro
+accuracy and `H` is the median of the 15 human-transfer task macro-F1 values.
+Missing and invalid answers stay in the denominator of their native scorers.
+The three typed scores and all 15 transfer scores appear beside the aggregate.
+
+Public JevBench 231 is required as a **separate first-release cross-check**;
+its score, Decision Bench, and Decision Index never enter the v3 scalar. The
+independently authored 1,200–1,480-original panel remains a proposed **v3.1**
+extension after qualified independent review. Neither old v1/v2 scores nor an
+unreviewed authored pilot can be relabeled as v3 results.
+
+The v3 roster (`jevarena-v3-roster/1`) points to completed FINAL typed and CSS
+score reports for at least two models. It also points to a separate pre-key
+freeze receipt (`jevarena-v3-freeze/1`) whose SHA-256 is pinned in the roster.
+The receipt binds both gold-file hashes, source hashes of the v3/typed/CSS
+scorers, the candidate lock, each native model identity and its typed/CSS
+prediction hashes. A model without a local package may use a null native model
+fingerprint; Decision 2.0 candidates require the exact scored native model
+fingerprint. The v3 ranker checks these identities and the internal metric
+arithmetic without reading gold or prediction rows. Its result remains
+`scored_pending_independent_release_audit` until a separate audit verifies
+actual pre-key timing, native model identity, package parity and release gates.
+
+Local contract test and scorer invocation:
+
+```bash
+PYTHONPATH=src/training/decision2 python3 -m unittest jev_arena.tests.test_arena_v3
+PYTHONPATH=src/training/decision2 python3 -m jev_arena.arena_v3 \
+  --manifest /path/to/private/v3-roster.json \
+  --output /path/to/private/v3-rank.json
+```
+
+The sections below document earlier v1/v2 protocols. Their frozen aggregate
+formulas and historical results are not interchangeable with v3.
 
 JevArena runs every eligible model through its **native** inference path on
 the same frozen prompts. It records exact model and data revisions, keeps gold
