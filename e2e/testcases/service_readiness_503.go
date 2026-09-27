@@ -41,13 +41,19 @@ type errorEnvelope struct {
 	} `json:"error"`
 }
 
+const (
+	readinessWAVHeaderBytes = 44
+	readinessWAVSampleBytes = 8
+	readinessWAVBytes       = readinessWAVHeaderBytes + readinessWAVSampleBytes
+)
+
 // readinessAudioFixture is a minimal valid 16-bit mono WAV data URI. The
 // readiness contract is decided from the prepared models, so the payload is a
 // real decodable clip rather than a rejected one.
 func readinessAudioFixture() string {
-	wav := make([]byte, 44+8)
+	wav := make([]byte, readinessWAVBytes)
 	copy(wav, "RIFF")
-	binary.LittleEndian.PutUint32(wav[4:], uint32(len(wav)-8))
+	binary.LittleEndian.PutUint32(wav[4:], uint32(readinessWAVBytes-8))
 	copy(wav[8:], "WAVEfmt ")
 	binary.LittleEndian.PutUint32(wav[16:], 16)
 	binary.LittleEndian.PutUint16(wav[20:], 1)
@@ -57,7 +63,7 @@ func readinessAudioFixture() string {
 	binary.LittleEndian.PutUint16(wav[32:], 2)
 	binary.LittleEndian.PutUint16(wav[34:], 16)
 	copy(wav[36:], "data")
-	binary.LittleEndian.PutUint32(wav[40:], 8)
+	binary.LittleEndian.PutUint32(wav[40:], readinessWAVSampleBytes)
 	binary.LittleEndian.PutUint16(wav[44:], 16384)
 	binary.LittleEndian.PutUint16(wav[46:], 32767)
 	binary.LittleEndian.PutUint16(wav[48:], 0)
