@@ -47,3 +47,8 @@ def test_displayed_oracle_rejects_missing_decisive_document() -> None:
     ]
     with pytest.raises(ValueError, match="Document identity"):
         corpus._rendered_oracle(row["family"][6:], row["state"], row["language"])
+
+
+def test_rejected_select3_has_policy_free_archive_shortcut() -> None:
+    _, select3 = corpus.generate(bytes(range(32)))
+    assert corpus._select3_archive_bypass(select3) == {"correct": 96, "rows": 96}

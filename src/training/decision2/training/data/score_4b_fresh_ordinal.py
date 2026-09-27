@@ -328,6 +328,42 @@ def _rendered_oracle(mechanism: str, state: dict[str, Any], language: str) -> in
     )
 
 
+def _select3_archive_bypass(rows: list[dict[str, Any]]) -> dict[str, int]:
+    """Negative control: predict without reading the displayed policy thresholds.
+
+    This is deliberately a known failure of candidate v1. It belongs in the
+    private audit receipt so a matching token budget cannot imply admission.
+    """
+    correct = 0
+    for row in rows:
+        mechanism = row["family"][6:]
+        _, name_a, unit_a, mode_a, name_b, unit_b, mode_b = MECHANISMS[mechanism]
+        if mode_a == "range" or mode_b == "range":
+            raise ValueError("Archive bypass probe only supports monotone criteria")
+        language = row["language"]
+        if language == "zh":
+            name_a, name_b = CHINESE_FIELDS[name_a], CHINESE_FIELDS[name_b]
+            unit_a, unit_b = CHINESE_UNITS[unit_a], CHINESE_UNITS[unit_b]
+        docs = {doc["kind"]: doc["text"] for doc in row["state"]["documents"]}
+        predicted = 1
+        for name, unit, mode in ((name_a, unit_a, mode_a), (name_b, unit_b, mode_b)):
+            pattern = (
+                rf"{re.escape(name)}为 (\d+) {re.escape(unit)}"
+                if language == "zh"
+                else rf"{re.escape(name)} at (\d+) {re.escape(unit)}"
+            )
+            current = re.search(pattern, docs["current"])
+            archive = re.search(pattern, docs["archive"])
+            if current is None or archive is None:
+                raise ValueError("Archive bypass fields are not parseable")
+            delta = int(current[1]) - int(archive[1])
+            predicted += (1 if delta > 0 else -1 if delta < 0 else 0) * (
+                1 if mode == "lower" else -1
+            )
+        correct += predicted == row["label"]
+    return {"correct": correct, "rows": len(rows)}
+
+
 def generate(seed: bytes) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if len(seed) != 32:
         raise ValueError("A private 32-byte seed is required")
@@ -728,7 +764,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         _write(args.output_dir / name, body)
     manifest = {
         "version": VERSION,
-        "status": "HOLD_PENDING_INDEPENDENT_BLIND_REVIEW",
+        "status": "HOLD_SHORTCUT_CONFIRMED",
         "training_approved": False,
         "model_gate_approved": False,
         "seed_sha256": _sha(seed),
@@ -741,6 +777,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             if key.endswith("/token_summary")
         },
         "replacement_feasibility": replacement,
+        "select3_archive_bypass": _select3_archive_bypass(select3_rows),
         "overlap": {
             key: value
             for key, value in overlap.items()
@@ -751,7 +788,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "limitations": [
             "Synthetic source cases and surface variations do not establish real-task transfer.",
             "Train and SELECT3 have separate sources and templates but share a two-criterion ordinal abstraction.",
-            "No independent blind answerability, bilingual, triplet or shortcut review has passed.",
+            "Independent blinded answerability passed, but a policy-free archive-delta shortcut solved all SELECT3 rows.",
             "The length-selected old Score replacement changes its original family mix and remains unapproved even if the 7455-row/token budget matches.",
         ],
     }
