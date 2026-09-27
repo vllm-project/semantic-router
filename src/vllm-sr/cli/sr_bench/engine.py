@@ -164,6 +164,22 @@ class Context:
         )
         call_record = {"id": call_id, "role": role}
         self.calls.append(call_record)
+        task_schedules = (
+            self.manifest.get("fault_schedules")
+            or self.manifest.get("fault_schedule")
+            or {}
+        )
+        case_schedule = (
+            self.case.get("fault_schedule") or task_schedules.get(self.case["id"]) or []
+        )
+        subject_calls = [c for c in self.calls if c.get("role") == "subject"]
+        call_index = len(subject_calls) - 1 if role == "subject" else 0
+        scheduled_fault = None
+        if role == "subject" and case_schedule:
+            for item in case_schedule:
+                if isinstance(item, dict) and item.get("call_index") == call_index:
+                    scheduled_fault = item
+                    break
         try:
             result = chat(
                 selected,
@@ -174,6 +190,7 @@ class Context:
                 extra_body,
                 self.artifact_dir / (call_id + ".sse"),
                 activity=activity,
+                fault_key=self.case["id"],
                 **(
                     {"output_policy": "native"}
                     if self.manifest["output_policy"] == "native"
@@ -199,6 +216,9 @@ class Context:
                     "Auxiliary model output was truncated; grading is incomplete",
                     result,
                 )
+            if scheduled_fault is not None:
+                result["injected_fault"] = scheduled_fault
+                result["call_index"] = call_index
             self.store.finish_call(call_id, "completed", result)
             call_record.update(result)
             with self.engine.lock:
@@ -210,10 +230,14 @@ class Context:
                 self.quality_failure = "output_limit"
             return result
         except CallFailure as exc:
+            if scheduled_fault is not None:
+                exc.partial["injected_fault"] = scheduled_fault
+                exc.partial["call_index"] = call_index
+            exc.partial.setdefault("error", str(exc))
             self.store.finish_call(
                 call_id,
                 "cancelled" if self.cancelled() else "failed",
-                {**exc.partial, "error": str(exc)},
+                exc.partial,
             )
             call_record.update(exc.partial)
             with self.engine.lock:
@@ -459,8 +483,14 @@ class Engine:
                     }
                     self.first_failures[run_id] = failure
                     self.store.event(run_id, "failure_observed", failure)
-            # Fail closed: no new cases are dispatched after a transport/harness failure.
-            cancel.set()
+            # Fail closed: no new cases are dispatched after an unexpected transport/harness failure.
+            # Intended faults scheduled on a task do not abort other tasks in the run.
+            has_injected_fault = any(
+                c.get("injected_fault") is not None or c.get("fault_injected") is True
+                for c in ctx.calls
+            )
+            if not has_injected_fault:
+                cancel.set()
 
     def _completed_case(self, ctx, result, started):
         if ctx.quality_failure:

@@ -160,6 +160,121 @@ def continuity(results: list[dict], subject_calls: list[dict]) -> dict:
     }
 
 
+def fault_summary(results, subject_calls, total=None, *, planned_case_ids=None):
+    """Separate faulted and unfaulted tasks, reporting Router decisions, models, and outcomes."""
+    tasks_calls: dict[str, list[dict]] = {}
+    for call in subject_calls:
+        if call.get("case_id"):
+            tasks_calls.setdefault(call["case_id"], []).append(call)
+
+    results_by_case = {r.get("case_id"): r for r in results if r.get("case_id")}
+
+    if planned_case_ids:
+        all_case_ids = list(planned_case_ids)
+    else:
+        seen = set()
+        all_case_ids = []
+        for r in results:
+            cid = r.get("case_id")
+            if cid and cid not in seen:
+                seen.add(cid)
+                all_case_ids.append(cid)
+        for cid in tasks_calls:
+            if cid not in seen:
+                seen.add(cid)
+                all_case_ids.append(cid)
+
+    faulted_task_records = []
+    unfaulted_task_ids = []
+
+    for case_id in all_case_ids:
+        c_calls = tasks_calls.get(case_id, [])
+        c_res = results_by_case.get(case_id, {})
+
+        faulted_calls = []
+        for idx, call in enumerate(c_calls):
+            is_fault = (
+                call.get("injected_fault") is not None
+                or call.get("fault_injected") is True
+            )
+            if is_fault:
+                fault_info = call.get("injected_fault")
+                if fault_info is None:
+                    fault_info = {
+                        "status": call.get("response_status"),
+                        "injected": True,
+                    }
+                selected_model = _observed_model(call) or call.get("model")
+                faulted_calls.append(
+                    {
+                        "call_id": call.get("id"),
+                        "call_index": call.get("call_index", idx),
+                        "injected_fault": fault_info,
+                        "selected_model": selected_model,
+                        "router_response": {
+                            "status": call.get("response_status"),
+                            "call_status": call.get("status"),
+                            "decision": call.get("decision"),
+                            "error": call.get("error") or call.get("failure"),
+                        },
+                    }
+                )
+
+        if faulted_calls:
+            faulted_task_records.append(
+                {
+                    "case_id": case_id,
+                    "outcome": c_res.get("status", "unknown"),
+                    "status": c_res.get("status", "unknown"),
+                    "correct": c_res.get("correct"),
+                    "error": c_res.get("error") or c_res.get("failure"),
+                    "quality_failure": c_res.get("quality_failure"),
+                    "latency_s": c_res.get("latency_s"),
+                    "total_calls": len(c_calls),
+                    "fault_count": len(faulted_calls),
+                    "faulted_calls": faulted_calls,
+                }
+            )
+        else:
+            unfaulted_task_ids.append(case_id)
+
+    unfaulted_results = [
+        results_by_case[cid] for cid in unfaulted_task_ids if cid in results_by_case
+    ]
+    unfaulted_completed = [
+        r for r in unfaulted_results if r.get("status") == "completed"
+    ]
+    unfaulted_correct = sum(1 for r in unfaulted_completed if r.get("correct") is True)
+    unfaulted_total = len(unfaulted_task_ids)
+
+    faulted_completed = sum(
+        1 for t in faulted_task_records if t.get("outcome") == "completed"
+    )
+    faulted_correct = sum(1 for t in faulted_task_records if t.get("correct") is True)
+    faulted_total = len(faulted_task_records)
+
+    return {
+        "faulted_tasks": {
+            "total": faulted_total,
+            "completed": faulted_completed,
+            "failed": faulted_total - faulted_completed,
+            "correct": faulted_correct,
+            "accuracy": faulted_correct / faulted_total if faulted_total else None,
+            "tasks": faulted_task_records,
+        },
+        "unfaulted_tasks": {
+            "total": unfaulted_total,
+            "completed": len(unfaulted_completed),
+            "failed": unfaulted_total - len(unfaulted_completed),
+            "correct": unfaulted_correct,
+            "accuracy": (
+                unfaulted_correct / unfaulted_total if unfaulted_total else None
+            ),
+            "case_ids": unfaulted_task_ids,
+        },
+    }
+
+
 def metric(target_id, results, calls, total, *, planned_case_ids=None):
     completed = [r for r in results if r["status"] == "completed"]
     scored = [r for r in completed if isinstance(r.get("correct"), bool)]
@@ -239,6 +354,9 @@ def metric(target_id, results, calls, total, *, planned_case_ids=None):
         ),
         "decisions": dict(Counter(c["decision"] for c in subject if c.get("decision"))),
         "continuity": continuity(results, subject),
+        "fault_summary": fault_summary(
+            results, subject, total, planned_case_ids=planned_case_ids
+        ),
         "queue_wait_p50_s": percentile(
             [r["queue_wait_s"] for r in results if r.get("queue_wait_s") is not None],
             0.5,
@@ -482,6 +600,13 @@ def make_report(store, run_id):
         datetime.fromisoformat(run["updated_at"])
         - datetime.fromisoformat(run["created_at"])
     ).total_seconds()
+    overall_faults = (
+        metrics[0]["fault_summary"]
+        if len(metrics) == 1
+        else fault_summary(
+            results, [c for c in calls if c["role"] == "subject"], len(cells)
+        )
+    )
     return {
         "version": VERSION,
         "run_id": run_id,
@@ -510,7 +635,9 @@ def make_report(store, run_id):
                     else None
                 )
             ),
+            "fault_summary": overall_faults,
         },
+        "fault_summary": overall_faults,
         "benchmarks": benchmarks,
         "limitations": limitations,
         "provenance": {
