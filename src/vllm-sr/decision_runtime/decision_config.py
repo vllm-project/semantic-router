@@ -11,8 +11,9 @@ from types import MappingProxyType
 from typing import Any
 
 from .family_registry import family_registration
-from .release_artifacts import ReleaseArtifactError, select_qwen_weight_files
 from .runtime_profile import RuntimeProfileError, validate_relative_artifact_path
+
+_RESERVED_PATHS = frozenset({"config.json", ".vllm-sr-artifact.json"})
 
 
 class DecisionConfigError(ValueError):
@@ -47,9 +48,9 @@ def parse_decision_config(
 ) -> DecisionRepositoryConfig:
     """Validate a model-owned root descriptor without trusting repository code.
 
-    Paths are constrained to the installed family loader's stable layout. A
-    changing number of Qwen weight shards is selected from the descriptor;
-    neither a particular model commit nor weight digest is built into code.
+    Paths are authoritative except where Transformers requires conventional
+    filenames for local discovery. Neither a particular model commit nor a
+    weight digest is built into code.
     """
 
     try:
@@ -89,20 +90,18 @@ def parse_decision_config(
         )
 
     is_qwen = family == "qwen3.5"
-    prefix = "" if is_qwen else "native/"
-    backbone_directory = f"{prefix}{'backbone' if is_qwen else 'encoder'}"
-    tokenizer_directory = "" if is_qwen else "native/tokenizer/"
-
     model_config = _path(root["model_config"], "model_config")
-    if model_config != f"{prefix}decision_config.json":
-        raise DecisionConfigError("Decision model config layout is unsupported")
+    if not model_config.endswith(".json"):
+        raise DecisionConfigError("Decision model config must be JSON")
+    data_root = PurePosixPath(model_config).parent
 
     backbone = _mapping(root["backbone"], "backbone")
     if set(backbone) not in ({"config", "weights"}, {"config", "weights", "index"}):
         raise DecisionConfigError("Decision backbone fields are unsupported")
     backbone_config = _path(backbone["config"], "backbone.config")
-    if backbone_config != f"{backbone_directory}/config.json":
-        raise DecisionConfigError("Decision backbone config layout is unsupported")
+    backbone_directory = PurePosixPath(backbone_config).parent
+    if PurePosixPath(backbone_config).name != "config.json":
+        raise DecisionConfigError("Transformers backbone config must be config.json")
     weights = backbone["weights"]
     if (
         not isinstance(weights, list)
@@ -112,30 +111,28 @@ def parse_decision_config(
         raise DecisionConfigError("Decision backbone weights must be a nonempty list")
     backbone_weights = tuple(_path(item, "backbone.weights") for item in weights)
     if any(
-        PurePosixPath(item).parent.as_posix() != backbone_directory
+        PurePosixPath(item).parent != backbone_directory
         or not item.endswith(".safetensors")
         for item in backbone_weights
     ):
-        raise DecisionConfigError("Decision backbone weight layout is unsupported")
+        raise DecisionConfigError("Decision backbone weights must share one directory")
     backbone_index = (
         _path(backbone["index"], "backbone.index") if "index" in backbone else None
     )
     if is_qwen:
-        try:
-            selected_weights = select_qwen_weight_files(
-                set(backbone_weights) | ({backbone_index} if backbone_index else set())
-            )
-        except ReleaseArtifactError as error:
-            raise DecisionConfigError(str(error)) from error
-        if set(selected_weights) != set(backbone_weights) | (
-            {backbone_index} if backbone_index else set()
+        if len(backbone_weights) == 1 and backbone_index is None:
+            if PurePosixPath(backbone_weights[0]).name != "model.safetensors":
+                raise DecisionConfigError(
+                    "Transformers single weight must be model.safetensors"
+                )
+        elif (
+            backbone_index is None
+            or PurePosixPath(backbone_index).parent != backbone_directory
+            or PurePosixPath(backbone_index).name != "model.safetensors.index.json"
         ):
-            raise DecisionConfigError("Decision Qwen weight layout is unsupported")
-    elif (
-        backbone_weights != ("native/encoder/model.safetensors",)
-        or backbone_index is not None
-    ):
-        raise DecisionConfigError("Decision Vela weight layout is unsupported")
+            raise DecisionConfigError("Decision Qwen indexed weight layout is invalid")
+    elif len(backbone_weights) != 1 or backbone_index is not None:
+        raise DecisionConfigError("Decision Vela requires one encoder weight file")
 
     tokenizer = _mapping(root["tokenizer"], "tokenizer")
     tokenizer_required = {"json", "config"}
@@ -147,6 +144,7 @@ def parse_decision_config(
         raise DecisionConfigError("Decision tokenizer fields are unsupported")
     tokenizer_json = _path(tokenizer["json"], "tokenizer.json")
     tokenizer_config = _path(tokenizer["config"], "tokenizer.config")
+    tokenizer_directory = PurePosixPath(tokenizer_json).parent
     special_tokens_map = (
         _path(tokenizer["special_tokens_map"], "tokenizer.special_tokens_map")
         if "special_tokens_map" in tokenizer
@@ -158,42 +156,40 @@ def parse_decision_config(
         else None
     )
     if (
-        tokenizer_json != f"{tokenizer_directory}tokenizer.json"
-        or tokenizer_config != f"{tokenizer_directory}tokenizer_config.json"
+        PurePosixPath(tokenizer_json).name != "tokenizer.json"
+        or PurePosixPath(tokenizer_config).name != "tokenizer_config.json"
+        or PurePosixPath(tokenizer_config).parent != tokenizer_directory
     ):
-        raise DecisionConfigError("Decision tokenizer layout is unsupported")
-    if (
-        special_tokens_map is not None
-        and special_tokens_map != f"{tokenizer_directory}special_tokens_map.json"
+        raise DecisionConfigError("Transformers tokenizer layout is unsupported")
+    if special_tokens_map is not None and (
+        PurePosixPath(special_tokens_map).name != "special_tokens_map.json"
+        or PurePosixPath(special_tokens_map).parent != tokenizer_directory
     ):
         raise DecisionConfigError(
             "Decision tokenizer special tokens layout is unsupported"
         )
     if chat_template is not None and (
-        not is_qwen or chat_template != "chat_template.jinja"
+        PurePosixPath(chat_template).name != "chat_template.jinja"
+        or PurePosixPath(chat_template).parent != tokenizer_directory
     ):
         raise DecisionConfigError(
             "Decision tokenizer chat template layout is unsupported"
         )
 
     raw_decision_weights = _mapping(root["decision_weights"], "decision_weights")
-    expected_weights = (
-        {"decision_head": "decision_head.safetensors"}
+    expected_roles = (
+        {"decision_head"}
         if is_qwen
-        else {
-            "choice_encoder": "native/choice_encoder.safetensors",
-            "score_encoder": "native/score_encoder.safetensors",
-            "decision_heads": "native/decision_heads.safetensors",
-        }
+        else {"choice_encoder", "score_encoder", "decision_heads"}
     )
-    if set(raw_decision_weights) != set(expected_weights):
+    if set(raw_decision_weights) != expected_roles:
         raise DecisionConfigError("Decision head weight fields are unsupported")
     decision_weights = {
         key: _path(value, f"decision_weights.{key}")
         for key, value in raw_decision_weights.items()
     }
-    if decision_weights != expected_weights:
-        raise DecisionConfigError("Decision head weight layout is unsupported")
+    if any(not path.endswith(".safetensors") for path in decision_weights.values()):
+        raise DecisionConfigError("Decision head weights must be safetensors")
 
     temperature: float | None = None
     temperature_file: str | None = None
@@ -205,10 +201,8 @@ def parse_decision_config(
             temperature_file = _path(
                 calibration["temperature_file"], "calibration.temperature_file"
             )
-            if temperature_file != "temperature.json":
-                raise DecisionConfigError(
-                    "Decision calibration file layout is unsupported"
-                )
+            if not temperature_file.endswith(".json"):
+                raise DecisionConfigError("Decision calibration file must be JSON")
         else:
             raise DecisionConfigError("Decision Qwen calibration is unsupported")
     elif "calibration" in root:
@@ -228,6 +222,11 @@ def parse_decision_config(
     )
     if len(paths) != len(set(paths)):
         raise DecisionConfigError("Decision config contains duplicate file paths")
+    if any(
+        path in _RESERVED_PATHS or not _within_data_root(path, data_root)
+        for path in paths
+    ):
+        raise DecisionConfigError("Decision config files must stay in their data root")
     return DecisionRepositoryConfig(
         model_name=model_name,
         family=family,
@@ -293,6 +292,12 @@ def _path(value: object, field: str) -> str:
         return validate_relative_artifact_path(value, field=field)
     except RuntimeProfileError as error:
         raise DecisionConfigError(str(error)) from error
+
+
+def _within_data_root(path: str, data_root: PurePosixPath) -> bool:
+    if data_root == PurePosixPath("."):
+        return True
+    return PurePosixPath(path).is_relative_to(data_root)
 
 
 def _positive_finite(value: object) -> float:

@@ -91,7 +91,9 @@ def _descriptor(family: str, model_name: str) -> dict:
     }
 
 
-def _snapshot(tmp_path: Path, model_id: str, family: str):
+def _snapshot(
+    tmp_path: Path, model_id: str, family: str, *, descriptor: dict | None = None
+):
     model = resolve_decision_runtime_model(model_id, revision=_REVISION)
     model = replace(
         model,
@@ -99,7 +101,7 @@ def _snapshot(tmp_path: Path, model_id: str, family: str):
             model.profile, artifact=ArtifactSelection(config_path="config.json")
         ),
     )
-    descriptor = _descriptor(family, model.template_id)
+    descriptor = descriptor or _descriptor(family, model.template_id)
     config = parse_decision_config(
         json.dumps(descriptor).encode(), model_name=model.template_id, family=family
     )
@@ -206,8 +208,8 @@ def test_root_config_rejects_wrong_identity_code_and_unsafe_paths() -> None:
 def test_root_config_accepts_dynamic_complete_shards_and_checks_index() -> None:
     descriptor = _descriptor("qwen3.5", "Decision-1.0-Nox-4B")
     weights = [
-        "backbone/model-00001-of-00002.safetensors",
-        "backbone/model-00002-of-00002.safetensors",
+        "backbone/part-one.safetensors",
+        "backbone/part-two.safetensors",
     ]
     descriptor["backbone"] = {
         "config": "backbone/config.json",
@@ -225,8 +227,8 @@ def test_root_config_accepts_dynamic_complete_shards_and_checks_index() -> None:
         json.dumps(
             {
                 "weight_map": {
-                    "layer.0": "model-00001-of-00002.safetensors",
-                    "layer.1": "model-00002-of-00002.safetensors",
+                    "layer.0": "part-one.safetensors",
+                    "layer.1": "part-two.safetensors",
                 }
             }
         ).encode(),
@@ -236,13 +238,60 @@ def test_root_config_accepts_dynamic_complete_shards_and_checks_index() -> None:
         validate_decision_weight_index(
             b'{"weight_map":{"layer.0":"other.safetensors"}}', config
         )
-    descriptor["backbone"]["weights"].pop()
-    with pytest.raises(DecisionConfigError, match="incomplete"):
+    descriptor["backbone"].pop("index")
+    with pytest.raises(DecisionConfigError, match="indexed weight layout"):
         parse_decision_config(
             json.dumps(descriptor).encode(),
             model_name=descriptor["model_name"],
             family="qwen3.5",
         )
+
+
+@pytest.mark.parametrize(
+    "model_id,family,data_root", [(_QWEN, "qwen3.5", "v2"), (_VELA, "vela", "release")]
+)
+def test_root_config_drives_renamed_model_files_and_data_root(
+    tmp_path: Path, model_id: str, family: str, data_root: str
+) -> None:
+    descriptor = _descriptor(family, model_id.rsplit("/", 1)[-1])
+    descriptor["model_config"] = f"{data_root}/metadata.json"
+    descriptor["backbone"] = {
+        "config": f"{data_root}/body/config.json",
+        "weights": [
+            (
+                f"{data_root}/body/model.safetensors"
+                if family == "qwen3.5"
+                else f"{data_root}/body/encoder-v2.safetensors"
+            )
+        ],
+    }
+    descriptor["tokenizer"] = {
+        "json": f"{data_root}/text/tokenizer.json",
+        "config": f"{data_root}/text/tokenizer_config.json",
+    }
+    descriptor["decision_weights"] = (
+        {"decision_head": f"{data_root}/heads/scorer-v2.safetensors"}
+        if family == "qwen3.5"
+        else {
+            "choice_encoder": f"{data_root}/heads/choice-v2.safetensors",
+            "score_encoder": f"{data_root}/heads/score-v2.safetensors",
+            "decision_heads": f"{data_root}/heads/decision-v2.safetensors",
+        }
+    )
+    model, fetcher, config = _snapshot(
+        tmp_path, model_id, family, descriptor=descriptor
+    )
+    artifact = ArtifactResolver(fetcher, tmp_path / "cache").materialize(model)
+
+    assert config.data_root_relative == data_root
+    assert artifact.data_root == artifact.root / data_root
+    assert {item.repository_path for item in artifact.files} == set(config.files)
+    assert (
+        open_verified_artifact(
+            artifact.root, model, expected_content_id=artifact.content_id
+        )
+        == artifact
+    )
 
 
 def test_old_manifest_fallback_requires_config_absence_not_invalidity(
