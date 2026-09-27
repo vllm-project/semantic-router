@@ -1,7 +1,7 @@
 # Official Qwen3.5 4B Posttrained: prospective GPU admission lock
 
-**Status: CPU admission locked and independently reverified; GPU phases NOT
-STARTED.** This is the next bounded stage of the
+**Status: HOLD after the first bounded GPU admission phase failed before any
+model forward pass. No retry under this lock.** This is the next bounded stage of the
 [official-source matched ablation](qwen35-4b-posttrained-vs-base-prereg-2026-09-27.md).
 It is an engineering source/numerics check, not a model result. The completed
 official Base BEST466 control and its v3 HOLD stay immutable. No typed FINAL,
@@ -89,3 +89,39 @@ reading formal labels, retuning calibration, or publishing 4B. The
 [Base v3 transfer failure](qwen35-4b-official-best466-v3-formal-hold-2026-09-27.md)
 and [2B Posttrained Score collapse](qwen35-2b-official-dual-source-full-result-2026-09-27.md)
 remain substantive risks.
+
+## Bounded execution result: HOLD
+
+The approved `zero-a` phase exited nonzero after **13.205 seconds** inside the
+runner. The private failure receipt and complete console log have SHA-256
+`837723a9c502167182c7894abb982e0f45b79ea95bb53a1ffd42aaae6571b023`
+and `aaac74af32b618857ba1de8a008361e22236790b70b4980c321997f2e37cceb6`.
+The private HOLD decision, bound to the unchanged lock, has SHA-256
+`a299ebe2974694f2f554b47313f1aa0478319c3f7eb0bd8f7a7d8e4377d38241`.
+The reserved-card accounting proxy is **0.003668 GPU-hour** for the runner's
+measured phase; container startup is excluded, and the complete reservation was
+below 0.01 GPU-hour. There were no model forward passes, predictions, optimizer
+updates, or trained weights. `zero-b`, `compare-zero`, `one`, and `reload` were
+not started. No formal or public benchmark label was accessed.
+
+The stack trace ends at `DecisionModel.from_base` calling
+`AutoConfig.from_pretrained`, which rejects `model_type=qwen3_5`. The official
+Base and Posttrained configuration files have the **same SHA-256**
+`ddc63e1c717afa86c865bb5e01313d89d72bb53b97ad4a8a03ba8510c0621670`,
+the same `model_type=qwen3_5`, and the same
+`Qwen3_5ForConditionalGeneration` architecture. The archived successful Base
+zero-step, smoke, and initial full-run containers used this exact immutable
+image ID and the same `decision_model.py` SHA-256
+`ee3db820db73011d60e99b98c3067e33d85c8f4cbae08b53ea0604869ffba0ca`.
+Their command invoked `/usr/bin/python`, whose Transformers version in the
+image is **5.17.0**. The admission runner invoked its container entrypoint
+`/opt/vllm-sr/venvs/vela/bin/python` and then reused that `sys.executable`
+for training; that interpreter has Transformers **4.57.6** and does not support
+Qwen3.5. Thus the frozen runtime invocation, rather than a Posttrained weight
+or architecture difference, caused this admission failure. The source arm has
+not yet been tested.
+
+The current lock cannot admit any further phase. A future corrected attempt
+would require a revised runner, a CPU-only pinned-interpreter source-load
+preflight, a new lock and independent review before GPU use. It must not
+relabel this failed run or reuse its zero-step output.
