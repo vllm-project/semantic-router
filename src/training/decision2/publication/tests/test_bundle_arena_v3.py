@@ -557,6 +557,8 @@ class FullV3PackageTests(unittest.TestCase):
             "status": "prekey_frozen",
             "candidate_lock_sha256": "a" * 64,
             "protocol_sha256": bundle.common.sha_file(bundle.POLICY),
+            "formula": "100*sqrt(T*H)",
+            "paired_bootstrap": {"replicates": 5000, "seed": 20260927},
             "prekey_frozen_at_utc": "2026-09-02T01:30:00+00:00",
             "score_sources_sha256": {
                 name: bundle.common.sha_file(path)
@@ -612,10 +614,17 @@ class FullV3PackageTests(unittest.TestCase):
             self.plan_path,
             {
                 "plan_version": "decision2-first-release-v3-plan/1",
+                "formula": "100*sqrt(T*H)",
                 "candidate_freeze_sha256": self.freeze["candidate_lock_sha256"],
                 "gate_document_sha256": self.freeze["protocol_sha256"],
                 "comparison_pairs": pairs,
                 "comparison_pairs_sha256": pair_sha,
+                "paired_ci_commands_after_prekey_freeze": [
+                    {
+                        **pairs[0],
+                        "command": "python -m jev_arena.compare_v3 --replicates 5000 --seed 20260927",
+                    }
+                ],
                 "source_root": str(source_root),
                 "source_sha256": {
                     name: bundle.common.sha_file(source_root / name)
@@ -656,8 +665,31 @@ class FullV3PackageTests(unittest.TestCase):
                 "raw_hashes_sha256": "b" * 64,
             },
         )
+        chronology_path = self.root / "v3-chronology.json"
+        write(
+            chronology_path,
+            {
+                "schema_version": "jevarena-v3-prekey-chronology/1",
+                "candidate_lock": {
+                    "at_utc": "2026-09-02T00:00:00+00:00",
+                    "sha256": self.freeze["candidate_lock_sha256"],
+                },
+                "prediction_seal": {
+                    "at_utc": "2026-09-02T01:00:00+00:00",
+                    "sha256": "b" * 64,
+                },
+                "audit_seal": {
+                    "at_utc": "2026-09-02T01:20:00+00:00",
+                    "sha256": bundle.common.sha_file(self.audit_path),
+                },
+            },
+        )
         self.freeze.update(
             {
+                "chronology": {
+                    "path": str(chronology_path),
+                    "sha256": bundle.common.sha_file(chronology_path),
+                },
                 "plan": {
                     "path": str(self.plan_path),
                     "sha256": bundle.common.sha_file(self.plan_path),
