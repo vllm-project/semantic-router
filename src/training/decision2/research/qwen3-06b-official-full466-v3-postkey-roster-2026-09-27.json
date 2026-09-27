@@ -1,0 +1,83 @@
+{
+  "schema": "decision2-official-qwen06b-v3-postkey-roster/1",
+  "status": "prospective_same_panel_after_project_label_access",
+  "not_a_never_unsealed_blind_test": true,
+  "development_gate_commit": "e42ce49e3",
+  "source_commit": "1414e6d6d150fbde9d977945a4be23a7b8597368",
+  "panel": {
+    "typed": {
+      "items": 1600,
+      "answer_slots": 2000,
+      "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd"
+    },
+    "css": {
+      "items": 6547,
+      "answer_slots": 6547,
+      "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6"
+    },
+    "public": {
+      "items": 231,
+      "answer_slots": 231,
+      "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+      "manifest_sha256": "e0e7c67701cf05f996d3b4eac09abf1bb3e6bb363cfe007089acd3644a38ed35"
+    }
+  },
+  "scoring_sources_sha256": {
+    "benchmark/score.py": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "transfer/score.py": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca",
+    "jev_arena/arena_v3.py": "3d5b4aea031efb0d05ae7a501983868fe3bb9e42ca37e23fce5da8c002720cd8",
+    "jev_arena/compare_v3.py": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "jev_arena/jevbench_public.py": "aec840b6497beeae8b63e9270670c22506265c086a84e889bc82f694146518cf"
+  },
+  "candidate": {
+    "model_id": "research/qwen3-06b-official-full466",
+    "model_revision": "5380e01e3fbb5f541d6548144dfb9e0776292d28a52d490f90c8929f764f37ab",
+    "model_sha256": "5380e01e3fbb5f541d6548144dfb9e0776292d28a52d490f90c8929f764f37ab",
+    "loaded_parameters": 597103104,
+    "base_model": "Qwen/Qwen3-0.6B-Base",
+    "base_revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+    "best_step": 466,
+    "best_sha256": "e96277b9e0b07b7ef8c8df4b2fcbb71b7bdb9e8b4b8ed58816d8381dc221e3b6",
+    "complete_sha256": "66d281398be3ffeed170d9384db92c9c17e6f3a2a12f123f765f8d1424efba54",
+    "adapter_version": "decision2-typed-benchmark-adapter-v2-calibrated",
+    "adapter_sha256": "33dae46ec1aa812f0a75365e2757a60f17b8d9474fdd15d9a45524437c1b7d56",
+    "calibration_sha256": "dc29fc12c65f2cf0a676f547360703fde5e846b1df0cd4fb557f830fb3d13da5",
+    "max_length": 8192,
+    "temperature_source": "selected_checkpoint_disjoint_CAL700",
+    "inference": "one item at a time; all item questions batched; no truncation"
+  },
+  "comparators": {
+    "previous_generation": {
+      "name": "Kai1",
+      "model_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+      "weight_revision": "7185f514f54b8f93c55998b1e8f9c5cc67f0d029",
+      "loaded_parameters": 571909635,
+      "adapter_version": "kai-lex-native-v2",
+      "prediction_sha256": {
+        "typed": "385889a50908185de59da171e1fb368c7f454db000af0225aa815da359590348",
+        "css": "471c21cff9e436c905119756ca121d10dc7cbec76612ce4a364456d333d71086",
+        "public": "b07c3862e89b7fd45dc74f4da3d09696bdfb9ea2284b3eb96671b7e35034d526"
+      }
+    },
+    "index_selected_peer": {
+      "name": "Bosun-v3.1-0.6B",
+      "model_id": "Hanno-Labs/bosun-v3.1-0.6b",
+      "weight_revision": "1d8b6f9611f9b64b514ce8b57cd86398fbc31a3b",
+      "loaded_parameters": 606131200,
+      "adapter_version": "bosun-v31-06b-native-predict-v1",
+      "prediction_sha256": {
+        "typed": "37d7b991db9b58310fb56ca384da0254171c560c41006411d6a08e4c13ce7e6e",
+        "css": "c567b879c70372d8c5a1fd7babd64a3561eda5bf1eb3a0b71a5b22b83c0e1735",
+        "public": "cb212d91e5761980e4836873f316bed3adc218b449e734ba620794ca608827ac"
+      }
+    }
+  },
+  "reused_comparator_roster_sha256": "e7c1599a43f7a7a09391934f3a8a2c4ddd1bebf0ca78ce6ba59353e7c56e7c99",
+  "reused_comparator_prediction_seal_sha256": "2e6333049ff51ceeb79463702dad0ecc88d389bc0daf2970565c7f399704fcc6",
+  "overlap_audit_sha256": "2501199805ac94397f15776224a2d7c5f6befffbea9ac19218dce7d968826493",
+  "score_rule": "100 * sqrt(typed_FINAL_four_family_macro_accuracy * CSS15_task_median_macro_F1)",
+  "invalid_policy": "missing, invalid and over-budget answers fail at full denominator",
+  "paired_bootstrap": {"replicates": 5000, "seed": 20260927},
+  "execution_order": "audit_and_lock_candidate; candidate_gold_free_typed_css_public; seal_all_three_plus_reused_comparators; score",
+  "publication_role": "internal research protocol, not a model card"
+}
