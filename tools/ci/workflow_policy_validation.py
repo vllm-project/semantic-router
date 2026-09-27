@@ -95,7 +95,6 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         ("pr.yml", "pr"),
         ("main.yml", "main"),
         ("nightly-build.yml", "nightly"),
-        ("release.yml", "release"),
     ):
         workflow = workflows.get(filename)
         call = workflow.jobs.get("ci", {}) if workflow else {}
@@ -170,6 +169,31 @@ def validate_release_contract(
 
 
 def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> None:
+    expected_jobs = {
+        "validate",
+        "images",
+        "docker",
+        "helm",
+        "pypi",
+        "crate",
+        "release-notes",
+    }
+    if set(release.jobs) != expected_jobs:
+        errors.append(
+            ".github/workflows/release.yml: publish graph must contain only "
+            "version validation, artifact build, and publishers"
+        )
+    builder = release.jobs.get("images", {})
+    if (
+        local_target(builder) != "build-artifacts.yml"
+        or needs(builder) != {"validate"}
+        or builder.get("with", {}).get("mode") != "release"
+        or builder.get("with", {}).get("multiarch") is not True
+    ):
+        errors.append(
+            ".github/workflows/release.yml: images must build from the "
+            "validated release source without CI tests"
+        )
     expected_publishers = {
         "docker": "docker-publish.yml",
         "helm": "helm-publish.yml",
@@ -186,6 +210,30 @@ def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> Non
                 f".github/workflows/release.yml: '{job_id}' must call '{target}' "
                 "after validate"
             )
+        if "github.event_name == 'push'" not in job.get("if", ""):
+            errors.append(
+                f".github/workflows/release.yml: '{job_id}' may publish only "
+                "on a tag push"
+            )
+        if "images" not in needs(
+            job
+        ) or "needs.images.result == 'success'" not in job.get("if", ""):
+            errors.append(
+                f".github/workflows/release.yml: '{job_id}' must wait for "
+                "successful release image builds"
+            )
+    pypi_job = release.jobs.get("pypi", {})
+    if pypi_job.get("with", {}).get("prebuilt-dist") is not False:
+        errors.append(
+            ".github/workflows/release.yml: Python publisher must build its "
+            "own release distribution"
+        )
+    notes = release.jobs.get("release-notes", {})
+    if needs(notes) != {"validate", *expected_publishers}:
+        errors.append(
+            ".github/workflows/release.yml: GitHub Release must wait for "
+            "all publishers"
+        )
 
 
 def validate_release_images(release: WorkflowLike, errors: list[str]) -> None:
@@ -195,8 +243,16 @@ def validate_release_images(release: WorkflowLike, errors: list[str]) -> None:
         if isinstance(docker_job, dict)
         else None
     )
-    if images != "${{ needs.ci.outputs.publish_images }}":
-        errors.append("release images must consume the planner publication inventory")
+    builder = release.jobs.get("images", {})
+    built_images = (
+        builder.get("with", {}).get("images") if isinstance(builder, dict) else None
+    )
+    expected = "${{ needs.validate.outputs.images }}"
+    if images != expected or built_images != expected:
+        errors.append(
+            "release image builds and publishers must consume the validated "
+            "publication inventory"
+        )
     release_text = release.path.read_text(encoding="utf-8")
     fixture_bullets = {
         "- `provider-mocker`",

@@ -101,6 +101,9 @@ release: v9.9
             release_contract.write_github_outputs(output, contract, "9.8.7")
             self.assertIn("catalog_snapshot=v9.8", output.read_text(encoding="utf-8"))
             self.assertIn("candle_version=9.8.7", output.read_text(encoding="utf-8"))
+            self.assertIn(
+                'release_images_json=["vllm-sr"]', output.read_text(encoding="utf-8")
+            )
 
 
 if __name__ == "__main__":

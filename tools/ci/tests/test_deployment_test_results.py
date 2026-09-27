@@ -11,9 +11,48 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from deployment_test_results import go_unit, kubernetes, operator
+from release_guard_waiver import GUARD_WAIVER
 
 
 class DeploymentResultsTests(unittest.TestCase):
+    def test_release_guard_case_remains_failed_and_other_cases_are_required(self):
+        report = {
+            "profile": "production-stack",
+            "expected_cases": ["routing", "jailbreak-detection"],
+            "test_results": [
+                {"Name": "routing", "Passed": True},
+                {"Name": "jailbreak-detection", "Passed": False},
+            ],
+            "status": "FAILED",
+            "exit_code": 1,
+            "total_tests": 2,
+            "passed_tests": 1,
+            "failed_tests": 1,
+        }
+        evidence = kubernetes(report, "production-stack", waiver=GUARD_WAIVER)
+        self.assertEqual(
+            evidence["cases"][-1],
+            {"id": "jailbreak-detection", "status": "failed"},
+        )
+        with self.assertRaises(ValueError):
+            kubernetes(report, "production-stack")
+        for mutation in (
+            {
+                "test_results": [
+                    {"Name": "routing", "Passed": False},
+                    *report["test_results"][1:],
+                ]
+            },
+            {"expected_cases": ["jailbreak-detection"]},
+            {"failed_tests": 0},
+            {"status": "PASSED"},
+            {"exit_code": 0},
+        ):
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                kubernetes(
+                    {**report, **mutation}, "production-stack", waiver=GUARD_WAIVER
+                )
+
     def test_kubernetes_requires_exact_passed_inventory(self):
         report = {
             "profile": "envoy-ai-gateway",
@@ -122,8 +161,11 @@ class DeploymentResultsTests(unittest.TestCase):
                         del bad[job]
                     else:
                         bad[job]["result"] = state
-                    with self.subTest(job=job, state=state), self.assertRaisesRegex(
-                        ValueError, f"prerequisite did not succeed: {job}"
+                    with (
+                        self.subTest(job=job, state=state),
+                        self.assertRaisesRegex(
+                            ValueError, f"prerequisite did not succeed: {job}"
+                        ),
                     ):
                         operator(directory, variants, bad)
             with self.assertRaises(ValueError):

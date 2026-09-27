@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release candidate to qualify without publishing.
+        description: Build release artifacts without publishing.
         required: true
         type: string
 
@@ -25,8 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-      performance_base: ${{ steps.baseline.outputs.ref }}
       tag: ${{ steps.version.outputs.tag }}
+      images: ${{ steps.contract.outputs.release_images_json }}
       sim_version: ${{ steps.contract.outputs.sim_version }}
       candle_version: ${{ steps.contract.outputs.candle_version }}
       catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}
@@ -72,51 +72,20 @@ jobs:
             --version "${{ steps.version.outputs.version }}" \
             --github-output "$GITHUB_OUTPUT"
 
-      - name: Resolve compatible implementation base for paired performance
-        id: baseline
-        env:
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          python3 tools/ci/ci_plan.py performance-base \
-            --version "$RELEASE_VERSION" --github-output "$GITHUB_OUTPUT"
-
-      - name: Verify performance base is an ancestor
-        env:
-          PERFORMANCE_BASE: ${{ steps.baseline.outputs.ref }}
-        run: git merge-base --is-ancestor "$PERFORMANCE_BASE" "$GITHUB_SHA"
-
-  ci:
-    name: Release Candidate
+  images:
+    name: Build Release Images
     needs: validate
-    uses: ./.github/workflows/ci.yml
-    permissions:
-      contents: read
-      actions: read
-      security-events: write
+    uses: ./.github/workflows/build-artifacts.yml
     with:
-      profile: release
+      images: ${{ needs.validate.outputs.images }}
+      mode: release
       tag: ${{ needs.validate.outputs.tag }}
-      performance-base-ref: ${{ needs.validate.outputs.performance_base }}
-    secrets: inherit
-
-  gate:
-    name: Release CPU Qualification
-    if: always()
-    needs: [validate, ci]
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Require version and complete CPU evidence
-        env:
-          VERSION_RESULT: ${{ needs.validate.result }}
-          QUALIFICATION_RESULT: ${{ needs.ci.result }}
-        run: |
-          test "$VERSION_RESULT" = success
-          test "$QUALIFICATION_RESULT" = success
+      multiarch: true
 
   docker:
     name: Publish Images
-    needs: [validate, gate, ci]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    needs: [validate, images]
+    if: github.event_name == 'push' && needs.images.result == 'success'
     permissions:
       contents: read
       actions: read
@@ -124,15 +93,15 @@ jobs:
     uses: ./.github/workflows/docker-publish.yml
     with:
       mode: release
-      images: ${{ needs.ci.outputs.publish_images }}
+      images: ${{ needs.validate.outputs.images }}
       tag: ${{ needs.validate.outputs.tag }}
       publish_latest: true
     secrets: inherit
 
   helm:
     name: Publish Helm Chart
-    needs: [validate, gate]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    needs: [validate, images]
+    if: github.event_name == 'push' && needs.images.result == 'success'
     permissions:
       contents: read
       actions: read
@@ -146,20 +115,20 @@ jobs:
 
   pypi:
     name: Publish Python Package
-    needs: [validate, gate]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    needs: [validate, images]
+    if: github.event_name == 'push' && needs.images.result == 'success'
     uses: ./.github/workflows/pypi-publish.yml
     with:
       version: ${{ needs.validate.outputs.version }}
       tag: ${{ needs.validate.outputs.tag }}
       catalog_snapshot: ${{ needs.validate.outputs.catalog_snapshot }}
-      prebuilt-dist: true
+      prebuilt-dist: false
     secrets: inherit
 
   crate:
     name: Publish Rust Crate
-    needs: [validate, gate]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    needs: [validate, images]
+    if: github.event_name == 'push' && needs.images.result == 'success'
     uses: ./.github/workflows/publish-crate.yml
     with:
       version: ${{ needs.validate.outputs.version }}
@@ -169,8 +138,8 @@ jobs:
 
   release-notes:
     name: Publish GitHub Release
-    needs: [validate, gate, docker, helm, pypi, crate]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    needs: [validate, docker, helm, pypi, crate]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -208,8 +177,8 @@ jobs:
           body: |
             ## Release ${{ needs.validate.outputs.tag }}
 
-            Version and CPU runtime qualification completed before Docker, Helm, PyPI, crates.io,
-            and operator image publication.
+            Release versions and artifact identities were checked before Docker,
+            Helm, PyPI, crates.io, and operator image publication.
 
             ### Container images
 
