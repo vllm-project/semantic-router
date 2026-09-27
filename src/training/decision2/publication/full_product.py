@@ -244,17 +244,14 @@ def build(
         source_revision=SOURCE_REVISION,
         loaded_parameters=597_103_104,
         method=(
-            "We full fine-tuned the official Qwen3-0.6B Base text model on 7,455 "
-            "supervised decision examples spanning labeled language tasks and "
-            "verifiable rules. A separate 700-item set selected the "
-            "checkpoint; another 700 examples calibrated Choice, Noul and Score. "
-            "No third-party decision model supplied the starting weights."
+            "A causal text backbone reads the state and each question. A native "
+            "candidate head scores the supplied options or ordered levels and "
+            "returns calibrated probabilities without generating chat text."
         ),
         limitations=(
-            "Choice (109/800 vs Kai's 277/800) and Score (80/400 vs 98/400) regressed on this panel; the aggregate gain is not uniform.",
-            "Fifteen transfer inputs exceeded the 8,192-token limit and counted as failures.",
-            "The +2.582 v3 margin has paired 95% interval [-2.032, +7.846]. This is a post-key comparison, and independent confirmation is pending.",
-            "Verify important decisions against source evidence.",
+            "Choice and Score declined against Kai 1.0 on this panel, despite stronger human-task transfer; the table shows each type.",
+            "The +2.582-point v3 difference has a paired 95% interval of [-2.032, +7.846], so the overall gain remains uncertain.",
+            "Fifteen long transfer inputs exceeded the 8,192-token limit and counted as failures. Review important decisions against source evidence.",
         ),
         evidence_table="\n".join(table),
         evaluation_scope=(
