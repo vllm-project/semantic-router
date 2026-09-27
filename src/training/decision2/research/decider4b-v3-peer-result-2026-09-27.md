@@ -57,6 +57,16 @@ same-panel scores, not historical Index rows. Peer size comparison should use
 the loaded parameter count, not the `4b` suffix alone. No claim about official
 JevBench rank or a protected new blind set follows from these figures.
 
+The fixed 5,000-draw paired v3 bootstrap against own Nox 1.0 gives Decider
+minus Nox **+5.411410 points**, 95% interval **[+0.504765, +10.537760]**.
+Typed `T` is +.0750 with interval [.0421875, .1065625]; CSS `H` is
++.036434 with interval [−.041712, +.126682]. The CSS axis alone is not
+resolved by this interval. Typed groups were resampled within family and CSS
+tasks/items were resampled together for each model, with invalid answers kept
+in the denominator. This paired comparison remains post-key same-panel
+evidence, not an unseen external test. Private paired-report SHA-256:
+`f10ec811ac8344e38bdad9de0226c318a5c00bed3b7bf557f8528c6e372de8b5`.
+
 ## Reproduction and limitations
 
 Pinned scorer source SHA-256: typed
