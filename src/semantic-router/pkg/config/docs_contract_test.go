@@ -52,7 +52,7 @@ var configContractRequiredDocs = []docNeedles{
 			"Entrypoints and recipes",
 			"exhaustive canonical example",
 			"`config/fragments/`",
-			// The canonical version gate is a documented startup contract (issue #2469).
+			// The version gate is a documented startup contract (#2469).
 			"## Schema version",
 			"### Contract bumps",
 		},

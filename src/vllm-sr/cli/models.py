@@ -2477,11 +2477,7 @@ class UserConfig(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
-    # Defaults to "" rather than being required: the JSON Schema has no
-    # `required` for version (an omitted key already validates there), and the
-    # Router's own gate treats an absent or empty version as the compatibility
-    # fallback rather than an error. Requiring it here would make the CLI
-    # reject a document the Router loads. See canonical_version.go.
+    # Optional like the Router gate (canonical_version.go), which treats absent as "".
     version: str = ""
     listeners: List[Listener] = Field(default_factory=list)
     providers: Providers = Field(default_factory=Providers)

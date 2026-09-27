@@ -1,6 +1,4 @@
-"""Cross-language conformance: the CLI's version gate must agree with the
-Router's (canonical_version.go), which this corpus also drives from
-Go's TestVersionGateMatchesSharedCrossLanguageConformance. See issue #2469."""
+"""The CLI version gate must agree with the Router's; Go replays the same corpus (#2469)."""
 
 from __future__ import annotations
 
@@ -31,8 +29,7 @@ def _document_for_case(case: dict[str, Any]) -> dict[str, Any]:
 
 
 def _accepts_current_contract(document: dict[str, Any]) -> bool:
-    """Mirror cli.parser.parse_user_config's gate order: the generated JSON
-    Schema runs first and short-circuits, then Pydantic. Either can reject."""
+    """Mirror parse_user_config: generated JSON Schema first, then Pydantic."""
     if validate_config_structure(document):
         return False
     try:
@@ -45,9 +42,7 @@ def _accepts_current_contract(document: dict[str, Any]) -> bool:
 def _accepts_with_version_enum(
     document: dict[str, Any], accepted_versions: list[str]
 ) -> bool:
-    """Structural-only check against a schema whose version enum is patched to
-    a different accepted set, mirroring how the Go test swaps the package-level
-    acceptedCanonicalVersions to simulate a retained contract."""
+    """Schema-only check with the version enum patched, like the Go retained-contract test."""
     schema = copy.deepcopy(schema_document())
     schema["properties"]["version"] = {
         "type": "string",

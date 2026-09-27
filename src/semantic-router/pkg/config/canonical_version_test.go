@@ -41,8 +41,7 @@ func TestValidateCanonicalVersionRejectsNil(t *testing.T) {
 	}
 }
 
-// A release that bumps the written contract lists the outgoing one in
-// acceptedCanonicalVersions, so configs written for it keep loading.
+// A retained outgoing contract keeps loading after a bump.
 func TestValidateCanonicalVersionAcceptsRetainedContracts(t *testing.T) {
 	restore := acceptedCanonicalVersions
 	t.Cleanup(func() { acceptedCanonicalVersions = restore })
@@ -63,8 +62,7 @@ func TestValidateCanonicalVersionAcceptsRetainedContracts(t *testing.T) {
 	}
 }
 
-// TestCanonicalContractRejectsUnsupportedVersion covers the boundary rather than the
-// helper: an unsupported version must fail before the document is interpreted.
+// The boundary, not the helper, must reject an unsupported version.
 func TestCanonicalContractRejectsUnsupportedVersion(t *testing.T) {
 	canonical := &CanonicalConfig{Version: "v0.1"}
 
@@ -92,8 +90,7 @@ func TestExportStampsSupportedVersion(t *testing.T) {
 	}
 }
 
-// The version is read straight off the parsed YAML map, so a document written
-// for another contract is refused before any normalizer rewrites it.
+// The raw gate reads version off the parsed YAML map, before any normalizer.
 func TestValidateRawCanonicalVersion(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -102,11 +99,13 @@ func TestValidateRawCanonicalVersion(t *testing.T) {
 	}{
 		{"supported", map[string]interface{}{"version": CanonicalConfigVersion}, false},
 		{"key absent", map[string]interface{}{}, false},
+		{"nil map", nil, false},
 		{"empty string", map[string]interface{}{"version": ""}, false},
 		{"whitespace only", map[string]interface{}{"version": "   "}, true},
 		{"padded", map[string]interface{}{"version": " " + CanonicalConfigVersion + " "}, true},
 		{"older contract", map[string]interface{}{"version": "v0.2"}, true},
 		{"not a string", map[string]interface{}{"version": 0.3}, true},
+		{"list", map[string]interface{}{"version": []interface{}{CanonicalConfigVersion}}, true},
 		{"null", map[string]interface{}{"version": nil}, true},
 	}
 
@@ -123,9 +122,7 @@ func TestValidateRawCanonicalVersion(t *testing.T) {
 	}
 }
 
-// An unsupported version wins over every other complaint the document attracts.
-// Otherwise a file written for another contract is reported as a bad field in
-// this one, which sends the reader to the wrong fix.
+// An unsupported version must win over any other rejection of the same document.
 func TestUnsupportedVersionOutranksOtherRejections(t *testing.T) {
 	// routing.models is a deprecated field, so this document fails twice over.
 	document := []byte("version: v0.2\nrouting:\n  models:\n    - name: legacy\n")
@@ -149,8 +146,7 @@ func TestUnsupportedVersionOutranksOtherRejections(t *testing.T) {
 	}
 }
 
-// The generated JSON Schema gates on the same list the Router reads, so the CLI
-// cannot reject a document the Router loads.
+// Callers get a copy, so the schema generator cannot mutate the Router's gate.
 func TestAcceptedCanonicalVersionsIsACopy(t *testing.T) {
 	accepted := AcceptedCanonicalVersions()
 	if len(accepted) == 0 || accepted[0] != CanonicalConfigVersion {

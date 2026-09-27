@@ -8,13 +8,11 @@ import (
 	"testing"
 )
 
-// versionGateConformanceCase is one row of the shared cross-language corpus.
-// version_present distinguishes an omitted key from an explicit value, since
-// the raw gate treats them differently for anything that isn't a string.
+// versionGateConformanceCase is one corpus row; Version is any so null and numbers stay distinct.
 type versionGateConformanceCase struct {
 	ID             string `json:"id"`
 	VersionPresent bool   `json:"version_present"`
-	Version        string `json:"version"`
+	Version        any    `json:"version"`
 	ExpectedValid  bool   `json:"expected_valid"`
 }
 
@@ -54,10 +52,7 @@ func loadVersionGateConformanceCorpus(t *testing.T) versionGateConformanceCorpus
 	return corpus
 }
 
-// runVersionGateConformanceContract asserts ValidateRawCanonicalVersion agrees
-// with the corpus for one accepted_versions set, so the same fixture the CLI's
-// generated schema and Pydantic model are checked against is also checked
-// against the Go gate they are meant to match.
+// runVersionGateConformanceContract replays one accepted_versions set against the Go raw gate.
 func runVersionGateConformanceContract(t *testing.T, contract versionGateConformanceContract) {
 	t.Helper()
 	if len(contract.AcceptedVersions) == 0 {
@@ -82,7 +77,7 @@ func runVersionGateConformanceContract(t *testing.T, contract versionGateConform
 
 			err := ValidateRawCanonicalVersion(raw)
 			if (err == nil) != tc.ExpectedValid {
-				t.Fatalf("ValidateRawCanonicalVersion(present=%v, version=%q) error = %v, want valid=%v",
+				t.Fatalf("ValidateRawCanonicalVersion(present=%v, version=%#v) error = %v, want valid=%v",
 					tc.VersionPresent, tc.Version, err, tc.ExpectedValid)
 			}
 		})

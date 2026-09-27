@@ -22,9 +22,7 @@ func init() {
 	})
 }
 
-// versionGateDocument is one canonical document parameterized only by `version`.
-// Both cases submit the same bytes apart from that field, so a difference in the
-// outcome is attributable to the version gate and nothing else.
+// versionGateDocument differs between cases only in `version`, so any outcome change is the gate's.
 const versionGateDocument = `version: %s
 listeners:
   - name: http-8899
@@ -75,10 +73,8 @@ type routerConfigErrorResponse struct {
 	} `json:"error"`
 }
 
-// testRouterConfigVersionGate drives POST /config/router/validate on the running
-// Router. That endpoint runs the same canonical parse as serve and hot-reload but
-// writes nothing, so the case asserts the real runtime contract without mutating
-// the deployed configuration. See issue #2469.
+// testRouterConfigVersionGate posts to /config/router/validate, which shares the serve and
+// hot-reload parse but writes nothing (#2469).
 func testRouterConfigVersionGate(
 	ctx context.Context,
 	client *kubernetes.Clientset,

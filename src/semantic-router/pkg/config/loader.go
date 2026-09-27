@@ -121,9 +121,7 @@ func parseYAMLBytesWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	// The version gate runs first. Everything below interprets the document as
-	// this contract, so a document written for another one has to be refused
-	// before any of it is rewritten or checked against this contract's fields.
+	// Gate the version first: everything below reads the document as this contract.
 	if versionErr := ValidateRawCanonicalVersion(raw); versionErr != nil {
 		return nil, versionErr
 	}

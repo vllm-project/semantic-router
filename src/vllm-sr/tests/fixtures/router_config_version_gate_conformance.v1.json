@@ -58,6 +58,18 @@
         "version_present": true,
         "version": "latest",
         "expected_valid": false
+      },
+      {
+        "id": "version-null",
+        "version_present": true,
+        "version": null,
+        "expected_valid": false
+      },
+      {
+        "id": "version-number",
+        "version_present": true,
+        "version": 0.3,
+        "expected_valid": false
       }
     ]
   },

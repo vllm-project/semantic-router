@@ -65,8 +65,7 @@ var BaselineRouterContract = []string{
 	"language-routing",
 	// Reask signal rule matching and routing (issue #3178)
 	"reask-routing",
-	// The canonical version gate accepts the supported contract and rejects
-	// an unsupported one before interpretation (issue #2469)
+	// Canonical version gate accepts the supported contract, rejects others (issue #2469)
 	"router-config-version-gate",
 }
 
