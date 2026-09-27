@@ -172,6 +172,8 @@ def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> Non
     expected_jobs = {
         "validate",
         "images",
+        "helm-build",
+        "python-build",
         "docker",
         "helm",
         "pypi",
@@ -181,7 +183,7 @@ def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> Non
     if set(release.jobs) != expected_jobs:
         errors.append(
             ".github/workflows/release.yml: publish graph must contain only "
-            "version validation, artifact build, and publishers"
+            "version validation, artifact builds, and publishers"
         )
     builder = release.jobs.get("images", {})
     if (
@@ -200,6 +202,22 @@ def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> Non
         "pypi": "pypi-publish.yml",
         "crate": "publish-crate.yml",
     }
+    expected_prebuilds = {
+        "helm-build": ("helm-publish.yml", "prebuilt-chart"),
+        "python-build": ("pypi-publish.yml", "prebuilt-dist"),
+    }
+    for job_id, (target, prebuilt_input) in expected_prebuilds.items():
+        job = release.jobs.get(job_id, {})
+        if (
+            local_target(job) != target
+            or needs(job) != {"validate"}
+            or job.get("with", {}).get("build-only") is not True
+            or job.get("with", {}).get(prebuilt_input, False)
+        ):
+            errors.append(
+                f".github/workflows/release.yml: '{job_id}' must build "
+                "the validated release artifact without publishing"
+            )
     for job_id, target in expected_publishers.items():
         job = release.jobs.get(job_id)
         if not isinstance(job, dict):
@@ -222,11 +240,29 @@ def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> Non
                 f".github/workflows/release.yml: '{job_id}' must wait for "
                 "successful release image builds"
             )
+        for prebuild in expected_prebuilds:
+            if prebuild not in needs(
+                job
+            ) or f"needs.{prebuild}.result == 'success'" not in job.get("if", ""):
+                errors.append(
+                    f".github/workflows/release.yml: '{job_id}' must wait for "
+                    f"successful {prebuild}"
+                )
     pypi_job = release.jobs.get("pypi", {})
-    if pypi_job.get("with", {}).get("prebuilt-dist") is not False:
+    if pypi_job.get("with", {}).get("prebuilt-dist") is not True or pypi_job.get(
+        "with", {}
+    ).get("build-only", False):
         errors.append(
-            ".github/workflows/release.yml: Python publisher must build its "
-            "own release distribution"
+            ".github/workflows/release.yml: Python publisher must promote "
+            "the validated prebuilt distribution"
+        )
+    helm_job = release.jobs.get("helm", {})
+    if helm_job.get("with", {}).get("prebuilt-chart") is not True or helm_job.get(
+        "with", {}
+    ).get("build-only", False):
+        errors.append(
+            ".github/workflows/release.yml: Helm publisher must promote "
+            "the validated prebuilt chart"
         )
     notes = release.jobs.get("release-notes", {})
     if needs(notes) != {"validate", *expected_publishers}:

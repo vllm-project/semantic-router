@@ -239,17 +239,18 @@ def make_plan(
 
 
 def component_batches(verifications: list[dict]) -> list[dict]:
-    """Pack compatible lightweight contracts without changing their identities."""
+    """Give every selected component contract an independent Actions worker."""
+    workers = load_catalog()["component_workers"]
     return [
-        {"id": name, **worker, "verifications": selected}
-        for name, worker in load_catalog()["component_workers"].items()
-        if (
-            selected := [
-                row
-                for row in verifications
-                if row["executor"] == "tools" and row["worker"] == name
-            ]
-        )
+        {
+            "id": row["id"],
+            "worker": row["worker"],
+            **workers[row["worker"]],
+            "display_name": row["display_name"],
+            "verifications": [row],
+        }
+        for row in verifications
+        if row["executor"] == "tools"
     ]
 
 

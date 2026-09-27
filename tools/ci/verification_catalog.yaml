@@ -10,6 +10,7 @@ defaults:
   images: []
   services: []
 component_workers:
+  # These select per-contract setup; each selected verification gets its own job.
   cli:
     display_name: CLI and Fleet
     go: false
