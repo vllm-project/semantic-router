@@ -34,6 +34,36 @@ and be within 25% of the nominal model name. The record's per-language TRAIN
 counts must sum to the exact TRAIN row count; the card states the evaluation
 language coverage so English-heavy panels are not read as multilingual proof.
 
+`python3 -m publication.panel_parity` builds the private full-panel
+`parity_receipt` from already sealed, **gold-free** source and packaged
+predictions for the exact DEV1,600 and CSS pilot1,430 prompt rosters. Supply
+the inner package manifest, each panel's prompt file and both prediction
+files, plus a new private 0700 output directory. Each prediction file must
+have its companion `.manifest.json` binding the prompt/model/CAL hashes; the
+package prediction manifest must also bind the inner package SHA. The tool
+compares the scorer's actual Choice, Noul and Score point decisions, includes
+invalid and over-budget outputs, computes p99 over individual probability and
+Score scalars, and writes two detailed private reports plus
+`native-parity.json`. It refuses incomplete rows, changed input order or
+unbound prediction files. The package gate accepts this receipt only if both
+panels pass the **unchanged** zero-decision-change, p99 ≤0.005 and max ≤0.02
+thresholds. The comparison does not prove that the two prediction files were
+run on comparable devices; retain the external runtime and chronological
+attestation separately. Never copy the detailed reports or raw predictions
+into a public model repository.
+
+```bash
+PYTHONPATH=src/training/decision2 python3 -m publication.panel_parity \
+  --package-manifest /private/package/MODEL_MANIFEST.json \
+  --dev-prompts /private/dev.prompts.jsonl \
+  --dev-source /private/dev.source.predictions.jsonl \
+  --dev-package /private/dev.package.predictions.jsonl \
+  --css-prompts /private/css-pilot.prompts.jsonl \
+  --css-source /private/css-pilot.source.predictions.jsonl \
+  --css-package /private/css-pilot.package.predictions.jsonl \
+  --output-dir /private/new-0700-parity-directory
+```
+
 The pretest freeze uses `decision2-jevarena-pretest-freeze/1`. It names the
 selected model revision, native model, model-file and calibration digests,
 native adapter version and SHA-256, the complete candidate model/revision

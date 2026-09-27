@@ -153,12 +153,17 @@ def _package_manifest(
     manifest_path = package / "MODEL_MANIFEST.json"
     if manifest_path.is_symlink() or not manifest_path.is_file():
         raise ValueError("Package manifest is missing or linked")
-    actual = _sha_file(manifest_path)
+    manifest_bytes = manifest_path.read_bytes()
+    actual = hashlib.sha256(manifest_bytes).hexdigest()
     if actual != expected_sha256:
         raise ValueError("Package manifest differs from frozen SHA-256")
     if model_revision.split(":", 1)[1] != actual:
         raise ValueError("Development model revision differs from package bytes")
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = json.loads(
+        manifest_bytes,
+        object_pairs_hook=_no_duplicate_keys,
+        parse_constant=_reject_constant,
+    )
     if (
         not isinstance(manifest, dict)
         or manifest.get("bundle_version") != PACKAGE_VERSION
