@@ -49,7 +49,8 @@ For a candidate to be labeled a **validated Decision 2.0 improvement**:
    bound for the existing half-squared-error multiclass Brier policy.
    Candidate `B*` must be at most paired 1.0 `B* + 0.03`. Report the original
    valid-only Brier and probability coverage too. Thus missing or invalid
-   probabilities cannot improve this gate by being omitted.
+   probabilities cannot improve this gate by being omitted. If `m=0` or the
+   Brier report is absent, the gate fails instead of treating it as a pass.
 5. Every required 8,147-item prediction panel must be complete, hashed and
    attributable to one frozen native model/calibration package. Packaging
    parity must pass its previously specified categorical and probability
@@ -75,11 +76,14 @@ authored v3.1 expansion.
 
 ## Current 4B candidate, without opening FINAL
 
-The clean-v2 Eikos native SemIf package selected checkpoint 0232. Its already
-completed gold-free selected-LoRA/merged-package parity receipts cover the
-full DEV 1,600 and CSS pilot 1,430 prompts with zero categorical mismatches
-and zero option-probability drift. The combined receipt reports gate pass.
-These establish package consistency only. The DEV, pilot and public results
-are development evidence; this model has no v3 `T`, `H` or paired interval.
-The signed freeze must verify all package and receipt hashes anew, and pair it
-with native Decision 1.0 Nox 4B on the sealed panels.
+The clean-v2 Eikos native SemIf package selected checkpoint 0232. Its original
+same-process selected-LoRA/merged-package parity passed on DEV 1,600 and CSS
+pilot 1,430, but the original FLA path later failed an independent-process
+repeatability gate. A prospectively chosen PyTorch reference path passed two
+independent complete CSS pilot processes with zero categorical and probability
+drift. That path still needs fixed-backend score screening and new
+selected-source/package parity before a candidate freeze. All existing DEV,
+pilot and public results are development evidence; this model has no v3 `T`,
+`H` or paired interval. The signed freeze must verify the eventual stable
+package and receipt hashes anew, and pair it with native Decision 1.0 Nox 4B
+on the sealed panels.
