@@ -129,3 +129,47 @@ labels before freezing the candidate, native prompt and scoring rule.
 readout, model package or SOTA/parameter-efficiency claim follows from this
 source screen. The most informative next action is the private native-row
 projection and group/overlap/oracle audit, not another broad optimizer run.
+
+## Native Choice/Noul projection preflight, still HOLD
+
+The subsequent CPU-only `audit_control_native_projection.py` screen used the
+same pinned source and protected inventory, the actual official 4B tokenizer,
+and the `training.model.decision_model.encode` segmented-option prompt aligned
+to the [typed System One request contract](https://docs.typesafe.ai/api). It
+created no student TRAIN file or optimizer job. The aggregate receipt SHA-256
+is `42f924c07f4c2982510f4954aa68012ba29b9cb4dece16006180193eda243fe2`;
+it is byte-identical under Python hash seeds 0 and 42. The canonical native
+input-payload stream SHA-256 is
+`61e0100d2c5f8ddd820facbb34d6a05cdbfde68efcb61026026d82d292b6183a`.
+Choice maps publisher entailment, contradiction and neutral to distinct
+`supports`, `contradicts` and `undetermined` options. The two Noul projections
+ask separately whether support or contradiction is established. These are
+semantic hypotheses pending independent rubric review, not verified oracles.
+**ConTRoL provides no ordinal Score supervision.**
+
+| Native projection gate | CPU result |
+| --- | ---: |
+| Protected near-match premise groups / source rows quarantined | 5 / 25 |
+| Repeated premise-hypothesis rows removed | 26 |
+| Conflicting-label source groups removed | 13 |
+| Remaining source pairs / independent premise groups | 6,618 / 1,509 |
+| Potential Choice / Noul / Score rows, never admitted to TRAIN | 6,618 / 13,236 / 0 |
+| Full native Choice tokens, median / p99 / max | 476 / 1,667 / 2,137 |
+| Full native support Noul tokens, median / p99 / max | 446 / 1,637 / 2,107 |
+| Full native contradiction Noul tokens, median / p99 / max | 449 / 1,640 / 2,110 |
+| Prompts above frozen 8,192-token limit | 0 |
+
+Choice gold keys are supports 2,448, contradicts 2,258 and undetermined
+1,912. Rotated Choice gold positions are 2,236 / 2,179 / 2,203; support Noul
+positions are 3,292 / 3,326 and contradiction Noul positions are 3,322 /
+3,296. The projection passes syntax, position-balance and native length
+preflight. No exact or short-leaf heuristic near overlap was found in the
+protected SELECT/CAL roles, but the scanner did not near-scan 9,444 long
+protected leaves or assess semantic paraphrases. The 13 conflicting-label
+groups are an additional quality warning, not a reason to relabel them.
+
+**TRAIN admission remains HOLD** until a separate reviewer checks source
+label versus native rubric on a blind group sample, long-leaf and semantic
+neighbors are adjudicated, and a same-initialization data-only substitution
+with matched token/padded exposure and explicit Score retention is frozen.
+This Choice/Noul source gate cannot by itself justify a 4B release recipe.
