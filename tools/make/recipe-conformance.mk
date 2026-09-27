@@ -4,7 +4,7 @@
 
 RECIPE_CONFORMANCE_PYTHON ?= $(if $(wildcard $(CURDIR)/.venv-agent/bin/python),$(CURDIR)/.venv-agent/bin/python,python3)
 RECIPE_CONFORMANCE_REPORT_DIR ?= $(CURDIR)/.agent-harness/recipe-conformance
-RECIPE_CONFORMANCE_SHARDS ?= 3
+RECIPE_CONFORMANCE_SHARDS ?=
 RECIPE_CONFORMANCE_RECIPE ?=
 VLLM_SR_PORT_OFFSET ?= 0
 RECIPE_CONFORMANCE_ROUTER_URL ?= http://127.0.0.1:$(shell expr 8080 + $(VLLM_SR_PORT_OFFSET))
@@ -30,10 +30,10 @@ recipe-conformance-static: recipe-conformance-assets ## Validate assets and Rout
 		./pkg/dsl/... \
 		./pkg/decision/...
 
-recipe-conformance-plan: ## Emit deterministic live-CPU recipe shards
+recipe-conformance-plan: ## Emit one live-CPU job per recipe (set RECIPE_CONFORMANCE_SHARDS to group)
 	@$(LOG_TARGET)
 	@$(RECIPE_CONFORMANCE_PYTHON) tools/calibration/recipe/recipe_conformance.py \
-		plan-all --shards "$(RECIPE_CONFORMANCE_SHARDS)"
+		plan-all $(if $(strip $(RECIPE_CONFORMANCE_SHARDS)),--shards "$(RECIPE_CONFORMANCE_SHARDS)",)
 
 recipe-conformance-report: ## Assemble downloaded shard artifacts into one report
 	@$(LOG_TARGET)
