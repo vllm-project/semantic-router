@@ -301,7 +301,9 @@ def build(
         "JevBench v1.2 public is a separate, independently rerun 231-question "
         "subset (easy 48, standard 72, hard 111). The displayed raw accuracy "
         "is not the upstream four-axis official score or closed-set ranking. "
-        "DEV2.0-0.6B scores 48/48, 51/72 and 44/111 respectively.\n\n"
+        "DEV2.0-0.6B scores 48/48, 51/72 and 44/111 respectively. "
+        "Native-valid answers were 231/231 for DEV2.0-0.6B and Bosun, and "
+        "187/231 for Kai; invalid answers remain failures in the 231 denominator.\n\n"
         "This is a prospective post-key same-panel rerun. Project-level formal "
         "answer-key access predates this candidate; its prediction files were "
         "sealed before same-panel scoring. It is not an untouched blind test. "
@@ -330,6 +332,9 @@ def build(
                 zip(("typed", "transfer", "jevbench_public"), values, strict=True)
             )
             for key, values in REPORT_HASHES.items()
+        },
+        "jevbench_public_valid_answers": {
+            row["key"]: row["public_valid"] for row in rows
         },
         "figure_sha256": {
             path.name: sha_file(path)
