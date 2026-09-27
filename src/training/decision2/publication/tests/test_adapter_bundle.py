@@ -208,6 +208,28 @@ class AdapterBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Upstream source files differ"):
             adapter_bundle._verify_staged_runtime(self.root / "bundle", self.source)
 
+    def test_root_download_config_points_to_packaged_adapter_bytes(self) -> None:
+        self.assemble()
+        bundle = self.root / "bundle"
+        config = json.loads((bundle / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(config["model_name"], "DEV2.0-0.8B")
+        self.assertEqual(config["runtime_family"], "decision2-native-adapter")
+        self.assertEqual(
+            config["backbone"],
+            {"repository": "Qwen/Qwen3.5-0.8B-Base", "revision": "a" * 40},
+        )
+        targets = [
+            config["model_config"],
+            *config["tokenizer"].values(),
+            *config["decision_weights"].values(),
+            config["calibration"]["temperature_file"],
+        ]
+        self.assertTrue(all((bundle / target).is_file() for target in targets))
+        config["decision_weights"]["adapter_weights"] = "missing.safetensors"
+        _json(bundle / "config.json", config)
+        with self.assertRaisesRegex(ValueError, "file inventory"):
+            adapter_bundle._verify_staged_runtime(bundle, self.source)
+
     def test_official_qwen3_decoder_package_counts_loaded_weights(self) -> None:
         _json(self.source / "config.json", {"model_type": "qwen3"})
         _weights(
@@ -399,6 +421,21 @@ class AdapterBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "differs from native scored"):
             self.assemble()
         self.assertFalse((self.root / "bundle").exists())
+
+    def test_third_party_decision_weights_cannot_enter_official_package(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Official Qwen source"):
+            adapter_bundle.assemble(
+                checkpoint=self.checkpoint,
+                source=self.source,
+                calibration=self.calibration,
+                scored_manifest=self.scored,
+                dependency_lock=self.lock,
+                base_repo_id="third-party/decision-model",
+                base_revision="a" * 40,
+                model_id="llm-semantic-router/DEV2.0-0.8B",
+                output=self.root / "ineligible-source",
+            )
+        self.assertFalse((self.root / "ineligible-source").exists())
 
     def test_runtime_rejects_missing_or_changed_pinned_dependency(self) -> None:
         lock = json.loads(self.lock.read_text(encoding="utf-8"))

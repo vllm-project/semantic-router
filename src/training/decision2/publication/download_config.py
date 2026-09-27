@@ -11,8 +11,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-
 MODEL_ID = re.compile(r"llm-semantic-router/DEV2\.0-(?:0\.6|0\.8|2|4|9|27)B\Z")
+SOURCE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
+REVISION = re.compile(r"[0-9a-f]{40}\Z")
 
 
 def build_download_config(root: Path, model_id: str) -> dict[str, Any]:
@@ -60,3 +61,50 @@ def build_download_config(root: Path, model_id: str) -> dict[str, Any]:
     if template.is_file() and not template.is_symlink():
         result["tokenizer"]["chat_template"] = template.relative_to(root).as_posix()
     return result
+
+
+def build_adapter_download_config(
+    root: Path, model_id: str, source_id: str, source_revision: str
+) -> dict[str, Any]:
+    """Describe an unmerged native adapter and its exact external backbone."""
+    if (
+        MODEL_ID.fullmatch(model_id) is None
+        or SOURCE_ID.fullmatch(source_id) is None
+        or REVISION.fullmatch(source_revision) is None
+    ):
+        raise ValueError("Adapter download config needs pinned model identities")
+    required = (
+        "model/decision_config.json",
+        "model/decision_head.safetensors",
+        "model/adapter/adapter_config.json",
+        "model/adapter/adapter_model.safetensors",
+        "model/tokenizer.json",
+        "calibration.json",
+    )
+    if any(
+        not (root / name).is_file() or (root / name).is_symlink() for name in required
+    ):
+        raise ValueError("Native adapter package is missing a config target")
+    tokenizer: dict[str, str] = {"json": "model/tokenizer.json"}
+    for key, name in (
+        ("config", "model/tokenizer_config.json"),
+        ("chat_template", "model/chat_template.jinja"),
+    ):
+        path = root / name
+        if path.is_file() and not path.is_symlink():
+            tokenizer[key] = name
+    return {
+        "decision_format": "vllm-sr-decision",
+        "format_version": 2,
+        "model_name": model_id.rsplit("/", 1)[1],
+        "runtime_family": "decision2-native-adapter",
+        "model_config": "model/decision_config.json",
+        "backbone": {"repository": source_id, "revision": source_revision},
+        "tokenizer": tokenizer,
+        "decision_weights": {
+            "decision_head": "model/decision_head.safetensors",
+            "adapter_config": "model/adapter/adapter_config.json",
+            "adapter_weights": "model/adapter/adapter_model.safetensors",
+        },
+        "calibration": {"temperature_file": "calibration.json"},
+    }

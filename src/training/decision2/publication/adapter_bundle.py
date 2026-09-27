@@ -35,6 +35,7 @@ from .adapter_runtime import (
 )
 from .bundle import _screen_file
 from .bundle_arena import _public_text, _tensor_counts
+from .download_config import build_adapter_download_config
 
 LOADER_SOURCES = (
     "calibration.py",
@@ -285,6 +286,8 @@ def assemble(
     source_kind = contract.get("source_kind")
     if source_kind not in {"base", "posttrained", "decision1"}:
         raise ValueError("Checkpoint has an unsupported publication source kind")
+    if source_kind in {"base", "posttrained"} and not base_repo_id.startswith("Qwen/"):
+        raise ValueError("Official Qwen source is required for this model family")
     if (
         source_kind in {"base", "posttrained"}
         and contract.get("base_revision") != base_revision
@@ -376,6 +379,18 @@ def assemble(
         )
         (temporary / "requirements.txt").write_text(
             "\n".join(f"{name}=={lock[name]}" for name in REQUIRED_PACKAGES) + "\n",
+            encoding="utf-8",
+        )
+        (temporary / "config.json").write_text(
+            json.dumps(
+                build_adapter_download_config(
+                    temporary, model_id, base_repo_id, base_revision
+                ),
+                ensure_ascii=False,
+                sort_keys=True,
+                indent=2,
+            )
+            + "\n",
             encoding="utf-8",
         )
         source_label = (
