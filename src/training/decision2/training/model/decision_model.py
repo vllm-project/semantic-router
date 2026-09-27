@@ -26,8 +26,11 @@ QWEN3_ARCHITECTURE = "qwen3-text-endpoints-global-query-shared-bilinear-mlp"
 QWEN3_TYPED_ARCHITECTURE = (
     "qwen3-text-endpoints-global-query-type-separated-bilinear-mlp"
 )
+QWEN3_INTERACTION_ARCHITECTURE = (
+    "qwen3-text-endpoints-global-query-candidate-interaction-v1"
+)
 TASK_TYPES = ("choice", "noul", "score")
-HEAD_VARIANTS = ("shared", "type-separated")
+HEAD_VARIANTS = ("shared", "type-separated", "candidate-interaction")
 
 
 def _payload(value: Any) -> str:
@@ -191,8 +194,8 @@ class DecisionModel(nn.Module):
             raise ValueError("Unsupported decision head variant")
 
         config = AutoConfig.from_pretrained(path, local_files_only=True)
-        if head_variant == "type-separated" and config.model_type != "qwen3":
-            raise ValueError("The type-separated ablation requires Qwen3")
+        if head_variant != "shared" and config.model_type != "qwen3":
+            raise ValueError("The experimental head ablations require Qwen3")
         if config.model_type == "qwen3_5":
             from transformers import Qwen3_5ForConditionalGeneration
 
@@ -207,6 +210,8 @@ class DecisionModel(nn.Module):
             raise ValueError(f"Unsupported official Qwen backbone: {config.model_type}")
         if head_variant == "type-separated":
             architecture = QWEN3_TYPED_ARCHITECTURE
+        elif head_variant == "candidate-interaction":
+            architecture = QWEN3_INTERACTION_ARCHITECTURE
         tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
         full, info = model_class.from_pretrained(
             path,
@@ -228,6 +233,10 @@ class DecisionModel(nn.Module):
             from .type_separated_head import TypeSeparatedCandidateHead
 
             head = TypeSeparatedCandidateHead(backbone.config.hidden_size, head_dim)
+        elif head_variant == "candidate-interaction":
+            from .candidate_interaction_head import CandidateInteractionHead
+
+            head = CandidateInteractionHead(backbone.config.hidden_size, head_dim)
         else:
             head = CandidateHead(backbone.config.hidden_size, head_dim)
         metadata = {
@@ -239,6 +248,11 @@ class DecisionModel(nn.Module):
             "source_stage": source_stage,
             "initialization": f"{source_stage}-random-head",
             "head_dim": head_dim,
+            **(
+                {"interaction_dim": head.interaction_dim}
+                if head_variant == "candidate-interaction"
+                else {}
+            ),
             "max_options": MAX_OPTIONS,
             "text_parameter_count": sum(p.numel() for p in backbone.parameters()),
             "parameter_dtype": "float32",
@@ -318,18 +332,18 @@ class DecisionModel(nn.Module):
             ARCHITECTURE,
             QWEN3_ARCHITECTURE,
             QWEN3_TYPED_ARCHITECTURE,
+            QWEN3_INTERACTION_ARCHITECTURE,
         ):
             raise ValueError("Checkpoint is not a Decision 2.0 dynamic-option model")
-        if variant != (
-            "type-separated" if architecture == QWEN3_TYPED_ARCHITECTURE else "shared"
-        ):
+        expected_variant = {
+            QWEN3_TYPED_ARCHITECTURE: "type-separated",
+            QWEN3_INTERACTION_ARCHITECTURE: "candidate-interaction",
+        }.get(architecture, "shared")
+        if variant != expected_variant:
             raise ValueError("Checkpoint architecture and head variant disagree")
-        if (
-            variant == "type-separated"
-            and metadata.get("checkpoint_format") == LORA_FORMAT
-        ):
+        if variant != "shared" and metadata.get("checkpoint_format") == LORA_FORMAT:
             raise ValueError(
-                "Typed-head LoRA checkpoints are not supported by this ablation"
+                "Experimental-head LoRA checkpoints are not supported by this ablation"
             )
         if metadata.get("checkpoint_format") == LORA_FORMAT:
             if source_path is None:
@@ -402,7 +416,11 @@ class DecisionModel(nn.Module):
             return source_model, tokenizer
         if metadata.get("checkpoint_format") not in (None, "full"):
             raise ValueError("Unknown Decision 2.0 checkpoint format")
-        if architecture in (QWEN3_ARCHITECTURE, QWEN3_TYPED_ARCHITECTURE):
+        if architecture in (
+            QWEN3_ARCHITECTURE,
+            QWEN3_TYPED_ARCHITECTURE,
+            QWEN3_INTERACTION_ARCHITECTURE,
+        ):
             from transformers import Qwen3Model
 
             backbone_class = Qwen3Model
@@ -422,6 +440,16 @@ class DecisionModel(nn.Module):
 
             head = TypeSeparatedCandidateHead(
                 backbone.config.hidden_size, metadata["head_dim"]
+            )
+        elif variant == "candidate-interaction":
+            from .candidate_interaction_head import CandidateInteractionHead
+
+            if metadata.get("interaction_dim") != 64:
+                raise ValueError("Candidate-interaction checkpoint dimension differs")
+            head = CandidateInteractionHead(
+                backbone.config.hidden_size,
+                metadata["head_dim"],
+                metadata["interaction_dim"],
             )
         else:
             head = CandidateHead(backbone.config.hidden_size, metadata["head_dim"])
@@ -448,9 +476,12 @@ class DecisionModel(nn.Module):
         batch = torch.arange(hidden.shape[0], device=hidden.device)
         candidates = hidden[batch[:, None], candidate_positions]
         query = hidden[batch, query_positions]
-        if self.metadata.get("head_variant", "shared") == "type-separated":
+        if self.metadata.get("head_variant", "shared") in (
+            "type-separated",
+            "candidate-interaction",
+        ):
             if task_type_ids is None:
-                raise ValueError("Typed-head inference needs task_type_ids")
+                raise ValueError("Experimental-head inference needs task_type_ids")
             scores = self.head(candidates, query, task_type_ids, candidate_mask)
         else:
             scores = self.head(candidates, query)
