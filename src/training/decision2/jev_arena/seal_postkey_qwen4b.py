@@ -12,6 +12,7 @@ from .lock_postkey_qwen4b import ROSTER_SCHEMA, SCHEMA
 from .seal_postkey_qwen06b import (
     PANELS,
     _candidate_rows,
+    _control_rows,
     _exclusive_json,
     _object,
     _prompts,
@@ -48,6 +49,15 @@ def seal(args: argparse.Namespace) -> dict:
         )
         for panel in PANELS
     }
+    controls = {}
+    for name in ("nox", "kev"):
+        controls[name] = {}
+        for panel in PANELS:
+            path = args.prior_predictions / f"{name}.{panel}.predictions.jsonl"
+            observed = _control_rows(path, panels[panel], roster["comparators"][name])
+            if observed != locked["controls"][name][panel]:
+                raise ValueError("Archived control prediction changed after lock")
+            controls[name][panel] = observed
     result = {
         "schema": SEAL_SCHEMA,
         "created_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -56,7 +66,7 @@ def seal(args: argparse.Namespace) -> dict:
         "code_sha256": file_digest(Path(__file__)),
         "post_key_same_panel": True,
         "candidate": candidate,
-        "controls": locked["controls"],
+        "controls": controls,
         "prompts_sha256": locked["prompts_sha256"],
         "scoring_sources_sha256": locked["scoring_sources_sha256"],
         "claim": "All three candidate predictions and six reused controls sealed before this run's first formal/public score; prior project label access is disclosed.",
@@ -75,6 +85,7 @@ def main() -> None:
         "css_prompts",
         "public_prompts",
         "predictions",
+        "prior_predictions",
         "output",
     ):
         parser.add_argument("--" + name.replace("_", "-"), type=Path, required=True)
