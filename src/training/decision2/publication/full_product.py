@@ -295,7 +295,10 @@ def build(
         "answer-key access predates this candidate; its prediction files were "
         "sealed before same-panel scoring. It is not an untouched blind test. "
         "The model's direct source and source-data credits appear in the card "
-        "and ATTRIBUTIONS.md. Exact public panel and report hashes are in "
+        "and ATTRIBUTIONS.md. Its TRAIN data include FLUTE training examples, "
+        "while the human-task panel contains disjoint FLUTE evaluation items; "
+        "the 15 tasks therefore are not uniformly unseen-source zero-shot transfer. "
+        "Exact public panel and report hashes are in "
         "[manifest.json](manifest.json).\n",
         encoding="utf-8",
     )
