@@ -7,11 +7,41 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from publication.download_config import build_download_config
 from publication.full_product import _row
 from publication.full_runtime_api import _inventory, _tensor_count
 
 
 class FullPublicationTest(unittest.TestCase):
+    def test_root_hub_config_points_to_native_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            names = (
+                "model/decision_config.json",
+                "model/backbone/config.json",
+                "model/backbone/model.safetensors",
+                "model/decision_head.safetensors",
+                "model/tokenizer.json",
+                "model/tokenizer_config.json",
+                "calibration.json",
+            )
+            for name in names:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("{}", encoding="utf-8")
+            config = build_download_config(root, "llm-semantic-router/DEV2.0-0.6B")
+            self.assertEqual(config["model_config"], "model/decision_config.json")
+            self.assertEqual(
+                config["backbone"]["weights"], ["model/backbone/model.safetensors"]
+            )
+            self.assertEqual(
+                config["decision_weights"]["decision_head"],
+                "model/decision_head.safetensors",
+            )
+            (root / "model/decision_head.safetensors").unlink()
+            with self.assertRaises(ValueError):
+                build_download_config(root, "llm-semantic-router/DEV2.0-0.6B")
+
     def test_hub_metadata_requires_pinned_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -19,6 +19,7 @@ from training.model.infer import checkpoint_fingerprint
 
 from .adapter_bundle import _screen_public_file
 from .bundle import _screen_file, sha_file
+from .download_config import build_download_config
 from .full_runtime_api import MANIFEST_VERSION, _tensor_count
 
 MODEL_ID = "llm-semantic-router/DEV2.0-0.6B"
@@ -229,6 +230,19 @@ def build(
             target = stage / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
+        # Keep the same root query-file layout as Decision 1.0. The Hub's
+        # default download counter looks for a root config.json, while the
+        # native runtime continues to load the files listed under model/.
+        (stage / "config.json").write_text(
+            json.dumps(
+                build_download_config(stage, MODEL_ID),
+                indent=2,
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         files = {
             path.relative_to(stage).as_posix(): sha_file(path)
             for path in sorted(stage.rglob("*"))

@@ -13,6 +13,7 @@ verified again after downloading the exact HF revision:
 
 ```text
 README.md                  concise product card and working examples
+config.json                Hub-counted root pointer to the native model files
 LICENSE                    Apache-2.0 for our released content
 NOTICE, ATTRIBUTIONS.md    applicable source and artwork credits
 model/                     directly loadable native weights/config/tokenizer
