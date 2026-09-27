@@ -929,10 +929,7 @@ def audit_prekey_predictions(plan: dict[str, Any]) -> dict[str, Any]:
                 raise ValueError(
                     f"{key}: planned baseline identity differs from attestation"
                 )
-    if any(
-        sha_file(source_root / name) != digest
-        for name, digest in plan["source_sha256"].items()
-    ):
+    if plan.get("source_sha256") != _source_hashes(source_root, models):
         raise ValueError("Protocol source changed since v3 planning")
     if sha_file(source_root / GATE_DOCUMENT) != plan["gate_document_sha256"]:
         raise ValueError("Numeric gate document changed since v3 planning")

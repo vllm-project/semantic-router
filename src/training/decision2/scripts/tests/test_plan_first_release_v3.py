@@ -641,6 +641,10 @@ class FirstReleasePlanTests(unittest.TestCase):
                 with self.subTest(source=source):
                     with self.assertRaisesRegex(ValueError, "Protocol source changed"):
                         audit_prekey_predictions(changed_plan)
+            missing_source_plan = copy.deepcopy(plan)
+            del missing_source_plan["source_sha256"]["publication/adapter_parity.py"]
+            with self.assertRaisesRegex(ValueError, "Protocol source changed"):
+                audit_prekey_predictions(missing_source_plan)
 
     def test_gold_free_prediction_audit_full_panel_and_tamper(self) -> None:
         panels = {
