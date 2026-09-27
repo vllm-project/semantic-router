@@ -92,6 +92,42 @@ class GemmaSourceProbeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "new absolute"):
             probe.private_output(target, {})
 
+    def test_repeated_zero_step_must_keep_type_logits_and_category(self) -> None:
+        first = {
+            "source_id": probe.SOURCE_ID,
+            "source_revision": probe.SOURCE_REVISION,
+            "config_sha256": probe.CONFIG_SHA256,
+            "tokenizer_json_sha256": "tokenizer",
+            "weights": {"shard_sha256": {"part": "weight"}},
+            "loaded_text_parameters": 10,
+            "loaded_total_parameters": 12,
+            "synthetic_probe_token_hashes": {"choice": "c", "noul": "n", "score": "s"},
+            "probe_version": probe.PROBE_VERSION,
+            "random_untrained_head": True,
+            "model_quality_evaluated": False,
+            "typed_outputs": {
+                kind: {
+                    "candidate_count": 2,
+                    "input_tokens": 100,
+                    "finite_logits": True,
+                    "logits": [0.1, 0.9],
+                    "wrapper_hidden_max_abs_drift": 0.0,
+                }
+                for kind in ("choice", "noul", "score")
+            },
+        }
+        second = json.loads(json.dumps(first))
+        second["typed_outputs"]["score"]["logits"][1] += 0.0005
+        passed = probe.compare_zero_step(first, second)
+        self.assertEqual(passed["status"], "zero_step_mechanics_passed")
+        self.assertAlmostEqual(passed["max_logit_abs_drift"], 0.0005)
+        second["typed_outputs"]["score"]["logits"] = [1.0, 0.1]
+        with self.assertRaisesRegex(ValueError, "selected category changed"):
+            probe.compare_zero_step(first, second)
+        second["typed_outputs"]["score"]["logits"] = [0.1, 0.902]
+        with self.assertRaisesRegex(ValueError, "drift exceeds"):
+            probe.compare_zero_step(first, second)
+
 
 if __name__ == "__main__":
     unittest.main()

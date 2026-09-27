@@ -230,6 +230,7 @@ def zero_step(snapshot: Path, *, device: str, result: dict[str, Any]) -> dict[st
     expected_text_count = result["weights"]["stored_parameter_groups"]["language_model"]
     if loaded_text_count != expected_text_count:
         raise RuntimeError("Loaded text parameter count differs from stored tensors")
+    torch.manual_seed(264)
     head = CandidateHead(text.config.hidden_size).to(device)
     head.eval()
     outputs = {}
@@ -262,17 +263,102 @@ def zero_step(snapshot: Path, *, device: str, result: dict[str, Any]) -> dict[st
                 "wrapper_hidden_max_abs_drift": maximum_drift,
             }
     torch.cuda.synchronize()
+    loaded_total_count = sum(parameter.numel() for parameter in model.parameters())
+    if loaded_total_count != result["weights"]["stored_parameter_count"]:
+        raise RuntimeError("Loaded total parameter count differs from stored tensors")
     return {
         **result,
         "probe_version": PROBE_VERSION,
         "loaded_text_parameters": loaded_text_count,
-        "loaded_total_parameters": sum(p.numel() for p in model.parameters()),
+        "loaded_total_parameters": loaded_total_count,
         "device_name": torch.cuda.get_device_name(0),
         "torch_version": torch.__version__,
         "gpu_peak_bytes": torch.cuda.max_memory_allocated(),
         "typed_outputs": outputs,
         "random_untrained_head": True,
         "model_quality_evaluated": False,
+    }
+
+
+def compare_zero_step(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
+    """Admit repeated zero-step mechanics without interpreting accuracy."""
+    required = (
+        "source_id",
+        "source_revision",
+        "config_sha256",
+        "tokenizer_json_sha256",
+        "weights",
+        "loaded_text_parameters",
+        "loaded_total_parameters",
+        "synthetic_probe_token_hashes",
+        "probe_version",
+    )
+    if any(first.get(field) != second.get(field) for field in required):
+        raise ValueError("Independent zero-step receipts differ in source identity")
+    if (
+        first.get("probe_version") != PROBE_VERSION
+        or first.get("random_untrained_head") is not True
+        or second.get("random_untrained_head") is not True
+        or first.get("model_quality_evaluated") is not False
+        or second.get("model_quality_evaluated") is not False
+    ):
+        raise ValueError("Receipts do not describe this untrained source probe")
+    left = first.get("typed_outputs")
+    right = second.get("typed_outputs")
+    if (
+        not isinstance(left, dict)
+        or not isinstance(right, dict)
+        or set(left) != {"choice", "noul", "score"}
+        or set(right) != set(left)
+    ):
+        raise ValueError("Independent zero-step receipts lack all three task types")
+    drift = 0.0
+    for kind in sorted(left):
+        a, b = left[kind], right[kind]
+        if a.get("candidate_count") != b.get("candidate_count") or a.get(
+            "input_tokens"
+        ) != b.get("input_tokens"):
+            raise ValueError(f"{kind}: candidate or input lengths changed")
+        if a.get("finite_logits") is not True or b.get("finite_logits") is not True:
+            raise ValueError(f"{kind}: nonfinite model output")
+        if any(
+            type(value) not in (int, float)
+            or not math.isfinite(value)
+            or value > 1e-4
+            or value < 0
+            for value in (
+                a.get("wrapper_hidden_max_abs_drift"),
+                b.get("wrapper_hidden_max_abs_drift"),
+            )
+        ):
+            raise ValueError(f"{kind}: wrapper and direct text path differ")
+        x, y = a.get("logits"), b.get("logits")
+        if (
+            not isinstance(x, list)
+            or not isinstance(y, list)
+            or len(x) != a["candidate_count"]
+            or len(y) != len(x)
+            or any(
+                type(value) not in (int, float) or not math.isfinite(value)
+                for value in [*x, *y]
+            )
+        ):
+            raise ValueError(f"{kind}: malformed logits")
+        if x.index(max(x)) != y.index(max(y)):
+            raise ValueError(f"{kind}: selected category changed between processes")
+        drift = max(drift, *(abs(v1 - v2) for v1, v2 in zip(x, y)))
+    if drift > 1e-3:
+        raise ValueError("Independent zero-step logit drift exceeds 1e-3")
+    return {
+        "probe_version": PROBE_VERSION,
+        "source_id": SOURCE_ID,
+        "source_revision": SOURCE_REVISION,
+        "task_types_admitted": ["choice", "noul", "score"],
+        "selected_categories_unchanged": True,
+        "max_logit_abs_drift": drift,
+        "max_allowed_logit_abs_drift": 1e-3,
+        "model_quality_evaluated": False,
+        "status": "zero_step_mechanics_passed",
     }
 
 
@@ -298,15 +384,27 @@ def private_output(path: Path, value: dict[str, Any]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("inspect", "zero-step"))
-    parser.add_argument("--snapshot", required=True, type=Path)
+    parser.add_argument("mode", choices=("inspect", "zero-step", "compare"))
+    parser.add_argument("--snapshot", type=Path)
+    parser.add_argument("--first", type=Path)
+    parser.add_argument("--second", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--device", default="cuda:0")
     args = parser.parse_args()
-    snapshot = args.snapshot.resolve(strict=True)
-    result = inspect(snapshot)
-    if args.mode == "zero-step":
-        result = zero_step(snapshot, device=args.device, result=result)
+    if args.mode == "compare":
+        if args.snapshot is not None or args.first is None or args.second is None:
+            parser.error("compare requires --first and --second, without --snapshot")
+        result = compare_zero_step(
+            json.loads(args.first.read_text(encoding="utf-8")),
+            json.loads(args.second.read_text(encoding="utf-8")),
+        )
+    else:
+        if args.snapshot is None or args.first is not None or args.second is not None:
+            parser.error("inspect/zero-step require only --snapshot")
+        snapshot = args.snapshot.resolve(strict=True)
+        result = inspect(snapshot)
+        if args.mode == "zero-step":
+            result = zero_step(snapshot, device=args.device, result=result)
     private_output(args.output, result)
     print(
         json.dumps(
