@@ -208,6 +208,70 @@ class AdapterBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Upstream source files differ"):
             adapter_bundle._verify_staged_runtime(self.root / "bundle", self.source)
 
+    def test_own_decision1_source_keeps_unmerged_adapter_and_full_count(self) -> None:
+        (self.source / "model.safetensors").unlink()
+        _json(self.source / "backbone/config.json", {"model_type": "qwen3_5_text"})
+        _weights(self.source / "backbone/model.safetensors", {"embed.weight": [2, 3]})
+        _json(
+            self.source / "decision_config.json",
+            {
+                "architecture": "contextual-candidate-endpoint-plus-global-query-shared-bilinear-mlp",
+                "prompt_version": "structured-segmented-candidate-endpoints-global-query-v2",
+                "head_dim": 2,
+            },
+        )
+        _weights(self.source / "decision_head.safetensors", {"key.weight": [1, 2]})
+        metadata = json.loads((self.checkpoint / "decision_config.json").read_text())
+        metadata["lora"]["source_kind"] = "decision1"
+        metadata["lora"]["base_revision"] = "b" * 40
+        metadata["lora"]["source_fingerprint"] = source_fingerprint(self.source)
+        _json(self.checkpoint / "decision_config.json", metadata)
+        identity = checkpoint_fingerprint(self.checkpoint, self.source)
+        scored = json.loads(self.scored.read_text())
+        scored["model_sha256"] = identity["model_sha256"]
+        scored["model_files_sha256"] = identity["files_sha256"]
+        _json(self.scored, scored)
+        calibration = json.loads(self.calibration.read_text())
+        calibration["model_sha256"] = identity["model_sha256"]
+        _json(self.calibration, calibration)
+        scored["calibration"]["file_sha256"] = adapter_runtime._hash(self.calibration)
+        _json(self.scored, scored)
+
+        arguments = dict(
+            checkpoint=self.checkpoint,
+            source=self.source,
+            calibration=self.calibration,
+            scored_manifest=self.scored,
+            dependency_lock=self.lock,
+            base_revision="a" * 40,
+            model_id="llm-semantic-router/DEV2.0-2B",
+        )
+        with self.assertRaisesRegex(ValueError, "own-family repository"):
+            adapter_bundle.assemble(
+                **arguments,
+                base_repo_id="somebody/decision-model",
+                output=self.root / "invalid-origin",
+            )
+        manifest = adapter_bundle.assemble(
+            **arguments,
+            base_repo_id="llm-semantic-router/Decision-1.0-Sol-2B",
+            output=self.root / "own-source",
+        )
+        self.assertEqual(manifest["base"]["source_kind"], "decision1")
+        self.assertEqual(manifest["parameter_breakdown"]["base_text"], 6)
+        self.assertEqual(manifest["parameter_count"], 12)
+        self.assertFalse((self.root / "own-source/model/backbone").exists())
+        adapter_bundle._verify_staged_runtime(self.root / "own-source", self.source)
+        old = json.loads((self.source / "decision_config.json").read_text())
+        old["architecture"] = "other"
+        _json(self.source / "decision_config.json", old)
+        with self.assertRaisesRegex(ValueError, "incompatible with the native loader"):
+            adapter_bundle.assemble(
+                **arguments,
+                base_repo_id="llm-semantic-router/Decision-1.0-Sol-2B",
+                output=self.root / "incompatible-origin",
+            )
+
     def test_normal_python_import_keeps_package_verifiable(self) -> None:
         self.assemble()
         script = (

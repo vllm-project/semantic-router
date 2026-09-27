@@ -147,14 +147,15 @@ def _model_files(checkpoint: Path) -> dict[str, str]:
 
 
 def _full_parameter_count(
-    source: Path, checkpoint: Path, metadata: dict[str, Any]
+    source: Path, checkpoint: Path, metadata: dict[str, Any], source_kind: str
 ) -> dict[str, int]:
     # The native loader retains ``full.model.language_model`` and discards the
     # upstream vision/lm-head components. Count those loaded text tensors, not
     # merely the much smaller adapter. Cross-check the training-time count.
-    weights = sorted(source.glob("*.safetensors"))
-    if not weights or any(path.suffix == ".bin" for path in source.iterdir()):
-        raise ValueError("Pinned Qwen source requires safetensors weights")
+    weight_root = source / "backbone" if source_kind == "decision1" else source
+    weights = sorted(weight_root.glob("*.safetensors"))
+    if not weights or any(path.suffix == ".bin" for path in weight_root.iterdir()):
+        raise ValueError("Pinned source requires safetensors text weights")
     all_names: set[str] = set()
     base_count = 0
     for path in weights:
@@ -162,7 +163,7 @@ def _full_parameter_count(
             if name in all_names:
                 raise ValueError("Duplicate source tensor across shards")
             all_names.add(name)
-            if name.startswith("model.language_model."):
+            if source_kind == "decision1" or name.startswith("model.language_model."):
                 base_count += count
     expected = metadata.get("text_parameter_count")
     if type(expected) is not int or expected < 1 or base_count != expected:
@@ -273,11 +274,31 @@ def assemble(
         or not isinstance(contract, dict)
     ):
         raise ValueError("Input is not a Decision 2.0 PEFT LoRA checkpoint")
+    source_kind = contract.get("source_kind")
+    if source_kind not in {"base", "posttrained", "decision1"}:
+        raise ValueError("Checkpoint has an unsupported publication source kind")
     if (
-        contract.get("source_kind") not in {"base", "posttrained"}
-        or contract.get("base_revision") != base_revision
+        source_kind in {"base", "posttrained"}
+        and contract.get("base_revision") != base_revision
     ):
         raise ValueError("Checkpoint source kind or immutable revision differs")
+    if source_kind == "decision1" and not base_repo_id.startswith(
+        "llm-semantic-router/Decision-1.0-"
+    ):
+        raise ValueError("Decision 1.0 source must be an own-family repository")
+    if source_kind == "decision1":
+        old = _object(source / "decision_config.json")
+        if (
+            old.get("architecture")
+            != "contextual-candidate-endpoint-plus-global-query-shared-bilinear-mlp"
+            or old.get("prompt_version")
+            != "structured-segmented-candidate-endpoints-global-query-v2"
+            or old.get("head_dim") != metadata.get("head_dim")
+            or not (source / "backbone/config.json").is_file()
+        ):
+            raise ValueError(
+                "Decision 1.0 source is incompatible with the native loader"
+            )
     verify_source(source, contract.get("source_fingerprint"))
     verify_adapter_config(checkpoint / "adapter", contract)
     source_files = _inventory(source, ignore_cache=True)
@@ -328,7 +349,7 @@ def assemble(
     ):
         raise ValueError("Scored inference context differs from calibrated contract")
     lock = _lock(dependency_lock, scored)
-    parameters = _full_parameter_count(source, checkpoint, metadata)
+    parameters = _full_parameter_count(source, checkpoint, metadata, source_kind)
     for path in loader_sources.values():
         _screen_public_file(path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -349,9 +370,12 @@ def assemble(
             "\n".join(f"{name}=={lock[name]}" for name in REQUIRED_PACKAGES) + "\n",
             encoding="utf-8",
         )
+        source_label = (
+            "Decision 1.0 source" if source_kind == "decision1" else "Qwen base model"
+        )
         (temporary / "README.md").write_text(
             f"# {model_id.rsplit('/', 1)[1]}: adapter artifact candidate\n\n"
-            "This unmerged PEFT package depends on an immutable upstream base model. "
+            f"This unmerged PEFT package depends on an immutable {source_label}. "
             "The artifact is a preparation candidate only; it has no release or score "
             "claim until independent native parity and the full JevArena release gate pass.\n\n"
             "Use `decision2.Decision2.from_pretrained(package_path, source_path=base_snapshot)` "
@@ -375,6 +399,7 @@ def assemble(
             "base": {
                 "repo_id": base_repo_id,
                 "revision": base_revision,
+                "source_kind": source_kind,
                 "files_sha256": source_files,
             },
             "model_sha256": model_identity["model_sha256"],

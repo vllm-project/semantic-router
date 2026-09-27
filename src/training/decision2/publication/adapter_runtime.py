@@ -171,18 +171,19 @@ def _tensor_counts(path: Path) -> dict[str, int]:
     return counts
 
 
-def _parameter_breakdown(root: Path, source: Path) -> dict[str, int]:
+def _parameter_breakdown(root: Path, source: Path, source_kind: str) -> dict[str, int]:
     base = 0
     names: set[str] = set()
-    weights = sorted(source.glob("*.safetensors"))
-    if not weights or any(path.suffix == ".bin" for path in source.iterdir()):
-        raise ValueError("Pinned base requires safetensors weights")
+    weight_root = source / "backbone" if source_kind == "decision1" else source
+    weights = sorted(weight_root.glob("*.safetensors"))
+    if not weights or any(path.suffix == ".bin" for path in weight_root.iterdir()):
+        raise ValueError("Pinned source requires safetensors text weights")
     for path in weights:
         for name, count in _tensor_counts(path).items():
             if name in names:
                 raise ValueError("Duplicate base tensor in multiple shards")
             names.add(name)
-            if name.startswith("model.language_model."):
+            if source_kind == "decision1" or name.startswith("model.language_model."):
                 base += count
     adapter = sum(
         _tensor_counts(root / "model/adapter/adapter_model.safetensors").values()
@@ -217,8 +218,13 @@ def verify_bundle(
         or HF_ID.fullmatch(base["repo_id"]) is None
         or not isinstance(base.get("revision"), str)
         or REVISION.fullmatch(base["revision"]) is None
+        or base.get("source_kind") not in {"base", "posttrained", "decision1"}
     ):
         raise ValueError("Adapter package needs a pinned upstream repository commit")
+    if base["source_kind"] == "decision1" and not base["repo_id"].startswith(
+        "llm-semantic-router/Decision-1.0-"
+    ):
+        raise ValueError("Decision 1.0 source must be an own-family repository")
     files = _digest_map(manifest.get("files_sha256"), "package files")
     if "MODEL_MANIFEST.json" in files or _inventory(root, ignore_bytecode=True) != {
         **files,
@@ -241,6 +247,20 @@ def verify_bundle(
         if name.startswith("decision2/")
     } != loader_files:
         raise ValueError("Packaged loader sources differ from manifest")
+    metadata = json.loads(
+        (root / "model/decision_config.json").read_text(encoding="utf-8")
+    )
+    contract = metadata.get("lora") if isinstance(metadata, dict) else None
+    if (
+        not isinstance(contract, dict)
+        or contract.get("source_kind") != base["source_kind"]
+    ):
+        raise ValueError("Package source kind differs from adapter contract")
+    if (
+        base["source_kind"] in {"base", "posttrained"}
+        and contract.get("base_revision") != base["revision"]
+    ):
+        raise ValueError("Package Qwen revision differs from adapter contract")
     expected_source = _digest_map(base.get("files_sha256"), "upstream source files")
     if source_path is not None:
         if Path(source_path).is_symlink():
@@ -253,10 +273,7 @@ def verify_bundle(
         identity = checkpoint_fingerprint(root / "model", source)
         if identity.get("model_sha256") != manifest.get("model_sha256"):
             raise ValueError("PEFT checkpoint and upstream base identity disagree")
-        breakdown = _parameter_breakdown(root, source)
-        metadata = json.loads(
-            (root / "model/decision_config.json").read_text(encoding="utf-8")
-        )
+        breakdown = _parameter_breakdown(root, source, base["source_kind"])
         if metadata.get("text_parameter_count") != breakdown["base_text"]:
             raise ValueError(
                 "Pinned base parameter count differs from checkpoint metadata"

@@ -25,12 +25,15 @@ entire loaded text backbone, even though its weights are an external
 dependency; the discarded upstream vision and language-generation head are
 not attributed to the Decision 2.0 inference model.
 
-This prototype supports Qwen `base` and `posttrained` PEFT source kinds with
-safetensors weights. A Decision 1.0 or Decision 2.0 full-checkpoint source
-needs a separate portable dependency contract. Source revision identity is a
-declared HF repository and commit plus byte inventory; before public release,
-independently confirm that the local snapshot came from that HF commit. An
-offline file hash cannot prove repository ownership.
+This package supports Qwen `base` and `posttrained` sources and our full
+Decision 1.0 source with safetensors weights. For Decision 1.0, the external
+source repository must be under `llm-semantic-router/Decision-1.0-*`; its
+`backbone/` tensors are counted as the loaded text model, and the adapter's
+source fingerprint must match that repository snapshot. A full Decision 2.0
+source still needs a separate portable dependency contract. Source revision
+identity is a declared HF repository and commit plus byte inventory; before
+public release, independently confirm that the local snapshot came from that
+HF commit. An offline file hash cannot prove repository ownership.
 
 Prepare an exact runtime lock from the **scored** environment (Python,
 Torch, Transformers, PEFT, safetensors and Hugging Face Hub). The current
@@ -56,6 +59,14 @@ This creates a local artifact suitable for later HF upload preparation; it
 does **not** upload or publish anything. The output must not exist. A failed
 build leaves no output package. Its generated README makes no score claim.
 Only copy the reviewed artifact after every gate below passes.
+
+For an own Decision 1.0 initialization, pass its exact HF repository and
+40-character commit as `--base-repo-id` and `--base-revision`, with that exact
+snapshot as `--source`. The source's historical Qwen revision inside the LoRA
+contract may differ from the direct Decision 1.0 repository commit. The
+package manifest records both its `decision1` source kind and complete file
+inventory. This still does not qualify a candidate that failed its training,
+development, rights or inference-parity gates.
 
 ## Native parity before any score or release claim
 
