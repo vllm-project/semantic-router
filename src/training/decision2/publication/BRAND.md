@@ -1,13 +1,13 @@
 # Decision 2.0 visual direction
 
-The provisional family mascot is an original, chibi mosaic owl holding a
-three-facet decision gem. The facets stand for the typed decision modes;
-the owl's curious eyes stand for checking evidence before choosing. Its
-rounded face, coral cheeks, chunky color blocks and cream die-cut outline
-keep the silhouette legible at Hugging Face collection and model-card
-thumbnail sizes. The current
-asset is `decision-2-sticker-chibi-v4.png`; earlier stickers remain as design
-studies.
+Two original sticker mascots remain under visual review. The newer candidate,
+`decision-2-sticker-crossroads-fox-v5.png`, is a cute pixel-mosaic fox with a
+forked tail for branching choices and a three-facet gem for Choice, Noul and
+Score. Its chunky pixels and distinct tail silhouette aim to stay recognizable
+at Hugging Face thumbnail sizes. The earlier chibi owl,
+`decision-2-sticker-chibi-v4.png`, is retained as an alternative design study.
+Neither asset is a claim about evaluation quality, and the final card/collection
+must choose one consistent mascot after a small-size visual check.
 
 | Role | Color |
 | --- | --- |
