@@ -26,3 +26,13 @@ itself qualify the model for release. On a pass, hold the selected weights and
 runtime fixed and perform a separate full package parity check before any
 formal v3 evaluation. On a fail, preserve both outputs and keep the candidate
 on HOLD until a separately frozen deterministic runtime is available.
+
+Following a pass, materialize BEST320 once into a new portable checkpoint.
+Compare the selected unmerged and merged checkpoints on the same 32 gold-free
+inputs under one runtime and CAL. This package smoke passes only with zero
+changed point decisions, zero malformed answers, p99 absolute probability
+drift at most 0.005 and maximum drift at most 0.02. If it fails, retain the
+failed materialization for analysis and consider a separately specified
+unmerged source-plus-adapter package; do not assign historical development
+scores to the new package. Complete DEV and CSS-pilot source/package parity
+is required before a formal v3 roster.
