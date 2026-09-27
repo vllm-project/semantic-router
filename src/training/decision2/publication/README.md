@@ -1,5 +1,16 @@
 # Model-card artifacts from frozen reports
 
+## JevArena v3 first release
+
+The separate [`generate_arena_v3`](generate_arena_v3.py) and
+[`bundle_arena_v3`](bundle_arena_v3.py) commands implement the prospective
+8,147-item typed FINAL + 15-task human transfer first-release path. A pinned
+231-item public JevBench rerun is required but scored and graphed separately.
+Authored questions are reserved for v3.1; Decision Bench and Decision Index
+are not first-release gates. See [BUNDLE_ARENA_V3.md](BUNDLE_ARENA_V3.md)
+for the exact inputs, pre-key freeze, numeric comparison and package audit.
+The six-axis v2 commands below remain unchanged for historical reproducibility.
+
 ## JevArena six-axis release artifacts
 
 `python3 -m publication.generate_arena` creates the Decision 2.0 release
