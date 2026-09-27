@@ -234,7 +234,13 @@ def build(
     card = ProductCard(
         model_id="llm-semantic-router/DEV2.0-0.6B",
         banner="assets/DEV2.0-0.6B-owl-banner.png",
-        tagline="A compact Choice, Noul and Score decision model for supplied evidence.",
+        tagline="A compact model for choices, yes/no checks and ordered scores.",
+        measured_summary=(
+            "On this matched panel, DEV2.0-0.6B gains **2.58 points** over Kai "
+            "1.0 overall and improves on human-labeled transfer. Its Choice "
+            "and Score results are lower; the overall paired interval includes "
+            "zero."
+        ),
         use_cases=(
             "Choose among supplied routes or options with explicit criteria.",
             "Judge a yes/no proposition and return a probability estimate.",
@@ -246,7 +252,7 @@ def build(
         method=(
             "A causal text backbone reads the state and each question. A native "
             "candidate head scores supplied options or ordered levels and "
-            "returns calibrated probabilities without generating chat text."
+            "returns probabilities without generating chat text."
         ),
         limitations=(
             "Choice and Score declined against Kai 1.0 on this panel, despite stronger human-task transfer; the table shows each type.",

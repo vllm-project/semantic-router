@@ -20,6 +20,7 @@ def specimen(**changes: object) -> ProductCard:
         "model_id": "llm-semantic-router/DEV2.0-27B",
         "banner": "assets/DEV2.0-27B-banner.svg",
         "tagline": "One request, three kinds of evidence-aware decision.",
+        "measured_summary": "The same-panel result is shown below.",
         "use_cases": ("Route requests", "Check evidence", "Apply ordered rubrics"),
         "direct_weight_source": "Qwen/Qwen3.8-27B",
         "source_revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
@@ -37,15 +38,14 @@ class ProductCardTest(unittest.TestCase):
     def test_product_first_and_three_type_example(self) -> None:
         card = render(specimen())
         self.assertLess(
-            card.index("| Decision | Use it to | Returns |"),
-            card.index("## Measured capability"),
+            card.index("## Measured decisions"),
+            card.index("## Three ways to decide"),
         )
         self.assertLess(
-            card.index("## Measured capability"), card.index("## Download and decide")
+            card.index("## Three ways to decide"), card.index("## Download and decide")
         )
         self.assertLess(
-            card.index("## Download and decide"),
-            card.index("## Architecture and limits"),
+            card.index("## Download and decide"), card.index("## Architecture")
         )
         self.assertIn("| Choice | Route requests |", card)
         self.assertIn("| Noul | Check evidence |", card)

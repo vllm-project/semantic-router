@@ -26,6 +26,7 @@ class ProductCard:
     model_id: str
     banner: str
     tagline: str
+    measured_summary: str
     use_cases: tuple[str, ...]
     direct_weight_source: str
     source_revision: str
@@ -78,6 +79,7 @@ def render(card: ProductCard) -> str:
         raise ValueError("A scored v3 and public231 table is required")
     name = card.model_id.rsplit("/", 1)[1]
     tagline = _text(card.tagline, "tagline")
+    measured_summary = _text(card.measured_summary, "measured summary")
     method = _text(card.method, "method")
     evaluation_scope = _text(card.evaluation_scope, "evaluation scope")
     if len(card.use_cases) != 3:
@@ -124,27 +126,29 @@ tags:
 
 {tagline}
 
-Give the model a state, named questions, and your criteria. It evaluates the
-evidence and returns decisions with probabilities.
+Give it a state and the questions your application needs answered. Supply the
+options or rubric at runtime; get structured answers and probabilities back.
 
-| Decision | Use it to | Returns |
-| --- | --- | --- |
-{uses}
+## Measured decisions
 
-## Measured capability
+{measured_summary}
 
-The models below were evaluated on the same **8,147-item JevArena v3** panel.
-The **231 public JevBench v1.2** questions are reported separately.
+The comparison uses the same **8,147-item JevArena v3** panel for every model.
+The **231 public JevBench v1.2** questions are shown separately.
 
 {table}
 
 {chart_lines}
 
-{evaluation_scope}
-
-Ranks cover only the displayed models and test versions.
-[All tasks and methods](evaluation/EVALUATION.md) ·
+{evaluation_scope} Ranks cover only the models shown here.
+[Full results and methods](evaluation/EVALUATION.md) ·
 [Evaluation manifest](evaluation/manifest.json)
+
+## Three ways to decide
+
+| Decision | Use it to | Returns |
+| --- | --- | --- |
+{uses}
 
 ## Download and decide
 
@@ -154,7 +158,7 @@ Download the full model repository:
 hf download {card.model_id} --local-dir {name}
 ```
 
-Run a SystemOne-style request on a BF16-capable GPU:
+Run a local System One request on a BF16-capable GPU:
 
 ```python
 import os
@@ -188,7 +192,7 @@ print(result["answers"])
 
 This repository is a model download, not a hosted API.
 
-## Architecture and limits
+## Architecture
 
 {method}
 
@@ -197,6 +201,8 @@ The starting weights are
 [{card.direct_weight_source}](https://huggingface.co/{card.direct_weight_source});
 their exact revision is in the [evaluation manifest](evaluation/manifest.json).
 {teacher}
+
+### Limits
 
 {limits}
 
