@@ -111,3 +111,16 @@ diagnostics if the SELECT gate passes. Record actual wall allocation,
 GPU-hours, hashes, zero-step drift, one-step numeric values and all stop
 reasons. A positive screen merely authorizes a new preregistered full arm;
 it is not JevArena v3 evidence and does not qualify 4B publication.
+
+## Read-only device preflight
+
+An initial device probe set `ROCR_VISIBLE_DEVICES=2`,
+`HIP_VISIBLE_DEVICES=2` and `CUDA_VISIBLE_DEVICES=2` together. ROCm
+applied overlapping visibility filters and exposed no device; it loaded
+no model and ran no optimizer. Separate probes using only
+`ROCR_VISIBLE_DEVICES=2` or only `HIP_VISIBLE_DEVICES=2` each exposed
+exactly one BF16-capable device. The treatment will use only the former,
+with the full device mapping, after a fresh physical-card memory/process
+check. This fixes device visibility before any model score or update; no
+data, weight, numerical gate or selector changes. CPU loss/plan tests in
+the pinned image passed (4 tests).
