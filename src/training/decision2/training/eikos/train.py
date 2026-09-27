@@ -22,12 +22,18 @@ from typing import Any
 import torch
 from inference.eikos import REVISION, verify_release
 
+from training.eikos.baseline_parity import check_baseline_parity
 from training.eikos.data import (
     MAX_ONE_PASS,
     PROMPT_VERSION,
     collate,
     encode,
     one_pass_quarantine,
+)
+from training.eikos.loss_profile import (
+    PROFILE_VERSION,
+    loss_weights,
+    verify_frozen_treatment,
 )
 from training.eikos.rights import verify_clean_files
 from training.model.data import (
@@ -186,6 +192,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learning-rate", type=float, default=2e-5)
     parser.add_argument("--brier-weight", type=float, default=0.25)
     parser.add_argument("--weight-decay", type=float, default=0.01)
+    parser.add_argument(
+        "--loss-profile", choices=("uniform", PROFILE_VERSION), default="uniform"
+    )
+    parser.add_argument("--baseline-reference", type=Path)
+    parser.add_argument("--baseline-reference-sha256")
     return parser.parse_args()
 
 
@@ -217,6 +228,14 @@ def main() -> None:
         raise ValueError("Invalid LoRA optimizer settings")
     if int(os.environ.get("WORLD_SIZE", "1")) != 1:
         raise ValueError("This pilot supports one process and one GPU")
+    if args.loss_profile == PROFILE_VERSION and (
+        args.baseline_reference is None or args.baseline_reference_sha256 is None
+    ):
+        raise ValueError("The transfer arm requires frozen pre-optimizer source parity")
+    if (args.baseline_reference is None) != (args.baseline_reference_sha256 is None):
+        raise ValueError(
+            "Baseline reference path and SHA-256 must be supplied together"
+        )
 
     release = verify_release(args.model_path, args.model_revision)
     train_rows_all = load_partition(args.train, "train")
@@ -239,6 +258,7 @@ def main() -> None:
             "SELECT/CAL exceed native Eikos one-pass limit; rework evaluator before proceeding"
         )
     train_rows, quarantined = one_pass_quarantine(train_rows_all)
+    row_weights, weight_receipt = loss_weights(train_rows, args.loss_profile)
     if args.select_limit is not None:
         select_rows = select_rows[: args.select_limit]
     if not select_rows:
@@ -284,6 +304,16 @@ def main() -> None:
         name: file_sha256(args.model_path / name)
         for name in ("decision_core.py", "letter_adapter.py", "serve.py", "calib.json")
     }
+    verify_frozen_treatment(
+        profile=args.loss_profile,
+        args=args,
+        data_hashes=data_hashes,
+        rights_sha256=file_sha256(args.data_manifest),
+        release_sha256=release["release_manifest_sha256"],
+        admitted_rows=len(train_items),
+        admitted_tokens=sum(len(item["ids"]) for item in train_items),
+        receipt=weight_receipt,
+    )
     max_options = max(len(item["keys"]) for item in train_items)
     if max_options > MAX_ONE_PASS:
         raise AssertionError("Quarantine did not enforce the native one-pass policy")
@@ -365,6 +395,7 @@ def main() -> None:
         "select_max_options": select_max_options,
         "cal_max_options": cal_max_options,
         "train_tokens": sum(lengths),
+        "loss_weight_profile": weight_receipt,
         "train_max_tokens": max(lengths),
         "max_options": max_options,
         "native_max_one_pass_options": MAX_ONE_PASS,
@@ -413,6 +444,13 @@ def main() -> None:
         output=args.output,
         tag="select-baseline",
     )
+    if args.baseline_reference is not None:
+        parity = check_baseline_parity(
+            args.baseline_reference,
+            args.output / "select-baseline-predictions.jsonl",
+            reference_sha256=args.baseline_reference_sha256,
+        )
+        atomic_json(args.output / "baseline-parity.json", parity)
     emit({"event": "baseline", "metrics": baseline})
     best_key = (baseline["family_macro_accuracy"], -baseline["family_macro_brier"], 0)
     atomic_json(
@@ -422,8 +460,16 @@ def main() -> None:
     for step in range(planned):
         window = batches[step * args.accumulation : (step + 1) * args.accumulation]
         examples = sum(len(batch) for batch in window)
+        window_weight = sum(
+            row_weights[index]
+            for batch_indices in window
+            for source, index in batch_indices
+            if source == "train"
+        )
+        if window_weight <= 0:
+            raise RuntimeError("Empty weighted Eikos optimizer window")
         optimizer.zero_grad(set_to_none=True)
-        total = ce_total = brier_total = 0.0
+        total = ce_total = brier_total = weighted_total = 0.0
         tokens = correct = 0
         started = time.perf_counter()
         for indices in window:
@@ -442,11 +488,18 @@ def main() -> None:
                 objective="ce_brier",
                 brier_weight=args.brier_weight,
             )
-            loss = terms["total"].sum() / examples
+            weights = torch.tensor(
+                [row_weights[index] for source, index in indices if source == "train"],
+                device=device,
+                dtype=torch.float32,
+            )
+            weighted_terms = terms["total"] * weights
+            loss = weighted_terms.sum() / window_weight
             if not torch.isfinite(loss):
                 raise RuntimeError(f"Nonfinite Eikos loss at step {step + 1}")
             loss.backward()
             total += terms["total"].detach().sum().item()
+            weighted_total += weighted_terms.detach().sum().item()
             ce_total += terms["ce"].detach().sum().item()
             brier_total += terms["brier"].detach().sum().item()
             correct += (logits.argmax(-1) == batch["labels"]).sum().item()
@@ -463,6 +516,7 @@ def main() -> None:
                 "examples": examples,
                 "tokens": tokens,
                 "loss": total / examples,
+                "weighted_loss": weighted_total / window_weight,
                 "ce": ce_total / examples,
                 "brier_sum": brier_total / examples,
                 "accuracy": correct / examples,
