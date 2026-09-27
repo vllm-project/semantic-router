@@ -40,9 +40,13 @@ For a candidate to be labeled a **validated Decision 2.0 improvement**:
    slice regression hidden by the macro score.
 4. On each sealed axis, the invalid-or-missing fraction must be at most
    `max(0.02, comparator_fraction + 0.01)`; the score still counts all such
-   answers as wrong. Typed Brier must be at most the 1.0 typed Brier plus
-   0.03, using the same normalized probability policy. Failed probability
-   validity cannot be treated as a favorable Brier omission.
+   answers as wrong. Typed Brier uses a coverage adjustment, with `n=1600`,
+   `m=probability_n` accepted probability answers and `B=overall.brier` over
+   those answers: `B*=(m*B + (n-m))/n`. The penalty `1` is the worst-case
+   bound for the existing half-squared-error multiclass Brier policy.
+   Candidate `B*` must be at most paired 1.0 `B* + 0.03`. Report the original
+   valid-only Brier and probability coverage too. Thus missing or invalid
+   probabilities cannot improve this gate by being omitted.
 5. Every required 8,147-item prediction panel must be complete, hashed and
    attributable to one frozen native model/calibration package. Packaging
    parity must pass its previously specified categorical and probability

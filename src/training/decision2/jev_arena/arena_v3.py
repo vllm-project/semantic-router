@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Any
 
 from benchmark.generate import FINAL_FAMILIES
+from transfer.build import EVALUATION_TASKS, PANEL_VERSION, PILOT_TASKS
 
 from jev_arena.arena import _load, _pareto, _score, _sha
-from transfer.build import EVALUATION_TASKS, PANEL_VERSION, PILOT_TASKS
 
 ARENA_VERSION = "jevarena-ranking/3"
 ROSTER_VERSION = "jevarena-v3-roster/1"
@@ -30,6 +30,7 @@ PANEL_HASH_KEYS = ("typed_gold_sha256", "css_gold_sha256")
 PREDICTION_KEYS = ("typed", "css")
 SCORER_SOURCE_PATHS = {
     "arena_v3": Path(__file__),
+    "paired_v3": Path(__file__).with_name("compare_v3.py"),
     "typed": Path(__file__).resolve().parents[1] / "benchmark/score.py",
     "css": Path(__file__).resolve().parents[1] / "transfer/score.py",
 }

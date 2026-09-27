@@ -19,7 +19,7 @@ unreviewed authored pilot can be relabeled as v3 results.
 The v3 roster (`jevarena-v3-roster/1`) points to completed FINAL typed and CSS
 score reports for at least two models. It also points to a separate pre-key
 freeze receipt (`jevarena-v3-freeze/1`) whose SHA-256 is pinned in the roster.
-The receipt binds both gold-file hashes, source hashes of the v3/typed/CSS
+The receipt binds both gold-file hashes, source hashes of the v3/paired/typed/CSS
 scorers, the candidate lock, each native model identity and its typed/CSS
 prediction hashes. A model without a local package may use a null native model
 fingerprint; Decision 2.0 candidates require the exact scored native model
@@ -27,6 +27,10 @@ fingerprint. The v3 ranker checks these identities and the internal metric
 arithmetic without reading gold or prediction rows. Its result remains
 `scored_pending_independent_release_audit` until a separate audit verifies
 actual pre-key timing, native model identity, package parity and release gates.
+`compare_v3.py` independently computes the joint 2.0-minus-1.0 paired
+bootstrap interval from the original full-panel predictions after the pre-key
+freeze. The release audit requires its separate hashed report; marginal typed
+and CSS intervals cannot be combined to stand in for the joint interval.
 
 Local contract test and scorer invocation:
 

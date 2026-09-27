@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 from benchmark.generate import FINAL_FAMILIES
+from transfer.build import EVALUATION_TASKS, PANEL_VERSION
 
 from jev_arena.arena_v3 import (
     FREEZE_VERSION,
@@ -17,7 +18,6 @@ from jev_arena.arena_v3 import (
     SCORER_SOURCE_PATHS,
     rank,
 )
-from transfer.build import EVALUATION_TASKS, PANEL_VERSION
 
 
 def write(path: Path, value: dict) -> str:
@@ -223,7 +223,7 @@ class JevArenaV3Test(unittest.TestCase):
                 rank(manifest)
             fixture(root)
             freeze = json.loads(freeze_path.read_text())
-            freeze["score_sources_sha256"]["css"] = "9" * 64
+            freeze["score_sources_sha256"]["paired_v3"] = "9" * 64
             freeze_sha = write(freeze_path, freeze)
             roster = json.loads(manifest.read_text())
             roster["freeze_sha256"] = freeze_sha
