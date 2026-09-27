@@ -1,7 +1,7 @@
 # Sol 2B matched inline soft-replay screen
 
-Status: **prospective; no optimizer or selector result from this arm**. This is
-one bounded development experiment. It preserves the completed targeted160 →
+Status: **stopped at the frozen zero-step gate; no optimizer or selector result**.
+This was one bounded development experiment. It preserves the completed targeted160 →
 rights-clean-v2 control; that control must not be retrained or reset. The
 synthetic FINAL, CSS15 gold, authored release panel and public JevBench are
 excluded from training and checkpoint selection.
@@ -139,3 +139,26 @@ is forgetting, not success. A positive CSS pilot alone does not prove new-task
 transfer. There is one KL weight and one predeclared cohort; do not tune either
 on this selector. No HF upload, model publication or release-score claim may
 follow this arm alone.
+
+## Pre-optimizer outcome
+
+The historical and proposed runtime encoded all 7,455 TRAIN and 700 SELECT
+rows identically and produced byte-identical 466-window token/schedule audit
+receipts, SHA-256
+`c239f8fea084b645ff204d47d10151d4eb53f396fbe4ff32c27dce170fe4178b`.
+The 894-row teacher cohort roster matched the prospective hash. The first
+teacher probe accidentally combined two ROCm visibility masks and saw no GPU;
+it wrote no teacher. A second probe on one visible GPU used single-row
+inference and failed the strict `1e-4` historical zero-step probability gate.
+Before any update, signed commit
+`d630022f9c6df78b12044e72d6afc0e0166bd540` corrected the probe to
+preserve the original SELECT batch size two, order, and batch mates. This
+third probe compared all 32 fixed samples, found the same categorical choices,
+but still exceeded the preregistered probability-drift threshold. The private
+batch-matched failure log is identified by SHA-256
+`2fbd20e4ac2823ce35c2891db7955261f0c9aca3b98a5a65c8fc4e2510cbe497`.
+No teacher artifact, treatment checkpoint, optimizer update, CAL fit, DEV/CSS
+evaluation, or public benchmark run resulted from this arm. The observed
+native BF16 cross-process drift prevents the claimed exact zero-step pairing
+to the completed control. Any later experiment needs a new prospective
+protocol and cannot inherit a pass from this failed gate.
