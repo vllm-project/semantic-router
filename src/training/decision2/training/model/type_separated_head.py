@@ -10,9 +10,9 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from .decision_model import CandidateHead
+from .decision_model import TASK_TYPES, CandidateHead
 
-TYPE_ORDER = ("choice", "noul", "score")
+TYPE_ORDER = TASK_TYPES
 
 
 class TypeSeparatedCandidateHead(nn.Module):
