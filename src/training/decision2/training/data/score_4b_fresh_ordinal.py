@@ -229,7 +229,8 @@ def _render(
     if language == "en":
         current = (
             f"The current field sheet for {scene}, case {case}, records "
-            f"{name_a} at {values[0]} {unit_a} and {name_b} at {values[1]} {unit_b}."
+            f"{name_a} at {values[0]} {unit_a} and {name_b} at {values[1]} {unit_b}. "
+            "The duty recorder signed this sheet after the earlier draft was withdrawn."
         )
         previous = (
             f"An earlier draft for the same case listed {name_a} at {archive[0]} {unit_a} "
@@ -244,7 +245,7 @@ def _render(
     else:
         current = (
             f"{scene}，案件 {case} 的现行现场记录载明：{name_a}为 {values[0]} {unit_a}，"
-            f"{name_b}为 {values[1]} {unit_b}。"
+            f"{name_b}为 {values[1]} {unit_b}。值班记录员在撤回旧草稿后签署了这份记录。"
         )
         previous = (
             f"同案旧草稿写着{name_a}为 {archive[0]} {unit_a}、{name_b}为 {archive[1]} {unit_b}；"
@@ -553,14 +554,7 @@ def _load_goldfree_inventory(
     return references, sorted(receipts, key=lambda x: x["role"])
 
 
-ELIGIBLE_CHOICE_FAMILIES = (
-    "stage4_arithmetic",
-    "stage4_scope",
-    "stage4_registers",
-    "stage4_relations",
-    "stage4_dense_table",
-    "stage4_automaton",
-)
+ELIGIBLE_SCORE_FAMILIES = ("stage4_ordinal", "stage4_dense_table")
 
 
 def _replacement_feasibility(
@@ -570,80 +564,37 @@ def _replacement_feasibility(
     old_by_family: dict[str, list[tuple[dict[str, Any], int]]] = (
         collections.defaultdict(list)
     )
+    all_score_groups: dict[str, int] = collections.Counter(
+        row["group_id"] for row in parent if row["task_type"] == "score"
+    )
     for row in parent:
-        if row["task_type"] == "choice" and row["family"] in ELIGIBLE_CHOICE_FAMILIES:
+        if row["task_type"] == "score" and row["family"] in ELIGIBLE_SCORE_FAMILIES:
             if row["source"] != "legacy:stage4-general-composition-v2":
-                raise ValueError("Eligible Choice row has unexpected original source")
+                raise ValueError(
+                    "Eligible old Score row has unexpected original source"
+                )
+            if all_score_groups[row["group_id"]] != 1:
+                raise ValueError("Old Score replacement would split a source group")
             old_by_family[row["family"]].append(
                 (row, pilot.count_tokens(row, tokenizer))
             )
-    pool_counts = {name: len(old_by_family[name]) for name in ELIGIBLE_CHOICE_FAMILIES}
-    if [pool_counts[name] for name in ELIGIBLE_CHOICE_FAMILIES] != [
-        224,
-        197,
-        178,
-        168,
-        110,
-        99,
-    ]:
-        raise ValueError("Eligible synthetic Choice source roster changed")
-    if any(
-        len({r["group_id"] for r, _ in old_by_family[name]}) != pool_counts[name]
-        for name in ELIGIBLE_CHOICE_FAMILIES
-    ):
-        raise ValueError("Choice swap would split an original source group")
-    quotas = (66, 58, 53, 50, 32, 29)
+    pool_counts = {name: len(old_by_family[name]) for name in ELIGIBLE_SCORE_FAMILIES}
+    if pool_counts != {"stage4_ordinal": 279, "stage4_dense_table": 55}:
+        raise ValueError("Eligible original Score roster changed")
     needed = sum(pilot.count_tokens(row, tokenizer) for row in candidate)
-    target_per_row = needed / len(candidate)
-    selected: dict[str, tuple[dict[str, Any], int]] = {}
-    remainder: dict[str, list[tuple[dict[str, Any], int]]] = {}
-    for name, quota in zip(ELIGIBLE_CHOICE_FAMILIES, quotas):
-        ordered = sorted(
-            old_by_family[name],
-            key=lambda item: (
-                abs(item[1] - target_per_row),
-                _sha(item[0]["id"].encode()),
-            ),
-        )
-        for row, tokens in ordered[:quota]:
-            selected[row["id"]] = (row, tokens)
-        remainder[name] = ordered[quota:]
+    ordered = sorted(
+        (item for pool in old_by_family.values() for item in pool),
+        key=lambda item: (item[1], _sha(item[0]["id"].encode())),
+    )
+    selected = {row["id"]: (row, tokens) for row, tokens in ordered[: len(candidate)]}
     removed_tokens = sum(tokens for _, tokens in selected.values())
-    # A one-for-one swap is allowed only within the frozen source family quota.
-    for _ in range(64):
-        old_error = abs(removed_tokens - needed)
-        best = None
-        for name in ELIGIBLE_CHOICE_FAMILIES:
-            selected_name = [
-                entry for entry in selected.values() if entry[0]["family"] == name
-            ]
-            for old_row, old_tokens in selected_name:
-                for new_row, new_tokens in remainder[name]:
-                    error = abs(removed_tokens - old_tokens + new_tokens - needed)
-                    candidate_swap = (
-                        error,
-                        old_row["id"],
-                        new_row["id"],
-                        old_tokens,
-                        new_tokens,
-                    )
-                    if error < old_error and (best is None or candidate_swap < best):
-                        best = candidate_swap
-        if best is None:
-            break
-        _, old_id, new_id, old_tokens, new_tokens = best
-        name = selected[old_id][0]["family"]
-        old_entry = selected.pop(old_id)
-        new_entry = next(item for item in remainder[name] if item[0]["id"] == new_id)
-        remainder[name].remove(new_entry)
-        remainder[name].append(old_entry)
-        selected[new_id] = new_entry
-        removed_tokens += new_tokens - old_tokens
     delta = needed - removed_tokens
     feasible = len(selected) == len(candidate) and abs(delta) * 200 <= PARENT_TOKENS
     receipt = {
         "eligible_family_counts": pool_counts,
-        "replacement_quotas": dict(zip(ELIGIBLE_CHOICE_FAMILIES, quotas)),
+        "removed_family_counts": dict(
+            collections.Counter(row["family"] for row, _ in selected.values())
+        ),
         "selected_rows": len(selected),
         "candidate_tokens": needed,
         "removed_tokens": removed_tokens,
@@ -658,16 +609,10 @@ def _replacement_feasibility(
     merged = [next(additions) if row["id"] in selected else row for row in parent]
     if next(additions, None) is not None or len(merged) != len(parent):
         raise AssertionError("Token-matched row replacement was incomplete")
-    if [
-        (r["id"], r["task_type"])
-        for r in merged
-        if r["task_type"] != "score" and r["id"] not in {x["id"] for x in candidate}
-    ] != [
-        (r["id"], r["task_type"])
-        for r in parent
-        if r["id"] not in selected and r["task_type"] != "score"
+    if [r["id"] for r in merged if r["task_type"] != "score"] != [
+        r["id"] for r in parent if r["task_type"] != "score"
     ]:
-        raise AssertionError("Unselected Choice or Noul records changed")
+        raise AssertionError("Choice or Noul identity/order changed")
     return merged, receipt
 
 
@@ -798,7 +743,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "Synthetic source cases and surface variations do not establish real-task transfer.",
             "Train and SELECT3 have separate sources and templates but share a two-criterion ordinal abstraction.",
             "No independent blind answerability, bilingual, triplet or shortcut review has passed.",
-            "No eligible replacement roster or matched 7455-row/466-update token budget has been frozen.",
+            "The length-selected old Score replacement changes its original family mix and remains unapproved even if the 7455-row/token budget matches.",
         ],
     }
     _write(
