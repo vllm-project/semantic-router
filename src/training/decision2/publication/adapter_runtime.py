@@ -45,7 +45,9 @@ def _hash(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _inventory(root: Path, *, ignore_cache: bool = False) -> dict[str, str]:
+def _inventory(
+    root: Path, *, ignore_cache: bool = False, ignore_bytecode: bool = False
+) -> dict[str, str]:
     if not root.is_dir() or root.is_symlink():
         raise ValueError("Model directory is missing or is a symlink")
     files: dict[str, str] = {}
@@ -60,6 +62,22 @@ def _inventory(root: Path, *, ignore_cache: bool = False) -> dict[str, str]:
             if path.is_symlink():
                 raise ValueError("Model directory contains a directory symlink")
             continue
+        if ignore_bytecode and relative.parts[:2] == ("decision2", "__pycache__"):
+            tag = re.escape(sys.implementation.cache_tag)
+            match = re.fullmatch(
+                rf"([A-Za-z_][A-Za-z_0-9]*)\.{tag}(?:\.opt-[012])?\.pyc",
+                path.name,
+            )
+            source = root / "decision2" / f"{match.group(1)}.py" if match else None
+            if (
+                len(relative.parts) == 3
+                and not path.is_symlink()
+                and path.is_file()
+                and source is not None
+                and source.is_file()
+                and not source.is_symlink()
+            ):
+                continue
         # HF snapshots often link files to the content-addressed blob cache.
         # External files may be links, but the resolved bytes are always hashed.
         if not path.is_file() or (path.is_symlink() and not ignore_cache):
@@ -202,7 +220,7 @@ def verify_bundle(
     ):
         raise ValueError("Adapter package needs a pinned upstream repository commit")
     files = _digest_map(manifest.get("files_sha256"), "package files")
-    if "MODEL_MANIFEST.json" in files or _inventory(root) != {
+    if "MODEL_MANIFEST.json" in files or _inventory(root, ignore_bytecode=True) != {
         **files,
         "MODEL_MANIFEST.json": _hash(root / "MODEL_MANIFEST.json"),
     }:

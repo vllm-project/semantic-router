@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -195,6 +196,39 @@ class AdapterBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Upstream source files differ"):
             adapter_bundle._verify_staged_runtime(self.root / "bundle", self.source)
 
+    def test_normal_python_import_keeps_package_verifiable(self) -> None:
+        self.assemble()
+        script = (
+            "import sys; "
+            "sys.path.insert(0, sys.argv[1]); "
+            "import decision2; "
+            "decision2.verify_bundle(sys.argv[2], sys.argv[3]); "
+            "assert callable(decision2.api._dependencies); "
+            "decision2.verify_bundle(sys.argv[2], sys.argv[3])"
+        )
+        process = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                script,
+                str(self.root / "bundle"),
+                str(self.root / "bundle"),
+                str(self.source),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertTrue((self.root / "bundle/decision2/__pycache__").is_dir())
+
+    def test_private_address_in_model_metadata_is_rejected(self) -> None:
+        metadata = json.loads((self.checkpoint / "decision_config.json").read_text())
+        metadata["lora"]["source_fingerprint"]["source_name"] = "192.0.2.1"
+        _json(self.checkpoint / "decision_config.json", metadata)
+        with self.assertRaisesRegex(ValueError, "private infrastructure"):
+            self.assemble()
+
     def test_missing_base_and_tampered_loader_are_rejected(self) -> None:
         self.assemble()
         with self.assertRaises(FileNotFoundError):
@@ -272,9 +306,9 @@ class ParityContractTests(unittest.TestCase):
             {
                 "id": "row",
                 "questions": {
-                    "a": {"type": "choice"},
-                    "b": {"type": "noul"},
-                    "c": {"type": "score"},
+                    "a": {"type": "choice", "criteria": {"x": "X", "y": "Y"}},
+                    "b": {"type": "noul", "criteria": {"false": "No", "true": "Yes"}},
+                    "c": {"type": "score", "criteria": ["Low", "High"]},
                 },
             }
         ]
@@ -343,6 +377,25 @@ class ParityContractTests(unittest.TestCase):
                 [{"id": "row", "answers": {"a": self.predictions[0]["answers"]["a"]}}],
                 [{"id": "row", "answers": {"a": self.predictions[0]["answers"]["a"]}}],
             )
+
+    def test_tied_choice_and_out_of_domain_probabilities_fail(self) -> None:
+        for qid, field, value in (
+            ("a", "choice", None),
+            ("b", "noul", 1.2),
+            ("c", "score", 4.0),
+        ):
+            changed = json.loads(json.dumps(self.predictions))
+            changed[0]["answers"][qid][field] = value
+            result = adapter_parity.compare_answers(self.prompts, changed, changed)
+            self.assertFalse(result["passed"])
+            self.assertEqual(result["invalid_or_missing_n"], 1)
+        tied = json.loads(json.dumps(self.predictions))
+        tied[0]["answers"]["a"].update(
+            {"choice": None, "probabilities": {"x": 0.5, "y": 0.5}}
+        )
+        self.assertFalse(
+            adapter_parity.compare_answers(self.prompts, tied, tied)["passed"]
+        )
 
 
 if __name__ == "__main__":

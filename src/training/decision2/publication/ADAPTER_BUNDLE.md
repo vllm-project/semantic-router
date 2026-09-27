@@ -12,8 +12,11 @@ The candidate contains the scored Decision 2.0 checkpoint's LoRA tensors,
 head and tokenizer, its exact CAL file, and the native PEFT inference modules.
 It does not copy the upstream base weights. `MODEL_MANIFEST.json` pins a
 40-character upstream HF commit and SHA-256 for every source snapshot file,
-every packaged model and loader file, and the exact Python and package
-versions. The staged loader uses `DecisionModel.from_checkpoint` with the
+every packaged model and loader file, and supplied exact Python and package
+versions. A normal Python import may create `decision2/__pycache__`;
+verification ignores only bytecode for a pinned source module in that
+directory. Every other unlisted file still fails the inventory gate. The
+staged loader uses `DecisionModel.from_checkpoint` with the
 original PEFT adapter and refuses a missing or changed base. When no local
 source is supplied, it may download **only** the enumerated files from that
 commit and verifies all resulting bytes. Base, adapter and head tensors are
@@ -30,10 +33,14 @@ independently confirm that the local snapshot came from that HF commit. An
 offline file hash cannot prove repository ownership.
 
 Prepare an exact runtime lock from the **scored** environment (Python,
-Torch, Transformers, PEFT, safetensors and Hugging Face Hub). The native scored
-prediction manifest must match the checkpoint fingerprint, model-file map,
-inference source hashes, PEFT and Torch versions, CAL hash, and context limit.
-The builder checks only these identities; it does not verify score quality.
+Torch, Transformers, PEFT, safetensors and Hugging Face Hub). The current
+scored prediction manifest verifies only Torch and PEFT versions; the other
+supplied lock versions need an independently sealed runtime receipt before
+release. The native scored prediction manifest must match the checkpoint
+fingerprint, model-file map, inference source hashes, PEFT and Torch versions,
+CAL hash, and context limit. The builder checks only these identities; it does
+not verify score quality. Copied text and safetensors metadata are screened for
+credential-like text, private paths and IP addresses before staging.
 
 ```bash
 PYTHONPATH=src/training/decision2 python3 -m publication.adapter_bundle \
@@ -71,6 +78,10 @@ PYTHONPATH=src/training/decision2 python3 -m publication.adapter_parity \
 The parity roster, checkpoint, scored prediction manifest, CAL and receipt
 remain private. Do not use this command with final labels. A failed parity
 receipt is evidence of a block, not an invitation to relax the threshold.
+The package API supplies default Noul criteria when callers omit them, while
+the scored native collector rejects that form. Exact-output parity applies to
+the canonical explicit-criteria roster; test that convenience form separately
+before documenting its behavior for callers.
 
 ## Remaining release integration
 
@@ -83,5 +94,10 @@ release environment, bind a passing gold-free parity receipt to the package
 manifest, and rerun the complete same-panel release evaluation and candidate
 gate. Frozen candidates, independent authored questions, multilingual review,
 overlap audit, threshold review and model-card evidence remain required.
+Freeze the final sticker, card and chart files in a publication inventory
+before uploading; adding them to this prototype changes its exact file
+roster. Verify a downloaded HF snapshot and ordinary package import after
+upload. Neither a syntactically valid 40-character revision nor matching
+local bytes alone proves the claimed upstream repository owns that snapshot.
 Neither the merged pilot's failed scores nor the source adapter's existing
 development scores transfer to this package without native package parity.

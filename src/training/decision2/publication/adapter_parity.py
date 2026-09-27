@@ -29,6 +29,62 @@ def _answers_digest(rows: list[dict[str, Any]]) -> str:
     return hashlib.sha256(canonical(rows).encode("utf-8")).hexdigest()
 
 
+def _native_values(
+    question: dict[str, Any], answer: dict[str, Any]
+) -> tuple[list[float], str | bool] | None:
+    kind = question["type"]
+    if kind == "noul":
+        probability = answer.get("noul")
+        if (
+            type(probability) not in (int, float)
+            or not math.isfinite(probability)
+            or not 0 <= probability <= 1
+        ):
+            return None
+        return [float(probability)], probability >= 0.5
+
+    criteria = question.get("criteria")
+    if kind == "choice" and isinstance(criteria, dict):
+        keys = list(criteria)
+    elif kind == "score" and isinstance(criteria, list):
+        keys = [str(index) for index in range(len(criteria))]
+    else:
+        return None
+    probabilities = answer.get("probabilities")
+    if (
+        len(keys) < 2
+        or not isinstance(probabilities, dict)
+        or set(probabilities) != set(keys)
+    ):
+        return None
+    values = [probabilities[key] for key in keys]
+    if any(
+        type(value) not in (int, float)
+        or not math.isfinite(value)
+        or not 0 <= value <= 1
+        for value in values
+    ) or not math.isclose(sum(values), 1.0, abs_tol=1e-5):
+        return None
+    if kind == "choice":
+        chosen = answer.get("choice")
+        maximum = max(values)
+        winners = [
+            key for key, value in zip(keys, values) if abs(value - maximum) <= 1e-8
+        ]
+        if not isinstance(chosen, str) or len(winners) != 1 or chosen != winners[0]:
+            return None
+        return [float(value) for value in values], chosen
+    score = answer.get("score")
+    expected = sum(index * value for index, value in enumerate(values))
+    if (
+        type(score) not in (int, float)
+        or not math.isfinite(score)
+        or not math.isclose(score, expected, abs_tol=1e-5)
+    ):
+        return None
+    return [*map(float, values), float(score)], keys[values.index(max(values))]
+
+
 def compare_answers(
     prompts: list[dict[str, Any]],
     source_predictions: list[dict[str, Any]],
@@ -72,44 +128,14 @@ def compare_answers(
             if "error" in a or "error" in b:
                 invalid += 1
                 continue
-            if kind == "noul":
-                values = [(a.get("noul"), b.get("noul"))]
-                categorical = True
-            else:
-                pa, pb = a.get("probabilities"), b.get("probabilities")
-                if (
-                    not isinstance(pa, dict)
-                    or not isinstance(pb, dict)
-                    or set(pa) != set(pb)
-                    or not pa
-                ):
-                    invalid += 1
-                    continue
-                values = [(pa[key], pb[key]) for key in pa]
-                categorical = True
-                if kind == "choice":
-                    categorical &= a.get("choice") == b.get("choice")
-                else:
-                    values.append((a.get("score"), b.get("score")))
-            valid = True
-            for av, bv in values:
-                if (
-                    type(av) not in (int, float)
-                    or type(bv) not in (int, float)
-                    or not math.isfinite(av)
-                    or not math.isfinite(bv)
-                ):
-                    invalid += 1
-                    valid = False
-                    break
-                largest = max(largest, abs(float(av) - float(bv)))
-            if not valid:
+            av, bv = _native_values(question, a), _native_values(question, b)
+            if av is None or bv is None:
+                invalid += 1
                 continue
-            if kind == "noul":
-                categorical = (a["noul"] >= 0.5) == (b["noul"] >= 0.5)
-            else:
-                categorical &= max(pa, key=pa.get) == max(pb, key=pb.get)
-            if not categorical:
+            values = zip(av[0], bv[0], strict=True)
+            for left_value, right_value in values:
+                largest = max(largest, abs(left_value - right_value))
+            if av[1] != bv[1]:
                 mismatch += 1
     if kinds != TYPES:
         raise ValueError("Parity roster must contain native Choice, Noul and Score")
@@ -172,7 +198,7 @@ def run(
     prompts_path = prompts_path.resolve(strict=True)
     api = _packaged_api(package)
     manifest = api.verify_bundle(package, source)
-    api._dependencies(manifest)
+    api.api._dependencies(manifest)
     scored = json.loads(scored_manifest.read_text(encoding="utf-8"))
     if (
         not isinstance(scored, dict)

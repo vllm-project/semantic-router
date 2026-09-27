@@ -69,6 +69,17 @@ def _object(path: Path) -> dict[str, Any]:
     return value
 
 
+def _screen_public_file(path: Path) -> None:
+    _screen_file(path)
+    if path.suffix == ".safetensors":
+        with path.open("rb") as source:
+            length = int.from_bytes(source.read(8), "little")
+            metadata = json.loads(source.read(length))
+        _public_text(json.dumps(metadata, ensure_ascii=False), path.name)
+    else:
+        _public_text(path.read_text(encoding="utf-8"), path.name)
+
+
 def _model_files(checkpoint: Path) -> dict[str, str]:
     if not checkpoint.is_dir() or checkpoint.is_symlink():
         raise ValueError("PEFT checkpoint directory is missing")
@@ -105,7 +116,7 @@ def _model_files(checkpoint: Path) -> dict[str, str]:
         *sorted(path for path in adapter_paths if path.name in MODEL_ADAPTER_FILES),
     ]
     for path in selected:
-        _screen_file(path)
+        _screen_public_file(path)
     return {path.relative_to(checkpoint).as_posix(): _hash(path) for path in selected}
 
 
@@ -250,6 +261,7 @@ def assemble(
         raise ValueError("Upstream base source has no weight files")
     for name in source_files:
         _public_text(name, "upstream source filename")
+    _public_text(base_repo_id, "upstream repository ID")
     model_identity = checkpoint_fingerprint(checkpoint, source)
     scored = _object(scored_manifest)
     if (
@@ -277,7 +289,7 @@ def assemble(
         ).hexdigest()
     ):
         raise ValueError("Native inference loader changed since the scored run")
-    _screen_file(calibration)
+    _screen_public_file(calibration)
     cal_sha = _hash(calibration)
     if scored.get("calibration", {}).get("file_sha256") != cal_sha:
         raise ValueError("Scored inference used another CAL file")
@@ -292,7 +304,7 @@ def assemble(
     lock = _lock(dependency_lock, scored)
     parameters = _full_parameter_count(source, checkpoint, metadata)
     for path in loader_sources.values():
-        _screen_file(path)
+        _screen_public_file(path)
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=f".{output.name}.", dir=output.parent))
     try:
@@ -322,6 +334,9 @@ def assemble(
             "pinned base commit and verifies the same bytes.\n",
             encoding="utf-8",
         )
+        for path in temporary.rglob("*"):
+            if path.is_file():
+                _screen_public_file(path)
         files = _inventory(temporary)
         loader_files = {
             name.removeprefix("decision2/"): digest
@@ -350,13 +365,14 @@ def assemble(
             "files_sha256": files,
             "publication_status": "candidate-parity-pending",
         }
-        (temporary / "MODEL_MANIFEST.json").write_text(
+        manifest_text = (
             json.dumps(
                 manifest, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False
             )
-            + "\n",
-            encoding="utf-8",
+            + "\n"
         )
+        _public_text(manifest_text, "adapter package manifest")
+        (temporary / "MODEL_MANIFEST.json").write_text(manifest_text, encoding="utf-8")
         _verify_staged_runtime(temporary, source)
         if output.exists():
             raise FileExistsError(output)
