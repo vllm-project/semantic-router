@@ -623,7 +623,6 @@ class FirstReleasePlanTests(unittest.TestCase):
             fla_path="/private/fla",
             stable_runtime=self.stable_runtime,
         )
-        plan["source_sha256"]["benchmark/score.py"] = "0" * 64
         with patch(
             "scripts.plan_first_release_v3.frozen_candidates",
             return_value=([self.candidate], "x"),
@@ -631,8 +630,17 @@ class FirstReleasePlanTests(unittest.TestCase):
             "scripts.plan_first_release_v3.verified_stable_runtime",
             return_value=self.stable_runtime,
         ):
-            with self.assertRaisesRegex(ValueError, "Protocol source changed"):
-                audit_prekey_predictions(plan)
+            for source in (
+                "benchmark/score.py",
+                "publication/adapter_parity.py",
+                "publication/adapter_bundle.py",
+                "publication/bundle.py",
+            ):
+                changed_plan = copy.deepcopy(plan)
+                changed_plan["source_sha256"][source] = "0" * 64
+                with self.subTest(source=source):
+                    with self.assertRaisesRegex(ValueError, "Protocol source changed"):
+                        audit_prekey_predictions(changed_plan)
 
     def test_gold_free_prediction_audit_full_panel_and_tamper(self) -> None:
         panels = {
