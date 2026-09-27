@@ -61,6 +61,19 @@ this note.
 | Independent quorum | 39 | 32 | +7 |
 | Waiver precedence | 48 | 45 | +3 |
 
+The classwise correct counts show the tradeoff behind the net gain:
+
+| Gold Score level | Original / 64 | A / 64 | B / 64 | A minus B |
+| --- | ---: | ---: | ---: | ---: |
+| 0 | 62 | 54 | 55 | -1 |
+| 1 | 18 | 43 | 20 | +23 |
+| 2 | 47 | 41 | 52 | -11 |
+
+The treatment substantially recovered the middle level, while losing
+high-level decisions relative to the matched control. This is an aggregate
+diagnostic on a consumed selector; any proposed repair needs a new
+prospectively frozen training design and independent selector.
+
 The fixed 10,000-replicate stratified **paired 64-group** bootstrap interval
 for A minus B accuracy was **[0.015625, 0.104167]**. It is descriptive for
 this one frozen English selector. Two operation slices improved, none lost
