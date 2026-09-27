@@ -51,3 +51,28 @@ and clean runtime source tree SHA-256
 No native teacher inference or gold scoring occurred in these checks. GPU 4
 on the first authorized node was idle at the precheck; it must be rechecked
 immediately before the single bounded run.
+
+## Frozen source screen result
+
+The one permitted native run finished in 74 wall seconds, approximately
+0.0206 GPU-hours. The private aggregate (SHA-256
+`a5b105f59435a62ae91fe4d5debb7455051d2f2c1b2f30d40bc073be8015d58b`)
+was written with mode 0600 and passed row/roster invariants. Its model and
+runtime hashes match the CPU lock. No student optimization or evaluation-set
+inference was performed. The task-owned container exited and GPU memory
+returned to its prior idle level.
+
+| Native TRAIN type | AutoJev correct / 32 | AutoJev valid / 32 | Ties | Mean gold probability | Half Brier / row | Eikos correct / 32 on exact roster | Eikos half Brier / row |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Choice | 26 | 32 | 1 | 0.6936 | 0.1277 | 21 | 0.2193 |
+| Noul | 26 | 32 | 0 | 0.7778 | 0.1294 | 26 | 0.1275 |
+| Score | 25 | 32 | 0 | 0.4850 | 0.2037 | 10 | 0.3843 |
+
+AutoJev has 77/96 unique-max hard-label matches versus Eikos 57/96 on this
+one TRAIN roster, with equal Noul hard-label matches. This is a descriptive
+teacher-source check, not a model rank: there are just 32 groups/type,
+third-party training overlap is unknown, the models have very different sizes,
+and no student has been trained. The Score contrast supports considering an
+AutoJev soft-teacher arm only after separately predeclaring source checks,
+matched student budget and independent SELECT/transfer gates. Do not use this
+TRAIN result as a JevArena/JevBench or release claim.
