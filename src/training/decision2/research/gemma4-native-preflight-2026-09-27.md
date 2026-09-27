@@ -54,3 +54,49 @@ no training or formal labels are involved. Any later architecture comparison
 must add a qualified LoRA/full-weight training path, exact reload and a
 matched-data/token-budget development experiment against the already measured
 official Qwen3.8 27B candidate. Gemma cannot inherit Qwen or external scores.
+
+## Zero-step launch incident and one-time setup amendment
+
+The first authorized zero-step cell stopped after 31 seconds **before any
+weights finished loading or forward pass began**. PyTorch reported `No CUDA
+GPUs are available` during Transformers' caching-allocator warmup. No optimizer,
+formal label, model prediction, or benchmark score was produced. The
+conservative reserved use was 31/3600 = 0.00861 GPU-hour; the task containers
+were removed by the preregistered cleanup trap. The private failure-log SHA-256
+is `905b05bbed3bca7d453137b4b41d85329ce70b90685cb9b9261a71fbf96d2086`
+and the timing-receipt SHA-256 is
+`245e36ea19ae14b940de219c9607aaa6c92a7dacadb862865cb855bf2be69f1d`.
+This is an infrastructure/setup failure, **not** a Gemma capability result.
+
+The successful concurrent 4B training container uses the same exact image
+digest, `/dev/kfd` and `/dev/dri` device mounts, `video` group, IPC mode, and
+security settings. Its launch sets only `ROCR_VISIBLE_DEVICES` for GPU
+isolation. The failed Gemma command set both `ROCR_VISIBLE_DEVICES=3` and
+`HIP_VISIBLE_DEVICES=3`; the latter is the only isolation-mask difference.
+Because the failed container was removed, its original HostConfig cannot be
+inspected independently; the original immutable orchestration script is
+preserved under SHA-256
+`a6af3945a80ddc54165332febdb9059f040481f18223c95a07d7b1acdd4a85bd`.
+This mask interaction is a **hypothesis**. AMD's [HIP environment variable
+reference](https://rocm.docs.amd.com/projects/HIP/en/docs-6.3.0/reference/env_variables.html)
+documents both variables, but a CPU-only smoke cannot prove GPU visibility.
+
+The single proposed correction removes only `HIP_VISIBLE_DEVICES=3` and
+retains `ROCR_VISIBLE_DEVICES=3`, matching the qualified isolation form.
+The amended orchestration script SHA-256 is
+`12c2c3e0dd8a6cf816bd83579b11ecb6d2ec6b9e82007cf03d40cd0fa5a31993`.
+It uses new container and receipt names, so it cannot overwrite the failure.
+`bash -n` passes. A no-device, no-network image smoke with the corrected
+environment imported PyTorch 2.12.0+git6bbd260 (HIP 7.2.53211) and
+Transformers 5.17.0, observed `ROCR_VISIBLE_DEVICES=3`, no HIP mask, and no
+`/dev/kfd`; this checks the setup without initializing a GPU. The Gemma source
+script and pinned checkpoint are unchanged.
+
+The proposed **one-time** retry keeps the original two independent BF16
+zero-step loads, three synthetic schema inputs, strict source-key/shape and
+tied-head checks, finite-logit and two-load agreement thresholds, and a combined
+15-minute / 0.25 GPU-hour cap. Before any retry, recheck the requested GPU's
+occupancy, official source revision, both weight-shard hashes, and the mirrored
+source-script hash. If GPU enumeration or any model check still fails, stop,
+preserve new receipts, and do not search further setup variants or launch
+training. No retry is authorized by this amendment itself.
