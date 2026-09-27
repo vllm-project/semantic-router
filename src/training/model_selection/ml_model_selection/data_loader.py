@@ -10,7 +10,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 from huggingface_hub import hf_hub_download
@@ -206,46 +206,6 @@ def group_by_query(
             groups[r.query] = []
         groups[r.query].append(r)
     return groups
-
-
-def find_best_model_per_query(
-    records: List[RoutingRecord],
-    quality_weight: float = 0.9,
-) -> Dict[str, Tuple[str, float]]:
-    """
-    Find the best model for each query based on quality + efficiency.
-
-    Args:
-        records: List of routing records
-        quality_weight: Weight for quality (1 - quality_weight for efficiency)
-
-    Returns:
-        Dict mapping query -> (best_model, score)
-    """
-    groups = group_by_query(records)
-    best_models = {}
-
-    for query, group in groups.items():
-        # Find max latency for normalization
-        max_latency = max(r.latency_ms for r in group) or 1.0
-
-        best_score = -1
-        best_model = None
-
-        for r in group:
-            # Calculate combined score: quality_weight * quality + (1-quality_weight) * speed
-            normalized_latency = r.latency_ms / max_latency
-            speed_factor = 1.0 / (1.0 + normalized_latency)
-            score = quality_weight * r.quality + (1 - quality_weight) * speed_factor
-
-            if score > best_score:
-                best_score = score
-                best_model = r.model_name
-
-        if best_model:
-            best_models[query] = (best_model, best_score)
-
-    return best_models
 
 
 def print_data_stats(records: List[RoutingRecord]) -> None:

@@ -96,6 +96,24 @@ def test_success_outranks_failure_under_every_accepted_weighting(weights):
     assert [name for name, _ in objective.rank(snapshot)] == ["worked", "broke"]
 
 
+@pytest.mark.parametrize(
+    "weights",
+    [
+        {"quality_weight": 1.0, "latency_weight": 1.0, "cost_weight": 1.0},
+        {"quality_weight": 0.0, "latency_weight": 5.0},
+        {"quality_weight": 0.9, "latency_weight": 0.1},
+    ],
+)
+def test_failed_samples_carry_no_training_weight(weights):
+    """Trainers use score() as a per-sample weight, so a failure must not keep full weight."""
+    objective = SelectorObjective(**weights)
+    broke = _outcome("broke", quality=1.0, latency_ms=FAST_MS, success=False)
+    worst_success = _outcome("w", quality=0.0, latency_ms=10**9, cost=10**9)
+    assert objective.score(broke) == 0.0
+    assert objective.score(broke) <= objective.score(worst_success)
+    assert objective.utility(broke) > 0.0
+
+
 def test_failures_still_order_among_themselves():
     """Every candidate failed, so the query still needs a deterministic winner."""
     snapshot = _snapshot(

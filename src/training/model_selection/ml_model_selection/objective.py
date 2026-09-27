@@ -15,9 +15,10 @@ was trained under.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass
+
+from query_outcome_set import _digest
 
 OBJECTIVE_VERSION = 1
 
@@ -25,8 +26,6 @@ OBJECTIVE_VERSION = 1
 # magnitude past the scale still scores worse than one just past it.
 DEFAULT_LATENCY_SCALE_MS = 10_000.0
 DEFAULT_COST_SCALE = 1.0
-
-_DIGEST_CHARS = 16
 
 
 @dataclass(frozen=True)
@@ -62,35 +61,27 @@ class SelectorObjective:
             f"ls{self.latency_scale_ms!r}",
             f"cs{self.cost_scale!r}",
         )
-        digest = hashlib.blake2b("|".join(parts).encode("utf-8"), digest_size=16)
-        return digest.hexdigest()[:_DIGEST_CHARS]
+        return _digest(*parts)
 
-    def score(self, outcome) -> float:
-        """Weighted utility of one CandidateOutcome, with no reference to its peers.
-
-        Utility alone does not decide a winner: success is enforced separately in
-        sort_key, because no fixed penalty can outrank an unbounded weighted sum.
-        """
+    def utility(self, outcome) -> float:
+        """Weighted utility of one CandidateOutcome, ignoring success; for ordering only."""
         speed = 1.0 / (
             1.0 + max(0.0, float(outcome.latency_ms)) / self.latency_scale_ms
         )
         thrift = 1.0 / (1.0 + max(0.0, float(outcome.cost)) / self.cost_scale)
-        total = (
+        return (
             self.quality_weight * float(outcome.quality)
             + self.latency_weight * speed
             + self.cost_weight * thrift
         )
-        return total
+
+    def score(self, outcome) -> float:
+        """Per-sample weight: utility for a success, 0.0 for a failure (the floor)."""
+        return self.utility(outcome) if outcome.success else 0.0
 
     def sort_key(self, outcome) -> tuple[int, float, str]:
-        """Eligibility first, then utility, then model_ref.
-
-        A failed candidate is a tier below every successful one whatever the
-        weights say, so the disqualification cannot be bought back by a high
-        recorded quality. Failures still order among themselves, for the query
-        where every candidate failed.
-        """
-        return (0 if outcome.success else 1, -self.score(outcome), outcome.model_ref)
+        """Success first, then utility, then model_ref; failures still order among themselves."""
+        return (0 if outcome.success else 1, -self.utility(outcome), outcome.model_ref)
 
     def rank(self, snapshot) -> list[tuple[str, float]]:
         """Candidates best first, ties broken by model_ref so the order is reproducible."""
