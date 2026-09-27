@@ -69,3 +69,30 @@ data, threshold and frozen 32-row count remain unchanged. The old failed
 receipt is retained. A passing same-batch comparison would establish only
 same-condition reload parity; batch-shape sensitivity remains a separate
 diagnostic and is not hidden by this correction.
+
+## Completed preflight receipt
+
+The source tokenizer admitted all 7,455 TRAIN, 700 SELECT and 700 CAL rows at
+8,192 tokens without truncation. TRAIN has 4,094,489 encoded tokens, median
+154, p95 2,726 and maximum 6,559. The read-only audit JSON SHA-256 is
+`af07b66f734edf2069d40c1a98b32cdefea8d9c77147feeab6672a0466041a59`.
+
+Two separate source starts returned 700/700 valid SELECT answers, including
+Choice, Noul and Score, with zero category or probability changes. Their
+prediction files have the identical SHA-256
+`e62731df7a8b9f35c6ecda17aa763b1dd30700522b3cd8c082f8063f2829f5c3`.
+The baseline was 232/700, family macro accuracy .278048. These are
+source-contract checks, not evidence of 2.0 quality.
+
+The one-update smoke completed from the same official source with finite loss
+1.43413, gradient norm 27.68713, 16 examples and 4,977 tokens. Its SELECT
+result was 244/700, family macro accuracy .326040. The checkpoint saved and
+reloaded. The first, sorted-slice comparator remains **HOLD** as described
+above; a subsequent read-only comparison using the original adjacent
+batch-size-two pairs returned **PASS, 32/32, zero category changes and zero
+probability drift**. Its receipt SHA-256 is
+`ddb012c254f5d017060d1583f06fadb08678086f4dbd3ae6d2ebef5aaff01660`.
+No extra optimizer step was used to resolve the comparator discrepancy. The
+zero-step and one-step runs remained within their separate preregistered
+GPU-time caps. This only clears the native training and same-condition reload
+preflight; the one-step checkpoint is not a selected or releasable model.
