@@ -886,11 +886,9 @@ none were included in this v3 score. Decision Bench and Decision Index are not
 first-release score axes.
 
 ![JevArena v3 ranking](jevarena-rank.svg)
-![JevArena v3 parameter Pareto plot](jevarena-pareto.svg)
 ![JevArena v3 component matrix](jevarena-axis-matrix.svg)
 ![JevArena v3 model by task matrix](jevarena-task-matrix.svg)
 ![JevBench public ranking](jevbench-public-rank.svg)
-![JevBench public parameter Pareto plot](jevbench-public-pareto.svg)
 
 {score_table.rstrip()}
 
@@ -898,7 +896,7 @@ first-release score axes.
 
 {probability_table}
 
-The six figures, scorer versions, frozen panel digests and paired intervals are
+The four figures, scorer versions, frozen panel digests and paired intervals are
 bound in `card-artifacts/manifest.json`. Robustness, calibration, language,
 invalidity and efficiency are disclosed separately where measured. Runtime
 speed and cost are comparable only under matched conditions.

@@ -16,7 +16,7 @@ LICENSE                      Apache-2.0 text
 LICENSE-Eikos, LICENSE-Qwen   inherited model license texts
 NOTICE, ATTRIBUTIONS.md      inherited notice and source credits
 model/                       byte-identical inference files, new SHA256SUMS
-assets/                      owl banner and six frozen rank/matrix/Pareto figures
+assets/                      owl banner and four frozen rank/matrix figures
 evaluation/EVALUATION.md     concise first-release protocol
 evaluation/manifest.json     public file hashes and private-package binding
 ```

@@ -984,6 +984,7 @@ class FullV3PackageTests(unittest.TestCase):
         self.assertIn("8,147", card)
         self.assertIn("Authored questions are reserved for v3.1", card)
         self.assertIn("Coverage-adjusted Brier", card)
+        self.assertNotIn("pareto", card.lower())
         self.assertIn("decision-2-sticker-crossroads-fox-v5.png", card)
         self.assertTrue(
             (

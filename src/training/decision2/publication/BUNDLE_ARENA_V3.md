@@ -83,10 +83,10 @@ PYTHONPATH=src/training/decision2 python3 -m publication.generate_arena_v3 \
 The generator requires matching rosters, v3's exact two axes, 8,147 sealed
 items, the public231 panel, and prediction-bound 2.0/1.0 component and joint
 paired reports. It displays the joint v3 score interval beside the separate
-typed and transfer intervals. It emits a score table and separate JevArena and JevBench rank/Pareto SVGs plus
-two-axis and model-by-task matrices. The card and chart style follows the
-earlier Decision family; the mosaic sticker remains a distinct 2.0 asset.
-Ranks and Pareto status are relative to the identical displayed roster.
+typed and transfer intervals. It emits a score table, separate JevArena and
+JevBench rank SVGs, and two-axis and model-by-task matrices. Ranks are
+relative to the identical displayed roster. The verified research bundle is
+an input to a separate product-card export; do not publish its audit README.
 
 ## Native package gate
 

@@ -212,6 +212,7 @@ class ArenaV3ArtifactTests(unittest.TestCase):
             self.assertEqual(
                 manifest["artifacts_sha256"][name], sha_file(output / name)
             )
+        self.assertFalse(list(output.glob("*pareto*")))
         with self.assertRaises(FileExistsError):
             generate(self.root / "config.json", output)
 

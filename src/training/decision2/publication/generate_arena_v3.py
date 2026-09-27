@@ -33,20 +33,16 @@ from .generate_arena import (
 )
 from .render_arena_v3 import (
     axis_matrix_svg,
-    pareto_svg,
-    public_pareto_svg,
     ranking_svg,
     task_matrix_svg,
 )
 
-VERSION = "decision-model-card-artifacts/5"
+VERSION = "decision-model-card-artifacts/6"
 FIGURES = (
     "jevarena-rank.svg",
-    "jevarena-pareto.svg",
     "jevarena-axis-matrix.svg",
     "jevarena-task-matrix.svg",
     "jevbench-public-rank.svg",
-    "jevbench-public-pareto.svg",
 )
 ARTIFACTS = ("score-table.md", *FIGURES)
 PUBLIC_TIERS = ("easy", "standard", "hard")
@@ -431,7 +427,7 @@ def table(
         "",
         "The [JevBench public 231-question subset](https://github.com/fstandhartinger/jevbench) is an independent rerun among the displayed models, not a score or official rank on the upstream sealed benchmark. Easy, standard, and hard use the pinned public items. JevArena v3 excludes this public subset, Decision Bench, and prospective authored v3.1 questions from its headline. These sources and versions remain separately attributed.",
         "",
-        "Ranks and Pareto status apply only to the displayed same-panel roster. Historical versions are not mixed. Robustness, calibration, language, invalidity, latency, throughput and cost require separate side reports; speed and cost are comparable only under matched hardware and runtime.",
+        "Ranks apply only to the displayed same-panel roster. Historical versions are not mixed. Robustness, calibration, language, invalidity, latency, throughput and cost require separate side reports; speed and cost are comparable only under matched hardware and runtime.",
         "",
     ]
     return "\n".join(lines)
@@ -474,11 +470,9 @@ def generate(config_path: Path, output_dir: Path) -> dict[str, Any]:
         products = {
             "score-table.md": table(arena, models, comparisons),
             "jevarena-rank.svg": ranking_svg(arena),
-            "jevarena-pareto.svg": pareto_svg(arena),
             "jevarena-axis-matrix.svg": axis_matrix_svg(arena),
             "jevarena-task-matrix.svg": task_matrix_svg(arena),
             "jevbench-public-rank.svg": public_ranking_svg(public),
-            "jevbench-public-pareto.svg": public_pareto_svg(public),
         }
         for name, content in products.items():
             _screen_public_text(content)
