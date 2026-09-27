@@ -161,9 +161,17 @@ def build(
     ordered = sorted(rows, key=lambda row: (-row["score"], row["key"]))
     for rank, row in enumerate(ordered, 1):
         row["rank"] = rank
-    arena = {"schema_version": "jevarena-ranking/3", "models": ordered}
+    arena = {
+        "schema_version": "jevarena-ranking/3",
+        "scope": "post-key same-panel",
+        "models": ordered,
+    }
     public_rows = sorted(rows, key=lambda row: (-row["public_correct"], row["key"]))
-    public = {"schema_version": "jevarena-jevbench-public-rank/1", "models": []}
+    public = {
+        "schema_version": "jevarena-jevbench-public-rank/1",
+        "edition": "v1.2",
+        "models": [],
+    }
     for rank, row in enumerate(public_rows, 1):
         public["models"].append(
             {
@@ -195,9 +203,9 @@ def build(
         return f"{value * 100:.2f}%"
 
     table = [
-        "JevArena v3: 8,147 original items; JevBench public: 231 questions.",
+        "JevArena v3: 8,147 original items; JevBench v1.2 public: 231 questions.",
         "",
-        "| JevArena rank | Model | Actual parameters | v3 score ↑ | Typed T ↑ | Human transfer H ↑ | JevBench public ↑ |",
+        "| JevArena rank | Model | Actual parameters | v3 score ↑ | Typed T ↑ | Human transfer H ↑ | JevBench v1.2 public ↑ |",
         "| ---: | --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in ordered:
@@ -237,8 +245,8 @@ def build(
         loaded_parameters=597_103_104,
         method=(
             "We full fine-tuned the official Qwen3-0.6B Base text model on 7,455 "
-            "supervised decision examples spanning verifiable rules, labeled "
-            "language tasks and replay. A separate 700-item set selected the "
+            "supervised decision examples spanning labeled language tasks and "
+            "verifiable rules. A separate 700-item set selected the "
             "checkpoint; another 700 examples calibrated Choice, Noul and Score. "
             "No third-party decision model supplied the starting weights."
         ),
@@ -246,7 +254,7 @@ def build(
             "On this panel, Choice was 109/800 versus Kai's 277/800, and Score was 80/400 versus 98/400; do not treat the higher aggregate as uniform improvement.",
             "Fifteen long human-transfer inputs exceeded the 8,192-token budget and counted as failures.",
             "The v3 point estimate is 2.582 points above Kai, but its paired 95% interval is [-2.032, +7.846]; this does not establish a statistically certain improvement.",
-            "This is a post-key same-panel comparison, not an untouched blind test. Recheck important decisions against source evidence.",
+            "The test panel had been inspected earlier; independent confirmation is pending. Recheck important decisions against source evidence.",
         ),
         evidence_table="\n".join(table),
         evaluation_scope=(
@@ -270,7 +278,7 @@ def build(
         "- [Decision 1.0 Nox-4B](https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B) "
         "at `cde2a68dbaa557ea65dc458104d410a0802ee259`: our mosaic owl motif, "
         "adapted into this model-name banner.\n"
-        "- Supervised training uses internally generated rule data and replay, plus "
+        "- Supervised training uses internally generated rule data, plus "
         "labeled records from [GoEmotions](https://github.com/google-research/google-research/tree/master/goemotions) "
         "(CC BY 4.0), [CLINC150](https://github.com/clinc/oos-eval) (CC BY 3.0), "
         "[BANKING77](https://huggingface.co/datasets/PolyAI/banking77) (CC BY 4.0), "
@@ -290,8 +298,9 @@ def build(
         "are failures. The paired interval resamples independent typed groups "
         "and transfer tasks/items (5,000 replicates). The candidate-minus-Kai "
         "point estimate is +2.582 with 95% interval [-2.032, +7.846].\n\n"
-        "Public JevBench is a separate, independently rerun 231-question subset "
-        "(easy 48, standard 72, hard 111), not an official closed-set ranking. "
+        "JevBench v1.2 public is a separate, independently rerun 231-question "
+        "subset (easy 48, standard 72, hard 111). The displayed raw accuracy "
+        "is not the upstream four-axis official score or closed-set ranking. "
         "DEV2.0-0.6B scores 48/48, 51/72 and 44/111 respectively.\n\n"
         "This is a prospective post-key same-panel rerun. Project-level formal "
         "answer-key access predates this candidate; its prediction files were "
@@ -312,7 +321,7 @@ def build(
         "transfer_items": 6547,
         "transfer_tasks": 15,
         "jevbench_public_items": 231,
-        "jevbench_scope": "independently rerun public subset; not official closed rank",
+        "jevbench_scope": "v1.2 independently rerun public 231; raw accuracy, not official closed rank",
         "candidate_checkpoint_sha256": "5380e01e3fbb5f541d6548144dfb9e0776292d28a52d490f90c8929f764f37ab",
         "candidate_prediction_seal_sha256": "3bd2e8e2ee992ef170bfccbf801d142cdecddad317e7186bd6bc0c9cb46ec33c",
         "calibration_sha256": "dc29fc12c65f2cf0a676f547360703fde5e846b1df0cd4fb557f830fb3d13da5",

@@ -35,10 +35,12 @@ def _rows(report: dict[str, Any]) -> list[dict[str, Any]]:
 def ranking_svg(report: dict[str, Any]) -> str:
     rows = _rows(report)
     height = 171 + 49 * len(rows)
-    title = "JevArena v3 sealed-core ranking"
-    caveat = (
-        "8,147 sealed items · typed plus human transfer · rank among displayed models"
-    )
+    if report.get("scope") == "post-key same-panel":
+        title = "JevArena v3 same-panel ranking"
+        caveat = "8,147 original items · typed plus human transfer · rank among displayed models"
+    else:
+        title = "JevArena v3 sealed-core ranking"
+        caveat = "8,147 sealed items · typed plus human transfer · rank among displayed models"
     parts = _svg(height, title, caveat)
     parts += [
         _text(32, 42, title, size=24, weight=700),

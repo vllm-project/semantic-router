@@ -72,7 +72,7 @@ def render(card: ProductCard) -> str:
     table = _text(card.evidence_table, "evidence table")
     if (
         "| JevArena rank | Model | Actual parameters |" not in table
-        or "JevBench public" not in table
+        or "JevBench v1.2 public" not in table
         or "8,147" not in table
     ):
         raise ValueError("A scored v3 and public231 table is required")
@@ -88,10 +88,13 @@ def render(card: ProductCard) -> str:
         if card.teacher_assisted
         else ""
     )
-    chart_lines = "\n".join(
-        f"- [{figure.removesuffix('.svg').replace('-', ' ').title()}]"
-        f"(assets/{figure})"
-        for figure in FIGURES
+    chart_labels = {
+        "jevarena-rank.svg": "JevArena rank",
+        "jevarena-task-matrix.svg": "JevArena model-by-task matrix",
+        "jevbench-public-rank.svg": "JevBench v1.2 public 231 rank",
+    }
+    chart_lines = "\n\n".join(
+        f"![{chart_labels[figure]}](assets/{figure})" for figure in FIGURES
     )
     return f"""---
 license: apache-2.0
@@ -157,8 +160,9 @@ model does not retrieve missing evidence.
 ## Measured results
 
 The table compares models evaluated with the same JevArena v3 protocol and a
-separate rerun of the **231 public JevBench questions**. The public subset is
-not the upstream closed benchmark. JevArena uses 8,147 original items; its
+separate rerun of the **JevBench v1.2 public 231-question panel**. Its raw
+accuracy is not the upstream multi-axis score or closed benchmark. JevArena
+uses 8,147 original items; its
 headline combines typed decision accuracy and the median of 15 human-labeled
 transfer tasks. Invalid and missing answers count as failures.
 
@@ -179,8 +183,8 @@ Ranks apply only to the displayed same-panel roster. See
 The direct starting weights are
 [{card.direct_weight_source}](https://huggingface.co/{card.direct_weight_source})
 at revision `{card.source_revision}`. The native inference package loads
-**{card.loaded_parameters:,} parameters**, including its decision head and any
-adapter. {teacher}See [attributions](ATTRIBUTIONS.md) and [license](LICENSE).
+**{card.loaded_parameters:,} parameters**, including its decision head.
+{teacher}See [attributions](ATTRIBUTIONS.md) and [license](LICENSE).
 
 ## Limits
 

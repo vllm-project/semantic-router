@@ -70,6 +70,12 @@ def _color(group: str) -> str:
 def _context(report: dict[str, Any]) -> tuple[str, str, str]:
     schema = report.get("schema_version")
     if schema == "jevarena-jevbench-public-rank/1":
+        if report.get("edition") == "v1.2":
+            return (
+                "JevBench v1.2 public 231",
+                "Raw accuracy on the pinned 231 public items · same panel",
+                "Independent public-subset rerun · not the upstream four-axis or closed-set score",
+            )
         return (
             "JevBench public-only",
             "Raw accuracy on 231 public items · same pinned panel",
