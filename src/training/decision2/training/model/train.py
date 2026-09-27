@@ -220,7 +220,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--model-path",
-        help="Local Qwen3.5-family base/posttrained, Decision 1.0, or Decision 2.0 directory",
+        help="Local official Qwen3/Qwen3.5 base or posttrained, Decision 1.0, or Decision 2.0 directory",
     )
     parser.add_argument(
         "--init-kind",

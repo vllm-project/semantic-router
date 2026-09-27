@@ -1,4 +1,4 @@
-"""Qwen3.5 text backbone with a shared, dynamic-option decision readout.
+"""Qwen text backbone with a shared, dynamic-option decision readout.
 
 Option endpoint vectors preserve local candidate context; the final query
 vector sees all candidates. The head is explicitly FP32 inside BF16 autocast.
@@ -22,6 +22,7 @@ from .source import verify_source
 
 PROMPT_VERSION = "decision2-segmented-options-global-query-v1"
 ARCHITECTURE = "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp"
+QWEN3_ARCHITECTURE = "qwen3-text-endpoints-global-query-shared-bilinear-mlp"
 
 
 def _payload(value: Any) -> str:
@@ -175,13 +176,26 @@ class DecisionModel(nn.Module):
         *,
         source_stage: str = "base",
     ) -> tuple[DecisionModel, Any]:
-        from transformers import AutoTokenizer, Qwen3_5ForConditionalGeneration
+        from transformers import AutoConfig, AutoTokenizer
 
         if source_stage not in ("base", "posttrained"):
             raise ValueError("Qwen source stage must be base or posttrained")
 
+        config = AutoConfig.from_pretrained(path, local_files_only=True)
+        if config.model_type == "qwen3_5":
+            from transformers import Qwen3_5ForConditionalGeneration
+
+            model_class = Qwen3_5ForConditionalGeneration
+            architecture = ARCHITECTURE
+        elif config.model_type == "qwen3":
+            from transformers import Qwen3ForCausalLM
+
+            model_class = Qwen3ForCausalLM
+            architecture = QWEN3_ARCHITECTURE
+        else:
+            raise ValueError(f"Unsupported official Qwen backbone: {config.model_type}")
         tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
-        full, info = Qwen3_5ForConditionalGeneration.from_pretrained(
+        full, info = model_class.from_pretrained(
             path,
             dtype=torch.float32,
             local_files_only=True,
@@ -192,12 +206,15 @@ class DecisionModel(nn.Module):
         if any(
             info.get(name) for name in ("missing_keys", "mismatched_keys", "error_msgs")
         ):
-            raise RuntimeError(f"Incomplete Qwen3.5 base loading: {info}")
-        backbone = full.model.language_model
+            raise RuntimeError(f"Incomplete Qwen base loading: {info}")
+        backbone = (
+            full.model.language_model if config.model_type == "qwen3_5" else full.model
+        )
         backbone.config.use_cache = False
         head = CandidateHead(backbone.config.hidden_size, head_dim)
         metadata = {
-            "architecture": ARCHITECTURE,
+            "architecture": architecture,
+            "backbone_model_type": config.model_type,
             "prompt_version": PROMPT_VERSION,
             "base_revision": revision,
             "source_stage": source_stage,
@@ -271,16 +288,14 @@ class DecisionModel(nn.Module):
     ) -> tuple[DecisionModel, Any]:
         from safetensors.torch import load_file
         from transformers import AutoTokenizer
-        from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5TextModel
 
         path = Path(path)
         metadata = json.loads(
             (path / "decision_config.json").read_text(encoding="utf-8")
         )
-        if (
-            metadata.get("prompt_version") != PROMPT_VERSION
-            or metadata.get("architecture") != ARCHITECTURE
-        ):
+        if metadata.get("prompt_version") != PROMPT_VERSION or metadata.get(
+            "architecture"
+        ) not in (ARCHITECTURE, QWEN3_ARCHITECTURE):
             raise ValueError("Checkpoint is not a Decision 2.0 dynamic-option model")
         if metadata.get("checkpoint_format") == LORA_FORMAT:
             if source_path is None:
@@ -315,11 +330,15 @@ class DecisionModel(nn.Module):
                     raise ValueError("Nested LoRA source checkpoints are unsupported")
             else:
                 raise ValueError("LoRA checkpoint has an unsupported source kind")
+            if source_model.metadata["architecture"] != metadata["architecture"]:
+                raise ValueError(
+                    "LoRA checkpoint architecture differs from its pinned source"
+                )
             if contract.get("target_modules") != select_target_modules(
                 source_model.backbone
             ):
                 raise ValueError(
-                    "LoRA checkpoint target modules differ from the source Qwen3.5 text backbone"
+                    "LoRA checkpoint target modules differ from the pinned source backbone"
                 )
             source_modules = dict(source_model.backbone.named_modules())
             source_dimensions = {
@@ -349,7 +368,15 @@ class DecisionModel(nn.Module):
             return source_model, tokenizer
         if metadata.get("checkpoint_format") not in (None, "full"):
             raise ValueError("Unknown Decision 2.0 checkpoint format")
-        backbone = Qwen3_5TextModel.from_pretrained(
+        if metadata["architecture"] == QWEN3_ARCHITECTURE:
+            from transformers import Qwen3Model
+
+            backbone_class = Qwen3Model
+        else:
+            from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5TextModel
+
+            backbone_class = Qwen3_5TextModel
+        backbone = backbone_class.from_pretrained(
             path / "backbone",
             dtype=torch.float32,
             local_files_only=True,
