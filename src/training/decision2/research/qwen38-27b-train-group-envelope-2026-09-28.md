@@ -77,3 +77,55 @@ CPU checker. Its output excludes row IDs, source names, private paths and raw
 text. Synthetic group-capacity tests and the repository changed-path training
 checks pass. This receipt neither revises the old experiment nor changes any
 published performance number.
+
+## Protected-inventory schema follow-up
+
+The available candidate inventory has 32 unique roles and 23,414 rows; all
+32 referenced files exist and match their manifest hashes. The five required
+27B evaluation role names and expected row counts are present: typed DEV
+1,600, CSS pilot 1,430, typed FINAL 1,600, CSS15 6,547 and public subset 231.
+**It is not a valid gold-free inventory for the strict 27B admission parser.**
+Four role files contain nested answer-like keys: the public Decision Bench
+view on 30 rows, CSS15 on 6,547 rows, CSS pilot on 1,430 rows and typed FINAL
+on 400 rows. This audit counted key names only, never inspected values or
+printed raw prompts. The parser stops at `PROTECTED_NESTED_GOLD_FIELD`.
+Key-name rejection alone does not prove these fields contain gold: the native
+prompt contract uses a CSS `questions.label` as a question ID and permits one
+exact `state.target={entity,item}` task-input shape. Conversely, the optional
+Decision Bench role's `state.answer` still lacks source-specific input
+attestation and must remain excluded from any admission claim.
+The inventory also lacks the rights-clean TRAIN, SELECT and CAL roles required
+by new training-source audits. No overlap result can be inferred from a
+file-hash PASS. A future version must use role-specific input-only projections,
+prove that the projected prompt still covers the actual native inference
+surface, add the three partition roles, and pass the strict parser before
+candidate overlap is considered. GPU and release status remain HOLD.
+
+### Prospective input-only projection, unexecuted on protected data
+
+`training.data.plan_goldfree_inventory` is a local CPU-only construction
+prototype with six synthetic tests. For the five required native evaluator
+roles it requires pinned sealed-prompt bytes, calls the existing native
+`load_gold_free` loader, preserves the full `state` and `questions` input
+content as text, and records the native `input_digest` in a private sidecar.
+It does **not** edit the model request or delete legitimate task fields. For
+rights-clean TRAIN/SELECT/CAL it selects only the four hashed input fields,
+checks each source `input_sha256`, then projects input content to text; no
+target field is accessed by the projection. Exact eight-role counts, IDs,
+top-level field whitelist, text-only schema and absence of nested answer-like
+JSON keys are asserted. The synthetic tests include legitimate question-ID
+and target-entity inputs, an answer-bearing prompt rejection, count and hash
+failures, and a nonserializable target sentinel.
+
+This is **schema feasibility, not an inventory or overlap PASS**. No real
+sealed prompt or partition was opened by this prototype, and the candidate
+32-role inventory was not replaced. The three rights-clean role files and
+their pinned source hashes still need private construction and a complete
+source-level audit. Optional roles need separate native-source validation.
+The current 27B overlap checker only scans `state`, so it cannot certify the
+whole native question/option surface from this projection; a newly versioned
+full-input-surface screen and reviewed semantic/source overlap are required.
+The newer Choice source auditor scans all input text fields but pins the old
+manifest digest, so it too needs a prospective manifest/version lock before
+use. Existing exact-quota HOLD receipts and teacher/data rights gates remain
+unchanged. GPU-hours for this follow-up: **0**.
