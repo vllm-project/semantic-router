@@ -292,6 +292,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--direct-lora-arm", choices=("A", "B"))
     parser.add_argument("--output", required=True)
     parser.add_argument("--resume", help="Exact checkpoint-N directory within --output")
+    parser.add_argument(
+        "--zero-step-only",
+        action="store_true",
+        help="Write native SELECT baseline and exit before any optimizer update",
+    )
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--max-steps", type=int)
     parser.add_argument("--microbatch", type=int, default=1)
@@ -329,6 +334,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError(
             "Exact resume loads its model from --resume; omit --model-path"
         )
+    if args.resume and args.zero_step_only:
+        raise ValueError("Zero-step-only probe must use fresh initialization")
     if not args.resume and args.source_path and args.init_kind != "decision2-lora":
         raise ValueError(
             "Fresh initialization uses --model-path; --source-path is only for direct LoRA continuation or resume"
@@ -733,6 +740,7 @@ def main() -> None:
         "data_sha256": data_sha,
         "epochs": args.epochs,
         "max_steps": args.max_steps,
+        "zero_step_only": args.zero_step_only,
         "microbatch": args.microbatch,
         "accumulation": args.accumulation,
         "eval_batch": args.eval_batch,
@@ -995,6 +1003,10 @@ def main() -> None:
             tag="select-baseline",
         )
         log({"event": "baseline", "metrics": baseline})
+    if args.zero_step_only:
+        log({"event": "zero_step_only", "step": 0})
+        metrics_file.close()
+        return
     model.train()
     if args.train_mode == "head":
         model.backbone.eval()
