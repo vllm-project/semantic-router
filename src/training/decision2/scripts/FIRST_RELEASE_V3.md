@@ -167,10 +167,39 @@ receipt digests, comparison pairs, numeric policy and source hashes, under
 `jevarena-v3-freeze/2`. The auditable event order is
 candidate and policy lock, complete prediction seals, gold-free audit,
 pre-key receipt seal, then first label access. Write the receipt with exclusive
-creation and record its time and SHA. Replace the placeholder in the planned
+creation and record its time and SHA. A private chronology JSON must contain
+exactly `schema_version: jevarena-v3-prekey-chronology/1` and
+`candidate_lock`, `prediction_seal`, and `audit_seal` objects, each with
+`at_utc` and `sha256`. Their hashes must respectively identify the candidate
+lock, `RAW_PREDICTIONS.sha256`, and the saved audit; the times must be strictly
+ordered. Preserve independently recorded events so a reviewer can corroborate
+the declared times. The ranker checks their bound identities and order, not an
+external trusted clock.
+
+The private freeze generator accepts only the two gold **digest strings**, not
+label paths. It reruns the full gold-free audit, requires byte-exact agreement
+with the saved audit, checks formula and paired-bootstrap policy, and writes
+the receipt once into an existing owner-held mode-0700 directory as mode 0600.
+It refuses a destination inside the code checkout and never prints private
+paths or prompts:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SOURCE_ROOT" python3 -m scripts.freeze_first_release_v3 \
+  --plan "$PRIVATE_PLAN_JSON" --plan-sha256 "$PLAN_SHA256" \
+  --prediction-audit "$PRIVATE_PREKEY_AUDIT_JSON" \
+  --prediction-audit-sha256 "$AUDIT_SHA256" \
+  --chronology "$PRIVATE_CHRONOLOGY_JSON" \
+  --chronology-sha256 "$CHRONOLOGY_SHA256" \
+  --typed-gold-sha256 "$TYPED_GOLD_SHA256" \
+  --css-gold-sha256 "$CSS_GOLD_SHA256" \
+  --output "$PRIVATE_FREEZE_JSON"
+```
+
+An invalid receipt created after a concurrent file mutation stays preserved
+for audit; use a new private pre-key run rather than overwriting it. Replace
+the placeholder in the planned
 `arena_roster` template with that actual receipt SHA; write both the arena and
 public roster files. The v3 scorer independently verifies the freeze receipt.
-The first-release planner does not generate a pretend freeze receipt or make
-an automatic publish decision. Run its deferred scoring, paired-CI and rank
+The generator makes no publish decision. Run deferred scoring, paired-CI and rank
 commands only after this freeze, followed by the separate v3 publication
 gate and full package parity audit.

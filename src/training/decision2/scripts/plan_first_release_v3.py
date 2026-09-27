@@ -67,6 +67,7 @@ SOURCE_FILES = (
     "scripts/plan_final_eval.py",
     "scripts/baseline_attestation_v3.py",
     "scripts/plan_first_release_v3.py",
+    "scripts/freeze_first_release_v3.py",
 )
 SAME_SIZE_COMPARATOR = {
     "0.6B": {"kai", "lex"},

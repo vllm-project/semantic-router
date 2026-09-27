@@ -24,7 +24,9 @@ their exact file hashes, the candidate-to-1.0 comparison mapping, both gold-file
 hashes, the full scorer source closure and release-gate source, and each native
 model identity with typed, CSS and public prediction hashes. The gold-free audit
 checks every prediction ID against the 1,600 + 6,547 + 231 prompt IDs before
-the receipt is sealed. A model without a local package may use a null native model
+the receipt is sealed. The private freeze generator and chronology format are
+documented in [`FIRST_RELEASE_V3.md`](../scripts/FIRST_RELEASE_V3.md). A model
+without a local package may use a null native model
 fingerprint; Decision 2.0 candidates require the exact scored native model
 fingerprint. The v3 ranker checks these identities and the internal metric
 arithmetic without reading gold or prediction rows. Its result remains

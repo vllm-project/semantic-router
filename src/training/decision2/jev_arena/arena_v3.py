@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import re
+import shlex
 import statistics
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +27,7 @@ from jev_arena.arena import _load, _pareto, _score, _sha
 ARENA_VERSION = "jevarena-ranking/3"
 ROSTER_VERSION = "jevarena-v3-roster/1"
 FREEZE_VERSION = "jevarena-v3-freeze/2"
+CHRONOLOGY_VERSION = "jevarena-v3-prekey-chronology/1"
 TYPES = ("choice", "noul", "score")
 AXES = ("typed", "transfer")
 PANEL_HASH_KEYS = ("typed_gold_sha256", "css_gold_sha256")
@@ -44,7 +46,11 @@ SCORER_SOURCE_PATHS = {
 REQUIRED_PROTOCOL_SOURCES = {
     path.relative_to(Path(__file__).resolve().parents[1]).as_posix()
     for path in SCORER_SOURCE_PATHS.values()
-} | {"publication/bundle_arena_v3.py", "scripts/plan_first_release_v3.py"}
+} | {
+    "publication/bundle_arena_v3.py",
+    "scripts/plan_first_release_v3.py",
+    "scripts/freeze_first_release_v3.py",
+}
 ENTRY_FIELDS = {
     "key",
     "label",
@@ -123,6 +129,47 @@ def _pair_digest(pairs: Any) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def _utc(value: Any, field: str) -> datetime:
+    if not isinstance(value, str):
+        raise ValueError(f"{field}: expected a UTC timestamp")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{field}: invalid UTC timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(None):
+        raise ValueError(f"{field}: timestamp must be UTC")
+    return parsed
+
+
+def _chronology(freeze: dict[str, Any], path: Path, frozen_at: datetime) -> None:
+    """Bind declared event order; independent timestamp proof remains external."""
+    chain = _receipt(freeze.get("chronology"), path.parent, "pre-key chronology")
+    stages = ("candidate_lock", "prediction_seal", "audit_seal")
+    if (
+        set(chain) != {"schema_version", *stages}
+        or chain["schema_version"] != CHRONOLOGY_VERSION
+    ):
+        raise ValueError("Pre-key chronology has an unknown or incomplete schema")
+    expected = (
+        freeze.get("candidate_lock_sha256"),
+        freeze.get("raw_prediction_hashes_sha256"),
+        freeze.get("prediction_audit", {}).get("sha256"),
+    )
+    previous: datetime | None = None
+    for stage, digest in zip(stages, expected, strict=True):
+        item = chain[stage]
+        if not isinstance(item, dict) or set(item) != {"at_utc", "sha256"}:
+            raise ValueError(f"{stage}: incomplete chronology event")
+        if _digest(item["sha256"], f"{stage}.sha256") != digest:
+            raise ValueError(f"{stage}: chronology digest differs from freeze")
+        observed = _utc(item["at_utc"], f"{stage}.at_utc")
+        if previous is not None and observed <= previous:
+            raise ValueError("Pre-key chronology is not strictly ordered")
+        previous = observed
+    if previous is None or previous >= frozen_at:
+        raise ValueError("Pre-key freeze must follow the gold-free audit seal")
+
+
 def _prekey_evidence(
     freeze: dict[str, Any], path: Path, keys: set[str]
 ) -> dict[str, Any]:
@@ -136,6 +183,12 @@ def _prekey_evidence(
         "candidate_lock_sha256"
     ) or plan.get("gate_document_sha256") != freeze.get("protocol_sha256"):
         raise ValueError("Pre-key plan candidate lock or policy differs")
+    if (
+        plan.get("formula") != "100*sqrt(T*H)"
+        or freeze.get("formula") != plan["formula"]
+        or freeze.get("paired_bootstrap") != {"replicates": 5000, "seed": 20260927}
+    ):
+        raise ValueError("Pre-key formula or paired bootstrap policy differs")
     pairs = freeze.get("comparison_pairs")
     pair_sha = _digest(freeze.get("comparison_pairs_sha256"), "comparison_pairs_sha256")
     if (
@@ -179,6 +232,30 @@ def _prekey_evidence(
         or any(planned_groups.get(pair["comparator"]) != "decision1" for pair in pairs)
     ):
         raise ValueError("Pre-key pairs do not cover the Decision 2.0 roster")
+    comparisons = plan.get("paired_ci_commands_after_prekey_freeze")
+    if not isinstance(comparisons, list) or len(comparisons) != len(pairs):
+        raise ValueError("Pre-key plan lacks one paired-CI command per candidate")
+    by_candidate = {pair["candidate"]: pair for pair in pairs}
+    seen_comparisons: set[str] = set()
+    for entry in comparisons:
+        if (
+            not isinstance(entry, dict)
+            or entry.get("candidate") not in by_candidate
+            or entry["candidate"] in seen_comparisons
+            or any(
+                entry.get(name) != by_candidate[entry["candidate"]][name]
+                for name in ("comparator", "size_relation", "rationale")
+            )
+            or not isinstance(entry.get("command"), str)
+        ):
+            raise ValueError("Paired-CI command does not match the frozen pair")
+        seen_comparisons.add(entry["candidate"])
+        tokens = shlex.split(entry["command"])
+        for flag, expected in (("--replicates", "5000"), ("--seed", "20260927")):
+            if tokens.count(flag) != 1 or tokens[
+                tokens.index(flag) + 1 : tokens.index(flag) + 2
+            ] != [expected]:
+                raise ValueError("Paired-CI command changed its bootstrap policy")
     for row in roster:
         model = freeze["models"][row["key"]]
         if any(
@@ -213,15 +290,8 @@ def _prekey_evidence(
     ):
         raise ValueError("Gold-free prompt or prediction inventory differs")
     _digest(audit.get("raw_hashes_sha256"), "raw prediction hash list")
-    when = freeze.get("prekey_frozen_at_utc")
-    if not isinstance(when, str):
-        raise ValueError("Pre-key receipt needs an explicit UTC freeze time")
-    try:
-        parsed = datetime.fromisoformat(when)
-    except ValueError as exc:
-        raise ValueError("Pre-key receipt has an invalid freeze time") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(None):
-        raise ValueError("Pre-key receipt freeze time needs UTC")
+    parsed = _utc(freeze.get("prekey_frozen_at_utc"), "prekey_frozen_at_utc")
+    _chronology(freeze, path, parsed)
     return plan
 
 

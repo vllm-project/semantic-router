@@ -130,8 +130,10 @@ def fixture(root: Path) -> tuple[Path, Path]:
         "plan_version": "decision2-first-release-v3-plan/1",
         "candidate_freeze_sha256": "e" * 64,
         "gate_document_sha256": "7" * 64,
+        "formula": "100*sqrt(T*H)",
         "comparison_pairs": [],
         "comparison_pairs_sha256": pair_sha,
+        "paired_ci_commands_after_prekey_freeze": [],
         "source_root": str(source_root),
         "source_sha256": {
             name: hashlib.sha256((source_root / name).read_bytes()).hexdigest()
@@ -169,11 +171,31 @@ def fixture(root: Path) -> tuple[Path, Path]:
     }
     plan_path, audit_path = root / "plan.json", root / "audit.json"
     plan_sha, audit_sha = write(plan_path, plan), write(audit_path, audit)
+    chronology_path = root / "chronology.json"
+    chronology_sha = write(
+        chronology_path,
+        {
+            "schema_version": "jevarena-v3-prekey-chronology/1",
+            "candidate_lock": {
+                "at_utc": "2026-09-02T01:00:00+00:00",
+                "sha256": "e" * 64,
+            },
+            "prediction_seal": {
+                "at_utc": "2026-09-02T01:10:00+00:00",
+                "sha256": "9" * 64,
+            },
+            "audit_seal": {
+                "at_utc": "2026-09-02T01:20:00+00:00",
+                "sha256": audit_sha,
+            },
+        },
+    )
     freeze = {
         "schema_version": FREEZE_VERSION,
         "status": "prekey_frozen",
         "plan": {"path": str(plan_path), "sha256": plan_sha},
         "prediction_audit": {"path": str(audit_path), "sha256": audit_sha},
+        "chronology": {"path": str(chronology_path), "sha256": chronology_sha},
         "comparison_pairs": [],
         "comparison_pairs_sha256": pair_sha,
         "prekey_frozen_at_utc": "2026-09-02T01:30:00+00:00",
@@ -185,6 +207,8 @@ def fixture(root: Path) -> tuple[Path, Path]:
         },
         "protocol_sha256": "7" * 64,
         "candidate_lock_sha256": "e" * 64,
+        "formula": "100*sqrt(T*H)",
+        "paired_bootstrap": {"replicates": 5000, "seed": 20260927},
         "panels": {
             "typed_gold_sha256": "a" * 64,
             "css_gold_sha256": "b" * 64,
@@ -350,7 +374,31 @@ class JevArenaV3Test(unittest.TestCase):
             roster = json.loads(manifest.read_text())
             roster["freeze_sha256"] = write(freeze_path, freeze)
             write(manifest, roster)
-            with self.assertRaisesRegex(ValueError, "freeze time needs UTC"):
+            with self.assertRaisesRegex(ValueError, "timestamp must be UTC"):
+                rank(manifest)
+
+    def test_chronology_and_bootstrap_tamper_fail_at_rank_time(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, freeze_path = fixture(root)
+            freeze = json.loads(freeze_path.read_text())
+            chronology_path = Path(freeze["chronology"]["path"])
+            chronology = json.loads(chronology_path.read_text())
+            chronology["audit_seal"]["sha256"] = "0" * 64
+            freeze["chronology"]["sha256"] = write(chronology_path, chronology)
+            roster = json.loads(manifest.read_text())
+            roster["freeze_sha256"] = write(freeze_path, freeze)
+            write(manifest, roster)
+            with self.assertRaisesRegex(ValueError, "chronology digest differs"):
+                rank(manifest)
+
+            manifest, freeze_path = fixture(root)
+            freeze = json.loads(freeze_path.read_text())
+            freeze["paired_bootstrap"]["seed"] += 1
+            roster = json.loads(manifest.read_text())
+            roster["freeze_sha256"] = write(freeze_path, freeze)
+            write(manifest, roster)
+            with self.assertRaisesRegex(ValueError, "paired bootstrap policy"):
                 rank(manifest)
 
     def test_invalid_answers_stay_in_full_denominator(self) -> None:
@@ -399,10 +447,20 @@ class JevArenaV3Test(unittest.TestCase):
             plan["comparison_pairs_sha256"] = freeze["comparison_pairs_sha256"] = (
                 _pair_digest(pairs)
             )
+            plan["paired_ci_commands_after_prekey_freeze"] = [
+                {
+                    **pairs[0],
+                    "command": "python -m jev_arena.compare_v3 --replicates 5000 --seed 20260927",
+                }
+            ]
             audit_path = Path(freeze["prediction_audit"]["path"])
             audit = json.loads(audit_path.read_text())
             audit["comparison_pairs_sha256"] = _pair_digest(pairs)
             freeze["prediction_audit"]["sha256"] = write(audit_path, audit)
+            chronology_path = Path(freeze["chronology"]["path"])
+            chronology = json.loads(chronology_path.read_text())
+            chronology["audit_seal"]["sha256"] = freeze["prediction_audit"]["sha256"]
+            freeze["chronology"]["sha256"] = write(chronology_path, chronology)
             freeze["plan"]["sha256"] = write(plan_path, plan)
             roster["freeze_sha256"] = write(freeze_path, freeze)
             write(manifest, roster)
