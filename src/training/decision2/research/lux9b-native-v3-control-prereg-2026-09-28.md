@@ -13,7 +13,8 @@ precedes the Lux FINAL/CSS15 predictions and scores.
 | --- | --- |
 | Own published model | `llm-semantic-router/Decision-1.0-Lux-9B@bd45a30aee8c84032791c245c70f86dee5389cc8`; downloaded revision metadata attests that exact commit. The native bundle contains 29 manifest-listed files. Bundle-manifest SHA-256 `985ade73c509399291d60b5f98e8bbbbe99c0ee0efe611a5f84604f71420e0fd`, decision config `656b1717b8cfebad6253e9d1321023323651ad3c80327562b7d1542ec74c23d1`, runtime profile `2fffc75c6c681d7056b24ca660f95491f12816d0ed1c4a70ff3dbee3896044bb`. |
 | Native decision inference | Unmodified `inference/run.py` SHA-256 `b49054f1aef7a35c0a65b88dd5c1f1e5e252bb96dc210c7ef9e1d83942bb45ce`, backend `lux`, exact `state`/`questions` in published `DecisionModel.decide`. No chat projection, input truncation, option dropping or unvalidated-runtime override. |
-| Gold-free seal | `jev_arena/seal_lux9b_peer.py` SHA-256 `ddc526425b6377f15ea37117c95a9315c7bc7cb5b27a80eedeed5c8571ef2753`; requires exact revision/manifest, original question IDs/hashes and `runtime_matches_validated=True` on every output. |
+| Gold-free seal | `jev_arena/seal_lux9b_peer.py` SHA-256 `ddc526425b6377f15ea37117c95a9315c7cb5b27a80eedeed5c8571ef2753`; requires exact revision/manifest, original question IDs/hashes and `runtime_matches_validated=True` on every output. |
+| Published example gate | The released bundle's `model-card-example.json` SHA-256 `12d68a696b50851b3614c1ed9d5e73347780ca5ad487ee2ad35e746ab40bbb18` contains two requests and five actual native Choice/Noul/Score answers. `jev_arena/verify_lux9b_release_example.py` SHA-256 `20eea543e0d3da060d6aeffd694cc126470253f9236cf7d05f0bae59460d63e2` builds gold-free inputs, requires all five answers and release-qualified runtime, zero category changes and numeric/probability drift at most `0.02`. |
 | Typed FINAL | 1,600 items / 2,000 answers, input SHA-256 `e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd`; separate gold SHA-256 `707dd28dfbab10d124d437434023729f319501542e999e536fce9b7ff7f2361e`. |
 | CSS15 | 6,547 items / 6,547 answers, input SHA-256 `7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6`; separate gold SHA-256 `1cda9623032138bb7b124be0c1b0a4239c06bed7be3169264e6eb31805c19ba4`. |
 | Fixed metrics | Typed scorer SHA-256 `d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc`; CSS scorer SHA-256 `cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca`; v3 score `100 × sqrt(T × H)`. Pair to frozen JPT with `jev_arena/compare_v3.py`, 5,000 paired bootstrap draws, seed `20260927`. |
@@ -25,20 +26,18 @@ The fixed executable for each panel is `python -m inference.run --backend lux
 cuda:0`. Run with `PYTHONPATH=/code:/opt/decision-fla`, preserving the Lux
 image's bundled FLA source path while adding only our exact mirrored adapter.
 `/model` and `/panels` are read-only mounts and contain no gold.
-The earlier independent 32-question gold-free prompt SHA-256 is
+The 32-question gold-free prompt SHA-256 is
 `ce16f6107b8a8da6d0e5ef501cc8360da07a7232ecd7289d5a437d1d77767b67`.
-Its prior answer-map receipt is a screening reference from an older wrapper,
-not a source for FINAL scores. Require the native published runtime to match
-its profile and the smoke to have all three types, 32 complete answers, zero
-category changes and maximum probability drift at most 0.02 against the old
-map. If wrapper differences violate that gate, stop and investigate rather
-than silently changing the protocol.
+Its native smoke must have all three types, 32 complete answers and the
+qualified runtime. The release example above is the model's own numerical
+consistency gate. If it differs, stop without formal inference.
 
 ## Fixed stop and score order
 
 1. Verify source/mirror SHA, model revision, bundle files, image, prompts,
-   idle GPU, disk and the smoke reference before reserving GPU. Run the
-   bounded smoke, then typed FINAL once and CSS15 once in separate processes.
+   idle GPU and disk before reserving GPU. Run the 32-question smoke and the
+   published release example gate, then typed FINAL once and CSS15 once in
+   separate processes.
    A missing, invalid or over-budget answer counts as wrong in the same
    scorer; if the collector aborts or times out, retain the partial file and
    report incomplete rather than dropping rows or changing prompts.
@@ -73,3 +72,22 @@ An immediate second attempt with the qualified image also stopped before any
 answers: the orchestration set `PYTHONPATH=/code`, masking the image's default
 `/opt/decision-fla` path. The final environment above includes both paths.
 Both failed attempts stay in the compute budget and private failure log.
+
+## Wrong-reference correction before formal predictions
+
+The 32-question smoke completed on the qualified image with 32 valid native
+answers and a matched runtime profile. A comparison to the previously staged
+`lux-a` answer map showed no categorical differences, but Score probability
+drift up to `0.0742`, above the initially proposed `0.02` gate. Its manifest
+then proved that `lux-a` was **not** from own Lux 1.0: it identified a later
+Decision 2.0 LoRA checkpoint (`decision2-lux-structured8360-r1`, step 224)
+which had used Lux as its starting weight. Repeated `lux-a/a2/b` answers being
+identical does not make that checkpoint a valid Lux 1.0 reference. It is
+scientifically invalid to require 1.0 and a trained 2.0 checkpoint to have
+near-identical probabilities. The failed cross-model check remains recorded;
+it is removed as a gate only after this provenance finding, **before any
+formal Lux prediction**. The native 32-answer completeness and exact runtime
+gate remain. In its place, the originally published Lux 1.0 bundle's own
+fixed two-request, five-answer example provides a same-weight numerical gate
+with the same `0.02` drift ceiling. No formal key or gold was read for this
+correction.
