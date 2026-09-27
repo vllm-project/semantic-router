@@ -42,12 +42,13 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-log "Setting up mock vLLM backend venv..."
+log "Setting up provider mocker backend venv..."
+"${MOCK_PYTHON}" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else "provider-mocker requires Python 3.11+; set MOCK_PYTHON")'
 "${MOCK_PYTHON}" -m venv "${WORK_DIR}/mock-venv"
-"${WORK_DIR}/mock-venv/bin/pip" install --quiet -r tools/test/services/mock-vllm/requirements.txt
+"${WORK_DIR}/mock-venv/bin/pip" install --quiet -r tools/test/services/provider-mocker/requirements.txt
 
-log "Starting mock vLLM backend on :${MOCK_PORT}..."
-(cd tools/test/services/mock-vllm && exec "${WORK_DIR}/mock-venv/bin/uvicorn" app:app \
+log "Starting provider mocker backend on :${MOCK_PORT}..."
+(cd tools/test/services/provider-mocker && exec "${WORK_DIR}/mock-venv/bin/python" -m provider_mocker \
   --host 127.0.0.1 --port "${MOCK_PORT}") > "${WORK_DIR}/mock.log" 2>&1 &
 MOCK_PID=$!
 for i in $(seq 1 30); do

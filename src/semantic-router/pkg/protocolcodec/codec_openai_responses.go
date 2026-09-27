@@ -15,13 +15,14 @@ func (OpenAIResponsesCodec) Capabilities() llmprotocol.CapabilitySet {
 	return llmprotocol.Capabilities(
 		llmprotocol.CapabilityText, llmprotocol.CapabilityImageInput, llmprotocol.CapabilityFileInput,
 		llmprotocol.CapabilityImageGeneration,
-		llmprotocol.CapabilityTools, llmprotocol.CapabilityParallelTools, llmprotocol.CapabilityReasoning,
+		llmprotocol.CapabilityTools, llmprotocol.CapabilityParallelTools, llmprotocol.CapabilityCustomTools, llmprotocol.CapabilityReasoning,
 		llmprotocol.CapabilityStructuredJSON, llmprotocol.CapabilityStrictJSONSchema, llmprotocol.CapabilityStrictToolSchema,
 		llmprotocol.CapabilityStreaming, llmprotocol.CapabilityCacheAccounting,
 		llmprotocol.CapabilityReasoningAccounting, llmprotocol.CapabilityAuthoritativeUsage,
 		llmprotocol.CapabilityReasoningEffort, llmprotocol.CapabilityRequestMetadata,
 		llmprotocol.CapabilityRequestStorage, llmprotocol.CapabilityAutomaticStorage,
 		llmprotocol.CapabilityConversationState,
+		llmprotocol.CapabilityTextVerbosity,
 	)
 }
 
@@ -51,13 +52,14 @@ type responsesRequestWire struct {
 	MaxToolCalls         json.RawMessage             `json:"max_tool_calls,omitempty"`
 	Moderation           json.RawMessage             `json:"moderation,omitempty"`
 	Prompt               json.RawMessage             `json:"prompt,omitempty"`
-	PromptCacheKey       json.RawMessage             `json:"prompt_cache_key,omitempty"`
+	PromptCacheKey       string                      `json:"prompt_cache_key,omitempty"`
 	PromptCacheRetention json.RawMessage             `json:"prompt_cache_retention,omitempty"`
 	PromptCacheOptions   json.RawMessage             `json:"prompt_cache_options,omitempty"`
 	SafetyIdentifier     json.RawMessage             `json:"safety_identifier,omitempty"`
 	ServiceTier          json.RawMessage             `json:"service_tier,omitempty"`
 	StreamOptions        *responsesStreamOptionsWire `json:"stream_options,omitempty"`
 	TopLogprobs          json.RawMessage             `json:"top_logprobs,omitempty"`
+	ClientMetadata       map[string]string           `json:"client_metadata,omitempty"`
 }
 
 type responsesReasoningWire struct {
@@ -73,8 +75,8 @@ type responsesStreamOptionsWire struct {
 }
 
 type responsesTextWire struct {
-	Format    responsesFormatWire `json:"format,omitempty"`
-	Verbosity json.RawMessage     `json:"verbosity,omitempty"`
+	Format    *responsesFormatWire `json:"format,omitempty"`
+	Verbosity json.RawMessage      `json:"verbosity,omitempty"`
 }
 
 type responsesFormatWire struct {
@@ -89,6 +91,7 @@ type responsesToolWire struct {
 	Type              string                     `json:"type"`
 	Name              string                     `json:"name,omitempty"`
 	Description       string                     `json:"description,omitempty"`
+	Format            *responsesCustomToolFormat `json:"format,omitempty"`
 	Parameters        json.RawMessage            `json:"parameters,omitempty"`
 	Strict            *bool                      `json:"strict,omitempty"`
 	AllowedCallers    json.RawMessage            `json:"allowed_callers,omitempty"`
@@ -107,6 +110,13 @@ type responsesToolWire struct {
 	Action            string                     `json:"action,omitempty"`
 }
 
+// Responses uses a flattened grammar object, unlike Chat's nested grammar.
+type responsesCustomToolFormat struct {
+	Type       string `json:"type"`
+	Syntax     string `json:"syntax,omitempty"`
+	Definition string `json:"definition,omitempty"`
+}
+
 type responsesImageGenMaskWire struct {
 	ImageURL string `json:"image_url,omitempty"`
 	FileID   string `json:"file_id,omitempty"`
@@ -123,6 +133,7 @@ type responsesItemWire struct {
 	Caller           json.RawMessage `json:"caller,omitempty"`
 	Namespace        string          `json:"namespace,omitempty"`
 	Arguments        string          `json:"arguments,omitempty"`
+	Input            string          `json:"input,omitempty"`
 	Output           json.RawMessage `json:"output,omitempty"`
 	Summary          json.RawMessage `json:"summary,omitempty"`
 	Phase            json.RawMessage `json:"phase,omitempty"`
@@ -151,6 +162,12 @@ func (wire responsesItemWire) MarshalJSON() ([]byte, error) {
 			return nil, err
 		}
 		object["arguments"] = arguments
+	case "custom_tool_call":
+		input, err := json.Marshal(wire.Input)
+		if err != nil {
+			return nil, err
+		}
+		object["input"] = input
 	case "reasoning":
 		if len(wire.Summary) == 0 {
 			object["summary"] = json.RawMessage(`[]`)
@@ -215,13 +232,16 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	}
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"background": wire.Background, "context_management": wire.ContextManagement,
-		"include": wire.Include, "max_tool_calls": wire.MaxToolCalls, "moderation": wire.Moderation,
-		"prompt": wire.Prompt, "prompt_cache_key": wire.PromptCacheKey,
+		"max_tool_calls": wire.MaxToolCalls, "moderation": wire.Moderation, "prompt": wire.Prompt,
 		"prompt_cache_retention": wire.PromptCacheRetention,
 		"prompt_cache_options":   wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
 		"service_tier": wire.ServiceTier,
 		"top_logprobs": wire.TopLogprobs,
 	}); err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
+	diagnostics, err := decodeResponsesDroppedFields(wire, policy)
+	if err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	if wire.MaxOutputTokens != nil && *wire.MaxOutputTokens < 16 {
@@ -252,15 +272,50 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	if err := decodeResponsesRequestOptions(wire, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, request.Generation, policy), nil, nil
+	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, request.Generation, policy), diagnostics, nil
+}
+
+// decodeResponsesDroppedFields accepts include and client_metadata without
+// forwarding them. The Router already drops provider-encrypted reasoning from
+// responses, so it can never honor that include, and client telemetry is not
+// model input. Each drop is reported instead of discarded silently.
+func decodeResponsesDroppedFields(wire responsesRequestWire, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
+	var diagnostics llmprotocol.Diagnostics
+	include, err := decodeResponsesInclude(wire.Include, policy)
+	if err != nil {
+		return nil, err
+	}
+	if len(include) > 0 {
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "include", "provider-encrypted reasoning is not relayed")
+	}
+	if len(wire.ClientMetadata) > 0 {
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "client_metadata", "client telemetry is not model input")
+	}
+	return diagnostics, nil
+}
+
+func decodeResponsesInclude(raw json.RawMessage, policy llmprotocol.Policy) ([]string, error) {
+	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, nil
+	}
+	var values []string
+	if err := decodeWireValue(raw, &values, policy); err != nil {
+		return nil, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_include", "Responses include must be an array of strings", err)
+	}
+	for _, value := range values {
+		if value != "reasoning.encrypted_content" {
+			return nil, rejectUnsupportedRequestField("include", raw)
+		}
+	}
+	return values, nil
 }
 
 func decodeResponsesBaseRequest(wire responsesRequestWire, conversationID string) llmprotocol.Request {
 	request := llmprotocol.Request{
 		Generation: 1, Model: wire.Model, Stream: wire.Stream, Metadata: wire.Metadata,
 		EndUserID: wire.User, PreviousResponseID: wire.PreviousResponseID, ConversationID: conversationID,
-		Truncation: wire.Truncation,
-		Store:      wire.Store, AutoStore: wire.AutoStore, ParallelToolCalls: wire.ParallelToolCalls,
+		Truncation: wire.Truncation, PromptCacheKey: wire.PromptCacheKey,
+		Store: wire.Store, AutoStore: wire.AutoStore, ParallelToolCalls: wire.ParallelToolCalls,
 		Sampling: llmprotocol.Sampling{Temperature: wire.Temperature, TopP: wire.TopP, MaxOutputTokens: wire.MaxOutputTokens},
 		Trusted:  llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.OpenAIResponsesV1},
 	}
@@ -277,11 +332,19 @@ func decodeResponsesReasoningRequest(reasoning *responsesReasoningWire, request 
 	request.ReasoningEffort = reasoning.Effort
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"reasoning.mode":             reasoning.Mode,
-		"reasoning.summary":          reasoning.Summary,
 		"reasoning.context":          reasoning.Context,
 		"reasoning.generate_summary": reasoning.GenerateSummary,
 	}); err != nil {
 		return err
+	}
+	if len(reasoning.Summary) == 0 || bytes.Equal(bytes.TrimSpace(reasoning.Summary), []byte("null")) {
+		return nil
+	}
+	if err := json.Unmarshal(reasoning.Summary, &request.ReasoningSummary); err != nil {
+		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_reasoning_summary", "reasoning summary must be auto, concise, or detailed", err)
+	}
+	if request.ReasoningSummary == "" {
+		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_reasoning_summary", "reasoning summary must be auto, concise, or detailed", nil)
 	}
 	return nil
 }
@@ -333,10 +396,43 @@ func decodeResponsesTool(body json.RawMessage, request *llmprotocol.Request, pol
 	if toolType == "image_generation" {
 		return decodeResponsesImageGenerationTool(body, request, policy)
 	}
+	if toolType == "custom" {
+		return decodeResponsesCustomTool(body, request, policy)
+	}
 	if toolType != "function" {
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function tools enter the model protocol", nil)
 	}
 	return decodeResponsesFunctionTool(body, request, policy)
+}
+
+func decodeResponsesCustomTool(body json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+	var wire responsesToolWire
+	if err := decodeWireValue(body, &wire, policy); err != nil {
+		return err
+	}
+	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
+		"tools.allowed_callers": wire.AllowedCallers,
+		"tools.defer_loading":   wire.DeferLoading,
+	}); err != nil {
+		return err
+	}
+	var format *llmprotocol.CustomToolFormat
+	if wire.Format != nil {
+		switch wire.Format.Type {
+		case "text":
+			if wire.Format.Syntax != "" || wire.Format.Definition != "" {
+				return invalidCustomToolFormat("custom tool text format cannot carry a grammar")
+			}
+		case "grammar":
+			format = &llmprotocol.CustomToolFormat{Syntax: wire.Format.Syntax, Definition: wire.Format.Definition}
+		default:
+			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool_format", "custom tool format must be text or grammar", nil)
+		}
+	}
+	request.Tools = append(request.Tools, llmprotocol.Tool{
+		Kind: llmprotocol.ToolKindCustom, Name: wire.Name, Description: wire.Description, CustomFormat: format,
+	})
+	return nil
 }
 
 func responsesToolDiscriminator(body json.RawMessage) (string, error) {
@@ -401,6 +497,8 @@ func validateResponsesToolVariant(body json.RawMessage, toolType string) error {
 	switch toolType {
 	case "function":
 		names = []string{"name", "description", "parameters", "strict", "allowed_callers", "defer_loading", "output_schema"}
+	case "custom":
+		names = []string{"name", "description", "format", "allowed_callers", "defer_loading"}
 	case "image_generation":
 		names = []string{
 			"model", "quality", "size", "output_format", "output_compression", "moderation",
@@ -413,7 +511,7 @@ func validateResponsesToolVariant(body json.RawMessage, toolType string) error {
 		allowed[name] = struct{}{}
 	}
 	known := []string{
-		"name", "description", "parameters", "strict", "allowed_callers", "defer_loading", "output_schema",
+		"name", "description", "parameters", "strict", "format", "allowed_callers", "defer_loading", "output_schema",
 		"model", "quality", "size", "output_format", "output_compression", "moderation",
 		"background", "input_fidelity", "input_image_mask", "partial_images", "action",
 	}
@@ -457,12 +555,14 @@ func decodeResponsesRequestOptions(wire responsesRequestWire, request *llmprotoc
 	}
 	request.ToolChoice = choice
 	if wire.Text != nil {
-		if err := rejectUnsupportedRequestField("text.verbosity", wire.Text.Verbosity); err != nil {
+		if err := decodeTextVerbosity(wire.Text.Verbosity, &request.TextVerbosity); err != nil {
 			return err
 		}
-		request.OutputFormat = llmprotocol.OutputFormat{
-			Kind: llmprotocol.OutputFormatKind(wire.Text.Format.Type), Name: wire.Text.Format.Name,
-			Description: wire.Text.Format.Description, Strict: wire.Text.Format.Strict, Schema: wire.Text.Format.Schema,
+		if wire.Text.Format != nil {
+			request.OutputFormat = llmprotocol.OutputFormat{
+				Kind: llmprotocol.OutputFormatKind(wire.Text.Format.Type), Name: wire.Text.Format.Name,
+				Description: wire.Text.Format.Description, Strict: wire.Text.Format.Strict, Schema: wire.Text.Format.Schema,
+			}
 		}
 		switch request.OutputFormat.Kind {
 		case "json_schema":

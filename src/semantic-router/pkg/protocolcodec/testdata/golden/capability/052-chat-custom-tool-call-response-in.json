@@ -1,0 +1,39 @@
+{
+  "operation": "response",
+  "cases": [
+    {
+      "name": "custom_tool_call",
+      "body": {
+        "id": "chatcmpl_custom_1",
+        "object": "chat.completion",
+        "created": 100,
+        "model": "provider-model",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "tool_calls",
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_1",
+                  "type": "custom",
+                  "custom": {
+                    "name": "apply_patch",
+                    "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 4,
+          "completion_tokens": 3,
+          "total_tokens": 7
+        }
+      }
+    }
+  ]
+}

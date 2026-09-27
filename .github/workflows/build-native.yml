@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: CPU Libraries
+    name: CPU / amd64
     runs-on: ubuntu-24.04
     outputs:
       artifact-name: ${{ steps.identity.outputs.name }}

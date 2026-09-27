@@ -8,26 +8,35 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import runtime_evidence
 from ci_results import collection_errors
+from run_model_tests import required_inventory, runtime_families
 
 
 class RuntimeEvidenceTests(unittest.TestCase):
     def report(self, provider="ort", **overrides):
+        suites = {}
+        for package, name in sorted(required_inventory(provider)):
+            item = suites.setdefault(
+                package,
+                {
+                    "package": package,
+                    "expected": [],
+                    "passed": [],
+                    "failed": [],
+                    "skipped": [],
+                    "exit_code": 0,
+                },
+            )
+            item["expected"].append(name)
+            item["passed"].append(name)
+        first = next(iter(suites.values()))
+        first["skipped"].append(first["passed"].pop())
         return {
             "source_sha": "a" * 40,
             "suite": "runtime",
             "provider": provider,
             "device": "cpu",
-            "models": [],
-            "suites": [
-                {
-                    "package": "native",
-                    "expected": ["TestOne", "TestTwo"],
-                    "passed": ["TestOne"],
-                    "failed": [],
-                    "skipped": ["TestTwo"],
-                    "exit_code": 0,
-                }
-            ],
+            "models": [{"name": name} for name in runtime_families(provider)],
+            "suites": list(suites.values()),
             **overrides,
         }
 
@@ -41,8 +50,13 @@ class RuntimeEvidenceTests(unittest.TestCase):
             path = Path(tmp)
             (path / "results.json").write_text(json.dumps(self.report()))
             result = runtime_evidence.native_evidence(path)
-            self.assertEqual(len(result["expected_cases"]), 2)
-            self.assertEqual(result["cases"][1]["status"], "skipped")
+            self.assertEqual(
+                len(result["expected_cases"]), len(required_inventory("ort"))
+            )
+            self.assertTrue(
+                any(case["status"] == "skipped" for case in result["cases"])
+            )
+            self.assertTrue(collection_errors(result, "native"))
 
     def test_candle_requires_multimodal_report(self):
         with (
@@ -68,6 +82,35 @@ class RuntimeEvidenceTests(unittest.TestCase):
             path = Path(tmp)
             (path / "results.json").write_text(json.dumps(self.report()))
             with self.assertRaisesRegex(ValueError, "source"):
+                runtime_evidence.native_evidence(path)
+
+    def test_receipt_cannot_shorten_models_or_required_cases(self):
+        for field in ("models", "suites"):
+            with (
+                tempfile.TemporaryDirectory() as tmp,
+                patch.object(
+                    runtime_evidence.subprocess, "check_output", return_value="a" * 40
+                ),
+            ):
+                path = Path(tmp)
+                report = self.report()
+                report[field].pop()
+                (path / "results.json").write_text(json.dumps(report))
+                with self.assertRaisesRegex(ValueError, "inventory"):
+                    runtime_evidence.native_evidence(path)
+
+    def test_runtime_receipt_cannot_relabel_itself_as_smaller_multimodal_suite(self):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(
+                runtime_evidence.subprocess, "check_output", return_value="a" * 40
+            ),
+        ):
+            path = Path(tmp)
+            (path / "results.json").write_text(
+                json.dumps(self.report(provider="candle", suite="multimodal"))
+            )
+            with self.assertRaisesRegex(ValueError, "suite identity"):
                 runtime_evidence.native_evidence(path)
 
     def test_recipe_uses_authored_acceptance_without_hiding_observations(self):

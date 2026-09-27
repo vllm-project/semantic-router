@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -96,6 +97,11 @@ type OpenAIRouter struct {
 	// RuntimeRegistry exposes runtime-owned services without forcing request-time
 	// paths back through package-global API-server state.
 	RuntimeRegistry *routerruntime.Registry
+
+	// FallbackOrchestrator manages bounded execution and fallback across model candidates.
+	FallbackOrchestrator        *fallback.Orchestrator
+	RecipeFallbackOrchestrators map[config.RecipeName]*fallback.Orchestrator
+	fallbackCaller              fallbackTransportCaller
 
 	routerLearningMu        sync.Mutex
 	routerLearningRuntime   *routerLearningRuntime
@@ -274,4 +280,16 @@ func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.ToolRet
 		r.ToolsRegistry = tools.NewRegistry()
 	}
 	r.ToolsRegistry.Register(name, retriever)
+}
+
+func (r *OpenAIRouter) fallbackOrchestratorForContext(ctx *RequestContext) *fallback.Orchestrator {
+	if r == nil {
+		return nil
+	}
+	if ctx != nil && ctx.Routing.RecipeName() != "" && r.RecipeFallbackOrchestrators != nil {
+		if orch, ok := r.RecipeFallbackOrchestrators[ctx.Routing.RecipeName()]; ok && orch != nil {
+			return orch
+		}
+	}
+	return r.FallbackOrchestrator
 }

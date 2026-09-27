@@ -71,6 +71,10 @@ func buildReplayRouteDiagnostics(
 		DecisionRanking:                replayDecisionRanking(ctx.VSRDecisionDiagnostics.Ranking),
 	}
 	diagnostics.ContextDedup = contextDedupReplayDiagnostics(ctx)
+	if ctx.preparedDispatchReceipt != nil {
+		receipt := *ctx.preparedDispatchReceipt
+		diagnostics.PreparedDispatch = &receipt
+	}
 	if ctx.VSRSelectedDecision != nil {
 		diagnostics.Annotations = ctx.VSRSelectedDecision.Annotations
 	}

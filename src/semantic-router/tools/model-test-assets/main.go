@@ -141,6 +141,9 @@ func assets(suite, provider, output string) (manifest, []modeldownload.ModelSpec
 		}
 		specs = append(specs, spec)
 	}
+	if suite == "runtime" {
+		return runtimeExtensions(result, specs, output)
+	}
 	return result, specs, nil
 }
 

@@ -104,6 +104,9 @@ func TestMain(m *testing.M) {
 	if domainTask != nil {
 		owners = append(owners, domainTask)
 	}
+	if inputLengthDomain != nil {
+		owners = append(owners, inputLengthDomain)
+	}
 	if cacheEmbeddingOwner != nil {
 		owners = append(owners, cacheEmbeddingOwner)
 	}

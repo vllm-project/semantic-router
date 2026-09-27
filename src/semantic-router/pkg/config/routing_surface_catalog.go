@@ -36,6 +36,7 @@ const (
 	DecisionPluginToolSelection      = "tool_selection"
 	DecisionPluginContextCompression = "context_compression"
 	DecisionPluginContextDedup       = "context_dedup"
+	DecisionPluginPromptCache        = "prompt_cache"
 	DecisionPluginShadowDispatch     = "shadow_dispatch"
 )
 
@@ -117,6 +118,7 @@ var decisionPluginRegistry = []decisionPluginRegistryEntry{
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginResponseJailbreak, DisplayName: "Response Jailbreak", Description: "Screen generated responses for jailbreak-like output."}, NewPayload: func() interface{} { return &ResponseJailbreakPluginConfig{} }},
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginContextCompression, DisplayName: "Context Compression", Description: "Compress selected context before provider dispatch."}, NewPayload: func() interface{} { return &ContextCompressionPluginConfig{} }},
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginContextDedup, DisplayName: "Context Dedup", Description: "Remove adjacent repeated history turns before provider dispatch."}, NewPayload: func() interface{} { return &ContextDedupPluginConfig{} }},
+	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginPromptCache, DisplayName: "Prompt Cache", Description: "Add bounded Anthropic prompt-cache markers after route selection."}, NewPayload: func() interface{} { return &PromptCachePluginConfig{} }},
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginShadowDispatch, DisplayName: "Shadow Dispatch", Description: "Send a bounded asynchronous copy to a secondary model."}, NewPayload: func() interface{} { return &ShadowDispatchPluginConfig{} }},
 }
 

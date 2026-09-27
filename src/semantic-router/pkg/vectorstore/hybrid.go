@@ -477,10 +477,14 @@ func GenericHybridRerank(
 	}
 	config.applyDefaults()
 
-	// Fetch an expanded candidate set from the base vector search.
-	expandedTopK := topK * rerankCandidateMultiplier
-	if expandedTopK < 50 {
-		expandedTopK = 50
+	// Fetch an expanded candidate set from the base vector search. A non-positive
+	// topK means unlimited results, so preserve that contract for candidate fetches.
+	expandedTopK := 0
+	if topK > 0 {
+		expandedTopK = topK * rerankCandidateMultiplier
+		if expandedTopK < 50 {
+			expandedTopK = 50
+		}
 	}
 
 	vectorResults, err := backend.Search(ctx, vectorStoreID, queryEmbedding,
@@ -523,7 +527,11 @@ func GenericHybridRerank(
 		keyToIdx[k] = i
 	}
 
-	results := make([]SearchResult, 0, topK)
+	resultCapacity := topK
+	if resultCapacity < 0 {
+		resultCapacity = 0
+	}
+	results := make([]SearchResult, 0, resultCapacity)
 	for _, fc := range fused {
 		if fc.FinalScore < float64(threshold) {
 			continue

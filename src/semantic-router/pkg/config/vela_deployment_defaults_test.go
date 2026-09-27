@@ -10,7 +10,8 @@ import (
 
 func TestVelaDeploymentDownloadsMatchRegistryPinsAndPaths(t *testing.T) {
 	pattern := regexp.MustCompile(`\("(llm-semantic-router/Vela-[^"]+)", "(Vela-[^"]+)", "([a-f0-9]{40})"\)`)
-	for _, asset := range []string{"deploy/kserve/deployment.yaml", "deploy/openshift/deployment.yaml", "deploy/openshift/deployment-simulator.yaml"} {
+	// OpenShift's provider fixtures share one Router deployment and its pinned preloads.
+	for _, asset := range []string{"deploy/kserve/deployment.yaml", "deploy/openshift/deployment.yaml"} {
 		t.Run(asset, func(t *testing.T) {
 			data := string(mustReadRepoFile(t, asset))
 			matches := pattern.FindAllStringSubmatch(data, -1)

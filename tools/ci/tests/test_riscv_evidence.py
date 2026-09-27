@@ -130,14 +130,15 @@ class RISCVTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 riscv.rust_cases(directory)
 
-    def test_elf_must_be_actual_riscv_target(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / ".agent-harness") as folder:
+    def test_elf_must_be_actual_riscv_target(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as folder:
             path = Path(folder) / "binary"
             header = bytearray(64)
             header[:6] = b"\x7fELF\x02\x01"
             header[18:20] = (243).to_bytes(2, "little")
             path.write_bytes(header)
             record = riscv.target_binary(path)
+            self.assertEqual(record["path"], str(path.relative_to(ROOT)))
             self.assertEqual(record["platform"], "linux/riscv64")
             self.assertEqual(len(record["sha256"]), 64)
             header[18:20] = (62).to_bytes(2, "little")

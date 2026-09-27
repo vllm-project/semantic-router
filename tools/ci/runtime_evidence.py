@@ -14,6 +14,7 @@ from pathlib import Path
 from image_calibration import evidence as image_calibration_evidence
 from openvino_evidence import evidence as openvino_evidence
 from riscv_evidence import evidence as riscv_evidence
+from run_model_tests import required_inventory, runtime_families
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -47,6 +48,37 @@ def native_evidence(directory: Path) -> dict:
             or suite_report["provider"] != report["provider"]
         ):
             raise ValueError("Native evidence source or runtime mismatch")
+        suite_name = suite_report["suite"]
+        required_suite = (
+            "runtime" if path == directory / "results.json" else "multimodal"
+        )
+        if suite_name != required_suite:
+            raise ValueError(
+                "Native evidence suite identity differs from required inventory"
+            )
+        families = (
+            runtime_families(report["provider"])
+            if suite_name == "runtime"
+            else ("Multimodal",)
+        )
+        actual_models = [model["name"] for model in suite_report["models"]]
+        if len(actual_models) != len(families) or set(actual_models) != set(families):
+            raise ValueError(
+                "Native evidence model inventory differs from supported runtime inventory"
+            )
+        inventory = [
+            (suite["package"], name)
+            for suite in suite_report["suites"]
+            for name in suite["expected"]
+        ]
+        if len(inventory) != len(set(inventory)) or set(
+            inventory
+        ) != required_inventory(report["provider"], suite_name):
+            raise ValueError(
+                "Native evidence case inventory differs from required runtime inventory"
+            )
+        if suite_report["device"] != "cpu":
+            raise ValueError("Native model suite qualifies CPU execution only")
         models.extend(suite_report["models"])
         for suite in suite_report["suites"]:
             prefix = suite_report["suite"] + ":" + suite["package"] + ":"

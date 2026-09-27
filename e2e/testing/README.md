@@ -9,10 +9,10 @@ coverage from a numbered script or a saved check mark in this directory.
 
 ## Contents
 
-- [`llm-katan/`](llm-katan/) provides a lightweight OpenAI-compatible test
-  server and echo backend.
-- [`anthropic-shim/`](anthropic-shim/) translates a llama.cpp-style backend to
-  the Anthropic Messages shape for a manual profile.
+- [`provider-mocker`](../../tools/test/services/provider-mocker/) provides native
+  OpenAI and Anthropic protocol fixtures and deterministic scenario responses.
+- [`tiny-model`](../../tools/test/services/tiny-model/) provides optional real
+  Qwen3-0.6B inference through an upstream serving image.
 - [`hallucination-demo/`](hallucination-demo/) runs a focused mock-tool demo.
 - [`vllm-sr-cli/`](vllm-sr-cli/) documents CLI unit and container integration
   tests.
@@ -26,7 +26,7 @@ Use this only for a script that explicitly requires it:
 
 ```bash
 # Terminal 1: lightweight model backends
-e2e/testing/start-llm-katan.sh
+make start-provider-mocker
 
 # Terminal 2: Envoy
 make run-envoy

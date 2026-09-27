@@ -41,6 +41,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
+// Status is best-effort: a stalled API request must not indefinitely delay activation.
+const statusUpdateTimeout = 2 * time.Second
+
 // Reconciler reconciles IntelligentPool and IntelligentRoute CRDs
 type Reconciler struct {
 	client         client.Client
@@ -392,7 +395,9 @@ func (r *Reconciler) updatePoolStatus(ctx context.Context, pool *v1alpha1.Intell
 	if reflect.DeepEqual(pool.Status, poolCopy.Status) {
 		return
 	}
-	if err := r.client.Status().Update(ctx, poolCopy); err != nil {
+	statusCtx, cancel := context.WithTimeout(ctx, statusUpdateTimeout)
+	defer cancel()
+	if err := r.client.Status().Update(statusCtx, poolCopy); err != nil {
 		logging.Errorf("Failed to update IntelligentPool status: %v", err)
 		return
 	}
@@ -429,7 +434,9 @@ func (r *Reconciler) updateRouteStatus(ctx context.Context, route *v1alpha1.Inte
 	if reflect.DeepEqual(route.Status, routeCopy.Status) {
 		return
 	}
-	if err := r.client.Status().Update(ctx, routeCopy); err != nil {
+	statusCtx, cancel := context.WithTimeout(ctx, statusUpdateTimeout)
+	defer cancel()
+	if err := r.client.Status().Update(statusCtx, routeCopy); err != nil {
 		logging.Errorf("Failed to update IntelligentRoute status: %v", err)
 		return
 	}

@@ -14,12 +14,12 @@ config:
         backend_refs:
           - name: test-endpoint
             provider: vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: openai/workflow-planner
         backend_refs:
           - name: test-endpoint
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
   routing:
     decisions:
@@ -113,7 +113,7 @@ config:
         embedding_model: mmbert
     integrations:
       looper:
-        endpoint: http://mock-vllm.default.svc.cluster.local:8000/v1/chat/completions
+        endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/chat/completions
         flow:
           model_names:
             - openai/gpt-oss-20b

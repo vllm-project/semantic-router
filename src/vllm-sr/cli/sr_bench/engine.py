@@ -7,6 +7,7 @@ import json
 import os
 import threading
 import time
+from contextlib import contextmanager
 from http import HTTPStatus
 
 import requests
@@ -247,14 +248,30 @@ class Engine:
                 for cancel in self.cancels.values():
                     cancel.set()
 
+    @contextmanager
+    def admit_replay(self, owner, request_key):
+        """Hold shutdown admission and the store lock while materializing a replay.
+
+        An existing idempotency key can be reconciled after shutdown. New keys
+        and requests without a key cannot create a run once admission closes.
+        """
+        with self._admission, self.store.lock:
+            if not (request_key and self.store.request(owner, request_key)):
+                self._reject_when_closing()
+            yield
+
+    def _reject_when_closing(self):
+        """A new run is not admitted once shutdown closed admission."""
+        if self._closed:
+            raise EngineClosedError("Evaluation service is shutting down")
+
     def _admit(self, frozen, owner, request_key):
         """Under the admission lock, reconcile an existing run or allow creation."""
         if request_key and (existing := self.store.request(owner, request_key)):
             if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
                 raise ValueError("idempotency key is already bound to a different plan")
             return existing
-        if self._closed:
-            raise EngineClosedError("Evaluation service is shutting down")
+        self._reject_when_closing()
         return None
 
     def start(

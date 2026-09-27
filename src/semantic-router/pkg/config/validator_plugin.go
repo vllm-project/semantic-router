@@ -66,6 +66,7 @@ func validateDecisionPluginPayload(
 		normalizedType == DecisionPluginResponseJailbreak ||
 		normalizedType == DecisionPluginContextCompression ||
 		normalizedType == DecisionPluginContextDedup ||
+		normalizedType == DecisionPluginPromptCache ||
 		normalizedType == DecisionPluginShadowDispatch {
 		err = plugin.Configuration.DecodeIntoStrict(target)
 	} else {
@@ -109,6 +110,8 @@ func validateDecodedPluginContract(
 		return validateContextCompressionPlugin(decisionName, index, pluginType, typed)
 	case *ContextDedupPluginConfig:
 		return validateContextDedupPlugin(decisionName, index, pluginType, typed)
+	case *PromptCachePluginConfig:
+		return validatePromptCachePlugin(decisionName, index, pluginType, typed)
 	case *ShadowDispatchPluginConfig:
 		return validateShadowDispatchPlugin(decisionName, index, pluginType, typed)
 	}

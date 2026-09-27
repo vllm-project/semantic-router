@@ -172,7 +172,7 @@ func runContextDedupScenario(
 	ctx context.Context,
 	localPort string,
 	scenario contextDedupScenario,
-) (*mockVLLMEcho, error) {
+) (*providerMockerEcho, error) {
 	response, err := sendLocalChatConversation(ctx, localPort, "auto", scenario.conversation, 60*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send conversation: %w", err)
@@ -199,7 +199,7 @@ func runContextDedupScenario(
 
 // contextDedupUpstreamEcho reads the mock backend's JSON echo of the request
 // it received from the assistant message of the chat completion.
-func contextDedupUpstreamEcho(body []byte) (*mockVLLMEcho, error) {
+func contextDedupUpstreamEcho(body []byte) (*providerMockerEcho, error) {
 	var completion struct {
 		Choices []struct {
 			Message struct {
@@ -213,15 +213,15 @@ func contextDedupUpstreamEcho(body []byte) (*mockVLLMEcho, error) {
 	if len(completion.Choices) == 0 {
 		return nil, fmt.Errorf("chat completion carried no choices: %s", truncateString(string(body), 200))
 	}
-	echo := &mockVLLMEcho{}
+	echo := &providerMockerEcho{}
 	if err := json.Unmarshal([]byte(completion.Choices[0].Message.Content), echo); err != nil {
 		return nil, fmt.Errorf(
-			"assistant content is not a mock-vllm echo: %w (content=%q)",
+			"assistant content is not a provider-mocker echo: %w (content=%q)",
 			err,
 			truncateString(completion.Choices[0].Message.Content, 200),
 		)
 	}
-	if echo.Mock != "mock-vllm" {
+	if echo.Mock != "provider-mocker" {
 		return nil, fmt.Errorf("unexpected backend marker %q", echo.Mock)
 	}
 	return echo, nil
