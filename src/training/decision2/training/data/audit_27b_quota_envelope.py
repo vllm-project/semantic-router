@@ -1,6 +1,6 @@
 """Gold-free TRAIN-group capacity envelope for a *new* 27B teacher arm.
 
-This never reads labels, teacher outputs, or evaluation sets. Its receipt is
+This never consults labels, teacher outputs, or evaluation sets. Its receipt is
 aggregate-only and cannot admit an experiment without separate rights, teacher
 identity, and protected-inventory checks.
 """
@@ -206,7 +206,7 @@ def evaluate(
         "minimum_l1_source_quota_shift": relaxed_l1,
         "largest_source_quota_shift": max_source_shift,
         "gpu_hours": 0,
-        "limits": "TRAIN metadata and token lengths only. No labels, teacher vectors, rights ledger, protected prompts, weights or evaluation outcomes were read. Capacity does not authorize training.",
+        "limits": "TRAIN metadata and token lengths only. No target labels were consulted; no teacher vectors, rights ledger, protected prompts, weights or evaluation outcomes were read. Capacity does not authorize training.",
     }
 
 
