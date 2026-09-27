@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import argparse
 import collections
+import copy
 import hashlib
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any
 
@@ -36,33 +36,70 @@ def _verdict(row: dict[str, Any], state: str) -> int:
 def _source_witnesses(row: dict[str, Any]) -> dict[str, bool]:
     if row["label"] != 2:
         raise ValueError("Source-necessity witnesses require the positive case")
-    state, case_id = row["state"], row["audit_metadata"]["case_id"]
-    a_pattern = rf"({re.escape(case_id)}: A )verified"
-    b_pattern = rf"({re.escape(case_id)}: scope S-[A-Z0-9]+, B )verified"
-    changed_a, count_a = re.subn(a_pattern, r"\1unresolved", state, count=1)
-    changed_b, count_b = re.subn(b_pattern, r"\1unresolved", state, count=1)
-    veto = re.search(r"current veto (S-[A-Z0-9]+) d\d+", state)
-    scope_pattern = rf"({re.escape(case_id)}: scope )S-[A-Z0-9]+"
-    if veto is None or count_a != 1 or count_b != 1:
+    lines = row["state"].splitlines()
+    if len(lines) != 3:
+        raise ValueError("Expected the rendered procedure and two documents")
+    case_id = row["audit_metadata"]["case_id"]
+    bundle = json.loads(lines[1].split(": ", 1)[1])
+    registry = json.loads(lines[2].split(": ", 1)[1])
+    a_rows = [entry for entry in bundle["ledger"] if entry["case"] == case_id]
+    b_rows = [entry for entry in registry if entry["case"] == case_id]
+    vetoes = [
+        notice
+        for notice in bundle["notices"]
+        if notice["state"] == "current" and notice["kind"] == "disqualifier"
+    ]
+    archived_notices = [
+        notice for notice in bundle["notices"] if notice["state"] == "archived"
+    ]
+    if (
+        len(a_rows) != 1
+        or len(b_rows) != 1
+        or len(vetoes) != 1
+        or len(archived_notices) != 1
+    ):
         raise ValueError("Cannot construct source-necessity perturbation")
-    changed_scope, count_scope = re.subn(
-        scope_pattern, lambda match: match.group(1) + veto.group(1), state, count=1
+
+    def rendered(new_bundle: dict[str, Any], new_registry: list[dict[str, Any]]) -> str:
+        return "\n".join(
+            (
+                lines[0],
+                lines[1].split(": ", 1)[0]
+                + ": "
+                + json.dumps(new_bundle, sort_keys=True),
+                lines[2].split(": ", 1)[0]
+                + ": "
+                + json.dumps(new_registry, sort_keys=True),
+            )
+        )
+
+    changed_a = copy.deepcopy(bundle)
+    next(entry for entry in changed_a["ledger"] if entry["case"] == case_id)[
+        "requirement_A"
+    ] = "unresolved"
+    changed_b = copy.deepcopy(registry)
+    next(entry for entry in changed_b if entry["case"] == case_id)[
+        "requirement_B"
+    ] = "unresolved"
+    changed_scope = copy.deepcopy(registry)
+    next(entry for entry in changed_scope if entry["case"] == case_id)["scope"] = (
+        vetoes[0]["scope"]
     )
-    if count_scope != 1:
-        raise ValueError("Cannot construct veto-scope join perturbation")
-    archived, count_archived = re.subn(
-        r"archived veto S-[A-Z0-9]+",
-        "archived veto S-IGNORED",
-        state,
-        count=1,
-    )
-    if count_archived != 1:
-        raise ValueError("Cannot construct archived-notice control")
+    without_archived = copy.deepcopy(bundle)
+    without_archived["notices"] = [
+        notice
+        for notice in without_archived["notices"]
+        if notice["state"] != "archived"
+    ]
     return {
-        "document_a_required": _verdict(row, changed_a) == 1,
-        "document_b_required": _verdict(row, changed_b) == 1,
-        "cross_document_veto_required": _verdict(row, changed_scope) == 0,
-        "archived_control_invariant": _verdict(row, archived) == 2,
+        "document_a_required": _verdict(row, rendered(changed_a, registry)) == 1,
+        "document_b_required": _verdict(row, rendered(bundle, changed_b)) == 1,
+        "cross_document_veto_required": _verdict(row, rendered(bundle, changed_scope))
+        == 0,
+        "archived_control_invariant": _verdict(
+            row, rendered(without_archived, registry)
+        )
+        == 2,
     }
 
 
