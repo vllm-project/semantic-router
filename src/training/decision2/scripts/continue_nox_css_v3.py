@@ -33,7 +33,8 @@ def continue_css(
         frozen = json.loads(plan.read_text(encoding="utf-8"))
         model = next(item for item in frozen["inference"] if item["key"] == "nox")
         predictions = Path(model["paths"]["css"])
-        failed_index = sum(1 for _ in predictions.open(encoding="utf-8")) + 1
+        with predictions.open(encoding="utf-8") as stream:
+            failed_index = sum(1 for _ in stream) + 1
         recovery_path = log_root / f"nox.css.overbudget-{failed_index}.receipt.json"
         recovery = recover(plan, plan_sha, pending, recovery_path)
         process_log = log_root / f"nox.css.resume-{failed_index}.process.log"
