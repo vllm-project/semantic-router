@@ -105,8 +105,34 @@ aggregate receipt SHA-256:
 All 24 requests have the exact native Score input keys, and the packet
 contains eight groups with three requests each. Source-file, tokenizer and
 parent-receipt hashes matched the frozen audit. The packet was generated on
-an authorized private CPU environment with **0 GPU-hours**. Independent
-semantic review has not yet returned, so admitted training rows remain **0**.
+an authorized private CPU environment with **0 GPU-hours**.
+
+### Independent answer-blind rubric result
+
+An independent reviewer froze item-level ordinal meaning, unique support,
+evidence necessity, shortcut and language criteria, plus group-level relation
+integrity, **before** opening the packet. Its private criterion receipt is
+SHA-256 `17c84c524e8130e7b8b509c17dd67b159fde36d70b87401372967e6b10730f04`.
+The reviewer checked the packet hash, saw no separate key, source label,
+prior receipt, model prediction or benchmark answer, and sealed a reasoned
+answer guess for every item.
+
+Only **9/24** individual native Score requests and **2/8** complete three-item
+groups passed the conservative rubric. Eleven requests had wording or label
+shortcut risk, six lacked a robust unique ordinal answer and one had a major
+language defect; categories overlap. Recurrent relation errors included
+conflating a named actor's conduct with an institution's, inferring causality
+from co-occurrence, and treating absent evidence as contradiction. The
+private item-level and public-safe aggregate receipts have SHA-256 values
+`127f9304033970814378c39da5e3d4128c9a7a28de3a7ca5d97890f89e740511`
+and `6336c1ca235639f408642cf453aff642a404e29384a9dc580c748565b9246510`.
+This is a sample-level construct check, not a source accuracy estimate or a
+comparison with official ANLI labels.
+
+**Whole-source automatic Score admission remains HOLD, zero rows.** A distinct
+future item-level filter or authored evidence-relation source would require a
+new prospective protocol, larger independent review, complete source-rights
+and protected-overlap checks. This negative result authorizes no GPU training.
 
 ## Single conditional causal experiment
 

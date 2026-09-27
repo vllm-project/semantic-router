@@ -38,8 +38,10 @@ The separate [ANLI TRAIN source screen](anli-score-train-source-audit-2026-09-28
 froze 12,000 rows across 930 whole premise groups before inspecting source
 labels. One group (26 rows) exactly overlaps public ANLI DEV input, leaving
 an unfilled technical upper bound of 11,974 rows/929 groups. Original-source
-terms, repeated-pair quality and the native three-level Score mapping still
-need independent review. **Training admission is zero; no GPU arm ran.**
+terms and repeated-pair quality remain unresolved. Its independent answer-blind
+native Score rubric review passed only **9/24** sampled requests and **2/8**
+complete groups; shortcuts and uncertain ordinal meanings prevent whole-source
+admission. **Training admission is zero; no GPU arm ran.**
 
 The [RACE Choice source screen](race06-choice-source-screen-2026-09-28.md)
 measured official TRAIN passages and native 0.6B input lengths without GPU
