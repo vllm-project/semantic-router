@@ -20,6 +20,9 @@ SHA = re.compile(r"[0-9a-f]{64}\Z")
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
 MODEL_ID = "llm-semantic-router/DEV2.0-0.6B"
 ARCHITECTURE = "qwen3-text-endpoints-global-query-shared-bilinear-mlp"
+HUB_GITATTRIBUTES_SHA256 = (
+    "4358a92acd019e7896d287637a9081061d85a0f5655f3308eaf79b0a0d5cbf91"
+)
 
 
 def _sha_file(path: Path) -> str:
@@ -47,6 +50,14 @@ def _inventory(root: Path) -> dict[str, str]:
         name = path.relative_to(root).as_posix()
         relative = Path(name)
         if relative.parts[:2] == (".cache", "huggingface"):
+            continue
+        if name == ".gitattributes":
+            if (
+                not path.is_file()
+                or path.is_symlink()
+                or _sha_file(path) != HUB_GITATTRIBUTES_SHA256
+            ):
+                raise ValueError("Hub metadata differs from the pinned default")
             continue
         if path.is_dir():
             if path.is_symlink():

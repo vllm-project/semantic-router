@@ -8,10 +8,17 @@ import unittest
 from pathlib import Path
 
 from publication.full_product import _row
-from publication.full_runtime_api import _tensor_count
+from publication.full_runtime_api import _inventory, _tensor_count
 
 
 class FullPublicationTest(unittest.TestCase):
+    def test_hub_metadata_requires_pinned_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".gitattributes").write_text("unexpected metadata\n")
+            with self.assertRaises(ValueError):
+                _inventory(root)
+
     def test_safetensors_parameter_count_uses_shapes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "head.safetensors"
