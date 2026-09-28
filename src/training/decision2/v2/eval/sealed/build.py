@@ -12,9 +12,14 @@ Per task, in the order of SHA-256(salt | task | source item id):
    often than chance (per-item option sets); `length` when a length-only baseline
    (majority gold per input-length quintile, 5-fold CV by group) beats the better of
    majority and chance by at least 5 points; otherwise the gold.
-3. Take up to the stratum quota (length: equal gold counts within every length
-   quintile; gold_length_rank: equal counts per rank; gold: cap // classes, all of a
-   smaller class), at most `group_cap` items per source group, stopping at `cap`.
+3. Take up to the stratum quota (length: each gold gets the same count in every length
+   quintile, so length is independent of the gold; gold_length_rank: equal counts per
+   rank; gold: cap // classes, all of a smaller class), at most `group_cap` items per
+   source group, stopping at `cap`.
+
+Selected-set gate (always applied): a task whose selected length baseline gains
+>= 5 points is rebuilt once with forced length balancing and is dropped if it still
+fails; a task left with fewer than 30 items or one gold class is dropped.
 
 Writes prompts.jsonl (gold-free System One rows with opaque ids), gold.jsonl,
 manifest.json (counts and hashes) and a count-only receipt; private files are mode 600.
@@ -40,6 +45,7 @@ LENGTH_GAIN = 5.0
 OPTION_LENGTH_GAIN = 0.05
 REVIEW_EXCLUDE = 0.2
 BINS = 5
+MIN_TASK_ITEMS = 30
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -80,15 +86,26 @@ def bin_of(value: int, edges: list[float]) -> int:
     return sum(value > edge for edge in edges)
 
 
-def length_baseline(rows: list[dict[str, Any]]) -> dict[str, float]:
-    """CV accuracy of the majority gold per input-length quintile vs the reference."""
+def length_baseline(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """CV accuracy of the majority gold per input-length quintile vs the reference.
+
+    The reference is the better of the CV majority and chance. `fails` is the
+    LEAK-level gate: gain >= 5 points with the group-bootstrap lower bound above 0.
+    """
     if len(rows) < 2 * FOLDS:
-        return {"baseline": float("nan"), "reference": float("nan"), "gain": 0.0}
+        return {
+            "baseline": None,
+            "reference": None,
+            "gain": 0.0,
+            "ci95": None,
+            "fails": False,
+        }
     lengths = [row["_chars"] for row in rows]
     edges = quintiles(lengths)
     golds = [json.dumps(row["gold"]) for row in rows]
     folds = [fold(row["group_id"]) for row in rows]
-    correct = majority_correct = 0
+    by_length = [0.0] * len(rows)
+    by_majority = [0.0] * len(rows)
     for k in range(FOLDS):
         train = [i for i, f in enumerate(folds) if f != k]
         test = [i for i, f in enumerate(folds) if f == k]
@@ -101,13 +118,24 @@ def length_baseline(rows: list[dict[str, Any]]) -> dict[str, float]:
         for i in test:
             cell = per_bin.get(bin_of(lengths[i], edges))
             guess = cell.most_common(1)[0][0] if cell else overall
-            correct += guess == golds[i]
-            majority_correct += overall == golds[i]
-    n = len(rows)
-    chance = 100.0 * statistics.mean(1.0 / option_count(row) for row in rows)
-    reference = max(100.0 * majority_correct / n, chance)
-    baseline = 100.0 * correct / n
-    return {"baseline": baseline, "reference": reference, "gain": baseline - reference}
+            by_length[i] = float(guess == golds[i])
+            by_majority[i] = float(overall == golds[i])
+    chance = [1.0 / option_count(row) for row in rows]
+    reference = by_majority if sum(by_majority) >= sum(chance) else chance
+    gain = 100.0 * (sum(by_length) - sum(reference)) / len(rows)
+    interval = leak_audit.cluster_bootstrap(
+        [row["group_id"] for row in rows],
+        [a - b for a, b in zip(by_length, reference)],
+        leak_audit.REPLICATES,
+        leak_audit.SEED,
+    )
+    return {
+        "baseline": 100.0 * sum(by_length) / len(rows),
+        "reference": 100.0 * sum(reference) / len(rows),
+        "gain": gain,
+        "ci95": interval,
+        "fails": bool(interval and interval[0] > 0 and gain >= LENGTH_GAIN),
+    }
 
 
 def option_count(row: dict[str, Any]) -> int:
@@ -154,10 +182,14 @@ def option_length_gain(rows: list[dict[str, Any]]) -> float:
 def choose_balance(rows: list[dict[str, Any]]) -> tuple[str, dict[str, float]]:
     length = length_baseline(rows)
     option_gain = option_length_gain(rows)
-    checks = {"length_gain": length["gain"], "option_length_gain": option_gain}
+    checks = {
+        "length_gain": length["gain"],
+        "length_ci95": length["ci95"],
+        "option_length_gain": option_gain,
+    }
     if option_gain >= OPTION_LENGTH_GAIN:
         return "gold_length_rank", checks
-    if length["gain"] >= LENGTH_GAIN:
+    if length["fails"]:
         return "length", checks
     return "gold", checks
 
@@ -175,10 +207,11 @@ def select_task(
         golds = sorted({json.dumps(row["gold"]) for row in rows})
         available = Counter(stratum.values())
         per_cell = max(1, cap // (BINS * len(golds)))
+        present = sorted({b for b, _ in available})
         quota = {}
-        for b in range(BINS):
-            smallest = min(available.get((b, g), 0) for g in golds)
-            for g in golds:
+        for g in golds:
+            smallest = min(available.get((b, g), 0) for b in present)
+            for b in present:
                 quota[(b, g)] = min(per_cell, smallest)
     elif balance == "gold_length_rank":
         stratum = {id(row): gold_length_rank(row) for row in rows}
@@ -274,14 +307,32 @@ def select(args: argparse.Namespace) -> int:
         balance, checks = choose_balance(unique)
         if spec.get("balance"):
             balance = spec["balance"]
-        chosen = select_task(unique, spec["cap"], spec.get("group_cap", 1), balance)
+        group_cap = spec.get("group_cap", 1)
+        chosen = select_task(unique, spec["cap"], group_cap, balance)
+        gate = []
+        if length_baseline(chosen)["fails"] and balance != "length":
+            gate.append(f"length gate failed under {balance}; rebuilt with length")
+            balance = "length"
+            chosen = select_task(unique, spec["cap"], group_cap, balance)
+        if length_baseline(chosen)["fails"]:
+            gate.append("length gate failed after length balancing; task dropped")
+            chosen = []
+        elif len(chosen) < MIN_TASK_ITEMS:
+            gate.append(f"{len(chosen)} items < {MIN_TASK_ITEMS}; task dropped")
+            chosen = []
+        elif len({json.dumps(row["gold"]) for row in chosen}) < 2:
+            gate.append("fewer than 2 gold classes; task dropped")
+            chosen = []
         for row in chosen:
             row["_id"] = "c1-" + salted(salt, "id", task, row["source_item_id"])[:16]
+        final = length_baseline(chosen)
         after = {
-            "length_gain": length_baseline(chosen)["gain"],
+            "length_gain": final["gain"],
+            "length_ci95": final["ci95"],
             "option_length_gain": option_length_gain(chosen),
         }
         tasks[task] = {
+            "gate": gate,
             "eligible": len(unique),
             "selected": len(chosen),
             "groups": len({row["group_id"] for row in chosen}),

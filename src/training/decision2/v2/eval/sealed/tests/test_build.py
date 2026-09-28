@@ -125,8 +125,14 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(manifest["leak_audit"]["verdict_option_surface"], "CLEAN")
 
     def test_group_cap_and_salt_determinism(self):
+        rng = random.Random(5)
         rows = [
-            row(i, ["agree", "disagree"][i % 2], f"text {i} " * 4, group=f"g{i // 10}")
+            row(
+                i,
+                ["agree", "disagree"][i % 2],
+                f"text {i} " + "x " * rng.randint(3, 30),
+                group=f"g{i // 10}",
+            )
             for i in range(200)
         ]
         hits = [hit(r) for r in rows]
@@ -151,7 +157,9 @@ class BuildTest(unittest.TestCase):
         for i in range(600):
             gold = rng.choice(["agree", "disagree"])
             words = rng.randint(30, 60) if gold == "disagree" else rng.randint(5, 40)
-            rows.append(row(i, gold, " ".join(f"w{j}" for j in range(words))))
+            rows.append(
+                row(i, gold, f"item{i} " + " ".join(f"w{j}" for j in range(words)))
+            )
         hits = [hit(r) for r in rows]
         config = {
             "sources": ["src"],
@@ -164,6 +172,46 @@ class BuildTest(unittest.TestCase):
         self.assertLess(
             task["selected_checks"]["length_gain"], task["pool_checks"]["length_gain"]
         )
+
+    def test_selected_gate_rebuilds_with_length_balance_or_drops(self):
+        rng = random.Random(4)
+        rows = []
+        for i in range(900):
+            gold = "agree" if i % 5 else "disagree"
+            low, high = (5, 60) if gold == "agree" else (25, 60)
+            words = rng.randint(low, high)
+            rows.append(
+                row(i, gold, f"item{i} " + " ".join(f"w{j}" for j in range(words)))
+            )
+        hits = [hit(r) for r in rows]
+        config = {
+            "sources": ["src"],
+            "tasks": {"src/stance": {"cap": 200, "group_cap": 1}},
+        }
+        _, gold, manifest = run(rows, hits, config)
+        task = manifest["tasks"]["src/stance"]
+        self.assertTrue(task["gate"], task)
+        if task["selected"]:
+            self.assertEqual(task["balance"], "length")
+            self.assertLess(task["selected_checks"]["length_gain"], 5.0)
+            self.assertGreaterEqual(len(task["labels"]), 2)
+        else:
+            self.assertIn("dropped", task["gate"][-1])
+
+    def test_small_tasks_are_dropped(self):
+        rows = [
+            row(i, ["agree", "disagree"][i % 2], f"short item {i} " * 3)
+            for i in range(20)
+        ]
+        hits = [hit(r) for r in rows]
+        config = {
+            "sources": ["src"],
+            "tasks": {"src/stance": {"cap": 20, "group_cap": 1}},
+        }
+        prompts, _, manifest = run(rows, hits, config)
+        self.assertEqual(manifest["tasks"]["src/stance"]["selected"], 0)
+        self.assertIn("< 30", manifest["tasks"]["src/stance"]["gate"][0])
+        self.assertEqual(prompts, [])
 
     def test_gold_length_rank_balance_for_per_item_options(self):
         rng = random.Random(3)
