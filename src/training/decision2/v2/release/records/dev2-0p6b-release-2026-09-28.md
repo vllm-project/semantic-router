@@ -1,5 +1,167 @@
 # DEV2.0-0.6B: private build, upload and verification (2026-09-28)
 
+## Final release, 2026-09-29 ≈02:11 UTC+8 — revision `99c4e799`, in the private "Decision 2.0" collection
+
+The coordinator approved the release at 02:05 UTC+8 (full-autonomy mandate) after JevArena-C1 event 2
+([eval record](../../eval/records/m4-dev2-06b-c1-event2-2026-09-29.md)). The release is a card-only
+revision of the frozen T = 1 package `e61b2b44`.
+
+- **Final revision `99c4e799392afa73241915aeb16fefa5ef3518d7`** of private `llm-semantic-router/DEV2.0-0.6B`
+  (now `main`). Manifest `0affd1b13fd41446011f97cb723ce0d48ef1ed01e72d2837123518b34ccc2282`, 31 files, no
+  `calibration.json`, 597,103,104 loaded parameters.
+- **Final decision** [`DEV2.0-0.6B.decision.json`](dev2-0p6b-release-2026-09-28/DEV2.0-0.6B.decision.json),
+  SHA-256 **`e22fe181f6c245a15a1c341d136141ef529768c0b8fecb92d65ee909722b15b0`**. It is `status: final`,
+  decided by the coordinator, and names identity `5b30b7e2…`, report `72cf01de…` and paired file `bd4ad6c7…`.
+  It supersedes the drafts `bc59b2af…` and `4946f666…`. The run's `gate.json` (`787c31c9…`) binds it to
+  `99c4e799…` and manifest `0affd1b1…`; all six gate items pass.
+- **Card changes** (spec `specs/dev2-0p6b-release.json`). The C1 placeholder became the event 2 line:
+  33.21 vs Kai 1.0 17.77, +15.44 [+13.51, +17.21]; Bosun 35.03, −1.82 [−4.05, +0.35]; GLiNER2.5-Decide 22.82;
+  Lex 20.82; plus the input-limit caveat. Three limits were added:
+  - typed accuracy below Bosun (−0.038 [−0.068, −0.010]);
+  - typed Noul only narrowly above chance, and typed Score leaning on the lowest and highest levels;
+  - the C1 weak spots versus Kai (Arabic HalluTruthQA, narrative event causality, Arabic overall; Noul the
+    weakest type) and versus Bosun (weaker on Choice and Noul, stronger on Score).
+
+  The existing disclosures are unchanged. Every named comparator passes the 22:20 licence policy: Bosun is
+  Apache-2.0 with a LICENSE file; GLiNER2.5-Decide declares Apache-2.0 without a LICENSE file (noted on the card);
+  Kai and Lex are our own.
+- **Package = `e61b2b44` plus the card.** Only `README.md` and `MODEL_MANIFEST.json` differ from `e61b2b44`,
+  both in a CPU build-only preflight and on the Hub. In the manifest, the changed fields are the README hash,
+  the card hash and `builder.source_commit`. The evaluation page is unchanged.
+- **Verification.** One `release.sh --upload --collect` run from the mirror of `61d22cd30` passed all 17
+  steps in about 150 s ([command](dev2-0p6b-release-2026-09-28/final/extra/launch-command.txt)). It ran on
+  node A GPU5 via the shared-lease entry `owner.release` (18:08:24–18:11:20Z, then removed; the owner entry
+  was not touched).
+  - Native examples are bit-identical in three processes, answers `a7da72d4…`, the same as `e61b2b44`.
+    The card example reproduced before and after upload.
+  - **Exact parity (tolerance 0)** against the raw scored predictions on 600 prompts (typed 150, transfer
+    200, public 100, mlx-diag 150): 0 changes and drift 0.0, before and after the real download.
+  - A real `hf download` of `99c4e799…` with a fresh cache re-hashes 31/31 files.
+  - **Weights identical to `e61b2b44`.** All seven model files have equal SHA-256 in the download and in
+    the old manifest, and equal remote LFS / blob ids at both revisions; the identity is still `5b30b7e2…`
+    ([compare](dev2-0p6b-release-2026-09-28/final/extra/revision-compare.json)).
+  - Readback: repository private at `99c4e799…` (= `main`), 31/31 remote hashes, Hub card `apache-2.0`,
+    no card problems. HTTP check: 12/12 card images and files; anonymous model API, README and page refused
+    (401). `hub_links`: 14/14.
+  - Collection "Decision 2.0": private, **exactly two items**, `llm-semantic-router/DEV2.0-0.8B` and
+    `llm-semantic-router/DEV2.0-0.6B`.
+- **GPU-hours 0.042** (node A GPU5). The preflight build and the extra readbacks used no GPU.
+- Superseded revisions stay in the history: `e61b2b44` (frozen T = 1 package, placeholder card) and the
+  earlier `7b5d3ff2`, `cb2bfd76` and `a87eeb72` (never use `a87eeb72`).
+
+Receipts: [`final/`](dev2-0p6b-release-2026-09-28/final/).
+
+## Update 23:50 UTC+8: CAL698 rejected on development panels; T = 1 revision `e61b2b44` is current
+
+Coordinator rule 23:15 (supersedes 22:30): CAL698 temperatures are adopted only if they do not worsen
+aggregate calibration on the development panels. `v2/release/dev_calibration.py` re-tempered the stored
+development predictions of the same weights (`m4-t-a7-soup` readout, identity `5b30b7e2…`, T = 1, 8,192
+tokens; 0 answer changes) and scored them with the development scorers
+([receipt](dev2-0p6b-release-2026-09-28/devcal/dev2-0p6b.json)):
+
+| Development metric | Raw | CAL698 |
+| --- | ---: | ---: |
+| Typed DEV Brier / ECE-10 | 0.336 / 0.169 | **0.396 / 0.300** (worse) |
+| CSS pilot median task Brier-sum / ECE-15 | 0.790 / 0.072 | 0.790 / 0.058 |
+
+Typed-DEV Brier and ECE worsen, so **CAL698 is rejected and the package ships T = 1**.
+
+- **Current private revision `e61b2b4419383672cb6a92d63699f7974e5f81ac`, manifest
+  `a5cdabedf93835f028b871d0dc64ad8595e5369128f994d07bdee44dc1e999a9`** (31 files, no `calibration.json`).
+  Model files and identity equal `7b5d3ff2`; only `README.md` and `evaluation/EVALUATION.md` differ (the
+  card's calibration line now says the CAL698 temperatures were evaluated and not adopted because they
+  worsened out-of-distribution calibration; the GLiNER2.5-Decide LICENSE note; score table back to the raw
+  0.309 / 0.118). All 15 release steps pass ([receipts](dev2-0p6b-release-2026-09-28/t1/release/)):
+  examples bit-identical in three processes (answers `a7da72d4…`, as for `7b5d3ff2`), card example,
+  **exact parity (tolerance 0) against the raw scored predictions** on 600 prompts before and after the
+  real download (full-panel exact parity was shown for the same model and runtime bytes at `7b5d3ff2`),
+  re-hash 31/31, readback, `hub_links` 14/14, HTTP check 12/12 with anonymous 401, six gate items.
+- **Do not use `a87eeb725b4edd5e7612342be662c4d11d470487`.** The first T = 1 upload kept the previous
+  revision's `calibration.json` because `upload_folder` never deletes; the re-hash step failed and the
+  chain stopped ([receipts](dev2-0p6b-release-2026-09-28/t1/failed-a87eeb72/)). Fixed in `89294e89f`
+  (`hub upload` passes `delete_patterns=['*']`; the Hub keeps `.gitattributes`), then re-uploaded.
+- **Draft decision:** build-time [`…build-draft-t1.json`](dev2-0p6b-release-2026-09-28/DEV2.0-0.6B.decision.build-draft-t1.json)
+  (`4946f666…`); verified draft for the coordinator [`DEV2.0-0.6B.decision.draft.json`](dev2-0p6b-release-2026-09-28/DEV2.0-0.6B.decision.draft.json)
+  (`bc59b2af…`, names `e61b2b44`, supersedes `f52e7873…`, `f752dad2…` and `72bc767e…`). Report `72cf01de…`,
+  paired `bd4ad6c7…` (v3 43.541, +7.60 [+4.70, +10.76]).
+- **Scored identity for C1 event 2:** `llm-semantic-router/DEV2.0-0.6B` at
+  `e61b2b4419383672cb6a92d63699f7974e5f81ac` (manifest `a5cdabed…`), weights `model_sha256` `5b30b7e2…`,
+  **no calibration (T = 1)**, 8,192-token limit, over-budget inputs invalid. Run the package runtime, or
+  `training.model.infer` with the eval adapter spec `v2/06b/records/adapters/dev2-06b-causal-8k.json`
+  (`--model-path <package or staging 62c61c10 checkpoint> --extra model_id=…`) on node A; this is exactly the
+  configuration of the scored run `m4-t-a7-soup`.
+- The CAL698 revision `cb2bfd76` (section below) is superseded.
+- **GPU-hours this round:** 0.193 on shared node A GPU0 (0.6B failed upload 195 s, 0.6B re-upload 358 s,
+  0.8B local verification 142 s); lease entry `owner.release` set back to idle.
+
+## Update 23:15 UTC+8: CAL698-calibrated package, revision `cb2bfd76`, supersedes `7b5d3ff2`
+
+Coordinator decision 22:30: the frozen release package includes its CAL698 calibration before any
+C1 event or collection add. **New private revision `cb2bfd76e9d8a5e1b9a968dcafb7e18d8c01b3b9`,
+`MODEL_MANIFEST.json` `83d6ec2b58a7a454b90711e05fc543cfadc7b13f0fb532e60a0802d6afb9db75`** (32
+files). Stopped again before `--collect` (the collection holds only DEV2.0-0.8B). Receipts:
+[`dev2-0p6b-release-2026-09-28/cal698/`](dev2-0p6b-release-2026-09-28/cal698/).
+
+- **Fit.** `v2/release/calibrate_frozen.py` on CAL698 (`19cc1a8c…`, 698 rows: 319 Choice / 289 Noul /
+  90 Score; never panel, SELECT or sealed items) for the frozen weights (identity `5b30b7e2…`), node A
+  GPU0, scored image and execution (BF16 backbone, FP32 head, 8,192 tokens, one question per forward).
+  [`calibration.json`](dev2-0p6b-release-2026-09-28/cal698/calibration.json) `e1f7c909…`,
+  `frozen_checkpoint` policy: **T Choice 0.5917, Noul 0.5880, Score 0.3452** (all below 1: the soup is
+  under-confident in distribution). CAL698 before → after: NLL 0.447 → 0.396, Brier 0.118 → 0.111,
+  ECE 0.079 → 0.031 (Choice ECE 0.092 → 0.034, Noul 0.056 → 0.011, Score 0.110 → 0.161).
+- **Calibrated predictions.** One re-score with the eval track's frozen runner (registry adapter
+  `decision2-typed` = `training.model.infer` + `--calibration`, 8,192 tokens) on typed-final, css15,
+  public231 and mlx-diag. `v2/release/temperature_parity.py` against the raw scored run: **0 answer
+  changes on all 11,053 slots** (typed 2,000, transfer 6,547, public 231, mlx-diag 2,275), and the
+  calibrated numbers re-derived offline as softmax(log p / T) from the raw scored probabilities equal the
+  re-score within **1.3e-15** (so the logits were bit-identical and the calibration is exact).
+  The calibrated report ([REPORT](dev2-0p6b-release-2026-09-28/cal698/rescore/REPORT.json) `ffbb32a4…`)
+  has v3 43.541 (T 0.3953, H 0.4796), public 231 142 (48 / 54 / 40), identical per-task macro-F1, and the
+  same paired interval vs Kai 1.0 (+7.60 [+4.70, +10.76], `53df7087…`); mlx-diag accuracies identical.
+- **Calibration on the panels (raw → CAL698), disclosed on the card:**
+
+  | Metric | Raw | CAL698 |
+  | --- | ---: | ---: |
+  | Typed Brier / ECE-10 | 0.309 / 0.118 | 0.332 / 0.191 |
+  | Typed Choice Brier / ECE | 0.352 / 0.156 | 0.380 / 0.227 |
+  | Typed Noul Brier / ECE | 0.231 / 0.137 | 0.240 / 0.177 |
+  | Typed Score Brier / ECE | 0.378 / 0.040 | 0.423 / 0.226 |
+  | Transfer median task Brier-sum / ECE-15 | 0.565 / 0.070 | 0.598 / 0.120 |
+  | Public 231 Brier / ECE-15 | 0.233 / 0.116 | 0.253 / 0.144 |
+
+  In-distribution sharpening makes the already slightly over-confident panel probabilities worse; still
+  better than Kai 1.0's raw typed 0.390 / 0.209.
+- **Package and verification** (`release.sh --gpu 0 --shared-lease release`, all 15 steps pass,
+  [RELEASE-RECEIPT](dev2-0p6b-release-2026-09-28/cal698/release/RELEASE-RECEIPT.json)): every model file
+  byte-identical to `7b5d3ff2` (identity unchanged); changed files only `calibration.json` (added),
+  `config.json` (pointer names it), `README.md`, `evaluation/*`. Native examples bit-identical in three
+  processes; card example reproduced; parity against the calibrated re-score on 600 prompts (typed 150,
+  transfer 200, public 100, mlx-diag 150) **0 changes, drift 0.0** before and after the real
+  `hf download`; full-panel equality follows from the re-score equivalence above and the earlier
+  bit-exact raw parity on every prompt. Re-hash 32/32; readback private, 32 remote hashes, no card
+  problems; `hub_links` 14/14 and HTTP check 12/12, anonymous 401; all six `gate evaluate` items pass.
+- **Card.** Score table and evaluation page show the calibrated Brier / ECE; calibration line states the
+  temperatures; a limit states the panel calibration tradeoff; the GLiNER2.5-Decide LICENSE note is
+  now rendered; the C1 line stays a placeholder.
+- **Draft decision.** Build-time draft
+  [`…build-draft-cal698.json`](dev2-0p6b-release-2026-09-28/DEV2.0-0.6B.decision.build-draft-cal698.json)
+  (`f752dad2…`, supersedes `72bc767e…`); verified draft for the coordinator
+  [`DEV2.0-0.6B.decision.draft.json`](dev2-0p6b-release-2026-09-28/DEV2.0-0.6B.decision.draft.json)
+  (`f52e7873…`, names revision `cb2bfd76` and manifest `83d6ec2b…`). The finalizing rerun must point the
+  spec's `gate_receipt` at the final decision.
+- **Scored identity for C1 event 2:** DEV2.0-0.6B = private `llm-semantic-router/DEV2.0-0.6B` at
+  `cb2bfd76e9d8a5e1b9a968dcafb7e18d8c01b3b9` (manifest `83d6ec2b…`): weights `model_sha256`
+  `5b30b7e2…` + `calibration.json` `e1f7c909…` (CAL698 `19cc1a8c…`), 8,192-token limit, over-budget
+  inputs invalid. Run the package runtime, or `training.model.infer` through adapter `decision2-typed`
+  with `--extra max_length=8192 --extra calibration=<the package's calibration.json>` on node A. Answers
+  (so accuracy) are the same with or without calibration; probability metrics must use the calibrated
+  package.
+- **Launcher change.** `run_same_panel.sh` and `release.sh` gained `--shared-lease NAME` (writes only
+  `owner.NAME`, never reads or rewrites the owner's entry, skips the idle-VRAM gate), because GPU0 is shared
+  with the running 0.6B jobs. Default behaviour unchanged.
+- **GPU-hours this round:** 0.497 on shared node A GPU0 (fit 93 s, re-score 1,087 s + 338 s, release run
+  272 s; about 5× slower than idle because of the concurrent 0.6B training).
+
 **Result: every verification step passed; the package is in the private repository
 `llm-semantic-router/DEV2.0-0.6B` at revision `7b5d3ff2bf338194b0b485bda4d08b30b8fea88e`.
 Stopped before `--collect`: nothing was added to the "Decision 2.0" collection (still 0

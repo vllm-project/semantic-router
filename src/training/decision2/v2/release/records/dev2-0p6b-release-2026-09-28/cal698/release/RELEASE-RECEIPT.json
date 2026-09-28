@@ -1,0 +1,211 @@
+{
+  "device": "cuda:0",
+  "gpu_hours": 0.07551248159673479,
+  "image": "decision20-train-fast:host2",
+  "launcher": {
+    "device": "cuda:0",
+    "env": [
+      "HIP_FORCE_DEV_KERNARG=1"
+    ],
+    "gpu": "0",
+    "image": "decision20-train-fast:host2",
+    "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+    "require_kernels": false,
+    "rw_mounts": [],
+    "schema": "dev2-release-launcher/1",
+    "sites": [],
+    "track": "release-06b"
+  },
+  "package_manifest_sha256": "83d6ec2b58a7a454b90711e05fc543cfadc7b13f0fb532e60a0802d6afb9db75",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 597103104,
+    "packaged": {
+      "backbone": 596049920,
+      "head": 1053184,
+      "residual": 0
+    }
+  },
+  "passed": true,
+  "schema": "dev2-release-receipt/1",
+  "source_commit": "c5f941d53755dbf18260247a97566b4ea201887f-src_training_decision2",
+  "steps": {
+    "build": {
+      "files": 32,
+      "manifest_sha256": "83d6ec2b58a7a454b90711e05fc543cfadc7b13f0fb532e60a0802d6afb9db75",
+      "passed": true,
+      "sha256": "2ab693d009b5b87e4f88110baaa79158daf3fb77c230093c65e21b4b81af0402"
+    },
+    "card-post": {
+      "passed": true,
+      "seconds": 13.780053474009037,
+      "sha256": "01c294513a2945166a3fc3757fdb0900ff9c6bac3cc326f95b7b988a9542a44e"
+    },
+    "card-pre": {
+      "passed": true,
+      "seconds": 14.868150710128248,
+      "sha256": "36490056ea840bfcfa56fd7638b7eaf177375f840f191354c3ba45321488d0ee"
+    },
+    "download": {
+      "files": 32,
+      "passed": true,
+      "revision": "cb2bfd76e9d8a5e1b9a968dcafb7e18d8c01b3b9",
+      "seconds": 8.258558846078813,
+      "sha256": "1c821dfe99d80c0e16bb5ff6f164285996d9f2d1709744318d23b4fc078db7eb"
+    },
+    "ensure": {
+      "passed": true,
+      "private": true,
+      "sha256": "384219c7653e170d82134e3b39006b9212b417ccda11f74ad39576b965739216"
+    },
+    "parity-post": {
+      "device": "cuda:0",
+      "load_seconds": 7.661642030114308,
+      "panels": {
+        "css15": {
+          "category_changes": 0,
+          "input_mismatch": 0,
+          "max_abs_drift": 0.0,
+          "prompts": 200,
+          "slots": 200
+        },
+        "mlx-diag": {
+          "category_changes": 0,
+          "input_mismatch": 0,
+          "max_abs_drift": 0.0,
+          "prompts": 150,
+          "slots": 150
+        },
+        "public231": {
+          "category_changes": 0,
+          "input_mismatch": 0,
+          "max_abs_drift": 0.0,
+          "prompts": 100,
+          "slots": 100
+        },
+        "typed-final": {
+          "category_changes": 0,
+          "input_mismatch": 0,
+          "max_abs_drift": 0.0,
+          "prompts": 150,
+          "slots": 150
+        }
+      },
+      "passed": true,
+      "sha256": "51cf59c11f5bf9a20cf1424393dc31da1037ffa0fb8e7b9ea9d8f7a6a4746fb3"
+    },
+    "parity-pre": {
+      "device": "cuda:0",
+      "load_seconds": 7.449901196174324,
+      "panels": {
+        "css15": {
+          "category_changes": 0,
+          "input_mismatch": 0,
+          "max_abs_drift": 0.0,
+          "prompts": 200,
+          "slots": 200
+        },
+        "mlx-diag": {
+          "category_changes": 0,
+          "input_mismatch": 0,
+          "max_abs_drift": 0.0,
+          "prompts": 150,
+          "slots": 150
+        },
+        "public231": {
+          "category_changes": 0,
+          "input_mismatch": 0,
+          "max_abs_drift": 0.0,
+          "prompts": 100,
+          "slots": 100
+        },
+        "typed-final": {
+          "category_changes": 0,
+          "input_mismatch": 0,
+          "max_abs_drift": 0.0,
+          "prompts": 150,
+          "slots": 150
+        }
+      },
+      "passed": true,
+      "sha256": "61d730dcc78834430f16c0e8ef9b8c269fd509901e688229e8bff23094791151"
+    },
+    "post": {
+      "answers_sha256": "699daea5a49b0935208591d5cce43181e656c6038ad086ed074b11cf6dc6cf7c",
+      "device": "cuda:0",
+      "load_seconds": 7.741015845909715,
+      "loaded_parameters": 597103104,
+      "passed": true,
+      "sha256": "121e4f96f7a3a434410977b3dd0126d196668716e48c6977b407bfd1bd91b6dd"
+    },
+    "pre-a": {
+      "answers_sha256": "699daea5a49b0935208591d5cce43181e656c6038ad086ed074b11cf6dc6cf7c",
+      "device": "cuda:0",
+      "load_seconds": 7.1964568209368736,
+      "loaded_parameters": 597103104,
+      "passed": true,
+      "sha256": "44d3a55e101e90694c132ec35c402c15962e4a243ba8fc0422ea645d15e66c83"
+    },
+    "pre-b": {
+      "answers_sha256": "699daea5a49b0935208591d5cce43181e656c6038ad086ed074b11cf6dc6cf7c",
+      "device": "cuda:0",
+      "load_seconds": 7.175248189130798,
+      "loaded_parameters": 597103104,
+      "passed": true,
+      "sha256": "7f609f1b03bbeff38869ecc5e5b50d0fca547b36d2aebb14dc7e4f43d23dcca6"
+    },
+    "readback": {
+      "card_problems": [],
+      "collection": {
+        "contains_repo": false,
+        "items": 1,
+        "private": true,
+        "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+        "title": "Decision 2.0"
+      },
+      "passed": true,
+      "private": true,
+      "revision": "cb2bfd76e9d8a5e1b9a968dcafb7e18d8c01b3b9",
+      "sha256": "0a3fcdd8ffdb532ba6b8c68757fbac026de8c6c786aeafd892329f9585e1acf8"
+    },
+    "repeat-post": {
+      "bit_identical_answers": true,
+      "passed": true,
+      "sha256": "9a81414b43478e853a4d9761dcbdc0f669782ef22654d3945da93f3ce1d1eb75",
+      "totals": {
+        "category_changes": 0,
+        "max_abs_drift": 0.0,
+        "missing": 0,
+        "slots": 11
+      }
+    },
+    "repeat-pre": {
+      "bit_identical_answers": true,
+      "passed": true,
+      "sha256": "a8ccd6b839053b14dacced591f0c09fb0717eb5667ba097376dcd7afde56131d",
+      "totals": {
+        "category_changes": 0,
+        "max_abs_drift": 0.0,
+        "missing": 0,
+        "slots": 11
+      }
+    },
+    "tree": {
+      "files": 32,
+      "manifest_sha256": "83d6ec2b58a7a454b90711e05fc543cfadc7b13f0fb532e60a0802d6afb9db75",
+      "passed": true,
+      "sha256": "363c8cf90c1c9b5874a79f2432ea34f3043a40c9bfc7a5bbaac67260447f208f"
+    },
+    "upload": {
+      "files": 32,
+      "manifest_sha256": "83d6ec2b58a7a454b90711e05fc543cfadc7b13f0fb532e60a0802d6afb9db75",
+      "passed": true,
+      "private": true,
+      "revision": "cb2bfd76e9d8a5e1b9a968dcafb7e18d8c01b3b9",
+      "seconds": 2.351075083948672,
+      "sha256": "83fcb8319c9208b742ea776f1ae8de4016211c23ca37a24a6b4b1870b86efbec"
+    }
+  },
+  "utc": "2026-09-28T15:10:36.911181+00:00",
+  "wall_seconds": 271.84493374824524
+}

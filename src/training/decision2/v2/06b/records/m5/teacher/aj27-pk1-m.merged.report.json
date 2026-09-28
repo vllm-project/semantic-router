@@ -1,0 +1,14 @@
+{
+  "inputs": [
+    {
+      "rows": 7299,
+      "sha256": "97a071affe820d148f7cfe6b50aa59b04511523b68f2d5bf3a4026b7811be138"
+    },
+    {
+      "rows": 84523,
+      "sha256": "ba52dd86ff7fc7c422bb097c7036c344399de549597cec60c352fef02c21038a"
+    }
+  ],
+  "output_sha256": "a606dee410644b179c3426bf776e2a1e39771732a0bed9fbccf99e9ebf0e4fd6",
+  "rows": 91822
+}

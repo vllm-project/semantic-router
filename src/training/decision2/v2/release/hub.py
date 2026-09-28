@@ -103,6 +103,10 @@ def upload(args: argparse.Namespace) -> dict[str, Any]:
         folder_path=str(args.package),
         commit_message=args.message,
         ignore_patterns=["**/__pycache__/**", ".cache/**", "*.pyc"],
+        # The commit must leave exactly the package: files of an earlier revision that the
+        # package no longer has (e.g. a dropped calibration.json) are deleted; the Hub keeps
+        # .gitattributes.
+        delete_patterns=["*"],
     )
     revision = commit.oid
     info = api.model_info(args.repo, revision=revision)
@@ -256,10 +260,13 @@ def readback(args: argparse.Namespace) -> dict[str, Any]:
     collection, items = _collection_items(api, args.collection)
     in_collection = args.repo in items
     kind = manifest["kind"]
+    # Collection items name a repository, not a revision: a new revision of a release that an
+    # earlier final decision already collected is in the collection before its own gate seal.
+    expect_item = kind == "release" and (
+        args.expect_collected or args.already_collected
+    )
     collection_ok = collection.private is True and (
-        in_collection
-        if kind == "release" and args.expect_collected
-        else not in_collection
+        in_collection if expect_item else not in_collection
     )
     return {
         "schema": "dev2-hub-readback/1",
@@ -288,6 +295,7 @@ def readback(args: argparse.Namespace) -> dict[str, Any]:
             "private": collection.private,
             "items": len(items),
             "contains_repo": in_collection,
+            "expected_repo": expect_item,
         },
         "passed": info.private is True
         and info.sha == args.revision
@@ -370,6 +378,7 @@ def main() -> None:
     p.add_argument("--package", type=Path, required=True)
     p.add_argument("--collection", default=COLLECTION)
     p.add_argument("--expect-collected", action="store_true")
+    p.add_argument("--already-collected", action="store_true")
     p = sub.add_parser("collect")
     p.add_argument("--repo", required=True)
     p.add_argument("--revision", required=True)

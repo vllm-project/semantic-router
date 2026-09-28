@@ -1,0 +1,66 @@
+{
+  "calibration_json_in_new": false,
+  "changed": [
+    "MODEL_MANIFEST.json",
+    "README.md",
+    "config.json",
+    "evaluation/EVALUATION.md",
+    "evaluation/manifest.json"
+  ],
+  "files_new": 31,
+  "files_old": 32,
+  "identity_old": "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b",
+  "main_sha": "7d08d0e12082ee6810a4221063342cefe45b6ac3",
+  "method": "Hub model_info(files_metadata=True) at both revisions (LFS SHA-256 or git blob id per file); SHA-256 of the model files in the real hf download of the new revision; MODEL_MANIFEST.json of the old revision fetched from the Hub",
+  "model_files": {
+    "backbone/config.json": {
+      "download_sha256": "2b5d7e14da681afa0f2717f4e450c8a4cd05d41a7aff99231578d5aa3a6bad73",
+      "old_manifest_sha256": "2b5d7e14da681afa0f2717f4e450c8a4cd05d41a7aff99231578d5aa3a6bad73",
+      "remote_new": "blob:bd145a378cdae9697f24c6f3b813c54ad3388497",
+      "remote_old": "blob:bd145a378cdae9697f24c6f3b813c54ad3388497"
+    },
+    "backbone/model.safetensors": {
+      "download_sha256": "9db82b841878b2f259701e11fdccdfd4b54021b857934304de181e28379f5f1e",
+      "old_manifest_sha256": "9db82b841878b2f259701e11fdccdfd4b54021b857934304de181e28379f5f1e",
+      "remote_new": "lfs:9db82b841878b2f259701e11fdccdfd4b54021b857934304de181e28379f5f1e",
+      "remote_old": "lfs:9db82b841878b2f259701e11fdccdfd4b54021b857934304de181e28379f5f1e"
+    },
+    "decision_config.json": {
+      "download_sha256": "3503b7cb43a1e4994c27916bf35653612a517c249f2ed9458000904a3f8da700",
+      "old_manifest_sha256": "3503b7cb43a1e4994c27916bf35653612a517c249f2ed9458000904a3f8da700",
+      "remote_new": "blob:c78a25d773c1bd8a393190a28ef263ec69840e91",
+      "remote_old": "blob:c78a25d773c1bd8a393190a28ef263ec69840e91"
+    },
+    "decision_head.safetensors": {
+      "download_sha256": "cf2a2ebdd0b007eca460d90889f129f80a75b2371be54ca1889f4bf15613af6a",
+      "old_manifest_sha256": "cf2a2ebdd0b007eca460d90889f129f80a75b2371be54ca1889f4bf15613af6a",
+      "remote_new": "lfs:cf2a2ebdd0b007eca460d90889f129f80a75b2371be54ca1889f4bf15613af6a",
+      "remote_old": "lfs:cf2a2ebdd0b007eca460d90889f129f80a75b2371be54ca1889f4bf15613af6a"
+    },
+    "tokenizer.json": {
+      "download_sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "old_manifest_sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "remote_new": "lfs:06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "remote_old": "lfs:06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+    },
+    "tokenizer_config.json": {
+      "download_sha256": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87",
+      "old_manifest_sha256": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87",
+      "remote_new": "blob:6913705fa6a05ee4498df98d776803ba8b39f413",
+      "remote_old": "blob:6913705fa6a05ee4498df98d776803ba8b39f413"
+    }
+  },
+  "model_files_identical": true,
+  "new_private": true,
+  "new_revision": "7d08d0e12082ee6810a4221063342cefe45b6ac3",
+  "old_private": true,
+  "old_revision": "0b631a85c19fb573aee34fc68bb413271ebe89f4",
+  "only_in_new": [],
+  "only_in_old": [
+    "calibration.json"
+  ],
+  "passed": true,
+  "repo": "llm-semantic-router/DEV2.0-0.8B",
+  "schema": "dev2-release-revision-compare/1",
+  "utc": "2026-09-28T16:13:51.032365+00:00"
+}

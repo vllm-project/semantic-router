@@ -1,0 +1,71 @@
+{
+  "changed": [
+    "MODEL_MANIFEST.json",
+    "README.md"
+  ],
+  "collection": {
+    "items": [
+      "llm-semantic-router/DEV2.0-0.8B",
+      "llm-semantic-router/DEV2.0-0.6B"
+    ],
+    "private": true
+  },
+  "identity_new": "5b30b7e2e612cbf4a45dcab1cbe2bd05b2b6d25cfe91c376031cb22d5ce303a8",
+  "identity_old": "5b30b7e2e612cbf4a45dcab1cbe2bd05b2b6d25cfe91c376031cb22d5ce303a8",
+  "main_sha": "99c4e799392afa73241915aeb16fefa5ef3518d7",
+  "method": "Hub model_info(files_metadata=True) at both revisions; SHA-256 of the model files in the real hf download of the new revision; MODEL_MANIFEST.json of the old revision from the Hub; collection read back",
+  "model_files": {
+    "backbone/config.json": {
+      "download_sha256": "fcf62f425b626755c6df66630215aed57c70b38bf779e6ac9aeff376224310ac",
+      "old_manifest_sha256": "fcf62f425b626755c6df66630215aed57c70b38bf779e6ac9aeff376224310ac",
+      "remote_new": "blob:b7e057faa450ec9df08f45d31480a248c0d089cb",
+      "remote_old": "blob:b7e057faa450ec9df08f45d31480a248c0d089cb"
+    },
+    "backbone/model.safetensors": {
+      "download_sha256": "7e2d1f9d7010cb59fe0e38d3e0fb848222ba12657663dc96776a22221bd82b8e",
+      "old_manifest_sha256": "7e2d1f9d7010cb59fe0e38d3e0fb848222ba12657663dc96776a22221bd82b8e",
+      "remote_new": "lfs:7e2d1f9d7010cb59fe0e38d3e0fb848222ba12657663dc96776a22221bd82b8e",
+      "remote_old": "lfs:7e2d1f9d7010cb59fe0e38d3e0fb848222ba12657663dc96776a22221bd82b8e"
+    },
+    "chat_template.jinja": {
+      "download_sha256": "87a2728cb8dc9fe424d624542f6060ec05a1d285ebbec578bb078900e33396b5",
+      "old_manifest_sha256": "87a2728cb8dc9fe424d624542f6060ec05a1d285ebbec578bb078900e33396b5",
+      "remote_new": "blob:699ff8df401fe4788525e9c1f9b86a99eadd6230",
+      "remote_old": "blob:699ff8df401fe4788525e9c1f9b86a99eadd6230"
+    },
+    "decision_config.json": {
+      "download_sha256": "5a4a56cae499e02042546424fcdc829425ffe71803a87e888ba754b5070f2246",
+      "old_manifest_sha256": "5a4a56cae499e02042546424fcdc829425ffe71803a87e888ba754b5070f2246",
+      "remote_new": "blob:221fe671a0c1f802cca230644ed2ea73654555e1",
+      "remote_old": "blob:221fe671a0c1f802cca230644ed2ea73654555e1"
+    },
+    "decision_head.safetensors": {
+      "download_sha256": "70dc7451862bec4c88f2f8abcdaae66b7f1f118baa8582e3fa863c1794810046",
+      "old_manifest_sha256": "70dc7451862bec4c88f2f8abcdaae66b7f1f118baa8582e3fa863c1794810046",
+      "remote_new": "lfs:70dc7451862bec4c88f2f8abcdaae66b7f1f118baa8582e3fa863c1794810046",
+      "remote_old": "lfs:70dc7451862bec4c88f2f8abcdaae66b7f1f118baa8582e3fa863c1794810046"
+    },
+    "tokenizer.json": {
+      "download_sha256": "be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506",
+      "old_manifest_sha256": "be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506",
+      "remote_new": "lfs:be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506",
+      "remote_old": "lfs:be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506"
+    },
+    "tokenizer_config.json": {
+      "download_sha256": "cbea7bca9904d56693d2226b00fd564e3be053609d1e50f8f1885510f0f6e790",
+      "old_manifest_sha256": "cbea7bca9904d56693d2226b00fd564e3be053609d1e50f8f1885510f0f6e790",
+      "remote_new": "blob:a26ad2b3c6830602106c5381a48200d2ca7cc324",
+      "remote_old": "blob:a26ad2b3c6830602106c5381a48200d2ca7cc324"
+    }
+  },
+  "model_files_identical": true,
+  "new_private": true,
+  "new_revision": "99c4e799392afa73241915aeb16fefa5ef3518d7",
+  "old_revision": "e61b2b4419383672cb6a92d63699f7974e5f81ac",
+  "only_in_new": [],
+  "only_in_old": [],
+  "passed": true,
+  "repo": "llm-semantic-router/DEV2.0-0.6B",
+  "schema": "dev2-release-revision-compare/1",
+  "utc": "2026-09-28T18:11:24.554016+00:00"
+}

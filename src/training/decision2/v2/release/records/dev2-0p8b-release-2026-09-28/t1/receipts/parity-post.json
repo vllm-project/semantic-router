@@ -1,0 +1,88 @@
+{
+  "device": "cuda:0",
+  "load_seconds": 9.993327870965004,
+  "mode": "parity",
+  "package_manifest_sha256": "2a19a65a0141a8d71939bbf82025e299266db404cadd8b2bc712d1a992e98e7e",
+  "panels": {
+    "css15": {
+      "category_changes": 0,
+      "ids_sha256": "6d154148761f3bd96b483a06a7525fbe097909fe1dbc48fc4e67e0e7f7d1dd67",
+      "input_mismatch": 0,
+      "max_abs_drift": 2.220446049250313e-16,
+      "missing": 0,
+      "predictions_sha256": "995a0079601e71771336ddb663c2e31dd5910ff600e12c9f56b186be9841623d",
+      "prompts": 200,
+      "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+      "seconds": 4.278053018031642,
+      "slots": 200
+    },
+    "mlx-diag": {
+      "category_changes": 0,
+      "ids_sha256": "2d5ce74a12c8672527a444692eeb9e4fc3ef1f7a1045c49ff4f66983dcc5dc19",
+      "input_mismatch": 0,
+      "max_abs_drift": 2.220446049250313e-16,
+      "missing": 0,
+      "predictions_sha256": "5f333bc9bd20b0189d608ef5e1f232f26c443fc194ec5c7fb1ba1c7be48cf24d",
+      "prompts": 150,
+      "prompts_sha256": "25fde28f4b227a9cc8588da79a597ce816ba4a8f979139f99f69aeb595580a5f",
+      "seconds": 3.232739154016599,
+      "slots": 150
+    },
+    "public231": {
+      "category_changes": 0,
+      "ids_sha256": "2e46038b89dae0c13a1cd3896542177e865422fac9894b95604153138e6abe3d",
+      "input_mismatch": 0,
+      "max_abs_drift": 4.440892098500626e-16,
+      "missing": 0,
+      "predictions_sha256": "8b030a6c0e01282a1e86b2e1355394c6cb84a0e0ac347af586e746481be392e8",
+      "prompts": 100,
+      "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+      "seconds": 2.137177398893982,
+      "slots": 100
+    },
+    "typed-final": {
+      "category_changes": 0,
+      "ids_sha256": "e0dea4107c24fde09533de26006a977ef78e3589bc0d02b11e012cec9ab3034e",
+      "input_mismatch": 0,
+      "max_abs_drift": 1.1102230246251565e-16,
+      "missing": 0,
+      "predictions_sha256": "328c01294378c5a23bfc7fe560aa6d6715b70f65bf9e0104eabc3a7da0478426",
+      "prompts": 150,
+      "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+      "seconds": 8.161038337042555,
+      "slots": 150
+    }
+  },
+  "passed": true,
+  "runtime": {
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-0p8b-E8F-soup-nodeA-copy-t1pub"
+    },
+    "numpy": "2.3.5",
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1",
+  "tolerance": 0.0001
+}

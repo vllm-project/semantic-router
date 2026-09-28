@@ -1,0 +1,18 @@
+{
+  "name": "decision2-27b-typed-lora",
+  "module": "v2.27b.typed_collect",
+  "args": [
+    "--checkpoint", "{model}",
+    "--source-path", "{source}",
+    "--model-id", "{model_id}",
+    "--model-revision", "{revision}",
+    "--max-length", "{max_length}",
+    "--calibration", "{calibration}",
+    "--input", "{input}",
+    "--output", "{output}"
+  ],
+  "model_id": "llm-semantic-router/DEV2.0-27B",
+  "image": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+  "batch_policy": "current training.model.infer: one prompt per call, all its questions batched; BF16 backbone, FP32 head; unmerged PEFT LoRA on the pinned base; no truncation, over-budget questions invalid",
+  "requires": ["source", "calibration", "max_length"]
+}
