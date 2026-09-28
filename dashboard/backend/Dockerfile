@@ -91,7 +91,10 @@ COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/configschema/ /app/src/semantic-router/pkg/configschema/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
+COPY src/semantic-router/pkg/fallback/ /app/src/semantic-router/pkg/fallback/
 COPY src/semantic-router/pkg/headers/ /app/src/semantic-router/pkg/headers/
+COPY src/semantic-router/pkg/k8s/configwriter/ /app/src/semantic-router/pkg/k8s/configwriter/
+COPY src/semantic-router/pkg/llmprotocol/ /app/src/semantic-router/pkg/llmprotocol/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
@@ -131,7 +134,7 @@ RUN set -eux; \
       done; \
       return 1; \
     }; \
-    apt_get_install_with_retry ca-certificates curl docker.io gosu libseccomp2 wget
+    apt_get_install_with_retry ca-certificates curl docker.io git gosu libseccomp2 wget
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
@@ -164,6 +167,9 @@ RUN groupadd --gid 65532 nonroot && \
     chown -R root:root /app/cli && \
     find /app/cli -type d -exec chmod 0555 {} + && \
     find /app/cli -type f -exec chmod 0444 {} + && \
+    chown -R root:root /app/config /app/skills && \
+    find /app/config /app/skills -type d -exec chmod 0755 {} + && \
+    find /app/config /app/skills -type f -exec chmod 0644 {} + && \
     chown root:root \
       /app/entrypoint.sh \
       /app/entrypoint_permissions.py \
@@ -179,6 +185,10 @@ RUN groupadd --gid 65532 nonroot && \
 # Exercise the same interpreter, user and isolated working directory as the
 # catalog HTTP handler. A root-only smoke test misses unreadable package data.
 RUN cd /tmp && gosu nonroot python3 -m cli.model_catalog_export >/dev/null
+# These directories contain only bundled public ToolsDB, knowledge-base and
+# skill assets at build time. Keep them readable under a restrictive build
+# context umask without changing mounted runtime configuration or user state.
+RUN gosu nonroot find /app/config /app/skills -type f -exec head -c 0 {} + >/dev/null
 EXPOSE 8700
 # Note: We run as root initially so entrypoint can fix ownership/permissions, then switch to nonroot
 ENTRYPOINT ["/app/entrypoint.sh"]

@@ -59,7 +59,6 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 			scoped.PromptGuard.ModelID = artifact
 			scoped.PromptGuard.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 			scoped.PromptGuard.Backend = remote
-			scoped.PromptGuard.Protocol = ""
 			scoped.PromptGuard.Variant = ""
 			if mapping != "" {
 				scoped.PromptGuard.JailbreakMappingPath = mapping

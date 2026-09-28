@@ -52,10 +52,6 @@ func TestDefaultJailbreakWindowPreservesExplicitPolicies(t *testing.T) {
 		},
 		"different adapter": func(c *config.RouterConfig) { c.PromptGuard.Variant = config.PromptGuardVariantCandle },
 		"disabled":          func(c *config.RouterConfig) { c.PromptGuard.Enabled = false },
-		"remote protocol": func(c *config.RouterConfig) {
-			c.PromptGuard.Variant = ""
-			c.PromptGuard.Protocol = config.PromptGuardProtocolHTTPChat
-		},
 		"remote backend": func(c *config.RouterConfig) {
 			c.PromptGuard.Variant = ""
 			c.PromptGuard.Backend = &config.RemoteClassifierBackend{Model: "remote", Protocol: config.RemoteClassifierProtocolHTTPClassify}

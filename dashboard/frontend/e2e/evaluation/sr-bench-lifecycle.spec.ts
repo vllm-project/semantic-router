@@ -356,7 +356,7 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
     save()
     await page
       .getByRole('checkbox', {
-        name: `Recover ${selected!.target_id} ${selected!.case_id}`,
+        name: `Recover ${approved.target_model} ${selected!.case_id}`,
         exact: true,
       })
       .check()

@@ -227,6 +227,15 @@ func (n *RuleNode) IsEmpty() bool {
 	return n.Type == "" && n.Name == "" && n.Operator == "" && len(n.Conditions) == 0
 }
 
+// IsCatchAll reports a decision that matches every request: omitted rules or
+// an explicit AND with no conditions.
+func (n *RuleNode) IsCatchAll() bool {
+	if n.IsEmpty() {
+		return true
+	}
+	return !n.IsLeaf() && strings.EqualFold(n.Operator, RuleOperatorAnd) && len(n.Conditions) == 0
+}
+
 type (
 	RuleCombination = RuleNode
 	RuleCondition   = RuleNode

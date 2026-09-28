@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { ViewSection } from '../components/ViewPanel'
 import type { InsightsRecord } from './insightsPageTypes'
 import type { ReplaySessionPolicy } from './insightsPageRoutingTypes'
+import InsightsSelectionTrace from './InsightsSelectionTrace'
 import styles from './InsightsPage.module.css'
 
 function metric(value: number | undefined) {
@@ -91,6 +92,23 @@ function protectionCandidates(policy: ReplaySessionPolicy): ViewSection[] {
 export function buildRoutingExplanationSections(record: InsightsRecord): ViewSection[] {
   const sections: ViewSection[] = []
   const diagnostics = record.route_diagnostics
+  if (diagnostics?.selection_trace) {
+    sections.push({
+      title: 'Selection Stages',
+      fields: [
+        {
+          label: 'Recorded objective filtering',
+          fullWidth: true,
+          value: (
+            <InsightsSelectionTrace
+              trace={diagnostics.selection_trace}
+              selectedModel={record.selected_model}
+            />
+          ),
+        },
+      ],
+    })
+  }
   const policy =
     record.learning?.protection ?? record.session_policy ?? record.learning?.protection_preflight
   if (record.session_id || policy) {

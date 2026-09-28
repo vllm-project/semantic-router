@@ -77,6 +77,9 @@ func (r *OpenAIRouter) renderAutomaticCandidates(ctx *RequestContext, refs []con
 	demands := make(map[string]selection.CandidateDemand, len(refs))
 	overflow := []config.ModelRef{}
 	for _, ref := range refs {
+		if err := selectionRequestContext(ctx).Err(); err != nil {
+			return nil, nil, err
+		}
 		view, err := selection.EffectiveCandidateRequest(ctx.SemanticRequest, ctx.VSRSelectedDecision)
 		if err != nil {
 			return nil, nil, err
@@ -103,6 +106,9 @@ func (r *OpenAIRouter) renderAutomaticCandidates(ctx *RequestContext, refs []con
 				overflow = append(overflow, ref)
 				continue
 			}
+			return nil, nil, err
+		}
+		if err := selectionRequestContext(ctx).Err(); err != nil {
 			return nil, nil, err
 		}
 		demand := selection.DemandForRequest(view)

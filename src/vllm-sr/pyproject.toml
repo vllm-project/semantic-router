@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vllm-sr"
-version = "0.3.0"
+version = "0.4.0"
 description = "vLLM Semantic Router - Intelligent routing for Mixture-of-Models"
 authors = [{name = "vLLM-SR Team"}]
 readme = "README.md"
@@ -29,7 +29,7 @@ dependencies = [
     "jsonschema>=4.23.0",
     "pydantic>=2.12.0",
     "typing-extensions>=4.6.0",
-    "huggingface_hub[cli]>=0.20.0",
+    "huggingface_hub>=0.20.0",
 ]
 
 [project.optional-dependencies]

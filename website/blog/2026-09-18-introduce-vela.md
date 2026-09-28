@@ -45,16 +45,9 @@ Vela improves on our preceding mmBERT models across selected request-understandi
 
 Better request signals help a router choose. Better retrieval gives the answering model more useful evidence. **Both are part of building a better inference system.**
 
-<details>
-<summary>Evaluation notes</summary>
-
-These are separate, task-specific comparisons. Domain uses 1,988 short requests across six languages, on a development set used in checkpoint selection. Embedding uses 336 SummScreenFD validation queries at full depth, 768 dimensions, FP32. Reranker uses a matched 320-query MIRACL development subset across four languages with identical candidates. The linked model cards include the full protocols and results, including regressions on other workloads.
-
-</details>
-
 ## One family, fourteen starting points
 
-The text family builds on a **307M multilingual encoder**. Here's a quick, illustrative example for each model:
+Vela pairs a **307M multilingual text family** with **two multimodal encoders**. These examples illustrate each model's role:
 
 | Model | Input → what it enables |
 | --- | --- |
@@ -79,9 +72,9 @@ Embedding and Reranker also offer **Matryoshka configurations across multiple wi
 
 We're also bringing Vela beyond text. **Omni Nano (163.8M)** and **Omni Mini (1.36B)** encode text, images, and audio into shared spaces for cross-modal search and matching.
 
-Nano uses GIST-small text embeddings at 384 dimensions and a 512-token limit. Mini uses Qwen3 text embeddings at 768 dimensions and a 32,768-token limit, with an optional instruction mode for text tasks. Their updated audio paths combine Whisper speech features with a frozen CLAP branch for environmental sounds. Both sizes count the entire model.
+Nano uses GIST-small text embeddings at 384 dimensions and a 512-token limit. Mini uses Qwen3 text embeddings at 768 dimensions and a 32,768-token limit, with an optional instruction mode for text tasks. Their audio encoders combine Whisper speech features with a frozen CLAP branch for environmental sounds.
 
-**The complete English and audio panels now lead the comparison.** The primary metric is Mean(TaskType), which weights task types equally. Among models no larger than themselves, Nano ranks **5/75 on English and 6/27 on audio**; Mini ranks **10/134 on instructed English and 5/50 on audio**. Neither model lies on these complete-panel size–quality frontiers.
+The charts below compare Omni's text and audio performance with models across a range of sizes, followed by highlights from individual tasks.
 
 <ArticleChartGallery charts={[
   { label: 'Nano · English', src: '/img/blog/vela-1-0/omni-nano-general-english41.png', width: 2924, height: 1700, alt: 'Complete English v2 benchmark: Nano scores 60.78 Mean TaskType, ranks 66 of 188 globally and 5 of 75 at no greater total size, below the observed frontier.', children: 'Nano · default shared text: 60.78 Mean(TaskType), 66/188 globally and 5/75 at ≤163.8M parameters; 0.61 points behind the best at that size.' },
@@ -100,11 +93,7 @@ Nano uses GIST-small text embeddings at 384 dimensions and a 512-token limit. Mi
   { label: 'Mini · SIBFLEURS', src: '/img/blog/vela-1-0/omni-mini-pareto-sibfleurs.png', width: 2448, height: 1496, alt: 'Mini reaches 39.07 accuracy on SIBFLEURS spoken-topic classification, on this task-level observed frontier.', children: 'Mini: 39.07 accuracy on SIBFLEURS spoken-topic classification.' },
 ]} />
 
-These selected-task frontiers identify individual strengths, not overall benchmark leadership. All audio scores use the default audio mode.
-
 </details>
-
-*September 19 snapshot: [Nano](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/README.md) and [Mini](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/README.md). Complete-panel rankings combine the September 17 registry with both current Vela models and include single-modality specialists; reported protocols vary. Mini’s English panel uses fixed official task instructions, while Nano’s English and both audio panels use default modes. Text and image paths are retained, but the CLAP-residual audio paths are newly trained and evaluated. Mean(Task) is a secondary aggregate; the [model documentation](/docs/tutorials/global/vela-models#omni-checkpoints) lists both metrics, matched original-model comparisons and evidence boundaries. Model size means total parameters, not speed.*
 
 ## Where Vela goes next
 
@@ -123,7 +112,7 @@ These research directions build toward [vLLM-SR's vision for model collaboration
 
 ## Explore the architectures
 
-For a closer look, expand the computation graphs below. All nine diagrams follow the visual conventions of *Attention Is All You Need* and reflect the released Vela implementations.
+Explore Vela's architectures below, from task-specific prediction heads to multimodal encoders.
 
 <details>
 <summary>Request understanding and risk detection</summary>
@@ -155,11 +144,11 @@ For a closer look, expand the computation graphs below. All nine diagrams follow
 <details>
 <summary>Omni Nano and Omni Mini</summary>
 
-<ArticleFigure src="/img/blog/vela-1-0/07-omni-nano.png" width={5700} height={5060} alt="Omni Nano combines GIST-small text and SigLIP image paths with an audio path that adds a CLAP residual to the retained Whisper affine before L2 normalization.">
-  Nano retains GIST-small text and SigLIP image paths. Its audio path independently resamples original PCM for Whisper at 16 kHz and CLAP at 48 kHz, then adds a learned CLAP residual to the unnormalized speech affine. Total size: 163.8M.
+<ArticleFigure src="/img/blog/vela-1-0/07-omni-nano.png" width={5700} height={5060} alt="Omni Nano combines GIST-small text and SigLIP image encoders with an audio encoder that adds a CLAP residual to the Whisper projection before L2 normalization.">
+  Nano combines GIST-small text and SigLIP image encoders. Its audio encoder combines Whisper and CLAP features before normalization. Total size: 163.8M.
 </ArticleFigure>
 <ArticleFigure src="/img/blog/vela-1-0/08-omni-mini.png" width={5700} height={5060} alt="Omni Mini uses Qwen3 with optional text instructions and Matryoshka readout, SigLIP, and a dual Whisper-CLAP audio path with a learned residual map.">
-  Mini retains the 1024-to-768 Matryoshka text readout and SigLIP attention pooling, adds optional text instructions, and combines Whisper with the CLAP audio residual. The diagrams expand the CLAP Swin stages, window aggregation and residual addition. Total size: 1.36B; both reflect the pinned September 19 revisions above.
+  Mini uses a 1024-to-768 Matryoshka text readout with optional task instructions, SigLIP attention pooling, and a Whisper–CLAP audio encoder. Total size: 1.36B.
 </ArticleFigure>
 
 </details>

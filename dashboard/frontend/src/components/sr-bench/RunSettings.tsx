@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import ProductIcon from '../ProductIcon'
+import BenchSelect from './BenchSelect'
 import type { Manifest, Target } from './types'
 import styles from './SrBench.module.css'
 import controls from './BenchControls.module.css'
@@ -62,6 +63,10 @@ interface Props {
   seed: number
   targets: Target[]
   costPolicy: Manifest['cost_policy']
+  outputPolicy: 'bounded' | 'native'
+  onOutputPolicyChange: (policy: 'bounded' | 'native') => void
+  nativeAvailable: boolean
+  onCostPolicyChange: (policy: 'require_priced' | 'capability_only') => void
   mode: Manifest['mode']
   previewContext: NonNullable<Manifest['preview_context']>
   onPreviewContextChange: (context: NonNullable<Manifest['preview_context']>) => void
@@ -75,6 +80,10 @@ export default function RunSettings({
   seed,
   targets,
   costPolicy,
+  outputPolicy,
+  onOutputPolicyChange,
+  nativeAvailable,
+  onCostPolicyChange,
   mode,
   previewContext,
   onPreviewContextChange,
@@ -103,6 +112,34 @@ export default function RunSettings({
   }
   return (
     <>
+      <BenchSelect
+        label="Output policy"
+        value={outputPolicy}
+        onChange={(value) => onOutputPolicyChange(value as 'bounded' | 'native')}
+        options={[
+          {
+            value: 'bounded',
+            label: 'Bounded output',
+            description: 'Set a shared output-token limit.',
+          },
+          ...(nativeAvailable || outputPolicy === 'native'
+            ? [
+                {
+                  value: 'native',
+                  label: 'Native capacity',
+                  description: 'Use available model capacity without a shared token cap.',
+                },
+              ]
+            : []),
+        ]}
+      />
+      <p className={styles.muted}>
+        {outputPolicy === 'native'
+          ? 'Use each selected model’s available context for reasoning and its answer. No fixed shared token cap is sent; remaining output capacity depends on the actual input.'
+          : !nativeAvailable
+            ? 'Native capacity requires operator-registered model limits and a compatible target profile.'
+            : 'A shared cap bounds each response; registered target overrides still apply.'}
+      </p>
       <div className={styles.formGrid}>
         <NumberField
           label="Budget (USD)"
@@ -124,13 +161,15 @@ export default function RunSettings({
           onChange={changeLimit('max_run_seconds')}
           min={1}
         />
-        <NumberField
-          label="Max output tokens"
-          value={limits.max_output_tokens}
-          onChange={changeLimit('max_output_tokens')}
-          min={1}
-          help="Per response. Must accommodate any fixed target profile."
-        />
+        {outputPolicy === 'bounded' && (
+          <NumberField
+            label="Max output tokens"
+            value={limits.max_output_tokens ?? ''}
+            onChange={changeLimit('max_output_tokens')}
+            min={1}
+            help="Per response. Must accommodate any fixed target profile."
+          />
+        )}
         <NumberField
           label="Concurrency"
           value={limits.concurrency}
@@ -185,6 +224,36 @@ export default function RunSettings({
                 help="Reproduces preview sampling. Later live routing can change with the learning state."
               />
             </div>
+          </>
+        )}
+        {mode === 'live' && (
+          <>
+            <h4>Cost accounting</h4>
+            <BenchSelect
+              label="Cost accounting"
+              value={costPolicy ?? 'require_priced'}
+              onChange={(value) =>
+                onCostPolicyChange(value as 'require_priced' | 'capability_only')
+              }
+              options={[
+                {
+                  value: 'require_priced',
+                  label: 'Quality and cost',
+                  description: 'Require complete prices and a model-cost budget.',
+                },
+                {
+                  value: 'capability_only',
+                  label: 'Quality only',
+                  description: 'Allow incomplete prices. No cost-saving claims.',
+                },
+              ]}
+            />
+            {costPolicy === 'capability_only' && (
+              <p className={styles.notice}>
+                No USD budget is applied. Time, output and call limits still apply. Known costs are
+                recorded, but this run cannot prove cost savings.
+              </p>
+            )}
           </>
         )}
         <h4>Sampling defaults</h4>

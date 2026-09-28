@@ -90,7 +90,7 @@ curl -fsS 'http://localhost:8080/api/v1/routing/preview?trace=true' \
   | jq '{decision_result, signal_confidences, signal_errors, metrics}'
 ```
 
-Preview 实际运行分类器，返回决策、信号分数、错误和耗时，但不调用回答后端。通过以下请求测试完整链路：
+Preview 实际运行分类器，返回决策、信号分数、错误和耗时，不生成答案。原生输出选模可能调用后端的 render 端点检查容量。通过以下请求测试完整链路：
 
 ```bash
 curl -fsS http://localhost:8899/v1/chat/completions \

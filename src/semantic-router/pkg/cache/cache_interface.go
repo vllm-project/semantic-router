@@ -21,19 +21,23 @@ type CacheEntry struct {
 	HitCount     int64     // Access count
 	TTLSeconds   int       // Per-entry TTL in seconds (0 = not cached, -1 = use cache default, >0 = specific TTL)
 	ExpiresAt    time.Time // Calculated expiration time based on TTL
+
+	// Immutable in-memory lookup metadata; not part of the stored/public entry.
+	polarityTokens []string
 }
 
 // LookupResult carries the request-owned outcome of one lookup. A hit includes
 // the matched score; a below-threshold miss may include its rejected candidate's
 // score. Errors carry no score.
 type LookupResult struct {
-	ResponseBody []byte
-	Found        bool
-	Similarity   float32
-	StoredAt     time.Time
-	ExpiresAt    time.Time
-	Age          time.Duration
-	AgeKnown     bool
+	ResponseBody  []byte
+	Found         bool
+	Similarity    float32
+	StoredAt      time.Time
+	ExpiresAt     time.Time
+	Age           time.Duration
+	AgeKnown      bool
+	NegationGuard NegationGuardOutcome // semantic hits only
 }
 
 // lookupResultFromTimestamps constructs a successful LookupResult and calculates Age / AgeKnown.

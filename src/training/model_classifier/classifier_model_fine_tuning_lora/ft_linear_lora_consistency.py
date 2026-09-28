@@ -43,21 +43,17 @@ Usage:
 """
 
 import json
-import logging
 import os
 import random
 import shutil
 import sys
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from datasets import Dataset, load_dataset
+from datasets import load_dataset
 from peft import LoraConfig, PeftModel, TaskType, get_peft_model
-from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
+from torch import nn
+from torch.nn import functional
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -68,16 +64,23 @@ from transformers import (
 # Import common LoRA utilities
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common_lora_utils import (
-    clear_gpu_memory,
     create_lora_config,
-    get_all_gpu_info,
-    log_memory_usage,
     resolve_model_path,
-    set_gpu_device,
     setup_logging,
 )
+from training_args_compat import create_training_arguments
 
 logger = setup_logging()
+
+# Dataset filters and training heuristics retain their historical thresholds.
+MIN_TYPO_TEXT_LENGTH = 3
+MIN_TYPO_WORD_LENGTH = 3
+COMMON_TYPO_PROBABILITY = 0.3
+SHORT_WORD_LENGTH = 6
+SINGLE_TYPO_PROBABILITY = 0.7
+MIN_SWAP_WORD_LENGTH = 2
+MIN_DELETE_WORD_LENGTH = 3
+
 
 # Required categories
 REQUIRED_CATEGORIES = [
@@ -179,18 +182,17 @@ def apply_typo(text: str, prob: float = 0.20) -> str:
     Apply realistic typos to text with given probability per word.
     Enhanced version with more realistic typo patterns.
     """
-    if not text or len(text) < 3:
+    if not text or len(text) < MIN_TYPO_TEXT_LENGTH:
         return text
 
     words = text.split()
     result = []
 
     for word in words:
-        original_word = word
         word_lower = word.lower()
 
         # Skip if too short or not alphabetic
-        if len(word) < 3 or not word.isalpha():
+        if len(word) < MIN_TYPO_WORD_LENGTH or not word.isalpha():
             result.append(word)
             continue
 
@@ -200,7 +202,7 @@ def apply_typo(text: str, prob: float = 0.20) -> str:
             continue
 
         # Check for common typo patterns first (more realistic)
-        if word_lower in COMMON_TYPOS and random.random() < 0.3:
+        if word_lower in COMMON_TYPOS and random.random() < COMMON_TYPO_PROBABILITY:
             # Use common typo pattern
             typo = COMMON_TYPOS[word_lower]
             # Preserve capitalization
@@ -213,10 +215,14 @@ def apply_typo(text: str, prob: float = 0.20) -> str:
         word_lower_list = [c.lower() for c in word_list]
 
         # Decide number of typos (1-2 for longer words)
-        num_typos = 1 if len(word) < 6 else (1 if random.random() < 0.7 else 2)
+        num_typos = (
+            1
+            if len(word) < SHORT_WORD_LENGTH
+            else (1 if random.random() < SINGLE_TYPO_PROBABILITY else 2)
+        )
 
         for _ in range(num_typos):
-            if len(word_list) < 3:
+            if len(word_list) < MIN_TYPO_WORD_LENGTH:
                 break
 
             # Choose augmentation type with weighted probabilities
@@ -234,7 +240,7 @@ def apply_typo(text: str, prob: float = 0.20) -> str:
                 [w[0] for w in aug_weights], weights=[w[1] for w in aug_weights]
             )[0]
 
-            if aug_type == "swap" and len(word_list) > 2:
+            if aug_type == "swap" and len(word_list) > MIN_SWAP_WORD_LENGTH:
                 # Character swap (common typo)
                 idx = random.randint(0, len(word_list) - 2)
                 word_list[idx], word_list[idx + 1] = word_list[idx + 1], word_list[idx]
@@ -243,7 +249,7 @@ def apply_typo(text: str, prob: float = 0.20) -> str:
                     word_lower_list[idx],
                 )
 
-            elif aug_type == "delete" and len(word_list) > 3:
+            elif aug_type == "delete" and len(word_list) > MIN_DELETE_WORD_LENGTH:
                 # Delete character (common - missing key)
                 idx = random.randint(1, len(word_list) - 2)  # Avoid first/last
                 word_list.pop(idx)
@@ -393,9 +399,11 @@ class ConsistencyTrainer(Trainer):
 
         # Consistency loss: KL divergence between predictions
         # This encourages same prediction for clean and typo versions
-        clean_probs = F.log_softmax(clean_logits, dim=-1)
-        typo_probs = F.softmax(typo_logits, dim=-1)
-        consistency_loss = F.kl_div(clean_probs, typo_probs, reduction="batchmean")
+        clean_probs = functional.log_softmax(clean_logits, dim=-1)
+        typo_probs = functional.softmax(typo_logits, dim=-1)
+        consistency_loss = functional.kl_div(
+            clean_probs, typo_probs, reduction="batchmean"
+        )
 
         # Total loss
         total_loss = clean_loss + typo_loss + self.consistency_weight * consistency_loss
@@ -413,7 +421,7 @@ def load_mmlu_dataset(max_samples=10000):
 
     # Group by category
     category_samples = {}
-    for text, label in zip(all_texts, all_labels):
+    for text, label in zip(all_texts, all_labels, strict=False):
         if label not in category_samples:
             category_samples[label] = []
         category_samples[label].append(text)
@@ -492,7 +500,7 @@ def main(
     max_samples: int = 25000,
     typo_prob: float = 0.20,
     consistency_weight: float = 1.0,
-    output_dir: str = None,
+    output_dir: str | None = None,
 ):
     """Main training function with consistency loss."""
 
@@ -530,7 +538,8 @@ def main(
     os.makedirs(output_dir, exist_ok=True)
 
     # Training arguments
-    training_args = TrainingArguments(
+    training_args = create_training_arguments(
+        TrainingArguments,
         output_dir=output_dir,
         num_train_epochs=epochs,
         per_device_train_batch_size=batch_size,
@@ -606,7 +615,7 @@ def merge_lora_model(lora_path, output_path, model_name, label2id, id2label):
 
     # Save config with labels
     config_path = os.path.join(output_path, "config.json")
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         config = json.load(f)
     config["id2label"] = id2label
     config["label2id"] = label2id

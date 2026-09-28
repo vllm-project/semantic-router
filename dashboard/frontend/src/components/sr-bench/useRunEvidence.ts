@@ -10,12 +10,25 @@ function readFailure(cause: unknown) {
   return cause instanceof Error ? cause.message : 'Refresh to retry the read.'
 }
 
+function eventPage(events: RunEvent[], loaded = 0, after = 0): PageState {
+  const next = Math.max(after, ...events.map((event) => event.seq ?? event.sequence ?? 0))
+  if (events.length >= 1000 && next <= after)
+    throw new Error('Saved event page did not provide an advancing cursor.')
+  return {
+    total: events.length < 1000 ? loaded + events.length : null,
+    nextCursor: events.length >= 1000 ? next : null,
+    loading: false,
+    error: '',
+  }
+}
+
 export function useRunEvidence(id: string, revision: number) {
   const [run, setRun] = useState<Run | null>(null)
   const [report, setReport] = useState<Report | null>(null)
   const [reportRead, setReportRead] = useState({ loading: true, error: '' })
   const [results, setResults] = useState<CaseResult[]>([])
   const [events, setEvents] = useState<RunEvent[]>([])
+  const [eventsPage, setEventsPage] = useState<PageState>(initialPage)
   const [calls, setCalls] = useState<CallRecord[]>([])
   const [resultsPage, setResultsPage] = useState<PageState>(initialPage)
   const [callsPage, setCallsPage] = useState<PageState>(initialPage)
@@ -25,44 +38,32 @@ export function useRunEvidence(id: string, revision: number) {
     controller: AbortController
     resultsExpanded: boolean
     callsExpanded: boolean
+    eventsLoaded: boolean
+    eventsLoading: boolean
   } | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
-    const currentControl = { controller, resultsExpanded: false, callsExpanded: false }
+    const currentControl = {
+      controller,
+      resultsExpanded: false,
+      callsExpanded: false,
+      eventsLoaded: false,
+      eventsLoading: false,
+    }
     control.current = currentControl
     let timer: ReturnType<typeof setTimeout> | undefined
-    let eventCursor = 0
     let lastUpdated = ''
     setRun(null)
     setReport(null)
     setReportRead({ loading: true, error: '' })
     setResults([])
     setEvents([])
+    setEventsPage(initialPage)
     setCalls([])
     setResultsPage(initialPage)
     setCallsPage(initialPage)
     setError('')
-
-    async function readEvents() {
-      const all: RunEvent[] = []
-      let cursor = eventCursor
-      // The service limits event pages to 1,000. Drain saved pages in order,
-      // including terminal runs, without ever replaying a model request.
-      while (!controller.signal.aborted) {
-        const page = await benchApi.events(id, cursor, controller.signal)
-        if (!page.events.length) break
-        all.push(...page.events)
-        const next = Math.max(...page.events.map((event) => event.seq ?? 0))
-        if (next <= cursor) break
-        cursor = next
-        if (page.events.length < 1000) break
-      }
-      // Commit only the events this read can display. A later page failure must
-      // leave the cursor unchanged so the next read also recovers earlier pages.
-      eventCursor = cursor
-      return all
-    }
 
     async function load() {
       let terminal = false
@@ -75,6 +76,8 @@ export function useRunEvidence(id: string, revision: number) {
         terminal = !active(current.status)
         if (current.updated_at !== lastUpdated) {
           setReportRead({ loading: true, error: '' })
+          if (!currentControl.eventsLoaded)
+            setEventsPage((previous) => ({ ...previous, loading: true, error: '' }))
           if (!currentControl.resultsExpanded)
             setResultsPage((previous) => ({ ...previous, loading: true, error: '' }))
           if (!currentControl.callsExpanded)
@@ -87,7 +90,12 @@ export function useRunEvidence(id: string, revision: number) {
             currentControl.callsExpanded
               ? Promise.resolve(null)
               : benchApi.calls(id, 0, controller.signal),
-            readEvents(),
+            currentControl.eventsLoaded
+              ? Promise.resolve(null)
+              : benchApi.events(id, 0, controller.signal).then((response) => ({
+                  events: response.events,
+                  page: eventPage(response.events),
+                })),
           ])
           if (controller.signal.aborted) return
           if (responses[0].status === 'fulfilled') setReport(responses[0].value)
@@ -137,9 +145,18 @@ export function useRunEvidence(id: string, revision: number) {
               error: `Call records are unavailable: ${reason}`,
             }))
           }
-          if (responses[3].status === 'fulfilled') {
-            const newEvents = responses[3].value
-            setEvents((previous) => [...previous, ...newEvents])
+          if (responses[3].status === 'fulfilled' && responses[3].value) {
+            const page = responses[3].value.events
+            setEvents(page)
+            currentControl.eventsLoaded = true
+            setEventsPage(responses[3].value.page)
+          } else if (responses[3].status === 'rejected') {
+            const reason = readFailure(responses[3].reason)
+            setEventsPage((previous) => ({
+              ...previous,
+              loading: false,
+              error: reason,
+            }))
           }
           const failed = responses.find((response) => response.status === 'rejected')
           evidenceIncomplete = !!failed
@@ -225,12 +242,40 @@ export function useRunEvidence(id: string, revision: number) {
     }
   }
 
+  async function loadMoreEvents() {
+    const current = control.current
+    if (
+      !current ||
+      current.controller.signal.aborted ||
+      current.eventsLoading ||
+      eventsPage.nextCursor === null
+    )
+      return
+    current.eventsLoading = true
+    setEventsPage((previous) => ({ ...previous, loading: true, error: '' }))
+    try {
+      const response = await benchApi.events(id, eventsPage.nextCursor, current.controller.signal)
+      if (current.controller.signal.aborted) return
+      const page = response.events
+      const state = eventPage(page, events.length, eventsPage.nextCursor)
+      setEvents((previous) => [...previous, ...page])
+      setEventsPage(state)
+    } catch (cause) {
+      if (!current.controller.signal.aborted)
+        setEventsPage((previous) => ({ ...previous, loading: false, error: readFailure(cause) }))
+    } finally {
+      current.eventsLoading = false
+    }
+  }
+
   return {
     run,
     report,
     reportRead,
     results,
     events,
+    eventsPage,
+    loadMoreEvents,
     calls,
     error,
     readAt,

@@ -87,10 +87,12 @@ global:
             margin_threshold: 0.05
 ```
 
-The family-level `prototype_scoring` settings compress each rule's candidate
+The family-level `prototype_scoring` settings compress each text rule's candidate
 bank and control its scoring. A rule can declare its own `prototype_scoring`
-object beside `candidates`. Omitting it inherits the family settings; declaring
-it replaces the complete object, with omitted fields using built-in defaults.
+object beside `candidates`. Text rules inherit the family settings when it is
+omitted. Image and audio rules instead retain every candidate and use the raw
+maximum similarity by default: nearby text anchors can match different media.
+Declaring it replaces the complete object, with omitted fields using built-in defaults.
 An empty object therefore uses built-in defaults rather than family overrides.
 
 To retain every distinct authored candidate, including multilingual examples,
@@ -104,12 +106,13 @@ prototype_scoring:
 ```
 
 `enabled: false` disables clustering and the prototype cap, not aggregation.
-`max` still combines the best similarity and top-M support; `mean` still averages
+In this explicit override, `max` combines the best similarity and top-M support;
+`mean` still averages
 the retained bank. With compression enabled, `max_prototypes: 0` uses the default
 cap of 8. Retaining more candidates adds local scoring work; candidate embeddings
 are already computed before compression and request embedding calls are unchanged.
 Rule settings travel with an exported or initialized recipe and apply to both
-text and image queries.
+text, image, and audio queries.
 
 The Router scores every embedding rule. By default, `top_k: 0` retains every
 rule that meets its threshold, so independent predicates remain available to
@@ -134,9 +137,10 @@ list:
   emission is appropriate, a competing benign rule can also give ordinary
   inputs a better semantic match. Test it with your actual `top_k` and
   threshold settings; a benign rule is not a security blocklist.
-- Use `aggregation_method: max` to favor the strongest example while considering
-  support from other prototypes. The rule threshold applies to the combined
-  score, so the best individual similarity can exceed it without a match. Use
+- Use `aggregation_method: max` to favor the strongest example. Text rules
+  also consider support from other prototypes by default; image and audio
+  rules use the strongest candidate similarity without compression. An explicit
+  prototype blend applies the threshold to its combined score. Use
   `mean` only when broad agreement across the candidate set is the behavior
   you want.
 - Calibrate `threshold` against labeled positive and negative traffic for the
@@ -149,19 +153,51 @@ not silently reuse an incompatible threshold.
 
 ## Multimodal queries (`query_modality`)
 
-Each embedding rule accepts an optional `query_modality` field that declares which modality of incoming request payload the rule's query is computed from. The candidates remain text in every case; the rule cosine-matches the text-anchor set against a query embedding from the declared modality, all in the same shared multimodal space.
+Each embedding rule accepts an optional `query_modality` field that declares which modality of incoming request payload the rule's query is computed from. Text and image candidates are encoded by the same prepared model in its shared embedding space. Candidate modality is independent of query modality.
 
 Accepted values:
 
 - `"text"` (default, backward-compatible): query embedded from request text. Existing rules with no `query_modality` field behave exactly as before.
 - `"image"`: query embedded from an allowlisted inline
   `data:image/...;base64,...` attachment in an OpenAI-style chat message.
-- Audio query embeddings are not currently supported; use `text` or `image`.
+- `"audio"`: query embedded from bounded inline PCM or float WAV data. Remote audio URLs, MP3, and other compressed formats are not accepted.
 
-`"image"` requires
+Image/audio queries and image candidates require
 `global.model_catalog.embeddings.semantic.embedding_config.model_type: multimodal`
-so candidates and queries share one embedding space. The Router rejects an
-image-modality rule paired with a text-only embedding model.
+or an explicit recipe embedding binding. The Router checks the prepared model's
+actual modality capabilities at startup; a name or catalog entry does not prove
+that an image or audio encoder is available.
+
+### Positive and negative candidate banks
+
+| Field | Encoded as | Role |
+| --- | --- | --- |
+| `candidates` | Text | Positive examples |
+| `image_candidates` | Images | Positive examples |
+| `negative_candidates` | Text | Contrasting examples |
+| `negative_image_candidates` | Images | Contrasting examples |
+
+At least one positive candidate is required. Image references are absolute or
+`./` local paths, inline base64, or image data URIs; candidate loading never
+fetches remote URLs. Every bank uses the rule's aggregation policy. With `max`,
+the score is `max(cosine(query, positive))`; when negatives are present, it is
+`max(cosine(query, positive)) - max(cosine(query, negative))`. Text and image
+examples in one bank compete in the same maximum. A rule matches when its raw
+score is greater than or equal to `threshold`. Thresholds use cosine units
+`[-1, 1]`, or margin units `[-2, 2]` when a negative bank is present.
+
+Image/audio queries and rules with image candidates retain every authored
+example by default. Explicit `prototype_scoring` can enable clustering. Positive
+and negative banks are built independently, and the same aggregation is applied
+to both. `mean` means the difference of the two bank means, not the mean of a
+combined positive/negative list.
+
+`SignalValues["embedding:<name>"]` retains the raw score; `:positive` and
+`:negative` expose its components. Contrastive signal confidence is
+`clamp((score + 2) / 4, 0, 1)` for consumers requiring a bounded value. It describes
+position in the margin range, **not a probability**. Thresholds and raw-value
+projections continue to use the unnormalized margin. Optional soft matching also
+compares `min_score_threshold` to the raw score; choose it in the same units.
 
 ### Worked example: route sensitive imagery on-prem
 
@@ -170,7 +206,7 @@ global:
   model_catalog:
     embeddings:
       semantic:
-        multimodal_model_path: models/multi-modal-embed-small
+        multimodal_model_path: models/vela-1.0-omni-nano
         embedding_config:
           model_type: multimodal
 
@@ -225,15 +261,44 @@ example includes `identifier_document_imagery`,
 its candidates with examples from your deployment and recalibrate the
 threshold. The example values are not portable defaults.
 
-The shipped thresholds were obtained with
-[`tools/calibration/image-routing`](https://github.com/vllm-project/semantic-router/tree/main/tools/calibration/image-routing)
-against `llm-semantic-router/multi-modal-embed-small` (snapshot
-`fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4`, 384 dimensions, default
-`prototype_scoring`) and a hand-reviewed manifest of repository images in which
-every fixture is labelled positive for a named candidate, negative, or excluded
-as ambiguous. Treat them as a starting point for that model only: calibrate
-against your own labelled images before relying on the rules, and recalibrate
-whenever you change the model, the candidates, or the scoring configuration.
+The maintained pack uses `llm-semantic-router/Vela-1.0-Omni-Nano`, snapshot
+`2ff2d66385dbdd661a560ec3e8bcb45a0527d92e`, with the complete 384-dimensional
+output. The code rule uses seven positive image prototypes and 178 negative
+image prototypes. All prototypes come from the frozen development split of the
+229-image reviewed corpus. Their original bytes and SHA256 identities are listed
+in `config/assets/image-routing/manifest.json`. Runtime images package these
+files under `/app/share/image-routing`; no runtime download is required.
+
+The threshold `0.022578716` is selected on development data while excluding every
+prototype from each query's source group, including the query itself. The six
+validation positives and 30 validation negatives never enter the banks or
+threshold selection. The fixed results are:
+
+| Model and bank | Development TP / FP / FN | Validation TP / FP / FN |
+| --- | --- | --- |
+| Nano, all development prototypes | 7 / 2 / 0 | 6 / 0 / 0 |
+| Mini, all development prototypes, its own threshold `0.028753608` | 5 / 2 / 2 | 6 / 1 / 0 |
+
+Eight development files sharing bytes with seven validation files are excluded
+from both candidate banks and threshold fitting. All 36 validation items remain
+in the report. Identical-content label groups were consistent; no labels were
+changed. Development scoring excludes both source-group and content matches.
+The pack retains the complete remaining negative bank. Mini's remaining false positive is
+an Ollama setup-wizard screenshot; it is retained in the report. The corpus's
+original text-anchor baseline had already been examined before this split was
+frozen, so these are grouped diagnostic results, not an unseen external benchmark.
+
+The identifier rule retains its text anchors and threshold `0.29`. The office
+rule subtracts a contrasting text bank at threshold `0.054949798`. Each has only
+one labeled positive in this corpus; both separate the reviewed images, but
+neither has an independent positive holdout. These examples require local data
+and calibration before deployment as a document or office detector.
+
+Run `tools/calibration/image-routing` with an explicit prepared Omni artifact to
+reproduce the production scorer, source-group exclusions, held-out results, and
+artifact checksums. `testdata/prototype-protocol.json` records the frozen split.
+Changing any model, prototype, image bytes, dimension, or scoring policy requires
+new calibration; Nano thresholds must not be reused for Mini.
 
 ### Distinction from the `modality` signal type
 
@@ -241,9 +306,9 @@ whenever you change the model, the candidates, or the scoring configuration.
 
 ## Dependencies and Limitations
 
-- Text or image content is processed by the configured embedding runtime. A
+- Text, image, or audio content is processed by the configured embedding runtime. A
   remote provider currently supports text only and receives the text being
-  embedded. Audio query embeddings are not supported.
+  embedded. Local Vela Omni deployments support all three input modalities.
 - Similarity scores and thresholds are not portable across embedding models,
   dimensions, or modalities. Recalibrate whenever those change.
 - Image matching is semantic rather than OCR or PII extraction; use a dedicated

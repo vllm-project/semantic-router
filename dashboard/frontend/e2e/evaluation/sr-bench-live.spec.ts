@@ -226,13 +226,7 @@ test('live comparison retains current Balance and two optimization revisions', a
   )
   const blocked = await openAcceptance(page)
   await page.getByRole('button', { name: 'Compare iterations', exact: true }).click()
-  await expect(
-    page.getByText(
-      'Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost measurements.',
-      { exact: true },
-    ),
-  ).toBeVisible()
-  await page.getByRole('combobox', { name: 'Baseline run', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Reference run', exact: true }).click()
   await page
     .locator(`[role="option"][data-value=${JSON.stringify(plan!.baseline_run_id!)}]`)
     .click()
@@ -255,6 +249,12 @@ test('live comparison retains current Balance and two optimization revisions', a
   await page.getByRole('button', { name: 'Compare runs', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Comparison evidence', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText(
+      'Total cost includes model answers and evaluation calls, priced from recorded usage at frozen rates. These are estimates, not invoices or hardware costs.',
+      { exact: true },
+    ),
   ).toBeVisible()
   await expect(page.getByText('Comparison withheld:', { exact: false })).toHaveCount(0)
   await expect(page.getByRole('alert')).toHaveCount(0)
@@ -304,12 +304,22 @@ test('live final recipe is verified and downloadable without launching a job', a
     'Requires the completed final Balance run and its independently recorded configuration hash.',
   )
   const blocked = await openAcceptance(page)
-  await openRun(page, plan!.balance_run_ids!.at(-1)!)
+  const runID = plan!.balance_run_ids!.at(-1)!
+  const response = await page.request.get(
+    `${plan!.base_url}/api/sr-bench/v1/runs/${encodeURIComponent(runID)}`,
+  )
+  expect(response.ok()).toBe(true)
+  const run = (await response.json()) as {
+    manifest: { targets: { id: string; model: string }[] }
+  }
+  const model = run.manifest.targets.find((target) => target.id === plan!.final_target_id)?.model
+  expect(model?.trim(), 'The saved run must retain its canonical model name.').toBeTruthy()
+  await openRun(page, runID)
   await page.getByRole('tab', { name: 'Recipe', exact: true }).click()
   const recipes = page.locator('#run-recipe')
   await expect(
     recipes.getByRole('heading', {
-      name: `${plan!.final_target_id} · Verified config snapshot`,
+      name: `${model} · Verified config snapshot`,
       exact: true,
     }),
   ).toBeVisible()
@@ -320,9 +330,7 @@ test('live final recipe is verified and downloadable without launching a job', a
       .locator('xpath=following-sibling::dd[1]'),
   ).toHaveText(plan!.final_config_hash!)
   const downloading = page.waitForEvent('download')
-  await recipes
-    .getByRole('button', { name: `Download ${plan!.final_target_id} recipe`, exact: true })
-    .click()
+  await recipes.getByRole('button', { name: `Download ${model} recipe`, exact: true }).click()
   const download = await downloading
   await download.saveAs(testInfo.outputPath('final-recipe.json'))
   const recipe = JSON.parse(readFileSync(testInfo.outputPath('final-recipe.json'), 'utf8'))

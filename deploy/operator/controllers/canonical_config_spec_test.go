@@ -199,7 +199,7 @@ func TestOperatorPIIBackendResolvesInGeneratedRouterConfig(t *testing.T) {
 // TestBuildCanonicalConfigDefaultsPromptGuardVariantWhenBothUnset guards a
 // cross-field defaulting bug: PromptGuardConfig.Variant deliberately has no
 // kubebuilder default (the API server would inject it unconditionally, even
-// when a user sets Protocol instead, tripping mutual-exclusion validation).
+// when a user sets Backend instead, tripping mutual-exclusion validation).
 // The "neither set" default must come from applyOperatorModelCatalog after
 // both fields are read, not from a per-field CRD default.
 func TestBuildCanonicalConfigDefaultsPromptGuardVariantWhenBothUnset(t *testing.T) {
@@ -222,11 +222,8 @@ func TestBuildCanonicalConfigDefaultsPromptGuardVariantWhenBothUnset(t *testing.
 
 	promptGuard := canonical.Global.ModelCatalog.Modules.PromptGuard
 	if promptGuard.Variant != routerconfig.PromptGuardVariantMmBERT32K {
-		t.Fatalf("expected variant to default to %q when both variant and protocol are unset, got %q",
+		t.Fatalf("expected variant to default to %q when both variant and backend are unset, got %q",
 			routerconfig.PromptGuardVariantMmBERT32K, promptGuard.Variant)
-	}
-	if promptGuard.Protocol != "" {
-		t.Fatalf("expected protocol to stay unset, got %q", promptGuard.Protocol)
 	}
 }
 

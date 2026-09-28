@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import BenchSelect from './BenchSelect'
+import BenchPagination from './BenchPagination'
 import { active, number, percent } from './model'
 import type { Run } from './types'
 import { profileTitle } from './datasetPresentation'
+import { targetLabel } from './targetPresentation'
 import styles from './SrBench.module.css'
 
 export function RunStatus({ status }: { status: string }) {
@@ -9,19 +11,29 @@ export function RunStatus({ status }: { status: string }) {
   return <span className={`${styles.status} ${styles[tone]}`}>{status}</span>
 }
 
+export interface RunFilters {
+  query: string
+  status: string
+  mode: string
+  profile: string
+  page: number
+}
+
 export default function RunList({
   runs,
   selectedID,
   onSelect,
+  filters,
+  onFilters,
 }: {
   runs: Run[]
   selectedID: string | null
   onSelect: (id: string) => void
+  filters: RunFilters
+  onFilters: (filters: Partial<RunFilters>) => void
 }) {
-  const [query, setQuery] = useState('')
-  const [status, setStatus] = useState('all')
-  const [mode, setMode] = useState('all')
-  const [page, setPage] = useState(0)
+  const { query, status, mode, profile, page } = filters
+  const changeFilter = (patch: Partial<RunFilters>) => onFilters({ ...patch, page: 0 })
   const filtered = runs.filter((run) => {
     const text = [
       run.id,
@@ -34,7 +46,8 @@ export default function RunList({
     return (
       text.includes(query.toLowerCase()) &&
       (status === 'all' || (status === 'active' ? active(run.status) : run.status === status)) &&
-      (mode === 'all' || run.manifest.mode === mode)
+      (mode === 'all' || run.manifest.mode === mode) &&
+      (profile === 'all' || run.manifest.profile === profile)
     )
   })
   const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 10) - 1))
@@ -57,43 +70,50 @@ export default function RunList({
             value={query}
             placeholder="Name, model or run ID"
             onChange={(event) => {
-              setQuery(event.target.value)
-              setPage(0)
+              changeFilter({ query: event.target.value })
             }}
           />
         </label>
-        <label>
-          Run status
-          <select
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value)
-              setPage(0)
-            }}
-          >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
-            <option value="interrupted">Interrupted</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </label>
-        <label>
-          Run mode
-          <select
-            value={mode}
-            onChange={(event) => {
-              setMode(event.target.value)
-              setPage(0)
-            }}
-          >
-            <option value="all">All modes</option>
-            <option value="live">Live evaluation</option>
-            <option value="preview">Route preview</option>
-            <option value="replay">Diagnostic replay</option>
-          </select>
-        </label>
+        <BenchSelect
+          label="Run status"
+          value={status}
+          onChange={(value) => {
+            changeFilter({ status: value })
+          }}
+          options={[
+            { value: 'all', label: 'All statuses' },
+            { value: 'active', label: 'Active' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'failed', label: 'Failed' },
+            { value: 'interrupted', label: 'Interrupted' },
+            { value: 'cancelled', label: 'Cancelled' },
+          ]}
+        />
+        <BenchSelect
+          label="Run mode"
+          value={mode}
+          onChange={(value) => {
+            changeFilter({ mode: value })
+          }}
+          options={[
+            { value: 'all', label: 'All modes' },
+            { value: 'live', label: 'Live evaluation' },
+            { value: 'preview', label: 'Route preview' },
+            { value: 'replay', label: 'Diagnostic replay' },
+          ]}
+        />
+        <BenchSelect
+          label="Run profile"
+          value={profile}
+          onChange={(value) => changeFilter({ profile: value })}
+          options={[
+            { value: 'all', label: 'All profiles' },
+            ...['smoke', 'quick', 'standard'].map((value) => ({
+              value,
+              label: profileTitle(value),
+            })),
+          ]}
+        />
       </div>
       {filtered.length ? (
         <div className={styles.tableScroll}>
@@ -101,7 +121,8 @@ export default function RunList({
             <thead>
               <tr>
                 <th>Run / targets</th>
-                <th>Mode / profile</th>
+                <th>Mode</th>
+                <th>Profile</th>
                 <th>Status</th>
                 <th>Progress</th>
                 <th>Last update</th>
@@ -120,7 +141,7 @@ export default function RunList({
                       <div className={styles.targetChips}>
                         {run.manifest.targets.map((target) => (
                           <span className={styles.badge} key={target.id}>
-                            {target.id} · {target.kind === 'mom' ? 'MoM' : 'Single'}
+                            {targetLabel(target)} · {target.kind === 'mom' ? 'MoM' : 'Single'}
                           </span>
                         ))}
                       </div>
@@ -130,9 +151,9 @@ export default function RunList({
                         ? 'Live'
                         : run.manifest.mode === 'preview'
                           ? 'Preview'
-                          : 'Replay'}{' '}
-                      / {profileTitle(run.manifest.profile)}
+                          : 'Replay'}
                     </td>
+                    <td>{profileTitle(run.manifest.profile)}</td>
                     <td>
                       <RunStatus status={run.status} />
                     </td>
@@ -171,23 +192,13 @@ export default function RunList({
             : 'No runs yet. Create an evaluation using a prepared dataset.'}
         </p>
       )}
-      {filtered.length > 10 && (
-        <div className={styles.actions}>
-          <button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
-            Previous runs
-          </button>
-          <span>
-            {number(filtered.length)} runs · page {currentPage + 1} of{' '}
-            {Math.ceil(filtered.length / 10)}
-          </span>
-          <button
-            disabled={(currentPage + 1) * 10 >= filtered.length}
-            onClick={() => setPage(currentPage + 1)}
-          >
-            Next runs
-          </button>
-        </div>
-      )}
+      <BenchPagination
+        label="Runs"
+        total={filtered.length}
+        page={currentPage}
+        pageSize={10}
+        onChange={(page) => onFilters({ page })}
+      />
     </section>
   )
 }

@@ -1,96 +1,12 @@
-// Command image-routing-calibration derives the per-rule thresholds shipped in
-// config/fragments/signal/embedding/image-routing.yaml from a versioned
-// positive/negative image set, and emits a reproducible report.
-//
-// Issue #2165: the previous thresholds were tuned before the encoder
-// correctness fixes in #1927, #1928 and #1943 and no longer described the
-// embedding distribution. It wires the REAL candle multimodal FFI, so scores
-// match the path the router takes at runtime.
-//
-// Threshold selection: for each rule, P is the set of fixtures depicting
-// something one of that rule's shipped candidate phrases names, N is every
-// other fixture. If min(P) > max(N), take the midpoint of that band and record
-// the margin (distance to the nearest fixture on either side); otherwise take
-// the midpoint of the max-F1 band and record the residual confusion matrix
-// rather than presenting a non-separable rule as calibrated. Candidates are an
-// INPUT to calibration, never an output — the report pins each candidate list
-// by sha256.
-//
-// The labelled calibration set lives in testdata/calibration-set.json and is
-// an explicit, hand-reviewed manifest: positive labels (image, rule, the
-// candidate phrase it depicts), the list of reviewed negatives (images that
-// depict no candidate phrase of any rule), and excluded images that were
-// judged ambiguous, with the reason. Nothing is inferred from directory
-// contents, so adding an image to the repository does not silently add an
-// unlabelled negative. A positive is a negative for every other rule. The set
-// is versioned by the repository commit: the report records that commit,
-// flags any uncommitted change in the worktree (fixtures, manifest, rules,
-// or code), and lists every listed and excluded fixture with its sha256, so
-// two reports are comparable without duplicating any image.
-//
-// The generated report is PR evidence and is not committed; regenerate it with the
-// invocation below whenever the model artifact, the fixture set, or a rule's
-// candidate list changes, and mirror any threshold change into the
-// multimodal-routing E2E IntelligentRoute CRD
-// (TestImageRoutingPack_MatchesMultimodalE2EProfile enforces the lockstep).
-//
-// -check turns the run into a gate (exit 2 unless every shipped threshold
-// equals the report-selected value; with -require-clean also unless the
-// worktree matches the recorded commit). The workflow
-// unified CI native.image-calibration-cpu verification runs it that way at
-// the planned source commit (the merge tree for pull requests) and uploads reports, so reviewers get
-// reproducible evidence.
-//
-// Known state at snapshot fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4:
-// identifier_document_imagery (0.61) and ambient_office_imagery (0.54) are
-// separable with ~0.10 and ~0.14 cosine headroom on each side.
-// code_or_terminal_imagery is NOT separable on repo imagery — dark UI
-// screenshots outscore several genuine code/terminal images — so its shipped
-// 0.47 is the max-F1 band midpoint (F1 0.444, 8 FP / 7 FN over 13 positives)
-// and the E2E code fixture (score 0.4748) clears it by only ~0.005. Treat that
-// rule as the first suspect when the multimodal E2E profile regresses; a
-// stronger code fixture is the real fix.
-//
-// Scores are the classifier's prototype blend under aggregation_method=max
-// (best_weight*best + (1-best_weight)*mean(top_m), defaults 0.75 / 2), not a
-// raw max cosine; a deployment that overrides prototype_scoring shifts every
-// threshold. The tool refuses a rule that does not set aggregation_method: max
-// explicitly, because a mean rule is scored without the blend and the report
-// would then record semantics the run did not use.
-//
-// Build/run (needs every native binding built by `make rust-ci` on the
-// library path, since the router module links all of them, plus the
-// multimodal model):
-//
-//	hf download llm-semantic-router/multi-modal-embed-small \
-//	  config.json model.safetensors tokenizer.json tokenizer_config.json \
-//	  special_tokens_map.json \
-//	  --revision fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4 \
-//	  --local-dir models/mom-embedding-multimodal
-//
-//	make build-image-routing-calibration
-//	LIBS=$PWD/candle-binding/target/release:$PWD/onnx-binding/target/release:$PWD/ml-binding/target/release:$PWD/nlp-binding/target/release
-//	DYLD_LIBRARY_PATH=$LIBS LD_LIBRARY_PATH=$LIBS bin/image-routing-calibration \
-//	    -model models/mom-embedding-multimodal \
-//	    -artifact-revision fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4 \
-//	    -rules config/fragments/signal/embedding/image-routing.yaml \
-//	    -cases tools/calibration/image-routing/testdata/calibration-set.json \
-//	    -fixture-root . \
-//	    -output /tmp/image-routing-calibration.json \
-//	    -markdown /tmp/image-routing-calibration.md
-//
-// -artifact-revision is the snapshot the model was downloaded at (the
-// --revision above; the router's own downloader tracks "main", see
-// pkg/modeldownload/config_parser.go). The report binds that claim to the
-// bytes it scored with: every loader input under -model is hashed into the
-// report, and where the Hugging Face download cache recorded the snapshot a
-// file resolved to, it must equal the claim or the run fails before loading.
-// The CI workflow pins the download to the same snapshot and performs the
-// same check in shell before the gate runs.
+// Calibrate image-routing thresholds using a prepared Vela Omni deployment.
+// Labels and fixtures remain the reviewed, versioned calibration set. The report
+// binds every score to the actual manifest, graph bytes, source revision, and
+// production embedding classifier. Nano and Mini require independent reports.
 package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -106,12 +22,10 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
-
-const modelRepository = "llm-semantic-router/multi-modal-embed-small"
 
 // calibrationSet is the labelled input: every fixture is listed explicitly
 // with the label a reviewer gave it. A fixture is positive for a rule only
@@ -142,7 +56,7 @@ type excludedLabel struct {
 }
 
 // fixtureExtensions mirrors the image crate features compiled into
-// candle-binding (jpeg, png); anything else fails to decode at the FFI.
+// the native Omni image decoder (JPEG and PNG).
 var fixtureExtensions = map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 
 type excludedFixture struct {
@@ -159,13 +73,16 @@ type fixtureReport struct {
 }
 
 type ruleReport struct {
-	Name            string            `json:"name"`
-	CandidateSHA256 string            `json:"candidate_sha256"`
-	Positives       int               `json:"positive_fixtures"`
-	Negatives       int               `json:"negative_fixtures"`
-	Shipped         thresholdResult   `json:"shipped"`
-	Selected        thresholdResult   `json:"selected"`
-	Sweep           []thresholdResult `json:"sweep"`
+	Name                 string            `json:"name"`
+	Evaluation           string            `json:"evaluation,omitempty"`
+	Validation           *thresholdResult  `json:"validation,omitempty"`
+	ValidationAtSelected *thresholdResult  `json:"validation_at_development_threshold,omitempty"`
+	CandidateSHA256      string            `json:"candidate_sha256"`
+	Positives            int               `json:"positive_fixtures"`
+	Negatives            int               `json:"negative_fixtures"`
+	Shipped              thresholdResult   `json:"shipped"`
+	Selected             thresholdResult   `json:"selected"`
+	Sweep                []thresholdResult `json:"sweep"`
 }
 
 type thresholdResult struct {
@@ -199,20 +116,17 @@ type calibrationReport struct {
 		// and any Hugging Face download record for a file must agree with
 		// the claim or the run fails.
 		ArtifactFiles map[string]string `json:"artifact_files"`
-		// TargetDimension is the matryoshka dimension used for the candidate
-		// (text) embeddings; the image tower always produces its native
-		// dimension, so this is a text-side parameter. TargetLayer is the
-		// encoder layer the candidate embeddings are taken from; 0 means the
-		// final layer (the E2E profile pins target_layer: 6, which is the
-		// final layer of this model). Both change every score.
+		// Zero requests the manifest's full dimension and final layer for all
+		// modalities. The manifest hash binds the actual dimension and pooling.
 		TargetDimension int    `json:"target_dimension"`
 		TargetLayer     int    `json:"target_layer"`
 		ModelType       string `json:"model_type"`
 		Aggregation     string `json:"aggregation_method"`
+		ScoringPolicy   string `json:"scoring_policy"`
 		// Scoring records the effective prototype-scoring parameters. With
 		// aggregation_method=max the runtime score is
-		// best_weight*best + (1-best_weight)*mean(top_m), not a raw max
-		// cosine, so thresholds shift if a deployment overrides these.
+		// best_weight*best + (1-best_weight)*mean(top_m). The media default
+		// has best_weight=1 and retains every candidate.
 		Scoring config.PrototypeScoringConfig `json:"prototype_scoring"`
 	} `json:"model"`
 	// Source pins the repository side of the run: the commit the fixtures,
@@ -222,9 +136,12 @@ type calibrationReport struct {
 	// ignored), and the images the calibration set excludes as ambiguous,
 	// hashed so a later reviewer can tell exactly which asset was excluded.
 	Source struct {
-		Commit   string            `json:"repo_commit"`
-		Dirty    bool              `json:"repo_dirty"`
-		Excluded []excludedFixture `json:"excluded_fixtures,omitempty"`
+		Commit               string            `json:"repo_commit"`
+		PrototypeManifestSHA string            `json:"prototype_manifest_sha256,omitempty"`
+		PrototypeProtocolSHA string            `json:"prototype_protocol_sha256,omitempty"`
+		PrototypeExcluded    []string          `json:"prototype_excluded_development,omitempty"`
+		Dirty                bool              `json:"repo_dirty"`
+		Excluded             []excludedFixture `json:"excluded_fixtures,omitempty"`
 	} `json:"source"`
 	Fixtures []fixtureReport      `json:"fixtures"`
 	Rules    []ruleReport         `json:"rules"`
@@ -241,16 +158,25 @@ func thresholdMatches(rule ruleReport) bool {
 	return math.Abs(diff) <= shippedThresholdTolerance && sameMatrix(rule.Shipped, rule.Selected)
 }
 
+func prototypeValidationPasses(result *thresholdResult) bool {
+	return result != nil && result.TP > 0 && result.FP == 0 && result.FN == 0
+}
+
 func thresholdAssertions(rules []ruleReport) []thresholdAssertion {
 	checks := make([]thresholdAssertion, 0, len(rules))
 	for _, rule := range rules {
 		checks = append(checks, thresholdAssertion{ID: "threshold/" + rule.Name, Passed: thresholdMatches(rule)})
+		if rule.Validation != nil {
+			checks = append(checks, thresholdAssertion{ID: "validation/" + rule.Name, Passed: prototypeValidationPasses(rule.Validation)})
+		}
 	}
 	return checks
 }
 
-func main() {
-	modelPath := flag.String("model", os.Getenv("MULTIMODAL_MODEL_PATH"), "multimodal model directory")
+func main() { os.Exit(runCalibration()) }
+
+func runCalibration() int {
+	modelPath := flag.String("model", os.Getenv("MULTIMODAL_MODEL_PATH"), "prepared Vela Omni artifact directory")
 	rulesPath := flag.String("rules", "../../config/fragments/signal/embedding/image-routing.yaml", "image-routing YAML fragment")
 	casesPath := flag.String("cases", "../../tools/calibration/image-routing/testdata/calibration-set.json", "labelled calibration set JSON")
 	fixtureRoot := flag.String("fixture-root", ".", "directory that relative fixture paths in the cases file resolve against")
@@ -260,6 +186,7 @@ func main() {
 	check := flag.Bool("check", false, "gate mode: exit 2 unless every rule's report-selected threshold equals the shipped value")
 	expectRevision := flag.String("expect-artifact-revision", "", "snapshot the shipped thresholds were calibrated on; a different -artifact-revision is reported as a warning, not a failure")
 	requireClean := flag.Bool("require-clean", false, "with -check: fail unless the worktree matches the recorded commit, so the report is reproducible evidence")
+	prototypePolicy := flag.String("prototype-policy", "default", "scoring policy: default, cluster, or raw-max (explicit diagnostic override, preserves all candidate text)")
 	flag.Parse()
 	if *modelPath == "" || *artifactRevision == "" || *casesPath == "" {
 		fatal("-model (or MULTIMODAL_MODEL_PATH), -artifact-revision, and -cases are required")
@@ -285,6 +212,10 @@ func main() {
 	if err = validateRules(rules); err != nil {
 		fatal("rules: %v", err)
 	}
+	hnsw := classifierConfig()
+	if policyErr := applyPrototypePolicy(rules, &hnsw, *prototypePolicy); policyErr != nil {
+		fatal("prototype policy: %v", policyErr)
+	}
 	set := loadSet(casesReal, rules)
 	fixtures := enumerateFixtures(set)
 	// Every input the report attributes to the commit must actually come from
@@ -302,29 +233,54 @@ func main() {
 		fatal("outputs: %v", outputErr)
 	}
 	*output, *markdown = outputs[0], outputs[1]
-	artifactFiles, err := modelArtifact(*modelPath, *artifactRevision)
+	artifact, err := modelArtifact(*modelPath, *artifactRevision)
 	if err != nil {
 		fatal("model artifact: %v", err)
 	}
-	if err = candle_binding.InitMultiModalEmbeddingModel(*modelPath, true); err != nil {
-		fatal("initialize multimodal model: %v", err)
+	modelDir, err := filepath.Abs(*modelPath)
+	if err != nil {
+		fatal("model directory: %v", err)
 	}
-	hnsw := classifierConfig()
-	classifier, err := classification.NewEmbeddingClassifier(rules, hnsw)
+	provider, err := native.New(nil).Embedding(context.Background(), config.ResolvedModelBinding{
+		Recipe: "image-calibration", Name: "embedding",
+		Binding:    config.ModelBinding{Deployment: "omni-calibration", Adapter: "vela_omni", Contract: "embedding.v1"},
+		Deployment: config.ModelDeployment{Provider: "ort", Device: "cpu", Artifact: modelDir, Precision: "native", Input: config.ModelInputBudget{MaxTokens: artifact.MaxTextLength, Overflow: "reject"}},
+	}, 0, 0)
+	if err != nil {
+		fatal("initialize Omni: %v", err)
+	}
+	defer provider.Close()
+	var prototypeRun *prototypeEvaluation
+	for _, rule := range rules {
+		if rule.HasImageCandidates() {
+			prototypeRun, err = preparePrototypeEvaluation(root, filepath.Join(root, "config/assets/image-routing/manifest.json"), filepath.Join(root, "tools/calibration/image-routing/testdata/prototype-protocol.json"), rules, hnsw, provider)
+			if err != nil {
+				fatal("prototype evaluation: %v", err)
+			}
+			break
+		}
+	}
+	classifier, err := classification.NewEmbeddingClassifierWithProvider(rules, hnsw, provider)
 	if err != nil {
 		fatal("initialize classifier: %v", err)
 	}
 
 	report := calibrationReport{}
-	report.Model.Repository = modelRepository
+	report.Model.Repository = artifact.Repository
 	report.Model.ArtifactSHA = *artifactRevision
-	report.Model.ArtifactFiles = artifactFiles
+	report.Model.ArtifactFiles = artifact.Files
 	report.Model.TargetDimension = hnsw.TargetDimension
 	report.Model.TargetLayer = hnsw.TargetLayer
 	report.Model.ModelType = hnsw.ModelType
 	// validateRules guarantees every rule uses this aggregation.
 	report.Model.Aggregation = string(config.AggregationMethodMax)
+	report.Model.ScoringPolicy = *prototypePolicy
 	report.Model.Scoring = hnsw.PrototypeScoring
+	if prototypeRun != nil {
+		report.Source.PrototypeManifestSHA = prototypeRun.ManifestSHA
+		report.Source.PrototypeProtocolSHA = prototypeRun.ProtocolSHA
+		report.Source.PrototypeExcluded = prototypeRun.Excluded
+	}
 	report.Source.Commit, report.Source.Dirty = repoState(*fixtureRoot, *output, *markdown)
 	for _, label := range set.Excluded {
 		report.Source.Excluded = append(report.Source.Excluded, excludedFixture{
@@ -334,11 +290,24 @@ func main() {
 	if report.Source.Dirty {
 		fmt.Fprintln(os.Stderr, "WARNING: worktree has uncommitted changes; this report is not reproducible from its commit")
 	}
-	for _, fixture := range fixtures {
+	for index, fixture := range fixtures {
+		if index%20 == 0 {
+			fmt.Fprintf(os.Stderr, "Scoring fixture %d/%d\n", index+1, len(fixtures))
+		}
+		if prototypeRun != nil {
+			classifier, err = prototypeRun.classifier(fixture)
+			if err != nil {
+				fatal("prototype split: %v", err)
+			}
+		}
 		report.Fixtures = append(report.Fixtures, scoreFixture(classifier, *fixtureRoot, fixture, set, rules))
 	}
 	for _, rule := range rules {
-		report.Rules = append(report.Rules, calibrateRule(rule, report.Fixtures))
+		if prototypeRun != nil {
+			report.Rules = append(report.Rules, prototypeRun.report(rule, report.Fixtures))
+		} else {
+			report.Rules = append(report.Rules, calibrateRule(rule, report.Fixtures))
+		}
 	}
 
 	if *check {
@@ -346,8 +315,9 @@ func main() {
 	}
 	writeReports(report, *output, *markdown)
 	if *check {
-		os.Exit(checkShippedThresholds(report, *artifactRevision, *expectRevision, *requireClean))
+		return checkShippedThresholds(report, *artifactRevision, *expectRevision, *requireClean)
 	}
+	return 0
 }
 
 func writeReports(report calibrationReport, output, markdown string) {
@@ -393,6 +363,10 @@ func checkShippedThresholds(report calibrationReport, gotRevision, wantRevision 
 		}
 	}
 	for _, rule := range report.Rules {
+		if rule.Validation != nil && !prototypeValidationPasses(rule.Validation) {
+			fmt.Printf("  FAIL: held-out validation %s TP=%d FP=%d FN=%d\n", rule.Name, rule.Validation.TP, rule.Validation.FP, rule.Validation.FN)
+			code = 2
+		}
 		shipped, selected := rule.Shipped.Threshold, rule.Selected.Threshold
 		status := "ok"
 		if !thresholdMatches(rule) {
@@ -703,25 +677,25 @@ func scoreFixture(classifier *classification.EmbeddingClassifier, root, path str
 // prototype_scoring override, because the classifier scores mean-aggregated
 // rules without the prototype blend and overridden rules with their own
 // blend (embeddingAggregationOptions in pkg/classification), while the
-// report records the family config; either would make the report describe
+// report records a shared image policy; either would make the report describe
 // semantics the run did not use.
 func validateRules(rules []config.EmbeddingRule) error {
 	for _, rule := range rules {
 		if modality := rule.EffectiveQueryModality(); modality != config.QueryModalityImage {
 			return fmt.Errorf("rule %q has query_modality %q; only image rules can be calibrated here", rule.Name, modality)
 		}
-		if len(rule.Candidates) == 0 {
+		if len(rule.Candidates)+len(rule.ImageCandidates) == 0 {
 			return fmt.Errorf("rule %q has no candidates", rule.Name)
 		}
 		if rule.AggregationMethodConfiged != config.AggregationMethodMax {
-			return fmt.Errorf("rule %q has aggregation_method %q; the report records %q (prototype blend) so every rule must set it explicitly",
+			return fmt.Errorf("rule %q has aggregation_method %q; the report records %q so every rule must set it explicitly",
 				rule.Name, rule.AggregationMethodConfiged, config.AggregationMethodMax)
 		}
 		// A per-rule prototype_scoring override is resolved by the classifier
-		// in place of the family config the report records, so the report
+		// in place of the image policy the report records, so the report
 		// would describe a blend the run did not use.
 		if rule.PrototypeScoring != nil {
-			return fmt.Errorf("rule %q overrides prototype_scoring; the report records the family scoring config, so per-rule overrides cannot be calibrated here", rule.Name)
+			return fmt.Errorf("rule %q overrides prototype_scoring; the report records a shared image policy, so per-rule overrides cannot be calibrated here", rule.Name)
 		}
 	}
 	return nil
@@ -734,7 +708,29 @@ func validateRules(rules []config.EmbeddingRule) error {
 // its own HNSW config from the deployment, which may override
 // prototype_scoring and shift every threshold; the report says so.
 func classifierConfig() config.HNSWConfig {
-	return config.HNSWConfig{ModelType: "multimodal", TargetDimension: 384, PreloadEmbeddings: true}.WithDefaults()
+	cfg := config.HNSWConfig{ModelType: "multimodal", TargetDimension: 0, PreloadEmbeddings: true}.WithDefaults()
+	cfg.PrototypeScoring = (config.EmbeddingRule{QueryModality: config.QueryModalityImage}).EffectivePrototypeScoring(cfg.PrototypeScoring)
+	return cfg
+}
+
+func applyPrototypePolicy(rules []config.EmbeddingRule, hnsw *config.HNSWConfig, policy string) error {
+	var scoring config.PrototypeScoringConfig
+	switch policy {
+	case "default":
+		return nil
+	case "cluster":
+		scoring = config.PrototypeScoringConfig{}.WithDefaults()
+	case "raw-max":
+		disabled := false
+		scoring = config.PrototypeScoringConfig{Enabled: &disabled, BestWeight: 1, TopM: 1}.WithDefaults()
+	default:
+		return fmt.Errorf("unknown policy %q; expected default, cluster, or raw-max", policy)
+	}
+	hnsw.PrototypeScoring = scoring
+	for i := range rules {
+		rules[i].PrototypeScoring = &scoring
+	}
+	return nil
 }
 
 // collectScores turns the classifier's result into one finite score per
@@ -791,7 +787,7 @@ func calibrateRule(rule config.EmbeddingRule, fixtures []fixtureReport) ruleRepo
 		thresholds = append(thresholds, threshold)
 	}
 	sort.Float64s(thresholds)
-	report := ruleReport{Name: rule.Name, CandidateSHA256: hashCandidates(rule.Candidates)}
+	report := ruleReport{Name: rule.Name, CandidateSHA256: hashCandidateBanks(rule)}
 	for _, threshold := range thresholds {
 		report.Sweep = append(report.Sweep, evaluateThreshold(threshold, rule.Name, positive, fixtures))
 	}
@@ -921,13 +917,13 @@ func positiveNegativeBounds(rule string, positive map[string]bool, fixtures []fi
 func renderMarkdown(report calibrationReport) string {
 	var b strings.Builder
 	b.WriteString("# Image Routing Calibration Report\n\n")
-	b.WriteString("Generated by `tools/calibration/image-routing`. Regenerate with the invocation in\n")
-	b.WriteString("the package doc comment of `tools/calibration/image-routing/main.go`.\n\n")
+	b.WriteString("Generated by `tools/calibration/image-routing`. Reproduce with the recorded\n")
+	b.WriteString("artifact, reviewed calibration set, candidates, and prototype policy.\n\n")
 	layer := fmt.Sprintf("%d", report.Model.TargetLayer)
 	if report.Model.TargetLayer == 0 {
 		layer = "0 (final layer)"
 	}
-	fmt.Fprintf(&b, "- Model repository: `%s`\n- Artifact revision: `%s`\n- Target dimension (candidate text embeddings): `%d`\n- Target layer (candidate text embeddings): `%s`\n- Model type: `%s`\n- Aggregation: `%s`\n- Calibration fixtures: `%d`\n",
+	fmt.Fprintf(&b, "- Model repository: `%s`\n- Artifact revision: `%s`\n- Target dimension (all candidate modalities): `%d`\n- Target text layer: `%s`\n- Model type: `%s`\n- Aggregation: `%s`\n- Calibration fixtures: `%d`\n",
 		report.Model.Repository, report.Model.ArtifactSHA, report.Model.TargetDimension, layer,
 		report.Model.ModelType, report.Model.Aggregation, len(report.Fixtures))
 	names := make([]string, 0, len(report.Model.ArtifactFiles))
@@ -946,10 +942,12 @@ func renderMarkdown(report calibrationReport) string {
 	for _, excluded := range report.Source.Excluded {
 		fmt.Fprintf(&b, "- Excluded as ambiguous (not scored): `%s` (`%s`): %s\n", excluded.Path, excluded.SHA256, excluded.Reason)
 	}
-	fmt.Fprintf(&b, "- Effective score: `%.2f*best + %.2f*mean(top %d)` (prototype_scoring defaults; "+
-		"deployments that override `best_weight`/`top_m` shift every threshold)\n\n",
+	fmt.Fprintf(&b, "- Prototype policy: `%s`; compression enabled: `%t`\n", report.Model.ScoringPolicy, report.Model.Scoring.IsEnabled())
+	fmt.Fprintf(&b, "- Per-bank aggregation: `%.2f*best + %.2f*mean(top %d)`; "+
+		"deployments that override these parameters require separate calibration.\n\n",
 		report.Model.Scoring.BestWeight, 1-report.Model.Scoring.BestWeight, report.Model.Scoring.TopM)
 
+	b.WriteString("Negative banks are aggregated independently and subtracted from the positive bank score.\n\n")
 	b.WriteString("## Shipped thresholds\n\n")
 	b.WriteString("Metrics are computed at the threshold currently in `image-routing.yaml`.\n\n")
 	b.WriteString("Headroom is the absolute cosine gap from the threshold to the nearest positive\n")
@@ -966,7 +964,7 @@ func renderMarkdown(report calibrationReport) string {
 	b.WriteString("\n## Best achievable threshold per rule\n\n")
 	b.WriteString("Selection rule: if `min(positive) > max(negative)` take the midpoint of that band;\n")
 	b.WriteString("otherwise take the midpoint of the max-F1 band and record the residual confusion\n")
-	b.WriteString("matrix. Margin is the distance to the nearest fixture on either side.\n\n")
+	b.WriteString("matrix. Image-prototype rules instead use development-only maximum F1, precision, then higher threshold, as frozen in their protocol. Margin is the distance to the nearest fixture on either side.\n\n")
 	b.WriteString("| Rule | Best | F1 | FP | FN | Margin | Separable |\n|---|---:|---:|---:|---:|---:|:---:|\n")
 	for _, rule := range report.Rules {
 		s := rule.Selected
@@ -974,6 +972,18 @@ func renderMarkdown(report calibrationReport) string {
 			rule.Name, s.Threshold, s.F1, s.FP, s.FN, s.Margin, s.Separable)
 	}
 
+	b.WriteString("\n## Frozen validation\n\n")
+	b.WriteString("Image-prototype thresholds are selected on development scores with source-group and content exclusion. Validation content is excluded from candidate banks and threshold fitting. Other rules have no independent positive holdout.\n\n")
+	fmt.Fprintf(&b, "Prototype manifest: `%s`; protocol: `%s`.\n\n", report.Source.PrototypeManifestSHA, report.Source.PrototypeProtocolSHA)
+	for _, source := range report.Source.PrototypeExcluded {
+		fmt.Fprintf(&b, "- Scored, excluded from development fitting and prototypes because its bytes occur in validation: `%s`\n", source)
+	}
+	b.WriteString("\n| Rule | Threshold | TP | FP | FN | TN | F1 |\n|---|---:|---:|---:|---:|---:|---:|\n")
+	for _, rule := range report.Rules {
+		if v := rule.Validation; v != nil {
+			fmt.Fprintf(&b, "| `%s` | %.9f | %d | %d | %d | %d | %.3f |\n", rule.Name, v.Threshold, v.TP, v.FP, v.FN, v.TN, v.F1)
+		}
+	}
 	b.WriteString("\n## Candidate list digests\n\n")
 	b.WriteString("A change to any rule's candidates invalidates this report.\n\n")
 	b.WriteString("| Rule | Candidates |\n|---|---|\n")
@@ -984,9 +994,7 @@ func renderMarkdown(report calibrationReport) string {
 }
 
 // imageDataURI reads an image file and renders it as a base64 data URI.
-// ClassifyDetailedMultimodal resolves payloads through
-// MultiModalEncodeImageFromBase64, which does not accept filesystem paths
-// despite the doc comment on that method.
+// The production owned provider receives the same inline image payload as a request.
 func imageDataURI(path string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -1056,4 +1064,13 @@ func contains(items []string, value string) bool {
 func fatal(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	os.Exit(1)
+}
+
+func hashCandidateBanks(rule config.EmbeddingRule) string {
+	if !rule.HasImageCandidates() && !rule.HasNegativeCandidates() {
+		return hashCandidates(rule.Candidates)
+	}
+	data, _ := json.Marshal([][]string{rule.Candidates, rule.ImageCandidates, rule.NegativeCandidates, rule.NegativeImageCandidates})
+	sum := sha256.Sum256(data)
+	return "sha256:" + hex.EncodeToString(sum[:])
 }

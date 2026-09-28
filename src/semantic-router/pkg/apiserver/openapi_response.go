@@ -105,7 +105,7 @@ func configMutationResponses() apiRouteOption {
 		}
 		jsonResponseOrError[RouterConfigUpdateResponse](http.StatusServiceUnavailable, "Configuration persisted but activation failed; the active runtime remains on its previous generation").applyRoute(route)
 		etagResponseHeaders(http.StatusServiceUnavailable).applyRoute(route)
-		errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusInternalServerError).applyRoute(route)
+		errorResponses(http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusInternalServerError).applyRoute(route)
 		etagResponseHeaders(http.StatusPreconditionFailed).applyRoute(route)
 	})
 }

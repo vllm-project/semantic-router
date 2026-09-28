@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any
 
 import click
@@ -17,6 +17,7 @@ from cli.commands.common import exit_with_logged_error
 from cli.commands.eval_rendering import render_route_preview_summary
 from cli.commands.route_probe import delivery_assertion
 from cli.router_management_client import RouterManagementClient
+from cli.routing_preview import build_preview_request
 from cli.terminal import echo
 from cli.url_display import redact_url
 from cli.utils import get_logger
@@ -25,20 +26,6 @@ log = get_logger(__name__)
 
 _MAX_SIGNAL_DISPLAY = 10
 _MAX_CONFIDENCE_DISPLAY = 5
-
-
-@dataclass(frozen=True)
-class RoutePreviewRequest:
-    """Request payload for /api/v1/routing/preview."""
-
-    messages: list[dict[str, Any]]
-    model: str | None = None
-
-    def to_json(self) -> dict[str, Any]:
-        payload = {"messages": self.messages}
-        if self.model:
-            payload["model"] = self.model
-        return payload
 
 
 def _parse_messages_json(messages_json: str) -> list[dict[str, Any]]:
@@ -181,6 +168,28 @@ def _summarize_response(payload: dict[str, Any]) -> str:
     decision_result = payload.get("decision_result")
     if isinstance(decision_result, dict):
         lines = _summarize_decision_result(payload, decision_result)
+        lines.append(
+            f"selected model: {payload.get('selected_model') or '(not determined)'}"
+        )
+        lines.append(
+            f"selection status: {payload.get('selection_status') or '(unavailable)'}"
+        )
+        if method := payload.get("selection_method"):
+            lines.append(f"selection method: {method}")
+        if reason := payload.get("selection_reason"):
+            lines.append(f"selection reason: {reason}")
+        if provenance := payload.get("selection_provenance"):
+            lines.append(
+                f"selection evidence: {provenance.get('mode', '(unavailable)')}"
+            )
+            if provenance.get("state_dependent"):
+                lines.append(
+                    "state: read-only snapshot; later live selection may differ"
+                )
+            if provenance.get("sampled"):
+                lines.append(
+                    f"sampling seed: {provenance.get('sampling_seed')}; preview-only draw"
+                )
         if lines:
             return "\n".join(lines)
 
@@ -208,6 +217,18 @@ def route() -> None:
     "--model",
     default=None,
     help="Routing model or entrypoint whose recipe should be evaluated.",
+)
+@click.option(
+    "--request-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="JSON Router Preview request; supported Chat messages and prompt fields only.",
+)
+@click.option("--session-id", help="Read-only Learning session identity.")
+@click.option("--conversation-id", help="Read-only Learning conversation identity.")
+@click.option(
+    "--sampling-seed",
+    type=click.IntRange(-(2**63), 2**63 - 1),
+    help="Preview-only exploration seed; does not fix a later live random draw.",
 )
 @click.option(
     "--endpoint",
@@ -244,32 +265,51 @@ def preview(
     prompt: str | None,
     messages_json: str | None,
     model: str | None,
+    request_file: Path | None,
+    session_id: str | None,
+    conversation_id: str | None,
+    sampling_seed: int | None,
     endpoint: str | None,
     token_env: str,
     trace: bool,
     output_json: bool,
     timeout: float,
 ) -> None:
-    """Preview signals and the selected route without calling a model backend."""
+    """Preview signals and model selection without generating an answer."""
 
-    if (prompt is None and messages_json is None) or (
-        prompt is not None and messages_json is not None
-    ):
-        raise ValueError("Provide exactly one of --prompt or --messages")
-
-    if messages_json is not None:
-        messages = _parse_messages_json(messages_json)
+    if sum(value is not None for value in (prompt, messages_json, request_file)) != 1:
+        raise ValueError(
+            "Provide exactly one of --prompt, --messages or --request-file"
+        )
+    if request_file is not None:
+        with request_file.open("rb") as stream:
+            raw = stream.read(10 * 1024 * 1024 + 1)
+        if len(raw) > 10 * 1024 * 1024:
+            raise ValueError("Preview request exceeds 10 MiB")
+        request = json.loads(raw)
+    elif messages_json is not None:
+        request = {"messages": _parse_messages_json(messages_json)}
     else:
-        messages = _prompt_to_messages(prompt or "")
-
-    req = RoutePreviewRequest(messages=messages, model=(model or "").strip() or None)
+        request = {"messages": _prompt_to_messages(prompt or "")}
+    context = {
+        key: value
+        for key, value in {
+            "session_id": session_id,
+            "conversation_id": conversation_id,
+            "sampling_seed": sampling_seed,
+        }.items()
+        if value is not None
+    }
+    req = build_preview_request(
+        request, model=(model or "").strip() or None, preview_context=context or None
+    )
     payload = (
         RouterManagementClient(
             endpoint,
             timeout=timeout,
             token_env=token_env,
         )
-        .preview_route(req.to_json(), trace=trace)
+        .preview_route(req, trace=trace)
         .payload
     )
 

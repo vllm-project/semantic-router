@@ -109,6 +109,7 @@ const BuilderPage: React.FC = () => {
   })
   const [importText, setImportText] = useState('')
   const [importError, setImportError] = useState<string | null>(null)
+  const [configLoadError, setConfigLoadError] = useState<string | null>(null)
   const [importUrl, setImportUrl] = useState('')
   const [importUrlLoading, setImportUrlLoading] = useState(false)
   const importTextareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -215,10 +216,10 @@ const BuilderPage: React.FC = () => {
       setShowImportModal(false)
       setImportText('')
       setImportError(null)
-    } catch {
-      setImportError(
-        'Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.',
-      )
+      setConfigLoadError(null)
+      autoLoadedDefaultConfigRef.current = true
+    } catch (err) {
+      setImportError(`Failed to import YAML: ${err instanceof Error ? err.message : String(err)}`)
     }
   }, [importText, importYaml, compile])
 
@@ -282,6 +283,8 @@ const BuilderPage: React.FC = () => {
       compile()
       setShowImportModal(false)
       setImportText('')
+      setConfigLoadError(null)
+      autoLoadedDefaultConfigRef.current = true
     } catch (err) {
       setImportError(
         `Failed to load from router: ${err instanceof Error ? err.message : String(err)}`,
@@ -314,7 +317,7 @@ const BuilderPage: React.FC = () => {
     let cancelled = false
     const loadDefaultConfig = async () => {
       setLoadingFromRouter(true)
-      setImportError(null)
+      setConfigLoadError(null)
       try {
         await loadFromRouter()
         if (!cancelled) {
@@ -322,7 +325,11 @@ const BuilderPage: React.FC = () => {
           autoLoadedDefaultConfigRef.current = true
         }
       } catch (err) {
-        console.error('[BuilderPage] Failed to load default router config:', err)
+        if (!cancelled) {
+          setConfigLoadError(
+            `Failed to load router config: ${err instanceof Error ? err.message : String(err)}`,
+          )
+        }
       } finally {
         autoLoadingDefaultConfigRef.current = false
         if (!cancelled) {
@@ -338,7 +345,7 @@ const BuilderPage: React.FC = () => {
 
   // Diagnostic counts
   const validationErrorCount = diagnostics.filter((d) => d.level === 'error').length
-  const errorCount = validationErrorCount + (compileError ? 1 : 0)
+  const errorCount = validationErrorCount + (compileError ? 1 : 0) + (configLoadError ? 1 : 0)
   const modelCount = ast?.models?.length ?? symbols?.models?.length ?? 0
   const totalRoutingSummary = useMemo(
     () => summarizeBuilderRoutingScopes(ast, symbols, dslSource),
@@ -417,8 +424,23 @@ const BuilderPage: React.FC = () => {
         onValidate={validate}
         onToggleGuide={() => setGuideOpen(!guideOpen)}
         onToggleOutput={() => setOutputPanelOpen(!outputPanelOpen)}
-        onReset={reset}
+        onReset={() => {
+          setConfigLoadError(null)
+          autoLoadedDefaultConfigRef.current = true
+          reset()
+        }}
       />
+
+      {configLoadError && (
+        <div className={styles.workspaceError} role="alert">
+          {configLoadError} Use Import to retry loading or choose a corrected config.
+        </div>
+      )}
+      {compileError && (
+        <div className={styles.workspaceError} role="alert">
+          {compileError}
+        </div>
+      )}
 
       {/* Main Content — editor + output panel */}
       <div className={styles.content} ref={contentRef}>

@@ -317,7 +317,12 @@ impl DualPathRouter {
             }
         }
 
-        score.max(0.0).min(1.0)
+        // Preserve the zero score for invalid historical metrics.
+        if score.is_nan() {
+            0.0
+        } else {
+            score.clamp(0.0, 1.0)
+        }
     }
 
     /// Get expected performance for model type

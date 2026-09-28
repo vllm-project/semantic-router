@@ -2,14 +2,14 @@
 title: Vela 模型目录
 sidebar_label: 模型目录
 translation:
-  source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
+  source_commit: "19c03bfd28b6c53df9b682bbfc3e5fc1d372c803"
   source_file: "docs/training/model-catalog.md"
   outdated: false
 ---
 
 # Vela 模型目录 {#vela-model-catalog}
 
-[Vela 1.0](https://huggingface.co/collections/llm-semantic-router/vela-10-router-models-6aa555ba70cc6997d6d67798)是面向智能路由的模型家族。全部 11 个模型共享 307M 参数的 Vela Encoder 基座，覆盖请求理解、安全、检索和重排序。
+[Vela 1.0](https://huggingface.co/collections/llm-semantic-router/vela-10-router-models-6aa555ba70cc6997d6d67798)是面向智能路由的模型家族。全部 12 个模型共享 307M 参数的 Vela Encoder 基座，覆盖请求理解、安全、检索和重排序。
 
 ## 选择模型 {#choose-a-model}
 
@@ -19,6 +19,7 @@ translation:
 | [Domain](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Domain) | 将请求分为 14 个主题领域 |
 | [Guard](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Guard) | 检测提示词注入和越狱攻击 |
 | [Safety](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Safety) | 检测不安全内容 |
+| [Shield](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Shield) | 检测不安全请求；可替代 Safety |
 | [Hazard](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Hazard) | 识别 12 类内容风险 |
 | [PII](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-PII) | 定位 17 类个人信息 |
 | [FactCheck](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck) | 判断回答是否需要事实核查 |
@@ -27,7 +28,7 @@ translation:
 | [Embedding](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Embedding) | 比较请求并检索相关文档 |
 | [Reranker](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Reranker) | 按相关性重新排列候选文档 |
 
-Guard 检测改变指令执行的攻击；Safety 检测内容风险，Hazard 识别风险类别。应用同时需要提示词攻击防护和内容策略时，可以组合使用。
+Guard 检测改变指令执行的攻击；Safety 检测内容风险，Hazard 识别风险类别。应用同时需要提示词攻击防护和内容策略时，可以组合使用。Shield 是单独训练的模型，与 Safety 使用相同的 `safe`/`unsafe` 接口；Safety 仍是默认模型，改用 Shield 的方法见英文版 [Safety 信号指南](https://vllm-sr.ai/docs/tutorials/signal/learned/safety#select-vela-shield)。
 
 Embedding 和 Reranker 提供四种编码器深度和五种维度，方便权衡质量、延迟和内存。选择方法见 [Embedding 和 Reranking](./mmbert-32k-models)。
 

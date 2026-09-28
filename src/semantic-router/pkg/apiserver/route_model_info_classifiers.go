@@ -98,8 +98,10 @@ func buildRoutingClassifierModels(
 
 	promptGuard := cfg.PromptGuard
 	if cfg.IsPromptGuardEnabled() {
-		backend := promptGuard.Protocol
-		if backend == "" {
+		backend := ""
+		if promptGuard.Backend != nil {
+			backend = promptGuard.Backend.Protocol
+		} else {
 			backend = promptGuard.Variant
 		}
 		if backend == "" {

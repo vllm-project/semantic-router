@@ -346,6 +346,10 @@ func TestSetupValidateHandlerUsesConfigDirectoryForRelativeKBAssets(t *testing.T
 }
 
 func TestSetupImportRemoteHandler(t *testing.T) {
+	// The fixture server is on loopback; declare it the way an operator would
+	// declare a real internal target (#1388).
+	allowLoopbackForTest(t)
+
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
 
@@ -431,6 +435,10 @@ routing:
 }
 
 func TestSetupImportRemoteHandlerUsesConfigDirectoryForRelativeKBAssets(t *testing.T) {
+	// The fixture server is on loopback; declare it the way an operator would
+	// declare a real internal target (#1388).
+	allowLoopbackForTest(t)
+
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
 
@@ -562,6 +570,7 @@ func TestSetupActivateHandler(t *testing.T) {
 	if info, err := os.Stat(filepath.Join(tempDir, ".vllm-sr")); err != nil || !info.IsDir() {
 		t.Fatalf(".vllm-sr output directory should exist after activation: %v", err)
 	}
+	assertSnapshotPermissions(t, tempDir)
 }
 
 func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {

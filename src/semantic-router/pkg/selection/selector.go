@@ -33,6 +33,7 @@ import (
 	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
 // SelectionMethod defines the type of model selection algorithm
@@ -281,6 +282,11 @@ type SelectionResult struct {
 	CandidateScores CandidateScores
 	ScoreDirection  ScoreDirection
 	AllScores       map[string]float64
+
+	// MultiFactor records the base objective stages and their eligible survivors.
+	// Later learning/session policy may choose among them; this is not a final
+	// dispatch trace. Weighted objectives omit it.
+	MultiFactor *selectiontrace.MultiFactorObjective
 
 	// Prompt-helper telemetry is populated only by MethodPrompt.
 	HelperModel            string

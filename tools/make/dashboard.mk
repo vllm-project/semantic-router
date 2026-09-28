@@ -37,7 +37,7 @@ dashboard-dev-frontend: dashboard-install dashboard-build-wasm ## Start dashboar
 
 dashboard-dev-backend: ## Start dashboard backend in dev mode
 	@$(LOG_TARGET)
-	cd $(DASHBOARD_BACKEND_DIR) && go run main.go
+	cd $(DASHBOARD_BACKEND_DIR) && VLLM_SR_CONFIG_BASE_DIR="$${VLLM_SR_CONFIG_BASE_DIR:-$(CURDIR)}" go run main.go
 
 
 ## Build

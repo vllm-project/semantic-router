@@ -612,7 +612,7 @@ def test_eval_readable_output_is_not_raw_json(monkeypatch) -> None:
     assert result.stderr == ""
     assert "✓ Routing preview complete" in result.stdout
     assert "Result" in result.stdout
-    assert "Decision  jailbreak" in result.stdout
+    assert "Decision jailbreak" in " ".join(result.stdout.split())
     assert not result.stdout.strip().startswith("{")
 
 

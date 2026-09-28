@@ -71,8 +71,12 @@ func TestBuildRouterComponentsClosesEarlierResourcesOnLaterFailure(t *testing.T)
 		},
 		InlineModels: config.InlineModels{
 			PromptGuard: config.PromptGuardConfig{
-				Enabled:  true,
-				Protocol: config.PromptGuardProtocolHTTPClassify,
+				Enabled: true,
+				Backend: &config.RemoteClassifierBackend{
+					Protocol: config.RemoteClassifierProtocolHTTPClassify,
+					Contract: config.RemoteClassifierContractLabelDistribution,
+					Model:    "missing-guardrail",
+				},
 			},
 		},
 	}

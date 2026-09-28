@@ -39,6 +39,12 @@ const ResponseVendorAzure ResponseVendor = "azure"
 // own integral codes instead of the canonical OpenAI error object.
 const ResponseVendorCloudflare ResponseVendor = "cloudflare"
 
+// ResponseVendorSnowflake permits Snowflake Cortex AI response handling: its
+// failures arrive as a flat object carrying the vendor's own string code instead
+// of the canonical OpenAI error object. No accepted-response decoration has been
+// observed, so this vendor changes only how failures are decoded.
+const ResponseVendorSnowflake ResponseVendor = "snowflake"
+
 type Policy struct {
 	UnknownFields      UnknownFieldPolicy
 	LossyFeatures      LossyPolicy
@@ -142,12 +148,13 @@ type ResponseRenderContext struct {
 // Envelope is bounded, ephemeral wire fidelity and rendering state. It must
 // never be serialized into logs, snapshots, YAML, or usage records.
 type Envelope struct {
-	Format         WireFormat
-	Generation     uint64
-	Request        []byte
-	Response       []byte
-	SourceStop     string
-	ResponseRender ResponseRenderContext
+	Format                   WireFormat
+	Generation               uint64
+	Request                  []byte
+	Response                 []byte
+	ResponseReencodeRequired bool // Provider decorations must not be replayed to a same-format client.
+	SourceStop               string
+	ResponseRender           ResponseRenderContext
 }
 
 func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy Policy, response bool) bool {
@@ -156,6 +163,9 @@ func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy 
 		return false
 	}
 	if response {
+		if envelope.ResponseReencodeRequired {
+			return false
+		}
 		if envelope.ResponseRender.PreviousResponseID != "" {
 			return false
 		}

@@ -16,7 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("anthropic-messages-stop-sequence", pkgtestcases.TestCase{
-		Description: "Verify stop_reason=stop_sequence when stop_sequences is set and model triggers it (anthropic-shim profile)",
+		Description: "Verify stop_reason=stop_sequence when stop_sequences truncates the provider fixture (provider-protocols profile)",
 		Tags:        []string{"anthropic", "stop-reason", "functional"},
 		Fn:          testAnthropicMessagesStopSequence,
 	})
@@ -24,13 +24,12 @@ func init() {
 
 // testAnthropicMessagesStopSequence asserts that the response codec maps
 // the upstream finish_reason to "stop_sequence" when the request carried
-// stop_sequences and the model's output triggered one.
+// stop_sequences and the provider's output triggered one.
 //
-// A single space is used as the stop sequence while the model is instructed
-// to answer with several words. This exercises the real backend stop path
-// without depending on a small model reproducing an arbitrary sentinel.
+// A single space truncates the provider fixture's deterministic multiword
+// response. This exercises the stop path without a model download.
 //
-// Requires the anthropic-shim profile.
+// Requires the provider-protocols profile.
 func testAnthropicMessagesStopSequence(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Anthropic] Testing stop_sequence assertion on /v1/messages")

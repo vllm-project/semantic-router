@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
 func normalizeMultiFactorObjective(objective *MultiFactorObjective) {
@@ -49,13 +50,14 @@ func normalizeMultiFactorObjective(objective *MultiFactorObjective) {
 func (s *MultiFactorSelector) chooseCandidate(
 	signals []signalSet,
 	mins, maxs extrema,
-) (int, CandidateScores, float64, float64, []int) {
+) (int, CandidateScores, float64, float64, []int, *selectiontrace.MultiFactorObjective) {
 	var bestIndex int
 	var candidateScores []float64
 	var bestScore, secondBest float64
 	var survivors []int
+	var trace *selectiontrace.MultiFactorObjective
 	if s.config.Objective.Strategy == config.MultiFactorObjectiveLexicographic {
-		bestIndex, candidateScores, bestScore, secondBest, survivors = s.chooseLexicographic(signals)
+		bestIndex, candidateScores, bestScore, secondBest, survivors, trace = s.chooseLexicographic(signals)
 	} else {
 		bestIndex, candidateScores, bestScore, secondBest = s.chooseWeighted(signals, mins, maxs)
 	}
@@ -69,7 +71,7 @@ func (s *MultiFactorSelector) chooseCandidate(
 	if winner := scores.Best(HigherIsBetter, s.qualityRelevant()); winner >= 0 {
 		bestIndex = winner
 	}
-	return bestIndex, scores, bestScore, secondBest, survivors
+	return bestIndex, scores, bestScore, secondBest, survivors, trace
 }
 
 func (s *MultiFactorSelector) chooseWeighted(
@@ -96,14 +98,20 @@ func (s *MultiFactorSelector) chooseWeighted(
 
 func (s *MultiFactorSelector) chooseLexicographic(
 	signals []signalSet,
-) (int, []float64, float64, float64, []int) {
+) (int, []float64, float64, float64, []int, *selectiontrace.MultiFactorObjective) {
 	active := make([]int, len(signals))
 	for index := range signals {
 		active[index] = index
 	}
 	candidateScores := make([]float64, len(signals))
+	trace := &selectiontrace.MultiFactorObjective{Stages: make([]selectiontrace.ObjectiveStage, 0, len(s.config.Objective.Priorities))}
 	denominator := float64(len(s.config.Objective.Priorities) + 1)
 	for stage, priority := range s.config.Objective.Priorities {
+		stageTrace := s.objectiveStageTrace(priority, signals, active)
+		if stageTrace.Action == selectiontrace.StageSkipped {
+			trace.Stages = append(trace.Stages, stageTrace)
+			continue
+		}
 		best := 0.0
 		bestSet := false
 		higherIsBetter := false
@@ -120,18 +128,20 @@ func (s *MultiFactorSelector) chooseLexicographic(
 				bestSet = true
 			}
 		}
-		if len(values) == 0 {
-			continue
-		}
 		retained := make([]int, 0, len(active))
-		for _, index := range active {
+		for position, index := range active {
 			value, available := values[index]
 			if available && withinRelativeTolerance(value, best, higherIsBetter, priority.Tolerance) {
 				retained = append(retained, index)
 				continue
 			}
 			candidateScores[index] = float64(stage) / denominator
+			stageTrace.Candidates[position].EliminationReason = selectiontrace.OutsideTolerance
+			if !available {
+				stageTrace.Candidates[position].EliminationReason = selectiontrace.MissingMeasurement
+			}
 		}
+		trace.Stages = append(trace.Stages, stageTrace)
 		active = retained
 		if len(active) == 1 {
 			break
@@ -139,6 +149,7 @@ func (s *MultiFactorSelector) chooseLexicographic(
 	}
 	for _, index := range active {
 		candidateScores[index] = 1
+		trace.FinalSurvivors = append(trace.FinalSurvivors, traceCandidate(signals[index].candidate))
 	}
 	winner := active[0]
 	secondBest := math.Inf(-1)
@@ -150,7 +161,7 @@ func (s *MultiFactorSelector) chooseLexicographic(
 	}
 	// Preserve the actual objective survivors for downstream adaptation and
 	// protection. Scores retain eliminated candidates for diagnostics only.
-	return winner, candidateScores, 1, secondBest, active
+	return winner, candidateScores, 1, secondBest, active, trace
 }
 
 func factorValue(signal signalSet, factor string) (float64, bool, bool) {

@@ -37,13 +37,3 @@ func nativeTokenResult(result candle_binding.TokenClassificationResult, err erro
 	scoresAvailable := true
 	return tasks.TokenClassificationResult{Entities: nativeTokenEntities(result.Entities), ScoresAvailable: &scoresAvailable}, err
 }
-
-func nativeEmbeddingResult(result *candle_binding.EmbeddingOutput, err error) (*tasks.EmbeddingResult, error) {
-	if result == nil {
-		return nil, err
-	}
-	return &tasks.EmbeddingResult{
-		Embedding: append([]float32(nil), result.Embedding...), ModelType: result.ModelType,
-		SequenceLength: result.SequenceLength, ProcessingTimeMs: result.ProcessingTimeMs,
-	}, err
-}

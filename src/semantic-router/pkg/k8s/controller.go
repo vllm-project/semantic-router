@@ -37,7 +37,7 @@ type ControllerConfig struct {
 	Namespace      string
 	Kubeconfig     string
 	StaticConfig   *config.RouterConfig
-	OnConfigUpdate func(*config.RouterConfig) error
+	OnConfigUpdate func(context.Context, *config.RouterConfig) error
 }
 
 // NewController creates a new Kubernetes controller using controller-runtime

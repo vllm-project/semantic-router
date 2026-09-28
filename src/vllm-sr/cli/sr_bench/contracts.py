@@ -11,8 +11,25 @@ from urllib.parse import urlparse
 
 import yaml
 
+from cli.routing_preview import case_request_fields
+
 from . import VERSION
 from .adapters import get_adapter, list_adapters
+from .canonical import (
+    canonical,
+    digest,
+    plan_digest,
+    protocol_canonical,  # noqa: F401 - retained public import
+)
+from .dataset_io import (
+    MAX_ROWS,
+    MAX_SCAN_BYTES,
+    bounded_lines,
+    read_small,
+    verified_lines,
+)
+from .experiments import validate_membership, validate_role
+from .native_output import configure as configure_output_policy
 
 MAX_PARAMETER_BYTES = 65536
 MAX_INFERENCE_CALLS = 256
@@ -82,20 +99,6 @@ DEFAULT_LIMITS = {
 }
 
 
-def canonical(value):
-    return json.dumps(
-        value,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    )
-
-
-def digest(value):
-    return hashlib.sha256(canonical(value).encode()).hexdigest()
-
-
 def planned_cells(manifest):
     return manifest.get("execution_cells") or [
         {"case_id": case["id"], "target_id": target["id"]}
@@ -117,12 +120,38 @@ def catalog():
     }
 
 
+_NO_INLINE_CASES = object()
+
+
+def _jsonl_document(lines, existing=_NO_INLINE_CASES):
+    if existing is not _NO_INLINE_CASES and not isinstance(existing, list):
+        raise ValueError("inline cases do not match dataset")
+    loaded = []
+    count = 0
+    for line in lines:
+        if not line.strip():
+            continue
+        if count >= MAX_ROWS:
+            raise ValueError("Dataset exceeds the supported case limit")
+        row = json.loads(line)
+        if existing is not _NO_INLINE_CASES:
+            if count >= len(existing) or existing[count] != row:
+                raise ValueError("inline cases do not match dataset")
+            # Python equality conflates booleans, integers and integral floats.
+            # Reuse assets only when the file's exact case digest is preserved.
+            if digest(existing[count]) == digest(row):
+                row = existing[count]
+        loaded.append(row)
+        count += 1
+    if existing is not _NO_INLINE_CASES and count != len(existing):
+        raise ValueError("inline cases do not match dataset")
+    return loaded
+
+
 def load_document(path):
     path = Path(path).expanduser().resolve()
     if path.suffix == ".jsonl":
-        return [
-            json.loads(line) for line in path.read_text().split("\n") if line.strip()
-        ]
+        return _jsonl_document(bounded_lines(path))
     if path.suffix in {".yaml", ".yml"}:
         return yaml.safe_load(path.read_text())
     return json.loads(path.read_text())
@@ -234,7 +263,77 @@ def validate_request_params(params, limits, label="request_params"):
             raise ValueError(f"{label}.{name} must be boolean")
 
 
-def plan(manifest):
+def resolve_dataset(manifest):
+    """Resolve the hash-bound case source before applying benchmark policy."""
+    m = dict(manifest)
+    if "dataset" in m:
+        ds = m["dataset"]
+        if not isinstance(ds, dict) or not ds.get("path") or not ds.get("sha256"):
+            raise ValueError("dataset requires path and sha256")
+        path = Path(ds["path"]).expanduser().absolute()
+        if path.suffix == ".jsonl":
+            loaded = _jsonl_document(
+                verified_lines(path, ds["sha256"]),
+                m.get("cases", _NO_INLINE_CASES),
+            )
+        else:
+            # Non-JSONL imports retain their document contract. Prepared sources
+            # use JSONL so their raw text and parsed records never coexist in full.
+            content = read_small(path, MAX_SCAN_BYTES)
+            if hashlib.sha256(content).hexdigest() != ds["sha256"]:
+                raise ValueError("dataset SHA256 mismatch")
+            document = (
+                yaml.safe_load(content)
+                if path.suffix in {".yaml", ".yml"}
+                else json.loads(content)
+            )
+            loaded = document if isinstance(document, list) else document.get("cases")
+            if "cases" in m and m["cases"] != loaded:
+                raise ValueError("inline cases do not match dataset")
+        m["cases"] = loaded
+        prepared_provenance_found = False
+        metadata_path = path.parent / "manifest.json"
+        if metadata_path.is_file() and metadata_path != path:
+            metadata = json.loads(read_small(metadata_path, 2 * 1024 * 1024))
+            if metadata.get("sha256") == ds["sha256"]:
+                from .preparation import (  # noqa: PLC0415
+                    validate_cases,
+                    validate_manifest,
+                )
+
+                validate_manifest(metadata)
+                if "preparation" in metadata or "preparation" in ds:
+                    for key in ds.keys() - {"path", "sha256"}:
+                        if key not in metadata or canonical(ds[key]) != canonical(
+                            metadata[key]
+                        ):
+                            raise ValueError(
+                                "Prepared dataset provenance cannot be overridden"
+                            )
+                    validate_cases(metadata, loaded)
+                    prepared_provenance_found = True
+                if metadata.get("profile") != m.get("profile", "quick"):
+                    raise ValueError(
+                        "Prepared dataset profile differs from requested run profile"
+                    )
+                if metadata.get("seed") != m.get("seed", 20260918):
+                    raise ValueError(
+                        "Prepared dataset seed differs from requested run seed"
+                    )
+                m["dataset"] = {**metadata, **ds}
+        if (
+            "preparation" in ds
+            or ds.get("selection") == "stratified-hash-provenance-v1"
+        ) and not prepared_provenance_found:
+            raise ValueError(
+                "Preparation provenance requires its verified prepared manifest"
+            )
+
+    return m
+
+
+def plan(manifest, *, policy=None):
+    """Verify datasets once, apply trusted service policy, then freeze the plan."""
     if not isinstance(manifest, dict):
         raise ValueError("manifest must be an object")
     if "runner_provenance" in manifest:
@@ -252,6 +351,8 @@ def plan(manifest):
     if isinstance(m["seed"], bool) or not isinstance(m["seed"], int):
         raise ValueError("seed must be an integer")
     m.setdefault("name", "sr-bench")
+    if "experiment" in m:
+        m["experiment"] = validate_membership(m["experiment"])
     m.setdefault("cost_policy", "require_priced")
     if m["cost_policy"] not in {"require_priced", "capability_only"}:
         raise ValueError("cost_policy must be require_priced or capability_only")
@@ -275,32 +376,9 @@ def plan(manifest):
         ):
             raise ValueError("preview sampling_seed must be a signed 64-bit integer")
         m["preview_context"] = context
-    if "dataset" in m:
-        ds = m["dataset"]
-        if not isinstance(ds, dict) or not ds.get("path") or not ds.get("sha256"):
-            raise ValueError("dataset requires path and sha256")
-        path = Path(ds["path"]).expanduser().resolve()
-        actual = hashlib.sha256(path.read_bytes()).hexdigest()
-        if actual != ds["sha256"]:
-            raise ValueError("dataset SHA256 mismatch")
-        document = load_document(path)
-        loaded = document if isinstance(document, list) else document.get("cases")
-        if "cases" in m and m["cases"] != loaded:
-            raise ValueError("inline cases do not match dataset")
-        m["cases"] = loaded
-        metadata_path = path.parent / "manifest.json"
-        if metadata_path.is_file() and metadata_path != path:
-            metadata = load_document(metadata_path)
-            if metadata.get("sha256") == actual:
-                if metadata.get("profile") != m["profile"]:
-                    raise ValueError(
-                        "Prepared dataset profile differs from requested run profile"
-                    )
-                if metadata.get("seed") != m["seed"]:
-                    raise ValueError(
-                        "Prepared dataset seed differs from requested run seed"
-                    )
-                m["dataset"] = {**metadata, **ds}
+    m = resolve_dataset(m)
+    if policy is not None:
+        m = policy(m)
 
     cases = m.get("cases")
     if not isinstance(cases, list) or not cases:
@@ -316,6 +394,7 @@ def plan(manifest):
         ):
             raise ValueError("case IDs must be unique nonempty strings")
         ids.add(c["id"])
+        case_request_fields(c)
         if (
             m["profile"] == "standard"
             and c.get("metadata", {}).get("split") != "holdout"
@@ -424,6 +503,7 @@ def plan(manifest):
                     "prices must be finite nonnegative USD per million tokens"
                 )
     limits = {**DEFAULT_LIMITS, **m.get("limits", {})}
+    configure_output_policy(m, targets + list(auxiliary.values()), limits)
     unknown = set(limits) - set(DEFAULT_LIMITS)
     if unknown:
         raise ValueError(f"unknown limits: {sorted(unknown)}")
@@ -451,7 +531,11 @@ def plan(manifest):
         raise ValueError("sampling must be an object")
     sampling = {
         "temperature": 0,
-        "max_tokens": limits["max_output_tokens"],
+        **(
+            {"max_tokens": limits["max_output_tokens"]}
+            if m["output_policy"] == "bounded"
+            else {}
+        ),
         **m.get("sampling", {}),
     }
     validate_request_params(sampling, limits, "sampling")
@@ -488,6 +572,8 @@ def plan(manifest):
             if (c["id"], t["id"]) in chosen
         ]
     m["sampling"] = sampling
+    if "experiment" in m:
+        validate_role(m, m["experiment"]["role"])
     m["case_sha256"] = digest(cases)
     expected_weights = {
         **BENCHMARK_WEIGHTS,
@@ -509,5 +595,5 @@ def plan(manifest):
             adapter = get_adapter(case["benchmark"])
             if adapter.preflight is not None:
                 adapter.preflight(case, m, cache)
-    m["plan_sha256"] = digest({k: v for k, v in m.items() if k != "plan_sha256"})
+    m["plan_sha256"] = plan_digest(m)
     return m

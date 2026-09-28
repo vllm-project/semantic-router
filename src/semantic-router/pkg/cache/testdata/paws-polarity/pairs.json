@@ -1,0 +1,107 @@
+{
+  "dataset": "google-research-datasets/paws",
+  "config": "labeled_final",
+  "split": "test",
+  "hf_revision": "161ece9501cf0a11f3e48bd356eaa82de46d6a09",
+  "primary_repository_revision": "02b29f3af1143620d1b7f352247e65c0bdd2ec18",
+  "primary_repository": "https://github.com/google-research-datasets/paws",
+  "license_url": "https://github.com/google-research-datasets/paws/blob/02b29f3af1143620d1b7f352247e65c0bdd2ec18/LICENSE",
+  "attribution": "PAWS by Yuan Zhang, Jason Baldridge, Luheng He (NAACL2019); Google LLC as data source. Preserve upstream LICENSE alongside any checked-in subset and clearly mark modifications.",
+  "fixtures": [
+    {
+      "name": "paws-test-39-original-paraphrase",
+      "source_id": 39,
+      "kind": "original_human_labeled_paraphrase",
+      "upstream_label": 1,
+      "label_origin": "PAWS original human label; texts unchanged",
+      "sentence1": "He was born in New York City in East Broadway on October 23 , 1806 .",
+      "sentence2": "He was born on 23 October 1806 in New York , East Broadway .",
+      "want_lexical_mismatch": false
+    },
+    {
+      "name": "paws-test-74-original-paraphrase",
+      "source_id": 74,
+      "kind": "original_human_labeled_paraphrase",
+      "upstream_label": 1,
+      "label_origin": "PAWS original human label; texts unchanged",
+      "sentence1": "A new South stand was built in 2005 and 2006 to make the stadium into a complete bowl .",
+      "sentence2": "In 2005 and 2006 , a new southern stand was built to make the stadium a complete bowl .",
+      "want_lexical_mismatch": false
+    },
+    {
+      "name": "paws-test-1437-original-paraphrase",
+      "source_id": 1437,
+      "kind": "original_human_labeled_paraphrase",
+      "upstream_label": 1,
+      "label_origin": "PAWS original human label; texts unchanged",
+      "sentence1": "The two above controls are active : they are either boolean or not .",
+      "sentence2": "The above two controls are active : they are either boolean or not .",
+      "want_lexical_mismatch": false
+    },
+    {
+      "name": "paws-test-39-derived-explicit_not",
+      "source_id": 39,
+      "kind": "locally_derived_polarity_negative",
+      "upstream_label": null,
+      "label_origin": "Maintainer-reviewed derivation, NOT an original PAWS pair or human label",
+      "derivation": {
+        "base": "original sentence1",
+        "replace_once": [
+          " was born",
+          " was not born"
+        ]
+      },
+      "sentence1": "He was born in New York City in East Broadway on October 23 , 1806 .",
+      "sentence2": "He was not born in New York City in East Broadway on October 23 , 1806 .",
+      "want_lexical_mismatch": true
+    },
+    {
+      "name": "paws-test-74-derived-explicit_not",
+      "source_id": 74,
+      "kind": "locally_derived_polarity_negative",
+      "upstream_label": null,
+      "label_origin": "Maintainer-reviewed derivation, NOT an original PAWS pair or human label",
+      "derivation": {
+        "base": "original sentence1",
+        "replace_once": [
+          " was built",
+          " was not built"
+        ]
+      },
+      "sentence1": "A new South stand was built in 2005 and 2006 to make the stadium into a complete bowl .",
+      "sentence2": "A new South stand was not built in 2005 and 2006 to make the stadium into a complete bowl .",
+      "want_lexical_mismatch": true
+    },
+    {
+      "name": "paws-test-1437-derived-antonym_active_inactive",
+      "source_id": 1437,
+      "kind": "locally_derived_polarity_negative",
+      "upstream_label": null,
+      "label_origin": "Maintainer-reviewed derivation, NOT an original PAWS pair or human label",
+      "derivation": {
+        "base": "original sentence1",
+        "replace_once": [
+          " are active",
+          " are inactive"
+        ]
+      },
+      "sentence1": "The two above controls are active : they are either boolean or not .",
+      "sentence2": "The two above controls are inactive : they are either boolean or not .",
+      "want_lexical_mismatch": true
+    }
+  ],
+  "selected_page_provenance": [
+    {
+      "offset": 0,
+      "url": "https://datasets-server.huggingface.co/rows?dataset=google-research-datasets%2Fpaws&config=labeled_final&split=test&offset=0&length=100",
+      "revision": "161ece9501cf0a11f3e48bd356eaa82de46d6a09",
+      "sha256": "93802fa09f07e530d2ba22d7432445baac8cf5f11c203abf49918769bc5689e2"
+    },
+    {
+      "offset": 1400,
+      "url": "https://datasets-server.huggingface.co/rows?dataset=google-research-datasets%2Fpaws&config=labeled_final&split=test&offset=1400&length=100",
+      "revision": "161ece9501cf0a11f3e48bd356eaa82de46d6a09",
+      "sha256": "017b6b7ce5cdb4508fb01301f90723afbbac26888dcc6ca71f516d1f1e664737"
+    }
+  ]
+}

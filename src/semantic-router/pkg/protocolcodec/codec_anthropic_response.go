@@ -8,17 +8,19 @@ import (
 )
 
 type anthropicResponseWire struct {
-	ID           string              `json:"id"`
-	Type         string              `json:"type"`
-	Role         string              `json:"role"`
-	Model        string              `json:"model"`
-	Content      json.RawMessage     `json:"content"`
-	StopReason   *string             `json:"stop_reason"`
-	StopSequence *string             `json:"stop_sequence"`
-	Usage        *anthropicUsageWire `json:"usage"`
-	Error        *anthropicErrorWire `json:"error,omitempty"`
-	Container    json.RawMessage     `json:"container"`
-	StopDetails  json.RawMessage     `json:"stop_details"`
+	ID                string              `json:"id"`
+	Type              string              `json:"type"`
+	Role              string              `json:"role"`
+	Model             string              `json:"model"`
+	Content           json.RawMessage     `json:"content"`
+	StopReason        *string             `json:"stop_reason"`
+	StopSequence      *string             `json:"stop_sequence"`
+	Usage             *anthropicUsageWire `json:"usage"`
+	Error             *anthropicErrorWire `json:"error,omitempty"`
+	Container         json.RawMessage     `json:"container"`
+	StopDetails       json.RawMessage     `json:"stop_details"`
+	Diagnostics       json.RawMessage     `json:"diagnostics,omitempty"`
+	ContextManagement json.RawMessage     `json:"context_management,omitempty"`
 }
 
 type anthropicUsageWire struct {
@@ -31,6 +33,7 @@ type anthropicUsageWire struct {
 	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
 	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
 	ServiceTier              string                          `json:"service_tier"`
+	Iterations               []json.RawMessage               `json:"iterations,omitempty"`
 }
 
 type anthropicCacheCreationUsageWire struct {
@@ -66,7 +69,11 @@ func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Pol
 	if err := validateAnthropicResponseResource(wire); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	diagnostics := anthropicResponseMetadataDiagnostics(wire, policy)
+	diagnostics, err := anthropicStopSequenceDiagnostics(body, "", policy)
+	if err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
+	diagnostics = appendDiagnostics(diagnostics, anthropicResponseMetadataDiagnostics(wire, policy), policy.Limits.Diagnostics)
 	response, err := decodeAnthropicResponseResource(wire, policy)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
@@ -82,6 +89,12 @@ func anthropicResponseMetadataDiagnostics(wire anthropicResponseWire, policy llm
 	}
 	if len(wire.StopDetails) > 0 && !bytes.Equal(bytes.TrimSpace(wire.StopDetails), []byte("null")) {
 		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "stop_details", "structured refusal detail has no neutral representation")
+	}
+	if len(wire.Diagnostics) > 0 && !bytes.Equal(bytes.TrimSpace(wire.Diagnostics), []byte("null")) {
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "diagnostics", "prompt-cache miss diagnostics have no neutral representation")
+	}
+	if len(wire.ContextManagement) > 0 && !bytes.Equal(bytes.TrimSpace(wire.ContextManagement), []byte("null")) {
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "context_management", "applied context edits have no protocol-neutral representation")
 	}
 	return diagnostics
 }
@@ -126,6 +139,7 @@ func appendAnthropicResponseUsage(
 		"usage.server_tool_use": usage.ServerToolUse.WebFetchRequests != 0 ||
 			usage.ServerToolUse.WebSearchRequests != 0,
 		"usage.service_tier": usage.ServiceTier != "",
+		"usage.iterations":   len(usage.Iterations) > 0,
 	}, "provider usage metadata has no neutral accounting bucket")
 }
 
@@ -280,6 +294,11 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
+	// Snowflake declares the Anthropic Messages operation as well, and its
+	// transport failure envelope is the same flat vendor object on both paths.
+	if policy.ResponseVendor == llmprotocol.ResponseVendorSnowflake {
+		return decodeSnowflakeTransportError(body, policy, llmprotocol.AnthropicMessagesV1)
+	}
 	var wire anthropicTransportErrorWire
 	if err := decodeProviderWire(body, &wire, policy); err != nil {
 		return llmprotocol.TransportError{}, nil, err

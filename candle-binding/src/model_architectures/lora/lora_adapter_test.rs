@@ -75,7 +75,7 @@ fn test_lora_config_various_ranks(#[case] rank: usize) {
 
 #[rstest]
 fn test_lora_init_method_variants() {
-    let methods = vec![
+    let methods = [
         LoRAInitMethod::Kaiming,
         LoRAInitMethod::Xavier,
         LoRAInitMethod::Normal {
@@ -340,7 +340,7 @@ fn test_lora_config_deserialization() {
 
 #[rstest]
 fn test_lora_init_method_serialization() {
-    let methods = vec![
+    let methods = [
         LoRAInitMethod::Kaiming,
         LoRAInitMethod::Xavier,
         LoRAInitMethod::Normal {

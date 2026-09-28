@@ -99,8 +99,15 @@ type Request struct {
 
 // Response contains the output from looper execution
 type Response struct {
-	// Body is the response body (JSON for non-streaming, SSE for streaming)
+	// Body preserves the direct Go caller's JSON/SSE view, including optional
+	// router traces. HTTP callers must use ProtocolBody and RouterExtensions
+	// through the strict transport boundary, never forward this view directly.
 	Body []byte
+
+	// These snapshots are written only by router emitters, before they attach
+	// optional evidence to Body. They cannot be populated from provider JSON.
+	protocolBody     []byte
+	routerExtensions []ResponseExtension
 
 	// BufferedBody is the completed Chat result behind a locally synthesized
 	// stream. It preserves alternative choices for semantic accounting without

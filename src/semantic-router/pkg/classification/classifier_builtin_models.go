@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -49,14 +48,6 @@ func (c *Classifier) IsJailbreakEnabled() bool {
 	if c.Config.PromptGuard.Backend != nil {
 		return c.Config.PromptGuard.JailbreakMappingPath != "" && c.jailbreakInference != nil
 	}
-	if c.Config.PromptGuard.Protocol != "" {
-		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
-		hasExternalConfig := externalCfg != nil &&
-			externalCfg.ModelEndpoint.Address != "" &&
-			externalCfg.ModelName != ""
-
-		return c.Config.PromptGuard.JailbreakMappingPath != "" && hasExternalConfig
-	}
 
 	return c.Config.PromptGuard.ModelID != "" && c.Config.PromptGuard.JailbreakMappingPath != ""
 }
@@ -72,14 +63,6 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 	}
 
 	if c.Config.PromptGuard.Backend != nil {
-		return nil
-	}
-	if c.Config.PromptGuard.Protocol != "" {
-		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
-		logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
-			"mode":      c.Config.PromptGuard.Protocol,
-			"model_ref": externalCfg.ModelName,
-		})
 		return nil
 	}
 

@@ -91,11 +91,11 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: pip
-    directory: /tools/test/services/mock-vllm
+    directory: /tools/test/services/provider-mocker
     schedule:
       interval: weekly
     open-pull-requests-limit: 0
     groups:
-      mock-vllm-python-security:
+      provider-mocker-python-security:
         applies-to: security-updates
         patterns: ["*"]

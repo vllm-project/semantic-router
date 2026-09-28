@@ -131,6 +131,7 @@ func validateJailbreakWindowScores(scores []float32, classes int) error {
 
 func (c *windowedJailbreakBackend) riskiestWindow(windows []tasks.LabelDistributionWindow) (SequenceClassificationResult, error) {
 	var selected []float32
+	var at tasks.LabelDistributionWindow
 	best := float32(-1)
 	for _, window := range windows {
 		if err := validateJailbreakWindowScores(window.Probabilities, len(c.labels)); err != nil {
@@ -141,15 +142,20 @@ func (c *windowedJailbreakBackend) riskiestWindow(windows []tasks.LabelDistribut
 			risk += window.Probabilities[index]
 		}
 		if risk > best {
-			best, selected = risk, window.Probabilities
+			best, selected, at = risk, window.Probabilities, window
 		}
 	}
 	if selected == nil {
 		return SequenceClassificationResult{}, fmt.Errorf("windowed jailbreak model returned no windows")
 	}
 	// Keep a real distribution: per-class maxima would mix different windows
-	// and invent probability mass when a policy combines positive labels.
-	return SequenceClassificationResult{Probabilities: append([]float32(nil), selected...)}, nil
+	// and invent probability mass when a policy combines positive labels. The
+	// window the distribution came from travels with it, since one window of
+	// many decided the score a threshold then reads.
+	return SequenceClassificationResult{
+		Probabilities: append([]float32(nil), selected...),
+		Window:        &tasks.ScanWindow{Start: at.Start, End: at.End, Count: len(windows)},
+	}, nil
 }
 
 func (c *windowedJailbreakBackend) Close() error {

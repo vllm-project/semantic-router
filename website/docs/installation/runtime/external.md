@@ -78,7 +78,8 @@ curl -fsS 'http://localhost:8080/api/v1/routing/preview?trace=true' \
 
 Replace `auto` with your public entrypoint name if different. Check
 `signal_errors` as well as the decision. Preview evaluates signals without
-calling a generation backend.
+generating an answer. Native output selection may call the backend's render
+endpoint to check capacity.
 
 ## Avoid common integration errors
 

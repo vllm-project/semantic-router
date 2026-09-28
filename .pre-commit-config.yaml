@@ -6,10 +6,28 @@ repos:
     rev: v4.2.0
     hooks:
       - id: trailing-whitespace
-        files: \.(go|rs|py|js)$
+        files: \.(go|rs|js)$
       - id: end-of-file-fixer
-        files: \.(go|rs|py|js)$
+        files: \.(go|rs|js)$
         exclude: ^website/build/
+      - id: trailing-whitespace
+        name: check Python trailing whitespace
+        entry: python tools/agent/scripts/check_python_whitespace.py trailing-whitespace
+        files: \.py$
+      - id: end-of-file-fixer
+        name: check Python end of files
+        entry: python tools/agent/scripts/check_python_whitespace.py end-of-file-fixer
+        files: \.py$
+        exclude: ^website/build/
+      - id: trailing-whitespace
+        alias: python-format
+        files: \.py$
+        stages: [manual]
+      - id: end-of-file-fixer
+        alias: python-format
+        files: \.py$
+        exclude: ^website/build/
+        stages: [manual]
       - id: check-added-large-files
         args: ["--maxkb=500"]
         files: \.(go|rs|py|js)$
@@ -137,11 +155,17 @@ repos:
         pass_filenames: false
 
   # Python specific hooks
-  # Using only Black for Python formatting (simpler, no conflicts)
   - repo: https://github.com/psf/black
     rev: 25.1.0
     hooks:
       - id: black
+        args: [--check]
+        language_version: python3
+        files: \.py$
+        exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site-packages/)
+      - id: black
+        alias: python-format
+        stages: [manual]
         language_version: python3
         files: \.py$
         exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site-packages/)

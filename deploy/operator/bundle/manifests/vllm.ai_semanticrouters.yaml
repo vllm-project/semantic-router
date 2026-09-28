@@ -1913,14 +1913,6 @@ spec:
                         items:
                           type: string
                         type: array
-                      protocol:
-                        description: |-
-                          Protocol is retired and rejected at admission. Configure Backend with
-                          the protocol, contract and explicit external model name instead.
-                        enum:
-                        - http_chat
-                        - http_classify
-                        type: string
                       threshold:
                         default: "0.5"
                         description: Jailbreak detection threshold (0.0-1.0). Stored
@@ -1964,13 +1956,11 @@ spec:
                     x-kubernetes-validations:
                     - message: max_sequence_length requires the local mmbert32k variant
                       rule: '!has(self.max_sequence_length) || self.max_sequence_length
-                        == 0 || (!has(self.backend) && (!has(self.protocol) || size(self.protocol)
-                        == 0) && (!has(self.variant) || size(self.variant) == 0 ||
-                        self.variant == ''mmbert32k''))'
-                    - message: window requires the local mmbert32k variant
-                      rule: '!has(self.window) || (!has(self.backend) && (!has(self.protocol)
-                        || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant)
+                        == 0 || (!has(self.backend) && (!has(self.variant) || size(self.variant)
                         == 0 || self.variant == ''mmbert32k''))'
+                    - message: window requires the local mmbert32k variant
+                      rule: '!has(self.window) || (!has(self.backend) && (!has(self.variant)
+                        || size(self.variant) == 0 || self.variant == ''mmbert32k''))'
                     - message: window.size must not exceed max_sequence_length (512
                         when omitted or zero)
                       rule: '!has(self.window) || self.window.size <= (has(self.max_sequence_length)
@@ -3298,6 +3288,32 @@ spec:
                     enum:
                     - priority
                     type: string
+                  streamed_body:
+                    description: |-
+                      StreamedBody enables streamed request body handling. Mirrors
+                      global.router.streamed_body; the gateway must send bodies to ExtProc in
+                      STREAMED or FullDuplexStreamed mode for it to take effect.
+                    properties:
+                      enabled:
+                        description: Enabled accumulates request body chunks before
+                          routing at end-of-stream.
+                        type: boolean
+                      max_bytes:
+                        description: |-
+                          MaxBytes caps the accumulated body size. A larger body is rejected and the
+                          ExtProc stream ends; the downstream response follows the gateway's ExtProc
+                          failure policy. Zero disables the limit.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      timeout_sec:
+                        description: |-
+                          TimeoutSec caps how long body accumulation may take. A slower body is
+                          rejected and the ExtProc stream ends; the downstream response follows the
+                          gateway's ExtProc failure policy. Zero disables the limit.
+                        minimum: 0
+                        type: integer
+                    type: object
                   tools:
                     description: Tools configuration
                     properties:

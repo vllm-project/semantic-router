@@ -28,11 +28,20 @@ type ModelDiagnosticWindow struct {
 	Overlap int `json:"overlap"`
 }
 type ModelDiagnosticEmbeddingCapability struct {
-	Dimension     int      `json:"dimension"`
-	Layer         int      `json:"layer"`
-	Pooling       string   `json:"pooling"`
-	Normalization string   `json:"normalization"`
-	Modalities    []string `json:"modalities"`
+	Dimension     int                             `json:"dimension"`
+	Layer         int                             `json:"layer"`
+	Pooling       string                          `json:"pooling"`
+	Normalization string                          `json:"normalization"`
+	Modalities    []string                        `json:"modalities"`
+	Dimensions    []int                           `json:"dimensions,omitempty"`
+	Audio         *ModelDiagnosticAudioCapability `json:"audio,omitempty"`
+}
+type ModelDiagnosticAudioCapability struct {
+	SampleRates   []int  `json:"sample_rates,omitempty"`
+	MaxSampleRate int    `json:"max_sample_rate"`
+	MaxSeconds    int    `json:"max_seconds"`
+	MaxChannels   int    `json:"max_channels"`
+	Layout        string `json:"layout"`
 }
 type ModelDiagnosticBinding struct {
 	Recipe     string                              `json:"recipe"`
@@ -123,7 +132,10 @@ func diagnosticBinding(info binding.PreparedBinding) ModelDiagnosticBinding {
 	}
 	if c.Embedding != nil {
 		e := c.Embedding
-		out.Embedding = &ModelDiagnosticEmbeddingCapability{Dimension: e.Dimension, Layer: e.Layer, Pooling: e.Pooling, Normalization: e.Normalization, Modalities: e.Modalities}
+		out.Embedding = &ModelDiagnosticEmbeddingCapability{Dimension: e.Dimension, Layer: e.Layer, Pooling: e.Pooling, Normalization: e.Normalization, Modalities: e.Modalities, Dimensions: e.AvailableDimensions}
+		if a := e.Audio; a != nil {
+			out.Embedding.Audio = &ModelDiagnosticAudioCapability{SampleRates: a.SampleRates, MaxSampleRate: a.MaxSampleRate, MaxSeconds: a.MaxSeconds, MaxChannels: a.MaxChannels, Layout: a.Layout}
+		}
 	}
 	return out
 }

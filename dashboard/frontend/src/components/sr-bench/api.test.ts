@@ -29,7 +29,7 @@ describe('sr-bench evidence read deadlines', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it.each(['compose', 'plan', 'comparison'])(
+  it.each(['compose', 'plan', 'comparison', 'replay', 'candidate'])(
     'bounds a stalled %s review without retrying or dispatching generation',
     async (operation) => {
       const fetch = vi.fn(
@@ -42,17 +42,33 @@ describe('sr-bench evidence read deadlines', () => {
       )
       vi.stubGlobal('fetch', fetch)
       const outcome = expect(
-        operation === 'compose'
-          ? benchApi.composeDatasets(['a'.repeat(64)], ['mmlu-pro'])
-          : operation === 'comparison'
-            ? benchApi.compare('baseline', 'candidate')
-            : benchApi.plan({} as Manifest),
+        operation === 'candidate'
+          ? benchApi.candidatePlan('baseline', {
+              target_ids: ['balance'],
+              mode: 'live',
+              name: 'Candidate',
+            })
+          : operation === 'replay'
+            ? benchApi.replay({
+                baseline_run_id: 'baseline',
+                preview_run_id: 'preview',
+                idempotency_key: 'same-key',
+              })
+            : operation === 'compose'
+              ? benchApi.composeDatasets(['a'.repeat(64)], ['mmlu-pro'])
+              : operation === 'replay'
+                ? 'Reconcile the saved submission'
+                : operation === 'comparison'
+                  ? benchApi.compare('baseline', 'candidate')
+                  : benchApi.plan({} as Manifest),
       ).rejects.toMatchObject({
         status: 408,
         message: expect.stringContaining(
-          operation === 'comparison'
-            ? 'timed out after 30 seconds'
-            : 'No model generation was requested',
+          operation === 'replay'
+            ? 'Reconcile the saved submission'
+            : operation === 'comparison'
+              ? 'timed out after 30 seconds'
+              : 'No model generation was requested',
         ),
       })
       await vi.advanceTimersByTimeAsync(30000)
@@ -84,21 +100,25 @@ describe('sr-bench evidence read deadlines', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('does not apply the evidence timeout or automatic retries to mutations', async () => {
-    let finish!: (response: Response) => void
+  it('bounds mutation responses without retrying or claiming the mutation was stopped', async () => {
     const fetch = vi.fn(
-      () =>
-        new Promise<Response>((resolve) => {
-          finish = resolve
-        }),
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) =>
+          init.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          ),
+        ),
     )
     vi.stubGlobal('fetch', fetch)
-    const result = benchApi.cancel('run-existing')
-    await vi.advanceTimersByTimeAsync(60000)
+    const outcome = expect(benchApi.cancel('run-existing')).rejects.toMatchObject({
+      status: 408,
+      dispatchStarted: undefined,
+      message: expect.stringContaining('outcome is unknown'),
+    })
+    await vi.advanceTimersByTimeAsync(30000)
+    await outcome
     expect(fetch).toHaveBeenCalledTimes(1)
     expect(vi.getTimerCount()).toBe(0)
-    finish(new Response(JSON.stringify({ id: 'run-existing', status: 'cancelled' })))
-    await expect(result).resolves.toMatchObject({ status: 'cancelled' })
   })
 
   it('marks a lost initial submission response ambiguous without claiming dispatch was stopped', async () => {

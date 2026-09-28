@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,6 +12,9 @@ import (
 	"strings"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
 const (
@@ -49,6 +53,26 @@ func (s *ClassificationAPIServer) acquireConfigMutationGuard(
 		guard.Release()
 		s.writeErrorResponse(w, http.StatusConflict, "MANAGED_RECIPE_ACTIVE", "Router config mutations are disabled while a managed Recipe package is active or activating.")
 		return nil, false
+	}
+	if s.configMutationReadOnly() {
+		guard.Release()
+		s.writeErrorResponse(w, http.StatusForbidden, "CONFIG_READ_ONLY", "This deployment uses read-only configuration. Update the configuration source and reload or roll out the deployment as appropriate.")
+		return nil, false
+	}
+	if _, declared := configwriter.ConfigMapTargetFromEnv(); declared && s.configPath != "" {
+		paths := resolveConfigPersistencePaths(s.configPath)
+		mounted, mountErr := os.ReadFile(paths.sourcePath)
+		persisted, readErr := readPersistedSourceConfig(paths.sourcePath)
+		if mountErr != nil || readErr != nil {
+			guard.Release()
+			s.writeErrorResponse(w, http.StatusServiceUnavailable, "CONFIG_SOURCE_UNAVAILABLE", "Unable to compare the mounted config with the ConfigMap before mutation.")
+			return nil, false
+		}
+		if !bytes.Equal(mounted, persisted) {
+			guard.Release()
+			s.writeErrorResponse(w, http.StatusConflict, "CONFIG_ROLLOUT_REQUIRED", "The ConfigMap has a saved change that this pod has not loaded. Roll out the deployment before another mutation.")
+			return nil, false
+		}
 	}
 	return guard, true
 }
@@ -182,4 +206,38 @@ func recipeManagedStateExistsAt(storeFD int) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// configMutationReadOnly checks capability before any backup or side-effecting
+// write. Opening without O_TRUNC does not change the existing configuration.
+func (s *ClassificationAPIServer) configMutationReadOnly() bool {
+	if cfg := s.currentConfig(); cfg != nil && cfg.ConfigSource == config.ConfigSourceKubernetes {
+		return true
+	}
+	if _, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		// A declared ConfigMap target persists writes through the Kubernetes API.
+		// The mounted file is intentionally read-only and remains stale until rollout.
+		return false
+	}
+	if s.configPath == "" {
+		return false
+	}
+	paths := resolveConfigPersistencePaths(s.configPath)
+	for _, path := range []string{paths.sourcePath, paths.runtimePath} {
+		if path == "" {
+			continue
+		}
+		file, err := os.OpenFile(path, os.O_WRONLY, 0)
+		if err == nil {
+			_ = file.Close()
+		}
+		if errors.Is(err, unix.EROFS) || errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) {
+			return true
+		}
+		err = unix.Access(filepath.Dir(path), unix.W_OK)
+		if errors.Is(err, unix.EROFS) || errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) {
+			return true
+		}
+	}
+	return false
 }

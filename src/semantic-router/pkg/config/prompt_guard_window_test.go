@@ -12,7 +12,6 @@ func TestPromptGuardWindowContract(t *testing.T) {
 	}
 	for _, mutate := range []func(*PromptGuardConfig){
 		func(c *PromptGuardConfig) { c.Backend = &RemoteClassifierBackend{}; c.Variant = "" },
-		func(c *PromptGuardConfig) { c.Protocol = PromptGuardProtocolHTTPChat; c.Variant = "" },
 		func(c *PromptGuardConfig) { c.Variant = PromptGuardVariantCandle },
 		func(c *PromptGuardConfig) { c.Window = &SequenceHeadWindowConfig{Size: 0} },
 		func(c *PromptGuardConfig) { c.Window = &SequenceHeadWindowConfig{Size: 128, Overlap: 128} },

@@ -102,8 +102,22 @@ dataset licenses before publishing.
 python server.py --host 127.0.0.1 --port 8686
 ```
 
-Do not expose it to an untrusted network; a training request can consume
+The service binds to `127.0.0.1` by default. The shipped Kubernetes and OpenShift
+sidecars keep this address and use in-container health probes, so only the
+co-located Dashboard can reach the API through their shared network namespace.
+For Docker, join the Dashboard container network namespace with
+`--network container:dashboard`; publishing port 8686 does not make a loopback
+listener reachable.
+
+`--host` or `ML_SERVICE_HOST` can override the address for an operator-managed
+remote deployment. Such a deployment requires authenticated workload transport
+and a restrictive network policy. The service itself has no workload
+authentication; do not publish it directly. A training request can consume
 substantial compute and write artifacts.
+
+This loopback boundary does not replace server-owned job/artifact handles,
+private shared storage, or bounded job lifecycle controls. Those remain separate
+requirements before enabling this pipeline for untrusted users.
 
 ## Validate Before Deployment
 

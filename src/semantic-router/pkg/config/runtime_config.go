@@ -1,5 +1,7 @@
 package config
 
+import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+
 // LooperConfig defines configuration for multi-model execution.
 type LooperConfig struct {
 	Endpoint           string              `yaml:"endpoint"`
@@ -23,9 +25,17 @@ func (l *LooperConfig) GetTimeout() int {
 	return l.TimeoutSeconds
 }
 
+// grpcEnvelopeHeadroomBytes leaves room for the ExtProc message fields that
+// travel with a request body.
+const grpcEnvelopeHeadroomBytes = 1 << 20
+
+// defaultGRPCMaxMsgSize admits every body the protocol codec accepts, because
+// Envoy sends a buffered request body to ExtProc as a single message.
+var defaultGRPCMaxMsgSize = llmprotocol.DefaultPolicy().Limits.BodyBytes + grpcEnvelopeHeadroomBytes
+
 func (l *LooperConfig) GetGRPCMaxMsgSize() int {
 	if l.GRPCMaxMsgSizeMB <= 0 {
-		return 4 * 1024 * 1024
+		return defaultGRPCMaxMsgSize
 	}
 	return l.GRPCMaxMsgSizeMB * 1024 * 1024
 }
@@ -208,6 +218,9 @@ type QdrantConfig struct {
 	CollectionName string `yaml:"collection_name,omitempty"`
 }
 
+// DefaultMemorySimilarityThreshold applies when no memory similarity threshold is configured.
+const DefaultMemorySimilarityThreshold float32 = 0.70
+
 type MemoryConfig struct {
 	Enabled                    bool                    `yaml:"enabled,omitempty"`
 	Backend                    string                  `yaml:"backend,omitempty"`
@@ -225,6 +238,15 @@ type MemoryConfig struct {
 	HybridMode                 string                  `yaml:"hybrid_mode,omitempty"`
 	AdaptiveThreshold          bool                    `yaml:"adaptive_threshold,omitempty"`
 	Reflection                 MemoryReflectionConfig  `yaml:"reflection,omitempty"`
+	Persistence                MemoryPersistenceConfig `yaml:"persistence,omitempty"`
+}
+
+// MemoryPersistenceConfig bounds asynchronous response memory writes.
+type MemoryPersistenceConfig struct {
+	TimeoutSeconds       int `yaml:"timeout_seconds,omitempty"`
+	Concurrency          int `yaml:"concurrency,omitempty"`
+	Queue                int `yaml:"queue,omitempty"`
+	ShutdownGraceSeconds int `yaml:"shutdown_grace_seconds,omitempty"`
 }
 
 // MemoryRedisCacheConfig configures an optional Redis hot cache in front of Milvus retrieval.

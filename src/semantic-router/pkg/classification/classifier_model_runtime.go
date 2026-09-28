@@ -79,14 +79,29 @@ func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract str
 	if len(maxTokens) > 0 {
 		limit = maxTokens[0]
 	}
+	overflow := "truncate"
+	if model := config.GetModelByPath(artifact); model != nil && model.DefaultAdapter != "" {
+		adapter = model.DefaultAdapter
+		// Only a declared task adapter changes implicit execution policy. The
+		// historical classifier defaults continue to use their 512-token policy.
+		if adapter == "vela_halu" {
+			if limit == 0 {
+				limit = model.MaxContextLength
+			}
+			overflow = "reject"
+		}
+	}
 	provider, device := config.DefaultModelExecution(useCPU)
 	if name == "domain_classifier" {
 		provider, device = config.DefaultCategoryExecution(useCPU)
 	}
+	if model := config.GetModelByPath(artifact); model != nil && model.DefaultProvider != "" {
+		provider, device = model.DefaultProvider, model.DefaultDevice
+	}
 	return config.ResolvedModelBinding{
 		Recipe: m.recipe, Name: name,
 		Binding:    config.ModelBinding{Deployment: name, Adapter: adapter, Contract: contract},
-		Deployment: config.ModelDeployment{Artifact: config.ResolveModelPath(artifact), Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{MaxTokens: limit, Overflow: "truncate"}},
+		Deployment: config.ModelDeployment{Artifact: config.ResolveModelPath(artifact), Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{MaxTokens: limit, Overflow: overflow}},
 		Admission:  m.cfg.ModelAdmission[name],
 	}
 }

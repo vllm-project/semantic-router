@@ -29,7 +29,7 @@ func TestVelaDefaultsUsePublishedPathsWithoutChangingInputPolicies(t *testing.T)
 	if cfg.CategoryModel.MaxSequenceLength != 0 || cfg.PIIModel.MaxSequenceLength != 0 || cfg.HallucinationMitigation.FactCheckModel.MaxSequenceLength != 0 || cfg.FeedbackDetector.MaxSequenceLength != 0 {
 		t.Fatal("model migration changed the existing zero/512 input policy")
 	}
-	if cfg.EmbeddingConfig.FullContext || cfg.EmbeddingConfig.TargetLayer != 22 || cfg.EmbeddingConfig.TargetDimension != 768 {
+	if cfg.EmbeddingConfig.FullContext || cfg.EmbeddingConfig.TargetLayer != 22 || cfg.EmbeddingConfig.TargetDimension != 0 {
 		t.Fatal("embedding input/representation defaults changed")
 	}
 	if cfg.HallucinationMitigation.FactCheckModel.Threshold != float32(.95) {

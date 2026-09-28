@@ -18,7 +18,8 @@ func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 		t.Fatalf("plugin feature recipe must use only its explicit keyword signals: %#v", signals)
 	}
 	names := []string{
-		"plugin_request_mutations", "tool_selection_add_weather", "tool_selection_add_calc",
+		"plugin_request_mutations", "tools_passthrough", "tools_filtered", "tools_none",
+		"tool_selection_add_weather", "tool_selection_add_calc",
 		"tool_selection_filter", "tool_selection_filter_threshold", "tool_selection_add_topk_one",
 		"tool_selection_with_system_prompt",
 	}
@@ -70,9 +71,31 @@ func TestProtocolAndCacheRecipesReachTheirOwnedBoundaries(t *testing.T) {
 	}
 }
 
+func TestExactCacheRecipeKeepsMultilingualNegationOnAnExactOnlyPolicy(t *testing.T) {
+	config := profileConfig(t)
+	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-cache-exact"), "routing")
+	if routing["signals"] != nil || len(routing["decisions"].([]any)) != 1 {
+		t.Fatal("exact-cache fixture must have one unconditional decision")
+	}
+	decision := profileNamed(t, routing["decisions"], "e2e_cache_exact_decision")
+	if !reflect.DeepEqual(decision["rules"], map[string]any{"operator": "AND"}) {
+		t.Fatal("exact-cache fixture must select without classifier signals")
+	}
+	plugins := decision["plugins"].([]any)
+	if len(plugins) != 1 {
+		t.Fatalf("exact-cache fixture plugins = %d, want one", len(plugins))
+	}
+	plugin := plugins[0].(map[string]any)
+	configuration := profileMap(t, plugin, "configuration")
+	if plugin["type"] != "response_cache" || configuration["enabled"] != true ||
+		configuration["mode"] != "exact" || configuration["scope"] != "global" {
+		t.Fatalf("multilingual negation fixture must exercise enabled exact cache: %#v", plugin)
+	}
+}
+
 func TestFeatureEntrypointsPreserveDefaultSecurityPrecedence(t *testing.T) {
 	config := profileConfig(t)
-	for _, recipe := range []string{"e2e-protocol", "e2e-plugins", "e2e-cache", "e2e-domain", "e2e-fallback"} {
+	for _, recipe := range []string{"e2e-protocol", "e2e-plugins", "e2e-cache", "e2e-cache-exact", "e2e-domain", "e2e-fallback"} {
 		found := false
 		for _, raw := range config["entrypoints"].([]any) {
 			entrypoint := raw.(map[string]any)

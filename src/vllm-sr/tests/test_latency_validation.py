@@ -2,10 +2,12 @@
 
 import os
 import tempfile
+
+import pytest
 import yaml
 
 from cli.config_migration import migrate_config_data
-from cli.parser import parse_user_config
+from cli.parser import ConfigParseError, parse_user_config
 from cli.validator import validate_user_config
 
 
@@ -68,12 +70,10 @@ providers:
   default_model: "test_model"
 """
 
-    config = _parse_config(config_yaml)
-    errors = validate_user_config(config)
-
-    assert any(
-        "uses unsupported signal type 'latency'" in str(error) for error in errors
-    )
+    with pytest.raises(
+        ConfigParseError, match=r"conditions.*type: 'latency' is not one of"
+    ):
+        _parse_config(config_yaml)
 
 
 def test_validate_accepts_latency_aware_configuration():

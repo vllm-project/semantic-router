@@ -258,7 +258,7 @@ func (c *Classifier) hasLongContextClassifier(signalType string) bool {
 	case config.SignalTypePII:
 		return c.Config.PIIModel.Backend == nil && c.Config.PIIModel.UseMmBERT32K && c.Config.PIIModel.MaxSequenceLength > 512
 	case config.SignalTypeJailbreak:
-		return c.Config.PromptGuard.Protocol == "" && c.Config.PromptGuard.Variant == config.PromptGuardVariantMmBERT32K && c.Config.PromptGuard.MaxSequenceLength > 512
+		return c.Config.PromptGuard.Backend == nil && c.Config.PromptGuard.Variant == config.PromptGuardVariantMmBERT32K && c.Config.PromptGuard.MaxSequenceLength > 512
 	case config.SignalTypeModality:
 		return c.Config.ModalityDetector.Classifier != nil && c.Config.ModalityDetector.Classifier.MaxSequenceLength > 512
 	}

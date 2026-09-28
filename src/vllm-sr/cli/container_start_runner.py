@@ -16,7 +16,7 @@ from cli.container_services import (
     container_status,
     container_stop_container,
 )
-from cli.sr_bench_runtime import reuse_bench_container
+from cli.sr_bench_runtime import reconcile_bench_container
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -111,13 +111,37 @@ def _run_service_commands(
         except subprocess.CalledProcessError as exc:
             if service_name == "sr-bench" and index == 0:
                 try:
-                    reused = reuse_bench_container(cmd, container_name)
-                except (ValueError, subprocess.TimeoutExpired) as reconciliation_error:
+                    action = reconcile_bench_container(
+                        cmd, container_name, bench_secret_values or {}
+                    )
+                except (ValueError, subprocess.SubprocessError) as reconciliation_error:
                     return (1, "\n".join(stdout_chunks), str(reconciliation_error))
-                if reused:
+                if action == "reuse":
                     log.info(
                         "Reusing the independent sr-bench service; active runs continue"
                     )
+                    continue
+                if action == "replace":
+                    log.info(
+                        "Upgrading the idle sr-bench service; saved evidence is preserved"
+                    )
+                    try:
+                        result = subprocess.run(
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            check=True,
+                            env=creation_env,
+                        )
+                    except subprocess.CalledProcessError as upgrade_error:
+                        return (
+                            upgrade_error.returncode,
+                            upgrade_error.stdout or "",
+                            upgrade_error.stderr or "sr-bench image upgrade failed",
+                        )
+                    on_created()
+                    stdout_chunks.append(result.stdout or "")
+                    stderr_chunks.append(result.stderr or "")
                     continue
             if exc.stdout:
                 stdout_chunks.append(exc.stdout)

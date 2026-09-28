@@ -3,10 +3,12 @@ package memory
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 const (
 	defaultMemoryCacheKeyPrefix = "memory_cache:"
 	defaultMemoryCacheTTL       = 300 // 5 minutes
+	memoryCacheKeyVersion       = "v2:"
 )
 
 // RedisCacheConfig configures the Redis hot cache for memory retrieval.
@@ -30,7 +33,7 @@ type RedisCacheConfig struct {
 }
 
 // RedisCache is a Redis-backed cache for memory retrieval results.
-// Value keys: {keyPrefix}v:{userID}:{queryHash}. Each value key is also recorded
+// Value keys: {keyPrefix}v2:{userID}:{queryHash}. Each value key is also recorded
 // in a per-user index set ({keyPrefix}u:{userID}); the cache is invalidated per
 // user on store/update/forget by deleting that set's members, so invalidation
 // costs O(user's cached queries) instead of an O(keyspace) SCAN.
@@ -58,9 +61,10 @@ func NewRedisCache(ctx context.Context, cfg *RedisCacheConfig) (*RedisCache, err
 		ttlSec = defaultMemoryCacheTTL
 	}
 	opts := &redis.Options{
-		Addr:     cfg.Address,
-		Password: cfg.Password,
-		DB:       cfg.DB,
+		Addr:                  cfg.Address,
+		Password:              cfg.Password,
+		DB:                    cfg.DB,
+		ContextTimeoutEnabled: true,
 	}
 	client := redis.NewClient(opts)
 	if err := client.Ping(ctx).Err(); err != nil {
@@ -75,29 +79,41 @@ func NewRedisCache(ctx context.Context, cfg *RedisCacheConfig) (*RedisCache, err
 	}, nil
 }
 
-// cacheKey builds a value key from userID and a hash of the retrieval options
-// (query, projectID, limit, threshold, types). Value keys live under the "v:"
-// namespace so they can never collide with a per-user index key (see
-// userIndexKey), regardless of userID content.
+// cacheKey hashes a versioned, length-delimited encoding of retrieval options.
+// v2 cannot reuse legacy values that omitted retrieval policy. The user index
+// deliberately stays unchanged so invalidation also removes tracked old keys.
+// Only the cache identity is normalized; the backing store receives the
+// caller's original options and retains its existing retrieval behavior.
 func cacheKey(prefix, userID string, opts RetrieveOptions) string {
-	h := sha256.New()
-	h.Write([]byte(opts.Query))
-	h.Write([]byte("\x00"))
-	h.Write([]byte(opts.ProjectID))
-	h.Write([]byte("\x00"))
-	_, _ = fmt.Fprintf(h, "%d", opts.Limit)
-	h.Write([]byte("\x00"))
-	_, _ = fmt.Fprintf(h, "%.6f", opts.Threshold)
-	for _, t := range opts.Types {
-		h.Write([]byte("\x00"))
-		h.Write([]byte(t))
+	mode := opts.HybridMode
+	if !opts.HybridSearch {
+		mode = "" // Both stores ignore the fusion mode for vector-only retrieval.
+	} else if mode == "" {
+		mode = "weighted" // vectorstore.HybridSearchConfig.applyDefaults
 	}
-	hash := hex.EncodeToString(h.Sum(nil))[:16]
-	return prefix + "v:" + userID + ":" + hash
+	encoded := []byte(memoryCacheKeyVersion)
+	appendField := func(value string) {
+		encoded = binary.AppendUvarint(encoded, uint64(len(value)))
+		encoded = append(encoded, value...)
+	}
+	for _, field := range []string{
+		opts.Query, opts.ProjectID, strconv.Itoa(opts.Limit),
+		strconv.FormatFloat(float64(opts.Threshold), 'g', -1, 32),
+		strconv.FormatBool(opts.HybridSearch), mode, strconv.FormatBool(opts.AdaptiveThreshold),
+		strconv.Itoa(len(opts.Types)),
+	} {
+		appendField(field)
+	}
+	for _, t := range opts.Types {
+		appendField(string(t))
+	}
+	digest := sha256.Sum256(encoded)
+	hash := hex.EncodeToString(digest[:])[:16]
+	return prefix + memoryCacheKeyVersion + userID + ":" + hash
 }
 
 // userIndexKey returns the Redis set key that tracks every cached value key for a
-// user. The "u:" namespace is disjoint from the "v:" value-key namespace, so an
+// user. The "u:" namespace is disjoint from the versioned value-key namespace, so an
 // index key can never collide with a cached value, regardless of userID content.
 func (c *RedisCache) userIndexKey(userID string) string {
 	return c.prefix + "u:" + userID
@@ -155,22 +171,28 @@ func (c *RedisCache) Set(ctx context.Context, opts RetrieveOptions, results []*R
 // It reads the user's index set rather than scanning the keyspace, so cost is
 // proportional to the number of cached queries for that user, not the total
 // number of keys in Redis.
-func (c *RedisCache) InvalidateByUser(ctx context.Context, userID string) {
+// An error means entries may still be readable, so a caller that just committed
+// a write is serving stale results until TTL - hence warn, not debug.
+func (c *RedisCache) InvalidateByUser(ctx context.Context, userID string) error {
 	if c == nil || c.client == nil || userID == "" {
-		return
+		return nil
 	}
 	idxKey := c.userIndexKey(userID)
 	keys, err := c.client.SMembers(ctx, idxKey).Result()
 	if err != nil {
-		logging.Debugf("Memory Redis cache index read error: %v", err)
-		return
+		// Leave the index intact: it is the only record of this user's value keys,
+		// so dropping it would strand them beyond any later invalidation.
+		logging.Warnf("Memory Redis cache index read failed for user %s, entries remain cached until TTL: %v", userID, err)
+		return err
 	}
 	// Delete the tracked value keys together with the index set itself. DEL on a
 	// key that already expired via TTL is a harmless no-op, so stale index members
 	// (entries whose value key already expired) never cause errors.
 	if err := c.client.Del(ctx, append(keys, idxKey)...).Err(); err != nil {
-		logging.Debugf("Memory Redis cache invalidate error: %v", err)
+		logging.Warnf("Memory Redis cache invalidate failed for user %s, %d entries remain cached until TTL: %v", userID, len(keys), err)
+		return err
 	}
+	return nil
 }
 
 // Close closes the Redis client.

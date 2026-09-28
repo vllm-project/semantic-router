@@ -23,10 +23,11 @@ import (
 //
 // BUFFERED mode (default): the message goes straight to handleRequestBody.
 //
-// STREAMED mode (streamed_body_mode: true in config): Envoy sends multiple
-// body messages. A StreamedBodyHandler accumulates chunks, detects the model
-// from the first few KB, and either passes through or accumulates for the
-// full pipeline on end_of_stream.
+// STREAMED and FULL_DUPLEX_STREAMED modes (global.router.streamed_body.enabled):
+// Envoy sends multiple body messages. A StreamedBodyHandler accumulates every
+// chunk and runs the full pipeline on end_of_stream. Requests that name a
+// concrete model are accumulated too, because dispatch can still rewrite the
+// model ID, translate the wire format, and add stream_options.include_usage.
 func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	// Honor x-vsr-skip-processing before allocating a streamed-body handler.
 	// This guarantees no chunk accumulation, model detection, or buffered
@@ -55,7 +56,8 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 	if ctx.FullDuplexRequestBody && !streamedMode {
 		return newFullDuplexRequestBodyResponse(v.RequestBody.GetBody(), eos), nil
 	}
-	if streamedMode && (!eos || ctx.FullDuplexRequestBody) {
+	// STREAMED may contain just one EOS body message; it still needs the guards.
+	if streamedMode {
 		ctx.StreamedBody = newStreamedBodyHandler(r, ctx)
 		resp, err := ctx.StreamedBody.HandleChunk(v.RequestBody, ctx)
 		if eos {
@@ -65,7 +67,7 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 		return resp, err
 	}
 
-	// BUFFERED mode or single-message STREAMED — use classic pipeline
+	// BUFFERED mode uses the classic pipeline.
 	return r.handleRequestBody(v, ctx)
 }
 
@@ -82,6 +84,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			logging.Errorf("Process: recovered panic: %v\n%s", rec, debug.Stack())
 			retErr = status.Errorf(codes.Internal, "internal error: %v", rec)
 		}
+		finishRequestTrace(ctx, retErr)
 	}()
 
 	// Initialize request context
@@ -105,6 +108,13 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 }
 
 func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error) error {
+	if !errors.Is(err, io.EOF) {
+		ctx.TraceReceiveError = err
+	} else if ctx.RequestSpan != nil {
+		// A terminal response closes the span before the next Recv. EOF with
+		// an open request therefore means the response was never completed.
+		ctx.TraceReceiveError = io.ErrUnexpectedEOF
+	}
 	if ctx.IsStreamingResponse && !ctx.StreamingComplete {
 		ctx.StreamingAborted = true
 		// The evidence window is count-bounded, so a turn that never reaches EOS
@@ -236,6 +246,7 @@ func (r *OpenAIRouter) processRequestHeaders(
 		logging.Errorf("sendResponse for headers failed: %v", err)
 		return err
 	}
+	finishImmediateResponseTrace(ctx, response)
 	return nil
 }
 
@@ -265,6 +276,7 @@ func (r *OpenAIRouter) processRequestBody(
 		logging.Errorf("sendResponse for body failed: %v", err)
 		return err
 	}
+	finishImmediateResponseTrace(ctx, response)
 	return nil
 }
 
@@ -284,7 +296,9 @@ func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (
 	if ctx != nil {
 		ctx.ImmediateProtocolError = protocolError
 	}
-	return r.createErrorResponse(http.StatusBadRequest, protocolError.Message), true
+	response := r.createErrorResponse(http.StatusBadRequest, protocolError.Message)
+	addPromptCacheReceiptToImmediateResponse(response, ctx)
+	return response, true
 }
 
 func (r *OpenAIRouter) processResponseHeaders(
@@ -297,7 +311,14 @@ func (r *OpenAIRouter) processResponseHeaders(
 		return err
 	}
 	r.bindBenchmarkConfigResponse(response, ctx)
-	return sendResponse(stream, response, "response header")
+	if err := sendResponse(stream, response, "response header"); err != nil {
+		return err
+	}
+	finishImmediateResponseTrace(ctx, response)
+	if v.ResponseHeaders.GetEndOfStream() {
+		finishRequestTrace(ctx, nil)
+	}
+	return nil
 }
 
 func (r *OpenAIRouter) processResponseBody(
@@ -310,7 +331,14 @@ func (r *OpenAIRouter) processResponseBody(
 		return err
 	}
 	r.bindBenchmarkConfigResponse(response, ctx)
-	return sendResponse(stream, response, "response body")
+	if err := sendResponse(stream, response, "response body"); err != nil {
+		return err
+	}
+	finishImmediateResponseTrace(ctx, response)
+	if v.ResponseBody.GetEndOfStream() || ctx.StreamingComplete {
+		finishRequestTrace(ctx, nil)
+	}
+	return nil
 }
 
 func processUnknownRequest(

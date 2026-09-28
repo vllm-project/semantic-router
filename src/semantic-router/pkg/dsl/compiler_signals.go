@@ -68,6 +68,15 @@ func (c *Compiler) compileEmbeddingSignal(s *SignalDecl) {
 	if v, ok := getStringField(s.Fields, "aggregation_method"); ok {
 		rule.AggregationMethodConfiged = config.AggregationMethod(v)
 	}
+	if v, ok := getStringArrayField(s.Fields, "image_candidates"); ok {
+		rule.ImageCandidates = v
+	}
+	if v, ok := getStringArrayField(s.Fields, "negative_candidates"); ok {
+		rule.NegativeCandidates = v
+	}
+	if v, ok := getStringArrayField(s.Fields, "negative_image_candidates"); ok {
+		rule.NegativeImageCandidates = v
+	}
 	if v, ok := getStringField(s.Fields, "query_modality"); ok {
 		rule.QueryModality = config.QueryModality(v)
 	}

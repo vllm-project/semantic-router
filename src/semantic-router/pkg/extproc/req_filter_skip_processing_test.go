@@ -311,8 +311,13 @@ func TestHandleResponseHeadersSkipProcessingBypassesVSRHeaders(t *testing.T) {
 	if response.GetResponseHeaders().Response.Status != ext_proc.CommonResponse_CONTINUE {
 		t.Fatalf("expected CONTINUE status, got %v", response.GetResponseHeaders().Response.Status)
 	}
-	if response.GetResponseHeaders().Response.HeaderMutation != nil {
-		t.Fatal("expected no header mutation when skipping processing")
+	mutation := response.GetResponseHeaders().Response.HeaderMutation
+	if len(mutation.GetSetHeaders()) != 0 {
+		t.Fatal("expected no router headers to be added when skipping processing")
+	}
+	removed := mutation.GetRemoveHeaders()
+	if len(removed) != 2 || removed[0] != headers.VSREffectiveInputTokens || removed[1] != headers.VSREffectiveMaxOutputTokens {
+		t.Fatalf("expected only removal of untrusted automatic-output receipts, got %v", removed)
 	}
 	if response.ModeOverride != nil {
 		t.Fatal("did not expect mode override when skipping processing on a non-streaming response")

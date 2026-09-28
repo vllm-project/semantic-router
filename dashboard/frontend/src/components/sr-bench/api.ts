@@ -4,14 +4,18 @@ import type {
   Catalog,
   CaseResult,
   EvidencePage,
+  ExperimentRunContext,
   Dataset,
   DatasetDetail,
+  DatasetSelection,
   DatasetCasePage,
   Manifest,
   Plan,
   Report,
   RecoveryPlan,
   RecoveryRequest,
+  RunOptions,
+  ReplayRequest,
   Run,
   RunEvent,
   Target,
@@ -31,30 +35,30 @@ export class SrBenchRequestError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  // Bound reads and initial run submission responses, including stalled bodies.
-  // A submission timeout is ambiguous; its durable identity must be reconciled.
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // Bound every response, including stalled bodies. Mutation timeouts are
+  // ambiguous; callers must reconcile their original identity before retrying.
   // No request is automatically retried by this layer.
   const reading = !init.method || ['GET', 'HEAD'].includes(init.method)
-  const submitting = path === '/runs' && init.method === 'POST'
-  const preparing = ['/plans', '/datasets/compose'].includes(path) && init.method === 'POST'
+  const submitting = ['/runs', '/replays'].includes(path) && init.method === 'POST'
+  const preparing =
+    (['/plans', '/datasets/compose'].includes(path) || path.endsWith('/candidate-plan')) &&
+    init.method === 'POST'
   const computing =
     (path === '/comparisons' || path.endsWith('/recover-plan')) && init.method === 'POST'
-  const controller = reading || submitting || preparing || computing ? new AbortController() : null
+  const controller = new AbortController()
   let timedOut = false
-  const abort = () => controller?.abort()
+  const abort = () => controller.abort()
   init.signal?.addEventListener('abort', abort, { once: true })
   if (init.signal?.aborted) abort()
-  const deadline = controller
-    ? setTimeout(() => {
-        timedOut = true
-        controller.abort()
-      }, 30000)
-    : undefined
+  const deadline = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, 30000)
   try {
     const response = await fetch(`${SR_BENCH_API}${path}`, {
       ...init,
-      signal: controller?.signal ?? init.signal,
+      signal: controller.signal,
       headers: { 'Content-Type': 'application/json', ...init.headers },
     })
     const value: unknown = await response.json().catch(() => null)
@@ -86,12 +90,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
           ? 'The evaluation submission response timed out. Reconcile the saved submission before starting another attempt.'
           : preparing
             ? 'Preparing the evaluation timed out after 30 seconds. No model generation was requested. You can review again using the same selection.'
-            : 'Reading saved sr-bench evidence timed out after 30 seconds. Existing runs continue independently.',
+            : reading || computing
+              ? 'Reading saved sr-bench evidence timed out after 30 seconds. Existing runs continue independently.'
+              : 'The action response timed out after 30 seconds. Its outcome is unknown; reconcile the saved state before submitting again.',
         408,
       )
     throw error
   } finally {
-    if (deadline) clearTimeout(deadline)
+    clearTimeout(deadline)
     init.signal?.removeEventListener('abort', abort)
   }
 }
@@ -103,6 +109,10 @@ const runPath = (id: string) => `/runs/${encodeURIComponent(id)}`
 export const benchApi = {
   catalog: (signal?: AbortSignal) => request<Catalog>('/catalog', { signal }),
   datasets: (signal?: AbortSignal) => request<{ datasets: Dataset[] }>('/datasets', { signal }),
+  datasetSelection: (profile: string, signal?: AbortSignal) =>
+    request<DatasetSelection>(`/datasets/selection?${new URLSearchParams({ profile })}`, {
+      signal,
+    }),
   dataset: (id: string, signal?: AbortSignal) =>
     request<DatasetDetail>(`/datasets/${encodeURIComponent(id)}`, { signal }),
   datasetCases: (
@@ -130,6 +140,15 @@ export const benchApi = {
   runs: (signal?: AbortSignal) => request<{ runs: Run[] }>('/runs', { signal }),
   run: (id: string, signal?: AbortSignal) => request<Run>(runPath(id), { signal }),
   plan: (manifest: Manifest) => post<Plan>('/plans', { manifest }),
+  candidatePlan: (
+    baseline: string,
+    body: {
+      target_ids: string[]
+      mode: 'live' | 'preview'
+      name: string
+      experiment?: ExperimentRunContext
+    },
+  ) => post<Plan>(`${runPath(baseline)}/candidate-plan`, body),
   start: (manifest: Manifest, idempotencyKey: string) =>
     post<Run>('/runs', { manifest, idempotency_key: idempotencyKey }),
   recoveryPlan: (id: string, mode: RecoveryPlan['mode']) =>
@@ -139,6 +158,11 @@ export const benchApi = {
   calls: (id: string, after = 0, signal?: AbortSignal) =>
     request<EvidencePage & { calls: CallRecord[] }>(
       `${runPath(id)}/calls?after=${after}&limit=100`,
+      { signal },
+    ),
+  activeCalls: (id: string, after = 0, signal?: AbortSignal) =>
+    request<EvidencePage & { calls: CallRecord[] }>(
+      `${runPath(id)}/calls?active=true&after=${after}&limit=100`,
       { signal },
     ),
   call: (id: string, callId: string, signal?: AbortSignal) =>
@@ -152,8 +176,18 @@ export const benchApi = {
     request<Report>(`${runPath(id)}/report`, { signal }),
   events: (id: string, after = 0, signal?: AbortSignal) =>
     request<{ events: RunEvent[] }>(`${runPath(id)}/events?after=${after}`, { signal }),
-  replay: (baseline: string, preview: string) =>
-    post<Run>('/replays', { baseline_run_id: baseline, preview_run_id: preview }),
+  runOptions: (
+    kind: 'comparison' | 'replay',
+    baseline?: string,
+    after?: string,
+    signal?: AbortSignal,
+  ) => {
+    const query = new URLSearchParams({ limit: '10' })
+    if (baseline) query.set('baseline_run_id', baseline)
+    if (after) query.set('after', after)
+    return request<RunOptions>(`/${kind}-options?${query}`, { signal })
+  },
+  replay: (body: ReplayRequest) => post<Run>('/replays', body),
   regrade: (id: string) => post<Record<string, unknown>>(`${runPath(id)}/regrade`, {}),
   exportMatrix: (id: string) => post<Record<string, unknown>>(`${runPath(id)}/export`, {}),
   compare: (baseline: string, candidate: string) =>

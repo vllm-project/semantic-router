@@ -141,10 +141,15 @@ func (r *OpenAIRouter) learningExperience(ctx *RequestContext, decision string, 
 }
 
 func (r *OpenAIRouter) prepareEvalRequest(input services.EvalModelSelectionInput, decision *config.Decision) (*RequestContext, error) {
+	request, err := selection.EffectiveCandidateRequest(input.SemanticRequest, nil)
+	if err != nil {
+		return nil, err
+	}
 	ctx := &RequestContext{
 		Headers: map[string]string{}, VSRSelectedDecision: decision,
-		SemanticRequest: input.SemanticRequest, VSRConversationFacts: input.ConversationFacts,
+		SemanticRequest: request, VSRConversationFacts: input.ConversationFacts,
 		VSRContextTokenCount: input.ContextTokenCount,
+		TraceContext:         input.Context,
 	}
 	if recipe, ok := r.Config.RecipeByName(input.Recipe); ok {
 		ctx.Routing.SelectRecipe(recipe)
@@ -191,6 +196,7 @@ func (r *OpenAIRouter) prepareEvalRequest(input services.EvalModelSelectionInput
 }
 
 func (r *OpenAIRouter) finishEvalLearning(ctx *RequestContext, selCtx *selection.SelectionContext, base *selection.SelectionResult, ref *config.ModelRef, method string) services.EvalModelSelection {
+	objectiveTrace := base.MultiFactor.Clone()
 	selected, result := ref, base
 	if ctx.learningPreview != nil {
 		_, learned, candidate, _, err := r.applyRouterLearning(selCtx, base, ref, ctx)
@@ -207,6 +213,7 @@ func (r *OpenAIRouter) finishEvalLearning(ctx *RequestContext, selCtx *selection
 		reason = "selected by the live runtime selector"
 	}
 	output := selectedEvalModel(selected, method, boundedSelectionReasoning(reason))
+	output.MultiFactor = objectiveTrace
 	output.Provenance = &services.SelectionProvenance{Mode: "stateless", ConfigHash: r.Config.DocumentHash}
 	if ctx.learningPreview == nil {
 		if method != "static" && method != "single" {

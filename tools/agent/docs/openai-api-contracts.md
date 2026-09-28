@@ -205,7 +205,7 @@ the ExtProc seam or Envoy E2E gate.
 | Data-plane seam | Client/backend orientation, provider model rewrite, API-root paths, buffered response, and streaming for all 3×3 pairs | `go test ./pkg/extproc` |
 | Concurrency | Immutable registry plus parallel 3×3 request, response, transport-error, and stream translations proving request-scoped model, error, lifecycle, and accumulator state | `go test -race ./pkg/llmprotocol ./pkg/protocolcodec ./pkg/extproc` |
 | Robustness | Malformed buffered and arbitrarily chunked stream input across all format pairs | protocol codec fuzz targets with a bounded CI or release time budget |
-| Envoy transport | Native and translated buffered, streaming, tools, provider errors, incomplete streams, and midstream errors | `make e2e-test E2E_PROFILE=response-api` and `make e2e-test E2E_PROFILE=anthropic-shim` |
+| Envoy transport | Native and translated buffered, streaming, tools, provider errors, incomplete streams, and midstream errors | `make e2e-test E2E_PROFILE=response-api` and `make e2e-test E2E_PROFILE=provider-protocols` |
 | Routing regression | Existing routing, cache, tool selection, replay, and streaming behavior | `make e2e-test E2E_PROFILE=envoy-ai-gateway` and `make e2e-test E2E_PROFILE=streaming` |
 
 The published-schema tier currently closes three Chat Completions object
@@ -298,7 +298,7 @@ it remains valid when codec internals move.
 | [#3045](https://github.com/vllm-project/semantic-router/pull/3045) Responses clients must receive Responses SSE when the selected backend speaks Anthropic Messages | complete Responses event taxonomy and 3×3 stream matrix | Anthropic backend streaming matrix |
 | [#913](https://github.com/vllm-project/semantic-router/issues/913) a buffered semantic-cache entry must replay as valid SSE | neutral cached response is encoded through the client stream codec | `streaming-sse-cache` requires a cache hit, valid SSE, matching content, and one `[DONE]` terminal |
 | [#2846](https://github.com/vllm-project/semantic-router/pull/2846) intermediate usage chunks must not terminate or truncate streaming content | per-chunk usage continuation and one-terminal stream-state tests | `streaming` profile |
-| [#3068](https://github.com/vllm-project/semantic-router/issues/3068) Anthropic backend profile bypasses a second protocol processor and runs in affected-change CI | profile topology and classifier tests | `anthropic-shim` profile |
+| [#3068](https://github.com/vllm-project/semantic-router/issues/3068) Anthropic backend profile bypasses a second protocol processor and runs in affected-change CI | profile topology and classifier tests | `provider-protocols` profile |
 | [#3067](https://github.com/vllm-project/semantic-router/issues/3067) flat Responses tools and inline call results | 3×3 request and tool-history matrices | three backend tool-lifecycle cases |
 | [#3065](https://github.com/vllm-project/semantic-router/issues/3065) provider API-root joining | protocol × base-URL × custom-path table | all three backend profiles use their native route |
 | [#3064](https://github.com/vllm-project/semantic-router/issues/3064), fixed by [#3066](https://github.com/vllm-project/semantic-router/pull/3066), provider model ID rewrite | request dispatch tests for Chat, Responses, and Messages targets | buffered 3×3 backend matrices |

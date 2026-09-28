@@ -107,7 +107,7 @@ func TestAutomaticOutputUsesExactRenderedCandidateAndFinalBudgets(t *testing.T) 
 	require.Equal(t, 3, calls)
 	require.Equal(t, text+"more", ctx.SemanticRequest.Messages[0].Content[0].Text)
 	preview := r.SelectModelForEval(services.EvalModelSelectionInput{Decision: d, Demand: selection.CandidateDemand{Known: true, AutomaticOutput: true}})
-	require.Equal(t, services.EvalSelectionExecutionRequired, preview.Status)
+	require.Equal(t, services.EvalSelectionUnavailable, preview.Status)
 }
 
 func TestAutomaticOutputDifferentCandidateWindowsPreserveInput(t *testing.T) {

@@ -7,14 +7,16 @@ import hashlib
 import json
 import os
 import secrets
+import sqlite3
 import stat
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
+from cli.container_services import _is_port_in_use
 from cli.runtime_env_names import runtime_env_name_is_allowed
-from cli.runtime_stack import RuntimeStackLayout
+from cli.runtime_stack import BENCH_PORT_ENV, PORT_OFFSET_ENV, RuntimeStackLayout
 
 BENCH_CONFIG_ENV = ("SR_BENCH_URL", "SR_BENCH_TOKEN_ENV", "SR_BENCH_STORE")
 BENCH_TOKEN_ENV = "SR_BENCH_TOKEN"
@@ -130,6 +132,10 @@ def prepare_bench_runtime(
     os.chmod(store, 0o700)
     token = environment.get(token_ref) or _private_token(root / "service-token")
     values = {token_ref: token}
+    # The service owns gated source downloads; never send this credential to the
+    # browser or include its value in preparation requests or job receipts.
+    if environment.get("HF_TOKEN"):
+        values["HF_TOKEN"] = environment["HF_TOKEN"]
     for ref in _target_secret_refs(store):
         value = environment.get(ref)
         if not value:
@@ -160,11 +166,15 @@ def bench_command_identity(command: list[str], credentials: dict[str, str]) -> s
     ).hexdigest()
 
 
-def reuse_bench_container(command: list[str], container_name: str) -> bool:
-    """Reuse a matching running worker after Docker reports a name conflict.
+def reconcile_bench_container(
+    command: list[str], container_name: str, credentials: dict[str, str]
+) -> str | None:
+    """Reuse a matching worker, or remove an owned idle worker for an image upgrade.
 
-    A configuration reload must not tear down the owner of in-flight requests.
-    Unknown or stopped workers require explicit reconciliation, not a restart.
+    Identity covers every launch argument and credential. The previous image is
+    the only permitted difference; even legacy workers carry the full identity.
+    A worker that never started is removed whatever its identity: it holds no
+    ledger state, and left in place its name would fail every later serve.
     """
     expected = next(
         (
@@ -175,13 +185,14 @@ def reuse_bench_container(command: list[str], container_name: str) -> bool:
         None,
     )
     if expected is None:
-        return False
+        return None
     result = subprocess.run(
         [
             command[0],
             "inspect",
             "--format",
-            "{{json .State.Status}} {{json .Config.Labels}}",
+            '{"id":{{json .Id}},"status":{{json .State.Status}},'
+            '"labels":{{json .Config.Labels}},"image":{{json .Config.Image}}}',
             container_name,
         ],
         capture_output=True,
@@ -190,19 +201,175 @@ def reuse_bench_container(command: list[str], container_name: str) -> bool:
         timeout=10,
     )
     if result.returncode != 0:
-        return False
-    decoder = json.JSONDecoder()
+        return None
     try:
-        status, end = decoder.raw_decode(result.stdout.strip())
-        labels = json.loads(result.stdout.strip()[end:].strip())
-    except (ValueError, TypeError):
-        return False
+        existing = json.loads(result.stdout)
+        status = existing["status"]
+        labels = existing["labels"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if status == "created" and existing.get("id"):
+        subprocess.run(
+            [command[0], "rm", existing["id"]],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        host_port = int(command[command.index("-p") + 1].rsplit(":", 2)[-2])
+        if _is_port_in_use(host_port):
+            raise ValueError(
+                f"sr-bench port {host_port} is already in use, so {container_name} "
+                f"could not start. Stop the process using port {host_port}, set "
+                f"{BENCH_PORT_ENV} for both serve and benchmark, or set a different "
+                f"{PORT_OFFSET_ENV}."
+            )
+        return None
     if status != "running":
         raise ValueError(
             "The sr-bench service is stopped; inspect its saved ledger before an explicit service restart"
         )
-    if not isinstance(labels, dict) or labels.get(BENCH_IDENTITY_LABEL) != expected:
+    if isinstance(labels, dict) and labels.get(BENCH_IDENTITY_LABEL) == expected:
+        return "reuse"
+    previous = _previous_image_command(command, existing.get("image"))
+    if (
+        previous is None
+        or not isinstance(labels, dict)
+        or labels.get(BENCH_IDENTITY_LABEL)
+        != bench_command_identity(previous, credentials)
+        or not existing.get("id")
+    ):
         raise ValueError(
-            "The running sr-bench service has a different image, store or credential; reconcile it before replacing the service"
+            "The running sr-bench service has a different identity, store or credential; reconcile it before replacing the service"
         )
-    return True
+    image = command[command.index("cli.sr_bench.service") - 2]
+    subprocess.run(
+        [command[0], "image", "inspect", image],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=10,
+    )
+    store = Path(previous[previous.index("--store") + 1])
+    _remove_idle_bench_container(command[0], existing["id"], store)
+    return "replace"
+
+
+def _previous_image_command(command: list[str], image: str | None) -> list[str] | None:
+    """Reconstruct the legacy identity without changing any non-image argument."""
+    if not isinstance(image, str) or not image:
+        return None
+    previous = list(command)
+    try:
+        label = next(
+            i
+            for i, arg in enumerate(previous)
+            if arg.startswith(BENCH_IDENTITY_LABEL + "=")
+        )
+        if previous[label - 1] != "--label":
+            return None
+        del previous[label - 1 : label + 1]
+        module = previous.index("cli.sr_bench.service")
+        if previous[module - 1] != "-m" or previous[module - 2] == image:
+            return None
+        previous[module - 2] = image
+        if previous[module + 1] != "--store":
+            return None
+    except (StopIteration, ValueError, IndexError):
+        return None
+    return previous
+
+
+def _remove_idle_bench_container(runtime: str, container_id: str, store: Path) -> None:
+    # Freeze admission before checking the durable journal. Checking /runs and
+    # then stopping would race with a new request (and may miss other owners).
+    try:
+        subprocess.run(
+            [runtime, "pause", container_id],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        # A client timeout does not establish whether the daemon paused it.
+        subprocess.run(
+            [runtime, "unpause", container_id],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        raise
+    removed = False
+    try:
+        try:
+            with sqlite3.connect(
+                (store / "journal.sqlite3").as_uri() + "?mode=ro", uri=True, timeout=1
+            ) as db:
+                busy = db.execute(
+                    "SELECT 1 FROM runs WHERE status NOT IN "
+                    "('completed','failed','cancelled','interrupted') LIMIT 1"
+                ).fetchone()
+        except (OSError, sqlite3.Error) as exc:
+            raise ValueError(
+                "Cannot verify the sr-bench journal; leaving its worker unchanged"
+            ) from exc
+        if busy:
+            raise ValueError(
+                "The sr-bench service has active runs; finish or cancel them before an image upgrade"
+            )
+        # Preparation workers share this service lifecycle but have their own
+        # durable journal. Inspect it while admission and its children are frozen.
+        from cli.sr_bench.preparations import ACTIVE, JOB_ID  # noqa: PLC0415
+
+        try:
+            preparations = store / "dataset-preparations"
+            if preparations.is_symlink() or (
+                preparations.exists() and not preparations.is_dir()
+            ):
+                raise ValueError("Invalid preparation journal directory")
+            preparing = False
+            if preparations.exists():
+                for path in preparations.iterdir():
+                    if not path.name.startswith("prep-") or path.suffix != ".json":
+                        continue
+                    if path.is_symlink() or not JOB_ID.fullmatch(path.stem):
+                        raise ValueError("Invalid preparation journal file")
+                    job = json.loads(path.read_text())
+                    if (
+                        not isinstance(job, dict)
+                        or job.get("id") != path.stem
+                        or job.get("status") not in ACTIVE | {"completed", "failed"}
+                    ):
+                        raise ValueError("Invalid preparation journal record")
+                    if job["status"] in ACTIVE:
+                        preparing = True
+                        break
+        except (OSError, ValueError, TypeError) as exc:
+            raise ValueError(
+                "Cannot verify dataset preparations; leaving the sr-bench worker unchanged"
+            ) from exc
+        if preparing:
+            raise ValueError(
+                "The sr-bench service has active dataset preparations; wait for them to finish before an image upgrade"
+            )
+        # No benchmark can be dispatched after the idle check while frozen.
+        # SQLite's durable journal survives removal; only the owned ID is removed.
+        subprocess.run(
+            [runtime, "rm", "--force", container_id],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        removed = True
+    finally:
+        if not removed:
+            subprocess.run(
+                [runtime, "unpause", container_id],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=10,
+            )

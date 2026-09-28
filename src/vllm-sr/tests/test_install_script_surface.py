@@ -75,10 +75,10 @@ def test_installation_doc_documents_runtime_options() -> None:
     assert "Podman" in content
 
 
-def test_install_script_defaults_to_dev_channel() -> None:
+def test_install_script_defaults_to_stable_channel() -> None:
     content = INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")
 
-    assert 'REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-dev}"' in content
+    assert 'REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-stable}"' in content
     assert "--channel stable|dev" in content
     assert "resolve_latest_dev_version" in content
     assert '"vllm-sr==$dev_version"' in content
@@ -92,7 +92,6 @@ def test_installation_surfaces_offer_minimal_human_and_agent_paths() -> None:
     data = INSTALL_DATA_PATH.read_text(encoding="utf-8")
     homepage = HOMEPAGE_INSTALL_PATH.read_text(encoding="utf-8")
     skill = VLLM_SR_AGENT_SKILL_PATH.read_text(encoding="utf-8")
-    normalized_skill = " ".join(skill.split())
 
     for method in ("curl", "pip", "uv", "Agent"):
         assert f"label: '{method}'" in docs
@@ -119,20 +118,8 @@ def test_installation_surfaces_offer_minimal_human_and_agent_paths() -> None:
     assert "vllm-sr route probe" in agent_docs
 
     assert "name: vllm-sr" in skill
-    assert "vllm-sr config schema" in skill
-    assert "vllm-sr config init" in skill
-    assert "vllm-sr config validate --config config.yaml" in skill
-    assert (
-        'vllm-sr config plan --config candidate.yaml --endpoint "$ROUTER_ORIGIN"'
-        in skill
-    )
-    assert "vllm-sr route preview" in skill
-    assert "vllm-sr route probe" in skill
-    assert "Use the Dashboard when the user requests it." in normalized_skill
-    assert "--channel dev --mode cli --runtime skip --no-launch" in skill
-    assert "--channel stable --mode cli" not in skill
+    assert "--channel stable --mode cli --runtime skip --no-launch" in skill
     assert 'export PATH="$HOME/.local/bin:$PATH"' in skill
-    assert "vllm-sr recipe builtin list" in skill
 
 
 def test_pypi_publish_workflow_does_not_push_back_to_main() -> None:

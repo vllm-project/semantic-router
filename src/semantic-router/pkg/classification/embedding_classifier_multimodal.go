@@ -30,7 +30,7 @@ func (c *EmbeddingClassifier) ClassifyDetailedMultimodal(modality config.QueryMo
 // during the same EvaluateAllSignalsWithContext call, the embedding is
 // reused instead of recomputed via FFI. A nil cache is equivalent to the
 // pre-cache behavior.
-func (c *EmbeddingClassifier) classifyDetailedMultimodalWithCache(ctx context.Context, modality config.QueryModality, payload string, cache *requestImageEmbeddingCache) (*EmbeddingClassificationResult, error) {
+func (c *EmbeddingClassifier) classifyDetailedMultimodalWithCache(ctx context.Context, modality config.QueryModality, payload string, cache *requestMediaEmbeddingCache) (*EmbeddingClassificationResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -47,13 +47,8 @@ func (c *EmbeddingClassifier) classifyDetailedMultimodalWithCache(ctx context.Co
 			config.QueryModalityImage, config.QueryModalityAudio, modality)
 	}
 
-	if effective == config.QueryModalityAudio {
-		return nil, fmt.Errorf("audio modality is not yet supported by ClassifyDetailedMultimodal; pass %q instead",
-			config.QueryModalityImage)
-	}
-	if effective != config.QueryModalityImage {
-		return nil, fmt.Errorf("unsupported query modality %q (supported: %q)",
-			modality, config.QueryModalityImage)
+	if effective != config.QueryModalityImage && effective != config.QueryModalityAudio {
+		return nil, fmt.Errorf("unsupported query modality %q", modality)
 	}
 
 	startTime := time.Now()
@@ -65,14 +60,14 @@ func (c *EmbeddingClassifier) classifyDetailedMultimodalWithCache(ctx context.Co
 		return &EmbeddingClassificationResult{}, nil
 	}
 
-	queryEmbedding, err := cache.resolveFor(c.provider, payload, c.optimizationConfig.TargetDimension, func() ([]float32, error) {
+	queryEmbedding, err := cache.resolveFor(c.provider, effective, payload, c.optimizationConfig.TargetDimension, func() ([]float32, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if c.provider != nil {
-			return embedding.Image(ctx, c.provider, payload, 0)
+		if effective == config.QueryModalityAudio {
+			return embedding.Audio(ctx, c.provider, payload, c.optimizationConfig.TargetDimension)
 		}
-		return getMultiModalImageEmbedding(payload, 0)
+		return embedding.Image(ctx, c.provider, payload, c.optimizationConfig.TargetDimension)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute multimodal query embedding (modality=%s): %w", effective, err)

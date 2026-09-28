@@ -121,7 +121,7 @@ fn test_classification_output_scenarios() {
     );
     assert_valid_distribution(&multi_result);
 
-    let batch_results = vec![
+    let batch_results = [
         build_result(
             "category",
             "physics",

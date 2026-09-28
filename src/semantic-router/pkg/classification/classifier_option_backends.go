@@ -119,7 +119,7 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 		backend, err := newWindowedJailbreakBackend(cfg.PromptGuard, jailbreakMapping, models...)
 		return backend, backend, err
 	}
-	if len(models) > 0 && cfg.PromptGuard.Protocol == "" && cfg.PromptGuard.Backend == nil {
+	if len(models) > 0 && cfg.PromptGuard.Backend == nil {
 		adapter := cfg.PromptGuard.Variant
 		if adapter == "" || adapter == config.PromptGuardVariantCandle {
 			adapter = "auto"
@@ -136,7 +136,7 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create jailbreak inference: %w", err)
 	}
-	if cfg.PromptGuard.Protocol != "" || cfg.PromptGuard.Backend != nil {
+	if cfg.PromptGuard.Backend != nil {
 		// Remote backends have no local model to initialize.
 		return nil, jailbreakInference, nil
 	}

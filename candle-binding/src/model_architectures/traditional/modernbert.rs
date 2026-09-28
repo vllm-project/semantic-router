@@ -1624,6 +1624,30 @@ impl TraditionalModernBertTokenClassifier {
         run_on_inference_pool(&self.device, || self.classify_tokens_on_device(text))
     }
 
+    /// Score an already tokenized task input without re-tokenizing its pair template.
+    pub fn classify_encoded_tokens(
+        &self,
+        encoding: &tokenizers::Encoding,
+    ) -> Result<Vec<Vec<f32>>> {
+        anyhow::ensure!(
+            encoding.len() <= self.tokenizer.get_config().max_length,
+            "input_limit: pair exceeds the token classifier input budget"
+        );
+        run_on_inference_pool(&self.device, || {
+            let ids = Tensor::new(encoding.get_ids(), &self.device)?.unsqueeze(0)?;
+            let mask = Tensor::new(encoding.get_attention_mask(), &self.device)?.unsqueeze(0)?;
+            let sequence = self.model.forward(&ids, &mask)?;
+            let hidden = match &self.head {
+                Some(head) => head.forward(&sequence)?,
+                None => sequence,
+            };
+            let logits = self.classifier.forward(&hidden)?;
+            Ok(ops::softmax(&logits, D::Minus1)?
+                .squeeze(0)?
+                .to_vec2::<f32>()?)
+        })
+    }
+
     /// Execute exact token IDs, reconcile overlaps, and decode BIO only once.
     pub fn classify_token_windows(
         &self,

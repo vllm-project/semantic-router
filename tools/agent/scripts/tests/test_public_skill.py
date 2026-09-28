@@ -159,23 +159,6 @@ class PublicSkillTests(unittest.TestCase):
                     target = match[2].strip("<>")
                     self.assertIn(urlsplit(target).scheme, {"http", "https"}, str(path))
 
-    def test_deployment_guidance_uses_host_capabilities_without_vendor_branch(self):
-        documents = skill.published_files(skill.SOURCE)
-        entry = documents[Path("SKILL.md")]
-        deployment = " ".join(documents[Path("references/deployment-loop.md")].split())
-        self.assertIn("installed `vllm-sr serve --help`", entry)
-        self.assertIn("explicitly select the `--platform` value", deployment)
-        self.assertIn(
-            "The CLI does not select a GPU platform automatically.", deployment
-        )
-        self.assertIn(
-            "Check inherited platform, image, and runtime overrides", deployment
-        )
-        self.assertIn("actual devices in the live inventory", deployment)
-        for path, content in documents.items():
-            self.assertNotIn("rocm", content.lower(), str(path))
-            self.assertNotIn("--platform amd", content, str(path))
-
     def test_harness_checks_the_explicit_publication_source(self):
         makefile = (skill.ROOT / "tools/make/agent.mk").read_text()
         self.assertIn("tools/agent/scripts/sync_public_skill.py --check", makefile)

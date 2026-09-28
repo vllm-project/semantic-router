@@ -20,14 +20,13 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	ctx.StartTime = time.Now()
 
 	span := startRequestHeaderSpan(v, ctx)
-	defer span.End()
 
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled())
+	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	if rejected := r.benchmarkConfigPrecondition(ctx); rejected != nil {
 		return rejected, nil
 	}
 
-	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	detectSourceFormat(path, ctx)
 	applyHeaderPassThroughPolicy(ctx)
 
@@ -48,6 +47,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		detectStreamingExpectation(ctx)
 		mutation := buildLooperInternalHeaderRemovalMutation()
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, headers.SelectedModel)
+		if isAzureOpenAIPath(path) {
+			mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
+		}
 		response := newContinueRequestHeadersResponse(mutation)
 		if headerValueCI(ctx, headers.SelectedModel) != "" {
 			// A caller-supplied selected-model header may have selected a provider
@@ -69,7 +71,12 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if validationResp := r.validateRequestHeaders(method, path); validationResp != nil {
 		return validationResp, nil
 	}
-	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()), nil
+	mutation := buildIdentityEncodingRequestMutation()
+	if isAzureOpenAIPath(path) {
+		// The Azure client key authenticates to the Router, never to a provider.
+		mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
+	}
+	return newContinueRequestHeadersResponse(mutation), nil
 }
 
 func startRequestHeaderSpan(
@@ -88,10 +95,11 @@ func startRequestHeaderSpan(
 	ctx.TraceContext = tracing.ExtractTraceContext(baseCtx, headerMap)
 	spanCtx, span := tracing.StartSpan(
 		ctx.TraceContext,
-		tracing.SpanRequestReceived,
+		tracing.SpanRequest,
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	ctx.TraceContext = spanCtx
+	ctx.RequestSpan = span
 	return span
 }
 
@@ -145,6 +153,16 @@ func setRequestHeaderSpanAttributes(
 	method string,
 	path string,
 ) {
+	route, kind := requestTraceRoute(path)
+	if kind == "inference" && ctx.LooperRequest {
+		kind = "inference_internal"
+	}
+	ctx.TraceTrafficKind = kind
+	switch method {
+	case "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS":
+	default:
+		method = "OTHER"
+	}
 	if ctx.RequestID != "" {
 		tracing.SetSpanAttributes(
 			span,
@@ -155,7 +173,9 @@ func setRequestHeaderSpanAttributes(
 	tracing.SetSpanAttributes(
 		span,
 		attribute.String(tracing.AttrHTTPMethod, method),
-		attribute.String(tracing.AttrHTTPPath, path),
+		attribute.String(tracing.AttrHTTPPath, route),
+		attribute.String("http.route", route),
+		attribute.String("traffic.kind", kind),
 	)
 }
 

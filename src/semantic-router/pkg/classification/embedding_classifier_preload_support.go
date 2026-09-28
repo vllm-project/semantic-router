@@ -3,16 +3,23 @@ package classification
 import (
 	"context"
 	"fmt"
-	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
+type embeddingCandidate struct {
+	value string
+	image bool
+}
+
 type embeddingPreloadResult struct {
-	candidate string
+	candidate embeddingCandidate
 	embedding []float32
 	err       error
 }
@@ -53,7 +60,7 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings(ctx context.Context) er
 	})
 
 	numWorkers := c.preloadWorkerCount(len(candidates))
-	candidateEmbeddings, successCount, firstError := c.collectCandidateEmbeddingResults(
+	candidateEmbeddings, imageEmbeddings, successCount, firstError := c.collectCandidateEmbeddingResults(
 		c.startCandidateEmbeddingWorkers(ctx, candidates, modelType, numWorkers),
 	)
 
@@ -72,47 +79,58 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings(ctx context.Context) er
 	}
 
 	c.candidateEmbeddings = candidateEmbeddings
+	c.imageCandidateEmbeddings = imageEmbeddings
 	c.rebuildRulePrototypeBanks()
 	return nil
 }
 
-func (c *EmbeddingClassifier) collectUniqueCandidates() []string {
-	uniqueCandidates := make(map[string]struct{})
+func (c *EmbeddingClassifier) collectUniqueCandidates() []embeddingCandidate {
+	unique := make(map[embeddingCandidate]struct{})
 	for _, rule := range c.rules {
-		for _, candidate := range rule.Candidates {
-			uniqueCandidates[candidate] = struct{}{}
+		for _, values := range [][]string{rule.Candidates, rule.NegativeCandidates} {
+			for _, value := range values {
+				unique[embeddingCandidate{value: value}] = struct{}{}
+			}
+		}
+		for _, values := range [][]string{rule.ImageCandidates, rule.NegativeImageCandidates} {
+			for _, value := range values {
+				unique[embeddingCandidate{value: value, image: true}] = struct{}{}
+			}
 		}
 	}
-
-	candidates := make([]string, 0, len(uniqueCandidates))
-	for candidate := range uniqueCandidates {
+	candidates := make([]embeddingCandidate, 0, len(unique))
+	for candidate := range unique {
 		candidates = append(candidates, candidate)
 	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].image != candidates[j].image {
+			return !candidates[i].image
+		}
+		return candidates[i].value < candidates[j].value
+	})
 	return candidates
 }
 
+// Local prepared sessions serialize execution; bound image decode/read work to
+// the same single admission slot. Remote text requests use at most four workers.
 func (c *EmbeddingClassifier) preloadWorkerCount(candidateCount int) int {
-	if candidateCount <= 1 {
+	if candidateCount <= 1 || !strings.EqualFold(c.inferenceBackend(), config.EmbeddingBackendOpenAICompatible) {
 		return 1
 	}
-	if strings.EqualFold(c.getBackend(), "candle") {
-		return 1
-	}
-	numWorkers := runtime.NumCPU() * 2
-	if numWorkers > candidateCount {
+	if candidateCount < 4 {
 		return candidateCount
 	}
-	return numWorkers
+	return 4
 }
 
 func (c *EmbeddingClassifier) startCandidateEmbeddingWorkers(
 	ctx context.Context,
-	candidates []string,
+	candidates []embeddingCandidate,
 	modelType string,
 	numWorkers int,
 ) <-chan embeddingPreloadResult {
 	resultChan := make(chan embeddingPreloadResult, len(candidates))
-	candidateChan := make(chan string, len(candidates))
+	candidateChan := make(chan embeddingCandidate, len(candidates))
 
 	for _, candidate := range candidates {
 		candidateChan <- candidate
@@ -125,12 +143,25 @@ func (c *EmbeddingClassifier) startCandidateEmbeddingWorkers(
 		go func() {
 			defer wg.Done()
 			for candidate := range candidateChan {
-				embedding, err := c.computeEmbedding(ctx, candidate, modelType, "preload")
+				var vector []float32
+				var err error
+				if err = ctx.Err(); err != nil {
+					resultChan <- embeddingPreloadResult{candidate: candidate, err: err}
+					continue
+				}
+				if candidate.image {
+					vector, err = embedding.Image(ctx, c.provider, candidate.value, c.optimizationConfig.TargetDimension)
+				} else {
+					vector, err = c.computeEmbedding(ctx, candidate.value, modelType, "preload")
+				}
+				if err == nil {
+					err = ctx.Err()
+				}
 				if err != nil {
 					resultChan <- embeddingPreloadResult{candidate: candidate, err: err}
 					continue
 				}
-				resultChan <- embeddingPreloadResult{candidate: candidate, embedding: embedding}
+				resultChan <- embeddingPreloadResult{candidate: candidate, embedding: vector}
 			}
 		}()
 	}
@@ -145,20 +176,33 @@ func (c *EmbeddingClassifier) startCandidateEmbeddingWorkers(
 
 func (c *EmbeddingClassifier) collectCandidateEmbeddingResults(
 	resultChan <-chan embeddingPreloadResult,
-) (map[string][]float32, int, error) {
+) (map[string][]float32, map[string][]float32, int, error) {
 	candidateEmbeddings := make(map[string][]float32)
+	imageEmbeddings := make(map[string][]float32)
 	var firstError error
 	successCount := 0
+	dimension := 0
 	for res := range resultChan {
+		if res.err == nil {
+			if len(res.embedding) == 0 || (dimension > 0 && len(res.embedding) != dimension) {
+				res.err = fmt.Errorf("candidate dimension %d differs from prepared bank dimension %d", len(res.embedding), dimension)
+			} else {
+				dimension = len(res.embedding)
+			}
+		}
 		if res.err != nil {
 			if firstError == nil {
-				firstError = fmt.Errorf("failed to compute embedding for candidate %q: %w", res.candidate, res.err)
+				firstError = fmt.Errorf("failed to compute embedding for candidate %q: %w", res.candidate.value, res.err)
 			}
-			logging.Warnf("Failed to compute embedding for candidate %q: %v", res.candidate, res.err)
+			logging.Warnf("Failed to compute embedding for candidate %q: %v", res.candidate.value, res.err)
 			continue
 		}
-		candidateEmbeddings[res.candidate] = res.embedding
+		if res.candidate.image {
+			imageEmbeddings[res.candidate.value] = res.embedding
+		} else {
+			candidateEmbeddings[res.candidate.value] = res.embedding
+		}
 		successCount++
 	}
-	return candidateEmbeddings, successCount, firstError
+	return candidateEmbeddings, imageEmbeddings, successCount, firstError
 }

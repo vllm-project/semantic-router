@@ -31,6 +31,7 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateDecisionEmitContracts(cfg); err != nil {
 		return err
 	}
+	reportAmbiguousConfidencePools(cfg)
 	return validateDecisionPluginContracts(cfg)
 }
 

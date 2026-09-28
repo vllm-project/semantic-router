@@ -90,6 +90,11 @@ Use `/health` for liveness and `/ready` for readiness. During model download or
 runtime preparation, a process can be healthy while `/ready` still returns
 `503`.
 
+For a Router with a runtime registry, `/ready` and `/startup-status` report that
+replica's observed startup state. Another replica's shared file or Redis record
+cannot change these responses. Until the local replica reports startup progress,
+both endpoints return `503`.
+
 ### Replica-local status
 
 `GET /api/v1/status` requires `ready.read`. It returns `schema_version: "v1"`,
@@ -519,11 +524,11 @@ Validate, inspect, apply, version, and roll back Router configuration and Recipe
 
 ### routing
 
-Preview routing behavior without invoking a generation backend.
+Preview routing behavior without generating an answer.
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/api/v1/routing/preview` | Preview configured signals and model selection without invoking a generation backend. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound. |
+| `POST` | `/api/v1/routing/preview` | Preview configured signals and model selection without generating an answer. Supported native-output requests use backend render APIs to resolve per-candidate capacity; paths requiring execution remain unresolved. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound. |
 
 ### inventory
 
@@ -547,6 +552,7 @@ Inspect routing replays, metrics, and management audit; submit outcome evidence.
 | `GET` | `/api/v1/observability/replays` | List Router Replay records |
 | `GET` | `/api/v1/observability/replays/aggregate` | Aggregate Router Replay routing and cost metadata |
 | `GET` | `/api/v1/observability/replays/trajectory` | Build a recipe-scoped session trajectory with each recorded routing result |
+| `GET` | `/api/v1/observability/replays/dataset` | Export a shadow comparison dataset manifest built from the selected Router Replay records |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one Router Replay record |
 | `GET` | `/api/v1/observability/audit` | Page through this Router process's bounded management mutation audit; filter by action and resume after a sequence |
 | `GET` | `/api/v1/observability/plugins/context_compression/stats` | Get redacted context-compression statistics |
@@ -626,7 +632,7 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, 
 | `POST` | `/api/v1/diagnostics/classify/combined` | Perform combined classification (intent, PII, and security) |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Batch classification with configurable task_type parameter |
 | `POST` | `/api/v1/diagnostics/nli` | Natural language inference classification for premise and hypothesis pairs |
-| `POST` | `/api/v1/diagnostics/embeddings` | Generate text and image embeddings |
+| `POST` | `/api/v1/diagnostics/embeddings` | Generate text, image, and audio embeddings |
 | `POST` | `/api/v1/diagnostics/similarity` | Calculate pairwise text similarity |
 | `POST` | `/api/v1/diagnostics/similarity/batch` | Calculate batch text-similarity matches |
 | `GET` | `/api/v1/diagnostics/models` | List prepared model bindings in an explicitly selected recipe |

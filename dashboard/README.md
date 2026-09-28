@@ -15,6 +15,11 @@ Use it to:
 - manage security policies, ML selection workflows, MCP tools, and optional
   OpenClaw workers when those features are enabled.
 
+Playground starts with the default route advertised by the Router. Named recipe
+entrypoints and orchestration aliases remain selectable alongside it; adding a
+Fusion route does not change ordinary chat's default. If the Router advertises
+only explicit entrypoints, Playground selects the first available entrypoint.
+
 The Dashboard is a control plane, not an inference proxy. Applications should
 send inference requests to Envoy.
 
@@ -103,6 +108,7 @@ variables. Defaults are defined in
 | `DASHBOARD_STATIC_DIR` | Built frontend assets. |
 | `ROUTER_CONFIG_PATH` | Canonical Router YAML read or updated by config APIs. |
 | `DASHBOARD_CONFIG_DIR` | Directory for config versions and related state. |
+| `VLLM_SR_CONFIG_BASE_DIR` | Absolute shared asset root for relative tools database paths; defaults to the process working directory. The development launcher sets the repository root and the CLI sets `/app`. |
 | `TARGET_ROUTER_API_URL` | Router management API; default `http://localhost:8080`. |
 | `TARGET_ROUTER_METRICS_URL` | Router Prometheus endpoint. |
 | `TARGET_ENVOY_URL` | Inference endpoint used by Playground and route probes. |
@@ -120,11 +126,11 @@ Feature controls:
 | `DASHBOARD_SETUP_MODE` | Enable the trusted first-run setup flow. |
 | `SR_BENCH_URL` | Server-owned sr-bench service origin; default `http://127.0.0.1:8090`. |
 | `SR_BENCH_TOKEN_ENV` | Environment variable containing the service token; default `SR_BENCH_TOKEN`. The browser never receives this token. |
-| `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. |
+| `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. Defaults to `false`. |
 | `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
-| `ML_SERVICE_URL` | Use an external ML service instead of local subprocesses. |
+| `ML_SERVICE_URL` | Use an ML service instead of local subprocesses; co-located sidecars use `http://127.0.0.1:8686`. |
 | `MCP_ENABLED` | Enable MCP server and tool management. |
-| `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
+| `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. Defaults to `false`; `vllm-sr serve` mounts the container socket only when explicitly enabled. |
 
 OpenClaw provisioning accepts optional `skills` entries as exact IDs from the
 server's skills catalog (`GET /api/openclaw/skills`). IDs use lowercase ASCII
@@ -150,6 +156,9 @@ Docker socket nor GPU devices. Dashboard/config reloads reuse a matching running
 worker. A stopped or changed worker requires explicit reconciliation; `vllm-sr
 stop` stops it without deleting its evidence.
 
+Active runs and dataset preparations block an image upgrade. An
+unverifiable preparation journal also preserves the running worker for inspection.
+
 The core image does not include every upstream execution environment. For code
 and interactive benchmarks, prepare a dedicated worker host with the required
 pinned harnesses and sandbox dependencies. `SR_BENCH_URL` selects that external
@@ -170,9 +179,33 @@ Targets contain endpoint and model identities, four token prices, and credential
 environment references. The Dashboard selects registered targets; it cannot
 redirect their credentials to another endpoint.
 
-Prepare versioned datasets with `vllm-sr benchmark dataset prepare` and select a
-frozen dataset, profile, targets and limits in Evaluation. Review the plan before
-starting. Live runs record capability and usage; preview runs record routing
+Start in **Evaluation → Create evaluation**: choose benchmarks, a smoke, quick,
+or standard size, targets and limits. **Review plan** reuses available datasets
+and automatically prepares missing data and its supported dependencies. Progress
+stays in the creation flow; the service completes accepted preparation jobs even
+if the page closes. Review the frozen plan before **Start evaluation**.
+
+**Datasets → Prepare dataset** remains a management entry point. It and
+`vllm-sr benchmark dataset prepare` use the same worker, progress and frozen
+datasets. Repeat `--benchmark` to prepare a collection in one background job.
+Required data preparation packages are installed automatically on the
+worker; execution harnesses, sandbox images and model servers are not. Gated
+sources require access approval and credentials in the worker environment.
+Preparation continues when the page closes and makes no model requests. It
+requires Evaluation write permission and is disabled in read-only mode; viewing
+its progress only requires Evaluation read permission.
+Read-only users can still browse every benchmark and compare smoke, quick and
+standard question counts. **Refresh access** retries failed settings reads and
+refreshes the current account permissions without starting a download.
+
+The CLI waits for the manifest by default; use `dataset prepare --no-wait` and
+`dataset preparations [PREPARATION_ID]` to submit and inspect background work.
+`--url` prepares on the selected service. File imports and history selection use
+explicit `dataset prepare --local` on the worker host or shared store, not an
+implicit upload from a remote CLI.
+
+Existing frozen datasets can also be selected explicitly. Live runs record
+capability and usage; preview runs record routing
 diagnostics only. The page shows per-target and per-benchmark results, four
 token buckets, latency, wall time, failures, routing distributions and case
 evidence. Comparisons require completed live runs on the same frozen cases.
@@ -258,6 +291,10 @@ The frontend does not store, copy, or forward it.
   on its own, and the server recomputes the expected value from the session id
   inside the session token rather than reading the cookie back, so planting one
   achieves nothing without the session cookie as well.
+  The embedded Grafana document loads a same-origin request adapter before its
+  application scripts. It performs the same CSRF-cookie echo for Grafana API
+  writes (including Prometheus queries); it does not exempt those requests from
+  the Dashboard's authentication, origin, CSRF, or permission checks.
 - **`SameSite=Lax` is deliberate.** `Strict` would withhold the cookie from
   top-level navigation into the dashboard, so following a link from chat or an
   alert would land on the login page despite a valid session. `Lax` still

@@ -1,4 +1,5 @@
 import type { Report, Target } from './types'
+import { targetLabel } from './targetPresentation'
 import styles from './SrBench.module.css'
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -47,7 +48,8 @@ export default function RecipeEvidence({
         return (
           <div className={styles.caseDetail} key={target.id}>
             <h4>
-              {target.id} · {verified ? 'Verified config snapshot' : 'Snapshot unavailable'}
+              {targetLabel(target)} ·{' '}
+              {verified ? 'Verified config snapshot' : 'Snapshot unavailable'}
             </h4>
             <dl className={styles.identity}>
               <dt>Configuration hash</dt>
@@ -77,7 +79,7 @@ export default function RecipeEvidence({
                 </details>
                 <div className={styles.actions}>
                   <button onClick={() => download(target.id, snapshot)}>
-                    Download {target.id} recipe
+                    Download {targetLabel(target)} recipe
                   </button>
                 </div>
               </>

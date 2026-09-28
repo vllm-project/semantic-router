@@ -20,6 +20,12 @@ const azureOpenAIProviderType = "azure-openai"
 // native surface.
 const cloudflareWorkersAIProviderType = "cloudflare-workers-ai"
 
+// snowflakeCortexProviderType is the catalog provider id for Snowflake Cortex
+// AI. Its account-scoped host also fronts the Snowflake SQL API, whose bodies do
+// not share this failure envelope, so the provider id is the only reliable
+// selector.
+const snowflakeCortexProviderType = "snowflake-cortex"
+
 // azureOpenAIHostSuffixes cover a profile pointed at an Azure endpoint without
 // declaring the Azure provider type. Azure resources are per-tenant subdomains,
 // so these are matched by suffix rather than exact host.
@@ -49,6 +55,9 @@ func resolveResponseVendor(profile *config.ProviderProfile) llmprotocol.Response
 	}
 	if strings.EqualFold(strings.TrimSpace(profile.Type), cloudflareWorkersAIProviderType) {
 		return llmprotocol.ResponseVendorCloudflare
+	}
+	if strings.EqualFold(strings.TrimSpace(profile.Type), snowflakeCortexProviderType) {
+		return llmprotocol.ResponseVendorSnowflake
 	}
 	if isAzureOpenAIHost(normalizedProfileHost(profile)) {
 		return llmprotocol.ResponseVendorAzure

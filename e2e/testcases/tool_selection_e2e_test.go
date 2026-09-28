@@ -7,8 +7,8 @@ import (
 
 func TestToolSelectionRequestsUseOwnedEntrypoints(t *testing.T) {
 	cases := toolSelectionContractCases(json.RawMessage(`{"type":"object","properties":{}}`))
-	if len(cases) != 7 {
-		t.Fatalf("tool contract inventory = %d, want 7", len(cases))
+	if len(cases) != 10 {
+		t.Fatalf("tool contract inventory = %d, want 10", len(cases))
 	}
 	var featureCases, precedenceCases int
 	for _, tc := range cases {
@@ -29,7 +29,7 @@ func TestToolSelectionRequestsUseOwnedEntrypoints(t *testing.T) {
 			}
 		})
 	}
-	if featureCases != 6 || precedenceCases != 1 {
-		t.Fatalf("feature/precedence inventory = %d/%d, want 6/1", featureCases, precedenceCases)
+	if featureCases != 9 || precedenceCases != 1 {
+		t.Fatalf("feature/precedence inventory = %d/%d, want 9/1", featureCases, precedenceCases)
 	}
 }

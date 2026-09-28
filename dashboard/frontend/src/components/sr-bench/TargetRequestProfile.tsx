@@ -1,4 +1,5 @@
 import { effectiveRequestProfile, number } from './model'
+import { targetLabel } from './targetPresentation'
 import type { Manifest, Target } from './types'
 import styles from './SrBench.module.css'
 import controls from './BenchControls.module.css'
@@ -13,9 +14,7 @@ function settingLabel(key: string) {
     ignore_eos: 'Ignore end-of-sequence',
     stop: 'Stop sequences',
   }
-  return (
-    labels[key] ?? key.replace(/_/g, ' ').replace(/^./, (character) => character.toUpperCase())
-  )
+  return labels[key] ?? key.replace(/_/g, ' ').replace(/^./, (character) => character.toUpperCase())
 }
 
 function FixedValue({ value }: { value: unknown }) {
@@ -58,9 +57,11 @@ function FixedValue({ value }: { value: unknown }) {
 export default function TargetRequestProfile({
   target,
   sampling,
+  outputPolicy,
 }: {
   target: Target
   sampling: Manifest['sampling']
+  outputPolicy?: Manifest['output_policy']
 }) {
   const effective = effectiveRequestProfile(target, sampling)
   const fields = [
@@ -73,10 +74,14 @@ export default function TargetRequestProfile({
   const shown = new Set<string>(fields.map(([key]) => key))
   const other = Object.entries(target.request_params ?? {}).filter(([key]) => !shown.has(key))
   return (
-    <section aria-label={`${target.id} request profile`}>
+    <section aria-label={`${targetLabel(target)} request profile`}>
       <h4>Effective request profile</h4>
+      {outputPolicy === 'native' && (
+        <p className={styles.muted}>Native capacity · no shared output-token cap.</p>
+      )}
       <dl className={controls.profileGrid}>
         {fields.map(([key, label]) => {
+          if (outputPolicy === 'native' && key === 'max_tokens') return null
           const value = effective[key]
           if (value === undefined || value === null) return null
           const fixed = target.request_params?.[key] !== undefined
@@ -91,6 +96,26 @@ export default function TargetRequestProfile({
           )
         })}
       </dl>
+      {outputPolicy === 'native' && target.native_limits && (
+        <details className={controls.fixedSettings}>
+          <summary>Registered model capacities</summary>
+          <p className={styles.muted}>
+            Model maxima, not the output budget of a particular request. Actual input uses part of
+            the context window.
+          </p>
+          <dl>
+            {Object.entries(target.native_limits).map(([model, limits]) => (
+              <div key={model}>
+                <dt>{model}</dt>
+                <dd>
+                  {number(limits.context_window)} context tokens ·{' '}
+                  {number(limits.max_output_tokens)} maximum output tokens
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      )}
       {other.length > 0 && (
         <details className={controls.fixedSettings}>
           <summary>Other fixed settings</summary>

@@ -61,6 +61,7 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 		Projections:           canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
 		Decisions:             copyDecisions(cfg.Decisions),
 		Strategy:              cfg.Strategy,
+		Fallback:              cfg.Fallback.Clone(),
 	}
 }
 
@@ -309,6 +310,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			SkipProcessing: cfg.SkipProcessing,
 			ModelSelection: cfg.ModelSelection,
 			Learning:       cfg.RouterLearning,
+			Fallback:       cfg.Fallback.Clone(),
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,
@@ -574,7 +576,7 @@ func canonicalProviderBackendRefs(
 		}
 		refs := make([]CanonicalBackendRef, 0, len(modelEndpoints))
 		for _, endpoint := range modelEndpoints {
-			refs = append(refs, canonicalBackendRefFromRuntime(endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
+			refs = append(refs, canonicalBackendRefFromRuntime(modelName, endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
 		}
 		return refs
 	}
@@ -585,14 +587,15 @@ func canonicalProviderBackendRefs(
 		if !ok {
 			continue
 		}
-		refs = append(refs, canonicalBackendRefFromRuntime(endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
+		refs = append(refs, canonicalBackendRefFromRuntime(modelName, endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
 	}
 	return refs
 }
 
-func canonicalBackendRefFromRuntime(endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
+func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
 	ref := CanonicalBackendRef{
-		Name:       endpoint.Name,
+		// Import adds exactly one model namespace; remove only that generated prefix.
+		Name:       strings.TrimPrefix(endpoint.Name, modelName+"_"),
 		Protocol:   endpoint.Protocol,
 		Weight:     endpoint.Weight,
 		Provider:   profile.Type,

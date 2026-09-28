@@ -35,13 +35,14 @@ import (
 func TestReconcileEmbeddingModalityValidation(t *testing.T) {
 	cases := []reconcileEmbeddingModalityCase{
 		{
-			name:              "AudioRejected",
+			name:              "AudioWithoutMultimodalRejected",
 			queryModality:     "audio",
 			ruleName:          "audio_rule_under_test",
-			baseModelType:     "multimodal",
+			baseModelType:     "mmbert",
 			wantValidationErr: true,
-			errSubstrings:     []string{"audio_rule_under_test", "audio FFI", "planned"},
+			errSubstrings:     []string{"audio_rule_under_test", "model_type=multimodal"},
 		},
+		{name: "AudioWithMultimodalAccepted", queryModality: "audio", ruleName: "audio_rule_under_test", baseModelType: "multimodal"},
 		{
 			name:              "ImageWithoutMultimodalRejected",
 			queryModality:     "image",
@@ -105,7 +106,7 @@ func TestReconcileKubernetesConfigValidationDispatch(t *testing.T) {
 	}
 
 	reconciler := buildEmbeddingModalityReconciler(t, namespace, staticConfig, pool, route)
-	reconciler.onConfigUpdate = func(*config.RouterConfig) error {
+	reconciler.onConfigUpdate = func(context.Context, *config.RouterConfig) error {
 		t.Fatal("invalid global config must not be published")
 		return nil
 	}
@@ -134,7 +135,7 @@ func TestReconcilePreservesMultimodalTargetLayer(t *testing.T) {
 
 	var updatedConfig *config.RouterConfig
 	reconciler := buildEmbeddingModalityReconciler(t, namespace, staticConfig, pool, route)
-	reconciler.onConfigUpdate = func(candidate *config.RouterConfig) error {
+	reconciler.onConfigUpdate = func(_ context.Context, candidate *config.RouterConfig) error {
 		updatedConfig = candidate
 		return nil
 	}
@@ -288,7 +289,7 @@ func buildEmbeddingModalityReconciler(
 		namespace:      namespace,
 		converter:      NewCRDConverter(),
 		staticConfig:   staticConfig,
-		onConfigUpdate: func(*config.RouterConfig) error { return nil },
+		onConfigUpdate: func(context.Context, *config.RouterConfig) error { return nil },
 	}
 }
 
@@ -476,7 +477,7 @@ func TestReconcileDiscardsStaticModelBindings(t *testing.T) {
 				route := buildEmbeddingModalityRoute(namespace, "crd_rule", "text")
 				reconciler := buildEmbeddingModalityReconciler(t, namespace, staticConfig, pool, route)
 				var published *config.RouterConfig
-				reconciler.onConfigUpdate = func(candidate *config.RouterConfig) error {
+				reconciler.onConfigUpdate = func(_ context.Context, candidate *config.RouterConfig) error {
 					published = candidate
 					return nil
 				}

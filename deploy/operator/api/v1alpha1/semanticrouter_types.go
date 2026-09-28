@@ -348,6 +348,33 @@ type ConfigSpec struct {
 	// Observability configuration
 	// +optional
 	Observability *ObservabilityConfig `json:"observability,omitempty"`
+
+	// StreamedBody enables streamed request body handling. Mirrors
+	// global.router.streamed_body; the gateway must send bodies to ExtProc in
+	// STREAMED or FullDuplexStreamed mode for it to take effect.
+	// +optional
+	StreamedBody *StreamedBodyConfig `json:"streamed_body,omitempty"`
+}
+
+// StreamedBodyConfig defines streamed request body handling.
+type StreamedBodyConfig struct {
+	// Enabled accumulates request body chunks before routing at end-of-stream.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// MaxBytes caps the accumulated body size. A larger body is rejected and the
+	// ExtProc stream ends; the downstream response follows the gateway's ExtProc
+	// failure policy. Zero disables the limit.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxBytes int64 `json:"max_bytes,omitempty"`
+
+	// TimeoutSec caps how long body accumulation may take. A slower body is
+	// rejected and the ExtProc stream ends; the downstream response follows the
+	// gateway's ExtProc failure policy. Zero disables the limit.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	TimeoutSec int `json:"timeout_sec,omitempty"`
 }
 
 // SemanticCacheConfig defines semantic cache configuration
@@ -1473,8 +1500,8 @@ type ToolsConfig struct {
 
 // PromptGuardConfig defines prompt guard configuration.
 //
-// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && (!has(self.protocol) || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="max_sequence_length requires the local mmbert32k variant"
-// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && (!has(self.protocol) || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="window requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="max_sequence_length requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="window requires the local mmbert32k variant"
 // +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PromptGuardConfig struct {
 	// Backend selects a named external classifier and its typed result contract.
@@ -1499,11 +1526,6 @@ type PromptGuardConfig struct {
 	// +kubebuilder:validation:Enum=candle;mmbert32k
 	// +optional
 	Variant string `json:"variant,omitempty"`
-	// Protocol is retired and rejected at admission. Configure Backend with
-	// the protocol, contract and explicit external model name instead.
-	// +kubebuilder:validation:Enum=http_chat;http_classify
-	// +optional
-	Protocol string `json:"protocol,omitempty"`
 	// +kubebuilder:default="models/Vela-1.0-Encoder-307M-Guard"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`

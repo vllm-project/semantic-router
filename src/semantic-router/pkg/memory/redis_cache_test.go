@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -189,4 +190,82 @@ func TestRedisCache_SetThenGet_RoundTrip(t *testing.T) {
 	assert.Equal(t, "1", got[0].Memory.ID)
 	assert.Equal(t, "a", got[0].Memory.Content)
 	assert.Equal(t, float32(0.9), got[0].Score)
+}
+
+func TestCacheKeySeparatesRetrievalPolicies(t *testing.T) {
+	baseline := RetrieveOptions{Query: "coffee", UserID: "u1", Limit: 5, Threshold: 0.5}
+	for _, change := range []struct {
+		name  string
+		apply func(*RetrieveOptions)
+	}{
+		{"hybrid", func(o *RetrieveOptions) { o.HybridSearch = true }},
+		{"fusion mode", func(o *RetrieveOptions) { o.HybridMode = "rrf" }},
+		{"adaptive", func(o *RetrieveOptions) { o.AdaptiveThreshold = true }},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			base := baseline
+			if change.name == "fusion mode" {
+				base.HybridSearch = true
+				base.HybridMode = "weighted"
+			}
+			other := base
+			change.apply(&other)
+			assert.NotEqual(t, cacheKey("mem:", "u1", base), cacheKey("mem:", "u1", other))
+		})
+	}
+}
+
+func TestCacheKeyNormalizesEffectiveHybridMode(t *testing.T) {
+	base := RetrieveOptions{Query: "coffee", UserID: "u1", Limit: 5, Threshold: 0.5}
+	for _, hybrid := range []bool{false, true} {
+		base.HybridSearch = hybrid
+		explicit := base
+		explicit.HybridMode = "weighted"
+		assert.Equal(t, cacheKey("mem:", "u1", base), cacheKey("mem:", "u1", explicit))
+		if !hybrid {
+			explicit.HybridMode = "rrf"
+			assert.Equal(t, cacheKey("mem:", "u1", base), cacheKey("mem:", "u1", explicit))
+		}
+	}
+}
+
+func TestCacheKeyVersionedEncodingPreservesThresholdPrecision(t *testing.T) {
+	base := RetrieveOptions{Query: "coffee", UserID: "u1", Limit: 5, Threshold: 0.5}
+	key := cacheKey("mem:", "u1", base)
+	assert.Contains(t, key, "mem:v2:u1:")
+	nearby := base
+	nearby.Threshold = math.Nextafter32(base.Threshold, 1)
+	assert.NotEqual(t, key, cacheKey("mem:", "u1", nearby), "distinct score floors must not round to the same key")
+	project := base
+	project.ProjectID = "another-project"
+	assert.NotEqual(t, key, cacheKey("mem:", "u1", project))
+	types := base
+	types.Types = []MemoryType{MemoryTypeSemantic}
+	assert.NotEqual(t, key, cacheKey("mem:", "u1", types))
+	assert.NotEqual(t, key, cacheKey("mem:", "other-user", base))
+}
+
+func TestCacheKeyHybridDefaultsAgreeWithActualRerankers(t *testing.T) {
+	for name, rerank := range map[string]func([]*RetrieveResult, RetrieveOptions) []*RetrieveResult{
+		"milvus": (&MilvusStore{}).hybridRerank,
+		"valkey": (&ValkeyStore{}).hybridRerank,
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidates := func() []*RetrieveResult {
+				return []*RetrieveResult{
+					{Memory: &Memory{ID: "coffee", Content: "coffee preference"}, Score: 0.8},
+					{Memory: &Memory{ID: "tea", Content: "tea preference"}, Score: 0.4},
+				}
+			}
+			implicit := RetrieveOptions{Query: "coffee", HybridSearch: true}
+			explicit := implicit
+			explicit.HybridMode = "weighted"
+			rrf := implicit
+			rrf.HybridMode = "rrf"
+			assert.Equal(t, rerank(candidates(), implicit), rerank(candidates(), explicit))
+			assert.NotEqual(t, rerank(candidates(), implicit), rerank(candidates(), rrf))
+			assert.Equal(t, cacheKey("m:", "u", implicit), cacheKey("m:", "u", explicit))
+			assert.NotEqual(t, cacheKey("m:", "u", implicit), cacheKey("m:", "u", rrf))
+		})
+	}
 }
