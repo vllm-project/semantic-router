@@ -1,0 +1,36 @@
+{
+  "name": "dev2-06b-encoder-8k",
+  "module": "v2.06b.predict",
+  "args": [
+    "benchmark",
+    "--family",
+    "encoder",
+    "--bundle",
+    "{bundle}",
+    "--native-dir",
+    "{model}",
+    "--manifest-sha256",
+    "{manifest}",
+    "--input",
+    "{input}",
+    "--output",
+    "{output}",
+    "--model-id",
+    "{model_id}",
+    "--model-revision",
+    "{revision}",
+    "--backend-label",
+    "dev2-06b-encoder-8k"
+  ],
+  "model_id": null,
+  "python": "/data/dev2/tools/envs/kai-lex/bin/python",
+  "batch_policy": "0.6B marker encoder export, FP32, one prompt per call, type-sorted B8; 8,192-token cap, overflow invalid, no truncation",
+  "requires": [
+    "bundle",
+    "manifest",
+    "model_id"
+  ],
+  "extra_mounts": [
+    "/data/dev2/tools/envs/kai-lex"
+  ]
+}
