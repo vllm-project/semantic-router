@@ -98,7 +98,7 @@ def _run_family(name: str) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
             "after_cap": len(capped),
             "groups": len({row["group_id"] for row in capped}),
             "shortfall": max(0, item.cap_rows - len(capped)),
-            "label_histogram": dict(
+            "label_histogram_after_cap": dict(
                 sorted(collections.Counter(str(row["label"]) for row in capped).items())
             ),
         },
