@@ -145,3 +145,63 @@ class LaunchTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+summarize = importlib.import_module("v2.27b.summarize")
+
+
+def _reports(correct, css_f1, invalid=0):
+    dev = {
+        "macro_family_accuracy": sum(correct.values()) / 1600,
+        "overall": {
+            "correct_n": sum(correct.values()),
+            "invalid_or_missing_n": invalid,
+            "brier": 0.2,
+        },
+        "by_type": {
+            k: {"correct_n": v, "n": 800 if k == "choice" else 400}
+            for k, v in correct.items()
+        },
+        "by_family": {"a": {"accuracy_all": 0.5}},
+    }
+    tasks = {
+        f"t{i}": {"role": "pilot", "macro_f1_all": f} for i, f in enumerate(css_f1)
+    }
+    css = {
+        "roles": {
+            "pilot": {
+                "median_task_macro_f1_all": sorted(css_f1)[1],
+                "items": 10,
+                "valid_items": 10,
+            }
+        },
+        "tasks": tasks,
+    }
+    return dev, css
+
+
+class SummarizeTest(unittest.TestCase):
+    def test_proxy_matches_best368_record(self):
+        dev, css = _reports(
+            {"choice": 791, "noul": 261, "score": 161}, [0.47488, 0.6177652, 0.68757]
+        )
+        summary = summarize.summarize(dev, css)
+        self.assertAlmostEqual(summary["P_dev"], 68.4357, places=3)
+
+    def test_decision_rule(self):
+        control = summarize.summarize(
+            *_reports({"choice": 791, "noul": 261, "score": 161}, [0.5, 0.6, 0.7])
+        )
+        better = summarize.summarize(
+            *_reports({"choice": 790, "noul": 290, "score": 200}, [0.5, 0.63, 0.7])
+        )
+        drop = summarize.summarize(
+            *_reports({"choice": 700, "noul": 330, "score": 260}, [0.5, 0.63, 0.7])
+        )
+        self.assertTrue(summarize.decide(control, better, None)["displaces_control"])
+        self.assertFalse(
+            summarize.decide(control, better, 5.0)["checks"]["p_dev_margin"]
+        )
+        self.assertFalse(
+            summarize.decide(control, drop, None)["checks"]["no_type_drop_over_3"]
+        )
