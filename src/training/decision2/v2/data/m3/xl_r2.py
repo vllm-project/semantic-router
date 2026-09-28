@@ -608,14 +608,12 @@ def coverage(
         ),
     }
     if pending:
-        waiting = set().union(*pending.values()) & lost
+        left = lost - set().union(*pending.values())
         out["pending"] = {name: len(lost & wave) for name, wave in pending.items()}
-        out["projected_rows_without"] = len(lost - waiting)
+        out["projected_rows_without"] = len(left)
         out["projected_without_by_pool"] = dict(
             sorted(
-                collections.Counter(
-                    r["pool"] for r in rows if r["id"] in lost - waiting
-                ).items()
+                collections.Counter(r["pool"] for r in rows if r["id"] in left).items()
             )
         )
     return out, missing
