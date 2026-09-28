@@ -35,3 +35,11 @@ a seed replicate and not eligible for promotion. **C0 takes the formal slot.**
    public231 200).
 4. Labels: "post-key same-panel" for v3; public231 is a public-subset rerun,
    not the official JevBench rank. No release or publication decision here.
+
+## Amendment F1 (before any parity outcome)
+
+The first parity collection computed DEV predictions but could not write them:
+the package writer requires a mode-0700 output directory and the driver
+created it with the default mode (0.096 GPU-hours, receipt kept, no
+predictions or comparison produced). The driver now creates the directory with
+mode 0700; the parity preflight runs once more with nothing else changed.
