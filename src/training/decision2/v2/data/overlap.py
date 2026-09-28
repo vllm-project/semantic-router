@@ -145,7 +145,7 @@ def method_descriptions(params: Params) -> dict[str, str]:
         "S": (
             "audit_vitaminc_score rule against protected leaves <= "
             f"{params.short_max_chars} normalized chars: compact {params.gram}-gram "
-            f"sets, every {params.index_every}nd sorted protected gram indexed, the "
+            f"sets, every {params.index_every}nd sorted protected gram indexed, the "  # codespell:ignore nd
             f"{params.rare_grams} rarest candidate grams by (posting length, gram), "
             f"postings <= {params.max_posting}, Jaccard >= {params.jaccard} or "
             f"containment >= {params.containment}"
