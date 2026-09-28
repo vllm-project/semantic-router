@@ -7,6 +7,12 @@ and the paired comparison with the tier's own Decision 1.0 model. ``check`` runs
 at build time; ``seal`` runs after the verification chain and writes the
 ``dev2-release-gate/1`` receipt that ``hub collect`` requires.
 
+A decision is ``status: final`` (named ``decided_by``; the default when absent)
+or ``status: draft`` (``prepared_by`` release engineering, no decider yet, e.g.
+while an independent confirmation is pending). A draft binds the same identity,
+report and paired comparison, so it can drive a private build, upload and
+verification, but ``seal`` refuses it: nothing enters the collection on a draft.
+
   evaluate  print the six gate items with evidence from a work directory
   seal      write <work>/receipts/gate.json if every item passes
 """
@@ -41,11 +47,22 @@ def _json(path: Path) -> dict[str, Any]:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def check(spec: dict[str, Any], decision_path: Path) -> dict[str, Any]:
+def check(
+    spec: dict[str, Any], decision_path: Path, *, final: bool = False
+) -> dict[str, Any]:
     """The decision must approve exactly this candidate, report and comparison."""
     decision = _json(decision_path)
     scored = spec.get("scored") or {}
     problems = []
+    status = decision.get("status", "final")
+    if status not in ("draft", "final"):
+        problems.append("status is draft or final")
+    elif status == "draft" and (
+        not decision.get("prepared_by") or decision.get("decided_by")
+    ):
+        problems.append("a draft names prepared_by and no decided_by")
+    elif final and status != "final":
+        problems.append("only a final decision can be sealed")
     if (
         decision.get("schema") != DECISION_SCHEMA
         or decision.get("decision") != "release"
@@ -63,8 +80,10 @@ def check(spec: dict[str, Any], decision_path: Path) -> dict[str, Any]:
     paired = spec["card"].get("paired")
     if not paired or decision.get("paired_sha256") != sha_file(Path(paired)):
         problems.append("decision names a different paired comparison")
-    if not decision.get("decided_by") or not decision.get("rationale"):
-        problems.append("decision needs decided_by and a rationale")
+    if not decision.get("rationale") or (
+        status == "final" and not decision.get("decided_by")
+    ):
+        problems.append("decision needs a rationale and, when final, decided_by")
     if problems:
         raise ValueError(
             "Release decision does not approve this spec: " + "; ".join(problems)
@@ -124,9 +143,15 @@ def evaluate(work: Path) -> dict[str, Any]:
             "evidence": f"Hub card {readback.get('card_data', {}).get('license')} / problems {readback.get('card_problems')}",
         },
     }
+    decision_path = Path(spec["gate_receipt"]) if spec.get("gate_receipt") else None
     return {
         "items": items,
         "passed": all(item["passed"] for item in items.values()),
+        "decision": decision_path
+        and {
+            "sha256": sha_file(decision_path),
+            "status": _json(decision_path).get("status", "final"),
+        },
         "spec": spec,
         "steps": steps,
         "build": build,
@@ -138,7 +163,7 @@ def seal(work: Path) -> dict[str, Any]:
     spec = result["spec"]
     if spec["kind"] != "release" or not spec.get("gate_receipt"):
         raise ValueError("Only release specs with a coordinator decision can be sealed")
-    decision = check(spec, Path(spec["gate_receipt"]))
+    decision = check(spec, Path(spec["gate_receipt"]), final=True)
     if not result["passed"]:
         failing = [name for name, item in result["items"].items() if not item["passed"]]
         raise ValueError(f"Gate items failed: {failing}")
@@ -173,7 +198,14 @@ def main() -> None:
     if args.command == "evaluate":
         result = evaluate(args.work)
         print(
-            json.dumps({"passed": result["passed"], "items": result["items"]}, indent=2)
+            json.dumps(
+                {
+                    "passed": result["passed"],
+                    "decision": result["decision"],
+                    "items": result["items"],
+                },
+                indent=2,
+            )
         )
         sys.exit(0 if result["passed"] else 1)
     gate = seal(args.work)

@@ -9,6 +9,13 @@ this repository. Subcommands:
   card     execute the README's Python block and compare with a ``run`` output
   parity   package answers on gold-free panel prompts vs sealed scored predictions
 
+``--site DIR`` puts an image directory of kernel packages on the path after the
+package (images that expose FLA only through ``PYTHONPATH``, which ``-I``
+drops); the card example then runs with exactly those directories as its
+``PYTHONPATH``, like a user environment with the kernels installed.
+``--require-kernels`` fails a Qwen3.5-family run unless the gated-delta and
+causal-conv1d functions are bound to their kernels and a persisted Triton
+autotune cache is set (the decoder track's ``v2/dec/runtime_check.py``).
 Receipts hold hashes, counts and drift only, never panel text.
 """
 
@@ -16,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -213,10 +221,28 @@ def runtime_versions() -> dict[str, Any]:
     return out
 
 
+RUNTIME_CHECK = Path(__file__).resolve().parents[1] / "dec" / "runtime_check.py"
+
+
+def kernel_runtime(required: bool) -> dict[str, Any] | None:
+    """Qwen3.5 kernel bindings and autotune cache; raises if required and not met."""
+    if not required:
+        return None
+    spec = importlib.util.spec_from_file_location("dev2_runtime_check", RUNTIME_CHECK)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    identity = module.runtime_identity()
+    problems = module.violations(identity)
+    if problems:
+        raise RuntimeError("Kernel runtime check failed: " + "; ".join(problems))
+    return {**identity, "runtime_check_sha256": sha_file(RUNTIME_CHECK)}
+
+
 def run(args: argparse.Namespace) -> dict[str, Any]:
     model, load_seconds = load_package(
         args.package, args.device, args.threads, args.base_path
     )
+    kernels = kernel_runtime(args.require_kernels)
     examples = [*EXAMPLES, over_budget_example(model.max_input_tokens)]
     outputs = []
     for example in examples:
@@ -244,7 +270,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "device": str(getattr(model.backend, "device", args.device)),
         "loaded_parameters": model.backend.parameter_count(),
         "load_seconds": load_seconds,
-        "runtime": runtime_versions(),
+        "runtime": {**runtime_versions(), "sites": args.site, "kernels": kernels},
         "outputs": outputs,
         "answers_sha256": digest(
             [{"id": o["id"], "response": o["response"]} for o in outputs]
@@ -428,9 +454,14 @@ def card(args: argparse.Namespace) -> dict[str, Any]:
         script = Path(scratch) / "card_example.py"
         script.write_text(code, encoding="utf-8")
         env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+        flags = ["-I", "-B"]
+        if args.site:
+            # Only the named kernel directories, as if installed in the user's environment.
+            env["PYTHONPATH"] = os.pathsep.join(args.site)
+            flags = ["-s", "-B"]
         started = time.perf_counter()
         completed = subprocess.run(
-            [sys.executable, "-I", "-B", str(script)],
+            [sys.executable, *flags, str(script)],
             cwd=args.package.resolve().parent,
             env=env,
             capture_output=True,
@@ -449,6 +480,8 @@ def card(args: argparse.Namespace) -> dict[str, Any]:
         "mode": "card",
         "code_sha256": hashlib.sha256(code.encode("utf-8")).hexdigest(),
         "readme_sha256": sha_file(args.package / "README.md"),
+        "interpreter_flags": flags,
+        "sites": args.site,
         "exit_code": completed.returncode,
         "stderr_tail": completed.stderr[-2000:] if completed.returncode else "",
         "seconds": time.perf_counter() - started,
@@ -471,6 +504,7 @@ def parity(args: argparse.Namespace) -> dict[str, Any]:
     model, load_seconds = load_package(
         args.package, args.device, args.threads, args.base_path
     )
+    kernels = kernel_runtime(args.require_kernels)
     panels = {}
     for spec in args.panel:
         name, prompts_path, predictions_path, count = spec.split(":")
@@ -531,7 +565,7 @@ def parity(args: argparse.Namespace) -> dict[str, Any]:
         "mode": "parity",
         "package_manifest_sha256": sha_file(args.package / "MODEL_MANIFEST.json"),
         "device": str(getattr(model.backend, "device", args.device)),
-        "runtime": runtime_versions(),
+        "runtime": {**runtime_versions(), "sites": args.site, "kernels": kernels},
         "load_seconds": load_seconds,
         "tolerance": args.tolerance,
         "panels": panels,
@@ -548,10 +582,17 @@ def main() -> None:
         p = sub.add_parser(name)
         p.add_argument("--package", type=Path, required=True)
         p.add_argument("--output", type=Path, required=True)
+        p.add_argument(
+            "--site",
+            action="append",
+            default=[],
+            help="image directory of kernel packages to import after the package",
+        )
         if name != "card":
             p.add_argument("--device")
             p.add_argument("--threads", type=int)
             p.add_argument("--base-path")
+            p.add_argument("--require-kernels", action="store_true")
     sub.choices["card"].add_argument("--reference", type=Path, required=True)
     sub.choices["card"].add_argument("--tolerance", type=float, default=0.0)
     sub.choices["parity"].add_argument(
@@ -570,6 +611,11 @@ def main() -> None:
     handler = {"run": run, "compare": compare, "card": card, "parity": parity}[
         args.command
     ]
+    for site in reversed(getattr(args, "site", [])):
+        if not Path(site).is_absolute() or not Path(site).is_dir():
+            raise ValueError(f"--site needs an existing absolute directory: {site}")
+        # load_package later inserts the package itself in front of these.
+        sys.path.insert(0, site)
     result = handler(args)
     write_exclusive(args.output, result)
     print(json.dumps({"mode": args.command, "passed": result["passed"]}))

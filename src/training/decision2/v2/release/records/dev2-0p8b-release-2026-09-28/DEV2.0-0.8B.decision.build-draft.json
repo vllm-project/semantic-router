@@ -1,0 +1,19 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-0.8B",
+  "repo_id": "llm-semantic-router/DEV2.0-0.8B",
+  "identity": {
+    "model_sha256": "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b"
+  },
+  "report_sha256": "e3e08cd17fe38becdfa655c61d329de7d39c75ffb7db70861af4f88d87fe2682",
+  "paired_sha256": "4489c0ea734a3827edf662419c11faba9fff90deb33325b04460a3f7fbdcd557",
+  "prepared_by": "Decision 2.0 release engineering (build-time binding draft)",
+  "decided_by": null,
+  "rationale": "Binding draft for the private build, upload and verification of the first release candidate (decoder recipe E8F seed soup; coordinator note 2026-09-28 21:00). It names the scored checkpoint identity, the post-key same-panel report of run m2-E8F-soup-nodeA and its paired comparison with the adopted Decision 1.0 Eos run (v3 50.236 vs 42.547, +7.69 [+3.65, +13.32]). It approves nothing: the coordinator writes the final decision after the JevArena-C1 scoring event, and only a final decision can be sealed and added to the Decision 2.0 collection.",
+  "pending": [
+    "JevArena-C1 scoring event 1 result for this checkpoint",
+    "coordinator decision (status final, decided_by)"
+  ]
+}
