@@ -6,8 +6,8 @@ similarity thresholds, and contradictory memory behavior.
 
 from memory_tests.base import (
     MIN_CONTENT_MATCHES,
-    PREVIEW_LENGTH,
     MSG_PREVIEW_LENGTH,
+    PREVIEW_LENGTH,
     MemoryFeaturesTest,
 )
 
