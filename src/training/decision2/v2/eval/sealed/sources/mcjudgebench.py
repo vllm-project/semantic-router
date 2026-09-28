@@ -56,14 +56,16 @@ QUESTION = {
         "The state holds an instruction given to an AI assistant (with any supplementary "
         "input), the assistant's response, and one requirement the response is checked "
         "against. Judge only this requirement, using only the instruction, the response "
-        "and the requirement text: how well does the response satisfy it? Do not assume "
-        "missing information, and do not credit overall fluency or quality when the "
+        "and the requirement text: how well does the response satisfy it? Judge the "
+        "response exactly as shown, even if it ends abruptly. Do not assume missing "
+        "information, and do not credit overall fluency or quality when the "
         "requirement itself is not met."
     ),
     "criteria": [
         "Not satisfied: the response clearly violates or omits the requirement.",
         "Partially satisfied: there is clear evidence that the requirement is met in "
-        "part, but not in full.",
+        "part but not in full (for example some but not all of what it asks for, or "
+        "it holds for some parts of the response and not others).",
         "Fully satisfied: the response clearly meets the requirement.",
     ],
 }

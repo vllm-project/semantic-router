@@ -59,10 +59,13 @@ def write_new(path: Path, data: bytes) -> None:
         stream.write(data)
 
 
-def sample(gold: list[dict[str, Any]], salt: str) -> list[dict[str, Any]]:
+def sample(
+    gold: list[dict[str, Any]], salt: str, tasks: list[str] | None = None
+) -> list[dict[str, Any]]:
     by_task: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in gold:
-        by_task[row["task"]].append(row)
+        if tasks is None or row["task"] in tasks:
+            by_task[row["task"]].append(row)
     chosen = []
     for task, rows in sorted(by_task.items()):
         long_share = sum(row["long"] for row in rows) / len(rows)
@@ -75,7 +78,7 @@ def sample(gold: list[dict[str, Any]], salt: str) -> list[dict[str, Any]]:
 def packet(args: argparse.Namespace) -> int:
     salt = args.salt_file.read_text(encoding="utf-8").strip()
     gold = read_jsonl(args.build_dir / "gold.jsonl")
-    chosen = sample(gold, salt)
+    chosen = sample(gold, salt, getattr(args, "task", None))
     args.output_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(args.output_dir, 0o700)
     packets: dict[str, list[dict[str, Any]]] = {"short": [], "long": []}
@@ -251,6 +254,7 @@ def main(argv: list[str] | None = None) -> int:
     one.add_argument("--build-dir", type=Path, required=True)
     one.add_argument("--salt-file", type=Path, required=True)
     one.add_argument("--output-dir", type=Path, required=True)
+    one.add_argument("--task", action="append", help="only these tasks (re-review)")
     two = commands.add_parser("score")
     two.add_argument("--build-dir", type=Path, required=True)
     two.add_argument("--review-dir", type=Path, required=True)

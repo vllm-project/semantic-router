@@ -1,6 +1,6 @@
 """JevArena-C1 converter for allenai/tutormoments-preview.
 
-Real K-12 maths tutoring sessions with human turn-level annotations. In each
+Real K-12 tutoring sessions (mostly maths) with human turn-level annotations. In each
 annotation pass a human annotator marks key moments of one type over a session:
 ``scaffolding`` (the tutor scaffolds, or misses a chance to scaffold, the
 student's problem solving) or ``rapport`` (rapport building or rupture). We emit
@@ -81,14 +81,17 @@ SPEC = SourceSpec(
     ),
 )
 
+_SESSION = (
+    "The state is an excerpt from a real one-to-one K-12 tutoring session, mostly"
+    " mathematics (automatically transcribed speech; speaker labels may contain"
+    " transcription errors). `moment` is a span of turns that a human annotator"
+    " marked as a key moment of the session; `preceding_turns` are the turns just"
+    " before it. The annotator marked it for one of two kinds of key moment; judge"
+    " which kind the span is primarily about."
+)
 MOMENT_Q = {
     "type": "choice",
-    "instructions": (
-        "The state is an excerpt from a real one-to-one K-12 maths tutoring session"
-        " (automatically transcribed speech). `moment` is a span of turns that a"
-        " human annotator marked as a key moment of the session; `preceding_turns`"
-        " are the turns just before it. Which kind of key moment is the marked span?"
-    ),
+    "instructions": _SESSION + " Which kind of key moment is the marked span?",
     "criteria": {
         "scaffolding": (
             "A scaffolding moment: the tutor supports, or misses a chance to support,"
@@ -97,20 +100,15 @@ MOMENT_Q = {
         ),
         "rapport": (
             "A rapport moment: the tutor builds, maintains, or ruptures the"
-            " relationship with the student (encouragement, empathy, personal or"
-            " social talk, reactions to the student's feelings or engagement)."
+            " relationship with the student, or misses a chance to respond to it"
+            " (encouragement, empathy, personal or social talk, reactions to the"
+            " student's feelings or engagement)."
         ),
     },
 }
 RAPPORT_Q = {
     "type": "noul",
-    "instructions": (
-        "The state is an excerpt from a real one-to-one K-12 maths tutoring session"
-        " (automatically transcribed speech). `moment` is a span of turns that a"
-        " human annotator marked as a key moment of the session; `preceding_turns`"
-        " are the turns just before it. The marked span is either a rapport moment or"
-        " a scaffolding moment. Is it a rapport moment?"
-    ),
+    "instructions": _SESSION + " Is it a rapport moment?",
     "criteria": {
         "true": MOMENT_Q["criteria"]["rapport"],
         "false": MOMENT_Q["criteria"]["scaffolding"],
