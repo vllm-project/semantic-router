@@ -121,7 +121,10 @@ Choices made here:
   tested card-renderer addition), so the finalization rerun prints it after the rank scope and on the
   evaluation page. The rest of that policy already holds here: the mlx-diag Score part (XNLI) is not
   shown, the label is `apache-2.0` with training-data licences credited, and CPU support is claimed
-  only because it was verified.
+  only because it was verified. A CPU build of the staged spec on node A (mirror of integration
+  `f41783939`, no upload) succeeds: only `README.md` and `evaluation/EVALUATION.md` differ from the
+  uploaded revision (the note appears once in each); identity, parameters and every model file are
+  unchanged; card checks report no problems.
 
 ## 5. Hub readback: PASS
 
