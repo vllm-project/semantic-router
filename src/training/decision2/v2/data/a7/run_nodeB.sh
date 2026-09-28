@@ -5,6 +5,7 @@
 #   build     pre-admission sub-arms, views and build manifest (host python)
 #   lengths   per-row token lengths in the pinned runtime image (no GPU devices)
 #   screens   overlap vs PI-v2 and shortcut receipts per sub-arm (host python)
+#   rescreen  overlap of the admitted files vs A7_RESCREEN_PI into A7_RESCREEN_DIR
 #   admit     apply overlap/budget/shortcut rules, resolve views
 #   post      post-admission shortcut and TRAIN<->AHO self-scan diagnostics
 #   freeze    content hash + manifest (+tokens) per final file (runtime image)
@@ -74,6 +75,29 @@ case "$stage" in
         --receipt "$W/screens/$sub.shortcut.json" --workers "$workers" \
         > "$W/screens/$sub.shortcut.stdout" 2> "$W/screens/$sub.shortcut.stderr"
       log "$sub shortcut rc=$? wall=$(( $(date +%s) - start ))"
+      set -e
+    done
+    ;;
+  rescreen)
+    # Lexical overlap of the admitted files against another protected manifest
+    # (A7_RESCREEN_PI, e.g. PI-v3 without TRAIN roles) into $W/$A7_RESCREEN_DIR.
+    pi="${A7_RESCREEN_PI:?A7_RESCREEN_PI}"
+    dir="$W/${A7_RESCREEN_DIR:?A7_RESCREEN_DIR}"
+    mkdir -p "$dir"
+    log "rescreen manifest=$(sha256sum "$pi" | cut -c1-64) dir=$dir"
+    for sub in "${SUBS[@]}"; do
+      files=()
+      for part in train aho; do
+        [[ -f "$W/final/$sub.$part.jsonl" ]] && files+=(--candidates "$W/final/$sub.$part.jsonl")
+      done
+      [[ ${#files[@]} -gt 0 ]] || continue
+      set +e
+      start=$(date +%s)
+      python3 -m v2.data.overlap "${files[@]}" --protected-inventory "$pi" \
+        --private-receipt "$dir/$sub.overlap.private.json" \
+        --public-receipt "$dir/$sub.overlap.public.json" --workers "$workers" \
+        > "$dir/$sub.overlap.stdout" 2> "$dir/$sub.overlap.stderr"
+      log "$sub rescreen overlap rc=$? wall=$(( $(date +%s) - start ))"
       set -e
     done
     ;;
