@@ -85,6 +85,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | release engineering | `/home/xunliu/code/vllm-sr-dev2-release` | `xunzhuo/decision-2-training-release` |
 | A7 own-1.0 corpora | `/home/xunliu/code/vllm-sr-dev2-a7` | `xunzhuo/decision-2-training-a7` |
 | release engineering (DEV2.0-0.6B) | `/home/xunliu/code/vllm-sr-dev2-release-06b` | `xunzhuo/decision-2-training-release-06b` |
+| release engineering (DEV2.0-2B) | `/home/xunliu/code/vllm-sr-dev2-release-2b` | `xunzhuo/decision-2-training-release-2b` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -176,6 +177,7 @@ exactly one gist file and updates it in place:
 | `07-decision-2-release.md` | release engineering |
 | `08-decision-2-own10-corpora.md` | A7 own-1.0 corpora |
 | `07b-decision-2-release-06b.md` | release engineering for DEV2.0-0.6B |
+| `07c-decision-2-release-2b.md` | release engineering for DEV2.0-2B |
 
 - Create: write the file locally with exactly that name, then `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -a <local-path>`.
   Update: `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -f <file-name> <local-path>`. Never modify or delete other files.
@@ -184,6 +186,28 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 02:45 — From decoder Milestone 3 (gist 04; integration `7c331e1b7`):
+  - **THIRD RELEASE CANDIDATE: DEV2.0-2B** = S2T (Sol full fine-tuning, own-Sol soft targets as a trust region, three-seed
+    soup): post-key v3 53.437 vs the stricter Sol 1.0 16K control 45.781 (+7.66 [+3.26, +10.81]); vs adopted Sol1 45.580
+    +7.86; vs Decider 2B +3.94 [−2.48, +5.67]; public 231 171 vs 160; all four typed families up; no type collapsed.
+    Staged `dev2-dec-staging@545a6784`, folder `m3/S2T-soup/`, `qwen-full`, 16,384 tokens; scored run
+    `/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA`. Teacher: own Sol 1.0 only. Disclose: CSS15 mrf −.094, wiki_corpus
+    −.045, flute −.032; mlx-diag level overall but Korean .59 vs .63. Release engineering + eval gate checks start now; C1
+    does not block it (the card gets its C1 line at event 3).
+  - **4B HOLD:** best soup N4LKr (own-Lux targets, KL 1.0) 59.539, +3.07 [−4.90, +5.00] vs Nox1 — fails the lower-bound
+    rule; staged `dev2-dec-staging@784a894f`. The 4B paired interval is about ±5, so 4B needs roughly +5 v3. Only own-Lux
+    lifted CSS15 transfer at 4B (more at KL 1.0); AutoJev lowered it most; v2-M costs 4B 2–3 points of mlx-diag; at 4B the
+    proxy's transfer term is dominated by one pilot task (`discourse`) that v2 inflates.
+  - 0.8B follow-up E8V (E8F data + v2-M) 48.585 < released E8F soup → DEV2.0-0.8B stays. New disclosure for its next
+    card-only revision: 19 of its training rows were later quarantined in A7 v3 against development held-out slices (at most
+    one could match an mlx-diag item).
+  - **HF PRIVATE STORAGE POLICY (the org hit its private storage limit at 18:08 UTC):** keep released model repos, the
+    current release candidate's staging copy until it is released, datasets (training data, teacher targets) and eval
+    artifacts. For everything else in staging model repos (HOLD candidates, individual seeds, superseded soups): record
+    hashes, keep a re-hashed copy on the nodes, then delete the stored LFS files from the Hub without rewriting commit
+    history, and log each deletion in your records. Upload only soups and finalists, never individual seeds. Check storage
+    headroom before any large upload.
 
 - 2026-09-29 02:40 — From 0.6B Milestone 5 (gist 03; integration `9a2301c68`): no successor; the released DEV2.0-0.6B stands.
   - Best soup Z (nine seeds: T + V2 + arm a) post-key v3 45.48, +1.94 [−0.82, +3.89] vs released (fails the successor
