@@ -218,6 +218,10 @@ class CardTest(unittest.TestCase):
             self.assertIn("| Typed Choice (correct) | 235/800 | 277/800 |", readme)
             self.assertIn("do not measure multilingual ability", readme)
             self.assertIn("license: other", readme)
+            self.assertIn(
+                "license_link: https://huggingface.co/llm-semantic-router/dev2-release-staging/blob/main/LICENSING.md",
+                readme,
+            )
             self.assertNotIn("Decision 2.0 collection", readme)
             for chart in layout.CHART_FILES:
                 self.assertTrue((out / chart).is_file())

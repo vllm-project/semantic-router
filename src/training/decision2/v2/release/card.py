@@ -308,7 +308,11 @@ def render_readme(ctx: dict[str, Any]) -> str:
     lic = facts["licence"]
     front = ["---", f"license: {lic['spdx']}"]
     if lic["spdx"] == "other":
-        front += [f"license_name: {lic['license_name']}", "license_link: LICENSING.md"]
+        # The Hub's metadata validator accepts only an https URI here.
+        front += [
+            f"license_name: {lic['license_name']}",
+            f"license_link: https://huggingface.co/{repo}/blob/main/LICENSING.md",
+        ]
     origin = facts["origin"]
     front.append(f"base_model: {origin['repo_id']}")
     if origin.get("relation") in ("finetune", "adapter", "merge"):
