@@ -53,6 +53,9 @@ type Runtime struct {
 	pair            *binding.Task[tasks.TextPairRequest, tasks.LabelDistribution]
 	mu              sync.Mutex
 	artifactMu      sync.Mutex
+	artifactCtx     context.Context
+	artifactCancel  context.CancelFunc
+	artifactWG      sync.WaitGroup
 	artifacts       map[string]string
 	artifactFlights map[string]*artifactFlight
 	fingerprint     artifactFingerprinter
@@ -66,6 +69,7 @@ func newRuntimeWithFingerprinter(pool *binding.Pool, fingerprint artifactFingerp
 	if pool == nil {
 		pool = binding.NewPool()
 	}
+	artifactCtx, artifactCancel := context.WithCancel(context.Background())
 	inventory := binding.NewInventory()
 	prepared := binding.NewPreparedTasks()
 	registry := binding.NewRegistry(func(event binding.Event) {
@@ -109,10 +113,25 @@ func newRuntimeWithFingerprinter(pool *binding.Pool, fingerprint artifactFingerp
 		tokenWindows:    tokenWindows,
 		grounded:        grounded,
 		pair:            pair,
+		artifactCtx:     artifactCtx,
+		artifactCancel:  artifactCancel,
 		artifacts:       make(map[string]string),
 		artifactFlights: make(map[string]*artifactFlight),
 		fingerprint:     fingerprint,
 	}
+}
+
+// Close stops and drains artifact fingerprinting owned by this runtime.
+// Prepared model resources remain owned by their existing handles.
+func (r *Runtime) Close() error {
+	if r == nil {
+		return nil
+	}
+	r.artifactMu.Lock()
+	r.artifactCancel()
+	r.artifactMu.Unlock()
+	r.artifactWG.Wait()
+	return nil
 }
 
 // ObserveBinding also admits typed external connectors to this generation's
@@ -232,6 +251,10 @@ func (r *Runtime) artifactRevisionResolved(ctx context.Context, abs string) (str
 		}
 
 		r.artifactMu.Lock()
+		if r.artifactCtx.Err() != nil {
+			r.artifactMu.Unlock()
+			return "", binding.ErrClosed
+		}
 		if cached, ok := r.artifacts[abs]; ok {
 			r.artifactMu.Unlock()
 			return cached, nil
@@ -254,16 +277,20 @@ func (r *Runtime) artifactRevisionResolved(ctx context.Context, abs string) (str
 
 		// The shared calculation has its own lifetime. A caller only cancels it
 		// after becoming the final waiter for this artifact.
-		workCtx, cancel := context.WithCancel(context.Background())
+		workCtx, cancel := context.WithCancel(r.artifactCtx)
 		flight := &artifactFlight{
 			done:    make(chan struct{}),
 			cancel:  cancel,
 			waiters: 1,
 		}
 		r.artifactFlights[abs] = flight
+		r.artifactWG.Add(1)
 		r.artifactMu.Unlock()
 
-		go r.runArtifactFingerprint(workCtx, abs, flight)
+		go func() {
+			defer r.artifactWG.Done()
+			r.runArtifactFingerprint(workCtx, abs, flight)
+		}()
 		return r.waitForArtifactRevision(ctx, abs, flight)
 	}
 }

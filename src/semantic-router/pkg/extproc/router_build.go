@@ -206,6 +206,7 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		routerSessionStore: buildRouterLearningStateStore(cfg),
 		protocolCodecs:     protocolcodec.NewBuiltinRegistry(),
 	}
+	components.resources.add(components.modelRuntime.Close)
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
 	embeddings, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, components.modelRuntime)
 	if err != nil {

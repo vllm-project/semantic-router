@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
@@ -248,6 +249,66 @@ func TestArtifactRevisionWaitsForAbandonedFlightBeforeRetry(t *testing.T) {
 	}
 	if got := calls.Load(); got != 2 {
 		t.Fatalf("fingerprint calls = %d, want canceled attempt and one retry", got)
+	}
+}
+
+func TestRuntimeCloseCancelsAndDrainsArtifactFlights(t *testing.T) {
+	started := make(chan struct{})
+	canceled := make(chan struct{})
+	release := make(chan struct{})
+	runtime := newRuntimeWithFingerprinter(nil, func(ctx context.Context, _ string) (string, error) {
+		close(started)
+		<-ctx.Done()
+		close(canceled)
+		<-release
+		return "", ctx.Err()
+	})
+	t.Cleanup(func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+		_ = runtime.Close()
+	})
+
+	result := make(chan artifactRevisionResult, 1)
+	go func() {
+		revision, err := runtime.artifactRevisionResolved(context.Background(), "artifact")
+		result <- artifactRevisionResult{revision: revision, err: err}
+	}()
+	<-started
+
+	closed := make(chan error, 1)
+	go func() { closed <- runtime.Close() }()
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("runtime close did not cancel the artifact worker")
+	}
+	select {
+	case err := <-closed:
+		t.Fatalf("runtime close returned before the artifact worker exited: %v", err)
+	default:
+	}
+
+	close(release)
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("runtime close did not wait for the artifact worker")
+	}
+	if revisionResult := <-result; !errors.Is(revisionResult.err, context.Canceled) {
+		t.Fatalf("artifact revision after runtime close = %q, %v", revisionResult.revision, revisionResult.err)
+	}
+	if _, err := runtime.artifactRevisionResolved(context.Background(), "other"); !errors.Is(err, binding.ErrClosed) {
+		t.Fatalf("artifact revision after runtime close error = %v, want %v", err, binding.ErrClosed)
+	}
+	if err := runtime.Close(); err != nil {
+		t.Fatalf("second runtime close failed: %v", err)
 	}
 }
 
