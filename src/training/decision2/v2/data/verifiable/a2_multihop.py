@@ -540,7 +540,7 @@ def reparse(
     if lang == "en":
         rx = {
             "member": rf"({name}) (?:is on|is a member of|works in) the ({team}) team",
-            "floor": rf"(?:The|the) ({team}) team (?:sits on|is on|on) the (\d+)(?:st|nd|rd|th) floor",
+            "floor": rf"(?:The|the) ({team}) team (?:sits on|is on|on) the (\d+)(?:st|nd|rd|th) floor",  # codespell:ignore nd
             "city": rf"The ({team}) team (?:is based in|works from the) ({city})",
             "building": rf"The ({team}) team (?:works out of|is housed in) ({bld})",
             "bcity": rf"({bld}) (?:is in|stands in) ({city})",
@@ -551,7 +551,7 @@ def reparse(
             rf"(?:On which floor|In which city) does ({name}) work\?", instructions
         )
         n = re.search(
-            rf"Does ({name}) work (?:on the (\d+)(?:st|nd|rd|th) floor|in ({city}))\?",
+            rf"Does ({name}) work (?:on the (\d+)(?:st|nd|rd|th) floor|in ({city}))\?",  # codespell:ignore nd
             instructions,
         )
     else:

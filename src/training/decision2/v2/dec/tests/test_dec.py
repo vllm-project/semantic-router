@@ -280,6 +280,327 @@ class TrainerHelperTest(unittest.TestCase):
             path.write_text(json.dumps(good[0]) + "\n")
             with self.assertRaises(ValueError):
                 load_teacher(path, rows)
+            self.assertEqual(set(load_teacher(path, rows, partial=True)), {"a"})
+            extra = [good[0], dict(good[1], input_sha256="renumbered")]
+            extra.append({"id": "gone", "input_sha256": "h9", "teacher_probs": {}})
+            path.write_text("".join(json.dumps(r) + "\n" for r in extra))
+            self.assertEqual(set(load_teacher(path, rows, partial=True)), {"a"})
+            with self.assertRaises(ValueError):
+                load_teacher(path, rows)
+
+
+class RuntimeCheckTest(unittest.TestCase):
+    @staticmethod
+    def _decorated(implementation, is_new_implementation):
+        def wrapped(*args, **kwargs):
+            if is_new_implementation:
+                return implementation(*args, **kwargs)
+            return None
+
+        def outer(*args, **kwargs):
+            return wrapped(*args, **kwargs)
+
+        return outer
+
+    def test_binding_follows_decorator_closures(self) -> None:
+        from v2.dec.runtime_check import _binding
+
+        def chunk_gated_delta_rule():
+            return None
+
+        name, is_new = _binding(self._decorated(chunk_gated_delta_rule, True))
+        self.assertTrue(name.endswith("chunk_gated_delta_rule"))
+        self.assertTrue(is_new)
+        self.assertFalse(_binding(self._decorated(chunk_gated_delta_rule, False))[1])
+
+    def test_violations_need_kernels_and_persisted_cache(self) -> None:
+        from v2.dec.runtime_check import BINDINGS, violations
+
+        good = {
+            "kernel_bindings": {
+                name: prefix + "ops.impl" for name, prefix in BINDINGS.items()
+            },
+            "triton_cache_dir": "/triton-cache",
+            "triton_cache_autotuning": "1",
+        }
+        self.assertEqual(violations(good), [])
+        reference = dict(
+            good,
+            kernel_bindings=dict(
+                good["kernel_bindings"], torch_chunk_gated_delta_rule=None
+            ),
+        )
+        self.assertEqual(len(violations(reference)), 1)
+        self.assertEqual(
+            len(
+                violations(
+                    dict(good, triton_cache_autotuning=None, triton_cache_dir=None)
+                )
+            ),
+            2,
+        )
+
+
+def _score_row(i: int, count: int, gold: int, group: str | None = None) -> dict:
+    return {
+        "id": f"s{count}-{i}",
+        "group_id": group or f"g{count}-{i}",
+        "task_type": "score",
+        "options": [{"key": str(k), "description": f"level {k}"} for k in range(count)],
+        "label": gold,
+        "source": "s",
+    }
+
+
+class ScoreOverfitTest(unittest.TestCase):
+    def test_selection_covers_every_gold_level_once_per_group(self) -> None:
+        from v2.dec.build_score_overfit import gold_level, select_rows
+
+        rows = [
+            _score_row(i, count, i % count, group=f"g{count}-{i // 2}")
+            for count in (2, 5, 10)
+            for i in range(60)
+        ]
+        chosen = select_rows(rows, 20, "seed")
+        self.assertEqual(chosen, select_rows(rows, 20, "seed"))
+        for count in (2, 5, 10):
+            subset = [r for r in chosen if len(r["options"]) == count]
+            self.assertEqual(len(subset), 20)
+            self.assertEqual({gold_level(r) for r in subset}, set(range(count)))
+            self.assertEqual(len({r["group_id"] for r in subset}), len(subset))
+
+    def test_fit_report_verdicts(self) -> None:
+        from v2.dec.score_fit_report import fit_report
+
+        rows = [_score_row(i, 3, i % 3) for i in range(30)]
+        perfect = {r["id"]: {"prediction_key": str(r["label"])} for r in rows}
+        self.assertEqual(fit_report(rows, perfect)["status"], "PASS")
+        collapsed = {r["id"]: {"prediction_key": "0"} for r in rows}
+        report = fit_report(rows, collapsed)
+        self.assertEqual(report["status"], "FAIL")
+        self.assertEqual(report["gold_levels_never_predicted"], {"L3": [1, 2]})
+
+
+class BatchingTest(unittest.TestCase):
+    def test_token_batches_respect_budget_and_cover_rows_once(self) -> None:
+        from v2.dec.batching import padded, row_windows, token_batches
+
+        lengths = [(i * 37) % 900 + 20 for i in range(500)]
+        batches = token_batches(lengths, seed=3, epoch=0, max_tokens=4096, max_rows=16)
+        self.assertEqual(
+            batches,
+            token_batches(lengths, seed=3, epoch=0, max_tokens=4096, max_rows=16),
+        )
+        self.assertNotEqual(
+            batches,
+            token_batches(lengths, seed=3, epoch=1, max_tokens=4096, max_rows=16),
+        )
+        self.assertEqual(sorted(i for b in batches for i in b), list(range(500)))
+        for batch in batches:
+            self.assertLessEqual(len(batch), 16)
+            self.assertLessEqual(
+                max(padded(lengths[i]) for i in batch) * len(batch), 4096
+            )
+        windows = row_windows(batches, 64)
+        self.assertEqual(sum(len(b) for w in windows for b in w), 500)
+        self.assertTrue(all(sum(len(b) for b in w) >= 64 for w in windows[:-1]))
+        with self.assertRaises(ValueError):
+            token_batches([5000], seed=0, epoch=0, max_tokens=4096, max_rows=4)
+
+
+class MixtureTest(unittest.TestCase):
+    def test_rule_7d_rekey_renumbers_and_rehashes(self) -> None:
+        from training.model.data import INPUT_FIELDS, digest
+        from v2.dec.build_mixture import rekey
+
+        row = {
+            "task_type": "choice",
+            "state": "s",
+            "instructions": "q",
+            "options": [
+                {"key": "result_2", "description": "a"},
+                {"key": "result_0", "description": "b"},
+                {"key": "result_1", "description": "c"},
+            ],
+            "label": 1,
+            "audit_metadata": {},
+        }
+        row["input_sha256"] = digest({f: row[f] for f in INPUT_FIELDS})
+        out = rekey(row)
+        self.assertEqual(
+            [o["key"] for o in out["options"]], ["result_0", "result_1", "result_2"]
+        )
+        self.assertEqual([o["description"] for o in out["options"]], ["a", "b", "c"])
+        self.assertEqual(out["label"], 1)
+        self.assertEqual(
+            out["audit_metadata"]["dec_rule_7d"]["original_keys"],
+            ["result_2", "result_0", "result_1"],
+        )
+        self.assertEqual(out["input_sha256"], digest({f: out[f] for f in INPUT_FIELDS}))
+        self.assertNotEqual(out["input_sha256"], row["input_sha256"])
+        self.assertIs(rekey(out), out)
+        other = dict(row, options=[{"key": "x", "description": "a"}] * 2)
+        self.assertIs(rekey(other), other)
+
+
+HAS_QWEN35 = HAS_TORCH and importlib.util.find_spec("transformers") is not None
+
+
+def _torch_reference(function, depth: int = 0):
+    """The reference PyTorch function behind a Transformers kernel wrapper."""
+    code = getattr(function, "__code__", None)
+    cells = getattr(function, "__closure__", None) or ()
+    if code is not None and "torch_function" in code.co_freevars:
+        return cells[code.co_freevars.index("torch_function")].cell_contents
+    for cell in cells if depth < 4 else ():
+        value = cell.cell_contents
+        if callable(value):
+            found = _torch_reference(value, depth + 1)
+            if found is not None:
+                return found
+    return None
+
+
+@unittest.skipUnless(HAS_QWEN35, "torch/transformers not installed")
+class PaddingEquivalenceTest(unittest.TestCase):
+    """Right padding must not change loss or gradients on a real hybrid backbone.
+
+    On CPU the image's CUDA/Triton kernels cannot run, so the gated-delta and
+    causal-conv1d calls use Transformers' reference implementations; the GPU
+    probe ``check_padding`` covers the kernels themselves.
+    """
+
+    def setUp(self) -> None:
+        from unittest import mock
+
+        import torch
+        from transformers.models.qwen3_5 import modeling_qwen3_5
+        from transformers.models.qwen3_5.configuration_qwen3_5 import (
+            Qwen3_5TextConfig,
+        )
+        from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5TextModel
+
+        for name in (
+            "causal_conv1d_fn",
+            "causal_conv1d_update",
+            "torch_chunk_gated_delta_rule",
+            "torch_recurrent_gated_delta_rule",
+        ):
+            reference = _torch_reference(getattr(modeling_qwen3_5, name))
+            if reference is not None:
+                patcher = mock.patch.object(modeling_qwen3_5, name, reference)
+                patcher.start()
+                self.addCleanup(patcher.stop)
+        try:
+            torch.linalg.solve_triangular(
+                torch.eye(2), torch.ones(2, 1), upper=False, unitriangular=True
+            )
+        except RuntimeError:
+            # ROCm builds without CPU BLAS: use the reference's own
+            # forward-substitution branch (plain matmuls, same math).
+            patcher = mock.patch.object(
+                modeling_qwen3_5, "is_torchdynamo_exporting", lambda: True
+            )
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+        from training.model.decision_model import (
+            ARCHITECTURE,
+            CandidateHead,
+            DecisionModel,
+        )
+
+        torch.manual_seed(0)
+        config = Qwen3_5TextConfig(
+            vocab_size=97,
+            hidden_size=32,
+            intermediate_size=64,
+            num_hidden_layers=2,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=8,
+            linear_num_value_heads=4,
+            linear_num_key_heads=2,
+            linear_key_head_dim=8,
+            linear_value_head_dim=8,
+            linear_conv_kernel_dim=4,
+            layer_types=["linear_attention", "full_attention"],
+            max_position_embeddings=256,
+        )
+        backbone = Qwen3_5TextModel(config).float()
+        self.torch = torch
+        self.model = DecisionModel(
+            backbone, CandidateHead(32, 8), {"architecture": ARCHITECTURE}
+        ).train()
+        lengths_and_counts = [(13, 3), (37, 2), (22, 4), (9, 2), (30, 3)]
+        self.items = []
+        for index, (length, count) in enumerate(lengths_and_counts):
+            ids = torch.randint(1, 97, (length,)).tolist()
+            ends = sorted(torch.randperm(length - 2)[:count].add(1).tolist())
+            self.items.append(
+                {
+                    "id": f"r{index}",
+                    "ids": ids,
+                    "candidate_positions": ends,
+                    "query_position": length - 1,
+                    "label": index % count,
+                    "keys": [str(k) for k in range(count)],
+                    "score_level_indices": list(range(count)),
+                    "task_type": "score",
+                    "teacher_probs": None,
+                }
+            )
+
+    def _run(self, mode: str, groups: list[list[int]]):
+        from training.model.loss import per_example_loss
+        from v2.dec.check_padding import batch_for
+
+        self.model.zero_grad(set_to_none=True)
+        losses = {}
+        for positions in groups:
+            subset = [self.items[i] for i in positions]
+            batch = batch_for(subset, 0, mode, 11)
+            logits = self.model(**batch)
+            terms = per_example_loss(
+                logits,
+                batch["labels"],
+                batch["candidate_mask"],
+                objective="ce_brier",
+                brier_weight=0.5,
+            )
+            terms["total"].sum().backward()
+            for position, value in zip(positions, terms["total"].tolist()):
+                losses[position] = value
+        grads = self.torch.cat(
+            [p.grad.flatten() for p in self.model.parameters() if p.grad is not None]
+        )
+        return [losses[i] for i in range(len(self.items))], grads
+
+    def test_padded_microbatches_match_unpadded_rows(self) -> None:
+        from v2.dec.check_padding import mixed_groups
+
+        singles = [[i] for i in range(len(self.items))]
+        exact_loss, exact_grad = self._run("exact", singles)
+        grouped = mixed_groups(
+            list(range(len(self.items))), [len(i["ids"]) for i in self.items], 3
+        )
+        self.assertTrue(any(len(g) > 1 for g in grouped))
+        for mode, groups in (
+            ("single", singles),
+            ("extra", singles),
+            ("grouped", grouped),
+        ):
+            loss, grad = self._run(mode, groups)
+            for a, b in zip(exact_loss, loss):
+                self.assertAlmostEqual(a, b, places=5, msg=mode)
+            relative = (grad - exact_grad).norm() / exact_grad.norm()
+            self.assertLess(relative.item(), 1e-5, mode)
+
+    def test_mixed_groups_pair_short_and_long_rows(self) -> None:
+        from v2.dec.check_padding import mixed_groups
+
+        groups = mixed_groups([0, 1, 2, 3, 4, 5], [5, 60, 10, 50, 20, 40], 2)
+        self.assertEqual(groups, [[1, 0], [3, 2], [5, 4]])
 
 
 if __name__ == "__main__":

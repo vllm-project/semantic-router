@@ -1,0 +1,192 @@
+{
+ "version": "a7-enc10-v1",
+ "node": "node-b",
+ "sources": [
+  {
+   "name": "oasst1",
+   "path": "/data/dev2/private/a7/sources/enc10/oasst1/train-00000-of-00001-b42a775f407cee45.parquet",
+   "sha256": "bbfadf5ed1278ba2208c837fdcad865adf65f5df55d80abadab2745db13fcb5e",
+   "licence": "Apache-2.0",
+   "upstream": "OpenAssistant/oasst1@fdf72ae0827c1cda404aff25b6603abec9e3399b data/train-00000-of-00001-b42a775f407cee45.parquet"
+  },
+  {
+   "name": "klue_sts",
+   "path": "/data/dev2/private/a7/sources/enc10/klue-sts/train.raw.json",
+   "sha256": "9fd1d5d3af73bd06648283be00c87d1b6f6eee90e4854f285df68d0bd5ae91d8",
+   "licence": "CC-BY-SA-4.0",
+   "upstream": "KLUE-benchmark/KLUE@3efd98708a40ff49251fddde35453f8fbb11f536 klue_benchmark/klue-sts-v1.1/klue-sts-v1.1_train.json"
+  },
+  {
+   "name": "jsts",
+   "path": "/data/dev2/private/a7/sources/enc10/jsts/train.raw.json",
+   "sha256": "db6bd653270ac9786759920413a48973164d322998f34dd4ae32202af5e66969",
+   "licence": "CC-BY-SA-4.0",
+   "upstream": "yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c datasets/jsts-v1.3/train-v1.3.json"
+  },
+  {
+   "name": "afrisenti_sw",
+   "path": "/data/dev2/private/a7/sources/enc10/afrisenti/sw_train.tsv",
+   "sha256": "1f06cb668d1c115a844704b5ffaec3e6168eabf1bd15657e3faf99a42e682152",
+   "licence": "CC-BY-4.0",
+   "upstream": "afrisenti-semeval/afrisent-semeval-2023@5aec3cfcf87b59f885e98641f72e52182776429d SubtaskA/train/sw_train.tsv"
+  },
+  {
+   "name": "massive",
+   "path": "/data/dev2/private/a7/sources/enc10/massive/amazon-massive-dataset-1.1.tar.gz",
+   "sha256": "4cba5faa11c71437928e17cb1b9b3d8b8e727e7ea363a3a9a8045e19c0491577",
+   "licence": "CC-BY-4.0",
+   "upstream": "amazon-massive-nlu-dataset amazon-massive-dataset-1.1.tar.gz (train partition)"
+  }
+ ],
+ "isolation_train": [
+  {
+   "name": "A0-root",
+   "path": "/data/dev2/private/a7/base/5c0255ed/rights_clean.train.jsonl",
+   "sha256": "61740be433c6cd714810a9908432ad29597c570d0d267d2731ab78cdad243755"
+  },
+  {
+   "name": "A0p",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A0p/train.jsonl",
+   "sha256": "2ad3906b6685d9d3349ba13a872e3c5cf83d8b9475c19474d0152a1e1b0cb519"
+  },
+  {
+   "name": "A0s",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A0s/train.jsonl",
+   "sha256": "df90cb7f20236fa41ada83d020fb47cbee8d8367cf74d9a67e240ff920994c68"
+  },
+  {
+   "name": "A1",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A1/train.jsonl",
+   "sha256": "b50b43afcb306114f93e37880a021185e4381b97b4e55a84bd0b065d3f36c283"
+  },
+  {
+   "name": "A2",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A2/train.jsonl",
+   "sha256": "2cd61397a01b1bd16fcdfc19bddd7b05c9ddd94320044c23aa600da89b0d8f4c"
+  },
+  {
+   "name": "A3",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A3/train.jsonl",
+   "sha256": "96da839671e64ff3ccf13691522da8311092af4ec2f307474f3807d38a9c17bc"
+  },
+  {
+   "name": "A4v2h",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A4v2h/train.jsonl",
+   "sha256": "32e21294cca16ec34ae4074d17fdd90df61160556e83633005d9eb54b86984f8"
+  },
+  {
+   "name": "A4v2r",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A4v2r/train.jsonl",
+   "sha256": "e2a44ce65b180784267c254fc965b295403a04620e68eeb9ca6ee652422eba0b"
+  },
+  {
+   "name": "A5",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A5/train.jsonl",
+   "sha256": "86868b2d10afb4e98b3798e000e7e80f2b471bdf97b8e565cd6077aaef61be54"
+  },
+  {
+   "name": "A6g",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A6g/train.jsonl",
+   "sha256": "ac94b7f4f1e7d8b73ddbffebe15035aa3b47cca9c825f622d0ec8d04bd7fc02f"
+  },
+  {
+   "name": "A6h",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A6h/train.jsonl",
+   "sha256": "23440f0c5561077780973259777fca4aa80400f5b30e9df6e1376f6d9aa31927"
+  },
+  {
+   "name": "RP-v1q",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/replay/RP-v1q/train.jsonl",
+   "sha256": "90a4ffaea3fa9a2e6c68e86f20352bfd8b0c83ee602238f1e7c0daf15a38c5b3"
+  },
+  {
+   "name": "R2-eos",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/replay/R2/eos/replay.jsonl",
+   "sha256": "372c7246e12c70581e400ac23ccd0f7ec7c539cc224e0b5f82cfe0faa824bfee"
+  },
+  {
+   "name": "R2-kai",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/replay/R2/kai/replay.jsonl",
+   "sha256": "dd85bdf2711df4d8379a8321425803cbede3e2b253aa5d233cd02c277476da3d"
+  },
+  {
+   "name": "R2-lex",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/replay/R2/lex/replay.jsonl",
+   "sha256": "6cca743627f3174b410900aea996501be2e17772a2154a769fd370178a43922e"
+  },
+  {
+   "name": "R2-lux",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/replay/R2/lux/replay.jsonl",
+   "sha256": "8e482b0b91c3dad103747e69d37c292bbb442833f486697b361bce1cdef8579a"
+  },
+  {
+   "name": "R2-nox",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/replay/R2/nox/replay.jsonl",
+   "sha256": "f5c28c0588181f470cef3b7ffb0041ae43adbeadb0c12402971f955a103a3266"
+  },
+  {
+   "name": "R2-sol",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/replay/R2/sol/replay.jsonl",
+   "sha256": "c6e232d2a27c94df4c7afbac81c22ca930ee758471499246cc77bfd0b3c0d823"
+  }
+ ],
+ "isolation_holdout": [
+  {
+   "name": "SELECT700",
+   "path": "/data/dev2/private/a7/base/5c0255ed/select.jsonl",
+   "sha256": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6"
+  },
+  {
+   "name": "CAL700",
+   "path": "/data/dev2/private/a7/base/5c0255ed/cal.jsonl",
+   "sha256": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a"
+  },
+  {
+   "name": "A1-aho",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A1/aho.jsonl",
+   "sha256": "3ec343d1d03ae6ce7e5fabe21c026ddf6252852ed0d088387287a06954ee0dec"
+  },
+  {
+   "name": "A2-aho",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A2/aho.jsonl",
+   "sha256": "97d8ab475bbbde68731d268009f1fc999d381891c02c6d9f08e62ad03fa18e6f"
+  },
+  {
+   "name": "A3-aho",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A3/aho.jsonl",
+   "sha256": "446abcf177566c90e197133676ca98f9ffb32f9f42c6e919a3707d2223a4566a"
+  },
+  {
+   "name": "A4v2h-aho",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A4v2h/aho.jsonl",
+   "sha256": "61417dbe572da9fb1e9ddca742f163f9f289f7d2b8c060f93bc3039809a2a6bb"
+  },
+  {
+   "name": "A4v2r-aho",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A4v2r/aho.jsonl",
+   "sha256": "cbc4ae8bb2a30588df54243cb3672b41f1bc6aa4d9b294e750d85f61d620c685"
+  },
+  {
+   "name": "A5-aho",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A5/aho.jsonl",
+   "sha256": "8635d8a628e19bd1021f619a59d68ccceb5043a181f9331ce8e2945691477757"
+  },
+  {
+   "name": "A6g-aho",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A6g/aho.jsonl",
+   "sha256": "c6b2a0b4bf55e82a8176cb5871106d383900a76934630b4543b7bc285f7d5304"
+  },
+  {
+   "name": "A6h-aho",
+   "path": "/data/dev2/private/a7/base/5c0255ed/v2/arms/A6h/aho.jsonl",
+   "sha256": "5b6c3fd090464ff33d5a60dbbbc7f0cbfd1b2cdc9df12089549ac24f4b1c0fb4"
+  }
+ ],
+ "data_track_files": [
+  "/data/dev2/private/a7/base/5c0255ed/v2/arms/A6h/train.jsonl",
+  "/data/dev2/private/a7/base/5c0255ed/v2/arms/A6h/aho.jsonl",
+  "/data/dev2/private/data/arms-v2/h6/h6.train.jsonl",
+  "/data/dev2/private/data/arms-v2/h6/h6.aho.jsonl",
+  "/data/dev2/private/data/arms-v2/h6/h6.sho.jsonl"
+ ]
+}

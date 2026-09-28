@@ -1,0 +1,338 @@
+{
+  "abcd_v1.1_train": {
+    "attribution": "Chen et al., Action-Based Conversations Dataset (NAACL 2021); asappresearch/abcd@6b8700ce67c6b37b062dd7a60abc76d7ef832a97",
+    "evidence": "https://github.com/asappresearch/abcd/blob/6b8700ce67c6b37b062dd7a60abc76d7ef832a97/LICENSE",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice"
+  },
+  "aquarat_train": {
+    "attribution": "Ling et al., AQuA-RAT (ACL 2017); deepmind/aqua_rat@33301c6a050c96af81f63cad5562cb5363e88971",
+    "evidence": "https://huggingface.co/datasets/deepmind/aqua_rat",
+    "license": "Apache-2.0",
+    "redistribution": "permitted with the Apache-2.0 notice"
+  },
+  "arc_train": {
+    "attribution": "Clark et al., ARC (2018); allenai/ai2_arc@210d026faf9955653af8916fad021475a3f00453",
+    "evidence": "https://huggingface.co/datasets/allenai/ai2_arc",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "argq30k_train": {
+    "attribution": "Gretz et al., A Large-scale Dataset for Argument Quality Ranking (AAAI 2020); ibm-research/argument_quality_ranking_30k@590726b3765b1b90c5e53a17e3b1f77d92d3aa8a",
+    "evidence": "https://huggingface.co/datasets/ibm-research/argument_quality_ranking_30k",
+    "license": "CC-BY-SA-3.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "cmrc2018_train": {
+    "attribution": "Cui et al., CMRC 2018 (EMNLP 2019); hfl/cmrc2018@137f2c45a24275fb68f6961c4d357f46288886aa",
+    "evidence": "https://github.com/ymcui/cmrc2018/blob/master/LICENCE",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "csqa_train": {
+    "attribution": "Talmor et al., CommonsenseQA (NAACL 2019); tau/commonsense_qa@94630fe30dad47192a8546eb75f094926d47e155",
+    "evidence": "https://huggingface.co/datasets/tau/commonsense_qa",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice"
+  },
+  "css_flute_official_train": {
+    "attribution": "Chakrabarty et al., FLUTE: Figurative Language Understanding through Textual Explanations (EMNLP 2022); ColumbiaNLP/FLUTE official train partition",
+    "evidence": "https://huggingface.co/datasets/ColumbiaNLP/FLUTE",
+    "license": "AFL-3.0",
+    "redistribution": "private redistribution with attribution; FLUTE is also a CSS15 transfer task (same-task exposure disclosed; excluded from A0s, A0p and RP-v1)"
+  },
+  "dbpedia14_train": {
+    "attribution": "Zhang et al., DBpedia-14 (NeurIPS 2015); fancyzhx/dbpedia_14@9abd46cf7fc8b4c64290f26993c540b92aa145ac",
+    "evidence": "https://huggingface.co/datasets/fancyzhx/dbpedia_14",
+    "license": "CC-BY-SA-3.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "decision2_programmatic_original_v1": {
+    "attribution": "Decision 2.0 rights-clean v1 programmatic generators",
+    "evidence": "rights-clean v2 manifest 61aa8830 source_rights: internally generated, pinned generators and objective oracle audits",
+    "license": "project-generated (no third-party text)",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_targeted_programmatic_v1": {
+    "attribution": "Decision 2.0 targeted programmatic generators (interval conjunction, quantized median)",
+    "evidence": "rights-clean v2 manifest 61aa8830 source_rights: internally generated",
+    "license": "project-generated (no third-party text)",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a2": {
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A2",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "license": "project-generated (no third-party text)",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a4": {
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "license": "project-generated (no third-party text)",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a4h": {
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4 hard distractors",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "license": "project-generated (no third-party text)",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a4r": {
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4 random distractors",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "license": "project-generated (no third-party text)",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a4v2h": {
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4 v2 hard distractors",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "license": "project-generated (no third-party text)",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a4v2r": {
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4 v2 random distractors",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "license": "project-generated (no third-party text)",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a6": {
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A6",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "license": "project-generated (no third-party text)",
+    "redistribution": "unrestricted within the project"
+  },
+  "drcd_train": {
+    "attribution": "Shao et al., DRCD (2018); DRCKnowledgeTeam/DRCD@b944790de5af02c5fbb7cd9cb1473d27d169eebf",
+    "evidence": "https://github.com/DRCKnowledgeTeam/DRCD (README licence section)",
+    "license": "CC-BY-SA-3.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "germanquad_train": {
+    "attribution": "Möller et al., GermanQuAD (2021); deepset/germanquad@a2f3a59f0be843fc305d0417d7292ef0b1a66884 (refs/convert/parquet)",
+    "evidence": "https://huggingface.co/datasets/deepset/germanquad",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "google_goemotions_official_train": {
+    "attribution": "Demszky et al., GoEmotions (ACL 2020); google-research@2adf640a14f11025ae5a9d0ec493b78530d276d3 official train split",
+    "evidence": "https://github.com/google-research/google-research/tree/master/goemotions",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "gsm8k_train": {
+    "attribution": "Cobbe et al., GSM8K (2021), human-written problems; openai/gsm8k@740312add88f781978c0658806c59bc2815b9866",
+    "evidence": "https://huggingface.co/datasets/openai/gsm8k",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice"
+  },
+  "hotpotqa_distractor_train": {
+    "attribution": "Yang et al., HotpotQA (EMNLP 2018); hotpotqa/hotpot_qa@1908d6afbbead072334abe2965f91bd2709910ab",
+    "evidence": "https://huggingface.co/datasets/hotpotqa/hotpot_qa",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "jglue_jcommonsenseqa_v1.3_train": {
+    "attribution": "Kurihara et al., JGLUE (LREC 2022), JCommonsenseQA v1.3; yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c",
+    "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "jglue_jnli_v1.3_train": {
+    "attribution": "Kurihara et al., JGLUE, JNLI v1.3; yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c",
+    "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "jglue_jsts_v1.3_train": {
+    "attribution": "Kurihara et al., JGLUE, JSTS v1.3; yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c",
+    "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "jsquad_v1.3_train": {
+    "attribution": "Kurihara et al., JGLUE, JSQuAD v1.3; yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c",
+    "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "klue_mrc_train": {
+    "attribution": "Park et al., KLUE, MRC; klue/klue@349481ec73fff722f88e0453ca05c77a447d967c",
+    "evidence": "https://github.com/KLUE-benchmark/KLUE#license",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "klue_nli_train": {
+    "attribution": "Park et al., KLUE, NLI; klue/klue@349481ec73fff722f88e0453ca05c77a447d967c",
+    "evidence": "https://github.com/KLUE-benchmark/KLUE#license",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "klue_sts_train": {
+    "attribution": "Park et al., KLUE, STS; klue/klue@349481ec73fff722f88e0453ca05c77a447d967c",
+    "evidence": "https://github.com/KLUE-benchmark/KLUE#license",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "klue_ynat_train": {
+    "attribution": "Park et al., KLUE (NeurIPS Datasets 2021), YNAT; klue/klue@349481ec73fff722f88e0453ca05c77a447d967c",
+    "evidence": "https://github.com/KLUE-benchmark/KLUE#license",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "legacy:cosmos_qa": {
+    "attribution": "Huang et al., Cosmos QA (EMNLP 2019)",
+    "evidence": "https://huggingface.co/datasets/allenai/cosmos_qa",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "legacy:snli": {
+    "attribution": "Bowman et al., SNLI (EMNLP 2015)",
+    "evidence": "https://nlp.stanford.edu/projects/snli/",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "legacy:squad2_answerability": {
+    "attribution": "Rajpurkar et al., SQuAD 2.0 (ACL 2018)",
+    "evidence": "https://rajpurkar.github.io/SQuAD-explorer/",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "legacy:stage3_replay": {
+    "attribution": "Larson et al., CLINC150 (EMNLP 2019); Casanueva et al., BANKING77 (2020); Decision 1.0 stage-3 replay generators",
+    "evidence": "https://github.com/clinc/oos-eval/blob/master/LICENSE ; https://huggingface.co/datasets/PolyAI/banking77",
+    "license": "mixed: project-generated (435 rows); CLINC150 CC-BY-3.0; BANKING77 CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "legacy:stage4-general-composition-v2": {
+    "attribution": "Decision 1.0 stage-4 general composition generators",
+    "evidence": "rights-clean v2 manifest 61aa8830 source_rights: internally generated",
+    "license": "project-generated (no third-party text)",
+    "redistribution": "unrestricted within the project"
+  },
+  "mlqepe_train": {
+    "attribution": "Fomicheva et al., MLQE-PE (LREC 2022); sheffieldnlp/mlqe-pe@2a670a1140416cf80507b5a829659383c878feb8",
+    "evidence": "https://github.com/sheffieldnlp/mlqe-pe/blob/master/LICENSE",
+    "license": "CC0-1.0 (annotations); Wikipedia source text CC-BY-SA",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "mtop_train": {
+    "attribution": "Li et al., MTOP (EACL 2021); official mtop.zip sha256 0c086500aed2ed48d3df383c91664b152e4a46e2adef6a635fa16d508ebaec0b (bundled LICENSE.txt)",
+    "evidence": "https://dl.fbaipublicfiles.com/mtop/mtop.zip",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "multiwoz22_train": {
+    "attribution": "Zang et al., MultiWOZ 2.2 (2020); budzianowski/multiwoz@fe0c8e65cfcd8462bd33c86e35f21addc84ca82b",
+    "evidence": "https://github.com/budzianowski/multiwoz/blob/master/LICENSE",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice"
+  },
+  "musique_full_v1.0_train": {
+    "attribution": "Trivedi et al., MuSiQue (TACL 2022); StonyBrookNLP/musique@922ac98f19a201998dbdae6d7f2887a5258dbdeb; data file from bdsaglam/musique@22873a405dd809893b22ada0b499299fb612d2df",
+    "evidence": "https://github.com/StonyBrookNLP/musique/blob/922ac98f19a201998dbdae6d7f2887a5258dbdeb/LICENSE",
+    "license": "CC-BY-4.0 (dataset); Wikipedia text CC-BY-SA",
+    "redistribution": "permitted with attribution; share-alike applies to Wikipedia-derived text"
+  },
+  "obqa_main_train": {
+    "attribution": "Mihaylov et al., OpenBookQA (EMNLP 2018); allenai/openbookqa@388097ea7776314e93a529163e0fea805b8a6454",
+    "evidence": "https://github.com/allenai/OpenBookQA/blob/main/LICENSE",
+    "license": "Apache-2.0",
+    "redistribution": "permitted with the Apache-2.0 notice"
+  },
+  "onestop_english": {
+    "attribution": "Vajjala and Lučić, OneStopEnglish (BEA 2018); nishkalavallabhi/OneStopEnglishCorpus@37f8db3945cd2f3cc0caafe45674147b224349be",
+    "evidence": "https://github.com/nishkalavallabhi/OneStopEnglishCorpus",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "piaf_train": {
+    "attribution": "Keraron et al., PIAF (LREC 2020); etalab-ia/piaf@bda8c063bc7297180796cd835d1974c0bc71c521",
+    "evidence": "https://huggingface.co/datasets/etalab-ia/piaf",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice"
+  },
+  "qasc_train": {
+    "attribution": "Khot et al., QASC (AAAI 2020); allenai/qasc@a34ba204eb9a33b919c10cc08f4f1c8dae5ec070",
+    "evidence": "https://huggingface.co/datasets/allenai/qasc",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "quac_train_v0.2": {
+    "attribution": "Choi et al., QuAC (EMNLP 2018); official train_v0.2.json sha256 ff5cca5a2e4b4d1cb5b5ced68b9fce88394ef6d93117426d6d4baafbcc05c56a",
+    "evidence": "https://quac.ai ; https://huggingface.co/datasets/allenai/quac",
+    "license": "CC-BY-SA-4.0 (dataset card: MIT)",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "quartz_train": {
+    "attribution": "Tafjord et al., QuaRTz (EMNLP 2019); allenai/quartz@28c1dbb56caf81799296cb17892fa73402e23464",
+    "evidence": "https://huggingface.co/datasets/allenai/quartz",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "ropes_train": {
+    "attribution": "Lin et al., ROPES (MRQA 2019); allenai/ropes@d59f1e2ee2b423d7c6ba71edd47fceb4158b07dd",
+    "evidence": "https://huggingface.co/datasets/allenai/ropes",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "saf_de_train": {
+    "attribution": "Filighera et al., Short Answer Feedback, micro-job (DE); Short-Answer-Feedback/saf_micro_job_german@30db3effcfc07b638291cfcff248b84dbd8013db",
+    "evidence": "https://huggingface.co/datasets/Short-Answer-Feedback/saf_micro_job_german",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "saf_en_train": {
+    "attribution": "Filighera et al., Short Answer Feedback (ACL 2022), communication networks (EN); Short-Answer-Feedback/saf_communication_networks_english@9358d6f0f87371c0a5f150502b14cb16e382195f",
+    "evidence": "https://huggingface.co/datasets/Short-Answer-Feedback/saf_communication_networks_english",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "scitail_train": {
+    "attribution": "Khot et al., SciTail (AAAI 2018); allenai/scitail@0cc4353235b289165dfde1c7c5d1be983f99ce44",
+    "evidence": "https://github.com/allenai/scitail/blob/main/LICENSE",
+    "license": "Apache-2.0",
+    "redistribution": "permitted with the Apache-2.0 notice"
+  },
+  "sgd_dstc8_train": {
+    "attribution": "Rastogi et al., Schema-Guided Dialogue (AAAI 2020); google-research-datasets/dstc8-schema-guided-dialogue@e852981ae34990f4358979625854259302feaa78",
+    "evidence": "https://github.com/google-research-datasets/dstc8-schema-guided-dialogue/blob/e852981ae34990f4358979625854259302feaa78/LICENSE.txt",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "sqac_train": {
+    "attribution": "Gutiérrez-Fandiño et al., SQAC (MarIA, 2022); PlanTL-GOB-ES/SQAC@f9928e8819596a601b8887cc5f8598b15d589a82",
+    "evidence": "https://huggingface.co/datasets/PlanTL-GOB-ES/SQAC",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "squad2_train": {
+    "attribution": "Rajpurkar et al., SQuAD 2.0 (ACL 2018); rajpurkar/squad_v2@3ffb306f725f7d2ce8394bc1873b24868140c412",
+    "evidence": "https://huggingface.co/datasets/rajpurkar/squad_v2",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "taskmaster2_train": {
+    "attribution": "Byrne et al., Taskmaster-2 (Google 2020); google-research-datasets/Taskmaster@d92cb6af3005f1dc09c39e75e7daf4a04905e00b",
+    "evidence": "https://github.com/google-research-datasets/Taskmaster/blob/master/TM-2-2020/README.md",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "twowiki_train": {
+    "attribution": "Ho et al., 2WikiMultihopQA (COLING 2020); data xanhho/2WikiMultihopQA@612bc5039a457880d9e7d84c3b0a4cf154b70e4f",
+    "evidence": "https://github.com/Alab-NII/2wikimultihop/blob/main/LICENSE",
+    "license": "Apache-2.0 (dataset); Wikipedia text CC-BY-SA",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "tydiqa_primary_train": {
+    "attribution": "Clark et al., TyDi QA (TACL 2020); google-research-datasets/tydiqa@da78f23f9119363459acbaf46bf89426ff26c259",
+    "evidence": "https://huggingface.co/datasets/google-research-datasets/tydiqa",
+    "license": "Apache-2.0 (dataset); Wikipedia text CC-BY-SA",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "winogrande_xl_train": {
+    "attribution": "Sakaguchi et al., WinoGrande (AAAI 2020); allenai/winogrande@01e74176c63542e6b0bcb004dcdea22d94fb67b5",
+    "evidence": "https://github.com/allenai/winogrande/blob/master/LICENSE",
+    "license": "Apache-2.0",
+    "redistribution": "permitted with the Apache-2.0 notice"
+  }
+}

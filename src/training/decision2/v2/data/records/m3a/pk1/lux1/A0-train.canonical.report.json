@@ -1,0 +1,51 @@
+{
+ "a0_pk1_sha256": "766249e76e2ced4b0d238749903965e594a3ffb4472cae848867771aef9742ae",
+ "content_sha256": "56627939e01b60d867ff3fa7ca8073e7434b63b859eee16b407860ca2ef508d2",
+ "control": {
+  "argmax_agree": 64,
+  "identical": 64,
+  "max_abs_diff": 0.0,
+  "rows": 64
+ },
+ "previous_sha256": "dd160420c389c5ce7f40a74ad4cc51548f6dcd4456dc25f9799fd15efb0e1cf8",
+ "rederive_missing": 0,
+ "rederive_report": {
+  "choice": {
+   "argmax_accuracy_vs_gold": 0.9658,
+   "mean_brier": 0.0675,
+   "mean_gold_probability": 0.9247,
+   "mean_normalized_entropy": 0.1112,
+   "no_answer_reasons": {},
+   "no_native_answer": 0,
+   "rows": 146,
+   "targets": 146
+  },
+  "model_id": "llm-semantic-router/Decision-1.0-Lux-9B",
+  "model_revision": "bd45a30aee8c84032791c245c70f86dee5389cc8",
+  "noul": {
+   "argmax_accuracy_vs_gold": 0.931,
+   "mean_brier": 0.1365,
+   "mean_gold_probability": 0.8277,
+   "mean_normalized_entropy": 0.4905,
+   "no_answer_reasons": {},
+   "no_native_answer": 0,
+   "rows": 29,
+   "targets": 29
+  },
+  "score": {
+   "argmax_accuracy_vs_gold": 1.0,
+   "mean_brier": 0.1089,
+   "mean_gold_probability": 0.8132,
+   "mean_normalized_entropy": 0.3445,
+   "no_answer_reasons": {},
+   "no_native_answer": 0,
+   "rows": 6,
+   "targets": 6
+  },
+  "teacher": "lux",
+  "teacher_output_sha256": "35422d837243ed48a48afa8678934e362982edb55dc6f82301cadd65f11f4c23"
+ },
+ "rederived": 117,
+ "rows": 7455,
+ "schema": "decision2-m3a-pk1-lux-canonical/1"
+}

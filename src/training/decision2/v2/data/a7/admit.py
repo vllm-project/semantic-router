@@ -22,8 +22,8 @@ from pathlib import Path
 from typing import Any
 
 from v2.data.a7.build_a7 import (
-    GENERATED_SUB_ARMS,
-    SUB_ARMS,
+    ALL_SUB_ARMS,
+    SHORTCUT_GATED_SUB_ARMS,
     _json_bytes,
     _write_new,
     keyed,
@@ -71,7 +71,7 @@ def admit_sub_arm(
     }
     cells = (
         shortcut_cells(shortcut_receipt)
-        if name in GENERATED_SUB_ARMS and shortcut_receipt is not None
+        if name in SHORTCUT_GATED_SUB_ARMS and shortcut_receipt is not None
         else {}
     )
     removed: dict[str, collections.Counter[tuple[str, str]]] = {
@@ -164,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
     reports: dict[str, Any] = {}
     outputs: dict[str, str] = {}
     final_ids: dict[str, str] = {}
-    for name in SUB_ARMS:
+    for name in ALL_SUB_ARMS:
         parts = {}
         for part in ("train", "aho"):
             path = args.build_dir / "prelim" / f"{name}.{part}.jsonl"
@@ -181,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
             if name in shortcuts
             else None
         )
-        if name in GENERATED_SUB_ARMS and shortcut is None:
+        if name in SHORTCUT_GATED_SUB_ARMS and shortcut is None:
             raise ValueError(f"{name}: generated sub-arms need a shortcut receipt")
         kept, report = admit_sub_arm(
             name, parts, overlap, shortcut, lengths, report_only
@@ -224,7 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         "rules": {
             "overlap": "whole-group quarantine for any non-report-only role",
             "native_budget": f"whole group if any row > {MAX_NATIVE_TOKENS} {BUDGET_TOKENIZER} tokens",
-            "shortcut": f"generated sub-arms {sorted(GENERATED_SUB_ARMS)}: drop family|task cells "
+            "shortcut": f"generated sub-arms {sorted(SHORTCUT_GATED_SUB_ARMS)}: drop family|task cells "
             f"with n >= {MIN_CELL_ROWS} exceeding majority + margin on {list(GATED_VIEWS)}",
         },
         "sub_arms": reports,

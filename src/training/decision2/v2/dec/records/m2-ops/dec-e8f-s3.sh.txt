@@ -1,0 +1,8 @@
+set -u
+SRC=$1
+C=/data/dev2/runs/dec/m2/chains
+D=/data/dev2/src/$SRC/src/training/decision2/v2/dec/drive_arm.sh
+EOS=/hf/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab
+FULL="--train /runs/m2/data/m2-full-a7-v1/train.jsonl --train-mode full --backbone-lr 1e-5 --head-lr 1e-4 --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64 --seed 20260928"
+(DEC_NODE=b bash $D m2-E8F-s3 2 $SRC m2/arms $EOS -- $FULL) > $C/gpu2-s3.log 2>&1 &
+echo launched-s3

@@ -74,7 +74,9 @@ def main() -> None:
     from training.model.decision_model import collate, encode
 
     from .dec_model import dec_fingerprint, load_dec_checkpoint
+    from .runtime_check import require_runtime
 
+    runtime = require_runtime()
     identity = dec_fingerprint(args.checkpoint, args.source_path)
     calibration = report = None
     if args.calibration is not None:
@@ -144,6 +146,7 @@ def main() -> None:
         "truncation_policy": "none; over-budget questions produce an invalid answer",
         "counts": counts,
         "torch_version": torch.__version__,
+        "runtime": runtime,
     }
     if calibration is not None:
         manifest["calibration"] = {

@@ -91,6 +91,34 @@ class CalibrationTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exact Choice/Noul/Score"):
                 load_calibration(path, "a" * 64)
 
+    def test_frozen_checkpoint_policy_binds_checkpoint_and_cal_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "calibration.json"
+            report = {
+                "calibration_version": "decision2-per-type-temperature/1",
+                "model_sha256": "a" * 64,
+                "checkpoint_sha256": "b" * 64,
+                "cal_sha256": "c" * 64,
+                "fit_split": "cal",
+                "selection_policy": "frozen_checkpoint",
+                "temperature_by_type": {"choice": 1.1, "noul": 0.9, "score": 1.0},
+            }
+            path.write_text(json.dumps(report))
+            temperatures, _ = load_calibration(path, "a" * 64)
+            self.assertEqual(temperatures["noul"], 0.9)
+            for missing in ("checkpoint_sha256", "cal_sha256"):
+                broken = {k: v for k, v in report.items() if k != missing}
+                path.write_text(json.dumps(broken))
+                with self.assertRaises(ValueError):
+                    load_calibration(path, "a" * 64)
+            path.write_text(json.dumps(dict(report, selection_policy="latest")))
+            with self.assertRaisesRegex(ValueError, "frozen CAL partition"):
+                load_calibration(path, "a" * 64)
+            completed = dict(report, selection_policy="completed_run_best_only")
+            path.write_text(json.dumps(completed))
+            with self.assertRaises(ValueError):
+                load_calibration(path, "a" * 64)
+
     def test_materialized_lineage_binds_original_calibration_without_rewriting(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

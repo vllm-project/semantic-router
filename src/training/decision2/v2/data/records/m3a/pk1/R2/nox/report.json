@@ -1,0 +1,51 @@
+{
+ "content_sha256": "ae7510a80e4b38382c177e68362d5f1a6ce3f50483df4261a524fcb28397a8e7",
+ "control": {
+  "argmax_agree": 42,
+  "identical": 42,
+  "max_abs_diff": 0.0,
+  "rows": 42
+ },
+ "previous_sha256": "f5c28c0588181f470cef3b7ffb0041ae43adbeadb0c12402971f955a103a3266",
+ "rederive_missing": 0,
+ "rederive_report": {
+  "choice": {
+   "argmax_accuracy_vs_gold": 0.8974,
+   "mean_brier": 0.1401,
+   "mean_gold_probability": 0.8671,
+   "mean_normalized_entropy": 0.1667,
+   "no_answer_reasons": {},
+   "no_native_answer": 0,
+   "rows": 39,
+   "targets": 39
+  },
+  "model_id": "llm-semantic-router/Decision-1.0-Nox-4B",
+  "model_revision": "0bb833504965c0eabdb9630b7bbd385cb2fe5cd4",
+  "noul": {
+   "argmax_accuracy_vs_gold": 0.7692,
+   "mean_brier": 0.2553,
+   "mean_gold_probability": 0.758,
+   "mean_normalized_entropy": 0.5145,
+   "no_answer_reasons": {},
+   "no_native_answer": 0,
+   "rows": 13,
+   "targets": 13
+  },
+  "score": {
+   "argmax_accuracy_vs_gold": 0.75,
+   "mean_brier": 0.3272,
+   "mean_gold_probability": 0.7221,
+   "mean_normalized_entropy": 0.2808,
+   "no_answer_reasons": {},
+   "no_native_answer": 0,
+   "rows": 12,
+   "targets": 12
+  },
+  "teacher": "nox",
+  "teacher_output_sha256": "5cea10b733163f71a978162cc8f7051f9140677a9b0b954dd6ddca9781206b5c"
+ },
+ "rederived": 22,
+ "rows": 1517,
+ "schema": "decision2-m3a-pk1-r2/1",
+ "tier": "nox"
+}

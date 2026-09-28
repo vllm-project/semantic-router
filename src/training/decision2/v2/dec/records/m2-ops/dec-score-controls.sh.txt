@@ -1,0 +1,19 @@
+set -u
+SRC=$1
+S=/data/dev2/src/$SRC/src/training/decision2; cd $S; export PYTHONPATH=$S
+F=/data/dev2/runs/dec/formal/m2; H=/data/dev2/hf-cache
+for spec in "nox1 4B Nox-4B cde2a68dbaa557ea65dc458104d410a0802ee259 m1-adopt/nox1" "sol1 2B Sol-2B ce0c018a28de16d6639b1cd203b761bf643b89e6 m1-adopt/sol1" "eos1 0.8B Eos-0.8B 363c4a5e56afc115b1c78c837633956d0bbb63ab m1/r4-eos1"; do
+  set -- $spec; name=$1 tier=$2 repo=$3 rev=$4 comp=/data/dev2/runs/eval/$5
+  run=$F/$name-8k
+  [ -f $run/SEAL.json ] || python3 -m v2.eval.same_panel seal --run-dir $run > $run.seal.log 2>&1
+  [ -f $run/REPORT.json ] || python3 -m v2.eval.same_panel report --run-dir $run --label "$name same-limit control (shared renderer, 8,192 tokens)" --tier $tier --family decision1 --count-safetensors $H/models--llm-semantic-router--Decision-1.0-$repo/snapshots/$rev > $run.report.log 2>&1
+  python3 -m v2.eval.same_panel compare --run-dir $run --comparator-run-dir $comp --left-name $name-8k --right-name $name-adopted > $run.compare.log 2>&1
+  python3 - $run $comp <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1] + "/REPORT.json")); c = json.load(open(sys.argv[2] + "/REPORT.json"))
+def pick(x):
+    s = x.get("summary") or x
+    return {k: s.get(k) for k in ("v3", "T", "H", "public231", "choice", "noul", "score")} if isinstance(s, dict) else None
+print(sys.argv[1].split("/")[-1], "keys", list(r)[:12])
+PY
+done

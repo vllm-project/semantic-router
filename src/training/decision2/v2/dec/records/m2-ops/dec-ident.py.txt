@@ -1,0 +1,12 @@
+import json, sys
+from pathlib import Path
+from v2.dec.dec_model import dec_fingerprint
+A, NOX = Path(sys.argv[1]), Path(sys.argv[2])
+for spec in sys.argv[3:]:
+    arm, ck = spec.split(":")
+    p = A / arm
+    ident = dec_fingerprint(p / ck, NOX)
+    cal = json.loads((p / "cal" / "calibration.json").read_text())
+    meta = json.loads((p / ck / "checkpoint.json").read_text())
+    files = {k.split("/")[-1]: v[:12] for k, v in ident["files_sha256"].items() if k.startswith("checkpoint/") and k.split("/")[-1] in ("adapter_model.safetensors", "adapter_config.json", "decision_head.safetensors", "decision_config.json")}
+    print(arm, ck, "model_sha256", ident["model_sha256"], "temps", {k: round(v, 5) for k, v in cal["temperature_by_type"].items()}, "select", meta["dev_metrics"]["correct"], round(meta["dev_metrics"]["family_macro_accuracy"], 6), files)

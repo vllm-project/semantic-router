@@ -1,0 +1,19 @@
+import json, glob, os, sys
+from datetime import datetime
+node = sys.argv[1]
+def t(s): return datetime.fromisoformat(s.replace("Z", "+00:00"))
+rows = []
+for p in glob.glob("/data/dev2/runs/dec/m2/**/*.launch.json", recursive=True):
+    r = json.load(open(p))
+    if r.get("gpu") is None: continue
+    rows.append((r["gpu"], r["job"], (t(r["end_utc"]) - t(r["start_utc"])).total_seconds() / 3600))
+for p in glob.glob("/data/dev2/runs/dec/formal/m2/**/GPU-TIME.json", recursive=True):
+    r = json.load(open(p))
+    rows.append((f"node {node.upper()} GPU{r['gpu']}", "formal:" + p.split("/formal/m2/")[1].rsplit("/", 1)[0], r["wall_seconds"] / 3600))
+by_gpu = {}
+by_kind = {}
+for gpu, job, h in rows:
+    by_gpu[gpu] = by_gpu.get(gpu, 0) + h
+    kind = ("formal" if job.startswith("formal") else "check" if any(k in job for k in ("pad", "score-fit", "tp-")) else "control" if "ctl" in job or "labels" in job or "diag" in job else "arm")
+    by_kind[kind] = by_kind.get(kind, 0) + h
+print(json.dumps({"node": node, "by_gpu": {k: round(v, 3) for k, v in sorted(by_gpu.items())}, "by_kind": {k: round(v, 3) for k, v in by_kind.items()}, "total": round(sum(by_gpu.values()), 3), "jobs": len(rows)}))

@@ -1,9 +1,9 @@
 """0.2.1 row selection on a verified 0.2 suite.
 
-The Space describes the Home duplicate criterion but does not publish which
-surface copy of each duplicate pair was retained. ``first`` and ``last`` are
-therefore provisional policies. Only an upstream-authorized explicit keep
-list can resolve row identity; aggregate-score agreement cannot prove it.
+The Space describes the Home duplicate criterion but not which copy of each
+duplicate pair survives. The public kit's 0.2.1 revision publishes the kept
+ToolRet, BRIGHT and Home run IDs; a complete selection must reproduce their
+pinned hashes. ``last`` keeps the other Home copy for a sensitivity check.
 """
 
 from __future__ import annotations
@@ -56,6 +56,25 @@ def verify_kit() -> Path:
     return root
 
 
+def digest(run_ids: Iterable[str]) -> str:
+    return hashlib.sha256("\n".join(sorted(run_ids)).encode()).hexdigest()
+
+
+def check_upstream(digests: dict[str, str], home_policy: str) -> str:
+    """Compare kept ToolRet (2), BRIGHT (36) and Home (9) IDs with the kit's 0.2.1 lists."""
+    expected = spec()["upstream_kit021"]["scoreable_keep_sha256"]
+    for number in ("2", "36"):
+        if digests[number] != expected[number]:
+            raise ValueError(
+                f"benchmark {number} kept rows differ from the upstream 0.2.1 list"
+            )
+    if home_policy == "last":
+        return "home_last_copy_sensitivity"
+    if digests["9"] != expected["9"]:
+        raise ValueError("Home kept rows differ from the upstream 0.2.1 list")
+    return "upstream_021_row_ids_matched"
+
+
 def _home_reference() -> tuple[dict[str, dict], set[str]]:
     verify_kit()
     from decision_index.suite.build.home_appliance import make_row
@@ -86,10 +105,7 @@ def _answerable(group: list[dict]) -> bool:
     if len(signatures) != 1:
         raise ValueError("retrieval chunks disagree on candidate IDs or qrels")
     first = group[0]["scoring"]
-    # The 0.2.1 rule says a relevant item among the 32 *retrieved*
-    # candidates. A few overlong retrieved candidates may be absent from
-    # scorable_ids; the latter would implement a different filter.
-    return any(first["qrels"].get(doc, 0) > 0 for doc in first["retrieved_ids"])
+    return any(first["qrels"].get(doc, 0) > 0 for doc in first["scorable_ids"])
 
 
 def select(
@@ -103,8 +119,9 @@ def select(
     """Select scoreable requests after the kit's common exclusions.
 
     ``rows`` must be the verified kit Suite.rows(apply_exclusions=True) stream
-    including its added-rows file. ``home_policy='explicit'`` needs the exact
-    88 upstream-kept run IDs; other policies cannot be labeled exact 0.2.1.
+    including its added-rows file. With ``require_full_counts``, ``first`` and
+    ``explicit`` must reproduce the upstream 0.2.1 keep lists, while ``last``
+    is reported as a Home-copy sensitivity selection.
     """
     if home_policy not in {"first", "last", "explicit"}:
         raise ValueError("home_policy must be first, last, or explicit")
@@ -183,17 +200,25 @@ def select(
         raise ValueError(
             f"complete 0.2/0.2.1 scoreable rows: expected 151034/150317, got {n}/{len(kept)}"
         )
-    digest = hashlib.sha256("\n".join(sorted(kept)).encode()).hexdigest()
+    status = (
+        "explicit_row_identity_unverified"
+        if home_policy == "explicit"
+        else "provisional_home_copy"
+    )
+    if require_full_counts:
+        members = {"2": set(), "36": set(), "9": set()}
+        for (number, _), group in groups.items():
+            members[str(number)].update(r["_evaluation"]["run_id"] for r in group)
+        members["9"].update(r["_evaluation"]["run_id"] for r in home_rows)
+        status = check_upstream(
+            {number: digest(ids & kept) for number, ids in members.items()}, home_policy
+        )
     return Selection(
         keep_run_ids=kept,
         dropped=dropped,
         scheduled=n,
         scoreable=len(kept),
         home_policy=home_policy,
-        status=(
-            "explicit_row_identity_unverified"
-            if home_policy == "explicit"
-            else "provisional_home_copy"
-        ),
-        keep_ids_sha256=digest,
+        status=status,
+        keep_ids_sha256=digest(kept),
     )

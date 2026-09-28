@@ -1,0 +1,12 @@
+import json, sys
+from pathlib import Path
+from v2.dec.dec_model import dec_fingerprint
+from training.model.calibration import load_calibration
+A = Path(sys.argv[1])
+for spec in sys.argv[2:]:
+    arm, ck, cal = spec.split(":")
+    p = A / arm
+    ident = dec_fingerprint(p / ck, None)
+    temps, report = load_calibration(p / cal / "calibration.json", ident["model_sha256"])
+    sel = json.loads((p / ck / "checkpoint.json").read_text())["dev_metrics"] if (p / ck / "checkpoint.json").exists() else None
+    print(arm, ck, cal, "model_sha256", ident["model_sha256"], "temps", {k: round(v, 5) for k, v in temps.items()}, "cal_sha", report["cal_sha256"][:12], "policy", report["selection_policy"], "max_len", report["inference"]["max_length"], "select", (sel["correct"], round(sel["family_macro_accuracy"], 6)) if sel else None)
