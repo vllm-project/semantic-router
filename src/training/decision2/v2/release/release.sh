@@ -6,13 +6,15 @@
 #       [--cpu | --gpu N --track TRACK] [--image IMAGE] [--python PY] [--mount PATH]... \
 #       [--mount-rw PATH]... [--env KEY=VALUE]... [--site DIR]... [--require-kernels] \
 #       [--threads N] [--base-path DIR] [--parity NAME:PROMPTS:PREDICTIONS:COUNT]... \
-#       [--parity-tolerance X] [--shared-lease NAME] [--upload] [--collect]
+#       [--parity-tolerance X] [--shared-lease NAME] [--upload] [--collect [--already-collected]]
 # --env takes non-secret runtime settings only (e.g. TRITON_CACHE_DIR of a persisted autotune
 # cache mounted with --mount-rw); --site names an image directory of kernel packages that the
 # isolated interpreter must import (e.g. /opt/decision-fla); --require-kernels makes the example
 # and parity processes fail unless the Qwen3.5 kernels and the persisted cache are in use.
 # --shared-lease NAME (a GPU the allocation table marks as shared) writes only
 # /data/dev2/leases/gpuN.lock/owner.NAME and never reads or rewrites the owner's entry.
+# --already-collected (with --collect): a new revision of a release repository that an earlier
+# final decision already added; the pre-collect readback then expects its collection item.
 #
 # Steps (each writes <work>/receipts/<step>.json; any failure stops the run):
 #   build        v2.release.build: exact scored bytes + runtime + card -> <work>/package/<repo-name>
@@ -28,11 +30,11 @@
 # The container never mounts gold. --cpu exposes no GPU; --gpu takes a leased GPU like the eval runner.
 set -euo pipefail
 
-usage() { sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 spec="" sha="" work="" device="cpu" gpu="" track="" image="decision20-train-fast:host2" python_bin="python3"
 threads="4" base_path="" upload=0 gate="" parity_tolerance="1e-4" mounts=() parity=()
-rw_mounts=() envs=() site_args=() kernel_args=() shared=""
+rw_mounts=() envs=() site_args=() kernel_args=() shared="" readback_args=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --spec) spec="$2"; shift 2 ;;
@@ -58,12 +60,14 @@ while [[ $# -gt 0 ]]; do
     --parity-tolerance) parity_tolerance="$2"; shift 2 ;;
     --upload) upload=1; shift ;;
     --collect) gate=1; shift ;;
+    --already-collected) readback_args=(--already-collected); shift ;;
     *) usage ;;
   esac
 done
 [[ -n "$spec" && -n "$sha" && -n "$work" ]] || usage
 [[ "$work" == /data/dev2/runs/release/* ]] || { echo "work dir must be under /data/dev2/runs/release/" >&2; exit 2; }
 [[ -z "$gate" || "$upload" == 1 ]] || { echo "--collect needs --upload" >&2; exit 2; }
+[[ ${#readback_args[@]} -eq 0 || -n "$gate" ]] || { echo "--already-collected needs --collect" >&2; exit 2; }
 src="/data/dev2/src/$sha"
 S="$src/src/training/decision2"
 [[ -f "$src/.dev2-mirror.json" ]] || { echo "no verified mirror at $src" >&2; exit 1; }
@@ -171,7 +175,7 @@ if [[ "$upload" == 1 ]]; then
   fi
   log "readback"
   "$hf_python" -m v2.release.hub readback --repo "$repo" --revision "$revision" --package "$pkg" \
-    --output "$work/receipts/readback.json"
+    "${readback_args[@]}" --output "$work/receipts/readback.json"
   if [[ -n "$gate" ]]; then
     log "gate seal and collection add"
     python3 -m v2.release.gate seal --work "$work"
