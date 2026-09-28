@@ -341,6 +341,9 @@ func requestWirePath(format llmprotocol.WireFormat) string {
 	if format == llmprotocol.OpenAIImagesV1 {
 		return "/v1/images/generations"
 	}
+	if format == llmprotocol.OpenAISpeechV1 {
+		return "/v1/audio/speech"
+	}
 	registry, err := modelcatalog.BuiltIn()
 	if err != nil {
 		return "/v1/chat/completions"
