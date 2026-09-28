@@ -48,7 +48,10 @@ def render_node(gpu: int, sysfs: Path = Path("/sys/class/drm")) -> Path:
     return Path("/dev/dri") / node
 
 
-def write_lease(gpu: int, fields: dict, root: Path = LEASE_ROOT) -> None:
+def write_lease(
+    gpu: int, fields: dict, root: Path = LEASE_ROOT, shared: str | None = None
+) -> None:
+    """Update the track's lease; ``shared`` adds/removes a co-located job."""
     lease = root / f"gpu{gpu}.lock"
     owner = lease / "owner"
     if not owner.is_file():
@@ -56,7 +59,11 @@ def write_lease(gpu: int, fields: dict, root: Path = LEASE_ROOT) -> None:
     current = json.loads(owner.read_text(encoding="utf-8"))
     if current.get("track") != TRACK:
         raise ValueError(f"GPU{gpu} lease belongs to {current.get('track')}")
-    if fields.get("status") == "running" and current.get("status") == "running":
+    if shared is not None:
+        jobs = set(current.get("shared_containers") or [])
+        jobs.add(shared) if fields.get("status") == "running" else jobs.discard(shared)
+        fields = {"shared_containers": sorted(jobs)}
+    elif fields.get("status") == "running" and current.get("status") == "running":
         raise ValueError(f"GPU{gpu} already runs {current.get('container')}")
     current.update(fields)
     pending = owner.with_name("owner.pending")
@@ -129,6 +136,11 @@ def main() -> None:
     parser.add_argument("--mount", action="append", default=[])
     parser.add_argument("--env", action="append", default=[])
     parser.add_argument("--workdir", default="/code")
+    parser.add_argument(
+        "--shared",
+        action="store_true",
+        help="Co-locate a small job on a GPU already running this track's job",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     if args.command[:1] == ["--"]:
@@ -159,6 +171,7 @@ def main() -> None:
                 time.time() + cap, timezone.utc
             ).strftime("%Y-%m-%dT%H:%M:%SZ"),
         },
+        shared=args.name if args.shared else None,
     )
     cid = ""
     exit_code = None
@@ -208,6 +221,7 @@ def main() -> None:
             "elapsed_seconds": round(elapsed, 3),
             "gpu_hours": round(elapsed / 3600, 5),
             "cap_hours": args.cap_hours,
+            "shared_gpu": args.shared,
             "watchdog_fired": timed_out.is_set(),
             "exit_code": exit_code,
             "container_log_sha256": sha_file(log_path) if log_path.exists() else None,
@@ -223,6 +237,7 @@ def main() -> None:
                 "container": None,
                 "last_receipt": str(args.receipt),
             },
+            shared=args.name if args.shared else None,
         )
     print(
         json.dumps(
