@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import tempfile
 import unittest
@@ -133,6 +134,36 @@ class WavesTest(unittest.TestCase):
             )
 
 
+class CoverageTest(unittest.TestCase):
+    def test_coverage_needs_every_bin_and_the_top(self) -> None:
+        ok = {"type": "noul", "noul": 0.5}
+        receipts = [
+            {"answers": {"q": ok}, "usage": {"input_tokens": t}}
+            for t in range(100, qualify.COVERAGE_TOP + 400, 300)
+        ]
+        self.assertTrue(qualify.coverage(receipts)["pass"])
+        gap = [r for r in receipts if not 2048 <= r["usage"]["input_tokens"] < 2560]
+        self.assertEqual(qualify.coverage(gap)["missing_bins"], [4])
+        bad = [
+            dict(r, answers={"q": {"type": "noul", "error": "context_overflow"}})
+            for r in receipts
+        ]
+        self.assertFalse(qualify.coverage(bad)["pass"])
+
+    def test_ladder_appends_synthetic_prompts_to_the_warm_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rows = _jsonl(root / "rows.jsonl", [_row(1, "noul"), _row(2, "choice")])
+            warm = root / "warm.jsonl"
+            warm.write_text('{"id": "w"}\n')
+            args = argparse.Namespace(rows=rows, warm=warm, out=root / "out.jsonl")
+            qualify.ladder_command(args)
+            lines = (root / "out.jsonl").read_text().splitlines()
+            self.assertEqual(len(lines), 1 + 2 * len(qualify.LADDER_CHARS))
+            longest = json.loads(lines[-1])
+            self.assertEqual(len(longest["state"]["notes"]), max(qualify.LADDER_CHARS))
+
+
 class ShardsTest(unittest.TestCase):
     def test_split_and_merge_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -252,6 +283,8 @@ class TeacherTargetsTest(unittest.TestCase):
             str(root / "t.jsonl"),
             "--report",
             str(root / "t.report.json"),
+            "--attestation",
+            str(root / "t.attest.jsonl"),
         ]
         return argv
 
@@ -266,6 +299,15 @@ class TeacherTargetsTest(unittest.TestCase):
             self.assertEqual(set(targets[0]), {"id", "input_sha256", "teacher_probs"})
             report = json.loads((root / "t.report.json").read_text())
             self.assertIn("closed OpenAI model", report["provenance_caveat"])
+            attest = [
+                json.loads(l)
+                for l in (root / "t.attest.jsonl").read_text().splitlines()
+            ]
+            self.assertEqual([a["id"] for a in attest], ["r0001", "r0002", "r0003"])
+            self.assertEqual(
+                attest[0]["model_revision"], qualify.IDENTITY["model_revision"]
+            )
+            self.assertEqual(attest[0]["shard"], "aj-t-s0")
             self.assertEqual(report["rows"], 3)
 
     def test_rejects_changed_autotune_or_failed_qualification(self) -> None:

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Node A: M3a AutoJev-27B runtime qualification (preregistration sections 3-4).
 #
-# Usage: qualify_nodeA.sh MIRROR_DIR WORK_DIR
+# Usage: qualify_nodeA.sh MIRROR_DIR WORK_DIR [WARM_PROMPTS]
+#
+# With WARM_PROMPTS (preregistration v2: W plus the length ladder) the warm-up uses that file and
+# the comparison adds gate G0 (warm-up token coverage).
 #
 # Expects WORK_DIR/qual/{warm,qual}.prompts.jsonl and sets.json from `v2.data.m3.qualify sets`.
 # Warm-up on GPU2 with the empty shared cache, round 1 (P1 GPU2, P2 GPU3, P3 GPU4 concurrently),
@@ -11,6 +14,7 @@ src="$1"; work="$2"
 job="$src/src/training/decision2/v2/data/m3/autojev_job.sh"
 cache="$work/triton-cache-autojev-nodeA"
 q="$work/qual"; out="$q/out"
+warm_file="${3:-$q/warm.prompts.jsonl}"
 ref=/data/dev2/runs/eval/m1-adopt/autojev27/output
 mkdir -p "$cache" "$out"
 event() { echo "{\"event\":\"$1\",\"rc\":${2:-0},\"utc\":\"$(date -u +%FT%TZ)\"}" >> "$work/qualify.events.jsonl"; }
@@ -18,7 +22,7 @@ run() { bash "$job" --gpu "$1" --src "$src" --input "$2" --output "$out/$3.jsonl
 
 [[ -z "$(find "$cache" -type f -name '*.autotune.json' | head -n 1)" ]] || { event cache_not_empty 2; exit 2; }
 event warm_start
-run 2 "$q/warm.prompts.jsonl" warm; rc=$?; event warm_done "$rc"
+run 2 "$warm_file" warm; rc=$?; event warm_done "$rc"
 [[ $rc -eq 0 ]] || exit 1
 event round1_start
 run 2 "$q/qual.prompts.jsonl" p1 & a=$!
@@ -37,5 +41,5 @@ python3 -m v2.data.m3.qualify compare --sets "$q/sets.json" \
   --run "P4=$out/p4.jsonl=$out/p4.jsonl.manifest.json" \
   --pair P1:P2 --pair P1:P3 --pair P2:P3 --pair P1:P4 \
   --reference "eval=$ref/typed-final.predictions.jsonl,$ref/public231.predictions.jsonl,$ref/css15.predictions.jsonl" \
-  --spot-run P1 --out "$work/qualification.json" > "$work/qualification.stdout" 2>&1
+  --spot-run P1 ${3:+--require-coverage} --out "$work/qualification.json" > "$work/qualification.stdout" 2>&1
 event compare_done $?

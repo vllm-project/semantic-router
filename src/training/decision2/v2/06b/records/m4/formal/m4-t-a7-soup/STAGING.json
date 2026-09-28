@@ -1,0 +1,42 @@
+{
+  "candidate": "m4-t-a7-soup",
+  "export_manifest_sha256": "0f96aa3932ea501589f794eff9949b52fd1c64835b92f0392da860c22b0442bf",
+  "formal_run_dir": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup",
+  "ingredients": [
+    {
+      "arm": "m4-t-a7-s1",
+      "best_select": 552,
+      "best_step": 1433,
+      "state_sha256": "5fb870dae26059b4609ae7ec6bc923b5854812eb6079ba146b34a135e2770bb4"
+    },
+    {
+      "arm": "m4-t-a7-s2",
+      "best_select": 564,
+      "best_step": 1433,
+      "state_sha256": "4c6b1570c4af12916905d22e853b65fcf9271e08d31bb79f4fd033b4c3049858"
+    },
+    {
+      "arm": "m4-t-a7-s3",
+      "best_select": 575,
+      "best_step": 1433,
+      "state_sha256": "dfec5bac53a3e3d26f2e77846f94eb803d794d5d29f0a0dfbe730ffc1b498a9c"
+    }
+  ],
+  "loaded_parameters": 597103104,
+  "packaging_profile": "qwen-full",
+  "paired_vs_kai1": {
+    "ci95": [
+      4.704926956876495,
+      10.7573648897828
+    ],
+    "delta": 7.603218633470711
+  },
+  "post_key_same_panel_v3": 43.54147935134208,
+  "public231_correct": 142,
+  "recipe": "official Qwen3-0.6B-Base da87bfb6 + (a2) recipe on mixture m4-mix-t (A0s-r + A6 slice + A7 v3 natural24k pool), own-Lux KL on A0s-r rows; uniform soup of three same-init seeds",
+  "runtime": "training.model.infer (causal endpoints + global query head), 8,192-token native cap",
+  "schema": "dev2-06b-staging/1",
+  "soup_state_sha256": "576384ef440bb4aa3f3afcc863ebc38fc00a8b217601e1c736cc19f54a731c49",
+  "source_commit": "c42d50ac1332ecbea2619d4174fffe7fade30acb",
+  "status": "private staging candidate (not a release; release gates pending)"
+}

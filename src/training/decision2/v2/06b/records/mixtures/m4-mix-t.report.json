@@ -1,0 +1,228 @@
+{
+  "components": {
+    "A0s": {
+      "excluded_family_rows": 752,
+      "families_top12": {
+        "human_goemotions_choice": 1397,
+        "human_goemotions_noul": 1397,
+        "natural_snli": 272,
+        "stage4_arithmetic": 224,
+        "stage4_boolean": 277,
+        "stage4_dense_table": 270,
+        "stage4_ordinal": 279,
+        "stage4_registers": 260,
+        "stage4_relations": 274,
+        "stage4_scope": 266,
+        "targeted_interval_conjunction": 450,
+        "targeted_quantized_median": 150
+      },
+      "groups": 4831,
+      "languages": {
+        "en": 5177,
+        "zh": 1370
+      },
+      "max_row_tokens": 6559,
+      "renumbered_rows": 117,
+      "role": "base",
+      "rows": 6547,
+      "rows_in_file": 7299,
+      "score_level_counts": {
+        "3": 102,
+        "4": 59,
+        "5": 211,
+        "6": 58,
+        "7": 47,
+        "8": 39
+      },
+      "task_types": {
+        "choice": 3337,
+        "noul": 2694,
+        "score": 516
+      },
+      "tokens": 3888278
+    },
+    "A6": {
+      "arms": {
+        "A6g": {
+          "rows": 2529,
+          "rows_available": 4905,
+          "share_tokens": 1241743,
+          "tokens": 1241732,
+          "tokens_available": 2369878
+        },
+        "A6h": {
+          "rows": 2948,
+          "rows_available": 5622,
+          "share_tokens": 792243,
+          "tokens": 792222,
+          "tokens_available": 1512003
+        }
+      },
+      "budget_tokens": 2033987,
+      "families_top12": {
+        "a6_band_rubric": 591,
+        "a6_checklist": 642,
+        "a6_evidence_status": 129,
+        "a6_interpolation": 545,
+        "a6_rank_position": 622,
+        "argq30k": 830,
+        "jglue_jsts": 860,
+        "klue_sts": 853,
+        "saf": 405
+      },
+      "groups": 3414,
+      "languages": {
+        "de": 270,
+        "en": 2726,
+        "ja": 860,
+        "ko": 853,
+        "zh": 768
+      },
+      "max_row_tokens": 1124,
+      "policy": "token_budget",
+      "role": "treatment",
+      "rows": 5477,
+      "score_level_counts": {
+        "10": 310,
+        "2": 268,
+        "3": 2335,
+        "4": 761,
+        "5": 439,
+        "6": 495,
+        "7": 280,
+        "8": 328,
+        "9": 261
+      },
+      "task_types": {
+        "score": 5477
+      },
+      "tokens": 2033954
+    },
+    "A7": {
+      "dropped": {
+        "A7g:repeats_earlier_input": 1987,
+        "A7h:excluded_family": 5056,
+        "A7h:repeats_earlier_input": 272,
+        "A7i:repeats_earlier_input": 209,
+        "A7p:repeats_earlier_input": 349,
+        "view:excluded_or_absent": 5056
+      },
+      "families_top12": {
+        "natural_snli": 1549,
+        "stage4_arithmetic": 863,
+        "stage4_automaton": 448,
+        "stage4_boolean": 907,
+        "stage4_dense_table": 905,
+        "stage4_natural_nli": 2170,
+        "stage4_ordinal": 906,
+        "stage4_registers": 948,
+        "stage4_relations": 1221,
+        "stage4_replay_banking_train": 524,
+        "stage4_replay_clinc_train": 497,
+        "stage4_scope": 1215
+      },
+      "fill_rounds": 7,
+      "groups": 14073,
+      "languages": {
+        "en": 9595,
+        "zh": 4584
+      },
+      "max_row_tokens": 7236,
+      "policy": "view_then_equal_shares",
+      "role": "treatment",
+      "rows": 14179,
+      "rows_by_arm_phase": {
+        "A7g:fill": 57,
+        "A7g:view": 7356,
+        "A7h:view": 1549,
+        "A7i:fill": 212,
+        "A7i:view": 1137,
+        "A7m:fill": 414,
+        "A7m:view": 1756,
+        "A7o:fill": 189,
+        "A7p:fill": 201,
+        "A7p:view": 1308
+      },
+      "score_level_counts": {
+        "3": 322,
+        "4": 187,
+        "5": 168,
+        "6": 214,
+        "7": 188,
+        "8": 144
+      },
+      "target_tokens": 14077768,
+      "task_types": {
+        "choice": 10085,
+        "noul": 2871,
+        "score": 1223
+      },
+      "tokens": 14076911,
+      "tokens_by_arm_phase": {
+        "A7g:fill": 77216,
+        "A7g:view": 12105388,
+        "A7h:view": 238998,
+        "A7i:fill": 77391,
+        "A7i:view": 530184,
+        "A7m:fill": 79233,
+        "A7m:view": 335391,
+        "A7o:fill": 78275,
+        "A7p:fill": 78091,
+        "A7p:view": 476744
+      },
+      "view_tokens": 13686705
+    }
+  },
+  "max_row_tokens": 8192,
+  "profile": {
+    "families_top12": {
+      "human_goemotions_choice": 1397,
+      "human_goemotions_noul": 1397,
+      "jglue_jsts": 860,
+      "natural_snli": 1821,
+      "stage4_arithmetic": 1087,
+      "stage4_boolean": 1184,
+      "stage4_dense_table": 1175,
+      "stage4_natural_nli": 2170,
+      "stage4_ordinal": 1185,
+      "stage4_registers": 1208,
+      "stage4_relations": 1495,
+      "stage4_scope": 1481
+    },
+    "groups": 22318,
+    "languages": {
+      "de": 270,
+      "en": 17498,
+      "ja": 860,
+      "ko": 853,
+      "zh": 6722
+    },
+    "max_row_tokens": 7236,
+    "rows": 26203,
+    "score_level_counts": {
+      "10": 310,
+      "2": 268,
+      "3": 2759,
+      "4": 1007,
+      "5": 818,
+      "6": 767,
+      "7": 515,
+      "8": 511,
+      "9": 261
+    },
+    "task_types": {
+      "choice": 13422,
+      "noul": 5565,
+      "score": 7216
+    },
+    "tokens": 19999143
+  },
+  "rows_file_sha256": "98e4e85906a5076cce20b98c132fc1ba0d7fcf6949b41d15231bdfeecc5d549a",
+  "seed": "decision2-06b-m4-a7",
+  "spec_sha256": "75000f7a0887b7e6f1956e47848b89f7da7f5e12a88eb99be72c73bfd3892f19",
+  "template": "S2",
+  "train_ids_sha256": "564bcfd416be384fcf3b5006b0565ef120d71e2325e939f1888f4b3ac7eb79d0",
+  "train_rows": 26203,
+  "train_tokens": 19999143,
+  "unit": "qwen3-0.6b-base-native-segmented"
+}
