@@ -27,7 +27,32 @@ from typing import Any
 from training.model.data import canonical
 from v2.data.build_a0_variants import native_prompt
 from v2.data.m2.common import read_jsonl, sha
-from v2.data.replay_targets import teacher_distribution
+
+SUM_TOLERANCE = 1e-2
+
+
+def teacher_distribution(
+    row: dict[str, Any], answer: dict[str, Any]
+) -> dict[str, float]:
+    """Native answer as a distribution over option keys, renormalized when the
+    collector's rounding leaves the sum within ``SUM_TOLERANCE`` of one."""
+    keys = [option["key"] for option in row["options"]]
+    if answer.get("type") != row["task_type"]:
+        raise ValueError(f"{row['id']}: teacher answered a different question type")
+    if row["task_type"] == "noul":
+        p_true = float(answer["noul"])
+        raw = {"false": 1.0 - p_true, "true": p_true}
+    else:
+        raw = {str(k): float(v) for k, v in answer["probabilities"].items()}
+    if set(raw) != set(keys) or any(
+        not math.isfinite(v) or v < 0 for v in raw.values()
+    ):
+        raise ValueError(f"{row['id']}: invalid teacher distribution")
+    total = sum(raw.values())
+    if abs(total - 1.0) > SUM_TOLERANCE:
+        raise ValueError(f"{row['id']}: teacher probabilities sum to {total}")
+    return {key: raw[key] / total for key in keys}
+
 
 CAL = "CAL"
 TEMPERATURES = [round(0.25 * 1.05**k, 6) for k in range(0, 80)]
@@ -137,7 +162,11 @@ def score(args: argparse.Namespace) -> int:
             if answer is None or "error" in answer:
                 invalid[row["task_type"]] += 1
                 continue
-            dist = teacher_distribution(row, answer)
+            try:
+                dist = teacher_distribution(row, answer)
+            except ValueError:
+                invalid[row["task_type"]] += 1
+                continue
             probs[row["id"]] = [dist[o["key"]] for o in row["options"]]
         temps = {}
         for kind in ("choice", "noul", "score"):
