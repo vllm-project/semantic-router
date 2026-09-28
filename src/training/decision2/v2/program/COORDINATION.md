@@ -187,6 +187,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 03:10 — Research & data M3b complete (gist 02, 03:10 entry; integration `189c6b39c`):
+  - **XL r2 release recipes** (private revision `100536133e…`): mx-xl-full-r2 365,970 rows / 179.2M tokens, Choice / Noul /
+    Score 31.9 / 45.6 / 22.6%, long-evidence share 29.0% (clears the 20% floor); mx-xl-short-r2 373,577 / 127.4M; a `nogap`
+    control keeps r1's balance. New arms H7 (English long evidence: HoVer, Natural Questions; 4,292 rows / 16.1M tokens)
+    and H8 (17 languages: TyDi QA, MIRACL, JCommonsenseQA, SentiMix Spanglish; 21,378 / 12.4M) at `09f73967` passed every
+    gate. Own-Lux targets cover every XL r1 row and control and all r2 rows except H7 / H8 (gold labels). PI-v4 manifest
+    `24b060da…` (87 roles; A7 held-out protected, A7 TRAIN report-only). Prefer XL r2 (or r1 if a tier needs its higher
+    Choice share) for new release-candidate training; the older M2 recipes are superseded.
+  - Same-source check: NO training source (nor Lux 1.0's pool) shares an origin with any CSS-pilot task; the v2 soup's proxy
+    lead came from typed DEV (82% of the gap). Nothing quarantined; FLUTE stays excluded.
+  - **Coordinator decisions:** (1) amendment 4 (post-results narrowing of the rescreen) is ACCEPTED as disclosed: exclude
+    hits against evaluation panels — formal (v3 typed + human transfer, public 231, C1, mlx-diag) and development readout
+    panels (typed DEV, CSS pilot); template sharing with our own SELECT / CAL splits (same generators by construction) is
+    tolerated and disclosed; the strict build `9f83ce9b` stays on record. (2) The rescreen's 305 excluded groups touch 82
+    CSS15 items (73 `media_ideology`, shared topical phrases, no exact duplicates), 33 Decision Bench v4, 1 mlx-diag and
+    1 public-231 item; models trained on r1 / v2 / v1 / A7 data (incl. the released DEV2.0-0.8B / 0.6B and the 2B
+    candidate) may have seen them — the eval track quantifies the effect from stored predictions before the card wording is
+    decided. (3) An own-Lux wave for the 25,664 H7 / H8 rows (~1 GPU-hour, new preregistration) is approved on node B GPU7.
+  - **Node B root filesystem is 99% full** because of `/root/jev-research-20260921` (1.9 TB of research data from a
+    2026-09-21 session; not ours; do NOT move or delete it). Docker's root is `/data/docker`. Every track: on node B write
+    only under `/data` — set `TMPDIR=/data/dev2/tmp`, keep HF / pip / uv / Triton caches under `/data/dev2`.
+
+- 2026-09-29 02:50 — **DEV2.0-2B APPROVED for private release** (eval record `m4-dev2-2b-gates-2026-09-29.md`; integration
+  `c149dca51`). Gates: human transfer vs Decider 2B +0.105 [−0.008, +0.132], vs This-That 1.2 +0.120 [−0.050, +0.223]; v3 vs
+  Decider 2B +3.94 [−2.48, +5.67], vs This-That +7.33 [−2.00, +13.60], vs Sol 1.0 16K +7.66 [+3.26, +10.81]; no type
+  collapsed (Choice .556, Noul .709, Score .438 vs chance .267 / .50 / .20). **Card disclosures to add (release worker):**
+  typed accuracy significantly below Decider 2B (−0.040 [−0.070, −0.009]) and Choice the weakest type vs peers (.556 vs .681
+  / .661); the margin over Decider 2B is not significant; the gain over Sol 1.0 is typed reasoning only (human transfer
+  level, +0.033 [−0.044, +0.092]); Score almost never predicts level 0 (6 of 400, recall .03); plus the decoder track's CSS15
+  losses (mrf, wiki_corpus, flute) and mlx-diag Korean .59 vs .63. Decider 2B (Apache-2.0) and This-That 1.2 (MIT) are
+  card-eligible with a note that their licences come from card metadata only (no LICENSE file). The C1 line is added after
+  C1 event 3 (card-only revision).
+
 - 2026-09-29 02:45 — From decoder Milestone 3 (gist 04; integration `7c331e1b7`):
   - **THIRD RELEASE CANDIDATE: DEV2.0-2B** = S2T (Sol full fine-tuning, own-Sol soft targets as a trust region, three-seed
     soup): post-key v3 53.437 vs the stricter Sol 1.0 16K control 45.781 (+7.66 [+3.26, +10.81]); vs adopted Sol1 45.580
