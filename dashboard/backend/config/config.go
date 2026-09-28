@@ -71,10 +71,12 @@ type Config struct {
 	MCPEnabled bool
 
 	// ML Pipeline configuration
-	MLPipelineEnabled bool
-	MLPipelineDataDir string
-	MLTrainingDir     string // path to src/training/model_selection/ml_model_selection
-	MLServiceURL      string // URL of the Python ML service sidecar (empty = subprocess mode)
+	MLPipelineEnabled           bool
+	MLPipelineDataDir           string
+	MLPipelineAvailable         bool
+	MLPipelineUnavailableReason string
+	MLTrainingDir               string // path to src/training/model_selection/ml_model_selection
+	MLServiceURL                string // URL of the Python ML service sidecar (empty = subprocess mode)
 
 	// OpenClaw configuration
 	OpenClawEnabled bool

@@ -56,12 +56,12 @@ const Layout: React.FC<LayoutProps> = ({
   )
   const pendingMenuFocusRef = useRef<'active-tab' | 'last-link' | null>(null)
   const { user, logout } = useAuth()
-  const { srBenchAvailable } = useReadonly()
+  const { srBenchAvailable, mlPipelineAvailable } = useReadonly()
   const location = useLocation()
   const configSection = getConfigSectionFromPathname(location.pathname)
   const navigate = useNavigate()
   const canAccessUsers = canViewUsers(user)
-  const canUseMLSetup = canAccessMLSetup(user)
+  const canUseMLSetup = canAccessMLSetup(user) && mlPipelineAvailable
   const canAccessMenuItem = (item: LayoutMenuItem) =>
     canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
   const buildMenuCategories = filterLayoutMenuCategories(

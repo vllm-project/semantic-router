@@ -73,6 +73,26 @@ func TestDashboardRouteInventoryHasCompletePolicies(t *testing.T) {
 	}
 }
 
+func TestMLPipelineAvailabilityFollowsRouteRegistration(t *testing.T) {
+	disabled, disabledCfg := setupRouteInventoryServerWithConfig(t, func(cfg *config.Config) {
+		cfg.MLPipelineEnabled = false
+	})
+	if disabledCfg.MLPipelineAvailable {
+		t.Fatal("MLPipelineAvailable = true, want false while the feature is disabled")
+	}
+	if disabledCfg.MLPipelineUnavailableReason == "" {
+		t.Fatal("MLPipelineUnavailableReason is empty while the feature is disabled")
+	}
+	if _, lookup := disabled.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/ml-pipeline/jobs"); lookup != auth.RouteNotFound {
+		t.Errorf("disabled ML route lookup = %v, want RouteNotFound", lookup)
+	}
+
+	_, enabledCfg := setupRouteInventoryServerWithConfig(t)
+	if !enabledCfg.MLPipelineAvailable || enabledCfg.MLPipelineUnavailableReason != "" {
+		t.Errorf("enabled config = %+v, want available with an empty reason", enabledCfg)
+	}
+}
+
 func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 	server := setupRouteInventoryServer(t)
 	for _, test := range []struct{ method, path, permission string }{
@@ -232,7 +252,7 @@ func setupRouteInventoryServer(t *testing.T) *Server {
 	return server
 }
 
-func setupRouteInventoryServerWithConfig(t *testing.T) (*Server, *config.Config) {
+func setupRouteInventoryServerWithConfig(t *testing.T, options ...func(*config.Config)) (*Server, *config.Config) {
 	t.Helper()
 	dir := t.TempDir()
 	staticDir := filepath.Join(dir, "static")
@@ -254,6 +274,9 @@ func setupRouteInventoryServerWithConfig(t *testing.T) (*Server, *config.Config)
 		MLPipelineEnabled: true, MLPipelineDataDir: filepath.Join(dir, "ml-pipeline"),
 		WorkflowDBPath:         filepath.Join(dir, "workflow.sqlite"),
 		ConfigProjectionDBPath: filepath.Join(dir, "projection.sqlite"),
+	}
+	for _, option := range options {
+		option(cfg)
 	}
 	server := Setup(cfg, setupmode.New(configPath, false))
 	t.Cleanup(func() { _ = server.Close() })

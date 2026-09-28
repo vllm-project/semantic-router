@@ -27,11 +27,15 @@ describe('Dashboard capability settings fail closed', () => {
     expect(source).toContain(
       'const [recipeStoreWritable, setRecipeStoreWritable] = useState(false)',
     )
+    expect(source).toContain(
+      'const [mlPipelineAvailable, setMLPipelineAvailable] = useState(false)',
+    )
     for (const reset of [
       'setIsReadonly(true)',
       'setServerReadonly(true)',
       'setRuntimeConfigWritable(false)',
       'setRecipeStoreWritable(false)',
+      'setMLPipelineAvailable(false)',
     ]) {
       expect(source.indexOf(reset)).toBeGreaterThan(-1)
       expect(source.indexOf(reset)).toBeLessThan(fetchStart)

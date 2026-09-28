@@ -39,7 +39,9 @@ import {
 } from './routeLoaders'
 
 interface AuthenticatedAppRoutesProps {
-  canUseMLSetup: boolean
+  canAccessMLSetup: boolean
+  mlPipelineAvailable: boolean
+  mlPipelineUnavailableReason: string
   user: PermissionUser | null
   setupMode: boolean
   settingsLoading: boolean
@@ -107,7 +109,9 @@ const renderShellElement = (
 }
 
 export const renderAuthenticatedAppRoutes = ({
-  canUseMLSetup,
+  canAccessMLSetup,
+  mlPipelineAvailable,
+  mlPipelineUnavailableReason,
   user,
   setupMode,
   settingsLoading,
@@ -170,11 +174,20 @@ export const renderAuthenticatedAppRoutes = ({
     <Route
       path="/ml-setup"
       element={
-        canUseMLSetup ? (
-          renderShellContent(
-            {},
-            <RecoverableLazyRoute loader={loadMLSetupPage} routeLabel="ML setup" />,
-          )
+        canAccessMLSetup ? (
+          <EvaluationAvailabilityRoute
+            available={mlPipelineAvailable}
+            isLoading={settingsLoading}
+            reason={mlPipelineUnavailableReason}
+            settingsError={settingsError}
+            onRefreshAccess={onRefreshAccess}
+            featureName="ML pipeline"
+          >
+            {renderShellContent(
+              {},
+              <RecoverableLazyRoute loader={loadMLSetupPage} routeLabel="ML setup" />,
+            )}
+          </EvaluationAvailabilityRoute>
         ) : (
           <Navigate to="/dashboard" replace />
         )
