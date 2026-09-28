@@ -1,10 +1,13 @@
-"""Label rights-clean TRAIN rows with a pinned own-family Decision 1.0 teacher.
+"""Label rights-clean TRAIN rows with a pinned own-family teacher.
 
-The teacher is loaded through the shared ``from_decision1`` path and scores the
-same shared rendering the student trains on. Probabilities use the teacher
-package's published per-type temperatures. Output rows carry only the TRAIN
-ID, its canonical input hash and the option-key distribution; the manifest
-records teacher identity, agreement with TRAIN labels by type and validity.
+A Decision 1.0 teacher is loaded through the shared ``from_decision1`` path
+and uses its package's published per-type temperatures; a decoder-track full
+checkpoint (``--teacher-kind dec``, for example a released 2.0 soup) uses the
+per-type temperatures of a calibration report bound to that checkpoint's
+inference identity. Either scores the same shared rendering the student trains
+on. Output rows carry only the TRAIN ID, its canonical input hash and the
+option-key distribution; the manifest records teacher identity, agreement with
+TRAIN labels by type and validity.
 """
 
 from __future__ import annotations
@@ -48,6 +51,25 @@ def teacher_temperatures(model_path: Path) -> dict[str, float]:
     return {key: float(value) for key, value in temperatures.items()}
 
 
+def calibration_temperatures(path: Path, model_sha256: str) -> dict[str, float]:
+    report = json.loads(path.read_text(encoding="utf-8"))
+    if report.get("model_sha256") != model_sha256:
+        raise ValueError("Calibration report belongs to a different checkpoint")
+    temperatures = report.get("temperature_by_type")
+    if not isinstance(temperatures, dict) or set(temperatures) != {
+        "choice",
+        "noul",
+        "score",
+    }:
+        raise ValueError("Calibration report lacks per-type temperatures")
+    if any(
+        type(v) not in (int, float) or not math.isfinite(v) or v <= 0
+        for v in temperatures.values()
+    ):
+        raise ValueError("Calibration temperatures must be positive and finite")
+    return {key: float(value) for key, value in temperatures.items()}
+
+
 def softmax(values: list[float], temperature: float) -> list[float]:
     scaled = [value / temperature for value in values]
     top = max(scaled)
@@ -59,6 +81,14 @@ def softmax(values: list[float], temperature: float) -> list[float]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--teacher-path", type=Path, required=True)
+    parser.add_argument(
+        "--teacher-kind", choices=("decision1", "dec"), default="decision1"
+    )
+    parser.add_argument(
+        "--teacher-calibration",
+        type=Path,
+        help="dec teachers: calibration report (temperature_by_type) of that checkpoint",
+    )
     parser.add_argument("--teacher-repo", required=True)
     parser.add_argument("--teacher-revision", required=True)
     parser.add_argument("--train", type=Path, required=True)
@@ -74,6 +104,8 @@ def main() -> None:
     args = parser.parse_args()
     if not 0 <= args.shard_index < args.shard_count:
         parser.error("need 0 <= --shard-index < --shard-count")
+    if (args.teacher_kind == "dec") != bool(args.teacher_calibration):
+        parser.error("--teacher-calibration goes with --teacher-kind dec (only)")
     if args.output.exists():
         raise FileExistsError(args.output)
     runtime = require_runtime()
@@ -82,10 +114,17 @@ def main() -> None:
         for position, row in enumerate(load_partition(args.train, "train"))
         if position % args.shard_count == args.shard_index
     ]
-    temperatures = teacher_temperatures(args.teacher_path)
-    source = source_fingerprint(args.teacher_path)
     device = torch.device("cuda:0")
-    model, tokenizer = DecisionModel.from_decision1(args.teacher_path, 256)
+    if args.teacher_kind == "dec":
+        from .dec_model import dec_fingerprint, load_dec_checkpoint
+
+        source = dec_fingerprint(args.teacher_path, None)["model_sha256"]
+        temperatures = calibration_temperatures(args.teacher_calibration, source)
+        model, tokenizer = load_dec_checkpoint(args.teacher_path, None)
+    else:
+        temperatures = teacher_temperatures(args.teacher_path)
+        source = source_fingerprint(args.teacher_path)
+        model, tokenizer = DecisionModel.from_decision1(args.teacher_path, 256)
     model = model.float().to(device).eval()
     pad_id = (
         tokenizer.pad_token_id
@@ -163,7 +202,13 @@ def main() -> None:
             "label_version": LABEL_VERSION,
             "teacher_repo": args.teacher_repo,
             "teacher_revision": args.teacher_revision,
+            "teacher_kind": args.teacher_kind,
             "teacher_source_fingerprint": source,
+            "teacher_calibration_sha256": (
+                file_sha256(args.teacher_calibration)
+                if args.teacher_calibration
+                else None
+            ),
             "teacher_temperatures": temperatures,
             "train_sha256": file_sha256(args.train),
             "shard": {"index": args.shard_index, "count": args.shard_count},

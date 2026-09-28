@@ -26,13 +26,15 @@ IDENTITY = ("teacher_repo", "teacher_revision", "teacher_source_fingerprint")
 
 
 def read_labels(
-    path: Path, by_id: dict[str, dict[str, Any]]
+    path: Path, by_id: dict[str, dict[str, Any]], subset: bool = False
 ) -> dict[str, dict[str, float]]:
     labels: dict[str, dict[str, float]] = {}
     with path.open(encoding="utf-8") as stream:
         for number, line in enumerate(stream, 1):
             record = json.loads(line)
             row = by_id.get(record.get("id"))
+            if row is None and subset:
+                continue
             if row is None:
                 raise ValueError(f"{path}:{number}: id not in TRAIN")
             if record.get("input_sha256") != row["input_sha256"]:
@@ -73,6 +75,12 @@ def main() -> None:
     parser.add_argument("--train", type=Path, required=True)
     parser.add_argument("--part", type=Path, action="append", required=True)
     parser.add_argument("--override", type=Path, action="append", default=[])
+    parser.add_argument(
+        "--override-subset",
+        action="store_true",
+        help="Override files may hold rows of other mixtures: ids absent from TRAIN are "
+        "skipped (a TRAIN id with a different input hash is still an error)",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.output.exists():
@@ -100,7 +108,7 @@ def main() -> None:
     overrides = [identity(p) for p in args.override]
     replaced: Counter = Counter()
     for index, path in enumerate(args.override):
-        for key, probs in read_labels(path, by_id).items():
+        for key, probs in read_labels(path, by_id, args.override_subset).items():
             if origin[key] != "part":
                 raise ValueError(f"{path}: id {key} already overridden")
             merged[key] = probs
@@ -140,6 +148,7 @@ def main() -> None:
         "rows": len(rows),
         "parts": parts,
         "overrides": overrides,
+        "override_subset": args.override_subset,
         "rows_by_origin": dict(Counter(origin.values())),
         "overridden_rows": dict(replaced),
         "train_label_agreement": {

@@ -637,6 +637,46 @@ class MergeLabelsTest(unittest.TestCase):
                 out.with_name(out.name + ".manifest.json").read_text()
             )
             self.assertEqual(manifest["rows_by_origin"], {"part": 3, "override0": 1})
+            foreign = _train_row("zz", "gz", "other mixture")
+            wider = tmp_path / "wider.jsonl"
+            wider.write_text(
+                json.dumps(label(rows[2], 0.3))
+                + "\n"
+                + json.dumps(label(foreign, 0.5))
+                + "\n"
+            )
+            strict, _ = run(
+                "--part", str(shard0), "--part", str(shard1), "--override", str(wider)
+            )
+            self.assertNotEqual(strict.returncode, 0)
+            subset, out = run(
+                "--part",
+                str(shard0),
+                "--part",
+                str(shard1),
+                "--override",
+                str(wider),
+                "--override-subset",
+            )
+            self.assertEqual(subset.returncode, 0, subset.stderr)
+            manifest = json.loads(
+                out.with_name(out.name + ".manifest.json").read_text()
+            )
+            self.assertEqual(manifest["rows_by_origin"], {"part": 3, "override0": 1})
+            stale = tmp_path / "stale.jsonl"
+            stale.write_text(
+                json.dumps(dict(label(rows[2], 0.3), input_sha256="0" * 64)) + "\n"
+            )
+            mismatch, _ = run(
+                "--part",
+                str(shard0),
+                "--part",
+                str(shard1),
+                "--override",
+                str(stale),
+                "--override-subset",
+            )
+            self.assertNotEqual(mismatch.returncode, 0)
             missing, _ = run("--part", str(shard0))
             self.assertNotEqual(missing.returncode, 0)
             repeated, _ = run(
