@@ -1,7 +1,8 @@
-"""Padded vs unpadded parity for the pinned BEST368 decision model (CPU, FP32).
+"""Padded vs unpadded parity for the pinned BEST368 decision model (FP32).
 
-Runs inside the pinned image (Torch + Transformers with Qwen3.5); skipped where
-they are missing. A tiny random Qwen3.5 text backbone (gated-delta and full
+Runs inside the pinned image (Torch + Transformers with Qwen3.5) on one GPU; the
+image's CPU build lacks BLAS for the reference gated-delta rule, so a CPU run
+skips. A tiny random Qwen3.5 text backbone (gated-delta and full
 attention layers) with the pinned ``CandidateHead`` must give the same logits,
 loss and gradients for a row alone and the same row right-padded next to a
 longer one, which covers readout indices, padding side and attention masks.
@@ -88,10 +89,39 @@ class PinnedPaddingParityTest(unittest.TestCase):
             ],
         )
         config._attn_implementation = "sdpa"
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         backbone = Qwen3_5TextModel(config).float().eval()
-        self.model = self.dm.DecisionModel(
-            backbone, self.dm.CandidateHead(64, 16), {}
-        ).float()
+        if self.device.type == "cpu":
+            self._use_torch_conv()
+        self.model = (
+            self.dm.DecisionModel(backbone, self.dm.CandidateHead(64, 16), {})
+            .float()
+            .to(self.device)
+        )
+
+    def _use_torch_conv(self):
+        """The image's causal_conv1d kernel is GPU-only; use the library's torch fallback on CPU."""
+        import torch.nn.functional as F
+        from transformers.models.qwen3_5 import modeling_qwen3_5 as modeling
+
+        def causal_conv1d_fn(
+            hidden_states, weight, bias=None, activation=None, **kwargs
+        ):
+            seq_len = hidden_states.shape[-1]
+            out = F.conv1d(
+                hidden_states.to(weight.dtype),
+                weight=weight.unsqueeze(1),
+                bias=bias,
+                padding=weight.shape[-1] - 1,
+                groups=hidden_states.shape[1],
+            )[:, :, :seq_len]
+            if activation is not None:
+                out = modeling.ACT2FN[activation](out)
+            return out.to(hidden_states.dtype)
+
+        self._saved_conv = modeling.causal_conv1d_fn
+        modeling.causal_conv1d_fn = causal_conv1d_fn
+        self.addCleanup(setattr, modeling, "causal_conv1d_fn", self._saved_conv)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -118,9 +148,17 @@ class PinnedPaddingParityTest(unittest.TestCase):
 
     def run_batch(self, items):
         torch = self.torch
-        batch = self.dm.collate(items, 0)
+        batch = {
+            key: value.to(self.device) if torch.is_tensor(value) else value
+            for key, value in self.dm.collate(items, 0).items()
+        }
         self.model.zero_grad(set_to_none=True)
-        logits = self.model(**batch)
+        try:
+            logits = self.model(**batch)
+        except RuntimeError as exc:
+            if "BLAS" in str(exc):
+                self.skipTest("this CPU build has no BLAS; run on the GPU")
+            raise
         terms = self.loss.per_example_loss(
             logits,
             batch["labels"],
