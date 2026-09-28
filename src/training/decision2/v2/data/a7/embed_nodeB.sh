@@ -32,7 +32,7 @@ umask 077
 mkdir -p "$out"
 prev="$out/lease.previous-owner"
 cp "$LEASE/owner" "$prev"
-if ! grep -q -E '"status" *: *"(released|idle)"|^status=(released|idle)' "$prev"; then
+if ! grep -q -E '"status" *: *"[^"]*(released|idle)[^"]*"|^status=[^ ]*(released|idle)' "$prev"; then
   echo "GPU$GPU owner file does not say released/idle; not starting" >&2
   exit 3
 fi

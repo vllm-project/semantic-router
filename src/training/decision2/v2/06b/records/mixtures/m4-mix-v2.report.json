@@ -1,0 +1,204 @@
+{
+  "components": {
+    "A0s": {
+      "excluded_family_rows": 752,
+      "families_top12": {
+        "human_goemotions_choice": 1397,
+        "human_goemotions_noul": 1397,
+        "natural_snli": 272,
+        "stage4_arithmetic": 224,
+        "stage4_boolean": 277,
+        "stage4_dense_table": 270,
+        "stage4_ordinal": 279,
+        "stage4_registers": 260,
+        "stage4_relations": 274,
+        "stage4_scope": 266,
+        "targeted_interval_conjunction": 450,
+        "targeted_quantized_median": 150
+      },
+      "groups": 4831,
+      "languages": {
+        "en": 5177,
+        "zh": 1370
+      },
+      "max_row_tokens": 6559,
+      "renumbered_rows": 117,
+      "role": "base",
+      "rows": 6547,
+      "rows_in_file": 7299,
+      "score_level_counts": {
+        "3": 102,
+        "4": 59,
+        "5": 211,
+        "6": 58,
+        "7": 47,
+        "8": 39
+      },
+      "task_types": {
+        "choice": 3337,
+        "noul": 2694,
+        "score": 516
+      },
+      "tokens": 3888278
+    },
+    "mx-v2-full-M": {
+      "dropped": {
+        "H1:repeats_earlier_input": 1,
+        "V1S:repeats_earlier_input": 12
+      },
+      "families_top12": {
+        "a2_units": 1077,
+        "argq30k": 1051,
+        "cmrc2018_removal": 1034,
+        "drcd_removal": 1146,
+        "gsm8k_twins": 1644,
+        "jglue_jsts": 1021,
+        "klue_mrc_removal": 1126,
+        "klue_sts": 1062,
+        "quac_removal": 1148,
+        "sqac_removal": 1068,
+        "squad2_removal": 1734,
+        "winogrande_twins": 2152
+      },
+      "groups": 19214,
+      "languages": {
+        "ar": 510,
+        "bn": 372,
+        "de": 1600,
+        "en": 21108,
+        "es": 1241,
+        "et": 270,
+        "fi": 554,
+        "fr": 985,
+        "hi": 166,
+        "id": 462,
+        "ja": 2555,
+        "ko": 2607,
+        "ne": 323,
+        "ro": 255,
+        "ru": 650,
+        "si": 293,
+        "sw": 320,
+        "te": 474,
+        "th": 649,
+        "zh": 4835,
+        "zh-hant": 1146
+      },
+      "manifest_rows": 48687,
+      "max_row_tokens": 5245,
+      "policy": "id_manifest",
+      "role": "treatment",
+      "rows": 41375,
+      "rows_by_pool": {
+        "E11": 2882,
+        "G2": 4325,
+        "G4h": 1119,
+        "G6": 3465,
+        "H1": 7879,
+        "H3": 1534,
+        "H5": 12328,
+        "H6": 4179,
+        "V1S": 3664
+      },
+      "score_level_counts": {
+        "10": 296,
+        "2": 1137,
+        "3": 4913,
+        "4": 1434,
+        "5": 1445,
+        "6": 832,
+        "7": 440,
+        "8": 474,
+        "9": 337
+      },
+      "skipped_pool_rows": {
+        "A0s": 7299
+      },
+      "task_types": {
+        "choice": 8062,
+        "noul": 22005,
+        "score": 11308
+      },
+      "tokens": 16143885,
+      "tokens_by_pool": {
+        "E11": 1086266,
+        "G2": 1596232,
+        "G4h": 478677,
+        "G6": 1554454,
+        "H1": 1171799,
+        "H3": 1880276,
+        "H5": 5184294,
+        "H6": 2197993,
+        "V1S": 993894
+      }
+    }
+  },
+  "max_row_tokens": 8192,
+  "profile": {
+    "families_top12": {
+      "a2_units": 1077,
+      "argq30k": 1051,
+      "drcd_removal": 1146,
+      "gsm8k_twins": 1644,
+      "human_goemotions_choice": 1397,
+      "human_goemotions_noul": 1397,
+      "klue_mrc_removal": 1126,
+      "klue_sts": 1062,
+      "quac_removal": 1148,
+      "sqac_removal": 1068,
+      "squad2_removal": 1734,
+      "winogrande_twins": 2152
+    },
+    "groups": 24045,
+    "languages": {
+      "ar": 510,
+      "bn": 372,
+      "de": 1600,
+      "en": 26285,
+      "es": 1241,
+      "et": 270,
+      "fi": 554,
+      "fr": 985,
+      "hi": 166,
+      "id": 462,
+      "ja": 2555,
+      "ko": 2607,
+      "ne": 323,
+      "ro": 255,
+      "ru": 650,
+      "si": 293,
+      "sw": 320,
+      "te": 474,
+      "th": 649,
+      "zh": 6205,
+      "zh-hant": 1146
+    },
+    "max_row_tokens": 6559,
+    "rows": 47922,
+    "score_level_counts": {
+      "10": 296,
+      "2": 1137,
+      "3": 5015,
+      "4": 1493,
+      "5": 1656,
+      "6": 890,
+      "7": 487,
+      "8": 513,
+      "9": 337
+    },
+    "task_types": {
+      "choice": 11399,
+      "noul": 24699,
+      "score": 11824
+    },
+    "tokens": 20032163
+  },
+  "rows_file_sha256": "0eedee75259c17869dbd3f8de93b39b2d5e2e7da442113347084b167fa07a47e",
+  "seed": "decision2-06b-m4-v2",
+  "spec_sha256": "aae2ee8b3e78cd512fffa694bb3067a8de26ef1a825b8bf522b35ef348f8117c",
+  "template": "S2",
+  "train_ids_sha256": "1bd2841dfb8299ddb7d163806ab2d367a421c7130700670a5fc4582319acb27e",
+  "train_rows": 47922,
+  "train_tokens": 20032163,
+  "unit": "qwen3-0.6b-base-native-segmented"
+}

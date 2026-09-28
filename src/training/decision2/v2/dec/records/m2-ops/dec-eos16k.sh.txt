@@ -1,0 +1,16 @@
+set -u
+SRC=$1
+source <(sed -n '/^run() {/,/^}/p' /data/dev2/runs/dec/m2/formal-controls.sh)
+S=/data/dev2/src/$SRC/src/training/decision2; H=/data/dev2/hf-cache; F=/data/dev2/runs/dec/formal/m2; spec=$S/v2/dec/adapter-spec-infer-1p0.json
+run16() {
+  local name=$1 model=$2 rev=$3 mid=$4
+  local tc=$F/$name-triton; mkdir -p $tc
+  common=(--gpu 5 --track dec --src $SRC --model-dir $model --mount $H
+    --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=$tc --mount-rw $tc
+    --purpose "M2 same-limit 1.0 control $name (16,384 tokens, shared renderer)")
+  args=(--adapter-spec $spec --model-path $model --revision $rev --extra model_id=$mid --extra max_length=16384)
+  bash $S/v2/eval/run_same_panel.sh "${common[@]}" --run-dir $F/$name-smoke -- "${args[@]}" --max-items 20 > $F/$name-smoke.collect.log 2>&1 || { echo "$(date -u +%FT%TZ) $name smoke FAILED" >> $F/OPERATIONS.log; return 1; }
+  sleep 20
+  bash $S/v2/eval/run_same_panel.sh "${common[@]}" --run-dir $F/$name -- "${args[@]}" > $F/$name.collect.log 2>&1 && echo "$(date -u +%FT%TZ) $name collected" >> $F/OPERATIONS.log || echo "$(date -u +%FT%TZ) $name collection FAILED" >> $F/OPERATIONS.log
+}
+run16 eos1-16k $H/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab 363c4a5e56afc115b1c78c837633956d0bbb63ab llm-semantic-router/Decision-1.0-Eos-0.8B

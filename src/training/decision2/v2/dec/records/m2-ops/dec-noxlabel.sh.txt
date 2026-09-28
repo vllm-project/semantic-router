@@ -1,0 +1,8 @@
+set -u
+SRC=$1
+until grep -q "controls chain (attempt 3) done" /data/dev2/runs/dec/formal/m2/OPERATIONS.log 2>/dev/null; do sleep 20; done
+sleep 10
+S=/data/dev2/src/$SRC/src/training/decision2/v2/dec; L=$S/launch.sh; T=/data/dev2/runs/dec/m2/teacher; mkdir -p $T
+NOX=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
+bash $L m2-nox-labels $SRC $T/nox-control-a0sr -- -m v2.dec.teacher_label --teacher-path $NOX --teacher-repo llm-semantic-router/Decision-1.0-Nox-4B --teacher-revision cde2a68dbaa557ea65dc458104d410a0802ee259 --train /runs/m2/data/m2-control-a0sr/train.jsonl --output /out/nox-teacher.jsonl
+echo "$(date -u +%FT%TZ) nox labels done exit=$?" >> $T/OPERATIONS.log

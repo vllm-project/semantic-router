@@ -12,7 +12,8 @@ spec="/src/src/training/decision2/v2/06b/records/arms/$arm.json"
 host="/data/dev2/runs/06b/m1/arms/$arm"
 out="/runs/m1/arms/$arm"
 mkdir -p "$host"
-spec_json="/data/dev2/src/$sha/src/training/decision2/v2/06b/records/arms/$arm.json"
+# DEV2_SPEC_JSON points at a spec generated after the fact (e.g. a soup of finished seeds).
+spec_json="${DEV2_SPEC_JSON:-/data/dev2/src/$sha/src/training/decision2/v2/06b/records/arms/$arm.json}"
 field() { python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2], {}, {'d': d}))" "$1" "$2"; }
 family=$(field "$spec_json" "d['family']")
 if [ "$family" = qwen-causal ]; then

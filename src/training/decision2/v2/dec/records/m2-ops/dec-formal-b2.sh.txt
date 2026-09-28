@@ -1,0 +1,27 @@
+set -u
+SRC=$1
+S=/data/dev2/src/$SRC/src/training/decision2
+F=/data/dev2/runs/dec/formal/m2; A=/data/dev2/runs/dec/m2/formal-candidates/staging-16c0929a/m2; H=/data/dev2/hf-cache
+EOS=$H/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab
+BASE=$H/models--Qwen--Qwen3.5-0.8B-Base/snapshots/dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68
+spec=$S/v2/dec/adapter-spec-infer-dec.json
+cand() {  # short checkpoint caldir source maxlen
+  local short=$1 ck=$2 cal=$3 src=$4 maxlen=$5 name=m2-$1-nodeA
+  local tc=$F/$name-triton; mkdir -p $tc
+  common=(--gpu 5 --track dec --src $SRC --model-dir $A/$short/$ck --mount $H --mount $A/$short/$cal
+    --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=$tc --mount-rw $tc
+    --purpose "M2 formal post-key collection $short (lock 0a4de2b17)")
+  args=(--adapter-spec $spec --model-path $A/$short/$ck --revision m2-$short-$ck
+    --extra source=$src --extra model_id=decision2-dec-m2-$short --extra max_length=$maxlen --extra calibration=$A/$short/$cal/calibration.json)
+  bash $S/v2/eval/run_same_panel.sh "${common[@]}" --run-dir $F/$name-smoke -- "${args[@]}" --max-items 20 > $F/$name-smoke.collect.log 2>&1 \
+    || { echo "$(date -u +%FT%TZ) $name smoke FAILED" >> $F/OPERATIONS.log; return 1; }
+  sleep 20
+  bash $S/v2/eval/run_same_panel.sh "${common[@]}" --run-dir $F/$name -- "${args[@]}" > $F/$name.collect.log 2>&1 \
+    && echo "$(date -u +%FT%TZ) $name collected" >> $F/OPERATIONS.log || echo "$(date -u +%FT%TZ) $name collection FAILED" >> $F/OPERATIONS.log
+  sleep 20
+}
+cand E8F-soup checkpoint cal698-16k $EOS 16384
+cand E8F-s2 checkpoint-0001520 cal $EOS 8192
+cand E8F-s3 checkpoint-0002041 cal $EOS 8192
+cand B8F-s2 checkpoint-0002026 cal $BASE 8192
+echo "$(date -u +%FT%TZ) batch2 formal chain done" >> $F/OPERATIONS.log

@@ -1,0 +1,13 @@
+import json, glob, re
+from datetime import datetime
+def t(s): return datetime.fromisoformat(s.replace("Z", "+00:00"))
+agg = {}
+for p in glob.glob("/data/dev2/runs/dec/m2/**/*.launch.json", recursive=True):
+    r = json.load(open(p))
+    if r.get("gpu") is None: continue
+    j = r["job"]
+    m = re.match(r"(m2-[A-Z0-9]+(?:-h)?-s\d|m2-E8F-soup|m2-pad|m2-score-fit|m2-tp|m2-ctl|m2-nox-labels|diag|m2-E8F-s\d-cal698)", j)
+    key = m.group(1) if m else j
+    key = re.sub(r"m2-pad.*", "checks:padding", key); key = re.sub(r"m2-score-fit.*", "checks:score-overfit", key); key = re.sub(r"m2-tp.*", "checks:throughput", key)
+    agg[key] = agg.get(key, 0) + (t(r["end_utc"]) - t(r["start_utc"])).total_seconds() / 3600
+print(json.dumps({k: round(v, 3) for k, v in sorted(agg.items())}))

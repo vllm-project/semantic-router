@@ -1,0 +1,13 @@
+set -u
+SRC=$1
+F=/data/dev2/runs/dec/formal/m2
+until grep -q "a7g diag done" /data/dev2/runs/dec/m2/diag/OPERATIONS.log 2>/dev/null; do sleep 20; done
+sleep 15
+mkdir -p $F/attempt2-missing-temperature
+mv $F/sol1-8k-smoke $F/sol1-8k-smoke.collect.log $F/eos1-8k-smoke $F/eos1-8k-smoke.collect.log $F/attempt2-missing-temperature/
+echo "$(date -u +%FT%TZ) sol1/eos1 smokes of attempt 2 failed (node A Sol snapshot incomplete; Eos ships no temperature.json); relaunch with 1fbd917c0" >> $F/OPERATIONS.log
+source <(sed -n '/^run() {/,/^}/p' /data/dev2/runs/dec/m2/formal-controls.sh)
+S=/data/dev2/src/$SRC/src/training/decision2; H=/data/dev2/hf-cache; spec=$S/v2/dec/adapter-spec-infer-1p0.json
+run sol1-8k $H/models--llm-semantic-router--Decision-1.0-Sol-2B/snapshots/ce0c018a28de16d6639b1cd203b761bf643b89e6 ce0c018a28de16d6639b1cd203b761bf643b89e6 llm-semantic-router/Decision-1.0-Sol-2B
+run eos1-8k $H/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab 363c4a5e56afc115b1c78c837633956d0bbb63ab llm-semantic-router/Decision-1.0-Eos-0.8B
+echo "$(date -u +%FT%TZ) controls chain (attempt 3) done" >> $F/OPERATIONS.log
