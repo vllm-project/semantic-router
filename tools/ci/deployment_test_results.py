@@ -8,9 +8,12 @@ import json
 from pathlib import Path
 
 from ci_results import actual_platform, artifact_records
+from release_guard_waiver import GUARD_WAIVER
 
 
-def require_complete(cases: list[dict], expected: list[str]) -> None:
+def require_complete(
+    cases: list[dict], expected: list[str], *, allowed_failed_case: str = ""
+) -> None:
     ids = [case["id"] for case in cases]
     if (
         not expected
@@ -22,25 +25,31 @@ def require_complete(cases: list[dict], expected: list[str]) -> None:
         raise ValueError(
             "deployment test executions differ from the expected inventory"
         )
-    if any(case["status"] != "passed" for case in cases):
+    failures = [case["id"] for case in cases if case["status"] != "passed"]
+    if failures != ([allowed_failed_case] if allowed_failed_case else []):
         raise ValueError("required deployment test failed or skipped")
 
 
-def kubernetes(report: dict, profile: str) -> dict:
+def kubernetes(report: dict, profile: str, *, waiver: dict | None = None) -> dict:
     if report["profile"] != profile:
         raise ValueError("Kubernetes report belongs to a different profile")
+    if waiver and (waiver != GUARD_WAIVER or profile != GUARD_WAIVER["profile"]):
+        raise ValueError("unknown Kubernetes release waiver")
     expected = report["expected_cases"]
     cases = [
         {"id": row["Name"], "status": "passed" if row["Passed"] is True else "failed"}
         for row in report["test_results"]
     ]
-    require_complete(cases, expected)
-    if report["status"] != "PASSED" or report["exit_code"] != 0:
+    waived_case = waiver["case"] if waiver else ""
+    require_complete(cases, expected, allowed_failed_case=waived_case)
+    if report["status"] != ("FAILED" if waiver else "PASSED") or report[
+        "exit_code"
+    ] != (1 if waiver else 0):
         raise ValueError("Kubernetes framework reported a failed run")
     if (
         report["total_tests"] != len(cases)
-        or report["passed_tests"] != len(cases)
-        or report["failed_tests"] != 0
+        or report["passed_tests"] != len(cases) - bool(waiver)
+        or report["failed_tests"] != bool(waiver)
     ):
         raise ValueError("Kubernetes report counters disagree with actual test results")
     return {"cases": cases, "expected_cases": expected}
