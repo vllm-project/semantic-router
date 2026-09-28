@@ -831,8 +831,9 @@ routing:
         - type: response_cache
           configuration:
             enabled: true
-            mode: exact_then_semantic
+            mode: exact
             scope: user
+            # Reference-only setting for operators who explicitly opt into semantic mode.
             semantic:
               similarity_threshold: 0.82
             ttl_seconds: 7200
@@ -975,6 +976,15 @@ routing:
             mode: filter
             relevance_threshold: 0.25
             preserve_count: 2
+        # Disabled sample: field coverage only (reference config union coverage
+        # for PromptCachePluginConfig). qwen3-32b speaks the Anthropic Messages
+        # wire format this plugin targets; see tutorials/plugin/prompt-cache.
+        - type: prompt_cache
+          configuration:
+            enabled: false
+            ttl: 1h
+            targets: [instructions, tools]
+            on_unsupported: skip
 
     - name: health_ratings_route
       description: Ratings-based route for health requests that need fact verification.
@@ -1077,13 +1087,13 @@ routing:
           configuration:
             enabled: true
             retrieval_limit: 6
-            similarity_threshold: 0.72
+            similarity_threshold: 0.40
             auto_store: true
             hybrid_search: true
-            hybrid_mode: rerank
+            hybrid_mode: weighted
             reflection:
               enabled: true
-              algorithm: recency_semantic
+              algorithm: heuristic
               max_inject_tokens: 384
               recency_decay_days: 14
               dedup_threshold: 0.9
@@ -2175,13 +2185,14 @@ global:
         password: ""
       embedding_model: bert
       default_retrieval_limit: 10
-      default_similarity_threshold: 0.74
+      # Calibrated for mom-embedding-light with weighted hybrid scoring.
+      default_similarity_threshold: 0.40
       hybrid_search: true
-      hybrid_mode: rerank
+      hybrid_mode: weighted
       adaptive_threshold: true
       reflection:
         enabled: true
-        algorithm: recency_semantic
+        algorithm: heuristic
         max_inject_tokens: 512
         recency_decay_days: 14
         dedup_threshold: 0.9
