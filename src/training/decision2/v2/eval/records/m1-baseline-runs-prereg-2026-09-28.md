@@ -142,6 +142,55 @@ relaunched once as Q2b with no other change.
 node A, adapter `this-that-1.2` (native Choice; Noul/Score are option projections;
 1,536-token state overflow invalid); formal + dev + mlx-diag; same rules.
 
+**A4.3 (Q5, before launch).** `michaljach/jet@fbc3d2da` (v6.2.0, merged BF16
+Qwen3_5ForCausalLM; every release file checked against `release-manifest.json`), 4B /
+node A, adapter `jet-v6.2` (`v2/eval/native_jet.py`, bundled `Jet().decide`, release
+calibration temperatures; native 16,384-token rejection invalid; release targets CUDA,
+run as `unvalidated_rocm`); formal + dev + mlx-diag; ≤ 0.5 GPU-hour; same rules.
+
+**A4.3.1 (Q5 technical stop and correction).** Q5 was stopped by the operator after
+224 s (0.062 GPU-hour; nothing sealed or scored) when a gold-free output check showed
+1,200 of 2,000 typed-final slots recorded as native rejections: Jet's API rejects Noul
+`criteria` ("noul questions take no criteria"), and the collector caught every
+`ValueError`. It also returned Noul as `probability` and Score probabilities as a list,
+which the frozen scorer does not read. Adapter v2 sends one question per call, appends
+the Noul true/false meanings to the instructions (the APUS adapter's mapping), maps
+answers onto the scorer's fields, and treats only the 16,384-token message as invalid
+(anything else stops the run); regression tests added. A 20-item typed-final smoke run
+(separate `smoke/` directory, answer-shape check only, no gold) precedes a single
+relaunch as Q5b with no other change.
+
+**A4.4 (Q6, before launch).** `bespokelabs/Bespoke-Nimble-9B-v2@4b8c04d1` (PEFT adapter,
+every `SHA256SUMS` file verified) on `Qwen/Qwen3.5-9B@c2022362` from the offline local
+cache, 9B / node A, adapter `nimble-v2` (`v2/eval/native_nimble.py`, bundled
+`ParallelScorer.score`, one native schema per item, release T=2.179 transferred and not
+refit; option, level and true/false meanings in `choice_descriptions`; structured states
+as compact JSON; native 8,192-token rejection invalid for the whole item; any other
+error stops; release targets CUDA, run as `unvalidated_rocm`). Formal + dev + mlx-diag;
+≤ 0.5 GPU-hour. Gold-free smoke runs of 20 items on typed-final and mlx-diag (answer
+shapes only) come first, as for Q5b.
+
+**A4.5 (Q7, before launch).** `frontier-infra/jebadiah-27b@c68db2b5` (merged BF16
+Qwen3_5ForCausalLM, all index shards present, chat template checked against
+`prompt_contract.json`), 27B / node B, adapter `jebadiah-27b`
+(`v2/eval/native_jebadiah.py`, bundled `scripts/` Scorer as in `decide_standalone.py`,
+fp32 candidate logits, shipped per-type temperatures). Its renderer cuts states over
+2,048 tokens; cut prompts are never scored and count as invalid (`over_budget`), as do
+Choice questions with more options than its single-token labels; any other error stops
+the run. Unvalidated ROCm. Formal + dev; ≤ 0.8 GPU-hour; gold-free 20-item smoke runs
+(typed-final, public231) first. Paired against AutoJev on node B.
+
+**A4.6 (Q8, before launch).** `HopitAI/hopper-g@71d991f4` (Hopper (G) 1.2 LoRA,
+`CHECKSUMS.txt` verified; research-and-demo licence, internal comparison only, never on
+cards) on `Qwen/Qwen3.5-4B@851bf6e8` from the offline cache, served by
+`hopit-ai/hopper@0204f929` (tag `g-1.2.0`; packaged calibration map byte-identical to the
+adapter's). 4B / node A, adapter `hopper-g` (`v2/eval/native_hopper.py`, `Decider` as
+`hopper-serve` builds it, default long-menu shortlist, one question per request; Score
+reported as its probability-weighted mean). `allow_slow_kernels=True` because the fused
+CUDA causal-conv1d kernel is unavailable on ROCm (PyTorch fallback; disclosed;
+unvalidated ROCm). Any native error stops the run. Formal + dev + mlx-diag; ≤ 0.5
+GPU-hour; gold-free 20-item smoke runs (typed-final, mlx-diag) first. Paired against Nox1.
+
 ## Reused results (identity verified, no new GPU time)
 
 Recorded predictions were located by SHA-256, adopted, sealed and re-scored with
