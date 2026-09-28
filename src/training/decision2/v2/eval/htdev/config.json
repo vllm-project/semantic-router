@@ -7,43 +7,205 @@
  "cap": 250,
  "floor": 150,
  "min_tasks": 10,
- "split_preference": ["test", "validation", "train"],
- "train_only_below_floor": true,
- "choice_length_margin": 0.10,
+ "split_preference": [
+  "test",
+  "validation",
+  "train"
+ ],
+ "choice_length_margin": 0.1,
  "slots": [
-  {"kind": "humor", "primary": {"task": "humor/nycc_pairs", "source": "nycc", "group_cap": 1}, "backups": []},
-  {"kind": "implicature", "primary": {"task": "implicature/circa", "source": "circa", "group_cap": 1}, "backups": []},
-  {"kind": "figurative", "primary": {"task": "figurative/figqa", "source": "figqa", "group_cap": 1}, "backups": [
-   {"task": "figurative/magpie", "source": "magpie", "group_cap": 1}
-  ]},
-  {"kind": "convincingness", "primary": {"task": "persuasion/ukpconvarg", "source": "ukpconvarg", "group_cap": 10}, "backups": [
-   {"task": "persuasion/ibm_argq_pairs", "source": "ibm_argq_pairs", "group_cap": 10}
-  ]},
-  {"kind": "misinformation", "primary": {"task": "misinfo/pubhealth", "source": "pubhealth", "group_cap": 1}, "backups": [
-   {"task": "misinfo/rumoureval_veracity", "source": "rumoureval", "group_cap": 1}
-  ]},
-  {"kind": "emotion", "primary": {"task": "emotion/brighter", "source": "brighter", "group_cap": 1}, "backups": [
-   {"task": "emotion/xed", "source": "xed", "group_cap": 1},
-   {"task": "emotion/emobank", "source": "emobank", "group_cap": 4}
-  ]},
-  {"kind": "stance", "primary": {"task": "stance/claim_stance", "source": "claim_stance", "group_cap": 10}, "backups": [
-   {"task": "stance/rumoureval", "source": "rumoureval", "group_cap": 4}
-  ]},
-  {"kind": "ideology", "primary": {"task": "ideology/hyperpartisan", "source": "hyperpartisan", "group_cap": 3}, "backups": []},
-  {"kind": "deception", "primary": {"task": "deception/diplomacy", "source": "diplomacy", "group_cap": 10}, "backups": [
-   {"task": "outcome/casino", "source": "casino", "group_cap": 1}
-  ]},
-  {"kind": "moral", "primary": {"task": "moral/scruples", "source": "scruples", "group_cap": 1}, "backups": [
-   {"task": "moral/mfrc", "source": "mfrc", "group_cap": 1},
-   {"task": "moral/moral_stories", "source": "moral_stories", "group_cap": 1}
-  ]},
-  {"kind": "formality", "primary": {"task": "formality/pavlick", "source": "pavlick", "group_cap": 1}, "backups": []},
-  {"kind": "empathy", "primary": {"task": "empathy/empathic_reactions", "source": "empathic_reactions", "group_cap": 1}, "backups": []},
-  {"kind": "hate", "primary": {"task": "hate/mhs", "source": "mhs", "group_cap": 1}, "backups": [
-   {"task": "hate/hatexplain", "source": "hatexplain", "group_cap": 1}
-  ]},
-  {"kind": "word_meaning", "primary": {"task": "wordsense/wic_tsv", "source": "wic_tsv", "group_cap": 1}, "backups": [
-   {"task": "wordsense/swords", "source": "swords", "group_cap": 1}
-  ]}
+  {
+   "kind": "humor",
+   "primary": {
+    "task": "humor/nycc_pairs",
+    "source": "nycc",
+    "group_cap": 1
+   },
+   "backups": []
+  },
+  {
+   "kind": "implicature",
+   "primary": {
+    "task": "implicature/circa",
+    "source": "circa",
+    "group_cap": 1
+   },
+   "backups": []
+  },
+  {
+   "kind": "figurative",
+   "primary": {
+    "task": "figurative/figqa",
+    "source": "figqa",
+    "group_cap": 1
+   },
+   "backups": [
+    {
+     "task": "figurative/magpie",
+     "source": "magpie",
+     "group_cap": 1
+    }
+   ]
+  },
+  {
+   "kind": "convincingness",
+   "primary": {
+    "task": "persuasion/ukpconvarg",
+    "source": "ukpconvarg",
+    "group_cap": 10
+   },
+   "backups": [
+    {
+     "task": "persuasion/ibm_argq_pairs",
+     "source": "ibm_argq_pairs",
+     "group_cap": 10
+    }
+   ]
+  },
+  {
+   "kind": "misinformation",
+   "primary": {
+    "task": "misinfo/pubhealth",
+    "source": "pubhealth",
+    "group_cap": 1
+   },
+   "backups": [
+    {
+     "task": "misinfo/rumoureval_veracity",
+     "source": "rumoureval",
+     "group_cap": 1
+    }
+   ]
+  },
+  {
+   "kind": "emotion",
+   "primary": {
+    "task": "emotion/brighter",
+    "source": "brighter",
+    "group_cap": 1
+   },
+   "backups": [
+    {
+     "task": "emotion/xed",
+     "source": "xed",
+     "group_cap": 1
+    },
+    {
+     "task": "emotion/emobank",
+     "source": "emobank",
+     "group_cap": 4
+    }
+   ]
+  },
+  {
+   "kind": "stance",
+   "primary": {
+    "task": "stance/claim_stance",
+    "source": "claim_stance",
+    "group_cap": 10
+   },
+   "backups": [
+    {
+     "task": "stance/rumoureval",
+     "source": "rumoureval",
+     "group_cap": 4
+    }
+   ]
+  },
+  {
+   "kind": "ideology",
+   "primary": {
+    "task": "ideology/hyperpartisan",
+    "source": "hyperpartisan",
+    "group_cap": 3
+   },
+   "backups": []
+  },
+  {
+   "kind": "deception",
+   "primary": {
+    "task": "deception/diplomacy",
+    "source": "diplomacy",
+    "group_cap": 10,
+    "group_cap_unit": "dialogue (game + player pair); cluster = game"
+   },
+   "backups": [
+    {
+     "task": "outcome/casino",
+     "source": "casino",
+     "group_cap": 1
+    }
+   ]
+  },
+  {
+   "kind": "moral",
+   "primary": {
+    "task": "moral/scruples",
+    "source": "scruples",
+    "group_cap": 1
+   },
+   "backups": [
+    {
+     "task": "moral/mfrc",
+     "source": "mfrc",
+     "group_cap": 1
+    },
+    {
+     "task": "moral/moral_stories",
+     "source": "moral_stories",
+     "group_cap": 1
+    }
+   ]
+  },
+  {
+   "kind": "empathy",
+   "primary": {
+    "task": "empathy/empathic_reactions",
+    "source": "empathic_reactions",
+    "group_cap": 1
+   },
+   "backups": []
+  },
+  {
+   "kind": "hate",
+   "primary": {
+    "task": "hate/mhs",
+    "source": "mhs",
+    "group_cap": 1
+   },
+   "backups": [
+    {
+     "task": "hate/hatexplain",
+     "source": "hatexplain",
+     "group_cap": 1
+    }
+   ]
+  },
+  {
+   "kind": "word_meaning",
+   "primary": {
+    "task": "wordsense/wic_tsv",
+    "source": "wic_tsv",
+    "group_cap": 1
+   },
+   "backups": [
+    {
+     "task": "wordsense/swords",
+     "source": "swords",
+     "group_cap": 1
+    }
+   ]
+  }
+ ],
+ "split_stages": "test; +validation only if test cannot fill the cap; +train only if still below the floor (amendment 2 item 4)",
+ "admission_keys": {
+  "claimstance": "claim_stance",
+  "empathic": "empathic_reactions",
+  "wictsv": "wic_tsv",
+  "moralstories": "moral_stories"
+ },
+ "amendments": [
+  "v2/eval/records/htdev-prereg-amendment-1-2026-09-29.md",
+  "v2/eval/records/htdev-prereg-amendment-2-2026-09-29.md"
  ]
 }

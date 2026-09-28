@@ -47,12 +47,12 @@ def noul_rows(task: str, source: str, count: int, split: str = "test", share=0.5
     return rows
 
 
-def pair_rows(task: str, source: str, count: int, longer_wins: bool):
+def pair_rows(task: str, source: str, count: int, longer_wins: bool, always=False):
     rows = []
     for i in range(count):
         short, long = f"s{i}", f"a much longer option text {i}"
         gold = "AB"[i % 2]
-        wins = longer_wins and i % 4 != 0
+        wins = longer_wins and (always or i % 4 != 0)
         texts = [long, short] if (gold == "A") == wins else [short, long]
         rows.append(
             {
@@ -83,7 +83,6 @@ def config(slots, **extra):
         "floor": 10,
         "min_tasks": 2,
         "split_preference": ["test", "validation", "train"],
-        "train_only_below_floor": True,
         "choice_length_margin": 0.10,
         "slots": slots,
         **extra,
@@ -116,20 +115,25 @@ class SelectTest(unittest.TestCase):
             path.write_text(value if isinstance(value, str) else json.dumps(value))
         return path
 
-    def run_select(self, pool, cfg, admitted, exclusions="", out="out"):
+    def run_select(self, pool, cfg, admitted, exclusions="", out="out", decisions=None):
+        admission = admitted if isinstance(admitted, dict) else {"admitted": admitted}
         args = [
             "select",
             "--pool",
             str(self.write("pool.jsonl", pool)),
             "--admission",
-            str(self.write("ADMISSION.json", {"admitted": admitted})),
+            str(self.write("ADMISSION.json", admission)),
             "--exclusions",
             str(self.write("exclusions.txt", exclusions)),
+            "--exclusions",
+            str(self.write("exclusions2.txt", "")),
             "--output-dir",
             str(self.dir / out),
             "--config",
             str(self.write("config.json", cfg)),
         ]
+        if decisions is not None:
+            args += ["--decisions", str(self.write("decisions.json", decisions))]
         return build.main(args)
 
     def manifest(self, out="out"):
@@ -255,6 +259,99 @@ class SelectTest(unittest.TestCase):
         self.assertEqual(tasks["b/y"]["stage"], "test+validation+train")
         self.assertIn("train", tasks["b/y"]["selected"]["by_split"])
 
+    def test_validation_only_when_test_cannot_fill_the_cap(self):
+        def val(rows):
+            return [
+                dict(r, id=r["id"] + "v", source_item_id=r["source_item_id"] + "v")
+                for r in rows
+            ]
+
+        pool = (
+            noul_rows("a/x", "a", 16, "test")
+            + val(noul_rows("a/x", "a", 30, "validation"))
+            + noul_rows("b/y", "b", 40, "test")
+            + val(noul_rows("b/y", "b", 30, "validation"))
+        )
+        cfg = config(
+            [slot("a", "a/x", "a", group_cap=4), slot("b", "b/y", "b", group_cap=4)]
+        )
+        self.assertEqual(self.run_select(pool, cfg, ["a", "b"]), 0)
+        tasks = self.manifest()["tasks"]
+        self.assertEqual(tasks["a/x"]["stage"], "test+validation")
+        self.assertEqual(tasks["a/x"]["selected"]["items"], 20)
+        self.assertEqual(tasks["b/y"]["stage"], "test")
+        self.assertEqual(tasks["b/y"]["selected"]["by_split"], {"test": 20})
+
+    def test_isolation_admission_format_and_decisions(self):
+        pool = (
+            noul_rows("a/x", "a", 40)
+            + noul_rows("a/backup", "ab", 40)
+            + noul_rows("b/y", "b_b", 40)
+        )
+        cfg = config(
+            [
+                slot("a", "a/x", "a", [("a/backup", "ab")], group_cap=2),
+                slot("b", "b/y", "b_b", group_cap=2),
+            ],
+            admission_keys={"bb": "b_b"},
+        )
+        admission = {
+            "sources": {
+                "a": {"admitted": True},
+                "ab": {"admitted": True},
+                "bb": {"admitted": True},
+                "zz": {"admitted": False},
+            }
+        }
+        decisions = {"not_admitted": {"a": "lineage"}}
+        self.assertEqual(self.run_select(pool, cfg, admission, decisions=decisions), 0)
+        manifest = self.manifest()
+        self.assertEqual([s["task"] for s in manifest["slots"]], ["a/backup", "b/y"])
+        self.assertEqual(manifest["slots"][0]["tried"][0]["reason"], "lineage")
+        self.assertEqual(manifest["admitted_sources"], ["ab", "b_b"])
+
+    def test_length_gate_failure_after_redraw_excludes_the_task(self):
+        pool = (
+            pair_rows("a/pair", "a", 80, longer_wins=True, always=True)
+            + noul_rows("a/backup", "ab", 40)
+            + noul_rows("b/y", "b", 40)
+        )
+        cfg = config(
+            [
+                slot("a", "a/pair", "a", [("a/backup", "ab")]),
+                slot("b", "b/y", "b", group_cap=2),
+            ]
+        )
+        self.assertEqual(self.run_select(pool, cfg, ["a", "ab", "b"]), 0)
+        manifest = self.manifest()
+        self.assertEqual(manifest["slots"][0]["task"], "a/backup")
+        self.assertEqual(
+            manifest["slots"][0]["tried"][0]["result"],
+            "length gate fails after re-draw",
+        )
+        gate = manifest["tasks"]["a/pair"]["length_gate"]
+        self.assertEqual(len(gate), 1)
+        self.assertFalse(gate[0]["passes_after"])
+
+    def test_gold_rows_carry_the_cluster(self):
+        rows = noul_rows("a/x", "a", 40)
+        for r in rows:
+            r["cluster_id"] = "c" + r["group_id"][1:2]
+        pool = rows + noul_rows("b/y", "b", 40)
+        cfg = config(
+            [slot("a", "a/x", "a", group_cap=2), slot("b", "b/y", "b", group_cap=2)]
+        )
+        self.run_select(pool, cfg, ["a", "b"])
+        gold = build.read_jsonl(self.dir / "out" / "ht-dev.gold.jsonl")
+        self.assertTrue(
+            all(g["cluster_id"].startswith("c") for g in gold if g["task"] == "a/x")
+        )
+        self.assertTrue(
+            all(g["cluster_id"] == g["group_id"] for g in gold if g["task"] == "b/y")
+        )
+        prompts = (self.dir / "out" / "ht-dev.prompts.jsonl").read_text()
+        self.assertNotIn("cluster", prompts)
+
     def test_exclusions_drop_items(self):
         pool = noul_rows("a/x", "a", 30) + noul_rows("b/y", "b", 30)
         cfg = config(
@@ -328,13 +425,181 @@ class PoolAndExportTest(unittest.TestCase):
             )
             protected = load_protected(tmp / "scan" / "overlap-protected.jsonl")
             self.assertEqual(protected.ids, [r["id"] for r in rows])
-            embed = build.read_jsonl(tmp / "scan" / "embed-candidates.jsonl")
+            embed = build.read_jsonl(
+                tmp / "scan" / "embed" / "stance__claim_stance.jsonl"
+            )
             self.assertEqual(set(embed[0]), {"id", "group_id", "state"})
+            self.assertTrue(all(e["group_id"] == e["id"] for e in embed))
             inventory = json.loads((tmp / "scan" / "embed-inventory.json").read_text())
-            self.assertEqual(inventory[0]["role"], "ht-dev-pool")
+            self.assertEqual(inventory[0]["role"], "ht-dev:stance/claim_stance")
             (root / "test.csv").write_text("tampered")
             with self.assertRaises(ValueError):
                 build.main(args + ["--output-dir", str(tmp / "pool2")])
+
+
+class FlaggedAndScanDropsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        rows = noul_rows("a/x", "a", 6)
+        rows[0]["state"] = {
+            "text": "A flagged sentence that is long enough.",
+            "t": "shared context string here",
+        }
+        rows[1]["state"] = {
+            "text": "Another different sentence, long enough.",
+            "t": "shared context string here",
+        }
+        rows[2]["option_texts"] = ["An option text that was flagged at source."]
+        self.pool = self.dir / "pool.jsonl"
+        self.pool.write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def admission(self):
+        def leaves(*texts):
+            return [build.leaf_digest(t) for t in texts]
+
+        data = {
+            "sources": {
+                "aa": {
+                    "admitted": True,
+                    "flagged_rows": [
+                        {
+                            "file": "f",
+                            "row": 0,
+                            "leaf_sha256": leaves(
+                                "a FLAGGED   sentence that is long enough.",
+                                "shared context string here",
+                            ),
+                        },
+                        {
+                            "file": "f",
+                            "row": 2,
+                            "leaf_sha256": leaves(
+                                "An option text that was flagged at source.",
+                                "a leaf the builder never shows anywhere",
+                            ),
+                        },
+                    ],
+                }
+            }
+        }
+        path = self.dir / "ADMISSION.json"
+        path.write_text(json.dumps(data))
+        cfg = self.dir / "config.json"
+        cfg.write_text(json.dumps({"admission_keys": {"aa": "a"}}))
+        return path, cfg
+
+    def test_flagged_any_and_row_rules(self):
+        admission, cfg = self.admission()
+        for match, expected in (
+            ("any", {"a/x|0", "a/x|1", "a/x|2"}),
+            ("row", {"a/x|0"}),
+        ):
+            out = self.dir / match
+            build.main(
+                [
+                    "flagged",
+                    "--pool",
+                    str(self.pool),
+                    "--admission",
+                    str(admission),
+                    "--config",
+                    str(cfg),
+                    "--match",
+                    match,
+                    "--output-dir",
+                    str(out),
+                ]
+            )
+            ids = {r["id"] for r in build.read_jsonl(out / "flagged-ids.jsonl")}
+            self.assertEqual(ids, expected)
+            receipt = json.loads((out / "FLAGGED.json").read_text())
+            self.assertEqual(receipt["tasks"]["a/x"]["match_any"], 3)
+            self.assertEqual(receipt["tasks"]["a/x"]["match_row"], 1)
+
+    def test_scan_drops_collects_lexical_and_embedding(self):
+        excluded = self.dir / "flagged.jsonl"
+        excluded.write_text(json.dumps({"id": "a/x|5"}) + "\n")
+        verdicts = ["CLEAN", "OVERLAP", "REVIEW", "CLEAN", "CLEAN"]
+        hits = self.dir / "hits.jsonl"
+        hits.write_text(
+            "".join(
+                json.dumps(
+                    {"id": f"a/x|{i}", "verdict": v, "shingles": 0 if i == 3 else 5}
+                )
+                + "\n"
+                for i, v in enumerate(verdicts)
+            )
+        )
+        private = self.dir / "embed.private.json"
+        private.write_text(
+            json.dumps(
+                {
+                    "quarantined": [
+                        {
+                            "row_id": "a/x|4",
+                            "protected_role": "css15_goldfree",
+                            "cosine": 0.95,
+                        }
+                    ],
+                    "public": {
+                        "by_file": {
+                            "a__x.jsonl": {
+                                "groups": 5,
+                                "review_band_groups": 1,
+                                "quarantined_groups": 1,
+                                "roles_css15_goldfree": 2,
+                            }
+                        }
+                    },
+                }
+            )
+        )
+        out = self.dir / "drops"
+        build.main(
+            [
+                "scan-drops",
+                "--pool",
+                str(self.pool),
+                "--exclude",
+                str(excluded),
+                "--lexical",
+                f"train={hits}",
+                "--embed",
+                f"panels={private}",
+                "--output-dir",
+                str(out),
+            ]
+        )
+        ids = {r["id"] for r in build.read_jsonl(out / "scan-ids.jsonl")}
+        self.assertEqual(ids, {"a/x|1", "a/x|2", "a/x|3", "a/x|4"})
+        task = json.loads((out / "SCANS.json").read_text())["tasks"]["a/x"]
+        self.assertEqual(task["scanned"], 5)
+        self.assertEqual(task["train:OVERLAP"], 1)
+        self.assertEqual(task["train:no_shingles"], 1)
+        self.assertEqual(task["panels:quarantine"], 1)
+        self.assertEqual(task["panels:band"], 1)
+        self.assertEqual(task["dropped"], 4)
+        hits.write_text(
+            json.dumps({"id": "a/x|0", "verdict": "CLEAN", "shingles": 3}) + "\n"
+        )
+        with self.assertRaises(SystemExit):
+            build.main(
+                [
+                    "scan-drops",
+                    "--pool",
+                    str(self.pool),
+                    "--exclude",
+                    str(excluded),
+                    "--lexical",
+                    f"train={hits}",
+                    "--output-dir",
+                    str(self.dir / "d2"),
+                ]
+            )
 
 
 class WaterfillTest(unittest.TestCase):

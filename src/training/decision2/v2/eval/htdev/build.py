@@ -1,30 +1,48 @@
 """Build HT-DEV v1: convert snapshots to a pool, export scan inputs, select the panel.
 
     python3 -m v2.eval.htdev.build pool --sources-dir <dir> --output-dir <private dir> [--source KEY ...]
-    python3 -m v2.eval.htdev.build export-scan --pool <pool.jsonl> --output-dir <private dir>
+    python3 -m v2.eval.htdev.build flagged --pool <pool.jsonl> --admission <ADMISSION.json> --output-dir <dir>
+    python3 -m v2.eval.htdev.build export-scan --pool <pool.jsonl> [--exclude <ids> ...] --output-dir <dir>
+    python3 -m v2.eval.htdev.build scan-drops --pool <pool.jsonl> [--exclude <ids> ...] \
+        --lexical NAME=<hits.jsonl> ... [--embed NAME=<embed.private.json> ...] --output-dir <dir>
     python3 -m v2.eval.htdev.build select --pool <pool.jsonl> --admission <ADMISSION.json> \
-        --exclusions <ids file> --output-dir <private dir> [--config config.json]
+        [--decisions <decisions.json>] --exclusions <ids file> ... --output-dir <dir> [--config config.json]
 
 `pool` runs every converter over its pinned snapshot (file sha256s checked against
 pins.json) and writes the full admissible pool (`pool.jsonl`: id = `task|source item id`,
 state, question, gold, split, group, provenance) plus a count-only `POOL.json`.
 
-`export-scan` writes the pool's states in the shapes the isolation scans read:
-`overlap-protected.jsonl` (`v2.eval.sealed.overlap scan --protected`; hit ids equal pool
-ids), `overlap-corpus.jsonl` (id + state rows, for `--corpus` when the pool is scanned as
-a corpus), `embed-candidates.jsonl` (`v2/data/embed_scan.py --candidates`) and
-`embed-inventory.json` (the pool as a `--protected-inventory` entry).
+`flagged` drops the source rows the isolation ADMISSION.json flags (amendment 2 item 6):
+an item goes when one of its texts of >= 20 characters (state leaves, per-item option
+texts, overlap texts) has the `leaf_sha256` (sha256 of `schema.normalized(text)`) of a
+flagged row of its source (`--match any`, the recipe's rule), or, with `--match row`,
+only when every leaf of some flagged row is among the item's texts. Writes
+`flagged-ids.jsonl` and count-only `FLAGGED.json`.
 
-`select` needs an admission file (`{"admitted": [source keys]}`; a missing file is
-refused) and an exclusion file (pool ids dropped by item-level scans, one per line or
-`{"id": ...}` JSON lines; may be empty). Per task, in `sha256("ht-dev/1:<task>:<item id>")`
-order after the split preference (test, validation; train only when the floor is not
-reached otherwise): drop excluded ids and repeated states, pick the C1 balancing
+`export-scan` writes the remaining pool in the shapes the item scans read:
+`overlap-protected.jsonl` (`v2.eval.sealed.overlap scan --protected`; hit ids equal pool
+ids), `overlap-corpus.jsonl` (id + state rows, for `--corpus`), one embedding candidates
+file per task under `embed/` (`v2/data/embed_scan.py --candidates`; group_id = item id,
+so every item gets its own best match) and `embed-inventory.json`.
+
+`scan-drops` turns item-scan outputs into exclusions: lexical OVERLAP or REVIEW, or no
+shingles, in any hits file; embedding cosine >= the quarantine threshold in any private
+receipt. Writes `scan-ids.jsonl` and count-only `SCANS.json` (per task and scan).
+
+`select` needs an admission file (the isolation `ADMISSION.json`, `sources.<key>.admitted`,
+keys mapped by `config.admission_keys`; or `{"admitted": [source keys]}`; a missing file
+is refused), an optional decisions file (`{"not_admitted": {key: reason}}`, build-time
+admission decisions such as the Fig-QA lineage check) and exclusion files (pool ids, one
+per line or `{"id": ...}` JSON lines; may be empty). Per task, in
+`sha256("ht-dev/1:<task>:<item id>")` order within split stages (amendment 2 item 4:
+test; validation only if test cannot fill the cap; train only if still below the floor):
+drop excluded ids and repeated states, pick the C1 balancing
 stratum (`gold_length_rank` for per-item options whose gold is the longest too often,
 `length` when the C1 length baseline fails, else the gold), fill the strata as evenly
 as the pool allows under the group cap, up to the cap. A Choice task whose length-only
 baseline macro-F1 exceeds chance + 0.10 is re-drawn once with length-stratified balance
-(recorded). A primary below the floor or not admitted is replaced by its backups in
+(recorded) and excluded if it still fails. A primary that is not admitted, misses the
+floor, keeps fewer than two gold classes or fails the gate is replaced by its backups in
 order; with fewer than `min_tasks` tasks the build stops (STOPPED.json, no panel).
 Writes ht-dev.prompts.jsonl (gold-free), ht-dev.gold.jsonl and MANIFEST.json, never
 overwriting.
@@ -55,6 +73,7 @@ from v2.eval.sealed.build import (
     quintiles,
     write_new,
 )
+from v2.eval.sealed.overlap import string_leaves
 from v2.eval.sealed.schema import LONG_INPUT_CHARS, input_chars, normalized, validate
 from v2.eval.sealed.score import macro_f1
 
@@ -63,6 +82,7 @@ CONFIG = Path(__file__).with_name("config.json")
 PANEL = "ht-dev"
 SPLIT_RANK = {"test": 0, "all": 0, "validation": 1, "train": 2}
 REFILL_PASSES = 5
+LEAF_CHARS = 20
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -133,6 +153,7 @@ def pool_row(candidate) -> dict[str, Any]:
         "overlap_texts": candidate.overlap_texts,
         "option_texts": candidate.option_texts,
         "provenance": candidate.provenance,
+        "cluster_id": candidate.cluster_id or candidate.group_id,
     }
 
 
@@ -187,8 +208,97 @@ def pool(args: argparse.Namespace) -> int:
     return 0
 
 
+def leaf_digest(text: str) -> str:
+    return sha_bytes(normalized(text).encode("utf-8"))
+
+
+def item_leaves(row: dict[str, Any]) -> set[str]:
+    """Digests of every text of an item that can carry a source-row leaf."""
+    texts: set[str] = set()
+    for value in (row["state"], row.get("option_texts"), row.get("overlap_texts")):
+        texts.update(string_leaves(value))
+        texts.update(strings(value))
+    return {leaf_digest(t) for t in texts if len(t.strip()) >= LEAF_CHARS}
+
+
+def strings(value: Any):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for child in value.values():
+            yield from strings(child)
+    elif isinstance(value, (list, tuple)):
+        for child in value:
+            yield from strings(child)
+
+
+def admission_sources(
+    data: dict[str, Any], config: dict[str, Any]
+) -> dict[str, dict[str, Any]]:
+    """Isolation ADMISSION.json sources under the builder's source keys."""
+    names = config.get("admission_keys", {})
+    return {names.get(k, k): v for k, v in data.get("sources", {}).items()}
+
+
+def flagged(args: argparse.Namespace) -> int:
+    config = json.loads(args.config.read_text(encoding="utf-8"))
+    admission_bytes = args.admission.read_bytes()
+    sources = admission_sources(json.loads(admission_bytes), config)
+    rows_by_source: dict[str, list[frozenset[str]]] = {}
+    for key, cell in sources.items():
+        rows_by_source[key] = [
+            frozenset(r["leaf_sha256"])
+            for r in cell.get("flagged_rows", [])
+            if r.get("leaf_sha256")
+        ]
+    leaves = {
+        k: frozenset().union(*v) if v else frozenset()
+        for k, v in rows_by_source.items()
+    }
+    out, tasks = [], defaultdict(Counter)
+    for row in read_jsonl(args.pool):
+        own = item_leaves(row)
+        hit_any = bool(own & leaves.get(row["source"], frozenset()))
+        hit_row = hit_any and any(
+            leaf_set <= own for leaf_set in rows_by_source.get(row["source"], [])
+        )
+        tasks[row["task"]]["pool"] += 1
+        tasks[row["task"]]["match_any"] += hit_any
+        tasks[row["task"]]["match_row"] += hit_row
+        if hit_row if args.match == "row" else hit_any:
+            out.append({"id": row["id"], "why": "admission-flagged-row"})
+    private_dir(args.output_dir)
+    data = jsonl_bytes(out)
+    write_new(args.output_dir / "flagged-ids.jsonl", data)
+    receipt = {
+        "schema": SCHEMA + ":flagged",
+        "admission_sha256": sha_bytes(admission_bytes),
+        "pool_sha256": fetch.sha_file(args.pool),
+        "match": args.match,
+        "flagged_rows": {k: len(v) for k, v in sorted(rows_by_source.items())},
+        "tasks": {t: dict(c) for t, c in sorted(tasks.items())},
+        "dropped": len(out),
+        "ids_sha256": sha_bytes(data),
+    }
+    write_new(
+        args.output_dir / "FLAGGED.json",
+        (json.dumps(receipt, indent=1, sort_keys=True) + "\n").encode(),
+    )
+    print(json.dumps({"dropped": len(out), "tasks": receipt["tasks"]}))
+    return 0
+
+
+def remaining(pool_path: Path, exclude: list[Path]) -> list[dict[str, Any]]:
+    dropped = set().union(*(read_exclusions(p) for p in exclude)) if exclude else set()
+    return [row for row in read_jsonl(pool_path) if row["id"] not in dropped]
+
+
+def task_file(task: str) -> str:
+    return task.replace("/", "__") + ".jsonl"
+
+
 def export_scan(args: argparse.Namespace) -> int:
-    rows = read_jsonl(args.pool)
+    rows = remaining(args.pool, args.exclude or [])
     protected = [
         {
             "source": row["source"],
@@ -200,31 +310,112 @@ def export_scan(args: argparse.Namespace) -> int:
         for row in rows
     ]
     corpus = [{"id": row["id"], "state": row["state"]} for row in rows]
-    embed = [
-        {"id": row["id"], "group_id": row["group_id"], "state": row["state"]}
-        for row in rows
-    ]
+    embed: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        embed[row["task"]].append(
+            {"id": row["id"], "group_id": row["id"], "state": row["state"]}
+        )
     private_dir(args.output_dir)
+    private_dir(args.output_dir / "embed")
     digests = {}
     for name, data in (
         ("overlap-protected.jsonl", jsonl_bytes(protected)),
         ("overlap-corpus.jsonl", jsonl_bytes(corpus)),
-        ("embed-candidates.jsonl", jsonl_bytes(embed)),
     ):
         write_new(args.output_dir / name, data)
         digests[name] = sha_bytes(data)
-    inventory = [
-        {
-            "role": "ht-dev-pool",
-            "path": str(args.output_dir / "embed-candidates.jsonl"),
-            "sha256": digests["embed-candidates.jsonl"],
-        }
-    ]
+    inventory = []
+    for task in sorted(embed):
+        path = args.output_dir / "embed" / task_file(task)
+        data = jsonl_bytes(embed[task])
+        write_new(path, data)
+        digests[f"embed/{path.name}"] = sha_bytes(data)
+        inventory.append(
+            {"role": f"ht-dev:{task}", "path": str(path), "sha256": sha_bytes(data)}
+        )
     write_new(
         args.output_dir / "embed-inventory.json",
         (json.dumps(inventory, indent=1) + "\n").encode(),
     )
-    print(json.dumps({"items": len(rows), **digests}))
+    print(json.dumps({"items": len(rows), "files": len(digests)}))
+    return 0
+
+
+def split_named(values: list[str]) -> list[tuple[str, Path]]:
+    out = []
+    for value in values or []:
+        name, _, path = value.partition("=")
+        if not path:
+            raise SystemExit(f"expected NAME=PATH, got {value!r}")
+        out.append((name, Path(path)))
+    return out
+
+
+def scan_drops(args: argparse.Namespace) -> int:
+    rows = remaining(args.pool, args.exclude or [])
+    task_of = {row["id"]: row["task"] for row in rows}
+    of_file = {task_file(t): t for t in set(task_of.values())}
+    reasons: dict[str, list[str]] = defaultdict(list)
+    tasks: dict[str, Counter] = defaultdict(Counter)
+    for row in rows:
+        tasks[row["task"]]["scanned"] += 1
+    inputs = {}
+    for name, path in split_named(args.lexical):
+        inputs[name] = fetch.sha_file(path)
+        seen = set()
+        for hit in read_jsonl(path):
+            if hit["id"] not in task_of:
+                raise SystemExit(f"{name}: hit id outside the scanned pool")
+            seen.add(hit["id"])
+            task = task_of[hit["id"]]
+            if hit["verdict"] in ("OVERLAP", "REVIEW"):
+                tasks[task][f"{name}:{hit['verdict']}"] += 1
+                reasons[hit["id"]].append(f"{name}:{hit['verdict']}")
+            elif not hit.get("shingles"):
+                tasks[task][f"{name}:no_shingles"] += 1
+                reasons[hit["id"]].append(f"{name}:no_shingles")
+        if seen != set(task_of):
+            raise SystemExit(f"{name}: hits do not cover the scanned pool")
+    for name, path in split_named(args.embed):
+        inputs[name] = fetch.sha_file(path)
+        private = json.loads(path.read_text(encoding="utf-8"))
+        for record in private["quarantined"]:
+            if record["row_id"] not in task_of:
+                raise SystemExit(f"{name}: embedding id outside the scanned pool")
+            task = task_of[record["row_id"]]
+            tasks[task][f"{name}:quarantine"] += 1
+            tasks[task][f"{name}:quarantine:{record['protected_role']}"] += 1
+            reasons[record["row_id"]].append(f"{name}:quarantine")
+        for file, stats in private["public"]["by_file"].items():
+            task = of_file.get(file)
+            if task is None:
+                continue
+            tasks[task][f"{name}:band"] += stats.get("review_band_groups", 0)
+            tasks[task][f"{name}:groups"] += stats.get("groups", 0)
+            for key, value in stats.items():
+                if key.startswith("roles_"):
+                    tasks[task][f"{name}:>=review:{key[6:]}"] += value
+    for item_id, why in reasons.items():
+        tasks[task_of[item_id]]["dropped"] += 1
+    out = [{"id": i, "why": sorted(set(w))} for i, w in sorted(reasons.items())]
+    private_dir(args.output_dir)
+    data = jsonl_bytes(out)
+    write_new(args.output_dir / "scan-ids.jsonl", data)
+    receipt = {
+        "schema": SCHEMA + ":scan-drops",
+        "pool_sha256": fetch.sha_file(args.pool),
+        "excluded_before": [fetch.sha_file(p) for p in args.exclude or []],
+        "inputs_sha256": inputs,
+        "scanned": len(rows),
+        "dropped": len(out),
+        "tasks": {t: dict(sorted(c.items())) for t, c in sorted(tasks.items())},
+        "ids_sha256": sha_bytes(data),
+    }
+    write_new(
+        args.output_dir / "SCANS.json",
+        (json.dumps(receipt, indent=1, sort_keys=True) + "\n").encode(),
+    )
+    print(json.dumps({"scanned": len(rows), "dropped": len(out)}))
     return 0
 
 
@@ -423,14 +614,18 @@ def select_task(
 ) -> dict[str, Any]:
     cap, floor = config["cap"], config["floor"]
     group_cap = entry.get("group_cap", 1)
-    early = [row for row in rows if SPLIT_RANK.get(row["split"], 2) <= 1]
-    stages = [("test+validation", early)]
-    if config.get("train_only_below_floor", True) and len(early) < len(rows):
-        stages.append(("test+validation+train", rows))
+    stages, previous = [], 0
+    for name, rank, enough in (
+        ("test", 0, cap),
+        ("test+validation", 1, floor),
+        ("test+validation+train", 2, 0),
+    ):
+        stage_rows = [row for row in rows if SPLIT_RANK.get(row["split"], 2) <= rank]
+        if len(stage_rows) > previous:
+            stages.append((name, stage_rows, enough))
+            previous = len(stage_rows)
     result: dict[str, Any] = {}
-    for stage, pool_rows in stages:
-        if not pool_rows:
-            continue
+    for stage, pool_rows, enough in stages:
         qtype = pool_rows[0]["question"]["type"]
         if qtype == "choice":
             balance, checks = choose_balance(pool_rows)
@@ -477,8 +672,9 @@ def select_task(
             "length_only": baseline,
             "chance": chance,
             "gate": gate,
+            "gate_fails": bool(gate) and not gate[-1]["passes_after"],
         }
-        if len(chosen) >= floor:
+        if len(chosen) >= enough:
             break
     return result
 
@@ -494,6 +690,7 @@ def counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
         ),
         "groups": len(groups),
         "max_per_group": max(groups.values()) if groups else 0,
+        "clusters": len({row.get("cluster_id") or row["group_id"] for row in rows}),
     }
 
 
@@ -520,8 +717,17 @@ def select(args: argparse.Namespace) -> int:
     config_bytes = args.config.read_bytes()
     config = json.loads(config_bytes)
     admission_bytes = args.admission.read_bytes()
-    admitted = set(json.loads(admission_bytes)["admitted"])
-    exclusions = read_exclusions(args.exclusions)
+    admission = json.loads(admission_bytes)
+    if "admitted" in admission:
+        admitted = set(admission["admitted"])
+    else:
+        admitted = {
+            k for k, v in admission_sources(admission, config).items() if v["admitted"]
+        }
+    decisions_bytes = args.decisions.read_bytes() if args.decisions else b"{}"
+    not_admitted = json.loads(decisions_bytes).get("not_admitted", {})
+    admitted -= set(not_admitted)
+    exclusions = set().union(*(read_exclusions(p) for p in args.exclusions))
     pool_bytes = args.pool.read_bytes()
     by_task: dict[str, list[dict[str, Any]]] = defaultdict(list)
     dropped: dict[str, Counter] = defaultdict(Counter)
@@ -545,7 +751,13 @@ def select(args: argparse.Namespace) -> int:
         ]:
             task, source = entry["task"], entry["source"]
             if source not in admitted:
-                record["tried"].append({"task": task, "result": "not admitted"})
+                record["tried"].append(
+                    {
+                        "task": task,
+                        "result": "not admitted",
+                        "reason": not_admitted.get(source, "isolation admission"),
+                    }
+                )
                 continue
             rows = sorted(
                 (r for r in by_task.get(task, []) if r["source"] == source),
@@ -564,14 +776,29 @@ def select(args: argparse.Namespace) -> int:
             outcome = select_task(unique, entry, config) if unique else {}
             chosen = outcome.get("chosen", [])
             classes = len({gold_key(row) for row in chosen})
-            if len(chosen) < config["floor"] or classes < 2:
+            failure = (
+                "below floor"
+                if len(chosen) < config["floor"]
+                else (
+                    "fewer than two classes"
+                    if classes < 2
+                    else (
+                        "length gate fails after re-draw"
+                        if outcome["gate_fails"]
+                        else None
+                    )
+                )
+            )
+            if failure:
                 record["tried"].append(
-                    {"task": task, "result": "below floor", "selected": len(chosen)}
+                    {"task": task, "result": failure, "selected": len(chosen)}
                 )
                 tasks[task] = {
                     "role": role,
                     "source": source,
-                    "status": "below floor",
+                    "status": failure,
+                    "length_only": outcome.get("length_only"),
+                    "length_gate": outcome.get("gate"),
                     "eligible": counts(unique),
                     "selected_if_used": counts(chosen),
                     "stage": outcome.get("stage"),
@@ -611,7 +838,9 @@ def select(args: argparse.Namespace) -> int:
         "pool_sha256": sha_bytes(pool_bytes),
         "admission_sha256": sha_bytes(admission_bytes),
         "admitted_sources": sorted(admitted),
-        "exclusions_sha256": fetch.sha_file(args.exclusions),
+        "decisions_sha256": sha_bytes(decisions_bytes),
+        "not_admitted_decisions": not_admitted,
+        "exclusions_sha256": [fetch.sha_file(p) for p in args.exclusions],
         "exclusion_ids": len(exclusions),
         "code_commit": code_commit(),
         "slots": slots,
@@ -642,6 +871,7 @@ def select(args: argparse.Namespace) -> int:
             "split": r["split"],
             "source_item_id": r["source_item_id"],
             "group_id": r["group_id"],
+            "cluster_id": r.get("cluster_id") or r["group_id"],
             "language": r["language"],
             "input_chars": r["_chars"],
             "long": r["_chars"] >= LONG_INPUT_CHARS,
@@ -692,19 +922,37 @@ def main(argv: list[str] | None = None) -> int:
     one.add_argument("--output-dir", type=Path, required=True)
     one.add_argument("--source", action="append")
     one.add_argument("--pins", type=Path, default=fetch.PINS)
+    flag = commands.add_parser("flagged")
+    flag.add_argument("--pool", type=Path, required=True)
+    flag.add_argument("--admission", type=Path, required=True)
+    flag.add_argument("--match", choices=("any", "row"), default="any")
+    flag.add_argument("--output-dir", type=Path, required=True)
+    flag.add_argument("--config", type=Path, default=CONFIG)
     two = commands.add_parser("export-scan")
     two.add_argument("--pool", type=Path, required=True)
+    two.add_argument("--exclude", type=Path, action="append")
     two.add_argument("--output-dir", type=Path, required=True)
+    drops = commands.add_parser("scan-drops")
+    drops.add_argument("--pool", type=Path, required=True)
+    drops.add_argument("--exclude", type=Path, action="append")
+    drops.add_argument("--lexical", action="append", metavar="NAME=HITS")
+    drops.add_argument("--embed", action="append", metavar="NAME=PRIVATE")
+    drops.add_argument("--output-dir", type=Path, required=True)
     three = commands.add_parser("select")
     three.add_argument("--pool", type=Path, required=True)
     three.add_argument("--admission", type=Path, required=True)
-    three.add_argument("--exclusions", type=Path, required=True)
+    three.add_argument("--decisions", type=Path)
+    three.add_argument("--exclusions", type=Path, action="append", required=True)
     three.add_argument("--output-dir", type=Path, required=True)
     three.add_argument("--config", type=Path, default=CONFIG)
     args = parser.parse_args(argv)
-    return {"pool": pool, "export-scan": export_scan, "select": select}[args.command](
-        args
-    )
+    return {
+        "pool": pool,
+        "flagged": flagged,
+        "export-scan": export_scan,
+        "scan-drops": scan_drops,
+        "select": select,
+    }[args.command](args)
 
 
 if __name__ == "__main__":
