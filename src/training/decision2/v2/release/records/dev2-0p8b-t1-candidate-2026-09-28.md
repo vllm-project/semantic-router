@@ -1,5 +1,9 @@
 # DEV2.0-0.8B: retroactive calibration check and a prepared T = 1 revision (2026-09-28, not uploaded)
 
+**Published 2026-09-29 ≈00:12 UTC+8** as private `llm-semantic-router/DEV2.0-0.8B@7d08d0e12082ee6810a4221063342cefe45b6ac3`
+(manifest `2a19a65a…`: this candidate rebuilt from `6d7e7a148`, only `builder.source_commit` differs).
+Final decision `fedb18fa…`. See the [release record](dev2-0p8b-release-2026-09-28.md).
+
 **Result: the released DEV2.0-0.8B's CAL698 temperatures fail the coordinator's 23:15 development rule.
 A calibration-only T = 1 candidate is built and verified on node A but not uploaded; publishing is the
 coordinator's decision.** The released package is `llm-semantic-router/DEV2.0-0.8B@0b631a85c19fb573aee34fc68bb413271ebe89f4`

@@ -1,6 +1,69 @@
 # DEV2.0-0.8B: private release build, upload and verification (2026-09-28)
 
-## Final release (2026-09-28 ≈22:30 UTC+8) — in the private "Decision 2.0" collection
+## Calibration-only revision (T = 1), 2026-09-29 ≈00:12 UTC+8 — current revision `7d08d0e1`
+
+The coordinator approved a calibration-only revision (23:55 UTC+8, full-autonomy mandate). Under the
+23:15 calibration rule, CAL698 temperatures are adopted only if they do not worsen calibration on the
+development panels. The released temperatures (Choice 1.123, Noul 1.071, Score 0.395) worsen typed-DEV
+Brier / ECE-10 from 0.269 / 0.128 (raw) to 0.300 / 0.180; the CSS pilot improves only slightly
+(0.834 / 0.127 to 0.821 / 0.109) ([receipt](dev2-0p6b-release-2026-09-28/devcal/dev2-0p8b.json)).
+So DEV2.0-0.8B now ships T = 1. The weights and every answer are unchanged: v3 50.236, +7.69
+[+3.65, +13.32] vs Eos 1.0, public 231 156, and JevArena-C1 event 1 stay as they were.
+
+- **Revision `7d08d0e12082ee6810a4221063342cefe45b6ac3`** of private `llm-semantic-router/DEV2.0-0.8B`
+  (now `main`). Manifest **`2a19a65a0141a8d71939bbf82025e299266db404cadd8b2bc712d1a992e98e7e`**, 30 files,
+  no `calibration.json`, 753,446,208 loaded parameters.
+- **Final decision** [`DEV2.0-0.8B.decision.t1.json`](dev2-0p8b-release-2026-09-28/DEV2.0-0.8B.decision.t1.json),
+  SHA-256 **`fedb18fa3634b1874b6508c75c4607fc59f3dd63961c4b43e0698b6faf378684`**. It is `status: final`,
+  decided by the coordinator under the full-autonomy mandate. It names report `1f5cf33d…` and paired
+  file `fa62c29a…`, and supersedes `b2338c45…` (revision `0b631a85`). The run's `gate.json`
+  (`13398d42…`) binds it to `7d08d0e1…` and manifest `2a19a65a…`; all six gate items pass.
+- **Card.** Two README lines differ from `0b631a85`:
+  - typed Brier / ECE goes from 0.277 / 0.150 to **0.254 / 0.103** (report `1f5cf33d…`);
+  - the calibration line now reads: raw model probabilities (temperature 1); the CAL698 temperatures were
+    evaluated and not adopted because they worsened calibration on out-of-distribution development data.
+
+  Scores, the C1 line, tradeoffs and disclosures are unchanged. The evaluation page shows the same
+  0.254 / 0.103. It also drops the note that the scored report counted only the backbone, because the
+  adopted T = 1 report counts all 753,446,208 parameters.
+- **Package = the verified T = 1 candidate.** It was rebuilt from the mirror of `6d7e7a148`. Every file
+  equals the candidate verified at `a1f5c332…` except `MODEL_MANIFEST.json`, and there the only changed
+  field is `builder.source_commit` (`89294e89f` → `6d7e7a148`)
+  ([compare](dev2-0p8b-release-2026-09-28/t1/extra/candidate-compare.json)). The decision allows exactly
+  that difference; a CPU build-only preflight showed it before any GPU or Hub step.
+- **Verification.** One `release.sh ... --upload --collect --already-collected` run passed all 17 steps
+  in 180 s ([command](dev2-0p8b-release-2026-09-28/t1/extra/launch-command.txt)). It ran on node A GPU5 via
+  the shared-lease entry `owner.release` (16:09:19–16:12:54Z, then removed; the owner entry was not
+  touched), with image `f83b1d10…`, `--site /opt/decision-fla --require-kernels` and a copy of the
+  candidate run's autotune cache.
+  - Native examples are bit-identical in three processes (two before upload, one from the download).
+    The answers hash `f0a72416…` equals the candidate's. The card example reproduced before and after upload.
+  - Parity against the derived T = 1 predictions on 600 prompts (typed 150, transfer 200, public 100,
+    mlx-diag 150; same prompt, id and prediction hashes as the candidate run): 0 changes, max drift
+    4.4e-16, before and after the real download.
+  - A real `hf download` of `7d08d0e1…` with a fresh cache re-hashes 30/30 files equal to the manifest
+    and to the pre-upload package.
+  - **Weights identical to `0b631a85`.** The six model files (backbone safetensors and config, head,
+    decision config, both tokenizer files) have equal SHA-256 in the download and in the old manifest,
+    and equal remote LFS / blob ids at both revisions. Only `calibration.json` (removed), `config.json`,
+    `README.md`, `evaluation/*` and `MODEL_MANIFEST.json` differ
+    ([compare](dev2-0p8b-release-2026-09-28/t1/extra/revision-compare.json)).
+  - Readback: repository private at `7d08d0e1…` (= `main`), 30/30 remote hashes, Hub card `apache-2.0`
+    with base model Eos 1.0, no card problems. HTTP check: 12/12 card images and files at the revision;
+    anonymous model API, README and page refused (401). `hub_links`: 14/14.
+  - Collection "Decision 2.0": private, **exactly one item** (`llm-semantic-router/DEV2.0-0.8B`, no note).
+    Collection items name a repository, not a revision, so the item now shows `7d08d0e1…` and needed no change.
+- **Pipeline fix `bf9717167`.** The pre-collect readback required the repository to be absent from the
+  collection, which fails for any later revision of a collected release. `release.sh --already-collected`
+  (only with `--collect`) makes that readback require the item instead (tests
+  `v2.release.tests.test_hub_readback`). Default behaviour is unchanged.
+- **GPU-hours 0.050** (node A GPU5, 180 s). The CPU preflight build and the extra readbacks used no GPU.
+- `0b631a85` (CAL698) is superseded and stays in the repository history.
+
+Receipts: [`t1/`](dev2-0p8b-release-2026-09-28/t1/) (pipeline receipts, extra checks, package text,
+launch command and log).
+
+## Final release (2026-09-28 ≈22:30 UTC+8) — in the private "Decision 2.0" collection (superseded by the T = 1 revision above)
 
 The coordinator decided to release (full-autonomy mandate). The spec's card got the
 JevArena-C1 event 1 line (DEV2.0-0.8B 40.24 vs Eos 1.0 37.94, +2.31 [+0.29, +4.30]; Kev 39.06;

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SRC=6d7e7a14851cdda3d8a7a81083df8369e3ac5532-src_training_decision2; S=/data/dev2/src/$SRC/src/training/decision2
+G=/data/dev2/private/panels/goldfree; P=/data/dev2/runs/release/inputs/dev2-0p8b-t1/derived
+TC=/data/dev2/runs/release/triton/dev2-0p8b-E8F-soup-nodeA-copy-t1pub
+$S/v2/release/release.sh --spec $S/v2/release/specs/dev2-0p8b-t1-candidate.json --src $SRC --work /data/dev2/runs/release/dev2-0p8b-t1-publish-20260928T160919Z \
+  --gpu 5 --track release --shared-lease release --threads 4 \
+  --site /opt/decision-fla --require-kernels \
+  --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=$TC --mount-rw $TC \
+  --mount $G --mount $P \
+  --parity typed-final:$G/typed-final.prompts.jsonl:$P/typed-final.predictions.jsonl:150 \
+  --parity css15:$G/css15.prompts.jsonl:$P/css15.predictions.jsonl:200 \
+  --parity public231:$G/public231.prompts.jsonl:$P/public231.predictions.jsonl:100 \
+  --parity mlx-diag:$G/mlx-diag.prompts.jsonl:$P/mlx-diag.predictions.jsonl:150 \
+  --upload --collect --already-collected
