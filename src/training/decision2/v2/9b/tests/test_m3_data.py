@@ -158,6 +158,24 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(manifest["replay"]["tokens"], 20)
         self.assertEqual([t["id"] for t in teachers], ["a0s-1", "h1-1", "h1-2"])
 
+    def test_extra_components_dedupe_against_earlier_rows(self):
+        repeat = row("a7g:copy", "cg2", "legacy:stage4")
+        repeat["state"] = self.replay[2]["state"]
+        repeat["input_sha256"] = self.replay[2]["input_sha256"]
+        extra = [repeat] + [row(f"v1:{i}", f"vg{i}", "a2_verifiable") for i in range(4)]
+        self.write("v1.jsonl", extra)
+        spec = self.spec()
+        spec["replay"]["budget_tokens"] = 10**6
+        spec["extras"] = [
+            {"name": "v1", "files": [self.ref("v1.jsonl")], "budget_tokens": 10}
+        ]
+        train, _, manifest = self.build(spec)
+        ids = {r["id"] for r in train}
+        self.assertNotIn("a7g:copy", ids)
+        self.assertEqual(manifest["extras"]["v1"]["duplicate_of_a0_or_recipe"], 1)
+        self.assertEqual(manifest["extras"]["v1"]["rows"], 2)
+        self.assertEqual(sum(i.startswith("v1:") for i in ids), 2)
+
     def test_missing_teacher_or_bad_hash_fails(self):
         self.write("teacher.jsonl", [teacher(r) for r in self.recipe_rows[:2]])
         with self.assertRaises(ValueError):

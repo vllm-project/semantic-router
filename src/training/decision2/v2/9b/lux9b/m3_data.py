@@ -161,6 +161,75 @@ def stratified_groups(
     return set(select_groups(groups, tokens, budget, seed))
 
 
+def extra_component(
+    component: dict[str, Any],
+    seed: str,
+    max_length: int,
+    roots: dict[str, Path],
+    inputs: dict[str, str],
+    blocked: set[str],
+    taken: set[str],
+    tokenizer: Path,
+    workers: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Gold-label rows of one extra component after exclusion, dedupe and budget."""
+    members = None
+    if "view" in component:
+        view = json.loads(verified(component["view"], roots, inputs).read_text())
+        members = {m["id"] for m in view["members"] if m["part"] == "train"}
+    excluded = set(component.get("exclude_families", []))
+    counts: Counter = Counter()
+    pool: list[dict[str, Any]] = []
+    for entry in component["files"]:
+        for row in load_partition(verified(entry, roots, inputs), "train"):
+            if members is not None and row["id"] not in members:
+                continue
+            counts["in_view"] += 1
+            if row["family"] in excluded:
+                counts["excluded_family"] += 1
+                continue
+            audit = row["audit_metadata"]
+            originals = {
+                (audit.get("a7") or {}).get("original_input_sha256"),
+                (audit.get("option_key_renumbering") or {}).get(
+                    "original_input_sha256"
+                ),
+            } - {None}
+            if row["input_sha256"] in blocked or originals & blocked:
+                counts["duplicate_of_a0_or_recipe"] += 1
+                continue
+            if row["id"] in taken:
+                raise ValueError(f"{row['id']}: extra row id repeats an earlier id")
+            pool.append(row)
+    lengths = dict(
+        zip((r["id"] for r in pool), token_lengths(pool, tokenizer, workers))
+    )
+    over = {r["group_id"] for r in pool if lengths[r["id"]] > max_length}
+    counts["over_length_rows"] = sum(r["group_id"] in over for r in pool)
+    pool = [r for r in pool if r["group_id"] not in over]
+    pool_tokens = sum(lengths[r["id"]] for r in pool)
+    budget = component.get("budget_tokens")
+    chosen = (
+        stratified_groups(pool, lengths, budget, seed)
+        if budget is not None and budget < pool_tokens
+        else {r["group_id"] for r in pool}
+    )
+    rows = [r for r in pool if r["group_id"] in chosen]
+    return rows, {
+        **dict(counts),
+        "view_members": len(members) if members is not None else None,
+        "pool_rows": len(pool),
+        "pool_tokens": pool_tokens,
+        "budget_tokens": budget,
+        "rows": len(rows),
+        "tokens": sum(lengths[r["id"]] for r in rows),
+        "rows_by_type": dict(Counter(r["task_type"] for r in rows)),
+        "rows_by_family": dict(Counter(r["family"] for r in rows).most_common()),
+        "rows_by_language": dict(Counter(r["language"] for r in rows)),
+        "max_tokens": max((lengths[r["id"]] for r in rows), default=0),
+    }
+
+
 def build(spec: dict[str, Any], roots: dict[str, Path], tokenizer: Path, workers: int):
     inputs: dict[str, str] = {}
     recipe = read_jsonl(verified(spec["recipe"], roots, inputs))
@@ -188,6 +257,12 @@ def build(spec: dict[str, Any], roots: dict[str, Path], tokenizer: Path, workers
             raise ValueError(f"{pool}: source differs for {wrong_source[:3]}")
         rows.extend(available[e["id"]] for e in entries)
         stats["pools"][pool] = len(entries)
+    recipe_excluded = set(spec.get("recipe_exclude_families", []))
+    if recipe_excluded:
+        stats["recipe_excluded_family"] = sum(
+            r["family"] in recipe_excluded for r in rows
+        )
+        rows = [r for r in rows if r["family"] not in recipe_excluded]
     recipe_ids = {row["id"] for row in rows}
 
     teacher: dict[str, dict[str, Any]] = {}
@@ -216,66 +291,33 @@ def build(spec: dict[str, Any], roots: dict[str, Path], tokenizer: Path, workers
         if renumbering.get("original_input_sha256"):
             blocked.add(renumbering["original_input_sha256"])
 
-    replay_spec = spec.get("replay")
+    components = (
+        [{"name": "replay", **spec["replay"]}] if "replay" in spec else []
+    ) + [dict(c) for c in spec.get("extras", [])]
     replay: list[dict[str, Any]] = []
-    replay_stats: dict[str, Any] = {}
-    if replay_spec:
-        view = json.loads(verified(replay_spec["view"], roots, inputs).read_text())
-        members = {m["id"] for m in view["members"] if m["part"] == "train"}
-        excluded = set(replay_spec.get("exclude_families", []))
-        counts: Counter = Counter()
-        pool: list[dict[str, Any]] = []
-        for entry in replay_spec["files"]:
-            for row in load_partition(verified(entry, roots, inputs), "train"):
-                if row["id"] not in members:
-                    continue
-                counts["in_view"] += 1
-                if row["family"] in excluded:
-                    counts["excluded_family"] += 1
-                    continue
-                audit = row["audit_metadata"]
-                originals = {
-                    (audit.get("a7") or {}).get("original_input_sha256"),
-                    (audit.get("option_key_renumbering") or {}).get(
-                        "original_input_sha256"
-                    ),
-                } - {None}
-                if row["input_sha256"] in blocked or originals & blocked:
-                    counts["duplicate_of_a0_or_recipe"] += 1
-                    continue
-                if row["id"] in recipe_ids:
-                    raise ValueError(f"{row['id']}: replay id repeats a recipe id")
-                pool.append(row)
-        lengths = dict(
-            zip(
-                (r["id"] for r in pool),
-                token_lengths(pool, tokenizer, workers),
-            )
+    extra_stats: dict[str, dict[str, Any]] = {}
+    taken = set(recipe_ids)
+    for component in components:
+        seed = (
+            spec["seed"]
+            if component["name"] == "replay"
+            else f"{spec['seed']}:{component['name']}"
         )
-        over = {r["group_id"] for r in pool if lengths[r["id"]] > spec["max_length"]}
-        counts["over_length_rows"] = sum(r["group_id"] in over for r in pool)
-        pool = [r for r in pool if r["group_id"] not in over]
-        pool_tokens = sum(lengths[r["id"]] for r in pool)
-        budget = replay_spec["budget_tokens"]
-        chosen = (
-            stratified_groups(pool, lengths, budget, spec["seed"])
-            if budget < pool_tokens
-            else {r["group_id"] for r in pool}
+        chosen_rows, extra_stats[component["name"]] = extra_component(
+            component,
+            seed,
+            spec["max_length"],
+            roots,
+            inputs,
+            blocked,
+            taken,
+            tokenizer,
+            workers,
         )
-        replay = [r for r in pool if r["group_id"] in chosen]
-        replay_stats = {
-            **dict(counts),
-            "view_members": len(members),
-            "pool_rows": len(pool),
-            "pool_tokens": pool_tokens,
-            "budget_tokens": budget,
-            "rows": len(replay),
-            "tokens": sum(lengths[r["id"]] for r in replay),
-            "rows_by_type": dict(Counter(r["task_type"] for r in replay)),
-            "rows_by_family": dict(Counter(r["family"] for r in replay).most_common()),
-            "rows_by_language": dict(Counter(r["language"] for r in replay)),
-            "max_tokens": max((lengths[r["id"]] for r in replay), default=0),
-        }
+        replay.extend(chosen_rows)
+        blocked.update(r["input_sha256"] for r in chosen_rows)
+        taken.update(r["id"] for r in chosen_rows)
+    replay_stats = extra_stats.get("replay", {})
 
     recipe_lengths = token_lengths(rows, tokenizer, workers)
     if max(recipe_lengths) > spec["max_length"]:
@@ -334,6 +376,7 @@ def build(spec: dict[str, Any], roots: dict[str, Path], tokenizer: Path, workers
             "recipe": stats,
             "teacher": {"rows": len(recipe_ids), "by_file": teacher_by_file},
             "replay": replay_stats,
+            "extras": extra_stats,
             "train_rows": len(train),
             "train_rows_by_type": dict(Counter(r["task_type"] for r in train)),
             "train_rows_by_language": dict(Counter(r["language"] for r in train)),
