@@ -366,8 +366,11 @@ def absent(repo: str) -> dict[str, Any]:
         return {"repo_id": repo, "exists": False, "http_status": exc.code}
 
 
-def check_local(receipt: dict[str, Any], key: str, snapshot: Path) -> dict[str, Any]:
+def check_local(
+    receipt: dict[str, Any], key: str, snapshot: str | Path
+) -> dict[str, Any]:
     """Hash a downloaded snapshot against the remote LFS and small-file digests."""
+    snapshot = Path(snapshot)
     candidate = receipt["candidates"][key]
     mismatched, missing, checked = [], [], 0
     for name, meta in candidate["files"].items():
