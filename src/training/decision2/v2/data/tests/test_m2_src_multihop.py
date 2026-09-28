@@ -731,9 +731,12 @@ class MultihopFamiliesTest(unittest.TestCase):
                         present(complete["state"], item.gold), [True, True]
                     )
                     self.assertEqual(sum(present(removed["state"], item.gold)), 1)
-                    keyed = {o["key"]: o["description"] for o in complete["options"]}
                     self.assertEqual(
-                        keyed, {"o1": names[0], "o2": names[1], "o3": common.ABSTAIN}
+                        sorted(o["description"] for o in complete["options"]),
+                        sorted([names[0], names[1], common.ABSTAIN]),
+                    )
+                    self.assertEqual(
+                        [o["key"] for o in complete["options"]], ["o1", "o2", "o3"]
                     )
 
     def test_v1_ids_are_excluded_and_reported(self) -> None:

@@ -14,6 +14,7 @@ import collections
 import hashlib
 import json
 import os
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -89,6 +90,11 @@ def make_row(
         if task_type != "choice":
             raise ValueError("only Choice options may be rotated")
         options, label = rotate(options, label, f"m2-v1:{ident}")
+        if all(re.fullmatch(r"o\d+", option["key"]) for option in options):
+            options = [
+                dict(option, key=f"o{position}")
+                for position, option in enumerate(options, 1)
+            ]
     row = {
         "id": ident,
         "state": state,
