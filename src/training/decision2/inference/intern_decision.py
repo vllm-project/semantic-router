@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -44,6 +45,8 @@ def load_engine(model_path: Path, device: str):
     )
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
+    # dataclasses resolve their module through sys.modules during class creation.
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module, module.DecisionEngine(str(model_path), device=device)
 

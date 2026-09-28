@@ -18,14 +18,39 @@ from typing import Any
 
 from inference.run import digest, file_digest, load_prompts, local_revision, synchronize
 
-MODEL_ID = "flock-io/this-that-model-1.0"
-MODEL_REVISION = "3d927195c4f9845efe66c5715883a7a0f42b1239"
-SOURCE_REVISION = "4efe782ccbb9c1979a9951c35a29a8e0b3b80bf0"
-ARTIFACT_SHA256 = {
-    "config.json": "6cb8daca9fb653c61485ff7452fc068bacd5c27cbee659ecd24b47186b0d1b52",
-    "model.safetensors": "11bab4bbbce0214dcb4d70a88e74b3e4bde6fe8a95f239e3d0c355946e0000e0",
-    "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+VARIANTS = {
+    "1.0": (
+        "flock-io/this-that-model-1.0",
+        "3d927195c4f9845efe66c5715883a7a0f42b1239",
+        "4efe782ccbb9c1979a9951c35a29a8e0b3b80bf0",
+        {
+            "config.json": "6cb8daca9fb653c61485ff7452fc068bacd5c27cbee659ecd24b47186b0d1b52",
+            "model.safetensors": "11bab4bbbce0214dcb4d70a88e74b3e4bde6fe8a95f239e3d0c355946e0000e0",
+            "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+        },
+    ),
+    "1.2": (
+        "flock-io/this-that-model-1.2",
+        "c4d1c30b8d512d278726de439b8cc81fccc70c8f",
+        "f57c9f0ad6882db523adfff9b6894871782353d9",
+        {
+            "config.json": "6cb8daca9fb653c61485ff7452fc068bacd5c27cbee659ecd24b47186b0d1b52",
+            "model.safetensors": "585295458a6b6e01162d2a72d33ba630c286b51c844869afc35272700c23f199",
+            "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+        },
+    ),
 }
+MODEL_ID, MODEL_REVISION, SOURCE_REVISION, ARTIFACT_SHA256 = VARIANTS["1.0"]
+
+
+def use_variant(version: str) -> None:
+    """Select the pinned This-That release for this process (one model per process)."""
+    global MODEL_ID, MODEL_REVISION, SOURCE_REVISION, ARTIFACT_SHA256
+    if version not in VARIANTS:
+        raise ValueError(f"Unknown This-That version: {version}")
+    MODEL_ID, MODEL_REVISION, SOURCE_REVISION, ARTIFACT_SHA256 = VARIANTS[version]
+
+
 ADAPTER_VERSION = "this-that-native-v1"
 MAX_STATE_TOKENS = 1536
 MAX_CONTEXT_TOKENS = 262144
@@ -35,7 +60,7 @@ def verify_release(
     model_path: Path, source_path: Path, revision: str
 ) -> dict[str, Any]:
     if revision != MODEL_REVISION:
-        raise ValueError(f"This-That 1.0 requires exact HF revision {MODEL_REVISION}")
+        raise ValueError(f"{MODEL_ID} requires exact HF revision {MODEL_REVISION}")
     if not local_revision(model_path, revision):
         raise ValueError(
             "HF local-dir metadata is required to attest the exact revision"
@@ -55,7 +80,7 @@ def verify_release(
         text=True,
     ).strip()
     if commit != SOURCE_REVISION:
-        raise ValueError("This-That source does not match the 1.0 release commit")
+        raise ValueError("This-That source does not match the release commit")
     changed = subprocess.check_output(
         [
             "git",
@@ -437,7 +462,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-path", type=Path, required=True)
     parser.add_argument("--source-path", type=Path, required=True)
-    parser.add_argument("--model-revision", default=MODEL_REVISION)
+    parser.add_argument("--model-revision")
+    parser.add_argument("--version", choices=tuple(VARIANTS), default="1.0")
     parser.add_argument("--input", type=Path, help="Gold-free benchmark prompts JSONL")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--device", default="cuda:0")
@@ -447,6 +473,8 @@ def main() -> None:
         "--verify-only", action="store_true", help="CPU-only pinned source/model checks"
     )
     args = parser.parse_args()
+    use_variant(args.version)
+    args.model_revision = args.model_revision or MODEL_REVISION
     if args.verify_only:
         print(
             json.dumps(

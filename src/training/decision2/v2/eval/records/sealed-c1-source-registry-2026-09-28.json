@@ -1,0 +1,817 @@
+{
+ "registry": "JevArena-C1 Option B source registry",
+ "date": "2026-09-28",
+ "min_first_release": "2026-06-01",
+ "preferred_after": "2026-08-15",
+ "access": "public unauthenticated only",
+ "sources": [
+  {
+   "dataset_id": "Bekhouche/HalluTruthQA-4K",
+   "revision": "e6e2b14733effc8da7b87fa79230a20cc4b7336b",
+   "first_release": "2026-07-27",
+   "evidence_url": "https://huggingface.co/api/datasets/Bekhouche/HalluTruthQA-4K/commits/main",
+   "evidence_extra": "arXiv 2607.20219",
+   "preferred_after_2026_08_15": false,
+   "licence": "cc-by-nc-nd-4.0",
+   "licence_flag": "NC-ND",
+   "label_provenance": "domain experts + independent trained reviewers + expert adjudication (ArabicNLP 2026 HalluScoring subtask 2.2)",
+   "task": "Arabic QA hallucination detection; 6-way MC reformulation",
+   "native_type": "Noul+Choice",
+   "label_blind_template": "Noul: Does the answer contain a factual hallucination? yes/no | Choice: Which option answers the question correctly? A-F",
+   "languages": [
+    "ar"
+   ],
+   "usable_eval_rows": "test 1600 (683 hallucination / 917 no_hallucination)",
+   "sealed_estimate": {
+    "Noul": 300,
+    "Choice": 300
+   },
+   "typical_input_length": "short (Q~50ch, answer~170ch)",
+   "long_input_4k": false,
+   "shortcuts_risks": "single generator (Fanar-1-9B); public train/dev; answer length may correlate with label",
+   "grade": "A",
+   "flags": []
+  },
+  {
+   "dataset_id": "Sami2305341176/JudgmentBench",
+   "revision": "826035f8ca0a62e9e1c7be857b5e2c55a9d79e9f",
+   "first_release": "2026-09-25",
+   "evidence_url": "https://huggingface.co/api/datasets/Sami2305341176/JudgmentBench/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": true,
+   "licence": "MIT",
+   "licence_flag": "",
+   "label_provenance": "53 legal professionals: 1530 pairwise judgements, 1539 rubric annotations (GPT autograder files separate, exclude)",
+   "task": "legal work-product quality",
+   "native_type": "Choice+Score",
+   "label_blind_template": "Choice: Which legal work product better completes the task? A/B | Score: overall quality vs task 1-5 (binned rubric total)",
+   "languages": [
+    "en"
+   ],
+   "usable_eval_rows": "30 tasks, 2274 outputs",
+   "sealed_estimate": {
+    "Choice": 30,
+    "Score": 0
+   },
+   "typical_input_length": "long (many >=4k chars)",
+   "long_input_4k": true,
+   "shortcuts_risks": "only 30 source groups; constructed quality_level must not be used as label; exclude autograder files",
+   "grade": "A",
+   "flags": [
+    "preferred"
+   ]
+  },
+  {
+   "dataset_id": "dreadnode/scopejudge",
+   "revision": "b8b06a65a09e39a4fe1682ef56f48fd14ab74800",
+   "first_release": "2026-07-30",
+   "evidence_url": "https://huggingface.co/api/datasets/dreadnode/scopejudge/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": false,
+   "licence": "MIT",
+   "licence_flag": "",
+   "label_provenance": "5 professional security experts; Fleiss kappa 0.641",
+   "task": "agent tool-call scope adjudication",
+   "native_type": "Noul",
+   "label_blind_template": "Is this tool call within the authorised engagement scope? yes/no",
+   "languages": [
+    "en"
+   ],
+   "usable_eval_rows": "100 trajectories / 4897 tool calls",
+   "sealed_estimate": {
+    "Noul": 100
+   },
+   "typical_input_length": "long (trajectory context)",
+   "long_input_4k": true,
+   "shortcuts_risks": "agent-generated trajectory text (labels human); correlated calls, take 1 per trajectory; check class skew",
+   "grade": "A",
+   "flags": []
+  },
+  {
+   "dataset_id": "SpaceHunterInf/DeliChess",
+   "revision": "277393d50567633ef1797eca0e76053bee10ca0d",
+   "first_release": "2026-08-01",
+   "evidence_url": "https://huggingface.co/api/datasets/SpaceHunterInf/DeliChess/commits/main",
+   "evidence_extra": "arXiv 2606.04987",
+   "preferred_after_2026_08_15": false,
+   "licence": "MIT",
+   "licence_flag": "",
+   "label_provenance": "human annotators per released guidelines; Gemini labels in separate columns (drop)",
+   "task": "group deliberation dialogue act",
+   "native_type": "Choice",
+   "label_blind_template": "What communicative function does this utterance serve? (9 fixed functions) | epistemic stance (3)",
+   "languages": [
+    "en"
+   ],
+   "usable_eval_rows": "7667 utterances / 107 dialogues",
+   "sealed_estimate": {
+    "Choice": 107
+   },
+   "typical_input_length": "short utterance + preceding turns",
+   "long_input_4k": false,
+   "shortcuts_risks": "drop gemini_* and *_match columns (label leak); needs dialogue context",
+   "grade": "A",
+   "flags": []
+  },
+  {
+   "dataset_id": "jaelly/MCJudgeBench",
+   "revision": "c64832efae480d3f1ed97ac3e877bc2162d9490d",
+   "first_release": "2026-09-06",
+   "evidence_url": "https://huggingface.co/api/datasets/jaelly/MCJudgeBench/commits/main",
+   "evidence_extra": "GEM 2026 (aclanthology 2026.gem-main.23)",
+   "preferred_after_2026_08_15": true,
+   "licence": "apache-2.0",
+   "licence_flag": "",
+   "label_provenance": "human-annotated gold per constraint; human-reviewed perturbations",
+   "task": "constraint satisfaction judging",
+   "native_type": "Score",
+   "label_blind_template": "Does the response satisfy the constraint? no / partial / yes",
+   "languages": [
+    "en"
+   ],
+   "usable_eval_rows": "219 instances (78 new beyond the 141 in the paper)",
+   "sealed_estimate": {
+    "Score": 200
+   },
+   "typical_input_length": "medium",
+   "long_input_4k": false,
+   "shortcuts_risks": "141 paper instances may be public via the paper; responses are model-generated",
+   "grade": "A",
+   "flags": [
+    "preferred"
+   ]
+  },
+  {
+   "dataset_id": "Flaglab/esnlir-al-annotated-test",
+   "revision": "d9c734a4c534fa462b64c109dea832f91790ec7d",
+   "first_release": "2026-08-06",
+   "evidence_url": "https://huggingface.co/api/datasets/Flaglab/esnlir-al-annotated-test/commits/main",
+   "evidence_extra": "IBERAMIA 2026",
+   "preferred_after_2026_08_15": false,
+   "licence": "cc-by-4.0",
+   "licence_flag": "",
+   "label_provenance": "12 annotators, 3 per item, majority vote; kappa 0.641; 151 items removed",
+   "task": "Spanish sentence-pair relation",
+   "native_type": "Choice",
+   "label_blind_template": "How is sentence 2 related to sentence 1? contrasting / entailment / reasoning / neutral",
+   "languages": [
+    "es"
+   ],
+   "usable_eval_rows": "1695 (contrasting 312, entailment 379, reasoning 370, neutral 634)",
+   "sealed_estimate": {
+    "Choice": 300
+   },
+   "typical_input_length": "short (~150ch each)",
+   "long_input_4k": false,
+   "shortcuts_risks": "model-confidence sampling; kept only human==connector label; mask connector; old source text",
+   "grade": "B",
+   "flags": [
+    "old_text"
+   ]
+  },
+  {
+   "dataset_id": "BRi002/SentiTaglishProductsAndServices",
+   "revision": "ea82e0196365c13c8e843e990dba5f2e3bc5ac8f",
+   "first_release": "2026-09-02",
+   "evidence_url": "https://huggingface.co/api/datasets/BRi002/SentiTaglishProductsAndServices/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": true,
+   "licence": "cc-by-4.0",
+   "licence_flag": "",
+   "label_provenance": "2 annotators + third adjudicator; Fleiss/Krippendorff reported",
+   "task": "code-mixed review polarity",
+   "native_type": "Score",
+   "label_blind_template": "Overall sentiment of the review: negative / neutral / positive",
+   "languages": [
+    "tl",
+    "en"
+   ],
+   "usable_eval_rows": "10510 (neutral ~262)",
+   "sealed_estimate": {
+    "Score": 300
+   },
+   "typical_input_length": "short (~140ch)",
+   "long_input_4k": false,
+   "shortcuts_risks": "review dates unknown; tiny neutral class",
+   "grade": "B",
+   "flags": [
+    "preferred",
+    "old_text"
+   ]
+  },
+  {
+   "dataset_id": "Hplss/wb-review-dataset",
+   "revision": "c207a9df3e78b0fbf22ece02dcafdd84481165b1",
+   "first_release": "2026-07-30",
+   "evidence_url": "https://huggingface.co/api/datasets/Hplss/wb-review-dataset/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": false,
+   "licence": "cc-by-nc-sa-4.0",
+   "licence_flag": "NC",
+   "label_provenance": "organic star ratings by review authors",
+   "task": "review star rating",
+   "native_type": "Score",
+   "label_blind_template": "Which star rating did the reviewer give? 1-5",
+   "languages": [
+    "ru"
+   ],
+   "usable_eval_rows": "27248 total; only rows dated >=2026-06-01 qualify (max 2026-07-25)",
+   "sealed_estimate": {
+    "Score": 225
+   },
+   "typical_input_length": "short (~170ch)",
+   "long_input_4k": false,
+   "shortcuts_risks": "5-star skew; 1 per product; recompute post-cutoff count at pinned SHA",
+   "grade": "B",
+   "flags": [
+    "time_filter"
+   ]
+  },
+  {
+   "dataset_id": "teplitsa-soc-tech/factbutcher-benchmark",
+   "revision": "211fb80c7ebb67f85e3bddaa8511938b48d1c2ea",
+   "first_release": "2026-08-06",
+   "evidence_url": "https://huggingface.co/api/datasets/teplitsa-soc-tech/factbutcher-benchmark/commits/main",
+   "evidence_extra": "createdAt 2026-08-09",
+   "preferred_after_2026_08_15": false,
+   "licence": "cc-by-4.0",
+   "licence_flag": "",
+   "label_provenance": "human-reviewed verdicts; 149 from Provereno.Media fact-checkers",
+   "task": "claim verification",
+   "native_type": "Choice",
+   "label_blind_template": "Verdict for the claim: true / false / mixed",
+   "languages": [
+    "ru"
+   ],
+   "usable_eval_rows": "423 total (FALSE 152, MIXED 82, TRUE 189); reference_date 2021..2026-07",
+   "sealed_estimate": {
+    "Choice": 80
+   },
+   "typical_input_length": "short (~90ch)",
+   "long_input_4k": false,
+   "shortcuts_risks": "verdicts may be on the web; keep reference_date >=2026-06-01 only",
+   "grade": "B",
+   "flags": [
+    "time_filter"
+   ]
+  },
+  {
+   "dataset_id": "CLS-Lab/narrative-gold-annotations",
+   "revision": "f22dd4d5cc18c10cc38984fe0600b21815190e92",
+   "first_release": "2026-06-17",
+   "evidence_url": "https://huggingface.co/api/datasets/CLS-Lab/narrative-gold-annotations/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": false,
+   "licence": "cc-by-4.0",
+   "licence_flag": "",
+   "label_provenance": "adjudicated gold + 1-2 annotators per config",
+   "task": "narrative setting / event relations",
+   "native_type": "Score+Choice",
+   "label_blind_template": "Score: How concrete is the setting? 1-5 | Choice: causal relation of event1 to event2: direct cause / enables / not related",
+   "languages": [
+    "en"
+   ],
+   "usable_eval_rows": "setting 400, agency 400, event_relation 440",
+   "sealed_estimate": {
+    "Score": 250,
+    "Choice": 60
+   },
+   "typical_input_length": "short (~350ch)",
+   "long_input_4k": false,
+   "shortcuts_risks": "passages sampled from Dolma (pretraining corpus)",
+   "grade": "B",
+   "flags": [
+    "old_text"
+   ]
+  },
+  {
+   "dataset_id": "allenai/tutormoments-preview",
+   "revision": "66058b4c7ef5e7631b3c4d39a1dfa8172e36d8bc",
+   "first_release": "2026-07-06",
+   "evidence_url": "https://huggingface.co/api/datasets/allenai/tutormoments-preview/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": false,
+   "licence": "cc-by-4.0",
+   "licence_flag": "",
+   "label_provenance": "human turn-level annotations (1584 passes, 263 transcripts); ground_truth/benchmark configs LLM-assisted or synthetic (exclude)",
+   "task": "tutoring moment classification",
+   "native_type": "Choice+Noul",
+   "label_blind_template": "Which tutoring move does this moment exemplify? (fixed types) | Is a key moment present? yes/no",
+   "languages": [
+    "en",
+    "es"
+   ],
+   "usable_eval_rows": "462 real transcripts",
+   "sealed_estimate": {
+    "Choice": 100,
+    "Noul": 100
+   },
+   "typical_input_length": "long (full sessions)",
+   "long_input_4k": true,
+   "shortcuts_risks": "use annotations config only",
+   "grade": "B",
+   "flags": []
+  },
+  {
+   "dataset_id": "lbrenap1/mining-legal-arguments-us-corporate-case-law",
+   "revision": "05bf4bb8c3bf8f44957474b2965e2ad0d7700707",
+   "first_release": "2026-08-30",
+   "evidence_url": "https://huggingface.co/api/datasets/lbrenap1/mining-legal-arguments-us-corporate-case-law/commits/main",
+   "evidence_extra": "arXiv 2609.25441",
+   "preferred_after_2026_08_15": true,
+   "licence": "cc-by-4.0",
+   "licence_flag": "",
+   "label_provenance": "expert annotation; 10 cases double-annotated (iaa_* configs)",
+   "task": "legal argument function",
+   "native_type": "Choice",
+   "label_blind_template": "What is the argumentative function of the marked sentence? (fixed scheme)",
+   "languages": [
+    "en"
+   ],
+   "usable_eval_rows": "5286 sentences / 42 opinions",
+   "sealed_estimate": {
+    "Choice": 42
+   },
+   "typical_input_length": "long (full opinions)",
+   "long_input_4k": true,
+   "shortcuts_risks": "only 42 groups; public older US tax opinions",
+   "grade": "B",
+   "flags": [
+    "preferred",
+    "old_text"
+   ]
+  },
+  {
+   "dataset_id": "McGill-NLP/ImplicatureX",
+   "revision": "959e5e279611c877224d7573fe66fa9748f59aa4",
+   "first_release": "2026-07-31",
+   "evidence_url": "https://huggingface.co/api/datasets/McGill-NLP/ImplicatureX/commits/main",
+   "evidence_extra": "arXiv 2607.25094",
+   "preferred_after_2026_08_15": false,
+   "licence": "MIT",
+   "licence_flag": "",
+   "label_provenance": "Prolific raters (2285 likelihood ratings) + 2 experts on 54 items",
+   "task": "implicature likelihood",
+   "native_type": "Score",
+   "label_blind_template": "How likely is it that the speaker meant the implicature? (Likert levels)",
+   "languages": [
+    "en"
+   ],
+   "usable_eval_rows": "271 items",
+   "sealed_estimate": {
+    "Score": 150
+   },
+   "typical_input_length": "short",
+   "long_input_4k": false,
+   "shortcuts_risks": "stimuli may be researcher/LLM authored (implicatureBot variant exists); aggregate ratings",
+   "grade": "B",
+   "flags": []
+  },
+  {
+   "dataset_id": "laallein/ClimateCause",
+   "revision": "7ab75d7c115effa6e54d869c73df85567258738a",
+   "first_release": "2026-08-31",
+   "evidence_url": "https://huggingface.co/api/datasets/laallein/ClimateCause/commits/main",
+   "evidence_extra": "Findings ACL 2026",
+   "preferred_after_2026_08_15": true,
+   "licence": "cc-by-sa-4.0",
+   "licence_flag": "",
+   "label_provenance": "expert annotators",
+   "task": "causal statement explicitness",
+   "native_type": "Noul",
+   "label_blind_template": "Is the causal relation stated explicitly? yes/no",
+   "languages": [
+    "en"
+   ],
+   "usable_eval_rows": "874 causal (593 explicit / 281 implicit)",
+   "sealed_estimate": {
+    "Noul": 300
+   },
+   "typical_input_length": "short-medium",
+   "long_input_4k": false,
+   "shortcuts_risks": "IPCC report text is old and public",
+   "grade": "B",
+   "flags": [
+    "preferred",
+    "old_text"
+   ]
+  },
+  {
+   "dataset_id": "NordosoftOy/innoduel-rlhf-real-world-human-preferences-sample",
+   "revision": "99f8810bbcaebefa65de68d39bca096bc99b09df",
+   "first_release": "2026-08-23",
+   "evidence_url": "https://huggingface.co/api/datasets/NordosoftOy/innoduel-rlhf-real-world-human-preferences-sample/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": true,
+   "licence": "cc-by-nc-4.0",
+   "licence_flag": "NC",
+   "label_provenance": "real organisational users' pairwise votes on human-written ideas",
+   "task": "pairwise idea preference",
+   "native_type": "Choice",
+   "label_blind_template": "Which of the two ideas did the participant prefer? A/B",
+   "languages": [
+    "fi",
+    "sv",
+    "en",
+    "uk"
+   ],
+   "usable_eval_rows": "1350",
+   "sealed_estimate": {
+    "Choice": 100
+   },
+   "typical_input_length": "short",
+   "long_input_4k": false,
+   "shortcuts_risks": "single vote per pair (noisy); small sample repo",
+   "grade": "B",
+   "flags": [
+    "preferred"
+   ]
+  },
+  {
+   "dataset_id": "Nandan007/NepFakeV2",
+   "revision": "903ad9f585a63bd0c771e26a2f1c21525c2c8d24",
+   "first_release": "2026-09-12",
+   "evidence_url": "https://huggingface.co/api/datasets/Nandan007/NepFakeV2/commits/main",
+   "evidence_extra": "weekly updates: pin SHA",
+   "preferred_after_2026_08_15": true,
+   "licence": "cc-by-4.0",
+   "licence_flag": "",
+   "label_provenance": "professional fact-checker verdicts (organic)",
+   "task": "Nepali claim verification",
+   "native_type": "Noul",
+   "label_blind_template": "Was this claim rated false by fact-checkers? yes/no",
+   "languages": [
+    "ne"
+   ],
+   "usable_eval_rows": "post-2026-06-01 subset only; >90% FALSE",
+   "sealed_estimate": {
+    "Noul": 45
+   },
+   "typical_input_length": "short",
+   "long_input_4k": false,
+   "shortcuts_risks": "extreme imbalance; verdicts on public sites",
+   "grade": "B",
+   "flags": [
+    "preferred",
+    "time_filter"
+   ]
+  },
+  {
+   "dataset_id": "alisa-yingjia-wan/gapa",
+   "revision": "cecb0381a965686b3b2fb6eec479127b08901b1b",
+   "first_release": "2026-09-16",
+   "evidence_url": "https://huggingface.co/api/datasets/alisa-yingjia-wan/gapa/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": true,
+   "licence": "MIT",
+   "licence_flag": "",
+   "label_provenance": "Prolific ratings with attention checks (human split 2300 ratings)",
+   "task": "attribute gender association",
+   "native_type": "Score",
+   "label_blind_template": "How strongly is the attribute associated with the person term? (rating levels)",
+   "languages": [
+    "en"
+   ],
+   "usable_eval_rows": "~100-300 aggregated attributes",
+   "sealed_estimate": {
+    "Score": 100
+   },
+   "typical_input_length": "very short",
+   "long_input_4k": false,
+   "shortcuts_risks": "subjective; some attribute splits LLM-sourced (use human split)",
+   "grade": "B",
+   "flags": [
+    "preferred"
+   ]
+  },
+  {
+   "dataset_id": "HiTZ/EusExams-v2",
+   "revision": "0b7650005592513b2ff8baa3851533d9fb755f6b",
+   "first_release": "2026-06-25",
+   "evidence_url": "https://huggingface.co/api/datasets/HiTZ/EusExams-v2/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": false,
+   "licence": "cc-by-sa-4.0",
+   "licence_flag": "",
+   "label_provenance": "official exam answer keys",
+   "task": "public-service exam MCQ",
+   "native_type": "Choice",
+   "label_blind_template": "Which option is correct? A-D",
+   "languages": [
+    "es",
+    "eu"
+   ],
+   "usable_eval_rows": "es_health 11387 total; only 2026 sittings qualify (unverified)",
+   "sealed_estimate": {
+    "Choice": 300
+   },
+   "typical_input_length": "short",
+   "long_input_4k": false,
+   "shortcuts_risks": "answer keys public on official sites; sitting dates unverified",
+   "grade": "B-",
+   "flags": [
+    "time_filter"
+   ]
+  },
+  {
+   "dataset_id": "LunaTsai/tiktok-political-stance-dataset-taiwan-2025",
+   "revision": "bac26ad9228625071dfe1c6e7c9d2270ed972775",
+   "first_release": "2026-06-23",
+   "evidence_url": "https://huggingface.co/api/datasets/LunaTsai/tiktok-political-stance-dataset-taiwan-2025/commits/main",
+   "evidence_extra": "arXiv 2607.15240",
+   "preferred_after_2026_08_15": false,
+   "licence": "none stated",
+   "licence_flag": "NO_LICENCE",
+   "label_provenance": "human-annotated stance",
+   "task": "political stance",
+   "native_type": "Choice",
+   "label_blind_template": "Stance toward the target: favour / against / neutral",
+   "languages": [
+    "zh-TW"
+   ],
+   "usable_eval_rows": "9302",
+   "sealed_estimate": {
+    "Choice": 300
+   },
+   "typical_input_length": "short",
+   "long_input_4k": false,
+   "shortcuts_risks": "no licence",
+   "grade": "B-",
+   "flags": []
+  },
+  {
+   "dataset_id": "NUAA-MMMI/VARM-Bench",
+   "revision": "2c8023326a2efbe402272404605faa04c3a40b48",
+   "first_release": "2026-08-13",
+   "evidence_url": "https://huggingface.co/api/datasets/NUAA-MMMI/VARM-Bench/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": false,
+   "licence": "none stated",
+   "licence_flag": "NO_LICENCE",
+   "label_provenance": "annotation policy described; provenance not fully clear",
+   "task": "abusive speech moderation",
+   "native_type": "Noul",
+   "label_blind_template": "Is the text abusive? yes/no",
+   "languages": [
+    "zh"
+   ],
+   "usable_eval_rows": "~8k",
+   "sealed_estimate": {
+    "Noul": 300
+   },
+   "typical_input_length": "short",
+   "long_input_4k": false,
+   "shortcuts_risks": "no licence; provenance to verify",
+   "grade": "B-",
+   "flags": []
+  },
+  {
+   "dataset_id": "giuseppe-aiello/stance-detection-it-dataset",
+   "revision": "2e4c575ae73144567335066d5d383c4b1e969bdf",
+   "first_release": "2026-08-31",
+   "evidence_url": "https://huggingface.co/api/datasets/giuseppe-aiello/stance-detection-it-dataset/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": true,
+   "licence": "MIT",
+   "licence_flag": "",
+   "label_provenance": "single annotator, 500 manual labels",
+   "task": "stance",
+   "native_type": "Choice",
+   "label_blind_template": "Stance: consenso / dissenso / altro",
+   "languages": [
+    "it"
+   ],
+   "usable_eval_rows": "500",
+   "sealed_estimate": {
+    "Choice": 100
+   },
+   "typical_input_length": "short",
+   "long_input_4k": false,
+   "shortcuts_risks": "single annotator",
+   "grade": "B-",
+   "flags": [
+    "preferred"
+   ]
+  },
+  {
+   "dataset_id": "lab-flair/constructcie",
+   "revision": "80d171feff0c2ad6a6aed497f2bdc8f9c5b6f072",
+   "first_release": "2026-07-14",
+   "evidence_url": "https://huggingface.co/api/datasets/lab-flair/constructcie/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": false,
+   "licence": "apache-2.0",
+   "licence_flag": "",
+   "label_provenance": "manual annotation",
+   "task": "construction accident type",
+   "native_type": "Choice",
+   "label_blind_template": "Accident type (fixed categories)",
+   "languages": [
+    "en"
+   ],
+   "usable_eval_rows": "530",
+   "sealed_estimate": {
+    "Choice": 100
+   },
+   "typical_input_length": "medium",
+   "long_input_4k": false,
+   "shortcuts_risks": "OSHA narratives 2011-2023 (old public text)",
+   "grade": "B-",
+   "flags": [
+    "old_text"
+   ]
+  },
+  {
+   "dataset_id": "HiTZ/safety-GuardEUS",
+   "revision": "f5a0527782cc34c7d30dd4463b22beabd922547c",
+   "first_release": "2026-06-25",
+   "evidence_url": "https://huggingface.co/api/datasets/HiTZ/safety-GuardEUS/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": false,
+   "licence": "apache-2.0",
+   "licence_flag": "",
+   "label_provenance": "human safety labels",
+   "task": "response safety",
+   "native_type": "Noul",
+   "label_blind_template": "Is the response safe? yes/no",
+   "languages": [
+    "eu"
+   ],
+   "usable_eval_rows": "250",
+   "sealed_estimate": {
+    "Noul": 50
+   },
+   "typical_input_length": "short",
+   "long_input_4k": false,
+   "shortcuts_risks": "tiny",
+   "grade": "B-",
+   "flags": []
+  },
+  {
+   "dataset_id": "iamjayeshc/reddit-self-medication-claim-dataset",
+   "revision": "839db5ff8123009577570496eceeb0bbe88228a3",
+   "first_release": "2026-08-01",
+   "evidence_url": "https://huggingface.co/api/datasets/iamjayeshc/reddit-self-medication-claim-dataset/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": false,
+   "licence": "cc-by-4.0",
+   "licence_flag": "",
+   "label_provenance": "single annotator (author)",
+   "task": "self-medication claim",
+   "native_type": "Noul",
+   "label_blind_template": "Does the post contain a self-medication claim? yes/no",
+   "languages": [
+    "en"
+   ],
+   "usable_eval_rows": "1215",
+   "sealed_estimate": {
+    "Noul": 100
+   },
+   "typical_input_length": "short-medium",
+   "long_input_4k": false,
+   "shortcuts_risks": "single annotator; older Reddit text",
+   "grade": "B-",
+   "flags": [
+    "old_text"
+   ]
+  },
+  {
+   "dataset_id": "ministere-culture/comparia-fr-arena",
+   "revision": "870a0bfa8b92793546357bcde24fbf1eaf39ffcf",
+   "first_release": "2026-06-11",
+   "evidence_url": "https://huggingface.co/api/datasets/ministere-culture/comparia-fr-arena/commits/main",
+   "evidence_extra": "",
+   "preferred_after_2026_08_15": false,
+   "licence": "etalab-2.0 / cc-by-4.0",
+   "licence_flag": "",
+   "label_provenance": "organic user votes (French public arena)",
+   "task": "pairwise answer preference",
+   "native_type": "Choice",
+   "label_blind_template": "Which answer is better? A / B / tie",
+   "languages": [
+    "fr"
+   ],
+   "usable_eval_rows": "large",
+   "sealed_estimate": {
+    "Choice": 0
+   },
+   "typical_input_length": "long conversations",
+   "long_input_4k": true,
+   "shortcuts_risks": "gated (auto) - needs HF login: blocked under unauthenticated rule",
+   "grade": "B",
+   "flags": [
+    "gated"
+   ]
+  },
+  {
+   "dataset_id": "cltl/toxirex",
+   "grade": "C",
+   "reject_reason": "GitHub first commit 2026-04-08, data 2026-04-15: before cutoff"
+  },
+  {
+   "dataset_id": "gabrielstefan04/polero",
+   "grade": "C",
+   "reject_reason": "HF created 2026-05-05: before cutoff"
+  },
+  {
+   "dataset_id": "ilsp/panellinies-exams-dataset",
+   "grade": "C",
+   "reject_reason": "exam years 2020-2025 public pre-cutoff; no licence"
+  },
+  {
+   "dataset_id": "GermEval 2026 / CheckThat! 2026",
+   "grade": "C",
+   "reject_reason": "gold released 2026-05-25 / 2026-05-20: before cutoff"
+  },
+  {
+   "dataset_id": "chnln/seeing-is-not-sharing",
+   "grade": "C",
+   "reject_reason": "MapTask text; labels from 2025 paper"
+  },
+  {
+   "dataset_id": "cardiffnlp/GrainWiC",
+   "grade": "C",
+   "reject_reason": "derived from older sense inventories/corpora"
+  },
+  {
+   "dataset_id": "TrustworthyComp/ClaimReview2025Q4",
+   "grade": "C",
+   "reject_reason": "verdicts public 2025Q4; NC"
+  },
+  {
+   "dataset_id": "jumafernandez/consultas-unlu",
+   "grade": "C",
+   "reject_reason": "~2019 emails previously released on GitHub"
+  },
+  {
+   "dataset_id": "AvinabhDutta-Dev/assamese-movie-reviews-sentiment",
+   "grade": "C",
+   "reject_reason": "~60% machine-translated/normalised text"
+  },
+  {
+   "dataset_id": "UKPLab/ProReviewer; Samarth0710/reviewarena; zai-org/SurveyReview",
+   "grade": "C",
+   "reject_reason": "reviews public before cutoff; PeerRead-like; SurveyReview no licence tag, derived scores"
+  },
+  {
+   "dataset_id": "UOM-CSE-E23/Sri-Lankan-Tourism-Review-Incongruence; fl4wn/respolitica; bil-y/polidata-de-stance-prediction",
+   "grade": "C",
+   "reject_reason": "old public text/labels"
+  },
+  {
+   "dataset_id": "ytu-ce-cosmos/absa-tr; YachayWiki/quechua-collao-sentiment; postovyi/disarm-ukrainian-telegram; niekbiesterbos/dutch-climate-parl; ictchenbo/public-discourse-corpus; ethicalabs/Research-Intent-Collab; DavidYor06/llm-disagreement; swiss-ai Apertus preference; s-nlp/EnokiQA; JarBenjaporn Thai reviews",
+   "grade": "C",
+   "reject_reason": "LLM or automatic labels"
+  },
+  {
+   "dataset_id": "Roblox PII benchmark; ralipanah/email-politeness-corpus; nutrient grounding sets",
+   "grade": "C",
+   "reject_reason": "synthetic or machine-translated text"
+  },
+  {
+   "dataset_id": "verdict-reviews; Kenpache/financial-sentiment-eval-7lang",
+   "grade": "C",
+   "reject_reason": "LLM-inferred ratings / unclear provenance"
+  },
+  {
+   "dataset_id": "fact-den Ctrip sample; Zaevlad/audit-findings; prospex-ch; akashnaren/agent-ui-human; sovrano-ai/ai_summit_workshop; 81melody algerian-realestate-intent",
+   "grade": "C",
+   "reject_reason": "licence other/unclear, scraped, tiny, single author, or semi-rule labels"
+  },
+  {
+   "dataset_id": "llm-jp/JSFactCheckBench; stellalisy/preference-forecast; ministere-culture/comparia-fr-arena-raw; msts-japanese",
+   "grade": "C",
+   "reject_reason": "gated"
+  },
+  {
+   "dataset_id": "inclusionAI/SingStreamBench",
+   "grade": "C",
+   "reject_reason": "built from older source datasets; NC"
+  },
+  {
+   "dataset_id": "Arena-90K / SHP / SQuAD / SNLI / IMDB derivatives; IndicQE-APE; tasksource/*",
+   "grade": "C",
+   "reject_reason": "re-uploads of older or project-used corpora"
+  },
+  {
+   "dataset_id": "tasksource/tasksource-jev-typed-decisions; Praveenrajus/jev-bench; AlexWortega/openjev-data; hachiko85/openjev-ja-eval; telepatia-ai/typed-decisions-pt-es; najdresearch/system-one; vagmi/jevlite_dataset; hayriyigit/jev-bench-tr",
+   "grade": "C",
+   "reject_reason": "peer JEV aggregators: contamination vectors"
+  },
+  {
+   "dataset_id": "zhuq41/*; TianfuXinqu/*; Roy229/*; SOTAagi2030/*; dataset_0xxxx_*",
+   "grade": "C",
+   "reject_reason": "template/fabricated repos"
+  },
+  {
+   "dataset_id": "OpenReview 2026 venues (COLM/ICML/NeurIPS/ARR)",
+   "grade": "C",
+   "reject_reason": "API requires challenge/login; watch-list for Score"
+  },
+  {
+   "dataset_id": "BioStance 2606.13187; AIMS 2606.27210; Mawqif-XT 2608.09539; ParsHate 2609.16393; ViTOED 2608.12776; CUP 2607.21274; LexIssue 2609.02954; RALS 2607.20078; Wazobia Eval 2608.21369",
+   "grade": "C",
+   "reject_reason": "paper only; data not located"
+  }
+ ]
+}

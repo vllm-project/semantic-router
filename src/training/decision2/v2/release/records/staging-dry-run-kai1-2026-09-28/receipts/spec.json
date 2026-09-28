@@ -1,0 +1,90 @@
+{
+  "schema": "dev2-release-spec/1",
+  "kind": "staging",
+  "repo_id": "llm-semantic-router/dev2-release-staging",
+  "model_name": "DEV2.0-0.6B",
+  "profile": "kai-native",
+  "checkpoint": "/data/decision20-20260926/models/Decision-1.0-Kai-0.6B/native",
+  "runtime_bundle": "/data/decision20-20260926/models/Decision-1.0-Kai-0.6B",
+  "runtime_revision": {
+    "repo_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+    "revision": "7185f514f54b8f93c55998b1e8f9c5cc67f0d029"
+  },
+  "expected_identity": {
+    "native_manifest_sha256": "c1bf07ab1c4c3fa1f819256d3de858d1ed87869bdfa663553280d7e78b88bee4"
+  },
+  "calibration": null,
+  "max_input_tokens": 8192,
+  "origin": {
+    "repo_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+    "revision": "7185f514f54b8f93c55998b1e8f9c5cc67f0d029",
+    "relation": "unchanged",
+    "summary": "The native weights are the unchanged Decision 1.0 Kai weights (byte-identical to the current main revision `9d6872cde6950c2c2b5786d182ec9a06ca1bdd66`); only the complete-input cap differs from the published 1,024-token profile."
+  },
+  "runtime_requirements": {
+    "python": "3.12.13",
+    "torch": "2.12.0+git6bbd260 (ROCm build; CPU and one ROCm GPU tested)",
+    "transformers": "4.57.6 (required exactly by the native encoder)",
+    "tokenizers": "0.22.2",
+    "safetensors": "0.8.0"
+  },
+  "runtime_equivalence": "decision2/kai_native.py follows v2/06b/kai8k.py (sha256 6217914c4bfa5aebb053c53fb8ad8b9d1493ae8f5a89d2750828e625f6d79d07): the same System One conversion, admission, type-sorted native FP32 batches of eight and answer mapping, without the ROCm-only device assertion. Equivalence is checked against the sealed kai1-native-8k predictions by release.sh --parity.",
+  "scored": {
+    "label": "kai1-native-8k (0.6B track formal same-panel run)",
+    "report_sha256": "7954b157f5defcf37b395008a1bae159a777312b43350f9b6ab92ec6f4dac76a",
+    "predictions_sha256": {
+      "typed-final": "762d721a0f297f0f8f7e588c0c432bb3a0e9074c46630a0a10c0b2df81f6791b",
+      "css15": "48593d4da1125d9055ad1791edf67a22d2e52cef58f090d64bb499fd1ddaa02b",
+      "public231": "2fd20c6efca2b461ded5f0e39da75c73a3f56baf5ba9ff85f8222142ab4062ef"
+    }
+  },
+  "licence": {
+    "components": [
+      {"component": "Decision 1.0 Kai model weights, native code and documentation", "licence": "apache-2.0", "source": "llm-semantic-router/Decision-1.0-Kai-0.6B@7185f514"},
+      {"component": "Vela / mmBERT encoder lineage", "licence": "mit", "source": "llm-semantic-router/Vela-1.0-Encoder-307M@fe9ccc07 (from jhu-clsp/mmBERT-base)"},
+      {"component": "Adapted ModernBERT implementation (Transformers 4.57.6)", "licence": "apache-2.0", "source": "huggingface/transformers@753d6110"},
+      {"component": "Gemma-origin tokenizer material inherited through mmBERT", "licence": "gemma-terms", "source": "google/gemma-2-9b tokenizer (see LICENSES/gemma)"}
+    ],
+    "files": [
+      {"source": "/data/decision20-20260926/models/Decision-1.0-Kai-0.6B/LICENSE", "path": "LICENSE", "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"},
+      {"source": "/data/decision20-20260926/models/Decision-1.0-Kai-0.6B/LICENSES/Transformers-Apache-2.0.txt", "path": "LICENSES/Transformers-Apache-2.0.txt", "sha256": "77fd4710def9ec3c0f6225800e0235f15a425abd4a8b03559127fcd782612049"},
+      {"source": "/data/decision20-20260926/models/Decision-1.0-Kai-0.6B/LICENSES/Upstream-MIT.txt", "path": "LICENSES/Upstream-MIT.txt", "sha256": "3ec44d2f046b27986e28e3b4705110a33b139e6392ef3868ff594a0453311038"},
+      {"source": "/data/decision20-20260926/models/Decision-1.0-Kai-0.6B/LICENSES/gemma/GEMMA_PROHIBITED_USE_POLICY.html", "path": "LICENSES/gemma/GEMMA_PROHIBITED_USE_POLICY.html", "sha256": "7e50ae0c7a6386ab51d36aa868e1d20a4fb28cbcab38778a5dbdac6a445f5a96"},
+      {"source": "/data/decision20-20260926/models/Decision-1.0-Kai-0.6B/LICENSES/gemma/GEMMA_TERMS.html", "path": "LICENSES/gemma/GEMMA_TERMS.html", "sha256": "01ccbe2f6504a6a1364db0e5d6d91ed37309435229c322a29b20ee5daebebc1a"},
+      {"source": "/data/decision20-20260926/models/Decision-1.0-Kai-0.6B/LICENSES/gemma/Notice", "path": "LICENSES/gemma/Notice", "sha256": "a7b8b1b625d4a140b4dd55ee4479db7d64b5cda047f2cbc1be9d21516b470921"},
+      {"source": "/data/decision20-20260926/models/Decision-1.0-Kai-0.6B/LICENSES/gemma/TOKENIZER_TERMS.md", "path": "LICENSES/gemma/TOKENIZER_TERMS.md", "sha256": "1ca30bf8cc8d1054f78ad3481ada9cf39a137cec9e383f18c3a9f0f56b8d4241"}
+    ],
+    "notice": {"source": "/data/decision20-20260926/models/Decision-1.0-Kai-0.6B/NOTICE", "sha256": "62465f94f94dcc229e07f6ce2bd50ffa9555ee694761f2b998dd7c95bb1d1036"},
+    "attributions": [
+      "[Decision 1.0 Kai-0.6B](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B) at `7185f514f54b8f93c55998b1e8f9c5cc67f0d029`: direct weight origin (unchanged native weights) and the vendored native runtime (`decision2/_vendor`).",
+      "[Vela-1.0-Encoder-307M](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M) and [mmBERT-base](https://huggingface.co/jhu-clsp/mmBERT-base): encoder lineage under the MIT terms retained in LICENSES/Upstream-MIT.txt; see NOTICE.",
+      "Adapted ModernBERT code from Transformers 4.57.6 under LICENSES/Transformers-Apache-2.0.txt.",
+      "Gemma-origin tokenizer material inherited through mmBERT, distributed with the Gemma terms in LICENSES/gemma/.",
+      "Owl banner: Decision 1.0 Kai mosaic owl, unchanged pixels, in a new DEV2.0 name layout; wordmark set in Poppins (SIL Open Font License) and DejaVu Sans Bold."
+    ],
+    "licensing_notes": [
+      "The inherited tokenizer keeps the Gemma Terms of Use and Prohibited Use Policy in `LICENSES/gemma/`; this does not describe the encoder weights as Gemma weights. See `NOTICE` for the full component mapping."
+    ]
+  },
+  "card": {
+    "banner": "DEV2.0-0.6B-owl-banner.png",
+    "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
+    "paired": "/data/dev2/runs/06b/m2/formal/kai1-native-8k/PAIRED-vs-kai1.json",
+    "requirements_text": "Tested with Python 3.12, PyTorch 2.12 and Transformers 4.57.6; the native encoder requires exactly Transformers 4.57.6.",
+    "text": {
+      "tagline": "A compact bidirectional encoder for routing choices, yes/no checks and rubric scores over one state.",
+      "staging_notice": "Private staging dry run of the Decision 2.0 release pipeline. The weights are the unchanged Decision 1.0 Kai weights served through the Decision 2.0 package runtime at an 8,192-token input cap. This is not a Decision 2.0 model and is not part of the Decision 2.0 collection.",
+      "limitations": [
+        "Same weights as Decision 1.0 Kai: the only change is the 8,192-token complete-input cap (published Kai: 1,024 tokens), which lets longer public questions be answered."
+      ]
+    },
+    "reports": [
+      {"key": "candidate", "role": "candidate", "report": "/data/dev2/runs/06b/m2/formal/kai1-native-8k/REPORT.json", "label": "DEV2.0-0.6B (staging)"},
+      {"key": "kai1", "role": "own-1.0", "report": "/data/dev2/runs/eval/m1-adopt/kai1/REPORT.json", "repo_id": "llm-semantic-router/Decision-1.0-Kai-0.6B", "label": "Decision 1.0 Kai"},
+      {"key": "lex1", "role": "peer", "report": "/data/dev2/runs/eval/m1/r3-lex/REPORT.json", "repo_id": "llm-semantic-router/Decision-1.0-Lex-0.6B", "label": "Decision 1.0 Lex"},
+      {"key": "bosun", "role": "peer", "report": "/data/dev2/runs/eval/m1-adopt/bosun/REPORT.json", "repo_id": "Hanno-Labs/bosun-v3.1-0.6b"},
+      {"key": "gliner25", "role": "peer", "report": "/data/dev2/runs/eval/m1/p1-gliner25/REPORT.json", "repo_id": "fastino/GLiNER2.5-Decide"},
+      {"key": "old-dev20-06b", "role": "peer", "report": "/data/dev2/runs/eval/m1-adopt/dev20-06b/REPORT.json"}
+    ]
+  }
+}

@@ -18,8 +18,25 @@ from typing import Any
 
 from .run import digest, file_digest, load_prompts, local_revision, synchronize
 
-MODEL_ID = "caiovicentino1/Eikos-4B"
-REVISION = "582ffb13f19a4da3f455e3db198584190bd7755b"
+VARIANTS = {
+    "4b": ("caiovicentino1/Eikos-4B", "582ffb13f19a4da3f455e3db198584190bd7755b", 100),
+    "27b": (
+        "caiovicentino1/Eikos-27B",
+        "103a5647c0131fd00abc165675fcee243d33a789",
+        160,
+    ),
+}
+MODEL_ID, REVISION, MAX_ONE_PASS = VARIANTS["4b"]
+
+
+def use_variant(size: str) -> None:
+    """Select the pinned Eikos release for this process (one model per process)."""
+    global MODEL_ID, REVISION, MAX_ONE_PASS
+    if size not in VARIANTS:
+        raise ValueError(f"Unknown Eikos size: {size}")
+    MODEL_ID, REVISION, MAX_ONE_PASS = VARIANTS[size]
+
+
 ADAPTER_VERSION = "eikos-native-letter-v1"
 
 
@@ -56,7 +73,7 @@ def verify_release(path: Path, revision: str) -> dict[str, str]:
         "prompt_version": "letter-v1-semif",
         "readout": "letter-logit",
         "calib": "calib.json",
-        "max_one_pass": 100,
+        "max_one_pass": MAX_ONE_PASS,
     }:
         raise ValueError("Unexpected Eikos native decision contract")
     return {
@@ -72,7 +89,7 @@ def load_native(path: Path, device: str):
     import decision_core
     from serve import Decider
 
-    decision_core.set_max_one_pass(100)
+    decision_core.set_max_one_pass(MAX_ONE_PASS)
     options = argparse.Namespace(
         model=str(path),
         adapter=None,
@@ -233,12 +250,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-path", type=Path, required=True)
     parser.add_argument("--model-revision", required=True)
+    parser.add_argument("--size", choices=tuple(VARIANTS), default="4b")
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--max-items", type=int)
     args = parser.parse_args()
+    use_variant(args.size)
     print(
         json.dumps(
             collect(
