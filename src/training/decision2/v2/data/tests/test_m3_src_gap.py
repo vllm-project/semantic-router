@@ -427,7 +427,7 @@ def _row(**overrides):
     return common.make_row(**fields)
 
 
-class ProtectedTest(unittest.TestCase):
+class ProtectedFixture(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp())
         protected = self.tmp / "p.jsonl"
@@ -444,6 +444,8 @@ class ProtectedTest(unittest.TestCase):
 
         shutil.rmtree(self.tmp)
 
+
+class ProtectedTest(ProtectedFixture):
     def test_verified_manifest_and_flags(self) -> None:
         digest = g.file_sha256(self.extra)
         report = g.project_protected(
@@ -477,6 +479,29 @@ class ProtectedTest(unittest.TestCase):
                         self.base, [("new", self.extra)], self.tmp / "pi", **kwargs
                     )
                 self.assertFalse((self.tmp / "pi").exists())
+
+
+class QuarantiningManifestTest(ProtectedFixture):
+    def test_drops_report_only_roles(self) -> None:
+        report = g.project_protected(
+            self.base, [("new", self.extra)], self.tmp / "pi", report_only=["new"]
+        )
+        out = self.tmp / "pi/manifest.quarantining.json"
+        subset = g.quarantining_manifest(
+            self.tmp / "pi/manifest.json", self.tmp / "pi/receipt.json", out
+        )
+        entries = json.loads(out.read_text())
+        self.assertEqual([entry["role"] for entry in entries], ["old"])
+        self.assertEqual(subset["from_manifest_sha256"], report["manifest_sha256"])
+        self.assertEqual(subset["dropped_report_only_roles"], ["new"])
+        receipt = json.loads(
+            (self.tmp / "pi/manifest.quarantining.receipt.json").read_text()
+        )
+        self.assertEqual(receipt["manifest_sha256"], g.file_sha256(out))
+        with self.assertRaises(ValueError):
+            g.quarantining_manifest(
+                self.base, self.tmp / "pi/receipt.json", self.tmp / "other.json"
+            )
 
 
 class PairCheckTest(unittest.TestCase):

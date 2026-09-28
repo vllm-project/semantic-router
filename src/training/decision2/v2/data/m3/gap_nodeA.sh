@@ -21,6 +21,7 @@ SRC=/data/dev2/private/sources
 TOK=/data/dev2/hf-cache/models--Qwen--Qwen3.5-0.8B-Base/snapshots/dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68
 TOKENIZERS=/data/dev2/private/data/arms-v1/tokenizers.json
 PI=$RUN/pi/manifest.json
+PIQ=$RUN/pi/manifest.quarantining.json
 EXISTING=$RUN/existing.json
 V1_ROWS=/data/dev2/private/data/arms-v2/v1-rows.json
 A7=/data/dev2/runs/data/m3b/hf/v2/a7/arms
@@ -90,9 +91,11 @@ v2_aho_H6 $V2/H6.aho.jsonl e7223148fd47a0a8291d11c6f90933f1bada861b327bf9f78ef3d
 EOF
   RO=()
   for R in "${REPORT_ONLY[@]}"; do RO+=(--report-only "$R"); done
-  python3 -m v2.data.m3.src_gap protected --base /data/dev2/private/data/pi-v3/manifest.json \
+  [ -f "$PI" ] || python3 -m v2.data.m3.src_gap protected --base /data/dev2/private/data/pi-v3/manifest.json \
     --base-sha256 fc09b2bd1fecf823b3fbd6218d1bee76109677474608d19f17e9c2aff080b7f2 "${ADD[@]}" "${RO[@]}" \
     --out-dir "$RUN/pi"
+  [ -f "$PIQ" ] || python3 -m v2.data.m3.src_gap quarantining --manifest "$PI" --receipt "$RUN/pi/receipt.json" \
+    --out "$PIQ"
   ;;
 a7k)
   python3 -m v2.data.m3.src_gap pair-check --pairs "$A7/A7k/train.jsonl" --pairs "$A7/A7k/aho.jsonl" \
@@ -111,16 +114,21 @@ audit)
     [ -f "$A/$ARM.$S.b.jsonl" ] || python3 -m v2.data.m3.src_gap budget --rows "$RUN/build/$ARM.$S.jsonl" \
       --tokens "$A/build.tokens.jsonl" --out "$A/$ARM.$S.b.jsonl" --report "$A/$ARM.$S.budget.json" > /dev/null
   done
-  [ -f "$A/overlap.private.json" ] || python3 -m v2.data.overlap --candidates "$A/$ARM.train.b.jsonl" \
-    --candidates "$A/$ARM.aho.b.jsonl" --candidates "$A/$ARM.sho.b.jsonl" --protected-inventory "$PI" \
-    --private-receipt "$A/overlap.private.json" --public-receipt "$A/overlap.public.json" --workers 48 \
-    > "$A/overlap.stdout" 2> "$A/overlap.stderr"
+  # Full PI-v4 scan (every role reported) and a scan against its quarantining roles only; a
+  # group is quarantined when either receipt flags it against a non-report-only role.
+  for SCAN in overlap:"$PI" overlap-q:"$PIQ"; do
+    NAME=${SCAN%%:*}
+    [ -f "$A/$NAME.private.json" ] || python3 -m v2.data.overlap --candidates "$A/$ARM.train.b.jsonl" \
+      --candidates "$A/$ARM.aho.b.jsonl" --candidates "$A/$ARM.sho.b.jsonl" --protected-inventory "${SCAN#*:}" \
+      --private-receipt "$A/$NAME.private.json" --public-receipt "$A/$NAME.public.json" --workers 48 \
+      > "$A/$NAME.stdout" 2> "$A/$NAME.stderr"
+  done
   RO=()
   for R in "${REPORT_ONLY[@]}"; do RO+=(--report-only-role "$R"); done
   for S in train aho sho; do
     [ -f "$A/$ARM.$S.q.jsonl" ] || python3 -m v2.data.apply_quarantine --rows "$A/$ARM.$S.b.jsonl" \
-      --overlap-receipt "$A/overlap.private.json" "${RO[@]}" --out "$A/$ARM.$S.q.jsonl" \
-      --report "$A/$ARM.$S.quarantine.json" > /dev/null
+      --overlap-receipt "$A/overlap.private.json" --overlap-receipt "$A/overlap-q.private.json" "${RO[@]}" \
+      --out "$A/$ARM.$S.q.jsonl" --report "$A/$ARM.$S.quarantine.json" > /dev/null
   done
   [ -d "$A/cells" ] || python3 -m v2.data.m2.audit_cells --rows "$A/$ARM.train.q.jsonl" --out-dir "$A/cells" > "$A/cells.json"
   ls "$A"/cells/*.jsonl | xargs -P 16 -I{} sh -c \
@@ -176,6 +184,7 @@ freeze)
     "${DOCKER[@]}" -m v2.data.freeze freeze --rows "$F/$ARM.$S.jsonl" --arm-id "${ARM^^}" --role "$S" \
       --license-registry "$CODE/v2/data/records/license-registry-m3b.json" --tokenizers "$TOKENIZERS" \
       --out-manifest "$F/$ARM.$S.manifest.json" > "$F/$ARM.$S.freeze.stdout"
+    tokens "$F/$ARM.$S.tokens.jsonl" "$F/$ARM.$S.jsonl" > "$F/$ARM.$S.tokens.stdout"
   done
   ;;
 *)

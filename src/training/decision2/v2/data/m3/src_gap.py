@@ -9,6 +9,8 @@ Spanglish), built with the data-arms v2 framework.
     python3 -m v2.data.m3.src_gap protected --base pi-v3/manifest.json \\
         [--base-sha256 HEX] --add ROLE=PATH [--expect ROLE=HEX] [--add ...] \\
         [--report-only ROLE ...] --out-dir PI
+    python3 -m v2.data.m3.src_gap quarantining --manifest PI/manifest.json \\
+        --receipt PI/receipt.json --out PI/manifest.quarantining.json
     python3 -m v2.data.m3.src_gap budget --rows A.jsonl --tokens A.tokens.jsonl \\
         --out B.jsonl --report B.budget.json
     python3 -m v2.data.m3.src_gap length-baseline --cells DIR --out lengths.json
@@ -1623,6 +1625,38 @@ def project_protected(
     return report
 
 
+def quarantining_manifest(manifest: Path, receipt: Path, out: Path) -> Report:
+    """The entries of ``manifest`` whose role is not report-only in its
+    ``protected`` receipt, unchanged. A scan against this subset gives the
+    quarantine decision without the report-only rows, which otherwise raise
+    posting counts and protected-row boilerplate counts and so hide matches
+    with quarantining roles."""
+    data = json.loads(receipt.read_text(encoding="utf-8"))
+    if data["manifest_sha256"] != file_sha256(manifest):
+        raise ValueError(f"{receipt} does not describe {manifest}")
+    report_only = set(data.get("report_only_roles", []))
+    entries = [
+        entry
+        for entry in json.loads(manifest.read_text(encoding="utf-8"))
+        if entry["role"] not in report_only
+    ]
+    digest = common._write_new(
+        out, (json.dumps(entries, indent=1, sort_keys=True) + "\n").encode("utf-8")
+    )
+    report = {
+        "schema": "decision2-m3b-protected-quarantining/v1",
+        "from_manifest_sha256": data["manifest_sha256"],
+        "dropped_report_only_roles": sorted(report_only),
+        "roles": len(entries),
+        "manifest_sha256": digest,
+    }
+    common._write_new(
+        out.with_name(out.name.replace(".json", "") + ".receipt.json"),
+        (json.dumps(report, indent=1, sort_keys=True) + "\n").encode(),
+    )
+    return report
+
+
 def apply_budget(
     rows_path: Path, tokens_path: Path, out: Path, report_path: Path, limit: int = 8192
 ) -> Report:
@@ -1861,17 +1895,21 @@ def gap_stats(
         "failures": len(isolation["failures"]),
         "partitions": len(isolation["partitions"]),
     }
-    overlap = load(audits / "overlap.public.json")
-    out["overlap"] = {
-        "protected_inventory_sha256": overlap["protected_inventory_sha256"],
-        "by_method": overlap["flagged"]["by_method"],
-        "quarantine": overlap["flagged"]["quarantine"],
-        "by_role_any": {
-            role: value["any"]
-            for role, value in overlap["flagged"]["by_role"].items()
-            if value["any"]["groups"]
-        },
-    }
+    for key, name in (("overlap", "overlap"), ("overlap_quarantining", "overlap-q")):
+        path = audits / f"{name}.public.json"
+        if not path.exists():
+            continue
+        overlap = load(path)
+        out[key] = {
+            "protected_inventory_sha256": overlap["protected_inventory_sha256"],
+            "by_method": overlap["flagged"]["by_method"],
+            "quarantine": overlap["flagged"]["quarantine"],
+            "by_role_any": {
+                role: value["any"]
+                for role, value in overlap["flagged"]["by_role"].items()
+                if value["any"]["groups"]
+            },
+        }
     if embed_public is not None:
         embed = load(embed_public)
         out["embedding"] = {
@@ -1974,6 +2012,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     protected.add_argument("--expect", action="append", default=[])
     protected.add_argument("--report-only", action="append", default=[])
     protected.add_argument("--out-dir", type=Path, required=True)
+    quarantining = commands.add_parser("quarantining")
+    quarantining.add_argument("--manifest", type=Path, required=True)
+    quarantining.add_argument("--receipt", type=Path, required=True)
+    quarantining.add_argument("--out", type=Path, required=True)
     pairs = commands.add_parser("pair-check")
     pairs.add_argument("--pairs", type=Path, action="append", required=True)
     pairs.add_argument("--against", type=Path, action="append", required=True)
@@ -2080,6 +2122,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 {"manifest_sha256": report["manifest_sha256"], "roles": report["roles"]}
             )
         )
+        return 0
+    if args.command == "quarantining":
+        report = quarantining_manifest(args.manifest, args.receipt, args.out)
+        print(json.dumps(report, sort_keys=True))
         return 0
     if args.command == "pair-check":
         report = pair_check(args.pairs, args.against)
