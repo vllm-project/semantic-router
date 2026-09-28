@@ -16,6 +16,7 @@ fresh head for that many updates, then starts the backbone schedule.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -786,6 +787,13 @@ def run(
         if g["name"].endswith("encoder")
         for p in g["params"]
     ]
+    if spec["start"].get("compute_dtype", "bfloat16") not in ("bfloat16", "float32"):
+        raise ValueError("compute_dtype must be bfloat16 (autocast) or float32")
+    compute = (
+        parity.fp32_compute
+        if spec["start"].get("compute_dtype") == "float32"
+        else contextlib.nullcontext
+    )
     log = (output / "TRAIN_LOG.jsonl").open("x", encoding="utf-8")
     last_update = total if not preflight else 1
     for step in range(1, last_update + 1):
@@ -824,11 +832,12 @@ def run(
             spec["max_micro_rows"],
             spec["micro_token_budget"],
         ):
-            loss, parts = family.loss(
-                [records["train"][i] for i in micro],
-                [teacher[i] for i in micro],
-                device,
-            )
+            with compute():
+                loss, parts = family.loss(
+                    [records["train"][i] for i in micro],
+                    [teacher[i] for i in micro],
+                    device,
+                )
             (loss / len(rows)).backward()
             for key, value in parts.items():
                 sums[key] += value

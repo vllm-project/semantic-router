@@ -128,4 +128,7 @@ def build(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
             "train_ids_sha256": digest(sorted(ids)),
         }
     )
+    for key, value in spec.get("expected", {}).items():
+        if report[key] != value:
+            raise ValueError(f"Mixture {key} is {report[key]}, frozen as {value}")
     return train, report
