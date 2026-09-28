@@ -1,11 +1,22 @@
-# M3b item 5 — new data sources, gap arms H7 and H8: record draft (2026-09-28)
+# M3b item 5 — new data sources, gap arms H7 and H8 (2026-09-28)
 
-**Status: draft (uncommitted code).** Built on node A (CPU only) from a scratch mirror of the
-uncommitted working tree on top of `8eb5d42cd` (mirror `b4`: `v2/data/m3/src_gap.py`
-`dce5d491…`, `v2/data/m3/gap_nodeA.sh` `dabba075…`; the working-tree `src_gap.py` differs from
-it only in two docstring lines about `--tokenizer`). The coordinator re-runs `gap_nodeA.sh` from a
-committed exact mirror before anything is published. No GPU was used,
-nothing was uploaded, no C1-registry dataset and no sealed directory was read.
+**Status: final. H7 and H8 pass gates 1–8 of amendment 2 and are published** (TRAIN + AHO) in the
+private HF dataset `llm-semantic-router/decision-2.0-training-data` at revision
+**`09f73967bc21b2b1e27160397272b7f66a1ef3af`**, folder `m3/arms/`. Gate 10 (same-source) is
+recorded as PASS by the same-source audit (`m3b-same-source-2026-09-28.md` §4d, `3824d2fda`).
+Gate 9 (node-B rebuild) is pending: another agent runs it, and this record did not wait for it.
+
+- **Build:** exact mirror of `39bc74ec507c411c4720011860e411b727721940` (tree
+  `c29aff6e62455b91873f2e78f2bfcc18e10b5637`).
+- **Audits, finalize, stats, freeze:** exact mirror of
+  `d14dff8e8c6e4f5e796b097ec4ce9cc9c193d3b9` (tree `b133490abe4c9307bb0973cdbbad4d7442e6debe`).
+  Its build code is identical to `39bc74ec5`, and a second build from it was byte-identical.
+- **Node A:** CPU only.
+- **GPU:** only the embedding scan, on node B GPU7, 0.21 GPU-hours (section 3).
+- No C1-registry dataset (any split) and no sealed C1 directory was read.
+
+The draft builds b1–b4 (uncommitted working trees on top of `8eb5d42cd`) are disclosed in
+amendment 2 §1. Nothing from them was published or trained on.
 
 Rules otherwise as `data-arms-v2-prereg-2026-09-28.md` with amendments 1–2 (group-level slicing
 AHO `sha256(group_id) % 10 == 0`, SHO `sha256("sho-v2:" + group_id) % 50 == 0` among the rest,
@@ -29,12 +40,14 @@ majority + 5 points on ≥ 30-row cells, whole-group lexical quarantine).
 | NQ simplified (GCS) | `storage.googleapis.com/natural_questions/...` | CC BY-SA 3.0 | — | not used: HTTP 403 without credentials; the HF mirror is pinned instead |
 | MASSIVE, PAWS-X, XNLI; ConditionalQA; NC / research-only sets | — | — | — | excluded (mlx-diag sources; brief) |
 
-**C1 check.** Every `dataset_id` of `v2/eval/records/sealed-c1-source-registry-2026-09-28.json`
+**C1 check (gate 2).** Every `dataset_id` of `v2/eval/records/sealed-c1-source-registry-2026-09-28.json`
 (47 entries, all grades including rejected) was compared by name and upstream with every source and
 parent above (HoVer, HotpotQA, Wikipedia dumps, Natural Questions, TyDi QA, MIRACL, HAGRID, JGLUE,
-SentiMix/SemEval-2020, Zenodo, LinCE, Natural Instructions): no match anywhere in the registry text.
-The only generic matches are entry 42 ("Arena-90K / SHP / SQuAD / SNLI / IMDB derivatives;
-IndicQE-APE; tasksource/*") and entry 43 (peer JEV aggregators); none of them is read.
+SentiMix/SemEval-2020, Zenodo, LinCE, Natural Instructions). The comparison was re-run for the
+final build and there is no match anywhere in the registry text. The only generic matches are
+entry 42 ("Arena-90K / SHP / SQuAD / SNLI / IMDB derivatives; IndicQE-APE; tasksource/*") and
+entry 43 (peer JEV aggregators); none of them is read. Entry 6 is a different dataset: Taglish
+product-review polarity, not SentiMix.
 
 ## 2. Constructions (`v2.data.m3.src_gap`)
 
@@ -88,123 +101,260 @@ groups per language (questions used by H5/E11); nothing else.
 2,600; TyDi windows 200 per language; MIRACL relevance 1,000 and pool 600 per language; JCQA 9,000;
 SentiMix 8,000.
 
-## 3. Audits (node A, `gap_nodeA.sh audit|finalize`)
+## 3. Runs and audits (`v2/data/m3/gap_nodeA.sh`)
 
-1. Per-row tokens: `v2.data.m2.row_tokens` in the pinned image (native `qwen3.5-0.8b-base@dc7cdfe2`,
-   raw `kai-0.6b@7185f514`, spec `arms-v1/tokenizers.json`); 8,192 budget by whole groups
-   (`src_gap budget`): **0 groups over** in both arms.
-2. Lexical overlap (`v2.data.overlap`, four methods) of TRAIN+AHO+SHO against a new manifest
-   `pi/manifest.json` `1e2e13b6…` = PI-v3 (`fc09b2bd…`, 56 roles) + the eleven A7 AHO slices (hashes
-   equal to the A7 v3 registry) + the nine v2 AHO slices; whole-group quarantine
-   (`apply_quarantine`) with the PI-v3 TRAIN roles and the **v2 AHO roles report-only** (see §6).
-3. Shortcut gates: `m2.audit_cells` cells (source × family, ≤ 20,000 rows), `v2.data.shortcut`
-   (state-removed, option-only; majority + 5 points), and a state-length logistic baseline per cell
-   (`src_gap length-baseline`, group-disjoint 5-fold). Failing cells would be dropped from every slice.
-4. Held-out dedup (`m2.dedup_heldout`), final tokens, isolation (`v2.data.freeze isolation`, the two
-   arms' slices against all 69 existing partitions).
+### 3.1 Committed-mirror runs on node A
+
+- **Mirrors.**
+  - `/data/dev2/src/<sha>-src_training_decision2` for `39bc74ec5` and `d14dff8e8`, both extracted
+    from `git archive`.
+  - The file-hash digests equal `git archive`: `14cfbef6…` and `f8b4e1cd…`.
+  - Node B's mirror of `39bc74ec5` is equal too.
+  - Unit tests pass on the host and in the image `f83b1d10…`.
+- **Run roots.**
+  - `/data/dev2/runs/data/m3b/gap/c1/` (`39bc74ec5`): NQ extraction, PI-v4, A7k check, builds and
+    the first audits.
+  - `/data/dev2/runs/data/m3b/gap/c2/` (`d14dff8e8`): builds, audits, finalize, stats and freeze.
+    Its `pi/` links to c1's, so the recorded PI-v4 hash stays the one in use.
+- **Existing partitions.**
+  - `existing.json` is the draft's list, byte for byte (`d54b85ce…`, 69 partitions).
+  - Every file was hash-verified: each SHA-256 equals the value recorded by the draft build.
+  - 60 of them also appear in git records and specs; the 9 v2 SHO slices are in the HF `m2/arms/*/sho.dedup.json` at `ba848147`.
+- **Reproduction.**
+  - `extract` re-created `nq-train.jsonl` byte-identical to the sources copy (`ad4140ed…`, same
+    report).
+  - Both builds (c1 and c2) are byte-identical to draft b4 in all six slices:
+    - `h7.{train,aho,sho}`: `165e9681…`, `e10d6ffc…`, `1c4afae3…`;
+    - `h8.{train,aho,sho}`: `fc5adc2e…`, `372027e7…`, `c1983981…`.
+  - `build.json` differs from b4 only in its `rules` and `status` strings: `2a7efd28…` (H7) and
+    `c45bd48a…` (H8).
+  - The budget step is identical: 0 groups over 8,192 native tokens in either arm.
+
+### 3.2 Code changes (review of `src_gap.py` against sections 1–2)
+
+The constructions, guards, group keys, AHO/SHO slicing, caps, isolation drop, budget and tokenizer
+loading match this record. No content-rule bug was found and no row changed. Changes:
+
+1. **`39bc74ec5`**
+   - `build.json` no longer says "draft (uncommitted code)". This changes only `build.json`.
+   - `src_gap protected` checks the base manifest and every added origin against expected SHA-256
+     values before writing, and lists the report-only roles in its receipt.
+   - New `pair-check` (A7k) and `stats` subcommands.
+   - `gap_nodeA.sh`:
+     - new `protected`, `a7k`, `stats` and `freeze` steps;
+     - `NQ_EXTRACT`, because `extract` refused to overwrite and so could not be re-run;
+     - `finalize` now fails when a cell has no shortcut receipt (a crashed shortcut run would have
+       passed silently);
+     - optional `EMBED_RECEIPT`; gate outputs are written under `final/`;
+     - the eleven `a7_train_*` roles added to `REPORT_ONLY`.
+2. **`d14dff8e8`**
+   - Quarantine uses the union of the full PI-v4 scan and a scan of PI-v4's 58 quarantining roles
+     only (`src_gap quarantining`, section 3.3). This removed rows (section 4).
+   - The freeze step also writes per-slice TRAIN/AHO token files.
+
+### 3.3 Gates
+
+1. **Rights: PASS.**
+   - `license-registry-m3b.json` (`a598405d…` as published).
+   - The freeze manifests carry complete licence tables for all six sources.
+2. **C1 registry: PASS** (section 1).
+3. **Isolation: PASS.**
+   - `v2.data.freeze isolation` of each arm's final slices against the 69 existing partitions
+     (every v2/v1/A7 partition, A0, SELECT700, CAL700, CAL698): 0 failures.
+4. **Lexical overlap against PI-v4** (whole-group quarantine).
+   - **PI-v4 manifest `24b060da2863a964da1ff2c40591943fff9d27e3ce19b28e2a9bd0918fdb47dc`** (87 roles).
+     It was built on node A by `gap_nodeA.sh protected` before the first PI-v4 scan:
+     - PI-v3 unchanged: `fc09b2bd…`, 56 roles, verified;
+     - the eleven A7 AHO slices, quarantining: A7g, A7h, A7i, A7m, A7o, A7p (`a7-dec10-v3`),
+       A7k, A7q, A7s, A7x (`a7-enc10-v4`) and A7r (`a7-rec10-v2`), origins equal to the A7
+       registries;
+     - A7 has no sealed slice: none in its HF registry and none under node B's A7 run
+       directories;
+     - the eleven A7 TRAIN files and the nine v2 AHO slices, report-only, all origins verified.
+   - Receipt `10b804c1…`: 29 report-only roles (the 9 PI-v3 TRAIN roles, 9 `v2_aho_*`,
+     11 `a7_train_*`). The quarantining subset is `48fd2537e63b1069…` (58 roles).
+   - **Finding.** Report-only rows in the same scan hide matches with quarantining roles. They
+     raise gram posting counts: near-duplicate candidates come only from the 6 rarest grams with
+     at most 128 postings. They also raise protected-row counts for n-gram boilerplate (5 or more
+     protected rows, first 5 refs per text).
+     - Evidence: the full PI-v4 scan quarantined fewer groups than the draft's smaller manifest.
+       H7 kept 5 TRAIN and 2 AHO groups, and H8 1 AHO group, that the draft had flagged against
+       A7q/A7m AHO or Decision Bench v4. Their hits moved to A7q TRAIN, v1 A3 TRAIN or v2 AHO, or
+       became boilerplate.
+     - The quarantining-roles scan flags 1,207 H7 groups against 1,008 from the full scan, and 59
+       H8 groups against 33. In both arms it contains every full-scan hit.
+   - Quarantine is therefore the union of both receipts. This is stricter than the full scan
+     alone and relaxes nothing.
+   - Final removals, groups (a group can count under several roles):
+     - H7 TRAIN 1,055 (9,076 → 4,292 rows): v1 A3 AHO 808 (MuSiQue Wikipedia paragraphs), CSS15
+       281, Decision Bench v4 86, A7q AHO 63, A7m AHO 20, A7h AHO 14, `mlx-diag` 5, CSS pilot 4,
+       v1 A1 AHO 3, ml-parallel-dev 3, JevBench-231 1. HoVer lost 4,224 rows, NQ 560.
+     - H7 AHO 128 (→ 460 rows); H7 SHO 24 (→ 41).
+     - H8 TRAIN 55 (21,488 → 21,378): v1 A3 AHO 33, CSS15 17, Decision Bench v4 10, A7q AHO 5,
+       A7h AHO 3, A7m AHO 3, CSS pilot 1, `mlx-diag` 1.
+     - H8 AHO 4 (→ 2,427); H8 SHO 0.
+   - Compared with the draft: every draft-quarantined group is still removed. Additionally
+     removed: H7 168 TRAIN, 20 AHO and 4 SHO groups; H8 24 TRAIN and 1 AHO group.
+5. **Embedding scan: PASS, 0 quarantined.**
+   - Setup: node B GPU7; Qwen3-Embedding-0.6B@`97b0c614`; 1,500/1,000-character windows (480/320
+     CJK); batch 256; runtime image `ce895822…`; commit `39bc74ec5` (`embed_scan.py` is unchanged
+     in `d14dff8e8`).
+   - Candidates: the six final files, copied node A → local pipe → node B, gzip, SHA-256 equal
+     at both ends, mode 0600 under `/data/dev2/private/data/m3b-gap/c1/final/`.
+   - Protected: manifest `deb4b7e9fd9ef5dd…` = PI-v3's embedding manifest (`d126bb27…`, 47
+     roles) plus the eleven A7 AHO slices, hash-checked on node B.
+   - Windows: 115,663 candidate, 122,921 protected.
+   - 0 groups ≥ 0.93.
+   - Review band [0.85, 0.93): 9 groups, all in H8 (TRAIN 6, AHO 2, SHO 1), all against A7 AHO
+     (A7x 6, A7s 2, A7q 1); H7 has none.
+   - All 9 pairs (fewer than 20 exist) were reviewed: 9 topical neighbours with no shared text,
+     short Spanglish tweets against MASSIVE requests, Hinglish tweets and an OASST exchange.
+     0 shared text.
+   - Wall 756 s (17:00:52–17:13:28 UTC) × 1 GPU = **0.21 GPU-hours**. GPU7 was shared with the
+     running own-Lux teacher job (98–100% utilization).
+   - Lease: `owner.embed` was written before start and set to `released` at the end; `owner` and
+     `owner.eval` were not touched.
+   - Receipts: public `46764f44…`, run `e49d2a15…` (path-stripped copies on HF). The private
+     receipt stays on node B.
+6. **Shortcut gates: PASS, all 24 cells** (3 H7, 21 H8; TyDi ko and sw have fewer than 30 rows).
+   - Twin families sit exactly at the majority in state-removed and option-only. JCQA is below it
+     (0.117 / 0.128 against 0.203). SentiMix is at most +0.3 points above it (0.337 / 0.328
+     against 0.334).
+   - State-length logistic baseline (reported, not a gate): H7 ≤ +0.9 points; H8 ≤ +4.2 except
+     MIRACL relevance fr at +5.0. Relevance twins pair different passages, so lengths are not
+     matched there; the draft had +4.9.
+7. **Held-out dedup: 0** groups removed from AHO or SHO.
+8. **Canonical freeze: PASS.**
+   - `v2.data.freeze freeze` in the pinned image; content hash = file hash for all four
+     published files.
+   - Manifests, published path-stripped copies: H7 `28dd76a8…`/`1ac8a695…`, H8
+     `cab69890…`/`584ceb65…` (TRAIN/AHO).
+9. **Node-B rebuild: pending** (another agent). Its interim report says the six build slices and
+   the NQ extraction came out byte-identical on node B from `39bc74ec5`.
+10. **Same-source: PASS** per `m3b-same-source-2026-09-28.md` §4d (`3824d2fda`). No H7/H8 source
+    is SAME DATASET or SAME PARENT CORPUS with a CSS pilot or CSS15 task.
+
+**A7k.** 0 A7k pairs, TRAIN 2,190 or AHO 237, occur in the H6 AHO (`e7223148…`) or H6 SHO
+(`7ae4aa75…`) slices, which hold A6h2's 454 KLUE-STS/JSTS pairs. The check was by `input_sha256`
+and by normalized sentence pair in either order (`src_gap pair-check`, receipt `a7k-pairs.json`).
+Even single-sentence sharing is 0. M3b rebuilt no H6/A6h2 held-out or sealed slice.
 
 ## 4. Results
 
-Native tokens are Qwen3.5-0.8B-Base native `encode` of the final files. "Long" = tokens in rows of
-≥ 2,000 native tokens.
+Native tokens are Qwen3.5-0.8B-Base native `encode` of the final files; "long" means tokens in rows
+of ≥ 2,000 native tokens. SHO slices are given by rows, groups and hash only.
 
 | Arm | Slice | Rows | Groups | Choice / Noul / Score | Native tokens | Long share | Max | SHA-256 |
 | --- | --- | ---: | ---: | --- | ---: | ---: | ---: | --- |
-| H7 | train | 4,931 | 1,881 | 0 / 4,104 / 827 | 18,761,859 | 99.9% | 7,563 | `997aa1ea743c6d731d41ec7d6ea3b802bea2ab8fe26e572f57c088ed7bf031bb` |
-| H7 | aho | 508 | 209 | 0 / 442 / 66 | 1,943,278 | 99.8% | 6,920 | `92e0ddd38ee90d38008f454487885b5fa2303c42e61524223e89108cc0ef2187` |
-| H7 | sho | 50 | 24 | 0 / 44 / 6 | 178,734 | 100% | 6,313 | `f5a3e710db4fa23cd52e2fcf0da335628a51f3ba7741a38e71e049efde089a46` |
-| H8 | train | 21,426 | 17,086 | 6,964 / 8,476 / 5,986 | 12,539,410 | 55.1% | 7,080 | `91af12b9c21ef6a03151aec4ab1f02bf0e1bc45926a9cc2c5653225a73df4a82` |
-| H8 | aho | 2,429 | 1,929 | 810 / 970 / 649 | 1,443,238 | 54.6% | 6,867 | `d397f6f9b72c1fcd84b1e511e4027702878995464bc54650b4bda80c017984ea` |
-| H8 | sho | 439 | 354 | 143 / 162 / 134 | 198,677 | 47.7% | 6,359 | `c1983981284671e8dd24dde43e4fba2ac2086457dc56a2a266f6c7e6768c2efa` |
+| H7 | train | 4,292 | 1,713 | 0 / 3,748 / 544 | 16,122,520 | 99.9% | 7,563 | `7c4133b05664de492bb80b40df5eef0f028257f10327a492564bea5f62813a32` |
+| H7 | aho | 460 | 189 | 0 / 400 / 60 | 1,767,474 | 99.8% | 6,920 | `0eaf41c0bfdbcd0c2a262a93804a16d8ba2698a8d621e17e83e554f50748a2b1` |
+| H7 | sho | 41 | 20 | — | — | — | — | `3906f68abd4a945443986d58640c25e36d71c7fcbc50d3621a66e3fde6785122` |
+| H8 | train | 21,378 | 17,062 | 6,964 / 8,428 / 5,986 | 12,379,042 | 54.5% | 7,080 | `1f19e5ab84e6b80182e99cd8e2b7efc79ec17275048e6daf7987afc335e7d361` |
+| H8 | aho | 2,427 | 1,928 | 810 / 968 / 649 | 1,438,676 | 54.5% | 6,867 | `3c1ba01ab3bb9244201f741c428f0e75324a422d5744783016f002154cacd627` |
+| H8 | sho | 439 | 354 | — | — | — | — | `c1983981284671e8dd24dde43e4fba2ac2086457dc56a2a266f6c7e6768c2efa` |
 
-**H7 TRAIN by family:** `hover_answerable` 2,246 rows / 860 groups / 8,972,713 tokens;
-`hover_coverage` 827 / 108 / 3,454,319 (Score L3 148 × 3, L4 72 × 4, L5 19 × 5, exactly balanced);
-`nq_window_removal` 1,858 / 929 / 6,334,827. English only; every row is above 1,024 Kai tokens
-(T1a-ineligible).
+**H7 TRAIN by family.**
 
-**H8 TRAIN by family:** `jcqa` 6,964 (ja; gold positions 1,331–1,443 per position);
-`sentimix_spanglish` 5,986 (es-en; levels 1,765 / 2,125 / 2,096); `miracl_relevance_<lang>` 864–894
-per language (es, fa, fr, hi, zh; 1.29M tokens); `miracl_pool_<lang>` 518–540 per language (4.26M
-tokens; hi 93% long, fa 35%, others ≤ 7%); `tydi_window_removal_<lang>` 138–182 rows for ar, en, fi,
-id, ja, ru, te, th, and bn 50, sw 6, ko 4 (5.08M tokens; ≥ 97% long except ko and sw). 17 languages (ja 7,142;
-es-en 5,986; fa 1,426; fr 1,412; hi 1,412; zh 1,402; es 1,388; id 182; ar 180; te 180; ru 178;
-th 172; fi 168; en 138; bn 50; sw 6; ko 4). Noul exactly 50/50. 3,135 rows above 1,024 Kai tokens.
+- `hover_answerable`: 1,982 rows / 764 groups / 7,891,050 tokens.
+- `hover_coverage`: 544 / 79 / 2,244,558. Score L3 114 × 3, L4 43 × 4, L5 6 × 5; exactly balanced.
+- `nq_window_removal`: 1,766 / 883 / 5,986,912.
+- English only. Noul 1,874 / 1,874. Every row is above 1,024 Kai tokens (T1a-ineligible).
 
-**Quarantine (whole groups, non-report-only roles).** H7: TRAIN 887 of 2,768 groups (9,076 → 4,931
-rows), AHO 108 (1,085 → 508), SHO 20 (139 → 50); by role v1 A3 AHO 601 (MuSiQue Wikipedia
-paragraphs), CSS15 268, Decision Bench v4 80, A7 AHO 87 (A7q 56, A7m 19, A7h 12), CSS pilot 4,
-mlx-diag 3, ml-parallel-dev 3, JevBench-231 1, v1 A1 AHO 1; HoVer 3,677 rows, NQ 468 rows. H8: TRAIN
-31 groups (CSS15 10, v1 A3 AHO 11, Decision Bench v4 8, A7 AHO 6, CSS pilot 1, mlx-diag 1), AHO 3,
-SHO 0. Report-only hits: v2 AHO H3 2,386 / H6 1,395 / E11 448 / H1 251 / H5 40 groups (H7) and
-v2 AHO H5 351 / H3 64 / E11 24 / H6 15 groups (H8); PI-v3 TRAIN roles.
+**H8 TRAIN by family.**
 
-**Shortcut gates: all 24 cells PASS** (3 in H7, 21 in H8; TyDi ko and sw have < 30 rows). Noul and
-Score twins sit exactly at the majority in state-removed and option-only (their question, options
-and instructions are shared inside each group); JCQA state-removed 0.117 and option-only 0.128 vs
-majority 0.203; SentiMix 0.337 / 0.328 vs 0.334. **State-length baseline** within +5 points
-everywhere (H7 ≤ +1.5; largest in H8: MIRACL relevance fr +4.9, zh +4.2, es +3.8 — relevance
-twins pair different passages, so lengths are not matched there). No family dropped.
+- `jcqa`: 6,964 rows (ja); gold positions 1,331–1,443 per position.
+- `sentimix_spanglish`: 5,986 (es-en); levels 1,765 / 2,125 / 2,096.
+- `miracl_relevance_<lang>`: 864–894 per language; 1.29M tokens.
+- `miracl_pool_<lang>`: 518–540 per language; 4.26M tokens. Long share: hi 93%, fa 35%, the
+  others ≤ 7%.
+- `tydi_window_removal_<lang>`: ar 180, te 180, ja 178, ru 176, id 174, fi 166, th 166, en 112,
+  bn 50, sw 6, ko 4; 4.92M tokens; long share ≥ 97% except ko and sw.
+- 17 languages: ja 7,142; es-en 5,986; fa 1,426; hi 1,412; fr 1,410; zh 1,402; es 1,386; ar 180;
+  te 180; ru 176; id 174; fi 166; th 166; en 112; bn 50; sw 6; ko 4.
+- Noul exactly 50/50. 3,089 rows are above 1,024 Kai tokens.
 
-**Isolation** of the six final files against the 69 existing partitions: **PASS** (no shared id,
-group id or input hash). Held-out dedup removed nothing. Rebuilds from the same sources reproduced
-H8 byte-for-byte across mirrors b1/b2 and b3/b4, and H7 across b1/b2.
+**Changes against the draft (r4):**
+
+- H7: TRAIN −639 rows, AHO −48, SHO −9.
+- H8: TRAIN −48, AHO −2.
+- All of these come from the quarantining-roles scan (section 3.3, gate 4).
 
 ## 5. Targets
 
-- **Long evidence.** New TRAIN tokens 31,301,269, of which 25,651,376 (81.9%) are in rows of
-  ≥ 2,000 tokens. With the frozen v2 arms (141.47M tokens, 15.2% long ≈ 21.5M) the share becomes
-  ≈ 47.2M / 172.8M = **27.3%** (floor 20% met; stretch 30% not). H7 alone adds 18.7M long tokens.
-- **Score:** 6,813 new Score TRAIN rows (25.8% of the new rows; L3–L5).
-- **Multilingual:** H8 adds ja, es-en, fa, fr, hi, zh, es ≥ 1,000 rows each; code-mixed es-en and
-  Persian are new languages for the v2 human arms.
-- **Sources:** three upstream releases new to the v2 human arms (HoVer, Natural Questions, MIRACL
-  non-English with its corpus, which v2 pinned but never built) plus new items from TyDi QA and
-  JCommonsenseQA; SentiMix Spanglish comes from the Zenodo release A7s already uses for Hinglish, so
-  it does not count as a new release.
+- **Long evidence.**
+  - New TRAIN: 28,501,562 tokens, of which 22,856,958 (80.2%) are in rows of ≥ 2,000 tokens.
+    H7 alone adds 16.1M long tokens.
+  - With the frozen v2 arms (141.47M tokens, 15.2% long ≈ 21.5M) the share becomes
+    ≈ 44.4M / 170.0M = **26.1%**. The floor of 20% is met; the stretch of 30% is not.
+- **Score:** 6,530 new Score TRAIN rows, 25.4% of the 25,670 new rows (L3–L5).
+- **Multilingual:** H8 adds ja, es-en, fa, fr, hi, zh and es with ≥ 1,000 rows each. Code-mixed
+  es-en and Persian are new languages for the v2 human arms.
+- **Sources:** three upstream releases are new to the v2 human arms: HoVer, Natural Questions, and
+  non-English MIRACL with its corpus (pinned by v2 but never built). There are also new items from
+  TyDi QA and JCommonsenseQA. SentiMix Spanglish comes from the Zenodo release that A7s already
+  uses for Hinglish, so it is not a new release.
 
-## 6. Decisions and deviations to confirm
+## 6. Decisions and deviations
 
-1. **v2 AHO slices are report-only.** The brief protects PI-v3 + A7 AHO; v2 AHO slices were added to
-   the manifest as report-only roles. Quarantining them too would remove most H7 groups (HoVer and
-   NQ share Wikipedia paragraphs with H3/H6/E11 AHO, as v2 TRAIN already does with its own AHO).
-   The private receipts name the groups, so either policy can be re-applied without rebuilding.
-2. **Caps raised after the first audit.** A first audit (mirror b2) showed ~50% of HoVer and ~23% of
-   NQ rows quarantined; the H7 caps were raised from 2,000 / 1,500 / 1,800 and NQ extended from 32 to
-   64 shards before the final build (b4). Content rules did not change; the change is disclosed like an
-   amendment.
-3. **Budget counter.** The first builds sized states with the raw `tokenizer.json`, which splits Thai,
-   Telugu and Bengali marks differently from the `AutoTokenizer` path of `row_tokens` (34 Thai rows
-   went over 8,192); from b3 the builder loads the tokenizer the same way (`freeze.load_tokenizer`).
+1. **v2 AHO slices are report-only** (amendment 2 §3). For models trained with H7/H8, the H1, H3,
+   H5, H6 and E11 AHO readouts are disclosed as passage-familiar. The private receipts name the
+   groups, so a stricter policy can be re-applied without a rebuild.
+2. **Quarantine from the union of two scans** (section 3.3, gate 4). This is stricter than the
+   amendment's single PI-v4 scan and does not relax it. Both receipts are published.
+3. **Caps raised after the first draft audit, and the budget counter fixed from b3:** amendment 2
+   §1. The content rules did not change.
 4. **Shortfalls.** TyDi windows for ko (4 rows), sw (6) and bn (50): v2 H5 already used nearly every
-   usable question; HoVer coverage keeps 108 TRAIN groups because a HotpotQA parent carries about ten
-   coverage rows and whole-group quarantine hits large groups more often.
-5. **SHO location.** SHO files are under the run directory (`r4/final/*.sho.jsonl`, mode 0600) as the
-   brief asked; they belong under the sealed location before publication and must not be uploaded.
+   usable question. HoVer coverage keeps 79 TRAIN groups: a HotpotQA parent carries about ten
+   coverage rows, and whole-group quarantine hits large groups more often.
+5. **Publication before the gate-9 record.** This follows the brief, which says not to wait for
+   gates 9 and 10. The arms must be withdrawn if the node-B rebuild disagrees.
+6. **SHO.** Both final SHO slices were moved to `/data/dev2/private/sealed/m3b/{h7,h8}.sho.jsonl`
+   on node A (mode 0600) and never uploaded. Node B's copies were deleted after the embedding scan.
+   The intermediate build and audit copies stay in the private run directories.
 
-## 7. Node-A outputs (run root `/data/dev2/runs/data/m3b/gap/`)
+## 7. Outputs
 
-- Final rows: `r4/final/{h7,h8}.{train,aho,sho}.jsonl`; tokens `r4/final/{h7,h8}.tokens.jsonl`
-  (`433a67d9…`, `8bec2b3d…`; one `{id, native, kai}` line per row of all three slices); stats
-  `r4/final/{h7,h8}.stats.json`; isolation `r4/final/{h7,h8}.isolation.json`; dedup
-  `r4/final/{h7,h8}.{aho,sho}.dedup.json`.
-- Build: `arms/build4/{h7,h8}.{train,aho,sho}.jsonl` and `{h7,h8}.build.json` (`e31b8c36…`,
-  `647ccaed…`); superseded builds `arms/superseded-b1`, `arms/build` (b2), `arms/build3`.
-- Gate receipts: `r4/audits/{h7,h8}/cells/*.jsonl.shortcut.json`, `length-baseline.json`
-  (`b33dfb5b…`, `b0a52d2f…`), `overlap.{public,private}.json` (public `51388762…`, `e6bfee93…`),
-  `*.budget.json`, `*.quarantine.json`, `*.gates.json`.
-- Protected manifest `pi/manifest.json` (+ `pi/receipt.json`); isolation list `existing.json`.
-- Sources: `/data/dev2/private/sources/m3b/{hover,nq,nq-extract-64,miracl-corpus,sentimix,hotpotqa-validation,natural-instructions}`
-  with `SHA256SUMS` / extraction receipts.
-
-**GPU embedding scan still needed** (Qwen3-Embedding-0.6B@`97b0c614`, v2 thresholds, against the
-PI-v3 embedding manifest plus the A7 AHO slices): `r4/final/h7.train.jsonl`, `h7.aho.jsonl`,
-`h7.sho.jsonl`, `h8.train.jsonl`, `h8.aho.jsonl`, `h8.sho.jsonl`. Until then both arms are
-development-only.
+- **HF** (revision `09f73967bc21b2b1e27160397272b7f66a1ef3af`, parent `530b0bce…`; private before
+  and after).
+  - Folder `m3/arms/`: 70 files. `registry.json` (`91747a05…`) lists the other 69 with SHA-256.
+  - All 70 files were re-downloaded at the revision; every SHA-256 equals the upload and the
+    registry.
+  - Per arm under `H7/` and `H8/`:
+    - `train.jsonl`, `aho.jsonl`, and `{train,aho}.tokens.jsonl` (H7 `5c48a2c6…`/`799c2eb0…`,
+      H8 `7c10a127…`/`512f20fd…`);
+    - `{train,aho}.manifest.json`, `build.json`, `stats.json` (H7 `56ef6549…`, H8 `83b83952…`);
+    - `{train,aho,sho}.quarantine.json`, `{train,aho,sho}.gates.json`, `{aho,sho}.dedup.json`.
+  - `audits/<ARM>/` holds `overlap.public.json`, `overlap-quarantining.public.json`,
+    `length-baseline.json` and `shortcut/<cell>.json`. `audits/` also holds `embed.public.json`,
+    `embed-run.json` and `a7k-pairs.json`.
+  - `protected-inventory/` holds the PI-v4 receipts. The folder also has `README.md`
+    (`hf-dataset-m3-arms-readme.md`) and `license-registry-m3b.json`.
+- **Node A final files** (run root `/data/dev2/runs/data/m3b/gap/c2/`):
+  - TRAIN `final/h7.train.jsonl` and `final/h8.train.jsonl`.
+  - TRAIN token files `final/h7.train.tokens.jsonl` (`5c48a2c6…`) and `final/h8.train.tokens.jsonl`
+    (`7c10a127…`), one `{id, native, kai}` line per TRAIN row.
+  - The all-slice token files `final/{h7,h8}.tokens.jsonl` (`9d7d1224…`, `e3a3d448…`) also list the
+    SHO ids; use the TRAIN files for recipes.
+  - AHO `final/{h7,h8}.aho.jsonl`; stats, gates, dedup, isolation and freeze manifests are also
+    under `final/`.
+  - Build `build/`; audits `audits/{h7,h8}/`; embedding receipts `embed/`; upload folder
+    `hf-upload/`; readback `readback/`.
+- **Node A, c1** (`/data/dev2/runs/data/m3b/gap/c1/`): PI-v4 `pi/` (manifest, receipt, the 31
+  projected role files, and `manifest.quarantining.json` with its receipt); `a7k-pairs.json`;
+  `nq-extract-64/`; `existing.json`.
+- **Node B:** embedding workspace `/data/dev2/private/data/m3b-gap/c1/` (manifest, final TRAIN and
+  AHO copies, receipts). The driver is `/data/dev2/logs/data/embed-m3b-gap.sh` (`a435a2b9…`) and its
+  log `embed-m3b-gap.log`.
+- **Draft outputs** (superseded, never published): `/data/dev2/runs/data/m3b/gap/{arms,audits,r4,pi}`.
 
 ## 8. Open items
 
-- Re-run `gap_nodeA.sh` (extract, build h7/h8, audit, finalize) from a committed exact mirror; the
-  second-node byte-identical rebuild; freeze manifests with `license-registry-m3b.json`.
-- Coordinator decision on v2 AHO quarantine (§6.1) and on whether H7/H8 enter the XL recipes.
-- Super-NaturalInstructions per-task review (instance licence, source, decision type) if wanted.
+- Gate 9 record (node-B rebuild agent).
+- **v2 arms re-screen.** The v2 arms were quarantined with PI-v3's nine report-only TRAIN roles in
+  the same scan, so the effect in gate 4 may have hidden hits there too. A report-only rescreen of
+  the v2 arms against PI-v3's 47 quarantining roles would size it. The A7 rescreens already used the
+  47 roles.
+- XL recipe revision r2 (amendment 2 §4), from the two node-A TRAIN files and their token files.
+  It is not built here.
+- Super-NaturalInstructions per-task review (instance licence, source, decision type), if wanted.
 - More NQ shards are available (223 unused) if more NQ volume is needed.
