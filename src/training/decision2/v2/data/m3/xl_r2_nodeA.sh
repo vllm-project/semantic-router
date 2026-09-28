@@ -1,7 +1,7 @@
 #!/bin/bash
 # M3b XL recipe revision r2 on node A (CPU only): rescreen of the r1 rows, then the r2 build.
 #
-#   xl_r2_nodeA.sh CODE RUN rows|scan
+#   xl_r2_nodeA.sh CODE RUN rows|scan|scan-union
 #
 # CODE = src/training/decision2 of an exact mirror; RUN = output root (rescreen/). Rules:
 # records/m3b-prereg-amendment-3-2026-09-28.md §2-§3 and amendment 2 §4. Optional
@@ -52,6 +52,20 @@ scan)
     echo "{\"pool\": \"$N\", \"start\": $T0, \"end\": $(date +%s)}" >> "$S/times.jsonl"
   ' _ {} "${WORKERS:-16}"
   echo "{\"event\": \"end\", \"utc\": \"$(date -u +%FT%TZ)\"}" >> "$S/wall.jsonl"
+  ;;
+scan-union)
+  # The same scan with the whole union as one candidate set, so boilerplate counts every
+  # pool's groups; the rescreen flags the union of both passes.
+  expect "$PIQ" "$PIQ_SHA"
+  U=$RUN/rescreen/scan-union
+  mkdir -p "$U" && chmod 700 "$U"
+  CANDS=()
+  for F in "$RUN"/rescreen/rows/*.jsonl; do CANDS+=(--candidates "$F"); done
+  echo "{\"event\": \"start\", \"utc\": \"$(date -u +%FT%TZ)\"}" >> "$U/wall.jsonl"
+  [ -f "$U/union.private.json" ] || nice -n 10 python3 -m v2.data.overlap "${CANDS[@]}" \
+    --protected-inventory "$PIQ" --private-receipt "$U/union.private.json" \
+    --public-receipt "$U/union.public.json" --workers "${WORKERS:-64}" > "$U/union.stdout" 2> "$U/union.stderr"
+  echo "{\"event\": \"end\", \"utc\": \"$(date -u +%FT%TZ)\"}" >> "$U/wall.jsonl"
   ;;
 *)
   echo "unknown step $STEP" >&2
