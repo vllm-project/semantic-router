@@ -89,6 +89,35 @@ About 6,400 original items in total, plus the paired variants.
 - Reported as "independent confirmation (JevArena-C1)" with paired intervals,
   separately from the post-key v3 table.
 
+## 5b. Option B — no paid annotation (post-cutoff public sources)
+
+A cheaper variant uses human labels that already exist but that no model or project
+artifact can have seen:
+
+- **Sources:** human-labelled classification, NLI, preference/rating and QA datasets
+  whose **first public release is after both the freeze date and the pretraining cutoffs
+  of every compared backbone**, with licences allowing evaluation. A custodian outside the
+  model tracks monitors HF and GitHub, pins each source at its release revision and keeps
+  the chosen list secret from the training tracks until scoring.
+- **Conversion:** label-blind, frozen templates (as in `v2/eval/multilingual_panel.py`):
+  task → native Choice / Noul / Score with fixed option sets, rows chosen by a salted hash
+  of the source ID plus label balance; shortcut baselines (hypothesis-only, option-only,
+  length) and the TRAIN/panel isolation audit must pass before sealing.
+- **Sealing and scoring:** SHA-256 commitments of the source revisions, templates,
+  prompts and labels are posted before any model sees a prompt; each frozen package is
+  scored once, with the same use budget as Option A.
+- **Expected size:** a quarter's worth of eligible releases typically yields ~10–15 usable
+  tasks; after quality, dedupe and balance filters about **2,500–5,000 items**, mostly
+  Choice and Noul, with few ordinal Score sources and uneven language coverage.
+- **Weaknesses:** labels are the publisher's, not re-verified (label noise and task
+  definitions vary); templated conversion is further from real decision traffic than
+  commissioned items; the labels are public, so validity lasts only until someone trains
+  on them, and a leaked source list burns the set; release dates do not prove absence
+  from pretraining crawls; Score coverage will be thin.
+- **Cost:** about 2–3 engineer-days per build plus ~0.5 GPU-hour per scoring round; no
+  annotation budget. It supports "independent of our data" claims, not "human-verified
+  held-out" claims; Option A remains the stronger design.
+
 ## 6. Cost and next step
 
 Rough effort: about 6,400 items × 2 annotations × 2–4 minutes plus

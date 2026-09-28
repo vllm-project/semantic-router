@@ -1,0 +1,81 @@
+{
+  "counts": {
+    "choice/ar": 126,
+    "choice/de": 126,
+    "choice/en": 126,
+    "choice/es": 126,
+    "choice/fr": 126,
+    "choice/ja": 126,
+    "choice/zh": 126,
+    "noul/de": 100,
+    "noul/en": 100,
+    "noul/es": 100,
+    "noul/fr": 100,
+    "noul/ja": 100,
+    "noul/ko": 100,
+    "noul/zh": 100,
+    "score/ar": 99,
+    "score/de": 99,
+    "score/en": 99,
+    "score/es": 99,
+    "score/fr": 99,
+    "score/ru": 99,
+    "score/zh": 99
+  },
+  "created_utc": "2026-09-28T05:56:36.782523+00:00",
+  "excluded_source_items": {
+    "massive": [
+      "11636",
+      "2334",
+      "2336",
+      "2796",
+      "443",
+      "4799",
+      "5396",
+      "5584",
+      "9718"
+    ],
+    "pawsx": [
+      "1932",
+      "6086",
+      "6440"
+    ]
+  },
+  "gold_sha256": "71515a41583e7c4792c7058d45e6b12980f033bc9de2847b15dd3fb7b940b484",
+  "items": 2275,
+  "prompts_sha256": "25fde28f4b227a9cc8588da79a597ce816ba4a8f979139f99f69aeb595580a5f",
+  "revisions": {
+    "massive": "MASSIVE 1.1 official archive",
+    "paws-x": "google-research-datasets/paws-x@4cd8187c404bda33cb1f62b49b001115862acf37",
+    "xnli": "facebook/xnli@b8dd5d7af51114dbda02c0e3f6133f332186418e"
+  },
+  "source_items": {
+    "massive": 126,
+    "pawsx": 100,
+    "xnli": 99
+  },
+  "sources": {
+    "massive/1.1/data/ar-SA.jsonl": "b604b44d3bb94e4f71f64d041229e16ceb42d7b89385df7c82873d2514737186",
+    "massive/1.1/data/de-DE.jsonl": "5e09cc550b38d37faf002e0ff42103acd330906e23032689e8f071e1cf3ff621",
+    "massive/1.1/data/en-US.jsonl": "c70f75c6a543a26e249ec383df67733ad9b1066f6c0406c2e04a3f03356e407e",
+    "massive/1.1/data/es-ES.jsonl": "310462a79fa181ff83c643a8d356c7b8155fd37a25e80a77ba3ca9b29305c4a5",
+    "massive/1.1/data/fr-FR.jsonl": "f9bf3db170ad415b389e4c9594dd0f8f80c38188143e05cc4459a6fa7df7cf49",
+    "massive/1.1/data/ja-JP.jsonl": "c22df382db6aa4a23dd1e7f62a2ac8f01c6158865771ad25201696be7201ab79",
+    "massive/1.1/data/zh-CN.jsonl": "992bf0bef3d678f08c27e514739bc851163e8f40f530bfb4d5970a2c24408ace",
+    "massive/amazon-massive-dataset-1.1.tar.gz": "4cba5faa11c71437928e17cb1b9b3d8b8e727e7ea363a3a9a8045e19c0491577",
+    "paws-x/de/test-00000-of-00001.parquet": "9f50249f813edbde93aa86668775779671457aee6b0fa334d1acd5d8d9f83fe6",
+    "paws-x/en/test-00000-of-00001.parquet": "fdb1e43f1068cf0cec955327cfdedc2d3065f15d3cd673c9d0002e6e87cc7915",
+    "paws-x/es/test-00000-of-00001.parquet": "5ba872e113a79c783616e59d3d28ec0e922b6db745d797e5eb95010a32928bee",
+    "paws-x/fr/test-00000-of-00001.parquet": "98844ef252bf38c42cbbf144ec30984c9e54c4c204d0e777c083831130593f4b",
+    "paws-x/ja/test-00000-of-00001.parquet": "a75eb349a59de7c0db1c408c4db29f8d9fbbc75cbd57d637f8a2454ae89abfd8",
+    "paws-x/ko/test-00000-of-00001.parquet": "b27692abb0b1be9f9a3a22f80cee749d9dd35870a6f2874c594777aac3aa6988",
+    "paws-x/zh/test-00000-of-00001.parquet": "cdae3237c12a49165aacf489d3ab60b832b7672e7775abf937a1495f3ab75c80",
+    "xnli/all_languages/test-00000-of-00001.parquet": "599e3a0191403f19cbe802afdf69841152000b41eaed725e4f463d432c0ffb49"
+  },
+  "version": "dev2-mlx-diag/1",
+  "isolation_audit": {
+    "corpus_files": 50,
+    "corpus_strings": 1177483,
+    "flagged": 0
+  }
+}
