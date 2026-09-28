@@ -298,17 +298,20 @@ def load_calibration(
         and reported_model != materialized_source_sha256
     ):
         raise ValueError("Calibration model hash differs from the inference checkpoint")
-    for name in (
-        "checkpoint_sha256",
-        "cal_sha256",
-        "best_sha256",
-        "complete_sha256",
-        "provenance_sha256",
-    ):
+    policy = report.get("selection_policy")
+    # A frozen checkpoint that is not one run's BEST (a seed soup) or that is
+    # refit on a newer clean CAL has no run files to bind; it binds its
+    # checkpoint and CAL bytes only.
+    required = ("checkpoint_sha256", "cal_sha256") + (
+        ("best_sha256", "complete_sha256", "provenance_sha256")
+        if policy == "completed_run_best_only"
+        else ()
+    )
+    for name in required:
         _sha(report.get(name), name)
-    if (
-        report.get("fit_split") != "cal"
-        or report.get("selection_policy") != "completed_run_best_only"
+    if report.get("fit_split") != "cal" or policy not in (
+        "completed_run_best_only",
+        "frozen_checkpoint",
     ):
         raise ValueError(
             "Calibration was not fit on a completed run's frozen CAL partition"
