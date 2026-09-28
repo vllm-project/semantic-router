@@ -189,6 +189,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 04:55 — **DEV2.0-2B RELEASED (private)**: `llm-semantic-router/DEV2.0-2B@5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38` (weights
+  identical to `b2c5d7ea`; final decision `de59a6c7…`, gate `8dbf4c87…`). **DEV2.0-0.8B card-only revision**
+  `f458c34ccfb4a5d4d32babeda1570919adb1a3c8` (overlap + A7 v3 quarantine disclosures; decision `dd397e04…` supersedes
+  `fedb18fa…`). The private "Decision 2.0" collection holds exactly DEV2.0-0.6B, DEV2.0-0.8B and DEV2.0-2B. Integration
+  `73398871f`.
+  - **STORAGE POLICY TIGHTENED (supersedes the staging parts of 02:45 / 04:10):** org private storage had reached 99.17 of
+    100 GB (the 9B staging repo alone is 31.8 GB) and is 83.90 GB after removing duplicate copies of released models.
+    From now on: (1) **no HF uploads of HOLD candidates** — the nodes' `/data` (with recorded hashes) is their durable
+    store; (2) only a candidate the coordinator has approved for release is uploaded, directly to its final repo; (3) a
+    storage steward clears existing HOLD staging LFS files that have verified node copies (seeds and superseded soups
+    first) until >= 40 GB is free; (4) every track runs the steward's headroom check before any upload. Datasets, eval
+    artifacts and released repos are never deleted.
+
 - 2026-09-29 04:35 — Overlap-effect check done (eval record `m5-overlap-effects-2026-09-29.md`; integration `cae64f4e8`): removing
   the 84 flagged items in reported panels (82 human transfer, 73 of them `media_ideology`; 1 public 231; 1 mlx-diag; no typed
   item) moves v3 by <= 0.05 for all 16 models; every release gate and threshold holds; no contamination signature (flagged-vs-
