@@ -236,7 +236,6 @@ jobs:
       && needs.image-fixtures.result == 'success'
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
         label: ${{ fromJSON(needs.plan.outputs.worker_labels)['local'] }}
     uses: ./.github/workflows/test-local.yml
@@ -267,7 +266,6 @@ jobs:
       && needs.native-build.result == 'success'
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
         label: ${{ fromJSON(needs.plan.outputs.worker_labels)['native-shared'] }}
     uses: ./.github/workflows/test-native.yml
@@ -284,7 +282,6 @@ jobs:
       && needs.plan.outputs.native-independent != '[]'
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
         label: ${{ fromJSON(needs.plan.outputs.worker_labels)['native-independent'] }}
     uses: ./.github/workflows/test-native.yml
@@ -303,7 +300,7 @@ jobs:
     with:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.performance)[0]) }}
       native-artifact: ${{ needs.native-build.outputs.artifact-name }}
-      base-ref: ${{ inputs.performance-base-ref || github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
+      base-ref: ${{ inputs.performance-base-ref || fromJSON(needs.plan.outputs.plan).base_sha || 'HEAD^' }}
     secrets: inherit
 
   package:
@@ -327,7 +324,6 @@ jobs:
       && needs.plan.outputs.tools != '[]'
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
         label: ${{ fromJSON(needs.plan.outputs.worker_labels)['tools'] }}
     uses: ./.github/workflows/test-tools.yml
@@ -344,7 +340,6 @@ jobs:
       && needs.image-router.result == 'success'
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
         label: ${{ fromJSON(needs.plan.outputs.worker_labels)['e2e-router'] }}
     uses: ./.github/workflows/integration-test-k8s.yml
@@ -363,7 +358,6 @@ jobs:
       && needs.image-fixtures.result == 'success'
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
         label: ${{ fromJSON(needs.plan.outputs.worker_labels)['e2e-fixtures'] }}
     uses: ./.github/workflows/integration-test-k8s.yml
@@ -382,7 +376,6 @@ jobs:
       && needs.image-dashboard.result == 'success'
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
         label: ${{ fromJSON(needs.plan.outputs.worker_labels)['e2e-dashboard'] }}
     uses: ./.github/workflows/integration-test-k8s.yml

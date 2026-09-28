@@ -7,20 +7,17 @@
           "type": "input_text"
         }
       ],
-      "id": "item_6a32e29c376158d871e9638e",
       "role": "user",
       "type": "message"
     },
     {
       "arguments": "{\"city\": \"Paris\"}",
       "call_id": "call_weather_1",
-      "id": "item_3c86696367ede4d56c0da3b8",
       "name": "lookup_weather",
       "type": "function_call"
     },
     {
       "call_id": "call_weather_1",
-      "id": "item_3a3234ffe986ecf50f4eafa2",
       "output": [
         {
           "text": "Sunny, 21 C",
@@ -36,7 +33,6 @@
           "type": "input_text"
         }
       ],
-      "id": "item_6a32e29c376158d871e9638e",
       "role": "user",
       "type": "message"
     }

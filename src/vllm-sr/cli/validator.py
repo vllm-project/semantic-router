@@ -4,6 +4,7 @@ from typing import Any, List
 from cli.models import (
     UserConfig,
     PluginType,
+    PromptCachePluginConfig,
     ResponseCachePluginConfig,
     FastResponsePluginConfig,
     RequestParamsPluginConfig,
@@ -283,6 +284,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.RAG.value: RAGPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
         PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
+        PluginType.PROMPT_CACHE.value: PromptCachePluginConfig,
     }
 
     for field_prefix, decision in _all_decisions(config):
@@ -596,3 +598,5 @@ def print_validation_errors(errors: List[ValidationError]):
     terminal_error("Configuration validation failed")
     for i, validation_error in enumerate(errors, 1):
         echo(f"  {i}. {validation_error}", err=True)
+        if validation_error.hint:
+            echo(f"     Hint: {validation_error.hint}", err=True)

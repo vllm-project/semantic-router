@@ -67,7 +67,7 @@ var dashboardLocalImages = []framework.LocalImageBuild{
 func init() {
 	register("vela-halu", func() framework.Profile { return velahalu.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("vela-shield", func() framework.Profile { return velashield.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{})
+	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"envoy-ai-gateway",
 		func() framework.Profile { return aigateway.NewProfile() },
@@ -160,7 +160,7 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register("routing-strategies", func() framework.Profile { return routingstrategies.NewProfile() }, framework.ProfileCapabilities{})
-	register("streaming", func() framework.Profile { return streaming.NewProfile() }, framework.ProfileCapabilities{})
+	register("streaming", func() framework.Profile { return streaming.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"vectorstore-registry",
 		func() framework.Profile { return vectorstoreregistry.NewProfile() },
