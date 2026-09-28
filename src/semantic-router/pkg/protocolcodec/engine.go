@@ -121,6 +121,8 @@ func (engine *Engine) EncodeRequest(format llmprotocol.WireFormat, request llmpr
 		return RequestResult{Request: request, Envelope: envelope}, err
 	}
 	projected, projectionDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(request, format)
+	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, format)
+	projectionDiagnostics = appendDiagnostics(projectionDiagnostics, verbosityDiagnostics, engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(format, pair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(projected)); err != nil {
 		return RequestResult{Request: projected, Envelope: envelope, Diagnostics: projectionDiagnostics}, err
 	}
@@ -175,6 +177,8 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
 	request, projectionDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(request, target)
+	diagnostics = appendDiagnostics(diagnostics, projectionDiagnostics, engine.policy.Limits.Diagnostics)
+	request, projectionDiagnostics = llmprotocol.ProjectTextVerbosity(request, target)
 	diagnostics = appendDiagnostics(diagnostics, projectionDiagnostics, engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(target, targetPair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(request)); err != nil {
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err

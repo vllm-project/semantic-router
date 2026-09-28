@@ -607,10 +607,16 @@
     {
       "name": "verbosity",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_verbosity"
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "verbosity": "low"
         }
       }
     },

@@ -486,7 +486,7 @@ func (decoder *chatStreamDecoder) decodeToolCalls(calls []chatChunkToolCallWire)
 			return nil, err
 		}
 		if !decoder.items[itemIndex] {
-			started, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemStarted, ItemIndex: itemIndex, Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{Kind: delta.Kind, ID: delta.ID, Name: delta.Name}})
+			started, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemStarted, ItemIndex: itemIndex, Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{Kind: delta.Kind, KindKnown: delta.KindKnown, ID: delta.ID, Name: delta.Name}})
 			if err != nil {
 				return nil, err
 			}

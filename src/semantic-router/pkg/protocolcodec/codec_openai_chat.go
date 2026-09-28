@@ -29,6 +29,7 @@ func (OpenAIChatCodec) Capabilities() llmprotocol.CapabilitySet {
 		llmprotocol.CapabilitySamplingTopK, llmprotocol.CapabilitySamplingMinP,
 		llmprotocol.CapabilityRepetitionPenalty, llmprotocol.CapabilityCacheIsolation,
 		llmprotocol.CapabilityRequestMetadata, llmprotocol.CapabilityRequestStorage,
+		llmprotocol.CapabilityTextVerbosity,
 	)
 }
 
@@ -192,6 +193,9 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	request := decodeChatBaseRequest(wire)
+	if err := decodeTextVerbosity(wire.Verbosity, &request.TextVerbosity); err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
 	if err := decodeChatMessages(wire.Messages, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
@@ -211,7 +215,7 @@ func validateChatRequestWire(wire chatRequestWire) error {
 		"audio": wire.Audio, "function_call": wire.FunctionCall, "functions": wire.Functions,
 		"logit_bias": wire.LogitBias, "logprobs": wire.Logprobs, "modalities": wire.Modalities,
 		"moderation": wire.Moderation, "prediction": wire.Prediction, "service_tier": wire.ServiceTier,
-		"top_logprobs": wire.TopLogprobs, "verbosity": wire.Verbosity,
+		"top_logprobs":       wire.TopLogprobs,
 		"web_search_options": wire.WebSearchOptions,
 	}); err != nil {
 		return err
@@ -725,13 +729,25 @@ func decodeChatToolChoice(raw json.RawMessage, policy llmprotocol.Policy) (llmpr
 	var discriminator struct {
 		Type string `json:"type"`
 	}
-	if json.Unmarshal(raw, &discriminator) == nil && (discriminator.Type == "allowed_tools" || discriminator.Type == "custom") {
+	if json.Unmarshal(raw, &discriminator) == nil && discriminator.Type == "allowed_tools" {
 		return llmprotocol.ToolChoice{}, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_tool_choice",
 			"Chat Completions tool choice cannot be represented by the neutral protocol",
 			nil,
 		)
+	}
+	if discriminator.Type == "custom" {
+		var named struct {
+			Type   string `json:"type"`
+			Custom struct {
+				Name string `json:"name"`
+			} `json:"custom"`
+		}
+		if decodeWireValue(raw, &named, policy) != nil || named.Custom.Name == "" {
+			return llmprotocol.ToolChoice{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_choice", "custom tool choice is invalid", nil)
+		}
+		return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: named.Custom.Name, Kind: llmprotocol.ToolKindCustom}, nil
 	}
 	var named struct {
 		Type     string `json:"type"`

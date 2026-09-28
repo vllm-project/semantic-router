@@ -127,7 +127,7 @@ func decodeChatToolCallDelta(wire chatChunkToolCallWire) (llmprotocol.ToolCall, 
 			return llmprotocol.ToolCall{}, invalidProviderResponse("invalid_stream_tool_call", "Chat stream custom tool call delta is invalid")
 		}
 		return llmprotocol.ToolCall{
-			Kind: llmprotocol.ToolKindCustom, ID: wire.ID, Name: wire.Custom.Name, Arguments: wire.Custom.Input,
+			Kind: llmprotocol.ToolKindCustom, KindKnown: true, ID: wire.ID, Name: wire.Custom.Name, Arguments: wire.Custom.Input,
 		}, nil
 	}
 	if wire.Type != "" && wire.Type != "function" {
@@ -135,5 +135,8 @@ func decodeChatToolCallDelta(wire chatChunkToolCallWire) (llmprotocol.ToolCall, 
 			llmprotocol.ErrorUnsupportedFeature, "unsupported_tool_call", "only function and custom tool calls enter the model protocol", nil,
 		)
 	}
-	return llmprotocol.ToolCall{ID: wire.ID, Name: wire.Function.Name, Arguments: wire.Function.Arguments}, nil
+	return llmprotocol.ToolCall{
+		KindKnown: wire.Type == "function" || wire.Function != (chatFunctionCallWire{}),
+		ID:        wire.ID, Name: wire.Function.Name, Arguments: wire.Function.Arguments,
+	}, nil
 }

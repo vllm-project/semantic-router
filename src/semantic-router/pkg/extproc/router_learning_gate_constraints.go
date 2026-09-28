@@ -28,7 +28,7 @@ func (r *OpenAIRouter) progressCandidateReason(ctx *RequestContext, selCtx *sele
 		if err != nil {
 			return "capability"
 		}
-		projected, err := r.projectAnthropicRequestForBackend(*ctx.SemanticRequest, ref.Model, format)
+		projected, err := r.projectRequestForBackend(*ctx.SemanticRequest, ref.Model, format)
 		if err != nil || !r.modelCanServeCapabilities(ref.Model, llmprotocol.RequiredCapabilities(projected)) {
 			return "capability"
 		}

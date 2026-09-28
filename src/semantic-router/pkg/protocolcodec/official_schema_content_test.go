@@ -389,12 +389,12 @@ func TestOfficialChatResponseMessageShapeIsStrict(t *testing.T) {
 
 func TestOfficialUnsupportedToolChoiceDiscriminatorsAreTyped(t *testing.T) {
 	engine := NewBuiltinEngine()
-	chatUnsupported := fields("allowed_tools", "custom")
+	chatUnsupported := fields("allowed_tools")
 	assertClosedDiscriminatorInventory(
 		t,
 		"OpenAI Chat Completions object tool choice",
 		3,
-		fields("function"),
+		fields("function", "custom"),
 		chatUnsupported,
 	)
 	for _, choiceType := range chatUnsupported {
@@ -419,14 +419,14 @@ func TestOfficialUnsupportedToolChoiceDiscriminatorsAreTyped(t *testing.T) {
 
 	responsesUnsupported := fields(
 		"allowed_tools", "apply_patch", "code_interpreter", "computer", "computer_use",
-		"computer_use_preview", "custom", "file_search", "mcp",
+		"computer_use_preview", "file_search", "mcp",
 		"programmatic_tool_calling", "shell", "web_search_preview", "web_search_preview_2025_03_11",
 	)
 	assertClosedDiscriminatorInventory(
 		t,
 		"OpenAI Responses object tool choice",
 		15,
-		fields("function", "image_generation"),
+		fields("function", "custom", "image_generation"),
 		responsesUnsupported,
 	)
 	for _, choiceType := range responsesUnsupported {

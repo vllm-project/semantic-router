@@ -103,6 +103,16 @@ comparison; Qwen3 and legacy classifier numbers cannot become Vela baselines.
 Model correctness belongs to the real-model regression suite; these benchmarks
 do not publish accuracy from a missing optional dataset.
 
+## Input-length measurement protocol
+
+`BenchmarkClassifyInputLength` times the Vela Domain classifier on inputs of up
+to 512, 2,048, and 8,192 tokens. Each input repeats the five fixture prompts
+until one more repetition would exceed its size, and each result reports the
+processed `tokens/op`. This classifier's deployment admits 8,192 tokens and
+rejects longer input, while the other classification benchmarks share a
+deployment that truncates at 512 tokens, so every size is one complete forward
+pass.
+
 ## Cache measurement protocol
 
 Each HNSW operation measures 100 public `LookupSimilarWithThreshold` requests
@@ -171,7 +181,7 @@ different address, run `go tool pprof` directly against the profile file.
 
 | Family | Location | Measures |
 | --- | --- | --- |
-| Classification | `benchmarks/classification*_bench_test.go` | owned Vela Domain/PII/Guard batch inference, parallel calls, and Domain inference |
+| Classification | `benchmarks/classification*_bench_test.go` | owned Vela Domain/PII/Guard batch inference, parallel calls, and Domain inference on short and up to 8K-token inputs |
 | Decision | `benchmarks/decision_bench_test.go` | rule evaluation, priority selection, and parallel evaluation |
 | Cache | `benchmarks/cache_bench_test.go` | cache sizes, search modes, concurrency, and hit-rate paths through the owned Vela Embedding provider |
 | Looper | `../src/semantic-router/pkg/looper/*_bench_test.go` | Base, Fusion, ReMoM, and Flow helpers and execution |

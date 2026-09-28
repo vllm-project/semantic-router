@@ -62,7 +62,7 @@ func runProtocolCodecAnthropicPerMessageEffort(ctx context.Context, client *kube
 				{"role": "user", "content": "First turn"},
 				{"role": "system", "content": []map[string]string{{"type": "text", "text": "Current date is 2026-01-01."}}, "output_config": map[string]string{"effort": "medium"}},
 				{"role": "system", "content": []any{}, "output_config": map[string]string{"effort": "low"}},
-				{"role": "user", "content": "Per message effort probe"},
+				{"role": "user", "content": "Per message effort probe __mock_protocol_matrix__"},
 			},
 		}, false, map[string]string{
 			"x-vsr-test-session-id": sessionID,

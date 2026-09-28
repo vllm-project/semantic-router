@@ -99,6 +99,7 @@ var ProviderProtocolsContract = []string{
 	"chat-completions-request",
 	"anthropic-messages-cache-cycle",
 	"anthropic-chat-cache-control",
+	"anthropic-prompt-cache-policy",
 	"anthropic-messages-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",
@@ -109,6 +110,8 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-buffered-matrix",
 	"protocol-codec-anthropic-backend-streaming-matrix",
 	"protocol-codec-anthropic-response-diagnostics",
+	"protocol-codec-responses-verbosity-anthropic",
+	"protocol-codec-prompt-cache-key-anthropic",
 	"protocol-codec-anthropic-per-message-effort-backend",
 	"protocol-codec-zero-penalty-anthropic",
 	"protocol-codec-anthropic-backend-tool-lifecycle",
@@ -116,6 +119,7 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-error-matrix",
 	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
 	"protocol-codec-anthropic-backend-midstream-error-matrix",
+	"protocol-codec-anthropic-backend-agent-client-replay",
 }
 
 // Combine preserves order while removing duplicate testcase names.

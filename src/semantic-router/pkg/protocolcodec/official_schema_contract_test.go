@@ -20,7 +20,6 @@ func TestOfficialNestedUnsupportedFieldsFailWithTypedErrors(t *testing.T) {
 		{"Responses reasoning mode", llmprotocol.OpenAIResponsesV1, `{"model":"m","input":"hello","reasoning":{"mode":"pro"}}`},
 		{"Responses reasoning context", llmprotocol.OpenAIResponsesV1, `{"model":"m","input":"hello","reasoning":{"context":"all_turns"}}`},
 		{"Responses deprecated reasoning summary", llmprotocol.OpenAIResponsesV1, `{"model":"m","input":"hello","reasoning":{"generate_summary":"auto"}}`},
-		{"Responses text verbosity", llmprotocol.OpenAIResponsesV1, `{"model":"m","input":"hello","text":{"verbosity":"high"}}`},
 		{"Responses input breakpoint", llmprotocol.OpenAIResponsesV1, `{"model":"m","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hello","prompt_cache_breakpoint":{"mode":"explicit"}}]}]}`},
 		{"Responses input message phase", llmprotocol.OpenAIResponsesV1, `{"model":"m","input":[{"type":"message","role":"user","phase":"commentary","content":[{"type":"input_text","text":"hello"}]}]}`},
 		{"Anthropic eager tool", llmprotocol.AnthropicMessagesV1, `{"model":"m","max_tokens":16,"messages":[{"role":"user","content":"hello"}],"tools":[{"name":"lookup","input_schema":{"type":"object"},"eager_input_streaming":true}]}`},
@@ -464,11 +463,11 @@ func assertAnthropicToolBlock(t *testing.T, content anthropicContentWire, body [
 }
 
 func TestOfficialUnsupportedResponsesItemDiscriminatorsAreTyped(t *testing.T) {
-	supported := fields("function_call", "function_call_output", "image_generation_call", "item_reference", "message", "reasoning")
+	supported := fields("function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output", "image_generation_call", "item_reference", "message", "reasoning")
 	unsupported := fields(
 		"additional_tools", "apply_patch_call", "apply_patch_call_output", "code_interpreter_call",
-		"compaction", "compaction_trigger", "computer_call", "computer_call_output", "custom_tool_call",
-		"custom_tool_call_output", "file_search_call", "function_shell_call",
+		"compaction", "compaction_trigger", "computer_call", "computer_call_output",
+		"file_search_call", "function_shell_call",
 		"function_shell_call_output", "local_shell_call", "local_shell_call_output",
 		"mcp_approval_request", "mcp_approval_response", "mcp_call", "mcp_list_tools", "program",
 		"program_output", "tool_search_call", "tool_search_output", "web_search_call",
@@ -498,8 +497,8 @@ func TestOfficialUnsupportedResponsesItemDiscriminatorsAreTyped(t *testing.T) {
 func TestOfficialUnsupportedResponsesOutputItemDiscriminatorsAreTyped(t *testing.T) {
 	unsupported := fields(
 		"additional_tools", "apply_patch_call", "apply_patch_call_output", "code_interpreter_call",
-		"compaction", "computer_call", "computer_call_output", "custom_tool_call",
-		"custom_tool_call_output", "file_search_call", "function_call_output", "function_shell_call",
+		"compaction", "computer_call", "computer_call_output", "custom_tool_call_output",
+		"file_search_call", "function_call_output", "function_shell_call",
 		"function_shell_call_output", "local_shell_call", "local_shell_call_output",
 		"mcp_approval_request", "mcp_approval_response", "mcp_call", "mcp_list_tools", "program",
 		"program_output", "tool_search_call", "tool_search_output", "web_search_call",
@@ -508,7 +507,7 @@ func TestOfficialUnsupportedResponsesOutputItemDiscriminatorsAreTyped(t *testing
 		t,
 		"OpenAI Responses output item",
 		28,
-		fields("function_call", "image_generation_call", "message", "reasoning"),
+		fields("function_call", "custom_tool_call", "image_generation_call", "message", "reasoning"),
 		unsupported,
 	)
 	engine := NewBuiltinEngine()
@@ -558,11 +557,11 @@ func TestOfficialResponsesItemVariantsRejectCrossVariantFields(t *testing.T) {
 
 func TestOfficialUnsupportedResponsesToolDiscriminatorsAreTyped(t *testing.T) {
 	unsupported := fields(
-		"apply_patch", "code_interpreter", "computer", "computer_use_preview", "custom",
+		"apply_patch", "code_interpreter", "computer", "computer_use_preview",
 		"file_search", "local_shell", "mcp", "namespace",
 		"programmatic_tool_calling", "shell", "tool_search", "web_search", "web_search_preview",
 	)
-	assertClosedDiscriminatorInventory(t, "OpenAI Responses tool", 16, fields("function", "image_generation"), unsupported)
+	assertClosedDiscriminatorInventory(t, "OpenAI Responses tool", 16, fields("function", "custom", "image_generation"), unsupported)
 	engine := NewBuiltinEngine()
 	for _, toolType := range unsupported {
 		t.Run(toolType, func(t *testing.T) {

@@ -14,7 +14,7 @@ MIN_ORTHOGONAL_RESIDUAL_NORM = 1e-6
 
 
 class MemoryDefaultThresholdTest(MemoryFeaturesTest):
-    """A score between 0.60 and 0.70 must be rejected when the plugin says 0."""
+    """Request-level regression for the fallback and calibrated memory cutoffs."""
 
     MARKER = "MEMORY_ZERO_MARKER"
     SCORE = 0.65
@@ -80,6 +80,20 @@ class MemoryDefaultThresholdTest(MemoryFeaturesTest):
             "The low-threshold control must retrieve the engineered memory row",
         )
         return memory_vector, control_score
+
+    def _vector_at_query_score(self, query: list[float], score: float) -> list[float]:
+        """Construct a memory vector with a known cosine against one query."""
+        axis = min(range(len(query)), key=lambda index: abs(query[index]))
+        residual = [-query[axis] * value for value in query]
+        residual[axis] += 1
+        orthogonal = self._unit(residual)
+        tail = math.sqrt(1 - score * score)
+        vector = [
+            score * value + tail * other
+            for value, other in zip(query, orthogonal, strict=True)
+        ]
+        self.assertAlmostEqual(self._dot(vector, query), score, delta=1e-5)
+        return vector
 
     def _insert_memory(
         self, user_id: str, content: str, embedding: list[float]
@@ -157,3 +171,35 @@ class MemoryDefaultThresholdTest(MemoryFeaturesTest):
             self.fail(
                 f"Low-threshold control did not inject a memory at cosine {control_score:.3f}"
             )
+
+    def test_calibrated_threshold_recalls_fact_without_unrelated_injection(self):
+        """A 0.424 fact passes the 0.40 route; a 0.380 unrelated row does not."""
+        self.assertTrue(self.milvus.is_available(), "Milvus is required for this E2E")
+        cases = [
+            ("Which programming language am I learning?", 0.424, True),
+            ("What is my sister's name?", 0.380, False),
+        ]
+        for question, score, should_inject in cases:
+            with self.subTest(question=question):
+                user_id = f"{self.test_user}_calibrated_{uuid.uuid4().hex[:8]}"
+                query = f"MEMORY_CALIBRATED_MARKER {question}"
+                query_vector = self._embed([query])[0]
+                canary = f"calibrated-canary-{uuid.uuid4().hex[:12]}"
+                self._insert_memory(
+                    user_id,
+                    f"Q: A personal fact is {canary}. A: {canary}",
+                    self._vector_at_query_score(query_vector, score),
+                )
+                result = self.send_memory_request(
+                    query, auto_store=False, user_id=user_id
+                )
+                self.assertIsNotNone(result, "Calibrated memory request failed")
+                output = result.get("_output_text", "")
+                if should_inject:
+                    self.assertIn(
+                        canary, output, "The calibrated fact was not injected"
+                    )
+                else:
+                    self.assertNotIn(
+                        canary, output, "An unrelated fact crossed the threshold"
+                    )

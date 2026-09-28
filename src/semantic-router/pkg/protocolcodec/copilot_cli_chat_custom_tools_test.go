@@ -39,7 +39,7 @@ func loadCopilotToolLoop(t *testing.T) []json.RawMessage {
 	return turns
 }
 
-func TestCopilotToolLoopReachesChatBackendsWithItsCustomTool(t *testing.T) {
+func TestCopilotToolLoopReachesOpenAIBackendsWithItsCustomTool(t *testing.T) {
 	engine := NewBuiltinEngine()
 	for turn, body := range loadCopilotToolLoop(t) {
 		request, envelope, _, err := engine.DecodeRequestForMutation(llmprotocol.OpenAIChatV1, body)
@@ -64,13 +64,15 @@ func TestCopilotToolLoopReachesChatBackendsWithItsCustomTool(t *testing.T) {
 			t.Fatalf("turn %d: Chat dispatch changed or lost the custom tool", turn+1)
 		}
 
-		for _, format := range []llmprotocol.WireFormat{llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1} {
-			_, err := engine.EncodeRequest(format, request, envelope)
-			var protocolError *llmprotocol.ProtocolError
-			if !errors.As(err, &protocolError) || protocolError.Category != llmprotocol.ErrorUnsupportedFeature ||
-				protocolError.Code != "unsupported_capability" {
-				t.Fatalf("turn %d to %s returned %v, want unsupported_capability", turn+1, format, err)
-			}
+		responses, err := engine.EncodeRequest(llmprotocol.OpenAIResponsesV1, request, envelope)
+		if err != nil || !json.Valid(responses.Body) {
+			t.Fatalf("turn %d to Responses returned %v: %s", turn+1, err, responses.Body)
+		}
+		_, err = engine.EncodeRequest(llmprotocol.AnthropicMessagesV1, request, envelope)
+		var protocolError *llmprotocol.ProtocolError
+		if !errors.As(err, &protocolError) || protocolError.Category != llmprotocol.ErrorUnsupportedFeature ||
+			protocolError.Code != "unsupported_capability" {
+			t.Fatalf("turn %d to Anthropic returned %v, want unsupported_capability", turn+1, err)
 		}
 	}
 }

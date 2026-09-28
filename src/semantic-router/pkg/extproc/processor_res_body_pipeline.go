@@ -56,6 +56,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 		)
 	}
 	usage := r.takeNeutralResponseUsage(ctx)
+	observeUpstreamResponse(ctx, semanticResponse.Model, usage)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 

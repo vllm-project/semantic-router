@@ -288,6 +288,7 @@ func TestOfficialNestedJSONInventoriesAreClosed(t *testing.T) {
 		"responses_text":                  reflect.TypeOf(responsesTextWire{}),
 		"responses_output_format":         reflect.TypeOf(responsesFormatWire{}),
 		"responses_tool_union":            reflect.TypeOf(responsesToolWire{}),
+		"responses_custom_tool_format":    reflect.TypeOf(responsesCustomToolFormat{}),
 		"responses_image_generation_mask": reflect.TypeOf(responsesImageGenMaskWire{}),
 		"responses_content":               reflect.TypeOf(responsesContentWire{}),
 		"responses_url_citation":          reflect.TypeOf(responsesAnnotationWire{}),

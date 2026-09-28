@@ -93,12 +93,13 @@ func encodeResponsesRequestWire(request llmprotocol.Request) (responsesRequestWi
 	wire.Input, _ = json.Marshal(items)
 	wire.Tools = encodeResponsesTools(request.Tools, request.ImageGeneration)
 	wire.ToolChoice = encodeResponsesToolChoice(request.ToolChoice)
-	wire.Text = encodeResponsesOutputFormat(request.OutputFormat)
+	wire.Text = encodeResponsesOutputFormat(request.OutputFormat, request.TextVerbosity)
 	return wire, nil
 }
 
 func encodeResponsesRequestItems(request llmprotocol.Request) ([]responsesItemWire, error) {
 	items := make([]responsesItemWire, 0, len(request.Messages))
+	callKinds := make(map[string]llmprotocol.ToolKind)
 	for _, instruction := range request.Instructions {
 		encoded, err := encodeResponsesMessage(llmprotocol.Message{Role: instruction.Role, Content: instruction.Content}, "input")
 		if err != nil {
@@ -107,8 +108,26 @@ func encodeResponsesRequestItems(request llmprotocol.Request) ([]responsesItemWi
 		items = append(items, encoded...)
 	}
 	for _, message := range request.Messages {
+		for _, content := range message.Content {
+			if content.Kind == llmprotocol.ContentToolCall && content.ToolCall != nil {
+				callKinds[content.ToolCall.ID] = content.ToolCall.Kind
+			}
+		}
 		if len(message.Content) == 0 && message.ReasoningEffort != "" {
 			continue
+		}
+		// Chat tool messages do not carry a result kind. A preceding custom
+		// call identifies the correct Responses output variant.
+		message.Content = append([]llmprotocol.Content(nil), message.Content...)
+		for index := range message.Content {
+			content := &message.Content[index]
+			if content.Kind == llmprotocol.ContentToolResult && content.ToolResult != nil && content.ToolResult.Kind == "" {
+				if kind := callKinds[content.ToolResult.CallID]; kind == llmprotocol.ToolKindCustom {
+					copy := *content.ToolResult
+					copy.Kind = kind
+					content.ToolResult = &copy
+				}
+			}
 		}
 		encoded, err := encodeResponsesMessage(message, "input")
 		if err != nil {
@@ -125,6 +144,14 @@ func encodeResponsesTools(input []llmprotocol.Tool, imageGeneration *llmprotocol
 	}
 	tools := make([]responsesToolWire, 0, len(input)+1)
 	for _, tool := range input {
+		if tool.Kind == llmprotocol.ToolKindCustom {
+			encoded := responsesToolWire{Type: "custom", Name: tool.Name, Description: tool.Description}
+			if tool.CustomFormat != nil {
+				encoded.Format = &responsesCustomToolFormat{Type: "grammar", Syntax: tool.CustomFormat.Syntax, Definition: tool.CustomFormat.Definition}
+			}
+			tools = append(tools, encoded)
+			continue
+		}
 		tools = append(tools, responsesToolWire{Type: "function", Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, Strict: tool.Strict})
 	}
 	if imageGeneration != nil {
@@ -149,14 +176,21 @@ func encodeResponsesTools(input []llmprotocol.Tool, imageGeneration *llmprotocol
 	return encoded
 }
 
-func encodeResponsesOutputFormat(output llmprotocol.OutputFormat) *responsesTextWire {
-	if output.Kind == "" || output.Kind == llmprotocol.OutputText {
+func encodeResponsesOutputFormat(output llmprotocol.OutputFormat, verbosity string) *responsesTextWire {
+	if (output.Kind == "" || output.Kind == llmprotocol.OutputText) && verbosity == "" {
 		return nil
 	}
-	return &responsesTextWire{Format: responsesFormatWire{
-		Type: string(output.Kind), Name: output.Name,
-		Description: output.Description, Strict: output.Strict, Schema: output.Schema,
-	}}
+	wire := &responsesTextWire{}
+	if verbosity != "" {
+		wire.Verbosity, _ = json.Marshal(verbosity)
+	}
+	if output.Kind != "" && output.Kind != llmprotocol.OutputText {
+		wire.Format = &responsesFormatWire{
+			Type: string(output.Kind), Name: output.Name,
+			Description: output.Description, Strict: output.Strict, Schema: output.Schema,
+		}
+	}
+	return wire
 }
 
 func encodeResponsesMessage(message llmprotocol.Message, textDirection string) ([]responsesItemWire, error) {
@@ -267,10 +301,15 @@ func (state *responsesMessageEncodingState) appendToolCall(call *llmprotocol.Too
 	if call == nil {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_call", "tool call is invalid", nil)
 	}
-	state.items = append(state.items, responsesItemWire{
+	item := responsesItemWire{
 		Type: "function_call", ID: state.itemID("function_call"),
 		CallID: call.ID, Name: call.Name, Arguments: call.Arguments,
-	})
+	}
+	if call.Kind == llmprotocol.ToolKindCustom {
+		item.Type, item.Input = "custom_tool_call", call.Arguments
+		item.Arguments = ""
+	}
+	state.items = append(state.items, item)
 	return nil
 }
 
@@ -282,10 +321,14 @@ func (state *responsesMessageEncodingState) appendToolResult(result *llmprotocol
 	if err != nil {
 		return err
 	}
-	state.items = append(state.items, responsesItemWire{
+	item := responsesItemWire{
 		Type: "function_call_output", ID: state.itemID("function_call_output"),
 		CallID: result.CallID, Output: output,
-	})
+	}
+	if result.Kind == llmprotocol.ToolKindCustom {
+		item.Type = "custom_tool_call_output"
+	}
+	state.items = append(state.items, item)
 	return nil
 }
 
@@ -409,7 +452,11 @@ func encodeResponsesToolChoice(choice llmprotocol.ToolChoice) json.RawMessage {
 		body, _ := json.Marshal(choice.Mode)
 		return body
 	case llmprotocol.ToolChoiceNamed:
-		body, _ := json.Marshal(map[string]string{"type": "function", "name": choice.Name})
+		kind := "function"
+		if choice.Kind == llmprotocol.ToolKindCustom {
+			kind = "custom"
+		}
+		body, _ := json.Marshal(map[string]string{"type": kind, "name": choice.Name})
 		return body
 	case llmprotocol.ToolChoiceImageGeneration:
 		body, _ := json.Marshal(map[string]string{"type": "image_generation"})

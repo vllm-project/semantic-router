@@ -218,6 +218,88 @@ def generate_chat_custom_tool_kind_stream(
     yield "data: [DONE]\n\n"
 
 
+CUSTOM_TOOL_FIXTURE_INPUT = "*** Begin Patch\n+provider\n*** End Patch"
+
+
+def build_chat_custom_tool_response(
+    req: ChatRequest, created_ts: int
+) -> dict[str, Any]:
+    return {
+        "id": "cmpl-mock-custom-tool-123",
+        "object": "chat.completion",
+        "created": created_ts,
+        "model": req.model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_mock_patch",
+                            "type": "custom",
+                            "custom": {
+                                "name": "apply_patch",
+                                "input": CUSTOM_TOOL_FIXTURE_INPUT,
+                            },
+                        }
+                    ],
+                },
+                "finish_reason": "tool_calls",
+                "logprobs": None,
+            }
+        ],
+        "usage": build_chat_usage(req, CUSTOM_TOOL_FIXTURE_INPUT),
+    }
+
+
+def generate_chat_custom_tool_stream(
+    req: ChatRequest, created_ts: int
+) -> Iterator[str]:
+    response_id = "cmpl-mock-custom-tool-123"
+    # Some Chat providers announce an id before the custom kind/name.
+    yield build_chat_stream_chunk(
+        req,
+        response_id,
+        created_ts,
+        {"role": "assistant", "tool_calls": [{"index": 0, "id": "call_mock_patch"}]},
+        None,
+    )
+    first, second = CUSTOM_TOOL_FIXTURE_INPUT[:15], CUSTOM_TOOL_FIXTURE_INPUT[15:]
+    yield build_chat_stream_chunk(
+        req,
+        response_id,
+        created_ts,
+        {
+            "tool_calls": [
+                {
+                    "index": 0,
+                    "type": "custom",
+                    "custom": {"name": "apply_patch", "input": first},
+                }
+            ]
+        },
+        None,
+    )
+    yield build_chat_stream_chunk(
+        req,
+        response_id,
+        created_ts,
+        {"tool_calls": [{"index": 0, "custom": {"input": second}}]},
+        None,
+    )
+    yield build_chat_stream_chunk(
+        req,
+        response_id,
+        created_ts,
+        {},
+        "tool_calls",
+        build_chat_usage(req, CUSTOM_TOOL_FIXTURE_INPUT),
+    )
+    yield "data: [DONE]\n\n"
+
+
 def build_chat_response(
     req: ChatRequest, content: str, usage: dict, created_ts: int
 ) -> dict:

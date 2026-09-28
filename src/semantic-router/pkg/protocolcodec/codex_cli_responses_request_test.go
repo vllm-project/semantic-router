@@ -50,7 +50,7 @@ func TestCodexToolLoopDecodesUnderEitherLossyPolicy(t *testing.T) {
 	}
 }
 
-func TestCodexToolLoopDispatchCarriesPromptCacheKeyOnlyToOpenAIFormats(t *testing.T) {
+func TestCodexToolLoopDispatchDropsPromptCacheKeyOnlyForMessages(t *testing.T) {
 	engine := NewBuiltinEngine()
 	for turn, body := range loadCodexToolLoop(t) {
 		request, envelope, _, err := engine.DecodeRequestForMutation(llmprotocol.OpenAIResponsesV1, body)
@@ -80,11 +80,18 @@ func TestCodexToolLoopDispatchCarriesPromptCacheKeyOnlyToOpenAIFormats(t *testin
 				}
 			}
 		}
-		_, err = engine.EncodeRequest(llmprotocol.AnthropicMessagesV1, request, envelope)
-		var protocolError *llmprotocol.ProtocolError
-		if !errors.As(err, &protocolError) || protocolError.Code != "unsupported_prompt_cache_key" {
-			t.Fatalf("turn %d to Messages returned %v, want unsupported_prompt_cache_key", turn+1, err)
+		encoded, err := engine.EncodeRequest(llmprotocol.AnthropicMessagesV1, request, envelope)
+		if err != nil {
+			t.Fatalf("turn %d to Messages: %v", turn+1, err)
 		}
+		var dispatch map[string]json.RawMessage
+		if err := json.Unmarshal(encoded.Body, &dispatch); err != nil {
+			t.Fatal(err)
+		}
+		if _, forwarded := dispatch["prompt_cache_key"]; forwarded {
+			t.Fatalf("turn %d leaked prompt_cache_key to Messages: %s", turn+1, encoded.Body)
+		}
+		assertDroppedFields(t, encoded.Diagnostics, "prompt_cache_key")
 	}
 }
 

@@ -42,6 +42,41 @@ config:
         modelRefs:
           - model: MoM
             use_reasoning: false
+      - name: prompt_cache_enabled
+        description: Route the prompt-cache policy probe to the Anthropic backend
+        priority: 70
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: prompt_cache_enabled
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
+        plugins:
+          - type: prompt_cache
+            configuration:
+              enabled: true
+              ttl: 1h
+              targets:
+                - instructions
+                - tools
+              on_unsupported: reject
+      - name: prompt_cache_disabled
+        description: Preserve the disabled prompt-cache policy contract
+        priority: 60
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: prompt_cache_disabled
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
+        plugins:
+          - type: prompt_cache
+            configuration:
+              enabled: false
       - name: route_to_anthropic_provider
         description: Route all requests to the native Anthropic provider fixture
         priority: 50
@@ -59,6 +94,14 @@ config:
           operator: OR
           keywords:
             - signalonlyjsonmarker
+        - name: prompt_cache_enabled
+          operator: OR
+          keywords:
+            - "__PROMPT_CACHE_ENABLED__"
+        - name: prompt_cache_disabled
+          operator: OR
+          keywords:
+            - "__PROMPT_CACHE_DISABLED__"
         - name: all_requests
           operator: OR
           keywords:

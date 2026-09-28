@@ -409,9 +409,6 @@ func validateAnthropicEncodableRequest(request llmprotocol.Request) error {
 	if err := rejectChatOnlyControls(request); err != nil {
 		return err
 	}
-	if request.PromptCacheKey != "" {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_prompt_cache_key", "target protocol cannot preserve prompt_cache_key", nil)
-	}
 	if request.Sampling.TopK != nil && *request.Sampling.TopK < 0 {
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_top_k", "Messages cannot represent top_k=-1", nil)
 	}
@@ -465,6 +462,9 @@ func buildAnthropicRequestWire(
 
 func anthropicRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
+	if request.PromptCacheKey != "" {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "prompt_cache_key", "Messages does not use client cache-affinity keys")
+	}
 	if request.ReasoningSummary != "" {
 		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "reasoning.summary", "Messages cannot request a reasoning summary")
 	}

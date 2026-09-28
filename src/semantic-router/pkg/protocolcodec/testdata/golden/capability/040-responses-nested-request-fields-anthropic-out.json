@@ -54,11 +54,48 @@
     {
       "name": "text_verbosity_and_format_description",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_text_verbosity"
-        }
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "output_config": {
+            "format": {
+              "schema": {
+                "type": "object"
+              },
+              "type": "json_schema"
+            }
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "text.verbosity",
+            "action": "dropped"
+          },
+          {
+            "field": "output_format.name",
+            "action": "dropped"
+          },
+          {
+            "field": "output_format.description",
+            "action": "dropped"
+          },
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
       }
     },
     {

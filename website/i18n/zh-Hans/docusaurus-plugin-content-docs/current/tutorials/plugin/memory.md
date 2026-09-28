@@ -45,11 +45,10 @@ plugins:
     configuration:
       enabled: true
       retrieval_limit: 5
-      similarity_threshold: 0.72
       auto_store: true
 ```
 
-记忆可以持久化从请求派生的内容，并将检索到的记忆发送给所选模型。请为这些数据选择合适的用户/租户隔离、保留策略、认证和传输安全。阈值取决于嵌入模型。完整示例见：
+记忆可以持久化从请求派生的内容，并将检索到的记忆发送给所选模型。请为这些数据选择合适的用户/租户隔离、保留策略、认证和传输安全。未设置的决策阈值会继承全局值；应先按嵌入模型和检索模式校准全局阈值，再考虑添加覆盖值。完整示例见：
 [`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml)。
 
 ## 升级嵌入模型

@@ -86,6 +86,7 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-anthropic-cache-tool-loop-chat",
 		"protocol-codec-anthropic-adaptive-chat",
 		"protocol-codec-chat-custom-tool-kind-switch",
+		"protocol-codec-responses-custom-tool-loop",
 		"protocol-codec-responses-backend-tool-lifecycle",
 		"protocol-codec-anthropic-cache-tool-loop-responses",
 		"protocol-codec-anthropic-adaptive-responses",
@@ -106,6 +107,8 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-ollama-output-limit",
 		"protocol-codec-ollama-empty-content",
 		"protocol-codec-auto-unsupported-capability",
+		"protocol-codec-chat-backend-agent-client-replay",
+		"protocol-codec-responses-backend-agent-client-replay",
 	}
 }
 
