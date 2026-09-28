@@ -694,6 +694,22 @@ class _RecordingVela:
         )
 
 
+def _length_bucket(tokens: int) -> int:
+    return max(64, 1 << (tokens - 1).bit_length())
+
+
+def test_vela_batch_keys_keep_types_apart_and_group_power_of_two_lengths():
+    from decision_runtime.families.vela import ADAPTER  # noqa: PLC0415
+
+    def key(question_type, tokens):
+        return ADAPTER.batch_key(question_type, SimpleNamespace(input_tokens=tokens))
+
+    assert key("noul", 1) == key("noul", 64) == "vela:noul:64"
+    assert key("noul", 65) == key("noul", 128) == "vela:noul:128"
+    assert key("noul", 1024) == "vela:noul:1024"
+    assert key("choice", 100) == "vela:choice:128" != key("noul", 100)
+
+
 def test_vela_executor_preserves_question_order_and_type_batch_keys():
     profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
     resident = _RecordingVela(profile.max_input_tokens)
@@ -707,9 +723,13 @@ def test_vela_executor_preserves_question_order_and_type_batch_keys():
     async def scenario():
         prepared = await executor.prepare_rows(rows)
         assert [item.batch_key for item in prepared] == [
-            "vela:noul",
-            "vela:choice",
-            "vela:score",
+            f"vela:{item.row.question.type}:{_length_bucket(item.payload.input_tokens)}"
+            for item in prepared
+        ]
+        assert [item.row.question.type for item in prepared] == [
+            "noul",
+            "choice",
+            "score",
         ]
         return tuple([await executor.predict_rows((item,)) for item in prepared])
 

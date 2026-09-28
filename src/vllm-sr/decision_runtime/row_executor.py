@@ -70,7 +70,7 @@ class TorchDecisionRowExecutor:
         return tuple(
             PreparedDecisionRow(
                 row=row,
-                batch_key=self._adapter.batch_key(row.question.type),
+                batch_key=self._adapter.batch_key(row.question.type, payload),
                 payload=payload,
             )
             for row, payload in zip(rows, encoded, strict=True)

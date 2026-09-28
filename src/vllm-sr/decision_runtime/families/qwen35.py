@@ -65,7 +65,7 @@ class Qwen35FamilyAdapter:
             ),
         )
 
-    def batch_key(self, question_type: str) -> str:
+    def batch_key(self, question_type: str, encoded: Any) -> str:
         # Its shared setwise scorer can mix question types in one forward.
         return self.family
 
