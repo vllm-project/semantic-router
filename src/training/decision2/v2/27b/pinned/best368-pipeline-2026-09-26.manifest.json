@@ -1,0 +1,48 @@
+{
+ "files_sha256": {
+  "training/__init__.py": "71124a9395b10ca2c0e1664256995e3ca8258ad46d058a132eb7e2bd3db59c09",
+  "training/model/__init__.py": "1479a633302ee0e6e014174c819b3d39034c3d87d4bc45352ff29bc5cdf12a38",
+  "training/model/calibrate.py": "271ee13b87878d1772557befc0fb6cb48b3793b06587a82474d8fc5b2fbf9b11",
+  "training/model/calibration.py": "e6cf3ee4682e0b2c0c73a39209f42f5501db92f1abe1a7d0587235ae35cf9a02",
+  "training/model/data.py": "814f4503c20649dffa719bdafafdb68d1851d647867e51d59eeba6d640f18bc3",
+  "training/model/decision_model.py": "561b28dd3d04f8d2758e73281ea77900d82c92ff3ffb726c78ebe54ef5799501",
+  "training/model/infer.py": "147026f0988b7d35f1f204466fc2b453ebabf43e1414b4ab5f2ba8fffb94b163",
+  "training/model/lora.py": "de14f1b7e7ed4b17327e91dff996990d53e95ee402a069da9e55ed96365614fe",
+  "training/model/loss.py": "a12351dd5995678b12416ea016158e0493f2e6d7d976c94dc458b39cbbd816cb",
+  "training/model/plan.py": "664b6ffe21a9211a9b082afcc1e6b38c94ecbae3bfe7381834a6764dc18a925b",
+  "training/model/source.py": "ef6f94a4c741d902e3700fafc9ea16592e70d20793861da376df8d8d7a43609b",
+  "training/model/train.py": "f5a1a1a0bb8164e5409d23aaff076a3b31466fbc9d656c6c180e03ddfe644252"
+ },
+ "provenance_matches": {
+  "calibration_receipt_code_sha256": [
+   "calibrate.py",
+   "calibration.py",
+   "data.py",
+   "decision_model.py",
+   "infer.py",
+   "lora.py",
+   "source.py"
+  ],
+  "inference_manifest_adapter_files_sha256": [
+   "infer.py",
+   "decision_model.py",
+   "data.py",
+   "lora.py",
+   "source.py",
+   "calibration.py"
+  ],
+  "training_provenance_code_sha256": [
+   "train.py",
+   "data.py",
+   "decision_model.py",
+   "loss.py",
+   "plan.py",
+   "source.py",
+   "lora.py"
+  ]
+ },
+ "purpose": "Byte-identical trainer, calibration and inference modules that produced BEST368 (never committed upstream); used unchanged for matched 27B arms",
+ "schema_version": "decision2-27b-vendored-pipeline/1",
+ "tar_sha256": "552c35ba5dd93405616c39e57d520a23e5f30980a2622b13a8b9c36e7a0d5a97",
+ "usage": "extract into an empty directory and put it first on PYTHONPATH; run python -m training.model.{train,calibrate,infer}"
+}

@@ -1,0 +1,78 @@
+{
+  "builder_commit": "0c593668b23527b98a4e11fc59b2ab3bbeb5150e",
+  "card": {
+    "excluded": [
+      {
+        "key": "old-dev20-06b",
+        "reason": "internal-only control"
+      }
+    ],
+    "figures_sha256": {
+      "assets/jevarena-v3-model-task.svg": "18b232348670eb36e76950700353daf21f55b6e84856d23e3b992977c7040a32",
+      "assets/jevarena-v3-rank.svg": "3c961c5e14d502f6f893a5abe6f925098f4bbd8aa970026c09e30931af4286c2",
+      "assets/jevbench-public231-rank.svg": "06843fcd067b23c87c03f8705efabed0920e2b3d15f209d0545642ec290b05b7"
+    },
+    "paired": {
+      "ci95": [
+        -0.061407578268958395,
+        1.9633523713195966
+      ],
+      "delta": 0.030430423009001117,
+      "replicates": 5000,
+      "sha256": "8d2f3bc8cd42312b6d8a97224cdec2b039eb06de77a5595b37b251c7174c5147"
+    },
+    "readme_sha256": "42708a4ca085943d4ac8c81e9eb59884dc0da167e1e7504ee48de605107ea36e",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "7954b157f5defcf37b395008a1bae159a777312b43350f9b6ab92ec6f4dac76a"
+      },
+      {
+        "key": "kai1",
+        "licence": "apache-2.0",
+        "report_sha256": "1b0140e360d35613d973cf36182978b54a1679e355ba62bc3cc2785714f06716"
+      },
+      {
+        "key": "lex1",
+        "licence": "apache-2.0",
+        "report_sha256": "45f7d5c9c8e35b70e069ffe2400c96b3401dd145994b17779e7897e8c3a4b3a9"
+      },
+      {
+        "key": "bosun",
+        "licence": "apache-2.0",
+        "report_sha256": "80c539bfb19116105d15b4e29978f517fb67716bd688f66c7929b6265ed3aade"
+      },
+      {
+        "key": "gliner25",
+        "licence": "apache-2.0",
+        "report_sha256": "7dc5be9242d07a59696e37b8caef1ed18a540ab96dfae547a3ffa2ae445f162d"
+      }
+    ],
+    "tradeoffs": []
+  },
+  "ended_utc": "2026-09-28T07:00:16.074106+00:00",
+  "files": 64,
+  "identity": {
+    "calibration": "none; raw probabilities",
+    "declared_parameters": 571909635,
+    "native_manifest_sha256": "c1bf07ab1c4c3fa1f819256d3de858d1ed87869bdfa663553280d7e78b88bee4",
+    "transformers_version": "4.57.6"
+  },
+  "licence": "other",
+  "manifest_sha256": "592123aa950554ae54786004c7f2694fc6b6342c63996b054666a04bfa537352",
+  "package": "/data/dev2/runs/release/dryrun-kai1-staging-20260928T070010Z/package/dev2-release-staging",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 571909635,
+    "packaged": {
+      "native": 571909635
+    }
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 62
+  },
+  "spec_sha256": "c1f205061cd09eef486cccf339dd2f018a04300a0d91434d47cbda5868a201c5",
+  "started_utc": "2026-09-28T07:00:10.714423+00:00"
+}

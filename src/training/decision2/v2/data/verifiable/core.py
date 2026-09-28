@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import calendar as _calendar
+import collections
 import hashlib
 import math
 import random
@@ -743,6 +744,106 @@ class A4Scenario:
     noul_near: str
     noul_far: list[str]
     k: int = 4
+
+
+@dataclass
+class A4v2Render:
+    state: str
+    facts: dict[str, Any]
+    subtype: str
+    template: str
+    question: str
+    proposition: Callable[[str], str]
+
+
+@dataclass
+class A4v2Alternative:
+    """One way to finish a hard-negative scenario: which option value becomes the gold."""
+
+    key: int
+    gold: str
+    near: list[str]
+    rand: list[str]
+    render: Callable[[], A4v2Render | None]
+
+
+@dataclass
+class A4v2Plan:
+    ordered: bool
+    alternatives: list[A4v2Alternative]
+
+
+def rank_windows(
+    rng: random.Random, lo: int, hi: int, k: int = 4, width: int = 6
+) -> list[tuple[int, list[int], list[int]]]:
+    """Per gold rank r: (gold, near, random) value indices, both sets holding the gold at rank r.
+
+    The near set is k consecutive indices; the random set is a random k-point shape
+    within ``width`` translated so that its r-th point is the gold. Both are drawn
+    before r is known, so option values carry no information about the gold's rank.
+    """
+    base = rng.randint(lo + width, hi - width - (k - 1))
+    while True:
+        shape = sorted(rng.sample(range(width + 1), k))
+        if shape != list(range(shape[0], shape[0] + k)):
+            break
+    out = []
+    for r in range(k):
+        gold = base + r
+        near = [base + i for i in range(k) if i != r]
+        rand = [gold - shape[r] + s for i, s in enumerate(shape) if i != r]
+        out.append((gold, near, rand))
+    return out
+
+
+_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def option_value(text: str) -> float | None:
+    for rx in DATE_RX.values():
+        if re.fullmatch(rx, text):
+            return float(to_date(text).toordinal())
+    found = _NUMBER.findall(text)
+    return float(found[0].replace(",", "")) if len(found) == 1 else None
+
+
+def mention_count(text: str, needle: str) -> int:
+    return len(
+        re.findall(
+            rf"(?<![0-9A-Za-z]){re.escape(needle)}(?![0-9A-Za-z])",
+            text,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _credit(scores: Sequence[float], label: int) -> float:
+    best = max(scores)
+    winners = [i for i, s in enumerate(scores) if s == best]
+    return (label in winners) / len(winners)
+
+
+def heuristic_credits(
+    options: Sequence[dict[str, Any]],
+    label: int,
+    state: str | None,
+    frequency: collections.Counter | None,
+) -> dict[str, float]:
+    """Option-only baselines with fractional credit on ties (chance = 1 / len(options))."""
+    texts = [o["description"] for o in options]
+    out = {"longest": _credit([len(t) for t in texts], label)}
+    if frequency is not None:
+        out["frequent"] = _credit([frequency[t] for t in texts], label)
+    if state is not None:
+        out["mentioned"] = _credit([mention_count(state, t) for t in texts], label)
+    values = [option_value(t) for t in texts]
+    if all(v is not None for v in values):
+        out["argmin"] = _credit([-v for v in values], label)
+        out["argmax"] = _credit(values, label)
+        ordered = sorted(range(len(values)), key=lambda i: values[i])
+        middle = ordered[(len(values) - 1) // 2 : len(values) // 2 + 1]
+        out["median"] = (label in middle) / len(middle)
+    return out
 
 
 def template_regex(template: str, **groups: str) -> str:

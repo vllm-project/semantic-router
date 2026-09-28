@@ -1,0 +1,39 @@
+{
+  "name": "dev2-06b-kai-native-8k-export",
+  "module": "v2.06b.predict",
+  "args": [
+    "benchmark",
+    "--family",
+    "kai-native",
+    "--bundle",
+    "{bundle}",
+    "--backend",
+    "{backend}",
+    "--native-dir",
+    "{model}",
+    "--manifest-sha256",
+    "{manifest}",
+    "--input",
+    "{input}",
+    "--output",
+    "{output}",
+    "--model-id",
+    "{model_id}",
+    "--model-revision",
+    "{revision}",
+    "--backend-label",
+    "dev2-06b-kai-native-8k"
+  ],
+  "model_id": null,
+  "python": "/data/dev2/tools/envs/kai-lex/bin/python",
+  "batch_policy": "Kai/Lex bundle native FP32 predict, one prompt per call, type-sorted physical B8; 8,192-token complete-input cap, overflow invalid, no truncation",
+  "requires": [
+    "backend",
+    "bundle",
+    "manifest",
+    "model_id"
+  ],
+  "extra_mounts": [
+    "/data/dev2/tools/envs/kai-lex"
+  ]
+}

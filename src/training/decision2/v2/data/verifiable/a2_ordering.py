@@ -491,6 +491,120 @@ def a4_scenario(rng: random.Random, lang: str) -> A4Scenario:
     )
 
 
+V2_ASIDES = {
+    "en": (
+        "{a} wore a green scarf.",
+        "{a} brought pastries for everyone.",
+        "{a} had travelled in from out of town.",
+        "{a} asked about the Wi-Fi password.",
+        "{a} was carrying a large umbrella.",
+        "{a} chatted about a new bike.",
+        "{a} wore a bright yellow jacket.",
+        "{a} mentioned a trip to the coast.",
+        "{a} had a cold and kept to one side.",
+        "{a} was reading a paperback novel.",
+        "{a} carried a thermos of tea.",
+        "{a} wore a badge from a past event.",
+        "{a} was humming a tune.",
+        "{a} brought a folding chair.",
+    ),
+    "zh": (
+        "{a}围着一条绿色围巾。",
+        "{a}给大家带了点心。",
+        "{a}是从外地赶过来的。",
+        "{a}问了无线网络的密码。",
+        "{a}拎着一把大伞。",
+        "{a}聊起了自己新买的自行车。",
+        "{a}穿着一件亮黄色的外套。",
+        "{a}提到最近去海边玩了一趟。",
+        "{a}有点感冒，一直待在角落里。",
+        "{a}手里拿着一本小说。",
+        "{a}带了一保温壶茶。",
+        "{a}别着一枚以前活动的徽章。",
+        "{a}一直在哼着小曲。",
+        "{a}自带了一把折叠椅。",
+    ),
+}
+
+
+def _equalized_asides(
+    rng: random.Random, names: list[str], constraints: Sequence[Constraint], lang: str
+) -> list[str]:
+    counts = [0] * len(names)
+    for kind, a, b in constraints:
+        counts[a] += 1
+        if kind != "notfirst":
+            counts[b] += 1
+    top = max(counts)
+    out = []
+    for person, count in enumerate(counts):
+        for template in rng.sample(V2_ASIDES[lang], top - count):
+            out.append(template.format(a=names[person]))
+    rng.shuffle(out)
+    return out
+
+
+def a4v2_plan(rng: random.Random, lang: str, turn: int) -> core.A4v2Plan:
+    """Any person may be the determined k-th; every name is mentioned equally often."""
+    n = 7
+    scene = _Scene(rng, lang, n)
+    scene.asides = []
+    k = rng.randrange(n)
+    names = scene.names
+
+    def render(person: int, pos: tuple[int, ...]) -> core.A4v2Render | None:
+        constraints = _derive(rng, n, pos, lambda s, p=person, q=k: s[p] == q, set())
+        if constraints is None:
+            return None
+        scene.asides = _equalized_asides(rng, names, constraints, lang)
+        base = (
+            core.words(
+                " ".join(scene.sentence(c, i) for i, c in enumerate(constraints)), lang
+            )
+            + 30
+        )
+        state = scene.state(
+            constraints, core.filler(rng, lang, base, [*scene.full, scene.co])
+        )
+        facts = {
+            "n": n,
+            "names": names,
+            "constraints": constraints,
+            "position": k,
+            "answer": names[person],
+        }
+        return core.A4v2Render(
+            state,
+            facts,
+            f"k{k}",
+            f"{scene.domain}_v2",
+            scene.ask_position(k),
+            lambda v: scene.ask_is_position(names.index(v), k),
+        )
+
+    alternatives = []
+    for person in rng.sample(range(n), n):
+        pos = _random_pos(rng, n, {person: k})
+        others = sorted(
+            (p for p in range(n) if p != person),
+            key=lambda p: (abs(pos[p] - k), rng.random()),
+        )
+        near = others[:3]
+        rand = rng.sample(others, 3)
+        while set(rand) == set(near):
+            rand = rng.sample(others, 3)
+        alternatives.append(
+            core.A4v2Alternative(
+                person,
+                names[person],
+                [names[p] for p in near],
+                [names[p] for p in rand],
+                lambda p=person, s=pos: render(p, s),
+            )
+        )
+    return core.A4v2Plan(False, alternatives)
+
+
 # ---------------------------------------------------------------- oracle 2
 
 _V = {

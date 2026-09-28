@@ -514,6 +514,58 @@ def a4_scenario(rng: random.Random, lang: str) -> A4Scenario:
     )
 
 
+V2_COUNTS = (2, 44)
+V2_SPAN = 5
+
+
+def a4v2_plan(rng: random.Random, lang: str, turn: int) -> core.A4v2Plan:
+    """Count options first (rank-balanced windows), then a log whose true count is the gold.
+
+    A wide count range keeps the random set's values (span <= ``V2_SPAN``) from
+    reaching far past the range the gold itself can take.
+    """
+    log = _Log(rng, lang)
+    sets = core.rank_windows(rng, *V2_COUNTS, 4, V2_SPAN)
+    number = lambda text: int(re.match(r"\d+", text).group(0))
+
+    def render(count: int, top: int) -> core.A4v2Render | None:
+        n_items = top + rng.randint(2, 6)
+        items, ids, styles = _layout(rng, log, count, 0, n_items)
+        items = [{key: item[key] for key in ("c", "x", "z")} for item in items]
+        if sum(satisfies(item, log.pred) for item in items) != count:
+            return None
+        sample = [log.sentence(item, i, s) for item, i, s in zip(items, ids, styles)]
+        pad = core.filler(rng, lang, core.words(" ".join(sample), lang) + 25, [log.co])
+        facts = {
+            "domain": log.domain,
+            "pred": log.pred,
+            "items": items,
+            "ids": ids,
+            "count": count,
+        }
+        return core.A4v2Render(
+            log.state(rng, items, ids, styles, pad),
+            facts,
+            log.pred["op"],
+            f"{log.domain}_v2",
+            log.question(),
+            lambda v: log.question("exactly", number(v)),
+        )
+
+    top = max(v for gold, near, rand in sets for v in (gold, *near, *rand))
+    alternatives = [
+        core.A4v2Alternative(
+            r,
+            log.option(gold),
+            [log.option(v) for v in near],
+            [log.option(v) for v in rand],
+            lambda g=gold: render(g, top),
+        )
+        for r, (gold, near, rand) in enumerate(sets)
+    ]
+    return core.A4v2Plan(True, alternatives)
+
+
 # ---------------------------------------------------------------- oracle 2
 
 _SENT = {

@@ -109,6 +109,8 @@ def benchmark(args: argparse.Namespace) -> dict[str, Any]:
     import torch
 
     rows = load_prompts(args.input)
+    if args.max_items:
+        rows = rows[: args.max_items]
     if args.output.exists():
         raise FileExistsError(args.output)
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -234,6 +236,7 @@ def main() -> None:
     sub.choices["benchmark"].add_argument("--model-id", required=True)
     sub.choices["benchmark"].add_argument("--model-revision", required=True)
     sub.choices["benchmark"].add_argument("--backend-label", required=True)
+    sub.choices["benchmark"].add_argument("--max-items", type=int)
     sub.choices["records"].add_argument("--data-parent", type=Path, required=True)
     sub.choices["records"].add_argument(
         "--role", choices=("train", "select", "cal"), required=True
