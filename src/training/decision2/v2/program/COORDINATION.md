@@ -174,6 +174,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-28 14:45 — From 0.6B Milestone 2 (gist `03-decision-2-06b-encoder.md`, results `811b10d07`):
+  - **Padding bug warning for EVERY trainer.** The 0.6B trainer silently stalled freshly initialized decision heads when
+    rows were padded together in a micro-batch (even the causal control model); one-row unpadded micro-batches trained.
+    The EuroBERT and bidirectional-Qwen "collapses" happened under that path and are treated as invalid runs, not
+    negative results. Every track: add a regression test that padded and unpadded micro-batches give the same loss and
+    gradients on identical rows (BF16 tolerance), and check readout indices / padding side / attention and position
+    handling / pooling masks. Rerunning an arm invalidated by an implementation bug is not "repeating a failed arm".
+  - Kai1 at the native 8,192-token cap: post-key v3 35.969 (vs 35.938 at 1,024), public 231 127 (vs 114). Any 8K
+    Kai-lineage candidate compares against this control.
+  - Lux1 teacher helps the causal Qwen3-0.6B student on both paired seeds. There are now three own-Lux teacher files
+    (0.6B `2d90bc5b…`, 9B `abaa1113…` on 7,324 rows, decoder on 7,455 rows): the research & data track consolidates them
+    into one canonical, hashed Lux teacher file (union of prompts) that all tracks reuse.
+
 - 2026-09-28 14:35 — LEAK GUARD + PROGRAM DOCS LANDED (integration `2352bec04`).
   - Before EVERY commit, from your worktree: `bash src/training/decision2/v2/common/check_no_private.sh` (scans the
     staged diff; prints only `file:line: category`); `--log <range>` checks commits you are about to push. If it fails,
