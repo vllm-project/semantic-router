@@ -10,7 +10,7 @@ from pathlib import Path
 
 from training.model.calibration import load_calibration
 from training.model.infer import normalized_answer
-from v2.release import calibrate_frozen, temperature_parity
+from v2.release import calibrate_frozen, dev_calibration, temperature_parity
 
 TEMPERATURES = {"choice": 1.37, "noul": 0.82, "score": 2.4}
 
@@ -95,6 +95,47 @@ class CalibrateFrozenTest(unittest.TestCase):
         self.assertEqual(set(temperatures), {"choice", "noul", "score"})
         self.assertEqual(loaded["selection_policy"], "frozen_checkpoint")
         self.assertEqual(loaded["inference"]["max_length"], 8192)
+
+
+class DevCalibrationTest(unittest.TestCase):
+    def test_stored_calibrated_rows_return_to_raw_then_to_the_candidate(self):
+        prompts, raw, cal = synthetic()
+        kinds = temperature_parity.question_kinds(prompts)
+        back = dev_calibration.rescale(cal, kinds, TEMPERATURES, invert=True)
+        self.assertEqual(dev_calibration.answer_changes(raw, back), 0)
+        forward = dev_calibration.rescale(back, kinds, TEMPERATURES)
+        self.assertEqual(dev_calibration.answer_changes(cal, forward), 0)
+        drift = temperature_parity.compare(
+            raw, back, kinds, {k: 1.0 for k in TEMPERATURES}
+        )
+        self.assertLess(drift["offline_max_abs_drift"], 1e-12)
+
+    def test_rule_rejects_any_worse_criterion(self):
+        raw = {
+            "typed_dev": {"brier": 0.30, "ece_10": 0.10},
+            "css_pilot": {
+                "median_task_brier_sum": 0.50,
+                "median_task_ece_pmax_15": 0.05,
+            },
+        }
+        better = {
+            "typed_dev": {"brier": 0.29, "ece_10": 0.09},
+            "css_pilot": {
+                "median_task_brier_sum": 0.50,
+                "median_task_ece_pmax_15": 0.04,
+            },
+        }
+        self.assertTrue(dev_calibration.decide(raw, better)["adopt"])
+        worse = {
+            **better,
+            "css_pilot": {
+                "median_task_brier_sum": 0.51,
+                "median_task_ece_pmax_15": 0.04,
+            },
+        }
+        decision = dev_calibration.decide(raw, worse)
+        self.assertFalse(decision["adopt"])
+        self.assertEqual(decision["worsened"], ["css_pilot_brier"])
 
 
 if __name__ == "__main__":
