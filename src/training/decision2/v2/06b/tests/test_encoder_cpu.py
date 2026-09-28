@@ -115,7 +115,8 @@ class ModelTest(unittest.TestCase):
             global_attn_every_n_layers=1,
         )
         torch.manual_seed(0)
-        backbone = ModernBertModel(cfg)
+        # The ROCm image ships a Triton flash-attention build that cannot run on CPU tensors.
+        backbone = ModernBertModel._from_config(cfg, attn_implementation="sdpa")
         model = enc._torch_module()(backbone, head_dim=8)
         return model.eval(), enc.MarkerPacker(tok, ids)
 
