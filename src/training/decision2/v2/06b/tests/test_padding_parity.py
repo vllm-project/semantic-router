@@ -35,7 +35,7 @@ def char_tokenizer():
     chars = [chr(c) for c in range(32, 127)] + ["\n"]
     vocab = {"[PAD]": 0, "[UNK]": 1, **{c: i + 2 for i, c in enumerate(chars)}}
     tok = Tokenizer(models.WordLevel(vocab=vocab, unk_token="[UNK]"))
-    tok.pre_tokenizer = pre_tokenizers.Split(Regex("(?s)."), behavior="isolated")
+    tok.pre_tokenizer = pre_tokenizers.Split(Regex(r"[\s\S]"), behavior="isolated")
     return PreTrainedTokenizerFast(tokenizer_object=tok, pad_token="[PAD]"), len(vocab)
 
 
