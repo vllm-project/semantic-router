@@ -112,7 +112,7 @@ class SelectTest(unittest.TestCase):
             for n in ("c254", "lvl2", "s100", "noul", "seed")
         }
         self.assertEqual(failed["c254"], ["choice_ge_255"])
-        self.assertEqual(failed["lvl2"], ["score_levels_ge_3"])
+        self.assertEqual(failed["lvl2"], ["score_modal_le_090"])
         self.assertEqual(failed["s100"], ["score_ge_101"])
         self.assertEqual(failed["noul"], ["cal_noul_ge_085"])
         self.assertEqual(failed["seed"], ["cal_noul_ge_085"])
@@ -229,7 +229,7 @@ class SelectTest(unittest.TestCase):
             "guard",
             t=0.50,
             tasks=(0.35, 0.35, 0.50),
-            levels={"0": 1, "1": 2},
+            levels={"0": 395, "2": 5},
             soup=[],
         )
         self.assertTrue(select.greedy_check("S", "ok", self.root)["accept"])
@@ -244,6 +244,38 @@ class SelectTest(unittest.TestCase):
         self.assertFalse(verdicts["guard"]["guards_hold"])
         for n in ("lowq", "h3", "choice", "guard"):
             self.assertFalse(select.greedy_check("S", n, self.root)["accept"])
+
+    def test_score_guard_modes(self):
+        make(
+            self.root,
+            "split",
+            t=0.4,
+            tasks=(0.3, 0.3, 0.3),
+            levels={"0": 235, "2": 165},
+            soup=[],
+        )
+        make(
+            self.root,
+            "thin3",
+            t=0.4,
+            tasks=(0.3, 0.3, 0.3),
+            levels={"0": 368, "1": 2, "2": 30},
+            soup=[],
+        )
+        self.assertEqual(select.candidate("split", self.root)["guards_failed"], [])
+        self.assertEqual(
+            select.candidate("thin3", self.root)["guards_failed"],
+            ["score_modal_le_090"],
+        )
+        try:
+            select.SCORE_GUARD = "levels3"
+            self.assertEqual(
+                select.candidate("split", self.root)["guards_failed"],
+                ["score_levels_ge_3"],
+            )
+            self.assertEqual(select.candidate("thin3", self.root)["guards_failed"], [])
+        finally:
+            select.SCORE_GUARD = "modal90"
 
     def test_path_refs_and_wrong_tasks(self):
         make(self.root, "p", t=0.4, tasks=(0.3, 0.3, 0.3), soup=[])

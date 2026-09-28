@@ -12,8 +12,10 @@ Development only (M6 prereg sections 3 and 4), never a release score:
 - T_dev = typed-DEV macro family accuracy; H_pilot = CSS-pilot median task macro-F1;
   H3 = mean macro-F1 of the three pilot tasks; P = 100*sqrt(T_dev*H_pilot);
   Q = 100*sqrt(T_dev*H3).
-- Guards: typed-DEV Choice >= 255 and Score >= 101, >= 3 distinct predicted Score levels,
-  SELECT Noul and CAL Noul accuracy >= .85. A missing input fails its guard.
+- Guards: typed-DEV Choice >= 255 and Score >= 101, Score not near-constant (the modal
+  predicted typed-DEV Score level covers <= 90% of predictions; M6 amendment b, default
+  `--score-guard modal90`; `--score-guard levels3` restores the prereg's >= 3 distinct
+  levels), SELECT Noul and CAL Noul accuracy >= .85. A missing input fails its guard.
 - seedmean: the family artifact is the soup if Q(soup) >= the seed-mean Q, else the
   median-Q seed (lower middle for an even count). Seeds with `full/STOPPED.json` (collapse
   stop) or without a readout are excluded.
@@ -37,8 +39,11 @@ from typing import Any
 DEFAULT_ROOT = Path("/data/dev2/runs/06b/m1/arms")
 PILOT_TASKS = ("discourse", "implicit_hate", "semeval_stance")
 CHOICE_MIN, SCORE_MIN, LEVELS_MIN, NOUL_MIN = 255, 101, 3, 0.85
+MODAL_MAX = 0.90
 H3_SLACK, ITEM_SLACK, FINALIST_BAND = 0.010, 20, 4.0
 NEW_FAMILIES = ("m6-cx", "m6-mx")
+SCORE_GUARDS = ("modal90", "levels3")
+SCORE_GUARD = "modal90"
 
 
 def load_json(path: Path) -> Any:
@@ -94,10 +99,17 @@ def guards(c: dict[str, Any]) -> dict[str, bool | None]:
     def at_least(value: Any, floor: float) -> bool | None:
         return None if value is None else value >= floor
 
+    if SCORE_GUARD == "levels3":
+        score_guard = {"score_levels_ge_3": at_least(c["score_levels"], LEVELS_MIN)}
+    else:
+        modal = c.get("score_modal_share")
+        score_guard = {
+            "score_modal_le_090": None if modal is None else modal <= MODAL_MAX
+        }
     return {
         "choice_ge_255": at_least(c["typed"]["choice"], CHOICE_MIN),
         "score_ge_101": at_least(c["typed"]["score"], SCORE_MIN),
-        "score_levels_ge_3": at_least(c["score_levels"], LEVELS_MIN),
+        **score_guard,
         "select_noul_ge_085": at_least(
             (c["select_noul"] or {}).get("accuracy"), NOUL_MIN
         ),
@@ -136,6 +148,9 @@ def candidate(ref: str, root: Path = DEFAULT_ROOT) -> dict[str, Any]:
         },
         "score_levels": len(levels),
         "score_level_counts": dict(sorted(levels.items())),
+        "score_modal_share": (
+            max(levels.values()) / sum(levels.values()) if levels else None
+        ),
         "select_noul": select_noul,
         "cal_noul": cal_noul,
         "in_distribution_source": source,
@@ -274,6 +289,7 @@ def write(path: Path | None, value: Any) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument("--score-guard", choices=SCORE_GUARDS, default="modal90")
     commands = parser.add_subparsers(dest="command", required=True)
     p = commands.add_parser("table")
     p.add_argument("refs", nargs="+")
@@ -288,6 +304,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("extended")
     p.add_argument("--json", type=Path)
     args = parser.parse_args(argv)
+    global SCORE_GUARD
+    SCORE_GUARD = args.score_guard
     if args.command == "table":
         result = table(args.refs, args.root, args.finalist_ref)
         print_table(result["candidates"])
