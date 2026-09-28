@@ -150,7 +150,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
 | node B GPU3–4 | eval & peers (added 2026-09-28 10:40 UTC+8) |
 | node B GPU5–6 | ~27B |
-| node B GPU7 | research & data |
+| node B GPU7 | research & data (owner); A7 may run short jobs (≤ 30 min, e.g. its embedding scan) under its own lease owner file when the GPU is idle/released |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
 stop rule BEFORE launch (commit a prereg); run preflights (load/parity, zero-step, one-step + reload). If a preflight
@@ -181,6 +181,29 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 16:00 — **A7 (own Decision 1.0 decoder corpora) AVAILABLE — the largest data lever so far** (gist
+  `08-decision-2-own10-corpora.md`; integration `7db1da83d`; private HF dataset `llm-semantic-router/decision-2.0-training-data`
+  revision `39a120ca5446dd2296567870ed0131a2d2e7b42d`, folder `v2/a7/`, registry `v2/a7/registry.json`).
+  - Six frozen sub-arms, 138,313 train rows / 126.2M native tokens (A0: 7,455 / 4.19M), 11,060 Score rows (3,841
+    three-level; A0: 516 / 102): A7h human reading (Cosmos QA, SNLI, SQuAD 2.0), A7m MultiNLI non-fiction, A7g Stage4
+    generated Score 3–8 levels, A7i BANKING77/CLINC150 intents, A7p older-generator replay, A7o Stage1–3 generated.
+    `views/` reproduces the exact 1.0 training mixtures by A7 id (e.g. `dec10-natural24k`, the Eos/Lux natural pool).
+  - **Every size track: adopt A7 now for development** (it passed lexical + long-leaf overlap and isolation screens).
+    Release candidates additionally need the A7 embedding scan to pass (A7 Milestone 2 runs it first). Deduplicate
+    against A0 by `input_sha256` (3,465 identical rows). Default mixtures EXCLUDE A7h families `natural_cosmos_qa` and
+    `natural_squad2_answerability` (known shortcut failures); they may appear only as an explicit ablation arm.
+  - 9B track: training on the A7 view `dec10-natural24k` (and wider A7) is the most direct test of the 21.9-point
+    gap to Lux's co-trained head. 0.6B track: 36,423 A7g rows exceed 1,024 tokens (fine with the 8K adapter; budget it).
+  - **NEW LEAK in 1.0-generated data: option keys `result_<n>` numbered before shuffling reveal the gold** (7,579/7,579
+    in intent rows). It was in the training data of Sol, Nox, Eos, Lux and Kai, and in 131 A0 rows (also RP-v1q / R2
+    prompts). A7 renumbers keys by position. Research & data: publish renumbered A0 / A0s / RP-v1q / R2 versions; all
+    release candidates use renumbered data. Eval track: audit every panel (SELECT, CAL, typed DEV, CSS pilot, v3 typed +
+    human transfer, public 231) for option-key / position leaks; 1.0-lineage models may exploit such keys on dev sets
+    built by the same generators, which could explain part of the dev-vs-v3 misalignment.
+  - Coordinator decisions: Lex typed-decisions stays excluded (unidentified teacher labels); Kai/Lex encoder-corpus text
+    written by an unrecorded AI agent is NOT admitted — A7 rebuilds those sub-arms with deterministic templates around
+    the human labels instead.
 
 - 2026-09-28 15:55 — From ~27B Milestone 1 (gist `06-decision-2-27b.md`; integration `1e34430b3`):
   - **Qwen3.5-family (gated-delta) training runtime fix — 9B/Lux, 0.8B–4B decoder and 27B tracks, read this.** Keep the
