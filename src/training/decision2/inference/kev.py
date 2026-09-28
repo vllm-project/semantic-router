@@ -26,11 +26,44 @@ from .run import (
     synchronize,
 )
 
-KEV_MODEL_ID = "jaredpalmer/kev-4b"
-KEV_MODEL_REVISION = "139fdd94f1b6a6ad80cc15e08fcb99cac885a101"
-KEV_SOURCE_REVISION = "6d02f5d066cd34958dfd15ffa5d2f6f0f4c21a63"
-KEV_BASE_ID = "Qwen/Qwen3.5-4B-Base"
-KEV_BASE_REVISION = "1001bb4d826a52d1f399e183466143f4da7b741b"
+VARIANTS = {
+    "4b": (
+        "jaredpalmer/kev-4b",
+        "139fdd94f1b6a6ad80cc15e08fcb99cac885a101",
+        "6d02f5d066cd34958dfd15ffa5d2f6f0f4c21a63",
+        "Qwen/Qwen3.5-4B-Base",
+        "1001bb4d826a52d1f399e183466143f4da7b741b",
+    ),
+    "0.8b": (
+        "jaredpalmer/kev-0.8b",
+        "9a45d25eb2ab761841196625383fa1dff0e56c1e",
+        "45923b7a3460b6d36358e2e143455902c1eb856b",
+        "Qwen/Qwen3.5-0.8B-Base",
+        "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+    ),
+}
+(
+    KEV_MODEL_ID,
+    KEV_MODEL_REVISION,
+    KEV_SOURCE_REVISION,
+    KEV_BASE_ID,
+    KEV_BASE_REVISION,
+) = VARIANTS["4b"]
+
+
+def use_variant(size: str) -> None:
+    """Select the pinned Kev release for this process (one model per process)."""
+    global KEV_MODEL_ID, KEV_MODEL_REVISION, KEV_SOURCE_REVISION, KEV_BASE_ID
+    global KEV_BASE_REVISION
+    if size not in VARIANTS:
+        raise ValueError(f"Unknown Kev size: {size}")
+    (
+        KEV_MODEL_ID,
+        KEV_MODEL_REVISION,
+        KEV_SOURCE_REVISION,
+        KEV_BASE_ID,
+        KEV_BASE_REVISION,
+    ) = VARIANTS[size]
 
 
 def verify_provenance(model_path: Path, source_path: Path) -> dict[str, Any]:
@@ -249,13 +282,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-path", type=Path, required=True)
     parser.add_argument("--source-path", type=Path, required=True)
-    parser.add_argument("--model-revision", default=KEV_MODEL_REVISION)
+    parser.add_argument("--model-revision")
+    parser.add_argument("--size", choices=tuple(VARIANTS), default="4b")
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--max-items", type=int)
     args = parser.parse_args()
+    use_variant(args.size)
+    args.model_revision = args.model_revision or KEV_MODEL_REVISION
     print(
         json.dumps(
             collect(
