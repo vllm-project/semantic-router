@@ -144,8 +144,8 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
 | node A GPU0–1 | 0.6B encoder |
-| node A GPU2–4 | research & data: AutoJev-27B re-qualification + target production (~1.5 h), then back to the 9B track (2026-09-28 20:15 UTC+8) |
-| node A GPU5 | 0.8B–4B decoder |
+| node A GPU2–4 | research & data: AutoJev-27B re-qualification + target production (~1.5 h), then back to the 9B track (2026-09-28 20:15 UTC+8). **9B track: read the 21:00 cross-track note (A7 is mostly NEW data for Lux) before planning work on these GPUs.** |
+| node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
 | node A GPU6–7 | 9B track Milestone 3 (lent by eval at 2026-09-28 20:30 UTC+8; eval borrows one back for a formal run or a C1 scoring event) |
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
@@ -181,6 +181,32 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 21:00 — **FIRST RELEASE CANDIDATE: DEV2.0-0.8B** (decoder Milestone 2; gist `04-decision-2-decoder-08b-4b.md`;
+  integration `18ef6e625`).
+  - Recipe "E8F": own Eos 1.0, FULL fine-tuning (not LoRA) on the full A7 + v1 mixture (138.4M tokens), three seeds,
+    uniform weight soup, CAL698 calibration, packaged `qwen-full` at 16,384 tokens. Post-key v3 50.236 vs Eos 1.0 42.547:
+    +7.69 [+3.65, +13.32] (node A); public 231 156 vs 142; also ~6.7 above the best measured 0.8B peer (Intern-Decision
+    43.535). Gains are typed reasoning (Choice 529 vs 315, Noul 611 vs 410); disclosed losses: −13 Score items, −0.021
+    human transfer, about −5 points multilingual Noul on mlx-diag; single seeds vary (49.78 / 47.36 / 41.08), so the soup
+    matters. Checkpoint: private `llm-semantic-router/dev2-dec-staging@16c0929a`, folder `m2/E8F-soup/`; scored run
+    `/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA`. Release engineering + C1 scoring event 1 start now.
+  - **A7 IS MOSTLY NEW DATA FOR THE Eos / Lux LINEAGE.** Per the A7 inventory, the Stage1–4 curricula (A7g / A7o / A7p /
+    A7i) trained only Sol and Nox; Eos and Lux saw only the natural 24k pool. That is why E8F gained so much typed
+    reasoning. **9B track:** treat the full A7 (plus v1 / v2) as new training data for Lux, not a small retention replay —
+    an E8F-style run (full-data fine-tuning, three seeds, uniform soup, own-Lux soft targets as a trust region) is the
+    highest-expected-value 9B arm. For Sol / Nox (2B / 4B), A7 is their own data, so new information has to come from v2.
+  - **Comparator rule:** compare against the STRICTER of the adopted 1.0 run and a same-renderer / same-limit 1.0 control
+    (the shared 2.0 renderer alone costs Nox 1.0 0.78 on v3: 55.689 vs adopted 56.470, so 4B compares against 56.470).
+  - Trainer checks at 0.8B–4B: no padding bug (gradient cosine >= 0.9985; the probe's preset thresholds were tighter than
+    kernel precision, disclosed); the Score overfit fits all levels 2..10, so the 0.8B "all level 0" on DEV Score was a
+    transfer limit, not a bug. Enforce FLA + causal-conv1d + shared persisted autotune cache in every Qwen3.5-family job.
+  - **Node B image gap:** node B's earlier image lacked the causal-conv1d kernel (a fallback computed the same operation).
+    Eval track: some node B collections (e.g., the AutoJev node-B 27B comparator) used that image — re-validate node-B
+    comparators on the kernel-equipped image before the next 27B formal comparison.
+  - A0s (incl. pk1) still contains 752 rows of the two excluded shortcut families (natural_cosmos_qa,
+    natural_squad2_answerability). Research & data: publish a strict variant without them; new runs use it; candidates
+    already trained with them disclose it.
 
 - 2026-09-28 20:30 — From eval Milestone 3 (gist `01-decision-2-eval-peers.md`; integration `3773540e8`):
   - Option-key audit of all eight eval panels: no `result_<n>` or out-of-order numbered keys; seven panels clean on every
