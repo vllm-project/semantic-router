@@ -24,7 +24,13 @@ gpu_label=${DEC_GPU_LABEL:-node A GPU5}
 data=${DEC_DATA:-/data/decision20-20260926/data/hf-private-decision20-clean-v2}
 src=/data/dev2/src/$sha
 [[ -d $src/src/training/decision2 ]] || { echo "missing exact mirror $src" >&2; exit 2; }
-tree=$(cat "$src/TREE" 2>/dev/null || echo unknown)
+# Subtree mirrors (<sha>-src_training_decision2) record commit and tree in .dev2-mirror.json.
+if [[ -f $src/.dev2-mirror.json ]]; then
+  sha=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"])' "$src/.dev2-mirror.json")
+  tree=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["tree"])' "$src/.dev2-mirror.json")
+else
+  tree=$(cat "$src/TREE" 2>/dev/null || echo unknown)
+fi
 mkdir -p "$out"
 receipt="$out.launch.json"
 [[ -e $receipt ]] && { echo "receipt exists: $receipt" >&2; exit 2; }

@@ -377,16 +377,51 @@ class ScoreOverfitTest(unittest.TestCase):
 HAS_QWEN35 = HAS_TORCH and importlib.util.find_spec("transformers") is not None
 
 
+def _torch_reference(function, depth: int = 0):
+    """The reference PyTorch function behind a Transformers kernel wrapper."""
+    code = getattr(function, "__code__", None)
+    cells = getattr(function, "__closure__", None) or ()
+    if code is not None and "torch_function" in code.co_freevars:
+        return cells[code.co_freevars.index("torch_function")].cell_contents
+    for cell in cells if depth < 4 else ():
+        value = cell.cell_contents
+        if callable(value):
+            found = _torch_reference(value, depth + 1)
+            if found is not None:
+                return found
+    return None
+
+
 @unittest.skipUnless(HAS_QWEN35, "torch/transformers not installed")
 class PaddingEquivalenceTest(unittest.TestCase):
-    """Right padding must not change loss or gradients on a real hybrid backbone."""
+    """Right padding must not change loss or gradients on a real hybrid backbone.
+
+    On CPU the image's CUDA/Triton kernels cannot run, so the gated-delta and
+    causal-conv1d calls use Transformers' reference implementations; the GPU
+    probe ``check_padding`` covers the kernels themselves.
+    """
 
     def setUp(self) -> None:
+        from unittest import mock
+
         import torch
+        from transformers.models.qwen3_5 import modeling_qwen3_5
         from transformers.models.qwen3_5.configuration_qwen3_5 import (
             Qwen3_5TextConfig,
         )
         from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5TextModel
+
+        for name in (
+            "causal_conv1d_fn",
+            "causal_conv1d_update",
+            "torch_chunk_gated_delta_rule",
+            "torch_recurrent_gated_delta_rule",
+        ):
+            reference = _torch_reference(getattr(modeling_qwen3_5, name))
+            if reference is not None:
+                patcher = mock.patch.object(modeling_qwen3_5, name, reference)
+                patcher.start()
+                self.addCleanup(patcher.stop)
 
         from training.model.decision_model import (
             ARCHITECTURE,
