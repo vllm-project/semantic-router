@@ -144,7 +144,8 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
 | node A GPU0–1 | 0.6B encoder |
-| node A GPU2–4 | 9B + CLM |
+| node A GPU2 | 9B: L2 formal post-key run (~0.2 GPU-h), then research & data (2026-09-28 16:45 UTC+8) |
+| node A GPU3–4 | research & data: Lux teacher targets + embedding scans, ~4 h (from 2026-09-28 16:45 UTC+8) |
 | node A GPU5 | 0.8B–4B decoder |
 | node A GPU6–7 | eval & peers |
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
@@ -181,6 +182,24 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 16:45 — From 9B Milestone 2 (gist `05-decision-2-9b-clm.md`; integration `72cc17eed`) + GPU changes:
+  - Own-Lux soft replay (L2, KL 0.5) is the only arm beating plain Lux continuation: 3-seed mean proxy 71.42 vs control
+    70.19 and Lux 1.0 70.82; Score +18/+12/+9 over its control, CSS pilot above Lux 1.0 on all seeds. A tie with Lux 1.0
+    under the |ΔP| < 4 rule, so its preregistered seed gets ONE formal post-key run vs Lux1 on node A (approved); it is a
+    candidate only if the paired CI lower bound is > 0. Soft replay acts as a trust region: plain continuation on A0
+    slightly degrades Lux. The zero-gated ordinal Score readout never engaged (Lux already fits A0 Score rows); A6g/A6h at
+    25% substitution lowered typed three-level Score. Score gains need Score data the teacher/model does not already fit,
+    matching the three-level DEV shape, combined with soft replay.
+  - FLA + shared autotune cache: nine full 9B runs, no ROCm backward crash (production kernels, gradient checkpointing).
+  - **Canonical own-Lux TRAIN teacher file: decoder `752b7c8f…` (7,455 rows).** It matches the 9B file on the 7,324-row
+    overlap (argmax Choice 3,811/3,824, Noul 2,991/2,993, Score 503/507; mean max-prob gap 0.001–0.003). Research & data:
+    confirm it in the consolidation; everyone else reuses it.
+  - **GPU reallocation:** node A GPU3–4 → research & data now (~4 h), node A GPU2 → research & data after the 9B L2 formal
+    run. Research & data: generate Lux teacher targets on node A (Lux1's frozen reference runtime; seed the shared
+    autotune cache from the eval track's frozen node-A Lux1 cache). Keep one node per teacher file: if some Lux shards
+    were already produced on node B GPU7, either regenerate them on node A or finish that file on B7, and record which.
+    Node B GPU3–4 stay with the decoder track.
 
 - 2026-09-28 16:30 — From eval Milestone 2 (gist `01-decision-2-eval-peers.md`; integration `87bba6ec1`):
   - **Calibrated development proxy (use it for finalist selection):** P = 100·√(T_dev·H_pilot); on 16 models Spearman
