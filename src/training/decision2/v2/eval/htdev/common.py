@@ -4,7 +4,8 @@ A converter exports `SPEC: SourceSpec` and `candidates(root) -> Iterator[HtCandi
 over its pinned snapshot, exactly like the C1 converters (`v2/eval/sealed/schema.py`
 rules: one frozen template per task, label-blind states, no model-generated columns).
 On top of the C1 candidate an HT-DEV candidate carries its split and a provenance
-pointer (file relpath + row index); both stay on the pool / gold side, never in a prompt.
+pointer (file relpath + row index) and a bootstrap cluster (the group unless the source
+names a coarser one); all stay on the pool / gold side, never in a prompt.
 
 Choice option order is `display_order(item id, n, salt="ht-dev-display")` for every
 Choice task. For per-item option sets (two captions, two arguments ...) the options are
@@ -41,6 +42,7 @@ class HtCandidate(Candidate):
     split: str = ""
     provenance: dict[str, Any] = field(default_factory=dict)
     option_texts: list[str] | None = None
+    cluster_id: str = ""
 
 
 def spec(
@@ -154,6 +156,7 @@ def make(
     gold: Any,
     overlap_texts: list[str] | None = None,
     option_texts: list[str] | None = None,
+    cluster: str = "",
 ) -> HtCandidate | None:
     if input_chars(state, question) > MAX_INPUT_CHARS:
         return None
@@ -171,6 +174,7 @@ def make(
         split=split,
         provenance={"file": file, "row": row},
         option_texts=option_texts,
+        cluster_id=cluster or group,
     )
 
 

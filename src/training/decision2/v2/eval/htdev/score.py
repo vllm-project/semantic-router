@@ -13,7 +13,8 @@ missing or invalid answer counting as wrong (C1 scorer semantics, reused from
 functional of formal H, as a fraction). Secondary: task mean, per-type means, quadratic
 weighted kappa for Score tasks. Panel noise: item bootstrap within tasks (2,000 draws,
 seed 20260929) of H_dev. `compare` gives the paired bootstrap of the H_dev difference,
-resampling source groups within each task. Labelled "development readout": never a
+resampling source clusters within each task (a gold row's `cluster_id`, else its group;
+Diplomacy clusters by game). Labelled "development readout": never a
 release score.
 """
 
@@ -181,8 +182,8 @@ def paired(
     rows_left = outcomes(gold, left)
     rows_right = outcomes(gold, right)
     groups: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(list))
-    for index, row in enumerate(rows_left):
-        groups[row[0]][row[1]].append(index)
+    for index, (row, item) in enumerate(zip(rows_left, gold)):
+        groups[row[0]][item.get("cluster_id") or row[1]].append(index)
     whole = {task: [i for g in gs.values() for i in g] for task, gs in groups.items()}
     point = statistics.median(
         task_scores(rows_left, whole).values()
@@ -211,7 +212,7 @@ def paired(
         "p_left_better": sum(d > 0 for d in draws) / replicates,
         "replicates": replicates,
         "seed": seed,
-        "unit": "source groups within each task",
+        "unit": "source clusters (group, or the gold row's cluster_id) within each task",
     }
 
 

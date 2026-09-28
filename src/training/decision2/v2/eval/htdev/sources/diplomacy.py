@@ -4,7 +4,8 @@ Each dialogue row lists its messages with the sender's own truthful/lie annotati
 (`sender_labels`, made at send time). One item per annotated message: up to three
 preceding messages of the same dialogue plus the target message, with sender and
 receiver (the players' countries). Receiver labels, game scores and seasons are never
-shown. The game is the group (the prereg caps items per game).
+shown. The dialogue (game + player pair) is the group, capped per dialogue, and the
+game is the bootstrap cluster (amendment 2 item 2).
 """
 
 from __future__ import annotations
@@ -51,6 +52,11 @@ def candidates(root: Path) -> Iterator[HtCandidate]:
     for relative, split in FILES:
         for index, row in enumerate(read_jsonl(root / relative)):
             game = str(row["game_id"])
+            players = sorted(
+                {str(p) for p in row.get("players") or ()}
+                or {str(row["speakers"][0]), str(row["receivers"][0])}
+            )
+            dialogue = f"{game}:{'-'.join(players)}"
             for j, label in enumerate(row["sender_labels"]):
                 if not isinstance(label, bool) or not str(row["messages"][j]).strip():
                     continue
@@ -66,7 +72,7 @@ def candidates(root: Path) -> Iterator[HtCandidate]:
                     SPEC,
                     TASK,
                     f"game{game}:msg{row['absolute_message_index'][j]}",
-                    game,
+                    dialogue,
                     split,
                     relative,
                     f"{index}:{j}",
@@ -74,6 +80,7 @@ def candidates(root: Path) -> Iterator[HtCandidate]:
                     dict(QUESTION),
                     not label,
                     overlap_texts=[state["message"]["text"]],
+                    cluster=game,
                 )
                 if item:
                     yield item

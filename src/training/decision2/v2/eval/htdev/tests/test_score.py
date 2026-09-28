@@ -174,7 +174,7 @@ class ScoreTest(unittest.TestCase):
         right = {r["id"]: r for r in self.predictions(wrong_choice=8)}
         result = score.paired(self.gold, left, right, 200, score.SEED)
         self.assertAlmostEqual(result["delta_H_dev"], 1.0 - 1 / 3)
-        self.assertEqual(result["unit"], "source groups within each task")
+        self.assertIn("cluster", result["unit"])
         self.assertGreater(result["p_left_better"], 0.9)
         same = score.paired(self.gold, left, left, 50, score.SEED)
         self.assertEqual(same["delta_H_dev"], 0.0)

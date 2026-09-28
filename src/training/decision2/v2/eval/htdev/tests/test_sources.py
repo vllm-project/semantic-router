@@ -163,6 +163,8 @@ class TemplateDetailTest(unittest.TestCase):
         self.assertEqual(items[0].gold, True)
         self.assertEqual(items[1].gold, False)
         self.assertEqual(items[0].split, "test")
+        self.assertEqual(items[0].group_id, "10:germany-italy")
+        self.assertEqual(items[0].cluster_id, "10")
 
     def test_scruples_story_is_capped(self):
         _, items = convert("scruples", False)
