@@ -1,0 +1,138 @@
+{
+ "attestation_per_row": [
+  "model_id",
+  "model_revision (attested)",
+  "adapter_version",
+  "backend",
+  "model_config_sha256",
+  "native_model_sha256",
+  "runtime_source_sha256",
+  "qualified runtime (shard manifest)",
+  "source_input_sha256 = digest of the training row's native prompt"
+ ],
+ "attestation_sha256": "d846600e760c53654be19e897ed3b71e54f1262d188528f82e56851241583406",
+ "choice": {
+  "argmax_accuracy_vs_gold": 0.7347,
+  "mean_brier": 0.352,
+  "mean_gold_probability": 0.6396,
+  "mean_normalized_entropy": 0.474,
+  "no_answer_reasons": {},
+  "no_native_answer": 0,
+  "rows": 3785,
+  "targets": 3785
+ },
+ "content_sha256": "97a071affe820d148f7cfe6b50aa59b04511523b68f2d5bf3a4026b7811be138",
+ "guard": {
+  "not_a_row": 0,
+  "not_train": 0,
+  "pass": true,
+  "prompt_differs_from_row": 0,
+  "prompts": 7299,
+  "prompts_sha256": "92c22354c0a4b09dde485bb88992303832eac4a949fe3102cee9b3b797d8fb82",
+  "protected_files": 27,
+  "schema": "decision2-m3a-target-guard/1",
+  "shared_id": 0,
+  "shared_input_sha256": 0,
+  "shared_prompt_digest": 0,
+  "shared_state_informational": 0
+ },
+ "guard_sha256": "7bc68a8a0c761676ec0c0f2124ed7c782bc5ca2a1d581df734e10d6ab95b1df1",
+ "model_id": "denis-pplx/autojev-27b",
+ "model_revision": "6f5b557e037f5edb25c7dc92dbc6553e5a19c015",
+ "noul": {
+  "argmax_accuracy_vs_gold": 0.8376,
+  "mean_brier": 0.2262,
+  "mean_gold_probability": 0.7711,
+  "mean_normalized_entropy": 0.5204,
+  "no_answer_reasons": {},
+  "no_native_answer": 0,
+  "rows": 2998,
+  "targets": 2998
+ },
+ "production_repeat_check": {
+  "argmax_mismatches": 0,
+  "autotune_unchanged": true,
+  "compared_distributions": 128,
+  "exit_code": 0,
+  "identical_answers": 128,
+  "max_drift": 0.0,
+  "mean_drift": 0.0,
+  "missing_prompts": 0,
+  "over_1e-2": 0,
+  "over_1e-3": 0,
+  "over_1e-6": 0,
+  "p50_drift": 0.0,
+  "p99_drift": 0.0,
+  "pass": true,
+  "questions": 128,
+  "validity_mismatches": 0
+ },
+ "prompts": 7299,
+ "prompts_sha256": "92c22354c0a4b09dde485bb88992303832eac4a949fe3102cee9b3b797d8fb82",
+ "provenance_caveat": "Teacher: denis-pplx/autojev-27b@6f5b557e (Apache-2.0 weights; third-party decision model, never a Decision 2.0 weight origin). Its public training pipeline reportedly used SFT data generated with a closed OpenAI model, so these targets carry that provenance: every AutoJev-distilled candidate discloses it on its card and in its records, and needs a matched own-Lux-target control. Own-Lux targets remain the clean default. Allowed for release candidates by coordinator decision (2026-09-28 18:45 UTC+8, re-qualification ordered 20:15) after the node-A ROCm runtime passed the M3a qualification v2 (bitwise repeat determinism with a shared, fully warmed autotune cache).",
+ "qualification_sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6",
+ "rows": 7299,
+ "rows_file_sha256": "35c1f98ff0f406feef8bfd1c7ed8f254c096b4f7b3a6e0858bcc92ef43ddc20b",
+ "runtime": {
+  "autotune_frozen": {
+   "entries": 11,
+   "sha256": "cff772eb9fa31c2248c4b503c34a758ac9fd5b3755797ace5977fdc7781bf988"
+  },
+  "collector": "inference.autojev27 (package-native DecisionModel, no chat API)",
+  "fla": "FLA 0.5.2 gated-delta kernels (no reference fallback)",
+  "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+  "node": "node A",
+  "package": {
+   "native_model_sha256": "d0b1e161c17d60889744b6ccb5fa588bf80f9856f8535e6a04e083ffcf667ca2",
+   "runtime_source_sha256": "550ccd857350c6771a1de03e4bcba9fb4412247b58bcdc9e8ac03de2ab9641a5"
+  },
+  "shards": [
+   {
+    "end_utc": "2026-09-28T13:12:23Z",
+    "gpu": 2,
+    "gpu_hours": 0.0782,
+    "input_sha256": "8464fa2bc3b294c81daeaea135ec104c3e855bfb434eb7a30a7a002764d78fc5",
+    "label": "m3a2-aj-a0s-s0",
+    "mirror_commit": "e48564a4757377fe4f62f1486c9a13d96f95c900",
+    "output_sha256": "cc89f9378682dcfa6801109bc0df8ccc3c11d0830c071bcc99a1218fe24e7b58",
+    "rows": 2425,
+    "start_utc": "2026-09-28T13:07:41Z"
+   },
+   {
+    "end_utc": "2026-09-28T13:12:20Z",
+    "gpu": 3,
+    "gpu_hours": 0.0774,
+    "input_sha256": "49e08549dd52e7cb7a90e3a5058d380913be91137af0b6531ee3eea9a7e6a474",
+    "label": "m3a2-aj-a0s-s1",
+    "mirror_commit": "e48564a4757377fe4f62f1486c9a13d96f95c900",
+    "output_sha256": "c1ce49f376f96cb10e8438479a398b5ba1c4767e50e2dc870b9f3c79192fdf45",
+    "rows": 2416,
+    "start_utc": "2026-09-28T13:07:41Z"
+   },
+   {
+    "end_utc": "2026-09-28T13:12:15Z",
+    "gpu": 4,
+    "gpu_hours": 0.076,
+    "input_sha256": "fcf1b8689b5d6434171e1bce3e0237cb4a4d225e447ff9916434a886d136ee4d",
+    "label": "m3a2-aj-a0s-s2",
+    "mirror_commit": "e48564a4757377fe4f62f1486c9a13d96f95c900",
+    "output_sha256": "13835b687e61584aba9da63182f204b97a4b90cd4bd4764f0c91eb30ddcaac00",
+    "rows": 2458,
+    "start_utc": "2026-09-28T13:07:41Z"
+   }
+  ]
+ },
+ "schema": "decision2-m3a-autojev-targets/1",
+ "score": {
+  "argmax_accuracy_vs_gold": 0.6395,
+  "mean_brier": 0.4915,
+  "mean_gold_probability": 0.4552,
+  "mean_normalized_entropy": 0.7413,
+  "no_answer_reasons": {},
+  "no_native_answer": 0,
+  "rows": 516,
+  "targets": 516
+ },
+ "teacher": "autojev27",
+ "wave": "aj-a0s"
+}
