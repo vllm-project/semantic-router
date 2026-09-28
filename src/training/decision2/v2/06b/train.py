@@ -447,6 +447,8 @@ class CausalQwenFamily:
         if any(t is not None for t in teacher):
             q = torch.zeros_like(targets)
             for i, (record, t) in enumerate(zip(records, teacher)):
+                if t is None:
+                    continue
                 row = self.rows[record["source_row_id"]]
                 mapped = original_probabilities(row, native_keys(record), t)
                 q[i, : len(mapped)] = torch.tensor(mapped, device=device)
