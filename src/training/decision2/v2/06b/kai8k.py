@@ -25,6 +25,7 @@ class ContextOverflow(ValueError):
 
 
 def runtime_flags(torch: Any) -> None:
+    torch.set_num_threads(4)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     torch.backends.mha.set_fastpath_enabled(False)

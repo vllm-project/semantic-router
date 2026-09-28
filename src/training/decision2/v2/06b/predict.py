@@ -53,6 +53,9 @@ class Runner:
             )
             self.config_sha = identity["native_manifest_sha256"]
         else:
+            import torch
+
+            kai8k.runtime_flags(torch)
             import_bundle(args.bundle)
             self.model, self.packer, self.metadata = enc.load(
                 args.native_dir, args.manifest_sha256, device=self.device

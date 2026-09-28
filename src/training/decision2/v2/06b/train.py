@@ -377,6 +377,7 @@ def run(
     if output.exists():
         raise FileExistsError(output)
     output.mkdir(parents=True)
+    kai8k.runtime_flags(torch)
     torch.cuda.set_per_process_memory_fraction(
         min(
             1.0,
