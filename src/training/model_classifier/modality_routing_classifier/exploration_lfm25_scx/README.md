@@ -47,6 +47,12 @@ audit refuses predictions it cannot tie to the rows it scores them on.
   as multi-hot with one active label per row.
 - **Large writes.** Trainer checkpoints are off. Multi-gigabyte writes coincided with
   WSL crashes, so each script saves once at the end.
+- **Licenses.** `LiquidAI/LFM2.5-Encoder-350M` is released under the LFM Open License
+  v1.0, not an OSI-approved license (Hugging Face lists it as `license: other`).
+  `scx-admin/scx-router-v0.1` is Apache-2.0. This is fine for exploration scripts that
+  are not shipped, but if LFM2.5 ever moves from this exploration into the candidate
+  path, check its license against the project's policy first, and say so here and in
+  any model card.
 
 ## Tests
 
