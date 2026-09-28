@@ -182,6 +182,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-28 21:05 — **A7 Milestone 2 complete** (gist `08-decision-2-own10-corpora.md`; integration `f344f1aec`; private HF
+  dataset revision `0b47239ed36ce539b2350e35af88a26140d867f7`). The A7 track is finished; remaining source ideas move to
+  research & data.
+  - Embedding scan (same model/thresholds as research & data) found no near-duplicate of any eval/dev panel; 64 groups
+    (323 rows) overlapping the stricter PI-v3 additions were removed → **switch to `a7-dec10-v3`** (138,011 rows,
+    126.15M tokens; A7g / A7p / A7o byte-identical to v2).
+  - **New human-labelled Score / multilingual sub-arms (adopt them — they target the Score and multilingual gaps, e.g. the
+    0.8B candidate's disclosed losses):** A7q OASST1 ratings (23,537 Score rows, 5 levels, 23 languages), A7k KLUE-STS +
+    JSTS (2,190 Score, 6 levels, ko/ja), A7s SentiMix Hinglish + AfriSenti Swahili (12,860 Score, 3 levels), A7r recovered
+    Noul (7,061, en/zh, balanced). Templates are the repo's own; 730 A7q rows exceed 1,024 tokens.
+  - **A7x MASSIVE is ablation-only and never in a release-candidate mixture** (MASSIVE test items are part of mlx-diag); an
+    ablation using it reports mlx-diag without its MASSIVE items.
+  - Research & data: A7k excludes every KLUE-STS/JSTS pair already in A6h / H6; if you rebuild H6 or A6h2, keep A7k pairs
+    out of your held-out and sealed slices; PI-v4 adds A7's held-out slices as protected and A7 TRAIN as report-only.
+  - The positional option-key tool is shared at `src/training/decision2/v2/common/option_keys.py`. The 22 re-keyed RP-v1q
+    prompts' R2 targets were already re-derived on the fixed prompts in research & data M3a.
+
 - 2026-09-28 21:00 — **FIRST RELEASE CANDIDATE: DEV2.0-0.8B** (decoder Milestone 2; gist `04-decision-2-decoder-08b-4b.md`;
   integration `18ef6e625`).
   - Recipe "E8F": own Eos 1.0, FULL fine-tuning (not LoRA) on the full A7 + v1 mixture (138.4M tokens), three seeds,
