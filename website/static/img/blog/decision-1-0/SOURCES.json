@@ -76,9 +76,9 @@
     },
     {
       "file": "tetris-poster.png",
-      "sha256": "f4f599211f1f00758bcc9b57cd9b83a50085dfec1b7980ab92c14631994608ac",
+      "sha256": "abdea69baca4a502ef41b093c385bfeb76cdd2cba2df3b89c0b1529e5eecf175",
       "source_urls": [],
-      "origin": "Frame 4.5 of the user-provided Tetris demo; source master SHA-256 d9bd6d0db6f57bafc7de4ce1fa913f03eaf2db482d7ba803b06266ae1aef68d1"
+      "origin": "Frame 1.0 of the updated user-provided Tetris demo; source master SHA-256 1f43b9f9a81b0b2321772c8d41a9f6dcdfd24f2b486792fb634d41766595ec4c"
     },
     {
       "file": "readout.png",
@@ -135,16 +135,16 @@
   "demo_videos": [
     {
       "path": "/videos/decision-1-0/decision-1-0-tetris.mp4",
-      "sha256": "58f07b3039868aaebcaea3aab756ef6bf7d7fea6c4e9d63123cad2b8d30c3eb8",
-      "bytes": 4384906,
-      "duration_seconds": 45.766667,
-      "width": 1146,
+      "sha256": "1f552bd8bdc6160f376bf8217b3a3a3eff4e5b24a1ab765b67f16e7bbc75367a",
+      "bytes": 2495438,
+      "duration_seconds": 16.206009,
+      "width": 1192,
       "height": 1080,
       "fps": 30,
-      "master_sha256": "d9bd6d0db6f57bafc7de4ce1fa913f03eaf2db482d7ba803b06266ae1aef68d1",
+      "master_sha256": "1f43b9f9a81b0b2321772c8d41a9f6dcdfd24f2b486792fb634d41766595ec4c",
       "poster": "/img/blog/decision-1-0/tetris-poster.png",
-      "transcode": "H.264 High profile, Level 4.0, yuv420p, AAC-LC, fast-start MP4; original audio retained through AAC transcoding.",
-      "context": "User-provided side-by-side Tetris visualization labeled Jev Cloud, Kai-0.6B Local, and Lux-9B Local. On-screen latency values are part of the supplied recording; they were not independently reproduced and are not a standardized benchmark."
+      "transcode": "H.264 High profile, Level 4.1, yuv420p, AAC-LC, fast-start MP4; scaled to 1192x1080 from the 2382x2160 HEVC source.",
+      "context": "User-provided two-board Tetris visualization showing Kai-0.6B beside Lux-9B, then Jev Upstream. On-screen latency values are part of the supplied recording; they were not independently reproduced and are not a standardized benchmark."
     }
   ],
   "benchmark": {

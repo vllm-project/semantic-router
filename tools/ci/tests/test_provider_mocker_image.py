@@ -14,7 +14,7 @@ from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import provider_mocker_image as mocker
-from ci_plan import make_plan
+from ci_plan import digest, github_outputs, make_plan, resolve_image_sources
 from image_artifacts import publication_tags
 
 
@@ -124,14 +124,84 @@ class FixturePublicationTests(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(ValueError):
                 mocker.validate_acquisition({**result, field: "wrong"}, result)
 
-    def test_absent_publication_fails_closed_instead_of_rebuilding(self):
-        for code in (401, 403, 404):
+    def test_registry_access_errors_fail_closed_and_missing_tag_is_distinct(self):
+        for code in (401, 403):
             with patch.object(
                 mocker,
                 "RegistryClient",
                 side_effect=HTTPError("url", code, "missing", {}, None),
             ), self.assertRaises(mocker.PublicationUnavailableError):
                 mocker.resolve_published({"inputs_sha256": "b" * 64})
+        with patch.object(
+            mocker,
+            "RegistryClient",
+            side_effect=HTTPError("url", 404, "missing", {}, None),
+        ), self.assertRaises(mocker.PublicationMissingError):
+            mocker.resolve_published({"inputs_sha256": "b" * 64})
+
+    def test_missing_exact_input_publication_builds_candidate_for_pr_and_main(self):
+        for profile in ("pr", "main"):
+            with self.subTest(profile=profile):
+                plan = make_plan(
+                    ["e2e/testing/run_memory_integration.sh"],
+                    source_sha="c" * 40,
+                    profile=profile,
+                )
+                with patch(
+                    "ci_plan.resolve_published",
+                    side_effect=mocker.PublicationMissingError("missing"),
+                ):
+                    resolve_image_sources(plan)
+                self.assertEqual(
+                    plan["image_sources"][mocker.IMAGE]["source"], "candidate"
+                )
+                self.assertIn(mocker.IMAGE, plan["build_images"])
+                self.assertEqual(
+                    mocker.IMAGE in plan["publish_images"], profile == "main"
+                )
+                self.assertEqual(plan["multiarch"], profile == "main")
+                producer = json.loads(github_outputs(plan)["image_producers"])[
+                    "image-fixtures"
+                ]
+                self.assertEqual(producer["build_images"], [mocker.IMAGE])
+                self.assertEqual(producer["published_images"], [])
+                self.assertEqual(
+                    plan["plan_sha256"],
+                    digest(
+                        {
+                            key: value
+                            for key, value in plan.items()
+                            if key != "plan_sha256"
+                        }
+                    ),
+                )
+
+    def test_registry_permission_failure_does_not_build_untrusted_fallback(self):
+        plan = make_plan(
+            ["e2e/testing/run_memory_integration.sh"],
+            source_sha="c" * 40,
+        )
+        with patch(
+            "ci_plan.resolve_published",
+            side_effect=mocker.PublicationUnavailableError("denied"),
+        ), self.assertRaises(mocker.PublicationUnavailableError):
+            resolve_image_sources(plan)
+        self.assertNotIn(mocker.IMAGE, plan["build_images"])
+
+    def test_release_and_nightly_require_a_published_main_fixture(self):
+        for profile in ("release", "nightly"):
+            with self.subTest(profile=profile):
+                plan = make_plan(
+                    ["e2e/testing/run_memory_integration.sh"],
+                    source_sha="c" * 40,
+                    profile=profile,
+                )
+                with patch(
+                    "ci_plan.resolve_published",
+                    side_effect=mocker.PublicationMissingError("missing"),
+                ), self.assertRaises(mocker.PublicationMissingError):
+                    resolve_image_sources(plan)
+                self.assertNotIn(mocker.IMAGE, plan["build_images"])
 
     def test_fixture_is_reused_for_all_unrelated_ci_entrypoints(self):
         for profile, full in (

@@ -92,12 +92,12 @@ func (r *OpenAIRouter) decisionRouteActionDestination(
 		return eligible[0].Model, true, nil
 	}
 	if requirements := r.candidateRequirements(ctx); selection.CandidateRequirementsEnabled(requirements) {
-		demand, err := selection.EffectiveCandidateDemand(ctx.SemanticRequest, decision)
+		refs := append([]config.ModelRef{{Model: destination}}, decision.ModelRefs...)
+		eligible, err := r.eligibleRequestModelRefs(requirements, refs, ctx.SemanticRequest, decision)
 		if err != nil {
 			return "", false, err
 		}
-		model, err := r.strictRouteActionDestination(decision, demand, requirements)
-		return model, err == nil, err
+		return eligible[0].Model, true, nil
 	}
 	if !r.modelNameExceedsContextWindow(destination, ctx.VSRContextTokenCount) {
 		logging.ComponentEvent("extproc", "route_action_applied", map[string]interface{}{
