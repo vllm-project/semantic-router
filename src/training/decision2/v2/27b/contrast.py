@@ -311,7 +311,10 @@ def main() -> None:
             target,
             float(sigma),
         )
-        result["contrasts"][f"{treat}-vs-{control}"] = {**decision, "bootstrap": boot}
+        result["contrasts"][f"{treat}-vs-{control}:{target}"] = {
+            **decision,
+            "bootstrap": boot,
+        }
         print(
             json.dumps(
                 {
