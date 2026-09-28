@@ -132,6 +132,11 @@ Shared-adapter changes (separate commit with tests): Kev size table (`inference/
 deferred: this-that 1.2, Jet v6.2, Nimble v2, Jebadiah 27B, Hopper (G); Rune only with
 a parity-checked ROCm path.
 
+**A4.1 (Q2 technical stop and correction).** Q2 stopped at engine load after 14.1 s
+(exit 1, no prediction): the release's dataclasses need the dynamically loaded module
+registered in `sys.modules`. Fixed in the adapter with a regression test; Q2 is
+relaunched once as Q2b with no other change.
+
 ## Reused results (identity verified, no new GPU time)
 
 Recorded predictions were located by SHA-256, adopted, sealed and re-scored with

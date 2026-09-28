@@ -34,6 +34,21 @@ class InternDecisionTest(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(answers["q"]["choice"], "a")
 
+    def test_release_module_with_dataclass_loads(self) -> None:
+        import tempfile
+
+        from inference.intern_decision import load_engine
+
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "inference.py").write_text(
+                "from dataclasses import dataclass\n"
+                "@dataclass(frozen=True)\nclass C:\n    x: int = 1\n"
+                "DEFAULT_TEMPERATURE = 2.0\n"
+                "class DecisionEngine:\n    def __init__(self, path, device):\n        self.c = C()\n"
+            )
+            module, engine = load_engine(Path(tmp), "cpu")
+            self.assertEqual(engine.c.x, 1)
+
     def test_rejects_other_revision(self) -> None:
         with self.assertRaisesRegex(ValueError, "pinned model revision"):
             collect(
