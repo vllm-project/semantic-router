@@ -29,12 +29,13 @@
 #
 # Categories:
 #   node-address    a nodes.env or node-names.env value (at least 4 characters),
-#                   its host part, or a node IPv4 written with - or _ separators
+#                   its host part, or a node IPv4 written with - or _ separators;
+#                   a node IPv4 matches wherever it is not part of a longer number
 #   secret-value    a secrets.env value (at least 8 characters), or the host of a URL value
 #   ipv4            any other IPv4 address except 0.0.0.0/8, 127.0.0.0/8, 240.0.0.0/4
 #                   and 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24 (documentation),
-#                   none of which can name a machine; octets above 255 and dotted runs
-#                   of more than four numbers (versions) are not addresses
+#                   none of which can name a machine; octets above 255, dotted runs of
+#                   more than four numbers and version tokens (v1.2.3.4) are not addresses
 #   hf-token        hf_ + 20 or more letters/digits
 #   apikey-token    apikey_ + 12 or more token characters
 #   jev-live-token  jv_live_ + 12 or more token characters
@@ -136,15 +137,15 @@ def is_ipv4(text):
     return re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,3}){3}", text) is not None
 
 
-def bounded(terms):
+def bounded(terms, edge="A-Za-z0-9"):
     alternatives = sorted({re.escape(term) for term in terms}, key=len, reverse=True)
     if not alternatives:
         return None
-    return re.compile(r"(?<![A-Za-z0-9])(?:" + "|".join(alternatives) + r")(?![A-Za-z0-9])", FLAGS | re.IGNORECASE)
+    return re.compile(rf"(?<![{edge}])(?:" + "|".join(alternatives) + rf")(?![{edge}])", FLAGS | re.IGNORECASE)
 
 
 def load_detectors(strict):
-    node_terms = set()
+    node_terms, node_ips = set(), set()
     for env_var, default, what, optional in (
         ("DEV2_NODES_FILE", "~/.config/decision2/nodes.env", "nodes", False),
         ("DEV2_NODE_NAMES_FILE", "~/.config/decision2/node-names.env", "node names", True),
@@ -157,10 +158,13 @@ def load_detectors(strict):
             elif "." in host:
                 candidates.add(host.split(".", 1)[0])
             for term in candidates:
-                if len(term) >= 4:
+                if len(term) < 4:
+                    if term == value:
+                        warn(f"{what} entry {key} is shorter than 4 characters; not matched")
+                elif re.fullmatch(r"[0-9]{1,3}(?:[._-][0-9]{1,3}){3}", term):
+                    node_ips.add(term)
+                else:
                     node_terms.add(term)
-                elif term == value:
-                    warn(f"{what} entry {key} is shorter than 4 characters; not matched")
     secret_values, secret_hosts = set(), set()
     for key, value in read_pairs("DEV2_SECRETS_FILE", "~/.config/decision2/secrets.env", "secrets", strict):
         if len(value) < 8:
@@ -172,9 +176,9 @@ def load_detectors(strict):
             if len(host) >= 4:
                 secret_hosts.add(host)
     detectors = []
-    node_re = bounded(node_terms)
-    if node_re:
-        detectors.append(("node-address", node_re))
+    for node_re in (bounded(node_terms), bounded(node_ips, edge="0-9")):
+        if node_re:
+            detectors.append(("node-address", node_re))
     if secret_values:
         alternatives = sorted((re.escape(v) for v in secret_values), key=len, reverse=True)
         detectors.append(("secret-value", re.compile("|".join(alternatives))))
@@ -192,6 +196,10 @@ def flagged_ipv4(text):
     return not any(address in network for network in ALLOWED_NETWORKS)
 
 
+def version_token(text, start):
+    return start > 0 and text[start - 1] in "vV" and (start == 1 or not text[start - 2].isalnum())
+
+
 def placeholder(match):
     body = next((group for group in match.groups() if group), "")
     return bool(body) and len(set(body.lower())) == 1
@@ -203,7 +211,7 @@ def matches(text, detectors):
         for match in regex.finditer(text):
             yield match.start(), match.end(), category
     for match in IPV4.finditer(text):
-        if flagged_ipv4(match.group(1)):
+        if flagged_ipv4(match.group(1)) and not version_token(text, match.start()):
             yield match.start(), match.end(), "ipv4"
     for category, regex in TOKEN_PATTERNS:
         for match in regex.finditer(text):

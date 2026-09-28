@@ -111,6 +111,7 @@ class CheckNoPrivateTest(unittest.TestCase):
             f"{APIKEY} {JEV_LIVE}",
             f"{GH_TOKEN} {PAT}",
             KEY_HEADER,
+            f"dev{OTHER_IP} and v{NODE_IP}",
         ]
         leaky.write_text("\n".join(lines) + "\n")
         result = self.guard(str(leaky))
@@ -128,6 +129,7 @@ class CheckNoPrivateTest(unittest.TestCase):
                 f"{leaky}:9: apikey-token,jev-live-token",
                 f"{leaky}:10: github-token",
                 f"{leaky}:11: private-key",
+                f"{leaky}:12: ipv4,node-address",
             ],
         )
         self.assert_nothing_private_printed(result)
@@ -138,7 +140,7 @@ class CheckNoPrivateTest(unittest.TestCase):
         clean = self.work / "clean.md"
         clean.write_text(
             "bind 0.0.0.0:8000 or 127.0.0.1; docs use 192.0.2.10 and 203.0.113.7\n"
-            "netmask 255.255.255.0; versions 1.2.3.4.5, 2.1.281.554, v0.2.1\n"
+            "netmask 255.255.255.0; versions 1.2.3.4.5, 2.1.281.554, v0.2.1, v1.0.0.0\n"
             "scan for `hf_`, `apikey_`, `jv_live_`, `gho_` before committing\n"
             f"export HF_TOKEN=hf_{'x' * 24}\n"
             "say node A or node-a, never the address\n"
