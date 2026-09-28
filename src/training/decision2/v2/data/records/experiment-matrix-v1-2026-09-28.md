@@ -12,6 +12,10 @@ Data arms referenced below (A0–A6, R0–R2, A0p) are defined, hashed and publi
 the data-arm registry `arms-v1-2026-09-28.md` next to this file. Until an arm has a
 frozen hash there, a contrast that needs it must not start.
 
+Revision v1.1 (same day): adds D4b (staged hard negatives), the D7 replay-dose and
+teacher-quality notes, D11 (evidence-removal abstention), and records that Jev
+outputs cannot be training targets (TypeSafe MCA §2.3(b)). v1 rows are unchanged.
+
 ## 1. Shared protocol (binds every row of the matrix)
 
 1. **One factor per contrast.** Same start repo@revision, native adapter, runtime,
@@ -161,6 +165,9 @@ dev proxy · stop rule · testbed · scale-up. Defaults from §1 apply unless ov
 - **Metric:** typed DEV Choice; `AHO-A4`; option-order flip rate; Choice Brier.
 - **Stop:** Choice effect rule fails in both T1 testbeds.
 - **Testbed:** T1a, T1b → T2; T3 reuses A4 pools for M3.
+- **D4b (staging, only if D4 passes):** same A4h rows as a short final stage (last
+  20% of updates) versus mixed from the start, same total budget. [A] CLM reports
+  69.2% hard-negative top-1 for a late stage vs a 62.4% peak when mixed from the start.
 
 ### D5 — multilingual native tasks (arm A5)
 
@@ -220,6 +227,13 @@ dev proxy · stop rule · testbed · scale-up. Defaults from §1 apply unless ov
 - **Preflight:** teacher targets must reproduce the teacher's own native output on
   RP-v1 (probability parity) before any student step.
 - **Testbed:** T1a (Kai/Lex), T1b (Eos) → T2 (Sol, Nox); T3 Lux only if T1/T2 pass.
+- **Teacher quality [M] (RP-v1, in-distribution):** Kai/Lex/Eos Score targets are
+  near-uniform (normalized entropy 0.86–1.0), so at T1 R2 can only test Choice/Noul
+  retention; exclude or separately weight Score replay rows there and say so. Sol/Nox/Lux
+  targets are strong on all three types.
+- **Dose (after R1 vs R2 is decided):** replay share 10% / 25% / 40% of tokens with the
+  winning target type ([A] CLM uses 40%; the Jev-dataroom Japanese replication lost old
+  tasks and calibration with none).
 
 ### D8 — source diversity at fixed tokens
 
@@ -247,6 +261,18 @@ dev proxy · stop rule · testbed · scale-up. Defaults from §1 apply unless ov
   frozen mix versus the best single-arm treatment, same budget. Report per-factor
   deltas only from D1–D9, never from D10.
 
+### D11 — evidence-removal abstention (data in arms v2)
+
+- **Hypothesis:** counterfactual copies whose operative evidence is removed, with an
+  explicit "cannot be determined" option (Choice) or a false/"not established" target
+  (Noul), teach small models to lower confidence when evidence is missing.
+- **Evidence:** [A] Lux1 card: evidence-removal confidence drop Kev-9B 53 points, Jev 30,
+  Lux 27, Sol 6, Kai 0.6; [A] third-party CLM probes: abstain options chosen < 1.7% on
+  ambiguous cases.
+- **Contrast:** template S, X = evidence-removed twins of A2/A3 items vs the same
+  items without removal. **Metric:** evidence-removal confidence drop, abstention
+  calibration, typed DEV retention. **Testbed:** T1a, T1b.
+
 ### Readout and objective factors (owned by the size tracks; data dependencies here)
 
 | ID | Factor (control → treatment) | Evidence | Data | Testbed |
@@ -256,7 +282,7 @@ dev proxy · stop rule · testbed · scale-up. Defaults from §1 apply unless ov
 | M3 | Negatives in the contrastive term: in-batch random → mined hard (A4 pools) | [A] CLM | A4 pools | T3 |
 | M4 | Calibration: CE → CE + Brier; per-type temperature always fitted on CAL | [A] This-That-Model, proper-scoring papers; [M] 0.8B temperature-transport diagnostic | A0 | T1a, T1b |
 | M5 | Score objective: CE → CE + RPS / cumulative-link head, **only on A0 ∪ A6** | [M] RPS on A0 alone failed (276/700) | A6 | T1a, T1b |
-| M6 | Distillation from third-party decision teachers (teacher only, never weights) | [M] AutoJev KL 510/700 vs 562/700; Kev v3 teacher missed gates | A0 | deprioritized; Jev API only if its terms allow |
+| M6 | Distillation from third-party decision teachers (teacher only, never weights) | [M] AutoJev KL 510/700 vs 562/700; Kev v3 teacher missed gates | A0 | deprioritized; Jev excluded (MCA §2.3(b) forbids training on its outputs); other teachers only if their licences allow |
 | M7 | Initialization: own 1.0 → official Base/general | [M] measured at 0.6B–27B (see release status) | — | do not repeat on A0; re-test only with the best mixture |
 
 CLM-specific rule (from the brief): relative candidate similarity is not an absolute
