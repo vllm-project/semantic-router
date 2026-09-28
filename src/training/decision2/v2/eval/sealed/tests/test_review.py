@@ -86,15 +86,25 @@ class ReviewTest(unittest.TestCase):
                 )
             )
             scored = json.loads((root / "score.json").read_text())
+            sampled_a = sum(
+                truth[item_id]["gold"]["decision"]["value"] == "a"
+                for item_id in mapping.values()
+                if truth[item_id]["task"] == "t/choice"
+            )
         tasks = scored["tasks"]
         self.assertEqual(tasks["t/long"]["decision"], "PASS")
         self.assertEqual(tasks["t/long"]["majority_agreement_with_gold"], 1.0)
         self.assertTrue(tasks["t/noul"]["decision"].startswith("FAIL: quality flags"))
         self.assertIn("t/noul", scored["failed_tasks"])
-        self.assertEqual(tasks["t/choice"]["per_reviewer_agreement"]["r1"], 0.5)
         self.assertEqual(
-            tasks["t/choice"]["decision"], "FAIL: majority agreement not above chance"
+            tasks["t/choice"]["per_reviewer_agreement"]["r1"], sampled_a / 16
         )
+        expected = (
+            "PASS"
+            if sampled_a / 16 > 0.5
+            else "FAIL: majority agreement not above chance"
+        )
+        self.assertEqual(tasks["t/choice"]["decision"], expected)
 
     def test_fleiss_kappa(self):
         self.assertAlmostEqual(
