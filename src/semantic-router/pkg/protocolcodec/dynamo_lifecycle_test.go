@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -107,7 +108,7 @@ func TestDynamoLateLifecycleReachesBoundaryValidation(t *testing.T) {
 		t.Fatal(startErr)
 	}
 	frames, _, _, err := stream.Push(chunks[1])
-	if err != rejection || len(frames) != 0 {
+	if !errors.Is(err, rejection) || len(frames) != 0 {
 		t.Fatalf("metadata bypassed boundary: frames=%q err=%v", frames, err)
 	}
 	final, _, _, _ := stream.Finalize(nil)
