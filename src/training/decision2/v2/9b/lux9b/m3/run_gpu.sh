@@ -7,11 +7,12 @@ set -euo pipefail
 gpu=$1; run=$2; purpose=$3; expected=$4; shift 4; [ "$1" = "--" ] && shift
 allowed="${D2_9B_GPUS:-2 3 4 6 7}"
 [[ " $allowed " == *" $gpu "* ]] || { echo "GPU $gpu is not allocated to the 9B track" >&2; exit 64; }
-bus=$(rocm-smi --showbus 2>/dev/null | awk -v g="GPU[$gpu]" '$1 == g {print tolower($NF)}')
-render=$(for r in /sys/class/drm/renderD*; do
-  slot=$(sed -n 's/^PCI_SLOT_NAME=//p' "$r/device/uevent" 2>/dev/null)
-  [ -n "$bus" ] && [ "$slot" = "$bus" ] && basename "$r"
-done | head -n 1)
+bus=$(rocm-smi --showbus 2>/dev/null | awk -v g="GPU[$gpu]" '$1 == g {print tolower($NF)}' || true)
+render=""
+for r in /sys/class/drm/renderD*; do
+  slot=$(sed -n 's/^PCI_SLOT_NAME=//p' "$r/device/uevent" 2>/dev/null || true)
+  if [ -n "$bus" ] && [ "$slot" = "$bus" ]; then render=$(basename "$r"); break; fi
+done
 [ -n "$render" ] || { echo "no render node for GPU $gpu" >&2; exit 64; }
 lock=/data/dev2/leases/gpu$gpu.lock
 mkdir -p "$lock"
