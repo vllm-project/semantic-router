@@ -1,6 +1,7 @@
-"""Build the A7 encoder-family sub-arms (`a7-enc10-v1`) from pinned human-labelled sources.
+"""Build the A7 encoder-family sub-arms (`a7-enc10-v2`) from pinned human-labelled sources.
 
-Rules: `records/a7-enc10-prereg-2026-09-28.md`. States are rendered from the
+Rules: `records/a7-enc10-prereg-2026-09-28.md` and its amendment 1 (A7x
+distractors from the same scenario only). States are rendered from the
 upstream files; instructions and option descriptions are the fixed English
 templates below; labels are the publishers' human labels. No 1.0 roster text is
 read. Writes prelim/<sub>.{train,aho}.jsonl and a count-only build manifest for
@@ -35,7 +36,7 @@ from v2.data.a7.build_a7 import (
 from v2.data.freeze import canonical_jsonl
 from v2.data.textnorm import normalize
 
-VERSION = "a7-enc10-v1"
+VERSION = "a7-enc10-v2"
 ENC_SUB_ARMS = ("A7q", "A7k", "A7s", "A7x")
 TIE_BAND = 0.1
 BALANCE_RATIO = 1.2
@@ -455,9 +456,6 @@ def massive_rows(
     intents_by_scenario: dict[str, set[str]] = collections.defaultdict(set)
     for item in items:
         intents_by_scenario[item["scenario"]].add(item["intent"])
-    all_intents = sorted(
-        {intent for group in intents_by_scenario.values() for intent in group}
-    )
     cells: dict[tuple[str, str], dict[str, list[dict[str, Any]]]] = (
         collections.defaultdict(lambda: collections.defaultdict(list))
     )
@@ -488,16 +486,13 @@ def massive_rows(
         for item in ordered[:MASSIVE_PER_LOCALE]:
             upstream_id = f"{item['locale']}:{item['id']}"
             same = sorted(intents_by_scenario[item["scenario"]] - {item["intent"]})
-            pool = (
-                same
-                if len(same) >= 3
-                else same + sorted(set(all_intents) - set(same) - {item["intent"]})
-            )
             distractors = sorted(
-                pool,
+                same,
                 key=lambda intent: _sha(f"massive-distractor:{upstream_id}:{intent}"),
             )[:3]
-            position = int(_sha(f"massive-position:{upstream_id}"), 16) % 4
+            position = int(_sha(f"massive-position:{upstream_id}"), 16) % (
+                len(distractors) + 1
+            )
             names = distractors[:position] + [item["intent"]] + distractors[position:]
             rows.append(
                 _row(

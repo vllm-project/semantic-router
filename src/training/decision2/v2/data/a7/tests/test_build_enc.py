@@ -188,7 +188,10 @@ class SourceRowsTest(unittest.TestCase):
             self.assertEqual(
                 gold, row["audit_metadata"]["a7"]["intent"].replace("_", " ")
             )
-            self.assertEqual(len(row["options"]), 4)
+            self.assertEqual(len(row["options"]), 3)
+            self.assertTrue(
+                all(o["description"].startswith("alarm") for o in row["options"])
+            )
             self.assertEqual(
                 row["group_id"],
                 f"a7:A7x:massive:{row['audit_metadata']['a7']['upstream_id'].split(':')[1]}",
