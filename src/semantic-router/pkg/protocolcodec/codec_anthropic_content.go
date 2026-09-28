@@ -68,33 +68,91 @@ func decodeAnthropicContentBlock(
 	if err != nil {
 		return llmprotocol.Content{}, err
 	}
-	if err := validateAnthropicContentVariant(body, typeName, providerOutput); err != nil {
+	rules := anthropicContentFieldRules(typeName, providerOutput)
+	if err := validateAnthropicContentVariant(body, typeName, rules, providerOutput); err != nil {
 		return llmprotocol.Content{}, err
 	}
-	if err := validateAnthropicContentExtensions(block, providerOutput); err != nil {
+	if err := validateAnthropicContentExtensions(block, rules, providerOutput); err != nil {
 		return llmprotocol.Content{}, err
 	}
 	return decodeAnthropicTypedContent(typeName, block, policy)
 }
 
-func validateAnthropicContentVariant(body json.RawMessage, typeName string, providerOutput bool) error {
-	allowedByType := map[string][]string{
-		"text":        {"cache_control", "citations", "text", "type"},
-		"thinking":    {"signature", "thinking", "type"},
-		"image":       {"cache_control", "source", "transformations", "type"},
-		"document":    {"cache_control", "citations", "context", "source", "title", "type"},
-		"tool_use":    {"cache_control", "caller", "id", "input", "name", "toolset_name", "type"},
-		"tool_result": {"cache_control", "content", "is_error", "tool_use_id", "toolset_name", "type"},
+// anthropicFieldRule classifies a known field for one (block type, direction) pair.
+type anthropicFieldRule uint8
+
+const (
+	anthropicFieldAccepted anthropicFieldRule = iota + 1
+	anthropicFieldUnsupported
+)
+
+// Single source of truth for the variant and extension checks; fields outside a row belong to another variant.
+var (
+	anthropicRequestContentFields = map[string]map[string]anthropicFieldRule{
+		"text":        anthropicFieldRules([]string{"cache_control", "text", "type"}, "citations"),
+		"thinking":    anthropicFieldRules([]string{"signature", "thinking", "type"}),
+		"image":       anthropicFieldRules([]string{"cache_control", "source", "type"}, "transformations"),
+		"document":    anthropicFieldRules([]string{"cache_control", "source", "type"}, "citations", "context", "title"),
+		"tool_use":    anthropicFieldRules([]string{"cache_control", "caller", "id", "input", "name", "type"}, "toolset_name"),
+		"tool_result": anthropicFieldRules([]string{"cache_control", "content", "is_error", "tool_use_id", "type"}, "toolset_name"),
 	}
+	anthropicResponseContentFields = map[string]map[string]anthropicFieldRule{
+		"text":     anthropicFieldRules([]string{"text", "type"}, "citations"),
+		"thinking": anthropicFieldRules([]string{"signature", "thinking", "type"}),
+		"tool_use": anthropicFieldRules([]string{"caller", "id", "input", "name", "toolset_name", "type"}),
+	}
+	anthropicKnownContentFields = []string{
+		"cache_control", "caller", "citations", "content", "context", "data", "file_id", "id", "input",
+		"is_error", "name", "signature", "source", "text", "thinking", "title", "tool_use_id",
+		"toolset_name", "transformations", "type",
+	}
+	anthropicRequiredContentFields = map[string][]string{
+		"text":        {"text"},
+		"thinking":    {"thinking"},
+		"image":       {"source"},
+		"document":    {"source"},
+		"tool_use":    {"id", "input", "name"},
+		"tool_result": {"content", "tool_use_id"},
+	}
+)
+
+// anthropicExtensionFields lists every field a rule may mark unsupported, in error-precedence order.
+var anthropicExtensionFields = []struct {
+	name  string
+	value func(*anthropicContentWire) json.RawMessage
+}{
+	{"citations", func(block *anthropicContentWire) json.RawMessage { return block.Citations }},
+	{"context", func(block *anthropicContentWire) json.RawMessage { return block.Context }},
+	{"title", func(block *anthropicContentWire) json.RawMessage { return block.Title }},
+	{"toolset_name", func(block *anthropicContentWire) json.RawMessage { return block.ToolsetName }},
+	{"transformations", func(block *anthropicContentWire) json.RawMessage { return block.Transformations }},
+}
+
+func anthropicFieldRules(acceptedFields []string, unsupportedFields ...string) map[string]anthropicFieldRule {
+	rules := make(map[string]anthropicFieldRule, len(acceptedFields)+len(unsupportedFields))
+	for _, name := range acceptedFields {
+		rules[name] = anthropicFieldAccepted
+	}
+	for _, name := range unsupportedFields {
+		rules[name] = anthropicFieldUnsupported
+	}
+	return rules
+}
+
+func anthropicContentFieldRules(typeName string, providerOutput bool) map[string]anthropicFieldRule {
 	if providerOutput {
-		allowedByType = map[string][]string{
-			"text":     {"citations", "text", "type"},
-			"thinking": {"signature", "thinking", "type"},
-			"tool_use": {"caller", "id", "input", "name", "toolset_name", "type"},
-		}
+		return anthropicResponseContentFields[typeName]
 	}
-	allowed, recognized := allowedByType[typeName]
-	if !recognized {
+	return anthropicRequestContentFields[typeName]
+}
+
+func validateAnthropicContentVariant(
+	body json.RawMessage,
+	typeName string,
+	rules map[string]anthropicFieldRule,
+	providerOutput bool,
+) error {
+	if rules == nil {
 		return nil
 	}
 	var object map[string]json.RawMessage
@@ -104,19 +162,11 @@ func validateAnthropicContentVariant(body json.RawMessage, typeName string, prov
 	if err := requireAnthropicContentFields(object, typeName, providerOutput); err != nil {
 		return err
 	}
-	return rejectAnthropicContentVariantFields(object, allowed, providerOutput)
+	return rejectAnthropicContentVariantFields(object, rules, providerOutput)
 }
 
 func requireAnthropicContentFields(object map[string]json.RawMessage, typeName string, providerOutput bool) error {
-	requiredByType := map[string][]string{
-		"text":        {"text"},
-		"thinking":    {"thinking"},
-		"image":       {"source"},
-		"document":    {"source"},
-		"tool_use":    {"id", "input", "name"},
-		"tool_result": {"content", "tool_use_id"},
-	}
-	for _, name := range requiredByType[typeName] {
+	for _, name := range anthropicRequiredContentFields[typeName] {
 		if _, present := object[name]; present {
 			continue
 		}
@@ -135,23 +185,14 @@ func requireAnthropicContentFields(object map[string]json.RawMessage, typeName s
 
 func rejectAnthropicContentVariantFields(
 	object map[string]json.RawMessage,
-	allowed []string,
+	rules map[string]anthropicFieldRule,
 	providerOutput bool,
 ) error {
-	known := []string{
-		"cache_control", "caller", "citations", "content", "context", "data", "file_id", "id", "input",
-		"is_error", "name", "signature", "source", "text", "thinking", "title", "tool_use_id",
-		"toolset_name", "transformations", "type",
-	}
-	allowedSet := make(map[string]struct{}, len(allowed))
-	for _, name := range allowed {
-		allowedSet[name] = struct{}{}
-	}
-	for _, name := range known {
+	for _, name := range anthropicKnownContentFields {
 		if _, present := object[name]; !present {
 			continue
 		}
-		if _, valid := allowedSet[name]; valid {
+		if _, valid := rules[name]; valid {
 			continue
 		}
 		category := llmprotocol.ErrorInvalidRequest
@@ -207,19 +248,38 @@ func anthropicResponseContentType(body json.RawMessage) (string, error) {
 	}
 }
 
-func validateAnthropicContentExtensions(block anthropicContentWire, providerOutput bool) error {
-	if len(block.Citations) > 0 {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_citations", "Anthropic citations are not supported by the neutral contract", nil)
-	}
+func validateAnthropicContentExtensions(
+	block anthropicContentWire,
+	rules map[string]anthropicFieldRule,
+	providerOutput bool,
+) error {
 	if err := validateAnthropicToolCaller(block.Caller, providerOutput); err != nil {
 		return err
 	}
-	return rejectUnsupportedRequestFields(map[string]json.RawMessage{
-		"content.context":         block.Context,
-		"content.title":           block.Title,
-		"content.toolset_name":    block.ToolsetName,
-		"content.transformations": block.Transformations,
-	})
+	for _, field := range anthropicExtensionFields {
+		value := bytes.TrimSpace(field.value(&block))
+		if rules[field.name] != anthropicFieldUnsupported || len(value) == 0 || bytes.Equal(value, []byte("null")) {
+			continue
+		}
+		return unsupportedAnthropicContentField(field.name, providerOutput)
+	}
+	return nil
+}
+
+func unsupportedAnthropicContentField(name string, providerOutput bool) error {
+	if name == "citations" {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_citations", "Anthropic citations are not supported by the neutral contract", nil)
+	}
+	contract := "request"
+	if providerOutput {
+		contract = "response"
+	}
+	return llmprotocol.NewError(
+		llmprotocol.ErrorUnsupportedFeature,
+		"unsupported_content_"+name,
+		"content."+name+" is not supported by the protocol-neutral "+contract+" contract",
+		nil,
+	)
 }
 
 func validateAnthropicToolCaller(raw json.RawMessage, providerOutput bool) error {

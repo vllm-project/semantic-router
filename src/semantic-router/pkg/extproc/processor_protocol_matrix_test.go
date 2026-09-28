@@ -138,6 +138,34 @@ func TestExtProcAcceptsAnthropicToolUseCallerProvenance(t *testing.T) {
 	})
 }
 
+func TestExtProcAcceptsAnthropicToolUseToolsetName(t *testing.T) {
+	router := &OpenAIRouter{}
+	body := []byte(`{
+		"id":"msg_1","type":"message","role":"assistant","model":"m",
+		"content":[{"type":"tool_use","id":"call_1","name":"lookup","input":{"city":"Paris"},"toolset_name":"web"}],
+		"stop_reason":"tool_use","usage":{"input_tokens":1,"output_tokens":1}
+	}`)
+	for _, source := range []llmprotocol.WireFormat{llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIChatV1} {
+		t.Run(string(source), func(t *testing.T) {
+			ctx := &RequestContext{
+				SourceFormat: source,
+				TargetFormat: llmprotocol.AnthropicMessagesV1,
+				TraceContext: t.Context(),
+			}
+			response := router.handleNonStreamingResponseBody(body, ctx, 0)
+			if response.GetImmediateResponse() != nil || response.GetResponseBody() == nil {
+				t.Fatalf("successful Anthropic tool response was rejected: %+v", response)
+			}
+			if ctx.SemanticResponse == nil || len(ctx.SemanticResponse.Output) != 1 ||
+				len(ctx.SemanticResponse.Output[0].Content) != 1 ||
+				ctx.SemanticResponse.Output[0].Content[0].ToolCall == nil ||
+				ctx.SemanticResponse.Output[0].Content[0].ToolCall.ID != "call_1" {
+				t.Fatalf("tool response semantics changed: %+v", ctx.SemanticResponse)
+			}
+		})
+	}
+}
+
 // HTTP failures have a separate wire contract from failed model-generation
 // resources. This matrix locks the response-header/body seam so every backend
 // error envelope is rendered for every client without becoming a 2xx response.
