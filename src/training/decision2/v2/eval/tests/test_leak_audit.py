@@ -262,7 +262,7 @@ class LeakAuditTest(unittest.TestCase):
                 tmp, "ht-dev", (tmp / "p.jsonl", tmp / "g.jsonl")
             )
             self.assertEqual(len(questions), 40)
-            self.assertEqual(questions[0].cluster, "c0")
+            self.assertEqual(questions[0].cluster, "g0")
             self.assertEqual(questions[1].gold, 1)
             out = tmp / "audit.json"
             code = leak_audit.main(

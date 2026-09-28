@@ -202,7 +202,7 @@ def load_panel(
                 panel,
                 row["id"],
                 row["task"],
-                row.get("cluster_id") or row["group_id"],
+                row["group_id"],
                 row["questions"]["decision"],
                 row["gold"]["decision"]["value"],
                 states[row["id"]],
