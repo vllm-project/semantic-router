@@ -154,8 +154,12 @@ config:
     router:
       streamed_body:
         enabled: true
-        max_bytes: 10485760
-        timeout_sec: 30
+        # The positive large-body case is ~80 KiB. Keep a small, explicit
+        # ceiling so the streamed-body rejection E2E can exercise HTTP 413.
+        max_bytes: 131072
+        # A deliberately paused chunked upload exercises HTTP 408 while
+        # staying below Envoy's 60-second request and ExtProc timeouts.
+        timeout_sec: 3
       strategy: priority
     services:
       api:

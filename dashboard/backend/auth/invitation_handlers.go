@@ -49,10 +49,16 @@ func adminInvitationsHandler(svc *Service) http.HandlerFunc {
 				http.Error(w, "invalid body", http.StatusBadRequest)
 				return
 			}
+			if RejectRevokedMutation(w, r) {
+				return
+			}
 			item, token, err := svc.CreateInvitation(r.Context(), InvitationSpec{
 				Kind: request.Kind, Email: request.Email, Name: request.Name, Role: request.Role, MaxUses: request.Capacity,
-			}, ac.UserID)
+			}, ac.UserID, ac)
 			if err != nil {
+				if writeAdminMutationAuthorizationError(w, err) {
+					return
+				}
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -82,7 +88,10 @@ func adminInvitationItemHandler(svc *Service) http.HandlerFunc {
 		id := parts[0]
 		switch {
 		case r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "rotate":
-			item, token, err := svc.RotateInvitation(r.Context(), id)
+			if RejectRevokedMutation(w, r) {
+				return
+			}
+			item, token, err := svc.RotateInvitation(r.Context(), id, ac)
 			if err != nil {
 				writeInvitationError(w, err)
 				return
@@ -90,7 +99,10 @@ func adminInvitationItemHandler(svc *Service) http.HandlerFunc {
 			writeAudit(r, svc, "invitation.rotate", "dashboard-invitations/"+id, ac.UserID)
 			respondJSON(w, invitationMutationResponse{Invitation: item, Token: token})
 		case r.Method == http.MethodDelete && len(parts) == 1:
-			if err := svc.store.RevokeInvitation(r.Context(), id); err != nil {
+			if RejectRevokedMutation(w, r) {
+				return
+			}
+			if err := svc.store.RevokeInvitation(r.Context(), id, ac); err != nil {
 				writeInvitationError(w, err)
 				return
 			}
@@ -155,6 +167,9 @@ func publicInvitationHandler(svc *Service) http.HandlerFunc {
 }
 
 func writeInvitationError(w http.ResponseWriter, err error) {
+	if writeAdminMutationAuthorizationError(w, err) {
+		return
+	}
 	if errors.Is(err, ErrInvitationUnavailable) {
 		http.Error(w, "invitation is no longer available", http.StatusGone)
 		return
