@@ -97,6 +97,127 @@ class CalibrateFrozenTest(unittest.TestCase):
         self.assertEqual(loaded["inference"]["max_length"], 8192)
 
 
+class CalibrateFrozenCliTest(unittest.TestCase):
+    """main() wiring with the GPU pieces mocked."""
+
+    IDENTITY = {
+        "model_sha256": "7" * 64,
+        "files_sha256": {"decision_config.json": "a" * 64},
+    }
+    KERNELS = {
+        "kernel_bindings": {
+            "torch_chunk_gated_delta_rule": "fla.ops.chunk_gated_delta_rule"
+        },
+        "triton_cache_dir": "/cache",
+        "triton_cache_autotuning": "1",
+    }
+
+    def run_main(self, scratch: Path, *extra: str):
+        from unittest import mock
+
+        cal = scratch / "cal.jsonl"
+        cal.write_text('{"id": "c0"}\n')
+        output = scratch / "calibration.json"
+        records = [
+            {
+                "id": f"c{i}",
+                "task_type": kind,
+                "label": i % 2,
+                "logits": [0.5 * i, -0.2],
+            }
+            for i, kind in enumerate(("choice", "noul", "score") * 10)
+        ]
+        argv = [
+            "calibrate_frozen",
+            "--checkpoint",
+            str(scratch / "ckpt"),
+            "--cal",
+            str(cal),
+            "--cal-sha256",
+            calibrate_frozen.file_sha256(cal),
+            "--output",
+            str(output),
+            *extra,
+        ]
+        calls = []
+        with mock.patch("sys.argv", argv), mock.patch(
+            "training.model.data.load_partition", return_value=[{"id": "c0"}]
+        ), mock.patch(
+            "training.model.infer.checkpoint_fingerprint",
+            side_effect=lambda path, source=None: calls.append(("fingerprint", source))
+            or self.IDENTITY,
+        ), mock.patch.object(
+            calibrate_frozen,
+            "cal_logits",
+            side_effect=lambda *a: calls.append(("logits", a))
+            or (records, {"torch": "t"}),
+        ), mock.patch(
+            "v2.dec.runtime_check.require_runtime",
+            side_effect=lambda: calls.append(("kernels",)) or self.KERNELS,
+        ), mock.patch(
+            "builtins.print"
+        ):
+            calibrate_frozen.main()
+        return json.loads(output.read_text()), calls
+
+    def test_default_records_no_kernel_identity_and_no_source(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            report, calls = self.run_main(Path(scratch))
+        self.assertEqual([c[0] for c in calls], ["fingerprint", "logits"])
+        self.assertIsNone(calls[0][1])
+        self.assertEqual(calls[1][1][2:], (8192, 1, None))
+        self.assertEqual(
+            set(report["inference"]),
+            {"max_length", "batch_size", "device", "execution", "runtime"},
+        )
+
+    def test_adapter_source_kernels_and_package_limit_are_recorded(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            base = Path(scratch) / "base"
+            report, calls = self.run_main(
+                Path(scratch),
+                "--source-path",
+                str(base),
+                "--require-kernels",
+                "--max-length",
+                "32768",
+            )
+            path = Path(scratch) / "calibration.json"
+            _, loaded = load_calibration(path, self.IDENTITY["model_sha256"])
+        self.assertEqual([c[0] for c in calls], ["kernels", "fingerprint", "logits"])
+        self.assertEqual(calls[1][1], base)
+        self.assertEqual(calls[2][1][2:], (32768, 1, base))
+        self.assertEqual(report["inference"]["kernel_runtime"], self.KERNELS)
+        self.assertEqual(loaded["inference"]["max_length"], 32768)
+        self.assertEqual(report["model_sha256"], self.IDENTITY["model_sha256"])
+
+    def test_failed_kernel_check_stops_before_loading(self):
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as scratch, mock.patch(
+            "v2.dec.runtime_check.require_runtime",
+            side_effect=RuntimeError("Decoder runtime check failed"),
+        ), mock.patch.object(calibrate_frozen, "cal_logits") as logits:
+            scratch = Path(scratch)
+            (scratch / "cal.jsonl").write_text("{}\n")
+            argv = [
+                "calibrate_frozen",
+                "--checkpoint",
+                str(scratch / "ckpt"),
+                "--cal",
+                str(scratch / "cal.jsonl"),
+                "--cal-sha256",
+                calibrate_frozen.file_sha256(scratch / "cal.jsonl"),
+                "--output",
+                str(scratch / "calibration.json"),
+                "--require-kernels",
+            ]
+            with mock.patch("sys.argv", argv), self.assertRaises(RuntimeError):
+                calibrate_frozen.main()
+            logits.assert_not_called()
+            self.assertFalse((scratch / "calibration.json").exists())
+
+
 class DevCalibrationTest(unittest.TestCase):
     def test_stored_calibrated_rows_return_to_raw_then_to_the_candidate(self):
         prompts, raw, cal = synthetic()
