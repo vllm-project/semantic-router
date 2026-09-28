@@ -16,6 +16,15 @@ MODEL=/source/$MODEL_SUBPATH
 STAGES=${STAGES:-admit,onestep,reload,full,readout}
 # Training-stage import path; amendment 3 appends the image FLA overlay (/opt/decision-fla).
 TRAIN_PYTHONPATH=${TRAIN_PYTHONPATH:-/pipeline:/code}
+# Amendment 4: TRITON_AUTOTUNE_CACHE=1 shares one on-disk Triton autotune cache
+# across this arm's training-stage containers so every process reuses the same
+# kernel configurations.
+TRAIN_EXTRA=()
+if [ "${TRITON_AUTOTUNE_CACHE:-0}" = 1 ]; then
+  mkdir -p "/data/dev2/runs/27b/$ARM/triton-cache"
+  TRAIN_EXTRA=(--mount "/data/dev2/runs/27b/$ARM/triton-cache:/triton-cache:rw"
+    --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=/triton-cache)
+fi
 
 [ -d "$CODE/v2/27b" ] || { echo "missing mirror $SHA" >&2; exit 2; }
 mkdir -p "$RUN/receipts"
@@ -62,7 +71,16 @@ launch() {  # name cap purpose out_dir -- argv...  (PYPATH selects the import pa
   mkdir -p "$out"
   python3 -m v2.27b.launch --name "d2-27b-$ARM-$name" --gpu "$GPU" --cap-hours "$cap" \
     --purpose "$ARM $purpose" --receipt "$RUN/receipts/$name.json" "${COMMON_MOUNTS[@]}" \
-    --mount "$out:/out:rw" --env "PYTHONPATH=${PYPATH:-/pipeline:/code}" -- "$@"
+    --mount "$out:/out:rw" --env "PYTHONPATH=${PYPATH:-/pipeline:/code}" \
+    "${EXTRA[@]}" -- "$@"
+}
+EXTRA=()
+train_launch() {  # launch with the training-stage import path and extra mounts/env
+  local status=0
+  EXTRA=("${TRAIN_EXTRA[@]}")
+  PYPATH=$TRAIN_PYTHONPATH launch "$@" || status=$?
+  EXTRA=()
+  return "$status"
 }
 
 if has admit; then
@@ -77,15 +95,15 @@ if has admit; then
   python3 -c "import json,sys; r=json.load(open('$RUN/admit/admission.json')); sys.exit(0 if r['all_admitted'] else 3)"
 fi
 if has tech24; then
-  PYPATH=$TRAIN_PYTHONPATH launch tech24 0.4 "24-update runtime technical probe" "$RUN/tech24" -- \
+  train_launch tech24 0.4 "24-update runtime technical probe" "$RUN/tech24" -- \
     "${TRAIN_ARGS[@]}" --max-steps 24 --save-every 24 --output /out/run
 fi
 if has onestep; then
-  PYPATH=$TRAIN_PYTHONPATH launch onestep 0.5 "one-step preflight" "$RUN/onestep" -- "${TRAIN_ARGS[@]}" \
+  train_launch onestep 0.5 "one-step preflight" "$RUN/onestep" -- "${TRAIN_ARGS[@]}" \
     --max-steps 1 --save-every 1 --output /out/run
 fi
 if has reload; then
-  PYPATH=$TRAIN_PYTHONPATH launch reload 0.5 "reload parity" "$RUN/onestep" -- python3 -m v2.27b.preflight_reload \
+  train_launch reload 0.5 "reload parity" "$RUN/onestep" -- python3 -m v2.27b.preflight_reload \
     --run-dir /out/run --step 1 --source-path "$MODEL" --select /data/select.jsonl \
     --rows 32 --max-length 4096 --output /out/reload-parity.json
 fi
@@ -105,10 +123,10 @@ if has full; then
     [ "$attempt" -gt 1 ] && name=full-r$attempt
     latest=$(find "$RUN/full/$run" -maxdepth 1 -type d -name 'checkpoint-*' ! -name '*.pending' 2>/dev/null | sort | tail -1 || true)
     if [ -n "$latest" ]; then
-      PYPATH=$TRAIN_PYTHONPATH launch "$name" 3.0 "exact resume from $(basename "$latest")" "$RUN/full" -- "${RESUME_ARGS[@]}" \
+      train_launch "$name" 3.0 "exact resume from $(basename "$latest")" "$RUN/full" -- "${RESUME_ARGS[@]}" \
         --save-every 92 --resume "/out/$run/$(basename "$latest")" --output "/out/$run" || true
     else
-      PYPATH=$TRAIN_PYTHONPATH launch "$name" 3.0 "full 458-update arm" "$RUN/full" -- "${TRAIN_ARGS[@]}" \
+      train_launch "$name" 3.0 "full 458-update arm" "$RUN/full" -- "${TRAIN_ARGS[@]}" \
         --save-every 92 --output "/out/$run" || true
     fi
     [ -f "$RUN/full/$run/COMPLETE.json" ] && break
