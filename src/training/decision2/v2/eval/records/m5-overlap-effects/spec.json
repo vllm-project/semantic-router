@@ -8,6 +8,7 @@
       "run": "/data/dev2/runs/release/dev2-0p8b-t1-derived",
       "equivalent_runs": ["/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA"],
       "mlx_run": "/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA-mlx",
+      "exposure": ["/data/dev2/runs/eval/m5/overlap-effects/final/exposure-dev2-0p8b.json"],
       "note": "released revision 7d08d0e1 (T = 1); the gate run m2-E8F-soup-nodeA must give identical outcomes"
     },
     "Eos1": {"run": "/data/dev2/runs/eval/m1/r4-eos1", "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-eos1"},
@@ -21,6 +22,7 @@
     "DEV2.0-0.6B": {
       "run": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup",
       "mlx_run": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup-mlx",
+      "exposure": ["/data/dev2/runs/eval/m5/overlap-effects/final/exposure-dev2-0p6b.json"],
       "note": "released revision 99c4e799 (weights of the frozen package e61b2b44 = this export)"
     },
     "Kai1": {"run": "/data/dev2/runs/eval/m1-adopt/kai1", "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-kai"},
@@ -31,6 +33,7 @@
       "run": "/data/dev2/runs/release/dev2-2b-t1-derived",
       "equivalent_runs": ["/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA"],
       "mlx_run": "/data/dev2/runs/dec/formal/m3/m3-S2T-soup-mlx",
+      "exposure": ["/data/dev2/runs/eval/m5/overlap-effects/final/exposure-dev2-2b-s2t.json"],
       "note": "approved candidate; the gate run m3-S2T-soup-nodeA must give identical outcomes"
     },
     "Sol1-16K": {
