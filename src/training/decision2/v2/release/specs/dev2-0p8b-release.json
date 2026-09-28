@@ -13,7 +13,7 @@
     "sha256": "9f76867d5be618da315bd860aae689ed0cf2a2a20ea34d5bae485b011877e05c"
   },
   "max_input_tokens": 16384,
-  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-0.8B.decision.build-draft.json",
+  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-0.8B.decision.json",
   "origin": {
     "repo_id": "llm-semantic-router/Decision-1.0-Eos-0.8B",
     "revision": "363c4a5e56afc115b1c78c837633956d0bbb63ab",
@@ -45,15 +45,38 @@
   },
   "licence": {
     "components": [
-      {"component": "DEV2.0-0.8B weights, decision head, package runtime, card and artwork", "licence": "apache-2.0", "source": "llm-semantic-router/DEV2.0-0.8B"},
-      {"component": "Decision 1.0 Eos-0.8B weights (direct weight origin, fully fine-tuned)", "licence": "apache-2.0", "source": "llm-semantic-router/Decision-1.0-Eos-0.8B@363c4a5e"},
-      {"component": "Qwen3.5-0.8B text backbone and tokenizer (upstream of Decision 1.0 Eos)", "licence": "apache-2.0", "source": "Qwen/Qwen3.5-0.8B@2fc06364"}
+      {
+        "component": "DEV2.0-0.8B weights, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/DEV2.0-0.8B"
+      },
+      {
+        "component": "Decision 1.0 Eos-0.8B weights (direct weight origin, fully fine-tuned)",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/Decision-1.0-Eos-0.8B@363c4a5e"
+      },
+      {
+        "component": "Qwen3.5-0.8B text backbone and tokenizer (upstream of Decision 1.0 Eos)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3.5-0.8B@2fc06364"
+      }
     ],
     "files": [
-      {"source": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab/LICENSE", "path": "LICENSE", "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"},
-      {"source": "/data/dev2/hf-cache/models--Qwen--Qwen3.5-0.8B/snapshots/2fc06364715b967f1860aea9cf38778875588b17/LICENSE", "path": "LICENSES/Qwen3.5-0.8B-LICENSE.txt", "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"}
+      {
+        "source": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab/LICENSE",
+        "path": "LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      },
+      {
+        "source": "/data/dev2/hf-cache/models--Qwen--Qwen3.5-0.8B/snapshots/2fc06364715b967f1860aea9cf38778875588b17/LICENSE",
+        "path": "LICENSES/Qwen3.5-0.8B-LICENSE.txt",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      }
     ],
-    "notice": {"source": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab/NOTICE", "sha256": "a6b47f5868e2cf9ff91a43f73042f31f9d3ea921c46edf89792e33cf6be818f6"},
+    "notice": {
+      "source": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab/NOTICE",
+      "sha256": "a6b47f5868e2cf9ff91a43f73042f31f9d3ea921c46edf89792e33cf6be818f6"
+    },
     "attributions": [
       "[Decision 1.0 Eos-0.8B](https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B) at `363c4a5e56afc115b1c78c837633956d0bbb63ab`: direct weight origin; every weight was fine-tuned (Apache-2.0, `LICENSE`; its NOTICE is reproduced in `NOTICE`).",
       "[Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B) at `2fc06364715b967f1860aea9cf38778875588b17`: upstream text backbone and tokenizer of Decision 1.0 Eos (Apache-2.0, `LICENSES/Qwen3.5-0.8B-LICENSE.txt`).",
@@ -72,7 +95,7 @@
       "tagline": "A compact decision model for routing choices, yes/no checks and rubric scores over one state: native System One Choice, Noul and Score answers with probabilities, no chat API.",
       "architecture": "The 24-layer Qwen3.5 text backbone inherited from Decision 1.0 Eos (18 gated-delta and 6 attention layers) reads the state, the question and every supplied candidate once; a shared candidate head scores the candidates against a global query and returns probabilities without generating text.",
       "runtime_note": "The download includes a small local runtime (`decision2/`) for one CUDA or ROCm GPU; it does not start a hosted endpoint.",
-      "confirmation": "**Independent sealed confirmation (JevArena-C1): PLACEHOLDER, result pending. The coordinator fills in this line after the one-shot C1 scoring event.**",
+      "confirmation": "**Independent sealed confirmation** — JevArena-C1 v1.1 (2,874 human-labeled items from 8 sources published after the relevant cutoffs, never used for training or development; scored once): DEV2.0-0.8B **40.24** vs Decision 1.0 Eos 37.94 (+2.31, 95% CI [+0.29, +4.30]); Kev-0.8B 39.06; Intern-Decision-0.8B 34.58.",
       "training": [
         "**Recipe:** one epoch of full fine-tuning (backbone learning rate 1e-5, head 1e-4; cross-entropy plus 0.5 × Brier) on 162,777 decision rows (138.4M tokens) with seeds 20260926, 20260927 and 20260928, each seed's checkpoint chosen on a held-out selection set, then a uniform weight average of the three. Hard labels only: no teacher, distillation or soft targets.",
         "**Own Decision 1.0 training corpora (130,157 rows):** program-generated English and Chinese decision tasks labeled by program oracles (no model-written states or labels), plus the human labels of CLINC150 (CC BY 3.0), BANKING77 (CC BY 4.0), MultiNLI non-fiction genres (OANC terms) and SNLI (CC BY-SA 4.0).",
@@ -81,17 +104,54 @@
       ],
       "limitations": [
         "**Seed dependence.** The three single fine-tunes scored 49.78, 47.36 and 41.08 on JevArena v3 (8,192-token runs); only their uniform average is released (50.24 at 16,384 tokens). A retrained seed of the same recipe can land well below this model.",
-        "**Where it improves and where it does not.** The gain over Decision 1.0 Eos is typed reasoning (Choice 529 vs 315, Noul 611 vs 410 of 800). Typed Score is lower (107 vs 120 of 400) and human transfer is slightly lower (H 0.440 vs 0.461); the tradeoffs table lists every task below Eos.",
+        "**Where it improves and where it does not.** The gain over Decision 1.0 Eos is typed reasoning (Choice 529 vs 315, Noul 611 vs 410 of 800). Typed Score is lower (107 vs 120 of 400; it never predicts the lowest of five Score levels on typed FINAL) and human transfer is slightly lower (H 0.440 vs 0.461); the tradeoffs table lists every task below Eos.",
         "**Multilingual.** On the mlx-diag diagnostic, non-English Noul (paraphrase pairs) is about 5 points below Decision 1.0 Eos (54.2% vs 59.2%), while non-English Choice is level (68.7% vs 68.5%).",
+        "**On the sealed C1 set** it is below Decision 1.0 Eos on Russian star ratings, tutoring-rapport Noul, Arabic multiple choice, long inputs and non-English items overall.",
         "**CPU.** CPU inference was not verified for this release: where the GPU-only causal-conv1d package is installed, Transformers routes the convolution to that kernel and a CPU run fails."
+      ],
+      "details": [
+        "**Comparator licences:** Kev-0.8B's model card declares Apache-2.0; its repository has no LICENSE file."
       ]
     },
     "reports": [
-      {"key": "candidate", "role": "candidate", "report": "/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA/REPORT.json", "mlx": "/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA-mlx/mlx-diag.score.json", "label": "DEV2.0-0.8B"},
-      {"key": "eos1", "role": "own-1.0", "report": "/data/dev2/runs/eval/m1/r4-eos1/REPORT.json", "mlx": "/data/dev2/runs/eval/m2/mlx/x-eos1/mlx-diag.score.json", "repo_id": "llm-semantic-router/Decision-1.0-Eos-0.8B", "label": "Decision 1.0 Eos"},
-      {"key": "intern", "role": "peer", "report": "/data/dev2/runs/eval/m2/q2b-intern08b/REPORT.json", "mlx": "/data/dev2/runs/eval/m2/q2b-intern08b/mlx-diag.score.json", "repo_id": "internlm/Intern-Decision-0.8B", "label": "Intern-Decision-0.8B"},
-      {"key": "kev", "role": "peer", "report": "/data/dev2/runs/eval/m2/q1-kev08b/REPORT.json", "mlx": "/data/dev2/runs/eval/m2/q1-kev08b/mlx-diag.score.json", "repo_id": "jaredpalmer/kev-0.8b", "label": "Kev-0.8B"},
-      {"key": "jpt08b", "role": "peer", "report": "/data/dev2/runs/eval/m1/p2-jpt08b/REPORT.json", "repo_id": "kirp/jpt-0.8b", "label": "JPT-0.8B"}
+      {
+        "key": "candidate",
+        "role": "candidate",
+        "report": "/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA/REPORT.json",
+        "mlx": "/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA-mlx/mlx-diag.score.json",
+        "label": "DEV2.0-0.8B"
+      },
+      {
+        "key": "eos1",
+        "role": "own-1.0",
+        "report": "/data/dev2/runs/eval/m1/r4-eos1/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-eos1/mlx-diag.score.json",
+        "repo_id": "llm-semantic-router/Decision-1.0-Eos-0.8B",
+        "label": "Decision 1.0 Eos"
+      },
+      {
+        "key": "intern",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m2/q2b-intern08b/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/q2b-intern08b/mlx-diag.score.json",
+        "repo_id": "internlm/Intern-Decision-0.8B",
+        "label": "Intern-Decision-0.8B"
+      },
+      {
+        "key": "kev",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m2/q1-kev08b/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/q1-kev08b/mlx-diag.score.json",
+        "repo_id": "jaredpalmer/kev-0.8b",
+        "label": "Kev-0.8B"
+      },
+      {
+        "key": "jpt08b",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m1/p2-jpt08b/REPORT.json",
+        "repo_id": "kirp/jpt-0.8b",
+        "label": "JPT-0.8B"
+      }
     ]
   }
 }

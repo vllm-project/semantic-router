@@ -1,0 +1,185 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "DEV2.0-0.8B",
+  "repo_id": "llm-semantic-router/DEV2.0-0.8B",
+  "identity": {
+    "model_sha256": "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b"
+  },
+  "report_sha256": "e3e08cd17fe38becdfa655c61d329de7d39c75ffb7db70861af4f88d87fe2682",
+  "paired_sha256": "4489c0ea734a3827edf662419c11faba9fff90deb33325b04460a3f7fbdcd557",
+  "decided_by": "coordinator (Decision 2.0 program), under the user's full-autonomy mandate of 2026-09-28",
+  "prepared_by": "Decision 2.0 release engineering",
+  "decided_utc": "2026-09-28T14:17:00Z",
+  "action": "Release privately: add llm-semantic-router/DEV2.0-0.8B to the private 'Decision 2.0' collection. The repository and the collection stay private.",
+  "revision_binding": "This decision names no revision; receipts/gate.json of the --collect run binds this file's SHA-256 to the Hub revision and package manifest it verified, and hub collect adds only that revision.",
+  "rationale": "The E8F three-seed soup clearly beats its own Decision 1.0 (Eos) on post-key same-panel JevArena v3 and beats both measured 0.8B peers with paired intervals excluding zero; human transfer is not significantly below the tier leaders; no decision type collapsed; the sealed independent JevArena-C1 event 1 confirms the gain over Eos 1.0. The package is the exact scored checkpoint, verified end to end, and every regression is disclosed on the card.",
+  "candidate": {
+    "recipe": "E8F: own Decision 1.0 Eos @363c4a5e, full fine-tuning on the M2 full mixture (A0s-r + v1 arms A1-A6h + all A7; 162,777 rows, 138.4M tokens, output d1dc33fc...), no teacher targets, seeds 20260926/27/28, uniform FP32 soup, CAL698 frozen-checkpoint calibration, 16,384-token package",
+    "checkpoint": {
+      "repo_id": "llm-semantic-router/dev2-dec-staging",
+      "revision": "16c0929ac0df649d8223483e1adf419d78a647ed",
+      "folder": "m2/E8F-soup/checkpoint",
+      "staging_files_equal_scored_copy": "9/9 (checkpoint, both calibrations, members.txt)"
+    },
+    "calibration_sha256": "9f76867d5be618da315bd860aae689ed0cf2a2a20ea34d5bae485b011877e05c",
+    "max_input_tokens": 16384,
+    "loaded_parameters": 753446208,
+    "packaged_parameters": {
+      "backbone": 752393024,
+      "head": 1053184,
+      "residual": 0
+    },
+    "tier": "0.8B"
+  },
+  "gate_evidence": {
+    "post_key_v3": {
+      "candidate": 50.236,
+      "eos1_adopted": 42.547,
+      "delta": 7.69,
+      "ci95": [
+        3.65,
+        13.32
+      ],
+      "paired_sha256": "4489c0ea734a3827edf662419c11faba9fff90deb33325b04460a3f7fbdcd557"
+    },
+    "vs_intern_decision_0p8b": {
+      "delta": 6.7,
+      "ci95": [
+        0.63,
+        10.35
+      ]
+    },
+    "vs_kev_0p8b": {
+      "delta": 7.02,
+      "ci95": [
+        1.33,
+        11.25
+      ]
+    },
+    "vs_eos1_same_limit_16k": {
+      "sha256": "15140c116b17512563ae37e3a6b53d7b11d077972a2978f90c283f7a688230eb",
+      "right_v3": 42.361,
+      "delta": 7.875,
+      "ci95": [
+        3.688,
+        13.362
+      ],
+      "replicates": 5000
+    },
+    "human_transfer": "not significantly below the tier leaders (H delta vs Intern +0.058 [-0.043, +0.119], vs Kev +0.050 [-0.041, +0.122]; vs Eos 1.0 -0.021 [-0.085, +0.088])",
+    "no_type_collapsed": "typed FINAL Choice .661, Noul .764, Score .268, none collapsed (eval record m4-dev2-08b-gates-and-c1-event1)",
+    "jevarena_c1_event1": {
+      "candidate": 40.24,
+      "eos1": 37.94,
+      "delta": 2.31,
+      "ci95": [
+        0.29,
+        4.3
+      ],
+      "kev_0p8b": 39.06,
+      "intern_decision_0p8b": 34.58,
+      "items": 2874
+    },
+    "public231": {
+      "candidate": 156,
+      "eos1": 142
+    },
+    "scored_run": {
+      "run": "m2-E8F-soup-nodeA (frozen runner, image f83b1d10..., node A GPU5)",
+      "report_sha256": "e3e08cd17fe38becdfa655c61d329de7d39c75ffb7db70861af4f88d87fe2682",
+      "seal_sha256": "7b886cdcda830f0ec982f644235b4a512b7fca28de832533f9167f996a8940ef",
+      "predictions_sha256": {
+        "typed-final": "119256bdf8a3c5461468614b126f949760866f2ef0dc745b695b190fe2312e31",
+        "css15": "5ab525e8b019113238615072b2d634f61bf3694f96090ff56ad2e33ac83e7754",
+        "public231": "870abd5f146da051490be3d39bdc459fda7537cec8a8fdf0bcd5712a67ae0ed7"
+      },
+      "paired_vs_adopted_eos1": {
+        "sha256": "4489c0ea734a3827edf662419c11faba9fff90deb33325b04460a3f7fbdcd557",
+        "left_v3": 50.236,
+        "right_v3": 42.547,
+        "delta": 7.689,
+        "ci95": [
+          3.646,
+          13.316
+        ],
+        "replicates": 5000
+      },
+      "paired_vs_same_limit_eos1_16k": {
+        "sha256": "15140c116b17512563ae37e3a6b53d7b11d077972a2978f90c283f7a688230eb",
+        "right_v3": 42.361,
+        "delta": 7.875,
+        "ci95": [
+          3.688,
+          13.362
+        ],
+        "replicates": 5000
+      },
+      "mlx_diag_score_sha256": "4e2529fe243b05f2b984c483804d7d81f6a6ba54993cc0018278f300bc47d1ae"
+    }
+  },
+  "package_verification": {
+    "verified_draft_revision": "2667d883c5941356a436ba38824b0453dd2fa7b6",
+    "manifest_sha256_at_draft": "d10bd95c40a1417b8416d73fe7af9a9213d3c113804a6f2bc600f57cbf379594",
+    "real_download_rehash": "31/31 files equal the manifest and the pre-upload package",
+    "parity": {
+      "css15": {
+        "prompts": 6547,
+        "slots": 6547,
+        "category_changes": 0,
+        "input_mismatch": 0,
+        "max_abs_drift": 0.0
+      },
+      "public231": {
+        "prompts": 231,
+        "slots": 231,
+        "category_changes": 0,
+        "input_mismatch": 0,
+        "max_abs_drift": 0.0
+      },
+      "typed-final": {
+        "prompts": 1600,
+        "slots": 2000,
+        "category_changes": 0,
+        "input_mismatch": 0,
+        "max_abs_drift": 0.0
+      }
+    },
+    "parity_post_download_identical": true,
+    "repeatability": "answers bit-identical across two processes and after download (a061d0a3...)",
+    "loaded_parameters": 753446208,
+    "draft_run_receipts": {
+      "spec": "c7d0aa7d0363edcdc2341ad6d006b09be01ab305162f78ec722171bab179c63e",
+      "launcher": "938f7149b07a098ba703eb18fadc4981c6bf664babd7be58afa5919c70040f20",
+      "build": "4cfb79bca5366febb8e26a5437ab4c0f8714e2750d9200dfeec9df8b5626baa8",
+      "pre-a": "300aeb899a6d9c732129b0356f7832f04b396ec068cdf81bb9f9117260ce1213",
+      "pre-b": "9f31d7cd558e797f50972f7317201f2dc45e56c85666e5448ce80f5beef3be55",
+      "repeat-pre": "45c2550dfeaebe8678893a43c3c639d263dce8727498ef5bb0576e2a5179adff",
+      "card-pre": "f6624e398f88a68bc1f6e28c88242b241a5674c2b7089bd665ed1c2d90c29306",
+      "parity-pre": "23e4201d49e548eeb902de77e847b3fb91c2f02589c3da025b0547cf530776a1",
+      "ensure": "004be78cdb49d22c5856d46ce81c5cb2aee0291426917566b4698c3bb29a1f80",
+      "upload": "4a8db6e28734a34601cef1cc2fb662e96f110ab4f9b6c3ea776f04042c07b646",
+      "download": "fe0a8d8d4791367cc2351bbb8d3631a075dee6d51357b150c82650e04edfd3c4",
+      "tree": "20926b88ac6aa94d20cf9bf4eedb33defc9e3c901ea61f63cc201576fbd69254",
+      "post": "acf7e35d89f300ec18f1f79bbe2fcadf726aeff4cc9af96df4c3af1d1bc5fb90",
+      "repeat-post": "d903e85748d89ae059fbf5562eee508f6b6f5f0a1a8adedbead7938935db04d1",
+      "card-post": "f072d550df2bcb14eaff896979e41691a73d96fa9d3cf902082ed074c7090123",
+      "parity-post": "c1d921fb296f1a2af0235a55a3879ba9ee8de701d1a182adcb423c7b5d5e919b",
+      "readback": "26577c9232be113987a38bea122b2dd3736006cad43d84db2141abd36833606e"
+    },
+    "final_run": "the --collect run rebuilds with the C1 line and disclosures; its receipts and gate.json are recorded next to this file"
+  },
+  "licence_decision": "apache-2.0: every weight-lineage component is Apache-2.0 (own weights, Decision 1.0 Eos @363c4a5e, Qwen3.5-0.8B @2fc06364 text backbone and tokenizer). CC BY / CC BY-SA / MIT / OANC training data are credited in ATTRIBUTIONS.md. Kev-0.8B stays on the card with a note that its repository has no LICENSE file (card declares Apache-2.0); the XNLI-based (CC BY-NC) mlx-diag Score part and JPT-0.8B (CC BY-NC) stay off the card.",
+  "disclosures": [
+    "post-key same-panel label; public 231 is not the official sealed JevBench rank",
+    "typed Score 107 vs 120 of 400; never predicts Score level 0 on typed FINAL",
+    "human transfer H 0.440 vs 0.461; eight transfer tasks below Eos 1.0",
+    "mlx-diag non-English Noul 54.2% vs 59.2%",
+    "C1: below Eos 1.0 on Russian star ratings, tutoring-rapport Noul, Arabic multiple choice, long inputs and non-English overall",
+    "seed dependence: single seeds 49.78 / 47.36 / 41.08; released artifact is the three-seed soup",
+    "no teacher targets; training data families and licences",
+    "GPU-verified runtime; CPU not verified"
+  ],
+  "draft_decision_sha256": "590f0cc1ca74a493ffabbb5705312bc23cd606a56a4b55301e35c9ab48265a1f"
+}
