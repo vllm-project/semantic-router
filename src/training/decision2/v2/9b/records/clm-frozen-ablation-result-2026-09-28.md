@@ -1,5 +1,11 @@
 # 9B CLM architecture experiment: frozen-feature ablation result (Milestone 1)
 
+**Closed (coordinator decision, 2026-09-28):** the CLM disaggregated readout is
+dropped as a 9B decision architecture; this is a completed negative finding.
+The cached shortlister for ≥ 32 options remains only an optional serving note.
+Hard negatives, the one helpful CLM component, are carried to the fine-tuned
+route as a candidate factor ([Milestone 2 preregistration](lux9b-m2-continuation-prereg-2026-09-28.md)).
+
 **Disposition: development HOLD for every frozen-backbone head, including every
 CLM-style arm; the CLM disaggregated route is decisively worse than the
 ordinary joint Decision head on transfer.** All numbers below are development

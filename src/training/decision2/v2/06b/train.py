@@ -5,13 +5,18 @@ all-types training API at the native 8,192 cap; `encoder` trains an official
 bidirectional encoder with the marker readout in `encoder.py`. Both see the
 same rights-clean v2 rows through the published System One converter, in one
 fixed hash order, with SELECT at fixed milestones and the Qwen-control BEST
-rule. `--preflight` runs step-0 SELECT, one update, export and a fresh reload
-parity check, then stops.
+rule. `--preflight` runs step-0 SELECT, the padded-versus-one-row micro-batch
+parity gate (`parity.py`), one update, export and a fresh reload parity
+check, then stops. `data.mixture` replaces the rights-clean TRAIN with a
+template-S mixture of hash-pinned arms (`mixture.py`); SELECT and CAL stay
+the rights-clean ones. `optimizer.backbone_freeze_updates` trains only the
+fresh head for that many updates, then starts the backbone schedule.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -22,6 +27,8 @@ from typing import Any
 
 from . import encoder as enc
 from . import kai8k
+from . import mixture as mix
+from . import parity
 from .common import (
     MAX_INPUT_TOKENS,
     better,
@@ -57,13 +64,14 @@ SPEC_KEYS = {
     "max_reserved_gib",
 }
 PARITY_ROWS = 32
+PADDING_PARITY_MICRO_BATCHES = 2
 
 
 def load_spec(path: Path) -> dict[str, Any]:
     spec = json.loads(path.read_text())
     if set(spec) != SPEC_KEYS:
         raise ValueError(f"Arm spec keys differ: {sorted(set(spec) ^ SPEC_KEYS)}")
-    if spec["family"] not in ("kai-native", "encoder"):
+    if spec["family"] not in ("kai-native", "encoder", "qwen-causal"):
         raise ValueError("Unknown family")
     return spec
 
@@ -234,6 +242,9 @@ class EncoderFamily:
             self.source_path,
             spec["start"]["source"],
             seed=int(spec["start"]["head_seed"]),
+            ordinal_score=bool(spec["start"].get("ordinal_score", False)),
+            candidate_pool=spec["start"].get("candidate_pool", "marker"),
+            query_pool=spec["start"].get("query_pool", "first"),
         )
         self.model.to(device)
         if hasattr(self.model.backbone, "gradient_checkpointing_enable"):
@@ -257,7 +268,12 @@ class EncoderFamily:
             },
             {
                 "name": "shared.head",
-                "params": list(self.model.head.parameters()),
+                "params": list(self.model.head.parameters())
+                + (
+                    list(self.model.ordinal.parameters())
+                    if self.model.ordinal is not None
+                    else []
+                ),
                 "lr": o["head_lr"],
             },
         ]
@@ -292,14 +308,20 @@ class EncoderFamily:
             raise ValueError("Score RPS is not part of the encoder recipe")
         q = None
         if any(t is not None for t in teacher):
-            raise ValueError("Teacher KL is not part of the encoder recipe")
+            q = torch.zeros_like(targets)
+            for i, t in enumerate(teacher):
+                if t is not None:
+                    q[i, : len(t)] = torch.tensor(t, device=device)
         extra, brier, kl = extra_terms(
             logits, targets, valid, q, loss_cfg["brier"], loss_cfg["teacher_kl"]
         )
-        return (loss_cfg["ce"] * ce + extra).sum(), {
+        weights = torch.tensor(
+            [r.get("_loss_weight", 1.0) for r in records], device=device
+        )
+        return ((loss_cfg["ce"] * ce + extra) * weights).sum(), {
             "ce": float(ce.detach().sum()),
             "brier": float(brier.detach().sum()),
-            "kl": 0.0,
+            "kl": float(kl.detach().sum()),
         }
 
     def probabilities(self, records: list[dict[str, Any]]) -> list[list[float]]:
@@ -328,6 +350,179 @@ class EncoderFamily:
         return sum(p.numel() for p in self.model.parameters())
 
 
+def native_from_original(
+    row: dict[str, Any], probabilities: list[float]
+) -> list[float]:
+    """Inverse of `original_probabilities`: flattened option order -> native order."""
+    if row["task_type"] != "noul":
+        return list(probabilities)
+    keys = [option["key"] for option in row["options"]]
+    return [probabilities[keys.index("false")], probabilities[keys.index("true")]]
+
+
+class CausalQwenFamily:
+    """The official-Qwen causal endpoint/global-query model of the archived control.
+
+    Reuses `training.model.decision_model` unchanged (renderer, collate, head,
+    save/load); only the schedule, selection and optional teacher term are this
+    trainer's, so causal and bidirectional arms share one trainer.
+    """
+
+    def __init__(
+        self, spec: dict[str, Any], device: str, rows: dict[str, dict[str, Any]]
+    ):
+        import torch
+
+        from training.model.decision_model import DecisionModel
+
+        self.spec, self.device, self.rows = spec, device, rows
+        path = Path(spec["start"]["path"])
+        self.identity = enc.verify_source(path, "qwen3-0.6b-base")
+        torch.manual_seed(int(spec["start"]["head_seed"]))
+        self.model, self.tokenizer = DecisionModel.from_base(
+            path, spec["start"]["revision"], head_dim=256
+        )
+        self.model.backbone.config.use_cache = False
+        self.model.to(device)
+        self.model.backbone.gradient_checkpointing_enable(
+            gradient_checkpointing_kwargs={"use_reentrant": False}
+        )
+
+    def encoded(self, record: dict[str, Any]) -> dict[str, Any]:
+        from training.model.decision_model import encode
+
+        return encode(
+            self.rows[record["source_row_id"]], self.tokenizer, MAX_INPUT_TOKENS
+        )
+
+    def length(self, record: dict[str, Any]) -> int:
+        return len(self.encoded(record)["ids"])
+
+    def parameter_groups(self) -> list[dict[str, Any]]:
+        o = self.spec["optimizer"]
+        return [
+            {
+                "name": "backbone.encoder",
+                "params": list(self.model.backbone.parameters()),
+                "lr": o["encoder_lr"],
+            },
+            {
+                "name": "shared.head",
+                "params": list(self.model.head.parameters()),
+                "lr": o["head_lr"],
+            },
+        ]
+
+    def train_mode(self) -> None:
+        self.model.train()
+
+    def batch(self, records: list[dict[str, Any]]) -> dict[str, Any]:
+        from training.model.decision_model import collate
+
+        items = [self.encoded(r) for r in records]
+        batch = collate(items, self.tokenizer.pad_token_id)
+        return {
+            k: (v.to(self.device) if hasattr(v, "to") else v) for k, v in batch.items()
+        }
+
+    def loss(
+        self,
+        records: list[dict[str, Any]],
+        teacher: list[list[float] | None],
+        device: str,
+    ) -> tuple[Any, dict[str, float]]:
+        import torch
+
+        batch = self.batch(records)
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            logits = self.model(**batch).float()
+        valid = batch["candidate_mask"].float()
+        logits = logits.masked_fill(
+            ~batch["candidate_mask"], torch.finfo(torch.float32).min
+        )
+        targets = (
+            torch.nn.functional.one_hot(batch["labels"], logits.shape[1]).float()
+            * valid
+        )
+        q = None
+        if any(t is not None for t in teacher):
+            q = torch.zeros_like(targets)
+            for i, (record, t) in enumerate(zip(records, teacher)):
+                if t is None:
+                    continue
+                row = self.rows[record["source_row_id"]]
+                mapped = original_probabilities(row, native_keys(record), t)
+                q[i, : len(mapped)] = torch.tensor(mapped, device=device)
+        logp = torch.log_softmax(logits, -1)
+        ce = -(targets * logp * valid).sum(-1)
+        cfg = self.spec["loss"]
+        extra, brier, kl = extra_terms(
+            logits, targets, valid, q, cfg["brier"], cfg["teacher_kl"]
+        )
+        return (cfg["ce"] * ce + extra).sum(), {
+            "ce": float(ce.detach().sum()),
+            "brier": float(brier.detach().sum()),
+            "kl": float(kl.detach().sum()),
+        }
+
+    def _probabilities(
+        self, model: Any, records: list[dict[str, Any]]
+    ) -> list[list[float]]:
+        import torch
+
+        out = []
+        model.eval()
+        with torch.inference_mode():
+            for start in range(0, len(records), 8):
+                chunk = records[start : start + 8]
+                batch = self.batch(chunk)
+                probs = model(**batch).float().softmax(-1).cpu().tolist()
+                for record, p in zip(chunk, probs):
+                    row = self.rows[record["source_row_id"]]
+                    out.append(native_from_original(row, p[: len(row["options"])]))
+        return out
+
+    def probabilities(self, records: list[dict[str, Any]]) -> list[list[float]]:
+        return self._probabilities(self.model, records)
+
+    def state(self) -> dict[str, Any]:
+        return {
+            k: v.detach().cpu().contiguous() for k, v in self.model.state_dict().items()
+        }
+
+    def restore(self, state: dict[str, Any]) -> None:
+        self.model.load_state_dict(state, strict=True)
+
+    def export(self, output: Path, provenance: dict[str, Any]) -> str:
+        self.model.metadata = {**self.model.metadata, "dev2_06b_provenance": provenance}
+        self.model.save(output, self.tokenizer)
+        files = {
+            item.relative_to(output).as_posix(): {
+                "bytes": item.stat().st_size,
+                "sha256": file_sha256(item),
+            }
+            for item in sorted(output.rglob("*"))
+            if item.is_file()
+        }
+        return write_json(
+            output.with_name(output.name + ".MANIFEST.json"),
+            {"schema": "dev2-06b-causal-files/1", "files": files},
+        )
+
+    def reload_probabilities(
+        self, output: Path, manifest: str, records: list[dict[str, Any]], device: str
+    ) -> list[list[float]]:
+        from training.model.decision_model import DecisionModel
+
+        if file_sha256(output.with_name(output.name + ".MANIFEST.json")) != manifest:
+            raise ValueError("Causal export manifest differs")
+        model, _ = DecisionModel.from_checkpoint(output)
+        return self._probabilities(model.to(device), records)
+
+    def parameters(self) -> int:
+        return sum(p.numel() for p in self.model.parameters())
+
+
 def evaluate(
     family: Any, rows: list[dict[str, Any]], records: list[dict[str, Any]]
 ) -> tuple[dict[str, Any], list[list[float]]]:
@@ -347,6 +542,41 @@ def milestone_steps(spec: dict[str, Any], total: int) -> list[int]:
     if steps[-1] != total or steps[0] < 1:
         raise ValueError("Milestones must be positive and end at the final update")
     return steps
+
+
+def padding_parity(
+    family: Any,
+    plan: list[list[int]],
+    kinds: list[str],
+    lengths: list[int],
+    records: list[dict[str, Any]],
+    teacher: list[list[float] | None],
+    budget: int,
+    device: str,
+) -> dict[str, Any]:
+    """Parity on the plan's first multi-row micro-batches, built as in padded arms."""
+    micros: list[list[int]] = []
+    for rows in plan:
+        micros.extend(
+            m for m in micro_batches(rows, kinds, lengths, 8, budget) if len(m) > 1
+        )
+        if len(micros) >= PADDING_PARITY_MICRO_BATCHES:
+            break
+    family.train_mode()
+    checks = [
+        {
+            "kind": kinds[m[0]],
+            "lengths": [lengths[i] for i in m],
+            **parity.micro_batch_parity(
+                family, [records[i] for i in m], [teacher[i] for i in m], device
+            ),
+        }
+        for m in micros[:PADDING_PARITY_MICRO_BATCHES]
+    ]
+    return {
+        "passed": bool(checks) and all(c["passed"] for c in checks),
+        "micro_batches": checks,
+    }
 
 
 def environment() -> dict[str, Any]:
@@ -395,15 +625,27 @@ def run(
     torch.manual_seed(seed_int)
 
     splits = load_rights_clean(spec["data"]["parent"])
+    mixture_report = None
+    if "mixture" in spec["data"]:
+        from training.model.data import check_partition_isolation
+
+        splits["train"], mixture_report = mix.build(spec["data"]["mixture"])
+        check_partition_isolation(splits)
+        write_json(output / "MIXTURE.json", mixture_report, exclusive=True)
     records = {
         role: native_records(splits[role], spec["data"]["converter_bundle"])
         for role in ("train", "select")
     }
-    family = (
-        KaiFamily(spec, device)
-        if spec["family"] == "kai-native"
-        else EncoderFamily(spec, device)
-    )
+    if spec["family"] == "kai-native":
+        family = KaiFamily(spec, device)
+    elif spec["family"] == "qwen-causal":
+        family = CausalQwenFamily(
+            spec,
+            device,
+            {row["id"]: row for role in ("train", "select") for row in splits[role]},
+        )
+    else:
+        family = EncoderFamily(spec, device)
 
     lengths = {role: [family.length(r) for r in records[role]] for role in records}
     over = {role: sum(v > MAX_INPUT_TOKENS for v in lengths[role]) for role in lengths}
@@ -412,6 +654,19 @@ def run(
             f"Rows exceed the complete-input cap; freeze a quarantine first: {over}"
         )
     kinds = [r["question"]["type"].lower() for r in records["train"]]
+    if spec["loss"].get("score_class_balance"):
+        if spec["family"] != "encoder":
+            raise ValueError(
+                "Score class balance is implemented for the encoder family"
+            )
+        # Bin each Score gold by its relative level (low/middle/high) across level counts.
+        bins = {}
+        for i, (row, kind) in enumerate(zip(splits["train"], kinds)):
+            if kind == "score":
+                bins[i] = round(2 * row["label"] / (len(row["options"]) - 1))
+        counts = {b: list(bins.values()).count(b) for b in set(bins.values())}
+        for i, b in bins.items():
+            records["train"][i]["_loss_weight"] = len(bins) / (len(counts) * counts[b])
 
     teacher: list[list[float] | None] = [None] * len(records["train"])
     if spec["teacher"] is not None:
@@ -419,8 +674,16 @@ def run(
         if file_sha256(path) != spec["teacher"]["sha256"]:
             raise ValueError("Teacher file differs from its frozen hash")
         by_id = {row["source_row_id"]: row["probabilities"] for row in read_jsonl(path)}
-        teacher = [by_id[r["source_row_id"]] for r in records["train"]]
+        keys = [
+            r.get("teacher_source_id", r["source_row_id"]) for r in records["train"]
+        ]
+        if spec["teacher"].get("coverage") == "subset":
+            teacher = [by_id.get(key) for key in keys]
+        else:
+            teacher = [by_id[key] for key in keys]
         for record, q in zip(records["train"], teacher):
+            if q is None:
+                continue
             if len(q) != len(native_keys(record)) or abs(sum(q) - 1) > 1e-4:
                 raise ValueError("Teacher vector does not match native candidates")
 
@@ -432,6 +695,15 @@ def run(
     total = len(plan)
     steps = milestone_steps(spec, total)
     warmup = int(total * spec["optimizer"]["warmup_ratio"])
+    freeze = int(spec["optimizer"].get("backbone_freeze_updates", 0))
+    if freeze and (spec["family"] == "kai-native" or not 0 < freeze < total - 1):
+        raise ValueError("Backbone freeze is for fresh-head families, within the run")
+    backbone_warmup = int(
+        (total - freeze)
+        * spec["optimizer"].get(
+            "backbone_warmup_ratio", spec["optimizer"]["warmup_ratio"]
+        )
+    )
     groups = family.parameter_groups()
     optimizer = torch.optim.AdamW(
         [{"params": g["params"], "lr": g["lr"], "name": g["name"]} for g in groups],
@@ -459,6 +731,10 @@ def run(
         "select_tokens": sum(lengths["select"]),
         "total_updates": total,
         "warmup_updates": warmup,
+        "backbone_freeze_updates": freeze,
+        "backbone_warmup_updates": backbone_warmup if freeze else None,
+        "teacher_rows": sum(q is not None for q in teacher),
+        "mixture": mixture_report,
         "milestones": steps,
         "environment": environment(),
         "preflight": preflight,
@@ -495,13 +771,56 @@ def run(
         write_json(output / "CURVE.json", curve)
 
     milestone(0)
+    padding = None
+    if preflight:
+        padding = padding_parity(
+            family,
+            plan,
+            kinds,
+            lengths["train"],
+            records["train"],
+            teacher,
+            spec["micro_token_budget"],
+            device,
+        )
+        write_json(output / "PADDING_PARITY.json", padding)
+    backbone = [
+        p
+        for g in optimizer.param_groups
+        if g["name"].endswith("encoder")
+        for p in g["params"]
+    ]
+    if spec["start"].get("compute_dtype", "bfloat16") not in ("bfloat16", "float32"):
+        raise ValueError("compute_dtype must be bfloat16 (autocast) or float32")
+    compute = (
+        parity.fp32_compute
+        if spec["start"].get("compute_dtype") == "float32"
+        else contextlib.nullcontext
+    )
     log = (output / "TRAIN_LOG.jsonl").open("x", encoding="utf-8")
     last_update = total if not preflight else 1
     for step in range(1, last_update + 1):
         if (time.monotonic() - started) / 3600 > spec["gpu_hour_cap"]:
             raise RuntimeError("GPU-hour cap reached; arm stopped")
         family.train_mode()
+        frozen = step <= freeze
+        if step in (1, freeze + 1):
+            for p in backbone:
+                p.requires_grad_(not frozen)
         for group in optimizer.param_groups:
+            if freeze and group["name"].endswith("encoder"):
+                group["lr"] = (
+                    0.0
+                    if frozen
+                    else learning_rate(
+                        step - freeze,
+                        total - freeze,
+                        backbone_warmup,
+                        base[group["name"]],
+                        spec["optimizer"]["lr_min"],
+                    )
+                )
+                continue
             group["lr"] = learning_rate(
                 step, total, warmup, base[group["name"]], spec["optimizer"]["lr_min"]
             )
@@ -516,11 +835,12 @@ def run(
             spec["max_micro_rows"],
             spec["micro_token_budget"],
         ):
-            loss, parts = family.loss(
-                [records["train"][i] for i in micro],
-                [teacher[i] for i in micro],
-                device,
-            )
+            with compute():
+                loss, parts = family.loss(
+                    [records["train"][i] for i in micro],
+                    [teacher[i] for i in micro],
+                    device,
+                )
             (loss / len(rows)).backward()
             for key, value in parts.items():
                 sums[key] += value
@@ -544,6 +864,7 @@ def run(
                     "rows": len(rows),
                     "tokens": tokens,
                     "grad_norm": norm,
+                    "frozen_backbone": frozen,
                     "lr": {g["name"]: g["lr"] for g in optimizer.param_groups},
                     **{k: v / len(rows) for k, v in sums.items()},
                 }
@@ -555,6 +876,22 @@ def run(
             raise FloatingPointError(f"Nonfinite loss at update {step}")
         if not preflight and step in steps:
             milestone(step)
+            stop = spec["start"].get("collapse_stop")
+            if (
+                stop
+                and step >= stop["step"]
+                and curve[-1]["metrics"]["correct"] < stop["min_select"]
+            ):
+                write_json(
+                    output / "STOPPED.json",
+                    {
+                        "reason": "preregistered collapse stop",
+                        "step": step,
+                        "select": curve[-1]["metrics"]["correct"],
+                        "rule": stop,
+                    },
+                )
+                raise RuntimeError("Preregistered collapse stop")
     log.close()
 
     if preflight:
@@ -583,8 +920,11 @@ def run(
         )
         result = {
             "status": (
-                "PREFLIGHT_PASS" if drift <= 1e-5 and changed == 0 else "PREFLIGHT_FAIL"
+                "PREFLIGHT_PASS"
+                if drift <= 1e-5 and changed == 0 and padding["passed"]
+                else "PREFLIGHT_FAIL"
             ),
+            "padding_parity_passed": padding["passed"],
             "zero_step_select": curve[0]["metrics"],
             "one_update_finite": True,
             "export_manifest_sha256": manifest,

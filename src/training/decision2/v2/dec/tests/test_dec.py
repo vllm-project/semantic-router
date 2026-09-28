@@ -54,6 +54,36 @@ class ReadoutMathTest(unittest.TestCase):
             self.assertEqual(result[name]["upper95"], 0.0)
 
 
+class TemplateSTest(unittest.TestCase):
+    def test_whole_group_stratified_deterministic_selection(self) -> None:
+        from v2.dec.build_template_s import group_rows, select_groups
+
+        rows = []
+        for i in range(40):
+            kind = "choice" if i % 4 else "score"
+            for j in range(1 + i % 2):
+                rows.append(
+                    {
+                        "id": f"r{i}-{j}",
+                        "group_id": f"g{i}",
+                        "source": "s",
+                        "task_type": kind,
+                        "language": "en",
+                    }
+                )
+        groups = group_rows(rows)
+        tokens = {g: 10 * len(members) for g, members in groups.items()}
+        chosen = select_groups(groups, tokens, 300, "seed")
+        self.assertEqual(chosen, select_groups(groups, tokens, 300, "seed"))
+        self.assertNotEqual(chosen, select_groups(groups, tokens, 300, "other"))
+        self.assertEqual(len(set(chosen)), len(chosen))
+        taken = sum(tokens[g] for g in chosen)
+        self.assertGreaterEqual(taken, 300)
+        self.assertLess(taken, 300 + 2 * max(tokens.values()))
+        score = [g for g in chosen if groups[g][0]["task_type"] == "score"]
+        self.assertTrue(0 < len(score) < len(chosen))
+
+
 @unittest.skipUnless(HAS_TORCH, "torch not installed")
 class ResidualReadoutTest(unittest.TestCase):
     def setUp(self) -> None:
