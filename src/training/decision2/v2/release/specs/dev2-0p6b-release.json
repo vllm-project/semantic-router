@@ -10,7 +10,7 @@
   },
   "calibration": null,
   "max_input_tokens": 8192,
-  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-0.6B.decision.build-draft-t1.json",
+  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-0.6B.decision.json",
   "origin": {
     "repo_id": "Qwen/Qwen3-0.6B-Base",
     "revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
@@ -80,7 +80,7 @@
     "text": {
       "tagline": "A compact decision model for routing choices, yes/no checks and rubric scores over one state: native System One Choice, Noul and Score answers with probabilities, no chat API.",
       "architecture": "The 28-layer Qwen3-0.6B text backbone (causal attention) reads the state, the question and every supplied candidate once; a shared candidate head scores the candidates against a global query and returns probabilities without generating text.",
-      "confirmation": "**Independent sealed confirmation (JevArena-C1): PLACEHOLDER, result pending. The coordinator fills in this line after the one-shot C1 scoring event.**",
+      "confirmation": "**Independent sealed confirmation** — JevArena-C1 v1.1 (2,874 human-labelled items from 8 sources published after the relevant cutoffs, never used for training or development; scored once): DEV2.0-0.6B **33.21** vs Decision 1.0 Kai 17.77 (+15.44, 95% CI [+13.51, +17.21]); Bosun v3.1 0.6B 35.03 (−1.82, 95% CI [−4.05, +0.35]); GLiNER2.5-Decide 22.82; Decision 1.0 Lex 20.82. Kai and Lex run at their published 1,024-token input limit and GLiNER2.5-Decide at its own; items they cannot take (525 and 935 of 2,874) count as wrong.",
       "comparator_note": "GLiNER2.5-Decide declares Apache-2.0 in its model card metadata, but its repository has no LICENSE file.",
       "details": [
         "**Weights:** the uniform average of three full fine-tunes of Qwen3-0.6B-Base with the same recipe, start and head initialization; the seeds differ only in data order, and each seed's checkpoint was chosen on a held-out selection set (all three at update 1,433 of 1,638)."
@@ -97,7 +97,10 @@
         "**Same-limit comparison:** the table shows Decision 1.0 Kai at its published 1,024-token input limit. Run at this model's 8,192-token limit, Kai scores 35.97 on JevArena v3 and 127/231 on JevBench public, and the paired v3 difference is +7.57 (95% interval [+4.43, +10.59]).",
         "**Not clearly ahead of the strongest 0.6B peer:** against GLiNER2.5-Decide the v3 difference is +1.02 with a paired 95% interval of [−1.77, +7.80], which includes zero; its typed accuracy T is higher (0.410 vs 0.395).",
         "**Seed dependence:** the three single fine-tunes differed markedly on our development panels. Only their uniform average was evaluated and is released, so retraining the same recipe with another seed can give a noticeably weaker model.",
-        "**Multilingual yes/no checks:** on the mlx-diag diagnostic, non-English Choice (intent routing) is 70.2%, but non-English Noul (paraphrase detection) is 51.8%, below Bosun v3.1 0.6B (61.2%); treat non-English Noul answers with care."
+        "**Multilingual yes/no checks:** on the mlx-diag diagnostic, non-English Choice (intent routing) is 70.2%, but non-English Noul (paraphrase detection) is 51.8%, below Bosun v3.1 0.6B (61.2%); treat non-English Noul answers with care.",
+        "**Typed accuracy is below Bosun v3.1 0.6B:** T 0.395 versus 0.434 (paired difference −0.038, 95% interval [−0.068, −0.010]); the v3 gain over Bosun comes from human transfer.",
+        "**Noul and middle Score levels are weak:** typed Noul is only narrowly above chance (.552 against .50; 95% interval from .518, with 78% of answers on one side), and typed Score leans on the lowest and highest of five levels (recall .54 and .77 there, .03 to .13 on the three middle levels).",
+        "**On the sealed C1 set** it is below Decision 1.0 Kai on Arabic HalluTruthQA (hallucination and find-the-truth), narrative event causality and Arabic overall, and Noul is its weakest type; versus Bosun v3.1 0.6B it is weaker on Choice and Noul and stronger on Score."
       ]
     },
     "reports": [
