@@ -10,7 +10,7 @@
   },
   "calibration": null,
   "max_input_tokens": 16384,
-  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-2B.decision.build-draft.json",
+  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-2B.decision.json",
   "origin": {
     "repo_id": "llm-semantic-router/Decision-1.0-Sol-2B",
     "revision": "ce0c018a28de16d6639b1cd203b761bf643b89e6",
@@ -104,7 +104,7 @@
         "**Against Decider 2B** the JevArena v3 margin is not significant (+3.94, 95% CI [−2.48, +5.67]). It comes from human transfer (+0.105, 95% CI [−0.008, +0.132], itself not significant), while typed accuracy is significantly lower (−0.040, 95% CI [−0.070, −0.009]). Choice is the weakest type relative to the 2B peers (typed Choice accuracy 0.556 vs 0.681 for Decider 2B and 0.661 for This-That 1.2), and the hard tier of JevBench public 231 is lower (57 vs 63).",
         "**Score levels.** On typed Score it almost never predicts the lowest level (6 of 400 predictions; recall 0.03 on level 0), which Decision 1.0 Sol does predict (recall 0.29).",
         "**Multilingual.** On the mlx-diag diagnostic, non-English Choice is level with Decision 1.0 Sol (66.5% vs 67.1%), non-English Noul (paraphrase pairs) is about 2 points lower (65.8% vs 68.0%), and Korean Noul is the weakest language (59% vs 63%, 100 items).",
-        "**Evaluation familiarity.** A stricter overlap screen run after training (covering 98% of the training rows; the rest are program-generated) found 45 training rows in 18 reading-passage groups (from MuSiQue, SQuAD 2.0, QuAC, HotpotQA and CommonsenseQA) that share long word sequences with items of the 15-task human-transfer panel; current data builds exclude such rows. No training row matched the typed panels, JevBench public 231 or the mlx-diag diagnostic.",
+        "**Evaluation familiarity.** A stricter overlap screen run after training (covering 98% of the training rows; the rest are program-generated) found 45 training rows in 18 reading-passage groups (from MuSiQue, SQuAD 2.0, QuAC, HotpotQA and CommonsenseQA) that share long word sequences with items of the 15-task human-transfer panel; current data builds exclude such rows. No training row matched the typed panels, JevBench public 231 or the mlx-diag diagnostic. Those rows touch 19 of the panel's items (18 media_ideology, 1 tropes); rescored without them, or counting all 19 as errors, post-key v3 stays 53.44 and none of this card's comparisons change.",
         "**CPU.** CPU inference was not verified for this release: where the GPU-only causal-conv1d package is installed, Transformers routes the convolution to that kernel and a CPU run fails."
       ],
       "details": [
