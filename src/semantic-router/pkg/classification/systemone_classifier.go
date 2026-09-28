@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -18,6 +19,11 @@ import (
 // rejected at configuration time rather than on every request.
 const systemOneMaxOptions = 255
 
+// systemOneTieTolerance is how far below the most probable option a choice may
+// sit and still count as tied with it, the tolerance #4086 uses for the same
+// check.
+const systemOneTieTolerance = 2e-5
+
 // SystemOneClassifierInference implements SequenceClassifierBackend by asking a
 // SystemOne endpoint one Choice question whose options are the signal's
 // declared labels. Unlike http_classify, the question travels with the request:
@@ -29,17 +35,24 @@ const systemOneMaxOptions = 255
 //	                              "criteria": {"safe": null, "unsafe": null}}}}
 //	  -> {"model": "<model>", "usage": {...},
 //	      "answers": {"<signal>": {"type": "choice", "choice": "safe",
-//	                               "confidence": 0.98,
+//	                               "confidence": 0.96,
 //	                               "probabilities": {"safe": 0.98, "unsafe": 0.02}}}}
+//
+// An absolute endpoint address, such as http://host/v1, is the API base and
+// only /systemone is appended to it, the target remoteOperationIdentity records.
 //
 // The answer's probabilities are keyed by option name, so they go through the
 // same alignScoresToMapping validator http_classify uses and land on the same
 // class indices every other backend produces. A serving endpoint that answers
-// more than the one question asked, or answers it with a different question
-// type, is a contract violation rather than a partial result, so it fails
-// instead of reporting the labels it did return.
+// more than the one question asked, answers it with a different question type,
+// names another model, chooses an option its own distribution does not rank
+// first, or reports a confidence outside [0, 1] is a contract violation rather
+// than a result, so it fails instead of reporting the labels it did return.
+// Confidence is not recomputed from the distribution: #4086 documents its
+// value as Decision's own statistic, not one other SystemOne providers share.
 type SystemOneClassifierInference struct {
 	connector    *connector.Client
+	operation    connector.Operation
 	timeout      time.Duration
 	mapping      sequenceLabelMapping
 	model        string
@@ -86,11 +99,15 @@ func NewSystemOneClassifierInference(
 		return nil, err
 	}
 
-	scheme := strings.ToLower(strings.TrimSpace(cfg.ModelEndpoint.Protocol))
-	if scheme == "" {
-		scheme = "http"
+	address := strings.TrimSpace(cfg.ModelEndpoint.Address)
+	baseURL, operationPath := address, "/systemone"
+	if !strings.Contains(address, "://") {
+		scheme := strings.ToLower(strings.TrimSpace(cfg.ModelEndpoint.Protocol))
+		if scheme == "" {
+			scheme = "http"
+		}
+		baseURL, operationPath = fmt.Sprintf("%s://%s:%d", scheme, address, cfg.ModelEndpoint.Port), "/v1/systemone"
 	}
-	baseURL := fmt.Sprintf("%s://%s:%d", scheme, strings.TrimSpace(cfg.ModelEndpoint.Address), cfg.ModelEndpoint.Port)
 
 	// A SystemOne call is a typed forward pass rather than a generative one, so
 	// it shares http_classify's fail-fast default instead of http_chat's.
@@ -113,7 +130,13 @@ func NewSystemOneClassifierInference(
 	}
 
 	return &SystemOneClassifierInference{
-		connector:    remote,
+		connector: remote,
+		operation: connector.Operation{
+			Name:      "http_systemone",
+			Method:    http.MethodPost,
+			Path:      operationPath,
+			RetrySafe: true,
+		},
 		timeout:      timeout,
 		mapping:      mapping,
 		model:        strings.TrimSpace(cfg.ModelName),
@@ -162,20 +185,13 @@ type systemOneRequest struct {
 type systemOneAnswer struct {
 	Type          string             `json:"type"`
 	Choice        string             `json:"choice"`
-	Confidence    float32            `json:"confidence"`
-	Probabilities map[string]float32 `json:"probabilities"`
+	Confidence    float64            `json:"confidence"`
+	Probabilities map[string]float64 `json:"probabilities"`
 }
 
 type systemOneResponse struct {
 	Model   string                     `json:"model"`
 	Answers map[string]systemOneAnswer `json:"answers"`
-}
-
-var systemOneOperation = connector.Operation{
-	Name:      "http_systemone",
-	Method:    http.MethodPost,
-	Path:      "/v1/systemone",
-	RetrySafe: true,
 }
 
 // Classify implements the SequenceClassifierBackend interface. The deadline
@@ -202,7 +218,7 @@ func (s *SystemOneClassifierInference) Classify(ctx context.Context, text string
 	if err != nil {
 		return SequenceClassificationResult{}, fmt.Errorf("failed to marshal http_systemone request: %w", err)
 	}
-	responseBody, err := s.connector.Do(ctx, systemOneOperation, reqBody)
+	responseBody, err := s.connector.Do(ctx, s.operation, reqBody)
 	if err != nil {
 		return SequenceClassificationResult{}, formatSystemOneConnectorError(err)
 	}
@@ -221,6 +237,9 @@ func (s *SystemOneClassifierInference) Classify(ctx context.Context, text string
 // scoresFromAnswers resolves the one answer this request asked for and turns its
 // option distribution into the label/score pairs alignScoresToMapping validates.
 func (s *SystemOneClassifierInference) scoresFromAnswers(decoded systemOneResponse) ([]httpClassifyLabelScore, error) {
+	if decoded.Model != s.model {
+		return nil, fmt.Errorf("http_systemone response names model %q, want the requested %q", decoded.Model, s.model)
+	}
 	if len(decoded.Answers) != 1 {
 		return nil, fmt.Errorf(
 			"http_systemone response answered %d questions, want exactly the 1 asked", len(decoded.Answers))
@@ -233,14 +252,45 @@ func (s *SystemOneClassifierInference) scoresFromAnswers(decoded systemOneRespon
 		return nil, fmt.Errorf(
 			"http_systemone answer for question %q has type %q, want \"choice\"", s.questionID, answer.Type)
 	}
-	if len(answer.Probabilities) == 0 {
-		return nil, fmt.Errorf("http_systemone answer for question %q carries no probabilities", s.questionID)
+	// Reading the options in declared order keeps the checks below independent
+	// of map iteration order.
+	scores := make([]httpClassifyLabelScore, 0, len(s.options))
+	for _, option := range s.options {
+		probability, ok := answer.Probabilities[option]
+		if !ok {
+			return nil, fmt.Errorf("http_systemone answer for question %q has no probability for option %q", s.questionID, option)
+		}
+		scores = append(scores, httpClassifyLabelScore{Label: option, Score: float32(probability)})
 	}
-	scores := make([]httpClassifyLabelScore, 0, len(answer.Probabilities))
-	for label, probability := range answer.Probabilities {
-		scores = append(scores, httpClassifyLabelScore{Label: label, Score: probability})
+	if len(answer.Probabilities) != len(s.options) {
+		return nil, fmt.Errorf(
+			"http_systemone answer for question %q has %d probabilities, want the %d options asked",
+			s.questionID, len(answer.Probabilities), len(s.options))
+	}
+	if err := checkSystemOneChoice(s.questionID, s.options, answer); err != nil {
+		return nil, err
 	}
 	return scores, nil
+}
+
+// checkSystemOneChoice rejects an answer whose choice is not a most probable
+// option, which would otherwise route on scores its own choice disagrees with,
+// and an answer whose confidence is not a probability.
+func checkSystemOneChoice(questionID string, options []string, answer systemOneAnswer) error {
+	top := math.Inf(-1)
+	for _, option := range options {
+		top = math.Max(top, answer.Probabilities[option])
+	}
+	chosen, ok := answer.Probabilities[answer.Choice]
+	if !ok || top-chosen > systemOneTieTolerance {
+		return fmt.Errorf(
+			"http_systemone answer for question %q chose %q, which is not a most probable option", questionID, answer.Choice)
+	}
+	if answer.Confidence < 0 || answer.Confidence > 1 {
+		return fmt.Errorf(
+			"http_systemone answer for question %q has confidence %v, want a value in [0, 1]", questionID, answer.Confidence)
+	}
+	return nil
 }
 
 func formatSystemOneConnectorError(err error) error {

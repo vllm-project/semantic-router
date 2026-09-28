@@ -143,9 +143,14 @@ Choice question's options, and `instructions` becomes the question text the
 request carries, so unlike `sequence_classifier` they require `instructions`
 rather than rejecting it. The endpoint answers the one question that was asked;
 an extra answer, a missing option, or a non-Choice answer type is an error
-rather than a partial result. The Choice contract accepts two to 255 options,
+rather than a partial result. So is a response that names another model, a
+choice that is not a most probable option, or a confidence outside zero to one.
+Confidence is not recomputed from the probabilities, since each SystemOne
+provider defines its own. The Choice contract accepts two to 255 options,
 and the external model entry needs `llm_model_name` because the request names
-its model explicitly. `model_path`, `use_cpu`, and `disable_rationale` are
+its model explicitly. An absolute `address` such as
+`http://decision.example.com/v1` is used as the API base, so the request goes
+to `{address}/systemone`. `model_path`, `use_cpu`, and `disable_rationale` are
 rejected.
 
 Local classifiers use `model_path` and support two or more declared labels.
