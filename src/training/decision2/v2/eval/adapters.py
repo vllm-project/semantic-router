@@ -198,6 +198,41 @@ REGISTRY: dict[str, Adapter] = {
             for size in ("0.8b", "4b")
         ),
         Adapter(
+            name="kev-0.8b",
+            module="inference.kev",
+            args=(
+                "--size",
+                "0.8b",
+                "--model-path",
+                "{model}",
+                "--source-path",
+                "{source}",
+                "--model-revision",
+                "{revision}",
+                *IO_ARGS,
+                "--device",
+                "{device}",
+            ),
+            model_id="jaredpalmer/kev-0.8b",
+            batch_policy="Kev FP32 Checkpoint.load/DecisionModel.probs, one prompt per call; strict 8,192-token limits, overflow invalid",
+            requires=("source",),
+        ),
+        Adapter(
+            name="intern-0.8b",
+            module="inference.intern_decision",
+            args=(
+                "--model-path",
+                "{model}",
+                "--model-revision",
+                "{revision}",
+                *IO_ARGS,
+                "--device",
+                "{device}",
+            ),
+            model_id="internlm/Intern-Decision-0.8B",
+            batch_policy="bundled DecisionEngine.predict, one forward per prompt; native rejections (8,192 tokens, 62 options) invalid",
+        ),
+        Adapter(
             name="bosun17",
             module="inference.bosun06",
             args=(
