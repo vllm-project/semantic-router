@@ -13,42 +13,34 @@ Reference:
 """
 
 import argparse
-import os
 import time
 from pathlib import Path
-from typing import Dict, List
 
 import numpy as np
-from tqdm import tqdm
-
 from data_loader import (
-    CATEGORIES,
     RoutingRecord,
-    category_to_onehot,
     create_feature_vector,
     download_data,
-    get_model_names,
     get_unique_queries,
-    group_by_query,
     load_jsonl,
     print_data_stats,
 )
-from embeddings import EmbeddingGenerator, generate_embeddings_for_queries
+from embeddings import generate_embeddings_for_queries
 from models import (
+    TORCH_AVAILABLE,
     KMeansModel,
     KNNModel,
     MLPModel,
     SVMModel,
     TrainingSample,
-    TORCH_AVAILABLE,
 )
 
 
 def create_training_samples(
-    records: List[RoutingRecord],
-    embeddings: Dict[str, np.ndarray],
+    records: list[RoutingRecord],
+    embeddings: dict[str, np.ndarray],
     quality_weight: float = 0.9,
-) -> List[TrainingSample]:
+) -> list[TrainingSample]:
     """
     Create training samples from records and embeddings.
 
@@ -83,13 +75,13 @@ def create_training_samples(
 
 
 def train_models(
-    samples: List[TrainingSample],
+    samples: list[TrainingSample],
     output_dir: Path,
     knn_k: int = 5,
     kmeans_clusters: int = 8,
     svm_kernel: str = "rbf",
     svm_gamma: float = 1.0,
-    mlp_hidden_sizes: List[int] = None,
+    mlp_hidden_sizes: list[int] | None = None,
     mlp_epochs: int = 100,
     mlp_learning_rate: float = 0.001,
     mlp_dropout: float = 0.1,
@@ -156,7 +148,7 @@ def train_models(
     print("=" * 50)
     print(f"  Samples: {len(samples)}")
     print(f"  Feature dim: {len(samples[0].feature_vector)}")
-    print(f"  Models: {sorted(set(s.model_name for s in samples))}")
+    print(f"  Models: {sorted({s.model_name for s in samples})}")
     print(f"  Algorithms: {', '.join(algorithms_to_train)}")
     print("=" * 50 + "\n")
 
@@ -215,14 +207,14 @@ def run_training_pipeline(
     kmeans_clusters: int = 8,
     svm_kernel: str = "rbf",
     svm_gamma: float = 1.0,
-    mlp_hidden_sizes: List[int] = None,
+    mlp_hidden_sizes: list[int] | None = None,
     mlp_epochs: int = 100,
     mlp_learning_rate: float = 0.001,
     mlp_dropout: float = 0.1,
     skip_mlp: bool = False,
     algorithm: str = "all",
     on_progress=None,
-) -> List[str]:
+) -> list[str]:
     """
     Run the full training pipeline: load data -> embed -> create samples -> train.
 
@@ -264,10 +256,7 @@ def run_training_pipeline(
 
     # Step 1: Load data
     progress(10, "Loading data", "Loading benchmark data")
-    if data_file:
-        data_path = Path(data_file)
-    else:
-        data_path = download_data(cache_dir)
+    data_path = Path(data_file) if data_file else download_data(cache_dir)
 
     records = load_jsonl(data_path)
     print_data_stats(records)

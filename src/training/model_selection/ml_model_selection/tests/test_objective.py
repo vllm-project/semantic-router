@@ -8,11 +8,11 @@ import pytest
 SERVICE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SERVICE_DIR))
 
-from objective import (
+from objective import (  # noqa: E402
     OBJECTIVE_VERSION,
     SelectorObjective,
     label_snapshots,
-)  # noqa: E402
+)
 from query_outcome_set import CandidateOutcome, QueryOutcomeSet  # noqa: E402
 
 FAST_MS = 100.0
