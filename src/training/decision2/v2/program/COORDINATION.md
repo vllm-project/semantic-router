@@ -153,6 +153,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
 | node B GPU5–6 | ~27B |
+| node B GPU7 (after the research & data H7 / H8 Lux wave, ~04:30 UTC+8) | ~27B Milestone 3 (assigned 2026-09-29 04:05 UTC+8); more GPUs from the 9B track when its Milestone 3 ends |
 | node B GPU7 | research & data (owner) — SHARED from 2026-09-28 21:55 UTC+8 with the eval track's node-B comparator re-validation (~1.5 h, inference only; each writes its own lease owner entry, e.g. `owner.eval`) |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
@@ -186,6 +187,22 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 04:05 — From ~27B Milestone 2 (gist 06; integration `76267432d`): HOLD. Best = Score arm (A6g + A6h) seed 1,
+  post-key v3 62.72 vs the >= 64.9 bar (AutoJev-27B re-measured 72.13; −9.42 [−10.65, −4.78]). Score data is the only
+  lever that beat its matched control post-key (+2.63 [+0.65, +6.85]; its Score family beats AutoJev .728 vs .705; human
+  transfer level with the peer; no type collapsed). 8K packaging worth 0.00 for the incumbent; A2 rules and AutoJev /
+  own-Lux distillation did not move v3 (the proxy over-predicted both). The remaining gap is Choice-side typed reasoning on
+  unseen families (constraint competition ~.39 vs 1.0; exception stack ~.6 vs .84). Coordinator: the 20.54 GPU-hour
+  overrun (vs ~14 approved) is accepted; Milestone 3 is APPROVED (A7's Stage1–4 typed curricula on a strict-base Score arm,
+  two seeds, 32K packaging) on node B GPU5–6 now + GPU7 after the data wave + 9B GPUs when free.
+  - **Release-path gaps to fix before any 27B release:** the release pipeline runs under `python -I`, so FLA kernels are not
+    importable and the package runtime takes the reference gated-delta path (fix: load the scored kernels explicitly and
+    fail if missing, as done for 0.8B); CAL698 fitting must use the 0.6B release worker's `calibrate_frozen.py` /
+    `dev_calibration.py` and the 23:15 rule; package at 32,768 tokens if the backbone supports it (18 inputs still over
+    8K). Disclose, if released: which A0s variant (with or without the shortcut families) and which CAL were used.
+  - LoRA seed soups: the average of seed updates is exactly representable as one LoRA of rank 2r (concatenate the scaled
+    B and A factors), so seed soups remain `qwen-adapter` packages.
 
 - 2026-09-29 03:30 — **Development proxy v2** (eval; "Eval runners" → "Development proxy v2"; integration `c3da006b8`): P stays
   100·√(T_dev·H_pilot), recalibrated on 51 models (v3 ≈ 22.4 + 0.58·P); **tie band is now |ΔP| < 8** (supersedes 4). No
