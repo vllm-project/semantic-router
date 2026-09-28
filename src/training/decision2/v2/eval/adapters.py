@@ -253,6 +253,24 @@ REGISTRY: dict[str, Adapter] = {
             batch_policy="bundled Jet().decide, questions scored separately; 16,384-token limit, rejection invalid",
         ),
         Adapter(
+            name="nimble-v2",
+            module="v2.eval.native_nimble",
+            args=(
+                "--model-path",
+                "{model}",
+                "--model-revision",
+                "{revision}",
+                *IO_ARGS,
+                "--device",
+                "{device}",
+            ),
+            model_id="bespokelabs/Bespoke-Nimble-9B-v2",
+            batch_policy=(
+                "bundled ParallelScorer.score, one native schema per item, T=2.179;"
+                " 8,192-token limit, rejected item invalid"
+            ),
+        ),
+        Adapter(
             name="eikos-27b",
             module="inference.eikos",
             args=(

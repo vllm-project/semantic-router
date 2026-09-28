@@ -160,6 +160,16 @@ answers onto the scorer's fields, and treats only the 16,384-token message as in
 (separate `smoke/` directory, answer-shape check only, no gold) precedes a single
 relaunch as Q5b with no other change.
 
+**A4.4 (Q6, before launch).** `bespokelabs/Bespoke-Nimble-9B-v2@4b8c04d1` (PEFT adapter,
+every `SHA256SUMS` file verified) on `Qwen/Qwen3.5-9B@c2022362` from the offline local
+cache, 9B / node A, adapter `nimble-v2` (`v2/eval/native_nimble.py`, bundled
+`ParallelScorer.score`, one native schema per item, release T=2.179 transferred and not
+refit; option, level and true/false meanings in `choice_descriptions`; structured states
+as compact JSON; native 8,192-token rejection invalid for the whole item; any other
+error stops; release targets CUDA, run as `unvalidated_rocm`). Formal + dev + mlx-diag;
+≤ 0.5 GPU-hour. Gold-free smoke runs of 20 items on typed-final and mlx-diag (answer
+shapes only) come first, as for Q5b.
+
 ## Reused results (identity verified, no new GPU time)
 
 Recorded predictions were located by SHA-256, adopted, sealed and re-scored with
