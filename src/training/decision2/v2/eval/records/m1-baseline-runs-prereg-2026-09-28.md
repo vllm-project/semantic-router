@@ -118,6 +118,20 @@ need a parity-checked fallback).
 - Rules unchanged: one shot, ≤ 0.5 GPU-hour per run (N2 ≤ 0.6), gold never mounted for
   inference, gold-free seal before formal scoring.
 
+## Amendment A4 — deferred peers (before launch, 2026-09-28 15:20 UTC+8)
+
+| Run | Peer @ pinned revision | Tier / node | Adapter | Panels |
+| --- | --- | --- | --- | --- |
+| Q1 | `jaredpalmer/kev-0.8b@9a45d25e`, runtime `kev@45923b7a`, base `Qwen3.5-0.8B-Base@dc7cdfe2` | 0.8B / node A | `kev-0.8b` (Kev FP32 reference path, strict 8,192-token limits) | formal + dev + mlx-diag |
+| Q2 | `internlm/Intern-Decision-0.8B@85a0cc5a` | 0.8B / node A | `intern-0.8b` (bundled `DecisionEngine`; release pins Transformers 5.14.1/CUDA, run as `unvalidated_rocm` on 5.17.0) | formal + dev + mlx-diag |
+| Q3 | `caiovicentino1/Eikos-27B@103a5647` (BF16 sibling of the board's FP8 artifact; disclosed) | 27B / node B | Eikos letter-logit adapter, 27B variant | formal + dev |
+
+Shared-adapter changes (separate commit with tests): Kev size table (`inference/kev.py`,
+4B default unchanged) and the new `inference/intern_decision.py`. Same rules: one shot,
+≤ 0.5 GPU-hour each (Q3 ≤ 0.8), native rejections invalid, gold-free seal first. Still
+deferred: this-that 1.2, Jet v6.2, Nimble v2, Jebadiah 27B, Hopper (G); Rune only with
+a parity-checked ROCm path.
+
 ## Reused results (identity verified, no new GPU time)
 
 Recorded predictions were located by SHA-256, adopted, sealed and re-scored with
