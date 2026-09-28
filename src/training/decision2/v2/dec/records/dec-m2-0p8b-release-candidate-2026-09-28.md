@@ -53,12 +53,22 @@ Best measured 0.8B peers: Intern-Decision-0.8B 43.535, Kev-0.8B 43.217.
   dataset revisions `39a120ca…` (A7) and `5c0255ed…` (v1), licences per their
   registries.
 
+## Seed evidence and multilingual diagnostic (added after scoring)
+
+Per-seed post-key runs (8,192 tokens, CAL700): s1 49.777 (+7.23 [+1.83,
++13.68]), s2 47.360 (+4.81 [+0.72, +9.59]), s3 41.084 (−1.46 [−4.28, +4.99];
+CSS15 H .3635). Seed mean 46.07; the soup (chosen on development data) is
+above every seed. `mlx-diag` (development diagnostic, 16,384 tokens, CAL698):
+type-macro 65.2 (Eos 1.0 66.5), English 67.1 (67.9), non-English Choice /
+Noul / Score 68.7 / 54.2 / 71.9 (68.5 / 59.2 / 71.0), weakest ko 55.0 (56.0);
+run dir `/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA-mlx`.
+
 ## Remaining release gates (release pipeline)
 
 Real HF download + package hash + loaded-parameter verification; System One
 native Choice/Noul/Score examples; cross-process repeatability (borrow one
 decoder GPU on node A with image `f83b1d10…`); card (owl banner, same-panel
-table, rank and model × task charts; disclose the Score and H regressions);
-`mlx-diag` multilingual diagnostic (collection queued on node A).
+table, rank and model × task charts; disclose the Score, H and multilingual
+Noul regressions and the seed dependence).
 Note: release packaging must accept `frozen_checkpoint` calibration reports
 (shared loader change `0a399c1d9`).

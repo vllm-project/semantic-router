@@ -1,0 +1,10 @@
+set -u
+SRC=$1
+F=/data/dev2/runs/dec/formal/m2
+until grep -q "controls chain (rest) done" $F/OPERATIONS.log 2>/dev/null; do sleep 30; done
+S=/data/dev2/src/$SRC/src/training/decision2/v2/dec; L=$S/launch.sh; R=/data/dev2/runs/dec/m2/diag; mkdir -p $R
+NOX=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
+ROWS=/runs/m2/data/a7g-aho-sample/rows.jsonl
+bash $L diag-a7g-nox1 $SRC $R/a7g-nox1 -- -m v2.dec.eval_rows --package $NOX --rows $ROWS --tag a7g-aho --output /out
+bash $L diag-a7g-x2 $SRC $R/a7g-x2 -- -m v2.dec.eval_rows --checkpoint /runs/e1/full/X2/checkpoint-0000408 --source-path $NOX --rows $ROWS --tag a7g-aho --output /out
+echo "$(date -u +%FT%TZ) a7g diag done" >> $R/OPERATIONS.log

@@ -1,0 +1,12 @@
+set -e
+SRC=$1
+S=/data/dev2/src/$SRC; L=$S/src/training/decision2/v2/dec/launch.sh; D=/data/dev2/runs/dec/m2/data; mkdir -p $D
+H=/hf/datasets--llm-semantic-router--decision-2.0-training-data/snapshots
+TOK=/hf/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab
+for spec in m2-control-a0sr m2-retention m2-full-a7-v1; do
+  nohup bash $L build-$spec $SRC $D/$spec --cpu -- -m v2.dec.build_mixture --spec /code/v2/dec/specs/$spec.json \
+    --source a7=$H/39a120ca5446dd2296567870ed0131a2d2e7b42d,v2/a7/registry.json,v2/ \
+    --source v1=$H/5c0255ed6a05d08b2fcb863e8045289eedd996cd,v2/registry.json, \
+    --tokenizer $TOK --workers 32 --output /out/train.jsonl > $D/$spec.nohup 2>&1 &
+done
+echo launched builds
