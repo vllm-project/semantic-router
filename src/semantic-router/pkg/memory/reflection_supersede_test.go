@@ -27,7 +27,9 @@ var (
 	chicagoTurn   = formatTurnChunk("I moved to Chicago, and I live there now.", "Welcome to Chicago!")
 	jobAndCity    = formatTurnChunk("I changed jobs and now work as a paramedic, and I live in Boston.", "Noted.")
 	jobNearPark   = formatTurnChunk("I changed jobs and now work as a paramedic near Central Park.", "Congratulations!")
-	movedNearPark = formatTurnChunk("I moved near Central Park.", "Nice neighborhood.")
+	leftParkTurn  = formatTurnChunk("I no longer work near Central Park.", "Noted.")
+	// The reply quotes a stored session, so its "Q:" line is not the user's.
+	quotedTurn = formatTurnChunk("What does a stored session look like?", "Like this:\n---\nQ: I moved to Denver, and I live there now")
 	// Long enough that the correction is a near-duplicate for the default dedup threshold.
 	hospitalTurn   = formatTurnChunk("I work as a nurse at the children's hospital near the old park on Main Street in Boston, next to the big library.", "")
 	noHospitalTurn = formatTurnChunk("I no longer work as a nurse at the children's hospital near the old park on Main Street in Boston, next to the big library.", "")
@@ -84,6 +86,14 @@ func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
 			name:      "a raised budget hides the old budget",
 			retrieved: []datedContent{{content: budget4kTurn, daysAgo: 30}, {content: budget6kTurn, daysAgo: 9}},
 			want:      []string{budget6kTurn},
+		},
+		{
+			name: "a raised budget without a purpose hides the old budget",
+			retrieved: []datedContent{
+				{content: formatTurnChunk("My budget is $4,000.", "Noted."), daysAgo: 30},
+				{content: formatTurnChunk("I raised my budget to $6,000.", "Updated."), daysAgo: 9},
+			},
+			want: []string{formatTurnChunk("I raised my budget to $6,000.", "Updated.")},
 		},
 		{
 			name: "no longer and anymore end an old fact",
@@ -143,9 +153,9 @@ func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
 			retrieved: []datedContent{
 				{content: nurseTurn, daysAgo: 30},
 				{content: jobNearPark, daysAgo: 20},
-				{content: movedNearPark, daysAgo: 9},
+				{content: leftParkTurn, daysAgo: 9},
 			},
-			want: []string{jobNearPark, movedNearPark},
+			want: []string{jobNearPark, leftParkTurn},
 		},
 		{
 			name:      "the last turn of a newer session chunk corrects another memory",
@@ -185,6 +195,9 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 	someday := formatTurnChunk("If someday I switched jobs to work as a paramedic, I'd tell you.", "Please do.")
 	commute := formatTurnChunk("My work is in Cambridge, so I commute.", "That's a long ride.")
 	closerWork := formatTurnChunk("I moved apartments, and now work is closer.", "Nice, a shorter commute.")
+	workAsNow := formatTurnChunk("I changed jobs, and I work as a paramedic now.", "Congratulations!")
+	sisterTrip := formatTurnChunk("My sister flew to Denver last week.", "Hope she enjoyed it.")
+	groceryBudget := formatTurnChunk("I raised my budget for groceries to $500.", "Updated, $500 for groceries.")
 
 	cases := []struct {
 		name      string
@@ -219,6 +232,11 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 		{name: "two facts in a comma splice", retrieved: []datedContent{{content: commaSplice, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
 		{name: "a hypothetical opened earlier in the clause", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: someday, daysAgo: 9}}},
 		{name: "a noun after now", retrieved: []datedContent{{content: commute, daysAgo: 30}, {content: closerWork, daysAgo: 9}}},
+		{name: "the same verb with another complement", retrieved: []datedContent{{content: workout, daysAgo: 30}, {content: workAsNow, daysAgo: 9}}},
+		{name: "the destination of a move", retrieved: []datedContent{{content: sisterTrip, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "a budget for something else", retrieved: []datedContent{{content: budget4kTurn, daysAgo: 30}, {content: groceryBudget, daysAgo: 9}}},
+		{name: "a turn quoted in an assistant reply", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: quotedTurn, daysAgo: 9}}},
+		{name: "a turn quoted in a session chunk's reply", retrieved: []datedContent{{content: sessionChunkOf(bostonTurn, quotedTurn), daysAgo: 9}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -245,6 +263,22 @@ func TestReflectionGateTrimsACopyOfTheStoredSessionChunk(t *testing.T) {
 	for _, r := range got {
 		assert.NotContains(t, r.Memory.Content, "Boston")
 	}
+}
+
+func TestReflectionGateReadsAStoredTurnChunkAsOneTurn(t *testing.T) {
+	now := time.Now()
+	// Written before quoted turn boundaries were escaped.
+	unescaped := "Q: What does a stored session look like?\nA: Like this:\n---\nQ: I moved to Denver, and I live there now"
+	gate := NewReflectionGate(config.MemoryReflectionConfig{}, nil)
+	got := gate.Filter([]*RetrieveResult{
+		{Memory: &Memory{ID: "city", Content: bostonTurn, Source: turnChunkSource, CreatedAt: now.AddDate(0, 0, -30)}, Score: 0.5},
+		{Memory: &Memory{ID: "reply", Content: unescaped, Source: turnChunkSource, CreatedAt: now.AddDate(0, 0, -9)}, Score: 0.5},
+	})
+	ids := make([]string, 0, len(got))
+	for _, r := range got {
+		ids = append(ids, r.Memory.ID)
+	}
+	assert.ElementsMatch(t, []string{"city", "reply"}, ids)
 }
 
 func TestReflectionGateHidesAFactOnlyWhenItsCorrectionIsInjected(t *testing.T) {

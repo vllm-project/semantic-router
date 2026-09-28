@@ -142,6 +142,7 @@ const (
 	turnQuestionPrefix   = "Q: "
 	turnAnswerPrefix     = "A: "
 	sessionTurnSeparator = "\n---\n"
+	turnChunkSource      = "conversation"
 )
 
 // MemoryExtractor stores conversation turns directly in the vector store.
@@ -311,7 +312,7 @@ func (e *MemoryExtractor) storeTurnChunk(ctx context.Context, userMessage, assis
 		Type:       MemoryTypeEpisodic,
 		Content:    sanitized,
 		UserID:     userID,
-		Source:     "conversation",
+		Source:     turnChunkSource,
 		CreatedAt:  time.Now(),
 		Importance: 0.5,
 	}
@@ -452,12 +453,18 @@ func buildSessionChunk(history []openai.ChatCompletionMessageParamUnion, userMsg
 func formatTurnChunk(userMessage, assistantResponse string) string {
 	var parts []string
 	if userMessage != "" {
-		parts = append(parts, turnQuestionPrefix+userMessage)
+		parts = append(parts, turnQuestionPrefix+escapeTurnBoundaries(userMessage))
 	}
 	if assistantResponse != "" {
-		parts = append(parts, turnAnswerPrefix+assistantResponse)
+		parts = append(parts, turnAnswerPrefix+escapeTurnBoundaries(assistantResponse))
 	}
 	return strings.Join(parts, "\n")
+}
+
+// escapeTurnBoundaries stores a quoted "---" line followed by "Q: " with the
+// prefix escaped, so only the separators buildSessionChunk writes start a turn.
+func escapeTurnBoundaries(message string) string {
+	return strings.ReplaceAll(message, sessionTurnSeparator+turnQuestionPrefix, sessionTurnSeparator+`\`+turnQuestionPrefix)
 }
 
 // =============================================================================

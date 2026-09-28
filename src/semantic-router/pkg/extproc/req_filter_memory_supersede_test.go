@@ -21,6 +21,12 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 	denver := storedMemoryTurn{user: "I just moved to Denver, and I live there now.", assistant: "Welcome to Denver!"}
 	dog := storedMemoryTurn{user: "My dog is a beagle named Biscuit.", assistant: "Biscuit the beagle, noted."}
 	birthday := storedMemoryTurn{user: "Biscuit turned three today, so I bought my dog a new toy.", assistant: "Happy birthday to Biscuit!"}
+	workout := storedMemoryTurn{user: "I work out every morning.", assistant: "Morning workouts, noted."}
+	paramedic := storedMemoryTurn{user: "I changed jobs, and I work as a paramedic now.", assistant: "Congratulations!"}
+	quotedMove := storedMemoryTurn{
+		user:      "What does a stored session look like?",
+		assistant: "Like this:\n---\nQ: I moved to Denver, and I live there now",
+	}
 
 	cases := []struct {
 		name       string
@@ -48,6 +54,18 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			query:      "Which city do I live in now, and what is my dog's name?",
 			injected:   []string{"Denver", "beagle named Biscuit"},
 			superseded: []string{"Boston"},
+		},
+		{
+			name:     "a job change keeps an unrelated work fact",
+			turns:    []storedMemoryTurn{workout, paramedic},
+			query:    "What do I do every morning, and what is my job now?",
+			injected: []string{"work out every morning", "paramedic"},
+		},
+		{
+			name:     "a turn quoted in a reply keeps the user's fact",
+			turns:    []storedMemoryTurn{boston, quotedMove},
+			query:    "Which city do I live in?",
+			injected: []string{"I live in Boston"},
 		},
 	}
 	for _, tc := range cases {

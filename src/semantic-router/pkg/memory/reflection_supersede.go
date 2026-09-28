@@ -19,14 +19,19 @@ import (
 // older statement. Questions and changes made by someone else, negated,
 // hypothetical or still planned don't count.
 var (
-	changeVerbs         = wordSet("moved relocated changed switched raised lowered increased decreased reduced")
-	firstPersonSubjects = wordSet("i we i've we've i'm we're")
-	changeModifiers     = wordSet("just recently finally already also actually have am are")
-	hypotheticalMarkers = wordSet("if wish unless whether had have has would could should might may")
-	negations           = wordSet("not don't doesn't can't never")
-	elidedSubjectVerbs  = wordSet("work live drive study teach own rent use run manage lead stay")
-	auxiliaries         = wordSet("is are was were be been has have had will would can could should may might must do does did")
-	functionWords       = wordSet(`a an the this that these those some any all each every no
+	changeVerbs           = wordSet("moved relocated changed switched raised lowered increased decreased reduced")
+	firstPersonSubjects   = wordSet("i we i've we've i'm we're")
+	changeModifiers       = wordSet("just recently finally already also actually have am are")
+	hypotheticalMarkers   = wordSet("if wish unless whether had have has would could should might may")
+	negations             = wordSet("not don't doesn't can't never")
+	elidedSubjectVerbs    = wordSet("work live drive study teach own rent use run manage lead stay")
+	verbParticles         = wordSet("as out up off down away back for with from to into about like over")
+	placeWords            = wordSet("in at near on by there here")
+	destinationWords      = wordSet("to into from back closer in at near on by there here")
+	determiners           = wordSet("a an the this that these those my our your his her their")
+	qualifierPrepositions = wordSet("for of")
+	auxiliaries           = wordSet("is are was were be been has have had will would can could should may might must do does did")
+	functionWords         = wordSet(`a an the this that these those some any all each every no
 		and or but so if then than because while
 		of to in on at for from with by as about into onto near over under after before
 		since until around through during without within
@@ -71,7 +76,7 @@ func newSupersession(memories []*RetrieveResult) *supersession {
 	turns := make([][]retrievedTurn, len(memories))
 	correctionsByPair := make(map[wordPair][]turnRef)
 	for i, m := range memories {
-		turns[i] = parseRetrievedTurns(m.Memory.Content, statementIDs)
+		turns[i] = parseRetrievedTurns(m.Memory, statementIDs)
 		for ti, turn := range turns[i] {
 			ref := turnRef{memory: i, turn: ti}
 			for _, pair := range turn.correction {
@@ -247,8 +252,12 @@ func createdAfter(a *Memory, b *Memory) bool {
 	return !a.CreatedAt.IsZero() && !b.CreatedAt.IsZero() && a.CreatedAt.After(b.CreatedAt)
 }
 
-func parseRetrievedTurns(content string, statementIDs map[string]int) []retrievedTurn {
-	segments := splitSessionTurns(content)
+func parseRetrievedTurns(m *Memory, statementIDs map[string]int) []retrievedTurn {
+	// A stored single turn has no turn boundaries, even where its text quotes one.
+	segments := []string{m.Content}
+	if m.Source != turnChunkSource {
+		segments = splitSessionTurns(m.Content)
+	}
 	turns := make([]retrievedTurn, 0, len(segments))
 	for _, segment := range segments {
 		turn := retrievedTurn{text: segment}
@@ -301,10 +310,28 @@ func correctionPairs(clauses [][]string) ([]wordPair, []bool) {
 		if reportsOwnChange(clause) || (changed && slices.Contains(clause, "now") && describesUser(clause)) {
 			changed = true
 			inCorrection[ci] = true
-			pairs = append(pairs, anchorPairs(clause)...)
+			pairs = append(pairs, anchorPairs(withoutNewValue(clause))...)
 		}
 	}
 	return pairs, inCorrection
+}
+
+// withoutNewValue cuts a change clause at its destination. "Moved to Denver"
+// names the new value, which older facts about Denver share without being
+// corrected.
+func withoutNewValue(clause []string) []string {
+	for i, word := range clause {
+		if !changeVerbs[word] || !endsWithOwnSubject(clause[:i]) {
+			continue
+		}
+		for j := i + 1; j < len(clause); j++ {
+			if destinationWords[clause[j]] {
+				return clause[:j]
+			}
+		}
+		break
+	}
+	return clause
 }
 
 // describesUser accepts a clause whose subject is the user, either named or
@@ -464,11 +491,59 @@ func anchorPairs(words []string) []wordPair {
 	for i, word := range words {
 		isContent := isContentWord(word)
 		if i > 0 && (previousIsContent || isContent) {
-			pairs = append(pairs, wordPair{words[i-1], word})
+			// A pair with one content word also carries what decides its
+			// meaning: "I work" starts both "I work out" and "I work as a nurse",
+			// and "my budget" can be for a trip or for groceries.
+			second := word
+			switch {
+			case isContent && leadsVerb(words[i-1]):
+				second += " " + complementOf(words[i+1:])
+			case isContent && determiners[words[i-1]]:
+				second = strings.TrimSpace(word + " " + qualifierOf(words[i+1:]))
+			case previousIsContent && qualifierPrepositions[word] && (i < 2 || !leadsVerb(words[i-2])):
+				second = qualifierOf(words[i:])
+			}
+			pairs = append(pairs, wordPair{words[i-1], second})
 		}
 		previousIsContent = isContent
 	}
 	return pairs
+}
+
+// leadsVerb accepts the subject, negation or modifier right before a verb, as
+// in "I work", "now work" or "no longer work".
+func leadsVerb(word string) bool {
+	return firstPersonSubjects[word] || negations[word] || changeModifiers[word] ||
+		word == "now" || word == "longer" || word == "still"
+}
+
+// complementOf names what a verb takes from the words after it: a particle
+// such as "as" or "out", a place ("in Boston", "there"), or an object.
+func complementOf(rest []string) string {
+	switch {
+	case len(rest) == 0:
+		return ""
+	case placeWords[rest[0]]:
+		return "place"
+	case verbParticles[rest[0]]:
+		return rest[0]
+	default:
+		return "object"
+	}
+}
+
+// qualifierOf returns the "for" or "of" phrase that says which one a noun
+// means, shortened to its first content word, as in "for japan".
+func qualifierOf(rest []string) string {
+	if len(rest) == 0 || !qualifierPrepositions[rest[0]] {
+		return ""
+	}
+	for _, word := range rest[1:] {
+		if isContentWord(word) {
+			return rest[0] + " " + word
+		}
+	}
+	return rest[0]
 }
 
 // Contractions, possessives and single letters ("don't", "children's") would

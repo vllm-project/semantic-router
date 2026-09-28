@@ -55,10 +55,15 @@ correction can both be retrieved for the same request. The default memory
 filter (`reflection.algorithm: heuristic`) then drops the older turn when a
 sentence in the newer one says the user changed something, as in "I moved",
 "we've switched", "I'm no longer" or "I don't ... anymore", and the part about
-the change shares a word pair with the older message, such as "I live" or
-"work as". A question, a change made by someone else, or one that is negated,
-hypothetical or only planned doesn't count. A session-window memory loses only
-the corrected turn.
+the change shares a word pair with the older message, such as "work as" or "I
+live" followed by a place. A shared verb must keep its complement and a shared
+noun its purpose, so "I work as a paramedic now" doesn't correct "I work out
+every morning" and "my budget for groceries" doesn't correct "my budget for the
+Japan trip". The destination in "I moved to Denver" doesn't match other facts
+about Denver either. A question, a change made by someone else, or one that is negated, hypothetical
+or only planned doesn't count. A session-window memory loses only the corrected
+turn. When a message quotes a `---` line followed by a `Q:` line, the stored
+copy escapes that `Q:`, so the quote can't start a new turn.
 
 Stored records don't change. An old turn is hidden only when its correction is
 injected in the same request, and only if it states a single fact. A turn with
