@@ -38,15 +38,22 @@ def embed_groups(receipt: dict[str, Any]) -> dict[str, list[str]]:
 
 
 def apply(
-    rows: list[dict[str, Any]], quarantine: dict[str, list[str]]
+    rows: list[dict[str, Any]],
+    quarantine: dict[str, list[str]],
+    drop_families: frozenset[str] = frozenset(),
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    dropped = [row for row in rows if row["family"] in drop_families]
+    rows = [row for row in rows if row["family"] not in drop_families]
     kept = [row for row in rows if row["group_id"] not in quarantine]
     removed = [row for row in rows if row["group_id"] in quarantine]
     by_role: collections.Counter[str] = collections.Counter()
     for group in {row["group_id"] for row in removed}:
         by_role.update(quarantine[group])
     return kept, {
-        "rows_in": len(rows),
+        "rows_in": len(rows) + len(dropped),
+        "family_rows_dropped": dict(
+            sorted(collections.Counter(row["family"] for row in dropped).items())
+        ),
         "rows_kept": len(kept),
         "rows_removed": len(removed),
         "groups_removed": len({row["group_id"] for row in removed}),
@@ -63,6 +70,7 @@ def main() -> None:
     parser.add_argument("--overlap-receipt", type=Path, action="append", default=[])
     parser.add_argument("--embed-receipt", type=Path, action="append", default=[])
     parser.add_argument("--report-only-role", action="append", default=[])
+    parser.add_argument("--drop-family", action="append", default=[])
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
@@ -83,7 +91,11 @@ def main() -> None:
     rows = [
         json.loads(line) for line in args.rows.open(encoding="utf-8") if line.strip()
     ]
-    kept, report = apply(rows, {g: sorted(set(r)) for g, r in quarantine.items()})
+    kept, report = apply(
+        rows,
+        {g: sorted(set(r)) for g, r in quarantine.items()},
+        frozenset(args.drop_family),
+    )
     data = "".join(
         canonical(row) + "\n" for row in sorted(kept, key=lambda r: r["id"])
     ).encode()
