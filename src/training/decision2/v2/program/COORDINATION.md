@@ -87,6 +87,8 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | release engineering (DEV2.0-0.6B) | `/home/xunliu/code/vllm-sr-dev2-release-06b` | `xunzhuo/decision-2-training-release-06b` |
 | release engineering (DEV2.0-2B) | `/home/xunliu/code/vllm-sr-dev2-release-2b` | `xunzhuo/decision-2-training-release-2b` |
 | eval: human-transfer dev panel | `/home/xunliu/code/vllm-sr-dev2-eval-devpanel` | `xunzhuo/decision-2-training-eval-devpanel` |
+| HF storage steward | `/home/xunliu/code/vllm-sr-dev2-storage` | `xunzhuo/decision-2-training-storage` |
+| release engineering (DEV2.0-4B) | `/home/xunliu/code/vllm-sr-dev2-release-4b` | `xunzhuo/decision-2-training-release-4b` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -151,7 +153,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | node A GPU2–4 | ~27B Milestone 3 (moved from the 9B track 2026-09-29 04:30 UTC+8; the 27B track may train on node A — same image + frozen autotune cache per the comparability rule; formal comparisons stay on node B) |
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
 | node A GPU6–7 | 9B track Milestone 4 (2026-09-29 04:30 UTC+8); the eval track may use short shared-lease jobs on any GPU for development-panel scoring |
-| node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
+| node B GPU0–2 | 9B track (moved from the decoder 2026-09-29 07:35 UTC+8; 9B may train on node B — same image + frozen autotune cache; its formal comparisons stay on node A) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
 | node B GPU5–6 | ~27B |
 | node B GPU7 | ~27B Milestone 3 (H7 / H8 Lux wave finished and released 2026-09-29 04:14 UTC+8; assigned at 04:05); more GPUs from the 9B track when its Milestone 3 ends |
@@ -180,6 +182,7 @@ exactly one gist file and updates it in place:
 | `08-decision-2-own10-corpora.md` | A7 own-1.0 corpora |
 | `07b-decision-2-release-06b.md` | release engineering for DEV2.0-0.6B |
 | `07c-decision-2-release-2b.md` | release engineering for DEV2.0-2B |
+| `07d-decision-2-release-4b.md` | release engineering for DEV2.0-4B |
 
 - Create: write the file locally with exactly that name, then `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -a <local-path>`.
   Update: `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -f <file-name> <local-path>`. Never modify or delete other files.
@@ -188,6 +191,22 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 07:35 — **FOURTH RELEASE CANDIDATE: DEV2.0-4B** (decoder M4; gist 04; integration `9b8137e56`).
+  - N4XF soup: own Nox 1.0, fine-tuned on a token-matched subsample of mx-xl-full-r2 with own-Lux targets (KL 1.0) on
+    every row except the gold-only H7 / H8 rows, three seeds + uniform soup. Post-key v3 63.151 vs the adopted Nox1 56.470:
+    +6.68 [+0.99, +9.64]; human transfer .580 vs .519 (11 of 15 CSS15 tasks up); typed FINAL Choice / Noul / Score 582 / 734 /
+    185 vs 552 / 653 / 178 (none collapsed); vs Decider 4B +1.27 [−5.71, +4.31], vs Jet v6.2 +2.78. Staged private
+    `dev2-dec-staging@e86562218928fbb77f8071b45646962f63049fad`, `m4/N4XF-soup/`; scored run
+    `/data/dev2/runs/dec/formal/m4/m4-N4XF-soup-nodeA` (+ `-mlx`). Disclose: mlx-diag .770 vs .795 (non-English Noul .727 vs
+    .800; Korean .63 vs .69; Japanese .72 vs .77); CSS15 wiki_corpus −.065, mrf −.045; public 231 171 vs 173.
+  - Release engineering and eval gate checks start now; C1 line after event 3. After release, delete its staging copy with
+    `rewrite_history=False`.
+  - Second finalist N4LX (cross-arm soup) 60.367 → HOLD; the 2B probe was below S2T.
+  - S2T's M3 mixture contains 57 rows that the r2 rescreen excluded for evaluation-panel hits (45 of them CSS15, matching
+    the 45 rows on the 2B card): the eval track confirms the other 12 touch no reported panel.
+  - **GPU reallocation:** node B GPU0–2 → 9B track. The decoder keeps node A GPU5 + node B GPU3–4 for Milestone 5 (a
+    successor study on the multilingual-Noul losses shared by the 0.8B / 2B / 4B models).
 
 - 2026-09-29 05:25 — Storage steward done (record `v2/release/records/hf-storage-steward-2026-09-29.md`; integration `e0ac90ef8`):
   org private storage 57.76 GB, **42.24 GB free**. Before ANY upload run
