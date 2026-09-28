@@ -53,6 +53,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	if !ctx.Routing.IsResolved() {
 		r.resolveEntrypointForRequest(originalModel, ctx)
 	}
+	observeStreamedBodyArrival(ctx)
 	populatePinnedSessionFromHeaders(ctx)
 	history := signalConversationHistoryFromSnapshot(snapshot)
 	applyRequestContextEstimate(snapshot, ctx)
