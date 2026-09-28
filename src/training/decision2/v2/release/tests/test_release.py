@@ -363,6 +363,15 @@ class CardTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             card.select_reports(entries, ROSTER)
 
+    def test_http_check_anchors_follow_hub_headings(self):
+        from v2.release.tests.hub_card_http_check import anchor
+
+        self.assertEqual(anchor("Download and decide"), "download-and-decide")
+        self.assertEqual(
+            anchor("Tradeoffs versus Decision 1.0 Eos"),
+            "tradeoffs-versus-decision-10-eos",
+        )
+
     def test_lint(self):
         self.assertTrue(card.lint("A Pareto frontier"))
         self.assertTrue(card.lint("ran on node A"))
@@ -552,6 +561,53 @@ class GateTest(unittest.TestCase):
                     gate.check(spec, path)
             path.write_text(json.dumps({**decision, "status": "final"}))
             self.assertEqual(gate.check(spec, path, final=True)["status"], "final")
+
+    def test_evaluate_items_and_legacy_download_receipt(self):
+        from v2.release import gate
+
+        with tempfile.TemporaryDirectory() as scratch:
+            work = Path(scratch)
+            receipts = work / "receipts"
+            receipts.mkdir()
+            paired = work / "paired.json"
+            paired.write_text(json.dumps({"ci95": {"low": 3.6, "high": 13.3}}))
+            decision = work / "decision.json"
+            decision.write_text(json.dumps({"status": "draft"}))
+            spec = {
+                "kind": "release",
+                "model_name": "DEV2.0-4B",
+                "repo_id": "llm-semantic-router/DEV2.0-4B",
+                "expected_identity": {"model_sha256": "c" * 64},
+                "scored": {"report_sha256": "d" * 64},
+                "card": {"paired": str(paired)},
+                "gate_receipt": str(decision),
+            }
+            revision = "a" * 40
+            files = {
+                "spec": spec,
+                "build": {"parameters": {"loaded": 7}, "card": {"tradeoffs": []}},
+                "repeat-pre": {"passed": True},
+                "card-pre": {"passed": True},
+                "upload": {"revision": revision},
+                "download": {"revision": revision, "files": 3},
+                "tree": {"passed": True, "files": 3},
+                "post": {"passed": True, "loaded_parameters": 7},
+                "repeat-post": {"passed": True},
+                "card-post": {"passed": True},
+                "readback": {"passed": True, "card_problems": [], "card_data": {}},
+            }
+            for name, value in files.items():
+                (receipts / f"{name}.json").write_text(json.dumps(value))
+            result = gate.evaluate(work)
+            self.assertTrue(result["passed"], result["items"])
+            self.assertEqual(result["decision"]["status"], "draft")
+            (receipts / "download.json").write_text(
+                json.dumps({"revision": "b" * 40, "files": 3})
+            )
+            result = gate.evaluate(work)
+            self.assertFalse(result["items"]["3_download_hash_parameters"]["passed"])
+            with self.assertRaises(ValueError):
+                gate.seal(work)
 
 
 class BuildTest(unittest.TestCase):
