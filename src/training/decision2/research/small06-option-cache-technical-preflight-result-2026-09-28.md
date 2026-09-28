@@ -13,7 +13,7 @@ evidence.
 | Container image digest | `sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54` |
 | Source/config/weight/code hashes | Matched every frozen value before model loading. Ten source-file hashes are in the private receipt. |
 | CPU preflight | Tokenizer loaded; all seven synthetic request shapes passed the native 8,192-token cap; exact code bytes matched. |
-| GPU visibility | **Failed:** PyTorch reported `device_count=0`, `is_available=False` in the pinned container, despite the selected render device and KFD device appearing inside it. |
+| GPU visibility | **Failed:** PyTorch reported `device_count=0`, `is_available=False` in the pinned container. Read-only host device inspection afterward showed that the mounted render node belonged to a virtual display adapter (PCI vendor `0x1af4`), not an AMD accelerator (`0x1002`). |
 | Hidden-state parity and 255-option cost | **Not measured.** No trained head or model prediction was run. |
 | Resource | Container window 51.904 seconds; reserved-slot upper bound 0.01442 GPU-hours; actual model GPU-hours 0. |
 | Private evidence | Mode-0600 failure receipt SHA-256 `2fdbfb466d4feab7ec16dca6ccecbf75fc621eca862c7d675fec63a85264e17d`. |
