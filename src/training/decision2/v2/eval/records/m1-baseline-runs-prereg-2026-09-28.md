@@ -180,6 +180,17 @@ Choice questions with more options than its single-token labels; any other error
 the run. Unvalidated ROCm. Formal + dev; ≤ 0.8 GPU-hour; gold-free 20-item smoke runs
 (typed-final, public231) first. Paired against AutoJev on node B.
 
+**A4.6 (Q8, before launch).** `HopitAI/hopper-g@71d991f4` (Hopper (G) 1.2 LoRA,
+`CHECKSUMS.txt` verified; research-and-demo licence, internal comparison only, never on
+cards) on `Qwen/Qwen3.5-4B@851bf6e8` from the offline cache, served by
+`hopit-ai/hopper@0204f929` (tag `g-1.2.0`; packaged calibration map byte-identical to the
+adapter's). 4B / node A, adapter `hopper-g` (`v2/eval/native_hopper.py`, `Decider` as
+`hopper-serve` builds it, default long-menu shortlist, one question per request; Score
+reported as its probability-weighted mean). `allow_slow_kernels=True` because the fused
+CUDA causal-conv1d kernel is unavailable on ROCm (PyTorch fallback; disclosed;
+unvalidated ROCm). Any native error stops the run. Formal + dev + mlx-diag; ≤ 0.5
+GPU-hour; gold-free 20-item smoke runs (typed-final, mlx-diag) first. Paired against Nox1.
+
 ## Reused results (identity verified, no new GPU time)
 
 Recorded predictions were located by SHA-256, adopted, sealed and re-scored with

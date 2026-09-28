@@ -289,6 +289,27 @@ REGISTRY: dict[str, Adapter] = {
             ),
         ),
         Adapter(
+            name="hopper-g",
+            module="v2.eval.native_hopper",
+            args=(
+                "--model-path",
+                "{model}",
+                "--model-revision",
+                "{revision}",
+                "--source-path",
+                "{source}",
+                *IO_ARGS,
+                "--device",
+                "{device}",
+            ),
+            model_id="HopitAI/hopper-g",
+            requires=("source",),
+            batch_policy=(
+                "hopper_decisions.Decider (g-1.2.0), one question per request, packaged"
+                " calibration map, default long-menu shortlist; PyTorch conv fallback on ROCm"
+            ),
+        ),
+        Adapter(
             name="eikos-27b",
             module="inference.eikos",
             args=(
