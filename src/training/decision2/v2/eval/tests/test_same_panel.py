@@ -238,6 +238,44 @@ class SamePanelTests(unittest.TestCase):
             expected = 100 * math.sqrt(result["v3"]["T"] * result["v3"]["H"])
             self.assertAlmostEqual(result["v3"]["score"], expected)
 
+    def test_charts_from_same_panel_reports_only(self) -> None:
+        from v2.eval import charts
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "panels"
+            fixture = PanelFixture(root)
+            reports = []
+            with fixture.patch():
+                for name, wrong in (("a", 0), ("b", 3)):
+                    run_dir = Path(tmp) / name
+                    fixture.predictions(run_dir, wrong_css=wrong)
+                    same_panel.seal(
+                        argparse.Namespace(run_dir=run_dir, panel_root=root)
+                    )
+                    args = report_args(run_dir, root)
+                    args.label, args.family = f"Model {name}", (
+                        "decision1" if name == "a" else "peer"
+                    )
+                    same_panel.report(args)
+                    reports.append(run_dir / "REPORT.json")
+            receipt = charts.render(reports, Path(tmp) / "charts")
+            self.assertEqual(
+                [m["label"] for m in receipt["v3_ranking"]["models"]],
+                ["Model a", "Model b"],
+            )
+            self.assertEqual(receipt["v3_ranking"]["models"][1]["group"], "open")
+            self.assertTrue(
+                (Path(tmp) / "charts" / "jevarena-v3-model-task.svg")
+                .read_text()
+                .startswith("<svg")
+            )
+            self.assertFalse(any("pareto" in name for name in receipt["figures"]))
+            mixed = json.loads(reports[1].read_text())
+            mixed["panel_sha256"] = {"x": "y"}
+            reports[1].write_text(json.dumps(mixed))
+            with self.assertRaises(ValueError):
+                charts.load_reports(reports)
+
     def test_seal_rejects_changed_input(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root, run_dir = Path(tmp) / "panels", Path(tmp) / "run"

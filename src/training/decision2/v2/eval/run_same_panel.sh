@@ -3,8 +3,9 @@
 #
 # Usage (SRC is a mirror directory name under /data/dev2/src: <sha> or <sha>-src_training_decision2):
 #   run_same_panel.sh --gpu N --track TRACK --src SRC --run-dir DIR --model-dir DIR \
-#       [--image IMAGE] [--mount HOST_PATH]... [--purpose TEXT] [--expected-end UTC] \
-#       -- <same_panel collect arguments except --run-dir>
+#       [--image IMAGE] [--mount HOST_PATH]... [--mount-rw HOST_PATH]... [--env KEY=VALUE]... \
+#       [--purpose TEXT] [--expected-end UTC] -- <same_panel collect arguments except --run-dir>
+# --env is for non-secret runtime settings only (for example TRITON_CACHE_DIR).
 #
 # Mounts (same path inside and outside): the exact mirror /data/dev2/src/SHA (ro), the
 # gold-free panels only (ro), the model directory and extra mounts (ro), the run directory
@@ -13,10 +14,10 @@
 # GPU must show no allocated VRAM. Wall time lands in <run-dir>/GPU-TIME.json.
 set -euo pipefail
 
-usage() { sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 gpu="" track="" sha="" run_dir="" model_dir="" image="decision20-train-fast:host2"
-purpose="same-panel native collection" expected_end="" mounts=()
+purpose="same-panel native collection" expected_end="" mounts=() rw_mounts=() envs=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu="$2"; shift 2 ;;
@@ -26,6 +27,8 @@ while [[ $# -gt 0 ]]; do
     --model-dir) model_dir="$2"; shift 2 ;;
     --image) image="$2"; shift 2 ;;
     --mount) mounts+=("$2"); shift 2 ;;
+    --mount-rw) rw_mounts+=("$2"); shift 2 ;;
+    --env) envs+=(-e "$2"); shift 2 ;;
     --purpose) purpose="$2"; shift 2 ;;
     --expected-end) expected_end="$2"; shift 2 ;;
     --) shift; break ;;
@@ -65,6 +68,9 @@ volumes=(-v "$src:$src:ro" -v "$panel_root/goldfree:$panel_root/goldfree:ro"
 for mount in "${mounts[@]}"; do
   volumes+=(-v "$mount:$mount:ro")
 done
+for mount in "${rw_mounts[@]}"; do
+  volumes+=(-v "$mount:$mount")
+done
 
 name="dev2-${track}-gpu${gpu}-$(date -u +%H%M%S)"
 started="$(date +%s.%N)"
@@ -73,7 +79,7 @@ docker run --rm --name "$name" --network none \
   --device /dev/kfd --device /dev/dri --group-add video --ipc host \
   --security-opt seccomp=unconfined \
   -e ROCR_VISIBLE_DEVICES="$gpu" -e DEV2_IMAGE_ID="$image_id" -e DEV2_GPU_LABEL="gpu$gpu" \
-  "${volumes[@]}" -w "$src/src/training/decision2" --entrypoint python3 "$image" \
+  "${envs[@]}" "${volumes[@]}" -w "$src/src/training/decision2" --entrypoint python3 "$image" \
   -m v2.eval.same_panel collect --run-dir "$run_dir" --panel-root "$panel_root" "$@"
 code=$?
 set -e

@@ -45,6 +45,28 @@ native path and loaded parameters.
   before scoring, then `REPORT.json`; paired v3 bootstrap versus the tier's own
   1.0 model (0.6B vs Kai1, 0.8B vs Eos1, 2B vs Sol1, 4B vs Nox1, 9B vs Lux1).
 
+## Amendment A1 — Lux1 kernel-selection determinism (before D1/D2)
+
+R2 (Kai1) passed: bit-identical to its sealed predictions. R1 (Lux1, node A)
+**failed** the repeat rule against the node B r4 predictions: 7 typed and 36
+CSS answer-category changes, maximum numeric drift 0.190, v3 65.808 versus
+66.268, public 183 unchanged. Host kernel, amdgpu driver, image package trees
+and package bytes are identical on both nodes; FLA's chunked gated-delta kernels
+choose Triton configurations by runtime autotuning. Hypothesis: timing-based
+autotune choices differ between runs/nodes and change reduction order.
+
+- **D1** (node A, one GPU): Lux1 full three panels with
+  `TRITON_CACHE_AUTOTUNING=1`, `TRITON_PRINT_AUTOTUNING=1` and a fresh
+  persistent `TRITON_CACHE_DIR`. Output: predictions plus autotune cache C,
+  frozen afterwards (tree SHA-256 recorded).
+- **D2** (node A, the other GPU): identical run from a fresh copy of frozen C.
+  PASS iff predictions are bit-identical to D1 (zero category changes, zero
+  numeric drift) and no new `*.autotune.json` entries appear. PASS makes
+  "image `f83b1d10…` + frozen cache C" the Lux1 frozen runtime and D1 the
+  current-package Lux1 comparator; FAIL means autotune is not the only source
+  and Lux1 is reported as the spread of R1/D1/D2 and r4 with no single number.
+- Budget: at most 0.3 GPU-hour each; one shot each.
+
 ## Reused results (identity verified, no new GPU time)
 
 Recorded predictions were located by SHA-256, adopted, sealed and re-scored with

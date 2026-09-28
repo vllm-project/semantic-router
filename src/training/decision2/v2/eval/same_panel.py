@@ -188,6 +188,11 @@ def collect(args: argparse.Namespace) -> int:
             )
         },
         "gpu_label": os.environ.get("DEV2_GPU_LABEL"),
+        "runtime_env": {
+            key: value
+            for key, value in sorted(os.environ.items())
+            if key.startswith(("TRITON_", "FLA_", "HIP_", "MIOPEN_"))
+        },
         "source_mirror": mirror_receipt(),
         "sources": source_hashes(),
         "runtime": runtime_probe(adapter.python, env),
@@ -511,7 +516,7 @@ def report(args: argparse.Namespace) -> int:
     for panel, entry in sealed["panels"].items():
         if sha_file(prediction_path(run_dir, panel)) != entry["predictions_sha256"]:
             raise ValueError(f"{panel}: predictions changed after the seal")
-    panels.verify(args.panel_root, list(sealed["panels"]))
+    verified = panels.verify(args.panel_root, list(sealed["panels"]))
     scores_dir = run_dir / "scores"
     scores_dir.mkdir(exist_ok=True)
     first = next(iter(sealed["panels"].values()))
@@ -530,6 +535,7 @@ def report(args: argparse.Namespace) -> int:
             "backend": identity_value(first, "backend"),
         },
         "seal_sha256": sha_file(seal_path),
+        "panel_sha256": verified,
         "provenance": sealed["provenance"],
         "sources": source_hashes(),
         "panels": {},
