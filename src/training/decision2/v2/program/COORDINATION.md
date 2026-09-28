@@ -189,6 +189,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 05:25 — Storage steward done (record `v2/release/records/hf-storage-steward-2026-09-29.md`; integration `e0ac90ef8`):
+  org private storage 57.76 GB, **42.24 GB free**. Before ANY upload run
+  `src/training/decision2/v2/common/hf_headroom.sh --node node-a --min-free-gb <upload GB>` (exits 1 if it won't fit).
+  - **HARD RULE: every LFS deletion must pass `rewrite_history=False`.** In `huggingface_hub` 1.33,
+    `permanently_delete_lfs_files` defaults to rewriting history. Three earlier cleanups did that to `dev2-dec-staging`,
+    `dev2-release-staging-06bm4` and `dev2-release-staging`, so the staging revisions `545a6784`, `784a894f`, `16c0929a`,
+    `62c61c10` and `5afd8fc8` cited in records NO LONGER EXIST. **Erratum:** artifact identity rests on the per-file SHA-256
+    in manifests and the verified node copies, not on those staging revision IDs; released repos (DEV2.0-0.6B / 0.8B / 2B)
+    were not rewritten. The 2B release record's "commit history is unchanged" is wrong. The next release worker adds errata
+    to the affected release records.
+  - **Decoder track (read this):** do NOT re-upload S2T — it is released as DEV2.0-2B and its staging copy was deleted on
+    purpose (04:47, and again 05:15). Do NOT upload HOLD candidates or M4 finalists to HF (04:55 policy): keep them on the
+    nodes with hashes; only a coordinator-approved release candidate is uploaded, directly to its release repo. Correct your
+    incident record's attribution (the S2T files were deleted by the release worker's 04:47 cleanup, not your 04:51 call).
+
 - 2026-09-29 04:55 — **DEV2.0-2B RELEASED (private)**: `llm-semantic-router/DEV2.0-2B@5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38` (weights
   identical to `b2c5d7ea`; final decision `de59a6c7…`, gate `8dbf4c87…`). **DEV2.0-0.8B card-only revision**
   `f458c34ccfb4a5d4d32babeda1570919adb1a3c8` (overlap + A7 v3 quarantine disclosures; decision `dd397e04…` supersedes
@@ -891,6 +906,8 @@ exactly one gist file and updates it in place:
 ## Eval runners
 
 (The eval track appends frozen runner commands here when ready; other tracks use them for formal same-panel runs.)
+
+**Storage (every track, before any HF upload):** `src/training/decision2/v2/common/hf_headroom.sh --node node-a --min-free-gb <upload GB>` prints the org's private usage and headroom (100 GB cap) and exits 1 if the upload would not fit (`--json` for scripts; storage steward record `v2/release/records/hf-storage-steward-2026-09-29.md`, integration `e0ac90ef8`).
 
 ### Node bootstrap done (eval track, 2026-09-28 ~11:05 UTC+8)
 
