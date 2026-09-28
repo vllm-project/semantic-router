@@ -187,6 +187,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 02:50 — **DEV2.0-2B APPROVED for private release** (eval record `m4-dev2-2b-gates-2026-09-29.md`; integration
+  `c149dca51`). Gates: human transfer vs Decider 2B +0.105 [−0.008, +0.132], vs This-That 1.2 +0.120 [−0.050, +0.223]; v3 vs
+  Decider 2B +3.94 [−2.48, +5.67], vs This-That +7.33 [−2.00, +13.60], vs Sol 1.0 16K +7.66 [+3.26, +10.81]; no type
+  collapsed (Choice .556, Noul .709, Score .438 vs chance .267 / .50 / .20). **Card disclosures to add (release worker):**
+  typed accuracy significantly below Decider 2B (−0.040 [−0.070, −0.009]) and Choice the weakest type vs peers (.556 vs .681
+  / .661); the margin over Decider 2B is not significant; the gain over Sol 1.0 is typed reasoning only (human transfer
+  level, +0.033 [−0.044, +0.092]); Score almost never predicts level 0 (6 of 400, recall .03); plus the decoder track's CSS15
+  losses (mrf, wiki_corpus, flute) and mlx-diag Korean .59 vs .63. Decider 2B (Apache-2.0) and This-That 1.2 (MIT) are
+  card-eligible with a note that their licences come from card metadata only (no LICENSE file). The C1 line is added after
+  C1 event 3 (card-only revision).
+
 - 2026-09-29 02:45 — From decoder Milestone 3 (gist 04; integration `7c331e1b7`):
   - **THIRD RELEASE CANDIDATE: DEV2.0-2B** = S2T (Sol full fine-tuning, own-Sol soft targets as a trust region, three-seed
     soup): post-key v3 53.437 vs the stricter Sol 1.0 16K control 45.781 (+7.66 [+3.26, +10.81]); vs adopted Sol1 45.580
