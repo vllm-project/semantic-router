@@ -3,6 +3,8 @@
 #
 # Usage: run_nodeB.sh <stage> [workers]
 #   build     pre-admission sub-arms, views and build manifest (host python)
+#   build-enc pre-admission encoder-family sub-arms (a7-enc10) in the runtime image,
+#             after running their unit tests there (pyarrow)
 #   recover   pre-admission A7r (rule 7e) from the spec sources, deduplicated and
 #             isolated against the frozen files in A7_FROZEN_FINAL (host python)
 #   lengths   per-row token lengths in the pinned runtime image (no GPU devices)
@@ -31,6 +33,7 @@ version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["vers
 W="${A7_RUN_DIR:-/data/dev2/private/a7/runs/$version/${commit:0:12}}"
 PI="${A7_PI:-/data/dev2/private/data/pi-v2/manifest.json}"
 IMAGE="${A7_IMAGE:-decision20-lux-runtime:latest}"
+LICENSES="${A7_LICENSE_REGISTRY:-$A7/license-registry-a7-v1.json}"
 read -r -a SUBS <<< "${A7_SUBS:-A7h A7m A7g A7i A7p A7o}"
 export PYTHONPATH="$S"
 cd "$S"
@@ -49,6 +52,15 @@ case "$stage" in
     log "build commit=$commit"
     python3 -m v2.data.a7.build_a7 --spec "$SPEC" \
       --out-dir "$W/build" --commit "$commit" | tee -a "$W/logs/build.out"
+    ;;
+  build-enc)
+    log "build-enc commit=$commit"
+    in_image -m unittest v2.data.a7.tests.test_build_enc 2>&1 | tail -3 | tee -a "$W/logs/build.out"
+    args=()
+    while read -r file; do args+=(--data-track-file "$file"); done < <(
+      python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1])).get("data_track_files", [])))' "$SPEC")
+    in_image -m v2.data.a7.build_enc --spec "$SPEC" "${args[@]}" --out-dir "$W/build" \
+      --commit "$commit" | tee -a "$W/logs/build.out"
     ;;
   recover)
     log "recover commit=$commit frozen=${A7_FROZEN_FINAL:?A7_FROZEN_FINAL}"
@@ -156,7 +168,7 @@ case "$stage" in
       role="${name##*.}"
       [[ "$role" == "train" || "$role" == "aho" ]] || continue
       in_image -m v2.data.freeze freeze --rows "$file" --arm-id "${name/./-}" --role "$role" \
-        --license-registry "$A7/license-registry-a7-v1.json" --tokenizers "$A7/specs/tokenizers.nodeB.json" \
+        --license-registry "$LICENSES" --tokenizers "$A7/specs/tokenizers.nodeB.json" \
         --out-manifest "$W/manifests/$name.freeze.json" | tee -a "$W/logs/freeze.out"
     done
     ;;
@@ -182,8 +194,14 @@ case "$stage" in
     python3 -m v2.data.freeze isolation "${parts[@]}" --report "$W/isolation.json" | tee -a "$W/logs/isolation.out"
     ;;
   assemble)
+    # A7_EXTRA_LICENSES: more licence registries; A7_EXTRA_RUNS: "NAME=DIR ..." runs whose
+    # sub-arms join this upload (records under versions/NAME/).
+    lic=(--license-registry "$LICENSES")
+    for extra in ${A7_EXTRA_LICENSES:-}; do lic+=(--license-registry "$extra"); done
+    ext=()
+    for item in ${A7_EXTRA_RUNS:-}; do ext+=(--extra-run "$item"); done
     python3 -m v2.data.a7.hf_spec --run-dir "$W" --readme "$A7/records/hf-dataset-a7-readme.md" \
-      --license-registry "$A7/license-registry-a7-v1.json" --out "$W/hf-spec.json"
+      "${lic[@]}" "${ext[@]}" --out "$W/hf-spec.json"
     python3 -m v2.data.assemble_hf_upload --spec "$W/hf-spec.json" --out-dir "$W/hf-upload"
     ;;
   upload)

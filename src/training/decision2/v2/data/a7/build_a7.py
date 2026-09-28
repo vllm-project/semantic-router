@@ -36,8 +36,11 @@ SCHEMA = "decision2.v2.a7.build.v1"
 SUB_ARMS = ("A7h", "A7m", "A7g", "A7i", "A7p", "A7o")
 GENERATED_SUB_ARMS = frozenset({"A7g", "A7p", "A7o"})
 RECOVERED_SUB_ARMS = ("A7r",)
-ALL_SUB_ARMS = SUB_ARMS + RECOVERED_SUB_ARMS
-SHORTCUT_GATED_SUB_ARMS = GENERATED_SUB_ARMS | frozenset(RECOVERED_SUB_ARMS)
+ENCODER_SUB_ARMS = ("A7q", "A7k", "A7s", "A7x")
+ALL_SUB_ARMS = SUB_ARMS + RECOVERED_SUB_ARMS + ENCODER_SUB_ARMS
+SHORTCUT_GATED_SUB_ARMS = (
+    GENERATED_SUB_ARMS | frozenset(RECOVERED_SUB_ARMS) | frozenset(ENCODER_SUB_ARMS)
+)
 SOURCE_KEYS = {
     "cosmos_qa": "dec10:cosmos_qa_train",
     "snli": "dec10:snli_train",
