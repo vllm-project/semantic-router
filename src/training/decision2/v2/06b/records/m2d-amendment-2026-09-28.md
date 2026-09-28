@@ -31,3 +31,15 @@ control for QCL. Both carry the collapse stop (SELECT < 350 at update 175).
 Readout uses `training.model.infer` at the 8,192 cap in the image runtime
 (Transformers 5.17), as the archived control did. Finalist, formal and stop rules
 are unchanged from `m2-prereg-2026-09-28.md`.
+
+## M2e diagnostic (frozen before its run)
+
+QC s1 and QCL s2 hit the collapse stop (311 and 259 at update 175); QCL s1 trains
+(403 at 175, 511 at 350). The remaining difference from the reference trainer
+that trained the archived control is micro-batching: it used unpadded one-row
+micro-batches (unmasked causal attention path), while this trainer pads up to
+eight rows (masked attention kernel; step-0 gradient cosine .991 for Qwen versus
+≥ .998 for the other backbones). **QCMB1 s1/s2** repeat QC with
+`max_micro_rows = 1` and nothing else changed, keeping the collapse stop. If both
+seeds pass it they are QC candidates under the unchanged finalist rule; s2 runs
+only if s1 passes.
