@@ -2,7 +2,8 @@
 
 Formal panels (post-key same-panel): JevArena v3 typed FINAL + CSS15 and the
 JevBench public 231 subset. Development panels (never release scores): typed
-DEV, the three-task CSS pilot and the private-dataset SELECT/CAL partitions.
+DEV, the three-task CSS pilot, the private-dataset SELECT/CAL partitions and
+HT-DEV, the 13-task human-annotated transfer panel (v2/eval/htdev/).
 
 Layout under a panel root (default ``/data/dev2/private/panels``)::
 
@@ -76,6 +77,13 @@ DEVELOPMENT: dict[str, dict[str, Any]] = {
         "gold": "gold/mlx-diag.gold.jsonl",
         "gold_sha256": "71515a41583e7c4792c7058d45e6b12980f033bc9de2847b15dd3fb7b940b484",
         "originals": 2275,
+    },
+    "ht-dev": {
+        "prompts": "goldfree/ht-dev.prompts.jsonl",
+        "prompts_sha256": "30b0bd3569da9dd183f142e606ba6dcb598de7e4d3d9c168f87f91852178fd65",
+        "gold": "gold/ht-dev.gold.jsonl",
+        "gold_sha256": "c1f138918f65edf1dc06143a876333f4380f03093c44a1218f20960d6cd49f1e",
+        "originals": 3240,
     },
     "select": {
         "gold": "gold/select.jsonl",

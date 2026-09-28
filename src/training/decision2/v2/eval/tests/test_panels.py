@@ -22,6 +22,20 @@ class PanelsTest(unittest.TestCase):
         )
         self.assertIn("sealed-c1", panels.ALL)
 
+    def test_ht_dev_is_a_development_panel_verified_by_default(self):
+        entry = panels.DEVELOPMENT["ht-dev"]
+        self.assertNotIn("ht-dev", panels.FORMAL)
+        self.assertEqual(entry["originals"], 3240)
+        default = panels.expected_files()
+        self.assertEqual(
+            default["goldfree/ht-dev.prompts.jsonl"], entry["prompts_sha256"]
+        )
+        self.assertEqual(default["gold/ht-dev.gold.jsonl"], entry["gold_sha256"])
+        self.assertEqual(
+            panels.path(panels.DEFAULT_ROOT, "ht-dev", "gold"),
+            panels.DEFAULT_ROOT / "gold/ht-dev.gold.jsonl",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
