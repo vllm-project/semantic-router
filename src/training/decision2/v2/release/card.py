@@ -42,6 +42,9 @@ FORBIDDEN = (
     ),
 )
 TYPED_N = {"choice": 800, "noul": 800, "score": 400}
+MLX_SCHEMA = "dev2-mlx-diag-score/1"
+# mlx-diag Score is built from XNLI (CC BY-NC 4.0, internal use only); cards show Choice and Noul.
+MLX_CARD_TYPES = ("choice", "noul")
 ARCHITECTURE = {
     "kai-native": (
         "Three 22-layer bidirectional encoder paths share multilingual embeddings. "
@@ -70,11 +73,30 @@ def _report(path: Path) -> dict[str, Any]:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def _mlx(entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Optional mlx-diag scores per entry key; all must score the same gold panel."""
+    scores = {}
+    for entry in entries:
+        if not entry.get("mlx"):
+            continue
+        value = _report(Path(entry["mlx"]))
+        if value.get("schema") != MLX_SCHEMA or value.get("invalid_or_missing") is None:
+            raise ValueError(f"{entry['key']}: not an mlx-diag score file")
+        scores[entry["key"]] = {"data": value, "sha256": sha_file(Path(entry["mlx"]))}
+    if (
+        len({(s["data"]["gold_sha256"], s["data"]["items"]) for s in scores.values()})
+        > 1
+    ):
+        raise ValueError("mlx-diag scores come from different panels")
+    return scores
+
+
 def select_reports(entries: list[dict[str, Any]], roster_path: Path) -> dict[str, Any]:
     """Validate one same panel, apply the licence filter, keep display order."""
     from v2.eval.charts import load_reports
 
     load_reports([Path(e["report"]) for e in entries])
+    mlx = _mlx(entries)
     roster = licence_policy.load_roster(roster_path)
     shown, excluded = [], []
     roles = [e.get("role") for e in entries]
@@ -105,6 +127,8 @@ def select_reports(entries: list[dict[str, Any]], roster_path: Path) -> dict[str
             "sha256": sha_file(Path(entry["report"])),
             "licence": decision["licence"],
             "reason": decision["reason"],
+            "mlx": (mlx.get(entry["key"]) or {}).get("data"),
+            "mlx_sha256": (mlx.get(entry["key"]) or {}).get("sha256"),
         }
         (shown if decision["eligible"] else excluded).append(item)
     if not any(e["role"] == "own-1.0" for e in shown):
@@ -163,40 +187,99 @@ def _typed(report: dict[str, Any], kind: str) -> tuple[int, int]:
     return item["correct"], item["n"]
 
 
-def score_table(shown: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
+def loaded_parameters(entry: dict[str, Any], candidate_loaded: int | None) -> int:
+    """The packaged candidate shows the count its runtime asserts; others their reports'."""
+    if entry["role"] == "candidate" and candidate_loaded:
+        return candidate_loaded
+    return entry["data"]["parameters"]["loaded"]
+
+
+def _tiers(public: dict[str, Any]) -> str:
+    tiers = public["tiers"]
+    return " / ".join(
+        str(tiers[t]["correct"]) for t in ("easy", "standard", "hard") if t in tiers
+    )
+
+
+def _mlx_cell(entry: dict[str, Any]) -> str:
+    mlx = entry.get("mlx")
+    if not mlx:
+        return "—"
+    return " / ".join(
+        f"{100 * mlx['by_type'][kind]['non_english_mean_accuracy']:.1f}"
+        for kind in MLX_CARD_TYPES
+    )
+
+
+def score_table(
+    shown: list[dict[str, Any]], candidate_loaded: int | None = None
+) -> tuple[str, list[dict[str, Any]]]:
     ordered = sorted(shown, key=lambda e: -e["data"]["v3"]["score"])
+    mlx = any(e.get("mlx") for e in shown)
     lines = [
-        "| Rank | Model | Parameters | JevArena v3 ↑ | Choice | Noul | Score | Human transfer | JevBench public 231 ↑ |",
-        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Rank | Model | Parameters | JevArena v3 ↑ | T | H | Choice | Noul | Score | "
+        "JevBench public 231 (easy / standard / hard) ↑ | "
+        + ("mlx-diag non-English Choice / Noul ↑ | " if mlx else "")
+        + "Typed Brier / ECE ↓ |",
+        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
+        + ("---: | " if mlx else "")
+        + "---: |",
     ]
     for rank, entry in enumerate(ordered, 1):
         report = entry["data"]
         label = entry.get("label") or report["model"]["label"]
         bold = entry["role"] == "candidate"
         name = f"**{label}**" if bold else label
-        loaded = report["parameters"]["loaded"]
+        loaded = loaded_parameters(entry, candidate_loaded)
         typed = " | ".join(
             f"{c}/{n}"
             for c, n in (_typed(report, k) for k in ("choice", "noul", "score"))
         )
         public = report["panels"]["public231"]
+        final = report["panels"]["typed-final"]
         v3 = f"{report['v3']['score']:.2f}"
         lines.append(
-            f"| {rank} | {name} | {loaded / 1e9:.2f}B | {'**' + v3 + '**' if bold else v3} | {typed} | "
-            f"{_pct(report['v3']['H'])} | {public['correct']}/{public['items']} |"
+            f"| {rank} | {name} | {loaded / 1e9:.2f}B | {'**' + v3 + '**' if bold else v3} | "
+            f"{report['v3']['T']:.3f} | {report['v3']['H']:.3f} | {typed} | "
+            f"{public['correct']}/{public['items']} ({_tiers(public)}) | "
+            + (f"{_mlx_cell(entry)} | " if mlx else "")
+            + f"{final['brier']:.3f} / {final['ece_10']:.3f} |"
         )
     return "\n".join(lines), ordered
 
 
 def tradeoff_rows(
-    candidate: dict[str, Any], own: dict[str, Any]
+    candidate: dict[str, Any],
+    own: dict[str, Any],
+    candidate_mlx: dict[str, Any] | None = None,
+    own_mlx: dict[str, Any] | None = None,
 ) -> list[tuple[str, str, str]]:
-    """Every per-type, per-task and public-tier regression versus the tier's own 1.0 model."""
+    """Every per-type, transfer, per-task, public-tier and shown mlx-diag regression versus own 1.0."""
     rows = []
     for kind in ("choice", "noul", "score"):
         (c, n), (o, _) = _typed(candidate, kind), _typed(own, kind)
         if c < o:
             rows.append((f"Typed {kind.title()} (correct)", f"{c}/{n}", f"{o}/{n}"))
+    if candidate["v3"]["H"] < own["v3"]["H"]:
+        rows.append(
+            (
+                "Human transfer H (median task macro-F1)",
+                f"{candidate['v3']['H']:.3f}",
+                f"{own['v3']['H']:.3f}",
+            )
+        )
+    if candidate_mlx and own_mlx:
+        for kind in MLX_CARD_TYPES:
+            mine = candidate_mlx["by_type"][kind]["non_english_mean_accuracy"]
+            theirs = own_mlx["by_type"][kind]["non_english_mean_accuracy"]
+            if mine < theirs:
+                rows.append(
+                    (
+                        f"mlx-diag non-English {kind.title()} (accuracy)",
+                        _pct(mine),
+                        _pct(theirs),
+                    )
+                )
     tasks_c = candidate["panels"]["css15"]["tasks"]
     tasks_o = own["panels"]["css15"]["tasks"]
     for task in sorted(
@@ -224,10 +307,15 @@ def tradeoff_rows(
     return rows
 
 
-def tradeoffs(candidate: dict[str, Any], own: dict[str, Any]) -> list[str]:
+def tradeoffs(
+    candidate: dict[str, Any],
+    own: dict[str, Any],
+    candidate_mlx: dict[str, Any] | None = None,
+    own_mlx: dict[str, Any] | None = None,
+) -> list[str]:
     return [
         f"{name}: {mine} versus {theirs}"
-        for name, mine, theirs in tradeoff_rows(candidate, own)
+        for name, mine, theirs in tradeoff_rows(candidate, own, candidate_mlx, own_mlx)
     ]
 
 
@@ -344,10 +432,19 @@ def render_readme(ctx: dict[str, Any]) -> str:
         f". On the separate 231 public JevBench questions it answers **{public['correct']}/231** "
         f"correctly versus **{own_public['correct']}/231**."
     )
-    table, ordered = score_table(ctx["shown"])
+    table, ordered = score_table(ctx["shown"], facts["parameters"]["loaded"])
     rank = next(i for i, e in enumerate(ordered, 1) if e["role"] == "candidate")
-    summary += f" It ranks {rank} of {len(ordered)} models shown."
-    regressions = tradeoff_rows(candidate, own)
+    summary += f" It ranks {rank} of {len(ordered)} models shown on JevArena v3."
+    regressions = tradeoff_rows(
+        candidate, own, ctx["candidate"].get("mlx"), ctx["own"].get("mlx")
+    )
+    mlx_note = (
+        " mlx-diag is a multilingual development diagnostic (public test splits in seven "
+        "languages, English instructions over target-language states), not a release score; "
+        "its Score part is not shown."
+        if any(e.get("mlx") for e in ctx["shown"])
+        else ""
+    )
     tradeoff_text = (
         "\n".join(
             [
@@ -399,8 +496,11 @@ def render_readme(ctx: dict[str, Any]) -> str:
         "",
         "## Measured decisions",
         "",
+        "Post-key same-panel results.",
+        "",
         summary,
         "",
+        *([f"> {text['confirmation']}", ""] if text.get("confirmation") else []),
         table,
         "",
         "![JevArena v3 same-panel ranking](assets/jevarena-v3-rank.svg)",
@@ -410,8 +510,13 @@ def render_readme(ctx: dict[str, Any]) -> str:
         "![JevBench public 231 ranking](assets/jevbench-public231-rank.svg)",
         "",
         "Every model ran natively on the same frozen prompts with the same scorers; missing, invalid and "
-        "over-budget answers count as failures. JevBench covers its 231 public questions only and is not "
-        "the official closed-set rank. Ranks include only the models shown. "
+        "over-budget answers count as failures. JevArena v3 answers were available during development, "
+        "so these are post-key same-panel comparisons, not a blind test. T is typed-decision accuracy "
+        "(four-family macro), H the median macro-F1 over 15 human-labeled transfer tasks, and "
+        "v3 = 100 × sqrt(T × H). JevBench public 231 is our rerun of the 231 public questions; it is not "
+        "the official sealed JevBench rank."
+        + mlx_note
+        + " Ranks include only the models shown. "
         "[Methods and per-model results](evaluation/EVALUATION.md)",
         "",
         f"### Tradeoffs versus {own_label}",
@@ -441,7 +546,13 @@ def render_readme(ctx: dict[str, Any]) -> str:
         f"- **Calibration:** {facts['calibration_text']}",
         "- **Files:** the root `config.json` maps the model files; `MODEL_MANIFEST.json` lists the SHA-256 "
         "of every file and the runtime verifies them before loading.",
+        *[f"- {item}" for item in text.get("details", [])],
         "",
+        *(
+            ["### Training", "", *[f"- {item}" for item in text["training"]], ""]
+            if text.get("training")
+            else []
+        ),
         "### Limits",
         "",
         *[f"- {item}" for item in limits],
@@ -456,33 +567,39 @@ def render_readme(ctx: dict[str, Any]) -> str:
 
 def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     shown, candidate = ctx["shown"], ctx["candidate"]["data"]
+    candidate_loaded = ctx["facts"]["parameters"]["loaded"]
+    mlx = any(e.get("mlx") for e in shown)
     rows = [
-        "| Model | Loaded parameters | v3 | T | H | Choice / Noul / Score | Public 231 (easy/standard/hard) | Invalid typed / transfer / public |",
-        "| --- | ---: | ---: | ---: | ---: | --- | --- | --- |",
+        "| Model | Loaded parameters | v3 | T | H | Choice / Noul / Score | Public 231 (easy/standard/hard) | "
+        "Typed Brier / ECE | "
+        + ("mlx-diag non-English Choice / Noul | " if mlx else "")
+        + "Invalid typed / transfer / public |",
+        "| --- | ---: | ---: | ---: | ---: | --- | --- | --- | "
+        + ("--- | " if mlx else "")
+        + "--- |",
     ]
     models = []
     for entry in sorted(shown, key=lambda e: -e["data"]["v3"]["score"]):
         report = entry["data"]
         label = entry.get("label") or report["model"]["label"]
-        tiers = report["panels"]["public231"]["tiers"]
+        final = report["panels"]["typed-final"]
+        loaded = loaded_parameters(entry, candidate_loaded)
         invalid = "/".join(
             str((report.get("invalid", {}).get(p) or {}).get("invalid_or_missing", "—"))
             for p in ("typed-final", "css15", "public231")
         )
         rows.append(
-            f"| {label} | {report['parameters']['loaded']:,} | {report['v3']['score']:.3f} | "
+            f"| {label} | {loaded:,} | {report['v3']['score']:.3f} | "
             f"{report['v3']['T']:.4f} | {report['v3']['H']:.4f} | "
             + " / ".join(
                 f"{c}/{n}"
                 for c, n in (_typed(report, k) for k in ("choice", "noul", "score"))
             )
             + f" | {report['panels']['public231']['correct']} ("
-            + "/".join(
-                str(tiers[t]["correct"])
-                for t in ("easy", "standard", "hard")
-                if t in tiers
-            )
-            + f") | {invalid} |"
+            + _tiers(report["panels"]["public231"]).replace(" ", "")
+            + f") | {final['brier']:.3f} / {final['ece_10']:.3f} | "
+            + (f"{_mlx_cell(entry)} | " if mlx else "")
+            + f"{invalid} |"
         )
         models.append(
             {
@@ -498,9 +615,37 @@ def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
                 "T": report["v3"]["T"],
                 "H": report["v3"]["H"],
                 "public231_correct": report["panels"]["public231"]["correct"],
-                "loaded_parameters": report["parameters"]["loaded"],
+                "typed_brier": final["brier"],
+                "typed_ece_10": final["ece_10"],
+                "loaded_parameters": loaded,
+                "report_loaded_parameters": report["parameters"]["loaded"],
+                "mlx_diag_sha256": entry.get("mlx_sha256"),
+                "mlx_diag_non_english": (
+                    {
+                        kind: entry["mlx"]["by_type"][kind]["non_english_mean_accuracy"]
+                        for kind in MLX_CARD_TYPES
+                    }
+                    if entry.get("mlx")
+                    else None
+                ),
             }
         )
+    reported = candidate["parameters"]["loaded"]
+    parameter_note = (
+        f"The candidate row shows the {candidate_loaded:,} parameters its packaged runtime loads and "
+        f"asserts; its same-panel report counted {reported:,} from the backbone safetensors only."
+        if reported != candidate_loaded
+        else ""
+    )
+    mlx_text = (
+        "mlx-diag (development diagnostic, 2,275 prompts, seven languages, English instructions over "
+        "target-language states): Choice comes from the MASSIVE 1.1 test split (CC BY 4.0) and Noul from "
+        "the PAWS-X test split; the columns show mean non-English accuracy. Its Score part is built from "
+        "XNLI (CC BY-NC 4.0) and is not shown. Public test splits may appear in backbone pretraining "
+        "data, so this is not a sealed test."
+        if mlx
+        else ""
+    )
     paired = ctx["paired"]
     paired_text = (
         f"The candidate-minus-{ctx['own'].get('label') or ctx['own']['data']['model']['label']} v3 "
@@ -522,14 +667,17 @@ def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
             "",
             "JevBench public 231 is reported separately as raw accuracy by easy / standard / hard tier. "
             "It is an independent rerun of the public questions, not the upstream four-axis score or the "
-            "official closed-set rank.",
+            "official sealed JevBench rank.",
             "",
             "Every model ran through its own native inference path on the same frozen prompts and was "
             "scored by the same scorers; each row reports the parameters its native loader instantiates. "
+            + (parameter_note + " " if parameter_note else "")
+            + "Typed Brier and ECE (10 bins) measure calibration on the typed decisions. "
             "The paired interval is a joint bootstrap over typed groups (within family) and transfer "
             "tasks then items, 5,000 replicates. " + paired_text,
             "",
-            "Comparators under non-commercial or research-only licences are not shown on this card.",
+            *([mlx_text, ""] if mlx_text else []),
+            "Comparators under non-commercial, research-only or unknown licences are not shown on this card.",
             "",
             *rows,
             "",
@@ -612,7 +760,12 @@ def build_card(
         "excluded": [
             {"key": e["key"], "reason": e["reason"]} for e in selection["excluded"]
         ],
-        "tradeoffs": tradeoffs(ctx["candidate"]["data"], ctx["own"]["data"]),
+        "tradeoffs": tradeoffs(
+            ctx["candidate"]["data"],
+            ctx["own"]["data"],
+            ctx["candidate"].get("mlx"),
+            ctx["own"].get("mlx"),
+        ),
         "paired": ctx["paired"],
     }
 

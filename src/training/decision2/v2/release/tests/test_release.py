@@ -230,6 +230,131 @@ class CardTest(unittest.TestCase):
             compile(code, "card", "exec")
             self.assertIn('Decision2.from_pretrained("dev2-release-staging")', code)
 
+    def test_card_score_table_mlx_calibration_and_disclosures(self):
+        m2 = ROOT / "v2/eval/records/m2-reports"
+        entries = [
+            {
+                "key": "cand",
+                "role": "candidate",
+                "report": str(m2 / "kev08b.json"),
+                "mlx": str(m2 / "mlx-kev08b.json"),
+                "label": "DEV2.0-0.8B",
+            },
+            {
+                "key": "eos1",
+                "role": "own-1.0",
+                "report": str(REPORTS / "eos1.json"),
+                "mlx": str(m2 / "mlx-eos1.json"),
+                "repo_id": "llm-semantic-router/Decision-1.0-Eos-0.8B",
+                "label": "Decision 1.0 Eos",
+            },
+            {
+                "key": "intern",
+                "role": "peer",
+                "report": str(m2 / "intern08b.json"),
+                "mlx": str(m2 / "mlx-intern08b.json"),
+                "repo_id": "internlm/Intern-Decision-0.8B",
+            },
+            {
+                "key": "jpt",
+                "role": "peer",
+                "report": str(REPORTS / "jpt08b.json"),
+                "repo_id": "kirp/jpt-0.8b",
+            },
+        ]
+        text = {
+            "tagline": "A decision model.",
+            "confirmation": "Independent confirmation: PLACEHOLDER for the coordinator.",
+            "training": ["Hard labels only; no teacher targets."],
+            "details": ["Seed soup of three runs."],
+            "limitations": [],
+        }
+        values = {
+            **facts(),
+            "model_name": "DEV2.0-0.8B",
+            "repo_id": "llm-semantic-router/DEV2.0-0.8B",
+            "profile": "qwen-full",
+            "parameters": {
+                "loaded": 753_446_208,
+                "components_text": "backbone 752,393,024; decision head 1,053,184",
+            },
+            "banner": "DEV2.0-0.8B-owl-banner.png",
+        }
+        with tempfile.TemporaryDirectory() as scratch:
+            out, banner = Path(scratch) / "pkg", Path(scratch) / "banner.png"
+            banner.write_bytes(b"\x89PNG\r\n\x1a\n")
+            result = card.build_card(
+                entries=entries,
+                roster=ROSTER,
+                paired=None,
+                facts=values,
+                text=text,
+                banner=banner,
+                work=Path(scratch) / "work",
+                output=out,
+            )
+            readme = (out / "README.md").read_text()
+            evaluation = (out / "evaluation/EVALUATION.md").read_text()
+            manifest = json.loads((out / "evaluation/manifest.json").read_text())
+            files = {
+                p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()
+            }
+            files |= {"LICENSE", "NOTICE", "ATTRIBUTIONS.md"}
+            self.assertEqual(card.check_rendered(readme, files), [])
+            self.assertEqual({e["key"] for e in result["excluded"]}, {"jpt"})
+            self.assertIn("Post-key same-panel results.", readme)
+            self.assertIn("it is not the official sealed JevBench rank", readme)
+            self.assertIn("| T | H |", readme)
+            self.assertIn("mlx-diag non-English Choice / Noul", readme)
+            self.assertIn("Typed Brier / ECE", readme)
+            self.assertIn(f"> {text['confirmation']}", readme)
+            self.assertIn(
+                "### Training\n\n- Hard labels only; no teacher targets.", readme
+            )
+            self.assertIn("- Seed soup of three runs.", readme)
+            self.assertIn(
+                "| **DEV2.0-0.8B** | 0.75B | **43.22** | 0.479 | 0.390 |", readme
+            )
+            self.assertIn("147/231 (48 / 58 / 41)", readme)
+            self.assertIn(
+                "Human transfer H (median task macro-F1): 0.390 versus 0.461",
+                result["tradeoffs"],
+            )
+            self.assertIn(
+                "mlx-diag non-English Choice (accuracy): 61.5% versus 68.5%",
+                result["tradeoffs"],
+            )
+            self.assertIn(
+                "mlx-diag non-English Noul (accuracy): 58.7% versus 59.2%",
+                result["tradeoffs"],
+            )
+            self.assertFalse(any("Score (accuracy)" in t for t in result["tradeoffs"]))
+            self.assertIn("| 61.5 / 58.7 |", readme)
+            self.assertIn(
+                "753,446,208 parameters its packaged runtime loads", evaluation
+            )
+            self.assertIn("752,917,824 from the backbone safetensors only", evaluation)
+            self.assertIn("XNLI (CC BY-NC 4.0) and is not shown", evaluation)
+            model = next(m for m in manifest["models"] if m["role"] == "candidate")
+            self.assertEqual(model["loaded_parameters"], 753_446_208)
+            self.assertEqual(model["report_loaded_parameters"], 752_917_824)
+            self.assertEqual(
+                model["mlx_diag_sha256"], layout.sha_file(m2 / "mlx-kev08b.json")
+            )
+            other = Path(scratch) / "mlx-other.json"
+            other.write_text(
+                json.dumps(
+                    {
+                        **json.loads((m2 / "mlx-eos1.json").read_text()),
+                        "gold_sha256": "0" * 64,
+                    }
+                )
+            )
+            with self.assertRaises(ValueError):
+                card.select_reports(
+                    [entries[0], {**entries[1], "mlx": str(other)}], ROSTER
+                )
+
     def test_card_needs_own_comparator(self):
         entries = [e for e in card_entries() if e["role"] != "own-1.0"]
         with self.assertRaises(ValueError):
