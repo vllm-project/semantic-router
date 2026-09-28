@@ -30,11 +30,18 @@ def _normalized(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip().casefold()
 
 
+def _text(value: Any) -> str:
+    return value if isinstance(value, str) else canonical(value)
+
+
 def _normalized_input(row: dict[str, Any]) -> str:
     options = " ".join(
-        f"{option['key']} {option['description']}" for option in row["options"]
+        f"{_text(option['key'])} {_text(option['description'])}"
+        for option in row["options"]
     )
-    return _normalized(" ".join((row["state"], row["instructions"], options)))
+    return _normalized(
+        " ".join((_text(row["state"]), _text(row["instructions"]), options))
+    )
 
 
 def preliminary_overlap(
@@ -45,7 +52,7 @@ def preliminary_overlap(
     candidate_ids = {row["id"] for row in candidate}
     candidate_input = {row["input_sha256"] for row in candidate}
     candidate_normalized = {_normalized_input(row) for row in candidate}
-    candidate_states = {_normalized(row["state"]) for row in candidate}
+    candidate_states = {_normalized(_text(row["state"])) for row in candidate}
     candidate_facts = {row["audit_metadata"]["fact_digest"] for row in candidate}
     for name, rows in comparisons.items():
         result[name] = {
@@ -58,7 +65,7 @@ def preliminary_overlap(
                 candidate_normalized & {_normalized_input(row) for row in rows}
             ),
             "shared_normalized_state": len(
-                candidate_states & {_normalized(row["state"]) for row in rows}
+                candidate_states & {_normalized(_text(row["state"])) for row in rows}
             ),
             "shared_fact_digest": len(
                 candidate_facts

@@ -116,14 +116,17 @@ class Sol2BPolicyConflictsV2Test(unittest.TestCase):
 
     def test_preliminary_overlap_counts_and_v1_independence(self) -> None:
         v1_rows, _ = build_v1_group("eligibility", 0)
+        structured_state = {**v1_rows[0], "state": {"field": "structured"}}
         report = preliminary_overlap(
-            self.rows[:3], {"self": self.rows[:3], "v1": v1_rows}
+            self.rows[:3],
+            {"self": self.rows[:3], "v1": v1_rows, "structured": [structured_state]},
         )
         self.assertEqual(report["self"]["shared_input_sha256"], 3)
         self.assertEqual(report["self"]["shared_normalized_state"], 1)
         self.assertEqual(report["self"]["shared_fact_digest"], 1)
         self.assertEqual(report["v1"]["shared_input_sha256"], 0)
         self.assertEqual(report["v1"]["shared_fact_digest"], 0)
+        self.assertEqual(report["structured"]["shared_normalized_state"], 0)
 
     def test_blind_packet_structure_and_determinism(self) -> None:
         first, first_oracle = build_group("eligibility", 7, seed=SEED)
