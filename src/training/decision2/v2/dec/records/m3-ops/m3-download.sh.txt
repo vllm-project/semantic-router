@@ -1,0 +1,26 @@
+set -u
+# Decoder M3 data download on node B (HF CLI, private dataset; token from the default HF token file).
+export HF_HUB_CACHE=/data/dev2/hf-cache
+HF=/data/dev2/tools/hf-cli/bin/hf
+R=llm-semantic-router/decision-2.0-training-data
+L=/data/dev2/runs/dec/m3/download.log
+mkdir -p /data/dev2/runs/dec/m3
+get() {  # revision file
+  if $HF download $R "$2" --repo-type dataset --revision "$1" >/dev/null 2>>$L.err; then
+    echo "$(date -u +%FT%TZ) ok $1 $2" >> $L
+  else
+    echo "$(date -u +%FT%TZ) FAIL $1 $2" >> $L
+  fi
+}
+V2=ed87a03ab80ca5b9560780bba51a83a77ff47d14
+for a in H1 H3 H5 H6 E11 G2 G6 G4h; do get $V2 m2/arms/$a/train.jsonl & done
+wait
+V1=5c0255ed6a05d08b2fcb863e8045289eedd996cd
+for a in A6g A6h; do get $V1 v2/arms/$a/train.jsonl; done
+A7=3a4efc7768e3458e392f44e83391313fc25e49df
+get $A7 v2/a7/registry.json
+get $A7 v2/a7/views/dec10-stage4v2.json
+get $A7 v2/a7/views/dec10-natural24k.json
+for a in A7g A7p A7m A7o A7i A7h; do get $A7 v2/a7/arms/$a/train.jsonl & done
+wait
+echo "$(date -u +%FT%TZ) all downloads finished" >> $L

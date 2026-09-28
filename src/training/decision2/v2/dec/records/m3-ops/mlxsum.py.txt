@@ -1,0 +1,34 @@
+"""Summarize mlx-diag score files side by side (type macro, English, non-English per type, weakest language)."""
+import json
+import sys
+
+
+def summary(path):
+    d = json.load(open(path))
+    out = {}
+    types = d["by_type"]
+    accs = []
+    for t, v in types.items():
+        out[f"{t}.en"] = v.get("english_accuracy")
+        out[f"{t}.non_en"] = v.get("non_english_mean_accuracy")
+        langs = v.get("languages", {})
+        accs.append(sum(x["correct"] for x in langs.values()) / max(1, sum(x["n"] for x in langs.values())))
+    for k in ("type_macro", "macro", "overall", "summary"):
+        if k in d:
+            out[k] = d[k] if not isinstance(d[k], dict) else {kk: vv for kk, vv in d[k].items() if not isinstance(vv, dict)}
+    per_lang = {}
+    for t, v in types.items():
+        for lang, x in v.get("languages", {}).items():
+            per_lang.setdefault(lang, [0, 0])
+            per_lang[lang][0] += x["correct"]
+            per_lang[lang][1] += x["n"]
+    lang_acc = {k: c / n for k, (c, n) in per_lang.items()}
+    out["type_mean_acc"] = sum(accs) / len(accs)
+    out["weakest"] = min(lang_acc.items(), key=lambda kv: kv[1])
+    out["lang"] = {k: round(v, 3) for k, v in sorted(lang_acc.items())}
+    return out
+
+
+for p in sys.argv[1:]:
+    s = summary(p)
+    print(p.split("/")[-2], json.dumps({k: (round(v, 4) if isinstance(v, float) else v) for k, v in s.items()}))

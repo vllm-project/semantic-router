@@ -1,0 +1,14 @@
+set -u
+# Decoder M3: re-collect one mlx-diag run whose first attempt the eval runner refused (GPU not idle).
+# usage: m3-mlx-retry.sh <mirror-dir> <name e.g. E8V-soup> <staging commit> <source 1.0 package>
+SRC=$1 NAME=$2 COMMIT=$3 SOURCE=$4
+. /data/dev2/runs/dec/formal/m3-ops/m3-formal-lib.sh
+mkdir $F/$NAME-mlx-retry.lock 2>/dev/null || { echo "already retried"; exit 0; }
+S=/data/dev2/src/$SRC/src/training/decision2
+D=/data/dev2/runs/dec/m3/formal-candidates/staging-${COMMIT:0:8}; P=$D/m3/$NAME
+[ -d $F/m3-$NAME-mlx ] && mv $F/m3-$NAME-mlx $F/m3-$NAME-mlx.refused-attempt1
+[ -f $F/m3-$NAME-mlx.collect.log ] && mv $F/m3-$NAME-mlx.collect.log $F/m3-$NAME-mlx.refused-attempt1.collect.log
+mlx $SRC m3-$NAME $P/checkpoint m3-$NAME-$COMMIT $S/v2/dec/adapter-spec-infer-dec.json \
+  --extra source=$SOURCE --extra model_id=decision2-dec-m3-$NAME --extra max_length=16384 \
+  --extra calibration=$P/cal698-16k/calibration.json --mount $D
+flog "$NAME mlx retry done"

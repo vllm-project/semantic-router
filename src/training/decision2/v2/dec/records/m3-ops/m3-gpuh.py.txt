@@ -1,0 +1,46 @@
+"""Decoder M3 GPU-hours from every job receipt (wall-clock x GPUs); CPU jobs excluded."""
+import glob
+import json
+import sys
+from datetime import datetime
+
+node = sys.argv[1]
+
+
+def t(s):
+    return datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+
+rows = []
+for p in glob.glob("/data/dev2/runs/dec/m3/**/*.launch.json", recursive=True):
+    r = json.load(open(p))
+    if r.get("gpu") is None:
+        continue
+    rows.append((r["gpu"], r["job"], (t(r["end_utc"]) - t(r["start_utc"])).total_seconds() / 3600))
+for p in glob.glob("/data/dev2/runs/dec/formal/m3/**/GPU-TIME.json", recursive=True):
+    r = json.load(open(p))
+    name = p.split("/formal/m3/")[1].rsplit("/", 1)[0]
+    rows.append((f"node {node.upper()} GPU{r['gpu']}", "formal:" + name, r["wall_seconds"] / 3600))
+
+
+def kind(job):
+    if job.startswith("formal"):
+        return "formal"
+    if "label" in job:
+        return "teacher-labels"
+    if "soup" in job or "cal698-16k" in job:
+        return "soup-readout-staging"
+    for g in ("N4T", "N4J", "N4L", "S2T", "S2J", "S2L", "E8V"):
+        if f"-{g}-" in job:
+            return "arm:" + g
+    return "other"
+
+
+by_gpu, by_kind = {}, {}
+for gpu, job, h in rows:
+    by_gpu[gpu] = by_gpu.get(gpu, 0) + h
+    k = kind(job)
+    by_kind[k] = by_kind.get(k, 0) + h
+print(json.dumps({"node": node, "by_gpu": {k: round(v, 3) for k, v in sorted(by_gpu.items())},
+                  "by_kind": {k: round(v, 3) for k, v in sorted(by_kind.items())},
+                  "total": round(sum(by_gpu.values()), 3), "jobs": len(rows)}))

@@ -1,0 +1,29 @@
+"""Per-task CSS15 macro-F1 and typed-FINAL family accuracy: candidate vs comparator run dirs."""
+import json
+import sys
+
+cand, comp = sys.argv[1], sys.argv[2]
+
+
+def css(run):
+    d = json.load(open(f"{run}/scores/css15.score.json"))["tasks"]
+    return {t: v["macro_f1_all"] for t, v in d.items()}
+
+
+def typed(run):
+    d = json.load(open(f"{run}/scores/typed-final.score.json"))
+    fams = {f: (v["correct_n"], v["n"]) for f, v in d["by_family"].items()}
+    types = {t: (v["correct_n"], v["n"]) for t, v in d["by_type"].items()}
+    return fams, types
+
+
+a, b = css(cand), css(comp)
+print("CSS15 task macro-F1 (cand, comp, delta):")
+for t in sorted(a):
+    print(f"  {t:28s} {a[t]:.3f} {b[t]:.3f} {a[t]-b[t]:+.3f}")
+fa, ta = typed(cand)
+fb, tb = typed(comp)
+print("typed-FINAL family correct (cand, comp, delta):")
+for f in sorted(fa):
+    print(f"  {f:28s} {fa[f][0]:4d} {fb[f][0]:4d} {fa[f][0]-fb[f][0]:+d} / {fa[f][1]}")
+print("types", {t: (ta[t][0], tb[t][0]) for t in ta})
