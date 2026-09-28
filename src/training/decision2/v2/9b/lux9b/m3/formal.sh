@@ -56,7 +56,16 @@ fi
 [ "$mode" = cand ] || { echo "mode must be cand or lux1" >&2; exit 2; }
 name=$1; ckpt=$2; cal=$3; label=$4
 rev="m3-$name-$(basename "$ckpt")"
-lora=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["trainable_by_group"]["lora"])' "$(dirname "$ckpt")/provenance.json")
+lora=0
+if [ -f "$(dirname "$ckpt")/provenance.json" ]; then
+  lora=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["trainable_by_group"].get("lora", 0))' \
+    "$(dirname "$ckpt")/provenance.json")
+fi
+if [ "$lora" -gt 0 ]; then
+  params_source="Lux 1.0 deployed 7,940,895,744 + LoRA $lora"
+else
+  params_source="full Lux 1.0 architecture (backbone + head), 7,940,895,744"
+fi
 cand() {
   out=$1; shift
   "$S/v2/eval/run_same_panel.sh" --gpu "$gpu" --track 9b-clm --src "$SRC" --run-dir "$F/$out" --model-dir "$ckpt" \
@@ -70,8 +79,7 @@ cand "$name-16k" || exit 1; waitidle
 cand "$name-16k-mlx" --panels mlx-diag || exit 1
 sp seal --run-dir "$F/$name-16k" || exit 1
 sp report --run-dir "$F/$name-16k" --label "$label" --tier 9B --family decision2 --model-id "decision2-9b-m3-$name" \
-  --revision "$rev" --loaded-parameters $((7940895744 + lora)) \
-  --parameter-source "Lux 1.0 deployed 7,940,895,744 + LoRA $lora" || exit 1
+  --revision "$rev" --loaded-parameters $((7940895744 + lora)) --parameter-source "$params_source" || exit 1
 sp compare --run-dir "$F/$name-16k" --comparator-run-dir "$COMPARATOR" --left-name "$name" --right-name Lux1-16K || exit 1
 if [ -f "$F/lux1-16k-shared/SEAL.json" ]; then
   sp compare --run-dir "$F/$name-16k" --comparator-run-dir "$F/lux1-16k-shared" --left-name "$name" \
