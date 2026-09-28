@@ -34,6 +34,7 @@ W="${A7_RUN_DIR:-/data/dev2/private/a7/runs/$version/${commit:0:12}}"
 PI="${A7_PI:-/data/dev2/private/data/pi-v2/manifest.json}"
 IMAGE="${A7_IMAGE:-decision20-lux-runtime:latest}"
 LICENSES="${A7_LICENSE_REGISTRY:-$A7/license-registry-a7-v1.json}"
+OUT="${A7_ASSEMBLE_DIR:-$W}"
 read -r -a SUBS <<< "${A7_SUBS:-A7h A7m A7g A7i A7p A7o}"
 export PYTHONPATH="$S"
 cd "$S"
@@ -200,9 +201,10 @@ case "$stage" in
     for extra in ${A7_EXTRA_LICENSES:-}; do lic+=(--license-registry "$extra"); done
     ext=()
     for item in ${A7_EXTRA_RUNS:-}; do ext+=(--extra-run "$item"); done
+    mkdir -p "$OUT"
     python3 -m v2.data.a7.hf_spec --run-dir "$W" --readme "$A7/records/hf-dataset-a7-readme.md" \
-      "${lic[@]}" "${ext[@]}" --out "$W/hf-spec.json"
-    python3 -m v2.data.assemble_hf_upload --spec "$W/hf-spec.json" --out-dir "$W/hf-upload"
+      "${lic[@]}" "${ext[@]}" --out "$OUT/hf-spec.json"
+    python3 -m v2.data.assemble_hf_upload --spec "$OUT/hf-spec.json" --out-dir "$OUT/hf-upload"
     ;;
   upload)
     export HF_HUB_CACHE=/data/dev2/hf-cache
@@ -213,13 +215,13 @@ case "$stage" in
     read -r before parent < <(private)
     [[ "$before" == "True" ]] || { echo "dataset is not private; refusing to upload" >&2; exit 1; }
     log "upload parent=$parent"
-    hf upload "$repo" "$W/hf-upload/a7" v2/a7 --repo-type dataset \
+    hf upload "$repo" "$OUT/hf-upload/a7" v2/a7 --repo-type dataset \
       --commit-message "A7 ${A7_VERSION:-$version}: own Decision 1.0 corpora sub-arms (${commit:0:12})" | tee -a "$W/logs/upload.out"
     read -r after revision < <(private)
     [[ "$after" == "True" ]] || { echo "dataset private flag changed" >&2; exit 1; }
-    mkdir -p "$W/readback"
-    hf download "$repo" v2/a7/registry.json --repo-type dataset --revision "$revision" --local-dir "$W/readback" >/dev/null
-    cmp "$W/readback/v2/a7/registry.json" "$W/hf-upload/a7/registry.json"
+    mkdir -p "$OUT/readback"
+    hf download "$repo" v2/a7/registry.json --repo-type dataset --revision "$revision" --local-dir "$OUT/readback" >/dev/null
+    cmp "$OUT/readback/v2/a7/registry.json" "$OUT/hf-upload/a7/registry.json"
     log "upload revision=$revision private=$after registry readback identical"
     ;;
   inventory)
