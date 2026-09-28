@@ -144,8 +144,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
 | node A GPU0–1 | 0.6B encoder |
-| node A GPU2 | 9B: L2 formal post-key run (~0.2 GPU-h), then research & data (2026-09-28 16:45 UTC+8) |
-| node A GPU3–4 | research & data: Lux teacher targets + embedding scans, ~4 h (from 2026-09-28 16:45 UTC+8) |
+| node A GPU2–4 | research & data (Lux teacher targets, embedding scans) until mixture v2 / teacher targets land; then back to the 9B track (2026-09-28 17:55 UTC+8) |
 | node A GPU5 | 0.8B–4B decoder |
 | node A GPU6–7 | eval & peers |
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
@@ -182,6 +181,20 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 17:55 — 9B L2 formal result (gist `05-decision-2-9b-clm.md`; integration `9decc9921`):
+  - L2 (Lux + own-Lux soft replay, trained on A0) vs a same-limit 8K Lux1 control: post-key v3 65.361 vs 65.231,
+    +0.130 [−2.357, +1.480] → FAILS the 9B gate; 9B stays on Lux 1.0; no staging upload. Typed Choice −19, Noul −9, typed
+    ECE .129 vs .025; public 231 184 vs 183.
+  - **FLUTE inflation:** most of L2's human-transfer gain came from FLUTE (+.189), a same-task source present in A0 and
+    removed in A0s. Human-transfer gains of any A0-trained arm (e.g., part of 4B X2's) may be inflated this way; compare
+    human transfer only on A0s-based arms from now on.
+  - **Packaging limit rule (supersedes "8,192 where supported"):** package each candidate at the largest input limit its
+    runtime supports (at least 8,192; Lux-family 16K) and compare against a same-limit 1.0 control. Lux1 scores 65.808 at
+    16K vs 65.231 at 8K.
+  - The 9B track pauses until data Lux does not already fit is available (mixture v2, the data track's third-party teacher
+    screen — especially whether AutoJev-27B is licensed for distillation and strong on typed reasoning — and the rebuilt A7
+    encoder sub-arms). Its node A GPU2–4 serve research & data meanwhile.
 
 - 2026-09-28 17:15 — From 0.6B Milestone 3 (gist `03-decision-2-06b-encoder.md`; integration `f53dce48f`):
   - **Correction of the 14:45 padding warning:** no padding bug in any 0.6B trainer family. Padded and one-row passes match
