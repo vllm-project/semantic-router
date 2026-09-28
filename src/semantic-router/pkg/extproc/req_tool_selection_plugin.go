@@ -235,7 +235,7 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 			filtered, committed = r.applyStickyToolSelectionWithStatusAndRetrieval(
 				request,
 				authorizedTools,
-				filtered,
+				nil,
 				policy,
 				resolveDecisionToolsConfig(ctx),
 				strategyLabel,

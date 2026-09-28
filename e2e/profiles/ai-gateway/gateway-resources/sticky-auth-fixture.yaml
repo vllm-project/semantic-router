@@ -1,0 +1,33 @@
+# E2E-only authentication fixture. Production deployments must inject
+# x-authz-user-id from a validated authn/authz filter instead.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: semantic-router-sticky-e2e-auth-fixture
+  namespace: default
+spec:
+  jsonPatches:
+  - name: default/semantic-router/http
+    operation:
+      op: add
+      path: /default_filter_chain/filters/0/typed_config/http_filters/0
+      value:
+        name: semantic-router-sticky-e2e-auth-fixture
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+          inlineCode: |
+            function envoy_on_request(request_handle)
+              local authenticated = request_handle:headers():get("x-vsr-e2e-authenticated")
+              request_handle:headers():remove("x-authz-user-id")
+              request_handle:headers():remove("x-authz-user-groups")
+              request_handle:headers():remove("x-vsr-e2e-authenticated")
+              if authenticated == "true" then
+                request_handle:headers():add("x-authz-user-id", "sticky-e2e-user")
+              end
+            end
+    type: type.googleapis.com/envoy.config.listener.v3.Listener
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router
+  type: JSONPatch

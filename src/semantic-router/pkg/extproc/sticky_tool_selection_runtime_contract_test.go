@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -70,6 +71,53 @@ func TestStickyRuntimeFilteredAutoUsesCurrentAuthorizedCatalog(t *testing.T) {
 	}
 	if !loaded.Found || len(loaded.State.Tools) != 1 || loaded.State.Tools[0].Name != "search" {
 		t.Fatalf("sticky state = %#v, want current authorized search tool", loaded.State)
+	}
+}
+
+func TestStickyRuntimeFilteredEmptyQueryPreservesSelection(t *testing.T) {
+	router, store, ctx := newStickyRuntimeContractRouter(t)
+	maxTools := 2
+	maxNewTools := 1
+	selection := stickyRuntimeContractSelection(config.ToolSelectionModeFilter)
+	selection.Sticky.MaxTools = &maxTools
+	selection.Sticky.MaxNewToolsPerTurn = &maxNewTools
+	catalog := stickyRuntimeContractTools("search", "calculate", "weather")
+	seedRequest := &llmprotocol.Request{ToolChoice: llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}}
+	seed, committed := router.applyStickyToolSelectionWithStatusAndRetrieval(
+		seedRequest,
+		catalog,
+		catalog[:2],
+		selection,
+		nil,
+		config.ToolSelectionModeFilter,
+		ctx,
+		toolsEmbeddingProviderIdentity(router.Config),
+	)
+	if !committed || len(seed) != 2 {
+		t.Fatalf("seed selection = %#v, committed=%v", seed, committed)
+	}
+
+	ctx.TurnIndex = 1
+	request := &llmprotocol.Request{
+		Tools:      append([]llmprotocol.Tool(nil), catalog...),
+		ToolChoice: llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto},
+	}
+	if err := router.runToolSelectionPluginFilter(request, "", nil, ctx, selection); err != nil {
+		t.Fatalf("runToolSelectionPluginFilter: %v", err)
+	}
+	if len(request.Tools) != 2 {
+		t.Fatalf("empty filter tool count = %d, want 2", len(request.Tools))
+	}
+	if got := []string{request.Tools[0].Name, request.Tools[1].Name}; !reflect.DeepEqual(got, []string{"search", "calculate"}) {
+		t.Fatalf("empty filter rotated sticky tools: got %v", got)
+	}
+	identity := stickyRuntimeContractIdentity(ctx, selection, nil)
+	loaded, err := store.Load(context.Background(), identity.StorageKey)
+	if err != nil {
+		t.Fatalf("load sticky state: %v", err)
+	}
+	if !loaded.Found || len(loaded.State.Tools) != 2 || loaded.State.Tools[0].Name != "search" || loaded.State.Tools[1].Name != "calculate" {
+		t.Fatalf("sticky state after empty filter = %#v", loaded.State)
 	}
 }
 

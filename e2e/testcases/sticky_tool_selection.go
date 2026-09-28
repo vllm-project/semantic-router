@@ -439,7 +439,8 @@ func stickyRequestHeaders(sessionID string, trusted bool) map[string]string {
 		"x-vsr-debug":           "true",
 	}
 	if trusted {
-		headers["x-authz-user-id"] = "sticky-e2e-user"
+		headers["x-authz-user-id"] = "spoofed-client-value"
+		headers["x-vsr-e2e-authenticated"] = "true"
 	}
 	return headers
 }
