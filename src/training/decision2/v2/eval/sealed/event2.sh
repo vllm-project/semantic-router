@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # JevArena-C1 v1.1 scoring event 2 (DEV2.0-0.6B + comparators), node A.
-# Usage: event2.sh <gpu> <mirror-dir-name> [lease-name]   (the key arrives once on stdin)
+# Usage: event2.sh <gpu> <mirror-dir-name> [lease-name, default owner.eval]   (the key arrives once on stdin)
+# The GPU is shared with its owner track: every job writes only the named lease entry and skips the idle check.
 # Every model first passes a 20-item typed-final smoke; only then are the prompts decrypted.
 # Predictions are sealed before the gold is decrypted; plaintext is removed on any exit.
 set -uo pipefail
 umask 077
 GPU="$1"
 SRC="$2"
-LEASE_NAME="${3:-owner}"
+LEASE_NAME="${3:-owner.eval}"
+[[ "$LEASE_NAME" =~ ^owner\.[a-z0-9-]+$ ]] || { echo "lease name must be a named entry owner.NAME" >&2; exit 2; }
 IFS= read -r KEY
 S="/data/dev2/src/$SRC/src/training/decision2"
 C1=/data/dev2/private/sealed/c1
@@ -18,9 +20,11 @@ E=/data/dev2/runs/eval/m4/c1-event2
 H=/data/dev2/hf-cache
 M=/data/decision20-20260926/models
 K=/data/decision20-20260926/competitors
-ARM=m4-t-a7-soup
-PKG="/data/dev2/runs/06b/m1/arms/$ARM/full/best-export"
-PKG_REV=0f96aa3932ea501589f794eff9949b52fd1c64835b92f0392da860c22b0442bf
+KL=/data/dev2/tools/envs/kai-lex
+# Snapshot files are symlinks into the repo's blobs/; the large ones continue into the cache-wide $H/blobs.
+PKG_REPO="$H/models--llm-semantic-router--DEV2.0-0.6B"
+PKG_REV=e61b2b4419383672cb6a92d63699f7974e5f81ac
+PKG="$PKG_REPO/snapshots/$PKG_REV"
 LEASE="/data/dev2/leases/gpu$GPU.lock/$LEASE_NAME"
 GT=""
 [ -e "$E/EVENT.log" ] && {
@@ -50,16 +54,16 @@ decrypt() {
 }
 
 MODELS="cand kai1 lex bosun06 gliner25"
-declare -A LABEL=([cand]="DEV2.0-0.6B ($ARM)" [kai1]="Decision 1.0 Kai" [lex]="Decision 1.0 Lex"
+declare -A LABEL=([cand]="DEV2.0-0.6B" [kai1]="Decision 1.0 Kai" [lex]="Decision 1.0 Lex"
   [bosun06]="Bosun v3.1 0.6B" [gliner25]="GLiNER2.5-Decide")
 # Runner options, then "--", then collect options (without --panels).
 args() {
   case $1 in
-  cand) echo "--model-dir $PKG -- --adapter-spec $S/v2/06b/records/adapters/dev2-06b-causal-8k.json --model-path $PKG --revision $PKG_REV --extra model_id=dev2-06b/$ARM" ;;
-  kai1) echo "--model-dir $M/Decision-1.0-Kai-0.6B -- --adapter kai --model-path $M/Decision-1.0-Kai-0.6B --revision 7185f514f54b8f93c55998b1e8f9c5cc67f0d029 --extra model_id=llm-semantic-router/Decision-1.0-Kai-0.6B" ;;
-  lex) echo "--model-dir $M/Decision-1.0-Lex-0.6B -- --adapter lex --model-path $M/Decision-1.0-Lex-0.6B --revision ee8e74d912fca8328a353c11d174b44da3f91781 --extra model_id=llm-semantic-router/Decision-1.0-Lex-0.6B" ;;
+  cand) echo "--model-dir $PKG_REPO --mount $H/blobs -- --adapter-spec $S/v2/06b/records/adapters/dev2-06b-causal-8k.json --model-path $PKG --revision $PKG_REV --extra model_id=llm-semantic-router/DEV2.0-0.6B" ;;
+  kai1) echo "--model-dir $M/Decision-1.0-Kai-0.6B --mount $KL -- --adapter kai --model-path $M/Decision-1.0-Kai-0.6B --revision 7185f514f54b8f93c55998b1e8f9c5cc67f0d029 --extra model_id=llm-semantic-router/Decision-1.0-Kai-0.6B" ;;
+  lex) echo "--model-dir $M/Decision-1.0-Lex-0.6B --mount $KL -- --adapter lex --model-path $M/Decision-1.0-Lex-0.6B --revision ee8e74d912fca8328a353c11d174b44da3f91781 --extra model_id=llm-semantic-router/Decision-1.0-Lex-0.6B" ;;
   bosun06) echo "--model-dir $K/bosun-v31-06b-r1 --mount $K/qwen3-06b-bosun-base-r1 -- --adapter bosun06 --model-path $K/bosun-v31-06b-r1 --revision 1d8b6f9611f9b64b514ce8b57cd86398fbc31a3b --extra base=$K/qwen3-06b-bosun-base-r1 --extra model_id=Hanno-Labs/bosun-v3.1-0.6b" ;;
-  gliner25) echo "--model-dir $M/GLiNER2.5-Decide --mount $H --env HF_HUB_CACHE=$H --env HF_HUB_OFFLINE=1 -- --adapter gliner25 --model-path $M/GLiNER2.5-Decide --revision 7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6 --extra model_id=fastino/GLiNER2.5-Decide --extra variant=english" ;;
+  gliner25) echo "--image decision20-gliner25:host2 --model-dir $M/GLiNER2.5-Decide --mount $H --env HF_HUB_CACHE=$H --env HF_HUB_OFFLINE=1 -- --adapter gliner25 --model-path $M/GLiNER2.5-Decide --revision 7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6 --extra model_id=fastino/GLiNER2.5-Decide --extra variant=english" ;;
   esac
 }
 # name run-dir purpose panels [max-items]
@@ -70,15 +74,15 @@ run() {
   read -r -a runner <<<"${a%% -- *}"
   read -r -a collect <<<"${a#* -- }"
   if [ -n "${5:-}" ]; then collect+=(--max-items "$5"); fi
-  bash "$S/v2/eval/run_same_panel.sh" --gpu "$GPU" --track eval --lease-name "$LEASE_NAME" --src "$SRC" \
+  bash "$S/v2/eval/run_same_panel.sh" --gpu "$GPU" --track eval --lease-name "$LEASE_NAME" --shared --src "$SRC" \
     --run-dir "$dir" --purpose "$purpose" "${runner[@]}" -- "${collect[@]}" --panels "$panels" >"$dir.log" 2>&1
 }
 
-log "start: C1 v1.1 event 2 (GPU$GPU, source $SRC); independence recheck vs 9bb9790b/780d2743/12912429 + local pools m3a2/m3b: no source name, 0 OVERLAP, 9 weak REVIEW (names 3be721f3, overlap a1149284), no v1.2"
+log "start: C1 v1.1 event 2 (GPU$GPU shared, entry $LEASE_NAME, source $SRC); candidate DEV2.0-0.6B@$PKG_REV (manifest a5cdabed, identity 5b30b7e2, T=1, 8192 tokens); independence recheck2 vs ba848147/38c2db3c/b1df84c4/30e0a1f7 + local pools m3a2/m3b + node-B lux-xl-w2 + derived files: no source name, 0 OVERLAP, the same 9 weak REVIEW (names 41fe708e, overlap c0f92ce9), no v1.2"
 printf 'track=eval\npurpose=C1 scoring event 2 (DEV2.0-0.6B + comparators)\nstart_utc=%s\n' "$(date -u +%FT%TZ)" >"$LEASE"
 for m in $MODELS; do
   run "$m" "$E/smoke-$m" "C1 event 2 preflight: $m" typed-final 20
-  n=$(cat "$E/smoke-$m"/smoke/output/typed-final.predictions.jsonl "$E/smoke-$m"/output/typed-final.predictions.jsonl 2>/dev/null | wc -l)
+  n=$(cat "$E/smoke-$m"/smoke/typed-final.predictions.jsonl 2>/dev/null | wc -l)
   if [ "$n" -lt 1 ]; then
     log "ABORT before decryption: preflight failed for $m (no C1 access used)"
     exit 1
