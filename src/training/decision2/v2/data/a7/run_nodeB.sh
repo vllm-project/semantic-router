@@ -6,6 +6,7 @@
 #   lengths   per-row token lengths in the pinned runtime image (no GPU devices)
 #   screens   overlap vs PI-v2 and shortcut receipts per sub-arm (host python)
 #   rescreen  overlap of the admitted files vs A7_RESCREEN_PI into A7_RESCREEN_DIR
+#   requarantine  new version A7_VERSION = A7_FROM_RUN minus rescreen/embedding hits
 #   admit     apply overlap/budget/shortcut rules, resolve views
 #   post      post-admission shortcut and TRAIN<->AHO self-scan diagnostics
 #   freeze    content hash + manifest (+tokens) per final file (runtime image)
@@ -101,6 +102,21 @@ case "$stage" in
       set -e
     done
     ;;
+  requarantine)
+    # New version (A7_VERSION) in $W from the admitted run A7_FROM_RUN minus the groups
+    # flagged by its A7_RESCREEN_DIR lexical and A7_EMBED_DIR embedding receipts.
+    from="${A7_FROM_RUN:?A7_FROM_RUN}"
+    args=()
+    for file in "$from/${A7_RESCREEN_DIR:?A7_RESCREEN_DIR}"/*.overlap.private.json; do
+      args+=(--overlap-receipt "$file")
+    done
+    args+=(--embed-receipt "$from/${A7_EMBED_DIR:?A7_EMBED_DIR}/embed.private.json")
+    python3 -m v2.data.a7.requarantine --from-run "$from" "${args[@]}" \
+      --version "${A7_VERSION:?A7_VERSION}" --out-run "$W" | tee -a "$W/logs/requarantine.out"
+    mkdir -p "$W/rescreen" "$W/embed"
+    cp "$from/$A7_RESCREEN_DIR"/*.overlap.public.json "$W/rescreen/"
+    cp "$from/$A7_EMBED_DIR/embed.public.json" "$from/$A7_EMBED_DIR/run.json" "$W/embed/"
+    ;;
   admit)
     args=()
     for sub in "${SUBS[@]}"; do
@@ -168,7 +184,7 @@ case "$stage" in
     [[ "$before" == "True" ]] || { echo "dataset is not private; refusing to upload" >&2; exit 1; }
     log "upload parent=$parent"
     hf upload "$repo" "$W/hf-upload/a7" v2/a7 --repo-type dataset \
-      --commit-message "A7 $version: own Decision 1.0 corpora sub-arms (${commit:0:12})" | tee -a "$W/logs/upload.out"
+      --commit-message "A7 ${A7_VERSION:-$version}: own Decision 1.0 corpora sub-arms (${commit:0:12})" | tee -a "$W/logs/upload.out"
     read -r after revision < <(private)
     [[ "$after" == "True" ]] || { echo "dataset private flag changed" >&2; exit 1; }
     mkdir -p "$W/readback"

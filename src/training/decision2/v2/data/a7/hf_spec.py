@@ -55,6 +55,17 @@ def spec_for(
                 items.append(
                     {"src": str(receipt), "dst": f"a7/audits/{name}/post-{kind}.json"}
                 )
+        receipt = run_dir / "rescreen" / f"{name}.overlap.public.json"
+        if receipt.exists():
+            items.append(
+                {
+                    "src": str(receipt),
+                    "dst": f"a7/audits/{name}/rescreen-overlap.public.json",
+                }
+            )
+    embed = run_dir / "embed" / "embed.public.json"
+    if embed.exists():
+        items.append({"src": str(embed), "dst": "a7/audits/embed.public.json"})
     for view in sorted((run_dir / "final" / "views").glob("*.json")):
         items.append({"src": str(view), "dst": f"a7/views/{view.name}"})
     return items
