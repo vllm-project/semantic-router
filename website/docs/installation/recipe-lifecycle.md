@@ -5,7 +5,7 @@ description: Plan, apply, and delete recipes with the vllm-sr CLI against the Ro
 
 # Managed Recipe Lifecycle
 
-The `vllm-sr recipe` commands are the CLI's stateful write path for the canonical Router configuration: they read a recipe file, validate it, and compare-and-swap it into the live configuration. What a recipe is, and how recipes relate to entrypoints and models, is covered in [Recipes](../../tutorials/global/recipes). How the CLI fits the other configuration interfaces is covered in [Configuration Workflows](./configuration-workflows). This page covers the command lifecycle.
+The `vllm-sr recipe` commands are the CLI's stateful write path for the canonical Router configuration: they read a recipe file, validate it, and compare-and-swap it into the live configuration. What a recipe is, and how recipes relate to entrypoints and models, is covered in [Recipes](../tutorials/global/recipes). How the CLI fits the other configuration interfaces is covered in [Configuration Workflows](./configuration-workflows). This page covers the command lifecycle.
 
 All recipe commands talk to the Router management API and share the same connection options:
 
