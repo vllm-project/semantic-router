@@ -707,7 +707,10 @@ def proxy_vectors(
 
 
 def evaluate_set(
-    models: list[dict[str, Any]], names: tuple[str, ...], cluster_draws: int = 0
+    models: list[dict[str, Any]],
+    names: tuple[str, ...],
+    cluster_draws: int = 0,
+    keep_pairs: bool = True,
 ) -> dict[str, Any]:
     y = [m["v3"] for m in models]
     tiers = [m["tier"] for m in models]
@@ -758,7 +761,11 @@ def evaluate_set(
             ),
             "median_noise_sd": statistics.median(noise[name]),
             "median_noise_sd_v3": abs(slope) * statistics.median(noise[name]),
-            "tie_band": tie_band([p for p in pairs if p["decision"]], x),
+            "tie_band": (
+                tie_band([p for p in pairs if p["decision"]], x)
+                if name in CANDIDATES
+                else None
+            ),
         }
     result: dict[str, Any] = {
         "n_models": len(models),
@@ -777,18 +784,21 @@ def evaluate_set(
             cluster_draws,
             CLUSTER_SEED,
         )
-    result["decision_pairs"] = [
-        {
-            "a": models[p["i"]]["key"],
-            "b": models[p["j"]]["key"],
-            "tier": models[p["i"]]["tier"],
-            "finalist": p["finalist"],
-            "v3_delta": p["dy"],
-            "proxy_delta": {n: vectors[n][p["i"]] - vectors[n][p["j"]] for n in names},
-        }
-        for p in pairs
-        if p["decision"]
-    ]
+    if keep_pairs:
+        result["decision_pairs"] = [
+            {
+                "a": models[p["i"]]["key"],
+                "b": models[p["j"]]["key"],
+                "tier": models[p["i"]]["tier"],
+                "finalist": p["finalist"],
+                "v3_delta": p["dy"],
+                "proxy_delta": {
+                    n: vectors[n][p["i"]] - vectors[n][p["j"]] for n in CANDIDATES
+                },
+            }
+            for p in pairs
+            if p["decision"]
+        ]
     return result
 
 
@@ -853,7 +863,12 @@ def analyze(data: dict[str, Any], cluster_draws: int) -> dict[str, Any]:
     names = CANDIDATES + REFERENCES
     sets = build_sets(data)
     results = {
-        name: evaluate_set(models, names, cluster_draws if name == "main" else 0)
+        name: evaluate_set(
+            models,
+            names,
+            cluster_draws if name == "main" else 0,
+            keep_pairs=name == "main",
+        )
         for name, models in sets.items()
     }
     main = results["main"]
@@ -886,12 +901,13 @@ def print_summary(result: dict[str, Any]) -> None:
             def fmt(key: str) -> str:
                 return f"{pw[key]['agree']}/{pw[key]['n']}"
 
+            band = value["tie_band"] or {"band": None, "model_check": {}}
             print(
                 f"{name:13s} rho={value['spearman']:.3f} rw={value['within_tier_r']:.3f} "
                 f"loo={err['mae']:.2f}/{err['rmse']:.2f}/{err['max']:.2f} all={fmt('all')} "
                 f"tier={fmt('same_tier')} prim={fmt('decision_resolvable')} close={fmt('decision_close')} "
                 f"fin={fmt('finalist_resolvable')} noise_v3={value['median_noise_sd_v3']:.2f} "
-                f"band={value['tie_band']['band']} bmodel={value['tie_band']['model_check']['band_10pct']}"
+                f"band={band['band']} bmodel={band['model_check'].get('band_10pct')}"
             )
     print(json.dumps(result["selection"], indent=1))
 
