@@ -39,7 +39,8 @@ PROVENANCE_CAVEAT = (
     "provenance: every AutoJev-distilled candidate discloses it on its card and in its "
     "records, and needs a matched own-Lux-target control. Own-Lux targets remain the clean "
     "default. Allowed for release candidates by coordinator decision (2026-09-28 18:45 "
-    "UTC+8) after the node-A ROCm runtime passed the M3a repeat-run determinism check."
+    "UTC+8, re-qualification ordered 20:15) after the node-A ROCm runtime passed the M3a "
+    "qualification v2 (bitwise repeat determinism with a shared, fully warmed autotune cache)."
 )
 
 
@@ -106,7 +107,14 @@ def qualified_receipts(
                     raise ValueError(
                         f"{record.get('id')}: {key} differs from the qualified package"
                     )
-            receipts.append(dict(record, runtime_matches_validated=True))
+            receipts.append(
+                dict(
+                    record,
+                    runtime_matches_validated=True,
+                    _shard=manifest["label"],
+                    _gpu=manifest["gpu"],
+                )
+            )
         shard_report.append(
             {
                 "label": manifest["label"],
@@ -149,6 +157,8 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     for row in rows:
         if canonical(by_id[row["id"]]) != canonical(native_prompt(row)):
             raise ValueError(f"{row['id']}: wave prompt differs from its training row")
+    shard_of = {r["id"]: (r.pop("_shard"), r.pop("_gpu")) for r in receipts}
+    attest = {r["id"]: r for r in receipts}
     replay, report = convert(
         rows,
         [native_prompt(row) for row in rows],
@@ -171,12 +181,33 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "wb") as stream:
         stream.write(data)
+    fields = ("source_input_sha256", *IDENTITY, *RUN_CONSTANT, "runtime_qualification")
+    attestation = "".join(
+        canonical(
+            {
+                "id": r["id"],
+                "input_sha256": r["input_sha256"],
+                **{k: attest[r["id"]][k] for k in fields},
+                "shard": shard_of[r["id"]][0],
+                "gpu": shard_of[r["id"]][1],
+                "node": "node A",
+                "image_id": IMAGE_ID,
+                "runtime_qualified_by": "M3a qualification v2",
+            }
+        )
+        + "\n"
+        for r in sorted(replay, key=lambda r: r["id"])
+    ).encode("utf-8")
+    fd = os.open(args.attestation, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(attestation)
     report.update(
         schema="decision2-m3a-autojev-targets/1",
         wave=args.wave,
         rows=len(replay),
         prompts=len(rows),
         content_sha256=hashlib.sha256(data).hexdigest(),
+        attestation_sha256=hashlib.sha256(attestation).hexdigest(),
         prompts_sha256=file_sha256(args.prompts),
         rows_file_sha256=file_sha256(args.rows),
         qualification_sha256=file_sha256(args.qualification),
@@ -218,6 +249,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--guard", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--attestation", type=Path, required=True)
     report = build(parser.parse_args(argv))
     print(
         json.dumps(
