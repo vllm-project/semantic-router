@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from inference.run import (
+    OVER_BUDGET_ADAPTER_VERSION,
     collect,
     digest,
     eos_runtime_report,
@@ -116,6 +117,156 @@ class CollectorTest(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "gold-bearing"):
                 load_prompts(path)
+
+    def test_over_budget_original_is_invalid_and_next_original_runs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            model_dir = root / "model"
+            model_dir.mkdir()
+            (model_dir / "decider_config.json").write_text("{}")
+            prompts = root / "prompts.jsonl"
+            rows = [
+                {
+                    "id": "long",
+                    "state": "unchanged long source",
+                    "questions": {"label": {"type": "choice", "criteria": {"a": "A"}}},
+                },
+                {
+                    "id": "short",
+                    "state": "next source",
+                    "questions": {"label": {"type": "noul"}},
+                },
+            ]
+            prompts.write_text("".join(json.dumps(row) + "\n" for row in rows))
+            calls = []
+
+            def fake_decide(**payload):
+                calls.append(payload)
+                if payload["state"] == "unchanged long source":
+                    raise ValueError(
+                        "label: 18198 tokens exceeds max_length=16384; "
+                        "no truncation allowed"
+                    )
+                return {
+                    "model": "decider-test",
+                    "answers": {
+                        "label": {
+                            "type": "noul",
+                            "noul": 0.8,
+                        }
+                    },
+                }
+
+            output = root / "predictions.jsonl"
+            with patch(
+                "inference.run.load_decider",
+                return_value=(
+                    object(),
+                    fake_decide,
+                    {},
+                ),
+            ):
+                report = collect(
+                    backend="decider",
+                    model_path=model_dir,
+                    revision="commit",
+                    prompts=prompts,
+                    output=output,
+                    device="cpu",
+                    over_budget_invalid=True,
+                )
+                resumed = collect(
+                    backend="decider",
+                    model_path=model_dir,
+                    revision="commit",
+                    prompts=prompts,
+                    output=output,
+                    device="cpu",
+                    resume=True,
+                    over_budget_invalid=True,
+                )
+            predictions = [json.loads(line) for line in output.read_text().splitlines()]
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(report["over_budget_rows_now"], 1)
+            self.assertEqual(resumed["collected_now"], 0)
+            self.assertEqual(predictions[0]["answers"], {"label": None})
+            self.assertEqual(
+                predictions[0]["native_error"],
+                {
+                    "kind": "native_input_over_budget",
+                    "question_id": "label",
+                    "input_tokens": 18198,
+                    "max_length": 16384,
+                },
+            )
+            self.assertEqual(
+                predictions[0]["source_input_sha256"],
+                digest(calls[0]),
+            )
+            self.assertIsNone(predictions[1]["native_error"])
+            self.assertEqual(
+                predictions[1]["adapter_version"],
+                OVER_BUDGET_ADAPTER_VERSION,
+            )
+            with patch(
+                "inference.run.load_decider",
+                return_value=(
+                    object(),
+                    fake_decide,
+                    {},
+                ),
+            ), self.assertRaisesRegex(ValueError, "stale input"):
+                collect(
+                    backend="decider",
+                    model_path=model_dir,
+                    revision="commit",
+                    prompts=prompts,
+                    output=output,
+                    device="cpu",
+                    resume=True,
+                )
+
+    def test_over_budget_mode_rejects_unrecognized_native_errors(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            model_dir = root / "model"
+            model_dir.mkdir()
+            (model_dir / "decider_config.json").write_text("{}")
+            prompts = root / "prompts.jsonl"
+            prompts.write_text(
+                json.dumps(
+                    {
+                        "id": "one",
+                        "state": "x",
+                        "questions": {"label": {}},
+                    }
+                )
+                + "\n"
+            )
+            for index, message in enumerate(
+                (
+                    "some other model error",
+                    "label: 16384 tokens exceeds max_length=16384; no truncation allowed",
+                    "wrong: 18198 tokens exceeds max_length=16384; no truncation allowed",
+                )
+            ):
+                with self.subTest(message=message), patch(
+                    "inference.run.load_decider",
+                    return_value=(
+                        object(),
+                        lambda **_: (_ for _ in ()).throw(ValueError(message)),
+                        {},
+                    ),
+                ), self.assertRaisesRegex(ValueError, "^" + message.split(":")[0]):
+                    collect(
+                        backend="decider",
+                        model_path=model_dir,
+                        revision="commit",
+                        prompts=prompts,
+                        output=root / f"{index}.jsonl",
+                        device="cpu",
+                        over_budget_invalid=True,
+                    )
 
     def test_nox_sol_eos_identity_and_pinned_revision(self):
         families = {

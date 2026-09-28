@@ -12,12 +12,18 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
 ADAPTER_VERSION = "native-published-v2"
+OVER_BUDGET_ADAPTER_VERSION = "native-published-v2-overbudget-invalid-v1"
+_OVER_BUDGET_ERROR = re.compile(
+    r"(?P<question_id>[^:]+): (?P<tokens>[0-9]+) tokens exceeds "
+    r"max_length=(?P<max_length>[0-9]+); no truncation allowed"
+)
 DECISION_BACKENDS = {
     "lux": (
         "llm-semantic-router/Decision-1.0-Lux-9B",
@@ -96,6 +102,7 @@ def completed_rows(
     model_config_sha256: str,
     model_id: str | None = None,
     revision_attested: bool = False,
+    adapter_version: str = ADAPTER_VERSION,
 ) -> set[str]:
     expected = {
         row["id"]: {
@@ -118,7 +125,7 @@ def completed_rows(
             if (
                 item.get("source_input_sha256") != expected[item_id]["input_sha256"]
                 or item.get("backend") != backend
-                or item.get("adapter_version") != ADAPTER_VERSION
+                or item.get("adapter_version") != adapter_version
                 or item.get("model_revision") != revision
                 or item.get("model_config_sha256") != model_config_sha256
                 or item.get("model_id") != model_id
@@ -134,6 +141,26 @@ def completed_rows(
                 raise ValueError(f"{path}:{line_number}: missing or mismatched answers")
             completed.add(item_id)
     return completed
+
+
+def native_over_budget_error(
+    exc: ValueError, questions: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Recognize only the published native no-truncation input-limit error."""
+    match = _OVER_BUDGET_ERROR.fullmatch(str(exc))
+    if match is None:
+        return None
+    question_id = match.group("question_id")
+    tokens = int(match.group("tokens"))
+    max_length = int(match.group("max_length"))
+    if question_id not in questions or max_length < 1 or tokens <= max_length:
+        return None
+    return {
+        "kind": "native_input_over_budget",
+        "question_id": question_id,
+        "input_tokens": tokens,
+        "max_length": max_length,
+    }
 
 
 def assert_native_package_path(package_root: Path) -> None:
@@ -342,6 +369,7 @@ def collect(
     resume: bool = False,
     allow_unvalidated_runtime: bool = False,
     max_items: int | None = None,
+    over_budget_invalid: bool = False,
 ) -> dict[str, Any]:
     if backend not in BACKENDS:
         raise ValueError(f"unsupported backend: {backend}")
@@ -363,13 +391,23 @@ def collect(
         else "MODEL_MANIFEST.json" if backend == "eos" else "decider_config.json"
     )
     config_sha256 = file_digest(model_path / config_name)
+    adapter_version = (
+        OVER_BUDGET_ADAPTER_VERSION if over_budget_invalid else ADAPTER_VERSION
+    )
     if output.exists():
         if not resume:
             raise FileExistsError(
                 f"{output} exists; use --resume only for this same run"
             )
         completed = completed_rows(
-            output, rows, backend, revision, config_sha256, model_id, revision_attested
+            output,
+            rows,
+            backend,
+            revision,
+            config_sha256,
+            model_id,
+            revision_attested,
+            adapter_version,
         )
     else:
         completed = set()
@@ -387,12 +425,34 @@ def collect(
     remaining = [row for row in rows if row["id"] not in completed]
     if max_items is not None:
         remaining = remaining[:max_items]
+    over_budget_rows = 0
     with output.open("a" if output.exists() else "x", encoding="utf-8") as target:
         for row in remaining:
             payload = {"state": row["state"], "questions": row["questions"]}
             synchronize(device)
             started = time.perf_counter()
-            response = decide(**payload)
+            native_error = None
+            try:
+                response = decide(**payload)
+            except ValueError as exc:
+                native_error = (
+                    native_over_budget_error(exc, row["questions"])
+                    if over_budget_invalid
+                    else None
+                )
+                if native_error is None:
+                    raise
+                # No native answer exists for this original row. Preserve its
+                # question IDs and count every answer slot as invalid/wrong.
+                response = {
+                    "answers": {key: None for key in row["questions"]},
+                    "model": (
+                        DECISION_BACKENDS[backend][1]
+                        if backend in DECISION_BACKENDS
+                        else None
+                    ),
+                }
+                over_budget_rows += 1
             synchronize(device)
             latency_ms = (time.perf_counter() - started) * 1000
             if not isinstance(response, dict) or not isinstance(
@@ -420,13 +480,15 @@ def collect(
                 "model": response.get("model"),
                 "backend": backend,
                 "model_id": model_id,
-                "adapter_version": ADAPTER_VERSION,
+                "adapter_version": adapter_version,
                 "model_revision": revision,
                 "revision_attested": revision_attested,
                 "model_config_sha256": config_sha256,
                 "source_input_sha256": digest(payload),
                 **runtime,
             }
+            if over_budget_invalid:
+                receipt["native_error"] = native_error
             target.write(
                 json.dumps(
                     receipt, ensure_ascii=False, separators=(",", ":"), allow_nan=False
@@ -442,6 +504,8 @@ def collect(
         "input_items": len(rows),
         "previously_completed": len(completed),
         "collected_now": len(remaining),
+        "over_budget_rows_now": over_budget_rows,
+        "adapter_version": adapter_version,
         "output": str(output),
         "model_config_sha256": config_sha256,
         **runtime,
@@ -461,6 +525,11 @@ def main() -> None:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--allow-unvalidated-runtime", action="store_true")
     parser.add_argument("--max-items", type=int)
+    parser.add_argument(
+        "--over-budget-invalid",
+        action="store_true",
+        help="Mark a native no-truncation input-limit row invalid and continue",
+    )
     args = parser.parse_args()
     result = collect(
         backend=args.backend,
@@ -472,6 +541,7 @@ def main() -> None:
         resume=args.resume,
         allow_unvalidated_runtime=args.allow_unvalidated_runtime,
         max_items=args.max_items,
+        over_budget_invalid=args.over_budget_invalid,
     )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
 
