@@ -154,6 +154,9 @@ func servePlaygroundOutcome(
 		writePlaygroundFeedbackError(w, *err)
 		return
 	}
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
 	idempotencyKey, claimErr := store.ClaimPlaygroundReplay(
 		r.Context(),
 		principal.SessionID,
@@ -186,6 +189,10 @@ func servePlaygroundOutcome(
 	}
 	r.Header.Set(headers.VSROutcomeSource, "user")
 	r.Header.Set(headers.VSROutcomePrincipal, "dashboard-session:"+principal.SessionID)
+	if auth.RejectRevokedMutation(w, r) {
+		_ = store.FinishPlaygroundReplay(context.Background(), principal.SessionID, payload.ReplayID, false)
+		return
+	}
 
 	statusWriter := &playgroundOutcomeResponseWriter{ResponseWriter: w, status: http.StatusOK}
 	proxy.ServeHTTP(statusWriter, r)

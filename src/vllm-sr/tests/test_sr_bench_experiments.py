@@ -450,6 +450,17 @@ def test_read_role_can_compare_owned_evidence_without_writes(tmp_path, monkeypat
                 },
                 timeout=2,
             )
+            assert response.status_code == 400
+            assert response.json()["error"] == "Unsupported request fields"
+            response = requests.post(
+                url + "/comparisons",
+                headers=headers,
+                json={
+                    "baseline_run_id": source["id"],
+                    "candidate_run_id": target["id"],
+                },
+                timeout=2,
+            )
             assert response.status_code == 404
         for path in (
             "/experiments",

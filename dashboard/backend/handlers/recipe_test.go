@@ -1,14 +1,18 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 )
 
@@ -78,6 +82,50 @@ func TestRecipeHandlerETagRoundTripsIntoActionPrecondition(t *testing.T) {
 	handler.ProbeAction(actionResponse, actionRequest)
 	if actionResponse.Code != http.StatusOK {
 		t.Fatalf("run-plan status = %d, body=%s", actionResponse.Code, actionResponse.Body.String())
+	}
+}
+
+func TestRecipeProbeValidationRejectsRevokedPermissionBeforeRouterCall(t *testing.T) {
+	var routerCalls atomic.Int32
+	router := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		routerCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/v1/models" {
+			_, _ = w.Write([]byte(`{"data":[{"id":"vllm-sr/auto","routing":{"resolution":"virtual","selectable":true,"recipe":"accuracy"}}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer router.Close()
+	service := recipe.NewService(recipe.Options{
+		Directory:    filepath.Join("..", "..", "..", "config", "recipes", "accuracy"),
+		RouterAPIURL: router.URL,
+	})
+	probes, err := service.ListProbes(recipe.ListOptions{Page: 1, PageSize: 1})
+	if err != nil || len(probes.Items) != 1 {
+		t.Fatalf("ListProbes() = %#v, %v", probes, err)
+	}
+	probe := probes.Items[0]
+	path := "/api/recipe/probes/" + url.PathEscape(probe.DecisionID) + "/" + url.PathEscape(probe.VariantID) + "/validate"
+	handler := NewRecipeHandler(service)
+	request := httptest.NewRequest(http.MethodPost, path, nil)
+	request.Header.Set("If-Match", `"`+probes.RecipeDigest+`"`)
+	response := httptest.NewRecorder()
+	handler.ProbeAction(response, request)
+	if got := routerCalls.Load(); got == 0 {
+		t.Fatalf("valid probe did not reach Router; status = %d", response.Code)
+	}
+	routerCalls.Store(0)
+
+	request = httptest.NewRequest(http.MethodPost, path, nil)
+	request.Header.Set("If-Match", `"`+probes.RecipeDigest+`"`)
+	request = request.WithContext(auth.WithPermissionRevalidator(request.Context(), func(context.Context) error {
+		return errors.New("topology.read revoked")
+	}))
+	response = httptest.NewRecorder()
+	handler.ProbeAction(response, request)
+	if response.Code != http.StatusForbidden || routerCalls.Load() != 0 {
+		t.Fatalf("revoked probe: status = %d, Router calls = %d", response.Code, routerCalls.Load())
 	}
 }
 

@@ -7,7 +7,7 @@ use candle_nn::{VarBuilder, VarMap};
 use candle_transformers::models::bert::{BertModel, Config as BertConfig};
 use std::ffi::CString;
 
-fn bert_fixture() -> TempDir {
+pub(super) fn bert_fixture() -> TempDir {
     let dir = fixture(&["weather", "travel", "other"], 2);
     let config = json!({
         "model_type": "bert", "vocab_size": 16, "hidden_size": 4,
