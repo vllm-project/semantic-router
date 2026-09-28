@@ -144,7 +144,7 @@ upload)
   for P in "$S"/*.public.json; do cp "$P" "$X/rescreen/$(basename "$P" .public.json).overlap.public.json"; done
   cp "$RUN/rescreen/scan-union/union.public.json" "$X/rescreen/union.overlap.public.json"
   cp "$CODE/v2/data/records/hf-xl-r2-readme.md" "$X/README.md"
-  if grep -rlE '/data/|/home/' "$X"; then
+  if grep -rlE '(^|[^[:alnum:]_.-])/(data|home|tmp)/' "$X"; then
     echo "path leak" >&2
     exit 1
   fi
