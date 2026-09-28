@@ -4,7 +4,9 @@
 # Usage (SRC is a mirror directory name under /data/dev2/src: <sha> or <sha>-src_training_decision2):
 #   run_same_panel.sh --gpu N --track TRACK --src SRC --run-dir DIR --model-dir DIR \
 #       [--image IMAGE] [--mount HOST_PATH]... [--mount-rw HOST_PATH]... [--env KEY=VALUE]... \
-#       [--purpose TEXT] [--expected-end UTC] -- <same_panel collect arguments except --run-dir>
+#       [--purpose TEXT] [--expected-end UTC] [--lease-name NAME] -- <same_panel collect arguments except --run-dir>
+# --lease-name writes this track's entry as gpuN.lock/NAME (for a GPU shared with its owner track,
+# e.g. owner.eval) and leaves the owner track's gpuN.lock/owner untouched.
 # --env is for non-secret runtime settings only (for example TRITON_CACHE_DIR).
 #
 # Mounts (same path inside and outside): the exact mirror /data/dev2/src/SHA (ro), the
@@ -17,7 +19,7 @@ set -euo pipefail
 usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 gpu="" track="" sha="" run_dir="" model_dir="" image="decision20-train-fast:host2"
-purpose="same-panel native collection" expected_end="" mounts=() rw_mounts=() envs=()
+purpose="same-panel native collection" expected_end="" mounts=() rw_mounts=() envs=() lease_name="owner"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu="$2"; shift 2 ;;
@@ -31,6 +33,7 @@ while [[ $# -gt 0 ]]; do
     --env) envs+=(-e "$2"); shift 2 ;;
     --purpose) purpose="$2"; shift 2 ;;
     --expected-end) expected_end="$2"; shift 2 ;;
+    --lease-name) lease_name="$2"; shift 2 ;;
     --) shift; break ;;
     *) usage ;;
   esac
@@ -47,7 +50,8 @@ mkdir -p "$run_dir"
 [[ ! -e "$run_dir/GPU-TIME.json" ]] || { echo "$run_dir already used" >&2; exit 1; }
 
 lease="/data/dev2/leases/gpu$gpu.lock"
-if [[ -f "$lease/owner" ]] && ! grep -qx "track=$track" "$lease/owner"; then
+[[ "$lease_name" =~ ^owner(\.[a-z0-9-]+)?$ ]] || { echo "bad --lease-name" >&2; exit 2; }
+if [[ "$lease_name" == "owner" && -f "$lease/owner" ]] && ! grep -qx "track=$track" "$lease/owner"; then
   echo "gpu$gpu is leased by another track:" >&2
   cat "$lease/owner" >&2
   exit 1
@@ -60,7 +64,7 @@ fi
 mkdir -p "$lease"
 start_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf 'track=%s\npurpose=%s\nstart_utc=%s\nexpected_end_utc=%s\nrun_dir=%s\n' \
-  "$track" "$purpose" "$start_utc" "${expected_end:-unknown}" "$run_dir" > "$lease/owner"
+  "$track" "$purpose" "$start_utc" "${expected_end:-unknown}" "$run_dir" > "$lease/$lease_name"
 
 image_id="$(docker image inspect --format '{{.Id}}' "$image")"
 volumes=(-v "$src:$src:ro" -v "$panel_root/goldfree:$panel_root/goldfree:ro"
