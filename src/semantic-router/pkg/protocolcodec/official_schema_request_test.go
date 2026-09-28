@@ -271,16 +271,16 @@ func TestOfficialUnsupportedRequestFieldsFailWithTypedErrors(t *testing.T) {
 			base:   map[string]any{"model": "m", "messages": []any{map[string]any{"role": "user", "content": "hello"}}},
 			fields: fields(
 				"audio", "function_call", "functions", "logit_bias", "logprobs", "modalities", "moderation",
-				"prediction", "prompt_cache_key", "prompt_cache_options", "prompt_cache_retention",
-				"safety_identifier", "service_tier", "top_logprobs", "verbosity", "web_search_options",
+				"prediction", "prompt_cache_options", "prompt_cache_retention",
+				"safety_identifier", "service_tier", "top_logprobs", "web_search_options",
 			),
 		},
 		{
 			format: llmprotocol.OpenAIResponsesV1,
 			base:   map[string]any{"model": "m", "input": "hello"},
 			fields: fields(
-				"background", "context_management", "include", "max_tool_calls", "moderation", "prompt",
-				"prompt_cache_key", "prompt_cache_options", "prompt_cache_retention", "safety_identifier",
+				"background", "context_management", "max_tool_calls", "moderation", "prompt",
+				"prompt_cache_options", "prompt_cache_retention", "safety_identifier",
 				"service_tier", "top_logprobs",
 			),
 		},

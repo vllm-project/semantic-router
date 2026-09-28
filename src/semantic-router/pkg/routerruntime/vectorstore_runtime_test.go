@@ -3,6 +3,7 @@ package routerruntime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -175,5 +176,87 @@ func TestVectorStoreRuntimeUsesEndpointWidthForStorage(t *testing.T) {
 				t.Fatal("invalid width opened storage before rejecting")
 			}
 		})
+	}
+}
+
+func TestCandleBERTVectorStoreRejectsHistoricalPaddingVectors(t *testing.T) {
+	ctx := context.Background()
+	provider, err := embedding.NewFuncProvider(config.EmbeddingBackendCandle, 3, func(context.Context, string) ([]float32, error) {
+		t.Fatal("identity resolution ran inference")
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The runtime passes an output-width view to the identity resolver.
+	view := embedding.WithOptions(provider, embedding.Options{Dimension: 3})
+	cfg := &config.VectorStoreConfig{EmbeddingModel: "bert", EmbeddingDimension: 3}
+	identity, err := resolveVectorStoreEmbeddingIdentity(view, cfg)
+	if err != nil || identity.Fingerprint == "" {
+		t.Fatalf("Candle BERT has no vector-store identity: %+v %v", identity, err)
+	}
+
+	backend := vectorstore.NewMemoryBackend(vectorstore.MemoryBackendConfig{})
+	registry := vectorstore.NewMemoryMetadataRegistry()
+	old := vectorstore.NewManager(backend, registry, 3, vectorstore.BackendTypeMemory)
+	store, err := old.CreateStore(ctx, vectorstore.CreateStoreRequest{Name: "padded vectors"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunk := vectorstore.EmbeddedChunk{ID: "old", Content: "historical", Embedding: []float32{1, 0, 0}}
+	if err = old.InsertChunks(ctx, store.ID, []vectorstore.EmbeddedChunk{chunk}); err != nil {
+		t.Fatal(err)
+	}
+
+	current := vectorstore.NewManager(backend, registry, 3, vectorstore.BackendTypeMemory, vectorstore.WithEmbeddingIdentity(identity.Fingerprint))
+	if err = current.LoadFromRegistry(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = current.Search(ctx, store.ID, chunk.Embedding, 1, 0, nil); !errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
+		t.Fatalf("new BERT query compared with persisted padded vector: %v", err)
+	}
+	if err = current.InsertChunks(ctx, store.ID, []vectorstore.EmbeddedChunk{chunk}); !errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
+		t.Fatalf("new BERT vector appended to persisted padded store: %v", err)
+	}
+
+	fresh, err := current.CreateStore(ctx, vectorstore.CreateStoreRequest{Name: "unpadded vectors"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh.Metadata[vectorstore.EmbeddingIdentityMetadataKey] != identity.Fingerprint {
+		t.Fatal("new vector store omitted the BERT encoder identity")
+	}
+	if err = current.InsertChunks(ctx, fresh.ID, []vectorstore.EmbeddedChunk{chunk}); err != nil {
+		t.Fatal(err)
+	}
+	restarted := vectorstore.NewManager(backend, registry, 3, vectorstore.BackendTypeMemory, vectorstore.WithEmbeddingIdentity(identity.Fingerprint))
+	if err = restarted.LoadFromRegistry(ctx); err != nil {
+		t.Fatal(err)
+	}
+	results, err := restarted.Search(ctx, fresh.ID, chunk.Embedding, 1, 0, nil)
+	if err != nil || len(results) != 1 {
+		t.Fatalf("matching BERT identity could not reuse new store: %v %v", results, err)
+	}
+	if _, err = restarted.Search(ctx, store.ID, chunk.Embedding, 1, 0, nil); !errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
+		t.Fatalf("restart adopted the historical vector store: %v", err)
+	}
+}
+
+func TestVectorStoreIdentityLeavesOtherBERTProvidersUntouched(t *testing.T) {
+	embed := func(context.Context, string) ([]float32, error) { return []float32{1, 0, 0}, nil }
+	for _, backend := range []string{"ort", config.EmbeddingBackendOpenAICompatible} {
+		provider, err := embedding.NewFuncProvider(backend, 3, embed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := &config.VectorStoreConfig{EmbeddingModel: "bert", EmbeddingDimension: 3}
+		identity, err := resolveVectorStoreEmbeddingIdentity(provider, cfg)
+		if err != nil || identity.Fingerprint != "" {
+			t.Fatalf("%s BERT acquired a new namespace: %+v %v", backend, identity, err)
+		}
+		cfg.EmbeddingModel = "mmbert"
+		if _, err = resolveVectorStoreEmbeddingIdentity(provider, cfg); !errors.Is(err, embedding.ErrIdentityUnsupported) {
+			t.Fatalf("%s mmbert bypassed content identity: %v", backend, err)
+		}
 	}
 }

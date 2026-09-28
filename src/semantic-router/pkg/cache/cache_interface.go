@@ -30,13 +30,14 @@ type CacheEntry struct {
 // the matched score; a below-threshold miss may include its rejected candidate's
 // score. Errors carry no score.
 type LookupResult struct {
-	ResponseBody []byte
-	Found        bool
-	Similarity   float32
-	StoredAt     time.Time
-	ExpiresAt    time.Time
-	Age          time.Duration
-	AgeKnown     bool
+	ResponseBody  []byte
+	Found         bool
+	Similarity    float32
+	StoredAt      time.Time
+	ExpiresAt     time.Time
+	Age           time.Duration
+	AgeKnown      bool
+	NegationGuard NegationGuardOutcome // semantic hits only
 }
 
 // lookupResultFromTimestamps constructs a successful LookupResult and calculates Age / AgeKnown.

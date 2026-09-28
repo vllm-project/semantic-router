@@ -26,12 +26,12 @@ Read only the reference needed for the task:
 | Improve signal, decision or model-selection policy | [Recipe tuning](https://vllm-sr.ai/install/agent/vllm-sr/references/recipe-tuning.md) |
 | Compare single models and MoM; run a measured optimization loop | [sr-bench](https://vllm-sr.ai/install/agent/vllm-sr/references/sr-bench.md) |
 
-For installation or an authorized upgrade, default to the published dev package
-unless the user selects another version:
+For installation or an authorized upgrade, use the published stable package
+unless the user selects another version or the dev channel:
 
 ```bash
 curl -fsSL https://vllm-sr.ai/install.sh | \
-  bash -s -- --channel dev --mode cli --runtime skip --no-launch
+  bash -s -- --channel stable --mode cli --runtime skip --no-launch
 export PATH="$HOME/.local/bin:$PATH"
 vllm-sr --version
 ```

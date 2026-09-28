@@ -12,9 +12,15 @@ environment.
 
 | Environment | Build | Serve |
 | --- | --- | --- |
-| CPU | `make vllm-sr-dev` | `vllm-sr serve --image-pull-policy never` |
-| AMD | `make vllm-sr-dev VLLM_SR_PLATFORM=amd` | `vllm-sr serve --image-pull-policy never --platform amd` |
-| NVIDIA | `VLLM_SR_PLATFORM=nvidia make vllm-sr-build` | `vllm-sr serve --platform nvidia --config <recipe>` |
+| CPU | `make vllm-sr-dev` | `VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest vllm-sr serve --image-pull-policy never` |
+| AMD | `make vllm-sr-dev VLLM_SR_PLATFORM=amd` | `VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest vllm-sr serve --image-pull-policy never --platform amd` |
+| NVIDIA | `VLLM_SR_PLATFORM=nvidia make vllm-sr-build` | `VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest vllm-sr serve --platform nvidia --config <recipe> --image-pull-policy ifnotpresent` |
+
+Make defaults to `latest`, while an editable CLI with a stable package version
+defaults to release-tagged images. These overrides select the local builds.
+If you customize the build tag, registry, or image variables, pass the actual
+built images instead. The NVIDIA build target builds only the Router image;
+`ifnotpresent` also allows the CLI to obtain missing companion images.
 
 Use CPU by default. Select AMD or NVIDIA only when platform defaults, GPU
 passthrough, router-side ML execution, or platform images are part of the

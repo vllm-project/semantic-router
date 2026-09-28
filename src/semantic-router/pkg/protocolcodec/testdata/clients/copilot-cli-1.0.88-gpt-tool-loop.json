@@ -1,0 +1,1066 @@
+[
+  {
+    "model": "worker",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the GitHub Copilot CLI, a terminal assistant built by GitHub. (System prompt shortened.)"
+      },
+      {
+        "role": "user",
+        "content": "<current_datetime>2026-09-25T02:35:48.724-07:00</current_datetime>\n\nCreate hello.txt containing hi"
+      }
+    ],
+    "reasoning_effort": "medium",
+    "temperature": 1,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "bash",
+          "description": "Runs a Bash command.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "The Bash command and arguments to run."
+              },
+              "description": {
+                "type": "string",
+                "description": "A short human-readable description of what the command does, limited to 100..."
+              },
+              "shellId": {
+                "type": "string",
+                "description": "(Optional) Identifier for this command execution."
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "sync",
+                  "async"
+                ],
+                "description": "Execution mode: \"sync\" runs synchronously and waits for completion (default), \"async\"..."
+              },
+              "detach": {
+                "type": "boolean",
+                "description": "(Optional) Only valid when mode=\"async\"."
+              },
+              "initial_wait": {
+                "type": "number",
+                "description": "(Optional) Time in seconds to wait for initial output when mode is \"sync\"."
+              }
+            },
+            "required": [
+              "command",
+              "description"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_bash",
+          "description": "Reads output from a Bash command.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "shellId": {
+                "type": "string",
+                "description": "The ID of the shell session used to invoke the Bash command."
+              },
+              "delay": {
+                "type": "number",
+                "description": "The amount of time in seconds to wait before reading the output."
+              }
+            },
+            "required": [
+              "shellId",
+              "delay"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "stop_bash",
+          "description": "Stops a running Bash command by terminating its process tree.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "shellId": {
+                "type": "string",
+                "description": "The ID of the Bash session used to invoke the bash command."
+              }
+            },
+            "required": [
+              "shellId"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_bash",
+          "description": "Lists all active Bash sessions.",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "custom",
+        "custom": {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files.",
+          "format": {
+            "type": "grammar",
+            "grammar": {
+              "syntax": "lark",
+              "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\n\nhunk: add_hunk | delete_hunk | update_hunk\nadd_hunk: \"*** Add File: \" filename LF add_line+\ndelete_hunk: \"*** Delete File: \" filename LF\nupdate_hunk: \"*** Update File: \" filename LF change_move? change?\n\nfilename: /(.+)/\nadd_line: \"+\" /(.*)/ LF -> line\n\nchange_move: \"*** Move to: \" filename LF\nchange: (change_context | change_line)+ eof_line?\nchange_context: (\"@@\" | \"@@ \" /(.+)/) LF\nchange_line: (\"+\" | \"-\" | \" \") /(.*)/ LF\neof_line: \"*** End of File\" LF\n\n%import common.LF"
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "view",
+          "description": "View files, images, or directories.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Existing file or directory's absolute path."
+              },
+              "view_range": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "Optional 1-based inclusive line range."
+              },
+              "forceReadLargeFiles": {
+                "type": "boolean",
+                "description": "Read an entire large file despite the size limit; default false."
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "fetch_copilot_cli_documentation",
+          "description": "Fetch authoritative GitHub Copilot CLI README/help for questions about your...",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "skill",
+          "description": "Load a skill into the main conversation",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "skill": {
+                "type": "string",
+                "description": "The skill name to invoke."
+              }
+            },
+            "required": [
+              "skill"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "sql",
+          "description": "Query the session SQLite database for structured workflows.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "A 2-5 word summary of what this query does (e.g., 'Insert auth todos', 'Query ready..."
+              },
+              "query": {
+                "type": "string",
+                "description": "The SQL query to execute."
+              }
+            },
+            "required": [
+              "description",
+              "query"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "session_store_sql",
+          "description": "Query cross-session history with read-only DuckDB.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "A 2-5 word summary of what this query does (e.g., 'Recent sessions overview', 'Find PR..."
+              },
+              "query": {
+                "type": "string",
+                "description": "One read-only SQL query (SELECT or WITH); DuckDB for cloud, SQLite for `source..."
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "cloud",
+                  "local"
+                ],
+                "description": "Which session store to query."
+              }
+            },
+            "required": [
+              "description",
+              "query"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_agent",
+          "description": "Reads a background agent's status and results by agent_id.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "agent_id": {
+                "type": "string",
+                "description": "Background agent ID from a task result or notification."
+              },
+              "wait": {
+                "type": "boolean",
+                "description": "Wait for completion; default false returns current status."
+              },
+              "timeout": {
+                "type": "number",
+                "description": "Wait timeout in seconds (default 30, max 180)."
+              },
+              "since_turn": {
+                "type": "integer",
+                "description": "Inclusive 0-based start index."
+              }
+            },
+            "required": [
+              "agent_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_agents",
+          "description": "Lists visible background agents by status: running, idle, completed, failed, or cancelled.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "include_completed": {
+                "type": "boolean",
+                "description": "Include completed/failed agents (default true); false returns only running/idle."
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "siblings",
+                  "children",
+                  "all"
+                ],
+                "description": "Visibility: omit for nearby; siblings=peers, children=descendants, all=read-only..."
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "write_agent",
+          "description": "Sends a message to one or more running or idle background agents, delivered as a new...",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "agent_id": {
+                "type": "string",
+                "description": "The ID of one background agent to send a message to."
+              },
+              "agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "{minLength: 1}"
+                },
+                "description": "A small explicit set of background agent IDs to send the same message to."
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "siblings",
+                  "children"
+                ],
+                "description": "Visible agent group to send the same message to."
+              },
+              "message": {
+                "type": "string",
+                "description": "The message to send to the selected agent or agents."
+              }
+            },
+            "required": [
+              "message"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "rg",
+          "description": "Search file contents quickly and precisely with ripgrep.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Regex to search for in file contents."
+              },
+              "paths": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ],
+                "description": "One directory or an array of directories; defaults to cwd."
+              },
+              "output_mode": {
+                "type": "string",
+                "enum": [
+                  "content",
+                  "files_with_matches",
+                  "count"
+                ],
+                "description": "Output: matching lines (content, with context/line-number options), matching file..."
+              },
+              "glob": {
+                "type": "string",
+                "description": "File glob filter, e.g."
+              },
+              "type": {
+                "type": "string",
+                "description": "File type filter, e.g."
+              },
+              "-i": {
+                "type": "boolean",
+                "description": "Case-insensitive search."
+              },
+              "-A": {
+                "type": "number",
+                "description": "Context lines after matches; requires content mode."
+              },
+              "-B": {
+                "type": "number",
+                "description": "Context lines before matches; requires content mode."
+              },
+              "-C": {
+                "type": "number",
+                "description": "Context lines around matches; requires content mode."
+              },
+              "-n": {
+                "type": "boolean",
+                "description": "\"-n\": true adds line numbers; requires content mode."
+              },
+              "head_limit": {
+                "type": "number",
+                "description": "Return first N results."
+              },
+              "multiline": {
+                "type": "boolean",
+                "description": "Allow cross-line patterns; default false."
+              }
+            },
+            "required": [
+              "pattern"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "glob",
+          "description": "Find files quickly by glob pattern.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Glob to match, e.g."
+              },
+              "paths": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ],
+                "description": "One directory or an array of directories; defaults to cwd."
+              }
+            },
+            "required": [
+              "pattern"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "task",
+          "description": "Custom agent: Launch specialized agents in separate context windows for specific tasks.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "3-5 word UI intent."
+              },
+              "prompt": {
+                "type": "string",
+                "description": "Task; include complete context."
+              },
+              "agent_type": {
+                "type": "string",
+                "enum": [
+                  "explore",
+                  "task",
+                  "general-purpose",
+                  "code-review",
+                  "research",
+                  "security-review"
+                ],
+                "description": "Agent type."
+              },
+              "name": {
+                "type": "string",
+                "description": "Short agent name."
+              },
+              "model": {
+                "type": "string",
+                "description": "Optional model override."
+              },
+              "reasoning_effort": {
+                "type": "string",
+                "description": "Optional reasoning effort override."
+              },
+              "context_tier": {
+                "type": "string",
+                "enum": [
+                  "default",
+                  "long_context"
+                ],
+                "description": "Optional context tier override."
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "sync",
+                  "background"
+                ],
+                "description": "sync waits; background returns immediately."
+              }
+            },
+            "required": [
+              "name",
+              "prompt",
+              "agent_type",
+              "description"
+            ]
+          }
+        }
+      }
+    ],
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
+    }
+  },
+  {
+    "model": "worker",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the GitHub Copilot CLI, a terminal assistant built by GitHub. (System prompt shortened.)"
+      },
+      {
+        "role": "user",
+        "content": "<current_datetime>2026-09-25T02:35:48.724-07:00</current_datetime>\n\nCreate hello.txt containing hi"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "refusal": null,
+        "tool_calls": [
+          {
+            "id": "call_1",
+            "type": "custom",
+            "custom": {
+              "name": "apply_patch",
+              "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_1",
+        "content": "Permission denied and could not request permission from user"
+      }
+    ],
+    "reasoning_effort": "medium",
+    "temperature": 1,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "bash",
+          "description": "Runs a Bash command.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "The Bash command and arguments to run."
+              },
+              "description": {
+                "type": "string",
+                "description": "A short human-readable description of what the command does, limited to 100..."
+              },
+              "shellId": {
+                "type": "string",
+                "description": "(Optional) Identifier for this command execution."
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "sync",
+                  "async"
+                ],
+                "description": "Execution mode: \"sync\" runs synchronously and waits for completion (default), \"async\"..."
+              },
+              "detach": {
+                "type": "boolean",
+                "description": "(Optional) Only valid when mode=\"async\"."
+              },
+              "initial_wait": {
+                "type": "number",
+                "description": "(Optional) Time in seconds to wait for initial output when mode is \"sync\"."
+              }
+            },
+            "required": [
+              "command",
+              "description"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_bash",
+          "description": "Reads output from a Bash command.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "shellId": {
+                "type": "string",
+                "description": "The ID of the shell session used to invoke the Bash command."
+              },
+              "delay": {
+                "type": "number",
+                "description": "The amount of time in seconds to wait before reading the output."
+              }
+            },
+            "required": [
+              "shellId",
+              "delay"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "stop_bash",
+          "description": "Stops a running Bash command by terminating its process tree.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "shellId": {
+                "type": "string",
+                "description": "The ID of the Bash session used to invoke the bash command."
+              }
+            },
+            "required": [
+              "shellId"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_bash",
+          "description": "Lists all active Bash sessions.",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "custom",
+        "custom": {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files.",
+          "format": {
+            "type": "grammar",
+            "grammar": {
+              "syntax": "lark",
+              "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\n\nhunk: add_hunk | delete_hunk | update_hunk\nadd_hunk: \"*** Add File: \" filename LF add_line+\ndelete_hunk: \"*** Delete File: \" filename LF\nupdate_hunk: \"*** Update File: \" filename LF change_move? change?\n\nfilename: /(.+)/\nadd_line: \"+\" /(.*)/ LF -> line\n\nchange_move: \"*** Move to: \" filename LF\nchange: (change_context | change_line)+ eof_line?\nchange_context: (\"@@\" | \"@@ \" /(.+)/) LF\nchange_line: (\"+\" | \"-\" | \" \") /(.*)/ LF\neof_line: \"*** End of File\" LF\n\n%import common.LF"
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "view",
+          "description": "View files, images, or directories.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Existing file or directory's absolute path."
+              },
+              "view_range": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "Optional 1-based inclusive line range."
+              },
+              "forceReadLargeFiles": {
+                "type": "boolean",
+                "description": "Read an entire large file despite the size limit; default false."
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "fetch_copilot_cli_documentation",
+          "description": "Fetch authoritative GitHub Copilot CLI README/help for questions about your...",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "skill",
+          "description": "Load a skill into the main conversation",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "skill": {
+                "type": "string",
+                "description": "The skill name to invoke."
+              }
+            },
+            "required": [
+              "skill"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "sql",
+          "description": "Query the session SQLite database for structured workflows.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "A 2-5 word summary of what this query does (e.g., 'Insert auth todos', 'Query ready..."
+              },
+              "query": {
+                "type": "string",
+                "description": "The SQL query to execute."
+              }
+            },
+            "required": [
+              "description",
+              "query"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "session_store_sql",
+          "description": "Query cross-session history with read-only DuckDB.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "A 2-5 word summary of what this query does (e.g., 'Recent sessions overview', 'Find PR..."
+              },
+              "query": {
+                "type": "string",
+                "description": "One read-only SQL query (SELECT or WITH); DuckDB for cloud, SQLite for `source..."
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "cloud",
+                  "local"
+                ],
+                "description": "Which session store to query."
+              }
+            },
+            "required": [
+              "description",
+              "query"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_agent",
+          "description": "Reads a background agent's status and results by agent_id.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "agent_id": {
+                "type": "string",
+                "description": "Background agent ID from a task result or notification."
+              },
+              "wait": {
+                "type": "boolean",
+                "description": "Wait for completion; default false returns current status."
+              },
+              "timeout": {
+                "type": "number",
+                "description": "Wait timeout in seconds (default 30, max 180)."
+              },
+              "since_turn": {
+                "type": "integer",
+                "description": "Inclusive 0-based start index."
+              }
+            },
+            "required": [
+              "agent_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_agents",
+          "description": "Lists visible background agents by status: running, idle, completed, failed, or cancelled.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "include_completed": {
+                "type": "boolean",
+                "description": "Include completed/failed agents (default true); false returns only running/idle."
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "siblings",
+                  "children",
+                  "all"
+                ],
+                "description": "Visibility: omit for nearby; siblings=peers, children=descendants, all=read-only..."
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "write_agent",
+          "description": "Sends a message to one or more running or idle background agents, delivered as a new...",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "agent_id": {
+                "type": "string",
+                "description": "The ID of one background agent to send a message to."
+              },
+              "agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "{minLength: 1}"
+                },
+                "description": "A small explicit set of background agent IDs to send the same message to."
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "siblings",
+                  "children"
+                ],
+                "description": "Visible agent group to send the same message to."
+              },
+              "message": {
+                "type": "string",
+                "description": "The message to send to the selected agent or agents."
+              }
+            },
+            "required": [
+              "message"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "rg",
+          "description": "Search file contents quickly and precisely with ripgrep.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Regex to search for in file contents."
+              },
+              "paths": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ],
+                "description": "One directory or an array of directories; defaults to cwd."
+              },
+              "output_mode": {
+                "type": "string",
+                "enum": [
+                  "content",
+                  "files_with_matches",
+                  "count"
+                ],
+                "description": "Output: matching lines (content, with context/line-number options), matching file..."
+              },
+              "glob": {
+                "type": "string",
+                "description": "File glob filter, e.g."
+              },
+              "type": {
+                "type": "string",
+                "description": "File type filter, e.g."
+              },
+              "-i": {
+                "type": "boolean",
+                "description": "Case-insensitive search."
+              },
+              "-A": {
+                "type": "number",
+                "description": "Context lines after matches; requires content mode."
+              },
+              "-B": {
+                "type": "number",
+                "description": "Context lines before matches; requires content mode."
+              },
+              "-C": {
+                "type": "number",
+                "description": "Context lines around matches; requires content mode."
+              },
+              "-n": {
+                "type": "boolean",
+                "description": "\"-n\": true adds line numbers; requires content mode."
+              },
+              "head_limit": {
+                "type": "number",
+                "description": "Return first N results."
+              },
+              "multiline": {
+                "type": "boolean",
+                "description": "Allow cross-line patterns; default false."
+              }
+            },
+            "required": [
+              "pattern"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "glob",
+          "description": "Find files quickly by glob pattern.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Glob to match, e.g."
+              },
+              "paths": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ],
+                "description": "One directory or an array of directories; defaults to cwd."
+              }
+            },
+            "required": [
+              "pattern"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "task",
+          "description": "Custom agent: Launch specialized agents in separate context windows for specific tasks.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "3-5 word UI intent."
+              },
+              "prompt": {
+                "type": "string",
+                "description": "Task; include complete context."
+              },
+              "agent_type": {
+                "type": "string",
+                "enum": [
+                  "explore",
+                  "task",
+                  "general-purpose",
+                  "code-review",
+                  "research",
+                  "security-review"
+                ],
+                "description": "Agent type."
+              },
+              "name": {
+                "type": "string",
+                "description": "Short agent name."
+              },
+              "model": {
+                "type": "string",
+                "description": "Optional model override."
+              },
+              "reasoning_effort": {
+                "type": "string",
+                "description": "Optional reasoning effort override."
+              },
+              "context_tier": {
+                "type": "string",
+                "enum": [
+                  "default",
+                  "long_context"
+                ],
+                "description": "Optional context tier override."
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "sync",
+                  "background"
+                ],
+                "description": "sync waits; background returns immediately."
+              }
+            },
+            "required": [
+              "name",
+              "prompt",
+              "agent_type",
+              "description"
+            ]
+          }
+        }
+      }
+    ],
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
+    }
+  }
+]

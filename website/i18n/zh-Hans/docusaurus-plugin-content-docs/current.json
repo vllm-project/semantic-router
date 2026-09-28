@@ -199,6 +199,10 @@
     "message": "评测",
     "description": "The label for category Benchmarking in sidebar tutorialSidebar"
   },
+  "sidebar.tutorialSidebar.category.sr-bench 1.0": {
+    "message": "sr-bench 1.0",
+    "description": "The label for category sr-bench 1.0 in sidebar tutorialSidebar"
+  },
   "sidebar.tutorialSidebar.category.API Reference": {
     "message": "接口参考",
     "description": "The label for category API Reference in sidebar tutorialSidebar"

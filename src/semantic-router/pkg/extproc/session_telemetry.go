@@ -45,6 +45,7 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		return
 	}
 	sessiontelemetry.RecordLastModel(routingSessionStateKey(ctx), ctx.RequestModel)
+	sessiontelemetry.RecordLastModel(promptCacheKeyStateKey(ctx), ctx.RequestModel)
 	accounting := estimateRouterCacheAccounting(ctx, usage, pricing)
 	// Routing ownership follows the dispatch identity; protocol telemetry keeps
 	// its own Chat fingerprint or Responses lineage without creating an owner.
@@ -94,6 +95,29 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		p.Chat = &sessiontelemetry.ChatInput{UserID: userID, Messages: msgs}
 	}
 	sessiontelemetry.RecordTurn(p)
+}
+
+// promptCacheKeyStateKey scopes a client prompt_cache_key to the recipe, under
+// a fixed component so it cannot collide with a session key.
+func promptCacheKeyStateKey(ctx *RequestContext) string {
+	if ctx == nil || ctx.SemanticRequest == nil || requestBypassesRouting(ctx) {
+		return ""
+	}
+	return sessiontelemetry.RoutingSessionKey(ctx.Routing.RecipeName(), "prompt_cache_key", ctx.SemanticRequest.PromptCacheKey)
+}
+
+// promptCacheKeyModel returns the model that last served this request's
+// prompt_cache_key. A preview reads its snapshot and leaves the live store alone.
+func promptCacheKeyModel(ctx *RequestContext) string {
+	key := promptCacheKeyStateKey(ctx)
+	if key == "" {
+		return ""
+	}
+	if ctx.learningPreview != nil {
+		return ctx.learningPreview.lastModel(key).Model
+	}
+	model, _ := sessiontelemetry.GetLastModel(key)
+	return model
 }
 
 func recordRouterSessionUsageFromContext(
