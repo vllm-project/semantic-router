@@ -158,7 +158,7 @@ def ordinal_suffix(value: int) -> str:
     suffix = (
         "th"
         if 10 <= value % 100 <= 20
-        else {1: "st", 2: "nd", 3: "rd"}.get(value % 10, "th")
+        else {1: "st", 2: "nd", 3: "rd"}.get(value % 10, "th")  # codespell:ignore nd
     )
     return f"{value}{suffix}"
 
@@ -214,7 +214,7 @@ EN_FIRST = (
     "Femi",
     "Noor",
     "Pieter",
-    "Ines",
+    "Ines",  # codespell:ignore ines
     "Kenji",
     "Marta",
     "Omar",

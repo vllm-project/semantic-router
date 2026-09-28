@@ -144,8 +144,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
 | node A GPU0–1 | 0.6B encoder |
-| node A GPU2 | 9B: L2 formal post-key run (~0.2 GPU-h), then research & data (2026-09-28 16:45 UTC+8) |
-| node A GPU3–4 | research & data: Lux teacher targets + embedding scans, ~4 h (from 2026-09-28 16:45 UTC+8) |
+| node A GPU2–4 | research & data (Lux teacher targets, embedding scans) until mixture v2 / teacher targets land; then back to the 9B track (2026-09-28 17:55 UTC+8) |
 | node A GPU5 | 0.8B–4B decoder |
 | node A GPU6–7 | eval & peers |
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
@@ -182,6 +181,38 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 17:55 — 9B L2 formal result (gist `05-decision-2-9b-clm.md`; integration `9decc9921`):
+  - L2 (Lux + own-Lux soft replay, trained on A0) vs a same-limit 8K Lux1 control: post-key v3 65.361 vs 65.231,
+    +0.130 [−2.357, +1.480] → FAILS the 9B gate; 9B stays on Lux 1.0; no staging upload. Typed Choice −19, Noul −9, typed
+    ECE .129 vs .025; public 231 184 vs 183.
+  - **FLUTE inflation:** most of L2's human-transfer gain came from FLUTE (+.189), a same-task source present in A0 and
+    removed in A0s. Human-transfer gains of any A0-trained arm (e.g., part of 4B X2's) may be inflated this way; compare
+    human transfer only on A0s-based arms from now on.
+  - **Packaging limit rule (supersedes "8,192 where supported"):** package each candidate at the largest input limit its
+    runtime supports (at least 8,192; Lux-family 16K) and compare against a same-limit 1.0 control. Lux1 scores 65.808 at
+    16K vs 65.231 at 8K.
+  - The 9B track pauses until data Lux does not already fit is available (mixture v2, the data track's third-party teacher
+    screen — especially whether AutoJev-27B is licensed for distillation and strong on typed reasoning — and the rebuilt A7
+    encoder sub-arms). Its node A GPU2–4 serve research & data meanwhile.
+
+- 2026-09-28 17:15 — From 0.6B Milestone 3 (gist `03-decision-2-06b-encoder.md`; integration `f53dce48f`):
+  - **Correction of the 14:45 padding warning:** no padding bug in any 0.6B trainer family. Padded and one-row passes match
+    in FP32 (loss within 1e-6, gradients within 3e-4); BF16 alone puts either path 5–26% (relative L2) off the FP32
+    gradient. Equivalence tests must compare each path against FP32 with dropout off. The stall was the **learning-rate
+    schedule**: a 2e-5 backbone peak after 5% warmup collapsed 4 of 10 fresh-head runs; 1e-5 with 10% warmup trained all
+    seeds. Tracks training new heads: watch gradient norms around the end of warmup.
+  - A real latent bug the tests caught: micro-batches mixing rows with and without teacher targets crashed. Check your
+    trainer if you mix teacher and non-teacher rows.
+  - EuroBERT-610m and bidirectional Qwen3-0.6B collapse even without padding, in FP32 and at 4× lower LR: recorded as
+    negative architecture evidence under the tried recipes.
+  - **Seed variance rule (small tiers):** σ_seed(P) ≈ 3.6 at 0.6B (0.84 at 0.8B), comparable to the tie band. For 0.6B and
+    0.8B, candidates need >= 3 seeds; choose recipes by the seed mean; the candidate artifact should be a uniform weight
+    average ("soup") of same-recipe, same-init seeds if it is >= the seed mean on development panels (avoids best-seed
+    selection bias and reduces variance); otherwise the median seed. Larger tiers keep >= 2 seeds.
+  - A6 at 0.6B: typed Score moves from one constant level to 2–3 levels, but the accuracy gain fails the matrix rule and
+    one seed drops transfer past the retention floor, so A6 does not pass at 0.6B. Every causal 0.6B checkpoint also
+    answers typed-DEV Noul with one constant answer (192/400): check your Noul answer distribution.
 
 - 2026-09-28 16:45 — From 9B Milestone 2 (gist `05-decision-2-9b-clm.md`; integration `72cc17eed`) + GPU changes:
   - Own-Lux soft replay (L2, KL 0.5) is the only arm beating plain Lux continuation: 3-seed mean proxy 71.42 vs control
@@ -297,7 +328,8 @@ exactly one gist file and updates it in place:
   returns control to the coordinator as if you were done. A data-track turn ended this way at 14:47 and had to be resumed.
 
 - 2026-09-28 14:45 — From 0.6B Milestone 2 (gist `03-decision-2-06b-encoder.md`, results `811b10d07`):
-  - **Padding bug warning for EVERY trainer.** The 0.6B trainer silently stalled freshly initialized decision heads when
+  - (CORRECTED at 17:15 — there was no padding bug; the stall was the learning-rate schedule. See the 17:15 note.)
+    **Padding bug warning for EVERY trainer.** The 0.6B trainer silently stalled freshly initialized decision heads when
     rows were padded together in a micro-batch (even the causal control model); one-row unpadded micro-batches trained.
     The EuroBERT and bidirectional-Qwen "collapses" happened under that path and are treated as invalid runs, not
     negative results. Every track: add a regression test that padded and unpadded micro-batches give the same loss and
