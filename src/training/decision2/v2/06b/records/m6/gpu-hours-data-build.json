@@ -1,0 +1,45 @@
+{
+  "runs": [
+    {
+      "run": "m6-unittest",
+      "gpu": 1,
+      "start_utc": "2026-09-28T19:20:55Z",
+      "end_utc": "2026-09-28T19:21:05Z",
+      "exit": 0
+    },
+    {
+      "run": "m6-build-mix",
+      "gpu": 0,
+      "start_utc": "2026-09-28T19:21:16Z",
+      "end_utc": "2026-09-28T19:22:16Z",
+      "exit": 0
+    },
+    {
+      "run": "m6-teacher-merge-cx",
+      "gpu": 0,
+      "start_utc": "2026-09-28T19:24:16Z",
+      "end_utc": "2026-09-28T19:24:24Z",
+      "exit": 0
+    },
+    {
+      "run": "m6-teacher-merge-mx",
+      "gpu": 1,
+      "start_utc": "2026-09-28T19:24:16Z",
+      "end_utc": "2026-09-28T19:24:24Z",
+      "exit": 0
+    },
+    {
+      "run": "m6-verify-mix",
+      "gpu": 1,
+      "start_utc": "2026-09-28T19:24:54Z",
+      "end_utc": "2026-09-28T19:26:11Z",
+      "exit": 0
+    }
+  ],
+  "per_gpu_hours": {
+    "0": 0.0189,
+    "1": 0.0264
+  },
+  "total_gpu_hours": 0.0453,
+  "summed_run_hours": 0.0453
+}

@@ -1,0 +1,903 @@
+{
+  "base": {
+    "pool": "A0s-strict",
+    "rows": 6547,
+    "tokens": 3888278
+  },
+  "budget_deviation": -0.000497,
+  "budget_tokens": 30000000,
+  "budget_tolerance": 0.005,
+  "dropped": {
+    "over_cap_groups": {},
+    "repeats_earlier_input": {}
+  },
+  "english_token_share": 0.5479,
+  "family": "m6-mx",
+  "language_tokens": {
+    "ar": 152224,
+    "bn": 201639,
+    "ca": 44779,
+    "da": 691,
+    "de": 382658,
+    "en": 16427784,
+    "es": 1269623,
+    "et": 77513,
+    "eu": 15541,
+    "fi": 118868,
+    "fr": 227204,
+    "hi": 19907,
+    "hi-en": 651143,
+    "hu": 2649,
+    "id": 140202,
+    "it": 17884,
+    "ja": 505400,
+    "ko": 790833,
+    "ne": 119918,
+    "pl": 9808,
+    "pt": 31650,
+    "ro": 73616,
+    "ru": 589573,
+    "si": 145034,
+    "sw": 116150,
+    "te": 340933,
+    "th": 210530,
+    "tr": 1919,
+    "uk": 37390,
+    "vi": 4711,
+    "zh": 6966220,
+    "zh-hant": 291089
+  },
+  "max_row_tokens": 8192,
+  "name": "m6-mx-s2",
+  "nonbase_group_keys_sha256": "18381bd8454b510c11ed24d21532242844be591ac5e3ca9e57ce14e2132e3690",
+  "nonbase_groups": 37051,
+  "partition_salt": "m6-partition",
+  "pool_rows": {
+    "A0s-strict": 6547,
+    "A7g": 3004,
+    "A7h": 250,
+    "A7i": 2699,
+    "A7k": 729,
+    "A7m": 1753,
+    "A7o": 3406,
+    "A7p": 1653,
+    "A7q": 7393,
+    "A7r": 1110,
+    "A7s": 4285,
+    "E11": 1972,
+    "G2": 3507,
+    "G4h": 632,
+    "G6": 2164,
+    "H1": 8989,
+    "H3": 1416,
+    "H5": 7999,
+    "H6": 3772,
+    "V1:A1": 738,
+    "V1:A2": 884,
+    "V1:A3": 122,
+    "V1:A4v2h": 263,
+    "V1:A5": 378,
+    "V1:A6g": 813,
+    "V1:A6h": 895
+  },
+  "pool_sha256": {
+    "A0s-strict": "df5c76888e4397068ada2444815b50baa7eb6e36fe6c9a1c991ef069b01a7853",
+    "A7g": "cc87e0b7a441774aaacbd34b59425294bf8fd5f1b678f92c9a15fd008dcdfddd",
+    "A7h": "86474b739d8297ebb98ca6ea818c7f6c3cef153a1d778108e6a6723336812718",
+    "A7i": "0b8284b1e08229698e9516be7104fe2b6f7dad79ec25eddc3cd3c1ad48e72e12",
+    "A7k": "8aab25e53e6f3c52e91f0bb45647ec448ba7b408491098285162abddb42577b9",
+    "A7m": "dd9b1ef029f87e9f7c33165002b5dc74e26776ae28edabe503ef85fd7df9b692",
+    "A7o": "dbba002225188fb4dca8f45d15a4801c41a8964d313ee49eba335e2af6355625",
+    "A7p": "cc9217e6128da1910784cb1839127a3edf7e5b90d5c795cd104d78f35f2f137e",
+    "A7q": "c65aac85a7399ebde36039d9de7b8945d8570909e61a3f4a69a7ad5001ac7bfd",
+    "A7r": "0fc421e4937146ae85d66b9c3a039fd2e5b1f344b9aad4bad77d9ea3983a534d",
+    "A7s": "f7eef149493d83e93cca1d5128132477412bbd99239832939fd77a80fb43e6ec",
+    "E11": "72eae02655246ab3261b828210269d906f0a18ee579b48770acc153fbca72f1f",
+    "G2": "c013d183760a348e205dded3f01b735424bd2d6791a3df48af0dd1107869eedd",
+    "G4h": "be00a00d8cf6bbe2e5bbdd076b345c18b565a978c0343933e214598c377ba7e5",
+    "G6": "884664923e7eb444c198f5f2ac7797a7a08438b47139e5a00a56cb38e898e236",
+    "H1": "5d1c5133eff7dc9081876974f4ef4ac05f44cadba5bec49fc6e84e596f912b52",
+    "H3": "46a7b68e0ec78cddba3501b6bd2c243408d0c079826f8cb8b2b98637715292b1",
+    "H5": "0921f75b8c7cd865057b1adc9b45bcab1a377470a044732582b737e9b0c22f3a",
+    "H6": "c4ffe4d6790ca737f3ce9327778493fe72483c84c9c447245c5181eced053e7d",
+    "V1:A1": "b50b43afcb306114f93e37880a021185e4381b97b4e55a84bd0b065d3f36c283",
+    "V1:A2": "2cd61397a01b1bd16fcdfc19bddd7b05c9ddd94320044c23aa600da89b0d8f4c",
+    "V1:A3": "96da839671e64ff3ccf13691522da8311092af4ec2f307474f3807d38a9c17bc",
+    "V1:A4v2h": "32e21294cca16ec34ae4074d17fdd90df61160556e83633005d9eb54b86984f8",
+    "V1:A5": "86868b2d10afb4e98b3798e000e7e80f2b471bdf97b8e565cd6077aaef61be54",
+    "V1:A6g": "ac94b7f4f1e7d8b73ddbffebe15035aa3b47cca9c825f622d0ec8d04bd7fc02f",
+    "V1:A6h": "23440f0c5561077780973259777fca4aa80400f5b30e9df6e1376f6d9aa31927"
+  },
+  "pool_tokens": {
+    "A0s-strict": 3888278,
+    "A7g": 4843162,
+    "A7h": 38770,
+    "A7i": 1046760,
+    "A7k": 191869,
+    "A7m": 335218,
+    "A7o": 1571200,
+    "A7p": 562751,
+    "A7q": 3333472,
+    "A7r": 171357,
+    "A7s": 681837,
+    "E11": 715127,
+    "G2": 1301378,
+    "G4h": 261087,
+    "G6": 960876,
+    "H1": 1357392,
+    "H3": 1716523,
+    "H5": 3348752,
+    "H6": 1921832,
+    "V1:A1": 227520,
+    "V1:A2": 363762,
+    "V1:A3": 311916,
+    "V1:A4v2h": 130149,
+    "V1:A5": 84205,
+    "V1:A6g": 379665,
+    "V1:A6h": 240225
+  },
+  "profile": {
+    "families_top12": {
+      "a2_units": 1018,
+      "csqa": 1086,
+      "gsm8k_twins": 1882,
+      "human_goemotions_choice": 1397,
+      "human_goemotions_noul": 1397,
+      "oasst1_creativity": 2135,
+      "oasst1_helpfulness": 2909,
+      "oasst1_quality": 1649,
+      "sentimix_hinglish": 4091,
+      "squad2_removal": 1148,
+      "stage4_natural_nli": 1753,
+      "winogrande_twins": 2356
+    },
+    "groups": 41879,
+    "languages": {
+      "ar": 383,
+      "bn": 242,
+      "ca": 110,
+      "da": 4,
+      "de": 988,
+      "en": 38093,
+      "es": 2899,
+      "et": 238,
+      "eu": 51,
+      "fi": 364,
+      "fr": 821,
+      "hi": 102,
+      "hi-en": 4091,
+      "hu": 8,
+      "id": 411,
+      "it": 41,
+      "ja": 1991,
+      "ko": 1796,
+      "ne": 286,
+      "pl": 30,
+      "pt": 80,
+      "ro": 233,
+      "ru": 1269,
+      "si": 275,
+      "sw": 472,
+      "te": 354,
+      "th": 610,
+      "tr": 9,
+      "uk": 50,
+      "vi": 20,
+      "zh": 10286,
+      "zh-hant": 766
+    },
+    "max_row_tokens": 7244,
+    "rows": 67373,
+    "score_level_counts": {
+      "10": 295,
+      "2": 995,
+      "3": 7459,
+      "4": 1009,
+      "5": 8768,
+      "6": 1420,
+      "7": 435,
+      "8": 568,
+      "9": 387
+    },
+    "task_type_tokens": {
+      "choice": 10750322,
+      "noul": 10801978,
+      "score": 8432783
+    },
+    "task_types": {
+      "choice": 22493,
+      "noul": 23544,
+      "score": 21336
+    },
+    "tokens": 29985083
+  },
+  "qks": {
+    "A7k": {
+      "admissible_groups": 2168,
+      "admissible_tokens": 575921,
+      "part_groups": [
+        720,
+        721,
+        727
+      ],
+      "part_rows": [
+        732,
+        729,
+        729
+      ],
+      "part_tokens": [
+        191870,
+        191869,
+        192182
+      ],
+      "recipe_rows": 2190,
+      "shared_rows": 2190
+    },
+    "A7q": {
+      "admissible_groups": 7339,
+      "admissible_tokens": 10006054,
+      "part_groups": [
+        2494,
+        2430,
+        2415
+      ],
+      "part_rows": [
+        7491,
+        7393,
+        7510
+      ],
+      "part_tokens": [
+        3333422,
+        3333472,
+        3339160
+      ],
+      "recipe_rows": 22394,
+      "shared_rows": 22394
+    },
+    "A7s": {
+      "admissible_groups": 12860,
+      "admissible_tokens": 2045617,
+      "part_groups": [
+        4294,
+        4285,
+        4281
+      ],
+      "part_rows": [
+        4294,
+        4285,
+        4281
+      ],
+      "part_tokens": [
+        681791,
+        681837,
+        681989
+      ],
+      "recipe_rows": 12860,
+      "shared_rows": 12860
+    }
+  },
+  "qks_part_tokens": [
+    4207083,
+    4207178,
+    4213331
+  ],
+  "qks_tokens": 4207178,
+  "recipe": {
+    "name": "cx-xl-r2-nogap-full",
+    "rows": 340306,
+    "sha256": "4a74a06ebb4ad933485d2417f99f633ed02d7596f31a098ece29aad65b9f3bca"
+  },
+  "rest": {
+    "A7g": {
+      "admissible_groups": 18312,
+      "admissible_tokens": 29695161,
+      "part_groups": [
+        2963,
+        3004,
+        2975
+      ],
+      "part_rows": [
+        2963,
+        3004,
+        2975
+      ],
+      "part_tokens": [
+        4841390,
+        4843162,
+        4839707
+      ],
+      "recipe_rows": 18312,
+      "recipe_tokens": 29695161,
+      "target_tokens": [
+        4843191.9,
+        4843170.9,
+        4841810.5
+      ],
+      "unused_groups": 9370
+    },
+    "A7h": {
+      "admissible_groups": 1450,
+      "admissible_tokens": 238998,
+      "part_groups": [
+        232,
+        238,
+        240
+      ],
+      "part_rows": [
+        253,
+        250,
+        253
+      ],
+      "part_tokens": [
+        38924,
+        38770,
+        38948
+      ],
+      "recipe_rows": 1549,
+      "recipe_tokens": 238998,
+      "target_tokens": [
+        38979.9,
+        38979.7,
+        38968.7
+      ],
+      "unused_groups": 740
+    },
+    "A7i": {
+      "admissible_groups": 15880,
+      "admissible_tokens": 6426348,
+      "part_groups": [
+        2545,
+        2594,
+        2721
+      ],
+      "part_rows": [
+        2646,
+        2699,
+        2829
+      ],
+      "part_tokens": [
+        1048103,
+        1046760,
+        1047733
+      ],
+      "recipe_rows": 16539,
+      "recipe_tokens": 6426348,
+      "target_tokens": [
+        1048118.1,
+        1048113.6,
+        1047819.2
+      ],
+      "unused_groups": 8020
+    },
+    "A7m": {
+      "admissible_groups": 10763,
+      "admissible_tokens": 2056350,
+      "part_groups": [
+        1752,
+        1753,
+        1761
+      ],
+      "part_rows": [
+        1752,
+        1753,
+        1761
+      ],
+      "part_tokens": [
+        335318,
+        335218,
+        335230
+      ],
+      "recipe_rows": 10763,
+      "recipe_tokens": 2056350,
+      "target_tokens": [
+        335384.5,
+        335383.1,
+        335288.9
+      ],
+      "unused_groups": 5497
+    },
+    "A7o": {
+      "admissible_groups": 20581,
+      "admissible_tokens": 9634720,
+      "part_groups": [
+        3273,
+        3406,
+        3282
+      ],
+      "part_rows": [
+        3273,
+        3406,
+        3282
+      ],
+      "part_tokens": [
+        1571113,
+        1571200,
+        1570364
+      ],
+      "recipe_rows": 20581,
+      "recipe_tokens": 9634720,
+      "target_tokens": [
+        1571394.0,
+        1571387.2,
+        1570945.8
+      ],
+      "unused_groups": 10620
+    },
+    "A7p": {
+      "admissible_groups": 9800,
+      "admissible_tokens": 3450897,
+      "part_groups": [
+        1540,
+        1653,
+        1521
+      ],
+      "part_rows": [
+        1540,
+        1653,
+        1521
+      ],
+      "part_tokens": [
+        562512,
+        562751,
+        562541
+      ],
+      "recipe_rows": 9800,
+      "recipe_tokens": 3450897,
+      "target_tokens": [
+        562831.0,
+        562828.5,
+        562670.4
+      ],
+      "unused_groups": 5086
+    },
+    "A7r": {
+      "admissible_groups": 6817,
+      "admissible_tokens": 1051544,
+      "part_groups": [
+        1120,
+        1110,
+        1107
+      ],
+      "part_rows": [
+        1120,
+        1110,
+        1107
+      ],
+      "part_tokens": [
+        171447,
+        171357,
+        171352
+      ],
+      "recipe_rows": 6817,
+      "recipe_tokens": 1051544,
+      "target_tokens": [
+        171503.7,
+        171502.9,
+        171454.8
+      ],
+      "unused_groups": 3480
+    },
+    "E11": {
+      "admissible_groups": 2391,
+      "admissible_tokens": 4387207,
+      "part_groups": [
+        383,
+        396,
+        403
+      ],
+      "part_rows": [
+        1912,
+        1972,
+        1948
+      ],
+      "part_tokens": [
+        714481,
+        715127,
+        715273
+      ],
+      "recipe_rows": 11804,
+      "recipe_tokens": 4387207,
+      "target_tokens": [
+        715540.3,
+        715537.2,
+        715336.2
+      ],
+      "unused_groups": 1209
+    },
+    "G2": {
+      "admissible_groups": 8299,
+      "admissible_tokens": 7982111,
+      "part_groups": [
+        1335,
+        1348,
+        1376
+      ],
+      "part_rows": [
+        3493,
+        3507,
+        3564
+      ],
+      "part_tokens": [
+        1301194,
+        1301378,
+        1299971
+      ],
+      "recipe_rows": 21624,
+      "recipe_tokens": 7982111,
+      "target_tokens": [
+        1301858.4,
+        1301852.8,
+        1301487.1
+      ],
+      "unused_groups": 4240
+    },
+    "G4h": {
+      "admissible_groups": 2850,
+      "admissible_tokens": 1602968,
+      "part_groups": [
+        470,
+        476,
+        466
+      ],
+      "part_rows": [
+        627,
+        632,
+        615
+      ],
+      "part_tokens": [
+        261072,
+        261087,
+        261044
+      ],
+      "recipe_rows": 3799,
+      "recipe_tokens": 1602968,
+      "target_tokens": [
+        261439.3,
+        261438.2,
+        261364.7
+      ],
+      "unused_groups": 1438
+    },
+    "G6": {
+      "admissible_groups": 2837,
+      "admissible_tokens": 5899717,
+      "part_groups": [
+        471,
+        458,
+        463
+      ],
+      "part_rows": [
+        2159,
+        2164,
+        2092
+      ],
+      "part_tokens": [
+        962184,
+        960876,
+        961374
+      ],
+      "recipe_rows": 13078,
+      "recipe_tokens": 5899717,
+      "target_tokens": [
+        962226.2,
+        962222.0,
+        961951.7
+      ],
+      "unused_groups": 1445
+    },
+    "H1": {
+      "admissible_groups": 30932,
+      "admissible_tokens": 8323726,
+      "part_groups": [
+        5080,
+        4909,
+        5049
+      ],
+      "part_rows": [
+        9224,
+        8989,
+        9043
+      ],
+      "part_tokens": [
+        1357481,
+        1357392,
+        1357008
+      ],
+      "recipe_rows": 56014,
+      "recipe_tokens": 8323726,
+      "target_tokens": [
+        1357574.8,
+        1357568.9,
+        1357187.6
+      ],
+      "unused_groups": 15894
+    },
+    "H3": {
+      "admissible_groups": 4341,
+      "admissible_tokens": 10532772,
+      "part_groups": [
+        710,
+        708,
+        699
+      ],
+      "part_rows": [
+        1420,
+        1416,
+        1402
+      ],
+      "part_tokens": [
+        1714092,
+        1716523,
+        1716714
+      ],
+      "recipe_rows": 8688,
+      "recipe_tokens": 10532772,
+      "target_tokens": [
+        1717863.6,
+        1717856.2,
+        1717373.6
+      ],
+      "unused_groups": 2224
+    },
+    "H5": {
+      "admissible_groups": 16338,
+      "admissible_tokens": 20537064,
+      "part_groups": [
+        2657,
+        2661,
+        2608
+      ],
+      "part_rows": [
+        8138,
+        7999,
+        7879
+      ],
+      "part_tokens": [
+        3349390,
+        3348752,
+        3347915
+      ],
+      "recipe_rows": 49020,
+      "recipe_tokens": 20537064,
+      "target_tokens": [
+        3349533.7,
+        3349519.2,
+        3348578.3
+      ],
+      "unused_groups": 8412
+    },
+    "H6": {
+      "admissible_groups": 15022,
+      "admissible_tokens": 11786175,
+      "part_groups": [
+        2482,
+        2456,
+        2489
+      ],
+      "part_rows": [
+        3766,
+        3772,
+        3760
+      ],
+      "part_tokens": [
+        1922031,
+        1921832,
+        1920541
+      ],
+      "recipe_rows": 22905,
+      "recipe_tokens": 11786175,
+      "target_tokens": [
+        1922289.9,
+        1922281.5,
+        1921741.6
+      ],
+      "unused_groups": 7595
+    },
+    "V1:A1": {
+      "admissible_groups": 2750,
+      "admissible_tokens": 1398315,
+      "part_groups": [
+        434,
+        456,
+        448
+      ],
+      "part_rows": [
+        709,
+        738,
+        733
+      ],
+      "part_tokens": [
+        227969,
+        227520,
+        227718
+      ],
+      "recipe_rows": 4434,
+      "recipe_tokens": 1398315,
+      "target_tokens": [
+        228061.0,
+        228060.0,
+        227995.9
+      ],
+      "unused_groups": 1412
+    },
+    "V1:A2": {
+      "admissible_groups": 2033,
+      "admissible_tokens": 2235494,
+      "part_groups": [
+        334,
+        326,
+        332
+      ],
+      "part_rows": [
+        884,
+        884,
+        885
+      ],
+      "part_tokens": [
+        363771,
+        363762,
+        363643
+      ],
+      "recipe_rows": 5453,
+      "recipe_tokens": 2235494,
+      "target_tokens": [
+        364602.4,
+        364600.8,
+        364498.4
+      ],
+      "unused_groups": 1041
+    },
+    "V1:A3": {
+      "admissible_groups": 380,
+      "admissible_tokens": 1925366,
+      "part_groups": [
+        62,
+        61,
+        60
+      ],
+      "part_rows": [
+        124,
+        122,
+        120
+      ],
+      "part_tokens": [
+        313539,
+        311916,
+        309903
+      ],
+      "recipe_rows": 760,
+      "recipe_tokens": 1925366,
+      "target_tokens": [
+        314021.4,
+        314020.1,
+        313931.9
+      ],
+      "unused_groups": 197
+    },
+    "V1:A4v2h": {
+      "admissible_groups": 1283,
+      "admissible_tokens": 798061,
+      "part_groups": [
+        211,
+        197,
+        212
+      ],
+      "part_rows": [
+        282,
+        263,
+        285
+      ],
+      "part_tokens": [
+        129698,
+        130149,
+        130092
+      ],
+      "recipe_rows": 1720,
+      "recipe_tokens": 798061,
+      "target_tokens": [
+        130161.4,
+        130160.8,
+        130124.2
+      ],
+      "unused_groups": 663
+    },
+    "V1:A5": {
+      "admissible_groups": 2110,
+      "admissible_tokens": 517742,
+      "part_groups": [
+        342,
+        343,
+        344
+      ],
+      "part_rows": [
+        371,
+        378,
+        365
+      ],
+      "part_tokens": [
+        84139,
+        84205,
+        84347
+      ],
+      "recipe_rows": 2298,
+      "recipe_tokens": 517742,
+      "target_tokens": [
+        84442.2,
+        84441.8,
+        84418.1
+      ],
+      "unused_groups": 1081
+    },
+    "V1:A6g": {
+      "admissible_groups": 1038,
+      "admissible_tokens": 2350228,
+      "part_groups": [
+        162,
+        177,
+        191
+      ],
+      "part_rows": [
+        789,
+        813,
+        813
+      ],
+      "part_tokens": [
+        382009,
+        379665,
+        382078
+      ],
+      "recipe_rows": 4868,
+      "recipe_tokens": 2350228,
+      "target_tokens": [
+        383315.2,
+        383313.5,
+        383205.8
+      ],
+      "unused_groups": 508
+    },
+    "V1:A6h": {
+      "admissible_groups": 5398,
+      "admissible_tokens": 1473394,
+      "part_groups": [
+        884,
+        885,
+        873
+      ],
+      "part_rows": [
+        902,
+        895,
+        893
+      ],
+      "part_tokens": [
+        240068,
+        240225,
+        240011
+      ],
+      "recipe_rows": 5489,
+      "recipe_tokens": 1473394,
+      "target_tokens": [
+        240306.2,
+        240305.1,
+        240237.6
+      ],
+      "unused_groups": 2756
+    }
+  },
+  "rest_budget_tokens": 21904544,
+  "rest_pool_tokens": 134304358,
+  "rest_tokens": 21889627,
+  "rows_file_sha256": "5fafa72d6199025e36cda7eb315a1faa341d1f5164ac1d06ccafd69f4e7ed8c0",
+  "seed": 2,
+  "seeds": 3,
+  "shared_with": {
+    "name": "cx-xl-r2-a7v1-full",
+    "rows": 191536,
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2"
+  },
+  "spec_sha256": "2a0f27ea0095ba4be2534c37dcdec3f23b48a3478031fd656f64319989022636",
+  "template": "M6",
+  "train_ids_sha256": "ebacdc4eacf9e2d45389d7943624fd85867cb4d80009c49c39368fbc5f981e33",
+  "train_rows": 67373,
+  "train_tokens": 29985083,
+  "unit": "qwen3-0.6b-base-native-segmented"
+}
