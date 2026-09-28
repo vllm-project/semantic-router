@@ -28,6 +28,7 @@ if [ "$stage" = full ] || [ "$stage" = all ]; then
   [ "$status" = COMPLETE ] || exit 4
 fi
 if [ "$stage" = readout ] || [ "$stage" = all ]; then
+  mkdir -p "$host/readout"
   manifest=$(field "$host/full/COMPLETE.json" "d['best_export_manifest_sha256']")
   family=$(field "$spec_json" "d['family']")
   if [ "$family" = kai-native ]; then

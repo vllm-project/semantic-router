@@ -111,6 +111,7 @@ def benchmark(args: argparse.Namespace) -> dict[str, Any]:
     rows = load_prompts(args.input)
     if args.output.exists():
         raise FileExistsError(args.output)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     runner = Runner(args)
     receipts, overflow = [], 0
     started = time.monotonic()
@@ -172,6 +173,7 @@ def benchmark(args: argparse.Namespace) -> dict[str, Any]:
 def records(args: argparse.Namespace) -> dict[str, Any]:
     splits = load_rights_clean(args.data_parent)
     rows = splits[args.role]
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     native = native_records(rows, args.bundle)
     runner = Runner(args)
     prepared = []
