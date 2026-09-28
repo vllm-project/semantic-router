@@ -313,7 +313,7 @@ def binned(
             for i, j in chosen
         ]
         row = {
-            "bin": [low, high],
+            "bin": [low, None if math.isinf(high) else high],
             "n": len(chosen),
             "agree": statistics.fmean(scores) if scores else None,
         }

@@ -1,3 +1,4 @@
+import json
 import math
 
 import pytest
@@ -103,3 +104,5 @@ def test_analyze_decision_and_tie_bands():
     assert tie["band"] is None or tie["band"] >= 1
     assert result["section6"]["status"].startswith("binding")
     assert len(result["table"]) == 12
+    json.dumps(result, allow_nan=False)
+    assert result["section5"]["agreement_by_H_dev_gap"][-1]["bin"][1] is None
