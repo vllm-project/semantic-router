@@ -45,6 +45,20 @@ class RecipeConformanceWorkflowTests(unittest.TestCase):
         self.assertIn('--recipe "${recipe}"', self.runner)
         self.assertIn("VSR_MGMT_TOKEN", self.runner)
 
+    def test_plan_keeps_the_per_recipe_matrix_that_evidence_expects(self) -> None:
+        plan = next(
+            step
+            for step in self.workflow.jobs["inventory"]["steps"]
+            if step.get("id") == "plan"
+        )
+        self.assertIn("plan-all", plan["run"])
+        self.assertNotIn(
+            "--shards",
+            plan["run"],
+            "runtime_evidence.py reads one image receipt per recipe job",
+        )
+        self.assertIn("image-$SHARD.json", self.text)
+
     def test_report_fails_closed_on_the_source_aware_live_matrix(self) -> None:
         report_needs = needs(self.workflow.jobs["report"])
 
