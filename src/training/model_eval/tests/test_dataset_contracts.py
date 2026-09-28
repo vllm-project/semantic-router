@@ -91,6 +91,46 @@ class DatasetContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unrecognized"):
             load("jailbreak", args)
 
+    def test_domain_baseline_leaves_out_mmlu_rows_and_the_model_trained_on_them(self):
+        class Split(list):
+            def filter(self, keep):
+                return Split(row for row in self if keep(row))
+
+        published = Split(
+            [
+                {"question": "a", "category": "math", "src": "ori_mmlu-algebra"},
+                {"question": "b", "category": "physics", "src": "scibench"},
+                {"question": "c", "category": "law", "src": "ori_mmlu-jurisprudence"},
+            ]
+        )
+        namespace = load_definitions(
+            "baseline_tasks.py",
+            {"TaskSpec", "TASK_SPECS", "load_rows"},
+            {
+                "dataclass": dataclass,
+                "LEGACY_MODEL_REGISTRY": LEGACY_MODEL_REGISTRY,
+                "BaselineError": ValueError,
+                "load_dataset": lambda repo, split: published,
+                "np": SimpleNamespace(
+                    array=lambda values, dtype: values, int64=int, ndarray=list
+                ),
+                "logger": logging.getLogger("test"),
+                "MAX_REPORTED_UNMAPPED": 10,
+            },
+        )
+        spec = namespace["TASK_SPECS"]["domain"]
+        self.assertEqual(spec.split_rule, "by_source")
+        texts, labels, available = namespace["load_rows"](
+            spec, {"math": 0, "physics": 1, "law": 2}, None
+        )
+        self.assertEqual((texts, labels, available), (["b"], [1], 1))
+        spec.validate_artifact(MODEL_REGISTRY["intent"]["id"])
+        for key in ("id", "lora_id"):
+            with self.assertRaisesRegex(
+                ValueError, "was trained on TIGER-Lab/MMLU-Pro"
+            ):
+                spec.validate_artifact(LEGACY_MODEL_REGISTRY["intent"][key])
+
     def test_baseline_blocks_incompatible_gold_before_dataset_resolution(self):
         namespace = load_definitions(
             "baseline_tasks.py",
