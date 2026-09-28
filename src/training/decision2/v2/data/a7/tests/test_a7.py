@@ -350,6 +350,38 @@ class AdmitTest(unittest.TestCase):
         self.assertEqual(resolved["removed_by_admission"], 1)
 
 
+class HfSpecTest(unittest.TestCase):
+    def test_spec_stays_under_a7_and_requires_manifests(self) -> None:
+        from v2.data.a7 import hf_spec
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            for folder in ("build", "final/views", "manifests", "screens", "post"):
+                (run / folder).mkdir(parents=True)
+            for path in (
+                "build/build-manifest.json",
+                "final/admission.json",
+                "isolation.json",
+                "final/A7g.train.jsonl",
+                "manifests/A7g.train.freeze.json",
+                "screens/A7g.overlap.public.json",
+                "screens/A7g.overlap.private.json",
+                "final/views/dec10-natural24k.json",
+            ):
+                (run / path).write_text("{}\n")
+            items = hf_spec.spec_for(
+                run, run / "isolation.json", run / "isolation.json"
+            )
+            destinations = [item["dst"] for item in items]
+            self.assertTrue(all(dst.startswith("a7/") for dst in destinations))
+            self.assertIn("a7/arms/A7g/train.jsonl", destinations)
+            self.assertIn("a7/views/dec10-natural24k.json", destinations)
+            self.assertFalse(any("private" in dst for dst in destinations))
+            (run / "final/A7m.train.jsonl").write_text("{}\n")
+            with self.assertRaises(FileNotFoundError):
+                hf_spec.spec_for(run, run / "isolation.json", run / "isolation.json")
+
+
 class LengthsAndInventoryTest(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec("torch"), "needs the runtime image")
     def test_native_length_matches_segment_sum(self) -> None:

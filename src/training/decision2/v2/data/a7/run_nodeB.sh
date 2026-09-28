@@ -9,8 +9,11 @@
 #   post      post-admission shortcut and TRAIN<->AHO self-scan diagnostics
 #   freeze    content hash + manifest (+tokens) per final file (runtime image)
 #   isolation cross-partition isolation against SELECT/CAL/A0 and published arms
+#   assemble  HF upload folder (a7/ only) with registry, path-stripped JSON
+#   upload    upload a7/ to v2/a7 of the private dataset, verify private + readback
 #   inventory token-annotated census of the 1.0 decoder corpora
-# Work dir: /data/dev2/private/a7/runs/<version>/<commit12>; A7_SPEC overrides the spec.
+# Work dir: /data/dev2/private/a7/runs/<version>/<commit12>; A7_SPEC overrides the spec and
+# A7_RUN_DIR the work dir (assemble/upload of a run built by an earlier commit).
 set -euo pipefail
 
 stage="${1:?stage}"
@@ -21,7 +24,7 @@ commit="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commi
 A7="$S/v2/data/a7"
 SPEC="${A7_SPEC:-$A7/specs/a7-dec10-v2.nodeB.json}"
 version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$SPEC")"
-W="/data/dev2/private/a7/runs/$version/${commit:0:12}"
+W="${A7_RUN_DIR:-/data/dev2/private/a7/runs/$version/${commit:0:12}}"
 PI=/data/dev2/private/data/pi-v2/manifest.json
 IMAGE="${A7_IMAGE:-decision20-lux-runtime:latest}"
 SUBS=(A7h A7m A7g A7i A7p A7o)
@@ -125,6 +128,29 @@ case "$stage" in
       parts+=(--partition "${name##*.}/${name%%.*}=$file")
     done
     python3 -m v2.data.freeze isolation "${parts[@]}" --report "$W/isolation.json" | tee -a "$W/logs/isolation.out"
+    ;;
+  assemble)
+    python3 -m v2.data.a7.hf_spec --run-dir "$W" --readme "$A7/records/hf-dataset-a7-readme.md" \
+      --license-registry "$A7/license-registry-a7-v1.json" --out "$W/hf-spec.json"
+    python3 -m v2.data.assemble_hf_upload --spec "$W/hf-spec.json" --out-dir "$W/hf-upload"
+    ;;
+  upload)
+    export HF_HUB_CACHE=/data/dev2/hf-cache
+    repo=llm-semantic-router/decision-2.0-training-data
+    private() {
+      hf datasets info "$repo" --format json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("private"), d.get("sha"))'
+    }
+    read -r before parent < <(private)
+    [[ "$before" == "True" ]] || { echo "dataset is not private; refusing to upload" >&2; exit 1; }
+    log "upload parent=$parent"
+    hf upload "$repo" "$W/hf-upload/a7" v2/a7 --repo-type dataset \
+      --commit-message "A7 $version: own Decision 1.0 corpora sub-arms (${commit:0:12})" | tee -a "$W/logs/upload.out"
+    read -r after revision < <(private)
+    [[ "$after" == "True" ]] || { echo "dataset private flag changed" >&2; exit 1; }
+    mkdir -p "$W/readback"
+    hf download "$repo" v2/a7/registry.json --repo-type dataset --revision "$revision" --local-dir "$W/readback" >/dev/null
+    cmp "$W/readback/v2/a7/registry.json" "$W/hf-upload/a7/registry.json"
+    log "upload revision=$revision private=$after registry readback identical"
     ;;
   inventory)
     D=/data/dev2/private/a7/sources/dec10
