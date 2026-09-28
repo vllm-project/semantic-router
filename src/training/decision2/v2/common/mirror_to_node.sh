@@ -2,14 +2,16 @@
 # Exact-mirror one pushed commit of this repository onto an experiment node.
 #
 # Usage:
-#   mirror_to_node.sh <node-alias> <commit> [<target-root>]
-#   mirror_to_node.sh --verify <node-alias> <commit> [<target-root>]
+#   mirror_to_node.sh [--verify] [--path <repo-subtree>] <node-alias> <commit> [<target-root>]
 #
 # The tree lands in <target-root>/<full-sha>/ (default target root /data/dev2/src)
 # with <full-sha>/.dev2-mirror.json recording commit, tree, archive and content
 # manifest SHA-256; the mirrored files are made read-only. Re-running for an
 # existing mirror only re-verifies it. A directory created earlier by a plain
 # `git archive | tar -x` is adopted only if its content manifest matches exactly.
+# --path mirrors only one subtree (for example src/training/decision2, ~21 MB
+# instead of ~444 MB) into <full-sha>-<subtree with / replaced by _>/, keeping
+# repository-relative paths inside it.
 #
 # <node-alias> is looked up in ${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 # (private, never committed; lines "node-a=user@host"). An alias absent from that
@@ -19,15 +21,19 @@
 set -euo pipefail
 
 usage() {
-  sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
 verify_only=0
-if [[ "${1:-}" == "--verify" ]]; then
-  verify_only=1
-  shift
-fi
+subtree=""
+while [[ "${1:-}" == --* ]]; do
+  case "$1" in
+    --verify) verify_only=1; shift ;;
+    --path) subtree="${2%/}"; shift 2 ;;
+    *) usage ;;
+  esac
+done
 [[ $# -eq 2 || $# -eq 3 ]] || usage
 alias_name="$1"
 commit_arg="$2"
@@ -48,22 +54,27 @@ if [[ -z "$(git -C "$repo_root" branch -r --contains "$sha" 2>/dev/null | head -
   echo "commit $sha is not contained in any remote-tracking branch; push (and fetch) first" >&2
   exit 1
 fi
-remote_dir="$target_root/$sha"
+remote_dir="$target_root/$sha${subtree:+-${subtree//\//_}}"
 remote() { ssh -o BatchMode=yes -o ConnectTimeout=20 "$dest" "$@"; }
 
 manifest_cmd='find . -type f ! -name .dev2-mirror.json -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d" " -f1'
 
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
-git -C "$repo_root" archive --format=tar "$sha" > "$scratch/src.tar"
+if [[ -n "$subtree" ]]; then
+  git -C "$repo_root" cat-file -e "$sha:$subtree" || { echo "$subtree is not in $sha" >&2; exit 1; }
+  git -C "$repo_root" archive --format=tar "$sha" "$subtree" > "$scratch/src.tar"
+else
+  git -C "$repo_root" archive --format=tar "$sha" > "$scratch/src.tar"
+fi
 archive_sha="$(sha256sum "$scratch/src.tar" | cut -d' ' -f1)"
 mkdir "$scratch/tree"
 tar -x -C "$scratch/tree" -f "$scratch/src.tar"
 local_manifest="$(cd "$scratch/tree" && eval "$manifest_cmd")"
 file_count="$(cd "$scratch/tree" && find . -type f | wc -l | tr -d ' ')"
 receipt() {
-  printf '{"schema":"dev2-mirror/1","commit":"%s","tree":"%s","archive_sha256":"%s","content_manifest_sha256":"%s","files":%s,"created_utc":"%s"}' \
-    "$sha" "$tree" "$archive_sha" "$local_manifest" "$file_count" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '{"schema":"dev2-mirror/1","commit":"%s","tree":"%s","path":"%s","archive_sha256":"%s","content_manifest_sha256":"%s","files":%s,"created_utc":"%s"}' \
+    "$sha" "$tree" "${subtree:-.}" "$archive_sha" "$local_manifest" "$file_count" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 
 state="$(remote "if [ -f '$remote_dir/.dev2-mirror.json' ]; then echo receipt; elif [ -e '$remote_dir' ]; then echo stray; else echo absent; fi")"
@@ -97,5 +108,5 @@ if [[ "$remote_manifest" != "$local_manifest" || "$recorded" != "$sha $tree $loc
   echo "mirror of $sha on $alias_name does not match the commit" >&2
   exit 1
 fi
-printf 'mirror ok: %s commit=%s tree=%s content_manifest=%s files=%s dir=%s\n' \
-  "$alias_name" "$sha" "$tree" "$local_manifest" "$file_count" "$remote_dir"
+printf 'mirror ok: %s commit=%s tree=%s path=%s content_manifest=%s files=%s dir=%s\n' \
+  "$alias_name" "$sha" "$tree" "${subtree:-.}" "$local_manifest" "$file_count" "$remote_dir"

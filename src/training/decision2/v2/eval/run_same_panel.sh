@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Launch one native collection inside the pinned image on one leased GPU (run on the node).
 #
-# Usage:
-#   run_same_panel.sh --gpu N --track TRACK --src SHA --run-dir DIR --model-dir DIR \
+# Usage (SRC is a mirror directory name under /data/dev2/src: <sha> or <sha>-src_training_decision2):
+#   run_same_panel.sh --gpu N --track TRACK --src SRC --run-dir DIR --model-dir DIR \
 #       [--image IMAGE] [--mount HOST_PATH]... [--purpose TEXT] [--expected-end UTC] \
 #       -- <same_panel collect arguments except --run-dir>
 #
@@ -13,7 +13,7 @@
 # GPU must show no allocated VRAM. Wall time lands in <run-dir>/GPU-TIME.json.
 set -euo pipefail
 
-usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 gpu="" track="" sha="" run_dir="" model_dir="" image="decision20-train-fast:host2"
 purpose="same-panel native collection" expected_end="" mounts=()
@@ -49,7 +49,7 @@ if [[ -f "$lease/owner" ]] && ! grep -qx "track=$track" "$lease/owner"; then
   cat "$lease/owner" >&2
   exit 1
 fi
-vram="$(rocm-smi -d "$gpu" --showmemuse 2>/dev/null | awk -F': ' '/VRAM%/ {print $NF; exit}')"
+vram="$(rocm-smi -d "$gpu" --showmemuse 2>/dev/null | awk -F': ' '/VRAM%/ {v = $NF} END {print v}')"
 if [[ -z "$vram" || "$vram" != "0" ]]; then
   echo "gpu$gpu is not idle (VRAM%=${vram:-unknown})" >&2
   exit 1
