@@ -1,0 +1,27 @@
+{
+  "arm": "m5-c-soup",
+  "family": "qwen-causal",
+  "recipe": "/src/src/training/decision2/v2/06b/records/arms/m5-c-s1.json",
+  "ingredients": [
+    {
+      "arm": "m5-c-s1",
+      "run": "/runs/m1/arms/m5-c-s1/full",
+      "state_sha256": "cc28516ce9760944dafc7a59d25613bb89cbcd37d7943563731c0c74368724a8"
+    },
+    {
+      "arm": "m5-c-s2",
+      "run": "/runs/m1/arms/m5-c-s2/full",
+      "state_sha256": "c3595695fe9d03b560c577ecd7ed20bef46bbfdbf4193b9f81ab7ec750b575ae"
+    },
+    {
+      "arm": "m5-c-s3",
+      "run": "/runs/m1/arms/m5-c-s3/full",
+      "state_sha256": "01959b405e6e44b6931d8eaa47235595330aa27e73c5ff26ab0536e4161cb0fa"
+    }
+  ],
+  "allowed_differences": [
+    "arm",
+    "seed"
+  ],
+  "export": true
+}

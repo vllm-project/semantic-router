@@ -1,0 +1,21 @@
+set -u
+# Decoder M3 amendment 3 (00ffa2791), relaunch after the aborted duplicate N4LK launch: N4LKr seeds
+# (N4L with KL weight 1.0) on node B GPU1, GPU2, GPU4, plus the group's soup watcher. A mkdir lock makes
+# a repeated invocation a no-op.
+SRC=$1
+M=/data/dev2/runs/dec/m3; A=$M/arms; C=$M/chains
+mkdir $C/n4lkr.lock 2>/dev/null || { echo "N4LKr already launched"; exit 0; }
+D=/data/dev2/src/$SRC/src/training/decision2/v2/dec/drive_arm.sh
+NOX=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
+FULL="--train /runs/m3/data/m3-v2m-ret/train.jsonl --train-mode full --backbone-lr 5e-6 --head-lr 5e-5 --teacher /runs/m3/teacher/nox-lux/nox-lux-teacher.jsonl --teacher-kl-weight 1.0 --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64"
+for spec in "1 m3-N4LKr-s1 20260926" "2 m3-N4LKr-s2 20260927" "4 m3-N4LKr-s3 20260928"; do
+  set -- $spec; gpu=$1 name=$2 seed=$3
+  {
+    echo "set -u"
+    echo "printf 'track=dec\nstatus=busy\npurpose=M3 amendment 3: $name\nstart_utc=%s\n' \$(date -u +%FT%TZ) > /data/dev2/leases/gpu$gpu.lock/owner"
+    echo "DEC_NODE=b DEC_DATA_DIR=$M/data-sel700-cal698 bash $D $name $gpu $SRC m3/arms $NOX -- $FULL --seed $seed"
+  } > $C/n4lkr-$gpu.sh
+  setsid nohup bash $C/n4lkr-$gpu.sh > $C/n4lkr-$gpu.log 2>&1 < /dev/null &
+done
+setsid nohup bash $M/ops/m3-soup.sh $SRC N4LKr 1 $NOX nox1 > $M/soup/N4LKr.nohup 2>&1 < /dev/null &
+echo "$(date -u +%FT%TZ) amendment 3 N4LKr chains + soup watcher launched (lock n4lkr.lock)" >> $M/OPERATIONS.log

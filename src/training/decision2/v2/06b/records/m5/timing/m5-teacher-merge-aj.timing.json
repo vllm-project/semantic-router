@@ -1,0 +1,1 @@
+{"run":"m5-teacher-merge-aj","gpu":1,"render":"/dev/dri/renderD137","commit":"e848d0bab720020e60b4199febf934fe47d4ce26-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T14:10:52Z","end_utc":"2026-09-28T14:10:53Z","wall_seconds":1,"gpu_hours":0.00028,"exit":0}

@@ -1,0 +1,54 @@
+{
+ "hover_train_v1.1": {
+  "attribution": "Jiang et al., HoVer: A Dataset for Many-Hop Fact Extraction and Claim Verification (Findings of EMNLP 2020); claims hover-nlp/hover@39b84697f196308f398a251a7aea9b82ae0f0562 data/hover/hover_train_release_v1.1.json (SHA-256 1f1cd57abd616fa00c70bdc575ce77c16fc6cf1a6cffd5ff87c208030a336bb6); paragraphs from the HoVer release of the HotpotQA-processed Wikipedia, nlp.cs.unc.edu/data/hover/wiki_wo_links.db (SHA-256 c37ee397916ec0bffacfe8902db454a5cda88a7a188409217b2e15231fe5ee2f); distractor titles from nlp.cs.unc.edu/data/hover/train_tfidf_doc_retrieval_results.json (SHA-256 45e03a5e47ce8076981eefc86f28d764f4c2eddf1b94b69d9263675260108462)",
+  "evidence": "https://hover-nlp.github.io/ (\"HoVer is distributed under a CC BY-SA 4.0 License\"); https://huggingface.co/datasets/hover-nlp/hover (card c0e43052759879b3461642ca6c0dd26658f47691, license cc-by-sa-4.0); code MIT: https://github.com/hover-nlp/hover/blob/39b84697f196308f398a251a7aea9b82ae0f0562/LICENSE",
+  "license": "CC-BY-SA-4.0 (claims and labels); Wikipedia text CC-BY-SA",
+  "redistribution": "permitted with attribution; share-alike applies to derived rows",
+  "used_by": "H7 hover_answerable, hover_coverage",
+  "group_parent": "HotpotQA parent question (hotpotqa/hotpot_qa@1908d6afbbead072334abe2965f91bd2709910ab distractor TRAIN JSONL and validation-00000-of-00001.parquet SHA-256 c20b638ca82b21d04fe12e14ff417ad05153d4d215a65de54497fca4e972f7c6, CC-BY-SA-4.0); used only to key groups, never rendered"
+ },
+ "natural_questions_train": {
+  "attribution": "Kwiatkowski et al., Natural Questions: a Benchmark for Question Answering Research (TACL 2019); google-research-datasets/natural_questions@e8103d566bef4154c2c12b17c6095ec5275840cc, default/train-00000..00063-of-00287.parquet (64 of 287 TRAIN shards; SHA-256 per shard in the extraction receipt)",
+  "evidence": "https://huggingface.co/datasets/google-research-datasets/natural_questions (card e8103d56, license cc-by-sa-3.0, Licensing Information: Creative Commons Attribution-ShareAlike 3.0 Unported); code Apache-2.0: https://github.com/google-research-datasets/natural-questions",
+  "license": "CC-BY-SA-3.0 (dataset, Wikipedia page text)",
+  "redistribution": "permitted with attribution; share-alike applies to derived rows",
+  "used_by": "H7 nq_window_removal"
+ },
+ "tydiqa_primary_train": {
+  "attribution": "Clark et al., TyDi QA (TACL 2020); google-research-datasets/tydiqa@da78f23f9119363459acbaf46bf89426ff26c259 primary_task TRAIN",
+  "evidence": "https://huggingface.co/datasets/google-research-datasets/tydiqa",
+  "license": "Apache-2.0 (dataset); Wikipedia text CC-BY-SA",
+  "redistribution": "permitted with attribution; share-alike applies to derived rows",
+  "used_by": "H8 tydi_window_removal_<lang> (same entry as license-registry-v2.json)"
+ },
+ "miracl_v1.0_train": {
+  "attribution": "Zhang et al., MIRACL (TACL 2023); topics and qrels miracl/miracl@5be20db9509754dadad47689368639fcec739c00 (es, fa, fr, hi, zh TRAIN), passages miracl/miracl-corpus@d921ec7e349ce0d28daf30b2da9da5ee698bef0d",
+  "evidence": "https://huggingface.co/datasets/miracl/miracl (license apache-2.0); https://huggingface.co/datasets/miracl/miracl-corpus (license apache-2.0)",
+  "license": "Apache-2.0 (topics, judgments); Wikipedia text CC-BY-SA",
+  "redistribution": "permitted with attribution; share-alike applies to derived rows",
+  "used_by": "H8 miracl_relevance_<lang>, miracl_pool_<lang>",
+  "excluded_part": "MIRACL-English: parent of HAGRID, a Decision Bench v4 source (data-arms v2 prereg section 1.2)"
+ },
+ "jglue_jcommonsenseqa_v1.3_train": {
+  "attribution": "Kurihara et al., JGLUE (LREC 2022), JCommonsenseQA v1.3; yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c",
+  "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE",
+  "license": "CC-BY-SA-4.0",
+  "redistribution": "permitted with attribution; share-alike applies to derived rows",
+  "used_by": "H8 jcqa (items of v1 A5 excluded by q_id and normalized question; same entry as license-registry-v1.json)"
+ },
+ "sentimix_spanglish_train": {
+  "attribution": "Patwa et al., SemEval-2020 Task 9: Overview of Sentiment Analysis of Code-Mixed Tweets; Zenodo 10.5281/zenodo.3974927 Semeval_2020_task9_data.zip (SHA-256 69509f1764ce24235fa2f64dec0b5f5e3f5ff7e9a484f3b6315264d8d978ec6d), member Semeval_2020_task9_data/Spanglish/Spanglish_train.conll (SHA-256 b78294c5b895b40fc1bcc4831d13104c38e3c7344fab80dae5993265d26444de)",
+  "evidence": "https://zenodo.org/records/3974927 (record licence field cc-by-4.0; the A7 track verified the same record for SentiMix Hinglish)",
+  "license": "CC-BY-4.0 (tweet text collected from Twitter; publisher release)",
+  "redistribution": "permitted with attribution",
+  "used_by": "H8 sentimix_spanglish (TRAIN file only; the dev and unlabelled test files are not read)"
+ },
+ "_screened_out": {
+  "miracl_en": "excluded: MIRACL-English is HAGRID's parent and HAGRID is a Decision Bench v4 source (data-arms v2 prereg section 1.2); only es, fa, fr, hi, zh are used",
+  "super_natural_instructions": "not admitted in this pass: allenai/natural-instructions@55a365637381ce7f3748fa2eac7aef1a113bbb82 is Apache-2.0 as a repository, but each task carries its own source dataset and instance licence (some non-commercial or unknown), and many tasks re-package excluded sources (XNLI, PAWS-X, MASSIVE, SNLI/SQuAD/IMDB derivatives, CSS parents); a per-task screen was not completed; tasksource/* mirrors are C1-registry entries and must not be used",
+  "tydiqa_goldp": "not used: the GoldP secondary task is a subset of the primary task's questions (same groups) with mostly single-sentence passages (data-arms v2 amendment 1); the primary task's minimal answers are used instead",
+  "massive_pawsx_xnli": "excluded: mlx-diag sources",
+  "conditionalqa": "excluded by the brief",
+  "nq_simplified_gcs": "not used: gs://natural_questions (storage.googleapis.com) returns HTTP 403 without credentials on 2026-09-28; the HF parquet mirror above is pinned instead"
+ }
+}

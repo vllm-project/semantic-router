@@ -1,0 +1,50 @@
+set -u
+# Decoder M3 data prep on node B: SELECT700 + CAL698 data dir, M3 mixture build (CPU),
+# own-Nox (3 shards) and own-Sol (2 shards) teacher labels, merged per teacher.
+SRC=$1
+M=/data/dev2/runs/dec/m3
+S=/data/dev2/src/$SRC/src/training/decision2/v2/dec; L=$S/launch.sh
+H=/hf/datasets--llm-semantic-router--decision-2.0-training-data/snapshots
+HH=/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data/snapshots
+TOK=/hf/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab
+NOX=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
+SOL=/hf/models--llm-semantic-router--Decision-1.0-Sol-2B/snapshots/ce0c018a28de16d6639b1cd203b761bf643b89e6
+log() { echo "$(date -u +%FT%TZ) $*" >> $M/OPERATIONS.log; }
+now=$(date -u +%FT%TZ)
+for g in 0 1 2 3 4; do mkdir -p /data/dev2/leases/gpu$g.lock; printf 'track=dec\nstatus=busy\npurpose=M3 data prep: own-Nox / own-Sol teacher labels on the M3 mixture\nstart_utc=%s\nexpected_end_utc=2026-09-28T14:30:00Z\n' $now > /data/dev2/leases/gpu$g.lock/owner; done
+D=$M/data-sel700-cal698; mkdir -p $D
+[ -f $D/select.jsonl ] || cp /data/dev2/runs/dec/data-cleanv2/select.jsonl $D/select.jsonl
+[ -f $D/cal.jsonl ] || cp -L $HH/ed87a03ab80ca5b9560780bba51a83a77ff47d14/m2/cal/CAL698/cal.jsonl $D/cal.jsonl
+(cd $D && sha256sum select.jsonl cal.jsonl > SHA256SUMS)
+log "data dir ready: $(tr '\n' ' ' < $D/SHA256SUMS)"
+mkdir -p $M/data
+if [ ! -f $M/data/m3-v2m-ret/train.jsonl ]; then
+  bash $L m3-build-v2m-ret $SRC $M/data/m3-v2m-ret --cpu -- -m v2.dec.build_mixture --spec /code/v2/dec/specs/m3-v2m-ret.json \
+    --source pk1=$H/d8eae3e4fb5b91871c5aa7c13f0d94ea96e86ea7,m3/registry.json, \
+    --source v2=$H/ed87a03ab80ca5b9560780bba51a83a77ff47d14,m2/registry.json, \
+    --source v1=$H/5c0255ed6a05d08b2fcb863e8045289eedd996cd,v2/registry.json, \
+    --source mx=$H/5c602c5ae76c3930d5ed191facef4ac710863b6d,-, \
+    --source a7=$H/3a4efc7768e3458e392f44e83391313fc25e49df,v2/a7/registry.json,v2/ \
+    --tokenizer $TOK --workers 48 --output /out/train.jsonl || { log "m3 build FAILED"; exit 1; }
+fi
+log "m3 build done: $(tail -1 $M/data/m3-v2m-ret.stdout.log)"
+export DEC_IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1 DEC_DATA=$D
+declare -A RENDER=([0]=/dev/dri/renderD129 [1]=/dev/dri/renderD137 [2]=/dev/dri/renderD145 [3]=/dev/dri/renderD153 [4]=/dev/dri/renderD161)
+T=$M/teacher; mkdir -p $T
+label() {  # gpu name path repo revision shard count
+  DEC_RENDER=${RENDER[$1]} DEC_GPU_LABEL="node B GPU$1" bash $L m3-label-$2-$6of$7 $SRC $T/$2-shard$6 -- -m v2.dec.teacher_label \
+    --teacher-path $3 --teacher-repo $4 --teacher-revision $5 --train /runs/m3/data/m3-v2m-ret/train.jsonl \
+    --output /out/labels.jsonl --shard-index $6 --shard-count $7 && log "label $2 shard $6/$7 done" || log "label $2 shard $6/$7 FAILED"
+}
+for k in 0 1 2; do label $k nox $NOX llm-semantic-router/Decision-1.0-Nox-4B cde2a68dbaa557ea65dc458104d410a0802ee259 $k 3 & done
+for k in 0 1; do label $((k+3)) sol $SOL llm-semantic-router/Decision-1.0-Sol-2B ce0c018a28de16d6639b1cd203b761bf643b89e6 $k 2 & done
+wait
+bash $L m3-merge-nox $SRC $T/nox --cpu -- -m v2.dec.merge_labels --train /runs/m3/data/m3-v2m-ret/train.jsonl \
+  --part /runs/m3/teacher/nox-shard0/labels.jsonl --part /runs/m3/teacher/nox-shard1/labels.jsonl --part /runs/m3/teacher/nox-shard2/labels.jsonl \
+  --output /out/nox-teacher.jsonl && log "merge nox done" || log "merge nox FAILED"
+bash $L m3-merge-sol $SRC $T/sol --cpu -- -m v2.dec.merge_labels --train /runs/m3/data/m3-v2m-ret/train.jsonl \
+  --part /runs/m3/teacher/sol-shard0/labels.jsonl --part /runs/m3/teacher/sol-shard1/labels.jsonl \
+  --output /out/sol-teacher.jsonl && log "merge sol done" || log "merge sol FAILED"
+now=$(date -u +%FT%TZ)
+for g in 0 1 2 3 4; do printf 'track=dec\nstatus=idle (M3 data prep finished; arms launch after the preregistration)\nlast_job_end_utc=%s\n' $now > /data/dev2/leases/gpu$g.lock/owner; done
+log "m3 prep chain done"

@@ -1,0 +1,22 @@
+{
+  "inputs": [
+    {
+      "rows": 7455,
+      "sha256": "56627939e01b60d867ff3fa7ca8073e7434b63b859eee16b407860ca2ef508d2"
+    },
+    {
+      "rows": 28501,
+      "sha256": "47049a6b799be3a84aca07309f01e6d442df3eb94acc5c496f4085e4f9bc7709"
+    },
+    {
+      "rows": 55976,
+      "sha256": "2c6ab38d7c11884e9ac20c318d1d4817290c08ab57a58d252a6ccec43411ea3d"
+    },
+    {
+      "rows": 281,
+      "sha256": "084adacd5c6f37714971fd90e9a35b9fdd68ba6602f3561c1f68eba0d73dde6a"
+    }
+  ],
+  "output_sha256": "a7bc7a4598055e6c33b9b4b06b2c7edf014e6aa7c157055ea36055f189e9f1fa",
+  "rows": 92213
+}

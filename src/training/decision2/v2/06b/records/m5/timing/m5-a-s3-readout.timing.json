@@ -1,0 +1,1 @@
+{"run":"m5-a-s3-readout","gpu":0,"render":"/dev/dri/renderD129","commit":"3755f206afd97b4218cfb9d09cc21b2f60ea943e-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T16:14:12Z","end_utc":"2026-09-28T16:14:12Z","wall_seconds":0,"gpu_hours":0.00000,"exit":0}

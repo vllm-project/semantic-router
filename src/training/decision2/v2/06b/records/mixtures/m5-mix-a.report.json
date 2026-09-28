@@ -1,0 +1,342 @@
+{
+  "components": {
+    "A0s-pk1": {
+      "excluded_family_rows": 752,
+      "families_top12": {
+        "human_goemotions_choice": 1397,
+        "human_goemotions_noul": 1397,
+        "natural_snli": 272,
+        "stage4_arithmetic": 224,
+        "stage4_boolean": 277,
+        "stage4_dense_table": 270,
+        "stage4_ordinal": 279,
+        "stage4_registers": 260,
+        "stage4_relations": 274,
+        "stage4_scope": 266,
+        "targeted_interval_conjunction": 450,
+        "targeted_quantized_median": 150
+      },
+      "groups": 4831,
+      "languages": {
+        "en": 5177,
+        "zh": 1370
+      },
+      "max_row_tokens": 6559,
+      "renumbered_rows": 0,
+      "role": "base",
+      "rows": 6547,
+      "rows_in_file": 7299,
+      "score_level_counts": {
+        "3": 102,
+        "4": 59,
+        "5": 211,
+        "6": 58,
+        "7": 47,
+        "8": 39
+      },
+      "task_type_tokens": {
+        "choice": 2363635,
+        "noul": 1235450,
+        "score": 289193
+      },
+      "task_types": {
+        "choice": 3337,
+        "noul": 2694,
+        "score": 516
+      },
+      "tokens": 3888278
+    },
+    "A7k": {
+      "arms": {
+        "A7k": {
+          "rows": 2190,
+          "rows_available": 2190,
+          "share_tokens": 575921,
+          "tokens": 575921,
+          "tokens_available": 575921
+        }
+      },
+      "budget_tokens": 575921,
+      "families_top12": {
+        "jglue_jsts": 945,
+        "klue_sts": 1245
+      },
+      "groups": 2168,
+      "languages": {
+        "ja": 945,
+        "ko": 1245
+      },
+      "max_row_tokens": 368,
+      "policy": "token_budget",
+      "role": "treatment",
+      "rows": 2190,
+      "score_level_counts": {
+        "6": 2190
+      },
+      "task_type_tokens": {
+        "score": 575921
+      },
+      "task_types": {
+        "score": 2190
+      },
+      "tokens": 575921
+    },
+    "A7q": {
+      "arms": {
+        "A7q": {
+          "rows": 4365,
+          "rows_available": 23537,
+          "share_tokens": 1924079,
+          "tokens": 1924045,
+          "tokens_available": 10512814
+        }
+      },
+      "budget_tokens": 1924079,
+      "families_top12": {
+        "oasst1_creativity": 1247,
+        "oasst1_helpfulness": 1724,
+        "oasst1_humor": 413,
+        "oasst1_quality": 981
+      },
+      "groups": 1430,
+      "languages": {
+        "ar": 10,
+        "ca": 65,
+        "da": 3,
+        "de": 134,
+        "en": 1966,
+        "es": 1152,
+        "eu": 21,
+        "fr": 175,
+        "hu": 4,
+        "it": 44,
+        "ja": 11,
+        "ko": 3,
+        "pl": 20,
+        "pt": 65,
+        "ru": 360,
+        "th": 98,
+        "tr": 4,
+        "uk": 45,
+        "vi": 12,
+        "zh": 173
+      },
+      "max_row_tokens": 2666,
+      "policy": "token_budget",
+      "role": "treatment",
+      "rows": 4365,
+      "score_level_counts": {
+        "5": 4365
+      },
+      "task_type_tokens": {
+        "score": 1924045
+      },
+      "task_types": {
+        "score": 4365
+      },
+      "tokens": 1924045
+    },
+    "A7s": {
+      "arms": {
+        "A7s": {
+          "rows": 9434,
+          "rows_available": 12860,
+          "share_tokens": 1500000,
+          "tokens": 1499945,
+          "tokens_available": 2045617
+        }
+      },
+      "budget_tokens": 1500000,
+      "families_top12": {
+        "afrisenti_sw": 436,
+        "sentimix_hinglish": 8998
+      },
+      "groups": 9434,
+      "languages": {
+        "hi-en": 8998,
+        "sw": 436
+      },
+      "max_row_tokens": 257,
+      "policy": "token_budget",
+      "role": "treatment",
+      "rows": 9434,
+      "score_level_counts": {
+        "3": 9434
+      },
+      "task_type_tokens": {
+        "score": 1499945
+      },
+      "task_types": {
+        "score": 9434
+      },
+      "tokens": 1499945
+    },
+    "T-A6": {
+      "families_top12": {
+        "a6_band_rubric": 591,
+        "a6_checklist": 642,
+        "a6_evidence_status": 129,
+        "a6_interpolation": 545,
+        "a6_rank_position": 622,
+        "argq30k": 830,
+        "jglue_jsts": 860,
+        "klue_sts": 853,
+        "saf": 405
+      },
+      "groups": 3414,
+      "languages": {
+        "de": 270,
+        "en": 2726,
+        "ja": 860,
+        "ko": 853,
+        "zh": 768
+      },
+      "max_row_tokens": 1124,
+      "policy": "from_materialized",
+      "role": "treatment",
+      "rows": 5477,
+      "rows_matching_prefix": 5477,
+      "score_level_counts": {
+        "10": 310,
+        "2": 268,
+        "3": 2335,
+        "4": 761,
+        "5": 439,
+        "6": 495,
+        "7": 280,
+        "8": 328,
+        "9": 261
+      },
+      "source_sha256": "98e4e85906a5076cce20b98c132fc1ba0d7fcf6949b41d15231bdfeecc5d549a",
+      "subsample_tokens": null,
+      "task_type_tokens": {
+        "score": 2033954
+      },
+      "task_types": {
+        "score": 5477
+      },
+      "tokens": 2033954
+    },
+    "T-A7": {
+      "families_top12": {
+        "natural_snli": 1111,
+        "stage4_arithmetic": 610,
+        "stage4_automaton": 320,
+        "stage4_boolean": 649,
+        "stage4_dense_table": 652,
+        "stage4_natural_nli": 1544,
+        "stage4_ordinal": 643,
+        "stage4_registers": 664,
+        "stage4_relations": 867,
+        "stage4_replay_banking_train": 362,
+        "stage4_replay_clinc_train": 359,
+        "stage4_scope": 893
+      },
+      "groups": 10045,
+      "languages": {
+        "en": 6824,
+        "zh": 3297
+      },
+      "max_row_tokens": 7236,
+      "policy": "from_materialized",
+      "role": "treatment",
+      "rows": 10121,
+      "rows_matching_prefix": 14179,
+      "score_level_counts": {
+        "3": 234,
+        "4": 128,
+        "5": 109,
+        "6": 152,
+        "7": 143,
+        "8": 105
+      },
+      "source_sha256": "98e4e85906a5076cce20b98c132fc1ba0d7fcf6949b41d15231bdfeecc5d549a",
+      "subsample_tokens": 10076911,
+      "task_type_tokens": {
+        "choice": 6789990,
+        "noul": 2703341,
+        "score": 583580
+      },
+      "task_types": {
+        "choice": 7193,
+        "noul": 2057,
+        "score": 871
+      },
+      "tokens": 10076911
+    }
+  },
+  "max_row_tokens": 8192,
+  "profile": {
+    "families_top12": {
+      "human_goemotions_choice": 1397,
+      "human_goemotions_noul": 1397,
+      "jglue_jsts": 1805,
+      "klue_sts": 2098,
+      "natural_snli": 1383,
+      "oasst1_creativity": 1247,
+      "oasst1_helpfulness": 1724,
+      "oasst1_quality": 981,
+      "sentimix_hinglish": 8998,
+      "stage4_natural_nli": 1544,
+      "stage4_relations": 1141,
+      "stage4_scope": 1159
+    },
+    "groups": 31322,
+    "languages": {
+      "ar": 10,
+      "ca": 65,
+      "da": 3,
+      "de": 404,
+      "en": 16693,
+      "es": 1152,
+      "eu": 21,
+      "fr": 175,
+      "hi-en": 8998,
+      "hu": 4,
+      "it": 44,
+      "ja": 1816,
+      "ko": 2101,
+      "pl": 20,
+      "pt": 65,
+      "ru": 360,
+      "sw": 436,
+      "th": 98,
+      "tr": 4,
+      "uk": 45,
+      "vi": 12,
+      "zh": 5608
+    },
+    "max_row_tokens": 7236,
+    "rows": 38134,
+    "score_level_counts": {
+      "10": 310,
+      "2": 268,
+      "3": 12105,
+      "4": 948,
+      "5": 5124,
+      "6": 2895,
+      "7": 470,
+      "8": 472,
+      "9": 261
+    },
+    "task_type_tokens": {
+      "choice": 9153625,
+      "noul": 3938791,
+      "score": 6906638
+    },
+    "task_types": {
+      "choice": 10530,
+      "noul": 4751,
+      "score": 22853
+    },
+    "tokens": 19999054
+  },
+  "rows_file_sha256": "46ecbcd4ffe153a91e71836bcf4b577dcc85b930f623d8294dfd6c8c314d9b4f",
+  "seed": "decision2-06b-m5-a",
+  "spec_sha256": "7a5609da72885aaa8b7e272693307bb7e04dc7b358d5d778e2b3a377c10e378b",
+  "template": "S2",
+  "train_ids_sha256": "b63fbd4a0965c1b892211b50942bdc61fbf7d6ac501e0eebca26f6ad269ee51f",
+  "train_rows": 38134,
+  "train_tokens": 19999054,
+  "unit": "qwen3-0.6b-base-native-segmented"
+}

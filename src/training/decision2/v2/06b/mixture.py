@@ -18,6 +18,11 @@ manifest joined to its arm files by id (`id_manifest`). Rows repeating any base
 input (before or after renumbering) or an earlier row, and groups with a row
 over `max_row_tokens`, are dropped and counted. S2 mixtures are built once
 (`python3 -m v2.06b.mixture`) and trained from the hash-pinned materialized file.
+
+Milestone 5 adds `from_materialized` (byte-identical rows of an earlier
+materialized mixture chosen by id prefix and task type, optionally subsampled
+by whole groups to a token budget) and a token budget for `id_manifest`
+(`tokens` or `fill_to_total_tokens`; per-pool shares by tokens, whole groups).
 """
 
 from __future__ import annotations
@@ -194,12 +199,16 @@ def build(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
 def profile(rows: list[dict[str, Any]], tokens: list[int]) -> dict[str, Any]:
     """Counts only: rows, tokens, groups, types, languages, Score levels, top families."""
     levels = Counter(str(len(r["options"])) for r in rows if r["task_type"] == "score")
+    type_tokens: Counter[str] = Counter()
+    for r, t in zip(rows, tokens):
+        type_tokens[r["task_type"]] += t
     return {
         "rows": len(rows),
         "tokens": sum(tokens),
         "max_row_tokens": max(tokens) if tokens else 0,
         "groups": len({r["group_id"] for r in rows}),
         "task_types": dict(sorted(Counter(r["task_type"] for r in rows).items())),
+        "task_type_tokens": dict(sorted(type_tokens.items())),
         "languages": dict(sorted(Counter(r["language"] for r in rows).items())),
         "score_level_counts": dict(sorted(levels.items(), key=lambda kv: int(kv[0]))),
         "families_top12": dict(Counter(r["family"] for r in rows).most_common(12)),
@@ -419,13 +428,49 @@ def view_component(
     )
 
 
+def budget_groups(
+    groups: dict[str, list[tuple[str, dict[str, Any]]]],
+    sizes: dict[str, list[int]],
+    budget: int,
+    seed: str,
+) -> set[str]:
+    """Whole groups per pool, in sha256(seed, pool, group) order, pool shares by tokens."""
+    pools: dict[str, list[str]] = {}
+    for group, members in groups.items():
+        pools.setdefault(members[0][0], []).append(group)
+    available = {p: sum(sum(sizes[g]) for g in gs) for p, gs in pools.items()}
+    total = sum(available.values())
+    chosen: set[str] = set()
+    for pool, members in sorted(pools.items()):
+        share = budget * available[pool] // total if total else 0
+        used = 0
+        for group in sorted(
+            members,
+            key=lambda g: (
+                hashlib.sha256(f"{seed}\0{pool}\0{g}".encode()).hexdigest(),
+                g,
+            ),
+        ):
+            size = sum(sizes[group])
+            if used + size <= share:
+                chosen.add(group)
+                used += size
+    return chosen
+
+
 def manifest_component(
-    comp: dict[str, Any], count: Any, cap: int, seen: set[str]
+    comp: dict[str, Any],
+    count: Any,
+    cap: int,
+    seen: set[str],
+    budget: int | None = None,
 ) -> tuple[list[dict[str, Any]], list[int], dict[str, Any]]:
     """Rows of a published recipe manifest (`{id, pool, ...}` per line), joined by id.
 
     Pools in `skip_pools` come from the base instead. Whole groups with a row
-    over the cap are dropped; rows repeating an earlier input are dropped.
+    over the cap are dropped; rows repeating an earlier input are dropped. With
+    a token `budget`, each pool keeps a share of it proportional to its tokens,
+    as whole groups in sha256(seed, pool, group) order (template S slices).
     """
     path = Path(comp["manifest"]["path"])
     if file_sha256(path) != comp["manifest"]["sha256"]:
@@ -451,12 +496,22 @@ def manifest_component(
     picked_tokens: list[int] = []
     per_pool: Counter[str] = Counter()
     per_pool_tokens: Counter[str] = Counter()
-    for members in groups.values():
-        sizes = [count(row) for _, row in members]
-        if max(sizes) > cap:
+    sizes_by_group = {
+        group: [count(row) for _, row in members] for group, members in groups.items()
+    }
+    admissible = {}
+    for group, members in groups.items():
+        if max(sizes_by_group[group]) > cap:
             for pool, _ in members:
                 drops[f"{pool}:over_cap_group_rows"] += 1
             continue
+        admissible[group] = members
+    if budget is not None:
+        kept = budget_groups(admissible, sizes_by_group, budget, comp["seed"])
+        drops["budget:groups_not_selected"] += len(admissible) - len(kept)
+        admissible = {g: m for g, m in admissible.items() if g in kept}
+    for group, members in admissible.items():
+        sizes = sizes_by_group[group]
         for (pool, row), size in zip(members, sizes):
             if row["input_sha256"] in used:
                 drops[f"{pool}:repeats_earlier_input"] += 1
@@ -472,6 +527,7 @@ def manifest_component(
         {
             "role": "treatment",
             "policy": "id_manifest",
+            **({"budget_tokens": budget} if budget is not None else {}),
             "manifest_rows": len(entries),
             "skipped_pool_rows": dict(
                 sorted(Counter(e["pool"] for e in entries if e["pool"] in skip).items())
@@ -480,6 +536,52 @@ def manifest_component(
             "tokens_by_pool": dict(sorted(per_pool_tokens.items())),
             "dropped": {k: v for k, v in sorted(drops.items()) if v},
             **profile(picked, picked_tokens),
+        },
+    )
+
+
+def materialized_component(
+    comp: dict[str, Any], count: Any, cap: int, seen: set[str]
+) -> tuple[list[dict[str, Any]], list[int], dict[str, Any]]:
+    """Rows of a hash-pinned materialized mixture, chosen by id prefix and task type.
+
+    Rows are kept byte-identical and in file order. With `subsample_tokens`,
+    whole groups are kept in sha256(seed, name, group) order, skipping any that
+    would overflow, until that many tokens.
+    """
+    from training.model.data import load_partition
+
+    source = comp["mixture"]
+    path = Path(source["path"])
+    if file_sha256(path) != source["sha256"]:
+        raise ValueError(f"{comp['name']}: materialized mixture differs from its hash")
+    rows = load_partition(path, "train")
+    if len(rows) != source["rows"]:
+        raise ValueError(f"{comp['name']}: materialized mixture row count differs")
+    prefixes = tuple(comp["id_prefixes"])
+    types = set(comp.get("task_types", ("choice", "noul", "score")))
+    matching = [r for r in rows if r["id"].startswith(prefixes)]
+    chosen = [r for r in matching if r["task_type"] in types]
+    if any(r["input_sha256"] in seen for r in chosen):
+        raise ValueError(f"{comp['name']}: a selected row repeats an earlier input")
+    tokens = [count(r) for r in chosen]
+    if any(t > cap for t in tokens):
+        raise ValueError(f"{comp['name']}: a selected row exceeds {cap} tokens")
+    budget = comp.get("subsample_tokens")
+    if budget is not None:
+        keep = select_groups(chosen, tokens, budget, comp["seed"], comp["name"])
+        chosen = [chosen[i] for i in keep]
+        tokens = [tokens[i] for i in keep]
+    return (
+        chosen,
+        tokens,
+        {
+            "role": "treatment",
+            "policy": "from_materialized",
+            "source_sha256": source["sha256"],
+            "rows_matching_prefix": len(matching),
+            "subsample_tokens": budget,
+            **profile(chosen, tokens),
         },
     )
 
@@ -556,7 +658,12 @@ def build_s2(
                 comp, count, cap, seen, target, spec["seed"]
             )
         elif comp["policy"] == "id_manifest":
-            rows, counts, part = manifest_component(comp, count, cap, seen)
+            budget = comp.get("tokens")
+            if "fill_to_total_tokens" in comp:
+                budget = comp["fill_to_total_tokens"] - sum(tokens)
+            rows, counts, part = manifest_component(comp, count, cap, seen, budget)
+        elif comp["policy"] == "from_materialized":
+            rows, counts, part = materialized_component(comp, count, cap, seen)
         elif comp["policy"] == "resample_base":
             rows, counts, part = resample_component(
                 comp, base_rows, base_tokens, spec["seed"]

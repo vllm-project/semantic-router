@@ -2,6 +2,7 @@ import importlib
 import json
 import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
 
 from training.model.data import INPUT_FIELDS, digest
@@ -237,6 +238,124 @@ class ManifestComponentTest(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             mixture.manifest_component(comp, count, 100, set())
+
+
+class MaterializedComponentTest(unittest.TestCase):
+    def setUp(self):
+        self.files = ArmFiles()
+        self.rows = [row(f"a7:x{i}", group=f"g{i // 2}", tokens=10) for i in range(8)]
+        self.rows += [row("a7:n1", kind="noul", keys=("true", "false"), tokens=10)]
+        self.rows += [row("a6-s1", kind="score", keys=("0", "1", "2"), tokens=10)]
+        self.rows += [row("base1", tokens=10)]
+        path = Path(self.files.dir.name) / "mix.train.jsonl"
+        path.write_text("".join(json.dumps(r) + "\n" for r in self.rows))
+        self.source = {
+            "path": str(path),
+            "sha256": common.file_sha256(path),
+            "rows": len(self.rows),
+        }
+
+    def comp(self, **extra):
+        return {
+            "name": "T-A7",
+            "policy": "from_materialized",
+            "mixture": self.source,
+            "id_prefixes": ["a7:"],
+            "seed": "s",
+            **extra,
+        }
+
+    def test_prefix_and_type_filter_keeps_rows_identical(self):
+        rows, tokens, report = mixture.materialized_component(
+            self.comp(task_types=["choice"]), count, 100, set()
+        )
+        self.assertEqual([r["id"] for r in rows], [f"a7:x{i}" for i in range(8)])
+        self.assertEqual(rows, self.rows[:8])
+        self.assertEqual(report["rows_matching_prefix"], 9)
+        self.assertEqual(report["task_type_tokens"], {"choice": 80})
+
+    def test_subsample_takes_whole_groups_in_hash_order(self):
+        rows, tokens, _ = mixture.materialized_component(
+            self.comp(subsample_tokens=45), count, 100, set()
+        )
+        self.assertLessEqual(sum(tokens), 45)
+        self.assertGreaterEqual(sum(tokens), 30)
+        groups = Counter(r["group_id"] for r in rows if r["id"].startswith("a7:x"))
+        self.assertTrue(all(n == 2 for n in groups.values()))
+        again, _, _ = mixture.materialized_component(
+            self.comp(subsample_tokens=45), count, 100, set()
+        )
+        self.assertEqual(rows, again)
+
+    def test_repeated_input_hash_or_changed_file_is_an_error(self):
+        with self.assertRaises(ValueError):
+            mixture.materialized_component(
+                self.comp(), count, 100, {self.rows[0]["input_sha256"]}
+            )
+        with self.assertRaises(ValueError):
+            mixture.materialized_component(
+                {**self.comp(), "mixture": {**self.source, "sha256": "0" * 64}},
+                count,
+                100,
+                set(),
+            )
+
+
+class ManifestBudgetTest(unittest.TestCase):
+    def test_budget_is_split_by_pool_tokens_in_whole_groups(self):
+        files = ArmFiles()
+        p = [row(f"p{i}", group=f"pg{i // 2}", tokens=10) for i in range(20)]
+        q = [row(f"q{i}", group=f"qg{i}", tokens=10) for i in range(10)]
+        manifest_path = Path(files.dir.name) / "recipe.ids.jsonl"
+        entries = [{"id": r["id"], "pool": "P"} for r in p]
+        entries += [{"id": r["id"], "pool": "Q"} for r in q]
+        manifest_path.write_text("".join(json.dumps(e) + "\n" for e in entries))
+        comp = {
+            "seed": "s",
+            "manifest": {
+                "path": str(manifest_path),
+                "sha256": common.file_sha256(manifest_path),
+                "rows": len(entries),
+            },
+            "pools": {"P": [files.arm("P", p)], "Q": [files.arm("Q", q)]},
+        }
+        rows, tokens, report = mixture.manifest_component(comp, count, 100, set(), 150)
+        by_pool = Counter(r["id"][0] for r in rows)
+        self.assertEqual(by_pool, {"p": 10, "q": 5})
+        self.assertEqual(report["budget_tokens"], 150)
+        self.assertEqual(report["dropped"], {"budget:groups_not_selected": 10})
+        full, _, full_report = mixture.manifest_component(comp, count, 100, set())
+        self.assertEqual(len(full), 30)
+        self.assertNotIn("budget_tokens", full_report)
+
+
+class TeacherAlignTest(unittest.TestCase):
+    def test_only_rows_every_teacher_covers_are_kept(self):
+        align = importlib.import_module("v2.06b.teacher_align")
+        rows = [row("c1", keys=("a", "b")), row("c2", keys=("a", "b")), row("c3")]
+        copy = {**rows[0], "id": "c1#resample1", "teacher_source_id": "c1"}
+
+        def entry(r, sha=None):
+            return {
+                "id": r["id"],
+                "input_sha256": sha or r["input_sha256"],
+                "teacher_probs": {"a": 0.4, "b": 0.6},
+            }
+
+        lux = {e["id"]: e for e in (entry(rows[0]), entry(rows[1]))}
+        aj = {
+            e["id"]: e
+            for e in (entry(rows[0]), entry(rows[1], "0" * 64), entry(rows[2]))
+        }
+        out, report = align.align(rows + [copy], {"lux": lux, "aj": aj})
+        self.assertEqual([e["id"] for e in out["lux"]], ["c1"])
+        self.assertEqual([e["id"] for e in out["aj"]], ["c1"])
+        self.assertEqual(report["aligned_rows"], 2)
+        self.assertEqual(report["covered_by_teacher"]["lux"]["rows"], 3)
+        self.assertEqual(report["covered_by_teacher"]["aj"]["rows"], 3)
+        bad = {"c1": {**entry(rows[0]), "teacher_probs": {"x": 1.0}}}
+        with self.assertRaises(ValueError):
+            align.align(rows, {"bad": bad})
 
 
 class TeacherMergeTest(unittest.TestCase):

@@ -1,0 +1,41 @@
+set -u
+# Decoder M3 amendment 2: compose the own-Lux (L) teacher files, then per-GPU queues that start after
+# each GPU's preregistered chain: L arms first, then the E8V seeds of amendment 1.
+SRC=$1 SRC8=$2   # SRC8: mirror holding the E8V spec (amendment 1)
+M=/data/dev2/runs/dec/m3; A=$M/arms
+S=/data/dev2/src/$SRC/src/training/decision2/v2/dec; L=$S/launch.sh
+HS=/hf/datasets--llm-semantic-router--decision-2.0-training-data/snapshots
+LUXA0=$HS/d8eae3e4fb5b91871c5aa7c13f0d94ea96e86ea7/m3/pk1/lux1/A0-train.canonical.jsonl
+W1=$HS/7885baf6ea3805cc0e00405bde5061ad5b9d0aa9/m2/teachers/lux1/rp-v2/wave1.targets.jsonl
+W2=$HS/6bd8eb4d4fe0bc2c47f517c1017f7422510b09f0/m2/teachers/lux1/rp-v2/wave2.targets.jsonl
+W4=$HS/03b1e72d4b4a4526b2e7f5db3659adb07f200a71/m2/teachers/lux1/rp-v2/wave4.targets.jsonl
+NOX=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
+SOL=/hf/models--llm-semantic-router--Decision-1.0-Sol-2B/snapshots/ce0c018a28de16d6639b1cd203b761bf643b89e6
+EOS=/hf/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab
+TRAIN=/runs/m3/data/m3-v2m-ret/train.jsonl
+log() { echo "$(date -u +%FT%TZ) $*" >> $M/OPERATIONS.log; }
+export DEC_DATA=$M/data-sel700-cal698 DEC_IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
+for t in nox sol; do
+  [ -f $M/teacher/$t-lux/$t-lux-teacher.jsonl ] && continue
+  bash $L m3-compose-$t-lux $SRC $M/teacher/$t-lux --cpu -- -m v2.dec.merge_labels --train $TRAIN \
+    --part /runs/m3/teacher/$t/$t-teacher.jsonl --override $LUXA0 --override $W1 --override $W2 --override $W4 --override-subset \
+    --output /out/$t-lux-teacher.jsonl && log "compose $t-lux done: $(tail -1 $M/teacher/$t-lux.stdout.log)" || { log "compose $t-lux FAILED"; exit 1; }
+done
+FULL="--train $TRAIN --train-mode full --backbone-lr 5e-6 --head-lr 5e-5 --teacher-kl-weight 0.5 --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64"
+E8V="--train /runs/m3/data/m3-e8f-v2m/train.jsonl --train-mode full --backbone-lr 1e-5 --head-lr 1e-4 --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64"
+TNL=/runs/m3/teacher/nox-lux/nox-lux-teacher.jsonl; TSL=/runs/m3/teacher/sol-lux/sol-lux-teacher.jsonl
+wait_line() { echo "until grep -qE '$1 (postrun complete|zero-step FAILED|one-step FAILED|gate job FAILED|full run FAILED|preflight FAIL)' $A/OPERATIONS.log 2>/dev/null; do sleep 60; done; sleep 30"; }
+lease() { echo "printf 'track=dec\nstatus=busy\npurpose=M3 amendment 2 queue: $2\nstart_utc=%s\n' \$(date -u +%FT%TZ) > /data/dev2/leases/gpu$1.lock/owner"; }
+arm() { echo "DEC_NODE=b DEC_DATA_DIR=$M/data-sel700-cal698 bash /data/dev2/src/$1/src/training/decision2/v2/dec/drive_arm.sh $2 $3 $1 m3/arms $4 -- $5"; }
+C=$M/chains
+{ echo "set -u"; wait_line m3-S2J-s1; lease 3 "S2L-s1, S2L-s3, E8V-s1"
+  arm $SRC m3-S2L-s1 3 $SOL "$FULL --teacher $TSL --seed 20260926"; arm $SRC m3-S2L-s3 3 $SOL "$FULL --teacher $TSL --seed 20260928"
+  arm $SRC8 m3-E8V-s1 3 $EOS "$E8V --seed 20260926"; } > $C/q3.sh
+{ echo "set -u"; wait_line m3-S2J-s3; lease 4 "S2L-s2, E8V-s2"
+  arm $SRC m3-S2L-s2 4 $SOL "$FULL --teacher $TSL --seed 20260927"; arm $SRC8 m3-E8V-s2 4 $EOS "$E8V --seed 20260927"; } > $C/q4.sh
+{ echo "set -u"; wait_line m3-N4J-s1; lease 0 "N4L-s1, E8V-s3"
+  arm $SRC m3-N4L-s1 0 $NOX "$FULL --teacher $TNL --seed 20260926"; arm $SRC8 m3-E8V-s3 0 $EOS "$E8V --seed 20260928"; } > $C/q0.sh
+{ echo "set -u"; wait_line m3-N4J-s2; lease 1 "N4L-s2"; arm $SRC m3-N4L-s2 1 $NOX "$FULL --teacher $TNL --seed 20260927"; } > $C/q1.sh
+{ echo "set -u"; wait_line m3-N4J-s3; lease 2 "N4L-s3"; arm $SRC m3-N4L-s3 2 $NOX "$FULL --teacher $TNL --seed 20260928"; } > $C/q2.sh
+for g in 0 1 2 3 4; do setsid nohup bash $C/q$g.sh > $C/q$g.log 2>&1 < /dev/null & done
+log "amendment 2 queues launched (L arms, then E8V)"
