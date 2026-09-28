@@ -1,0 +1,15 @@
+{
+ "cache_after": "4cd635970f8267c54f19a8d90739943e6df550914b3786ffd4da892c639dcbb0",
+ "cache_before": "c94e66c5fabb512229283a0470cf71dfc4cee4c4554001f43039b4e0322413df",
+ "exit_code": 0,
+ "gpu": 2,
+ "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+ "input_sha256": "fd6dd883a5462971b9ceea0dd42865fc82406521114cc778514c4942b2ebee3f",
+ "mirror_commit": "6533ef5314b227d6a0305c6044e008d8bfef72ed",
+ "model_revision": "bd45a30aee8c84032791c245c70f86dee5389cc8",
+ "node": "node A",
+ "output_sha256": "35422d837243ed48a48afa8678934e362982edb55dc6f82301cadd65f11f4c23",
+ "schema": "decision2-m3a-pk1-lux/1",
+ "start_utc": "2026-09-28T11:52:00Z",
+ "wall_seconds": 34
+}
