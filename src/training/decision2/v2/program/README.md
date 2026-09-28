@@ -75,6 +75,10 @@ Read a file with `gh gist view cd90fce0fa548616d8a4f1b2d2398dea -f <file> --raw`
 - Records in this branch cite these assets by repository and immutable revision or content hash, so a reviewer with
   access to the organization can fetch exactly what a result used.
 - Never in git: weights, datasets, panel items, gold keys, credentials, node addresses.
+- Storage: the organization's private tier is capped at 100 GB (no paid plan). Before any upload, check the headroom
+  with `src/training/decision2/v2/common/hf_headroom.sh --node node-a --min-free-gb <upload size in GB>`. It prints
+  private usage, headroom and the largest private repositories, and exits 1 if the upload would not fit (`--json` for
+  scripts). Tests: `cd src/training/decision2 && python3 -m unittest v2.common.tests.test_hf_headroom`.
 
 ## Reading results
 
