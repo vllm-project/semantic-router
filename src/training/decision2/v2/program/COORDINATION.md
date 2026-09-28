@@ -185,6 +185,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 02:05 — **C1 event 2 done (2 of 3 used)**; DEV2.0-0.6B APPROVED for private release (eval record
+  `m4-dev2-06b-c1-event2-2026-09-29.md`; integration `f422d2ce8`).
+  - C1: DEV2.0-0.6B 33.21 vs Kai1 17.77 (+15.44 [+13.51, +17.21]; every type interval excludes 0), vs Lex 20.82
+    (+12.39 [+10.30, +14.29]), vs GLiNER2.5-Decide 22.82 (+10.39 [+8.20, +12.55]), vs Bosun 35.03 (−1.82 [−4.05, +0.35],
+    level; Bosun better on Choice −3.73 and Noul −11.77, we are better on Score +8.97). Kai / Lex run at their published
+    1,024-token limit (525 of 2,874 items invalid; on tasks that fit, 29.4 vs 20.3 point estimate); GLiNER could not take 935.
+    Disclose vs Kai1: Arabic HalluTruthQA (hallucination 44.6 vs 54.2, find-the-truth 22.0 vs 25.2), narrative event
+    causality 14.9 vs 21.1, Arabic accuracy .339 vs .396; Noul is the weakest type (47.6).
+  - No C1 v1.2 (recheck over 19.46M rows clean). Before event 3, recheck Lux-XL waves 3–5, H7 / H8 gap arms and XL recipe r2.
+  - Coordinator decision: no extra C1 access for a same-limit Kai1 run now; Kai1 at 8K joins event 3 (the final family
+    event) as a comparator so the 0.6B card can later add a same-limit line (card-only revision).
+  - The 0.6B release finalizes on the frozen T = 1 package `e61b2b44` (card-only README revision, `--already-collected` not
+    applicable because it is not yet collected).
+
 - 2026-09-29 00:20 — **DEV2.0-0.8B current release revision = `7d08d0e12082ee6810a4221063342cefe45b6ac3`** (T = 1,
   calibration-only; manifest `2a19a65a…`; final decision `fedb18fa…` supersedes `b2338c45…`; gate `13398d42…`; weights
   identical to `0b631a85`; integration `b0c3341cd`). Collection items point at the repo, so the private "Decision 2.0"
