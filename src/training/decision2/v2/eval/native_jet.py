@@ -98,7 +98,12 @@ def is_length_rejection(exc: ValueError) -> bool:
 
 
 def collect(
-    *, model_path: Path, revision: str, prompts: Path, output: Path
+    *,
+    model_path: Path,
+    revision: str,
+    prompts: Path,
+    output: Path,
+    max_items: int | None = None,
 ) -> dict[str, Any]:
     if output.exists():
         raise FileExistsError(output)
@@ -106,7 +111,7 @@ def collect(
         json.loads(line)
         for line in prompts.read_text(encoding="utf-8").splitlines()
         if line.strip()
-    ]
+    ][:max_items]
     model_path = model_path.resolve(strict=True)
     identity = verify_release(model_path, revision)
     sys.path.insert(0, str(model_path))
@@ -178,6 +183,7 @@ def main() -> None:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--max-items", type=int)
     args = parser.parse_args()
     print(
         json.dumps(
@@ -186,6 +192,7 @@ def main() -> None:
                 revision=args.model_revision,
                 prompts=args.input,
                 output=args.output,
+                max_items=args.max_items,
             ),
             sort_keys=True,
         )
