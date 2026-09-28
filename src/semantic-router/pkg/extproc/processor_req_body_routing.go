@@ -267,7 +267,7 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	}
 	state := &routeHeaderState{
 		setHeaders:    r.startUpstreamSpanAndInjectHeaders(dispatch, ctx),
-		removeHeaders: []string{"content-length"},
+		removeHeaders: []string{"content-length", headers.VSRHandoffEnvelope},
 		profile:       dispatch.profile,
 	}
 	// Provider metadata is applied before credentials so an operator-supplied

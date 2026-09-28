@@ -267,6 +267,7 @@ func (r *OpenAIRouter) processRequestHeaders(
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
+	appendHandoffReceiptToImmediateResponse(response, ctx)
 	if r.holdFullDuplexHeaderReply(v, response, ctx) {
 		return nil
 	}
@@ -306,6 +307,7 @@ func (r *OpenAIRouter) sendRequestBodyResult(
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
+	appendHandoffReceiptToImmediateResponse(response, ctx)
 	r.persistImmediateResponseObject(response, ctx)
 	// FULL_DUPLEX_STREAMED explicitly permits the processor to buffer any
 	// number of input chunks before sending a StreamedBodyResponse. A nil

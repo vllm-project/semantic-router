@@ -46,6 +46,11 @@ const (
 	// See https://github.com/vllm-project/semantic-router/issues/1808.
 	VSRSkipProcessing = "x-vsr-skip-processing"
 
+	// VSRHandoffEnvelope carries a trusted gateway handoff envelope as
+	// unpadded base64url JSON. The Router strips it before signal evaluation
+	// and provider dispatch.
+	VSRHandoffEnvelope = "x-vsr-handoff-envelope"
+
 	// VSRDebug opts a request into verbose/debug response headers. Value: "true"
 	// (case-insensitive). When set, headers that the v0.4 contract otherwise
 	// omits or demotes to replay are emitted inline for that request — the
@@ -116,6 +121,14 @@ const (
 
 	// VSRCostCurrency is the currency of VSRCost. Example: "USD"
 	VSRCostCurrency = "x-vsr-cost-currency"
+
+	// VSRHandoff* form the handoff receipt. Version and ID are
+	// emitted only after a valid envelope was parsed; status and reason are
+	// emitted whenever the carrier was present.
+	VSRHandoffVersion = "x-vsr-handoff-version"
+	VSRHandoffID      = "x-vsr-handoff-id"
+	VSRHandoffStatus  = "x-vsr-handoff-status"
+	VSRHandoffReason  = "x-vsr-handoff-reason"
 
 	// VSRSessionPhase indicates the Router Learning protection phase.
 	// Example values: "user_turn", "tool_loop", "provider_state"
