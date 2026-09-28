@@ -1,0 +1,58 @@
+{
+  "device": "cpu",
+  "load_seconds": 17.9424951300025,
+  "mode": "parity",
+  "package_manifest_sha256": "592123aa950554ae54786004c7f2694fc6b6342c63996b054666a04bfa537352",
+  "panels": {
+    "css15": {
+      "category_changes": 0,
+      "ids_sha256": "cb3db2dec1578f1979c04b235e1b13f33caa6bdf1c4e694406ea8420e3b8036c",
+      "input_mismatch": 0,
+      "max_abs_drift": 2.950429916381836e-06,
+      "missing": 0,
+      "predictions_sha256": "48593d4da1125d9055ad1791edf67a22d2e52cef58f090d64bb499fd1ddaa02b",
+      "prompts": 12,
+      "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+      "seconds": 34.88092095707543,
+      "slots": 12
+    },
+    "public231": {
+      "category_changes": 0,
+      "ids_sha256": "4e9bebf4fdfb052cfcf0962cde6e6cb6299c976038c441bbee56ba95999f2203",
+      "input_mismatch": 0,
+      "max_abs_drift": 2.1457672119140625e-06,
+      "missing": 0,
+      "predictions_sha256": "2fd20c6efca2b461ded5f0e39da75c73a3f56baf5ba9ff85f8222142ab4062ef",
+      "prompts": 12,
+      "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+      "seconds": 35.02743682311848,
+      "slots": 12
+    },
+    "typed-final": {
+      "category_changes": 0,
+      "ids_sha256": "2360941fb09ff48ad09e8855b1a23213dcc149f21ad3b241f0515bb236ea3bc2",
+      "input_mismatch": 0,
+      "max_abs_drift": 2.5033950805664062e-06,
+      "missing": 0,
+      "predictions_sha256": "762d721a0f297f0f8f7e588c0c432bb3a0e9074c46630a0a10c0b2df81f6791b",
+      "prompts": 24,
+      "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+      "seconds": 196.34302113298327,
+      "slots": 24
+    }
+  },
+  "passed": true,
+  "runtime": {
+    "hip": "7.2.53211",
+    "numpy": "2.5.3",
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "threads": 4,
+    "tokenizers": "0.22.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "4.57.6"
+  },
+  "schema": "dev2-release-examples/1",
+  "tolerance": 0.0001
+}

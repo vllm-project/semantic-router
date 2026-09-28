@@ -1,0 +1,16 @@
+{
+  "code_sha256": "fa75291c1565692da293911a7aea82f1004160e466ba2065a774b1c8a4d39bfc",
+  "comparison": {
+    "category_changes": 0,
+    "max_abs_drift": 0.0,
+    "missing": 0,
+    "slots": 3
+  },
+  "exit_code": 0,
+  "mode": "card",
+  "passed": true,
+  "readme_sha256": "42708a4ca085943d4ac8c81e9eb59884dc0da167e1e7504ee48de605107ea36e",
+  "schema": "dev2-release-examples/1",
+  "seconds": 35.91410915297456,
+  "stderr_tail": ""
+}

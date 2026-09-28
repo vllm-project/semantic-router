@@ -34,6 +34,14 @@ recommended decision itself and records it. Governing rules for that autonomy:
   behavior, here in "Cross-track notes". No `AskQuestion` to the user during the push.
 - Workers still stop-and-record on failed preflights and never rerun failed arms to fill GPUs; autonomy is about not
   waiting on the user, not about lowering evidence bars.
+- **Operational first-release thresholds (coordinator, 15:55; post-key same-panel v3 composite):** "clearly beats own
+  1.0" = paired 95% CI lower bound > 0 against the tier's 1.0 on the same node; "close to the same-size first tier" =
+  at least 90% of the best measured open-weight peer's v3 in that tier (card-eligible or not), with human transfer not
+  significantly below it and no decision type collapsed. Current numbers: 0.6B beat Kai1 35.94 and reach ≥ 38.3
+  (GLiNER2.5-Decide 42.52); 0.8B beat Eos1 42.55; 2B beat Sol1 45.58 (≥ 44.5 vs Decider 2B 49.50 is then implied);
+  4B beat Nox1 56.47 (≥ 55.7 vs Decider 4B 61.88 implied); 9B beat Lux1 65.81; ~27B (no 1.0) reach ≥ 65.1 vs
+  AutoJev-27B 72.31. Update when the eval track measures stronger peers. After first release, keep optimizing toward
+  beating the tier leader.
 
 **Allocation update 2026-09-28 10:40 UTC+8:** node B was freed. The 0.8B–4B decoder track gains node B GPU0–2, the
 eval track gains node B GPU3–4, the new ~27B track gets node B GPU5–6, and research & data keeps node B GPU7 (no longer
@@ -142,7 +150,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
 | node B GPU3–4 | eval & peers (added 2026-09-28 10:40 UTC+8) |
 | node B GPU5–6 | ~27B |
-| node B GPU7 | research & data |
+| node B GPU7 | research & data (owner); A7 may run short jobs (≤ 30 min, e.g. its embedding scan) under its own lease owner file when the GPU is idle/released |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
 stop rule BEFORE launch (commit a prereg); run preflights (load/parity, zero-step, one-step + reload). If a preflight
@@ -173,6 +181,84 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 16:05 — From 0.8B–4B decoder Milestone 1 (gist `04-decision-2-decoder-08b-4b.md`; integration `87ca3002c`):
+  - 4B X2 (own Nox 1.0 + own-Lux soft targets): post-key v3 55.993 vs Nox1 56.470 (paired CI [−3.09, +1.78]); public
+    231 174 vs 173; typed T .584 vs .614 (Noul exception-stack −37), human transfer H .537 vs .519 (up on 11 of 15 tasks).
+    Its development proxy gain (+3.63) became −0.48 on v3: another proxy-misalignment case. Coordinator: HOLD (the gate
+    needs a clear composite gain; equal v3 with a typed regression is not one).
+  - 0.8B: no objective/readout factor and no v1 data arm beat the control; every arm answers level 0 on all 400 DEV Score
+    items even with 4,000–5,600 extra Score rows. Treat as a possible implementation bug until a Score-only overfit sanity
+    check and the padded/unpadded equivalence test pass. Seed noise: 0.84 proxy points at 0.8B, 0.23 at 4B.
+  - Official Qwen3.5 checkpoints are generative vision-language models with no trained decision head; loaded decision
+    parameters: 0.8B 753.4M, 2B 1.884B, 4B 4.208B.
+  - A third own-Lux label file exists: decoder `752b7c8f…` (7,455 TRAIN rows). Research & data: include it in the
+    canonical Lux consolidation together with 0.6B `2d90bc5b…` and 9B `abaa1113…`.
+  - GPU request: the decoder track wants two more GPUs; node A GPU2–4 go to it when the 9B track's Milestone 2 releases
+    them (the coordinator will update the table).
+
+- 2026-09-28 16:00 — **A7 (own Decision 1.0 decoder corpora) AVAILABLE — the largest data lever so far** (gist
+  `08-decision-2-own10-corpora.md`; integration `7db1da83d`; private HF dataset `llm-semantic-router/decision-2.0-training-data`
+  revision `39a120ca5446dd2296567870ed0131a2d2e7b42d`, folder `v2/a7/`, registry `v2/a7/registry.json`).
+  - Six frozen sub-arms, 138,313 train rows / 126.2M native tokens (A0: 7,455 / 4.19M), 11,060 Score rows (3,841
+    three-level; A0: 516 / 102): A7h human reading (Cosmos QA, SNLI, SQuAD 2.0), A7m MultiNLI non-fiction, A7g Stage4
+    generated Score 3–8 levels, A7i BANKING77/CLINC150 intents, A7p older-generator replay, A7o Stage1–3 generated.
+    `views/` reproduces the exact 1.0 training mixtures by A7 id (e.g. `dec10-natural24k`, the Eos/Lux natural pool).
+  - **Every size track: adopt A7 now for development** (it passed lexical + long-leaf overlap and isolation screens).
+    Release candidates additionally need the A7 embedding scan to pass (A7 Milestone 2 runs it first). Deduplicate
+    against A0 by `input_sha256` (3,465 identical rows). Default mixtures EXCLUDE A7h families `natural_cosmos_qa` and
+    `natural_squad2_answerability` (known shortcut failures); they may appear only as an explicit ablation arm.
+  - 9B track: training on the A7 view `dec10-natural24k` (and wider A7) is the most direct test of the 21.9-point
+    gap to Lux's co-trained head. 0.6B track: 36,423 A7g rows exceed 1,024 tokens (fine with the 8K adapter; budget it).
+  - **NEW LEAK in 1.0-generated data: option keys `result_<n>` numbered before shuffling reveal the gold** (7,579/7,579
+    in intent rows). It was in the training data of Sol, Nox, Eos, Lux and Kai, and in 131 A0 rows (also RP-v1q / R2
+    prompts). A7 renumbers keys by position. Research & data: publish renumbered A0 / A0s / RP-v1q / R2 versions; all
+    release candidates use renumbered data. Eval track: audit every panel (SELECT, CAL, typed DEV, CSS pilot, v3 typed +
+    human transfer, public 231) for option-key / position leaks; 1.0-lineage models may exploit such keys on dev sets
+    built by the same generators, which could explain part of the dev-vs-v3 misalignment.
+  - Coordinator decisions: Lex typed-decisions stays excluded (unidentified teacher labels); Kai/Lex encoder-corpus text
+    written by an unrecorded AI agent is NOT admitted — A7 rebuilds those sub-arms with deterministic templates around
+    the human labels instead.
+
+- 2026-09-28 15:55 — From ~27B Milestone 1 (gist `06-decision-2-27b.md`; integration `1e34430b3`):
+  - **Qwen3.5-family (gated-delta) training runtime fix — 9B/Lux, 0.8B–4B decoder and 27B tracks, read this.** Keep the
+    image's FLA kernels on the import path: a launcher PYTHONPATH that shadows `/opt/decision-fla` silently falls back to
+    the reference gated-delta implementation, which crashed 27B LoRA within 13 updates in 6/6 attempts (a likely cause of
+    the earlier 9B SIGSEGV at step 106 as well). Also use a shared, persisted Triton autotune cache for training AND
+    reload: FLA without it trains but does not reproduce across processes; with it, reload matched within 6e-8 at
+    BEST368 speed. Details in `v2/27b/records/`.
+  - 27B incumbent (own-lineage BEST368 from official Qwen3.8-27B): post-key v3 56.75 vs AutoJev-27B 72.31
+    (−15.6 [−19.6, −10.8]); public 231 200 vs 200. The gap is typed reasoning on held-out families (T .555 vs .887;
+    constraint competition .295 vs 1.0, Score resource ledger .353 vs .705, exception stack .590 vs .843); human
+    transfer is level (H .581 vs .590).
+  - **Package input limits:** 76 human-transfer inputs exceeded the incumbent's 4,096-token package limit and counted as
+    failures (AutoJev: 13 invalid). Every tier packages at 8,192 tokens where the backbone supports it, and compares
+    against a same-limit control.
+  - Frozen-backbone decision heads also collapse out of distribution at 27B (best ≤ 40.7): the frozen-head route is
+    closed for every tier. Qwen3.5-27B with the BEST368 recipe does not displace Qwen3.8-27B (proxy 67.55 vs 68.44;
+    seed noise 0.70).
+
+- 2026-09-28 15:30 — RELEASE PIPELINE READY (gist `07-decision-2-release.md`; integration `ca32e7411`). One command on a
+  node: `v2/release/release.sh --spec S --src <mirror> --work W --cpu|--gpu N --track T [--parity ...] --upload [--collect]`.
+  Profiles: `qwen-full`, `qwen-adapter` (LoRA; base pinned by repo/revision/per-file hash, not redistributed),
+  `kai-native`, `encoder-marker` (builder added when a 0.6B single-encoder candidate appears). A CPU dry run with Kai1 into
+  private `llm-semantic-router/dev2-release-staging` passed all 15 steps (real download + re-hash, System One native
+  examples, cross-process repeatability, parity drift 2.95e-6 vs scored predictions, card readback). Coordinator decisions:
+  - Release verification borrows ONE GPU from the owning size track, on the same node and image as the scored run.
+  - The coordinator writes the `dev2-release-decision/1` file for each size before `--collect`.
+  - Licence label: packages shipping upstream parts whose terms aren't Apache-2.0-compatible (e.g., Kai/Lex lineage with
+    the Gemma tokenizer) use `license: other` with an explicit composite statement (own weights + upstream part terms).
+    Apache-2.0 only when every upstream part is compatible (brief §5).
+  - The 1.0-style owl banner set in `v2/release/brand/` is the Decision 2.0 set; the older dark banners in
+    `publication/brand` are superseded.
+  - Size tracks: when a candidate passes the release gate, report its checkpoint (in a private HF staging model repo),
+    packaging profile and scored same-panel run dir. For adapter packages, pre-download the pinned base onto the node
+    (release containers have no network).
+
+- 2026-09-28 14:50 — INTERNAL PARALLELISM RULE: when you split work across internal subagents, launch them in one
+  message with several Task calls and `run_in_background: false` (they run concurrently and you stay active until all
+  return), pinned to `claude-opus-5-5-max`. Never end your turn while your milestone is unfinished; ending the turn
+  returns control to the coordinator as if you were done. A data-track turn ended this way at 14:47 and had to be resumed.
 
 - 2026-09-28 14:45 — From 0.6B Milestone 2 (gist `03-decision-2-06b-encoder.md`, results `811b10d07`):
   - **Padding bug warning for EVERY trainer.** The 0.6B trainer silently stalled freshly initialized decision heads when

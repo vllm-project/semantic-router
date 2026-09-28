@@ -1,0 +1,20 @@
+[
+ {
+  "name": "qwen3-0.6b-base@da87bfb6",
+  "path": "/data/dev2/hf-cache/models--Qwen--Qwen3-0.6B-Base/snapshots/da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+  "revision": null,
+  "kind": "native_decoder"
+ },
+ {
+  "name": "qwen3.5-0.8b-base@dc7cdfe2",
+  "path": "/data/dev2/hf-cache/models--Qwen--Qwen3.5-0.8B-Base/snapshots/dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+  "revision": null,
+  "kind": "native_decoder"
+ },
+ {
+  "name": "kai-0.6b@7185f514",
+  "path": "/data/dev2/private/models/Decision-1.0-Kai-0.6B@7185f514f54b8f93c55998b1e8f9c5cc67f0d029/native/tokenizer",
+  "revision": null,
+  "kind": "raw"
+ }
+]
