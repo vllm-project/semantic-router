@@ -1,0 +1,182 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "DEV2.0-0.8B",
+  "repo_id": "llm-semantic-router/DEV2.0-0.8B",
+  "identity": {
+    "model_sha256": "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b"
+  },
+  "report_sha256": "1f5cf33d85be3f4c8c8dea29654275e1e9939848a9d8d4d6d381c1152a8f0a11",
+  "paired_sha256": "fa62c29a1920dc8824b13ba5ccf1d8e9c4acaf68d8dad4e137cd1b6c84bc50bc",
+  "calibration": "none: raw model probabilities (temperature 1), no calibration.json; the CAL698 temperatures (calibration.json 9f76867d) were evaluated and rejected under the coordinator's 2026-09-28 23:15 UTC+8 rule",
+  "decided_by": "coordinator (Decision 2.0 program), under the user's full-autonomy mandate of 2026-09-28",
+  "prepared_by": "Decision 2.0 release engineering",
+  "decided_utc": "2026-09-28T15:55:00Z",
+  "revision_kind": "calibration-only revision of the released DEV2.0-0.8B: same weights and every answer unchanged; only calibration.json (removed), config.json, README.md and evaluation/* change",
+  "action": "Publish the T = 1 package as a new revision of the private repository llm-semantic-router/DEV2.0-0.8B, which stays the only item of the private 'Decision 2.0' collection. The repository and the collection stay private.",
+  "approved_package": "The T = 1 candidate verified on node A with MODEL_MANIFEST.json a1f5c3324013e309edaf5064e3d2d59604243f8cfe9ca29656d2c8f1b4c9bef0 (spec v2/release/specs/dev2-0p8b-t1-candidate.json). The publishing run rebuilds it from the mirror of the publishing commit: every package file other than MODEL_MANIFEST.json must equal the candidate's, and MODEL_MANIFEST.json may differ from a1f5c332 only in builder.source_commit.",
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the Hub revision and package manifest it verified. Collection items name the repository, not a revision, so from that seal on the collection item shows the new revision.",
+  "supersedes": {
+    "decision_sha256": "b2338c459d56a7b22b09365363532658060a0a67f53d19ec2784e47463b1a75e",
+    "revision": "0b631a85c19fb573aee34fc68bb413271ebe89f4",
+    "manifest_sha256": "0af27b1cbe9914ace33dda624ed4919f5f034bfa7f95a315aaaadd5a7353a91c",
+    "gate_sha256": "fb989b538c46a9079f3c4a625e98dcfe6852c715ce90f8c275913fd1ac4d1717",
+    "note": "the CAL698-calibrated release; its revision stays in the repository history"
+  },
+  "rationale": "Coordinator calibration rule of 2026-09-28 23:15 UTC+8 (supersedes 22:30): CAL698 per-type temperatures are adopted only if they do not worsen aggregate calibration (Brier and ECE) on the development panels (typed DEV and CSS pilot), decided on development panels and never on formal ones; otherwise the model ships T = 1 and the card discloses the evaluated-and-rejected temperatures. The released DEV2.0-0.8B's CAL698 temperatures (Choice 1.123, Noul 1.071, Score 0.395) worsen typed-DEV Brier / ECE-10 from 0.269 / 0.128 (raw) to 0.300 / 0.180 (the CSS pilot improves only slightly: median task Brier-sum / ECE-15 0.834 / 0.127 to 0.821 / 0.109), so they fail the rule and DEV2.0-0.8B ships T = 1. Only probabilities change: the weights (identity 60356482) and every answer are identical, so post-key same-panel JevArena v3 50.236, the paired interval vs Decision 1.0 Eos (+7.69 [+3.65, +13.32]), public 231 156 and JevArena-C1 event 1 (40.24 vs Eos 1.0 37.94, +2.31 [+0.29, +4.30]) are unchanged, and the release gate still holds. On the card the formal typed Brier / ECE become 0.254 / 0.103 (CAL698: 0.278 / 0.150); formal calibration numbers were not a decision input.",
+  "development_panel_check": {
+    "receipt": "v2/release/records/dev2-0p6b-release-2026-09-28/devcal/dev2-0p8b.json",
+    "receipt_sha256": "904afb3845e005010ec6a586d84ce105377a129ac19fb4d9fcbf1b7927dbbaf4",
+    "readout": "decoder-track development predictions of the E8F soup (identity 60356482, 8,192 tokens) with their CAL700 development temperatures undone (T = 1) and CAL698 applied, 0 answer changes (typed DEV 1,600 slots, CSS pilot 1,430 slots)",
+    "typed_dev": {
+      "raw": {
+        "brier": 0.26905552295284546,
+        "ece_10": 0.1279642993878181
+      },
+      "cal698": {
+        "brier": 0.3003285490451442,
+        "ece_10": 0.18011676821478864
+      }
+    },
+    "css_pilot": {
+      "raw": {
+        "median_task_brier_sum": 0.8339290493613282,
+        "median_task_ece_pmax_15": 0.12683458376639606
+      },
+      "cal698": {
+        "median_task_brier_sum": 0.8212476675565414,
+        "median_task_ece_pmax_15": 0.10852516361901819
+      }
+    },
+    "verdict": "reject CAL698: typed-DEV Brier and ECE both worsen"
+  },
+  "candidate": {
+    "recipe": "E8F: own Decision 1.0 Eos @363c4a5e, full fine-tuning on the M2 full mixture (A0s-r + v1 arms A1-A6h + all A7; 162,777 rows, 138.4M tokens, output d1dc33fc...), no teacher targets, seeds 20260926/27/28, uniform FP32 soup, no calibration (temperature 1), 16,384-token package",
+    "checkpoint": {
+      "repo_id": "llm-semantic-router/dev2-dec-staging",
+      "revision": "16c0929ac0df649d8223483e1adf419d78a647ed",
+      "folder": "m2/E8F-soup/checkpoint"
+    },
+    "calibration_sha256": null,
+    "max_input_tokens": 16384,
+    "loaded_parameters": 753446208,
+    "packaged_parameters": {
+      "backbone": 752393024,
+      "head": 1053184,
+      "residual": 0
+    },
+    "tier": "0.8B"
+  },
+  "gate_evidence": {
+    "post_key_v3": {
+      "candidate": 50.236,
+      "eos1_adopted": 42.547,
+      "delta": 7.69,
+      "ci95": [
+        3.65,
+        13.32
+      ],
+      "paired_sha256": "fa62c29a1920dc8824b13ba5ccf1d8e9c4acaf68d8dad4e137cd1b6c84bc50bc"
+    },
+    "vs_intern_decision_0p8b": {
+      "delta": 6.7,
+      "ci95": [
+        0.63,
+        10.35
+      ]
+    },
+    "vs_kev_0p8b": {
+      "delta": 7.02,
+      "ci95": [
+        1.33,
+        11.25
+      ]
+    },
+    "human_transfer": "not significantly below the tier leaders (H delta vs Intern +0.058 [-0.043, +0.119], vs Kev +0.050 [-0.041, +0.122]; vs Eos 1.0 -0.021 [-0.085, +0.088]); answer-based, unchanged",
+    "no_type_collapsed": "typed FINAL Choice .661, Noul .764, Score .268, none collapsed (eval record m4-dev2-08b-gates-and-c1-event1); answer-based, unchanged",
+    "jevarena_c1_event1": {
+      "candidate": 40.24,
+      "eos1": 37.94,
+      "delta": 2.31,
+      "ci95": [
+        0.29,
+        4.3
+      ],
+      "kev_0p8b": 39.06,
+      "intern_decision_0p8b": 34.58,
+      "items": 2874,
+      "note": "unchanged: the same weights give identical answers at temperature 1"
+    },
+    "public231": {
+      "candidate": 156,
+      "eos1": 142
+    },
+    "scored_run": {
+      "run": "m2-E8F-soup-nodeA at T = 1: the sealed CAL698 formal predictions (frozen runner, image f83b1d10..., node A GPU5) returned exactly to T = 1 by v2/release/retemper_predictions.py --undo (0 answer changes on typed 1,600, transfer 6,547, public 231 and mlx-diag 2,275 rows), adopted with same_panel adopt and sealed",
+      "report_sha256": "1f5cf33d85be3f4c8c8dea29654275e1e9939848a9d8d4d6d381c1152a8f0a11",
+      "seal_sha256": "522e813da74597418a9ef1a858e59e3d6f2839b7875c9cf29854182710ac73f1",
+      "predictions_sha256": {
+        "typed-final": "328c01294378c5a23bfc7fe560aa6d6715b70f65bf9e0104eabc3a7da0478426",
+        "css15": "995a0079601e71771336ddb663c2e31dd5910ff600e12c9f56b186be9841623d",
+        "public231": "8b030a6c0e01282a1e86b2e1355394c6cb84a0e0ac347af586e746481be392e8",
+        "mlx-diag": "5f333bc9bd20b0189d608ef5e1f232f26c443fc194ec5c7fb1ba1c7be48cf24d"
+      },
+      "paired_vs_adopted_eos1": {
+        "sha256": "fa62c29a1920dc8824b13ba5ccf1d8e9c4acaf68d8dad4e137cd1b6c84bc50bc",
+        "left_v3": 50.236,
+        "right_v3": 42.547,
+        "delta": 7.689,
+        "ci95": [
+          3.646,
+          13.316
+        ],
+        "replicates": 5000
+      },
+      "mlx_diag_score_sha256": "9c824e1dd695de659e525f1b38989bed0ad34bbc7c603dc178bc94bf2423eb57",
+      "probability_metrics_t1": {
+        "typed_brier": 0.25355869712809526,
+        "typed_ece_10": 0.10266916036296535,
+        "typed_by_type": {
+          "choice": {
+            "brier": 0.2232998440510428,
+            "ece_10": 0.08636307325793846
+          },
+          "noul": {
+            "brier": 0.20171442870045705,
+            "ece_10": 0.1336571180218999
+          },
+          "score": {
+            "brier": 0.41776494013747645,
+            "ece_10": 0.18483998073706442
+          }
+        },
+        "transfer_median_task_brier_sum": 0.6499635352175815,
+        "transfer_median_task_ece_pmax_15": 0.1635841262576665,
+        "public231_brier": 0.20042480910640192,
+        "public231_ece_pmax_15": 0.11361353621545191
+      }
+    }
+  },
+  "package_verification": {
+    "candidate_run": "release.sh without --upload on node A GPU0 (shared), mirror 89294e89f, scored kernel runtime (--site /opt/decision-fla --require-kernels, copy of the scored Triton autotune cache): all 6 local steps pass",
+    "candidate_manifest_sha256": "a1f5c3324013e309edaf5064e3d2d59604243f8cfe9ca29656d2c8f1b4c9bef0",
+    "candidate_answers_sha256": "f0a72416e62870b219368f505603cbb484e8ae9cf27c523bdcf3b178d532fdae",
+    "candidate_parity": "600 prompts (typed-final 150, css15 200, public231 100, mlx-diag 150) against the derived T = 1 predictions: 0 category changes, max drift 4.4e-16",
+    "model_files_vs_0b631a85": "identical (backbone, head, configs, tokenizer); changed files: calibration.json (removed), config.json, README.md, evaluation/EVALUATION.md, evaluation/manifest.json",
+    "build_draft_decision_sha256": "064afbc0c56df01ff7e55fffdccb2b0fc5088686cecd780e0a7d303c9675cbbb",
+    "publish_run": "release.sh --upload --collect --already-collected into a new work directory; its receipts and gate.json are recorded next to this file"
+  },
+  "licence_decision": "apache-2.0, unchanged: every weight-lineage component is Apache-2.0 (own weights, Decision 1.0 Eos @363c4a5e, Qwen3.5-0.8B @2fc06364 text backbone and tokenizer). CC BY / CC BY-SA / MIT / OANC training data are credited in ATTRIBUTIONS.md. Kev-0.8B stays on the card with a note that its repository has no LICENSE file (card declares Apache-2.0); the XNLI-based (CC BY-NC) mlx-diag Score part and JPT-0.8B (CC BY-NC) stay off the card.",
+  "disclosures": [
+    "post-key same-panel label; public 231 is not the official sealed JevBench rank",
+    "typed Score 107 vs 120 of 400; never predicts Score level 0 on typed FINAL",
+    "human transfer H 0.440 vs 0.461; eight transfer tasks below Eos 1.0",
+    "mlx-diag non-English Noul 54.2% vs 59.2%",
+    "C1: below Eos 1.0 on Russian star ratings, tutoring-rapport Noul, Arabic multiple choice, long inputs and non-English overall",
+    "seed dependence: single seeds 49.78 / 47.36 / 41.08; released artifact is the three-seed soup",
+    "no teacher targets; training data families and licences",
+    "GPU-verified runtime; CPU not verified",
+    "calibration: raw probabilities (temperature 1); the CAL698 temperatures were evaluated and not adopted because they worsened calibration on out-of-distribution development data"
+  ]
+}

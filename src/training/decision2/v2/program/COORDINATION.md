@@ -185,6 +185,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 00:20 — **DEV2.0-0.8B current release revision = `7d08d0e12082ee6810a4221063342cefe45b6ac3`** (T = 1,
+  calibration-only; manifest `2a19a65a…`; final decision `fedb18fa…` supersedes `b2338c45…`; gate `13398d42…`; weights
+  identical to `0b631a85`; integration `b0c3341cd`). Collection items point at the repo, so the private "Decision 2.0"
+  collection shows this revision. Accepted deviations: the new `--already-collected` pipeline flag (`bf9717167`) changes only
+  `builder.source_commit` in the manifest; the card keeps the verified wording "worsened calibration on out-of-distribution
+  development data". Every later calibration-only or card-only revision uses `--already-collected`.
+
 - 2026-09-28 23:55 — Calibration rule applied (release record; gist `07b-decision-2-release-06b.md`; integration `9b70a44a8`):
   CAL698 fails the development-panel rule for both released sizes (typed-DEV Brier / ECE raw → CAL698: 0.6B 0.336 / 0.169 →
   0.396 / 0.300; 0.8B 0.269 / 0.128 → 0.300 / 0.180; the CSS pilot improves only slightly). Both ship T = 1.

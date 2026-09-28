@@ -113,6 +113,13 @@ without `--collect`); `gate seal`, and therefore `--collect`, accepts only a
 fills in the card's confirmation line in the spec, writes the final decision,
 and reruns `release.sh ... --upload --collect` into a new work directory.
 
+A later revision of a collected release (for example a calibration-only
+revision) needs its own final decision and `--upload --collect
+--already-collected`. Collection items name a repository, not a revision, so
+the repository is already in the collection when the pre-collect readback runs;
+the flag makes that readback require the item instead of its absence, and
+`gate seal` then binds the new decision to the new revision.
+
 `hub download` is the real `hf download <repo> --revision <sha> --local-dir <fresh
 dir>` with a fresh cache. `readback` checks the private flag, the exact revision,
 each remote file's LFS SHA-256 or git blob id against the package, the Hub-parsed
