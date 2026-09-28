@@ -90,17 +90,34 @@ func TestValidateSelectionResultAcceptsModelAndLoRAReferences(t *testing.T) {
 	}
 }
 
+func TestValidateSelectionResultChecksSelectedCandidate(t *testing.T) {
+	ctx := &SelectionContext{CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}}}
+	candidate := ctx.CandidateModels[1]
+	if err := ValidateSelectionResult(ctx, &SelectionResult{SelectedModel: "model-b", SelectedCandidate: &candidate}); err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range []*SelectionResult{
+		{SelectedModel: "model-a", SelectedCandidate: &candidate},
+		{SelectedModel: "model-b", SelectedCandidate: &config.ModelRef{Model: "model-b", Weight: 2}},
+	} {
+		if err := ValidateSelectionResult(ctx, result); !errors.Is(err, ErrSelectedModelNotCandidate) {
+			t.Fatalf("result %+v: expected %v, got %v", result, ErrSelectedModelNotCandidate, err)
+		}
+	}
+}
+
 func TestGlobalSelectRejectsInvalidSelectorResult(t *testing.T) {
-	oldRegistry := GlobalRegistry
+	oldRegistry := GetGlobalRegistry()
 	defer func() {
-		GlobalRegistry = oldRegistry
+		SetGlobalRegistry(oldRegistry)
 	}()
 
 	method := SelectionMethod("stub_invalid_result")
-	GlobalRegistry = NewRegistry()
-	GlobalRegistry.Register(method, stubSelector{
+	registry := NewRegistry()
+	registry.Register(method, stubSelector{
 		result: &SelectionResult{SelectedModel: "other"},
 	})
+	SetGlobalRegistry(registry)
 
 	_, err := Select(context.Background(), method, &SelectionContext{
 		CandidateModels: createCandidateModels("model-a", "model-b"),
@@ -111,14 +128,15 @@ func TestGlobalSelectRejectsInvalidSelectorResult(t *testing.T) {
 }
 
 func TestGlobalSelectRejectsNilSelectorResult(t *testing.T) {
-	oldRegistry := GlobalRegistry
+	oldRegistry := GetGlobalRegistry()
 	defer func() {
-		GlobalRegistry = oldRegistry
+		SetGlobalRegistry(oldRegistry)
 	}()
 
 	method := SelectionMethod("stub_nil_result")
-	GlobalRegistry = NewRegistry()
-	GlobalRegistry.Register(method, stubSelector{})
+	registry := NewRegistry()
+	registry.Register(method, stubSelector{})
+	SetGlobalRegistry(registry)
 
 	_, err := Select(context.Background(), method, &SelectionContext{
 		CandidateModels: createCandidateModels("model-a"),

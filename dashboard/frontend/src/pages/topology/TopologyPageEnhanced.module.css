@@ -97,7 +97,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  max-width: 22rem;
+  width: min(380px, calc(100% - 32px));
   padding: 0.75rem 0.85rem;
   border: 1px solid #303036;
   border-radius: 6px;
@@ -123,6 +123,42 @@
   margin: 0;
   color: #71717a;
   font-size: 0.72rem;
+}
+
+.scopeControl {
+  display: grid;
+  gap: 5px;
+  margin-top: 7px;
+  padding-top: 9px;
+  border-top: 1px solid #303036;
+}
+
+.scopeControl label {
+  color: #a1a1aa;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scopeSelect {
+  width: 100%;
+  height: 30px;
+  padding: 0 28px 0 9px;
+  overflow: hidden;
+  border: 1px solid #3f3f46;
+  border-radius: 5px;
+  outline: none;
+  background: #18181b;
+  color: #f4f4f5;
+  font: inherit;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scopeSelect:focus-visible {
+  border-color: #71717a;
+  box-shadow: 0 0 0 2px rgba(161, 161, 170, 0.22);
 }
 
 .layoutToolbar {
@@ -545,6 +581,7 @@
   .canvasTitle {
     top: 10px;
     left: 10px;
+    width: calc(100% - 20px);
     max-width: calc(100% - 20px);
   }
 }

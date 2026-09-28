@@ -1,207 +1,92 @@
-# 使用 vLLM Production Stack 安装
-
-本教程改编自 [vLLM production stack 教程](https://github.com/vllm-project/production-stack/blob/main/tutorials/24-semantic-router-integration.md)
-
-## 什么是 vLLM Semantic Router？
-
-vLLM Semantic Router 是一个智能的 Mixture of Models (MoM) Router，作为 Envoy 外部处理器运行，将 OpenAI API 兼容请求 Semantic Router 到最合适的后端模型。使用基于 BERT 的分类，它通过将请求（例如 math、code、creative、general）匹配到专业模型来提高质量和成本效率。
-
-- **模型自动选择**：将 math、creative writing、code 和 general 查询路由到最适合的模型。
-- **安全与隐私**：PII 检测、Prompt Guard 和敏感 prompt 的安全路由。
-- **性能优化**：Semantic Cache 和更好的工具选择以减少延迟和 token。
-- **架构**：紧密的 Envoy ExtProc 集成；双 Go 和 Python 实现；生产就绪且可扩展。
-- **监控**：Grafana 仪表板、Prometheus 指标和 tracing，实现全面可见性。
-
-了解更多：[vLLM Semantic Router](https://vllm-sr.ai/docs/intro)
-
-## 集成有什么好处？
-
-vLLM Production Stack 提供了多种部署方式，可以启动 vLLM 服务器，将流量定向到不同模型，通过 Kubernetes API 执行服务发现和容错，并支持轮询、基于会话、前缀感知、KV 感知和分解预填充路由，原生支持 LMCache。 Semantic Router 添加了一个系统智能层，对每个用户请求进行分类，从池中选择最合适的模型，注入领域特定的系统提示词，执行语义缓存并执行企业级安全检查，如 PII 和越狱检测。
-
-通过结合这两个系统，我们获得了一个统一的推理堆栈。Semantic Router 确保每个请求由最佳可能的模型回答。Production-Stack 路由最大化基础设施和推理效率，并暴露丰富的指标。
-
+---
+title: 与 vLLM Production Stack 集成
+description: 将 Semantic Router 的模型池选择连接到由 vLLM Production Stack 管理的模型服务。
+translation:
+  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_file: "docs/installation/k8s/production-stack.md"
+  outdated: false
 ---
 
-本教程将指导您：
+# 与 vLLM Production Stack 集成
 
-- 部署一个最小的 vLLM Production Stack
-- 部署 vLLM Semantic Router 并将其指向您的 vLLM Router 服务
-- 通过 Envoy AI Gateway 测试 endpoint
+当 vLLM Production Stack 已经负责模型部署、服务发现和副本调度，而 Semantic Router 应根据请求含义和策略选择模型池时，使用此拓扑。
 
-## 前置条件
+本页描述集成约定。Production Stack 发行版和 Helm values 独立变化，因此请按当前 [Production Stack 文档](https://github.com/vllm-project/production-stack) 安装，不要从本指南复制冻结的 chart 配置。
 
-- kubectl
-- Helm
-- Kubernetes 集群（kind、minikube、GKE 等）
+## 职责划分
 
----
+| 组件 | 负责 |
+| --- | --- |
+| Semantic Router | 信号、决策、模型池选择，以及按配方作用的插件。 |
+| vLLM Production Stack | 模型服务器、服务发现、副本调度和推理生命周期。 |
+| Gateway | 客户端流量，以及对 Semantic Router 的 ExtProc 连接。 |
 
-## 步骤 1：使用您的 Helm values 部署 vLLM Production Stack
+Semantic Router 选择合格模型。随后 Production Stack 选择服务该模型的副本。仅当决策和插件执行策略时，PII、越狱或其他信号才会影响流量；仅检测不会拦截请求。
 
-使用您的 chart 和位于 `tutorials/assets/values-23-SR.yaml` 的 values 文件。
+## 开始之前
+
+需要：
+
+- 可用的 Production Stack 部署，且至少有一个 OpenAI 兼容模型端点；
+- 这些端点的稳定 Kubernetes 服务名称；
+- 能通过 ExtProc 调用 Semantic Router 的 Gateway；以及
+- `kubectl`、Helm、模型凭证和足够的推理容量。
+
+不要将 Router 提供商绑定到 Service `ClusterIP`。使用 Kubernetes DNS，以便配置在 Service 重建后仍然有效。
+
+## 1. 验证模型服务
+
+按上游安装指南操作，然后记录模型名称、命名空间、Service 名称和端口：
 
 ```bash
-helm repo add vllm-production-stack https://vllm-project.github.io/production-stack
-helm install vllm-stack vllm-production-stack/vllm-stack -f ./tutorials/assets/values-23-SR.yaml
+kubectl get services -A
+kubectl get pods -A
 ```
 
-作为参考，以下是示例 value 文件：
+加入 Semantic Router 之前，向 Production Stack 端点发送直接的 Chat Completions 请求。这样可以把后端或调度器故障与语义路由故障分开。
+
+## 2. 在规范配置中绑定模型
+
+为策略要选择的每个模型池创建一个 Semantic Router 提供商模型。Kubernetes 后端引用使用此形状：
 
 ```yaml
-servingEngineSpec:
-  runtimeClassName: ""
-  strategy:
-    type: Recreate
-  modelSpec:
-  - name: "qwen3"
-    repository: "lmcache/vllm-openai"
-    tag: "v0.3.7"
-    modelURL: "Qwen/Qwen3-8B"
-    pvcStorage: "50Gi"
-    vllmConfig:
-      # maxModelLen: 131072
-      extraArgs: ["--served-model-name", "Qwen/Qwen3-8B", "qwen3"]
-
-    replicaCount: 2
-
-    requestCPU: 8
-    requestMemory: "16Gi"
-    requestGPU: 1
-
-routerSpec:
-  repository: lmcache/lmstack-router
-  tag: "latest"
-  resources:
-    requests:
-      cpu: "1"
-      memory: "2G"
-    limits:
-      cpu: "1"
-      memory: "2G"
-  routingLogic: "roundrobin"
-  sessionKey: "x-user-id"
+providers:
+  defaults:
+    model: production/qwen3
+  models:
+    - name: production/qwen3
+      provider_model_id: Qwen/Qwen3-8B
+      backend_refs:
+        - name: production-stack
+          endpoint: vllm-router-service.default.svc.cluster.local:80
+          protocol: http
+          provider: vllm
+          weight: 100
 ```
 
-识别 chart 创建的路由服务的 ClusterIP 和端口（名称可能有所不同）：
+用部署中的值替换端点和模型标识。若 Production Stack 为每个模型暴露不同服务，则为每个服务创建 binding。若它暴露一个多模型服务，则保持不同的提供商模型，并使用后端所服务的模型标识。
+
+添加引用这些提供商名称的模型卡、决策和入口，然后校验完整文档：
 
 ```bash
-kubectl get svc vllm-router-service
-# 记录路由服务的 ClusterIP 和端口（例如 10.97.254.122:80）
+vllm-sr config validate --config config.yaml
 ```
 
----
+## 3. 部署 Semantic Router
 
-## 步骤 2：部署 vLLM Semantic Router 并将其指向您的 vLLM Router 服务
+使用[配置工作流](../configuration-workflows#helm) 通过 `configOverride` 部署已校验的配置，然后接入受支持的 [Kubernetes 网关](ai-gateway) 之一。生产环境固定 chart 和镜像版本；开发用的 `0.0.0-latest` chart 用于测试当前 main。
 
-按照官方网站的官方指南和**以下更新的配置文件**：[在 Kubernetes 中安装](https://vllm-sr.ai/docs/installation/k8s/ai-gateway)。
+上游 [Semantic Router 集成教程](https://github.com/vllm-project/production-stack/blob/main/tutorials/24-semantic-router-integration.md) 可以提供额外背景，但应用前请对照当前 Production Stack 发行版审阅其镜像标签和 values。
 
-使用自定义 values 通过 Helm 部署：
+## 4. 验证两层路由
 
-```bash
-   # 从 GHCR OCI 仓库部署 vLLM Semantic Router 并使用自定义 values
-   # （可选）如果使用镜像代理，请添加：--set global.imageRegistry=<your-registry>
-   helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
-     --version v0.0.0-latest \
-     --namespace vllm-semantic-router-system \
-     --create-namespace \
-     -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml
+1. 向每个模型服务发送直接请求。
+2. 通过 Gateway 使用已配置的虚拟模型发送同一请求。
+3. 检查 Semantic Router 选择头。
+4. 确认 Production Stack 将请求发送到所选模型池的副本。
 
-   kubectl wait --for=condition=Available deployment/semantic-router \
-     -n vllm-semantic-router-system --timeout=600s
-
-   # 安装 Envoy Gateway
-   helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
-     --version v0.0.0-latest \
-     --namespace envoy-gateway-system \
-     --create-namespace \
-     -f https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml
-
-   # 安装 Envoy AI Gateway
-   helm upgrade -i aieg oci://docker.io/envoyproxy/ai-gateway-helm \
-     --version v0.0.0-latest \
-     --namespace envoy-ai-gateway-system \
-     --create-namespace
-
-   # 安装 Envoy AI Gateway CRDs
-   helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm \
-     --version v0.0.0-latest \
-     --namespace envoy-ai-gateway-system
-
-   kubectl wait --timeout=300s -n envoy-ai-gateway-system \
-     deployment/ai-gateway-controller --for=condition=Available
-```
-
-**注意**：values 文件包含 Semantic Router 的配置。您可以从 [values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml) 下载并自定义以匹配您的 vLLM Production Stack 设置。
-
-创建 LLM 演示后端和 AI Gateway 路由：
-
-```bash
-   # 应用 LLM 演示后端
-   kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
-   # 应用 AI Gateway 路由
-   kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
-```
-
----
-
-## 步骤 3：测试部署
-
-端口转发到 Envoy 服务并发送测试请求，按照指南：
-
-```bash
-  export ENVOY_SERVICE=$(kubectl get svc -n envoy-gateway-system \
-    --selector=gateway.envoyproxy.io/owning-gateway-namespace=default,gateway.envoyproxy.io/owning-gateway-name=semantic-router \
-    -o jsonpath='{.items[0].metadata.name}')
-
-  kubectl port-forward -n envoy-gateway-system svc/$ENVOY_SERVICE 8080:80
-```
-
-发送对话补全请求：
-
-```bash
-  curl -i -X POST http://localhost:8080/v1/chat/completions \
-    -H "Content-Type: application/json" \
-    -d '{
-      "model": "MoM",
-      "messages": [
-        {"role": "user", "content": "What is the derivative of f(x) = x^3?"}
-      ]
-    }'
-```
-
----
+通用 Gateway 检查见[测试 Kubernetes Gateway 部署](gateway-testing)。成功的语义决策并不能证明所选模型已就绪，因此同时保留直接和已路由的生成测试。
 
 ## 清理
 
-删除整个部署：
-
-```bash
-# 删除 Gateway API 资源和演示 LLM
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
-
-# 删除Semantic Router 
-helm uninstall semantic-router -n vllm-semantic-router-system
-
-# 删除 AI gateway
-helm uninstall aieg -n envoy-ai-gateway-system
-helm uninstall aieg-crd -n envoy-ai-gateway-system
-
-# 删除 Envoy gateway
-helm uninstall eg -n envoy-gateway-system
-
-# 删除 vLLM Production Stack
-helm uninstall vllm-stack
-
-# 删除 kind 集群（可选）
-kind delete cluster --name semantic-router-cluster
-```
-
----
-
-## 故障排除
-
-- 如果网关无法访问，请按照指南检查 Gateway 和 Envoy 服务。
-- 如果推理池未就绪，请 `kubectl describe` InferencePool 并检查 controller 日志。
-- 如果 Semantic Router 无响应，请检查其 pod 状态和日志。
-- 如果返回错误代码，请检查 production stack 路由日志。
+按各自指南中的命令移除 Semantic Router 和 Gateway 资源。用安装时选择的 release 名称和命名空间移除 Production Stack；不要复制为不同发行版编写的清理命令。

@@ -36,8 +36,8 @@ impl Bm25Rule {
             })
             .collect();
 
-        let engine = SearchEngineBuilder::<usize>::with_documents(Language::English, documents)
-            .build();
+        let engine =
+            SearchEngineBuilder::<usize>::with_documents(Language::English, documents).build();
 
         Bm25Rule {
             name,
@@ -51,6 +51,7 @@ impl Bm25Rule {
 }
 
 /// BM25 keyword classifier holding multiple rules.
+#[derive(Default)]
 pub struct Bm25Classifier {
     rules: Vec<Bm25Rule>,
 }
@@ -66,7 +67,7 @@ pub struct Bm25ClassifyResult {
 
 impl Bm25Classifier {
     pub fn new() -> Self {
-        Bm25Classifier { rules: Vec::new() }
+        Self::default()
     }
 
     pub fn add_rule(
@@ -78,63 +79,66 @@ impl Bm25Classifier {
         case_sensitive: bool,
     ) {
         self.rules.push(Bm25Rule::new(
-            name, operator, keywords, threshold, case_sensitive,
+            name,
+            operator,
+            keywords,
+            threshold,
+            case_sensitive,
         ));
     }
 
-    /// Classify text against all rules (first-match semantics).
-    pub fn classify(&self, text: &str) -> Option<Bm25ClassifyResult> {
-        for rule in &self.rules {
-            let query = if rule.case_sensitive {
-                text.to_string()
-            } else {
-                text.to_lowercase()
-            };
+    fn classify_rule(rule: &Bm25Rule, text: &str) -> Option<Bm25ClassifyResult> {
+        let query = if rule.case_sensitive {
+            text.to_string()
+        } else {
+            text.to_lowercase()
+        };
 
-            // Search for all keywords (limit = total keywords)
-            let results: Vec<SearchResult<usize>> =
-                rule.engine.search(&query, rule.keywords.len());
+        // Search for all keywords (limit = total keywords).
+        let results: Vec<SearchResult<usize>> = rule.engine.search(&query, rule.keywords.len());
 
-            // Collect keywords that score above threshold
-            let mut matched_keywords = Vec::new();
-            let mut matched_scores = Vec::new();
-            for result in &results {
-                if result.score as f32 >= rule.threshold {
-                    matched_keywords.push(rule.keywords[result.document.id].clone());
-                    matched_scores.push(result.score as f32);
-                }
-            }
-
-            let matches = match rule.operator.as_str() {
-                "OR" => !matched_keywords.is_empty(),
-                "AND" => matched_keywords.len() == rule.keywords.len(),
-                "NOR" => matched_keywords.is_empty(),
-                _ => false,
-            };
-
-            if matches {
-                let match_count = matched_keywords.len();
-                return Some(Bm25ClassifyResult {
-                    rule_name: rule.name.clone(),
-                    matched_keywords: if rule.operator == "NOR" {
-                        Vec::new()
-                    } else {
-                        matched_keywords
-                    },
-                    scores: if rule.operator == "NOR" {
-                        Vec::new()
-                    } else {
-                        matched_scores
-                    },
-                    match_count: if rule.operator == "NOR" {
-                        0
-                    } else {
-                        match_count
-                    },
-                    total_keywords: rule.keywords.len(),
-                });
+        let mut matched_keywords = Vec::new();
+        let mut matched_scores = Vec::new();
+        for result in &results {
+            if result.score >= rule.threshold {
+                matched_keywords.push(rule.keywords[result.document.id].clone());
+                matched_scores.push(result.score);
             }
         }
-        None
+
+        let matches = match rule.operator.as_str() {
+            "OR" => !matched_keywords.is_empty(),
+            "AND" => matched_keywords.len() == rule.keywords.len(),
+            "NOR" => matched_keywords.is_empty(),
+            _ => false,
+        };
+        if !matches {
+            return None;
+        }
+
+        let match_count = matched_keywords.len();
+        let is_nor = rule.operator == "NOR";
+        Some(Bm25ClassifyResult {
+            rule_name: rule.name.clone(),
+            matched_keywords: if is_nor { Vec::new() } else { matched_keywords },
+            scores: if is_nor { Vec::new() } else { matched_scores },
+            match_count: if is_nor { 0 } else { match_count },
+            total_keywords: rule.keywords.len(),
+        })
+    }
+
+    /// Classify text using the legacy first-match contract.
+    pub fn classify(&self, text: &str) -> Option<Bm25ClassifyResult> {
+        self.rules
+            .iter()
+            .find_map(|rule| Self::classify_rule(rule, text))
+    }
+
+    /// Return every matching rule in declaration order.
+    pub fn classify_all(&self, text: &str) -> Vec<Bm25ClassifyResult> {
+        self.rules
+            .iter()
+            .filter_map(|rule| Self::classify_rule(rule, text))
+            .collect()
     }
 }

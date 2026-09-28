@@ -107,10 +107,10 @@ class TestSystemRoutes:
         assert body["service"] == "vllm-sr-sim"
         assert body["docs"] == "/api/docs"
 
-    def test_docs_resolve_openapi_under_forwarded_prefix(self, client):
-        r = client.get("/api/docs", headers={"x-forwarded-prefix": "/api/fleet-sim"})
+    def test_docs_resolve_openapi_under_generic_reverse_proxy_prefix(self, client):
+        r = client.get("/api/docs", headers={"x-forwarded-prefix": "/planning"})
         assert r.status_code == 200
-        assert "/api/fleet-sim/api/openapi.json" in r.text
+        assert "/planning/api/openapi.json" in r.text
 
 
 # ── Workload routes ───────────────────────────────────────────────────────────

@@ -2,32 +2,76 @@ package classification
 
 import (
 	"fmt"
+	"sort"
+	"sync"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
+
+// PreloadKnowledgeBases materializes every KB referenced by this classifier.
+// Stable ordering makes startup diagnostics deterministic.
+func (c *Classifier) PreloadKnowledgeBases() error {
+	if c == nil || len(c.kbClassifiers) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(c.kbClassifiers))
+	for name := range c.kbClassifiers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if err := c.kbClassifiers[name].Preload(); err != nil {
+			return fmt.Errorf("preload knowledge base %q: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// HasPreparedKnowledgeBases reports whether KB consumers have their own prepared
+// embedding providers. Other recipe or global providers cannot satisfy this.
+func (c *Classifier) HasPreparedKnowledgeBases() bool {
+	if c == nil || len(c.kbClassifiers) == 0 {
+		return false
+	}
+	for _, kb := range c.kbClassifiers {
+		if kb == nil || kb.provider == nil {
+			return false
+		}
+	}
+	return true
+}
 
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
+	closeOnce         sync.Once
+	closeErr          error
+	modalityInference *ownedModalityClassifier
+	embeddingProvider embedding.Provider
+	embeddingSet      *embedding.Set
+	ownsEmbeddingSet  bool
+	models            *classifierModelRuntime
 	// Dependencies - In-tree classifiers
-	categoryInitializer         CategoryInitializer
-	categoryInference           CategoryInference
-	jailbreakInitializer        JailbreakInitializer
-	jailbreakInference          JailbreakInference
-	piiInitializer              PIIInitializer
-	piiInference                PIIInference
-	keywordClassifier           *KeywordClassifier
-	keywordEmbeddingInitializer EmbeddingClassifierInitializer
-	keywordEmbeddingClassifier  *EmbeddingClassifier
+	categoryInitializer        CategoryInitializer
+	categoryInference          CategoryInference
+	jailbreakInitializer       JailbreakInitializer
+	jailbreakInference         SequenceClassifierBackend
+	piiInitializer             PIIInitializer
+	piiInference               PIIInference
+	keywordClassifier          *KeywordClassifier
+	keywordEmbeddingClassifier *EmbeddingClassifier
 
 	// Dependencies - MCP-based classifiers
 	mcpCategoryInitializer MCPCategoryInitializer
 	mcpCategoryInference   MCPCategoryInference
 
 	// Hallucination mitigation classifiers
-	factCheckClassifier   *FactCheckClassifier
-	hallucinationDetector *HallucinationDetector
-	feedbackDetector      *FeedbackDetector
-	reaskClassifier       *ReaskClassifier
+	factCheckClassifier           *FactCheckClassifier
+	hallucinationDetector         *HallucinationDetector
+	endpointHallucinationDetector *EndpointHallucinationDetector
+	feedbackDetector              *FeedbackDetector
+	reaskClassifier               *ReaskClassifier
 
 	// Preference classifier for route matching via external LLM
 	preferenceClassifier *PreferenceClassifier
@@ -37,6 +81,8 @@ type Classifier struct {
 
 	// Context classifier for token count-based routing
 	contextClassifier *ContextClassifier
+
+	admissionRegistry *admission.Registry
 	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
 	tokenCalibrator *CalibratedTokenCounter
 
@@ -45,6 +91,12 @@ type Classifier struct {
 
 	// Complexity classifier for complexity-based routing using embedding similarity
 	complexityClassifier *ComplexityClassifier
+
+	// Remote complexity backends. At most one is set, and its presence means
+	// the local prototype path is not taken: score for score.v1, labels for
+	// label_distribution.v1.
+	complexityScoreBackend ScoringBackend
+	complexityLabelBackend SequenceClassifierBackend
 
 	// Event classifier for event-driven request routing
 	eventClassifier *EventClassifier
@@ -57,8 +109,9 @@ type Classifier struct {
 	authzClassifier *AuthzClassifier
 
 	// Knowledge-base classifiers keyed by configured KB name.
-	kbClassifiers map[string]*KnowledgeBaseClassifier
-
+	kbClassifiers      map[string]*KnowledgeBaseClassifier
+	genericClassifiers map[string]labelClassifier
+	safetyClassifiers  map[string]*safetyDetector
 	// Identity header names resolved from authz.identity config (or defaults).
 	// Used by EvaluateAllSignalsWithHeaders to read user identity from requests.
 	authzUserIDHeader     string
@@ -88,7 +141,7 @@ func withCategory(categoryMapping *CategoryMapping, categoryInitializer Category
 	}
 }
 
-func withJailbreak(jailbreakMapping *JailbreakMapping, jailbreakInitializer JailbreakInitializer, jailbreakInference JailbreakInference) option {
+func withJailbreak(jailbreakMapping *JailbreakMapping, jailbreakInitializer JailbreakInitializer, jailbreakInference SequenceClassifierBackend) option {
 	return func(c *Classifier) {
 		c.JailbreakMapping = jailbreakMapping
 		c.jailbreakInitializer = jailbreakInitializer
@@ -110,9 +163,8 @@ func withKeywordClassifier(keywordClassifier *KeywordClassifier) option {
 	}
 }
 
-func withKeywordEmbeddingClassifier(keywordEmbeddingInitializer EmbeddingClassifierInitializer, keywordEmbeddingClassifier *EmbeddingClassifier) option {
+func withKeywordEmbeddingClassifier(keywordEmbeddingClassifier *EmbeddingClassifier) option {
 	return func(c *Classifier) {
-		c.keywordEmbeddingInitializer = keywordEmbeddingInitializer
 		c.keywordEmbeddingClassifier = keywordEmbeddingClassifier
 	}
 }
@@ -132,6 +184,18 @@ func withKBClassifiers(classifiers map[string]*KnowledgeBaseClassifier) option {
 func withStructureClassifier(structureClassifier *StructureClassifier) option {
 	return func(c *Classifier) {
 		c.structureClassifier = structureClassifier
+	}
+}
+
+func withComplexityScoreBackend(backend ScoringBackend) option {
+	return func(c *Classifier) {
+		c.complexityScoreBackend = backend
+	}
+}
+
+func withComplexityLabelBackend(backend SequenceClassifierBackend) option {
+	return func(c *Classifier) {
+		c.complexityLabelBackend = backend
 	}
 }
 
@@ -175,6 +239,8 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 	for _, option := range options {
 		option(classifier)
 	}
+
+	classifier.applyAdmissionGates()
 
 	// Build category name mappings to support generic categories in config
 	classifier.buildCategoryNameMappings()

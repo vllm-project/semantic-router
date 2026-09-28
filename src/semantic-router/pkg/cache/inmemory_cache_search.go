@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -41,13 +42,17 @@ func (c *InMemoryCache) refreshHNSWIfStaleDuringSearch() {
 //
 // The check order is load-bearing:
 //  1. entries without a stored response are not matchable;
-//  2. the hard user-scope gate (see CacheScopeNamespaceOf) drops a different
+//  2. the exact model partition drops entries owned by another model/recipe;
+//  3. the hard user-scope gate (see CacheScopeNamespaceOf) drops a different
 //     user's entry BEFORE the expiry check, so an out-of-scope entry never
 //     counts toward expiredCount;
-//  3. expired entries are not matchable but are reported via expired=true so
+//  4. expired entries are not matchable but are reported via expired=true so
 //     the caller can tally them.
-func (c *InMemoryCache) entryEligible(entry CacheEntry, scopeNamespace string, now time.Time) (ok bool, expired bool) {
+func (c *InMemoryCache) entryEligible(entry CacheEntry, model, scopeNamespace string, now time.Time) (ok bool, expired bool) {
 	if entry.ResponseBody == nil {
+		return false, false
+	}
+	if entry.Model != model {
 		return false, false
 	}
 	// Hard user-scope gate: never return another user's entry even if its
@@ -61,61 +66,102 @@ func (c *InMemoryCache) entryEligible(entry CacheEntry, scopeNamespace string, n
 	return true, false
 }
 
+type cacheSearchResult struct {
+	bestIndex             int
+	bestEntry             CacheEntry
+	bestSimilarity        float32
+	entriesChecked        int
+	expiredCount          int
+	polarityRejected      bool
+	polarityRejectedEntry CacheEntry
+	polarityRejectedScore float32
+}
+
+func (c *InMemoryCache) considerSearchCandidate(
+	result *cacheSearchResult,
+	queryTokens []string,
+	threshold float32,
+	entryIndex int,
+	entry CacheEntry,
+	queryEmbedding []float32,
+) {
+	dotProduct := embeddingDotProduct(queryEmbedding, entry.Embedding)
+	result.entriesChecked++
+
+	var cachedBuffer [32]string
+	cachedTokens := entry.polarityTokens
+	if dotProduct >= threshold && cachedTokens == nil {
+		// Directly constructed entries (including small fixtures) still obey the
+		// same guard; production insertion prepares this metadata once.
+		cachedTokens = tokenizeForPolarity(entry.Query, cachedBuffer[:0])
+	}
+	if dotProduct >= threshold && polarityTokensMismatch(queryTokens, cachedTokens) {
+		if !result.polarityRejected || dotProduct > result.polarityRejectedScore {
+			result.polarityRejected = true
+			result.polarityRejectedEntry = entry
+			result.polarityRejectedScore = dotProduct
+		}
+		return
+	}
+
+	if result.bestIndex == -1 || dotProduct > result.bestSimilarity {
+		result.bestSimilarity = dotProduct
+		result.bestIndex = entryIndex
+		result.bestEntry = entry
+	}
+}
+
 func (c *InMemoryCache) scanHNSWCandidates(
 	queryEmbedding []float32,
+	model string,
+	queryTokens []string,
+	threshold float32,
 	scopeNamespace string,
 	now time.Time,
-) (bestIndex int, bestSimilarity float32, entriesChecked int, expiredCount int) {
-	bestIndex = -1
+) cacheSearchResult {
+	result := cacheSearchResult{bestIndex: -1}
 	candidateIndices := c.hnswIndex.searchKNN(queryEmbedding, 10, c.hnswEfSearch, c.entries)
 	for _, entryIndex := range candidateIndices {
 		if entryIndex < 0 || entryIndex >= len(c.entries) {
 			continue
 		}
 		entry := c.entries[entryIndex]
-		ok, expired := c.entryEligible(entry, scopeNamespace, now)
+		ok, expired := c.entryEligible(entry, model, scopeNamespace, now)
 		if expired {
-			expiredCount++
+			result.expiredCount++
 		}
 		if !ok {
 			continue
 		}
-		dotProduct := embeddingDotProduct(queryEmbedding, entry.Embedding)
-		entriesChecked++
-		if bestIndex == -1 || dotProduct > bestSimilarity {
-			bestSimilarity = dotProduct
-			bestIndex = entryIndex
-		}
+		c.considerSearchCandidate(&result, queryTokens, threshold, entryIndex, entry, queryEmbedding)
 	}
 	logging.Debugf("InMemoryCache.FindSimilar: HNSW search checked %d candidates", len(candidateIndices))
-	return bestIndex, bestSimilarity, entriesChecked, expiredCount
+	return result
 }
 
 func (c *InMemoryCache) scanLinearForSimilarity(
 	queryEmbedding []float32,
+	model string,
+	queryTokens []string,
+	threshold float32,
 	scopeNamespace string,
 	now time.Time,
-) (bestIndex int, bestSimilarity float32, entriesChecked int, expiredCount int) {
-	bestIndex = -1
+) cacheSearchResult {
+	result := cacheSearchResult{bestIndex: -1}
 	for entryIndex, entry := range c.entries {
-		ok, expired := c.entryEligible(entry, scopeNamespace, now)
+		ok, expired := c.entryEligible(entry, model, scopeNamespace, now)
 		if expired {
-			expiredCount++
+			result.expiredCount++
 		}
 		if !ok {
 			continue
 		}
-		dotProduct := embeddingDotProduct(queryEmbedding, entry.Embedding)
-		entriesChecked++
-		if bestIndex == -1 || dotProduct > bestSimilarity {
-			bestSimilarity = dotProduct
-			bestIndex = entryIndex
-		}
+		c.considerSearchCandidate(&result, queryTokens, threshold, entryIndex, entry, queryEmbedding)
 	}
 	if !c.useHNSW {
 		logging.Debugf("InMemoryCache.FindSimilar: Linear search used (HNSW disabled)")
 	}
-	return bestIndex, bestSimilarity, entriesChecked, expiredCount
+	return result
 }
 
 // FindSimilar searches for semantically similar cached requests using the default threshold
@@ -125,113 +171,167 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
 func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+	result, err := c.LookupSimilarWithThreshold(context.Background(), model, query, threshold)
+	return result.ResponseBody, result.Found, err
+}
+
+// LookupSimilarWithThreshold returns a request-scoped lookup result.
+func (c *InMemoryCache) LookupSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error) {
 	start := time.Now()
 
 	if !c.enabled {
 		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: cache disabled")
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
-	queryPreview := query
-	if len(query) > 50 {
-		queryPreview = query[:50] + "..."
-	}
-	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
-		model, queryPreview, len(query), threshold)
+	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query=%s, threshold=%.4f",
+		model, logging.ContentDescriptor(query), threshold)
 
-	queryEmbedding, err := c.generateEmbedding(query)
+	queryEmbedding, err := c.generateEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("memory", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	bestIndex, bestEntry, bestSimilarity, entriesChecked, expiredCount := c.runFindSimilarEmbeddingSearch(queryEmbedding, CacheScopeNamespaceOf(query))
+	// Do not return a result if cancellation occurred during embedding.
+	if err := ctxErr(ctx); err != nil {
+		metrics.RecordCacheOperation("memory", "find_similar", "canceled", time.Since(start).Seconds())
+		return LookupResult{}, err
+	}
 
-	return c.finishFindSimilarSearch(
-		start, model, threshold,
-		bestIndex, bestEntry, bestSimilarity, entriesChecked, expiredCount,
+	search := c.runFindSimilarEmbeddingSearch(
+		queryEmbedding, model, query, threshold, CacheScopeNamespaceOf(query),
 	)
+
+	return c.finishFindSimilarSearch(ctx, start, model, query, threshold, search)
 }
 
-func (c *InMemoryCache) runFindSimilarEmbeddingSearch(queryEmbedding []float32, scopeNamespace string) (
-	bestIndex int,
-	bestEntry CacheEntry,
-	bestSimilarity float32,
-	entriesChecked int,
-	expiredCount int,
-) {
+func (c *InMemoryCache) runFindSimilarEmbeddingSearch(
+	queryEmbedding []float32,
+	model string,
+	query string,
+	threshold float32,
+	scopeNamespace string,
+) cacheSearchResult {
+	var queryBuffer [32]string
+	queryTokens := tokenizeForPolarity(query, queryBuffer[:0])
 	c.mu.RLock()
 	now := time.Now()
+	var result cacheSearchResult
 	if c.useHNSW && c.hnswIndex != nil {
 		c.refreshHNSWIfStaleDuringSearch()
-		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanHNSWCandidates(queryEmbedding, scopeNamespace, now)
+		result = c.scanHNSWCandidates(queryEmbedding, model, queryTokens, threshold, scopeNamespace, now)
+		if result.polarityRejected && (result.bestIndex < 0 || result.bestSimilarity < threshold) {
+			// HNSW is approximate; scan all entries before a polarity rejection
+			// hides a valid lower-ranked hit.
+			result = c.scanLinearForSimilarity(queryEmbedding, model, queryTokens, threshold, scopeNamespace, now)
+		}
 	} else {
-		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanLinearForSimilarity(queryEmbedding, scopeNamespace, now)
-	}
-	if bestIndex >= 0 {
-		bestEntry = c.entries[bestIndex]
+		result = c.scanLinearForSimilarity(queryEmbedding, model, queryTokens, threshold, scopeNamespace, now)
 	}
 	c.mu.RUnlock()
-	return bestIndex, bestEntry, bestSimilarity, entriesChecked, expiredCount
+	return result
+}
+
+// recordLexicalPolarityReject preserves caller-visible miss semantics while emitting
+// an event that distinguishes lexical polarity rejection from a threshold miss.
+func (c *InMemoryCache) recordLexicalPolarityReject(start time.Time, model, query, cachedQuery string, similarity, threshold float32) {
+	atomic.AddInt64(&c.missCount, 1)
+	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: POLARITY REJECT - similarity=%.4f >= threshold=%.4f but query and cached entry differ in polarity (negation/antonym); treating as miss",
+		similarity, threshold)
+	logging.LogEvent("cache_negation_reject", map[string]interface{}{
+		"backend":      "memory",
+		"similarity":   similarity,
+		"threshold":    threshold,
+		"model":        model,
+		"query":        logging.ContentDescriptor(query),
+		"cached_query": logging.ContentDescriptor(cachedQuery),
+	})
+	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
 }
 
 func (c *InMemoryCache) finishFindSimilarSearch(
+	ctx context.Context,
 	start time.Time,
 	model string,
+	query string,
 	threshold float32,
-	bestIndex int,
-	bestEntry CacheEntry,
-	bestSimilarity float32,
-	entriesChecked int,
-	expiredCount int,
-) ([]byte, bool, error) {
-	if expiredCount > 0 {
+	search cacheSearchResult,
+) (LookupResult, error) {
+	if search.expiredCount > 0 {
 		logging.Debugf("InMemoryCache: excluded %d expired entries during search (TTL: %ds)",
-			expiredCount, c.ttlSeconds)
+			search.expiredCount, c.ttlSeconds)
 		logging.LogEvent("cache_expired_entries_found", map[string]interface{}{
 			"backend":       "memory",
-			"expired_count": expiredCount,
+			"expired_count": search.expiredCount,
 			"ttl_seconds":   c.ttlSeconds,
 		})
 	}
 
-	if bestIndex < 0 {
+	// A valid lower-ranked candidate remains eligible after stronger candidates
+	// are rejected.
+	if search.polarityRejected && (search.bestIndex < 0 || search.bestSimilarity < threshold) {
+		c.recordLexicalPolarityReject(
+			start, model, query, search.polarityRejectedEntry.Query,
+			search.polarityRejectedScore, threshold,
+		)
+		return LookupResult{Similarity: search.polarityRejectedScore}, nil
+	}
+
+	if search.bestIndex < 0 {
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: no entries found with responses")
 		metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 
-	c.StoreSimilarity(bestSimilarity)
+	if search.bestSimilarity >= threshold {
+		// Candidate selection already excluded above-threshold lexical polarity
+		// mismatches. The optional NLI tier verifies the remaining winner once,
+		// outside the cache lock, before it is served or its access info is touched.
+		if result, handled, err := c.applyPolarityNLI(
+			ctx, start, model, query, search.bestEntry, search.bestSimilarity, threshold,
+		); handled {
+			return result, err
+		}
 
-	if bestSimilarity >= threshold {
 		atomic.AddInt64(&c.hitCount, 1)
 
 		c.mu.Lock()
-		c.updateAccessInfo(bestIndex, bestEntry)
+		c.updateAccessInfo(search.bestIndex, search.bestEntry)
 		c.mu.Unlock()
 
 		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
-			bestSimilarity, threshold, len(bestEntry.ResponseBody))
+			search.bestSimilarity, threshold, len(search.bestEntry.ResponseBody))
 		logging.LogEvent("cache_hit", map[string]interface{}{
 			"backend":    "memory",
-			"similarity": bestSimilarity,
+			"similarity": search.bestSimilarity,
 			"threshold":  threshold,
 			"model":      model,
 		})
 		metrics.RecordCacheOperation("memory", "find_similar", "hit", time.Since(start).Seconds())
-		return bestEntry.ResponseBody, true, nil
+		result := lookupResultFromTimestamps(
+			search.bestEntry.ResponseBody,
+			search.bestSimilarity,
+			search.bestEntry.Timestamp,
+			search.bestEntry.ExpiresAt,
+		)
+		var queryBuffer [32]string
+		result.NegationGuard = negationGuardOutcomeFor(tokenizeForPolarity(query, queryBuffer[:0]), search.bestEntry.Query)
+		return result, nil
 	}
 
 	atomic.AddInt64(&c.missCount, 1)
 	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f (checked %d entries)",
-		bestSimilarity, threshold, entriesChecked)
+		search.bestSimilarity, threshold, search.entriesChecked)
 	logging.LogEvent("cache_miss", map[string]interface{}{
 		"backend":         "memory",
-		"best_similarity": bestSimilarity,
+		"best_similarity": search.bestSimilarity,
 		"threshold":       threshold,
 		"model":           model,
-		"entries_checked": entriesChecked,
+		"entries_checked": search.entriesChecked,
 	})
 	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
-	return nil, false, nil
+	// A rejected candidate's score remains request-owned and is exposed on the
+	// debug and Replay surfaces to diagnose near-threshold misses.
+	return LookupResult{Similarity: search.bestSimilarity}, nil
 }

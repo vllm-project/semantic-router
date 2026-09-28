@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func validateRouterLearningConfig(cfg *RouterConfig) error {
+func validateGlobalRouterLearningConfig(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
@@ -15,8 +15,51 @@ func validateRouterLearningConfig(cfg *RouterConfig) error {
 	if err := validateRouterLearningProtectionConfig(cfg.RouterLearning.Protection); err != nil {
 		return err
 	}
-	for _, decision := range cfg.Decisions {
-		if err := validateDecisionAdaptationsConfig(decision.Name, decision.Adaptations); err != nil {
+	return validateRouterLearningStateStoreConfig(cfg.RouterLearning.StateStore)
+}
+
+func validateRouterLearningStateStoreConfig(cfg RouterLearningStateStoreConfig) error {
+	switch strings.TrimSpace(cfg.Backend) {
+	case "", "local":
+	case "redis":
+		if strings.TrimSpace(cfg.Redis.Address) == "" {
+			return fmt.Errorf("global.router.learning.state_store.redis.address is required for redis backend")
+		}
+	default:
+		return fmt.Errorf(
+			"global.router.learning.state_store.backend must be %q or %q",
+			"local",
+			"redis",
+		)
+	}
+	if cfg.TTLSeconds < 0 {
+		return fmt.Errorf("global.router.learning.state_store.ttl_seconds cannot be negative")
+	}
+	if cfg.TimeoutMS < 0 {
+		return fmt.Errorf("global.router.learning.state_store.timeout_ms cannot be negative")
+	}
+	return nil
+}
+
+func validateDecisionRouterLearningConfig(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	for _, ref := range cfg.RoutingDecisionRefs() {
+		if ref.Decision == nil {
+			continue
+		}
+		if ref.Decision.Tier < 0 {
+			return fmt.Errorf(
+				"recipe %q decision %q: tier cannot be negative",
+				ref.Recipe,
+				ref.Decision.Name,
+			)
+		}
+		if err := validateDecisionAdaptationsConfig(
+			ref.Decision.Name,
+			ref.Decision.Adaptations,
+		); err != nil {
 			return err
 		}
 	}
@@ -89,6 +132,63 @@ func validateProtectionTuning(prefix string, tuning RouterLearningProtectionTuni
 		{prefix + ".stability_weight", tuning.StabilityWeight},
 	}); err != nil {
 		return err
+	}
+	return validateProgressGateTuning(prefix+".progress_gate", tuning.ProgressGate)
+}
+
+// validateProgressGateTuning checks the switch-gate knobs, including the two
+// relationships the gate depends on: the escalation threshold must not be
+// easier than the downgrade threshold (that ordering is what produces
+// hysteresis), and the window cannot require more evidence than it can hold.
+func validateProgressGateTuning(prefix string, cfg *ProgressGateTuning) error {
+	if cfg == nil {
+		return nil
+	}
+	switch strings.TrimSpace(cfg.Mode) {
+	case "", "observe", "enforce":
+	default:
+		return fmt.Errorf("%s.mode must be observe or enforce, got %q", prefix, cfg.Mode)
+	}
+	if err := validateOptionalNonNegativeIntFields([]optionalNonNegativeIntField{
+		{prefix + ".window_size", cfg.WindowSize},
+		{prefix + ".window_ttl_seconds", cfg.WindowTTLSeconds},
+		{prefix + ".min_window_outcomes", cfg.MinWindowOutcomes},
+		{prefix + ".min_consecutive_regressions", cfg.MinConsecutiveRegressions},
+		{prefix + ".min_consecutive_recoveries", cfg.MinConsecutiveRecoveries},
+		{prefix + ".max_switches_per_window", cfg.MaxSwitchesPerWindow},
+	}); err != nil {
+		return err
+	}
+	if err := validateOptionalNonNegativeFloatFields([]optionalNonNegativeFloatField{
+		{prefix + ".cooldown_seconds", cfg.CooldownSeconds},
+	}); err != nil {
+		return err
+	}
+	effective := cfg.EffectiveConfig()
+	if effective.WindowSize < 1 || effective.WindowSize > 256 {
+		return fmt.Errorf("%s.window_size must be between 1 and 256", prefix)
+	}
+	if effective.WindowTTLSeconds < 1 || effective.WindowTTLSeconds > 86400 {
+		return fmt.Errorf("%s.window_ttl_seconds must be between 1 and 86400", prefix)
+	}
+	if effective.MaxSwitchesPerWindow > 256 {
+		return fmt.Errorf("%s.max_switches_per_window must not exceed 256", prefix)
+	}
+	if effective.MinWindowOutcomes > effective.WindowSize ||
+		effective.MinConsecutiveRegressions > effective.WindowSize || effective.MinConsecutiveRecoveries > effective.WindowSize {
+		return fmt.Errorf("%s evidence thresholds must not exceed window_size", prefix)
+	}
+	if effective.MinConsecutiveRegressions < effective.MinConsecutiveRecoveries {
+		return fmt.Errorf("%s.min_consecutive_regressions must be at least min_consecutive_recoveries", prefix)
+	}
+	if effective.CalibrationID != "" {
+		name, version, ok := strings.Cut(effective.CalibrationID, "@")
+		if !ok || name == "" || version == "" || strings.ContainsAny(effective.CalibrationID, " \t\n\r") {
+			return fmt.Errorf("%s.calibration_id must identify an external profile as name@version", prefix)
+		}
+	}
+	if effective.Enabled && effective.Mode == "enforce" && effective.CalibrationID == "" {
+		return fmt.Errorf("%s.calibration_id is required in enforce mode", prefix)
 	}
 	return nil
 }

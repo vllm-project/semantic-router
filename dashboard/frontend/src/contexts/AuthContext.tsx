@@ -1,24 +1,24 @@
-import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react'
+import React, {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from 'react'
 import {
-  clearStoredAuthToken,
-  getStoredAuthToken,
   installAuthenticatedFetch,
   normalizeAuthToken,
-  notifyUnauthorized,
-  storeAuthToken,
   UNAUTHORIZED_EVENT,
 } from '../utils/authFetch'
-import {
-  fetchCurrentAuthUser,
-  hasAuthenticatedSession,
-  type AuthUser,
-} from './authSession'
+import { fetchCurrentAuthUser, hasAuthenticatedSession, type AuthUser } from './authSession'
 
 interface AuthContextValue {
   token: string | null
   user: AuthUser | null
   isLoading: boolean
   isAuthenticated: boolean
+  sessionError: string | null
   login: (email: string, password: string) => Promise<void>
   setSession: (token: string, user?: AuthUser | null) => void
   logout: () => void
@@ -44,47 +44,49 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 installAuthenticatedFetch()
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => getStoredAuthToken())
+  // The session lives in the HttpOnly cookie, which we cannot read; /api/auth/me answers
+  // whether we are logged in. `token` is state only for the moment between a successful
+  // login response and the refresh that confirms it.
+  const [token, setToken] = useState<string | null>(null)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [sessionError, setSessionError] = useState<string | null>(null)
 
+  // The server's clearAuthSessionCookie on logout is what actually ends the session.
   const clearSession = useCallback(() => {
     setToken(null)
     setUser(null)
-    clearStoredAuthToken()
+    setSessionError(null)
   }, [])
 
   const setSession = useCallback((nextToken: string, nextUser?: AuthUser | null) => {
-    const storedToken = storeAuthToken(nextToken)
-    setToken(storedToken)
-    setUser(storedToken ? (nextUser ?? null) : null)
+    const validToken = normalizeAuthToken(nextToken)
+    setToken(validToken)
+    setUser(validToken ? (nextUser ?? null) : null)
+    setSessionError(null)
   }, [])
 
   const refreshSession = useCallback(async () => {
     setIsLoading(true)
     try {
       const result = await fetchCurrentAuthUser()
-      if (result.clearLocalToken) {
+      if (result.status === 'unauthenticated') {
         clearSession()
         return
       }
+      if (result.status === 'unavailable') {
+        setSessionError(result.message)
+        return
+      }
       setUser(result.user)
-    } catch {
-      notifyUnauthorized()
+      setSessionError(null)
     } finally {
       setIsLoading(false)
     }
   }, [clearSession])
 
-  useEffect(() => {
-    if (token) {
-      const storedToken = storeAuthToken(token)
-      if (storedToken !== token) {
-        setToken(storedToken)
-      }
-    }
-  }, [token])
-
+  // Unconditional: `token` is always null on mount now, so gating this on it would mean
+  // never asking the server and never seeing an existing cookie session.
   useEffect(() => {
     void refreshSession()
   }, [refreshSession])
@@ -137,6 +139,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         user,
         isLoading,
         isAuthenticated: hasAuthenticatedSession(token, user),
+        sessionError,
         login,
         setSession,
         logout,

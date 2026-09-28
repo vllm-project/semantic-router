@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "owner": "src/training/model_embeddings/multimodal/large",
+  "artifacts": [
+    {
+      "repo_id": "llm-semantic-router/multi-modal-embed-large",
+      "revision": "e21cde3ccc414c56f504b322662f42c603a939ee",
+      "config": "configs/production.yaml",
+      "train_entrypoint": "train.py",
+      "evaluate_entrypoint": "evaluate.py",
+      "upload_entrypoint": "upload.py"
+    }
+  ]
+}

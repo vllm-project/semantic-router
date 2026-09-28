@@ -78,7 +78,7 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 
 		hash, err := hashBootstrapPassword(svc, req.Password)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writePasswordHashError(w, err)
 			return
 		}
 
@@ -106,7 +106,7 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		setAuthSessionCookie(w, r, token, svc.ttlDuration)
+		setSessionCookies(w, r, svc, token)
 		writeAudit(r, svc, "user.bootstrap", "/api/auth/bootstrap/register", "")
 		respondJSON(w, LoginResponse{Token: token, User: cloneSessionUser(user, perms)})
 	}
@@ -137,7 +137,7 @@ func loginHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		setAuthSessionCookie(w, r, token, svc.ttlDuration)
+		setSessionCookies(w, r, svc, token)
 		respondJSON(w, LoginResponse{Token: token, User: cloneSessionUser(user, perms)})
 	}
 }

@@ -1,0 +1,14 @@
+{
+  "max_tokens": 24,
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {"type": "text", "text": "Before image"},
+        {"type": "image", "source": {"type": "url", "url": "https://example.com/image.png"}},
+        {"type": "text", "text": "After image"}
+      ]
+    }
+  ],
+  "model": "client-model"
+}

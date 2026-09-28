@@ -7,6 +7,9 @@ func (c *RAGPluginConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
+	if err := c.validateReranker(); err != nil {
+		return err
+	}
 	if c.Backend == "" {
 		return fmt.Errorf("RAG backend is required when enabled")
 	}
@@ -79,6 +82,9 @@ func validateExternalAPIRAGBackend(c *RAGPluginConfig) error {
 	if apiConfig.RequestFormat == "" {
 		return fmt.Errorf("request format is required for external API")
 	}
+	if apiConfig.MaxResponseBytes < 0 {
+		return fmt.Errorf("external API max_response_bytes must be non-negative")
+	}
 	return nil
 }
 
@@ -106,6 +112,9 @@ func validateOpenAIRAGBackend(c *RAGPluginConfig) error {
 	}
 	if openaiConfig.APIKey == "" {
 		return fmt.Errorf("API key is required for OpenAI backend")
+	}
+	if openaiConfig.MaxResponseBytes < 0 {
+		return fmt.Errorf("OpenAI max_response_bytes must be non-negative")
 	}
 	return nil
 }

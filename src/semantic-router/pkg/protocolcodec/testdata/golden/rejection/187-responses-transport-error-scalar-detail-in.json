@@ -1,0 +1,6 @@
+{
+  "operation": "error",
+  "body": {
+    "error": "Provider failed."
+  }
+}

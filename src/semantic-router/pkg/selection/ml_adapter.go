@@ -19,6 +19,7 @@ package selection
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelselection"
@@ -92,12 +93,13 @@ func (a *MLSelectorAdapter) Select(ctx context.Context, selCtx *SelectionContext
 	}
 
 	return &SelectionResult{
-		SelectedModel: selectedRef.Model,
-		LoRAName:      selectedRef.LoRAName,
-		Score:         1.0,
-		Confidence:    0.8, // ML selectors provide reasonable confidence
-		Method:        a.method,
-		Reasoning:     fmt.Sprintf("Selected by %s algorithm", a.method),
+		SelectedModel:     selectedRef.Model,
+		SelectedCandidate: selectedRef,
+		LoRAName:          selectedRef.LoRAName,
+		Score:             1.0,
+		Confidence:        0.8, // ML selectors provide reasonable confidence
+		Method:            a.method,
+		Reasoning:         fmt.Sprintf("Selected by %s algorithm", a.method),
 	}, nil
 }
 
@@ -116,6 +118,18 @@ func (a *MLSelectorAdapter) UpdateFeedback(ctx context.Context, feedback *Feedba
 	return nil
 }
 
+// Close releases the wrapped selector when it is closeable.
+func (a *MLSelectorAdapter) Close() error {
+	if a == nil || a.mlSelector == nil {
+		return nil
+	}
+	closer, ok := a.mlSelector.(io.Closer)
+	if !ok {
+		return nil
+	}
+	return closer.Close()
+}
+
 // GetMLSelector returns the underlying ML selector for direct access (e.g., for training).
 func (a *MLSelectorAdapter) GetMLSelector() modelselection.Selector {
 	return a.mlSelector
@@ -128,6 +142,10 @@ type MLSelectorConfig struct {
 
 	// EmbeddingDim is the embedding dimension (default: 1024 for Qwen3)
 	EmbeddingDim int `yaml:"embedding_dim"`
+
+	// ModelType selects the embedding model for this selector family. An empty
+	// value uses the factory's default embedding configuration.
+	ModelType string `yaml:"model_type,omitempty"`
 
 	// KNN configuration
 	KNN *KNNConfig `yaml:"knn,omitempty"`

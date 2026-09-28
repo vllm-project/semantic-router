@@ -106,6 +106,7 @@ const routerModels = [
   },
   {
     name: 'mmbert_embedding_model',
+    recipe: 'default',
     type: 'embedding',
     loaded: true,
     state: 'ready',
@@ -124,6 +125,9 @@ const routerModels = [
     },
     metadata: {
       model_type: 'mmbert',
+      provider: 'ort',
+      device: 'migraphx:0',
+      effective_input_tokens: '32768',
       max_sequence_length: '32768',
       default_dimension: '768',
       matryoshka_supported: 'true',
@@ -182,6 +186,14 @@ const statusPayload = {
   },
 }
 
+const hourlyHistory = (name: string) => ({
+  name,
+  hours: Array.from({ length: 90 }, (_, index) => ({
+    observedAt: new Date(Date.UTC(2026, 7, 24, 0, index * 60)).toISOString(),
+    status: index === 41 ? ('starting' as const) : ('operational' as const),
+  })),
+})
+
 async function mockRouterInventoryShell(page: Page, status: unknown = statusPayload) {
   await mockAuthenticatedAppShell(page, {
     settings: {
@@ -212,7 +224,28 @@ async function mockRouterInventoryShell(page: Page, status: unknown = statusPayl
 }
 
 test.describe('Router model inventory surfaces', () => {
-  test('renders six preview cards and keeps embedding metadata clean in status view', async ({
+  test('keeps service availability useful when router model metadata is absent', async ({ page }) => {
+    await mockRouterInventoryShell(page, {
+      ...statusPayload,
+      models: {
+        ...statusPayload.models,
+        models: null,
+        summary: {
+          ...statusPayload.models.summary,
+          loaded_models: 0,
+          total_models: 0,
+        },
+      },
+    })
+
+    await page.goto('/status')
+
+    await expect(page.getByTestId('status-overview')).toContainText('Healthy')
+    await expect(page.getByTestId('status-services-section')).toContainText('Router')
+    await expect(page.getByTestId('status-services-section')).toContainText('Dashboard')
+  })
+
+  test('opens the selected runtime details and restores focus on close', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1920, height: 1200 })
@@ -233,18 +266,107 @@ test.describe('Router model inventory surfaces', () => {
     await expect(page.getByText('AMD GPU', { exact: true })).toHaveCount(0)
 
     await embeddingPreview.click()
-    await expect(page).toHaveURL(/\/status#model-mmbert-embedding-model$/)
-
-    const fullCard = page.getByTestId('router-model-full-mmbert_embedding_model')
-    await expect(fullCard).toContainText('Identity')
-    await expect(fullCard).toContainText('Capabilities')
-    await expect(fullCard).toContainText('Runtime & Config')
-    await expect(fullCard).toContainText('models/mmbert-embed-32k-2d-matryoshka')
-    await expect(fullCard).not.toContainText('MmBertEmbeddingModel(')
-    await expect(fullCard.getByAltText('AMD platform')).toBeVisible()
+    const details = page.getByRole('dialog', { name: 'Runtime model details' })
+    await expect(details).toBeVisible()
+    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(details).toContainText('models/mmbert-embed-32k-2d-matryoshka')
+    await expect(details.getByText(routerModels[4].registry.description, { exact: true })).toBeVisible()
+    await expect(details).toContainText('Recipe')
+    await expect(details).toContainText('default')
+    await expect(details).toContainText('Provider')
+    await expect(details.getByText('ort', { exact: true })).toBeVisible()
+    await expect(details).toContainText('migraphx:0')
+    await expect(details).toContainText('32768')
+    await expect(details.getByRole('link', { name: /model card/i })).toHaveAttribute(
+      'href',
+      routerModels[4].registry.model_card_url,
+    )
+    await expect(details.getByRole('searchbox')).toHaveCount(0)
+    await expect(details.locator('[data-testid^="router-model-detail-"]')).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await expect(details).toHaveCount(0)
+    await expect(embeddingPreview).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(details).toBeVisible()
+    const closeButtons = details.getByRole('button', { name: 'Close', exact: true })
+    await expect(closeButtons.first()).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await expect(closeButtons.last()).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(closeButtons.first()).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(details.getByRole('link', { name: /model card/i })).toBeFocused()
   })
 
-  test('keeps model readiness independent from degraded service health', async ({ page }) => {
+  test('keeps model-card HTML out of runtime descriptions', async ({ page }) => {
+    const embedding = routerModels[4]
+    const description = [
+      '<div align="center">',
+      '<img src="https://vllm-sr.ai/img/vllm-sr-logo.social.png" alt="vLLM Semantic Router" width="560" />',
+      '<p> <a href="https://vllm-sr.ai/"><strong>Docs</strong></a> |',
+      '<a href="https://vllm-sr.ai/blog/"><strong>Blog</strong></a> |',
+      '<a href="https://vllm-dev.slack.com/archives/C09CTGF8KCN"><strong>Slack</strong></a> |',
+      '<a href="https://github.com/vllm-project/semantic-router"><strong>GitHub</strong></a> </p> </div>',
+    ].join(' ')
+    await mockRouterInventoryShell(page, {
+      ...statusPayload,
+      models: {
+        ...statusPayload.models,
+        models: [{ ...embedding, registry: { ...embedding.registry, description } }],
+        summary: { ...statusPayload.models.summary, loaded_models: 1, total_models: 1 },
+      },
+    })
+    await page.goto('/dashboard')
+    await page.getByTestId('router-model-preview-mmbert_embedding_model').click()
+
+    const details = page.getByRole('dialog', { name: 'Runtime model details' })
+    await expect(details).toBeVisible()
+    await expect(details.getByText('Embedding', { exact: true }).first()).toBeVisible()
+    await expect(details).not.toContainText('<div')
+    await expect(details).not.toContainText('Docs')
+    await expect(details).not.toContainText('Blog')
+    await expect(details.getByRole('link')).toHaveCount(1)
+    await expect(details.getByRole('link', { name: /model card/i })).toHaveAttribute(
+      'href', embedding.registry.model_card_url,
+    )
+  })
+
+  test('keeps same-name runtimes scoped to the clicked recipe', async ({ page }) => {
+    const embedding = routerModels[4]
+    await mockRouterInventoryShell(page, {
+      ...statusPayload,
+      models: {
+        ...statusPayload.models,
+        models: [
+          {
+            ...embedding,
+            recipe: 'balance',
+            model_path: 'models/balance-embedding',
+            registry: { ...embedding.registry, local_path: 'models/balance-embedding' },
+          },
+          {
+            ...embedding,
+            recipe: 'vault',
+            model_path: 'models/vault-embedding',
+            registry: { ...embedding.registry, local_path: 'models/vault-embedding' },
+          },
+        ],
+        summary: { ...statusPayload.models.summary, loaded_models: 2, total_models: 2 },
+      },
+    })
+    await page.goto('/dashboard')
+    const previews = page.getByTestId('router-model-preview-mmbert_embedding_model')
+    await expect(previews).toHaveCount(2)
+    await previews.filter({ hasText: 'models/vault-embedding' }).click()
+
+    const details = page.getByRole('dialog', { name: 'Runtime model details' })
+    await expect(details).toContainText('vault')
+    await expect(details).toContainText('models/vault-embedding')
+    await expect(details).not.toContainText('models/balance-embedding')
+    await expect(page).toHaveURL(/\/dashboard$/)
+  })
+
+  test('makes degraded service health explicit without hiding healthy services', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 900 })
 
     await mockRouterInventoryShell(page, {
@@ -259,69 +381,40 @@ test.describe('Router model inventory surfaces', () => {
 
     const overview = page.getByTestId('status-overview')
     await expect(overview).toContainText('Degraded')
-    await expect(page.getByTestId('status-metric-models')).toContainText('6/6')
-    await expect(page.getByTestId('status-metric-models')).toContainText('Ready')
-    await expect(page.getByTestId('status-model-fleet')).toContainText('Ready')
-    await expect(page.getByTestId('status-model-fleet')).not.toContainText('Degraded')
+    const services = page.getByTestId('status-services-section')
+    await expect(services).toContainText('Router')
+    await expect(services).toContainText('Operational')
+    await expect(services).toContainText('Telemetry')
+    await expect(services).toContainText('Unavailable')
   })
 
-  test('keeps status model inventory and services reachable inside the page scroll container', async ({
+  test('renders a keyboard-accessible 90-hour service history', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1600, height: 900 })
 
-    await mockRouterInventoryShell(page)
+    await mockRouterInventoryShell(page, {
+      ...statusPayload,
+      history: {
+        windowHours: 90,
+        through: '2026-08-27T17:00:00.000Z',
+        services: [hourlyHistory('Router'), hourlyHistory('Dashboard')],
+      },
+    })
     await page.goto('/status')
 
-    const statusPage = page.getByTestId('status-page')
     const overview = page.getByTestId('status-overview')
-    const inventorySection = page.getByTestId('status-model-inventory-section')
     const servicesSection = page.getByTestId('status-services-section')
-    const lastModelCard = page.getByTestId('router-model-full-pii_classifier')
-
     await expect(overview).toContainText('Healthy')
-    await expect(page.getByTestId('status-metric-services')).toContainText('2/2')
-    await expect(page.getByTestId('status-metric-models')).toContainText('6/6')
-    await expect(page.getByTestId('status-metric-deployment')).toContainText('Local')
-
-    const [overviewBox, inventoryBox] = await Promise.all([
-      overview.boundingBox(),
-      inventorySection.boundingBox(),
-    ])
-    expect(overviewBox).not.toBeNull()
-    expect(inventoryBox).not.toBeNull()
-    expect(Math.abs((overviewBox?.x ?? 0) - (inventoryBox?.x ?? 0))).toBeLessThan(1)
-    expect(Math.abs((overviewBox?.width ?? 0) - (inventoryBox?.width ?? 0))).toBeLessThan(1)
-    expect(overviewBox?.height ?? Infinity).toBeLessThan(280)
-    expect(inventoryBox?.y ?? Infinity).toBeLessThan(600)
-
-    const overviewSurface = await overview.evaluate((node) => {
-      const style = window.getComputedStyle(node)
-      return {
-        backgroundImage: style.backgroundImage,
-        borderRadius: style.borderRadius,
-      }
-    })
-    expect(overviewSurface.backgroundImage).toBe('none')
-    expect(overviewSurface.borderRadius).toBe('8px')
-
-    const metrics = await statusPage.evaluate((node) => ({
-      overflowY: window.getComputedStyle(node).overflowY,
-      scrollHeight: node.scrollHeight,
-      clientHeight: node.clientHeight,
-    }))
-
-    expect(metrics.overflowY).toBe('auto')
-    expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight)
-
-    await expect(inventorySection).toBeVisible()
-    await lastModelCard.scrollIntoViewIfNeeded()
-    await expect(lastModelCard).toBeInViewport()
-
-    await servicesSection.scrollIntoViewIfNeeded()
-    await expect(servicesSection).toBeInViewport()
-    await expect(servicesSection).toContainText('Router')
-    await expect(servicesSection).toContainText('Dashboard')
+    await expect(servicesSection.getByText('90-hour observed history')).toBeVisible()
+    const routerRow = servicesSection.locator('article').filter({ hasText: 'Router' })
+    const hours = routerRow.locator('[data-status-history-hour]')
+    await expect(hours).toHaveCount(90)
+    await hours.nth(89).focus()
+    await expect(hours.nth(89)).toBeFocused()
+    await page.keyboard.press('ArrowLeft')
+    await expect(hours.nth(88)).toBeFocused()
+    await expect(routerRow.getByRole('tooltip')).toContainText('UTC: Operational')
   })
 
   test('stacks the status overview without introducing horizontal overflow on mobile', async ({
@@ -340,9 +433,8 @@ test.describe('Router model inventory surfaces', () => {
     await expect(page.getByRole('heading', { name: 'System status' })).toBeVisible()
     const overview = page.getByTestId('status-overview')
     await expect(overview).toBeVisible()
-    await expect(overview).toContainText('Not reported')
-    await expect(overview).toContainText('No router services have been reported.')
-    await expect(overview).toContainText('The router has not reported model metadata yet.')
+    await expect(overview).toContainText('No running services detected')
+    await expect(overview).toContainText('Availability will appear when the Router starts.')
     await expect(page.getByLabel('Refresh system status')).toBeVisible()
 
     const pageMetrics = await page.getByTestId('status-page').evaluate((node) => ({
@@ -351,18 +443,9 @@ test.describe('Router model inventory surfaces', () => {
     }))
     expect(pageMetrics.scrollWidth).toBeLessThanOrEqual(pageMetrics.clientWidth + 1)
 
-    const metricWidths = await Promise.all(
-      ['services', 'models', 'deployment', 'version'].map((metric) =>
-        page
-          .getByTestId(`status-metric-${metric}`)
-          .evaluate((node) => node.getBoundingClientRect().width),
-      ),
-    )
-    expect(Math.max(...metricWidths) - Math.min(...metricWidths)).toBeLessThan(1)
-
     const servicesSection = page.getByTestId('status-services-section')
     await servicesSection.scrollIntoViewIfNeeded()
-    await expect(servicesSection).toContainText('No Running Services Detected')
+    await expect(servicesSection).toContainText('No services reported')
     const servicesMetrics = await servicesSection.evaluate((node) => ({
       clientWidth: node.clientWidth,
       scrollWidth: node.scrollWidth,
@@ -370,34 +453,4 @@ test.describe('Router model inventory surfaces', () => {
     expect(servicesMetrics.scrollWidth).toBeLessThanOrEqual(servicesMetrics.clientWidth + 1)
   })
 
-  test('keeps long downloading model progress visible on mobile before inventory is available', async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 390, height: 844 })
-    const downloadingModel =
-      'models/a-very-long-router-model-name-that-must-wrap-instead-of-expanding-the-status-surface'
-
-    await mockRouterInventoryShell(page, {
-      ...statusPayload,
-      models: undefined,
-      router_runtime: {
-        phase: 'downloading_models',
-        ready: false,
-        downloading_model: downloadingModel,
-        total_models: 6,
-      },
-    })
-    await page.goto('/status')
-
-    const overview = page.getByTestId('status-overview')
-    await expect(page.getByTestId('status-metric-models')).toContainText('0/6')
-    await expect(page.getByTestId('status-model-fleet')).toContainText('Downloading')
-    await expect(overview).toContainText(downloadingModel)
-
-    const overviewMetrics = await overview.evaluate((node) => ({
-      clientWidth: node.clientWidth,
-      scrollWidth: node.scrollWidth,
-    }))
-    expect(overviewMetrics.scrollWidth).toBeLessThanOrEqual(overviewMetrics.clientWidth + 1)
-  })
 })

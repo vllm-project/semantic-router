@@ -6,7 +6,7 @@ REQUESTED_RUNTIME="${VLLM_SR_RUNTIME:-auto}"
 INSTALL_ROOT="${VLLM_SR_INSTALL_ROOT:-$HOME/.local/share/vllm-sr}"
 BIN_DIR="${VLLM_SR_BIN_DIR:-$HOME/.local/bin}"
 PIP_SPEC="${VLLM_SR_PIP_SPEC:-}"
-REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-dev}"
+REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-stable}"
 PYTHON_BIN="${VLLM_SR_PYTHON:-}"
 REQUESTED_PLATFORM="${VLLM_SR_INSTALL_PLATFORM:-${VLLM_SR_PLATFORM:-auto}}"
 AUTO_LAUNCH="${VLLM_SR_INSTALL_AUTO_LAUNCH:-1}"
@@ -23,7 +23,8 @@ COLOR_WHITE=""
 COLOR_MUTED=""
 COLOR_SUCCESS=""
 
-DASHBOARD_URL="http://localhost:8700"
+DASHBOARD_PORT=""
+DASHBOARD_URL=""
 
 init_colors() {
   if [ ! -t 1 ] || [ -n "${NO_COLOR:-}" ]; then
@@ -77,6 +78,18 @@ die() {
   exit 1
 }
 
+resolve_dashboard_port() {
+  local offset="${VLLM_SR_PORT_OFFSET:-0}"
+  [[ "$offset" =~ ^[0-9]{1,5}$ ]] || die "VLLM_SR_PORT_OFFSET must be a non-negative integer"
+  offset=$((10#$offset))
+  # The Router's gRPC host port (50051) is the highest offset port.
+  (( offset <= 65535 - 50051 )) || die "VLLM_SR_PORT_OFFSET produces a host port above 65535"
+  printf '%s\n' "$((8700 + offset))"
+}
+
+DASHBOARD_PORT="$(resolve_dashboard_port)"
+DASHBOARD_URL="http://localhost:$DASHBOARD_PORT"
+
 is_truthy() {
   case "${1:-}" in
     1|true|TRUE|yes|YES|on|ON)
@@ -126,7 +139,7 @@ describe_package_selection() {
 
   case "$REQUESTED_CHANNEL" in
     dev)
-      printf 'vllm-sr (--pre, latest development release)\n'
+      printf 'vllm-sr==<latest published .dev version>\n'
       ;;
     stable)
       printf 'vllm-sr (latest stable release)\n'
@@ -185,7 +198,7 @@ print_install_plan() {
 
 usage() {
   cat <<'EOF'
-Usage: install.sh [--mode cli|serve] [--runtime auto|docker|skip]
+Usage: install.sh [--mode cli|serve] [--runtime auto|docker|podman|skip]
                   [--install-root PATH] [--bin-dir PATH]
                   [--channel stable|dev] [--pip-spec SPEC]
                   [--python PATH] [--platform PLATFORM] [--no-launch]
@@ -196,15 +209,17 @@ links a launcher into ~/.local/bin by default.
 Options:
   --mode cli|serve         Install the CLI only, or prepare a local runtime for
                            `vllm-sr serve` as well. Default: serve
-  --runtime auto|docker|skip
+  --runtime auto|docker|podman|skip
                            Runtime strategy for serve mode. Default: auto
                            macOS auto -> docker via colima
                            Linux auto -> docker
+                           podman -> use Podman, skip Docker detection
   --install-root PATH      Installation root. Default:
                            ~/.local/share/vllm-sr
   --bin-dir PATH           Launcher directory. Default: ~/.local/bin
   --channel stable|dev     Package channel to install when --pip-spec is not
-                           set. Default: dev
+                           set. The dev channel resolves and pins the newest
+                           published .dev package. Default: stable
   --pip-spec SPEC          Explicit Python package spec to install. Overrides
                            --channel when set
   --python PATH            Explicit Python interpreter to use
@@ -387,13 +402,13 @@ print_dashboard_access() {
   printf '%b\n' "${COLOR_WHITE}Dashboard access${COLOR_RESET}"
   printf '  local        %s\n' "$DASHBOARD_URL"
   if [ -n "$primary_ip" ]; then
-    printf '  network      http://%s:8700\n' "$primary_ip"
+    printf '  network      http://%s:%s\n' "$primary_ip" "$DASHBOARD_PORT"
   fi
   printf '\n'
 
   if is_remote_session; then
     printf '%b\n' "${COLOR_WHITE}Remote access${COLOR_RESET}"
-    printf '  ssh tunnel   ssh -L 8700:localhost:8700 %s@%s\n' "${USER:-user}" "$host_label"
+    printf '  ssh tunnel   ssh -L %s:localhost:%s %s@%s\n' "$DASHBOARD_PORT" "$DASHBOARD_PORT" "${USER:-user}" "$host_label"
     printf '  then open    %s\n' "$DASHBOARD_URL"
     printf '\n'
   fi
@@ -416,12 +431,17 @@ print_restart_command() {
   if [ -z "$LAUNCH_PLATFORM" ]; then
     LAUNCH_PLATFORM="$(resolve_launch_platform)"
   fi
+  local cmd="vllm-sr serve"
+  local dashboard_cmd="vllm-sr dashboard"
   if [ -n "$LAUNCH_PLATFORM" ]; then
-    printf '  vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
-  else
-    printf '  vllm-sr serve\n'
+    cmd+=" --platform $LAUNCH_PLATFORM"
   fi
-  printf '  vllm-sr dashboard\n'
+  if [ -n "${SELECTED_RUNTIME:-}" ]; then
+    cmd+=" --runtime $SELECTED_RUNTIME"
+    dashboard_cmd+=" --runtime $SELECTED_RUNTIME"
+  fi
+  printf '  %s\n' "$cmd"
+  printf '  %s\n' "$dashboard_cmd"
 }
 
 python_supports_vllm_sr() {
@@ -492,10 +512,31 @@ detect_package_manager_label() {
 }
 
 detect_existing_runtime() {
-  if docker_ready; then
-    printf 'docker\n'
-    return
-  fi
+  case "${REQUESTED_RUNTIME:-auto}" in
+    docker)
+      if docker_ready; then
+        printf 'docker\n'
+        return
+      fi
+      ;;
+    podman)
+      if podman_ready; then
+        printf 'podman\n'
+        return
+      fi
+      ;;
+    auto)
+      if docker_ready; then
+        printf 'docker\n'
+        return
+      fi
+
+      if podman_ready; then
+        printf 'podman\n'
+        return
+      fi
+      ;;
+  esac
 
   return 1
 }
@@ -616,16 +657,58 @@ create_launcher() {
   executable_path="$INSTALL_ROOT/venv/bin/vllm-sr"
 
   mkdir -p "$BIN_DIR"
+  # Export the install root so runtime detection reads the runtime.env
+  # persisted next to this installation instead of the default location.
   cat >"$launcher_path" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
+export VLLM_SR_INSTALL_ROOT="$INSTALL_ROOT"
 exec "$executable_path" "\$@"
 EOF
   chmod +x "$launcher_path"
 }
 
+resolve_latest_dev_version() {
+  local versions_line dev_version
+  # A cached catalog can omit the latest published dev package.
+  versions_line="$(
+    "$INSTALL_ROOT/venv/bin/python" -m pip index versions \
+      --disable-pip-version-check --no-cache-dir --pre vllm-sr 2>/dev/null \
+      | sed -n 's/^Available versions: //p' \
+      | head -n 1
+  )"
+  dev_version="$(
+    printf '%s\n' "$versions_line" \
+      | tr ',' '\n' \
+      | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+      | awk '/^[0-9]+([.][0-9]+)*[.]dev[0-9]+$/ { print; exit }'
+  )"
+  [ -n "$dev_version" ] || return 1
+  printf '%s\n' "$dev_version"
+}
+
+install_dev_package() (
+  local dev_version download_dir
+  dev_version="$1"
+  download_dir="$(mktemp -d)"
+  trap 'rm -rf "$download_dir"' EXIT
+
+  # The pinned download also consults the catalog. Refresh only vllm-sr,
+  # then install the local artifact with the normal dependency cache.
+  run_quiet_step \
+    "Downloading vLLM Semantic Router development package $dev_version" \
+    "$INSTALL_ROOT/venv/bin/python" -m pip download \
+      --disable-pip-version-check --no-cache-dir --no-deps --quiet \
+      --dest "$download_dir" "vllm-sr==$dev_version"
+  run_quiet_step \
+    "Installing vLLM Semantic Router development package $dev_version" \
+    "$INSTALL_ROOT/venv/bin/python" -m pip install \
+      --disable-pip-version-check --upgrade --quiet "$download_dir"/*
+)
+
 install_requested_package() {
+  local dev_version
   if [ -n "$PIP_SPEC" ]; then
     run_quiet_step \
       "Installing vLLM Semantic Router from $PIP_SPEC" \
@@ -635,9 +718,9 @@ install_requested_package() {
 
   case "$REQUESTED_CHANNEL" in
     dev)
-      run_quiet_step \
-        "Installing latest development vLLM Semantic Router release" \
-        "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet --pre vllm-sr
+      dev_version="$(resolve_latest_dev_version)" || die \
+        "No published vllm-sr development package was found. Use --channel stable or --pip-spec."
+      install_dev_package "$dev_version"
       ;;
     stable)
       run_quiet_step \
@@ -686,6 +769,10 @@ install_cli() {
 
 docker_ready() {
   has_cmd docker && docker info >/dev/null 2>&1
+}
+
+podman_ready() {
+  has_cmd podman && podman info >/dev/null 2>&1
 }
 
 choose_runtime_preference() {
@@ -744,7 +831,11 @@ install_linux_docker_runtime() {
 }
 
 write_runtime_env() {
+  local runtime="${1:-${SELECTED_RUNTIME:-}}"
   rm -f "$INSTALL_ROOT/runtime.env"
+  if [ -n "$runtime" ]; then
+    printf 'CONTAINER_RUNTIME=%s\n' "$runtime" > "$INSTALL_ROOT/runtime.env"
+  fi
 }
 
 ensure_runtime() {
@@ -755,10 +846,29 @@ ensure_runtime() {
     return
   fi
 
+  if [ "$REQUESTED_RUNTIME" = "podman" ]; then
+    if podman_ready; then
+      SELECTED_RUNTIME="podman"
+      write_runtime_env "podman"
+      done_step "Using existing Podman runtime"
+      return
+    else
+      write_runtime_env ""
+      die "Podman was requested but is not reachable. Install Podman or use --runtime auto."
+    fi
+  fi
+
   if docker_ready; then
     SELECTED_RUNTIME="docker"
     write_runtime_env
     done_step "Using existing Docker runtime"
+    return
+  fi
+
+  if [ "$REQUESTED_RUNTIME" = "auto" ] && podman_ready; then
+    SELECTED_RUNTIME="podman"
+    write_runtime_env "podman"
+    done_step "Using existing Podman runtime"
     return
   fi
 
@@ -797,23 +907,37 @@ launch_first_session() {
   LAUNCH_PLATFORM="$(resolve_launch_platform)"
   launch_dir="$(resolve_launch_dir)"
 
+  local serve_args=()
   if [ -n "$LAUNCH_PLATFORM" ]; then
-    info "First-run serve command: vllm-sr serve --platform $LAUNCH_PLATFORM"
+    serve_args+=(--platform "$LAUNCH_PLATFORM")
+  fi
+  if [ -n "$SELECTED_RUNTIME" ]; then
+    serve_args+=(--runtime "$SELECTED_RUNTIME")
+  fi
+  # The dashboard check below talks to the same stack serve just started, so it
+  # must reuse the explicit runtime; otherwise it re-detects Docker and the
+  # install fails after a Podman stack has already come up.
+  local dashboard_args=()
+  if [ -n "$SELECTED_RUNTIME" ]; then
+    dashboard_args+=(--runtime "$SELECTED_RUNTIME")
+  fi
+  if [ ${#serve_args[@]} -gt 0 ]; then
+    info "First-run serve command: vllm-sr serve ${serve_args[*]}"
   else
     info "First-run serve command: vllm-sr serve"
   fi
-  info "First-run dashboard command: vllm-sr dashboard"
+  if [ ${#dashboard_args[@]} -gt 0 ]; then
+    info "First-run dashboard command: vllm-sr dashboard ${dashboard_args[*]}"
+  else
+    info "First-run dashboard command: vllm-sr dashboard"
+  fi
   info "Starting the first local session. This can take a few minutes on the first image pull."
 
   step "Running first-time serve flow"
   serve_log_file="$(make_temp_log)"
   if (
     cd "$launch_dir"
-    if [ -n "$LAUNCH_PLATFORM" ]; then
-      "$BIN_DIR/vllm-sr" serve --platform "$LAUNCH_PLATFORM"
-    else
-      "$BIN_DIR/vllm-sr" serve
-    fi
+    "$BIN_DIR/vllm-sr" serve "${serve_args[@]}"
   ) >"$serve_log_file" 2>&1; then
     rm -f "$serve_log_file"
     AUTO_LAUNCH_RAN="1"
@@ -828,7 +952,7 @@ launch_first_session() {
   fi
 
   step "Checking dashboard availability"
-  if "$BIN_DIR/vllm-sr" dashboard --no-open >/dev/null 2>&1; then
+  if "$BIN_DIR/vllm-sr" dashboard --no-open "${dashboard_args[@]}" >/dev/null 2>&1; then
     done_step "Dashboard is available"
   else
     warn "The dashboard command could not confirm a running session."
@@ -886,27 +1010,39 @@ print_next_steps() {
     primary_ip="$(detect_primary_ip || true)"
     printf '  dashboard    %s\n' "$DASHBOARD_URL"
     if [ -n "$primary_ip" ]; then
-      printf '  network      http://%s:8700\n' "$primary_ip"
+      printf '  network      http://%s:%s\n' "$primary_ip" "$DASHBOARD_PORT"
     fi
     printf '  stop         vllm-sr stop\n'
     if [ -n "$LAUNCH_PLATFORM" ]; then
-      printf '  restart      vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
+      printf '  restart      vllm-sr serve --platform %s' "$LAUNCH_PLATFORM"
     else
-      printf '  restart      vllm-sr serve\n'
+      printf '  restart      vllm-sr serve'
     fi
+    if [ -n "${SELECTED_RUNTIME:-}" ]; then
+      printf ' --runtime %s' "$SELECTED_RUNTIME"
+    fi
+    printf '\n'
     if is_remote_session; then
       host_label="$(detect_host_label)"
-      printf '  tunnel       ssh -L 8700:localhost:8700 %s@%s\n' "${USER:-user}" "$host_label"
+      printf '  tunnel       ssh -L %s:localhost:%s %s@%s\n' "$DASHBOARD_PORT" "$DASHBOARD_PORT" "${USER:-user}" "$host_label"
     fi
   else
     printf '  verify       vllm-sr --version\n'
     if [ "$MODE" = "serve" ]; then
       if [ -n "$LAUNCH_PLATFORM" ]; then
-        printf '  start        vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
+        printf '  start        vllm-sr serve --platform %s' "$LAUNCH_PLATFORM"
       else
-        printf '  start        vllm-sr serve\n'
+        printf '  start        vllm-sr serve'
       fi
-      printf '  open         vllm-sr dashboard\n'
+      if [ -n "${SELECTED_RUNTIME:-}" ]; then
+        printf ' --runtime %s' "$SELECTED_RUNTIME"
+      fi
+      printf '\n'
+      printf '  open         vllm-sr dashboard'
+      if [ -n "${SELECTED_RUNTIME:-}" ]; then
+        printf ' --runtime %s' "$SELECTED_RUNTIME"
+      fi
+      printf '\n'
     fi
   fi
   printf '\n'
@@ -980,10 +1116,10 @@ validate_args() {
   esac
 
   case "$REQUESTED_RUNTIME" in
-    auto|docker|skip)
+    auto|docker|podman|skip)
       ;;
     *)
-      die "--runtime must be one of: auto, docker, skip"
+      die "--runtime must be one of: auto, docker, podman, skip"
       ;;
   esac
 

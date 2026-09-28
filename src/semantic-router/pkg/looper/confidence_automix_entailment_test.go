@@ -153,20 +153,73 @@ func TestPerformAutoMixEntailment_VerifierUnreachable(t *testing.T) {
 	}
 }
 
+func TestPerformAutoMixEntailment_NonOKErrorIsBoundedAndContentFree(t *testing.T) {
+	const privateEcho = "private candidate echo must not escape"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/verify" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(strings.Repeat(privateEcho, 400)))
+	}))
+	defer server.Close()
+	t.Cleanup(automixVerifierCacheReset)
+
+	looper := newTestLooper()
+	evaluator := &ConfidenceEvaluator{
+		Method:            MethodAutoMixEntailment,
+		Threshold:         0.7,
+		VerifierServerURL: server.URL,
+	}
+	req := buildAutoMixEntailmentRequest("private question")
+
+	_, accepted, err := looper.performAutoMixEntailment(
+		context.Background(),
+		req,
+		evaluator,
+		"small-model",
+		"private candidate answer",
+	)
+	if err == nil {
+		t.Fatal("expected verifier status error")
+	}
+	if accepted {
+		t.Fatal("verifier status error unexpectedly accepted the candidate")
+	}
+	errorText := err.Error()
+	if strings.Contains(errorText, privateEcho) || strings.Contains(errorText, "private candidate answer") {
+		t.Fatalf("verifier error leaked candidate content: %v", err)
+	}
+	if !strings.Contains(errorText, "status 502") ||
+		!strings.Contains(errorText, "error_body_bytes=8192") ||
+		!strings.Contains(errorText, "truncated=true") {
+		t.Fatalf("verifier error = %q, want bounded status/size metadata", errorText)
+	}
+	if len(errorText) > 256 {
+		t.Fatalf("verifier error length = %d, want bounded diagnostic: %q", len(errorText), errorText)
+	}
+}
+
 func TestPerformAutoMixEntailment_ClientCachedPerURL(t *testing.T) {
 	server, _ := newStubVerifierServer(t, 0.9, false, 5, 5)
 	defer server.Close()
 	t.Cleanup(automixVerifierCacheReset)
 
-	c1 := getAutoMixVerifierClient(server.URL, 0)
-	c2 := getAutoMixVerifierClient(server.URL, 0)
+	c1 := getAutoMixVerifierClient(server.URL, 0, 0)
+	c2 := getAutoMixVerifierClient(server.URL, 0, 0)
 	if c1 != c2 {
 		t.Error("expected getAutoMixVerifierClient to return the same client for repeated (url, timeout) tuples")
 	}
 
-	c3 := getAutoMixVerifierClient(server.URL, 30)
+	c3 := getAutoMixVerifierClient(server.URL, 30, 0)
 	if c3 == c1 {
 		t.Error("expected a distinct client when timeout differs")
+	}
+
+	c4 := getAutoMixVerifierClient(server.URL, 30, 1024)
+	if c4 == c3 {
+		t.Error("expected a distinct client when response limit differs")
 	}
 }
 

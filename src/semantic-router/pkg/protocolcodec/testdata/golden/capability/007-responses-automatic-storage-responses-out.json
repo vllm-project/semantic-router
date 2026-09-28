@@ -1,0 +1,20 @@
+{
+  "status": "ok",
+  "body": {
+    "auto_store": true,
+    "input": [
+      {
+        "content": [
+          {
+            "text": "Remember this turn.",
+            "type": "input_text"
+          }
+        ],
+        "role": "user",
+        "type": "message"
+      }
+    ],
+    "model": "routed-model",
+    "store": true
+  }
+}

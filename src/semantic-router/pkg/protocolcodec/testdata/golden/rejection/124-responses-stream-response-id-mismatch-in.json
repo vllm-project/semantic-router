@@ -1,0 +1,9 @@
+{
+  "operation": "stream",
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "chunks": [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"response_1\",\"object\":\"response\",\"created_at\":1,\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":1,\"response\":{\"id\":\"response_2\",\"object\":\"response\",\"created_at\":1,\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n"
+  ]
+}

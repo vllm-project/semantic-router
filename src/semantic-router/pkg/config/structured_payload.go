@@ -53,6 +53,21 @@ func (p *StructuredPayload) DecodeInto(target interface{}) error {
 	return nil
 }
 
+func (p *StructuredPayload) DecodeIntoStrict(target interface{}) error {
+	if p == nil || p.IsEmpty() {
+		return fmt.Errorf("structured payload is empty")
+	}
+	if target == nil {
+		return fmt.Errorf("structured payload target is nil")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(p.Raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return fmt.Errorf("decode structured payload: %w", err)
+	}
+	return nil
+}
+
 func (p *StructuredPayload) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var raw interface{}
 	if err := unmarshal(&raw); err != nil {

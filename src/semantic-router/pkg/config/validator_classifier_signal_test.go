@@ -1,0 +1,654 @@
+package config
+
+import (
+	"math"
+	"strings"
+	"testing"
+)
+
+func TestValidateClassifierSignalContracts(t *testing.T) {
+	cfg := &RouterConfig{IntelligentRouting: IntelligentRouting{
+		Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+			Name:      "phishing",
+			Type:      "local",
+			ModelPath: "models/phishing",
+			Labels:    []string{"BENIGN", "PHISHING"},
+			UseCPU:    true,
+		}}},
+	}}
+	if err := validateClassifierSignalContracts(cfg); err != nil {
+		t.Fatalf("validateClassifierSignalContracts() error = %v", err)
+	}
+}
+
+func TestValidateClassifierSignalContractsRejectsUnknownLLM(t *testing.T) {
+	cfg := &RouterConfig{IntelligentRouting: IntelligentRouting{
+		Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+			Name:         "risk",
+			Type:         "llm",
+			Model:        "missing",
+			Labels:       []string{"SAFE", "RISKY"},
+			Instructions: "Choose.",
+		}}},
+	}}
+	if err := validateClassifierSignalContracts(cfg); err == nil {
+		t.Fatal("expected missing external model error")
+	}
+}
+
+func TestValidateClassifierSignalContractsRejectsWhitespaceName(t *testing.T) {
+	cfg := &RouterConfig{IntelligentRouting: IntelligentRouting{
+		Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+			Name:      " risk ",
+			Type:      "local",
+			ModelPath: "models/risk",
+			Labels:    []string{"SAFE", "RISKY"},
+		}}},
+	}}
+	if err := validateClassifierSignalContracts(cfg); err == nil {
+		t.Fatal("expected surrounding whitespace validation error")
+	}
+}
+
+func TestValidateClassifierSignalContractsRejectsAmbiguousLabels(t *testing.T) {
+	for _, labels := range [][]string{
+		{" SAFE ", "RISKY"},
+		{"SAFE", "RISK:Y"},
+	} {
+		cfg := &RouterConfig{IntelligentRouting: IntelligentRouting{
+			Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+				Name:      "risk",
+				Type:      "local",
+				ModelPath: "models/risk",
+				Labels:    labels,
+			}}},
+		}}
+		if err := validateClassifierSignalContracts(cfg); err == nil {
+			t.Fatalf("expected classifier label validation error for %v", labels)
+		}
+	}
+}
+
+func TestValidateClassifierSignalContractsRejectsInvalidEndpoint(t *testing.T) {
+	cfg := &RouterConfig{
+		ExternalModels: []ExternalModelConfig{{
+			Name:      "judge",
+			ModelRole: ModelRoleClassification,
+		}},
+		IntelligentRouting: IntelligentRouting{
+			Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+				Name:         "risk",
+				Type:         "llm",
+				Model:        "judge",
+				Labels:       []string{"SAFE", "RISKY"},
+				Instructions: "Classify.",
+			}}},
+		},
+	}
+	if err := validateClassifierSignalContracts(cfg); err == nil {
+		t.Fatal("expected invalid external classifier endpoint error")
+	}
+}
+
+func TestValidateClassifierSignalContractsRejectsNonJSONParser(t *testing.T) {
+	for _, tc := range []struct {
+		parserType string
+		wantErr    bool
+	}{
+		{parserType: "", wantErr: false},
+		{parserType: "json", wantErr: false},
+		{parserType: "simple", wantErr: true},
+		{parserType: "qwen3guard", wantErr: true},
+	} {
+		cfg := &RouterConfig{
+			ExternalModels: []ExternalModelConfig{{
+				Name:          "judge",
+				ModelRole:     ModelRoleClassification,
+				ModelName:     "judge-model",
+				ParserType:    tc.parserType,
+				ModelEndpoint: ClassifierVLLMEndpoint{Address: "judge", Port: 8000},
+			}},
+			IntelligentRouting: IntelligentRouting{
+				Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+					Name:         "risk",
+					Type:         "llm",
+					Model:        "judge",
+					Labels:       []string{"SAFE", "RISKY"},
+					Instructions: "Classify.",
+				}}},
+			},
+		}
+		err := validateClassifierSignalContracts(cfg)
+		if (err != nil) != tc.wantErr {
+			t.Fatalf("parser_type %q: error = %v, wantErr %v", tc.parserType, err, tc.wantErr)
+		}
+	}
+}
+
+func TestValidateLLMClassifierExternalReasoningControl(t *testing.T) {
+	enabled := true
+	disabled := false
+	base := func() *RouterConfig {
+		return &RouterConfig{
+			ExternalModels: []ExternalModelConfig{{
+				Name:          "judge",
+				Provider:      "vllm",
+				ModelRole:     ModelRoleClassification,
+				ModelName:     "judge-model",
+				ModelEndpoint: ClassifierVLLMEndpoint{Address: "judge", Port: 8000},
+			}},
+			IntelligentRouting: IntelligentRouting{
+				ReasoningConfig: ReasoningConfig{ReasoningFamilies: map[string]ReasoningFamilyConfig{
+					"qwen3": {
+						Type:        ReasoningFamilyTypeChatTemplateKwargs,
+						Parameter:   "enable_thinking",
+						Modes:       []string{ReasoningModeEnabled, ReasoningModeDisabled},
+						DefaultMode: ReasoningModeEnabled,
+					},
+					"effort": {
+						Type:        ReasoningFamilyTypeReasoningEffort,
+						Parameter:   "reasoning_effort",
+						Levels:      []string{"low", "high"},
+						Default:     "high",
+						Modes:       []string{ReasoningModeEnabled, ReasoningModeDisabled},
+						DefaultMode: ReasoningModeEnabled,
+					},
+					"always-on": {
+						Type:        ReasoningFamilyTypeReasoningEffort,
+						Parameter:   "reasoning_effort",
+						Levels:      []string{"low", "high"},
+						Default:     "high",
+						Modes:       []string{ReasoningModeEnabled},
+						DefaultMode: ReasoningModeEnabled,
+					},
+				}},
+				Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+					Name:         "risk",
+					Type:         ClassifierSignalTypeLLM,
+					Model:        "judge",
+					Labels:       []string{"SAFE", "RISKY"},
+					Instructions: "Classify.",
+				}}},
+			},
+		}
+	}
+
+	tests := []struct {
+		name      string
+		provider  string
+		reasoning *ExternalModelReasoningConfig
+		wantErr   string
+	}{
+		{name: "omitted"},
+		{name: "omitted on non-vllm provider", provider: "openai"},
+		{name: "missing family", reasoning: &ExternalModelReasoningConfig{UseReasoning: &enabled}, wantErr: "reasoning.family is required"},
+		{name: "family whitespace", reasoning: &ExternalModelReasoningConfig{Family: " qwen3 ", UseReasoning: &enabled}, wantErr: "family must not contain surrounding whitespace"},
+		{name: "missing use reasoning", reasoning: &ExternalModelReasoningConfig{Family: "qwen3"}, wantErr: "use_reasoning is required"},
+		{name: "unknown family", reasoning: &ExternalModelReasoningConfig{Family: "missing", UseReasoning: &enabled}, wantErr: `family "missing" is not configured`},
+		{name: "effort whitespace", reasoning: &ExternalModelReasoningConfig{Family: "effort", UseReasoning: &enabled, ReasoningEffort: " high "}, wantErr: "reasoning_effort must not contain surrounding whitespace"},
+		{name: "always-on disabled", reasoning: &ExternalModelReasoningConfig{Family: "always-on", UseReasoning: &disabled}, wantErr: "cannot disable always-on family"},
+		{name: "disabled with effort", reasoning: &ExternalModelReasoningConfig{Family: "effort", UseReasoning: &disabled, ReasoningEffort: "low"}, wantErr: "cannot be set while reasoning is disabled"},
+		{name: "mode-only with effort", reasoning: &ExternalModelReasoningConfig{Family: "qwen3", UseReasoning: &enabled, ReasoningEffort: "low"}, wantErr: "mode-only family"},
+		{name: "unsupported effort", reasoning: &ExternalModelReasoningConfig{Family: "effort", UseReasoning: &enabled, ReasoningEffort: "medium"}, wantErr: "is not supported"},
+		{name: "non-vllm provider", provider: "openai", reasoning: &ExternalModelReasoningConfig{Family: "qwen3", UseReasoning: &enabled}, wantErr: `requires llm_provider "vllm"`},
+		{name: "valid disabled", reasoning: &ExternalModelReasoningConfig{Family: "qwen3", UseReasoning: &disabled}},
+		{name: "valid default effort", reasoning: &ExternalModelReasoningConfig{Family: "effort", UseReasoning: &enabled}},
+		{name: "valid explicit effort", reasoning: &ExternalModelReasoningConfig{Family: "effort", UseReasoning: &enabled, ReasoningEffort: "low"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := base()
+			if tt.provider != "" {
+				cfg.ExternalModels[0].Provider = tt.provider
+			}
+			cfg.ExternalModels[0].Reasoning = tt.reasoning
+			err := validateClassifierSignalContracts(cfg)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validateClassifierSignalContracts() error = %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("validateClassifierSignalContracts() error = %v, want substring %q", err, tt.wantErr)
+			}
+			if strings.Contains(tt.wantErr, "not configured") || strings.Contains(tt.wantErr, "always-on") || strings.Contains(tt.wantErr, "disabled") || strings.Contains(tt.wantErr, "mode-only") || strings.Contains(tt.wantErr, "supported") || strings.Contains(tt.wantErr, "llm_provider") {
+				if !strings.Contains(err.Error(), `classifiers["risk"]`) || !strings.Contains(err.Error(), `external model "judge"`) {
+					t.Fatalf("compatibility error lacks classifier and external-model paths: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestParseYAMLBytesPreservesLLMClassifierReasoningControl(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`
+version: v0.3
+global:
+  model_catalog:
+    external:
+      - name: risk-judge
+        llm_provider: vllm
+        model_role: classification
+        llm_endpoint:
+          address: risk-judge
+          port: 8000
+        llm_model_name: qwen/qwen3-8b
+        reasoning:
+          family: qwen3
+          use_reasoning: false
+routing:
+  signals:
+    classifiers:
+      - name: tool-risk
+        type: llm
+        model: risk-judge
+        labels: [SAFE, RISKY]
+        instructions: Classify the request.
+`))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+	external := cfg.FindExternalModelByName("risk-judge")
+	if external == nil || external.Reasoning == nil {
+		t.Fatalf("external reasoning control was not materialized: %#v", external)
+	}
+	if external.Reasoning.Family != "qwen3" || external.Reasoning.UseReasoning == nil || *external.Reasoning.UseReasoning {
+		t.Fatalf("external reasoning control = %#v, want qwen3 disabled", external.Reasoning)
+	}
+}
+
+func TestParseYAMLBytesRejectsDisabledAlwaysOnLLMClassifierReasoning(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`
+version: v0.3
+global:
+  model_catalog:
+    external:
+      - name: risk-judge
+        llm_provider: vllm
+        model_role: classification
+        llm_endpoint:
+          address: risk-judge
+          port: 8000
+        llm_model_name: qwen/qwen3.8
+        reasoning:
+          family: qwen3.8-always-on
+          use_reasoning: false
+routing:
+  signals:
+    classifiers:
+      - name: tool-risk
+        type: llm
+        model: risk-judge
+        labels: [SAFE, RISKY]
+        instructions: Classify the request.
+`))
+	if err == nil || !strings.Contains(err.Error(), `cannot disable always-on family "qwen3.8-always-on"`) {
+		t.Fatalf("ParseYAMLBytes() error = %v, want always-on family rejection", err)
+	}
+}
+
+func TestValidateClassifierSignalContractsRejectsCaseCollidingNames(t *testing.T) {
+	cfg := &RouterConfig{IntelligentRouting: IntelligentRouting{
+		Signals: Signals{ClassifierRules: []ClassifierSignalRule{
+			{
+				Name:      "Risk",
+				Type:      "local",
+				ModelPath: "models/risk",
+				Labels:    []string{"SAFE", "RISKY"},
+			},
+			{
+				Name:      "risk",
+				Type:      "local",
+				ModelPath: "models/risk",
+				Labels:    []string{"SAFE", "RISKY"},
+			},
+		}},
+	}}
+	if err := validateClassifierSignalContracts(cfg); err == nil {
+		t.Fatal("expected case-colliding classifier name error")
+	}
+}
+
+func TestLocalClassifierDecisionPredicateRequiresWinningConfidence(t *testing.T) {
+	upperBound := 0.4
+	err := validateClassifierDecisionLeaf(
+		&RouterConfig{IntelligentRouting: IntelligentRouting{
+			Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+				Name:   "risk",
+				Type:   "local",
+				Labels: []string{"SAFE", "RISKY"},
+			}}},
+		}},
+		"risk-route",
+		&RuleNode{
+			Type:      SignalTypeClassifier,
+			Name:      "risk",
+			Label:     "RISKY",
+			Predicate: &NumericPredicate{LTE: &upperBound},
+		},
+	)
+	if err == nil {
+		t.Fatal("expected local classifier lower-bound predicate error")
+	}
+}
+
+func TestDecisionLeafRejectsOnErrorOutsideClassifier(t *testing.T) {
+	err := validateDecisionLeafNode(
+		&RouterConfig{},
+		"metadata-route",
+		&RuleNode{
+			Type:      SignalTypeMetadata,
+			Name:      "cohort",
+			Predicate: &NumericPredicate{},
+			OnError:   "match",
+		},
+	)
+	if err == nil {
+		t.Fatal("expected on_error ownership validation error")
+	}
+}
+
+func TestPromptAlgorithmRejectsDuplicateModelNames(t *testing.T) {
+	useReasoning := false
+	err := validatePromptAlgorithmConfig(
+		"prompt-route",
+		[]ModelRef{
+			{Model: "model-a", ModelReasoningControl: ModelReasoningControl{UseReasoning: &useReasoning}},
+			{Model: "model-a", LoRAName: "adapter", ModelReasoningControl: ModelReasoningControl{UseReasoning: &useReasoning}},
+		},
+		&AlgorithmConfig{
+			Prompt: &PromptSelectionConfig{Model: "router", Instructions: "Choose."},
+		},
+	)
+	if err == nil {
+		t.Fatal("expected duplicate prompt model validation error")
+	}
+}
+
+func TestPromptAlgorithmRejectsEffectiveLoRAIdentityCollision(t *testing.T) {
+	useReasoning := false
+	err := validatePromptAlgorithmConfig(
+		"prompt-route",
+		[]ModelRef{
+			{
+				Model:    "base",
+				LoRAName: "specialist",
+				ModelReasoningControl: ModelReasoningControl{
+					UseReasoning: &useReasoning,
+				},
+			},
+			{
+				Model: "specialist",
+				ModelReasoningControl: ModelReasoningControl{
+					UseReasoning: &useReasoning,
+				},
+			},
+		},
+		&AlgorithmConfig{Prompt: &PromptSelectionConfig{
+			Model: "router", Instructions: "Choose.",
+		}},
+	)
+	if err == nil {
+		t.Fatal("expected effective prompt candidate identity collision")
+	}
+}
+
+func TestValidateLocalClassifierReloadAllowsPreparedGenerationChanges(t *testing.T) {
+	current := &RouterConfig{IntelligentRouting: IntelligentRouting{
+		Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+			Name:      "risk",
+			Type:      "local",
+			ModelPath: "models/risk-v1",
+			Labels:    []string{"SAFE", "RISKY"},
+		}}},
+	}}
+	same := &RouterConfig{IntelligentRouting: IntelligentRouting{
+		Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+			Name:      "renamed-risk",
+			Type:      "local",
+			ModelPath: "models/risk-v1",
+			Labels:    []string{"SAFE", "RISKY"},
+		}}},
+	}}
+	changed := &RouterConfig{IntelligentRouting: IntelligentRouting{
+		Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+			Name:      "risk",
+			Type:      "local",
+			ModelPath: "models/risk-v2",
+			Labels:    []string{"SAFE", "RISKY"},
+		}}},
+	}}
+
+	if err := ValidateLocalClassifierReload(current, same); err != nil {
+		t.Fatalf("same runtime contract rejected: %v", err)
+	}
+	if err := ValidateLocalClassifierReload(current, changed); err != nil {
+		t.Fatalf("candidate model change rejected: %v", err)
+	}
+	if err := ValidateLocalClassifierReload(&RouterConfig{}, current); err != nil {
+		t.Fatalf("candidate classifier addition rejected: %v", err)
+	}
+	if err := ValidateLocalClassifierReload(current, &RouterConfig{}); err != nil {
+		t.Fatalf("candidate classifier removal rejected: %v", err)
+	}
+}
+
+func TestRecipeLocalClassifiersHaveIndependentRuntimeSignatures(t *testing.T) {
+	rule := func(path string) ClassifierSignalRule {
+		return ClassifierSignalRule{
+			Name:      "risk",
+			Type:      "local",
+			ModelPath: path,
+			Labels:    []string{"SAFE", "RISKY"},
+		}
+	}
+	cfg := &RouterConfig{Recipes: []RoutingRecipe{
+		{
+			Name: "private",
+			Profile: RoutingProfile{Signals: Signals{
+				ClassifierRules: []ClassifierSignalRule{rule("models/risk")},
+			}},
+		},
+		{
+			Name: "public",
+			Profile: RoutingProfile{Signals: Signals{
+				ClassifierRules: []ClassifierSignalRule{rule("models/risk")},
+			}},
+		},
+	}}
+	if err := validateGlobalClassifierRuntimeContracts(cfg); err != nil {
+		t.Fatalf("identical recipe-local classifiers rejected: %v", err)
+	}
+
+	cfg.Recipes[1].Profile.Signals.ClassifierRules[0].ModelPath = "models/other-risk"
+	if err := validateGlobalClassifierRuntimeContracts(cfg); err != nil {
+		t.Fatalf("independent recipe models rejected: %v", err)
+	}
+}
+
+func TestDecisionPredicateRejectsNonFiniteValues(t *testing.T) {
+	nan := math.NaN()
+	err := validateDecisionLeafPredicate(
+		"nan-route",
+		&RuleNode{
+			Type:      SignalTypeStructure,
+			Name:      "bytes",
+			Predicate: &NumericPredicate{GTE: &nan},
+		},
+	)
+	if err == nil {
+		t.Fatal("expected non-finite predicate validation error")
+	}
+	if err := ValidateStructureRuleContract(StructureRule{
+		Name: "bytes",
+		Feature: StructureFeature{
+			Type:   "count",
+			Source: StructureSource{Type: "text_bytes"},
+		},
+		Predicate: &NumericPredicate{GTE: &nan},
+	}); err == nil {
+		t.Fatal("expected non-finite structure predicate validation error")
+	}
+	if err := ValidateConversationRuleContract(ConversationRule{
+		Name: "images",
+		Feature: ConversationFeature{
+			Type:   "count",
+			Source: ConversationSource{Type: "image_content"},
+		},
+		Predicate: &NumericPredicate{GTE: &nan},
+	}); err == nil {
+		t.Fatal("expected non-finite conversation predicate validation error")
+	}
+}
+
+func TestNumericPredicateRejectsEmptyRanges(t *testing.T) {
+	five := 5.0
+	three := 3.0
+	for _, predicate := range []*NumericPredicate{
+		{GT: &five, LT: &three},
+		{GTE: &five, LTE: &three},
+		{GT: &five, LTE: &five},
+		{GTE: &five, LT: &five},
+	} {
+		if err := validateNumericPredicateContract(predicate); err == nil {
+			t.Fatalf("predicate %#v should define an empty range", predicate)
+		}
+	}
+	if err := validateNumericPredicateContract(
+		&NumericPredicate{GTE: &five, LTE: &five},
+	); err != nil {
+		t.Fatalf("inclusive point range rejected: %v", err)
+	}
+}
+
+func TestDecisionAlgorithmRejectsUnknownType(t *testing.T) {
+	err := validateDecisionAlgorithmConfig(
+		"typo-route",
+		nil,
+		&AlgorithmConfig{Type: "typo"},
+	)
+	if err == nil {
+		t.Fatal("expected unknown algorithm type error")
+	}
+}
+
+func TestDecisionAlgorithmRejectsMixedCaseType(t *testing.T) {
+	err := validateDecisionAlgorithmConfig(
+		"prompt-route",
+		nil,
+		&AlgorithmConfig{Type: "Prompt"},
+	)
+	if err == nil {
+		t.Fatal("expected mixed-case algorithm type error")
+	}
+}
+
+func TestDecisionPluginRejectsUnknownTypeAndFields(t *testing.T) {
+	payload := MustStructuredPayload(map[string]interface{}{"enabled": true})
+	if err := validateDecisionPluginPayload(
+		"route",
+		0,
+		DecisionPlugin{Type: "unknown", Configuration: payload},
+	); err == nil {
+		t.Fatal("expected unknown plugin type error")
+	}
+	payload = MustStructuredPayload(map[string]interface{}{
+		"enabled": true,
+		"typo":    true,
+	})
+	if err := validateDecisionPluginPayload(
+		"route",
+		0,
+		DecisionPlugin{
+			Type:          DecisionPluginSemanticCache,
+			Configuration: payload,
+		},
+	); err == nil {
+		t.Fatal("expected unknown semantic-cache field error")
+	}
+}
+
+func TestDecisionPluginRequiresFastResponseMessage(t *testing.T) {
+	err := validateDecisionPluginPayload(
+		"route",
+		0,
+		DecisionPlugin{
+			Type: DecisionPluginFastResponse,
+			Configuration: MustStructuredPayload(
+				FastResponsePluginConfig{},
+			),
+		},
+	)
+	if err == nil {
+		t.Fatal("expected fast_response message validation error")
+	}
+}
+
+func TestDecisionPluginAliasResolvesCanonicalAccessor(t *testing.T) {
+	decision := &Decision{Plugins: []DecisionPlugin{{
+		Type: "semantic_cache",
+		Configuration: MustStructuredPayload(
+			SemanticCachePluginConfig{Enabled: true},
+		),
+	}}}
+	cache := decision.GetSemanticCacheConfig()
+	if cache == nil || !cache.Enabled {
+		t.Fatalf("semantic_cache alias did not resolve: %#v", cache)
+	}
+}
+
+func TestPromptModelRejectsAnthropicAPIFormat(t *testing.T) {
+	cfg := &RouterConfig{
+		BackendModels: BackendModels{ModelConfig: map[string]ModelParams{
+			"anthropic-helper": {APIFormat: ClientProtocolAnthropic},
+		}},
+	}
+	err := validateDecisionPromptModel(cfg, Decision{
+		Name: "prompt-route",
+		Algorithm: &AlgorithmConfig{Prompt: &PromptSelectionConfig{
+			Model:        "anthropic-helper",
+			Instructions: "Choose.",
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected Anthropic prompt helper validation error")
+	}
+}
+
+func TestPromptModelRejectsNonTextModality(t *testing.T) {
+	cfg := &RouterConfig{
+		BackendModels: BackendModels{ModelConfig: map[string]ModelParams{
+			"image-helper": {Modality: "image"},
+		}},
+	}
+	err := validateDecisionPromptModel(cfg, Decision{
+		Name: "prompt-route",
+		Algorithm: &AlgorithmConfig{Prompt: &PromptSelectionConfig{
+			Model:        "image-helper",
+			Instructions: "Choose.",
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected non-text prompt helper validation error")
+	}
+}
+
+func TestPromptModelRequiresProviderBackend(t *testing.T) {
+	cfg := &RouterConfig{
+		Looper: LooperConfig{Endpoint: "http://router:8899"},
+		BackendModels: BackendModels{ModelConfig: map[string]ModelParams{
+			"helper": {Modality: "text"},
+		}},
+	}
+	err := validateDecisionPromptModel(cfg, Decision{
+		Name: "prompt-route",
+		Algorithm: &AlgorithmConfig{Prompt: &PromptSelectionConfig{
+			Model: "helper", Instructions: "Choose.",
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected providerless prompt helper validation error")
+	}
+}

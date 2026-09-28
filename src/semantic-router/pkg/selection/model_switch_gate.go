@@ -214,7 +214,7 @@ func (g *ModelSwitchGate) collectSwitchEvidence(input ModelSwitchGateInput, cand
 	}
 
 	missing := make([]string, 0, 2)
-	handoffPenalty, handoffPenaltyOK := g.lookupHandoffPenalty(input.CurrentModel, candidateModel)
+	handoffPenalty, handoffPenaltyOK := g.lookupHandoffPenalty(input.SelectionContext, input.CurrentModel, candidateModel)
 	if !handoffPenaltyOK {
 		missing = append(missing, "handoff_penalty")
 		handoffPenalty = gateConfig(g).DefaultHandoffPenalty
@@ -302,21 +302,24 @@ func (g *ModelSwitchGate) lookupQualityGap(selCtx *SelectionContext, currentMode
 		return 0, false
 	}
 	if selCtx.CategoryName != "" {
-		if gap, ok := g.lookupTable.QualityGap(selCtx.CategoryName, currentModel, candidateModel); ok {
+		if gap, ok := g.lookupTable.QualityGap(selCtx.ScopedRoutingName(selCtx.CategoryName), currentModel, candidateModel); ok {
 			return gap, true
 		}
 	}
 	if selCtx.DecisionName != "" && selCtx.DecisionName != selCtx.CategoryName {
-		return g.lookupTable.QualityGap(selCtx.DecisionName, currentModel, candidateModel)
+		return g.lookupTable.QualityGap(selCtx.ScopedRoutingName(selCtx.DecisionName), currentModel, candidateModel)
 	}
 	return 0, false
 }
 
-func (g *ModelSwitchGate) lookupHandoffPenalty(currentModel, candidateModel string) (float64, bool) {
-	if g == nil || g.lookupTable == nil {
+func (g *ModelSwitchGate) lookupHandoffPenalty(selCtx *SelectionContext, currentModel, candidateModel string) (float64, bool) {
+	if g == nil || g.lookupTable == nil || selCtx == nil {
 		return 0, false
 	}
-	return g.lookupTable.HandoffPenalty(currentModel, candidateModel)
+	entry, ok := g.lookupTable.Get(
+		lookuptable.ScopedHandoffPenaltyKey(selCtx.RoutingScope(), currentModel, candidateModel),
+	)
+	return entry.Value, ok
 }
 
 func gateConfig(g *ModelSwitchGate) config.ModelSwitchGateConfig {

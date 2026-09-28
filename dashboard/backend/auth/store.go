@@ -40,6 +40,10 @@ func NewStore(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrate schema: %w", err)
 	}
+	if err := migrateInvitationSchema(context.Background(), db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("migrate invitation schema: %w", err)
+	}
 
 	store := &Store{db: db}
 	if err := store.normalizeStoredRoles(); err != nil {
@@ -56,6 +60,46 @@ func NewStore(path string) (*Store, error) {
 	}
 
 	return store, nil
+}
+
+func migrateInvitationSchema(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `PRAGMA table_info(dashboard_invitations)`)
+	if err != nil {
+		return err
+	}
+	columns := make(map[string]bool)
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue any
+		if scanErr := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); scanErr != nil {
+			_ = rows.Close()
+			return scanErr
+		}
+		columns[name] = true
+	}
+	if closeErr := rows.Close(); closeErr != nil {
+		return closeErr
+	}
+
+	additions := []struct {
+		name string
+		sql  string
+	}{
+		{name: "kind", sql: `ALTER TABLE dashboard_invitations ADD COLUMN kind TEXT NOT NULL DEFAULT 'personal'`},
+		{name: "max_uses", sql: `ALTER TABLE dashboard_invitations ADD COLUMN max_uses INTEGER NOT NULL DEFAULT 1`},
+		{name: "used_count", sql: `ALTER TABLE dashboard_invitations ADD COLUMN used_count INTEGER NOT NULL DEFAULT 0`},
+	}
+	for _, addition := range additions {
+		if columns[addition.name] {
+			continue
+		}
+		if _, execErr := db.ExecContext(ctx, addition.sql); execErr != nil {
+			return execErr
+		}
+	}
+	_, err = db.ExecContext(ctx, `UPDATE dashboard_invitations SET used_count=1 WHERE status=? AND used_count=0`, InvitationAccepted)
+	return err
 }
 
 func (s *Store) Close() error {
@@ -122,84 +166,94 @@ func (s *Store) GetUserByID(ctx context.Context, userID string) (*User, error) {
 }
 
 func (s *Store) UpdateUserRoleOrStatus(ctx context.Context, userID, role, status string) (*User, error) {
+	return s.updateUserRoleOrStatus(ctx, nil, userID, role, status)
+}
+
+func (s *Store) UpdateUserRoleOrStatusAuthorized(ctx context.Context, actor AuthContext, userID, role, status string) (*User, error) {
+	return s.updateUserRoleOrStatus(ctx, &actor, userID, role, status)
+}
+
+func (s *Store) updateUserRoleOrStatus(ctx context.Context, actor *AuthContext, userID, role, status string) (*User, error) {
 	if role == "" && status == "" {
 		return s.GetUserByID(ctx, userID)
 	}
 
 	updatedAt := nowUnix()
-	var (
-		res sql.Result
-		err error
-	)
-
-	switch {
-	case role != "" && status != "":
-		normalizedRole, normalizeErr := normalizeRole(role)
-		if normalizeErr != nil {
-			return nil, normalizeErr
+	if role != "" {
+		normalizedRole, err := normalizeRole(role)
+		if err != nil {
+			return nil, err
 		}
-		res, err = s.db.ExecContext(
-			ctx,
-			`UPDATE users SET role = ?, status = ?, updated_at = ? WHERE id = ?`,
-			normalizedRole,
-			status,
-			updatedAt,
-			userID,
-		)
-	case role != "":
-		normalizedRole, normalizeErr := normalizeRole(role)
-		if normalizeErr != nil {
-			return nil, normalizeErr
-		}
-		res, err = s.db.ExecContext(
-			ctx,
-			`UPDATE users SET role = ?, updated_at = ? WHERE id = ?`,
-			normalizedRole,
-			updatedAt,
-			userID,
-		)
-	default:
-		res, err = s.db.ExecContext(
-			ctx,
-			`UPDATE users SET status = ?, updated_at = ? WHERE id = ?`,
-			status,
-			updatedAt,
-			userID,
-		)
+		role = normalizedRole
 	}
-
+	err := s.withAdminMutation(ctx, actor, func(tx *sql.Tx) error {
+		var res sql.Result
+		var writeErr error
+		switch {
+		case role != "" && status != "":
+			res, writeErr = tx.ExecContext(ctx, `UPDATE users SET role = ?, status = ?, updated_at = ? WHERE id = ?`, role, status, updatedAt, userID)
+		case role != "":
+			res, writeErr = tx.ExecContext(ctx, `UPDATE users SET role = ?, updated_at = ? WHERE id = ?`, role, updatedAt, userID)
+		default:
+			res, writeErr = tx.ExecContext(ctx, `UPDATE users SET status = ?, updated_at = ? WHERE id = ?`, status, updatedAt, userID)
+		}
+		if writeErr != nil {
+			return writeErr
+		}
+		affected, _ := res.RowsAffected()
+		if affected == 0 {
+			return sql.ErrNoRows
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-	affected, _ := res.RowsAffected()
-	if affected == 0 {
-		return nil, sql.ErrNoRows
 	}
 	return s.GetUserByID(ctx, userID)
 }
 
 func (s *Store) DeleteUser(ctx context.Context, userID string) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, userID)
-	if err != nil {
-		return err
-	}
-	affected, _ := res.RowsAffected()
-	if affected == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+	return s.deleteUser(ctx, nil, userID)
+}
+
+func (s *Store) DeleteUserAuthorized(ctx context.Context, actor AuthContext, userID string) error {
+	return s.deleteUser(ctx, &actor, userID)
+}
+
+func (s *Store) deleteUser(ctx context.Context, actor *AuthContext, userID string) error {
+	return s.withAdminMutation(ctx, actor, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, userID)
+		if err != nil {
+			return err
+		}
+		affected, _ := res.RowsAffected()
+		if affected == 0 {
+			return sql.ErrNoRows
+		}
+		return nil
+	})
 }
 
 func (s *Store) UpdatePassword(ctx context.Context, userID, passwordHash string) error {
-	res, err := s.db.ExecContext(ctx, `UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?`, passwordHash, nowUnix(), userID)
-	if err != nil {
-		return err
-	}
-	affected, _ := res.RowsAffected()
-	if affected == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+	return s.updatePassword(ctx, nil, userID, passwordHash)
+}
+
+func (s *Store) UpdatePasswordAuthorized(ctx context.Context, actor AuthContext, userID, passwordHash string) error {
+	return s.updatePassword(ctx, &actor, userID, passwordHash)
+}
+
+func (s *Store) updatePassword(ctx context.Context, actor *AuthContext, userID, passwordHash string) error {
+	return s.withAdminMutation(ctx, actor, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?`, passwordHash, nowUnix(), userID)
+		if err != nil {
+			return err
+		}
+		affected, _ := res.RowsAffected()
+		if affected == 0 {
+			return sql.ErrNoRows
+		}
+		return nil
+	})
 }
 
 func (s *Store) UpdateLoginTime(ctx context.Context, userID string) error {

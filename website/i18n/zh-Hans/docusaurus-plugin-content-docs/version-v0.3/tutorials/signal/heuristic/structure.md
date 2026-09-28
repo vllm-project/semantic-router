@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`structure` 检测请求形态相关事实，例如多个显式问题、有序工作流标记或密集的约束措辞。映射到 `config/signal/structure/`，在 `routing.signals.structure` 中声明。
+`structure` 检测请求形态相关事实，例如多个显式问题、有序工作流标记或密集的约束措辞。映射到 `config/fragments/signal/structure/`，在 `routing.signals.structure` 中声明。
 
 该族为启发式：保持基于规则，但与 `keyword` 不同，可在发出命名信号前对类型化结构特征计数、归一化与比较。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/structure/`
+源片段族：`config/fragments/signal/structure/`
 
 ```yaml
 routing:

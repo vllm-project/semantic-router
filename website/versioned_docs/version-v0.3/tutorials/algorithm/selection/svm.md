@@ -4,7 +4,7 @@
 
 `svm` is a selection algorithm that uses a **Support Vector Machine** classifier for model selection. It learns decision boundaries between query types and candidate models.
 
-It aligns to `config/algorithm/selection/svm.yaml`.
+It aligns to `config/fragments/algorithm/selection/svm.yaml`.
 
 **Implementation**: Rust via [Linfa](https://github.com/rust-ml/linfa) (`linfa-svm`).
 

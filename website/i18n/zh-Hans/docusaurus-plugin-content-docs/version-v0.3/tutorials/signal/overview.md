@@ -13,7 +13,7 @@ translation:
 
 信号在 `routing.signals` 下定义命名检测器；决策在 `routing.decisions` 中引用这些名称，使检测可复用、路由逻辑可读。跨信号协调与派生路由档位现位于 `routing.projections`：`routing.projections.partitions` 是独占领域或嵌入分区的运行时载体；决策可用 `type: projection` 引用 `routing.projections.mappings` 的输出。DSL 编写中对应 `PROJECTION partition ...` 以及 `PROJECTION score ...` / `PROJECTION mapping ...` 块。完整投影工作流、规范 YAML、控制台路径与 DSL 示例见 [Projections](../projection/overview)。
 
-本教程组直接映射 `config/signal/` 下的片段树，文档按提取方式组织：
+本教程组直接映射 `config/fragments/signal/` 下的片段树，文档按提取方式组织：
 
 - `heuristic/`：请求形态、词法、身份与轻量检测器信号
 - `learned/`：依赖嵌入或分类器、使用路由器自有模型资产或维护检测模块的信号
@@ -38,7 +38,7 @@ translation:
 - 多条路由需要同一检测器
 - 同一决策树要混合多种检测方式
 - 需要在检测、决策逻辑、算法与插件之间划清边界
-- 希望配置片段清晰映射到 `config/signal/`
+- 希望配置片段清晰映射到 `config/fragments/signal/`
 
 ## 配置
 
@@ -82,36 +82,36 @@ routing:
             gte: 0.25
 ```
 
-最新信号文档仍覆盖 `config/signal/` 下各族，但按两级分类组织，便于看清运行时成本与依赖模型。
+最新信号文档仍覆盖 `config/fragments/signal/` 下各族，但按两级分类组织，便于看清运行时成本与依赖模型。
 
-### 启发式信号
+### 启发式信号 {#heuristic-signals}
 
 这类信号来自显式规则、请求形态或轻量检测，**不依赖**路由器自有分类模型。
 
 | 信号族 | 片段目录 | 用途 | 文档 |
 | ------ | -------- | ---- | ---- |
-| `authz` | `config/signal/authz/` | 按身份、角色或租户策略路由 | [Authz](./heuristic/authz) |
-| `context` | `config/signal/context/` | 按有效 token 窗口需求路由 | [Context](./heuristic/context) |
-| `keyword` | `config/signal/keyword/` | 词法或 BM25 风格匹配 | [Keyword](./heuristic/keyword) |
-| `language` | `config/signal/language/` | 按检测到的请求语言路由 | [Language](./heuristic/language) |
-| `structure` | `config/signal/structure/` | 按请求形态（如问题数量、有序工作流标记）路由 | [Structure](./heuristic/structure) |
+| `authz` | `config/fragments/signal/authz/` | 按身份、角色或租户策略路由 | [Authz](./heuristic/authz) |
+| `context` | `config/fragments/signal/context/` | 按有效 token 窗口需求路由 | [Context](./heuristic/context) |
+| `keyword` | `config/fragments/signal/keyword/` | 词法或 BM25 风格匹配 | [Keyword](./heuristic/keyword) |
+| `language` | `config/fragments/signal/language/` | 按检测到的请求语言路由 | [Language](./heuristic/language) |
+| `structure` | `config/fragments/signal/structure/` | 按请求形态（如问题数量、有序工作流标记）路由 | [Structure](./heuristic/structure) |
 
-### 学习型信号
+### 学习型信号 {#learned-signals}
 
 这类信号使用嵌入或分类模型，通常依赖 `global.model_catalog` 资产或模块配置。
 
 | 信号族 | 片段目录 | 用途 | 文档 |
 | ------ | -------- | ---- | ---- |
-| `complexity` | `config/signal/complexity/` | 检测难/易推理流量 | [Complexity](./learned/complexity) |
-| `domain` | `config/signal/domain/` | 请求主题族分类 | [Domain](./learned/domain) |
-| `embedding` | `config/signal/embedding/` | 语义相似度匹配 | [Embedding](./learned/embedding) |
-| `modality` | `config/signal/modality/` | 纯文本、图像生成或混合输出模式 | [Modality](./learned/modality) |
-| `fact-check` | `config/signal/fact-check/` | 需证据核验的提示 | [Fact Check](./learned/fact-check) |
-| `jailbreak` | `config/signal/jailbreak/` | 提示注入或越狱企图 | [Jailbreak](./learned/jailbreak) |
-| `pii` | `config/signal/pii/` | 敏感个人数据 | [PII](./learned/pii) |
-| `preference` | `config/signal/preference/` | 推断响应风格偏好 | [Preference](./learned/preference) |
-| `kb` | `config/signal/kb/` | 将知识库标签或分组绑定为命名路由信号 | [Knowledge Base](./learned/kb) |
-| `user-feedback` | `config/signal/user-feedback/` | 纠正或升级类反馈 | [User Feedback](./learned/user-feedback) |
+| `complexity` | `config/fragments/signal/complexity/` | 检测难/易推理流量 | [Complexity](./learned/complexity) |
+| `domain` | `config/fragments/signal/domain/` | 请求主题族分类 | [Domain](./learned/domain) |
+| `embedding` | `config/fragments/signal/embedding/` | 语义相似度匹配 | [Embedding](./learned/embedding) |
+| `modality` | `config/fragments/signal/modality/` | 纯文本、图像生成或混合输出模式 | [Modality](./learned/modality) |
+| `fact-check` | `config/fragments/signal/fact-check/` | 需证据核验的提示 | [Fact Check](./learned/fact-check) |
+| `jailbreak` | `config/fragments/signal/jailbreak/` | 提示注入或越狱企图 | [Jailbreak](./learned/jailbreak) |
+| `pii` | `config/fragments/signal/pii/` | 敏感个人数据 | [PII](./learned/pii) |
+| `preference` | `config/fragments/signal/preference/` | 推断响应风格偏好 | [Preference](./learned/preference) |
+| `kb` | `config/fragments/signal/kb/` | 将知识库标签或分组绑定为命名路由信号 | [Knowledge Base](./learned/kb) |
+| `user-feedback` | `config/fragments/signal/user-feedback/` | 纠正或升级类反馈 | [User Feedback](./learned/user-feedback) |
 
 请遵守：
 
@@ -126,5 +126,5 @@ routing:
 - 需要 `PROJECTION partition`、加权分数聚合或命名档位时，阅读 [Projections](../projection/overview)。
 - 完整公开约定见 [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)。
 - 仓库内真实策略可参考维护的 `balance` 资产：
-  - [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
-  - [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)
+  - [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
+  - [`config/recipes/balance/recipe.dsl`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/recipe.dsl)

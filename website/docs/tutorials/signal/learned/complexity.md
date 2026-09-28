@@ -2,35 +2,95 @@
 
 ## Overview
 
-`complexity` estimates whether a prompt needs a harder reasoning path or a cheaper easy path. It maps to `config/signal/complexity/` and is declared under `routing.signals.complexity`.
+`complexity` estimates whether a request is `easy`, `medium`, or `hard` by
+comparing it with configured example sets. Use it alongside Domain to distinguish
+requests in the same subject that need different amounts of work.
 
-This family is learned: the classifier compares requests against hard and easy examples using embedding similarity, and can optionally use multimodal candidates.
+Local scoring reuses your configured Embedding model, including Vela; it needs
+no separate Complexity model download. You can also connect a
+[remote scorer](#local-and-remote-scoring).
 
 ## Key Advantages
 
-- Separates reasoning escalation from domain classification.
-- Reuses one complexity policy across multiple decisions.
-- Supports hard/easy examples that are easy to tune over time.
-- Lets simple prompts stay on cheaper models while hard prompts escalate.
+- Separates estimated difficulty from topic classification.
+- Reuses one easy/medium/hard policy across multiple decisions.
+- Tunes routing with examples instead of a custom classifier schema.
 
 ## What Problem Does It Solve?
 
-Topic alone does not tell you whether a prompt needs strong reasoning. Two questions in the same domain can have very different reasoning depth.
-
-`complexity` solves that by estimating task difficulty directly from example-driven signal rules.
+Domain routing alone cannot distinguish a short factual request from a
+multi-step analysis request. Complexity supplies a reusable difficulty signal
+so decisions can escalate only the traffic that needs it.
 
 ## When to Use
 
-Use `complexity` when:
-
-- some prompts need stronger reasoning or longer chains of thought
-- easy traffic should stay on cheaper models
-- you want escalation policies that are independent of domain
-- multimodal reasoning requests need different handling from simple prompts
+Use complexity when model cost or reasoning mode should vary with estimated
+task difficulty. Do not treat it as a correctness or safety guarantee; use
+domain-specific evaluation and safety signals for those concerns.
 
 ## Configuration
 
-Source fragment family: `config/signal/complexity/`
+```yaml
+routing:
+  signals:
+    complexity:
+      - name: needs_reasoning
+        threshold: 0.10
+        description: Estimate the work needed to produce a supported answer.
+        hard:
+          candidates:
+            - Find a solution satisfying interacting constraints and justify why alternatives fail.
+            - Reconcile conflicting evidence and defend a conclusion under uncertainty.
+            - Derive an algorithm and prove its correctness.
+        easy:
+          candidates:
+            - Retrieve a fact explicitly stated in the supplied text.
+            - Copy the supplied information into the requested format.
+            - Apply one specified local edit while preserving everything else.
+```
+
+`threshold` is a margin, not a similarity cutoff. The router scores the request
+against the `hard` and the `easy` candidate banks, then compares the two:
+
+```text
+signal = hard_bank_score - easy_bank_score
+
+signal >  threshold  -> hard
+signal < -threshold  -> easy
+otherwise            -> medium
+```
+
+Both banks can score a request similarly, leaving a small margin even when the
+individual scores are high. The margin measures similarity separation; it is
+not a probability that the difficulty estimate is correct.
+
+The examples and `0.10` threshold are starting points. Calibrate them on easy,
+ordinary, and demanding requests in your supported languages. Compare requests
+about the same subject that require different operations, and vary answer style
+separately: a brief answer can still require difficult reasoning. Check both
+unnecessary escalation and hard requests sent to a simpler pool. A threshold
+change cannot fix examples whose difficulty scores are ordered incorrectly.
+
+A rule emits a suffixed name. Decisions must reference
+`<rule>:easy`, `<rule>:medium`, or `<rule>:hard`:
+
+```yaml
+routing:
+  decisions:
+    - name: reasoning
+      description: Route hard prompts to the reasoning model.
+      priority: 150
+      rules:
+        operator: AND
+        conditions:
+          - type: complexity
+            name: needs_reasoning:hard
+      modelRefs:
+        - model: reasoning-model
+          use_reasoning: true
+```
+
+For optional prototype-bank tuning, configure the family-level module once:
 
 ```yaml
 global:
@@ -39,151 +99,223 @@ global:
       complexity:
         prototype_scoring:
           enabled: true
-          cluster_similarity_threshold: 0.9
           max_prototypes: 8
-          best_weight: 0.75
           top_m: 2
-          margin_threshold: 0.0
+```
+
+A complexity rule can also declare `prototype_scoring` beside `hard` and
+`easy`. Omitting it inherits the family settings above. A declared object is a
+complete override: omitted fields, including those in `{}`, use built-in
+defaults rather than family overrides. This keeps authored recipe settings with
+the rule when the recipe is exported or initialized.
+
+To retain all distinct candidates in both banks:
+
+```yaml
+prototype_scoring:
+  enabled: false
+  best_weight: 0.75
+  top_m: 2
+```
+
+This disables clustering and the prototype cap while retaining best/support
+aggregation. The same resolved settings apply to text and image hard/easy banks
+and their scores. With compression enabled, `max_prototypes: 0` uses the default
+cap of 8. These settings affect local prototype scoring, not a remote scorer's
+returned score; thresholds and explicit difficulty boundaries are unchanged.
+
+### Local and remote scoring
+
+With no `backend`, complexity keeps its existing local behaviour: the `hard`
+and `easy` candidate lists are embedded once at startup, and each request is
+scored by how much more it resembles the hard examples than the easy ones. That
+difference is a signed margin centred on zero, which is why `threshold` is
+symmetric - above `+threshold` is hard, below `-threshold` is easy, and the band
+between them is medium.
+
+A remote scorer uses the shared backend block, declared beside
+`prototype_scoring` rather than on a rule. `routing.signals` is replaced
+wholesale by each routing recipe, so a backend declared on a rule would
+disappear under any recipe that did not repeat it, leaving a signal that still
+ran but had quietly reverted to local. Its `model` is an explicit name from
+`global.model_catalog.external[]`, and that entry needs
+`model_role: classification`.
+
+Complexity reads two contracts, and the one you choose depends on what your
+model returns. Because there are two, `contract` cannot be defaulted and must
+be stated.
+
+#### A model that returns a score: `score.v1`
+
+A regression model - a query-difficulty scorer, say - returns one number, and
+the router turns it into a verdict using each rule's boundaries. One request
+means one call no matter how many rules read it.
+
+The score arrives in the model's own units, not as a margin, so `threshold`
+does not apply. State the two boundaries instead, and the pair you use says
+which way difficulty runs:
+
+```yaml
+global:
+  model_catalog:
+    external:
+      - name: difficulty-scorer
+        model_role: classification
+        llm_endpoint:
+          address: difficulty-scorer.default.svc
+          port: 8080
+        llm_model_name: query-difficulty-v1
+    modules:
+      complexity:
+        backend:
+          protocol: http_classify
+          contract: score.v1
+          model: difficulty-scorer
+          deadline_ms: 5000
+
 routing:
   signals:
     complexity:
       - name: needs_reasoning
-        threshold: 0.75
-        description: Escalate multi-step reasoning or synthesis-heavy prompts.
-        hard:
-          candidates:
-            - solve this step by step
-            - compare multiple tradeoffs
-            - analyze the root cause
-        easy:
-          candidates:
-            - answer briefly
-            - quick summary
-            - simple rewrite
+        hard_above: 0.85          # a higher score is harder
+        easy_below: 0.60
+      - name: extreme
+        hard_above: 0.95          # same score, stricter boundaries
+        easy_below: 0.30
 ```
 
-Use `complexity` with representative hard and easy examples so the learned boundary matches your real routing cost profile. `prototype_scoring` is a family-level config under `global.model_catalog.modules.complexity`, so every complexity rule shares the same prototype-bank construction and label-scoring policy. Each rule still builds separate hard and easy prototype banks before computing the hard-vs-easy margin.
+For a model whose score falls as difficulty rises - one predicting the chance
+of a correct answer, for instance - use `hard_below` with `easy_above`
+instead. Encoding the direction in the field names means there is no separate
+direction setting to keep in sync, and an overlapping band cannot be written
+by accident. Those two fields require a `score.v1` backend: the local margin is
+hard-minus-easy, so a higher value is harder by construction, and to invert it
+locally you swap the candidate lists.
 
-## Routing on a complexity rule
+Want finer grading than three verdicts? Write more rules over the same score,
+each with its own boundaries. The verdict vocabulary stays `hard|easy|medium`
+because decisions match `<rule>:<verdict>`, and rules remain distinguishable
+through their own `composer` conditions.
 
-A complexity rule classifies each request into one of three difficulty levels — `hard`, `easy`, or `medium` — and emits the match as `<rule>:<level>`. Decision conditions must therefore reference the rule **with the difficulty suffix**, not by the bare rule name:
+The two rules above are not alternatives: the scorer is called once, and each
+rule reads the same score through its own boundaries, so one request yields
+one verdict per rule.
+
+| Score | `needs_reasoning` (0.85 / 0.60) | `extreme` (0.95 / 0.30) |
+| ----- | ------------------------------- | ----------------------- |
+| 0.20  | easy                            | easy                    |
+| 0.50  | easy                            | medium                  |
+| 0.70  | medium                          | medium                  |
+| 0.90  | **hard**                        | medium                  |
+| 0.99  | hard                            | **hard**                |
+
+That gives decisions a ladder to match on - `extreme:hard` for the very top,
+`needs_reasoning:hard` for anything past 0.85, `needs_reasoning:easy` for the
+bottom. A score of 0.99 satisfies both `hard` conditions at once, so the
+decision for `extreme:hard` needs the higher `priority`, or the looser rule
+takes the request.
+
+Give every rung an explicit `priority`, and give the stricter rung the higher
+number. `priority` may be omitted, and two decisions that both match at the
+same priority are separated by confidence - which `score.v1` never reports, so
+the comparison falls through to the decisions' names in alphabetical order.
+Renaming a decision would then change which model a request reaches, and
+nothing reports that it happened - #3658 tracks making the comparison that
+settled a request observable.
+
+`score.v1` reports no confidence. A score just short of `hard_above` is the
+least certain position rather than a strong one, so no confidence is derived
+from it, and any decision gated on such a rule ranks on the engine's structural
+default instead of a reported score. The router warns at startup when this
+applies.
+
+The endpoint may answer in either shape: the HuggingFace text-classification
+array with exactly one entry, `[{"label": "difficulty", "score": 0.73}]`, or a
+bare object, `{"score": 0.73}`. A missing or null score, more than one entry,
+or a non-finite value is an error, never a zero - zero is a real score at the
+easy end of a `[0,1]` range, and a fault must not route as one.
+
+#### A model that returns the verdict: `label_distribution.v1`
+
+A three-class model returns `hard`, `easy` and `medium` directly. No boundaries
+are consulted - the winning label *is* the verdict - and its probability is a
+real confidence, so confidence-based ranking is unaffected. The labels are the
+fixed verdict vocabulary and are not configured:
 
 ```yaml
-routing:
-  decisions:
-    - name: escalate_hard_prompts
-      priority: 160
-      rules:
-        operator: OR
-        conditions:
-          - type: complexity
-            name: needs_reasoning:hard # required form: <rule>:<hard|easy|medium>
-      modelRefs:
-        - model: qwen3-30b
-          use_reasoning: true
+    modules:
+      complexity:
+        backend:
+          protocol: http_classify
+          contract: label_distribution.v1
+          model: difficulty-classifier
+          deadline_ms: 5000
 ```
 
-A bare `name: needs_reasoning` never matches at runtime — the classifier only ever emits `needs_reasoning:hard|easy|medium` — so config validation rejects the suffix-less form with a clear error.
+Either way, the `hard` and `easy` candidate lists are never read once a backend
+supplies the score, and the router says so at startup rather than leaving you
+to edit examples that have no effect.
 
-## GPT-5.6 cost-tier example
+#### Watching a remote scorer
 
-GPT-5.6 model cards use the same open model-card contract as other providers; no router code or model registry entry is required. Configure the explicit Luna, Terra, and Sol model IDs so complexity decisions can select a stable cost tier:
+A network dependency fails in ways a local model does not, so the remote paths
+report what they do:
+
+- `llm_remote_connector_requests_total{operation, outcome}` and
+  `llm_remote_connector_request_duration_seconds{operation}` count and time
+  every call through the shared connector. `outcome` is `success` or the error
+  kind (`transport`, `status`, `authorization`, `request`, `response`), and
+  `llm_remote_connector_retries_total` counts retried attempts.
+- `llm_complexity_verdict_total{rule, verdict, source}` counts verdicts, where
+  `source` is `local`, `remote_score` or `remote_labels` - the same label the
+  failure counter carries, so the two can be read together. The shape of this
+  distribution is the check for a mismatched scale: a `[1,10]` scorer behind
+  `hard_above: 0.85` shows up as `hard` taking every request for that rule,
+  which no single log line would reveal.
+- `llm_complexity_evaluation_failures_total{source}` counts evaluations that
+  produced no verdict.
+
+When the scorer cannot be reached, the request still routes. The complexity
+signal is absent, every complexity rule is marked
+`complexity_evaluation_failed` in the request's signal errors, and
+`llm_complexity_evaluation_failures_total` counts it.
+
+By default a decision whose condition reads a failed complexity rule treats it
+as not matched, so the request falls through to whatever matches next. To
+decide deliberately instead, set `on_unknown` on that decision's root `rules`
+node:
 
 ```yaml
-providers:
-  defaults:
-    default_model: gpt-5.6-luna
-  models:
-    - name: gpt-5.6-luna
-      provider_model_id: gpt-5.6-luna
-      api_format: openai
-      pricing:
-        currency: USD
-        prompt_per_1m: 1.0
-        cached_input_per_1m: 0.1
-        cache_write_per_1m: 1.25
-        completion_per_1m: 6.0
-    - name: gpt-5.6-terra
-      provider_model_id: gpt-5.6-terra
-      api_format: openai
-      pricing:
-        currency: USD
-        prompt_per_1m: 2.5
-        cached_input_per_1m: 0.25
-        cache_write_per_1m: 3.125
-        completion_per_1m: 15.0
-    - name: gpt-5.6-sol
-      provider_model_id: gpt-5.6-sol
-      api_format: openai
-      pricing:
-        currency: USD
-        prompt_per_1m: 5.0
-        cached_input_per_1m: 0.5
-        cache_write_per_1m: 6.25
-        completion_per_1m: 30.0
-
-routing:
-  modelCards:
-    - name: gpt-5.6-luna
-      context_window_size: 1050000
-      description: Cost-efficient GPT-5.6 model for routine requests.
-      capabilities: [chat, coding, reasoning, tools, long-context]
-      modality: ar
-      tags: [gpt-5.6, low-cost]
-    - name: gpt-5.6-terra
-      context_window_size: 1050000
-      description: Balanced GPT-5.6 model for moderately complex requests.
-      capabilities: [chat, coding, reasoning, tools, long-context]
-      modality: ar
-      tags: [gpt-5.6, balanced]
-    - name: gpt-5.6-sol
-      context_window_size: 1050000
-      description: Highest-capability GPT-5.6 model for complex requests.
-      capabilities: [chat, coding, reasoning, tools, long-context]
-      modality: ar
-      tags: [gpt-5.6, premium]
-  signals:
-    complexity:
-      - name: request_complexity
-        threshold: 0.70
-        hard:
-          candidates:
-            - compare architecture tradeoffs under multiple failure modes
-            - debug a subtle distributed systems incident
-            - synthesize research into a technical recommendation
-        easy:
-          candidates:
-            - write a small helper function
-            - summarize this text briefly
-            - update a simple configuration example
-  decisions:
-    - name: gpt_5_6_hard
-      priority: 300
-      rules:
-        operator: AND
-        conditions:
-          - type: complexity
-            name: request_complexity:hard
-      modelRefs:
-        - model: gpt-5.6-sol
-    - name: gpt_5_6_medium
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: complexity
-            name: request_complexity:medium
-      modelRefs:
-        - model: gpt-5.6-terra
-    - name: gpt_5_6_easy
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: complexity
-            name: request_complexity:easy
-      modelRefs:
-        - model: gpt-5.6-luna
+decisions:
+  - name: reasoning
+    priority: 100
+    rules:
+      on_unknown: match       # no_match (default) | match | fail_request
+      operator: AND
+      conditions:
+        - type: complexity
+          name: needs_reasoning:hard
 ```
 
-Retain the `backend_refs` required by your deployment, such as an agentgateway endpoint. These are OpenAI's standard text-token rates from the [GPT-5.6 model page](https://openai.com/index/gpt-5-6/). The current pricing contract stores one flat rate per token class and does not model context-dependent pricing tiers.
+`match` sends a request you could not grade to the stronger model, which is
+usually the safer default; `fail_request` refuses it outright. `on_unknown`
+belongs on the root `rules` node and applies to the whole decision - the
+per-condition `on_error` field is accepted only on `classifier` conditions,
+so putting it on a `complexity` condition is rejected at config load.
+
+The scorer's number is published as `complexity:<rule>:score`, in the model's
+own units, where local scoring publishes `complexity:<rule>:margin` and its
+text/image components. These reach replay records and observability; a
+decision condition matches on the verdict (`<rule>:<verdict>`), not on the
+number, so a numeric predicate over `:score` is not a routing mechanism.
+
+## Dependencies and Limitations
+
+- Complexity uses the configured semantic embedding runtime. A remote embedding
+  provider receives the request text used for classification.
+- Candidate phrases and thresholds must be calibrated together against labeled
+  traffic. Re-evaluate them whenever the embedding model changes.
+- Ambiguous prompts can land in the `medium` band; always define a route or
+  fallback for every band you rely on.
+- See a complete example:
+  [`config/fragments/signal/complexity/escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/complexity/escalation.yaml).

@@ -146,6 +146,16 @@
   overflow-wrap: anywhere;
 }
 
+.readonlyJson {
+  max-width: 100%;
+  margin: 0;
+  overflow: auto;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+}
+
 .invalid {
   border-color: var(--color-danger);
 }

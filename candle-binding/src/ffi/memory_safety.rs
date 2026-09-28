@@ -68,6 +68,12 @@ pub struct LoRAMemoryPool {
     peak_usage: usize,
 }
 
+impl Default for LoRAMemoryPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LoRAMemoryPool {
     pub fn new() -> Self {
         Self {
@@ -175,6 +181,12 @@ pub struct PathSwitchState {
     pub switching_in_progress: bool,
     pub pending_deallocations: Vec<usize>, // Store addresses instead of pointers
     pub switch_count: usize,
+}
+
+impl Default for PathSwitchState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PathSwitchState {

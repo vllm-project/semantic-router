@@ -6,6 +6,7 @@ import {
   DEFAULT_MAX_QUEUE_CONVERSATIONS,
   DEFAULT_MAX_TASKS_PER_CONVERSATION,
   normalizePlaygroundQueues,
+  preparePlaygroundQueuesForPersistence,
   prunePlaygroundQueues,
   type PlaygroundTaskQueues,
 } from './playgroundQueueStorage'
@@ -18,7 +19,7 @@ interface UsePlaygroundQueueOptions {
 
 const removeConversationQueue = (
   prev: PlaygroundTaskQueues,
-  conversationId: string
+  conversationId: string,
 ): PlaygroundTaskQueues => {
   if (!(conversationId in prev)) {
     return prev
@@ -62,7 +63,7 @@ export const usePlaygroundQueue = ({
 
   const updateAndPersist = useCallback(
     (updater: (prev: PlaygroundTaskQueues) => PlaygroundTaskQueues) => {
-      setQueues(prev => {
+      setQueues((prev) => {
         const next = prunePlaygroundQueues(updater(prev), {
           maxConversations,
           maxTasksPerConversation,
@@ -70,10 +71,11 @@ export const usePlaygroundQueue = ({
 
         if (typeof window !== 'undefined') {
           try {
-            if (Object.keys(next).length === 0) {
+            const persisted = preparePlaygroundQueuesForPersistence(next)
+            if (Object.keys(persisted).length === 0) {
               window.localStorage.removeItem(storageKey)
             } else {
-              window.localStorage.setItem(storageKey, JSON.stringify(next))
+              window.localStorage.setItem(storageKey, JSON.stringify(persisted))
             }
           } catch (err) {
             console.error('Failed to save playground queue to localStorage', err)
@@ -83,29 +85,26 @@ export const usePlaygroundQueue = ({
         return next
       })
     },
-    [maxConversations, maxTasksPerConversation, storageKey]
+    [maxConversations, maxTasksPerConversation, storageKey],
   )
 
-  const getQueue = useCallback(
-    (conversationId: string) => queues[conversationId] ?? [],
-    [queues]
-  )
+  const getQueue = useCallback((conversationId: string) => queues[conversationId] ?? [], [queues])
 
   const enqueueTask = useCallback(
     (task: PlaygroundTask) => {
-      updateAndPersist(prev => ({
+      updateAndPersist((prev) => ({
         ...prev,
         [task.conversationId]: [...(prev[task.conversationId] ?? []), task],
       }))
     },
-    [updateAndPersist]
+    [updateAndPersist],
   )
 
   const removeTask = useCallback(
     (conversationId: string, taskId: string) => {
-      updateAndPersist(prev => {
+      updateAndPersist((prev) => {
         const queue = prev[conversationId] ?? []
-        const nextQueue = queue.filter(task => task.id !== taskId)
+        const nextQueue = queue.filter((task) => task.id !== taskId)
 
         if (nextQueue.length === queue.length) {
           return prev
@@ -121,15 +120,15 @@ export const usePlaygroundQueue = ({
         }
       })
     },
-    [updateAndPersist]
+    [updateAndPersist],
   )
 
   const reorderTasks = useCallback(
     (conversationId: string, sourceTaskId: string, targetTaskId: string) => {
-      updateAndPersist(prev => {
+      updateAndPersist((prev) => {
         const queue = prev[conversationId] ?? []
-        const sourceIndex = queue.findIndex(task => task.id === sourceTaskId)
-        const targetIndex = queue.findIndex(task => task.id === targetTaskId)
+        const sourceIndex = queue.findIndex((task) => task.id === sourceTaskId)
+        const targetIndex = queue.findIndex((task) => task.id === targetTaskId)
 
         if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
           return prev
@@ -145,14 +144,14 @@ export const usePlaygroundQueue = ({
         }
       })
     },
-    [updateAndPersist]
+    [updateAndPersist],
   )
 
   const clearConversationQueue = useCallback(
     (conversationId: string) => {
-      updateAndPersist(prev => removeConversationQueue(prev, conversationId))
+      updateAndPersist((prev) => removeConversationQueue(prev, conversationId))
     },
-    [updateAndPersist]
+    [updateAndPersist],
   )
 
   return {

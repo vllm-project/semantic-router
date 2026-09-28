@@ -20,10 +20,11 @@ func init() {
 	})
 }
 
-type mockVLLMEcho struct {
+type providerMockerEcho struct {
 	Mock          string   `json:"mock"`
 	Model         string   `json:"model"`
 	Roles         []string `json:"roles"`
+	Developer     []string `json:"developer"`
 	System        []string `json:"system"`
 	User          []string `json:"user"`
 	TotalMessages int      `json:"total_messages"`
@@ -43,6 +44,7 @@ func testResponseAPIConversationChaining(ctx context.Context, client *kubernetes
 	apiClient := fixtures.NewResponseAPIClient(session, 30*time.Second)
 	model := "openai/gpt-oss-20b"
 	instructions := "You are a helpful assistant. Preserve this instruction across turns."
+	replacementInstructions := "Answer the final turn in one sentence."
 	turn1 := "turn-1: hello"
 	turn2 := "turn-2: follow up"
 	turn3 := "turn-3: final"
@@ -54,7 +56,7 @@ func testResponseAPIConversationChaining(ctx context.Context, client *kubernetes
 		Instructions: instructions,
 		Store:        &storeTrue,
 		Metadata:     map[string]string{"test": "response-api-conversation-chaining", "turn": "1"},
-	}, "", []string{turn1}, instructions)
+	}, "", []string{turn1}, instructions, "")
 	if err != nil {
 		return fmt.Errorf("turn 1 request failed: %w", err)
 	}
@@ -65,7 +67,7 @@ func testResponseAPIConversationChaining(ctx context.Context, client *kubernetes
 		PreviousResponseID: resp1.ID,
 		Store:              &storeTrue,
 		Metadata:           map[string]string{"test": "response-api-conversation-chaining", "turn": "2"},
-	}, resp1.ID, []string{turn1, turn2}, instructions)
+	}, resp1.ID, []string{turn1, turn2}, "", instructions)
 	if err != nil {
 		return fmt.Errorf("turn 2 request failed: %w", err)
 	}
@@ -73,10 +75,11 @@ func testResponseAPIConversationChaining(ctx context.Context, client *kubernetes
 	resp3, echo3, err := executeConversationTurn(ctx, apiClient, fixtures.ResponseAPIRequest{
 		Model:              model,
 		Input:              turn3,
+		Instructions:       replacementInstructions,
 		PreviousResponseID: resp2.ID,
 		Store:              &storeTrue,
 		Metadata:           map[string]string{"test": "response-api-conversation-chaining", "turn": "3"},
-	}, resp2.ID, []string{turn1, turn2, turn3}, instructions)
+	}, resp2.ID, []string{turn1, turn2, turn3}, replacementInstructions, instructions)
 	if err != nil {
 		return fmt.Errorf("turn 3 request failed: %w", err)
 	}
@@ -101,7 +104,8 @@ func executeConversationTurn(
 	expectedPreviousID string,
 	expectedHistory []string,
 	expectedInstructions string,
-) (*fixtures.ResponseAPIResponse, *mockVLLMEcho, error) {
+	forbiddenInstructions string,
+) (*fixtures.ResponseAPIResponse, *providerMockerEcho, error) {
 	response, raw, err := apiClient.Create(ctx, request)
 	if err != nil {
 		return nil, nil, err
@@ -117,26 +121,29 @@ func executeConversationTurn(
 	if !containsInOrder(echo.User, expectedHistory) {
 		return nil, nil, fmt.Errorf("backend user messages missing history: user=%v, expected in-order=%v", echo.User, expectedHistory)
 	}
-	if expectedInstructions != "" && !slices.Contains(echo.System, expectedInstructions) {
-		return nil, nil, fmt.Errorf("backend did not receive inherited instructions: system=%v, expected=%q", echo.System, expectedInstructions)
+	if expectedInstructions != "" && !slices.Contains(echo.Developer, expectedInstructions) {
+		return nil, nil, fmt.Errorf("backend did not receive request instructions: developer=%v, expected=%q", echo.Developer, expectedInstructions)
+	}
+	if forbiddenInstructions != "" && slices.Contains(echo.Developer, forbiddenInstructions) {
+		return nil, nil, fmt.Errorf("backend inherited previous-response instructions: developer=%v, forbidden=%q", echo.Developer, forbiddenInstructions)
 	}
 
 	return response, echo, nil
 }
 
-func parseMockEcho(apiResp *fixtures.ResponseAPIResponse, rawBody []byte) (*mockVLLMEcho, error) {
+func parseMockEcho(apiResp *fixtures.ResponseAPIResponse, rawBody []byte) (*providerMockerEcho, error) {
 	if apiResp == nil {
 		return nil, fmt.Errorf("nil api response")
 	}
 	if apiResp.OutputText == "" {
 		return nil, fmt.Errorf("missing output_text in response: %s", truncateString(string(rawBody), 500))
 	}
-	var echo mockVLLMEcho
+	var echo providerMockerEcho
 	if err := json.Unmarshal([]byte(apiResp.OutputText), &echo); err != nil {
-		return nil, fmt.Errorf("output_text is not valid mock-vllm JSON echo: %w (output_text=%q)", err, truncateString(apiResp.OutputText, 200))
+		return nil, fmt.Errorf("output_text is not valid provider-mocker JSON echo: %w (output_text=%q)", err, truncateString(apiResp.OutputText, 200))
 	}
-	if echo.Mock != "mock-vllm" {
-		return nil, fmt.Errorf("unexpected mock backend marker: got %q, want %q", echo.Mock, "mock-vllm")
+	if echo.Mock != "provider-mocker" {
+		return nil, fmt.Errorf("unexpected mock backend marker: got %q, want %q", echo.Mock, "provider-mocker")
 	}
 	return &echo, nil
 }

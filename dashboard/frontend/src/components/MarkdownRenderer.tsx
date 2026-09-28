@@ -7,6 +7,7 @@ import type { Components } from 'react-markdown'
 
 interface MarkdownRendererProps {
   content: string
+  allowImages?: boolean
 }
 
 // Copy button component for code blocks
@@ -83,7 +84,7 @@ const extractTextContent = (node: React.ReactNode): string => {
   return ''
 }
 
-const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
+const MarkdownRenderer = ({ content, allowImages = true }: MarkdownRendererProps) => {
   const components: Components = {
     // Customize code blocks
     code({ className, children, ...props }) {
@@ -123,6 +124,16 @@ const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
           {children}
         </a>
       )
+    },
+    img({ alt, ...props }) {
+      if (!allowImages) {
+        return (
+          <span title="Images are not loaded from managed Recipe documentation">
+            Image omitted{alt ? `: ${alt}` : ''}
+          </span>
+        )
+      }
+      return <img {...props} alt={alt ?? ''} />
     },
     // Customize tables
     table({ children, ...props }) {

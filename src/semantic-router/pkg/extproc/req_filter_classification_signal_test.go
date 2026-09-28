@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,6 +20,8 @@ func TestPrepareSignalEvaluationInput_CombinesMessagesWithoutCompression(t *test
 		currentUserMessage: "user question",
 		nonUserMessages:    []string{"system setup", "assistant reply"},
 		hasAssistantReply:  true,
+		lastMessageRole:    "user",
+		lastUserHasText:    true,
 	})
 
 	assert.Equal(t, "user question", input.evaluationText)
@@ -67,6 +70,7 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 		JailbreakDetected:        true,
 		JailbreakType:            "prompt_injection",
 		JailbreakConfidence:      0.91,
+		JailbreakScoreAvailable:  true,
 		PIIDetected:              true,
 		PIIEntities:              []string{"EMAIL_ADDRESS"},
 	}
@@ -93,6 +97,7 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 	assert.True(t, ctx.JailbreakDetected)
 	assert.Equal(t, "prompt_injection", ctx.JailbreakType)
 	assert.Equal(t, float32(0.91), ctx.JailbreakConfidence)
+	assert.True(t, ctx.JailbreakScoreAvailable)
 	assert.True(t, ctx.PIIDetected)
 	assert.Equal(t, []string{"EMAIL_ADDRESS"}, ctx.PIIEntities)
 	assert.True(t, ctx.FactCheckNeeded)
@@ -128,6 +133,59 @@ func TestEnsureContextTokenCountRecordsContextTextBytes(t *testing.T) {
 	})
 
 	assert.Equal(t, len("system prompt and current user prompt"), ctx.VSRContextTextBytes)
+}
+
+func TestEnsureContextTokenCountUsesRequestAwareFloorWithoutPollutingTextBytes(t *testing.T) {
+	ctx := &RequestContext{VSRContextTokenCount: 64}
+	ensureContextTokenCount(ctx, signalEvaluationInput{
+		allMessagesText: "ok",
+		requestFacts: classification.RequestFacts{
+			ContextTokenFloor:      12_345,
+			ContextTextBytes:       2,
+			ContextEquivalentBytes: 49_380,
+			ContextHasNonText:      true,
+		},
+	})
+
+	assert.Equal(t, 12_345, ctx.VSRContextTokenCount)
+	assert.Equal(t, 2, ctx.VSRContextTextBytes,
+		"routing reserve must not masquerade as prose calibration bytes")
+	assert.Equal(t, 49_380, ctx.VSRContextEquivalentBytes)
+	assert.True(t, ctx.VSRContextHasNonText)
+}
+
+func TestPrepareSignalEvaluationInputDoesNotDoubleCountCurrentUserInFloor(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	history := signalConversationHistory{
+		currentUserMessage:     "hello",
+		contextTokenFloor:      7,
+		contextTextBytes:       9,
+		contextEquivalentBytes: 28,
+		contextHasNonText:      true,
+	}
+
+	input := router.prepareSignalEvaluationInput(history)
+	assert.Equal(t, "hello", input.evaluationText)
+	assert.Equal(t, "hello", input.allMessagesText)
+	assert.Equal(t, 7, input.requestFacts.ContextTokenFloor)
+	assert.Equal(t, 9, input.requestFacts.ContextTextBytes)
+	assert.Equal(t, 28, input.requestFacts.ContextEquivalentBytes)
+	assert.True(t, input.requestFacts.ContextHasNonText)
+}
+
+func TestApplyRequestContextEstimateSetsContentFreeScalars(t *testing.T) {
+	ctx := &RequestContext{}
+	applyRequestContextEstimate(&requestSignalSnapshot{
+		ContextTokenFloor:      24_000,
+		ContextTextBytes:       400,
+		ContextEquivalentBytes: 96_000,
+		ContextHasNonText:      true,
+	}, ctx)
+
+	assert.Equal(t, 24_000, ctx.VSRContextTokenCount)
+	assert.Equal(t, 400, ctx.VSRContextTextBytes)
+	assert.Equal(t, 96_000, ctx.VSRContextEquivalentBytes)
+	assert.True(t, ctx.VSRContextHasNonText)
 }
 
 func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
@@ -186,4 +244,19 @@ func TestBuildCompressionConfigAppliesProfileAndOverrides(t *testing.T) {
 	assert.Equal(t, 0.7, cfg.PositionDepth)
 	assert.Equal(t, 0.2, cfg.TextRankWeight)
 	assert.Equal(t, 2, cfg.PreserveFirstN, "coding profile should apply when not explicitly overridden")
+}
+
+func TestApplySignalResultsPreservesUnscoredPolicyMatch(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{}
+	key := "jailbreak:guard"
+	signals := &classification.SignalResults{MatchedJailbreakRules: []string{"guard"}, JailbreakDetected: true, JailbreakType: classification.JailbreakClassificationErrorType, SignalErrorMatches: map[string]bool{key: true}}
+	router.applySignalResultsToContext(ctx, signals)
+	signals.SignalErrorMatches[key] = false
+	require.True(t, ctx.VSRSignalErrorMatches[key])
+	require.False(t, ctx.JailbreakScoreAvailable)
+	outcome := responseJailbreakReplayOutcome(&RequestContext{VSRSignalErrors: map[string]string{key: "unreachable"}, ResponseJailbreakType: classification.JailbreakClassificationErrorType}, config.JailbreakRule{Name: "guard"}, time.Now(), "block")
+	require.Equal(t, "unavailable", outcome.Verdict)
+	require.Equal(t, "true", outcome.Metadata["policy_match"])
+	require.Equal(t, "false", outcome.Metadata["score_available"])
 }

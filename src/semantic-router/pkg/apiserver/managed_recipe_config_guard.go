@@ -1,0 +1,243 @@
+//go:build !windows && cgo
+
+package apiserver
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"golang.org/x/sys/unix"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
+)
+
+const (
+	recipeStoreDirEnv       = "VLLM_SR_RECIPE_STORE_DIR"
+	runtimeStateRootDirEnv  = "VLLM_SR_STATE_ROOT_DIR"
+	recipeConfigLockName    = "runtime-config.lock"
+	activeRecipePointerName = "active.json"
+	activationJournalName   = "activation-pending.json"
+)
+
+type configMutationGuard struct {
+	lockFile *os.File
+}
+
+func (s *ClassificationAPIServer) acquireConfigMutationGuard(
+	w http.ResponseWriter,
+) (*configMutationGuard, bool) {
+	if !deployMu.TryLock() {
+		s.writeErrorResponse(w, http.StatusConflict, "DEPLOY_IN_PROGRESS", "Another config update operation is in progress. Please try again.")
+		return nil, false
+	}
+
+	guard := &configMutationGuard{}
+	lockFile, managedRecipeActive, err := acquireRecipeStoreConfigLock()
+	if err != nil {
+		deployMu.Unlock()
+		if errors.Is(err, unix.EWOULDBLOCK) || errors.Is(err, unix.EAGAIN) {
+			s.writeErrorResponse(w, http.StatusConflict, "DEPLOY_IN_PROGRESS", "Another config update operation is in progress. Please try again.")
+			return nil, false
+		}
+		s.writeErrorResponse(w, http.StatusInternalServerError, "RECIPE_STATE_GUARD_ERROR", "The managed Recipe state could not be guarded safely.")
+		return nil, false
+	}
+	guard.lockFile = lockFile
+	if managedRecipeActive {
+		guard.Release()
+		s.writeErrorResponse(w, http.StatusConflict, "MANAGED_RECIPE_ACTIVE", "Router config mutations are disabled while a managed Recipe package is active or activating.")
+		return nil, false
+	}
+	if s.configMutationReadOnly() {
+		guard.Release()
+		s.writeErrorResponse(w, http.StatusForbidden, "CONFIG_READ_ONLY", "This deployment uses read-only configuration. Update the configuration source and reload or roll out the deployment as appropriate.")
+		return nil, false
+	}
+	if _, declared := configwriter.ConfigMapTargetFromEnv(); declared && s.configPath != "" {
+		paths := resolveConfigPersistencePaths(s.configPath)
+		mounted, mountErr := os.ReadFile(paths.sourcePath)
+		persisted, readErr := readPersistedSourceConfig(paths.sourcePath)
+		if mountErr != nil || readErr != nil {
+			guard.Release()
+			s.writeErrorResponse(w, http.StatusServiceUnavailable, "CONFIG_SOURCE_UNAVAILABLE", "Unable to compare the mounted config with the ConfigMap before mutation.")
+			return nil, false
+		}
+		if !bytes.Equal(mounted, persisted) {
+			guard.Release()
+			s.writeErrorResponse(w, http.StatusConflict, "CONFIG_ROLLOUT_REQUIRED", "The ConfigMap has a saved change that this pod has not loaded. Roll out the deployment before another mutation.")
+			return nil, false
+		}
+	}
+	return guard, true
+}
+
+func (g *configMutationGuard) Release() {
+	if g == nil {
+		return
+	}
+	if g.lockFile != nil {
+		_ = unix.Flock(int(g.lockFile.Fd()), unix.LOCK_UN)
+		_ = g.lockFile.Close()
+		g.lockFile = nil
+	}
+	deployMu.Unlock()
+}
+
+// acquireRecipeStoreConfigLock obtains the same stack-scoped advisory lock as
+// the Dashboard activation service. The managed-state check happens only after
+// the lock is held, and callers retain the lock for their complete filesystem
+// transaction, closing the cross-process TOCTOU window.
+func acquireRecipeStoreConfigLock() (*os.File, bool, error) {
+	storeDir, err := configuredRecipeStoreDir()
+	if err != nil || storeDir == "" {
+		return nil, false, err
+	}
+	storeFD, err := unix.Open(
+		storeDir,
+		unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW,
+		0,
+	)
+	if err != nil {
+		return nil, false, fmt.Errorf("open Recipe store: %w", err)
+	}
+	defer func() { _ = unix.Close(storeFD) }()
+
+	lockFD, err := openRecipeConfigLock(storeFD)
+	if err != nil {
+		return nil, false, err
+	}
+	closeLockFD := true
+	defer func() {
+		if closeLockFD {
+			_ = unix.Close(lockFD)
+		}
+	}()
+
+	managedRecipeActive, err := recipeManagedStateExistsAt(storeFD)
+	if err != nil {
+		_ = unix.Flock(lockFD, unix.LOCK_UN)
+		return nil, false, err
+	}
+	lockFile := os.NewFile(uintptr(lockFD), filepath.Join(storeDir, recipeConfigLockName))
+	if lockFile == nil {
+		_ = unix.Flock(lockFD, unix.LOCK_UN)
+		return nil, false, errors.New("create Recipe config lock handle")
+	}
+	closeLockFD = false
+	return lockFile, managedRecipeActive, nil
+}
+
+func configuredRecipeStoreDir() (string, error) {
+	storeDir := strings.TrimSpace(os.Getenv(recipeStoreDirEnv))
+	if storeDir == "" {
+		if requiresLocalRecipeStoreGuard() {
+			return "", fmt.Errorf("%s is required for the local runtime workspace", recipeStoreDirEnv)
+		}
+		return "", nil
+	}
+	if !filepath.IsAbs(storeDir) {
+		return "", fmt.Errorf("%s must be absolute", recipeStoreDirEnv)
+	}
+	return filepath.Clean(storeDir), nil
+}
+
+func openRecipeConfigLock(storeFD int) (int, error) {
+	lockFD, err := unix.Openat(
+		storeFD,
+		recipeConfigLockName,
+		unix.O_RDWR|unix.O_CREAT|unix.O_CLOEXEC|unix.O_NOFOLLOW,
+		0o600,
+	)
+	if err != nil {
+		return -1, fmt.Errorf("open Recipe config lock: %w", err)
+	}
+	var lockInfo unix.Stat_t
+	if err = unix.Fstat(lockFD, &lockInfo); err == nil && (lockInfo.Mode&unix.S_IFMT != unix.S_IFREG || lockInfo.Nlink != 1) {
+		err = errors.New("recipe config lock must be a private regular file")
+	}
+	if err == nil && lockInfo.Mode&0o007 != 0 {
+		err = errors.New("recipe config lock must not grant access to other users")
+	}
+	// Local stack bootstrap prepares group access for Dashboard. Preserve that shared
+	// lock's permissions instead of making subsequent Dashboard writes fail.
+	if err == nil {
+		err = unix.Flock(lockFD, unix.LOCK_EX|unix.LOCK_NB)
+	}
+	if err != nil {
+		_ = unix.Close(lockFD)
+		return -1, err
+	}
+	return lockFD, nil
+}
+
+func requiresLocalRecipeStoreGuard() bool {
+	stateRoot := strings.TrimSpace(os.Getenv(runtimeStateRootDirEnv))
+	runtimePath := strings.TrimSpace(os.Getenv(runtimeConfigPathEnv))
+	if !filepath.IsAbs(stateRoot) || !filepath.IsAbs(runtimePath) {
+		return false
+	}
+	runtimeDir := filepath.Join(filepath.Clean(stateRoot), ".vllm-sr")
+	cleanRuntimePath := filepath.Clean(runtimePath)
+	base := filepath.Base(cleanRuntimePath)
+	return filepath.Dir(cleanRuntimePath) == runtimeDir &&
+		strings.HasPrefix(base, "runtime-config") &&
+		strings.HasSuffix(base, ".yaml")
+}
+
+func recipeManagedStateExistsAt(storeFD int) (bool, error) {
+	for _, name := range []string{activeRecipePointerName, activationJournalName} {
+		var info unix.Stat_t
+		err := unix.Fstatat(storeFD, name, &info, unix.AT_SYMLINK_NOFOLLOW)
+		switch {
+		case err == nil:
+			// Presence is authoritative. Malformed files and symlinks remain a
+			// fail-closed managed state rather than reopening ordinary writers.
+			return true, nil
+		case errors.Is(err, unix.ENOENT):
+			continue
+		default:
+			return false, fmt.Errorf("inspect managed Recipe state: %w", err)
+		}
+	}
+	return false, nil
+}
+
+// configMutationReadOnly checks capability before any backup or side-effecting
+// write. Opening without O_TRUNC does not change the existing configuration.
+func (s *ClassificationAPIServer) configMutationReadOnly() bool {
+	if cfg := s.currentConfig(); cfg != nil && cfg.ConfigSource == config.ConfigSourceKubernetes {
+		return true
+	}
+	if _, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		// A declared ConfigMap target persists writes through the Kubernetes API.
+		// The mounted file is intentionally read-only and remains stale until rollout.
+		return false
+	}
+	if s.configPath == "" {
+		return false
+	}
+	paths := resolveConfigPersistencePaths(s.configPath)
+	for _, path := range []string{paths.sourcePath, paths.runtimePath} {
+		if path == "" {
+			continue
+		}
+		file, err := os.OpenFile(path, os.O_WRONLY, 0)
+		if err == nil {
+			_ = file.Close()
+		}
+		if errors.Is(err, unix.EROFS) || errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) {
+			return true
+		}
+		err = unix.Access(filepath.Dir(path), unix.W_OK)
+		if errors.Is(err, unix.EROFS) || errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) {
+			return true
+		}
+	}
+	return false
+}

@@ -1,9 +1,11 @@
 package helm
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -73,18 +75,88 @@ func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, "helm", args...)
-	if d.Verbose {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to install/upgrade chart: %w", err)
+	if err := d.runHelmInstallWithRetry(ctx, chart, args); err != nil {
+		return err
 	}
 
 	d.log("Chart %s installed/upgraded successfully", opts.ReleaseName)
 	return nil
+}
+
+func (d *Deployer) runHelmInstallWithRetry(
+	ctx context.Context,
+	chart string,
+	args []string,
+) error {
+	attempts := 1
+	if strings.Contains(chart, "://") {
+		attempts = helmNetworkAttempts
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		output, err := d.runHelmCommand(ctx, args)
+		if err == nil {
+			return nil
+		}
+		lastErr = fmt.Errorf(
+			"failed to install/upgrade chart: %w: %s",
+			err,
+			strings.TrimSpace(output),
+		)
+		if attempt == attempts || !isTransientHelmInstallFailure(output) {
+			return lastErr
+		}
+		d.log("Transient Helm fetch failure; retrying install (%d/%d)", attempt, attempts)
+		timer := time.NewTimer(helmRetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return errors.Join(ctx.Err(), lastErr)
+		case <-timer.C:
+		}
+	}
+	return lastErr
+}
+
+func (d *Deployer) runHelmCommand(
+	ctx context.Context,
+	args []string,
+) (string, error) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "helm", args...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if d.Verbose {
+		cmd.Stdout = io.MultiWriter(os.Stdout, &stdout)
+		cmd.Stderr = io.MultiWriter(os.Stderr, &stderr)
+	}
+	err := cmd.Run()
+	return stdout.String() + "\n" + stderr.String(), err
+}
+
+func isTransientHelmInstallFailure(output string) bool {
+	lower := strings.ToLower(output)
+	for _, marker := range []string{
+		`failed to perform "fetch"`,
+		"response status code 429",
+		"response status code 500",
+		"response status code 502",
+		"response status code 503",
+		"response status code 504",
+		"tls handshake timeout",
+		"connection reset",
+		"unexpected eof",
+		"i/o timeout",
+		"temporary failure",
+		"dial tcp",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *Deployer) prepareLocalChartWithDeps(ctx context.Context, chartRef string) (string, func(), error) {
@@ -119,12 +191,7 @@ func (d *Deployer) prepareLocalChartWithDeps(ctx context.Context, chartRef strin
 	}
 
 	// Build dependencies for local chart (creates charts/ and Chart.lock in temp copy).
-	cmd := exec.CommandContext(ctx, "helm", "dependency", "build", tmpChart)
-	if d.Verbose {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
-	if err := cmd.Run(); err != nil {
+	if err := d.runHelmWithRetry(ctx, "dependency", "build", tmpChart); err != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("failed to build chart dependencies: %w", err)
 	}
@@ -142,12 +209,7 @@ var requiredHelmRepos = []struct{ name, url string }{
 
 func (d *Deployer) ensureHelmRepos(ctx context.Context) error {
 	for _, repo := range requiredHelmRepos {
-		cmd := exec.CommandContext(ctx, "helm", "repo", "add", repo.name, repo.url, "--force-update")
-		if d.Verbose {
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-		}
-		if err := cmd.Run(); err != nil {
+		if err := d.runHelmWithRetry(ctx, "repo", "add", repo.name, repo.url, "--force-update"); err != nil {
 			return fmt.Errorf("failed to add helm repo %s: %w", repo.name, err)
 		}
 	}
@@ -161,6 +223,50 @@ func (d *Deployer) ensureHelmRepos(ctx context.Context) error {
 		d.log("Warning: helm repo update failed: %v", err)
 	}
 	return nil
+}
+
+const (
+	helmNetworkAttempts = 4
+	helmRetryDelay      = time.Second
+)
+
+// runHelmWithRetry retries idempotent chart setup commands.
+func (d *Deployer) runHelmWithRetry(ctx context.Context, args ...string) error {
+	return runWithRetry(ctx, helmNetworkAttempts, helmRetryDelay, func() error {
+		cmd := exec.CommandContext(ctx, "helm", args...)
+		if d.Verbose {
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+		}
+		return cmd.Run()
+	})
+}
+
+func runWithRetry(ctx context.Context, attempts int, delay time.Duration, operation func() error) error {
+	if attempts < 1 {
+		return fmt.Errorf("retry attempts must be positive")
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if err := operation(); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+
+		if attempt == attempts {
+			break
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return errors.Join(ctx.Err(), lastErr)
+		case <-timer.C:
+		}
+	}
+	return lastErr
 }
 
 func copyDir(src, dst string) error {

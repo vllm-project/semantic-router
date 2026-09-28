@@ -1,364 +1,244 @@
-# Performance Testing
+# Performance Microbenchmarks
 
-This directory contains the performance testing infrastructure for vLLM Semantic Router.
+The `perf/` module measures component-level Router hot paths with Go
+benchmarks. Use it to compare allocations, bytes, and execution time for
+classification, decision evaluation, cache operations, and Looper execution.
+Looper microbenchmarks live beside the implementation and are included by the
+repository Make targets.
 
-## Overview
+These are not end-to-end quality or load benchmarks. For reasoning quality,
+session routing, hallucination detection, and fusion evaluations, see
+[`bench/`](../bench/README.md).
 
-The performance testing framework provides:
+`make perf-test-unit` runs the parser, artifact identity, and regression contract
+tests without downloading models or running benchmarks. `make check` selects
+this target for performance changes. The dedicated performance CI job runs the
+model measurements and reports numerical regressions as warnings without failing
+CI. Benchmark execution, complete inventory, and matching model identities remain
+required. `make verify DOMAIN=performance` runs the strict local `perf-check`.
 
-- **Component Benchmarks**: Fast Go benchmarks for individual components (classification, decision engine, cache)
-- **E2E Performance Tests**: Full-stack load testing integrated with the e2e framework
-- **Profiling**: pprof integration for CPU, memory, and goroutine profiling
-- **Baseline Comparison**: Automated regression detection against performance baselines
-- **CI/CD Integration**: Performance tests run on every PR with regression blocking
+## Run the benchmarks
 
-## Quick Start
-
-### Running Benchmarks
+From the repository root:
 
 ```bash
-# Run all benchmarks
-make perf-bench
-
-# Run quick benchmarks (faster iteration)
+# Short local run
 make perf-bench-quick
 
-# Run specific component benchmarks
+# Longer run with CPU and memory profiles
+make perf-bench
+```
+
+Run one component family when iterating:
+
+```bash
 make perf-bench-classification
 make perf-bench-decision
 make perf-bench-cache
+make perf-bench-looper
 ```
 
-### Profiling
+The component targets build the Router and set the native-library path before
+running `go test -bench`. Classification benchmarks require the benchmark model
+artifacts; download them when they are not already available:
 
 ```bash
-# Run benchmarks with profiling
-make perf-bench
+make download-models-perf
+```
 
-# Analyze CPU profile
-go tool pprof -http=:8080 reports/cpu.prof
+## Compare with the committed baselines
 
-# Analyze memory profile
-go tool pprof -http=:8080 reports/mem.prof
+`perf-check` captures a fresh component and Looper run, parses the Go benchmark
+output, compares it with `perf/testdata/baselines/`, and exits non-zero for a
+blocking regression:
 
-# Or use shortcuts
+```bash
+make perf-check
+```
+
+To inspect a comparison without applying the failure exit, first create the
+raw input expected by `perf-compare`:
+
+```bash
+mkdir -p reports
+make perf-bench-quick 2>&1 | tee reports/bench-output.txt
+make perf-bench-looper 2>&1 | tee -a reports/bench-output.txt
+make perf-compare
+```
+
+The parser writes `reports/current.json`; the comparison writes
+`reports/comparison.json`.
+
+Classification and cache benchmarks use canonical, revision-pinned Vela artifacts
+through owned native runtime handles. Missing weights or failed inference fail the
+run. `VLLM_SR_DOMAIN_MODEL`, `VLLM_SR_PII_MODEL`, `VLLM_SR_JAILBREAK_MODEL`, and
+`VLLM_SR_EMBEDDING_MODEL` can point to downloaded snapshots. The asset downloader's
+`VLLM_SR_MODEL_MANIFEST` freezes the current catalog for both sides of a comparison.
+No model IDs or revisions are maintained separately in this module.
+
+The previous classification and cache baseline files contain no measurements.
+CI therefore measures those families against the PR base revision (or the prior
+main revision for scheduled runs), using the current benchmark program and the
+same downloaded Vela checkpoints on both revisions:
+
+```bash
+export VLLM_SR_MODEL_MANIFEST=/absolute/path/to/perf-models.json
+bash perf/scripts/compare-model-baseline.sh "$BASE_REF" reports
+cd perf
+go run ./cmd/perftest --compare-baseline=testdata/baselines \
+  --current=../reports/current.json --model-baseline=../reports/model-baseline.json \
+  --threshold-file=config/thresholds.yaml --output=../reports/comparison.json \
+  --inventory=config/benchmark-inventory.json
+```
+
+This is the report-only comparison used by CI. Add `--fail-on-regression` to
+request a strict local allocation check, as `make perf-check` does.
+
+The helper reuses native libraries only when their sources and build inputs are
+unchanged. Otherwise it builds the base revision's libraries. An incompatible
+base fails with its compile/runtime output. Reports record the measured source
+commit, registry revisions, actual artifact content hashes, device, precision,
+and benchmark protocol. Missing measurements or identity differences fail the
+comparison; Qwen3 and legacy classifier numbers cannot become Vela baselines.
+Model correctness belongs to the real-model regression suite; these benchmarks
+do not publish accuracy from a missing optional dataset.
+
+## Input-length measurement protocol
+
+`BenchmarkClassifyInputLength` times the Vela Domain classifier on inputs of up
+to 512, 2,048, and 8,192 tokens. Each input repeats the five fixture prompts
+until one more repetition would exceed its size, and each result reports the
+processed `tokens/op`. This classifier's deployment admits 8,192 tokens and
+rejects longer input, while the other classification benchmarks share a
+deployment that truncates at 512 tokens, so every size is one complete forward
+pass.
+
+## Cache measurement protocol
+
+Each HNSW operation measures 100 public `LookupSimilarWithThreshold` requests
+on each of five independently constructed graphs (500 requests/op). Linear
+search uses one cache and 100 requests/op. Every graph contributes equally;
+no graph or sample is retried or selected by its result. The eight scenarios retain their cache
+sizes, HNSW/linear modes, 1/10/50 workers, similarity threshold, and Vela model.
+A fixed corpus retains the original ten query topics and composed-query shape;
+70% or 90% of lookup inputs reuse a base query. This is an input repetition
+ratio, not an asserted model hit rate. The report records the observed hit rate.
+
+Population uses unique request IDs and validates the actual stored entry count.
+Population, embedding-memo warmup, worker startup, aggregation, and cleanup are
+outside Go's timed/allocation interval. Each worker handles requests even in a
+`-benchtime=1x` smoke run. Reports use batch `ns/op`, `B/op`, and `allocs/op`,
+with explicit `requests/op` and `graphs/op`, pooled observed hit rate, and
+request throughput. They do not
+claim separate embedding/search phase timings. HNSW retains its production
+randomized graph construction; the corpus and insertion order are fixed. The
+five-graph ensemble reduces graph-dependent variation. Go `B.Loop` reuses the
+prepared graphs throughout calibration so setup runs once per scenario.
+
+The `cache=public-lookup-v3` protocol records these units and the warmed memo.
+Both revisions run this exact harness and checkpoint; old standalone-harness
+measurements, which included random setup amortized over Go's variable iteration
+count, are not comparable to this protocol. Model inference is real during
+preparation; these cases measure repeated cached lookups, while classification
+benchmarks separately measure inference calls.
+
+## Regression reports and required evidence
+
+Thresholds in [`config/thresholds.yaml`](config/thresholds.yaml) are matched to
+benchmark names in order; the first matching pattern wins. Unmatched names use
+the `default` thresholds.
+
+- CI reports `allocs/op`, `B/op`, and `ns/op` changes without failing on numerical
+  regressions. Allocation regressions appear as workflow warnings and in the job
+  summary; all comparison values remain in the uploaded artifacts.
+- The explicit local `perf-check` and `--fail-on-regression` option still fail on
+  `allocs/op` and `B/op` regressions. `ns/op` remains advisory because host speed
+  and contention affect wall-clock measurements.
+- Model benchmarks require measurements with the same artifact content and
+  execution settings. Both measurements must cover the versioned inventory in
+  `config/benchmark-inventory.json`; missing, extra, or duplicate workloads fail.
+
+Go allocation metrics do not include Rust/C++ allocations, process RSS, or GPU
+memory. Benchmark commands exclude ordinary unit tests, which run in their own
+checks. The former JSON/map microbenchmarks did not call production ExtProc and
+are excluded from the production benchmark inventory.
+Record the source revision, Go version, model artifacts, CPU, and benchmark
+command whenever wall-clock results are shared.
+
+## Profiling
+
+`perf-bench` writes `reports/cpu.prof` and `reports/mem.prof`. Open them with:
+
+```bash
 make perf-profile-cpu
 make perf-profile-mem
 ```
 
-### Baseline Comparison
+The profile targets start the Go pprof web interface on port 8080. To choose a
+different address, run `go tool pprof` directly against the profile file.
 
-```bash
-# Compare against baseline (report only). Consumes reports/bench-output.txt, so
-# run a benchmark target that tees there first (or use make perf-check).
-make perf-compare
+## Benchmark families
 
-# Update baselines (run this on main branch after verifying improvements)
-make perf-baseline-update
-```
+| Family | Location | Measures |
+| --- | --- | --- |
+| Classification | `benchmarks/classification*_bench_test.go` | owned Vela Domain/PII/Guard batch inference, parallel calls, and Domain inference on short and up to 8K-token inputs |
+| Decision | `benchmarks/decision_bench_test.go` | rule evaluation, priority selection, and parallel evaluation |
+| Cache | `benchmarks/cache_bench_test.go` | cache sizes, search modes, concurrency, and hit-rate paths through the owned Vela Embedding provider |
+| Looper | `../src/semantic-router/pkg/looper/*_bench_test.go` | Base, Fusion, ReMoM, and Flow helpers and execution |
 
-### Regression Detection
+The repository's reusable performance workflow runs these numeric comparisons
+when the performance CI domain is selected. The workflow and `make perf-check`
+use the same parser and thresholds, with advisory results in CI and strict
+allocation checks in the local target. Model measurements also require a
+same-checkpoint baseline passed to the comparator as shown above.
 
-```bash
-# Run benchmarks and fail if any benchmark regresses beyond its threshold
-make perf-check
-```
+## Directory layout
 
-## Directory Structure
-
-```
+```text
 perf/
-├── cmd/perftest/           # CLI tool for performance testing
-├── pkg/
-│   ├── benchmark/          # Benchmark orchestration and reporting
-│   ├── profiler/           # pprof profiling utilities
-│   └── metrics/            # Runtime metrics collection
-├── benchmarks/             # Benchmark test files
-│   ├── classification_bench_test.go
-│   ├── decision_bench_test.go
-│   ├── cache_bench_test.go
-│   └── extproc_bench_test.go
-├── config/                 # Configuration files
-│   ├── perf.yaml          # Performance test configuration
-│   └── thresholds.yaml    # Performance SLOs and thresholds
-├── testdata/baselines/     # Performance baselines
-└── scripts/                # Utility scripts
+├── benchmarks/            Go component benchmarks
+├── cmd/perftest/           benchmark parser, comparator, and report CLI
+├── config/                 runner settings and comparison thresholds
+├── pkg/benchmark/          parsing, comparison, and report implementation
+├── pkg/profiler/           reusable pprof helper
+├── scripts/                baseline and dataset utilities
+└── testdata/
+    ├── baselines/          committed comparison inputs
+    └── examples/           illustrative, non-gating fixture files
 ```
 
-## Component Benchmarks
+## Update a baseline
 
-### Classification Benchmarks
-
-Test classification performance with different batch sizes:
-
-- `BenchmarkClassifyBatch_Size1` - Single text classification
-- `BenchmarkClassifyBatch_Size10` - Batch of 10
-- `BenchmarkClassifyBatch_Size50` - Batch of 50
-- `BenchmarkClassifyBatch_Size100` - Batch of 100
-- `BenchmarkClassifyCategory` - Category classification
-- `BenchmarkClassifyPII` - PII detection
-- `BenchmarkClassifyJailbreak` - Jailbreak detection
-
-### Decision Engine Benchmarks
-
-Test decision evaluation performance:
-
-- `BenchmarkEvaluateDecisions_SingleDomain` - Single domain
-- `BenchmarkEvaluateDecisions_MultipleDomains` - Multiple domains
-- `BenchmarkEvaluateDecisions_WithKeywords` - With keyword matching
-- `BenchmarkPrioritySelection` - Decision priority selection
-
-### Cache Benchmarks
-
-Test semantic cache performance (wraps existing cache benchmark tool):
-
-- `BenchmarkCacheSearch_1000Entries` - Search in 1K entries
-- `BenchmarkCacheSearch_10000Entries` - Search in 10K entries
-- `BenchmarkCacheSearch_HNSW` - HNSW index performance
-- `BenchmarkCacheSearch_Linear` - Linear search performance
-- `BenchmarkCacheConcurrency_*` - Different concurrency levels
-
-## Performance Metrics
-
-### Tracked Metrics
-
-**Latency**:
-
-- P50, P90, P95, P99 percentiles
-- Average and max latency
-
-**Throughput**:
-
-- Requests per second (QPS)
-- Batch processing efficiency
-
-**Resource Usage**:
-
-- CPU usage (cores)
-- Memory usage (MB)
-- Goroutine count
-- Heap allocations
-
-**Component-Specific**:
-
-- Classification: CGO call overhead
-- Cache: Hit rate, HNSW vs linear speedup
-- Decision: Rule matching time
-
-### Performance Thresholds
-
-Defined in `config/thresholds.yaml`:
-
-| Component | Metric | Threshold |
-|-----------|--------|-----------|
-| Classification (batch=1) | P95 latency | < 10ms |
-| Classification (batch=10) | P95 latency | < 50ms |
-| Decision Engine | P95 latency | < 1ms |
-| Cache (1K entries) | P95 latency | < 5ms |
-| Cache | Hit rate | > 80% |
-
-Regression thresholds are matched per benchmark by name and **gate on
-allocs/op + B/op** (hardware-independent); `ns/op` is advisory only. See
-[Thresholds Config](#thresholds-config-configthresholdsyaml).
-
-## E2E Performance Tests
-
-E2E tests measure full-stack performance:
+Only refresh baselines after reviewing why allocation behavior changed:
 
 ```bash
-# Run E2E performance tests
-make perf-e2e
+make perf-baseline-update
+git diff -- perf/testdata/baselines
 ```
 
-Test cases:
+Commit the baseline update with the code change that requires it. Do not use a
+baseline refresh to hide an unexplained regression.
 
-- `performance-throughput` - Sustained QPS measurement
-- `performance-latency` - End-to-end latency distribution
-- `performance-resource` - Resource utilization monitoring
+## Add a benchmark
 
-## CI/CD Integration
+1. Add a `BenchmarkXxx` function to the appropriate `perf/benchmarks` file, or
+   beside the Looper implementation when it requires unexported Looper code.
+2. Call `b.ReportAllocs()` and keep setup outside the timed region.
+3. Add the narrowest suitable pattern to `config/thresholds.yaml` when the
+   default thresholds are not appropriate.
+4. Run the new benchmark directly before running the family target:
 
-### PR regression gate
+   ```bash
+   cd perf
+   go test -run '^$' -bench '^BenchmarkXxx$' -benchmem ./benchmarks/...
+   ```
 
-`performance-test.yml` runs on every PR that touches the router, bindings, or
-`perf/`:
+5. Update the applicable baseline only after the result and threshold have
+   been reviewed.
 
-1. **Run benchmarks** — component suites + the Looper family, tee'd to
-   `reports/bench-output.txt`.
-2. **Generate current results** — `perftest --parse-bench` turns that raw output
-   into `reports/current.json`.
-3. **Compare and gate** — `perftest --compare-baseline ... --fail-on-regression`
-   diffs `current.json` against the committed per-suite baselines and **exits
-   non-zero if any benchmark's allocs/op or B/op regresses beyond its
-   threshold**, turning the check red on the PR. (`ns/op` changes are reported
-   as advisory only — they never fail the gate.)
-4. **Comment on the PR** — a summary comment reports each suite's status and the
-   regression-gate result.
-
-### Baseline lifecycle
-
-Because the gate blocks on **allocs/op and B/op** — which are
-hardware-independent — the committed baselines in `testdata/baselines/` are valid
-to compare against **regardless of which machine recorded them**. The gate works
-against the existing committed baselines with no special seeding. Suites whose
-baseline is empty (e.g. classification before benchmark models are cached) are
-simply skipped, never falsely failed.
-
-Refresh the baselines with `make perf-baseline-update` (then commit
-`testdata/baselines/`) when a PR legitimately changes a benchmark's allocations,
-or on a Go upgrade — allocation counts drift only with the code and the Go
-version, not with hardware. A `performance-nightly.yml` workflow exists to
-automate this refresh; it is currently **disabled**, and enabling it (it commits
-to the repo) is a maintainer decision, deliberately left out of this change.
-
-For **local** runs, `make perf-check` compares against these committed baselines
-too; `ns/op` will differ from your hardware but only shows as advisory.
-
-### Scope
-
-This gate establishes the single-runner numeric-regression mechanism. Large-scale
-**cross-hardware / cross-backend** coverage (Candle/ONNX × NVIDIA × AMD,
-backend-specific baselines) is tracked separately by **#1510**. The gap this work
-closes was surfaced by the router-quality audit in **#2375** and filed as
-**#2455**.
-
-## Configuration
-
-### Performance Test Config (`config/perf.yaml`)
-
-```yaml
-benchmark_config:
-  classification:
-    batch_sizes: [1, 10, 50, 100]
-    iterations: 1000
-
-  cache:
-    cache_sizes: [1000, 10000]
-    concurrency_levels: [1, 10, 50]
-```
-
-### Thresholds Config (`config/thresholds.yaml`)
-
-Regression thresholds are matched **per benchmark** by name. The gate **blocks**
-on the hardware-independent metrics — `max_allocs_regression_percent` (allocs/op)
-and `max_bytes_regression_percent` (B/op) — because those are determined by the
-code path, not the CPU, so they compare cleanly across machines. `ns/op` is
-**advisory** (`max_ns_regression_percent`): it is reported but never fails the
-gate, since absolute time depends on the runner's hardware.
-
-The **first matching pattern wins**, so entries are ordered most-specific first;
-any benchmark matching nothing uses `default`:
-
-```yaml
-component_benchmarks:
-  default:
-    max_allocs_regression_percent: 10
-    max_bytes_regression_percent: 10
-    max_ns_regression_percent: 30      # advisory only
-  benchmarks:
-    - name: decision_engine
-      pattern: "^Benchmark(EvaluateDecisions|PrioritySelection|Rule)"
-      max_allocs_regression_percent: 5   # blocks
-      max_bytes_regression_percent: 5    # blocks
-      max_ns_regression_percent: 20      # advisory
-    - name: looper
-      pattern: "^Benchmark(ReMoM|Fusion|Flow|Base)"
-      max_allocs_regression_percent: 10
-      max_bytes_regression_percent: 15
-      max_ns_regression_percent: 40
-```
-
-> **Why not gate on time?** Absolute `ns/op` varies with the CI runner's CPU and
-> noisy neighbors, so comparing it across machines produces false positives (and,
-> if you bias the baseline slow to avoid them, false negatives that hide real
-> regressions). Allocations and bytes per op are deterministic for a given build,
-> so they gate reliably without needing same-machine baselines. Introducing
-> allocations where the baseline had none (0 → N) is always treated as a
-> regression.
-
-## Troubleshooting
-
-### Benchmarks fail to run
-
-Ensure the Rust library is built and in the library path:
-
-```bash
-make rust
-export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release
-```
-
-### Models not found
-
-Download models before running benchmarks:
-
-```bash
-make download-models
-```
-
-### High variance in results
-
-- Increase `benchtime` for more stable results
-- Run benchmarks multiple times and average
-- Ensure no other CPU-intensive processes are running
-
-### Memory profiling shows high allocations
-
-Use the memory profile to identify hot spots:
-
-```bash
-go tool pprof -http=:8080 reports/mem.prof
-```
-
-Look for:
-
-- String/slice allocations in classification
-- CGO marshalling overhead
-- Cache entry allocations
-
-## Adding New Benchmarks
-
-1. Create benchmark function in appropriate file:
-
-```go
-func BenchmarkMyFeature(b *testing.B) {
-    // Setup
-    setupMyFeature(b)
-
-    b.ResetTimer()
-    b.ReportAllocs()
-
-    for i := 0; i < b.N; i++ {
-        // Test code
-    }
-}
-```
-
-2. Update thresholds in `config/thresholds.yaml`
-
-3. Run the benchmark:
+Run the parser and comparator unit tests after changing benchmark tooling:
 
 ```bash
 cd perf
-go test -bench=BenchmarkMyFeature -benchmem ./benchmarks/
+go test ./pkg/benchmark/...
 ```
-
-4. Update baseline:
-
-```bash
-make perf-baseline-update
-```
-
-## Best Practices
-
-1. **Always warm up** - Run warmup iterations before measuring
-2. **Report allocations** - Use `b.ReportAllocs()` to track memory
-3. **Reset timer** - Use `b.ResetTimer()` after setup
-4. **Use realistic data** - Test with production-like inputs
-5. **Control variance** - Use fixed seeds for random data
-6. **Measure what matters** - Focus on user-facing metrics
-
-## Resources
-
-- [Go Benchmarking Guide](https://dave.cheney.net/2013/06/30/how-to-write-benchmarks-in-go)
-- [pprof Documentation](https://github.com/google/pprof/blob/master/doc/README.md)
-- [Performance Best Practices](https://go.dev/doc/effective_go#performance)

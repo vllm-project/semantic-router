@@ -2,15 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
+	"strings"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -18,51 +17,105 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/profiling"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
+const metricsReadHeaderTimeout = 10 * time.Second
+
 type runtimeOptions struct {
-	configPath   string
-	certPath     string
-	kubeconfig   string
-	namespace    string
-	port         int
-	apiPort      int
-	metricsPort  int
-	enableAPI    bool
-	secure       bool
-	downloadOnly bool
+	configPath             string
+	certPath               string
+	kubeconfig             string
+	namespace              string
+	port                   int
+	apiPort                int
+	apiBind                string
+	managementAuthMode     string
+	managementRemoteExpose *bool
+	metricsPort            int
+	enableAPI              bool
+	secure                 bool
+	downloadOnly           bool
 }
 
 func parseRuntimeOptions() runtimeOptions {
 	var (
-		configPath   = flag.String("config", "config/config.yaml", "Path to the configuration file")
-		port         = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
-		apiPort      = flag.Int("api-port", 8080, "Port to listen on for the router apiserver")
-		metricsPort  = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
-		enableAPI    = flag.Bool("enable-api", true, "Enable the router apiserver")
-		secure       = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
-		certPath     = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
-		kubeconfig   = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
-		namespace    = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
-		downloadOnly = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
+		configPath             = flag.String("config", "config/config.yaml", "Path to the configuration file")
+		port                   = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
+		apiPort                = flag.Int("api-port", 0, "Port to listen on for the router apiserver (default from config: 8080)")
+		apiBind                = flag.String("api-bind", "", "Bind address for the router apiserver (default from config: 127.0.0.1)")
+		managementAuthMode     = flag.String("management-auth-mode", "", "Management API auth mode: bearer or disabled")
+		managementRemoteExpose = flag.Bool("management-remote-exposure", false, "Allow remote exposure of the management API (requires bearer auth tokens in config)")
+		metricsPort            = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
+		enableAPI              = flag.Bool("enable-api", true, "Enable the router apiserver")
+		secure                 = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
+		certPath               = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
+		kubeconfig             = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
+		namespace              = flag.String("namespace", kubernetesNamespaceDefault(), "Kubernetes namespace to watch for CRDs")
+		downloadOnly           = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
 	)
 	flag.Parse()
 
 	return runtimeOptions{
-		configPath:   *configPath,
-		certPath:     *certPath,
-		kubeconfig:   *kubeconfig,
-		namespace:    *namespace,
-		port:         *port,
-		apiPort:      *apiPort,
-		metricsPort:  *metricsPort,
-		enableAPI:    *enableAPI,
-		secure:       *secure,
-		downloadOnly: *downloadOnly,
+		configPath:             *configPath,
+		certPath:               *certPath,
+		kubeconfig:             *kubeconfig,
+		namespace:              *namespace,
+		port:                   *port,
+		apiPort:                *apiPort,
+		apiBind:                *apiBind,
+		managementAuthMode:     *managementAuthMode,
+		managementRemoteExpose: boolFlagOverride(flag.CommandLine, "management-remote-exposure", *managementRemoteExpose),
+		metricsPort:            *metricsPort,
+		enableAPI:              *enableAPI,
+		secure:                 *secure,
+		downloadOnly:           *downloadOnly,
 	}
+}
+
+func resolveRuntimeManagementOptions(opts runtimeOptions, cfg *config.RouterConfig) (runtimeOptions, error) {
+	if !opts.enableAPI {
+		return opts, nil
+	}
+	if cfg == nil {
+		return runtimeOptions{}, errors.New("management API configuration is unavailable")
+	}
+	resolved, err := cfg.ManagementAPI.ResolvedManagementAPI(config.ManagementAPIRuntimeOptions{
+		Port:           opts.apiPort,
+		BindAddress:    opts.apiBind,
+		RemoteExposure: opts.managementRemoteExpose,
+		AuthMode:       opts.managementAuthMode,
+	})
+	if err != nil {
+		return runtimeOptions{}, fmt.Errorf("invalid management API configuration: %w", err)
+	}
+	if resolved.Port == opts.port || resolved.Port == opts.metricsPort {
+		return runtimeOptions{}, errors.New("management API port conflicts with another Router service port")
+	}
+	opts.apiPort = resolved.Port
+	opts.apiBind = resolved.BindAddress
+	opts.managementAuthMode = resolved.Auth.Mode
+	opts.managementRemoteExpose = &resolved.RemoteExposure
+	return opts, nil
+}
+
+// boolFlagOverride returns a pointer to value only when the named flag was
+// explicitly supplied on the command line. Otherwise nil so config defaults
+// are preserved (e.g. management_api.remote_exposure: true).
+func boolFlagOverride(fs *flag.FlagSet, name string, value bool) *bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			set = true
+		}
+	})
+	if !set {
+		return nil
+	}
+	return &value
 }
 
 func initializeRuntimeLogger() {
@@ -93,8 +146,8 @@ func loadRuntimeConfigOrFatal(configPath string) *config.RouterConfig {
 	return cfg
 }
 
-func newStartupWriter(cfg *config.RouterConfig, configPath string) startupstatus.StatusWriter {
-	writer := buildStartupWriter(cfg, configPath)
+func newStartupWriter(cfg *config.RouterConfig, configPath string, registry *routerruntime.Registry) startupstatus.StatusWriter {
+	writer := registry.StartupStatusWriter(buildStartupWriter(cfg, configPath))
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "starting",
 		Ready:   false,
@@ -154,26 +207,9 @@ func failStartup(writer startupstatus.StatusWriter, format string, args ...inter
 	})
 }
 
-func ensureModelsDownloadedOrFatal(cfg *config.RouterConfig, writer startupstatus.StatusWriter) {
-	if err := ensureModelsDownloaded(cfg, writer); err != nil {
-		failStartup(writer, "Failed to ensure models are downloaded: %v", err)
-	}
-}
-
-func exitIfDownloadOnly(downloadOnly bool) {
-	if !downloadOnly {
-		return
-	}
-
-	logging.ComponentEvent("router", "download_only_complete", map[string]interface{}{
-		"mode": "download_only",
-	})
-	os.Exit(0)
-}
-
-func initializeTracing(cfg *config.RouterConfig) func() {
+func initializeTracing(cfg *config.RouterConfig) func(context.Context) error {
 	if !cfg.Observability.Tracing.Enabled {
-		return func() {}
+		return func(context.Context) error { return nil }
 	}
 
 	tracingCfg := tracing.TracingConfig{
@@ -199,14 +235,14 @@ func initializeTracing(cfg *config.RouterConfig) func() {
 	return shutdownTracing
 }
 
-func shutdownTracing() {
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := tracing.ShutdownTracing(shutdownCtx); err != nil {
+func shutdownTracing(ctx context.Context) error {
+	if err := tracing.ShutdownTracing(ctx); err != nil {
 		logging.ComponentErrorEvent("router", "tracing_shutdown_failed", map[string]interface{}{
 			"error": err.Error(),
 		})
+		return fmt.Errorf("shutdown tracing: %w", err)
 	}
+	return nil
 }
 
 func initializeWindowedMetricsIfEnabled(cfg *config.RouterConfig) {
@@ -225,74 +261,134 @@ func initializeWindowedMetricsIfEnabled(cfg *config.RouterConfig) {
 	})
 }
 
-func registerSignalHandler(shutdownHooks *[]func()) {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		sig := <-sigChan
-		logging.ComponentEvent("router", "shutdown_signal_received", map[string]interface{}{
-			"signal": sig.String(),
-		})
-		for _, hook := range *shutdownHooks {
-			hook()
-		}
-		shutdownTracing()
-		os.Exit(0)
-	}()
+func runShutdownHooks(ctx context.Context, shutdownHooks *[]func(context.Context) error) error {
+	if shutdownHooks == nil {
+		return nil
+	}
+	var shutdownErr error
+	for _, hook := range *shutdownHooks {
+		shutdownErr = errors.Join(shutdownErr, hook(ctx))
+	}
+	return shutdownErr
 }
 
-func startMetricsServerIfEnabled(cfg *config.RouterConfig, metricsPort int) {
-	metricsEnabled := true
-	if cfg.Observability.Metrics.Enabled != nil {
-		metricsEnabled = *cfg.Observability.Metrics.Enabled
-	}
+// metricsServerEnabled reports whether the Prometheus listener will be started
+// for this config and port, so callers that reason about the metrics port
+// (startup, profiling port reservation) share one decision.
+func metricsServerEnabled(cfg *config.RouterConfig, metricsPort int) bool {
 	if metricsPort <= 0 {
-		metricsEnabled = false
+		return false
 	}
-	if !metricsEnabled {
+	if cfg.Observability.Metrics.Enabled != nil {
+		return *cfg.Observability.Metrics.Enabled
+	}
+	return true
+}
+
+func startMetricsServerIfEnabled(cfg *config.RouterConfig, metricsPort int) *http.Server {
+	if !metricsServerEnabled(cfg, metricsPort) {
 		logging.ComponentEvent("router", "metrics_server_disabled", map[string]interface{}{
 			"metrics_port": metricsPort,
 		})
-		return
+		return nil
 	}
 
-	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		metricsAddr := fmt.Sprintf(":%d", metricsPort)
-		logging.ComponentEvent("router", "metrics_server_starting", map[string]interface{}{
+	metricsAddr := fmt.Sprintf(":%d", metricsPort)
+	listener, err := net.Listen("tcp", metricsAddr)
+	if err != nil {
+		logging.ComponentErrorEvent("router", "metrics_server_failed", map[string]interface{}{
 			"address": metricsAddr,
+			"error":   err.Error(),
 		})
-		if err := http.ListenAndServe(metricsAddr, nil); err != nil {
+		return nil
+	}
+	server := &http.Server{
+		Addr:              metricsAddr,
+		Handler:           metrics.NewServeMux(),
+		ReadHeaderTimeout: metricsReadHeaderTimeout,
+	}
+	logging.ComponentEvent("router", "metrics_server_starting", map[string]interface{}{
+		"address": metricsAddr,
+	})
+	go func() {
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logging.ComponentErrorEvent("router", "metrics_server_failed", map[string]interface{}{
 				"address": metricsAddr,
 				"error":   err.Error(),
 			})
 		}
 	}()
+	return server
+}
+
+// startProfilingServerIfEnabled brings up the pprof listener when the operator
+// opted in. Profiling is a debugging aid, so a misconfigured port or a failed
+// bind is logged and skipped rather than aborting router startup.
+func startProfilingServerIfEnabled(
+	cfg *config.RouterConfig,
+	opts runtimeOptions,
+	shutdownHooks *[]func(context.Context) error,
+) {
+	profilingCfg := cfg.Observability.Profiling
+	if !profilingCfg.Enabled {
+		logging.ComponentDebugEvent("router", "profiling_server_disabled", nil)
+		return
+	}
+
+	reserved := []int{opts.port}
+	if metricsServerEnabled(cfg, opts.metricsPort) {
+		reserved = append(reserved, opts.metricsPort)
+	}
+	if opts.enableAPI {
+		reserved = append(reserved, opts.apiPort)
+	}
+	if err := profiling.ValidatePort(profilingCfg.Port, reserved...); err != nil {
+		logging.ComponentErrorEvent("router", "profiling_server_port_invalid", map[string]interface{}{
+			"port":  profilingCfg.Port,
+			"error": err.Error(),
+		})
+		return
+	}
+	if err := profiling.ValidateBind(profilingCfg.Bind); err != nil {
+		logging.ComponentErrorEvent("router", "profiling_server_bind_invalid", map[string]interface{}{
+			"bind":  profilingCfg.Bind,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	server, err := profiling.Start(profilingCfg)
+	if err != nil {
+		logging.ComponentErrorEvent("router", "profiling_server_failed", map[string]interface{}{
+			"bind":  profilingCfg.Bind,
+			"port":  profilingCfg.Port,
+			"error": err.Error(),
+		})
+		return
+	}
+	if shutdownHooks != nil {
+		*shutdownHooks = append(*shutdownHooks, func(context.Context) error { return server.Close() })
+	}
+	logging.ComponentEvent("router", "profiling_server_starting", map[string]interface{}{
+		"address": server.Addr(),
+	})
 }
 
 func initializeRuntimeDependencies(
+	ctx context.Context,
 	cfg *config.RouterConfig,
 	writer startupstatus.StatusWriter,
-	shutdownHooks *[]func(),
+	shutdownHooks *[]func(context.Context) error,
 	runtimeRegistry *routerruntime.Registry,
-) modelruntime.EmbeddingRuntimeState {
+) (modelruntime.EmbeddingRuntimeState, error) {
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "initializing_models",
 		Ready:   false,
 		Message: "Initializing embedding models and router dependencies...",
 	}, "Failed to write initialization startup status")
 
-	embeddingState, err := modelruntime.PrepareRouterRuntime(context.Background(), cfg, modelruntime.PrepareRouterRuntimeOptions{
-		Component:                  "router",
-		MaxParallelism:             modelruntime.DefaultParallelism(5),
-		OnEvent:                    logRuntimeLifecycleEvent,
-		InitModalityClassifierFunc: extproc.InitModalityClassifier,
-	})
-	if err != nil {
-		failStartup(writer, "Failed to initialize runtime dependencies: %v", err)
-	}
+	embeddingState := modelruntime.EmbeddingRuntimeState{}
+
 	writeStartupState(writer, startupstatus.State{
 		Phase:             "initializing_models",
 		Ready:             false,
@@ -300,8 +396,10 @@ func initializeRuntimeDependencies(
 		EmbeddingProvider: startupEmbeddingProviderStatus(embeddingState),
 	}, "Failed to write runtime dependency startup status")
 
-	initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry)
-	return embeddingState
+	if err := initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry); err != nil {
+		return embeddingState, err
+	}
+	return embeddingState, nil
 }
 
 func startupEmbeddingProviderStatus(state modelruntime.EmbeddingRuntimeState) *startupstatus.EmbeddingProviderStatus {
@@ -354,110 +452,111 @@ func logRuntimeLifecycleEvent(event modelruntime.Event) {
 
 func initializeVectorStoreIfEnabled(
 	cfg *config.RouterConfig,
-	shutdownHooks *[]func(),
+	shutdownHooks *[]func(context.Context) error,
 	runtimeRegistry *routerruntime.Registry,
-) {
+) error {
 	if cfg.VectorStore == nil || !cfg.VectorStore.Enabled {
-		return
+		return nil
 	}
 
 	logging.ComponentEvent("router", "vector_store_init_started", map[string]interface{}{
 		"backend": cfg.VectorStore.BackendType,
 	})
 	if err := cfg.VectorStore.Validate(); err != nil {
-		logging.ComponentFatalEvent("router", "vector_store_config_invalid", map[string]interface{}{
-			"backend": cfg.VectorStore.BackendType,
-			"error":   err.Error(),
-		})
+		return fmt.Errorf("invalid vector store configuration: %w", err)
 	}
-	vectorStoreRuntime, err := routerruntime.NewVectorStoreRuntime(cfg)
+	vectorStoreRuntime, err := routerruntime.NewVectorStoreRuntime(cfg, runtimeRegistry.ModelPool())
 	if err != nil {
-		logging.ComponentFatalEvent("router", "vector_store_runtime_create_failed", map[string]interface{}{
-			"backend": cfg.VectorStore.BackendType,
-			"error":   err.Error(),
-		})
+		return fmt.Errorf("create vector store runtime: %w", err)
 	}
 	if runtimeRegistry != nil {
 		runtimeRegistry.SetVectorStoreRuntime(vectorStoreRuntime)
 	}
 	vectorStoreRuntime.LogInitialized("router", cfg)
 	registerVectorStoreShutdownHook(shutdownHooks, vectorStoreRuntime)
+	return nil
 }
 
 func registerVectorStoreShutdownHook(
-	shutdownHooks *[]func(),
+	shutdownHooks *[]func(context.Context) error,
 	vectorStoreRuntime *routerruntime.VectorStoreRuntime,
 ) {
-	*shutdownHooks = append(*shutdownHooks, func() {
+	*shutdownHooks = append(*shutdownHooks, func(ctx context.Context) error {
 		logging.ComponentEvent("router", "vector_store_shutdown_started", map[string]interface{}{})
-		if err := vectorStoreRuntime.Shutdown(); err != nil {
+		if err := vectorStoreRuntime.ShutdownContext(ctx); err != nil {
 			logging.ComponentErrorEvent("router", "vector_store_shutdown_failed", map[string]interface{}{
 				"error": err.Error(),
 			})
+			return err
 		}
+		return nil
 	})
 }
 
-func newExtProcServerOrFatal(
-	opts runtimeOptions,
-	writer startupstatus.StatusWriter,
-	runtimeRegistry *routerruntime.Registry,
-) *extproc.Server {
-	server, err := extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry)
-	if err != nil {
-		failStartup(writer, "Failed to create ExtProc server: %v", err)
-	}
-
-	return server
-}
-
-func warmupRouterRuntime(server *extproc.Server, embeddingState modelruntime.EmbeddingRuntimeState) {
-	router := server.GetRouter()
-	if router == nil {
-		return
-	}
-	_, _ = modelruntime.WarmupToolsDatabase(context.Background(), embeddingState.ToolsReady, router.LoadToolsDatabase, modelruntime.WarmupToolsOptions{
+func warmupRouterRuntime(ctx context.Context, server *extproc.Server) error {
+	return server.WarmupRouter(ctx, modelruntime.WarmupRouterOptions{
 		Component:      "router",
-		MaxParallelism: 1,
+		MaxParallelism: 2,
 		OnEvent:        logRuntimeLifecycleEvent,
 	})
 }
 
-func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime.Registry) {
+func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime.Registry) (*apiserver.Server, error) {
 	if !opts.enableAPI {
-		return
+		return nil, nil
 	}
+	if runtimeRegistry == nil || runtimeRegistry.CurrentConfig() == nil {
+		return nil, errors.New("management API configuration is unavailable")
+	}
+	resolvedOpts, err := resolveRuntimeManagementOptions(opts, runtimeRegistry.CurrentConfig())
+	if err != nil {
+		return nil, err
+	}
+	opts = resolvedOpts
 
-	go func() {
-		logging.ComponentEvent("router", "api_server_starting", map[string]interface{}{
-			"api_port": opts.apiPort,
-		})
-		if err := apiserver.InitWithRuntime(opts.configPath, opts.apiPort, runtimeRegistry); err != nil {
-			logging.ComponentErrorEvent("router", "api_server_failed", map[string]interface{}{
-				"api_port": opts.apiPort,
-				"error":    err.Error(),
-			})
-		}
-	}()
+	logging.ComponentEvent("router", "api_server_starting", map[string]interface{}{
+		"api_port":                   opts.apiPort,
+		"api_bind":                   opts.apiBind,
+		"management_auth_mode":       opts.managementAuthMode,
+		"management_remote_exposure": opts.managementRemoteExpose,
+	})
+	return apiserver.StartWithOptions(apiserver.InitOptions{
+		ConfigPath:      opts.configPath,
+		Port:            opts.apiPort,
+		BindAddress:     opts.apiBind,
+		RemoteExposure:  opts.managementRemoteExpose,
+		AuthMode:        opts.managementAuthMode,
+		RuntimeRegistry: runtimeRegistry,
+	})
 }
 
 func markRouterReady(writer startupstatus.StatusWriter, embeddingProvider *startupstatus.EmbeddingProviderStatus) {
 	writeStartupState(writer, startupstatus.State{
 		Phase:             "ready",
 		Ready:             true,
-		Message:           "Router models are ready. Starting router services...",
+		Message:           "Router configuration is active and the listener is accepting requests.",
 		EmbeddingProvider: embeddingProvider,
 	}, "Failed to write ready startup status")
 }
 
-func startKubernetesControllerIfNeeded(cfg *config.RouterConfig, kubeconfig, namespace string) {
-	if cfg.ConfigSource == config.ConfigSourceKubernetes {
-		go startKubernetesController(cfg, kubeconfig, namespace)
+func startExtProcServer(
+	ctx context.Context,
+	server *extproc.Server,
+	writer startupstatus.StatusWriter,
+) error {
+	if err := server.StartContextWithReady(ctx, func() {
+		if server.CurrentConfig().ConfigSource != config.ConfigSourceKubernetes {
+			markRouterReady(writer, startupEmbeddingProviderStatus(server.EmbeddingRuntimeState()))
+		}
+	}); err != nil {
+		return recordStartupError(writer, "serve ExtProc", err)
 	}
+	return nil
 }
 
-func startExtProcServerOrFatal(server *extproc.Server, writer startupstatus.StatusWriter) {
-	if err := server.Start(); err != nil {
-		failStartup(writer, "ExtProc server error: %v", err)
+func kubernetesNamespaceDefault() string {
+	if namespace := strings.TrimSpace(os.Getenv("POD_NAMESPACE")); namespace != "" {
+		return namespace
 	}
+	return "default"
 }

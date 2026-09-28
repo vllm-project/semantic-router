@@ -14,11 +14,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -58,12 +59,38 @@ global:
           min_turns_before_switch: 1
           switch_margin: 0.05
           stability_weight: 1.0
+      state_store:
+        backend: redis
+        ttl_seconds: 86400
+        timeout_ms: 50
+        redis:
+          address: redis:6379
+          database: 2
+          key_prefix: "vsr:router-session:v1:"
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
 	assertLearningConfig(t, cfg)
 	assertDecisionAdaptations(t, cfg.Decisions[0].Adaptations, cfg.RouterLearning.Adaptation.EffectiveCandidateSet())
+}
+
+func TestValidateDecisionLearningCoversRecipeOwnedDecisions(t *testing.T) {
+	cfg := &RouterConfig{Recipes: []RoutingRecipe{{
+		Name: "private",
+		Profile: RoutingProfile{Decisions: []Decision{{
+			Name: "private-route",
+			Adaptations: DecisionAdaptationsConfig{
+				Adaptation: &DecisionLearningAdaptationConfig{
+					CandidateSet: "invalid",
+				},
+			},
+		}}},
+	}}}
+
+	if err := validateDecisionRouterLearningConfig(cfg); err == nil {
+		t.Fatal("invalid recipe-owned learning config must be rejected")
+	}
 }
 
 func assertLearningConfig(t *testing.T, cfg *RouterConfig) {
@@ -76,6 +103,10 @@ func assertLearningConfig(t *testing.T, cfg *RouterConfig) {
 	}
 	if cfg.RouterLearning.Protection.EffectiveScope() != RouterLearningScopeSession {
 		t.Fatalf("expected session protection scope, got %q", cfg.RouterLearning.Protection.EffectiveScope())
+	}
+	if cfg.RouterLearning.StateStore.Backend != "redis" ||
+		cfg.RouterLearning.StateStore.Redis.Address != "redis:6379" {
+		t.Fatalf("expected Redis state store, got %#v", cfg.RouterLearning.StateStore)
 	}
 }
 
@@ -109,11 +140,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -168,11 +200,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -216,11 +249,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -277,11 +311,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -319,11 +354,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -372,11 +408,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -415,11 +452,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -456,11 +494,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -497,11 +536,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -544,11 +584,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -585,11 +626,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -627,11 +669,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -668,11 +711,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -708,11 +752,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap

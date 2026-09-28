@@ -1,7 +1,8 @@
-//go:build windows || !cgo
+//go:build windows || !cgo || (!amd64 && !arm64)
 
 // Package nlp_binding provides Go bindings for BM25 and N-gram keyword
-// classification. This is the mock implementation for platforms without CGo.
+// classification. This is the mock implementation for platforms without CGo
+// or without a native nlp-binding library.
 package nlp_binding
 
 import "fmt"
@@ -38,6 +39,11 @@ func (c *BM25Classifier) Classify(text string) MatchResult {
 	return MatchResult{}
 }
 
+// ClassifyAll returns no matches in non-CGO builds.
+func (c *BM25Classifier) ClassifyAll(text string) []MatchResult {
+	return nil
+}
+
 // Free releases resources (mock - no-op).
 func (c *BM25Classifier) Free() {}
 
@@ -61,6 +67,11 @@ func (c *NgramClassifier) AddRule(name, operator string, keywords []string, thre
 // Classify runs classification (mock - always returns no match).
 func (c *NgramClassifier) Classify(text string) MatchResult {
 	return MatchResult{}
+}
+
+// ClassifyAll returns no matches in non-CGO builds.
+func (c *NgramClassifier) ClassifyAll(text string) []MatchResult {
+	return nil
 }
 
 // Free releases resources (mock - no-op).

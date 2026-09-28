@@ -13,7 +13,7 @@ function resolveDensity(sectionCount: number, itemCount: number): LayoutMegaMenu
     return 'compact'
   }
 
-  if (sectionCount <= 3 && itemCount <= 7) {
+  if (sectionCount <= 3 && itemCount <= 8) {
     return 'standard'
   }
 

@@ -1,0 +1,106 @@
+replicaCount: 1
+
+# ExtProc-only Responses state and protocol conversion. The external gateway
+# owns the public listener, route, backend, credentials, and traffic policy.
+# Replace the chart's example routing config atomically. Using `config` here
+# would recursively merge in its placeholder default route and signals.
+configOverride:
+  version: v0.3
+  listeners: []
+  providers:
+    models:
+      # Protocol metadata only: intentionally no backend_refs or credentials.
+      - name: openai/gpt-oss-20b
+        api_format: openai
+  routing:
+    modelCards:
+      - name: openai/gpt-oss-20b
+  global:
+    router:
+      clear_route_cache: false
+      model_selection:
+        enabled: false
+    services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 86400
+        max_responses: 1000
+      router_replay:
+        enabled: false
+        store_backend: memory
+      observability:
+        tracing:
+          enabled: false
+    stores:
+      response_cache:
+        enabled: false
+      memory:
+        enabled: false
+    integrations:
+      tools:
+        enabled: false
+    model_catalog:
+      embeddings:
+        semantic:
+          qwen3_model_path: ""
+          gemma_model_path: ""
+          mmbert_model_path: ""
+          multimodal_model_path: ""
+          bert_model_path: ""
+          embedding_config:
+            preload_embeddings: false
+            enable_soft_matching: false
+      system:
+        prompt_guard: ""
+        domain_classifier: ""
+        pii_classifier: ""
+        fact_check_classifier: ""
+        hallucination_detector: ""
+        hallucination_explainer: ""
+        feedback_detector: ""
+      kbs: []
+      modules:
+        prompt_compression:
+          enabled: false
+        prompt_guard:
+          enabled: false
+          model_ref: ""
+          model_id: ""
+        classifier:
+          domain:
+            enabled: false
+            model_ref: ""
+            model_id: ""
+          mcp:
+            enabled: false
+          pii:
+            enabled: false
+            model_ref: ""
+            model_id: ""
+          preference:
+            use_contrastive: false
+            embedding_model: ""
+        hallucination_mitigation:
+          enabled: false
+          fact_check:
+            model_ref: ""
+            model_id: ""
+          detector:
+            model_ref: ""
+            model_id: ""
+          explainer:
+            model_ref: ""
+            model_id: ""
+        feedback_detector:
+          enabled: false
+          model_ref: ""
+          model_id: ""
+        modality_detector:
+          enabled: false
+
+service:
+  type: ClusterIP
+
+persistence:
+  enabled: false

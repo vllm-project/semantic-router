@@ -1,0 +1,14 @@
+{
+  "status": "ok",
+  "body": {
+    "max_completion_tokens": 32,
+    "messages": [
+      {
+        "content": "Sample from the top choices.",
+        "role": "user"
+      }
+    ],
+    "model": "routed-model",
+    "top_k": 8
+  }
+}

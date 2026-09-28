@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   classifierDraftFromRecord,
+  formatKnowledgeBaseSourcePath,
   payloadFromDraft,
   type TaxonomyClassifierRecord,
 } from './configPageTaxonomyClassifierSupport'
@@ -73,5 +74,28 @@ describe('taxonomy classifier form support', () => {
     expect(buildLabelRows(record, 'private data')).toHaveLength(1)
     expect(buildLabelRows(record, 'press release')).toHaveLength(1)
     expect(buildLabelRows(record, 'not-present')).toHaveLength(0)
+  })
+
+  it('joins the knowledge base source directory and manifest with a single separator', () => {
+    const format = formatKnowledgeBaseSourcePath
+    const joined = 'knowledge_bases/mmlu/labels.json'
+
+    // The shipped config writes the asset directory with a trailing slash.
+    expect(format({ path: 'knowledge_bases/mmlu/', manifest: 'labels.json' })).toBe(joined)
+    expect(format({ path: 'knowledge_bases/mmlu', manifest: 'labels.json' })).toBe(joined)
+    expect(format({ path: 'knowledge_bases/mmlu//', manifest: '/labels.json' })).toBe(joined)
+    expect(format({ path: ' knowledge_bases/mmlu/ ', manifest: ' labels.json ' })).toBe(joined)
+    expect(format({ path: '/opt/kb/', manifest: 'labels.json' })).toBe('/opt/kb/labels.json')
+  })
+
+  it('falls back to whichever half of the knowledge base source is present', () => {
+    const format = formatKnowledgeBaseSourcePath
+    const directory = 'knowledge_bases/mmlu/'
+
+    expect(format({ path: directory })).toBe(directory)
+    expect(format({ path: directory, manifest: '  ' })).toBe(directory)
+    expect(format({ path: '', manifest: 'labels.json' })).toBe('labels.json')
+    expect(format({ path: '/', manifest: 'labels.json' })).toBe('/labels.json')
+    expect(format({ path: '' })).toBe('')
   })
 })

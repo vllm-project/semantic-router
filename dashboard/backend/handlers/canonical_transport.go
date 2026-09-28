@@ -23,17 +23,19 @@ type globalFragment struct {
 }
 
 type routingFragmentDocument struct {
-	Routing routerconfig.CanonicalRouting `yaml:"routing"`
-	Global  *globalFragment               `yaml:"global,omitempty"`
-}
-
-type setupModeConfig struct {
-	Mode bool `yaml:"mode,omitempty"`
+	Routing     routerconfig.CanonicalRouting      `yaml:"routing"`
+	Entrypoints []routerconfig.CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
+	Recipes     []routerconfig.CanonicalRecipe     `yaml:"recipes,omitempty"`
+	Global      *globalFragment                    `yaml:"global,omitempty"`
 }
 
 type setupConfigFile struct {
-	routerconfig.CanonicalConfig `yaml:",inline"`
-	Setup                        *setupModeConfig `yaml:"setup,omitempty"`
+	routerconfig.CanonicalConfigDocument `yaml:",inline"`
+	globalOverrideRaw                    *yaml.Node
+}
+
+func (config *setupConfigFile) canonicalTransport() canonicalConfigTransport {
+	return canonicalConfigTransport{CanonicalConfig: config.CanonicalConfig, globalOverrideRaw: config.globalOverrideRaw}
 }
 
 func decodeYAMLTaggedBody[T any](reader io.Reader) (T, error) {
@@ -51,6 +53,9 @@ func decodeYAMLTaggedBytes[T any](data []byte) (T, error) {
 		return value, nil
 	}
 	if err := yaml.Unmarshal(data, &value); err != nil {
+		return value, err
+	}
+	if err := resolveTransportGlobal(data, &value); err != nil {
 		return value, err
 	}
 	return value, nil
@@ -86,12 +91,12 @@ func rawJSONMessage(value any) (json.RawMessage, error) {
 	return json.RawMessage(payload), nil
 }
 
-func readCanonicalConfigFile(configPath string) (*routerconfig.CanonicalConfig, error) {
-	data, err := os.ReadFile(configPath)
+func readCanonicalConfigFile(configPath string) (*canonicalConfigTransport, error) {
+	data, err := readPersistedDashboardConfig(configPath)
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](data)
+	cfg, err := decodeYAMLTaggedBytes[canonicalConfigTransport](data)
 	if err != nil {
 		return nil, err
 	}

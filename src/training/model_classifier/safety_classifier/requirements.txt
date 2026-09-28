@@ -1,0 +1,8 @@
+# Install a ROCm-compatible PyTorch build or use the documented container first.
+accelerate==1.10.1
+datasets==4.0.0
+huggingface-hub==0.34.4
+numpy==2.2.6
+peft==0.17.1
+safetensors==0.6.2
+transformers==4.55.2

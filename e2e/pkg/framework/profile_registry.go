@@ -11,12 +11,24 @@ type LocalImageBuild struct {
 	Dockerfile   string
 	Tag          string
 	BuildContext string
+	// RolloutRestarts lists deployments to restart after profile setup.
+	// Required when imagePullPolicy is Never and the tag is reused (e.g. :latest).
+	// Missing deployments are skipped so profiles can share an image without
+	// sharing the same Deployment name.
+	RolloutRestarts []RolloutRestartTarget
+}
+
+// RolloutRestartTarget identifies a deployment to restart after a local image reload.
+type RolloutRestartTarget struct {
+	Namespace  string
+	Deployment string
 }
 
 // ProfileCapabilities declares runner-level behavior a profile requires.
 type ProfileCapabilities struct {
-	RequiresGPU bool
-	LocalImages []LocalImageBuild
+	RequiresGPU     bool
+	LocalImages     []LocalImageBuild
+	RouterBuildArgs map[string]string // model artifacts or other image features required by the profile
 }
 
 // ProfileRegistration is the self-registration contract for runnable profiles.
@@ -69,6 +81,10 @@ func LookupProfileRegistration(name string) (ProfileRegistration, bool) {
 
 // NewProfileByName constructs a registered profile by name.
 func NewProfileByName(name string) (Profile, error) {
+	// Preserve the former generic name without advertising a duplicate profile.
+	if name == "kubernetes" {
+		name = "envoy-ai-gateway"
+	}
 	reg, ok := LookupProfileRegistration(name)
 	if !ok {
 		return nil, fmt.Errorf("unknown profile: %s (available: %v)", name, RegisteredProfileNames())

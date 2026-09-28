@@ -26,7 +26,14 @@ ENV/
 
 models/
 e2e/
-website/
+# Keep the model catalog and frozen image-routing prototypes required by COPY.
+website/*
+!website/static/
+website/static/*
+!website/static/img/
+!website/static/model-catalog/
+website/static/model-catalog/*
+!website/static/model-catalog/catalog.json
 docs/
 paper/
 perf/

@@ -339,8 +339,8 @@ func (h *OpenClawHandler) appendRoomAutomationError(room ClawRoomEntry, target C
 	errMsg := newRoomMessage(
 		room,
 		"system",
-		"clawos-system",
-		"ClawOS",
+		"openclaw-system",
+		"OpenClaw",
 		fmt.Sprintf("@%s is unavailable: %v", target.Name, replyErr),
 		map[string]string{"worker": target.Name, "phase": "reply"},
 	)
@@ -366,8 +366,8 @@ func (h *OpenClawHandler) appendRoomAutomationMaxTurnWarning(roomID string, turn
 	warn := newRoomMessage(
 		*room,
 		"system",
-		"clawos-system",
-		"ClawOS",
+		"openclaw-system",
+		"OpenClaw",
 		"Room automation reached max turns and was paused to avoid loops.",
 		map[string]string{"phase": "safety", "reason": "max-turns"},
 	)

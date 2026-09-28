@@ -72,6 +72,48 @@ describe('Builder structured field controls', () => {
     expect(featureMarkup).not.toContain('<textarea')
   })
 
+  it('renders multi-factor objectives and quality gates as structured controls', () => {
+    const objective = requireField(getAlgorithmFieldSchema('multi_factor'), 'objective')
+    const priorities = requireField(objective.fields || [], 'priorities')
+    expect(requireField(priorities.fields || [], 'tolerance')).toMatchObject({
+      label: 'Relative Tolerance',
+      type: 'number',
+    })
+    const objectiveMarkup = renderToStaticMarkup(
+      createElement(FieldEditor, {
+        schema: objective,
+        value: {
+          strategy: 'lexicographic',
+          priorities: [
+            { factor: 'quality', tolerance: 0.02 },
+            { factor: 'cost', tolerance: 0 },
+          ],
+        },
+        onChange: vi.fn(),
+      }),
+    )
+    expect(objectiveMarkup).toContain('lexicographic')
+    expect(objectiveMarkup).toContain('Priority: quality')
+    expect(objectiveMarkup).not.toContain('<textarea')
+
+    const quality = requireField(getAlgorithmFieldSchema('multi_factor'), 'quality')
+    const qualityMarkup = renderToStaticMarkup(
+      createElement(FieldEditor, {
+        schema: quality,
+        value: {
+          index: 'vllm-sr/intelligence@1.0.0',
+          on_missing: 'exclude',
+          min_coverage: 1,
+          min_score: 40,
+        },
+        onChange: vi.fn(),
+      }),
+    )
+    expect(qualityMarkup).toContain('Minimum Coverage')
+    expect(qualityMarkup).toContain('Minimum Score')
+    expect(qualityMarkup).not.toContain('<textarea')
+  })
+
   it('uses the shared object-list editor for flat header pairs', () => {
     const addHeaders = requireField(getPluginFieldSchema('header_mutation'), 'add')
     const markup = renderToStaticMarkup(
@@ -86,6 +128,23 @@ describe('Builder structured field controls', () => {
     expect(markup).toContain('Header Name')
     expect(markup).toContain('premium')
     expect(markup).not.toContain('<textarea')
+  })
+
+  it('enforces the ReMoM completion-token minimum', () => {
+    const maxCompletionTokens = requireField(
+      getAlgorithmFieldSchema('remom'),
+      'max_completion_tokens',
+    )
+    const markup = renderToStaticMarkup(
+      createElement(FieldEditor, {
+        schema: maxCompletionTokens,
+        value: 1,
+        onChange: vi.fn(),
+      }),
+    )
+
+    expect(maxCompletionTokens.min).toBe(1)
+    expect(markup).toContain('min="1"')
   })
 
   it('renders recursive composer rules without falling back to JSON', () => {

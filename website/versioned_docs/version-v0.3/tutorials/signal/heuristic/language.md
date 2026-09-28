@@ -2,7 +2,7 @@
 
 ## Overview
 
-`language` detects the request language and exposes it as a routing signal. It maps to `config/signal/language/` and is declared under `routing.signals.language`.
+`language` detects the request language and exposes it as a routing signal. It maps to `config/fragments/signal/language/` and is declared under `routing.signals.language`.
 
 This family is heuristic in the tutorial taxonomy because it uses a lightweight language detector instead of router-owned classifier models.
 
@@ -30,7 +30,7 @@ Use `language` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/language/`
+Source fragment family: `config/fragments/signal/language/`
 
 ```yaml
 routing:

@@ -1,0 +1,371 @@
+.modelList {
+  display: grid;
+}
+
+.modelListItem {
+  min-width: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.modelListItem:last-child {
+  border-bottom: 0;
+}
+
+.modelRow {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.3fr) minmax(265px, 0.8fr);
+  gap: 0.7rem 1.1rem;
+  width: 100%;
+  min-height: 112px;
+  padding: 0.8rem 0.9rem 0.65rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: background 140ms ease;
+}
+
+.modelRow:hover,
+.tableRow:hover {
+  background: rgba(255, 255, 255, 0.027);
+}
+
+.modelRow:focus-visible,
+.tableModelButton:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid rgba(238, 85, 92, 0.72);
+  outline-offset: -2px;
+}
+
+.modelRow[aria-pressed='true'],
+.tableRow.selected {
+  box-shadow: inset 3px 0 #e84950;
+  background: linear-gradient(90deg, rgba(232, 73, 80, 0.07), transparent 42%);
+}
+
+.listIdentity,
+.modelIdentity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.72rem;
+}
+
+.listIdentity > span:last-child,
+.modelIdentity > span:last-child {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+}
+
+.listTitle {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.listTitle strong,
+.modelIdentity strong {
+  overflow: hidden;
+  color: #eeeef1;
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listIdentity code {
+  overflow: hidden;
+  margin-top: 0.1rem;
+  padding: 0;
+  background: transparent;
+  color: #62626b;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listIdentity > span > small {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 0.35rem;
+  color: #85858e;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.lifecycleDot {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.3rem;
+  color: #818189;
+  font-size: 0.75rem;
+  font-style: normal;
+  text-transform: capitalize;
+}
+
+.lifecycleDot::before {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #77777e;
+  content: '';
+}
+
+.lifecycleDot[data-lifecycle='active']::before {
+  background: #4fc993;
+}
+
+.lifecycleDot[data-lifecycle='experimental']::before {
+  background: #e6ad4f;
+}
+
+.listFacts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  align-content: start;
+}
+
+.listFacts > span,
+.providerCount,
+.evaluationSummary {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.listFacts small,
+.providerCount small,
+.evaluationSummary small {
+  overflow: hidden;
+  color: #5f5f68;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listFacts strong,
+.providerCount strong,
+.evaluationSummary strong {
+  overflow: hidden;
+  color: #cacacf;
+  font-size: 0.75rem;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listFacts .evaluationSummary small:last-child {
+  display: none;
+}
+
+.listFooter {
+  display: flex;
+  grid-column: 1 / -1;
+  min-width: 0;
+  align-items: center;
+  gap: 0.65rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.cardTags {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 0.28rem;
+  overflow: hidden;
+}
+
+.cardTags i,
+.listPool code,
+.listPool i {
+  padding: 0.18rem 0.34rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
+  color: #92929a;
+  font-size: 0.75rem;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.listPool {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.listPool > small {
+  color: #66666f;
+  font-size: 0.75rem;
+}
+
+.listPool > span {
+  display: flex;
+  min-width: 0;
+  gap: 0.24rem;
+  overflow: hidden;
+}
+
+.listPool code,
+.listPool i {
+  overflow: hidden;
+  max-width: 98px;
+  border: 0;
+  border-radius: 4px;
+  text-overflow: ellipsis;
+}
+
+.inspectHint {
+  margin-left: auto;
+  color: #777780;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.inspectHint b {
+  color: #e85b61;
+}
+
+.tableScroller {
+  overflow-x: auto;
+}
+
+.tableScrollHint {
+  display: none;
+}
+
+.modelTable {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.tableHeader {
+  border-bottom: 1px solid var(--border-subtle);
+  background: #111113;
+  color: #65656d;
+  font-size: 0.75rem;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.tableHeader th,
+.tableRow td {
+  padding: 0.6rem 0.85rem;
+  text-align: left;
+}
+
+.tableHeader th {
+  height: 38px;
+  font-weight: 650;
+}
+
+.tableHeader th:first-child {
+  width: 34%;
+}
+
+.tableRow {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.052);
+  color: #aaaab1;
+  cursor: pointer;
+}
+
+.tableRow td {
+  height: 62px;
+  overflow: hidden;
+}
+
+.tableModelButton {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.modelIdentity small,
+.tableMeta {
+  overflow: hidden;
+  color: #73737b;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyState {
+  display: grid;
+  min-height: 210px;
+  place-items: center;
+  align-content: center;
+  gap: 0.3rem;
+  padding: 1.5rem;
+  color: #6d6d75;
+  text-align: center;
+}
+
+.emptyState > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+}
+
+.emptyState strong {
+  color: #d2d2d6;
+  font-size: 0.75rem;
+}
+
+.emptyState small {
+  max-width: 300px;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 1180px) {
+  .modelRow {
+    grid-template-columns: minmax(220px, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .modelRow {
+    min-height: 0;
+    padding: 0.78rem;
+  }
+
+  .listFacts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .listFooter {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .listPool {
+    order: 3;
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modelRow {
+    transition: none;
+  }
+}

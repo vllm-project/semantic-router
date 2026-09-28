@@ -1,0 +1,102 @@
+name: Native Contracts
+
+on:
+  workflow_call:
+    inputs:
+      batch:
+        description: Compatible native contracts with independent verification receipts.
+        type: string
+        required: true
+      native-artifact:
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inference:
+    name: Execute Contracts
+    runs-on: ${{ fromJSON(inputs.batch).runner }}
+    timeout-minutes: ${{ fromJSON(inputs.batch).job_timeout_minutes }}
+    env:
+      BATCH: ${{ inputs.batch }}
+      CI: "true"
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_XET: "1"
+      VLLM_SR_REQUIRE_MODEL_TESTS: "1"
+      MODEL_TEST_PROVIDER: ${{ fromJSON(inputs.batch).runtime }}
+      MODEL_TEST_DEVICE: ${{ fromJSON(inputs.batch).device }}
+      MODEL_TEST_REPORT_DIR: ${{ github.workspace }}/.agent-harness/model-tests/${{ fromJSON(inputs.batch).id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/free-disk-space
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - uses: dtolnay/rust-toolchain@stable
+        if: fromJSON(inputs.batch).runtime != 'openvino' && inputs.native-artifact == ''
+        with:
+          toolchain: "1.90"
+      - uses: actions/cache@v4
+        with:
+          path: models/
+          key: ${{ runner.os }}-${{ fromJSON(inputs.batch).platform_id }}-models-${{ fromJSON(inputs.batch).id }}-${{ hashFiles('src/semantic-router/pkg/config/registry*.go', 'src/semantic-router/pkg/config/canonical_defaults.go', 'src/semantic-router/tools/model-test-assets/*.go', 'tools/models/vela_omni/**', 'tools/ci/prepare_model_test_assets.py', '.dockerignore') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ fromJSON(inputs.batch).platform_id }}-models-${{ fromJSON(inputs.batch).id }}-
+            ${{ runner.os }}-${{ fromJSON(inputs.batch).platform_id }}-models-
+      - uses: actions/cache@v4
+        if: fromJSON(inputs.batch).runtime != 'openvino' && inputs.native-artifact == ''
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            candle-binding/target/
+            ml-binding/target/
+            nlp-binding/target/
+          key: ${{ runner.os }}-${{ fromJSON(inputs.batch).platform_id }}-native-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+      - name: Install native runtime dependencies
+        if: fromJSON(inputs.batch).runtime != 'openvino' && fromJSON(inputs.batch).execution.mode != 'qemu-user'
+        run: |
+          python -m pip install huggingface_hub onnxruntime==1.22.0
+          echo "ORT_DYLIB_PATH=$(python -c 'import onnxruntime,pathlib; print(next((pathlib.Path(onnxruntime.__file__).parent/"capi").glob("libonnxruntime.so.*")))')" >> "$GITHUB_ENV"
+      - name: Install RISC-V QEMU dependencies
+        if: fromJSON(inputs.batch).execution.mode == 'qemu-user'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-riscv64-linux-gnu g++-riscv64-linux-gnu libc6-dev-riscv64-cross pkg-config qemu-user-static
+          python -m pip install huggingface_hub PyYAML==6.0.3
+          rustup target add riscv64gc-unknown-linux-gnu
+      - name: Install OpenVINO dependencies
+        if: fromJSON(inputs.batch).runtime == 'openvino'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential pkg-config
+          python -m pip install -r openvino-binding/requirements-test.txt
+      - uses: ./.github/actions/load-native-artifact
+        if: inputs.native-artifact != ''
+        with:
+          artifact: ${{ inputs.native-artifact }}
+      - name: Execute selected runtime and conformance contracts
+        run: |
+          python tools/ci/run_native_batch.py --batch "$BATCH" \
+            --output "$MODEL_TEST_REPORT_DIR"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-result-${{ fromJSON(inputs.batch).id }}
+          path: .agent-harness/model-tests/${{ fromJSON(inputs.batch).id }}/results/*.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Publish complete worker evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ fromJSON(inputs.batch).id }}
+          path: .agent-harness/model-tests/${{ fromJSON(inputs.batch).id }}/
+          include-hidden-files: true
+          if-no-files-found: error

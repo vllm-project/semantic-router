@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
@@ -95,19 +95,19 @@ func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float6
 
 		logging.Infof("MCP classification confidence (%.4f) below threshold (%.4f), falling back to category: %s",
 			result.Confidence, threshold, fallbackCategory)
-		metrics.RecordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
+		c.recordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
 		return fallbackCategory, float64(result.Confidence), reasoningDecision, nil
 	}
 
 	categoryName, genericCategory := c.mcpCategoryNameForClass(result.Class)
-	metrics.RecordSignalMatch(config.SignalTypeKeyword, genericCategory)
+	c.recordSignalMatch(config.SignalTypeKeyword, genericCategory)
 	logging.Infof("MCP classified as category: %s (mmlu=%s), reasoning_decision: use=%t, confidence=%.3f, reason=%s",
 		genericCategory, categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
 
 	return genericCategory, float64(result.Confidence), reasoningDecision, nil
 }
 
-func (c *Classifier) classifyMCPWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
+func (c *Classifier) classifyMCPWithProbabilities(text string) (tasks.ClassResultWithProbs, error) {
 	ctx := context.Background()
 	if c.Config.TimeoutSeconds > 0 {
 		var cancel context.CancelFunc
@@ -117,7 +117,7 @@ func (c *Classifier) classifyMCPWithProbabilities(text string) (candle_binding.C
 
 	result, err := c.mcpCategoryInference.ClassifyWithProbabilities(ctx, text)
 	if err != nil {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("MCP classification error: %w", err)
+		return tasks.ClassResultWithProbs{}, fmt.Errorf("MCP classification error: %w", err)
 	}
 	return result, nil
 }

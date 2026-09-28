@@ -47,6 +47,13 @@ func parse(url string) (mime string, payload string, ok bool) {
 	return mime, payload, true
 }
 
+// IsAllowedMIME reports whether mime names an allowlisted inline image type.
+// It serves callers that hold decoded image bytes (for example a file read
+// from the router's file store) rather than a data URL.
+func IsAllowedMIME(mime string) bool {
+	return allowedMIME[strings.ToLower(strings.TrimSpace(mime))]
+}
+
 // IsSafeImageDataURL returns true only for inline base64-encoded image data URIs
 // with an allowlisted MIME type (e.g. "data:image/png;base64,..."). HTTP(S) URLs,
 // non-image data URIs, and file paths are rejected to prevent SSRF, local file

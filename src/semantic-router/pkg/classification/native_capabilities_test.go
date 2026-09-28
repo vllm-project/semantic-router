@@ -13,21 +13,37 @@ func TestCurrentNativeBackendCapabilitiesShape(t *testing.T) {
 
 	switch capabilities.Name {
 	case "candle":
-		if !capabilities.UnifiedBatchClassification {
-			t.Fatal("candle backend should advertise unified batch classification")
-		}
-		if !capabilities.LoRABatchClassification {
-			t.Fatal("candle backend should advertise LoRA batch classification")
-		}
-		if !capabilities.MultimodalEmbedding {
-			t.Fatal("candle backend should advertise multimodal embedding support")
-		}
+		assertCandleCapabilities(t, capabilities)
 	case "onnx", "stub":
-		if capabilities.LoRABatchClassification {
-			t.Fatalf("%s backend should not advertise LoRA batch classification", capabilities.Name)
-		}
+		assertLimitedCapabilities(t, capabilities)
 	default:
 		t.Fatalf("unexpected native backend capability name: %s", capabilities.Name)
+	}
+}
+
+func assertCandleCapabilities(t *testing.T, capabilities NativeBackendCapabilities) {
+	t.Helper()
+	if !capabilities.UnifiedBatchClassification {
+		t.Fatal("candle backend should advertise unified batch classification")
+	}
+	if !capabilities.LoRABatchClassification {
+		t.Fatal("candle backend should advertise LoRA batch classification")
+	}
+	if !capabilities.MultimodalEmbedding {
+		t.Fatal("candle backend should advertise multimodal embedding support")
+	}
+	if !capabilities.LocalHallucinationDetection || !capabilities.LocalHallucinationNLI {
+		t.Fatal("candle backend should advertise local hallucination support")
+	}
+}
+
+func assertLimitedCapabilities(t *testing.T, capabilities NativeBackendCapabilities) {
+	t.Helper()
+	if capabilities.LoRABatchClassification {
+		t.Fatalf("%s backend should not advertise LoRA batch classification", capabilities.Name)
+	}
+	if capabilities.LocalHallucinationDetection || capabilities.LocalHallucinationNLI {
+		t.Fatalf("%s backend should not advertise local hallucination support", capabilities.Name)
 	}
 }
 
@@ -39,13 +55,13 @@ func TestUnifiedClassifierRejectsUnsupportedNativeCapabilities(t *testing.T) {
 
 	classifier := &UnifiedClassifier{initialized: true}
 	_, err := classifier.ClassifyBatch([]string{"hello"})
-	if err == nil || !strings.Contains(err.Error(), `native backend "test-backend" does not support unified batch classification`) {
+	if err == nil || !strings.Contains(err.Error(), "real recipe task bindings") {
 		t.Fatalf("expected unsupported unified batch error, got %v", err)
 	}
 
 	classifier = &UnifiedClassifier{initialized: true, useLoRA: true}
 	_, err = classifier.ClassifyBatch([]string{"hello"})
-	if err == nil || !strings.Contains(err.Error(), `native backend "test-backend" does not support LoRA unified batch classification`) {
+	if err == nil || !strings.Contains(err.Error(), "loRA model paths not configured") {
 		t.Fatalf("expected unsupported LoRA batch error, got %v", err)
 	}
 
@@ -59,7 +75,7 @@ func TestUnifiedClassifierRejectsUnsupportedNativeCapabilities(t *testing.T) {
 		testUnifiedSecurityLabels,
 		true,
 	)
-	if err == nil || !strings.Contains(err.Error(), `native backend "test-backend" does not support unified batch classification`) {
+	if err == nil || !strings.Contains(err.Error(), "real recipe task bindings") {
 		t.Fatalf("expected initialize capability error, got %v", err)
 	}
 }

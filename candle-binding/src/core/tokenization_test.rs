@@ -1,6 +1,7 @@
 //! Tests for core tokenization module
 
 use super::tokenization::*;
+use super::tokenization_window::fit_prefix_to_window;
 use candle_core::Device;
 use rayon::prelude::*;
 use rstest::*;
@@ -398,4 +399,40 @@ fn test_unified_tokenizer_thread_safety(unified_tokenizer: UnifiedTokenizer) {
     for result in results {
         assert!(!result.token_ids.is_empty(), "Should tokenize successfully");
     }
+}
+
+#[rstest]
+fn test_fit_prefix_to_window_keeps_suffix() {
+    let tokenizer_path = PathBuf::from(TEST_MODEL_BASE)
+        .join("mom-halugate-detector")
+        .join("tokenizer.json");
+    if !tokenizer_path.exists() {
+        println!("Skipping: tokenizer not found at {:?}", tokenizer_path);
+        return;
+    }
+    let tokenizer = UnifiedTokenizer::from_file(
+        tokenizer_path.to_str().unwrap(),
+        TokenizationStrategy::ModernBERT,
+        Device::Cpu,
+    )
+    .expect("Failed to create UnifiedTokenizer");
+    let max_length = tokenizer.get_config().max_length;
+    let prefix = "The Eiffel Tower was constructed from 1887 to 1889. ".repeat(80);
+    let suffix = " Question: When was it built? [SEP] It was built in 1950.";
+
+    let fitted = fit_prefix_to_window(&tokenizer, &prefix, suffix).expect("fit prefix");
+    assert!(
+        fitted.len() < prefix.len(),
+        "Long prefix should be shortened"
+    );
+    assert!(prefix.starts_with(&fitted), "Prefix head should be kept");
+
+    let combined = format!("{}{}", fitted, suffix);
+    let result = tokenizer.tokenize(&combined).expect("Tokenize combined");
+    assert!(result.token_ids.len() <= max_length);
+    let last_end = result.offsets.iter().map(|(_, end)| *end).max().unwrap();
+    assert_eq!(last_end, combined.len(), "Suffix must survive truncation");
+
+    let short = fit_prefix_to_window(&tokenizer, "short context", suffix).expect("fit short");
+    assert_eq!(short, "short context");
 }

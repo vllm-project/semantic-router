@@ -1,0 +1,21 @@
+{
+  "operation": "request",
+  "base": {
+    "model": "client-model",
+    "messages": [{"role": "user", "content": "hello"}]
+  },
+  "cases": [
+    {"name": "temperature_minimum", "patch": {"temperature": 0}},
+    {"name": "temperature_maximum", "patch": {"temperature": 2}},
+    {"name": "top_p_minimum", "patch": {"top_p": 0}},
+    {"name": "top_p_maximum", "patch": {"top_p": 1}},
+    {"name": "frequency_penalty_minimum", "patch": {"frequency_penalty": -2}},
+    {"name": "frequency_penalty_maximum", "patch": {"frequency_penalty": 2}},
+    {"name": "presence_penalty_minimum", "patch": {"presence_penalty": -2}},
+    {"name": "presence_penalty_maximum", "patch": {"presence_penalty": 2}},
+    {"name": "candidate_minimum", "patch": {"n": 1}},
+    {"name": "candidate_policy_maximum", "patch": {"n": 32}},
+    {"name": "zero_max_completion_tokens", "patch": {"max_completion_tokens": 0}},
+    {"name": "four_stop_sequences", "patch": {"stop": ["one", "two", "three", "four"]}}
+  ]
+}

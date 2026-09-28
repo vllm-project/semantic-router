@@ -24,3 +24,15 @@ func (c *Classifier) TokenCalibrationRatio(category string) (mean, conservative 
 	}
 	return c.tokenCalibrator.GetRatio(category)
 }
+
+// EstimateTokens returns a conservative provider-calibrated token estimate for
+// the category. The bool reports whether enough provider samples were observed.
+func (c *Classifier) EstimateTokens(category string, byteLen int) (int, bool) {
+	if c == nil || c.tokenCalibrator == nil {
+		counter := NewCalibratedTokenCounter(WithConservativeEstimate())
+		tokens, _, calibrated := counter.EstimateWithCategory(category, byteLen)
+		return tokens, calibrated
+	}
+	tokens, _, calibrated := c.tokenCalibrator.EstimateWithCategory(category, byteLen)
+	return tokens, calibrated
+}

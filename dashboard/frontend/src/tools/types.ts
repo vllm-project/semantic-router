@@ -46,7 +46,7 @@ export interface ToolCall {
     name: string
     arguments: string
   }
-  status: 'pending' | 'running' | 'completed' | 'failed'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
 }
 
 /**
@@ -88,7 +88,7 @@ export interface ExecuteAllOptions extends ToolExecutionContext {
  */
 export type ToolExecutor<TArgs = unknown, TResult = unknown> = (
   args: TArgs,
-  context: ToolExecutionContext
+  context: ToolExecutionContext,
 ) => Promise<TResult>
 
 // ========== Tool Registration Types ==========
@@ -141,7 +141,7 @@ export interface RegisteredTool<TArgs = unknown, TResult = unknown> {
 
 // ========== Event Types ==========
 
-export type ToolEventType = 
+export type ToolEventType =
   | 'tool:registered'
   | 'tool:unregistered'
   | 'tool:enabled'

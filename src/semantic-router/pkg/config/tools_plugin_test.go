@@ -230,6 +230,18 @@ dynamic_retrieval:
 		Expect(cfg.Validate()).To(Succeed())
 	})
 
+	It("unmarshals a mode=none tool-history policy", func() {
+		cfgYAML := `
+enabled: true
+mode: none
+strip_tool_history: true
+`
+		cfg := &ToolsPluginConfig{}
+		Expect(yaml.Unmarshal([]byte(cfgYAML), cfg)).To(Succeed())
+		Expect(cfg.StripToolHistory).To(BeTrue())
+		Expect(cfg.Validate()).To(Succeed())
+	})
+
 	It("treats an absent dynamic_retrieval block as nil", func() {
 		cfgYAML := `
 enabled: true

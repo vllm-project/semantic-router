@@ -18,7 +18,7 @@ func (c *ComplexityClassifier) classifyRuleWithEmbeddings(
 
 	return ComplexityRuleResult{
 		RuleName:       rule.Name,
-		Difficulty:     classifyComplexityDifficulty(rule.Threshold, fusedSignal),
+		Difficulty:     localComplexityVerdict(c.boundariesFor(rule), fusedSignal),
 		TextHardScore:  textHardScore.Score,
 		TextEasyScore:  textEasyScore.Score,
 		TextMargin:     textSignal,
@@ -28,6 +28,11 @@ func (c *ComplexityClassifier) classifyRuleWithEmbeddings(
 		FusedMargin:    fusedSignal,
 		Confidence:     math.Abs(fusedSignal),
 		SignalSource:   signalSource,
+		// |margin| is a genuine confidence - distance from the undecided
+		// middle - and the decision engine, numeric predicates, projections
+		// and router-learning have always read it. Only score.v1 leaves it
+		// unreported.
+		ConfidenceReported: true,
 	}
 }
 
@@ -70,14 +75,11 @@ func selectComplexitySignal(textSignal float64, imageSignal float64, hasImage bo
 	return textSignal, "text"
 }
 
-func classifyComplexityDifficulty(threshold float32, signal float64) string {
-	if signal > float64(threshold) {
-		return "hard"
-	}
-	if signal < -float64(threshold) {
-		return "easy"
-	}
-	return "medium"
+// localComplexityVerdict classifies a local margin against a rule's resolved
+// boundaries. It delegates to the same comparison the remote score path uses,
+// so a rule cannot mean one thing locally and another remotely.
+func localComplexityVerdict(bounds config.ComplexityBoundaries, signal float64) string {
+	return bounds.Verdict(signal)
 }
 
 func logComplexityRuleResult(

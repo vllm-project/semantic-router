@@ -4,7 +4,7 @@
 
 `gmtrouter` is a personalized selection algorithm that uses a **heterogeneous graph neural network (GNN)** to learn user preferences from multi-turn interactions.
 
-It aligns to `config/algorithm/selection/gmtrouter.yaml`.
+It aligns to `config/fragments/algorithm/selection/gmtrouter.yaml`.
 
 **Paper**: [GMTRouter: Personalized LLM Router over Multi-turn User Interactions](https://arxiv.org/abs/2511.08590)
 

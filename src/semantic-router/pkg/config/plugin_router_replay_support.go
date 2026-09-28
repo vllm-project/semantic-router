@@ -28,13 +28,26 @@ func DefaultRouterReplayPluginConfig() RouterReplayPluginConfig {
 // should apply to a decision after layering global enablement and any
 // per-decision router_replay plugin overrides.
 func (c *RouterConfig) EffectiveRouterReplayConfigForDecision(decisionName string) *RouterReplayPluginConfig {
+	if c == nil {
+		base := DefaultRouterReplayPluginConfig()
+		return &base
+	}
+	return c.EffectiveRouterReplayConfig(c.GetDecisionByName(decisionName))
+}
+
+// EffectiveRouterReplayConfig resolves replay policy from an already scoped
+// decision. Request-time callers should prefer this form because decision names
+// are recipe-local and therefore cannot identify a decision globally.
+func (c *RouterConfig) EffectiveRouterReplayConfig(decision *Decision) *RouterReplayPluginConfig {
+	if c != nil && !c.DataPolicy.ReplayAllowed() {
+		return nil
+	}
 	base := DefaultRouterReplayPluginConfig()
 	if c == nil {
 		return &base
 	}
 	base.Enabled = c.RouterReplay.Enabled
 
-	decision := c.GetDecisionByName(decisionName)
 	if decision == nil {
 		if base.Enabled {
 			return &base

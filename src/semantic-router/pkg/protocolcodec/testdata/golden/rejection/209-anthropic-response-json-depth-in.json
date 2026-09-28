@@ -1,0 +1,14 @@
+{
+  "operation": "response",
+  "limits": {"json_depth": 2},
+  "body": {
+    "id": "msg_depth",
+    "type": "message",
+    "role": "assistant",
+    "model": "provider-model",
+    "content": [{"type": "text", "text": "done"}],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {"input_tokens": 1, "output_tokens": 1}
+  }
+}

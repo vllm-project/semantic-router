@@ -11,7 +11,7 @@ translation:
 
 `rl_driven` 用于在线探索与个性化的选择算法。
 
-对应 `config/algorithm/selection/rl-driven.yaml`。
+对应 `config/fragments/algorithm/selection/rl-driven.yaml`。
 
 ## 主要优势
 

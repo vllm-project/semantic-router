@@ -14,12 +14,14 @@ import (
 func (c *InMemoryCache) Close() error {
 	// Use sync.Once to ensure cleanup happens only once
 	c.closeOnce.Do(func() {
-		// Stop background cleanup goroutine
 		if c.stopCleanup != nil {
 			close(c.stopCleanup)
 		}
 		if c.cleanupTicker != nil {
 			c.cleanupTicker.Stop()
+		}
+		if c.cleanupDone != nil {
+			<-c.cleanupDone
 		}
 
 		c.mu.Lock()
@@ -37,6 +39,7 @@ func (c *InMemoryCache) Close() error {
 
 // backgroundCleanup runs periodic cleanup of expired entries
 func (c *InMemoryCache) backgroundCleanup() {
+	defer close(c.cleanupDone)
 	for {
 		select {
 		case <-c.cleanupTicker.C:
@@ -258,6 +261,7 @@ func (c *InMemoryCache) evictOne() {
 	if len(c.entries) == 0 {
 		return
 	}
+	start := time.Now()
 
 	// Use optimized O(1) eviction
 	victimIdx := c.evictUsingOptimizedPolicy()
@@ -300,7 +304,7 @@ func (c *InMemoryCache) evictOne() {
 	})
 
 	// Record eviction metric
-	metrics.RecordCacheOperation("memory", "evict", "success", 0)
+	metrics.RecordCacheOperation("memory", "evict", "success", time.Since(start).Seconds())
 
 	// Update cache entries count after eviction
 	metrics.UpdateCacheEntries("memory", len(c.entries))

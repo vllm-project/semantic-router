@@ -179,7 +179,7 @@ export function OpenClawWorkerDeployStep({
 
           <div className={styles.successActions}>
             <button type="button" className={styles.btnPrimary} onClick={onSwitchToStatus}>
-              Go to Claw Dashboard
+              Open runtime
             </button>
             {onDone ? (
               <button type="button" className={styles.btnSecondary} onClick={onDone}>

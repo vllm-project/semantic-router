@@ -1,0 +1,23 @@
+id: sarvam
+display_name: Sarvam AI
+description: Sarvam multilingual chat and reasoning models through the first-party API.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.sarvam.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+reasoning_transport: top_level_effort
+auth:
+  strategy: api_key_header
+  header: api-subscription-key
+  prefix: ''
+presentation:
+  logo: monogram
+  monogram: S
+  monochrome: false
+conformance:
+  status: unverified
+models: []

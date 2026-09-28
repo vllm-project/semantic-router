@@ -6,6 +6,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -27,25 +28,22 @@ func hybridHistoryCandidate(name string, similarity float32) tools.ToolSimilarit
 	}
 }
 
-// requestWithABAToolHistory builds a *ChatCompletionNewParams whose messages
-// carry an alternating assistant tool_call history of [toolA, toolB, toolA].
+// requestWithABAToolHistory builds neutral messages carrying an alternating
+// assistant tool-call history of [toolA, toolB, toolA].
 // This is the minimum shape that gives historyTransitionScore a non-zero
 // (toolA -> toolB) edge to observe.
-func requestWithABAToolHistory(toolA, toolB string) *openai.ChatCompletionNewParams {
-	return &openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage("turn 1"),
-			assistantToolCallMessage(toolA),
-			openai.ToolMessage("result", "call-"+toolA),
-			openai.UserMessage("turn 2"),
-			assistantToolCallMessage(toolB),
-			openai.ToolMessage("result", "call-"+toolB),
-			openai.UserMessage("turn 3"),
-			assistantToolCallMessage(toolA),
-			openai.ToolMessage("result", "call-"+toolA),
-			openai.UserMessage("please continue the workflow"),
-		},
+func requestWithABAToolHistory(toolA, toolB string) *llmprotocol.Request {
+	request := &llmprotocol.Request{Model: "entrypoint"}
+	for index, toolName := range []string{toolA, toolB, toolA} {
+		callID := "call-" + toolName + "-" + string(rune('0'+index))
+		request.Messages = append(request.Messages,
+			llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "turn"}}},
+			llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: callID, Name: toolName, Arguments: `{}`}}}},
+			llmprotocol.Message{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: callID, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "result"}}}}}},
+		)
 	}
+	request.Messages = append(request.Messages, llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "please continue the workflow"}}})
+	return request
 }
 
 // TestFindToolsForQueryExt_HybridHistoryPromotesHistoryConsistentTool asserts
@@ -97,9 +95,9 @@ func TestFindToolsForQueryExt_HybridHistoryPromotesHistoryConsistentTool(t *test
 	if len(selected) != 2 {
 		t.Fatalf("expected 2 selected tools, got %d", len(selected))
 	}
-	if selected[0].Function.Name != "tool_b" {
+	if selected[0].Name != "tool_b" {
 		t.Fatalf("hybrid_history must promote history-consistent tool_b above higher-similarity tool_a; got order [%q, %q]",
-			selected[0].Function.Name, selected[1].Function.Name)
+			selected[0].Name, selected[1].Name)
 	}
 }
 
@@ -146,8 +144,8 @@ func TestFindToolsForQueryExt_DefaultStrategyIgnoresToolHistory(t *testing.T) {
 	if len(selected) != 2 {
 		t.Fatalf("expected 2 selected tools, got %d", len(selected))
 	}
-	if selected[0].Function.Name != "tool_a" {
+	if selected[0].Name != "tool_a" {
 		t.Fatalf("default (weighted) strategy must rank by similarity and ignore tool history; got order [%q, %q]",
-			selected[0].Function.Name, selected[1].Function.Name)
+			selected[0].Name, selected[1].Name)
 	}
 }

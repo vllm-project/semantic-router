@@ -27,6 +27,10 @@ type ToolsPluginConfig struct {
 	SemanticSelection *bool    `json:"semantic_selection,omitempty" yaml:"semantic_selection,omitempty"`
 	AllowTools        []string `json:"allow_tools,omitempty" yaml:"allow_tools,omitempty"`
 	BlockTools        []string `json:"block_tools,omitempty" yaml:"block_tools,omitempty"`
+	// StripToolHistory removes provider-bound tool/function call and result
+	// messages after routing has evaluated the original conversation. It does
+	// not change the signal facts used to select the decision.
+	StripToolHistory bool `json:"strip_tool_history,omitempty" yaml:"strip_tool_history,omitempty"`
 	// Strategy names the retriever strategy to use for semantic tool selection.
 	// When empty, EffectiveStrategy returns ToolsStrategyDefault.
 	// The value must match a name registered in the router's tools.Registry.

@@ -1,7 +1,7 @@
 import { Edge } from 'reactflow'
 import { DecisionConfig, ModelRefConfig } from '../types'
 import { LAYOUT_CONFIG } from '../constants'
-import { summarizeRuleNode } from './ruleTree'
+import { collectRuleConditions, summarizeRuleNode } from './ruleTree'
 
 export interface ModelConnection {
   modelRef: ModelRefConfig
@@ -65,6 +65,26 @@ export function getDecisionNodeHeight(decision: DecisionConfig, collapsed: boole
   height += modelCount * 20
 
   return Math.max(height, 140)
+}
+
+export function getDecisionReachability(
+  decision: DecisionConfig,
+  configuredSignals: ReadonlySet<string>,
+): { isFallback: boolean; isUnreachable: boolean; unreachableReason?: string } {
+  const leafConditions = collectRuleConditions(decision.rules)
+  if (leafConditions.length === 0) {
+    return { isFallback: true, isUnreachable: false }
+  }
+  const hasConfiguredCondition = leafConditions.some((condition) =>
+    configuredSignals.has(`${condition.type}:${condition.name}`),
+  )
+  return {
+    isFallback: false,
+    isUnreachable: !hasConfiguredCondition,
+    ...(hasConfiguredCondition
+      ? {}
+      : { unreachableReason: 'Referenced signals not configured' }),
+  }
 }
 
 export function getSignalGroupHeight(signals: { name: string }[], collapsed: boolean): number {

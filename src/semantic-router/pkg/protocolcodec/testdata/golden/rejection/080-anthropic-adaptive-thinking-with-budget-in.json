@@ -1,0 +1,9 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "provider-model",
+    "max_tokens": 2048,
+    "messages": [{"role": "user", "content": "hello"}],
+    "thinking": {"type": "adaptive", "budget_tokens": 1024}
+  }
+}

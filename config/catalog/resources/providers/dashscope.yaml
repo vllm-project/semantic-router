@@ -1,0 +1,51 @@
+id: dashscope
+display_name: DashScope
+description: Qwen models through the compatible endpoint.
+category: model_api
+support_tier: compatible
+default_base_url: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+protocols:
+- openai/chat-completions@1
+- openai/responses@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+- openai/responses@1#create
+- openai/responses@1#list_models
+reasoning_transport: top_level_effort
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:qwen
+  monogram: Q
+  monochrome: false
+  featured: true
+conformance:
+  status: unverified
+models:
+- catalog: qwen/qwen3.7-max
+  relationship: first_party
+  id: qwen3.7-max
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_boolean
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+- catalog: qwen/qwen3.8-max
+  relationship: first_party
+  id: qwen3.8-max
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_transport: top_level_effort_boolean_switch
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model

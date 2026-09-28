@@ -1,0 +1,25 @@
+id: perplexity
+display_name: Perplexity
+description: Search-grounded models and online answers.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.perplexity.ai
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+path_overrides:
+  openai/chat-completions@1#create: /v1/sonar
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:perplexity
+  monogram: P
+  monochrome: false
+conformance:
+  status: unverified
+models: []

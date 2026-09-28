@@ -1,0 +1,66 @@
+{
+  "frames": [
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "role": "assistant"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "failed_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "content": ""
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "failed_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "content": "partial"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "failed_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "error": {
+          "code": "provider_overloaded",
+          "message": "Provider overloaded.",
+          "param": null,
+          "type": "server_error"
+        }
+      }
+    }
+  ]
+}

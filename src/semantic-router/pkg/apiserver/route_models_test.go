@@ -33,6 +33,18 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 			expectedModelResultLength: 5,
 		},
 		{
+			name:   "entrypoint model names are exposed",
+			config: openAIModelsEntrypointTestConfig(),
+			expectedModels: []string{
+				"vllm-sr/auto",
+				"auto",
+				"MoM",
+				"vllm-sr/privacy",
+				"vllm-sr/default-alias",
+			},
+			expectedModelResultLength: 5,
+		},
+		{
 			name:   "direct looper models are exposed when decisions are configured",
 			config: openAIModelsLooperTestConfig(),
 			expectedModels: []string{
@@ -105,6 +117,19 @@ func openAIModelsTestConfig(includeConfiguredModels bool) *config.RouterConfig {
 	}
 }
 
+func openAIModelsEntrypointTestConfig() *config.RouterConfig {
+	return &config.RouterConfig{
+		Recipes: []config.RoutingRecipe{
+			{Name: config.DefaultRecipeName},
+			{Name: "privacy", Description: "privacy profile"},
+		},
+		Entrypoints: []config.EntrypointMapping{
+			{ModelNames: []string{"vllm-sr/privacy"}, Recipe: "privacy"},
+			{ModelNames: []string{"vllm-sr/default-alias"}, Recipe: config.DefaultRecipeName},
+		},
+	}
+}
+
 func openAIModelsLooperTestConfig() *config.RouterConfig {
 	return &config.RouterConfig{
 		Looper: config.LooperConfig{Endpoint: "http://looper"},
@@ -152,6 +177,9 @@ func assertOpenAIModelList(t *testing.T, resp OpenAIModelList, expectedModels []
 		}
 		if model.Created == 0 {
 			t.Fatalf("expected created timestamp to be non-zero")
+		}
+		if model.Routing.Resolution == "" {
+			t.Fatalf("expected %s to declare routing metadata", model.ID)
 		}
 	}
 

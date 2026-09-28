@@ -1,3 +1,5 @@
+//go:build !riscv64
+
 /*
 Copyright 2025 vLLM Semantic Router.
 
@@ -29,28 +31,6 @@ import (
 	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
 
-// ValkeyBackendConfig holds configuration for the Valkey vector store backend.
-type ValkeyBackendConfig struct {
-	// Host is the Valkey server hostname (default "localhost").
-	Host string
-	// Port is the Valkey server port (default 6379).
-	Port int
-	// Password for Valkey authentication (optional).
-	Password string
-	// Database number (default 0).
-	Database int
-	// CollectionPrefix is the prefix for hash keys and index names (default "vsr_vs_").
-	CollectionPrefix string
-	// IndexM is the HNSW M parameter (default 16).
-	IndexM int
-	// IndexEf is the HNSW efConstruction parameter (default 200).
-	IndexEf int
-	// MetricType is the distance metric: "COSINE", "L2", or "IP" (default "COSINE").
-	MetricType string
-	// ConnectTimeout in seconds (default 10).
-	ConnectTimeout int
-}
-
 // ValkeyBackend implements VectorStoreBackend using Valkey with the valkey-search module.
 // All FT.* commands are issued via CustomCommand since valkey-glide Go client
 // does not yet have native search API bindings (expected in v2.4, Q2 2026).
@@ -60,47 +40,6 @@ type ValkeyBackend struct {
 	indexM           int
 	indexEf          int
 	metricType       string
-}
-
-// valkeyDefaults applies default values to a ValkeyBackendConfig, returning
-// the resolved host, port, prefix, indexM, indexEf, metricType, and timeout.
-// Returns an error if the metric type is unsupported.
-func valkeyDefaults(cfg ValkeyBackendConfig) (string, int, string, int, int, string, int, error) {
-	host := cfg.Host
-	if host == "" {
-		host = "localhost"
-	}
-	port := cfg.Port
-	if port <= 0 {
-		port = 6379
-	}
-	prefix := cfg.CollectionPrefix
-	if prefix == "" {
-		prefix = "vsr_vs_"
-	}
-	indexM := cfg.IndexM
-	if indexM <= 0 {
-		indexM = 16
-	}
-	indexEf := cfg.IndexEf
-	if indexEf <= 0 {
-		indexEf = 200
-	}
-	metricType := strings.ToUpper(cfg.MetricType)
-	if metricType == "" {
-		metricType = "COSINE"
-	}
-	switch metricType {
-	case "COSINE", "L2", "IP":
-		// valid
-	default:
-		return "", 0, "", 0, 0, "", 0, fmt.Errorf("unsupported metric type: %s (supported: COSINE, L2, IP)", metricType)
-	}
-	timeout := cfg.ConnectTimeout
-	if timeout <= 0 {
-		timeout = 10
-	}
-	return host, port, prefix, indexM, indexEf, metricType, timeout, nil
 }
 
 // NewValkeyBackend creates a new Valkey vector store backend.
@@ -152,21 +91,6 @@ func NewValkeyBackend(cfg ValkeyBackendConfig) (*ValkeyBackend, error) {
 		indexEf:          indexEf,
 		metricType:       metricType,
 	}, nil
-}
-
-// indexName returns the FT index name for a vector store collection.
-func (v *ValkeyBackend) indexName(vectorStoreID string) string {
-	return v.collectionPrefix + vectorStoreID + "_idx"
-}
-
-// keyPrefix returns the hash key prefix for a vector store collection.
-func (v *ValkeyBackend) keyPrefix(vectorStoreID string) string {
-	return v.collectionPrefix + vectorStoreID + ":"
-}
-
-// chunkKey returns the full hash key for a chunk within a collection.
-func (v *ValkeyBackend) chunkKey(vectorStoreID string, chunkID string) string {
-	return v.keyPrefix(vectorStoreID) + chunkID
 }
 
 // CreateCollection creates a Valkey FT index with HNSW vector field for the given collection.

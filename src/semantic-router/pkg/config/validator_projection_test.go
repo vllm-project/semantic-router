@@ -6,6 +6,14 @@ import (
 	"testing"
 )
 
+func TestProjectionRejectsEnvelopeAndLabelledClassifierInputs(t *testing.T) {
+	for _, signalType := range []string{SignalTypeMetadata, SignalTypeClassifier} {
+		if isProjectionInputTypeSupported(signalType) {
+			t.Fatalf("projection input type %q should require an explicit runtime accessor", signalType)
+		}
+	}
+}
+
 func TestParseRoutingYAMLBytesRejectsUnknownProjectionDecisionReference(t *testing.T) {
 	yaml := []byte(`
 routing:

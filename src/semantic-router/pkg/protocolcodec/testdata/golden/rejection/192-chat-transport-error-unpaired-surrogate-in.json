@@ -1,0 +1,4 @@
+{
+  "operation": "error",
+  "body_json": "{\"error\":{\"type\":\"server_error\",\"message\":\"\\ud800\"}}"
+}

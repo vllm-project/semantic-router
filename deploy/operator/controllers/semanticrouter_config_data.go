@@ -34,8 +34,12 @@ import (
 )
 
 func (r *SemanticRouterReconciler) reconcileConfigMap(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
-	if err := validateSemanticCacheConfig(sr.Spec.Config.SemanticCache); err != nil {
-		return fmt.Errorf("invalid semantic cache configuration: %w", err)
+	responseCache, err := operatorResponseCacheConfig(sr.Spec.Config)
+	if err != nil {
+		return err
+	}
+	if err := validateSemanticCacheConfig(responseCache); err != nil {
+		return fmt.Errorf("invalid response cache configuration: %w", err)
 	}
 
 	if err := r.resolveSemanticCacheSecrets(ctx, sr); err != nil {

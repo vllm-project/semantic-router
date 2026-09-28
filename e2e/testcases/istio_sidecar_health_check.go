@@ -3,8 +3,10 @@ package testcases
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -46,46 +48,13 @@ func testIstioSidecarHealthCheck(ctx context.Context, client *kubernetes.Clients
 
 	for _, pod := range pods.Items {
 		totalPods++
-		podHasSidecar := false
-		sidecarHealthy := false
-
-		// Check if the pod has an istio-proxy container
-		for _, container := range pod.Spec.Containers {
-			if container.Name == "istio-proxy" {
-				podHasSidecar = true
-				podsWithSidecar++
-
-				// Check if the istio-proxy container is ready
-				for _, status := range pod.Status.ContainerStatuses {
-					if status.Name == "istio-proxy" && status.Ready {
-						sidecarHealthy = true
-						healthySidecars++
-						break
-					}
-				}
-				break
-			}
+		details, err := verifyIstioProxy(pod, opts.Verbose)
+		if err != nil {
+			return err
 		}
-
-		if opts.Verbose {
-			fmt.Printf("[Test] Pod %s: sidecar_injected=%v, sidecar_healthy=%v\n",
-				pod.Name, podHasSidecar, sidecarHealthy)
-		}
-
-		sidecarDetails = append(sidecarDetails, map[string]interface{}{
-			"pod_name":         pod.Name,
-			"sidecar_injected": podHasSidecar,
-			"sidecar_healthy":  sidecarHealthy,
-			"pod_phase":        string(pod.Status.Phase),
-		})
-
-		if !podHasSidecar {
-			return fmt.Errorf("pod %s does not have istio-proxy sidecar injected", pod.Name)
-		}
-
-		if !sidecarHealthy {
-			return fmt.Errorf("pod %s has istio-proxy sidecar but it is not healthy", pod.Name)
-		}
+		podsWithSidecar++
+		healthySidecars++
+		sidecarDetails = append(sidecarDetails, details)
 	}
 
 	// Verify istio-injection label on namespace
@@ -116,4 +85,40 @@ func testIstioSidecarHealthCheck(ctx context.Context, client *kubernetes.Clients
 	}
 
 	return nil
+}
+
+func verifyIstioProxy(pod corev1.Pod, verbose bool) (map[string]interface{}, error) {
+	injected, ready := istioProxyStatus(pod)
+	if verbose {
+		fmt.Printf("[Test] Pod %s: sidecar_injected=%v, sidecar_healthy=%v\n", pod.Name, injected, ready)
+	}
+
+	details := map[string]interface{}{
+		"pod_name":         pod.Name,
+		"sidecar_injected": injected,
+		"sidecar_healthy":  ready,
+		"pod_phase":        string(pod.Status.Phase),
+	}
+	if !injected {
+		return details, fmt.Errorf("pod %s does not have istio-proxy sidecar injected", pod.Name)
+	}
+	if !ready {
+		return details, fmt.Errorf("pod %s has istio-proxy sidecar but it is not healthy", pod.Name)
+	}
+	return details, nil
+}
+
+func istioProxyStatus(pod corev1.Pod) (injected, ready bool) {
+	for _, container := range slices.Concat(pod.Spec.Containers, pod.Spec.InitContainers) {
+		if container.Name != "istio-proxy" {
+			continue
+		}
+		for _, status := range slices.Concat(pod.Status.ContainerStatuses, pod.Status.InitContainerStatuses) {
+			if status.Name == "istio-proxy" {
+				return true, status.Ready
+			}
+		}
+		return true, false
+	}
+	return false, false
 }

@@ -322,7 +322,9 @@ func (f *FileEloStorage) saveToFile(stored *StoredRatings) error {
 	return nil
 }
 
-// StartAutoSave starts a background goroutine that periodically saves dirty ratings
+// StartAutoSave starts a background goroutine that periodically saves dirty ratings.
+// A non-positive interval is defensively replaced with defaultAutoSaveInterval
+// (time.NewTicker panics on a non-positive duration).
 func (f *FileEloStorage) StartAutoSave(interval time.Duration, getAll func() map[string]map[string]*ModelRating) {
 	f.lifecycleMu.Lock()
 	if f.closed || f.autoSaveStarted {
@@ -331,6 +333,11 @@ func (f *FileEloStorage) StartAutoSave(interval time.Duration, getAll func() map
 	}
 	f.autoSaveStarted = true
 	f.lifecycleMu.Unlock()
+
+	if interval <= 0 {
+		logging.Warnf("[EloStorage] Non-positive auto-save interval %s; using default %s", interval, defaultAutoSaveInterval)
+		interval = defaultAutoSaveInterval
+	}
 
 	go func() {
 		defer close(f.doneChan)

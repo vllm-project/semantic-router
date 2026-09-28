@@ -1,0 +1,12 @@
+{
+  "status": "ok",
+  "body": {
+    "messages": [
+      {
+        "content": "Answer concisely.",
+        "role": "system"
+      }
+    ],
+    "model": "routed-model"
+  }
+}

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"mAX_tokens\":0,\"messAges\":[{\"role\":\"user\"}],\"model\":\"0\"}")

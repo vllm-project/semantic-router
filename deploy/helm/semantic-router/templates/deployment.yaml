@@ -4,7 +4,7 @@
 {{- else -}}
 {{- $routerMultiReplica = gt (int .Values.replicaCount) 1 -}}
 {{- end -}}
-{{- $config := (get .Values "config") | default (dict) -}}
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
 {{- $global := (get $config "global") | default (dict) -}}
 {{- $router := (get $global "router") | default (dict) -}}
 {{- $learning := (get $router "learning") | default (dict) -}}
@@ -30,6 +30,12 @@
 {{- end -}}
 {{- if and $rejectMultiReplicaLocalLearningState $routerMultiReplica $localLearningStateEnabled -}}
 {{- fail "multi-replica router deployments cannot use Router Learning local state; disable global.router.learning, use one router replica, or set safetyGuards.rejectMultiReplicaLocalLearningState=false after accepting replica-local learning divergence" -}}
+{{- end }}
+{{- $customModelsMount := false -}}
+{{- range .Values.extraVolumeMounts -}}
+{{- if eq (.mountPath | default "") "/app/models" -}}
+{{- $customModelsMount = true -}}
+{{- end -}}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -93,14 +99,27 @@ spec:
         - containerPort: {{ .Values.service.api.targetPort }}
           name: classify-api
           protocol: TCP
-        {{- if or .Values.env .Values.extraEnv }}
         env:
+          # Persist management API config writes through the Kubernetes API;
+          # the mounted ConfigMap file cannot be replaced in place.
+          - name: VLLM_SR_K8S_CONFIGMAP_NAME
+            value: {{ include "semantic-router.configMapName" . | quote }}
+          - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          # Retain Router API config versions across ConfigMap rollout restarts.
+          - name: VLLM_SR_CONFIG_BACKUP_DIR
+            value: /app/models/.vllm-sr/config-backups
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         {{- with .Values.env }}
           {{- toYaml . | nindent 10 }}
         {{- end }}
         {{- with .Values.extraEnv }}
           {{- toYaml . | nindent 10 }}
-        {{- end }}
         {{- end }}
         {{- with .Values.envFromSecrets }}
         envFrom:
@@ -110,6 +129,8 @@ spec:
           {{- end }}
         {{- end }}
         volumeMounts:
+        - name: runtime-tmp
+          mountPath: /tmp
         - name: config-volume
           mountPath: /app/config/config.yaml
           subPath: config.yaml
@@ -126,14 +147,14 @@ spec:
         {{- with .Values.extraVolumeMounts }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        {{- if .Values.persistence.enabled }}
+        {{- if not $customModelsMount }}
         - name: models-volume
           mountPath: /app/models
         {{- end }}
         {{- if .Values.startupProbe.enabled }}
-        # Startup probe for slow-starting containers (model loading takes ~60s with Gemma)
+        # Startup and readiness require an activated serving generation.
         startupProbe:
-          tcpSocket:
+          grpc:
             port: {{ .Values.service.grpc.targetPort }}
           periodSeconds: {{ .Values.startupProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
@@ -150,7 +171,7 @@ spec:
         {{- end }}
         {{- if .Values.readinessProbe.enabled }}
         readinessProbe:
-          tcpSocket:
+          grpc:
             port: {{ .Values.service.grpc.targetPort }}
           initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
@@ -160,6 +181,8 @@ spec:
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
       volumes:
+      - name: runtime-tmp
+        emptyDir: {}
       - name: config-volume
         configMap:
           name: {{ include "semantic-router.fullname" . }}-config
@@ -168,10 +191,15 @@ spec:
         configMap:
           name: {{ .Values.knowledgeBases.existingConfigMap | quote }}
       {{- end }}
+      {{- if not $customModelsMount }}
       {{- if .Values.persistence.enabled }}
       - name: models-volume
         persistentVolumeClaim:
           claimName: {{ include "semantic-router.pvcName" . }}
+      {{- else }}
+      - name: models-volume
+        emptyDir: {}
+      {{- end }}
       {{- end }}
       {{- with .Values.extraVolumes }}
       {{- toYaml . | nindent 6 }}

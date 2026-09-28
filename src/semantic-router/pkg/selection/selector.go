@@ -27,9 +27,13 @@ package selection
 
 import (
 	"context"
+	"errors"
+	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
 // SelectionMethod defines the type of model selection algorithm
@@ -92,6 +96,10 @@ const (
 	// MethodMultiFactor combines quality/latency/cost/load signals via a
 	// weighted score with optional SLO ceilings. Issue #37.
 	MethodMultiFactor SelectionMethod = "multi_factor"
+
+	// MethodPrompt uses a concrete helper LLM to choose one declared candidate
+	// through a runtime-owned structured output contract.
+	MethodPrompt SelectionMethod = "prompt"
 
 	// MethodSessionAware wraps a base selector with agentic session policy:
 	// it keeps tool loops and hot multi-turn continuations on the current model
@@ -158,6 +166,11 @@ type SelectionContext struct {
 	// DecisionName is the name of the matched decision for category-specific selection
 	DecisionName string
 
+	// RecipeName identifies the isolated routing profile that owns DecisionName.
+	// Selectors are instantiated per recipe; shared learning/lookup components
+	// use both fields as their state namespace.
+	RecipeName config.RecipeName
+
 	// CategoryName is the detected domain category (e.g., "physics", "math")
 	// Used by ML selectors to create feature vectors with category one-hot encoding
 	CategoryName string
@@ -168,6 +181,14 @@ type SelectionContext struct {
 	// CandidateIterations carries bounded DSL FOR ... IN metadata for selectors
 	// that opt into session-aware candidate policy evaluation.
 	CandidateIterations []config.CandidateIterationConfig
+
+	// InputTokens is the request-context token estimate available before model
+	// selection. ExpectedOutputTokens is the caller's output budget when present.
+	// Cost-aware selectors use both to compare request-shaped estimated cost.
+	InputTokens          int
+	ExpectedOutputTokens int
+	// CandidateDemands contains provider-rendered budgets for automatic output.
+	CandidateDemands map[string]CandidateDemand
 
 	// CostWeight indicates how much to weight cost in selection (0.0-1.0)
 	// Higher values prefer cheaper models
@@ -185,6 +206,11 @@ type SelectionContext struct {
 	// Used to track within-session model performance
 	SessionID string
 
+	// SessionStateKey is the canonical recipe-scoped router memory key. It is
+	// separate from SessionID so client identity text cannot be mistaken for an
+	// encoded session/conversation tuple. An empty key uses the raw SessionID.
+	SessionStateKey string
+
 	// AgenticSession carries request-time session facts used by
 	// session_aware selection. The flat SessionID remains the shared
 	// correlation key for selectors that do not need richer session facts.
@@ -200,10 +226,32 @@ type SelectionContext struct {
 	CacheAffinityCtx *CacheAffinityContext
 }
 
+// ScopedRoutingName namespaces recipe-local task-family names for shared
+// lookup-table state while keeping default-recipe keys unscoped.
+func (c *SelectionContext) ScopedRoutingName(localName string) string {
+	if c == nil {
+		return ""
+	}
+	return config.RoutingNamespaceKey(c.RecipeName, localName)
+}
+
+// RoutingScope returns the lookup-table namespace for this recipe. The
+// default recipe keeps unscoped keys.
+func (c *SelectionContext) RoutingScope() string {
+	if c == nil {
+		return ""
+	}
+	return config.RoutingNamespaceScope(c.RecipeName)
+}
+
 // SelectionResult contains the result of a model selection decision
 type SelectionResult struct {
 	// SelectedModel is the name of the selected model
 	SelectedModel string
+
+	// SelectedCandidate preserves the exact winning ModelRef when a model appears
+	// more than once with different candidate-level settings.
+	SelectedCandidate *config.ModelRef
 
 	// LoRAName is the LoRA adapter name to use (if applicable)
 	LoRAName string
@@ -223,8 +271,29 @@ type SelectionResult struct {
 	// Reasoning provides human-readable explanation for the selection
 	Reasoning string
 
-	// AllScores maps each candidate model to its computed score
-	AllScores map[string]float64
+	// EligibleModels is the selector's explicit policy envelope. Nil means the
+	// selector only ranks candidates; a non-nil set contains every model still
+	// allowed after hard filters (or the explicitly configured fallback).
+	// Later learning and provider rerouting must not expand this set.
+	EligibleModels []config.ModelRef
+
+	// CandidateScores is the typed input for composition and policy. AllScores
+	// is its compatibility/diagnostic projection, never a candidate identity.
+	CandidateScores CandidateScores
+	ScoreDirection  ScoreDirection
+	AllScores       map[string]float64
+
+	// MultiFactor records the base objective stages and their eligible survivors.
+	// Later learning/session policy may choose among them; this is not a final
+	// dispatch trace. Weighted objectives omit it.
+	MultiFactor *selectiontrace.MultiFactorObjective
+
+	// Prompt-helper telemetry is populated only by MethodPrompt.
+	HelperModel            string
+	HelperPromptTokens     int64
+	HelperCompletionTokens int64
+	HelperTotalTokens      int64
+	HelperLatencyMs        int64
 
 	// SessionPolicy records the session-aware stay/switch policy trace when
 	// Method is session_aware.
@@ -321,8 +390,44 @@ func (r *Registry) Get(method SelectionMethod) (Selector, bool) {
 	return s, ok
 }
 
-// GlobalRegistry is the default registry for selection methods
-var GlobalRegistry = NewRegistry()
+func (r *Registry) Close() error {
+	if r == nil {
+		return nil
+	}
+
+	r.mu.RLock()
+	closers := make([]io.Closer, 0, len(r.selectors))
+	for _, selector := range r.selectors {
+		if closer, ok := selector.(io.Closer); ok {
+			closers = append(closers, closer)
+		}
+	}
+	r.mu.RUnlock()
+
+	var errs []error
+	for _, closer := range closers {
+		if err := closer.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+var globalRegistry atomic.Pointer[Registry]
+
+func init() {
+	globalRegistry.Store(NewRegistry())
+}
+
+// GetGlobalRegistry returns the process-wide default selection registry.
+func GetGlobalRegistry() *Registry {
+	return globalRegistry.Load()
+}
+
+// SetGlobalRegistry replaces the process-wide default selection registry.
+func SetGlobalRegistry(registry *Registry) {
+	globalRegistry.Store(registry)
+}
 
 // Select uses the specified method to select a model
 func Select(ctx context.Context, method SelectionMethod, selCtx *SelectionContext) (*SelectionResult, error) {
@@ -330,10 +435,11 @@ func Select(ctx context.Context, method SelectionMethod, selCtx *SelectionContex
 		return nil, err
 	}
 
-	selector, ok := GlobalRegistry.Get(method)
+	registry := GetGlobalRegistry()
+	selector, ok := registry.Get(method)
 	if !ok {
 		// Default to static selection when the requested method is not registered.
-		selector, _ = GlobalRegistry.Get(MethodStatic)
+		selector, _ = registry.Get(MethodStatic)
 	}
 	if selector == nil {
 		// Last-resort default: return the first configured candidate.

@@ -8,7 +8,8 @@ spec:
   defaultModel: "qwen-2.5-32b"
   models:
     - name: "qwen-2.5-32b"
-      reasoningFamily: "qwen3"
+      reasoning:
+        family: "qwen3"
       pricing:
         inputTokenPrice: 0.000002    # $2 per 1M - for standard enterprise queries
         outputTokenPrice: 0.000004   # $4 per 1M
@@ -17,7 +18,8 @@ spec:
           description: "Enterprise assistant"
 
     - name: "qwen-2.5-72b"
-      reasoningFamily: "qwen3"
+      reasoning:
+        family: "qwen3"
       pricing:
         inputTokenPrice: 0.000003    # $3 per 1M - for complex enterprise scenarios
         outputTokenPrice: 0.000006   # $6 per 1M

@@ -12,6 +12,7 @@ import (
 
 func (v *Validator) checkConflicts() {
 	v.checkDomainSignalOverlap()
+	v.checkContextSignalBands()
 	v.checkSameSignalTypeGuard()
 	v.checkProjectionPartitions()
 	v.checkProjections()
@@ -379,46 +380,44 @@ func (v *Validator) checkProjectionPartitionImpossibleANDsInRoute(
 	route *RouteDecl,
 	memberToPartition map[string]string,
 ) {
+	// Distributing AND over OR can produce contradictory cross-products even
+	// when the original expression is satisfiable: (A OR B) AND (A OR B) still
+	// accepts A or B. An impossible-route constraint requires every alternative
+	// to contradict a partition; one viable alternative disproves that claim.
 	clauses := positiveConjunctionClauses(route.When)
 	seen := make(map[string]struct{})
-
+	var conflicts []string
 	for _, clause := range clauses {
 		partitionMembers := make(map[string]SignalRefExpr)
+		impossible := false
 		for _, ref := range clause {
 			partitionName, ok := memberToPartition[projectionPartitionMemberKey(ref.SignalType, ref.SignalName)]
 			if !ok {
 				continue
 			}
-
 			if existing, clash := partitionMembers[partitionName]; clash && existing.SignalName != ref.SignalName {
-				pair := []string{
-					projectionPartitionMemberKey(existing.SignalType, existing.SignalName),
-					projectionPartitionMemberKey(ref.SignalType, ref.SignalName),
-				}
+				impossible = true
+				pair := []string{projectionPartitionMemberKey(existing.SignalType, existing.SignalName), projectionPartitionMemberKey(ref.SignalType, ref.SignalName)}
 				sort.Strings(pair)
-				diagKey := route.Name + "|" + partitionName + "|" + strings.Join(pair, "|")
+				diagKey := partitionName + "|" + strings.Join(pair, "|")
 				if _, alreadyReported := seen[diagKey]; alreadyReported {
 					continue
 				}
 				seen[diagKey] = struct{}{}
-
-				v.addDiag(DiagConstraint, route.Pos,
-					fmt.Sprintf(
-						"ROUTE %q: WHEN clause ANDs PROJECTION partition %q members %s(%q) and %s(%q), but that partition declares them mutually exclusive",
-						route.Name,
-						partitionName,
-						existing.SignalType,
-						existing.SignalName,
-						ref.SignalType,
-						ref.SignalName,
-					),
-					nil,
-				)
+				conflicts = append(conflicts, fmt.Sprintf(
+					"ROUTE %q: WHEN clause ANDs PROJECTION partition %q members %s(%q) and %s(%q), but that partition declares them mutually exclusive",
+					route.Name, partitionName, existing.SignalType, existing.SignalName, ref.SignalType, ref.SignalName,
+				))
 				continue
 			}
-
 			partitionMembers[partitionName] = ref
 		}
+		if !impossible {
+			return
+		}
+	}
+	for _, message := range conflicts {
+		v.addDiag(DiagConstraint, route.Pos, message, nil)
 	}
 }
 
@@ -529,12 +528,12 @@ func (v *Validator) checkProjectionScoreInputProjectionRef(context string, pos P
 		return
 	}
 	switch input.ValueSource {
-	case "", "score":
+	case "", config.ProjectionValueSourceScore:
 		if !scoreNames[input.SignalName] {
 			v.addDiag(DiagWarning, pos,
 				fmt.Sprintf("%s: projection input %q references undeclared score", context, input.SignalName), nil)
 		}
-	case "confidence":
+	case config.ProjectionValueSourceConfidence:
 		if !v.isProjectionOutputDefined(input.SignalName) {
 			v.addDiag(DiagWarning, pos,
 				fmt.Sprintf("%s: projection input %q with value_source \"confidence\" references undeclared mapping output", context, input.SignalName), nil)
@@ -569,6 +568,10 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 		v.checkProjectionScoreInputProjectionRef(context, pos, input, scoreNames)
 		return
 	}
+	if strings.EqualFold(input.SignalType, config.ProjectionInputKBMetric) {
+		v.checkProjectionScoreKBMetricInput(context, pos, input)
+		return
+	}
 	if !v.isSignalDefined(input.SignalType, input.SignalName) {
 		v.addDiag(
 			DiagWarning,
@@ -578,7 +581,7 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 		)
 	}
 	switch input.ValueSource {
-	case "", "binary", "confidence", "raw":
+	case "", config.ProjectionValueSourceBinary, config.ProjectionValueSourceConfidence, config.ProjectionValueSourceRaw:
 	default:
 		v.addDiag(
 			DiagConstraint,
@@ -595,30 +598,41 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 	}
 }
 
-func isProjectionInputTypeSupported(signalType string) bool {
-	switch signalType {
-	case config.SignalTypeKeyword,
-		config.SignalTypeEmbedding,
-		config.SignalTypeDomain,
-		config.SignalTypeFactCheck,
-		config.SignalTypeUserFeedback,
-		config.SignalTypeReask,
-		config.SignalTypePreference,
-		config.SignalTypeLanguage,
-		config.SignalTypeContext,
-		config.SignalTypeStructure,
-		config.SignalTypeComplexity,
-		config.SignalTypeModality,
-		config.SignalTypeAuthz,
-		config.SignalTypeJailbreak,
-		config.SignalTypePII,
-		config.SignalTypeKB,
-		config.ProjectionInputKBMetric,
-		config.SignalTypeProjection:
-		return true
-	default:
-		return false
+// checkProjectionScoreKBMetricInput validates the part of a KB metric
+// reference that is owned by routing DSL. The DSL deliberately does not own
+// the shared knowledge-base catalog, so catalog membership and custom metric
+// names are validated after the compiled routing is merged into its base
+// config.
+func (v *Validator) checkProjectionScoreKBMetricInput(context string, pos Position, input *ProjectionScoreInputDecl) {
+	if strings.TrimSpace(input.KB) == "" {
+		v.addDiag(DiagConstraint, pos,
+			fmt.Sprintf("%s: kb_metric inputs require kb", context), nil)
 	}
+	if strings.TrimSpace(input.Metric) == "" {
+		v.addDiag(DiagConstraint, pos,
+			fmt.Sprintf("%s: kb_metric inputs require metric", context), nil)
+	}
+	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
+	case "", config.ProjectionValueSourceScore:
+	default:
+		v.addDiag(
+			DiagConstraint,
+			pos,
+			fmt.Sprintf(
+				"%s: kb_metric input for kb %q has unsupported value_source %q (supported: score)",
+				context,
+				input.KB,
+				input.ValueSource,
+			),
+			nil,
+		)
+	}
+}
+
+func isProjectionInputTypeSupported(signalType string) bool {
+	return config.IsSupportedSignalType(signalType) ||
+		signalType == config.ProjectionInputKBMetric ||
+		signalType == config.SignalTypeProjection
 }
 
 func (v *Validator) checkProjectionMapping(mapping *ProjectionMappingDecl, scoreNames map[string]bool, outputNames map[string]bool) {

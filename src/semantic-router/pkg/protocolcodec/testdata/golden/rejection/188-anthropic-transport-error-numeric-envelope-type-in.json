@@ -1,0 +1,10 @@
+{
+  "operation": "error",
+  "body": {
+    "type": 1,
+    "error": {
+      "type": "api_error",
+      "message": "Provider failed."
+    }
+  }
+}

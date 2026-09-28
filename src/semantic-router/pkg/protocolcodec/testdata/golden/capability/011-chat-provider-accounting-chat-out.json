@@ -1,0 +1,73 @@
+{
+  "status": "ok",
+  "body": {
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+          "content": "done",
+          "role": "assistant"
+        }
+      }
+    ],
+    "created": 100,
+    "id": "chatcmpl_usage_1",
+    "model": "routed-model",
+    "object": "chat.completion",
+    "usage": {
+      "completion_tokens": 7,
+      "completion_tokens_details": {
+        "reasoning_tokens": 4
+      },
+      "prompt_tokens": 10,
+      "prompt_tokens_details": {
+        "cache_write_tokens": 2,
+        "cached_tokens": 3
+      },
+      "total_tokens": 17
+    }
+  },
+  "diagnostics": [
+    {
+      "field": "metadata",
+      "action": "dropped"
+    },
+    {
+      "field": "moderation",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.completion_tokens_details.accepted_prediction_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.completion_tokens_details.audio_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.completion_tokens_details.rejected_prediction_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.completion_tokens_details.text_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.compute_units",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.prompt_tokens_details.audio_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.prompt_tokens_details.image_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.prompt_tokens_details.text_tokens",
+      "action": "dropped"
+    }
+  ]
+}

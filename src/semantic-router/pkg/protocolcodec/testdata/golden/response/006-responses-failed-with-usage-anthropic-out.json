@@ -1,0 +1,7 @@
+{
+  "error": {
+    "message": "failed after generation",
+    "type": "api_error"
+  },
+  "type": "error"
+}

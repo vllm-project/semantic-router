@@ -1,0 +1,237 @@
+{
+  "cases": [
+    {
+      "name": "custom",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 32,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "Use the selected tool.",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": {
+            "type": "auto"
+          },
+          "tools": [
+            {
+              "description": "Look up a value",
+              "input_schema": {
+                "type": "object"
+              },
+              "name": "lookup"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "bash_20250124",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "browser_toolset_20260801",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "code_execution_20250522",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "code_execution_20250825",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "code_execution_20260120",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "code_execution_20260521",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "computer_toolset_20260801",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "memory_20250818",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "text_editor_20250124",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "text_editor_20250429",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "text_editor_20250728",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "tool_search_tool_bm25_20251119",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "tool_search_tool_regex_20251119",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "web_fetch_20250910",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "web_fetch_20260209",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "web_fetch_20260309",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "web_fetch_20260318",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "web_search_20250305",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "web_search_20260209",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "web_search_20260318",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    }
+  ]
+}

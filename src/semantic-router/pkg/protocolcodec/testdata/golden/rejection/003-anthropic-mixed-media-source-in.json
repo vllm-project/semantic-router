@@ -1,0 +1,22 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "source-model",
+    "max_tokens": 64,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "image",
+            "source": {
+              "type": "url",
+              "url": "https://example.com/image.png",
+              "file_id": "file_1"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

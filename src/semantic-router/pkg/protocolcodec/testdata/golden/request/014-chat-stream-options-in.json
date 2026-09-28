@@ -1,0 +1,14 @@
+{
+  "model": "client-model",
+  "messages": [
+    {
+      "role": "user",
+      "content": "stream this"
+    }
+  ],
+  "stream": true,
+  "stream_options": {
+    "include_usage": false,
+    "include_obfuscation": true
+  }
+}

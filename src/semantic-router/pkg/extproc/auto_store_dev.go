@@ -7,14 +7,14 @@ import (
 )
 
 func extractRequestAutoStore(ctx *RequestContext) (bool, bool) {
-	if ctx == nil || ctx.ResponseAPICtx == nil || !ctx.ResponseAPICtx.IsResponseAPIRequest || ctx.ResponseAPICtx.OriginalRequest == nil || ctx.ResponseAPICtx.OriginalRequest.AutoStore == nil {
+	if ctx == nil || ctx.RequestAutoStore == nil {
 		return false, false
 	}
 
 	logging.Infof(
 		"extractAutoStore: Using Response API request auto_store=%v (request_id=%s)",
-		*ctx.ResponseAPICtx.OriginalRequest.AutoStore,
+		*ctx.RequestAutoStore,
 		ctx.RequestID,
 	)
-	return *ctx.ResponseAPICtx.OriginalRequest.AutoStore, true
+	return *ctx.RequestAutoStore, true
 }

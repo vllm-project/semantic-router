@@ -1,3 +1,9 @@
+//go:build !windows && cgo && (amd64 || arm64 || riscv64)
+
+// This suite exercises the native Candle backend's behavioral contract and only
+// runs under the CGO build. The non-CGO stub's fail-closed contract is verified
+// separately in semantic-router_mock_test.go.
+
 package candle_binding
 
 import (
@@ -386,8 +392,6 @@ func TestFindMostSimilar(t *testing.T) {
 
 }
 
-// TestClassifiers tests classification functions - removed basic BERT tests, keeping only working ModernBERT tests
-
 // TestBERTClassifiers tests BERT-based classification functions (not ModernBERT)
 // These models use BERT/LoRA architecture, not ModernBERT, so we use the appropriate Candle BERT classifier functions
 func TestBERTClassifiers(t *testing.T) {
@@ -418,11 +422,6 @@ func TestBERTClassifiers(t *testing.T) {
 		t.Logf("BERT LoRA category classification: Class=%d, Confidence=%.4f", result.Class, result.Confidence)
 	})
 
-	t.Run("BERTPIIClassifier", func(t *testing.T) {
-		// Skip if PII model doesn't exist
-		t.Skip("Skipping PII classifier test - model path may not exist")
-	})
-
 	t.Run("BERTJailbreakClassifier", func(t *testing.T) {
 		// mom-jailbreak-classifier is a BERT model with 2 classes (benign, jailbreak)
 		numClasses := 2
@@ -451,6 +450,55 @@ func TestBERTClassifiers(t *testing.T) {
 		}
 
 		t.Logf("BERT jailbreak classification: Class=%d, Confidence=%.4f", result.Class, result.Confidence)
+	})
+
+	t.Run("BERTJailbreakClassifierWithProbs", func(t *testing.T) {
+		// ClassifyJailbreakTextWithProbs must agree with ClassifyJailbreakText's
+		// top-1 prediction and return a full, normalized distribution.
+		numClasses := 2
+		err := InitJailbreakClassifier(JailbreakClassifierModelPath, numClasses, true)
+		if err != nil {
+			if isModelInitializationError(err) {
+				t.Skipf("Skipping BERT jailbreak with-probs test due to model initialization error: %v", err)
+			}
+			t.Skipf("BERT jailbreak classifier not available: %v", err)
+		}
+
+		top1, err := ClassifyJailbreakText(JailbreakText)
+		if err != nil {
+			t.Fatalf("Failed to classify jailbreak with BERT: %v", err)
+		}
+
+		withProbs, err := ClassifyJailbreakTextWithProbs(JailbreakText)
+		if err != nil {
+			t.Fatalf("Failed to classify jailbreak with probabilities: %v", err)
+		}
+
+		if withProbs.Class != top1.Class {
+			t.Errorf("argmax class mismatch: ClassifyJailbreakText=%d, WithProbs=%d", top1.Class, withProbs.Class)
+		}
+		if withProbs.Confidence != top1.Confidence {
+			t.Errorf("confidence mismatch: ClassifyJailbreakText=%.6f, WithProbs=%.6f", top1.Confidence, withProbs.Confidence)
+		}
+		if withProbs.NumClasses != numClasses || len(withProbs.Probabilities) != numClasses {
+			t.Errorf("expected %d probabilities, got NumClasses=%d len=%d", numClasses, withProbs.NumClasses, len(withProbs.Probabilities))
+		}
+
+		var sum float32
+		for _, p := range withProbs.Probabilities {
+			sum += p
+		}
+		if sum < 0.99 || sum > 1.01 {
+			t.Errorf("probabilities should sum to ~1.0, got %f", sum)
+		}
+		if withProbs.Class >= 0 && withProbs.Class < len(withProbs.Probabilities) {
+			if p := withProbs.Probabilities[withProbs.Class]; p != withProbs.Confidence {
+				t.Errorf("probability at predicted class (%.6f) should equal reported confidence (%.6f)", p, withProbs.Confidence)
+			}
+		}
+
+		t.Logf("BERT jailbreak with-probs classification: Class=%d, Confidence=%.4f, Probabilities=%v",
+			withProbs.Class, withProbs.Confidence, withProbs.Probabilities)
 	})
 }
 
@@ -547,337 +595,6 @@ func TestBertClassifier_ConcurrentClassificationSafety(t *testing.T) {
 	}
 
 	t.Logf("concurrent test OK: goroutines=%d iterations=%d", numGoroutines, iterationsPerGoroutine)
-}
-
-// TestModernBERTPIITokenClassification tests the PII token classification functionality
-// Note: This test is skipped because the ModernBERT PII token classifier model is not available
-func TestModernBERTPIITokenClassification(t *testing.T) {
-	t.Skip("Skipping ModernBERT PII token classifier tests - model not available in current setup")
-
-	// Test data with various PII entities
-	testCases := []struct {
-		name            string
-		text            string
-		expectedTypes   []string // Expected entity types (may be empty if model not available)
-		minEntities     int      // Minimum expected entities
-		maxEntities     int      // Maximum expected entities
-		shouldHaveSpans bool     // Whether entities should have valid spans
-	}{
-		{
-			name:            "EmailAndPhone",
-			text:            "My email is john.doe@example.com and my phone is 555-123-4567",
-			expectedTypes:   []string{"EMAIL", "PHONE"},
-			minEntities:     0, // Allow 0 if model not available
-			maxEntities:     3,
-			shouldHaveSpans: true,
-		},
-		{
-			name:            "PersonAndAddress",
-			text:            "My name is John Smith and I live at 123 Main Street, New York, NY 10001",
-			expectedTypes:   []string{"PERSON", "ADDRESS"},
-			minEntities:     0,
-			maxEntities:     4,
-			shouldHaveSpans: true,
-		},
-		{
-			name:            "SSNAndCreditCard",
-			text:            "My SSN is 123-45-6789 and credit card number is 4532-1234-5678-9012",
-			expectedTypes:   []string{"SSN", "CREDIT_CARD"},
-			minEntities:     0,
-			maxEntities:     3,
-			shouldHaveSpans: true,
-		},
-		{
-			name:            "NoPII",
-			text:            "This is a normal sentence without any personal information",
-			expectedTypes:   []string{},
-			minEntities:     0,
-			maxEntities:     0,
-			shouldHaveSpans: false,
-		},
-		{
-			name:            "EmptyText",
-			text:            "",
-			expectedTypes:   []string{},
-			minEntities:     0,
-			maxEntities:     0,
-			shouldHaveSpans: false,
-		},
-		{
-			name:            "ComplexDocument",
-			text:            "Dear Mr. Anderson, your account john.anderson@email.com has been updated. Contact us at +1-555-123-4567 or visit 123 Main St, New York, NY 10001. DOB: 12/31/1985, SSN: 987-65-4321.",
-			expectedTypes:   []string{"PERSON", "EMAIL", "PHONE", "ADDRESS", "DATE", "SSN"},
-			minEntities:     0,
-			maxEntities:     8,
-			shouldHaveSpans: true,
-		},
-	}
-
-	t.Run("InitTokenClassifier", func(t *testing.T) {
-		err := InitModernBertPIITokenClassifier(PIITokenClassifierModelPath, true)
-		if err != nil {
-			if isModelInitializationError(err) {
-				t.Skipf("Skipping ModernBERT PII token classifier tests due to model initialization error: %v", err)
-			}
-			t.Skipf("ModernBERT PII token classifier not available: %v", err)
-		}
-		t.Log("PII token classifier initialized successfully")
-	})
-
-	// Test each case
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Get config path
-			configPath := PIITokenClassifierModelPath + "/config.json"
-
-			// Perform token classification
-			result, err := ClassifyModernBertPIITokens(tc.text, configPath)
-
-			if tc.text == "" {
-				// Empty text should return error
-				if err == nil {
-					t.Error("Expected error for empty text")
-				}
-				return
-			}
-
-			if err != nil {
-				if isModelInitializationError(err) {
-					t.Skipf("Skipping token classification tests due to model initialization error: %v", err)
-				}
-				t.Skipf("Token classification failed (model may not be available): %v", err)
-			}
-
-			// Validate number of entities
-			numEntities := len(result.Entities)
-			if numEntities < tc.minEntities || numEntities > tc.maxEntities {
-				t.Logf("Warning: Expected %d-%d entities, got %d for text: %s",
-					tc.minEntities, tc.maxEntities, numEntities, tc.text)
-			}
-
-			t.Logf("Found %d entities in: %s", numEntities, tc.text)
-
-			// Validate each entity
-			entityTypes := make(map[string]int)
-			for i, entity := range result.Entities {
-				t.Logf("  Entity %d: %s='%s' at %d-%d (confidence: %.3f)",
-					i+1, entity.EntityType, entity.Text, entity.Start, entity.End, entity.Confidence)
-
-				// Validate entity structure
-				if entity.EntityType == "" {
-					t.Errorf("Entity %d has empty entity type", i)
-				}
-
-				if entity.Text == "" {
-					t.Errorf("Entity %d has empty text", i)
-				}
-
-				if entity.Confidence < 0.0 || entity.Confidence > 1.0 {
-					t.Errorf("Entity %d has invalid confidence: %f", i, entity.Confidence)
-				}
-
-				// Validate spans if required
-				if tc.shouldHaveSpans && tc.text != "" {
-					if entity.Start < 0 || entity.End <= entity.Start || entity.End > len(tc.text) {
-						t.Errorf("Entity %d has invalid span: %d-%d for text length %d",
-							i, entity.Start, entity.End, len(tc.text))
-					} else {
-						// Verify span extraction
-						extractedText := tc.text[entity.Start:entity.End]
-						if extractedText != entity.Text {
-							t.Errorf("Entity %d span mismatch: expected '%s', extracted '%s'",
-								i, entity.Text, extractedText)
-						}
-					}
-				}
-
-				// Count entity types
-				entityTypes[entity.EntityType]++
-			}
-
-			// Log entity type summary
-			if len(entityTypes) > 0 {
-				t.Log("Entity type summary:")
-				for entityType, count := range entityTypes {
-					t.Logf("  - %s: %d", entityType, count)
-				}
-			}
-		})
-	}
-
-	// Test error conditions
-	t.Run("ErrorHandling", func(t *testing.T) {
-		configPath := PIITokenClassifierModelPath + "/config.json"
-
-		// Test with empty text
-		_, err := ClassifyModernBertPIITokens("", configPath)
-		if err == nil {
-			t.Error("Expected error for empty text")
-		} else {
-			t.Logf("Empty text error handled: %v", err)
-		}
-
-		// Test with empty config path
-		_, err = ClassifyModernBertPIITokens("Test text", "")
-		if err == nil {
-			t.Error("Expected error for empty config path")
-		} else {
-			t.Logf("Empty config path error handled: %v", err)
-		}
-
-		// Test with invalid config path
-		_, err = ClassifyModernBertPIITokens("Test text", "/invalid/path/config.json")
-		if err == nil {
-			t.Error("Expected error for invalid config path")
-		} else {
-			t.Logf("Invalid config path error handled: %v", err)
-		}
-	})
-
-	// Test performance with longer text
-	t.Run("PerformanceTest", func(t *testing.T) {
-		longText := `
-		Dear Mr. John Anderson,
-
-		Thank you for your inquiry. Your account number is ACC-123456789.
-		We have updated your contact information:
-		- Email: john.anderson@email.com
-		- Phone: +1-555-123-4567
-		- Address: 456 Oak Street, Los Angeles, CA 90210
-
-		For security purposes, please verify your Social Security Number: 987-65-4321
-		and date of birth: March 15, 1985.
-
-		If you have any questions, please contact our support team at support@company.com
-		or call our toll-free number: 1-800-555-0123.
-
-		Best regards,
-		Customer Service Team
-		`
-
-		configPath := PIITokenClassifierModelPath + "/config.json"
-
-		start := time.Now()
-		result, err := ClassifyModernBertPIITokens(longText, configPath)
-		duration := time.Since(start)
-
-		if err != nil {
-			if isModelInitializationError(err) {
-				t.Skipf("Skipping performance test due to model initialization error: %v", err)
-			}
-			t.Skipf("Performance test skipped (model not available): %v", err)
-		}
-
-		t.Logf("Processed %d characters in %v", len(longText), duration)
-		t.Logf("Found %d entities in longer text", len(result.Entities))
-
-		// Group entities by type
-		entityTypes := make(map[string]int)
-		for _, entity := range result.Entities {
-			entityTypes[entity.EntityType]++
-		}
-
-		if len(entityTypes) > 0 {
-			t.Log("Entity type distribution:")
-			for entityType, count := range entityTypes {
-				t.Logf("  - %s: %d entities", entityType, count)
-			}
-		}
-
-		// Performance threshold (should process reasonably quickly)
-		if duration > 10*time.Second {
-			t.Logf("Warning: Processing took longer than expected: %v", duration)
-		}
-	})
-
-	// Test concurrent access
-	t.Run("ConcurrentAccess", func(t *testing.T) {
-		const numGoroutines = 5
-		const numIterations = 3
-
-		configPath := PIITokenClassifierModelPath + "/config.json"
-		testText := "Contact John Doe at john.doe@example.com or call 555-123-4567"
-
-		var wg sync.WaitGroup
-		errors := make(chan error, numGoroutines*numIterations)
-		results := make(chan int, numGoroutines*numIterations) // Store number of entities found
-
-		for i := 0; i < numGoroutines; i++ {
-			wg.Add(1)
-			go func(id int) {
-				defer wg.Done()
-				for j := 0; j < numIterations; j++ {
-					result, err := ClassifyModernBertPIITokens(testText, configPath)
-					if err != nil {
-						errors <- err
-					} else {
-						results <- len(result.Entities)
-					}
-				}
-			}(i)
-		}
-
-		wg.Wait()
-		close(errors)
-		close(results)
-
-		// Check for errors
-		errorCount := 0
-		for err := range errors {
-			t.Errorf("Concurrent classification error: %v", err)
-			errorCount++
-		}
-
-		// Check results consistency
-		var entityCounts []int
-		for count := range results {
-			entityCounts = append(entityCounts, count)
-		}
-
-		if len(entityCounts) > 0 && errorCount == 0 {
-			t.Logf("Concurrent access successful: processed %d requests", len(entityCounts))
-
-			// Check if results are consistent (they should be for same input)
-			firstCount := entityCounts[0]
-			for i, count := range entityCounts {
-				if count != firstCount {
-					t.Logf("Warning: Inconsistent results - request %d found %d entities vs %d",
-						i, count, firstCount)
-				}
-			}
-		} else if errorCount > 0 {
-			t.Skipf("Concurrent test skipped due to %d errors (model may not be available)", errorCount)
-		}
-	})
-
-	// Comparison with sequence classification
-	t.Run("CompareWithSequenceClassification", func(t *testing.T) {
-		testText := "My email is john.doe@example.com and my phone is 555-123-4567"
-		configPath := PIITokenClassifierModelPath + "/config.json"
-
-		// Try sequence classification (may not be initialized)
-		seqResult, seqErr := ClassifyModernBertPIIText(testText)
-
-		// Token classification
-		tokenResult, tokenErr := ClassifyModernBertPIITokens(testText, configPath)
-
-		if seqErr == nil && tokenErr == nil {
-			t.Logf("Sequence classification: Class %d (confidence: %.3f)",
-				seqResult.Class, seqResult.Confidence)
-			t.Logf("Token classification: %d entities detected", len(tokenResult.Entities))
-
-			for _, entity := range tokenResult.Entities {
-				t.Logf("  - %s: '%s' (%.3f)", entity.EntityType, entity.Text, entity.Confidence)
-			}
-		} else if tokenErr == nil {
-			t.Logf("Token classification successful: %d entities", len(tokenResult.Entities))
-			if seqErr != nil {
-				t.Logf("Sequence classification not available: %v", seqErr)
-			}
-		} else {
-			t.Skipf("Both classification methods failed - models not available")
-		}
-	})
 }
 
 // TestUtilityFunctions tests utility functions
@@ -1854,6 +1571,10 @@ func TestEmbeddingConsistency(t *testing.T) {
 		// Check that embeddings are identical (or very close)
 		maxDiff := 0.0
 		for i := range embedding1 {
+			if math.IsNaN(float64(embedding1[i])) || math.IsInf(float64(embedding1[i]), 0) ||
+				math.IsNaN(float64(embedding2[i])) || math.IsInf(float64(embedding2[i]), 0) {
+				t.Fatalf("Invalid embedding value at index %d: %f, %f", i, embedding1[i], embedding2[i])
+			}
 			diff := math.Abs(float64(embedding1[i] - embedding2[i]))
 			if diff > maxDiff {
 				maxDiff = diff
@@ -1867,8 +1588,8 @@ func TestEmbeddingConsistency(t *testing.T) {
 		}
 	})
 
-	t.Run("DifferentDimensionsSharePrefix", func(t *testing.T) {
-		// Test that Matryoshka embeddings are prefixes of full embeddings
+	t.Run("DifferentDimensionsShareNormalizedPrefix", func(t *testing.T) {
+		// Matryoshka truncation preserves the prefix direction and restores unit norm.
 		full768, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 768)
 		if err != nil {
 			t.Fatalf("Failed to get 768-dim embedding: %v", err)
@@ -1879,19 +1600,49 @@ func TestEmbeddingConsistency(t *testing.T) {
 			t.Fatalf("Failed to get 256-dim embedding: %v", err)
 		}
 
-		// Check that first 256 values match
+		for _, embedding := range []struct {
+			values    []float32
+			dimension int
+		}{
+			{full768, 768},
+			{mat256, 256},
+		} {
+			if len(embedding.values) != embedding.dimension {
+				t.Fatalf("Expected %d-dim embedding, got %d", embedding.dimension, len(embedding.values))
+			}
+			normSquared := 0.0
+			for i, value := range embedding.values {
+				if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+					t.Fatalf("Invalid %d-dim embedding value at index %d: %f", embedding.dimension, i, value)
+				}
+				normSquared += float64(value) * float64(value)
+			}
+			if norm := math.Sqrt(normSquared); math.Abs(norm-1) > TestEpsilon {
+				t.Fatalf("Expected unit-norm %d-dim embedding, got norm %e", embedding.dimension, norm)
+			}
+		}
+
+		prefixNormSquared := 0.0
+		for _, value := range full768[:len(mat256)] {
+			prefixNormSquared += float64(value) * float64(value)
+		}
+		prefixNorm := math.Sqrt(prefixNormSquared)
+		if prefixNorm <= 0 || math.IsNaN(prefixNorm) || math.IsInf(prefixNorm, 0) {
+			t.Fatalf("Cannot normalize embedding prefix with norm %e", prefixNorm)
+		}
+
 		maxDiff := 0.0
-		for i := 0; i < 256; i++ {
-			diff := math.Abs(float64(full768[i] - mat256[i]))
+		for i, value := range mat256 {
+			diff := math.Abs(float64(full768[i])/prefixNorm - float64(value))
 			if diff > maxDiff {
 				maxDiff = diff
 			}
 		}
 
 		if maxDiff > TestEpsilon {
-			t.Errorf("Matryoshka prefix differs from full embedding: max diff = %e", maxDiff)
+			t.Errorf("Matryoshka embedding differs from normalized prefix: max diff = %e", maxDiff)
 		} else {
-			t.Logf("Matryoshka 256 is a valid prefix of full 768 (max diff: %e)", maxDiff)
+			t.Logf("Matryoshka 256 matches normalized prefix of 768 (max diff: %e)", maxDiff)
 		}
 	})
 }
@@ -3366,6 +3117,54 @@ func TestDebertaComparison(t *testing.T) {
 	}
 }
 
+// TestModernBertJailbreakClassifierWithProbs verifies that
+// ClassifyModernBertJailbreakTextWithProbs agrees with
+// ClassifyModernBertJailbreakText's top-1 prediction and returns a full,
+// normalized distribution.
+func TestModernBertJailbreakClassifierWithProbs(t *testing.T) {
+	numClasses := 2
+	err := InitModernBertJailbreakClassifier(JailbreakClassifierModelPath, true)
+	if err != nil {
+		if isModelInitializationError(err) {
+			t.Skipf("Skipping ModernBERT jailbreak with-probs test due to model initialization error: %v", err)
+		}
+		t.Skipf("ModernBERT jailbreak classifier not available: %v", err)
+	}
+
+	top1, err := ClassifyModernBertJailbreakText(JailbreakText)
+	if err != nil {
+		t.Fatalf("Failed to classify jailbreak with ModernBERT: %v", err)
+	}
+
+	withProbs, err := ClassifyModernBertJailbreakTextWithProbs(JailbreakText)
+	if err != nil {
+		t.Fatalf("Failed to classify jailbreak with probabilities using ModernBERT: %v", err)
+	}
+
+	if withProbs.Class != top1.Class {
+		t.Errorf("argmax class mismatch: ClassifyModernBertJailbreakText=%d, WithProbs=%d", top1.Class, withProbs.Class)
+	}
+	if withProbs.Confidence != top1.Confidence {
+		t.Errorf("confidence mismatch: ClassifyModernBertJailbreakText=%.6f, WithProbs=%.6f", top1.Confidence, withProbs.Confidence)
+	}
+	if len(withProbs.Probabilities) != numClasses {
+		t.Errorf("expected %d probabilities, got %d", numClasses, len(withProbs.Probabilities))
+	}
+
+	var sum float32
+	for _, p := range withProbs.Probabilities {
+		sum += p
+	}
+	if sum < 0.99 || sum > 1.01 {
+		t.Errorf("probabilities should sum to ~1.0, got %f", sum)
+	}
+	if withProbs.Class >= 0 && withProbs.Class < len(withProbs.Probabilities) {
+		if p := withProbs.Probabilities[withProbs.Class]; p != withProbs.Confidence {
+			t.Errorf("probability at predicted class (%.6f) should equal reported confidence (%.6f)", p, withProbs.Confidence)
+		}
+	}
+}
+
 // BenchmarkDebertaJailbreakClassifier benchmarks DeBERTa v3 classification performance
 func BenchmarkDebertaJailbreakClassifier(b *testing.B) {
 	err := InitDebertaJailbreakClassifier(DebertaJailbreakModelPath, true)
@@ -3948,7 +3747,9 @@ func TestMmBert32KModelConstants(t *testing.T) {
 //   - 1Cute-doggy.jpg      : CC0 1.0 Universal (author: X posid)
 //   - 1908_Ford_Model_T.jpg: Public Domain (published 1908, pre-1930)
 const (
-	wikiCatURL = "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Tuxedo_kitten.jpg/512px-Tuxedo_kitten.jpg"
+	// Direct (non-thumbnail) URL: the 512px thumbnail rendition of this file
+	// started returning HTTP 400 from Wikimedia's thumbor service.
+	wikiCatURL = "https://upload.wikimedia.org/wikipedia/commons/6/6f/Tuxedo_kitten.jpg"
 	wikiDogURL = "https://upload.wikimedia.org/wikipedia/commons/a/a7/1Cute-doggy.jpg"
 	wikiCarURL = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/1908_Ford_Model_T.jpg/960px-1908_Ford_Model_T.jpg"
 )
@@ -3957,10 +3758,20 @@ func getMultiModalModelPath() string {
 	return os.Getenv("MULTIMODAL_MODEL_PATH")
 }
 
+// wikimediaUserAgent identifies these tests per Wikimedia's User-Agent policy
+// (https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy).
+// Wikimedia returns HTTP 403 for default library User-Agent strings.
+const wikimediaUserAgent = "semantic-router-tests/1.0 (https://github.com/vllm-project/semantic-router)"
+
 func downloadImageBytes(t *testing.T, url string) []byte {
 	t.Helper()
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("Failed to build request for %s: %v", url, err)
+	}
+	req.Header.Set("User-Agent", wikimediaUserAgent)
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("Failed to download %s: %v", url, err)
 	}
@@ -4420,6 +4231,27 @@ func TestMultiModalCrossModalRetrieval(t *testing.T) {
 
 // TestMultiModalInputValidation tests error handling for invalid inputs
 func TestMultiModalInputValidation(t *testing.T) {
+	// Run against a verified-working model (the TestMultiModalEmbeddingInit
+	// init-then-probe pattern) so the rejections below are attributable to
+	// the pure-Go validation layer rather than a missing or broken model:
+	// if a validation check regressed, the call falls through to a working
+	// encode instead of passing vacuously because the model is not loaded.
+	// Also removes the dependence on TestMultiModalEmbeddingInit running
+	// first in source order.
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH environment variable not set")
+	}
+	if err := InitMultiModalEmbeddingModel(modelPath, true); err != nil {
+		// Init may error if the model is already initialized; probe an
+		// encode to distinguish that from a genuinely broken model path,
+		// which must fail the test rather than let the negative subtests
+		// below pass vacuously.
+		if _, probeErr := MultiModalEncodeText("probe", 0); probeErr != nil {
+			t.Fatalf("multi-modal model not functional: %v", err)
+		}
+	}
+
 	t.Run("EmptyText", func(t *testing.T) {
 		_, err := MultiModalEncodeText("", 0)
 		if err == nil {
@@ -4686,4 +4518,27 @@ func TestMmBert32KAllClassifiersLongPrompt(t *testing.T) {
 	}
 	t.Run("modality", func(t *testing.T) { runModalityLongPrompt(t, longText) })
 	t.Run("pii_tokens", func(t *testing.T) { runPIILongPrompt(t, longText) })
+}
+
+// TestSupportsBatchedEmbedding verifies that only qwen3 reports batched support;
+// all other model types (including the default mmbert) use the single-text path.
+func TestSupportsBatchedEmbedding(t *testing.T) {
+	cases := []struct {
+		modelType string
+		want      bool
+	}{
+		{"qwen3", true},
+		{"Qwen3", true},
+		{"  qwen3  ", true},
+		{"mmbert", false},
+		{"gemma", false},
+		{"bert", false},
+		{"modernbert", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := SupportsBatchedEmbedding(tc.modelType); got != tc.want {
+			t.Errorf("SupportsBatchedEmbedding(%q) = %v, want %v", tc.modelType, got, tc.want)
+		}
+	}
 }

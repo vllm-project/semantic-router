@@ -64,12 +64,20 @@ const scopeNamespaceRepeat = 3
 // ScopeQueryToUser adds a deterministic user namespace to the cache query.
 // If userID is empty, the original query is returned unchanged for backward compatibility.
 func ScopeQueryToUser(query string, userID string) string {
-	normalizedUserID := strings.TrimSpace(userID)
-	if normalizedUserID == "" || query == "" {
+	return ScopeQueryToNamespace(query, strings.TrimSpace(userID))
+}
+
+// ScopeQueryToNamespace adds a deterministic, hard cache namespace while
+// preserving semantic similarity within that namespace. Callers may compose
+// recipe and user identity into namespaceID; backends compare only its HMAC,
+// so raw tenant or profile names never enter storage.
+func ScopeQueryToNamespace(query string, namespaceID string) string {
+	normalizedNamespace := strings.TrimSpace(namespaceID)
+	if normalizedNamespace == "" || query == "" {
 		return query
 	}
 
-	namespace := userScopeNamespace(normalizedUserID)
+	namespace := userScopeNamespace(normalizedNamespace)
 	tokens := make([]string, scopeNamespaceRepeat)
 	for i := range tokens {
 		tokens[i] = namespace
@@ -97,6 +105,19 @@ func CacheScopeNamespaceOf(query string) string {
 		return rest[:i]
 	}
 	return rest
+}
+
+// UserScopeNamespace returns the opaque hard-partition token for a trusted user ID.
+func UserScopeNamespace(userID string) string {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return ""
+	}
+	return userScopeNamespace(userID)
+}
+
+func UserScopeSecretConfigured() bool {
+	return strings.TrimSpace(os.Getenv("USER_SCOPE_NAMESPACE_SECRET")) != ""
 }
 
 // SameCacheScope reports whether two queries belong to the same user scope.
@@ -157,23 +178,4 @@ func normalizeEmbeddingModel(model string) string {
 		return defaultEmbeddingModel
 	}
 	return normalized
-}
-
-func semanticCacheEmbeddingDimension(configured int, embeddingModel string) int {
-	if configured > 0 {
-		return configured
-	}
-
-	switch normalizeEmbeddingModel(embeddingModel) {
-	case "qwen3":
-		return 1024
-	case "gemma":
-		return 768
-	case "mmbert":
-		return 768
-	case "multimodal":
-		return 384
-	default:
-		return 384
-	}
 }

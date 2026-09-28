@@ -6,17 +6,19 @@ package classification
 // Build with: go build -tags=onnx
 
 /*
-#cgo LDFLAGS: -L../../../../../onnx-binding/target/release -lonnx_semantic_router
+#cgo LDFLAGS: -L../../../../onnx-binding/target/release -lonnx_semantic_router
 */
 import "C"
 
 var nativeBackendCapabilities = NativeBackendCapabilities{
-	Name:                       "onnx",
-	UnifiedBatchClassification: false,
-	LoRABatchClassification:    false,
-	BatchedEmbedding:           true,
-	MultimodalEmbedding:        false,
-	ModalityRouting:            false,
-	MLPSelector:                false,
-	ExplicitReset:              false,
+	Name:                        "onnx",
+	UnifiedBatchClassification:  false,
+	LoRABatchClassification:     false,
+	BatchedEmbedding:            true,
+	MultimodalEmbedding:         false,
+	ModalityRouting:             false,
+	MLPSelector:                 false,
+	LocalHallucinationDetection: false,
+	LocalHallucinationNLI:       false,
+	ExplicitReset:               false,
 }

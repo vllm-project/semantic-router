@@ -1,0 +1,231 @@
+{
+  "frames": [
+    {
+      "event": "response.created",
+      "data": {
+        "response": {
+          "created_at": 0,
+          "error": null,
+          "id": "response_parallel_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "public-model",
+          "object": "response",
+          "output": [],
+          "parallel_tool_calls": true,
+          "status": "in_progress",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null
+        },
+        "sequence_number": 0,
+        "type": "response.created"
+      }
+    },
+    {
+      "event": "response.in_progress",
+      "data": {
+        "response": {
+          "created_at": 0,
+          "error": null,
+          "id": "response_parallel_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "public-model",
+          "object": "response",
+          "output": [],
+          "parallel_tool_calls": true,
+          "status": "in_progress",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null
+        },
+        "sequence_number": 1,
+        "type": "response.in_progress"
+      }
+    },
+    {
+      "event": "response.output_item.added",
+      "data": {
+        "item": {
+          "arguments": "",
+          "call_id": "call_weather",
+          "id": "item_weather",
+          "name": "lookup_weather",
+          "status": "in_progress",
+          "type": "function_call"
+        },
+        "output_index": 0,
+        "sequence_number": 2,
+        "type": "response.output_item.added"
+      }
+    },
+    {
+      "event": "response.output_item.added",
+      "data": {
+        "item": {
+          "arguments": "",
+          "call_id": "call_time",
+          "id": "item_time",
+          "name": "lookup_time",
+          "status": "in_progress",
+          "type": "function_call"
+        },
+        "output_index": 1,
+        "sequence_number": 3,
+        "type": "response.output_item.added"
+      }
+    },
+    {
+      "event": "response.function_call_arguments.delta",
+      "data": {
+        "delta": "{\"city\":",
+        "item_id": "item_weather",
+        "output_index": 0,
+        "sequence_number": 4,
+        "type": "response.function_call_arguments.delta"
+      }
+    },
+    {
+      "event": "response.function_call_arguments.delta",
+      "data": {
+        "delta": "{\"zone\":",
+        "item_id": "item_time",
+        "output_index": 1,
+        "sequence_number": 5,
+        "type": "response.function_call_arguments.delta"
+      }
+    },
+    {
+      "event": "response.function_call_arguments.delta",
+      "data": {
+        "delta": "\"UTC\"}",
+        "item_id": "item_time",
+        "output_index": 1,
+        "sequence_number": 6,
+        "type": "response.function_call_arguments.delta"
+      }
+    },
+    {
+      "event": "response.function_call_arguments.delta",
+      "data": {
+        "delta": "\"Paris\"}",
+        "item_id": "item_weather",
+        "output_index": 0,
+        "sequence_number": 7,
+        "type": "response.function_call_arguments.delta"
+      }
+    },
+    {
+      "event": "response.function_call_arguments.done",
+      "data": {
+        "arguments": "{\"zone\":\"UTC\"}",
+        "item_id": "item_time",
+        "name": "lookup_time",
+        "output_index": 1,
+        "sequence_number": 8,
+        "type": "response.function_call_arguments.done"
+      }
+    },
+    {
+      "event": "response.output_item.done",
+      "data": {
+        "item": {
+          "arguments": "{\"zone\":\"UTC\"}",
+          "call_id": "call_time",
+          "id": "item_time",
+          "name": "lookup_time",
+          "status": "completed",
+          "type": "function_call"
+        },
+        "output_index": 1,
+        "sequence_number": 9,
+        "type": "response.output_item.done"
+      }
+    },
+    {
+      "event": "response.function_call_arguments.done",
+      "data": {
+        "arguments": "{\"city\":\"Paris\"}",
+        "item_id": "item_weather",
+        "name": "lookup_weather",
+        "output_index": 0,
+        "sequence_number": 10,
+        "type": "response.function_call_arguments.done"
+      }
+    },
+    {
+      "event": "response.output_item.done",
+      "data": {
+        "item": {
+          "arguments": "{\"city\":\"Paris\"}",
+          "call_id": "call_weather",
+          "id": "item_weather",
+          "name": "lookup_weather",
+          "status": "completed",
+          "type": "function_call"
+        },
+        "output_index": 0,
+        "sequence_number": 11,
+        "type": "response.output_item.done"
+      }
+    },
+    {
+      "event": "response.completed",
+      "data": {
+        "response": {
+          "created_at": 0,
+          "error": null,
+          "id": "response_parallel_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "public-model",
+          "object": "response",
+          "output": [
+            {
+              "arguments": "{\"city\":\"Paris\"}",
+              "call_id": "call_weather",
+              "id": "item_weather",
+              "name": "lookup_weather",
+              "status": "completed",
+              "type": "function_call"
+            },
+            {
+              "arguments": "{\"zone\":\"UTC\"}",
+              "call_id": "call_time",
+              "id": "item_time",
+              "name": "lookup_time",
+              "status": "completed",
+              "type": "function_call"
+            }
+          ],
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 8,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 6,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 14
+          }
+        },
+        "sequence_number": 12,
+        "type": "response.completed"
+      }
+    }
+  ]
+}

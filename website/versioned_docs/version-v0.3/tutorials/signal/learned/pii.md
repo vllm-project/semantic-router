@@ -2,7 +2,7 @@
 
 ## Overview
 
-`pii` detects sensitive personal data in requests. It maps to `config/signal/pii/` and is declared under `routing.signals.pii`.
+`pii` detects sensitive personal data in requests. It maps to `config/fragments/signal/pii/` and is declared under `routing.signals.pii`.
 
 This family is learned: it uses the router-owned PII detection path configured through `global.model_catalog.system.pii_classifier`.
 
@@ -30,7 +30,7 @@ Use `pii` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/pii/`
+Source fragment family: `config/fragments/signal/pii/`
 
 ```yaml
 routing:

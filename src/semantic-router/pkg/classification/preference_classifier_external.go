@@ -45,17 +45,9 @@ func newExternalPreferenceClassifier(
 		return nil, fmt.Errorf("external model name is required for preference")
 	}
 
-	var client *VLLMClient
-	if externalCfg.AccessKey != "" {
-		client = NewVLLMClientWithAuth(&externalCfg.ModelEndpoint, externalCfg.AccessKey)
-	} else {
-		client = NewVLLMClient(&externalCfg.ModelEndpoint)
-	}
+	client := newVLLMClientFromConfig(externalCfg)
 
-	timeout := 30 * time.Second
-	if externalCfg.TimeoutSeconds > 0 {
-		timeout = time.Duration(externalCfg.TimeoutSeconds) * time.Second
-	}
+	timeout := externalCfg.GetTimeout()
 
 	return &PreferenceClassifier{
 		client:             client,
@@ -91,7 +83,7 @@ func (p *PreferenceClassifier) classifyExternal(conversationJSON string) (*Prefe
 	}
 
 	output := resp.Choices[0].Message.Content
-	logging.Infof("Preference classification response: %s", output)
+	logging.Infof("Preference classification response: %s", logging.ContentDescriptor(output))
 
 	result, err := p.parsePreferenceOutput(output)
 	if err != nil {

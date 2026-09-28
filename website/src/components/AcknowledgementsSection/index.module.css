@@ -14,11 +14,10 @@
   composes: site-section-intro from global;
   position: relative;
   z-index: 1;
-  max-width: none;
 }
 
 .title {
-  composes: site-section-intro__title site-section-intro__title--offset from global;
+  composes: site-section-intro__title from global;
   color: var(--site-text);
 }
 
@@ -61,7 +60,7 @@
 }
 
 .projectCard:hover .projectName {
-  color: var(--site-brand-blue);
+  color: var(--site-hover-text);
 }
 
 .projectCardTop,
@@ -77,15 +76,20 @@
   align-items: center;
   justify-content: center;
   border: 1px solid var(--site-border);
-  background: var(--site-surface-alt);
+  /* Brand artwork with dark wordmarks keeps a light plate in both modes. */
+  background: #f8fafc;
 }
 
 .projectCard[data-project-id='amd'] .projectLogoWrapper {
-  background: #111827;
+  background: var(--site-surface-alt);
 }
 
-.projectCard[data-project-id='pytorch'] .projectLogoWrapper {
-  background: #f8fafc;
+.projectCard[data-project-id='amd'] .projectLogo {
+  filter: invert(1);
+}
+
+:global([data-theme='dark']) .projectCard[data-project-id='amd'] .projectLogo {
+  filter: none;
 }
 
 .projectLogo {

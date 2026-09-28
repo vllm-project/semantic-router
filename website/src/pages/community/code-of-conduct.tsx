@@ -1,6 +1,7 @@
 import React from 'react'
 import Layout from '@theme/Layout'
 import Translate from '@docusaurus/Translate'
+import CommunityLayout from '@site/src/components/community/CommunityLayout'
 import styles from './community-page.module.css'
 
 const CodeOfConduct: React.FC = () => {
@@ -9,15 +10,12 @@ const CodeOfConduct: React.FC = () => {
       title="Code of Conduct"
       description="vLLM Semantic Router Community Code of Conduct"
     >
-      <div className={styles.container}>
-        <header className={styles.header}>
-          <h1><Translate id="codeOfConduct.title">Code of Conduct</Translate></h1>
-          <p className={styles.subtitle}>
-            <Translate id="codeOfConduct.subtitle">Our commitment to fostering an open, welcoming, and inclusive community.</Translate>
-          </p>
-        </header>
-
-        <main className={styles.main}>
+      <CommunityLayout
+        activeKey="code-of-conduct"
+        title={<Translate id="codeOfConduct.title">Code of Conduct</Translate>}
+        description={<Translate id="codeOfConduct.subtitle">Our commitment to fostering an open, welcoming, and inclusive community.</Translate>}
+      >
+        <div className={styles.main}>
           <section className={styles.section}>
             <h2>
               <Translate id="codeOfConduct.pledge.title">Our Pledge</Translate>
@@ -231,8 +229,8 @@ const CodeOfConduct: React.FC = () => {
               </p>
             </div>
           </section>
-        </main>
-      </div>
+        </div>
+      </CommunityLayout>
     </Layout>
   )
 }

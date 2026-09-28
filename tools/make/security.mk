@@ -13,7 +13,7 @@ security-scan: ## Run full AST + regex supply chain security scan
 
 security-scan-diff: ## Scan PR diff for supply chain attacks (AST-based)
 	@echo "=== AST PR Diff Security Scan ==="
-	@BASE=$${AGENT_BASE_REF:-$${GITHUB_BASE_REF:-main}}; \
+	@BASE=$${BASE_REF:-$${GITHUB_BASE_REF:-main}}; \
 	python3 $(AST_SCANNER) diff "$$BASE" --fail-on HIGH
 
 security-scan-ci: ## CI gate: AST scan (for GitHub Actions)

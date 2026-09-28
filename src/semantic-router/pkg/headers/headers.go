@@ -26,8 +26,8 @@ const (
 	// emits on every /v1/messages request belonging to the same chat thread.
 	// The router mirrors this into RequestContext.SessionID with priority
 	// below x-session-id (operator/SDK override) but above metadata.user_id
-	// and the message-fingerprint fallbacks. See docs/sessions.md for the
-	// full priority order.
+	// and the message-fingerprint fallbacks. See the session identification API
+	// documentation for the full priority order.
 	XClaudeCodeSessionID = "x-claude-code-session-id"
 
 	// DisableRouterMemory allows clients to opt-out of router-managed memory injection.
@@ -63,10 +63,19 @@ const (
 	// Example values: "math", "business", "biology", "computer science"
 	VSRSelectedCategory = "x-vsr-selected-category"
 
+	// VSRSelectedRecipe identifies the isolated routing profile selected by the
+	// inbound virtual model. Concrete backend model requests omit this header.
+	VSRSelectedRecipe = "x-vsr-selected-recipe"
+
 	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
 	// This is the final routing decision made by the DecisionEngine.
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
+
+	// VSRAppliedUnknownPolicy lists decisions whose terminal unknown result was
+	// resolved by rules.on_unknown, as comma-separated decision=policy pairs.
+	// Example value: "guarded=no_match,strict=fail_request"
+	VSRAppliedUnknownPolicy = "x-vsr-applied-unknown-policy"
 
 	// VSRSelectedConfidence indicates the confidence score of the selected decision.
 	// Value: decimal between 0.0 and 1.0 (e.g., "0.75")
@@ -84,10 +93,29 @@ const (
 	// Example values: "deepseek-v31", "phi4", "gpt-4"
 	VSRSelectedModel = "x-vsr-selected-model"
 
+	// VSREffectiveInputTokens is the selected backend's rendered input size for
+	// the finalized automatic-output dispatch, including its chat template.
+	VSREffectiveInputTokens = "x-vsr-effective-input-tokens" // #nosec G101 -- public header name, not a credential
+
+	// VSREffectiveMaxOutputTokens is the resolved output token limit sent to the
+	// selected backend for that automatic-output dispatch, including reasoning.
+	VSREffectiveMaxOutputTokens = "x-vsr-effective-max-output-tokens" // #nosec G101 -- public header name, not a credential
+
 	// VSRSelectedAlgorithm indicates the model-selection algorithm used after
 	// the routing decision matched. Example values: "static", "elo", "knn",
 	// "router_dc", "fusion", "remom", "workflows".
 	VSRSelectedAlgorithm = "x-vsr-selected-algorithm"
+
+	// VSRRoutingLatencyMs is the time the router spent choosing the model for
+	// this request, in milliseconds with microsecond precision. Example: "0.412"
+	VSRRoutingLatencyMs = "x-vsr-routing-latency-ms"
+
+	// VSRCost is the response's usage priced with the served model's configured
+	// pricing. Buffered responses only; omitted when the model has no pricing.
+	VSRCost = "x-vsr-cost"
+
+	// VSRCostCurrency is the currency of VSRCost. Example: "USD"
+	VSRCostCurrency = "x-vsr-cost-currency"
 
 	// VSRSessionPhase indicates the Router Learning protection phase.
 	// Example values: "user_turn", "tool_loop", "provider_state"
@@ -110,9 +138,17 @@ const (
 	// Example: "adaptation=sampled_win,protection=switch_allowed"
 	VSRLearningReasons = "x-vsr-learning-reasons"
 
+	// VSRFallbackAttempts indicates the number of candidate attempts during execution fallback.
+	VSRFallbackAttempts = "x-vsr-fallback-attempts"
+
 	// VSRInjectedSystemPrompt indicates whether a system prompt was injected into the request.
 	// Values: "true" or "false"
 	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"
+
+	VSRPromptCacheAction    = "x-vsr-prompt-cache-action"
+	VSRPromptCacheReason    = "x-vsr-prompt-cache-reason"
+	VSRPromptCacheInserted  = "x-vsr-prompt-cache-inserted"
+	VSRPromptCachePreserved = "x-vsr-prompt-cache-preserved"
 
 	// --- v0.4 keystone response-contract headers (issue #2203) ---
 	// These two headers are emitted on every VSR-processed response and form
@@ -137,6 +173,7 @@ const (
 	ResponsePathBlocked         = "blocked"          // rejected by a guardrail (e.g. jailbreak/PII)
 	ResponsePathRateLimited     = "rate_limited"     // rejected by rate limiting
 	ResponsePathError           = "error"            // router-side error response
+	ResponsePathFallback        = "fallback"         // produced by upstream error fallback
 
 	// SchemaVersionValue is the current response-header contract revision
 	// emitted in VSRSchemaVersion. v0.4 is contract revision "2".
@@ -156,6 +193,18 @@ const (
 	VSRRetentionTTLTurns         = "x-vsr-retention-ttl-turns"
 	VSRRetentionKeepCurrentModel = "x-vsr-retention-keep-current-model"
 	VSRRetentionPreferPrefix     = "x-vsr-retention-prefer-prefix"
+
+	// VSRKVTransferStatus reports whether the upstream backend applied cross-model
+	// KV reuse for this response. Emitted by the vLLM KVConnector plugin on the
+	// target pod; consumed by extproc for metrics and registry updates (issue #2976).
+	// Values: KVTransferStatusApplied, KVTransferStatusFallbackReprefill, or
+	// KVTransferStatusUnsupported. Absent ⇒ treat as unsupported (safe default).
+	VSRKVTransferStatus = "x-vsr-kv-transfer-status"
+
+	// KVTransferStatus* are valid values for VSRKVTransferStatus.
+	KVTransferStatusApplied           = "applied"
+	KVTransferStatusFallbackReprefill = "fallback_reprefill"
+	KVTransferStatusUnsupported       = "unsupported"
 
 	// RouterReplayID carries the identifier for a captured replay record.
 	// Value: opaque replay token
@@ -239,6 +288,14 @@ const (
 	// Example: "jailbreak_detected,strict_jailbreak"
 	VSRMatchedJailbreak = "x-vsr-matched-jailbreak"
 
+	// VSRMatchedSafety contains matched content safety rule names.
+	VSRMatchedSafety = "x-vsr-matched-safety"
+
+	// VSRMatchedHallucination contains comma-separated list of matched
+	// hallucination rule names. Written in the response body phase, once the
+	// model's answer has been checked against its grounding context.
+	VSRMatchedHallucination = "x-vsr-matched-hallucination"
+
 	// VSRMatchedPII contains comma-separated list of matched PII rule names.
 	// Example: "pii_strict,pii_moderate"
 	VSRMatchedPII = "x-vsr-matched-pii"
@@ -253,6 +310,11 @@ const (
 	// VSRMatchedEvent contains comma-separated list of matched event signal names.
 	// Example: "critical_payment_event,payment_failed"
 	VSRMatchedEvent = "x-vsr-matched-event"
+
+	// VSRMatchedInputModality contains comma-separated list of matched
+	// structural input-modality signal names.
+	// Example: "image_input,audio_input"
+	VSRMatchedInputModality = "x-vsr-matched-input-modality"
 
 	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
 	// Example: "balance_medium,verification_required"
@@ -330,6 +392,11 @@ const (
 	// Used by the ext_proc when routing requests to MiniMax models.
 	UserMiniMaxKey = "x-user-minimax-key"
 
+	// UserCloudflareWorkersAIKey carries the user's Cloudflare Workors AI API token,
+	// injected by the auth backend. The endpoint is account-scoped, so the account
+	// identifier travels in the operator's base URL and only the token is per user.
+	UserCloudflareWorkersAIKey = "x-user-cloudflare-workers-ai-key"
+
 	// AuthzUserID is the default header for the authenticated user's identity.
 	// Default for Authorino (K8s Secret metadata.name).
 	// Override via authz.identity.user_id_header for other backends:
@@ -346,6 +413,28 @@ const (
 	//   oauth2-proxy:      "x-forwarded-groups"
 	// Used by the authz signal classifier for group-level routing.
 	AuthzUserGroups = "x-authz-user-groups"
+
+	// AuthzTeamID and AuthzTenantID are trusted ext_authz outputs used for
+	// response-cache partitioning. Client-provided values must be stripped by
+	// the gateway before authorization.
+	AuthzTeamID   = "x-authz-team-id"
+	AuthzTenantID = "x-authz-tenant-id"
+)
+
+// Internal Request Authentication
+const (
+	// VSRInternalAuth authenticates in-process request context that must not
+	// be accepted from external callers or forwarded to model backends.
+	VSRInternalAuth = "x-vsr-internal-auth"
+
+	// VSROutcomeSource carries server-attested outcome provenance between a
+	// trusted control plane and the Router management API. External callers
+	// must not be allowed to supply this header through a proxy.
+	VSROutcomeSource = "x-vsr-outcome-source"
+
+	// VSROutcomePrincipal carries an opaque, server-attested identity used to
+	// isolate outcome-ingest rate limits. It is not persisted with the outcome.
+	VSROutcomePrincipal = "x-vsr-outcome-principal"
 )
 
 // Looper Request Headers
@@ -370,6 +459,24 @@ const (
 	VSRFusionDepth = "x-vsr-fusion-depth"
 )
 
+// VSR Cross-Model KV Transfer Request Headers (issue #2976)
+// Injected by the KVTransfer Coordinator on upstream dispatch when a model switch
+// is eligible for cross-model KV reuse. Consumed by the vLLM KVConnector plugin
+// on the target pod.
+const (
+	// VSRKVSourcePod is the gRPC address of the pod holding the source model's KV cache.
+	// Example: "10.0.1.5:8000"
+	VSRKVSourcePod = "x-vsr-kv-source-pod"
+
+	// VSRKVCacheID is the opaque session/cache identifier for the source KV block.
+	// Example: "sess-abc123"
+	VSRKVCacheID = "x-vsr-kv-cache-id"
+
+	// VSRKVMapperID names the published ridge-mapper artifact for the source→target pair.
+	// Example: "qwen3-14b-32b-v1"
+	VSRKVMapperID = "x-vsr-kv-mapper-id"
+)
+
 // Looper Response Headers
 // These headers are added to responses when looper mode is used.
 const (
@@ -388,4 +495,27 @@ const (
 	// VSRLooperAlgorithm indicates the algorithm used by the looper.
 	// Value: "confidence", "ratings", "cost-aware"
 	VSRLooperAlgorithm = "x-vsr-looper-algorithm"
+
+	// VSRLooperLatencyMs indicates the wall-clock latency, in milliseconds,
+	// of the full looper execution (all model calls plus algorithm overhead).
+	// Value: "842" (example)
+	VSRLooperLatencyMs = "x-vsr-looper-latency-ms"
+
+	// VSRLooperPromptTokens indicates the aggregate prompt token count
+	// across all model calls made during looper execution.
+	// Value: "512" (example)
+	//nolint:gosec
+	VSRLooperPromptTokens = "x-vsr-looper-prompt-tokens"
+
+	// VSRLooperCompletionTokens indicates the aggregate completion token
+	// count across all model calls made during looper execution.
+	// Value: "256" (example)
+	//nolint:gosec
+	VSRLooperCompletionTokens = "x-vsr-looper-completion-tokens"
+
+	// VSRLooperTotalTokens indicates the aggregate total token count across
+	// all model calls made during looper execution.
+	// Value: "768" (example)
+	//nolint:gosec
+	VSRLooperTotalTokens = "x-vsr-looper-total-tokens"
 )

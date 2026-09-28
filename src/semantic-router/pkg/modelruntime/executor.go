@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"runtime/debug"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 type TaskStatus string
@@ -100,7 +103,7 @@ func Execute(ctx context.Context, tasks []Task, options Options) (Summary, error
 	defer cancel()
 
 	run := newExecutorRun(states, ready, normalizeParallelism(len(tasks), options.MaxParallelism), cancel, len(tasks), options.OnEvent)
-	if err := run.execute(runCtx, len(tasks)); err != nil {
+	if err := run.execute(ctx, runCtx, len(tasks)); err != nil {
 		return summary, err
 	}
 
@@ -146,9 +149,12 @@ func buildEventEmitter(onEvent func(Event)) func(Event) {
 	return onEvent
 }
 
-func (r *executorRun) execute(ctx context.Context, taskCount int) error {
+func (r *executorRun) execute(parentCtx, taskCtx context.Context, taskCount int) error {
 	for r.finished < taskCount {
-		r.scheduleReady(ctx)
+		if err := parentCtx.Err(); err != nil {
+			return err
+		}
+		r.scheduleReady(taskCtx)
 		done, err := r.handleIdleState()
 		if err != nil {
 			return err
@@ -156,7 +162,12 @@ func (r *executorRun) execute(ctx context.Context, taskCount int) error {
 		if done {
 			return nil
 		}
-		r.handleOutcome(<-r.resultCh)
+		select {
+		case outcome := <-r.resultCh:
+			r.handleOutcome(outcome)
+		case <-parentCtx.Done():
+			return parentCtx.Err()
+		}
 	}
 	return nil
 }
@@ -220,10 +231,24 @@ func (r *executorRun) startTask(ctx context.Context, state *taskState) {
 	})
 
 	go func(task Task) {
-		r.resultCh <- taskOutcome{
-			name: task.Name,
-			err:  task.Run(ctx),
-		}
+		outcome := taskOutcome{name: task.Name}
+		// Initializers call into the Candle CGO bindings and re-run on every
+		// config reload, so an unrecovered panic here aborts a live router —
+		// even for BestEffort tasks, whose failures are meant to stay non-fatal.
+		// The send has to happen on both paths or execute() blocks on resultCh
+		// forever. Same intent as goSafely in pkg/extproc (#1843).
+		defer func() {
+			if rec := recover(); rec != nil {
+				outcome.err = fmt.Errorf("modelruntime: task %s panicked: %v", task.Name, rec)
+				logging.ComponentErrorEvent("modelruntime", "task_panic", map[string]interface{}{
+					"task":  task.Name,
+					"panic": rec,
+					"stack": string(debug.Stack()),
+				})
+			}
+			r.resultCh <- outcome
+		}()
+		outcome.err = task.Run(ctx)
 	}(state.task)
 }
 

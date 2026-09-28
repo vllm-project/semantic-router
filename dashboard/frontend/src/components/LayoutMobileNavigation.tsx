@@ -9,6 +9,12 @@ import {
   type LayoutMenuItem,
 } from './LayoutNavSupport'
 import { preloadDashboardRoute } from '../app/routeLoaders'
+import ProductIcon, { type ProductIconName } from './ProductIcon'
+
+const SECTION_ICONS: Record<LayoutDropdownKey, ProductIconName> = {
+  build: 'mixture',
+  operate: 'status',
+}
 
 interface LayoutMobileNavigationSection {
   key: LayoutDropdownKey
@@ -22,7 +28,6 @@ interface LayoutMobileNavigationProps {
   openSection: LayoutDropdownKey | null
   pathname: string
   sections: LayoutMobileNavigationSection[]
-  onConfigSelect: (item: LayoutMenuItem) => void
   onNavigate: () => void
   onSectionToggle: (section: LayoutDropdownKey) => void
 }
@@ -33,7 +38,6 @@ export default function LayoutMobileNavigation({
   openSection,
   pathname,
   sections,
-  onConfigSelect,
   onNavigate,
   onSectionToggle,
 }: LayoutMobileNavigationProps) {
@@ -88,34 +92,28 @@ export default function LayoutMobileNavigation({
     const active = isLayoutMenuItemActive(item, pathname, isConfigPage, configSection)
     const className = `${styles.mobileNavLink} ${active ? styles.mobileNavLinkActive : ''}`
 
-    if (item.kind === 'config') {
-      return (
-        <button
-          key={key}
-          type="button"
-          className={className}
-          aria-current={active ? 'page' : undefined}
-          data-mobile-nav-control
-          onFocus={() => void preloadDashboardRoute(`/config/${item.configSection}`)}
-          onPointerDown={() => void preloadDashboardRoute(`/config/${item.configSection}`)}
-          onClick={() => onConfigSelect(item)}
-        >
-          {item.label}
-        </button>
-      )
-    }
-
+    const to = item.kind === 'config' ? `/config/${item.configSection}` : item.to
+    const reloadDocument = item.kind === 'route' && item.reloadDocument
+    const target = item.kind === 'route' ? item.target : undefined
     return (
       <NavLink
         key={key}
-        to={item.to}
+        to={to}
+        reloadDocument={reloadDocument}
+        target={target}
+        rel={target === '_blank' ? 'noreferrer' : undefined}
         className={className}
         data-mobile-nav-control
-        onFocus={() => void preloadDashboardRoute(item.to)}
-        onPointerDown={() => void preloadDashboardRoute(item.to)}
+        onFocus={() => {
+          if (!reloadDocument) void preloadDashboardRoute(to)
+        }}
+        onPointerDown={() => {
+          if (!reloadDocument) void preloadDashboardRoute(to)
+        }}
         onClick={onNavigate}
       >
-        {item.label}
+        <ProductIcon name={item.icon} className={styles.mobileNavIcon} />
+        <span>{item.label}</span>
       </NavLink>
     )
   }
@@ -143,7 +141,8 @@ export default function LayoutMobileNavigation({
           onPointerDown={() => void preloadDashboardRoute(link.to)}
           onClick={onNavigate}
         >
-          {link.label}
+          <ProductIcon name={link.icon} className={styles.mobileNavIcon} />
+          <span>{link.label}</span>
         </NavLink>
       ))}
 
@@ -169,12 +168,18 @@ export default function LayoutMobileNavigation({
               onClick={() => onSectionToggle(section.key)}
             >
               <span className={styles.mobileNavSectionLabel}>
-                {section.label}
+                <span className={styles.mobileNavSectionTitle}>
+                  <ProductIcon name={SECTION_ICONS[section.key]} className={styles.mobileNavIcon} />
+                  {section.label}
+                </span>
                 {sectionActive ? (
                   <span className={styles.mobileNavActiveMarker}>Current</span>
                 ) : null}
               </span>
-              <span aria-hidden="true">{expanded ? '−' : '+'}</span>
+              <ProductIcon
+                name={expanded ? 'chevron-down' : 'chevron-right'}
+                className={styles.mobileNavChevron}
+              />
             </button>
 
             {expanded ? (

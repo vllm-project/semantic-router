@@ -13,7 +13,7 @@ export const EMBEDDING_MODELS_STRUCTURED_FIELDS: Record<string, RouterStructured
       'Layer, dimension, preload, and soft-matching controls shared by embedding consumers.',
     schema: object('Embedding Optimization', {
       preload_embeddings: boolean('Preload Embeddings'),
-      target_dimension: number('Target Dimension', { min: 1 }),
+      target_dimension: number('Target Dimension (0 = full model)', { min: 0 }),
       target_layer: number('Target Layer', { min: 0 }),
       enable_soft_matching: boolean('Enable Soft Matching'),
       top_k: number('Top K', { min: 1 }),
@@ -33,6 +33,7 @@ export const EMBEDDING_MODELS_STRUCTURED_FIELDS: Record<string, RouterStructured
       api_key_env: text('API Key Environment Variable', { placeholder: 'OPENAI_API_KEY' }),
       timeout_seconds: number('Timeout Seconds', { min: 0 }),
       max_retries: number('Max Retries', { min: 0 }),
+      max_response_bytes: number('Max Response Bytes', { min: 0 }),
       dimensions: number('Dimensions', { min: 1 }),
     }),
   },

@@ -1,31 +1,17 @@
-const STORAGE_KEY = 'vsr_auth_token'
-const COOKIE_NAME = 'vsr_session'
-const COOKIE_PATH = 'Path=/'
-const COOKIE_SAME_SITE = 'SameSite=Lax'
-const AUTH_QUERY_PARAM = 'authToken'
+// Auth plumbing. The session credential is an HttpOnly cookie (vsr_session) the browser
+// attaches to same-origin requests itself, so nothing here holds or forwards it: the
+// wrapper only attaches the CSRF token to writes and turns a 401 into an app-wide logout.
+// #2465 removed the localStorage copy, the ?authToken= rewriting and four global patches.
+
 const UNAUTHORIZED_EVENT = 'vsr-auth-unauthorized'
 const MAX_AUTH_TOKEN_LENGTH = 8192
 const UNSAFE_AUTH_TOKEN_CHARS = /[\s;]/
+const CSRF_COOKIE_NAME = 'vsr_csrf'
+const CSRF_HEADER_NAME = 'X-CSRF-Token'
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 type WrappedFetch = typeof window.fetch & {
   __vsrAuthWrapped?: boolean
-}
-
-type WrappedWebSocket = typeof window.WebSocket & {
-  __vsrAuthWrapped?: boolean
-}
-
-type WrappedEventSource = typeof window.EventSource & {
-  __vsrAuthWrapped?: boolean
-}
-
-type PatchedIframePrototype = HTMLIFrameElement & {
-  __vsrAuthSrcWrapped?: boolean
-  __vsrAuthSetAttributeWrapped?: boolean
-}
-
-type PatchedWindow = Window & {
-  __vsrAuthWindowOpenWrapped?: boolean
 }
 
 function getRequestUrl(input: RequestInfo | URL): URL | null {
@@ -78,42 +64,30 @@ function isProtectedPath(url: URL | null): boolean {
   return url.pathname.startsWith('/api/') || url.pathname.startsWith('/embedded/')
 }
 
-function withToken(url: URL | null): URL | null {
-  if (!url) {
+// Not HttpOnly, unlike vsr_session: the page has to read it, and it is not a credential on
+// its own. Read fresh every time, because it changes at each login. See #2465.
+function readCSRFToken(): string | null {
+  if (typeof document === 'undefined') {
     return null
   }
 
-  const token = getStoredAuthToken()
-  if (!token || !isProtectedPath(url)) {
-    return url
+  const prefix = `${CSRF_COOKIE_NAME}=`
+  for (const part of document.cookie.split(';')) {
+    const entry = part.trim()
+    if (entry.startsWith(prefix)) {
+      return entry.slice(prefix.length).trim() || null
+    }
   }
-
-  const next = new URL(url.toString())
-  next.searchParams.set(AUTH_QUERY_PARAM, token)
-  return next
+  return null
 }
 
-function toProtectedUrlString(input: string | URL): string {
-  if (typeof window === 'undefined') {
-    return typeof input === 'string' ? input : input.toString()
-  }
-
-  const url = input instanceof URL ? input : new URL(input, window.location.origin)
-  return withToken(url)?.toString() ?? url.toString()
+// init.method wins over a Request's own, matching fetch(request, {method}) semantics.
+function requestMethod(input: RequestInfo | URL, init?: RequestInit): string {
+  const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
+  return method.toUpperCase()
 }
 
-function patchProtectedResourceUrl(value: string): string {
-  if (typeof window === 'undefined') {
-    return value
-  }
-
-  try {
-    return toProtectedUrlString(value)
-  } catch {
-    return value
-  }
-}
-
+// Nothing stores tokens now; AuthContext.login still sanity-checks the login response.
 export function normalizeAuthToken(token: string | null | undefined): string | null {
   if (typeof token !== 'string') {
     return null
@@ -142,78 +116,12 @@ function hasControlCharacter(value: string): boolean {
   return false
 }
 
-export function getStoredAuthToken(): string | null {
-  if (typeof window === 'undefined') {
-    return null
-  }
-
-  const raw = window.localStorage.getItem(STORAGE_KEY)
-  const token = normalizeAuthToken(raw)
-  if (raw !== null && token !== raw) {
-    if (token) {
-      window.localStorage.setItem(STORAGE_KEY, token)
-    } else {
-      window.localStorage.removeItem(STORAGE_KEY)
-      clearSessionCookie()
-    }
-  }
-  return token
-}
-
-export function storeAuthToken(token: string): string | null {
-  if (typeof window === 'undefined') {
-    return null
-  }
-
-  const next = normalizeAuthToken(token)
-  if (!next) {
-    clearStoredAuthToken()
-    return null
-  }
-
-  window.localStorage.setItem(STORAGE_KEY, next)
-  document.cookie = buildSessionCookie(next)
-  return next
-}
-
-export function clearStoredAuthToken(): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  window.localStorage.removeItem(STORAGE_KEY)
-  clearSessionCookie()
-}
-
-function buildSessionCookie(token: string): string {
-  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
-  return `${COOKIE_NAME}=${token}; ${COOKIE_PATH}; ${COOKIE_SAME_SITE}${secure}`
-}
-
-function clearSessionCookie(): void {
-  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
-  document.cookie = `${COOKIE_NAME}=; ${COOKIE_PATH}; ${COOKIE_SAME_SITE}; Max-Age=0${secure}`
-}
-
 export function notifyUnauthorized(): void {
   if (typeof window === 'undefined') {
     return
   }
 
   window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
-}
-
-export function withAuthQuery(path: string): string {
-  if (typeof window === 'undefined') {
-    return path
-  }
-
-  const url = withToken(new URL(path, window.location.origin))
-  if (!url) {
-    return path
-  }
-
-  return `${url.pathname}${url.search}${url.hash}`
 }
 
 export function installAuthenticatedFetch(): void {
@@ -229,19 +137,26 @@ export function installAuthenticatedFetch(): void {
   const originalFetch = window.fetch.bind(window)
   const wrappedFetch: WrappedFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = getRequestUrl(input)
-    const token = getStoredAuthToken()
-    const shouldAttachAuth = Boolean(token) && isProtectedPath(url)
+    const protectedPath = isProtectedPath(url)
     const headers = input instanceof Request ? new Headers(input.headers) : new Headers()
     new Headers(init?.headers).forEach((value, key) => {
       headers.set(key, value)
     })
 
-    if (shouldAttachAuth && token && !headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`)
+    // With no cookie, send anyway and let the server answer 403.
+    if (
+      UNSAFE_METHODS.has(requestMethod(input, init)) &&
+      protectedPath &&
+      !headers.has(CSRF_HEADER_NAME)
+    ) {
+      const csrfToken = readCSRFToken()
+      if (csrfToken) {
+        headers.set(CSRF_HEADER_NAME, csrfToken)
+      }
     }
 
     const response = await originalFetch(input, { ...init, headers })
-    if (shouldAttachAuth && response.status === 401) {
+    if (protectedPath && response.status === 401) {
       notifyUnauthorized()
     }
 
@@ -250,116 +165,6 @@ export function installAuthenticatedFetch(): void {
 
   wrappedFetch.__vsrAuthWrapped = true
   window.fetch = wrappedFetch
-
-  installAuthenticatedBrowserTransports()
 }
 
-function installAuthenticatedBrowserTransports(): void {
-  installAuthenticatedWindowOpen()
-  installAuthenticatedWebSocket()
-  installAuthenticatedEventSource()
-  installAuthenticatedIframe()
-}
-
-function installAuthenticatedWindowOpen(): void {
-  const patchedWindow = window as PatchedWindow
-  if (patchedWindow.__vsrAuthWindowOpenWrapped) {
-    return
-  }
-
-  const originalOpen = window.open.bind(window)
-  window.open = ((url?: string | URL, target?: string, features?: string) => {
-    const nextUrl =
-      typeof url === 'string' || url instanceof URL
-        ? toProtectedUrlString(url)
-        : url
-
-    return originalOpen(nextUrl as string | undefined, target, features)
-  }) as typeof window.open
-
-  patchedWindow.__vsrAuthWindowOpenWrapped = true
-}
-
-function installAuthenticatedWebSocket(): void {
-  if (typeof window.WebSocket !== 'function') {
-    return
-  }
-
-  const CurrentWebSocket = window.WebSocket as WrappedWebSocket
-  if (CurrentWebSocket.__vsrAuthWrapped) {
-    return
-  }
-
-  const OriginalWebSocket = window.WebSocket
-  const WrappedConstructor = function (
-    this: WebSocket,
-    url: string | URL,
-    protocols?: string | string[],
-  ) {
-    const nextUrl = toProtectedUrlString(url)
-    return protocols === undefined
-      ? new OriginalWebSocket(nextUrl)
-      : new OriginalWebSocket(nextUrl, protocols)
-  } as unknown as WrappedWebSocket
-
-  Object.assign(WrappedConstructor, OriginalWebSocket, { __vsrAuthWrapped: true })
-  WrappedConstructor.prototype = OriginalWebSocket.prototype
-  window.WebSocket = WrappedConstructor
-}
-
-function installAuthenticatedEventSource(): void {
-  if (typeof window.EventSource !== 'function') {
-    return
-  }
-
-  const CurrentEventSource = window.EventSource as WrappedEventSource
-  if (CurrentEventSource.__vsrAuthWrapped) {
-    return
-  }
-
-  const OriginalEventSource = window.EventSource
-  const WrappedConstructor = function (
-    this: EventSource,
-    url: string | URL,
-    eventSourceInitDict?: EventSourceInit,
-  ) {
-    return new OriginalEventSource(toProtectedUrlString(url), eventSourceInitDict)
-  } as unknown as WrappedEventSource
-
-  Object.assign(WrappedConstructor, OriginalEventSource, { __vsrAuthWrapped: true })
-  WrappedConstructor.prototype = OriginalEventSource.prototype
-  window.EventSource = WrappedConstructor
-}
-
-function installAuthenticatedIframe(): void {
-  const iframePrototype = window.HTMLIFrameElement?.prototype as PatchedIframePrototype | undefined
-  if (!iframePrototype) {
-    return
-  }
-
-  const srcDescriptor = Object.getOwnPropertyDescriptor(iframePrototype, 'src')
-  if (srcDescriptor?.set && !iframePrototype.__vsrAuthSrcWrapped) {
-    Object.defineProperty(iframePrototype, 'src', {
-      ...srcDescriptor,
-      set(value: string) {
-        srcDescriptor.set?.call(this, patchProtectedResourceUrl(value))
-      },
-    })
-    iframePrototype.__vsrAuthSrcWrapped = true
-  }
-
-  if (!iframePrototype.__vsrAuthSetAttributeWrapped) {
-    const originalSetAttribute = iframePrototype.setAttribute
-    iframePrototype.setAttribute = function (name: string, value: string) {
-      if (name.toLowerCase() === 'src') {
-        originalSetAttribute.call(this, name, patchProtectedResourceUrl(value))
-        return
-      }
-
-      originalSetAttribute.call(this, name, value)
-    }
-    iframePrototype.__vsrAuthSetAttributeWrapped = true
-  }
-}
-
-export { AUTH_QUERY_PARAM, STORAGE_KEY, UNAUTHORIZED_EVENT }
+export { CSRF_COOKIE_NAME, CSRF_HEADER_NAME, UNAUTHORIZED_EVENT }

@@ -11,7 +11,6 @@ import (
 
 	"github.com/openai/openai-go"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -288,7 +287,7 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 			result.Entry.Tool.Function.Name, result.Similarity)
 	}
 
-	logging.Infof("Found %d similar tools for query: %s", len(selected), query)
+	logging.Infof("Found %d similar tools for query: %s", len(selected), logging.ContentDescriptor(query))
 	return selected, nil
 }
 
@@ -296,11 +295,7 @@ func (db *ToolsDatabase) embedText(text string) ([]float32, error) {
 	if db.provider != nil {
 		return db.provider.Embed(context.Background(), text)
 	}
-	output, err := candle_binding.GetEmbeddingWithModelType(text, db.modelType, db.targetDim)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	return nil, fmt.Errorf("tools embedding provider was not prepared")
 }
 
 // GetAllTools returns all tools in the database

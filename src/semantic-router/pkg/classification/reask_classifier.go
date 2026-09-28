@@ -51,7 +51,7 @@ func (c *ReaskClassifier) Classify(currentUserTurn string, priorUserTurns []stri
 		return nil, fmt.Errorf("failed to compute current user turn embedding: %w", err)
 	}
 
-	similarities, err := c.computeSimilarities(currentEmbedding, priorUserTurns)
+	similarities, err := c.computeSimilarities(currentEmbedding, priorUserTurns, minimumReaskThreshold(c.rules))
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (c *ReaskClassifier) Classify(currentUserTurn string, priorUserTurns []stri
 	return retainMaxLookbackReaskMatches(matches), nil
 }
 
-func (c *ReaskClassifier) computeSimilarities(currentEmbedding []float32, priorUserTurns []string) ([]float64, error) {
+func (c *ReaskClassifier) computeSimilarities(currentEmbedding []float32, priorUserTurns []string, minimumThreshold float64) ([]float64, error) {
 	cache := make(map[string][]float32, len(priorUserTurns))
 	similarities := make([]float64, 0, len(priorUserTurns))
 
@@ -99,21 +99,29 @@ func (c *ReaskClassifier) computeSimilarities(currentEmbedding []float32, priorU
 			cache[priorTurn] = priorEmbedding
 		}
 
-		similarities = append(similarities, float64(cosineSimilarity(currentEmbedding, priorEmbedding)))
+		similarity := float64(cosineSimilarity(currentEmbedding, priorEmbedding))
+		similarities = append(similarities, similarity)
+		if similarity < minimumThreshold {
+			break
+		}
 	}
 
 	return similarities, nil
 }
 
+func minimumReaskThreshold(rules []config.ReaskRule) float64 {
+	minimumThreshold := float64(rules[0].WithDefaults().Threshold)
+	for _, rawRule := range rules[1:] {
+		threshold := float64(rawRule.WithDefaults().Threshold)
+		if threshold < minimumThreshold {
+			minimumThreshold = threshold
+		}
+	}
+	return minimumThreshold
+}
+
 func (c *ReaskClassifier) embedText(text string) ([]float32, error) {
-	if c.provider != nil {
-		return c.provider.Embed(context.Background(), text)
-	}
-	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	return embedding.Embed(context.Background(), c.provider, text, embedding.Options{})
 }
 
 func evaluateReaskStreak(similarities []float64, threshold float64, lookbackTurns int) (float64, int) {

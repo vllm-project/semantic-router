@@ -1,0 +1,166 @@
+- id: mistral/mistral-small-4
+  display_name: Mistral Small 4
+  description: Open-weight multimodal MoE model with configurable reasoning.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Small-4-119B-2603
+    license: Apache-2.0
+  family: mistral-small-4
+  parameter_size: 119B (6.5B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: mistral-none-high
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mistral-Small-4-119B-2603
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  released_at: '2026-03-16'
+- id: mistral/mistral-medium-3.5
+  display_name: Mistral Medium 3.5
+  description: Mistral's current balanced model for reasoning and production agents.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Medium-3.5-128B
+    license: Modified-MIT
+  family: mistral-medium
+  parameter_size: 128B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: mistral-none-high
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mistral-Medium-3.5-128B
+  tags:
+  - open_weights
+  - multimodal
+  - enterprise
+  released_at: '2026-04-29'
+- id: mistral/mistral-large-3
+  display_name: Mistral Large 3
+  description: Large open-weight Mistral MoE model for multimodal enterprise agents.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Large-3-675B-Instruct-2512
+    license: Apache-2.0
+  family: mistral-large-3
+  parameter_size: 675B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mistral-Large-3-675B-Instruct-2512
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - frontier
+  released_at: '2025-12-02'
+- id: mistral/mistral-small-3.2-24b-instruct
+  display_name: Mistral Small 3.2 24B Instruct
+  description: Compact multimodal Mistral instruction checkpoint for local and edge deployment.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506
+    license: Apache-2.0
+  family: mistral-small-3
+  parameter_size: 24B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506
+  tags:
+  - open_weights
+  - multimodal
+  - dense
+  - efficient
+  released_at: '2025-06-19'

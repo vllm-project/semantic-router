@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -22,7 +24,13 @@ func (s *ClassificationService) ClassifyBatchUnified(texts []string) (*UnifiedBa
 }
 
 // ClassifyBatchUnifiedWithOptions performs unified batch classification with options support
-func (s *ClassificationService) ClassifyBatchUnifiedWithOptions(texts []string, _ interface{}) (*UnifiedBatchResponse, error) {
+func (s *ClassificationService) ClassifyBatchUnifiedWithOptions(texts []string, options interface{}) (*UnifiedBatchResponse, error) {
+	return s.ClassifyBatchUnifiedContext(context.Background(), texts, options)
+}
+
+func (s *ClassificationService) ClassifyBatchUnifiedContext(ctx context.Context, texts []string, _ interface{}) (*UnifiedBatchResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("texts cannot be empty")
 	}
@@ -32,7 +40,7 @@ func (s *ClassificationService) ClassifyBatchUnifiedWithOptions(texts []string, 
 	}
 
 	start := time.Now()
-	results, err := s.unifiedClassifier.ClassifyBatch(texts)
+	results, err := s.unifiedClassifier.ClassifyBatchContext(ctx, texts)
 	if err != nil {
 		return nil, fmt.Errorf("unified batch classification failed: %w", err)
 	}
@@ -48,10 +56,6 @@ func (s *ClassificationService) ClassifyBatchUnifiedWithOptions(texts []string, 
 
 // ClassifyPIIUnified performs PII detection using unified classifier
 func (s *ClassificationService) ClassifyPIIUnified(texts []string) ([]classification.PIIResult, error) {
-	if s.unifiedClassifier == nil {
-		return nil, fmt.Errorf("unified classifier not initialized")
-	}
-
 	results, err := s.ClassifyBatchUnified(texts)
 	if err != nil {
 		return nil, err
@@ -62,10 +66,6 @@ func (s *ClassificationService) ClassifyPIIUnified(texts []string) ([]classifica
 
 // ClassifySecurityUnified performs security detection using unified classifier
 func (s *ClassificationService) ClassifySecurityUnified(texts []string) ([]classification.SecurityResult, error) {
-	if s.unifiedClassifier == nil {
-		return nil, fmt.Errorf("unified classifier not initialized")
-	}
-
 	results, err := s.ClassifyBatchUnified(texts)
 	if err != nil {
 		return nil, err
@@ -76,11 +76,15 @@ func (s *ClassificationService) ClassifySecurityUnified(texts []string) ([]class
 
 // HasUnifiedClassifier returns true if the service has a unified classifier
 func (s *ClassificationService) HasUnifiedClassifier() bool {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	return s.unifiedClassifier != nil && s.unifiedClassifier.IsInitialized()
 }
 
 // GetUnifiedClassifierStats returns statistics about the unified classifier
 func (s *ClassificationService) GetUnifiedClassifierStats() map[string]interface{} {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	if s.unifiedClassifier == nil {
 		return map[string]interface{}{
 			"available": false,
@@ -90,4 +94,26 @@ func (s *ClassificationService) GetUnifiedClassifierStats() map[string]interface
 	stats := s.unifiedClassifier.GetStats()
 	stats["available"] = true
 	return stats
+}
+
+// Close releases the service-owned unified view or auto-discovered LoRA tasks.
+// Borrowed recipe classifiers remain owned by their router generation. A
+// standalone service owns and closes the candidates it prepared itself.
+func (s *ClassificationService) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.reloadMutex.Lock()
+	defer s.reloadMutex.Unlock()
+	s.runtimeMutex.Lock()
+	defer s.runtimeMutex.Unlock()
+	if s.closed {
+		return nil
+	}
+	s.closed = true
+	err := s.unifiedClassifier.Close()
+	if s.runtimeOwner != nil {
+		err = errors.Join(err, s.runtimeOwner.Close())
+	}
+	return err
 }

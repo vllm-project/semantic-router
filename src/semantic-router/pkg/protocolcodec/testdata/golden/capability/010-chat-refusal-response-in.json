@@ -1,0 +1,17 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "chatcmpl_1",
+    "object": "chat.completion",
+    "created": 100,
+    "model": "provider-model",
+    "choices": [
+      {
+        "index": 0,
+        "message": {"role": "assistant", "refusal": "I cannot help with that."},
+        "finish_reason": "content_filter"
+      }
+    ],
+    "usage": {"prompt_tokens": 4, "completion_tokens": 2, "total_tokens": 6}
+  }
+}

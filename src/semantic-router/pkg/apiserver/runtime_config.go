@@ -54,9 +54,14 @@ func (c *liveRuntimeConfig) Update(newCfg *config.RouterConfig) {
 }
 
 func (s *ClassificationAPIServer) currentConfig() *config.RouterConfig {
+	if s == nil {
+		return nil
+	}
 	if s.runtimeConfig != nil {
 		return s.runtimeConfig.Current()
 	}
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
 	return s.config
 }
 
@@ -64,18 +69,16 @@ func (s *ClassificationAPIServer) publishConfigMutation(newCfg *config.RouterCon
 	if s == nil {
 		return
 	}
-	s.config = newCfg
-	if s.runtimeConfig != nil {
-		s.runtimeConfig.Update(newCfg)
+	if s.runtimeRegistry != nil {
+		// Persistence has queued the candidate for the router watcher. Only its
+		// whole-generation publish may replace live service/config references.
 		return
 	}
-	if s.runtimeRegistry != nil {
-		s.runtimeRegistry.UpdateConfig(newCfg)
-		if s.classificationSvc != nil {
-			s.classificationSvc.RefreshRuntimeConfig(newCfg)
-		} else if svc := s.runtimeRegistry.ClassificationService(); svc != nil {
-			svc.RefreshRuntimeConfig(newCfg)
-		}
+	s.configMu.Lock()
+	s.config = newCfg
+	s.configMu.Unlock()
+	if s.runtimeConfig != nil {
+		s.runtimeConfig.Update(newCfg)
 		return
 	}
 	config.Replace(newCfg)

@@ -3,6 +3,7 @@ package auth
 import (
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -22,7 +23,7 @@ func TestRequiresAuthentication(t *testing.T) {
 		{path: "/api/auth/bootstrap/can-register", expected: false},
 		{path: "/api/setup/state", expected: false},
 		{path: "/api/auth/me", expected: true},
-		{path: "/api/status", expected: true},
+		{path: "/api/status", expected: false},
 		{path: "/embedded/grafana/", expected: true},
 		{path: "/embedded/wizmap/", expected: true},
 		{path: "/embedded/wizmap/assets/index.js", expected: false},
@@ -52,6 +53,7 @@ func TestServiceUnavailableGuard(t *testing.T) {
 		{name: "embedded denied", path: "/embedded/grafana/", wantCode: http.StatusServiceUnavailable, wantNext: false},
 		{name: "login public", path: "/api/auth/login", wantCode: http.StatusOK, wantNext: true},
 		{name: "setup state public", path: "/api/setup/state", wantCode: http.StatusOK, wantNext: true},
+		{name: "system status public", path: "/api/status", wantCode: http.StatusOK, wantNext: true},
 		{name: "static frontend public", path: "/dashboard", wantCode: http.StatusOK, wantNext: true},
 	}
 
@@ -93,16 +95,17 @@ func TestExtractAccessToken(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to query token", func(t *testing.T) {
+	// Inverted for #2465: this asserted the query token was returned.
+	t.Run("ignores a well-formed query token", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/embedded/grafana/?authToken=query-token", nil)
 
-		if token := extractAccessToken(req); token != "query-token" {
-			t.Fatalf("extractAccessToken() = %q, want query-token", token)
+		if token := extractAccessToken(req); token != "" {
+			t.Fatalf("extractAccessToken() = %q, want empty", token)
 		}
 	})
 
-	t.Run("falls back to cookie token before query token", func(t *testing.T) {
+	t.Run("prefers the cookie token and ignores the query token", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/embedded/grafana/?authToken=query-token", nil)
 		req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: "cookie-token"})
@@ -123,12 +126,18 @@ func TestExtractAccessToken(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects malformed query token", func(t *testing.T) {
+	// "Empty" is not enough on its own: assert the source too, or a reinstated query
+	// branch could pass this silently.
+	t.Run("reports no source for any query token shape", func(t *testing.T) {
 		t.Parallel()
-		req := httptest.NewRequest(http.MethodGet, "/embedded/grafana/?authToken=invalid%20token", nil)
 
-		if token := extractAccessToken(req); token != "" {
-			t.Fatalf("extractAccessToken() = %q, want empty", token)
+		for _, raw := range []string{"query-token", "invalid%20token", ""} {
+			req := httptest.NewRequest(http.MethodGet, "/embedded/grafana/?authToken="+raw, nil)
+
+			token, source := extractAccessTokenWithSource(req)
+			if token != "" || source != tokenSourceNone {
+				t.Fatalf("authToken=%q: got (%q, %v), want (\"\", tokenSourceNone)", raw, token, source)
+			}
 		}
 	})
 }
@@ -162,7 +171,7 @@ func TestNormalizeAccessToken(t *testing.T) {
 	}
 }
 
-func TestRequiredPermission(t *testing.T) {
+func TestRequiredPermissions(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
@@ -170,14 +179,24 @@ func TestRequiredPermission(t *testing.T) {
 		path     string
 		expected string
 	}{
+		{method: http.MethodGet, path: "/api/sr-bench/v1/catalog", expected: PermEvalRead},
+		{method: http.MethodGet, path: "/api/sr-bench/v1/runs/run-1/calls/call-1", expected: PermEvalRead},
+		{method: http.MethodPost, path: "/api/sr-bench/v1/plans", expected: PermEvalWrite},
+		{method: http.MethodPost, path: "/api/sr-bench/v1/runs", expected: PermEvalWrite},
+		{method: http.MethodPost, path: "/api/sr-bench/v1/runs/run-1/cancel", expected: PermEvalRun},
+		{method: http.MethodPost, path: "/api/sr-bench/v1/runs/run-1/reconcile-usage", expected: PermEvalWrite},
 		{method: http.MethodGet, path: "/api/admin/users", expected: PermUsersView},
 		{method: http.MethodPatch, path: "/api/admin/users/user-1", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/admin/audit-logs", expected: PermUsersManage},
-		{method: http.MethodGet, path: "/api/status", expected: PermLogsRead},
+		{method: http.MethodGet, path: "/api/status", expected: PermTopologyRead},
 		{method: http.MethodGet, path: "/embedded/grafana/", expected: PermLogsRead},
 		{method: http.MethodGet, path: "/embedded/wizmap/", expected: PermConfigRead},
 		{method: http.MethodPost, path: "/api/setup/activate", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/setup/import-remote", expected: PermConfigWrite},
+		{method: http.MethodGet, path: "/api/models/catalog", expected: PermConfigRead},
+		{method: http.MethodPost, path: "/api/models/discover", expected: PermConfigWrite},
+		{method: http.MethodPost, path: "/api/models/verify", expected: PermEvalRun},
+		{method: http.MethodGet, path: "/api/models/verify", expected: PermEvalRun},
 		{method: http.MethodGet, path: "/api/mcp/servers", expected: PermMcpRead},
 		{method: http.MethodPost, path: "/api/mcp/servers", expected: PermMcpManage},
 		{method: http.MethodDelete, path: "/api/mcp/servers/server-1/status", expected: PermMcpManage},
@@ -185,26 +204,344 @@ func TestRequiredPermission(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/config/deploy", expected: PermConfigDeploy},
 		{method: http.MethodPost, path: "/api/router/config/deploy/preview", expected: PermConfigDeploy},
 		{method: http.MethodGet, path: "/api/router/config/deployments", expected: PermConfigRead},
-		{method: http.MethodPost, path: "/api/evaluation/tasks", expected: PermEvalWrite},
-		{method: http.MethodPost, path: "/api/evaluation/run", expected: PermEvalRun},
-		{method: http.MethodPost, path: "/api/evaluation/cancel/task-1", expected: PermEvalRun},
-		{method: http.MethodGet, path: "/api/fleet-sim/api/workloads", expected: PermConfigRead},
-		{method: http.MethodPost, path: "/api/fleet-sim/api/jobs", expected: PermConfigWrite},
+		{method: http.MethodGet, path: "/api/router/api/v1/storage/response-cache/stats", expected: PermConfigRead},
+		{method: http.MethodPost, path: "/api/router/api/v1/storage/response-cache/invalidate", expected: PermConfigWrite},
+		{method: http.MethodPost, path: "/api/router/api/v1/plugins/context_compression/preview", expected: PermEvalRun},
+		{method: http.MethodPost, path: "/api/router/api/v1/storage/context-recovery/invalidate", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/openclaw/teams", expected: PermOpenClawRead},
 		{method: http.MethodPost, path: "/api/openclaw/teams", expected: PermOpenClaw},
-		{method: http.MethodPost, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawRead},
-		{method: http.MethodPost, path: "/api/router/v1/chat/completions", expected: PermConfigRead},
-		{method: http.MethodGet, path: "/api/security/policy", expected: PermConfigRead},
-		{method: http.MethodPut, path: "/api/security/policy", expected: PermSecurityManage},
-		{method: http.MethodPost, path: "/api/security/policy/preview", expected: PermSecurityManage},
+		{method: http.MethodGet, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawRead},
+		{method: http.MethodPost, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClaw},
+		{method: http.MethodGet, path: "/api/openclaw/rooms/room-1/ws", expected: PermOpenClaw},
+		{method: http.MethodGet, path: "/api/openclaw/token", expected: PermOpenClaw},
+		{method: http.MethodGet, path: "/embedded/openclaw/worker-1/", expected: PermOpenClaw},
+		{method: http.MethodPost, path: "/api/router/v1/chat/completions", expected: PermInferenceRun},
+		{method: http.MethodPost, path: "/api/router/api/v1/observability/outcomes", expected: PermFeedbackSubmit},
+		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays", expected: PermReplayRead},
+		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays/record-1", expected: PermReplayRead},
+		{method: http.MethodGet, path: "/api/router/api/v1/storage/knowledge-bases", expected: PermConfigRead},
+		{method: http.MethodPost, path: "/api/router/api/v1/storage/knowledge-bases", expected: PermConfigWrite},
+		{method: http.MethodDelete, path: "/api/router/api/v1/storage/knowledge-bases/example", expected: PermConfigWrite},
+		{method: http.MethodGet, path: "/api/recipe", expected: PermConfigRead},
+		{method: http.MethodGet, path: "/api/recipe/probes", expected: PermConfigRead},
+		{method: http.MethodGet, path: "/api/recipe/packages", expected: PermConfigRead},
+		{method: http.MethodGet, path: "/api/recipe/packages/", expected: PermConfigRead},
+		{method: http.MethodGet, path: "/api/recipe/packages/anything", expected: PermConfigRead},
+		{method: http.MethodPost, path: "/api/recipe/import", expected: PermConfigWrite},
+		{method: http.MethodPost, path: "/api/recipe/import/", expected: PermConfigWrite},
+		{method: http.MethodPost, path: "/api/recipe/import/anything", expected: PermConfigWrite},
+		{method: http.MethodPost, path: "/api/recipe/activate", expected: PermConfigDeploy},
+		{method: http.MethodPost, path: "/api/recipe/activate/preview", expected: PermConfigDeploy},
+		{method: http.MethodPost, path: "/api/recipe/activate/", expected: PermConfigDeploy},
+		{method: http.MethodPost, path: "/api/recipe/activate/anything", expected: PermConfigDeploy},
+		{method: http.MethodPost, path: "/api/recipe/deactivate", expected: PermConfigDeploy},
+		{method: http.MethodPost, path: "/api/recipe/deactivate/preview", expected: PermConfigDeploy},
+		{method: http.MethodPost, path: "/api/recipe/deactivate/", expected: PermConfigDeploy},
+		{method: http.MethodPost, path: "/api/recipe/deactivate/anything", expected: PermConfigDeploy},
+		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/run-plan", expected: PermConfigRead},
+		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/validate", expected: PermTopologyRead},
+		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/validate/", expected: PermTopologyRead},
+		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/validate///", expected: PermTopologyRead},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.path, func(t *testing.T) {
 			t.Parallel()
-			if actual := RequiredPermission(tc.method, tc.path); actual != tc.expected {
-				t.Fatalf("RequiredPermission(%q, %q) = %q, want %q", tc.method, tc.path, actual, tc.expected)
+			expected := []string{tc.expected}
+			if tc.method == http.MethodPost && tc.path == "/api/sr-bench/v1/runs" {
+				expected = append(expected, PermEvalRun)
+			}
+			if actual := RequiredPermissions(tc.method, tc.path); !reflect.DeepEqual(actual, expected) {
+				t.Fatalf("RequiredPermissions(%q, %q) = %q, want %q", tc.method, tc.path, actual, expected)
 			}
 		})
+	}
+}
+
+func TestAuthenticateRequestRequiresSRBenchWriteAndRunPermissions(t *testing.T) {
+	tests := []struct {
+		name             string
+		path             string
+		removePermission string
+		wantStatus       int
+		wantRequired     []string
+	}{
+		{
+			name: "dataset composition requires write", path: "/api/sr-bench/v1/datasets/compose",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "dataset preparation requires write", path: "/api/sr-bench/v1/dataset-preparations",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "dataset preparation needs no generation permission", path: "/api/sr-bench/v1/dataset-preparations",
+			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "dataset composition needs no generation permission", path: "/api/sr-bench/v1/datasets/compose",
+			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "create requires write", path: "/api/sr-bench/v1/runs",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite, PermEvalRun},
+		},
+		{
+			name: "create requires run", path: "/api/sr-bench/v1/runs",
+			removePermission: PermEvalRun, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite, PermEvalRun},
+		},
+		{
+			name: "recovery requires write", path: "/api/sr-bench/v1/runs/run-1/recover",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite, PermEvalRun},
+		},
+		{
+			name: "recovery requires run", path: "/api/sr-bench/v1/runs/run-1/recover",
+			removePermission: PermEvalRun, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite, PermEvalRun},
+		},
+		{
+			name: "recovery permits write and run", path: "/api/sr-bench/v1/runs/run-1/recover",
+			wantStatus:   http.StatusNoContent,
+			wantRequired: []string{PermEvalWrite, PermEvalRun},
+		},
+		{
+			name: "recovery planning requires write", path: "/api/sr-bench/v1/runs/run-1/recover-plan",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "recovery planning needs no generation permission", path: "/api/sr-bench/v1/runs/run-1/recover-plan",
+			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "cancel requires run not write", path: "/api/sr-bench/v1/runs/run-1/cancel",
+			removePermission: PermEvalWrite, wantStatus: http.StatusNoContent,
+			wantRequired: []string{PermEvalRun},
+		},
+		{
+			name: "cancel rejects missing run", path: "/api/sr-bench/v1/runs/run-1/cancel",
+			removePermission: PermEvalRun, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalRun},
+		},
+		{
+			name: "reconciliation requires write", path: "/api/sr-bench/v1/runs/run-1/reconcile-usage",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "reconciliation needs no generation permission", path: "/api/sr-bench/v1/runs/run-1/reconcile-usage",
+			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
+			wantRequired: []string{PermEvalWrite},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			svc := newTestAuthService(t)
+			writer := newTestUser(t, svc, test.name+"@example.com", RoleWrite, "active")
+			if _, err := svc.store.db.Exec(
+				`DELETE FROM role_permissions WHERE role = ? AND permission_key = ?`,
+				RoleWrite, test.removePermission,
+			); err != nil {
+				t.Fatalf("trim role permission: %v", err)
+			}
+			if actual := RequiredPermissions(http.MethodPost, test.path); !reflect.DeepEqual(actual, test.wantRequired) {
+				t.Fatalf("required permissions=%v want=%v", actual, test.wantRequired)
+			}
+			called := false
+			handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, writer, http.MethodPost, test.path, `{}`))
+			if response.Code != test.wantStatus || called != (test.wantStatus == http.StatusNoContent) {
+				t.Fatalf("status=%d called=%v want=%d", response.Code, called, test.wantStatus)
+			}
+		})
+	}
+}
+
+func TestAuthenticateRequestRequiresDatasetReadPermission(t *testing.T) {
+	for _, suffix := range []string{"", "/cases"} {
+		path := "/api/sr-bench/v1/datasets/" + strings.Repeat("a", 64) + suffix
+		t.Run(suffix, func(t *testing.T) {
+			svc := newTestAuthService(t)
+			reader := newTestUser(t, svc, "dataset-reader@example.com", RoleRead, "active")
+			if actual := RequiredPermissions(http.MethodGet, path); !reflect.DeepEqual(actual, []string{PermEvalRead}) {
+				t.Fatalf("dataset read requires unexpected permissions: %v", actual)
+			}
+			called := false
+			handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, reader, http.MethodGet, path, ""))
+			if response.Code != http.StatusNoContent || !called {
+				t.Fatalf("read-only user rejected: status=%d", response.Code)
+			}
+			if _, err := svc.store.db.Exec(`DELETE FROM role_permissions WHERE role = ? AND permission_key = ?`, RoleRead, PermEvalRead); err != nil {
+				t.Fatal(err)
+			}
+			called = false
+			response = httptest.NewRecorder()
+			handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, reader, http.MethodGet, path, ""))
+			if response.Code != http.StatusForbidden || called {
+				t.Fatalf("missing dataset permission accepted: status=%d", response.Code)
+			}
+		})
+	}
+}
+
+func TestAuthenticateRequestRequiresFeedbackPermissionForRouterOutcomes(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	reader := newTestUser(t, svc, "outcome-reader@example.com", RoleRead, "active")
+	writer := newTestUser(t, svc, "outcome-writer@example.com", RoleWrite, "active")
+	nextCalled := false
+	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	readerRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(
+		readerRecorder,
+		newAuthenticatedRequest(t, svc, reader, http.MethodPost, "/api/router/api/v1/observability/outcomes", `{}`),
+	)
+	if readerRecorder.Code != http.StatusNoContent || !nextCalled {
+		t.Fatalf("read role status = %d, next called = %v", readerRecorder.Code, nextCalled)
+	}
+
+	nextCalled = false
+	writerRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(
+		writerRecorder,
+		newAuthenticatedRequest(t, svc, writer, http.MethodPost, "/api/router/api/v1/observability/outcomes", `{}`),
+	)
+	if writerRecorder.Code != http.StatusNoContent || !nextCalled {
+		t.Fatalf("feedback role status = %d, next called = %v", writerRecorder.Code, nextCalled)
+	}
+}
+
+func TestAuthenticateRequestRequiresEvaluationRunForLiveModelVerification(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	reader := newTestUser(t, svc, "model-verify-reader@example.com", RoleRead, "active")
+	writer := newTestUser(t, svc, "model-verify-writer@example.com", RoleWrite, "active")
+	var calls int
+	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	readerResponse := httptest.NewRecorder()
+	handler.ServeHTTP(
+		readerResponse,
+		newAuthenticatedRequest(t, svc, reader, http.MethodPost, "/api/models/verify", `{}`),
+	)
+	if readerResponse.Code != http.StatusForbidden || calls != 0 {
+		t.Fatalf("reader status = %d, calls = %d", readerResponse.Code, calls)
+	}
+
+	writerResponse := httptest.NewRecorder()
+	handler.ServeHTTP(
+		writerResponse,
+		newAuthenticatedRequest(t, svc, writer, http.MethodPost, "/api/models/verify", `{}`),
+	)
+	if writerResponse.Code != http.StatusNoContent || calls != 1 {
+		t.Fatalf("writer status = %d, calls = %d", writerResponse.Code, calls)
+	}
+}
+
+func TestRouterGatewayRejectsUndeclaredMethodAndPathBeforePermissionFallback(t *testing.T) {
+	for _, tc := range []struct {
+		method, path string
+		allowed      bool
+		permission   string
+	}{
+		{http.MethodPost, "/api/router/api/v1/diagnostics/models/rerank", true, PermEvalRun},
+		{http.MethodGet, "/api/router/api/v1/plugins/rag/bindings", true, PermConfigRead},
+		{http.MethodPost, "/api/router/api/v1/plugins/rag/preview", true, PermEvalRun},
+		{http.MethodGet, "/api/router/api/v1/observability/audit", true, PermReplayRead},
+		{http.MethodPost, "/api/router/api/v1/storage/response-cache/flush", true, PermConfigWrite},
+		{http.MethodPatch, "/api/router/api/v1/config", false, ""},
+		{http.MethodGet, "/api/router/api/v1/observability/replays/id/extra", false, ""},
+		{http.MethodPost, "/api/router/api/v1/plugins/rag/bindings", false, ""},
+		{http.MethodGet, "/api/router/api/v1/response-cache/stats", false, ""},
+		{http.MethodPost, "/api/router/v1/chat/completions/suffix", false, ""},
+	} {
+		if routerGatewayRequestAllowed(tc.method, tc.path) != tc.allowed {
+			t.Fatalf("gateway decision wrong: %+v", tc)
+		}
+		if got := requiredPermission(tc.method, tc.path); got != tc.permission {
+			t.Fatalf("permission = %q for %+v", got, tc)
+		}
+	}
+}
+
+func TestAuthenticateRouterGatewayEnforcesProbePermissionAndDefaultDeny(t *testing.T) {
+	t.Parallel()
+	svc := newTestAuthService(t)
+	reader := newTestUser(t, svc, "gateway-reader@example.com", RoleRead, "active")
+	writer := newTestUser(t, svc, "gateway-writer@example.com", RoleWrite, "active")
+	calls := 0
+	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(http.StatusNoContent) }))
+	for _, tc := range []struct {
+		method, path               string
+		readerStatus, writerStatus int
+	}{
+		{http.MethodGet, "/api/router/api/v1/plugins/rag/bindings", http.StatusNoContent, http.StatusNoContent},
+		{http.MethodGet, "/api/router/api/v1/observability/audit", http.StatusNoContent, http.StatusNoContent},
+		{http.MethodPost, "/api/router/api/v1/diagnostics/models/rerank", http.StatusForbidden, http.StatusNoContent},
+		{http.MethodPost, "/api/router/api/v1/plugins/rag/preview", http.StatusForbidden, http.StatusNoContent},
+		{http.MethodPost, "/api/router/api/v1/storage/response-cache/flush", http.StatusForbidden, http.StatusNoContent},
+		{http.MethodPatch, "/api/router/api/v1/config", http.StatusForbidden, http.StatusForbidden},
+		{http.MethodGet, "/api/router/api/v1/observability/replays/id/extra", http.StatusForbidden, http.StatusForbidden},
+	} {
+		before := calls
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, reader, tc.method, tc.path, `{}`))
+		if response.Code != tc.readerStatus || (calls != before) != (tc.readerStatus == http.StatusNoContent) {
+			t.Fatalf("reader %s %s: %d", tc.method, tc.path, response.Code)
+		}
+		before = calls
+		response = httptest.NewRecorder()
+		handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, writer, tc.method, tc.path, `{}`))
+		if response.Code != tc.writerStatus || (calls != before) != (tc.writerStatus == http.StatusNoContent) {
+			t.Fatalf("writer %s %s: %d", tc.method, tc.path, response.Code)
+		}
+	}
+}
+
+func TestAuthenticateRouterRetrievalRequiresResourceReadInAdditionToEvaluation(t *testing.T) {
+	t.Parallel()
+	svc := newTestAuthService(t)
+	writer := newTestUser(t, svc, "retrieval-eval-only@example.com", RoleWrite, "active")
+	if _, err := svc.store.db.Exec(`DELETE FROM role_permissions WHERE role = ? AND permission_key = ?`, RoleWrite, PermConfigRead); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true; w.WriteHeader(http.StatusNoContent) }))
+	for _, plugin := range []string{"rag", "tools", "tool_selection"} {
+		path := "/api/router/api/v1/plugins/" + plugin + "/preview"
+		if got := RequiredPermissions(http.MethodPost, path); !reflect.DeepEqual(got, []string{PermEvalRun, PermConfigRead}) {
+			t.Fatalf("incomplete retrieval permissions: %v", got)
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, writer, http.MethodPost, path, `{"mode":"probe"}`))
+		if response.Code != http.StatusForbidden || called {
+			t.Fatalf("evaluation-only principal read plugin resources: %s status=%d", plugin, response.Code)
+		}
 	}
 }

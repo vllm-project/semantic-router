@@ -6,7 +6,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 func (c *Classifier) evaluateEventSignal(results *SignalResults, mu *sync.Mutex, text string) {
@@ -22,8 +21,8 @@ func (c *Classifier) evaluateEventSignal(results *SignalResults, mu *sync.Mutex,
 	bestConfidence := 0.0
 	mu.Lock()
 	for _, match := range matches {
-		metrics.RecordSignalExtraction(config.SignalTypeEvent, match.RuleName, latencySeconds)
-		metrics.RecordSignalMatch(config.SignalTypeEvent, match.RuleName)
+		c.recordSignalExtraction(config.SignalTypeEvent, match.RuleName, latencySeconds)
+		c.recordSignalMatch(config.SignalTypeEvent, match.RuleName)
 		results.MatchedEventRules = append(results.MatchedEventRules, match.RuleName)
 		results.SignalConfidences["event:"+match.RuleName] = match.Confidence
 		if match.MatchedSeverity != "" {

@@ -1,28 +1,61 @@
 import type { Column } from '../components/DataTable'
 import CollapsibleSection from '../components/CollapsibleSection'
+import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewField, ViewSection } from '../components/ViewPanel'
-import { formatDate } from '../types/evaluation'
+import { formatDateTime } from '../utils/dateTime'
+import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
 import { Link } from 'react-router-dom'
 
 import type {
   InsightsCostSummary,
-  InsightsFilterType,
+  InsightsCurrencyCostSummary,
   InsightsRecord,
-  Signal,
 } from './insightsPageTypes'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
-import {
-  buildToolTraceFields,
-  renderToolNamesCell,
-} from './insightsPageToolTrace'
+import { buildRoutingMetadataFields } from './insightsRoutingMetadata'
+import { buildRoutingExplanationSections } from './insightsPageRouting'
+import { renderToolNamesCell } from './insightsPageToolTrace'
+import { buildSignalFields, collectSignals } from './insightsRecordSignals'
+import { buildInsightsPluginFields } from './insightsRecordPlugins'
 import styles from './InsightsPage.module.css'
 
-interface InsightsFilterState {
-  searchTerm: string
-  filter: InsightsFilterType
-  decisionFilter: string
-  modelFilter: string
+export { filterInsightsRecords } from './insightsPageFilters'
+export { collectSignals } from './insightsRecordSignals'
+
+export const formatInsightsDecisionName = (decision: string): string =>
+  formatRoutingMetadataValue('x-vsr-selected-decision', decision)
+
+export function getInsightsLifecyclePresentation(record: InsightsRecord) {
+  const state = record.lifecycle_state || 'unknown'
+  const successful =
+    state === 'completed' && Boolean(record.response_status && record.response_status < 400)
+  const errored =
+    state === 'failed' ||
+    state === 'aborted' ||
+    (state === 'completed' && Boolean(record.response_status && record.response_status >= 400))
+  const pending = state === 'in_progress'
+  const label = record.response_status
+    ? `${record.response_status} · ${state.replace('_', ' ')}`
+    : state.replace('_', ' ')
+
+  return { state, successful, errored, pending, label }
 }
+
+export function getInsightsLifecycleStatusClass(
+  lifecycle: ReturnType<typeof getInsightsLifecyclePresentation>,
+) {
+  if (lifecycle.successful) {
+    return styles.statusSuccess
+  }
+  if (lifecycle.errored) {
+    return styles.statusError
+  }
+  if (lifecycle.pending) {
+    return styles.statusPending
+  }
+  return styles.statusUnknown
+}
+
 export function getUniqueDecisions(records: InsightsRecord[]) {
   const decisions = new Set<string>()
   records.forEach((record) => {
@@ -46,60 +79,36 @@ export function getUniqueModels(records: InsightsRecord[]) {
   return Array.from(models).sort()
 }
 
-export function filterInsightsRecords(records: InsightsRecord[], filters: InsightsFilterState) {
-  const searchTerm = filters.searchTerm.trim().toLowerCase()
-
-  return records.filter((record) => {
-    if (filters.filter === 'cached' && !record.from_cache) {
-      return false
-    }
-    if (filters.filter === 'streamed' && !record.streaming) {
-      return false
-    }
-    if (filters.decisionFilter !== 'all' && record.decision !== filters.decisionFilter) {
-      return false
-    }
-    if (
-      filters.modelFilter !== 'all' &&
-      record.selected_model !== filters.modelFilter &&
-      record.original_model !== filters.modelFilter
-    ) {
-      return false
-    }
-    if (searchTerm && !record.request_id?.toLowerCase().includes(searchTerm)) {
-      return false
-    }
-
-    return true
-  })
-}
-
 export function buildInsightsSummary(records: InsightsRecord[]): InsightsCostSummary {
-  let totalSaved = 0
-  let baselineSpend = 0
-  let actualSpend = 0
-  let currency: string | undefined
+  const groups = new Map<string, InsightsCurrencyCostSummary>()
   let costRecordCount = 0
-
   records.forEach((record) => {
-    if (!hasCompleteCostData(record)) {
-      return
+    if (!hasCompleteCostData(record)) return
+    const currency = record.currency!.trim().toUpperCase()
+    const group = groups.get(currency) ?? {
+      totalSaved: 0,
+      baselineSpend: 0,
+      actualSpend: 0,
+      currency,
+      costRecordCount: 0,
     }
-
-    totalSaved += record.cost_savings ?? 0
-    baselineSpend += record.baseline_cost ?? 0
-    actualSpend += record.actual_cost ?? 0
-    currency = currency || record.currency
+    group.totalSaved += record.cost_savings!
+    group.baselineSpend += record.baseline_cost!
+    group.actualSpend += record.actual_cost!
+    group.costRecordCount += 1
+    groups.set(currency, group)
     costRecordCount += 1
   })
-
+  const byCurrency = [...groups.values()].sort((a, b) => a.currency.localeCompare(b.currency))
+  const single = byCurrency.length === 1 ? byCurrency[0] : undefined
   return {
-    totalSaved,
-    baselineSpend,
-    actualSpend,
-    currency,
+    totalSaved: single?.totalSaved ?? 0,
+    baselineSpend: single?.baselineSpend ?? 0,
+    actualSpend: single?.actualSpend ?? 0,
+    currency: single?.currency,
     costRecordCount,
     excludedRecordCount: records.length - costRecordCount,
+    byCurrency,
   }
 }
 
@@ -116,7 +125,7 @@ export function buildInsightsRecordTitle(record: InsightsRecord | null | undefin
     return `Record: ${record.request_id.substring(0, 8)}...`
   }
 
-  return `Record: ${record.decision || record.id}`
+  return `Record: ${record.decision ? formatInsightsDecisionName(record.decision) : record.id}`
 }
 
 function formatCompactIdentifier(value: string) {
@@ -162,14 +171,25 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       header: 'Created',
       width: '160px',
       sortable: true,
-      render: (row) => <span className={styles.timestamp}>{formatDate(row.timestamp)}</span>,
+      render: (row) => <span className={styles.timestamp}>{formatDateTime(row.timestamp)}</span>,
+    },
+    {
+      key: 'recipe',
+      header: 'Recipe',
+      width: '140px',
+      sortable: true,
+      render: (row) => <span className={styles.decision}>{row.recipe || 'default'}</span>,
     },
     {
       key: 'decision',
       header: 'Decision',
       width: '180px',
       sortable: true,
-      render: (row) => <span className={styles.decision}>{row.decision || '-'}</span>,
+      render: (row) => (
+        <span className={styles.decision}>
+          {row.decision ? formatInsightsDecisionName(row.decision) : '-'}
+        </span>
+      ),
     },
     {
       key: 'signals',
@@ -223,28 +243,33 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
     },
     {
       key: 'actual_cost',
-      header: 'Actual Cost',
+      header: 'Estimated Cost',
       width: '160px',
       sortable: true,
-      render: (row) => renderCostValue(row.actual_cost, row.currency),
+      render: (row) =>
+        hasCompleteCostData(row)
+          ? renderCostValue(row.actual_cost, row.currency)
+          : renderUnavailableCost(row),
     },
     {
       key: 'cost_savings',
-      header: 'Saved vs Baseline',
+      header: 'Estimated Savings',
       width: '180px',
       sortable: true,
       render: (row) => {
         if (!hasCompleteCostData(row)) {
-          return <span className={styles.costValueMuted}>N/A</span>
+          return renderUnavailableCost(row)
         }
+        const zeroSavingsReason = getZeroSavingsReason(row)
 
         return (
           <div className={styles.costCell}>
-            <strong className={styles.costValuePositive}>
-              {formatCurrency(row.cost_savings ?? 0, row.currency)}
+            <strong className={zeroSavingsReason ? styles.costValue : styles.costValuePositive}>
+              {zeroSavingsReason ? 'No savings' : formatCurrency(row.cost_savings, row.currency)}
             </strong>
+            {zeroSavingsReason && <span className={styles.costSubtle}>{zeroSavingsReason}</span>}
             <span className={styles.costSubtle}>
-              Baseline: {row.baseline_model}
+              Baseline (configured rates): {row.baseline_model}
             </span>
           </div>
         )
@@ -253,19 +278,16 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
     {
       key: 'response_status',
       header: 'Status',
-      width: '80px',
+      width: '150px',
       align: 'center',
-      render: (row) => (
-        <span
-          className={`${styles.statusBadge} ${
-            row.response_status && row.response_status < 400
-              ? styles.statusSuccess
-              : styles.statusError
-          }`}
-        >
-          {row.response_status || '-'}
-        </span>
-      ),
+      render: (row) => {
+        const lifecycle = getInsightsLifecyclePresentation(row)
+        return (
+          <span className={`${styles.statusBadge} ${getInsightsLifecycleStatusClass(lifecycle)}`}>
+            {lifecycle.label}
+          </span>
+        )
+      },
     },
     {
       key: 'flags',
@@ -273,8 +295,13 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       width: '160px',
       render: (row) => (
         <div className={styles.indicators}>
-          <span className={`${styles.indicator} ${row.from_cache ? styles.indicatorActive : ''}`}>Cache</span>
-          <span className={`${styles.indicator} ${row.streaming ? styles.indicatorActive : ''}`}>Stream</span>
+          {row.from_cache && (
+            <span className={`${styles.indicator} ${styles.indicatorActive}`}>Cache hit</span>
+          )}
+          {row.streaming && (
+            <span className={`${styles.indicator} ${styles.indicatorActive}`}>Streaming</span>
+          )}
+          {!row.from_cache && !row.streaming && <span>No recorded flags</span>}
         </div>
       ),
     },
@@ -283,26 +310,40 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
 
 export function buildInsightsRecordSections(
   record: InsightsRecord,
-  options: { isReadonly: boolean; canViewReplayFlowDetails: boolean },
+  options: { isReadonly: boolean },
 ): ViewSection[] {
   const sections: ViewSection[] = []
 
   sections.push({
+    title: 'Lifecycle',
+    fields: [
+      { label: 'State', value: record.lifecycle_state || 'unknown' },
+      { label: 'HTTP status', value: record.response_status || '-' },
+      { label: 'Ended at', value: record.ended_at ? formatDateTime(record.ended_at) : '-' },
+      {
+        label: 'Duration',
+        value: typeof record.duration_ms === 'number' ? `${record.duration_ms} ms` : '-',
+      },
+      { label: 'Terminal reason', value: record.terminal_reason || '-' },
+    ],
+  })
+
+  sections.push({
     title: 'Decision Information',
     fields: [
-      { label: 'Decision name', value: record.decision || '-' },
+      { label: 'Recipe', value: record.recipe || 'default' },
+      {
+        label: 'Decision name',
+        value: record.decision ? formatInsightsDecisionName(record.decision) : '-',
+      },
       { label: 'Decision tier', value: formatDecisionNumber(record.decision_tier) },
       { label: 'Decision priority', value: formatDecisionNumber(record.decision_priority) },
       {
-        label: 'Category',
-        value: record.signals?.domain?.length ? record.signals.domain.join(', ') : record.category || '-',
-      },
-      {
         label: 'Confidence score',
         value:
-          record.confidence_score !== undefined
+          record.confidence_score_available === true && typeof record.confidence_score === 'number'
             ? `${(record.confidence_score * 100).toFixed(1)}%`
-            : '-',
+            : 'Score unavailable',
       },
       { label: 'Reasoning mode', value: record.reasoning_mode || '-' },
     ],
@@ -314,8 +355,34 @@ export function buildInsightsRecordSections(
       { label: 'Original model', value: record.original_model || '-' },
       { label: 'Selected model', value: record.selected_model || '-' },
       { label: 'Selection method', value: record.selection_method || '-' },
+      {
+        label: 'Selection rationale',
+        value: record.route_diagnostics?.selection_reasoning || 'Not recorded',
+      },
     ],
   })
+
+  if (record.outcomes?.length) {
+    sections.push({
+      title: 'Outcomes',
+      fields: record.outcomes.map((outcome, index) => ({
+        label: `Outcome ${index + 1}`,
+        value: [
+          outcome.timestamp ? formatDateTime(outcome.timestamp) : 'Unknown time',
+          `${outcome.source} → ${outcome.target}`,
+          outcome.verdict,
+        ].join(' · '),
+      })),
+    })
+  }
+
+  const projectionTraceFields = buildProjectionTraceFields(record)
+  if (projectionTraceFields.length > 0) {
+    sections.push({
+      title: 'Projection Trace',
+      fields: projectionTraceFields,
+    })
+  }
 
   const routingMetadataFields = buildRoutingMetadataFields(record)
   if (routingMetadataFields.length > 0) {
@@ -325,23 +392,7 @@ export function buildInsightsRecordSections(
     })
   }
 
-  const projectionTraceFields = buildProjectionTraceFields(record)
-  if (projectionTraceFields.length > 0) {
-    sections.push({
-      title: 'Projection trace',
-      fields: projectionTraceFields,
-    })
-  }
-
-  const toolTraceFields = buildToolTraceFields(record, {
-    canViewFlowDetails: options.canViewReplayFlowDetails,
-  })
-  if (toolTraceFields.length > 0) {
-    sections.push({
-      title: 'Tool Trace',
-      fields: toolTraceFields,
-    })
-  }
+  sections.push(...buildRoutingExplanationSections(record))
 
   sections.push({
     title: 'Usage & Cost',
@@ -350,10 +401,41 @@ export function buildInsightsRecordSections(
       { label: 'Prompt tokens', value: formatTokenValue(record.prompt_tokens) },
       { label: 'Completion tokens', value: formatTokenValue(record.completion_tokens) },
       { label: 'Total tokens', value: formatTokenValue(record.total_tokens) },
-      { label: 'Baseline model', value: record.baseline_model || '-' },
-      { label: 'Actual cost', value: formatCurrencyOrNA(record.actual_cost, record.currency) },
-      { label: 'Baseline cost', value: formatCurrencyOrNA(record.baseline_cost, record.currency) },
-      { label: 'Saved vs baseline', value: formatCurrencyOrNA(record.cost_savings, record.currency) },
+      { label: 'Baseline model', value: record.baseline_model || 'Baseline not recorded' },
+      {
+        label: 'Cost basis',
+        value:
+          getInsightsCostUnavailableReason(record) ||
+          'Recorded tokens × configured model rates at capture time; not a GPU bill or provider invoice.',
+      },
+      {
+        label: 'Baseline basis',
+        value:
+          'New records use the highest estimate in the recipe’s complete model pool across all decisions at configured rates, in the same currency using the same recorded tokens. Direct requests compare against the selected model. Older records retain their captured baseline.',
+      },
+      {
+        label: 'Current pricing',
+        value: (
+          <>
+            <a href="/config/models">View current configured model rates</a>. Current rates may
+            differ from this record; historical records are not repriced.
+          </>
+        ),
+      },
+      {
+        label: 'Estimated model cost',
+        value: formatRecordedCost(record, record.actual_cost),
+      },
+      {
+        label: 'Estimated baseline cost',
+        value: formatRecordedCost(record, record.baseline_cost),
+      },
+      {
+        label: 'Estimated savings',
+        value: getZeroSavingsReason(record)
+          ? `No savings — ${getZeroSavingsReason(record)}`
+          : formatRecordedCost(record, record.cost_savings),
+      },
     ],
   })
 
@@ -367,20 +449,13 @@ export function buildInsightsRecordSections(
 
   sections.push({
     title: 'Plugin Status',
-    fields: [
-      { label: 'Cache', value: record.from_cache ? 'Hit' : 'Miss' },
-      { label: 'Cache similarity', value: formatSimilarityValue(record.cache_similarity) },
-      { label: 'Streaming', value: record.streaming ? 'On' : 'Off' },
-      { label: 'Guardrails', value: buildGuardrailsValue(record) },
-      { label: 'RAG', value: buildRagValue(record) },
-      { label: 'Hallucination Detection', value: buildHallucinationValue(record) },
-    ],
+    fields: buildInsightsPluginFields(record),
   })
 
   const requestResponseFields = buildRequestResponseFields(record, options.isReadonly)
   if (requestResponseFields.length > 0) {
     sections.push({
-      title: 'Request/Response',
+      title: 'Request / Response',
       fields: requestResponseFields,
     })
   }
@@ -388,161 +463,48 @@ export function buildInsightsRecordSections(
   return sections
 }
 
-export function collectSignals(signals: Signal): string[] {
-  const allSignals: string[] = []
-  if (signals.keyword?.length) allSignals.push(...signals.keyword)
-  if (signals.embedding?.length) allSignals.push(...signals.embedding)
-  if (signals.domain?.length) allSignals.push(...signals.domain)
-  if (signals.fact_check?.length) allSignals.push(...signals.fact_check)
-  if (signals.user_feedback?.length) allSignals.push(...signals.user_feedback)
-  if (signals.reask?.length) allSignals.push(...signals.reask)
-  if (signals.preference?.length) allSignals.push(...signals.preference)
-  if (signals.language?.length) allSignals.push(...signals.language)
-  if (signals.context?.length) allSignals.push(...signals.context)
-  if (signals.structure?.length) allSignals.push(...signals.structure)
-  if (signals.complexity?.length) allSignals.push(...signals.complexity)
-  if (signals.modality?.length) allSignals.push(...signals.modality)
-  if (signals.authz?.length) allSignals.push(...signals.authz)
-  if (signals.jailbreak?.length) allSignals.push(...signals.jailbreak)
-  if (signals.pii?.length) allSignals.push(...signals.pii)
-  if (signals.kb?.length) allSignals.push(...signals.kb)
-  return allSignals
+export function getInsightsCostUnavailableReason(record: InsightsRecord): string | undefined {
+  return getUnavailableCost(record)?.reason
+}
+
+function getUnavailableCost(record: InsightsRecord) {
+  if (record.lifecycle_state !== 'completed') {
+    return { label: 'Not completed', reason: 'Request not completed' }
+  }
+  if (!Number.isFinite(record.total_tokens)) {
+    return { label: 'Usage not recorded', reason: 'Token usage was not recorded for this request' }
+  }
+  if (!Number.isFinite(record.actual_cost) || !record.currency?.trim()) {
+    return {
+      label: 'Price not recorded',
+      reason:
+        'No pricing estimate was recorded with this request. Historical records are not repriced using current model rates.',
+    }
+  }
+  if (
+    !Number.isFinite(record.baseline_cost) ||
+    !Number.isFinite(record.cost_savings) ||
+    !record.baseline_model
+  ) {
+    return {
+      label: 'Baseline not recorded',
+      reason: 'Baseline estimate was not recorded for this request',
+    }
+  }
+  return undefined
+}
+
+function renderUnavailableCost(record: InsightsRecord) {
+  const unavailable = getUnavailableCost(record)
+  return (
+    <span className={styles.costValueMuted} title={unavailable?.reason}>
+      {unavailable?.label || 'N/A'}
+    </span>
+  )
 }
 
 export function hasCompleteCostData(record: InsightsRecord) {
-  return (
-    typeof record.actual_cost === 'number' &&
-    typeof record.baseline_cost === 'number' &&
-    typeof record.cost_savings === 'number' &&
-    typeof record.total_tokens === 'number' &&
-    Boolean(record.currency) &&
-    Boolean(record.baseline_model)
-  )
-}
-
-function buildSignalFields(signals: Signal): ViewField[] {
-  const signalEntries: Array<[keyof Signal, string]> = [
-    ['keyword', 'Keyword matches'],
-    ['embedding', 'Embedding matches'],
-    ['domain', 'Domain matches'],
-    ['fact_check', 'Fact check results'],
-    ['user_feedback', 'User feedback'],
-    ['reask', 'Reask'],
-    ['preference', 'Preference signals'],
-    ['language', 'Language signals'],
-    ['context', 'Context signals'],
-    ['structure', 'Structure signals'],
-    ['complexity', 'Complexity signals'],
-    ['modality', 'Modality signals'],
-    ['authz', 'Authz signals'],
-    ['jailbreak', 'Jailbreak signals'],
-    ['pii', 'PII signals'],
-    ['kb', 'Knowledge base signals'],
-  ]
-
-  return signalEntries.flatMap(([key, label]) => {
-    const values = signals[key]
-    if (!values?.length) {
-      return []
-    }
-
-    return [
-      {
-        label,
-        value: (
-          <div className={styles.modalSignalList}>
-            {values.map((value) => (
-              <span
-                key={`${label}-${value}`}
-                className={styles.modalSignalPill}
-              >
-                {value}
-              </span>
-            ))}
-          </div>
-        ),
-        fullWidth: true,
-      },
-    ]
-  })
-}
-
-function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] {
-  return [
-    buildTagField('Projection outputs', record.projections),
-    buildNumericMapField('Projection scores', record.projection_scores),
-    buildNumericMapField('Signal confidences', record.signal_confidences),
-    buildNumericMapField('Signal values', record.signal_values),
-  ].filter((field): field is ViewField => field !== null)
-}
-
-function buildGuardrailsValue(record: InsightsRecord) {
-  if (!(record.guardrails_enabled || record.jailbreak_enabled || record.pii_enabled)) {
-    return 'Disabled'
-  }
-
-  if (record.jailbreak_detected || record.pii_detected) {
-    return (
-      <div className={styles.alertList}>
-        {record.jailbreak_detected ? (
-          <span className={styles.alertDanger}>
-            Jailbreak: {record.jailbreak_type || 'detected'} ({((record.jailbreak_confidence || 0) * 100).toFixed(1)}%)
-          </span>
-        ) : null}
-        {record.pii_detected ? (
-          <span className={record.pii_blocked ? styles.alertDanger : styles.alertWarn}>
-            {record.pii_blocked ? 'PII Blocked' : 'PII Found'}: {record.pii_entities?.join(', ') || 'detected'}
-          </span>
-        ) : null}
-      </div>
-    )
-  }
-
-  const enabledChecks = [record.jailbreak_enabled ? 'Jailbreak' : null, record.pii_enabled ? 'PII' : null]
-    .filter(Boolean)
-    .join(', ')
-
-  return <span className={styles.alertSuccess}>Clean ({enabledChecks || 'enabled'})</span>
-}
-
-function buildRagValue(record: InsightsRecord) {
-  if (!record.rag_enabled) {
-    return 'Not used'
-  }
-
-  return (
-    <div className={styles.pluginStack}>
-      <span className={styles.alertInfo}>Context Retrieved</span>
-      <span className={styles.costSubtle}>
-        Backend: {record.rag_backend || 'unknown'} | Length: {record.rag_context_length || 0} chars | Score:{' '}
-        {record.rag_similarity_score?.toFixed(3) || '-'}
-      </span>
-    </div>
-  )
-}
-
-function buildHallucinationValue(record: InsightsRecord) {
-  if (!record.hallucination_enabled) {
-    return 'Disabled'
-  }
-
-  if (!record.hallucination_detected) {
-    return <span className={styles.alertSuccess}>Not detected</span>
-  }
-
-  return (
-    <div className={styles.pluginStack}>
-      <span className={styles.alertDanger}>
-        Detected ({((record.hallucination_confidence || 0) * 100).toFixed(1)}%)
-      </span>
-      {record.hallucination_spans?.length ? (
-        <span className={styles.costSubtle}>
-          Unsupported spans: {record.hallucination_spans.slice(0, 2).join(' | ')}
-          {record.hallucination_spans.length > 2 ? ` (+${record.hallucination_spans.length - 2})` : ''}
-        </span>
-      ) : null}
-    </div>
-  )
+  return getInsightsCostUnavailableReason(record) === undefined
 }
 
 function buildRequestResponseFields(record: InsightsRecord, isReadonly: boolean): ViewField[] {
@@ -567,14 +529,24 @@ function buildRequestResponseFields(record: InsightsRecord, isReadonly: boolean)
   if (record.request_body) {
     fields.push({
       label: 'Request body',
-      value: renderBodyField(`request-${record.id}`, 'request body', record.request_body, record.request_body_truncated || false),
+      value: renderBodyField(
+        `request-${record.id}`,
+        'request body',
+        record.request_body,
+        record.request_body_truncated || false,
+      ),
       fullWidth: true,
     })
   }
   if (record.response_body) {
     fields.push({
       label: 'Response body',
-      value: renderBodyField(`response-${record.id}`, 'response body', record.response_body, record.response_body_truncated || false),
+      value: renderBodyField(
+        `response-${record.id}`,
+        'response body',
+        record.response_body,
+        record.response_body_truncated || false,
+      ),
       fullWidth: true,
     })
   }
@@ -603,67 +575,26 @@ function renderReadonlyLock() {
   )
 }
 
-function buildTagField(
-  label: string,
-  values: string[] | undefined,
-): ViewField | null {
-  if (!values?.length) {
-    return null
-  }
-
-  return {
-    label,
-    value: (
-      <div className={styles.modalSignalList}>
-        {values.map((value) => (
-          <span
-            key={`${label}-${value}`}
-            className={styles.modalSignalPill}
-          >
-            {value}
-          </span>
-        ))}
-      </div>
-    ),
-    fullWidth: true,
-  }
-}
-
-function buildNumericMapField(
-  label: string,
-  values: Record<string, number> | undefined,
-): ViewField | null {
-  if (!values || Object.keys(values).length === 0) {
-    return null
-  }
-
-  const entries = Object.entries(values).sort(([left], [right]) => left.localeCompare(right))
-  return {
-    label,
-    value: (
-      <div className={styles.pluginStack}>
-        {entries.map(([key, value]) => (
-          <span key={`${label}-${key}`} className={styles.costSubtle}>
-            {key}: {formatNumericMetric(value)}
-          </span>
-        ))}
-      </div>
-    ),
-    fullWidth: true,
-  }
-}
-
 function formatDecisionNumber(value: number | undefined) {
   return typeof value === 'number' ? String(value) : '-'
 }
 
-function formatNumericMetric(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(3)
+function getZeroSavingsReason(record: InsightsRecord): string | null {
+  if (
+    !hasCompleteCostData(record) ||
+    record.cost_savings !== 0 ||
+    record.actual_cost !== record.baseline_cost
+  ) {
+    return null
+  }
+  return record.selected_model && record.selected_model === record.baseline_model
+    ? 'Baseline model selected'
+    : 'Equal estimated cost'
 }
 
 function renderCostValue(value?: number, currency?: string) {
-  if (typeof value !== 'number' || !currency) {
-    return <span className={styles.costValueMuted}>N/A</span>
+  if (!Number.isFinite(value) || !currency?.trim()) {
+    return <span className={styles.costValueMuted}>Price not recorded</span>
   }
 
   return (
@@ -685,32 +616,15 @@ function formatJson(jsonStr: string | undefined) {
   }
 }
 
-function formatCurrency(value: number, currency?: string) {
-  if (!currency) {
-    return 'N/A'
+function formatRecordedCost(record: InsightsRecord, value?: number) {
+  if (!Number.isFinite(value) || !record.currency?.trim()) {
+    return getUnavailableCost(record)?.label || 'Price not recorded'
   }
-
-  try {
-    const minimumFractionDigits = Math.abs(value) >= 0.01 ? 2 : 4
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits,
-      maximumFractionDigits: 4,
-    }).format(value)
-  } catch {
-    return `${value.toFixed(4)} ${currency}`
-  }
-}
-
-function formatCurrencyOrNA(value?: number, currency?: string) {
-  return typeof value === 'number' && currency ? formatCurrency(value, currency) : 'N/A'
+  return formatCurrency(value, record.currency)
 }
 
 function formatTokenValue(value?: number) {
-  return typeof value === 'number' ? value.toLocaleString('en-US') : '-'
-}
-
-function formatSimilarityValue(value?: number) {
-  return typeof value === 'number' ? value.toFixed(3) : '-'
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value.toLocaleString('en-US')
+    : 'Not recorded'
 }

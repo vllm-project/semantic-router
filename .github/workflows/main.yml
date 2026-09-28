@@ -1,0 +1,68 @@
+name: Main
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      security-events: write
+    with:
+      profile: main
+    secrets: inherit
+
+  images:
+    name: Publish Images
+    needs: ci
+    if: >-
+      !cancelled() && needs.ci.result == 'success'
+      && needs.ci.outputs.publish_images != '[]'
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      mode: main
+      images: ${{ needs.ci.outputs.publish_images }}
+      publish_latest: true
+    secrets: inherit
+
+  helm:
+    name: Publish Helm Chart
+    needs: ci
+    if: >-
+      !cancelled() && needs.ci.result == 'success'
+      && needs.ci.outputs.publish_helm == 'true'
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    uses: ./.github/workflows/helm-publish.yml
+    with:
+      mode: main
+    secrets: inherit
+
+  pypi:
+    name: Publish Development CLI
+    needs: ci
+    if: >-
+      !cancelled() && needs.ci.result == 'success'
+      && needs.ci.outputs.publish_python == 'true'
+      && github.repository == 'vllm-project/semantic-router'
+    uses: ./.github/workflows/pypi-publish.yml
+    with:
+      channel: dev
+      prebuilt-dist: true
+    secrets: inherit

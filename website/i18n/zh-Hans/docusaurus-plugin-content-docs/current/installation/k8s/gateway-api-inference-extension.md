@@ -1,263 +1,162 @@
-# 使用 Gateway API Inference Extension 安装
+---
+title: Gateway API 推理扩展
+description: 将语义模型池选择与 Kubernetes InferencePool 内的端点选择结合。
+translation:
+  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_file: "docs/installation/k8s/gateway-api-inference-extension.md"
+  outdated: false
+---
 
-本指南提供了将 vLLM Semantic Router (vSR) 与 Istio 和 Kubernetes Gateway API Inference Extension (GIE) 集成的分步说明。这种强大的组合允许您使用 Kubernetes 原生 API 管理自托管的 OpenAI 兼容模型，实现高级的 load-aware routing。
+# Gateway API 推理扩展
 
-## 架构概览
+Gateway API Inference Extension（GAIE）和 Semantic Router 解决路由的不同部分：
 
-部署包含三个主要组件：
+- **Semantic Router** 根据请求含义、策略和配方状态选择逻辑模型或池。
+- **GAIE** 将该池表示为 `InferencePool`，并让 endpoint picker 选择就绪副本。
 
-- **vLLM Semantic Router**：基于请求内容对传入请求进行分类的智能核心。
-- **Istio & Gateway API**：网络网格和所有进入集群流量的前门。
-- **Gateway API Inference Extension (GIE)**：用于管理和扩展自托管模型后端的 Kubernetes 原生 API 集（`InferencePool` 等）。
+当一个公开模型 ID 可以在多个模型池之间选择，且每个池包含多个可互换的服务副本时，将两者一起使用。若每个模型直接映射到一个 Kubernetes Service，请改用更简单的网关集成，例如 [Istio](istio)。
 
-## 集成优势
-
-将 vSR 与 Istio 和 GIE 集成，为服务 LLM 提供了一个强大的 Kubernetes 原生解决方案，具有以下关键优势：
-
-### 1. **Kubernetes 原生 LLM 管理**
-
-使用熟悉的自定义资源定义 (CRD) 通过 `kubectl` 直接管理您的模型、路由和扩展策略。
-
-### 2. **智能模型和副本路由**
-
-结合 vSR 基于提示词的模型路由与 GIE 的智能负载感知副本选择。这确保请求不仅发送到正确的模型，还发送到最健康的副本，一次高效跳转完成所有操作。
-
-### 3. **保护模型免受过载**
-
-内置调度器跟踪 GPU 负载和请求队列，在高需求时自动卸载流量，防止模型服务器崩溃。
-
-### 4. **深度可观测性**
-
-从高级别 Gateway 指标和详细的 vSR 性能数据（如 token 使用和分类准确性）获取洞察，以监控和排查整个 AI 堆栈。
-
-### 5. **安全的多租户**
-
-使用标准 Kubernetes 命名空间和 `HTTPRoute` 隔离租户工作负载。在共享公共安全网关基础设施的同时应用速率限制和其他策略。
-
-## 支持的后端模型
-
-此架构旨在与任何暴露 **OpenAI 兼容 API** 的自托管模型配合使用。本指南中的演示模型使用 `vLLM` 服务 Llama3 和 Phi-3，但您可以轻松地用自己的模型服务器替换它们。
-
-## 前置条件
-
-开始之前，请确保已安装以下工具：
-
-- [Docker](https://docs.docker.com/get-docker/) 或其他容器运行时。
-- [kind](https://kind.sigs.k8s.io/) v0.22+ 或任何 Kubernetes 1.29+ 集群。
-- [kubectl](https://kubernetes.io/docs/tasks/tools/) v1.30+。
-- [Helm](https://helm.sh/) v3.14+。
-- [istioctl](https://istio.io/latest/docs/ops/diagnostic-tools/istioctl/) v1.28+。
-- 存储在 `HF_TOKEN` 环境变量中的 Hugging Face 令牌，示例 vLLM 部署需要它来下载模型。
-
-您可以使用以下命令验证工具链版本：
-
-```bash
-kind version
-kubectl version --client --short
-helm version --short
-istioctl version --remote=false
+```text
+client
+  -> Gateway
+  -> Semantic Router ExtProc
+  -> HTTPRoute chosen by x-selected-model
+  -> InferencePool
+  -> endpoint picker
+  -> model replica
 ```
 
-## 步骤 1：创建 Kind 集群（可选）
+## 选择并安装网关栈
 
-如果您没有 Kubernetes 集群，可以创建一个本地集群进行测试：
+使用平台支持的网关实现安装并验证 GAIE。使用上游项目的同一兼容集合；不要混用从不同版本复制的 CRD、chart 和示例。
 
-```bash
-kind create cluster --name vsr-gie
+- [GAIE 文档](https://gateway-api-inference-extension.sigs.k8s.io/)
+- [支持的网关实现](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/)
+- [GAIE 发行版](https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases)
+- [llm-d 网关提供方](https://llm-d.ai/docs/infrastructure/gateway)
 
-# 验证集群就绪
-kubectl wait --for=condition=Ready nodes --all --timeout=300s
+加入 Semantic Router 之前，确认：
+
+1. `Gateway` 报告 `Programmed=True`；
+2. 每个 `HTTPRoute` 报告已接受且引用已解析；
+3. 每个 `InferencePool` 有就绪端点；以及
+4. 直接请求能到达预期的池。
+
+Semantic Router 不安装、也不拥有网关控制器、GAIE CRD、endpoint picker 或模型服务器。
+
+## 定义名称约定
+
+Semantic Router 所选的提供商模型会成为 Gateway API 路由使用的请求头。该精确值必须在以下三个对象中一致：
+
+```yaml
+# Router config fragment
+providers:
+  defaults:
+    model: local/general
+  models:
+    - name: local/general
+      provider_model_id: served-general
+      api_format: openai
+      backend_refs:
+        - name: general-pool
+          endpoint: general-pool.inference.svc.cluster.local:8000
+          protocol: http
+          provider: vllm
+          weight: 100
 ```
 
-## 步骤 2：安装 Istio
-
-安装支持 Gateway API 和外部处理的 Istio：
-
-```bash
-# 下载并安装 Istio
-export ISTIO_VERSION=1.29.0
-curl -L https://istio.io/downloadIstio | ISTIO_VERSION=$ISTIO_VERSION sh -
-export PATH="$PWD/istio-$ISTIO_VERSION/bin:$PATH"
-istioctl install -y --set profile=minimal --set values.pilot.env.ENABLE_GATEWAY_API=true
-
-# 验证 Istio 就绪
-kubectl wait --for=condition=Available deployment/istiod -n istio-system --timeout=300s
+```yaml
+# Gateway API fragment
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: general-pool
+  namespace: inference
+spec:
+  parentRefs:
+    - name: inference-gateway
+  rules:
+    - matches:
+        - headers:
+            - type: Exact
+              name: x-selected-model
+              value: local/general
+      backendRefs:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: general-pool
+          port: 8000
 ```
 
-## 步骤 3：安装 Gateway API & GIE CRDs
+Router 在请求上写入 `x-selected-model`。它在响应上以 `x-vsr-selected-model` 向客户端暴露逻辑选择。GAIE 负责随后在 `general-pool` 内选择端点。
 
-安装标准 Gateway API 和 Inference Extension 的自定义资源定义 (CRD)：
+## 部署 Semantic Router
+
+应用前先创建并校验完整配置：
 
 ```bash
-# 安装 Gateway API CRDs
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
-
-# 安装 Gateway API Inference Extension CRDs
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/v1.1.0/manifests.yaml
-
-# 验证 CRDs 已安装
-kubectl get crd | grep 'gateway.networking.k8s.io'
-kubectl get crd | grep 'inference.networking.k8s.io'
+vllm-sr config validate --config config.yaml
 ```
 
-## 步骤 4：部署演示 LLM 服务器
+然后按 [Helm 或 Operator 工作流](../configuration-workflows) 部署。直接使用 Helm 时，通过 `configOverride` 传入完整的规范文档；这会在 chart 应用其 Kubernetes 侧改写之前替换 chart 示例配置。
 
-部署两个 `vLLM` 实例（Llama3 和 Phi-3）作为后端。它们将从 Hugging Face 自动下载。
+## ExtProc 之后重新评估路由
 
-```bash
-# 为模型创建命名空间和密钥
-kubectl create namespace llm-backends --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n llm-backends create secret generic hf-token --from-literal=token=$HF_TOKEN
+网关必须在下游请求路径中调用 Semantic Router，并在写入 `x-selected-model` 后重新评估路由。在规范配置中保持此 Router 设置启用：
 
-# 部署模型服务器
-kubectl -n llm-backends apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/vLlama3.yaml
-kubectl -n llm-backends apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/vPhi4.yaml
-
-# 等待模型就绪（可能需要几分钟）
-kubectl -n llm-backends wait --for=condition=Ready pods --all --timeout=10m
+```yaml
+global:
+  router:
+    clear_route_cache: true
 ```
 
-## 步骤 5：部署 vLLM Semantic Router
+这要求 Envoy 丢弃 ExtProc 之前选定的路由，并再次评估 `HTTPRoute` 头匹配。确保网关的 ExtProc 策略保留该响应标志。仅将依赖路由的授权和其他过滤器放在重新评估之后的路由上，或明确验证其顺序。
 
-使用官方 Helm chart 部署 vLLM Semantic Router。此组件将作为 `ext_proc` 服务器运行，Istio 调用它进行路由决策。
+- **Istio：** 使用 ExtProc `EnvoyFilter` 及其服务 `DestinationRule`。[Istio 指南](istio) 展示了直接 Service 版本的接入方式。
+- **agentgateway：** 在其预路由阶段附加 `AgentgatewayPolicy`。见 [agentgateway](agentgateway)。
+- **Agent Router（原 Envoy AI Gateway） / Envoy Gateway：** 使用网关支持的 ExtProc 策略面。见 [Agent Router](ai-gateway)。
 
-```bash
-helm upgrade -i semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version v0.0.0-latest \
-  --namespace vllm-semantic-router-system \
-  --create-namespace \
-  -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml
+不要把一种网关实现的接入资源应用到另一种；它们的策略 API 和处理模式不可互换。
 
-# 等待路由就绪
-kubectl -n vllm-semantic-router-system wait --for=condition=Available deploy/semantic-router --timeout=10m
-```
+对于分片请求体或立即流式响应，还需按 [Streamed ExtProc](streamed-extproc) 配置 body 模式。
 
-## 步骤 6：部署 Gateway 和路由逻辑
+## 验证组合路径
 
-应用最后一组资源来创建面向公众的 Gateway 并将所有组件连接在一起。这包括 `Gateway`、GIE 的 `InferencePools`、流量匹配的 `HTTPRoutes` 和 Istio 的 `EnvoyFilter`。
+使用当前配置暴露的虚拟模型发送请求：
 
 ```bash
-# 应用所有路由和网关资源
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/gateway.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inferencepool-llama.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inferencepool-phi4.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/httproute-phi4-pool.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/destinationrule.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/envoyfilter.yaml
-
-# 验证 Gateway 已被 Istio 编程
-kubectl wait --for=condition=Programmed gateway/inference-gateway --timeout=120s
-```
-
-## 测试部署
-
-### 方式 1：端口转发
-
-设置端口转发以从本地机器访问网关。
-
-```bash
-# Gateway 服务名为 'inference-gateway-istio'，位于 default 命名空间
-kubectl port-forward svc/inference-gateway-istio 8080:80
-```
-
-### 发送测试请求
-
-端口转发激活后，您可以向 `localhost:8080` 发送 OpenAI 兼容请求。
-
-**测试 1：显式请求模型**
-此请求绕过 Semantic Router 的逻辑，直接发送到指定的模型池。
-
-```bash
-curl -sS http://localhost:8080/v1/chat/completions \
+curl -i "$GATEWAY_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "llama3-8b",
-    "messages": [{"role": "user", "content": "Summarize the Kubernetes Gateway API in three sentences."}]
+    "model": "vllm-sr/auto",
+    "messages": [{"role": "user", "content": "Explain this API error."}]
   }'
 ```
 
-**测试 2：让 Semantic Router 选择模型**
-通过设置 `"model": "auto"`，您让 vSR 对 prompt 进行分类。它将识别这是一个"math"查询并添加 `x-selected-model: phi4-mini` header，`HTTPRoute` 使用它来路由请求。
+逐层检查：
 
 ```bash
-curl -sS http://localhost:8080/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model": "auto",
-    "messages": [{"role": "user", "content": "What is 2+2 * (5-1)?"}],
-    "max_tokens": 64
-  }'
+kubectl get gateway,httproute -A
+kubectl get inferencepools -A
+kubectl get httproute general-pool -n inference \
+  -o jsonpath='{.status.parents[*].conditions[*].type}{" "}{.status.parents[*].conditions[*].status}{"\n"}'
 ```
 
-## 故障排除
+响应的 `x-vsr-selected-model` 应匹配路由的 `x-selected-model` 值，且 endpoint picker 应报告该池中的就绪端点。仅有 HTTP 200 并不能证明语义选择和端点选择都已运行。
 
-**问题：CRDs 缺失**
-如果看到类似 `no matches for kind "InferencePool"` 的错误，检查 CRDs 是否已安装。
+## 按所有权排查
 
-```bash
-# 检查 GIE CRDs
-kubectl get crd | grep inference.networking.k8s.io
-```
+| 现象 | 从这里开始 |
+| --- | --- |
+| 响应没有 `x-vsr-selected-model` 头 | Semantic Router 配方选择和 ExtProc 接入 |
+| 头存在但路由未被选中 | `HTTPRoute` 头值、路由状态和网关处理顺序 |
+| `ResolvedRefs=False` | `InferencePool` 名称、group、端口、命名空间和引用权限 |
+| 池已选中但没有后端响应 | Endpoint-picker 状态、池选择器和模型服务器就绪状态 |
+| 仅流式或大型请求失败 | ExtProc 请求体模式、body 限制和超时 |
 
-**问题：Gateway 未就绪**
-如果 `kubectl port-forward` 失败或请求超时，检查 Gateway 状态。
+## 生产清单
 
-```bash
-# "Programmed" 条件应为 "True"
-kubectl get gateway inference-gateway -o yaml
-```
-
-**问题：vSR 未被调用**
-如果请求正常但路由似乎不正确，检查 Istio 代理日志中的 `ext_proc` 错误。
-
-```bash
-# 获取 Istio gateway pod 名称
-export ISTIO_GW_POD=$(kubectl get pod -l istio=ingressgateway -o jsonpath='{.items[0].metadata.name}')
-
-# 检查其日志
-kubectl logs $ISTIO_GW_POD -c istio-proxy | grep ext_proc
-```
-
-**问题：请求失败**
-检查 vLLM Semantic Router 和后端模型的日志。
-
-```bash
-# 检查 vSR 日志
-kubectl logs deploy/semantic-router -n vllm-semantic-router-system
-
-# 检查 Llama3 后端日志
-kubectl logs -n llm-backends -l app=vllm-llama3-8b-instruct
-```
-
-## 清理
-
-要删除本指南中创建的所有资源，运行以下命令。
-
-```bash
-# 1. 删除所有已应用的 Kubernetes 资源
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/gateway.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inferencepool-llama.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inferencepool-phi4.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/httproute-phi4-pool.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/destinationrule.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/envoyfilter.yaml
-kubectl delete ns llm-backends
-
-# 2. 卸载 Helm releases
-helm uninstall semantic-router -n vllm-semantic-router-system
-
-# 3. 卸载 Istio
-istioctl uninstall -y --purge
-
-# 4. 删除 kind 集群（可选）
-kind delete cluster --name vsr-gie
-```
-
-## 后续步骤
-
-- **自定义路由**：修改 `semantic-router` Helm chart 的 `values.yaml` 文件以定义您自己的路由类别和规则。
-- **添加您自己的模型**：用您自己的 OpenAI 兼容模型服务器替换演示 Llama3 和 Phi-3 部署。
-- **探索高级 GIE 功能**：查看使用 `InferenceObjective` 实现更高级的自动扩缩和调度策略。
-- **监控性能**：将您的 Gateway 和 vSR 与 Prometheus 和 Grafana 集成以构建监控仪表板。
+- 固定经过测试的 Gateway API、GAIE、网关、endpoint-picker、Router 和模型服务器版本。
+- 为每条路由决定 ExtProc 失败是 fail-open 还是 fail-closed。
+- 将提供商凭证和网关 TLS 材料放在各自所属的 Secret 工作流中，不要放在 Router YAML 里。
+- 在启用组合路径之前，将直接池访问、语义池选择和端点调度作为分开的故障域测试。

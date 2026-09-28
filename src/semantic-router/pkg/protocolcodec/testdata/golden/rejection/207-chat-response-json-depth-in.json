@@ -1,0 +1,17 @@
+{
+  "operation": "response",
+  "limits": {"json_depth": 3},
+  "body": {
+    "id": "chatcmpl-depth",
+    "object": "chat.completion",
+    "created": 1,
+    "model": "provider-model",
+    "choices": [
+      {
+        "index": 0,
+        "message": {"role": "assistant", "content": "done"},
+        "finish_reason": "stop"
+      }
+    ]
+  }
+}

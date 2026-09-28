@@ -1,0 +1,19 @@
+{
+  "status": "ok",
+  "body": {
+    "input": [
+      {
+        "content": [
+          {
+            "text": "Use the wider sampling range.",
+            "type": "input_text"
+          }
+        ],
+        "role": "user",
+        "type": "message"
+      }
+    ],
+    "model": "routed-model",
+    "temperature": 1.5
+  }
+}

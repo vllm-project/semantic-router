@@ -26,8 +26,6 @@ func adminUsersCollectionHandler(svc *Service) http.HandlerFunc {
 		switch r.Method {
 		case http.MethodGet:
 			handleAdminUsersList(w, r, svc)
-		case http.MethodPost:
-			handleAdminUsersCreate(w, r, svc, ac)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -80,49 +78,6 @@ func positiveQueryInt(r *http.Request, key string, fallback, maximum int) int {
 		return maximum
 	}
 	return value
-}
-
-func handleAdminUsersCreate(w http.ResponseWriter, r *http.Request, svc *Service, ac AuthContext) {
-	if !ac.Perms[PermUsersManage] {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-
-	var req struct {
-		Email    string `json:"email"`
-		Name     string `json:"name"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
-		return
-	}
-	if req.Email == "" || req.Password == "" {
-		http.Error(w, "email and password are required", http.StatusBadRequest)
-		return
-	}
-
-	hash, err := svc.HashPassword(req.Password)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	normalizedRole, err := normalizeRole(req.Role)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	user, err := svc.store.CreateUser(r.Context(), req.Email, req.Name, hash, normalizedRole, "active")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	writeAudit(r, svc, "user.create", "/api/admin/users", ac.UserID)
-	respondJSON(w, user)
 }
 
 func adminUserItemHandler(svc *Service) http.HandlerFunc {
@@ -213,8 +168,14 @@ func handleAdminUserPatch(
 		return
 	}
 
-	user, err := svc.store.UpdateUserRoleOrStatus(r.Context(), userID, normalizedRole, normalizedStatus)
+	if RejectRevokedMutation(w, r) {
+		return
+	}
+	user, err := svc.store.UpdateUserRoleOrStatusAuthorized(r.Context(), ac, userID, normalizedRole, normalizedStatus)
 	if err != nil {
+		if writeAdminMutationAuthorizationError(w, err) {
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -256,7 +217,13 @@ func handleAdminUserDelete(
 		return
 	}
 
-	if err := svc.store.DeleteUser(r.Context(), userID); err != nil {
+	if RejectRevokedMutation(w, r) {
+		return
+	}
+	if err := svc.store.DeleteUserAuthorized(r.Context(), ac, userID); err != nil {
+		if writeAdminMutationAuthorizationError(w, err) {
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

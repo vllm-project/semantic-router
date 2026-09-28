@@ -11,7 +11,7 @@ translation:
 
 `latency_aware` 按延迟分位数偏好**最快且可接受**候选的选择算法。
 
-对应 `config/algorithm/selection/latency-aware.yaml`。
+对应 `config/fragments/algorithm/selection/latency-aware.yaml`。
 
 ## 主要优势
 

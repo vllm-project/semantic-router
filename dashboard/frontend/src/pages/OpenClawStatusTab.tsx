@@ -1,6 +1,7 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 
 import ConfirmDialog from '../components/ConfirmDialog'
+import ProductLoadingState from '../components/ProductLoadingState'
 import type { RoomBridgeEnvelope } from '../components/openclawRoomBridge'
 import {
   listenForSurfaceEvents,
@@ -222,7 +223,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
       })
       setSurfaceEvents((previous) => [
         ...previous.slice(-9),
-        { source: 'clawos-room-bridge', type: 'surface_event', roomId: linkedRoomId, payload },
+        { source: 'openclaw-room-bridge', type: 'surface_event', roomId: linkedRoomId, payload },
       ])
     })
     return () => {
@@ -295,21 +296,12 @@ export const StatusTab: React.FC<StatusTabProps> = ({
   }
 
   if (statusLoading && containers.length === 0) {
-    return (
-      <div className={styles.loading} role="status">
-        <div className={styles.spinner} />
-        <p>Checking OpenClaw containers…</p>
-      </div>
-    )
+    return <ProductLoadingState label="Checking OpenClaw" compact />
   }
 
   if (!readOnly && selectedContainer && selected?.healthy) {
     if (tokenLoading) {
-      return (
-        <div className={styles.loading} role="status">
-          Connecting to gateway…
-        </div>
-      )
+      return <ProductLoadingState label="Connecting to gateway" compact />
     }
     if (tokenError || !gatewayToken) {
       return (

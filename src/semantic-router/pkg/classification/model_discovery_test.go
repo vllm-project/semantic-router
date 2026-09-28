@@ -1,6 +1,8 @@
 package classification
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,6 +61,42 @@ func createMockModelTree(t testing.TB, tempDir string) {
 	}
 }
 
+func TestNormalizeModelDiscoveryDir(t *testing.T) {
+	t.Parallel()
+
+	missing := filepath.Join(t.TempDir(), "absent")
+	_, err := normalizeModelDiscoveryDir(missing)
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("missing directory error = %v, want fs.ErrNotExist", err)
+	}
+
+	existing := t.TempDir()
+	got, err := normalizeModelDiscoveryDir(existing)
+	if err != nil {
+		t.Fatalf("existing directory: %v", err)
+	}
+	if got == "" {
+		t.Fatal("existing directory returned empty path")
+	}
+
+	loopDir := t.TempDir()
+	a := filepath.Join(loopDir, "a")
+	b := filepath.Join(loopDir, "b")
+	if symlinkErr := os.Symlink(b, a); symlinkErr != nil {
+		t.Fatalf("symlink a: %v", symlinkErr)
+	}
+	if symlinkErr := os.Symlink(a, b); symlinkErr != nil {
+		t.Fatalf("symlink b: %v", symlinkErr)
+	}
+	_, err = normalizeModelDiscoveryDir(a)
+	if err == nil {
+		t.Fatal("symlink loop succeeded")
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("symlink loop classified as missing: %v", err)
+	}
+}
+
 func TestAutoDiscoverModels(t *testing.T) {
 	tempDir := t.TempDir()
 	createMockModelTree(t, tempDir)
@@ -78,6 +116,7 @@ func TestAutoDiscoverModels(t *testing.T) {
 			name:      "nonexistent directory",
 			modelsDir: "/nonexistent/path",
 			wantErr:   true,
+			checkFunc: func(paths *ModelPaths) bool { return paths == nil },
 		},
 		{
 			name:      "empty directory",
@@ -93,6 +132,9 @@ func TestAutoDiscoverModels(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AutoDiscoverModels() error = %v, wantErr %v", err, tt.wantErr)
 				return
+			}
+			if tt.wantErr && tt.name == "nonexistent directory" && !errors.Is(err, fs.ErrNotExist) {
+				t.Errorf("AutoDiscoverModels() error = %v, want fs.ErrNotExist", err)
 			}
 			if tt.checkFunc != nil && !tt.checkFunc(paths) {
 				t.Errorf("AutoDiscoverModels() check function failed for paths: %+v", paths)
@@ -226,8 +268,7 @@ func TestModelPathsIsComplete(t *testing.T) {
 }
 
 func TestAutoDiscoverModels_RealModels(t *testing.T) {
-	modelsDir := getTestModelsDir()
-	testModelsDirExists(t, modelsDir)
+	modelsDir := requireLegacyTestModelsDir(t)
 
 	paths, err := AutoDiscoverModels(modelsDir)
 	if err != nil {
@@ -247,20 +288,8 @@ func TestAutoDiscoverModels_RealModels(t *testing.T) {
 	t.Logf("  Prefer LoRA: %v", paths.PreferLoRA())
 	t.Logf("  Is Complete: %v", paths.IsComplete())
 
-	if paths.IntentClassifier == "" || paths.PIIClassifier == "" || paths.SecurityClassifier == "" {
-		t.Logf("One or more required models not found (intent=%q, pii=%q, Jailbreak=%q)", paths.IntentClassifier, paths.PIIClassifier, paths.SecurityClassifier)
-		t.Skip("Skipping real-models discovery assertions because required models are not present")
-	}
-	if paths.ModernBertBase == "" {
-		t.Error("ModernBERT base model not found - auto-discovery logic failed")
-	} else {
-		t.Logf("ModernBERT base found at: %s", paths.ModernBertBase)
-	}
-
-	err = ValidateModelPaths(paths)
-	if err != nil {
-		t.Logf("ValidateModelPaths() failed in real-models test: %v", err)
-		t.Skip("Skipping real-models validation because environment lacks complete models")
+	if err := ValidateModelPaths(paths); err != nil {
+		t.Fatalf("explicit model directory failed validation: %v", err)
 	}
 	if !paths.IsComplete() {
 		t.Error("Model paths are not complete")
@@ -268,16 +297,21 @@ func TestAutoDiscoverModels_RealModels(t *testing.T) {
 }
 
 func TestAutoInitializeUnifiedClassifier(t *testing.T) {
-	modelsDir := getTestModelsDir()
-	testModelsDirExists(t, modelsDir)
+	modelsDir := requireLegacyTestModelsDir(t)
 
 	classifier, err := AutoInitializeUnifiedClassifier(modelsDir)
 	if err != nil {
-		t.Skipf("Skipping test: AutoInitializeUnifiedClassifier() failed: %v (models directory: %s)", err, modelsDir)
+		t.Fatalf("explicit AutoInitializeUnifiedClassifier() failed: %v (models directory: %s)", err, modelsDir)
 	}
 	if classifier == nil {
-		t.Skip("Skipping test: AutoInitializeUnifiedClassifier() returned nil classifier (models not available)")
+		t.Fatal("explicit AutoInitializeUnifiedClassifier() returned nil classifier")
 	}
+
+	t.Cleanup(func() {
+		if err := classifier.Close(); err != nil {
+			t.Errorf("close legacy compatibility classifier: %v", err)
+		}
+	})
 
 	t.Logf("Unified classifier initialized successfully")
 	t.Logf("  Use LoRA: %v", classifier.useLoRA)

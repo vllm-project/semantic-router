@@ -1,0 +1,17 @@
+processor:
+  # Ignore fields that are common to all Kubernetes resources
+  ignoreFields:
+    - "TypeMeta"
+    - "ObjectMeta"
+    - "ListMeta"
+
+  # Ignore types that are not relevant for documentation
+  ignoreTypes:
+    - "metav1.Time"
+    - "metav1.Duration"
+    - "metav1.ObjectMeta"
+    - "metav1.TypeMeta"
+    - "metav1.ListMeta"
+
+render:
+  kubernetesVersion: 1.34

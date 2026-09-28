@@ -12,10 +12,10 @@ import (
 )
 
 var expectedAMDModelSpecs = []string{
-	"models/mmbert-embed-32k-2d-matryoshka",
-	"models/mmbert32k-intent-classifier-merged",
-	"models/mmbert32k-factcheck-classifier-merged",
-	"models/mmbert32k-feedback-detector-merged",
+	"models/Vela-1.0-Encoder-307M-Embedding",
+	"models/Vela-1.0-Encoder-307M-Domain",
+	"models/Vela-1.0-Encoder-307M-FactCheck",
+	"models/Vela-1.0-Encoder-307M-Feedback",
 }
 
 func TestExtractModelPaths(t *testing.T) {
@@ -69,7 +69,7 @@ func TestExtractModelPaths(t *testing.T) {
 					},
 				},
 			},
-			expected: []string{"models/lora_intent_classifier_bert-base-uncased_model"},
+			expected: []string{"models/mom-domain-classifier"},
 		},
 		{
 			name: "Extract multiple model paths",
@@ -119,6 +119,8 @@ func TestIsModelDirectory(t *testing.T) {
 		expected bool
 	}{
 		{"models/bert-base-uncased", true},
+		{"models/Vela-1.0-Encoder-307M-Safety", true},
+		{"models/Vela-1.0-Encoder-307M-Safety/model.safetensors", false},
 		{"models/gmtrouter.pt", false},
 		{"models/lora_model/adapter_config.json", false},
 		{"models/mapping.json", false},
@@ -155,6 +157,23 @@ func TestExtractModelPathsSkipsRootLevelModelFiles(t *testing.T) {
 
 	if got := ExtractModelPaths(cfg); slices.Contains(got, "models/gmtrouter.pt") {
 		t.Fatalf("ExtractModelPaths() unexpectedly included root-level model file: %v", got)
+	}
+}
+
+func TestExtractModelPathsIncludesLocalClassifierSignals(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
+				Name:      "risk",
+				Type:      "local",
+				ModelPath: "models/risk-classifier",
+				Labels:    []string{"SAFE", "RISKY"},
+			}}},
+		},
+	}
+
+	if got := ExtractModelPaths(cfg); !slices.Contains(got, "models/risk-classifier") {
+		t.Fatalf("ExtractModelPaths() = %v, want local classifier model path", got)
 	}
 }
 
@@ -268,6 +287,10 @@ func TestBuildModelSpecsIncludesFactCheckClassifierWhenSignalConfigured(t *testi
 					{Name: "needs_fact_check"},
 				},
 			},
+			Decisions: []config.Decision{{
+				Name:  "verified-route",
+				Rules: config.RuleNode{Type: config.SignalTypeFactCheck, Name: "needs_fact_check"},
+			}},
 		},
 		InlineModels: config.InlineModels{
 			HallucinationMitigation: config.HallucinationMitigationConfig{
@@ -428,7 +451,7 @@ func TestBuildModelSpecsIncludesCoreClassifierUsedViaProjection(t *testing.T) {
 	}
 }
 
-func TestBuildModelSpecsIncludesRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
+func TestBuildModelSpecsSkipsUnusedRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
 version: v0.3
 listeners:
@@ -437,12 +460,13 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: openai/gpt-oss-120b
+    model: openai/gpt-oss-120b
   models:
     - name: openai/gpt-oss-120b
       provider_model_id: openai/gpt-oss-120b
       backend_refs:
         - name: primary
+          provider: vllm
           endpoint: localhost:8000
           protocol: http
           weight: 100
@@ -469,12 +493,12 @@ routing:
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs,
-		"models/mmbert-embed-32k-2d-matryoshka",
-	)
+	if len(specs) != 0 {
+		t.Fatalf("unused defaults requested model downloads: %+v", specs)
+	}
 }
 
-func TestBuildModelSpecsIncludesRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
+func TestBuildModelSpecsSkipsUnusedRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
 version: v0.3
 listeners:
@@ -483,12 +507,13 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: openai/gpt-oss-120b
+    model: openai/gpt-oss-120b
   models:
     - name: openai/gpt-oss-120b
       provider_model_id: openai/gpt-oss-120b
       backend_refs:
         - name: primary
+          provider: vllm
           endpoint: localhost:8000
           protocol: http
           weight: 100
@@ -537,9 +562,9 @@ global:
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs,
-		"models/mmbert-embed-32k-2d-matryoshka",
-	)
+	if len(specs) != 0 {
+		t.Fatalf("unused defaults requested model downloads: %+v", specs)
+	}
 }
 
 func TestBuildModelSpecsSkipsUnusedFeedbackDetectorDefaults(t *testing.T) {
@@ -587,11 +612,9 @@ func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
 	}
 
 	assertContainsAllModelSpecs(t, specs,
-		"models/mom-embedding-pro",
-		"models/mom-embedding-flash",
-		"models/mmbert-embed-32k-2d-matryoshka",
+		"models/Vela-1.0-Encoder-307M-Embedding",
 		"models/mom-embedding-light",
-		"models/mmbert32k-modality-router-merged",
+		"models/Vela-1.0-Encoder-307M-Modality",
 	)
 }
 
@@ -601,7 +624,7 @@ func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {
 		t.Fatal("failed to resolve amd config path")
 	}
 
-	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../deploy/recipes/balance.yaml"))
+	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../config/recipes/balance/config.yaml"))
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("read %s: %v", configPath, err)
@@ -659,7 +682,38 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForAgentSmokeConfigs(t *testing.
 	}
 }
 
-func TestBuildModelSpecsSkipsRouterOwnedDefaultsForMemoryE2EConfigs(t *testing.T) {
+func TestBuildModelSpecsDownloadsOnlyVelaDomainForRiscvQemuConfig(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to resolve RISC-V QEMU config path")
+	}
+	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "e2e", "config", "config.riscv-qemu.yaml"))
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", configPath, err)
+	}
+	cfg, err := config.ParseYAMLBytes(data)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+	if !cfg.IsCategoryClassifierEnabled() {
+		t.Fatal("RISC-V QEMU config must enable the Vela Domain classifier")
+	}
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want only Vela Domain: %#v", len(specs), specs)
+	}
+	if specs[0].LocalPath != "models/Vela-1.0-Encoder-307M-Domain" ||
+		specs[0].RepoID != "llm-semantic-router/Vela-1.0-Encoder-307M-Domain" ||
+		specs[0].Revision == "" {
+		t.Fatalf("RISC-V QEMU must download the pinned Vela Domain classifier: %#v", specs[0])
+	}
+}
+
+func TestBuildModelSpecsDownloadsOnlyVelaEmbeddingForMemoryE2EConfigs(t *testing.T) {
 	for _, relParts := range [][]string{
 		{"..", "..", "..", "..", "e2e", "config", "config.memory-user.yaml"},
 		{"..", "..", "..", "..", "e2e", "config", "config.memory-user-valkey.yaml"},
@@ -686,8 +740,13 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForMemoryE2EConfigs(t *testing.T
 			if err != nil {
 				t.Fatalf("BuildModelSpecs() error = %v", err)
 			}
-			if len(specs) != 0 {
-				t.Fatalf("BuildModelSpecs() returned %d specs, want 0: %#v", len(specs), specs)
+			if len(specs) != 1 {
+				t.Fatalf("BuildModelSpecs() returned %d specs, want only the memory embedding: %#v", len(specs), specs)
+			}
+			if specs[0].LocalPath != "models/Vela-1.0-Encoder-307M-Embedding" ||
+				specs[0].RepoID != "llm-semantic-router/Vela-1.0-Encoder-307M-Embedding" ||
+				specs[0].Revision == "" || specs[0].CheckONNX {
+				t.Fatalf("memory E2E must download the pinned native Vela embedding: %#v", specs[0])
 			}
 		})
 	}

@@ -6,6 +6,7 @@ import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useSt
 
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import ProductLoadingState from './ProductLoadingState'
 import { toolRegistry } from '../tools'
 import type { RegisteredTool } from '../tools'
 import { useMCPServers } from '../tools/mcp'
@@ -54,10 +55,10 @@ interface ActionError {
 }
 
 export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedded = false }) => {
-  const { isReadonly } = useReadonly()
-  const { user } = useAuth()
+  const { serverReadonly, isLoading: readonlyLoading } = useReadonly()
+  const { user, isLoading: authLoading } = useAuth()
   const canManageServers = canManageMCP(user)
-  const mutationDisabled = isReadonly || !canManageServers
+  const mutationDisabled = authLoading || readonlyLoading || serverReadonly || !canManageServers
   const {
     servers,
     tools,
@@ -265,9 +266,7 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedde
             ) : null}
           </div>
         ) : null}
-        <div className={styles.loading} role="status">
-          Loading MCP servers and tools…
-        </div>
+        <ProductLoadingState label="Loading tools" compact />
       </div>
     )
   }
@@ -352,7 +351,12 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedde
           onDismiss={() => setActionError(null)}
         />
       ) : null}
-      {!canManageServers ? (
+      {!readonlyLoading && serverReadonly ? (
+        <div className={styles.permissionNotice} role="note">
+          The server-wide read-only policy disables MCP server changes. Runtime config mount
+          availability does not affect MCP management.
+        </div>
+      ) : !authLoading && !canManageServers ? (
         <div className={styles.permissionNotice} role="note">
           You can inspect MCP servers and tools. Connect, edit, and delete actions require the{' '}
           <code>mcp.manage</code> permission.

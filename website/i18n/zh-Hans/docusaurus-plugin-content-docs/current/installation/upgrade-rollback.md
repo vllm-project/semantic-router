@@ -1,37 +1,41 @@
 ---
 sidebar_position: 10
+translation:
+  source_commit: "33349fdab9ad294da19ebd11588f8adbe8771b4a"
+  source_file: "docs/installation/upgrade-rollback.md"
+  outdated: false
 ---
 
-# 升级与回滚（Upgrade and Rollback）
+# 升级与回滚
 
-本手册覆盖了在生产环境中，如何对 vLLM Semantic Router 的各个发布面（release surface）进行升级、版本固定（pin）与回滚。
+本运行手册介绍如何在生产环境中升级、固定和回滚 vLLM Semantic Router 的每个发行表面。
 
 ---
 
-## 发布渠道（Release Channels）
+## 发行通道
 
-| 渠道 | Tag 模式 | 更新频率 | 适用场景 |
+| 通道 | 标签模式 | 更新时机 | 用途 |
 |---------|-------------|------------|----------|
-| **版本化** | `v0.3.0` / `0.3.0` | 仅打 tag 的正式发布 | 生产环境 — 不可变，推荐 |
-| **夜间构建** | `nightly-20260115` | 每日 02:00 UTC | 预发布测试 |
-| **Latest** | `latest` | 每次 push 到 `main` + 正式发布 | 仅用于开发 |
+| **Versioned** | `v0.3.0` / `0.3.0` | 仅带标签的发行 | 生产发行标识符；在需要不可变时验证并固定 digest |
+| **Nightly** | `nightly-YYYYMMDD` | 带日期戳的构建 | 预发行测试 |
+| **Latest** | `latest` | `main` 上受影响的镜像变更 + 发行 | 仅用于开发 |
 
-::::tip 建议
-生产环境务必使用 **版本化** tag。它是不可变的：同一个版本 tag 的 digest 永远不会变化。你可以在 [GitHub Releases](https://github.com/vllm-project/semantic-router/releases) 查看最新发布版本。
-::::
+:::tip 建议
+在生产中使用 **versioned** 发行，然后记录已解析的产物 digest。标签是可读的发行标识符；只有经过验证的 digest 才是不可变引用。已发布的发行见 [GitHub Releases 页面](https://github.com/vllm-project/semantic-router/releases)。
+:::
 
 ---
 
 ## 前置条件
 
-- `helm` ≥ 3.14（用于 Helm OCI 操作）
-- 已为目标集群配置 `kubectl`
+- 使用 `--reset-then-reuse-values` 时需要 `helm` ≥ 3.14
+- 已为你的目标集群配置 `kubectl`
 - `pip` ≥ 22（用于 Python CLI）
 - `docker` 或 `podman`（用于直接镜像操作）
 
 ---
 
-## 1. 查看当前版本
+## 1. 检查当前版本
 
 ### Helm release
 
@@ -40,12 +44,12 @@ helm list -n vllm-semantic-router-system
 helm history semantic-router -n vllm-semantic-router-system
 ```
 
-`CHART` 列显示 chart 版本（例如 `semantic-router-0.2.0`），`APP VERSION` 显示该 chart 部署的镜像 tag。
+`CHART` 列显示 chart 版本（例如 `semantic-router-0.2.0`），`APP VERSION` 显示该 chart 部署的镜像标签。
 
-### 运行中的容器镜像
+### 正在运行的容器镜像
 
 ```bash
-# Get the image tag currently used by the extproc deployment
+# 获取 extproc deployment 当前使用的镜像标签
 kubectl get deployment -n vllm-semantic-router-system \
   -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.template.spec.containers[0].image}{"\n"}{end}'
 ```
@@ -63,16 +67,16 @@ pip show vllm-sr
 
 ### 2a. Helm chart 升级
 
-生产环境升级务必指定具体版本，切勿依赖 `latest`。
+始终升级到特定版本。在生产中永远不要依赖 `latest`。
 
 ```bash
-# Pull the chart metadata first (optional but useful to verify it exists)
+# 先拉取 chart 元数据（可选，但有助于验证它存在）
 helm show chart oci://ghcr.io/vllm-project/charts/semantic-router --version 0.3.0
 
-# Upgrade to a specific version
-# --reset-then-reuse-values (Helm ≥ 3.14) resets to the new chart's defaults
-# first, then re-applies your previous overrides on top. This is safer than
-# --reuse-values alone, which breaks if the new chart adds new required values.
+# 升级到特定版本
+# --reset-then-reuse-values（Helm ≥ 3.14）先重置为新 chart 的默认值，
+# 然后在其上重新应用你先前的覆盖。复核结果清单，因为重命名
+# 或不兼容的 values 仍需要迁移。
 helm upgrade semantic-router \
   oci://ghcr.io/vllm-project/charts/semantic-router \
   --version 0.3.0 \
@@ -82,11 +86,9 @@ helm upgrade semantic-router \
   --timeout 10m
 ```
 
-::::caution 跨版本升级请使用 `--reset-then-reuse-values`，而不是 `--reuse-values`
-`--reuse-values` 只会合并旧版本存储的 values，并跳过新 chart 的默认值；当新 chart 引入新的必填字段时，这会导致模板渲染错误。`--reset-then-reuse-values`（Helm ≥ 3.14）会先重置为新版本默认值，再把你的覆盖项叠加上去——总是安全。
-
-如果你使用 Helm < 3.14，请改用 `-f your-values.yaml` 显式提供配置。
-::::
+:::caution 每次 chart 升级前都要复核 values
+`--reuse-values` 会跳过新的 chart 默认值，并可能在发行添加必需 values 时失败。`--reset-then-reuse-values`（Helm ≥ 3.14）从新默认值开始，但不能迁移已重命名、已删除或不兼容的 values。阅读发行说明，并在应用之前渲染或 diff 拟议清单。如果你使用 Helm < 3.14，请用 `-f your-values.yaml` 显式提供经过复核的 values 文件。
+:::
 
 升级后验证：
 
@@ -97,62 +99,81 @@ kubectl rollout status deployment/semantic-router -n vllm-semantic-router-system
 
 ### 2b. Docker 镜像升级（非 Helm 部署）
 
-在 [GitHub Releases](https://github.com/vllm-project/semantic-router/releases) 找到最新版本后：
+在 [GitHub Releases 页面](https://github.com/vllm-project/semantic-router/releases)查找最新版本，然后：
 
 ```bash
-# Pull by version tag (substitute podman for docker if using podman)
+# 按版本标签拉取（如果使用 podman，将 docker 替换为 podman）
 docker pull ghcr.io/vllm-project/semantic-router/extproc:v0.3.0
 docker pull ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0
-docker pull ghcr.io/vllm-project/semantic-router/anthropic-shim:v0.3.0
 
-# Get the immutable digest for maximum pinning stability
-DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' \
-  ghcr.io/vllm-project/semantic-router/extproc:v0.3.0)
+# 读取多架构索引 digest，而不是平台特定清单。
+DIGEST=$(docker buildx imagetools inspect \
+  ghcr.io/vllm-project/semantic-router/extproc:v0.3.0 \
+  --format '{{.Manifest.Digest}}')
 echo "Use digest: ${DIGEST}"
 ```
 
-对于 Kubernetes manifests，建议固定到 digest，而不是 tag：
+对于 Kubernetes 清单，固定到 digest，而不是标签：
 
 ```yaml
 image: ghcr.io/vllm-project/semantic-router/extproc@sha256:<digest>
 ```
 
-一次完整版本发布通常会包含这些镜像：
+完整发行的已发布版本化镜像：
 
-| 镜像 | 典型责任方 |
+| 镜像 | 典型所有者 |
 |-------|---------------|
 | `ghcr.io/vllm-project/semantic-router/extproc:v0.3.0` | Router ExtProc 运行时 |
-| `ghcr.io/vllm-project/semantic-router/extproc-rocm:v0.3.0` | ROCm Router ExtProc 运行时 |
+| `ghcr.io/vllm-project/semantic-router/extproc-rocm:v0.3.0` | ROCm router ExtProc 运行时 |
 | `ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0` | 本地/运行时 CLI 镜像 |
 | `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:v0.3.0` | ROCm 本地/运行时 CLI 镜像 |
-| `ghcr.io/vllm-project/semantic-router/anthropic-shim:v0.3.0` | Anthropic 兼容 API shim 镜像 |
-| `ghcr.io/vllm-project/semantic-router/dashboard:v0.3.0` | Dashboard 后端/前端镜像 |
-| `ghcr.io/vllm-project/semantic-router/llm-katan:v0.3.0` | Fleet simulation 服务镜像 |
+| `ghcr.io/vllm-project/semantic-router/dashboard:v0.3.0` | 控制面板后端/前端镜像 |
 | `ghcr.io/vllm-project/semantic-router/operator:v0.3.0` | Kubernetes operator 镜像 |
 | `ghcr.io/vllm-project/semantic-router/operator-bundle:v0.3.0` | Operator bundle 镜像 |
+
+镜像仓库不一定发布相同的发行通道。在将平台特定镜像添加到生产清单之前，先在 GHCR 中验证精确的标签或 digest。
 
 ### 2c. Python CLI 升级
 
 ```bash
 pip install --upgrade vllm-sr==0.3.0
-vllm-sr --version    # verify
+vllm-sr --version    # 验证
 ```
 
-升级到最新稳定版：
+升级到最新稳定发行：
 
 ```bash
 pip install --upgrade vllm-sr
 ```
 
-### 2d. Fleet simulator Python 包升级
+#### 对先前 Fleet Simulator sidecar 的一次性清理
 
-`vllm-sr-sim` 是一个独立 PyPI 包，发布节奏与主仓库不同。若你依赖 simulator CLI 或 dashboard sidecar 包数据，请显式固定版本：
+当前发行不会在 `vllm-sr serve` 生命周期中构建或启动 Fleet Simulator，并且 `vllm-sr stop` 有意不管理独立模拟器。从会自动启动旧 sidecar 的发行升级时，先检查该精确的遗留容器（如果当时使用的运行时是 `podman`，请替换）：
 
 ```bash
-pip install --upgrade vllm-sr-sim==0.1.0
+docker container inspect vllm-sr-sim-container \
+  --format '{{.Name}}\t{{.Config.Image}}\t{{.State.Status}}'
 ```
 
-Fleet simulator 的发布使用独立的 `vllm-sr-sim-v<version>` tag 流与 `pypi-publish-vllm-sr-sim.yml` workflow；它不会随着 router 的 `v<version>` tag 一起发布。
+仅当部署历史确认此精确容器是旧的自动管理 sidecar 时，才一次性移除它：
+
+```bash
+docker stop vllm-sr-sim-container
+docker rm vllm-sr-sim-container
+```
+
+不要移除用独立包、独立 Make 目标或自定义部署显式启动的 Fleet Simulator 实例。这些实例独立于 Router 运行时，并且仍然受支持。
+
+### 2d. Fleet simulator Python 包升级
+
+`vllm-sr-sim` 是一个单独的 PyPI 包，有自己的发行节奏。检查已发布的版本，然后固定一个与你的环境匹配的版本。选择开发发行时包含 `--pre`：
+
+```bash
+python -m pip index versions --pre vllm-sr-sim
+pip install --upgrade --pre vllm-sr-sim==<published-version>
+```
+
+Fleet Simulator 有独立的版本流。将其包版本与 Router 发行分开固定。
 
 ---
 
@@ -160,54 +181,54 @@ Fleet simulator 的发布使用独立的 `vllm-sr-sim-v<version>` tag 流与 `py
 
 ### 3a. Helm 回滚（最快路径）
 
-Helm 会保留每次部署的 revision 历史。回滚不需要重新下载，可立即生效。
+Helm 为每个 revision 存储发行 values 和清单。回滚会创建一次新的发布；节点可能仍需要拉取较旧的镜像，因此在将其视为完成之前，等待工作负载就绪。
 
 ```bash
-# View history
+# 查看历史
 helm history semantic-router -n vllm-semantic-router-system
 
-# Roll back to the previous revision
+# 回滚到上一个 revision
 helm rollback semantic-router -n vllm-semantic-router-system --wait
 
-# Roll back to a specific revision number (e.g. revision 3)
+# 回滚到特定 revision 编号（例如 revision 3）
 helm rollback semantic-router 3 -n vllm-semantic-router-system --wait
 
-# Verify
+# 验证
 helm status semantic-router -n vllm-semantic-router-system
 kubectl rollout status deployment/semantic-router -n vllm-semantic-router-system
 ```
 
-也可以通过重新安装旧 chart 版本来回滚：
+如果 Helm 历史不可用，仅用为该发行保存并测试过的 values 安装较旧的 chart：
 
 ```bash
 helm upgrade semantic-router \
   oci://ghcr.io/vllm-project/charts/semantic-router \
   --version 0.2.0 \
   --namespace vllm-semantic-router-system \
-  --reset-then-reuse-values \
+  -f values-0.2.0.yaml \
   --wait
 ```
 
-### 3b. Docker / Kubernetes manifest 回滚
+### 3b. Docker / Kubernetes 清单回滚
 
-若你直接管理 Kubernetes manifests（不使用 Helm），可通过 rollout history 回滚到之前的 revision：
+如果直接管理 Kubernetes 清单（不使用 Helm），使用内置发布历史将 Deployment 回滚到上一个 revision：
 
 ```bash
-# View rollout history
+# 查看发布历史
 kubectl rollout history deployment/semantic-router -n vllm-semantic-router-system
 
-# Undo the last rollout
+# 撤销上一次发布
 kubectl rollout undo deployment/semantic-router -n vllm-semantic-router-system
 
-# Undo to a specific revision
+# 撤销到特定 revision
 kubectl rollout undo deployment/semantic-router \
   --to-revision=3 -n vllm-semantic-router-system
 
-# Verify
+# 验证
 kubectl rollout status deployment/semantic-router -n vllm-semantic-router-system
 ```
 
-如果你使用了镜像 digest 固定，请将 manifest 更新到上一个 digest 后再 `kubectl apply`。
+如果使用固定的镜像 digest，将清单更新为先前的镜像 digest 并 `kubectl apply`。
 
 ### 3c. Python CLI 回滚
 
@@ -218,34 +239,19 @@ vllm-sr --version
 
 ---
 
-## 4. 版本固定（Pinning）参考
+## 4. 版本固定参考
 
-### Makefile 变量
+### Helm values 文件
 
-在本地通过 `make` 构建或部署时，可覆盖这些变量以指定版本，而不是使用 `latest`：
-
-```bash
-# Use a specific image tag for all docker-* targets
-make docker-build-extproc DOCKER_TAG=v0.3.0
-
-# Pull all production images at a specific version
-make docker-pull-release DOCKER_TAG=v0.3.0
-
-# Install/upgrade the Helm chart at a pinned chart version
-make helm-upgrade-version CHART_VERSION=0.3.0
-```
-
-### Helm values 文件（推荐用于长期运行环境）
-
-创建一个 `values-production.yaml` 显式固定镜像 tag：
+创建一个显式固定镜像标签的 `values-production.yaml`：
 
 ```yaml
 image:
-  tag: "v0.3.0"   # pin to an immutable release tag
+  tag: "v0.3.0"   # 可读的发行标签；在需要不可变时使用 digest
   pullPolicy: IfNotPresent
 ```
 
-然后部署：
+然后用以下方式部署：
 
 ```bash
 helm upgrade semantic-router \
@@ -257,67 +263,57 @@ helm upgrade semantic-router \
 
 ---
 
-## 5. 夜间构建（Nightly Builds）
+## 5. Nightly 构建
 
-夜间镜像与 chart 每天 02:00 UTC 构建一次，并打上 `nightly-YYYYMMDD` tag。它们仅用于预发布测试。
+Nightly 镜像使用 `nightly-YYYYMMDD`；nightly chart 版本使用 `0.0.0-nightly.YYYYMMDD`。它们仅用于预发行测试，较旧的日期可能不再保留。在固定之前先发现可用日期：
 
 ```bash
-# Pull the nightly image built on a specific date
-docker pull ghcr.io/vllm-project/semantic-router/vllm-sr:nightly-20260115
+# 需要 oras CLI。检查两个仓库，因为镜像和 chart
+# 的保留可能不同。
+oras repo tags ghcr.io/vllm-project/semantic-router/vllm-sr \
+  | grep -E '^nightly-[0-9]{8}$' | sort -V | tail
+oras repo tags ghcr.io/vllm-project/charts/semantic-router \
+  | grep -E '^0\.0\.0-nightly\.[0-9]{8}$' | sort -V | tail
+```
 
-# Install the nightly Helm chart
+选择两个列表中都存在的日期，然后在部署之前验证精确产物：
+
+```bash
+export NIGHTLY_DATE=<available-YYYYMMDD>
+
+docker pull \
+  "ghcr.io/vllm-project/semantic-router/vllm-sr:nightly-${NIGHTLY_DATE}"
+
+helm show chart oci://ghcr.io/vllm-project/charts/semantic-router \
+  --version "0.0.0-nightly.${NIGHTLY_DATE}"
+
 helm install semantic-router \
   oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version 0.0.0-nightly.20260115 \
+  --version "0.0.0-nightly.${NIGHTLY_DATE}" \
   --namespace vllm-semantic-router-system --create-namespace
 ```
 
-夜间构建 **不会** 自动晋升为版本化发布；只有通过打 tag 的正式发布才会晋升。
+Nightly 构建不会自动晋升为带版本的发行。将它们用于预发行验证，而不是作为未固定的生产通道。
 
 ---
 
-## 6. 晋升策略（Promotion Policy）
-
-```
-nightly-YYYYMMDD  ──→  (manual QA + CI green)  ──→  v0.3.0
-```
-
-夜间构建晋升为正式发布需要：
-
-1. 确认候选 commit 的所有 CI 检查通过。
-2. 将 `src/vllm-sr/pyproject.toml` 与 `candle-binding/Cargo.toml` 的版本字段 bump 到目标版本。
-3. 推送 `v<version>` tag —— 会同时触发 `docker-release.yml`、`helm-publish.yml`、`pypi-publish.yml`、`publish-crate.yml` 与 `release.yml`。
-4. `release.yml` workflow 会先验证各个发布面版本一致，然后再创建 GitHub Release。
-
-对于 dashboard 镜像，Docker release workflow 还会把推送的 `v<version>` tag
-传入 dashboard backend 构建。Dashboard `/api/status` 响应因此会报告与发布镜像一致的
-tag 形式版本。非正式 Docker publish 构建会使用 `src/vllm-sr/pyproject.toml` 版本，
-再追加 PR、commit 或 nightly 元数据，例如 `v0.3.0-dev.<sha>` 或
-`v0.3.0-nightly.<date>.<sha>`。
-
-Fleet simulator 包通过 bump `src/fleet-sim/pyproject.toml` 并推送 `vllm-sr-sim-v<version>` tag 来晋升，触发 `pypi-publish-vllm-sr-sim.yml`。
-
-nightly → release 没有自动化 gating；是否晋升由 release owner 决策。
-
----
-
-## 7. 故障排查（Troubleshooting）
+## 6. 故障排查
 
 ### Helm：`Error: chart not found`
 
 ```bash
-# List available versions in the OCI registry (requires oras CLI)
+# 列出 OCI 注册表中的可用版本（需要 oras CLI）
 oras repo tags ghcr.io/vllm-project/charts/semantic-router
 
-# Verify a specific version exists before installing
+# 在安装之前验证特定版本存在
 helm show chart oci://ghcr.io/vllm-project/charts/semantic-router --version 0.3.0
 ```
 
-### Helm：升级失败后 release 状态异常
+### Helm：失败升级后 release 处于损坏状态
 
 ```bash
 helm rollback semantic-router -n vllm-semantic-router-system --wait
-# If rollback also fails due to a bad state, force-reinstall:
+# 如果回滚也因不良状态失败，强制重新安装：
 helm uninstall semantic-router -n vllm-semantic-router-system
 helm install semantic-router \
   oci://ghcr.io/vllm-project/charts/semantic-router \
@@ -328,14 +324,14 @@ helm install semantic-router \
 
 ### Kubernetes：升级后出现 `ImagePullBackOff`
 
-镜像 tag 可能尚未发布完成（release 仍在发布），或缺少 pull secret。请检查：
+镜像标签可能尚不存在（发行仍在发布），或缺少 pull secret。检查：
 
 ```bash
 kubectl describe pod -n vllm-semantic-router-system <pod-name>
-# Look for "ErrImagePull" and the exact tag that failed
+# 查找 "ErrImagePull" 以及失败的精确标签
 ```
 
-如果确认 tag 还不存在，建议在 release 完成前先回滚：
+如果标签确实不存在，在发行完成期间回滚：
 
 ```bash
 helm rollback semantic-router -n vllm-semantic-router-system

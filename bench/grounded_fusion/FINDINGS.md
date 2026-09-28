@@ -1,157 +1,101 @@
-# Grounding-Aware Fusion — Evaluation Findings
+# Grounding-Aware Fusion: Filter-Policy Findings
 
-A first end-to-end evaluation of the Fusion looper's **grounding-aware synthesis**
-stage against the [DRACO](https://huggingface.co/datasets/perplexity-ai/draco)
-rubric-graded deep-research benchmark, run fully locally (Ollama, Apple Silicon).
-This documents the design, two scorer bugs it surfaced and fixed, the headline
-result, and how to improve the experiment next.
+This document records a June 2026 exploratory evaluation of hard filtering in
+the Fusion looper. It is historical, directional evidence rather than a current
+release benchmark: the run did not capture immutable source, dataset, or model
+revisions, and its sample was small.
 
-## TL;DR
+## Evaluation identity
 
-- **The panel-NLI grounding scorer was broken** and silently returned ~0.500 for
-  every response. Two root causes, both fixed in this change:
-  1. `classify_nli` reconstructed the 3-class distribution from the argmax
-     confidence, so any "neutral" prediction forced `entailment == contradiction`
-     → the consistency score collapsed to exactly 0.5.
-  2. The NLI input was a single `premise [SEP] hypothesis` string truncated to 512
-     tokens; panel answers run 600–1000+ tokens, so the hypothesis was truncated
-     away entirely → the model saw half of one answer → predicted neutral.
-- **After the fix the scorer discriminates** (live scores spread 0.52–0.69;
-  Level-1 Spearman vs panel rubric quality **+0.21**).
-- **But the *intervention* — dropping low-consistency panel responses before
-  synthesis — does not help and significantly hurts on hard factual questions.**
-  On the slice where grounding actually drops a response, the final-answer DRACO
-  score drops with a bootstrap CI excluding 0, and the harm grows monotonically as
-  more responses are dropped.
-- **Mechanism:** cross-model consistency drops the *dissenter*, but on
-  graduate-level questions the dissenter (often the strongest model) carries the
-  correct minority view. **Consistency ≠ correctness.**
+| Dimension | Value recorded by the run |
+| --- | --- |
+| Dataset | DRACO, Medicine and Law domains |
+| Sample size | 12 items, with 4 to 9 contested items depending on threshold |
+| Panel | `qwen3:8b`, `llama3.1:8b`, `gemma3:12b` |
+| Fusion judge | `qwen3:14b` |
+| Rubric grader | `qwen3:14b` |
+| Runtime | Local Ollama on Apple Silicon, through the no-thinking proxy |
+| Grounding mode | Cross-model `panel` NLI |
+| Policy | Hard `filter`, with `min_keep: 1` |
+| Thresholds | `min_score` 0.34, 0.55, and 0.60 |
+| Sampling | `temperature: 0`; panel regenerated independently for each arm |
 
-## Status / production decision (2026-06)
+DRACO grades an answer against weighted positive and negative criteria. The
+negative criteria can carry large penalties for incorrect, unsafe, or poorly
+sourced claims. DRACO does not provide source passages, so this evaluation did
+not exercise `context` or `hybrid` grounding.
 
-Acting on the headline result, the grounding stage now exposes a `grounding.policy`
-lever and **defaults to `weight` (soft down-weighting, no hard-drop)**:
+## Method
 
-- `weight` (default) — keep every panel response; the judge is told to weight each
-  answer by its groundedness score and to protect a correct lone dissenter.
-- `annotate` — keep every response; pass the scores to the judge as notes only.
-- `filter` — the prior hard-drop (below `min_score`); now opt-in.
+The evaluation considered two levels:
 
-**Decided:** we do **not** hard-drop facts by default — `filter` is known to regress
-quality on contested factual items (this document).
+- **Intrinsic:** grade each available panel response and correlate its rubric
+  quality with the panel-NLI grounding score.
+- **Final answer:** compare plain Fusion with grounding-aware Fusion and compute
+  paired bootstrap confidence intervals for the normalized DRACO score.
 
-**Still open (to validate in follow-up CRs, not in this change):**
+The contested subset contains items where the filter dropped at least one panel
+response. It is the subset on which hard filtering can directly change the
+synthesis input.
 
-1. Does `weight`/`annotate` actually *beat* plain fusion, or is it merely
-   non-harmful? Run `make_configs.py --policy weight` / `--policy annotate` arms
-   against the `off` baseline.
-2. Is the scorer (Level-1 Spearman +0.21) strong enough that soft-weighting on it
-   improves synthesis? Discrimination ≠ usefulness-as-a-weight.
+The scorer used for this run retained the complete three-class NLI probability
+distribution and evaluated sentence-level pairs rather than truncating two long
+answers into one model input. Under those conditions, observed scores ranged
+from 0.52 to 0.69 and the Level-1 Spearman correlation with panel rubric quality
+was +0.21. This indicates some discrimination, but it does not by itself show
+that the score is useful as a synthesis weight.
 
-This change ships the policy + default; the efficacy A/B above is deferred.
+## Results
 
-## What was measured
+Delta is grounding-on minus grounding-off for final-answer normalized DRACO
+score. A negative value favors the plain-fusion arm. `ns` means the paired
+bootstrap confidence interval included zero; `sig` means it excluded zero.
 
-Two levels (most eval efforts only do level 2 and then can't explain a null/noisy
-result):
+| `min_score` | Contested items | Overall delta | Contested delta | Contested negative-penalty delta |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.34 | 0 / 12 | -0.035 (`ns`) | Not applicable | Not applicable |
+| 0.55 | 4 / 11 | -0.058 (`ns`) | **-0.113 (`sig`)** | -2.50 (`ns`) |
+| 0.60 | 9 / 12 | -0.090 (`ns`) | **-0.132 (`sig`)** | +4.44 (`ns`) |
 
-- **Level 1 — intrinsic:** is the scorer any good? Grade each panel response with
-  the DRACO rubric and correlate (Spearman) the grounding score with panel-response
-  quality.
-- **Level 2 — extrinsic:** does the *final answer* improve? Same DRACO items
-  through plain Fusion (`grounding.enabled: false`) vs grounding-aware Fusion,
-  both graded by the DRACO rubric; paired bootstrap CIs on the deltas, reported
-  overall + per-domain + on the **contested slice** (items where grounding actually
-  dropped ≥1 response — where it can do anything at all).
-
-DRACO grades a free-text answer against a weighted rubric (positive criteria reward
-correctness/coverage; negative criteria down to −500 penalize confident-wrong /
-unsafe / badly-sourced claims). Grounding ran in **`panel` mode** (cross-model NLI)
-because DRACO ships no source documents, so `context`/`hybrid` modes have nothing
-to score against.
-
-## Setup
-
-- Domains: **Medicine + Law** (12 items) — where the −100…−500 penalties live and
-  models most disagree.
-- Panel: `qwen3:8b`, `llama3.1:8b`, `gemma3:12b` (cross-family for NLI diversity).
-  Judge + rubric grader: `qwen3:14b`. All local via Ollama behind a no-think proxy.
-- Threshold sweep on `grounding.min_score`: **0.34 / 0.55 / 0.60** (`min_keep: 1`).
-- MVP two-config A/B at `temperature: 0` (see Limitations re: per-arm panel
-  regeneration).
-
-## Headline result
-
-Δ = grounding-on − off on the final-answer normalized DRACO score (negative = worse):
-
-| min_score | contested items | overall Δnorm | **contested Δnorm** | contested Δneg-penalty |
-|-----------|-----------------|---------------|---------------------|------------------------|
-| 0.34      | 0 / 12          | −0.035 (ns)   | — (nothing dropped) | —                      |
-| 0.55      | 4 / 11          | −0.058 (ns)   | **−0.113 (sig)**    | −2.50 (ns)             |
-| 0.60      | 9 / 12          | −0.090 (ns)   | **−0.132 (sig)**    | +4.44 (ns)             |
-
-- Monotonic: the more grounding drops, the more it hurts overall quality.
-- On the contested slice the harm is statistically significant (CI excludes 0) at
-  both 0.55 and 0.60. At 0.60, 8 of 9 contested items got worse.
-- The dropped-model frequency at 0.60 was `gemma3:12b` 6×, `qwen3:8b` 5×,
-  `llama3.1:8b` 4× — the largest model is dropped most, consistent with
-  consistency filtering removing the strongest dissenter.
-- The intended benefit (cutting the negative-criteria penalty) was **not robustly
-  realized** (neg-penalty deltas not significant, mixed sign).
+At 0.60, eight of nine contested items scored worse with filtering. Across that
+threshold's panel responses, `gemma3:12b` was dropped six times, `qwen3:8b` five
+times, and `llama3.1:8b` four times. The negative-criteria penalty did not show a
+consistent significant improvement.
 
 ## Interpretation
 
-The scorer is now sound, but the **policy of hard-dropping** the least mutually
-consistent response is the wrong lever for hard factual QA. Three smaller models
-can be confidently wrong *together* (high mutual entailment) while the model that
-disagrees is right; consistency filtering deletes exactly that signal. With
-`min_keep: 1`, high thresholds collapse synthesis onto the single most-agreed
-response — the most consensus-biased answer.
+Within this run, more aggressive hard filtering was associated with lower
+answer quality on contested factual questions. Cross-model agreement is not the
+same as factual correctness: several models can share an error while a
+dissenting response contains the useful minority view. A policy that deletes
+the least consistent response can therefore remove evidence that the synthesis
+judge needs.
 
-## Limitations (read before trusting the magnitudes)
+The evidence supports keeping `filter` opt-in. The router currently defaults to
+`weight`, which preserves every panel response. These results do not establish
+that `weight` improves on plain fusion; they only show that the evaluated hard
+filtering setup was harmful on its contested subset.
 
-- **Small N** (12 items; contested 4–9). Overall deltas are not significant; only
-  the contested slices are.
-- **MVP two-config design** regenerates the panel per arm, so deltas carry
-  sampling noise (one off-arm answer scored worse than its on-arm counterpart).
-  The cached-panel paired design (below) removes this.
-- **Weak panel** (8–12B local models). The "dissenter is right" effect may differ
-  with stronger / more diverse models or a larger panel.
-- **`panel` mode only.** The `context`-mode faithfulness lever (hallucination
-  detector vs real RAG sources) is untested here and is the mode most likely to
-  help — DRACO just can't exercise it (no source docs).
+## Limitations
 
-## How to improve the experiment (next experiments)
+- The run used 12 items, and only 4 to 9 items were contested. Overall deltas
+  were not statistically significant.
+- Each arm generated a new panel, so paired deltas include response-sampling
+  variation even with a zero temperature setting.
+- The 8B to 12B local panel may not represent larger or more diverse model
+  fleets.
+- Only panel grounding was evaluated. Context-grounded factuality requires a
+  dataset with source documents.
+- Immutable source, dataset, and model revisions were not recorded. The exact
+  magnitudes cannot be treated as a reproducible baseline.
+- The run did not compare `weight`, `annotate`, or a random-weight placebo
+  against plain fusion.
 
-1. **Cached-panel paired design** — generate the panel **once** per item, then
-   replay judge+synthesis for each lever/threshold so all cells share identical
-   panel outputs. Biggest single noise reducer; turns the sweep into a clean paired
-   test. Needs the looper to support replaying a fixed panel (or a harness-side
-   refactor that separates panel generation from synthesis).
-2. **Ablate the two levers** — grounding both *filters* the panel and *annotates*
-   the judge prompt. Run `off` / `notes-only` / `filter-only` / `both`. The sweep
-   conflated them; notes-only (information without deletion) may help while
-   filtering hurts.
-3. **Down-weight instead of drop** — keep all responses and pass grounding scores
-   to the judge as soft weights/annotations rather than removing responses. Test
-   whether soft beats hard-drop.
-4. **Larger N / factuality subset** — 12 items is underpowered. Run the full DRACO
-   set (or a factuality-weighted subset) for tighter CIs.
-5. **Test `context` mode on a RAG benchmark** with real source docs — the lever
-   this dataset cannot exercise, and the one with a genuine faithfulness signal.
-6. **Stronger / larger / more diverse panel** — re-test the "dissenter is right"
-   effect with stronger models and panel size > 3.
-7. **Grade dropped responses too (Level-1 completeness)** — emit dropped responses'
-   content in the fusion trace so Level-1 can correlate grounding score with quality
-   across the *full* panel, not just the kept responses.
-8. **Per-section breakdown** — report which rubric sections (Factual Accuracy vs
-   Citation Quality) move, to localize where grounding helps/hurts. (Citation
-   Quality is confounded: vSR Fusion has no server-side web tools, so both arms
-   cite from parametric memory.)
+## Evidence still needed
 
-## Reproducing
-
-See `README.md`. The two scorer fixes are in `candle-binding/src/ffi/classify.rs`
-(real softmax) and `src/semantic-router/pkg/looper/grounding.go` (sentence-level
-NLI). The harness writes per-sample JSONL + summary JSON per arm; `compare.py`
-produces the paired A/B report. Run artifacts are git-ignored.
+A policy decision for soft grounding requires the cached-panel design described
+in [README.md](README.md): generate one panel per item, reuse its exact bytes for
+all arms, and compare judge-only, plain-fusion, grounded-weight, and seeded
+random-weight arms. A larger sample, pinned revisions, model digests, and a
+context-grounded dataset would make the result suitable for release-level
+claims.

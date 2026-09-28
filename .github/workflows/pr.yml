@@ -1,0 +1,43 @@
+name: Pull Request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      security-events: write
+    with:
+      profile: pr
+      full: ${{ contains(github.event.pull_request.labels.*.name, 'ci/full') }}
+      draft: >-
+        ${{ github.event.pull_request.draft
+            && !startsWith(github.head_ref, 'mergify/merge-queue/') }}
+    secrets: inherit
+
+  pr-gate:
+    name: PR Gate
+    if: always()
+    needs: ci
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require the complete planned qualification
+        env:
+          RESULT: ${{ needs.ci.result }}
+        run: test "$RESULT" = success

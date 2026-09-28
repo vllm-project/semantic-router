@@ -1,171 +1,50 @@
-# Test Data for CRD Converter
+# Kubernetes converter fixtures
 
-This directory contains test data for the Kubernetes CRD to canonical v0.3 config converter.
+These fixtures test the conversion from `IntelligentPool` and
+`IntelligentRoute` resources to the router's canonical v0.3 configuration.
+They are test inputs and golden outputs, not deployment examples.
 
-## Directory Structure
+## Layout
 
-```
+```text
 testdata/
-├── base-config.yaml          # Static canonical base configuration (shared across all tests)
-├── input/                    # Input CRD YAML files (IntelligentPool + IntelligentRoute)
-│   ├── 01-basic.yaml
-│   ├── 02-keyword-only.yaml
-│   ├── ...
-│   └── 15-keyword-embedding-domain-no-plugin.yaml
-└── output/                   # Generated canonical v0.3 YAML files
-    ├── 01-basic.yaml
-    ├── 02-keyword-only.yaml
-    ├── ...
-    └── 15-keyword-embedding-domain-no-plugin.yaml
+├── base-config.yaml  # Router-wide fields that do not come from the CRDs
+├── input/            # One IntelligentPool + IntelligentRoute scenario per file
+└── output/           # Expected canonical YAML for the matching input file
 ```
 
-## Base Configuration
+`base-config.yaml` supplies shared provider defaults, services, stores,
+integrations, and model assets. The converter supplies the pool models,
+provider bindings, routing signals, decisions, and route-local plugins.
 
-`base-config.yaml` contains the static canonical configuration that doesn't come from CRDs:
+## Scenarios
 
-- `providers.defaults.reasoning_families`
-- `providers.defaults.default_reasoning_effort`
-- `global.router.config_source`
-- `global.services.api`
-- `global.services.observability`
-- `global.stores.semantic_cache`
-- `global.integrations.tools`
-- `global.model_catalog.embeddings.semantic`
-- `global.model_catalog.modules.prompt_guard`
-- `global.model_catalog.modules.classifier`
+The numbered pairs cover:
 
-## Test Scenarios Overview
+- a minimal pool and route (`01`);
+- keyword, embedding, and domain signals alone and in combination (`02`–`08`);
+- those signal families with route-local plugins (`09`–`15`);
+- a multi-decision route without plugins (`16`); and
+- multimodal embedding conversion (`17`).
 
-| # | File | Keyword | Embedding | Domain | Plugin | Use Case |
-|---|------|---------|-----------|--------|--------|----------|
-| 1 | 01-basic.yaml | | | | | Basic comprehensive example |
-| 2 | 02-keyword-only.yaml | | ✗ | ✗ | ✗ | FAQ detection, greetings |
-| 3 | 03-embedding-only.yaml | ✗ | | ✗ | ✗ | Customer support, technical issues |
-| 4 | 04-domain-only.yaml | ✗ | ✗ | | ✗ | STEM queries, subject routing |
-| 5 | 05-keyword-embedding.yaml | | | ✗ | ✗ | Urgent support with semantics |
-| 6 | 06-keyword-domain.yaml | | ✗ | | ✗ | Academic homework assistance |
-| 7 | 07-domain-embedding.yaml | ✗ | | | ✗ | Research queries by domain |
-| 8 | 08-keyword-embedding-domain.yaml | | | | ✗ | Comprehensive tech support |
-| 9 | 09-keyword-plugin.yaml | | ✗ | ✗ | | FAQ with caching |
-| 10 | 10-embedding-plugin.yaml | ✗ | | ✗ | | PII-protected queries |
-| 11 | 11-domain-plugin.yaml | ✗ | ✗ | | | Legal advice with disclaimers |
-| 12 | 12-keyword-embedding-plugin.yaml | | | ✗ | | Security queries with protection |
-| 13 | 13-keyword-domain-plugin.yaml | | ✗ | | | Medical queries with PII |
-| 14 | 14-domain-embedding-plugin.yaml | ✗ | | | | Financial advice with protection |
-| 15 | 15-keyword-embedding-domain-plugin.yaml | | | | | Enterprise compliance (full) |
-| 16 | 16-keyword-embedding-domain-no-plugin.yaml | | | | ✗ | Educational tutorials |
+Keep an input and its output under the same filename. Add a new numbered pair
+when a converter behavior needs independent coverage; update an existing pair
+only when its contract intentionally changes.
 
-## Test Scenarios Details
+The output files contain the complete canonical configuration after merging
+the CRD-derived fields with `base-config.yaml`. They should use current
+`providers`, `routing`, and `global` fields rather than legacy config aliases.
 
-### Signal Type Combinations (No Plugins)
+## Run the fixture test
 
-1. **02-keyword-only.yaml** - Only keyword signals
-   - Use case: FAQ detection, greeting responses
-   - Signals: urgent, greeting keywords
-
-2. **03-embedding-only.yaml** - Only embedding signals
-   - Use case: Customer support, technical issue detection
-   - Signals: customer_support, technical_issue embeddings
-
-3. **04-domain-only.yaml** - Only domain signals
-   - Use case: STEM queries, subject-specific routing
-   - Signals: math, physics, computer science, chemistry domains
-
-4. **05-keyword-embedding.yaml** - Keyword + Embedding
-   - Use case: Urgent support requests with semantic matching
-   - Signals: urgent keywords + support_request embeddings
-
-5. **06-keyword-domain.yaml** - Keyword + Domain
-   - Use case: Academic homework assistance
-   - Signals: homework keywords + math/physics/chemistry domains
-
-6. **07-domain-embedding.yaml** - Domain + Embedding
-   - Use case: Research queries in specific domains
-   - Signals: research_question embeddings + biology/chemistry/physics domains
-
-7. **08-keyword-embedding-domain.yaml** - All three signal types
-   - Use case: Comprehensive technical support routing
-   - Signals: urgent keywords + technical_help embeddings + CS/engineering/math domains
-
-### Signal Type Combinations (With Plugins)
-
-8. **09-keyword-plugin.yaml** - Keyword + Plugins
-   - Use case: FAQ with aggressive caching
-   - Plugins: semantic-cache, header_mutation
-
-9. **10-embedding-plugin.yaml** - Embedding + Plugins
-   - Use case: Sensitive data handling with immediate user feedback
-   - Plugins: fast_response
-
-10. **11-domain-plugin.yaml** - Domain + Plugins
-    - Use case: Legal advice with disclaimers
-    - Plugins: system_prompt, semantic-cache
-
-11. **12-keyword-embedding-plugin.yaml** - Keyword + Embedding + Plugins
-    - Use case: Security queries with expert guidance and audit headers
-    - Plugins: system_prompt, header_mutation
-
-12. **13-keyword-domain-plugin.yaml** - Keyword + Domain + Plugins
-    - Use case: Medical queries with disclaimers and caching
-    - Plugins: system_prompt, semantic-cache
-
-13. **14-domain-embedding-plugin.yaml** - Domain + Embedding + Plugins
-    - Use case: Financial advice with disclaimers and caching
-    - Plugins: system_prompt, semantic-cache
-
-14. **15-keyword-embedding-domain-plugin.yaml** - Keyword + Embedding + Domain + Plugins
-    - Use case: Enterprise compliance and legal queries with route-local guidance
-    - Signals: compliance/confidential keywords + business_analysis/legal_review embeddings + business/law/economics domains
-    - Plugins: system_prompt, semantic-cache, header_mutation
-    - Multiple decisions with different plugin configurations
-
-15. **16-keyword-embedding-domain-no-plugin.yaml** - All signals, no plugins
-    - Use case: Educational tutorials across multiple domains
-    - Signals: tutorial keywords + learning_intent embeddings + CS/math/engineering domains
-    - Multiple decisions with different priorities
-
-## Plugin Types Used
-
-- **semantic-cache**: Cache responses for similar queries
-- **fast_response**: Return an immediate route-local response without calling an upstream model
-- **system_prompt**: Inject custom system prompts
-- **header_mutation**: Add custom headers to requests
-
-## Running Tests
+From the router module:
 
 ```bash
 cd src/semantic-router
-go test ./pkg/k8s -v -run TestConverterWithTestData
+go test ./pkg/k8s -run TestConverterWithTestData
 ```
 
-This will:
-
-1. Load `base-config.yaml` as the static configuration base
-2. Parse each input YAML file (IntelligentPool + IntelligentRoute)
-3. Convert CRDs to canonical `providers/routing` config
-4. Merge the static canonical base with the dynamic CRD-derived sections
-5. Generate output YAML files in `testdata/output/`
-6. Validate that output stays on the canonical v0.3 contract and can be parsed back into runtime config
-
-## Output Structure
-
-Each generated output file contains canonical v0.3 sections:
-
-- **Static parts** (from base-config.yaml):
-  - `providers.defaults.reasoning_families`
-  - `providers.defaults.default_reasoning_effort`
-  - `global.router`
-  - `global.services`
-  - `global.stores`
-  - `global.integrations`
-- `global.model_catalog`
-  
-- **Dynamic parts** (from CRDs):
-  - `routing.signals.keywords` (from `signals.keywords`)
-  - `routing.signals.embeddings` (from `signals.embeddings`)
-  - `routing.signals.domains` (from `signals.domains`)
-  - `routing.signals.context` and `routing.signals.fact_check`
-  - `routing.decisions` (from `decisions`)
-  - `routing.modelCards` (from `IntelligentPool.models`)
-  - `providers.defaults.default_model` (from `IntelligentPool.defaultModel`)
-  - `providers.models[*].pricing` when the pool supplies pricing metadata
+The test converts every input, compares it with the corresponding golden
+output, and parses the result through the runtime config loader. Review golden
+file changes as API changes: a passing diff still needs to represent the
+intended Kubernetes-to-router contract.

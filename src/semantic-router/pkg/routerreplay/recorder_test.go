@@ -1,7 +1,10 @@
 package routerreplay
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -121,6 +124,56 @@ func TestRecorderUpdateToolTraceClonesStoredValues(t *testing.T) {
 	}
 }
 
+func TestRecorderUpdateHallucinationStatusClonesStoredValues(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recordID, err := recorder.AddRecord(RoutingRecord{
+		ID:        "replay-hallucination-1",
+		Decision:  "decision-a",
+		RequestID: "req-1",
+	})
+	if err != nil {
+		t.Fatalf("failed to add record: %v", err)
+	}
+
+	spans := []string{"span-a"}
+	spanDetails := []HallucinationSpan{
+		{
+			Text:                    "span-a",
+			Start:                   0,
+			End:                     6,
+			HallucinationConfidence: 0.9,
+			NLILabel:                "CONTRADICTION",
+			NLIConfidence:           0.8,
+			Severity:                4,
+			Explanation:             "contradicts context",
+		},
+	}
+
+	if err := recorder.UpdateHallucinationStatus(recordID, true, 0.87, spans, spanDetails); err != nil {
+		t.Fatalf("failed to update hallucination status: %v", err)
+	}
+
+	spans[0] = "mutated"
+	spanDetails[0].Text = "mutated"
+	spanDetails[0].Severity = 0
+
+	record, found := recorder.GetRecord(recordID)
+	if !found {
+		t.Fatal("expected to retrieve updated replay record")
+	}
+
+	if !record.HallucinationDetected {
+		t.Fatal("expected hallucination detected to be true")
+	}
+	if len(record.HallucinationSpanDetails) != 1 {
+		t.Fatalf("expected 1 stored span detail, got %d", len(record.HallucinationSpanDetails))
+	}
+	got := record.HallucinationSpanDetails[0]
+	if got.Text != "span-a" || got.Severity != 4 || got.NLILabel != "CONTRADICTION" {
+		t.Fatalf("unexpected cloned span detail: %#v", got)
+	}
+}
+
 func TestLogFieldsIncludesOptionalReplayMetadata(t *testing.T) {
 	promptTokens := 120
 	cachedPromptTokens := 40
@@ -183,28 +236,29 @@ func richReplayRoutingRecord(
 	baselineModel *string,
 ) RoutingRecord {
 	return RoutingRecord{
-		ID:                "replay-1",
-		Decision:          "decision-a",
-		DecisionTier:      2,
-		DecisionPriority:  100,
-		Category:          "math",
-		OriginalModel:     "model-a",
-		SelectedModel:     "model-b",
-		ReasoningMode:     "cot",
-		ConfidenceScore:   0.91,
-		SelectionMethod:   "router_dc",
-		SessionPolicy:     map[string]interface{}{"decision_reason": "stay_has_best_adjusted_score"},
-		RequestID:         "req-1",
-		SessionID:         "sess-log-test",
-		TurnIndex:         5,
-		Timestamp:         timestamp,
-		FromCache:         true,
-		Streaming:         true,
-		ResponseStatus:    200,
-		Projections:       []string{"balance_reasoning"},
-		ProjectionScores:  map[string]float64{"reasoning_pressure": 0.73},
-		SignalConfidences: map[string]float64{"projection:balance_reasoning": 0.73},
-		SignalValues:      map[string]float64{"reask:likely_dissatisfied": 2},
+		ID:                       "replay-1",
+		Decision:                 "decision-a",
+		DecisionTier:             2,
+		DecisionPriority:         100,
+		Category:                 "math",
+		OriginalModel:            "model-a",
+		SelectedModel:            "model-b",
+		ReasoningMode:            "cot",
+		ConfidenceScore:          0.91,
+		ConfidenceScoreAvailable: true,
+		SelectionMethod:          "router_dc",
+		SessionPolicy:            map[string]interface{}{"decision_reason": "stay_has_best_adjusted_score"},
+		RequestID:                "req-1",
+		SessionID:                "sess-log-test",
+		TurnIndex:                5,
+		Timestamp:                timestamp,
+		FromCache:                true,
+		Streaming:                true,
+		ResponseStatus:           200,
+		Projections:              []string{"balance_reasoning"},
+		ProjectionScores:         map[string]float64{"reasoning_pressure": 0.73},
+		SignalConfidences:        map[string]float64{"projection:balance_reasoning": 0.73},
+		SignalValues:             map[string]float64{"reask:likely_dissatisfied": 2},
 		ToolTrace: &ToolTrace{
 			Flow:      "User Query -> LLM Tool Call -> Client Tool Result -> LLM Final Response",
 			Stage:     "LLM Final Response",
@@ -226,35 +280,37 @@ func richReplayRoutingRecord(
 			PII:        []string{"email"},
 			KB:         []string{"policy_kb"},
 		},
-		GuardrailsEnabled:           true,
-		JailbreakEnabled:            true,
-		PIIEnabled:                  true,
-		JailbreakDetected:           true,
-		JailbreakType:               "prompt_injection",
-		JailbreakConfidence:         0.9,
-		ResponseJailbreakDetected:   true,
-		ResponseJailbreakType:       "response_attack",
-		ResponseJailbreakConfidence: 0.8,
-		PIIDetected:                 true,
-		PIIEntities:                 []string{"email"},
-		PIIBlocked:                  true,
-		RAGEnabled:                  true,
-		RAGBackend:                  "milvus",
-		RAGContextLength:            2048,
-		RAGSimilarityScore:          0.76,
-		HallucinationEnabled:        true,
-		HallucinationDetected:       true,
-		HallucinationConfidence:     0.66,
-		HallucinationSpans:          []string{"span-a"},
-		PromptTokens:                promptTokens,
-		CachedPromptTokens:          cachedPromptTokens,
-		CompletionTokens:            completionTokens,
-		TotalTokens:                 totalTokens,
-		ActualCost:                  actualCost,
-		BaselineCost:                baselineCost,
-		CostSavings:                 costSavings,
-		Currency:                    currency,
-		BaselineModel:               baselineModel,
+		GuardrailsEnabled:               true,
+		JailbreakEnabled:                true,
+		PIIEnabled:                      true,
+		JailbreakDetected:               true,
+		JailbreakType:                   "prompt_injection",
+		JailbreakConfidence:             0.9,
+		JailbreakScoreAvailable:         true,
+		ResponseJailbreakDetected:       true,
+		ResponseJailbreakType:           "response_attack",
+		ResponseJailbreakConfidence:     0.8,
+		ResponseJailbreakScoreAvailable: true,
+		PIIDetected:                     true,
+		PIIEntities:                     []string{"email"},
+		PIIBlocked:                      true,
+		RAGEnabled:                      true,
+		RAGBackend:                      "milvus",
+		RAGContextLength:                2048,
+		RAGSimilarityScore:              0.76,
+		HallucinationEnabled:            true,
+		HallucinationDetected:           true,
+		HallucinationConfidence:         0.66,
+		HallucinationSpans:              []string{"span-a"},
+		PromptTokens:                    promptTokens,
+		CachedPromptTokens:              cachedPromptTokens,
+		CompletionTokens:                completionTokens,
+		TotalTokens:                     totalTokens,
+		ActualCost:                      actualCost,
+		BaselineCost:                    baselineCost,
+		CostSavings:                     costSavings,
+		Currency:                        currency,
+		BaselineModel:                   baselineModel,
 	}
 }
 
@@ -635,5 +691,43 @@ func TestRecorderSetMaxToolTraceBytesZeroNoTruncation(t *testing.T) {
 	}
 	if rec.PromptTruncated {
 		t.Error("expected PromptTruncated=false")
+	}
+}
+
+func TestRecorderPolicyConcurrentAccess(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(1000, 0))
+	var waitGroup sync.WaitGroup
+	for worker := range 8 {
+		waitGroup.Add(1)
+		go func(worker int) {
+			defer waitGroup.Done()
+			for iteration := range 100 {
+				recorder.SetCapturePolicy(true, true, 128+iteration)
+				recorder.SetMaxToolTraceBytes(iteration)
+				recorder.SetMaxToolTraceSteps(iteration)
+				id := fmt.Sprintf("%d-%d", worker, iteration)
+				_, _ = recorder.AddRecord(RoutingRecord{
+					ID:           id,
+					RequestBody:  strings.Repeat("q", 256),
+					ResponseBody: strings.Repeat("a", 256),
+				})
+				_ = recorder.AttachRequest(id, []byte("request"))
+				_ = recorder.AttachResponse(id, []byte("response"))
+			}
+		}(worker)
+	}
+	waitGroup.Wait()
+}
+
+func TestLogFieldsOmitsUnavailableConfidence(t *testing.T) {
+	fields := LogFields(RoutingRecord{ConfidenceScore: 1, JailbreakEnabled: true, JailbreakDetected: true, JailbreakConfidence: 1, JailbreakType: "classification_error", SignalErrorMatches: map[string]bool{"jailbreak:guard": true}}, "test")
+	if _, exists := fields["confidence_score"]; exists {
+		t.Fatal("unscored decision logged model confidence")
+	}
+	if _, exists := fields["jailbreak_confidence"]; exists {
+		t.Fatal("policy error logged model confidence")
+	}
+	if fields["confidence_score_available"] != false || fields["jailbreak_score_available"] != false || fields["signal_error_matches"] == nil {
+		t.Fatal("score availability or policy origin missing")
 	}
 }

@@ -7,7 +7,7 @@ import (
 func TestNewPermissionsExistInAllPermissions(t *testing.T) {
 	t.Parallel()
 
-	requiredPerms := []string{PermFeedbackSubmit, PermReplayRead, PermSecurityManage}
+	requiredPerms := []string{PermFeedbackSubmit, PermReplayRead}
 	allSet := make(map[string]bool, len(AllPermissions))
 	for _, p := range AllPermissions {
 		allSet[p] = true
@@ -20,42 +20,26 @@ func TestNewPermissionsExistInAllPermissions(t *testing.T) {
 	}
 }
 
-func TestAdminRoleHasSecurityManage(t *testing.T) {
+func TestRuntimeLogsRequireWriteOrAdminRoleByDefault(t *testing.T) {
 	t.Parallel()
 
-	adminPerms := DefaultRolePermissions[RoleAdmin]
-	found := false
-	for _, p := range adminPerms {
-		if p == PermSecurityManage {
-			found = true
-			break
+	for _, role := range []string{RoleAdmin, RoleWrite} {
+		if !containsPermission(DefaultRolePermissions[role], PermLogsRead) {
+			t.Fatalf("role %q should have %q permission", role, PermLogsRead)
 		}
 	}
-	if !found {
-		t.Fatalf("admin role should have %q permission", PermSecurityManage)
+	if containsPermission(DefaultRolePermissions[RoleRead], PermLogsRead) {
+		t.Fatalf("read role should not have %q permission", PermLogsRead)
 	}
 }
 
-func TestWriteRoleDoesNotHaveSecurityManage(t *testing.T) {
-	t.Parallel()
-
-	writePerms := DefaultRolePermissions[RoleWrite]
-	for _, p := range writePerms {
-		if p == PermSecurityManage {
-			t.Fatalf("write role should not have %q permission", PermSecurityManage)
+func containsPermission(permissions []string, target string) bool {
+	for _, permission := range permissions {
+		if permission == target {
+			return true
 		}
 	}
-}
-
-func TestReadRoleDoesNotHaveSecurityManage(t *testing.T) {
-	t.Parallel()
-
-	readPerms := DefaultRolePermissions[RoleRead]
-	for _, p := range readPerms {
-		if p == PermSecurityManage {
-			t.Fatalf("read role should not have %q permission", PermSecurityManage)
-		}
-	}
+	return false
 }
 
 func TestAllRolesHaveFeedbackSubmitAndReplayRead(t *testing.T) {

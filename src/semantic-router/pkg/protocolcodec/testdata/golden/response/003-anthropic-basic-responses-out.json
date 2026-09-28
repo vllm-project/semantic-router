@@ -1,0 +1,44 @@
+{
+  "created_at": 0,
+  "error": null,
+  "id": "response_1",
+  "incomplete_details": null,
+  "instructions": null,
+  "metadata": {},
+  "model": "routed-model",
+  "object": "response",
+  "output": [
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "hello",
+          "type": "output_text"
+        }
+      ],
+      "id": "item_133e3e903499276cc711fcf1",
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    }
+  ],
+  "output_text": "hello",
+  "parallel_tool_calls": true,
+  "status": "completed",
+  "temperature": null,
+  "tool_choice": "auto",
+  "tools": [],
+  "top_p": null,
+  "usage": {
+    "input_tokens": 2,
+    "input_tokens_details": {
+      "cache_write_tokens": 0,
+      "cached_tokens": 0
+    },
+    "output_tokens": 1,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 3
+  }
+}

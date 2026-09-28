@@ -1,0 +1,9 @@
+plugin:
+  type: response_cache
+  configuration:
+    enabled: true
+    mode: exact
+    scope: user
+    ttl_seconds: 3600
+    personalized:
+      mode: disabled

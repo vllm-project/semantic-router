@@ -27,7 +27,7 @@ import (
 
 func TestSampleCRValidation(t *testing.T) {
 	// Get the project root directory
-	projectRoot := filepath.Join("..", "..", "..")
+	projectRoot := filepath.Join("..", "..")
 	samplesDir := filepath.Join(projectRoot, "config", "samples")
 
 	tests := []struct {
@@ -63,7 +63,7 @@ func TestSampleCRValidation(t *testing.T) {
 			// Read the sample YAML file
 			data, err := os.ReadFile(samplePath)
 			if err != nil {
-				t.Skipf("Sample file not found: %s (this is expected during development)", samplePath)
+				t.Fatalf("Required sample file not readable: %s: %v", samplePath, err)
 				return
 			}
 
@@ -101,9 +101,9 @@ func TestSampleCRValidation(t *testing.T) {
 						}
 					}
 				}
-				if sr.Spec.Config.SemanticCache != nil {
-					if sr.Spec.Config.SemanticCache.EmbeddingModel != "mmbert" {
-						t.Errorf("mmbert sample should use embedding_model: mmbert, got %v", sr.Spec.Config.SemanticCache.EmbeddingModel)
+				if sr.Spec.Config.ResponseCache != nil {
+					if sr.Spec.Config.ResponseCache.EmbeddingModel != "mmbert" {
+						t.Errorf("mmbert sample should use embedding_model: mmbert, got %v", sr.Spec.Config.ResponseCache.EmbeddingModel)
 					}
 				}
 			}
@@ -130,12 +130,12 @@ func TestSampleCRValidation(t *testing.T) {
 				if sr.Spec.Config.EmbeddingModels == nil {
 					t.Error("redis cache sample should have embedding_models configured")
 				}
-				if sr.Spec.Config.SemanticCache != nil {
-					if sr.Spec.Config.SemanticCache.BackendType != "redis" {
-						t.Errorf("redis cache sample backend_type = %v, want redis", sr.Spec.Config.SemanticCache.BackendType)
+				if sr.Spec.Config.ResponseCache != nil {
+					if sr.Spec.Config.ResponseCache.BackendType != "redis" {
+						t.Errorf("redis cache sample backend_type = %v, want redis", sr.Spec.Config.ResponseCache.BackendType)
 					}
 					// Should use qwen3 or another embedding model
-					if sr.Spec.Config.SemanticCache.EmbeddingModel != "" && sr.Spec.Config.SemanticCache.EmbeddingModel == "bert" {
+					if sr.Spec.Config.ResponseCache.EmbeddingModel != "" && sr.Spec.Config.ResponseCache.EmbeddingModel == "bert" {
 						// This is fine, but ideally should showcase new embedding models
 						t.Logf("redis cache sample could showcase new embedding models (qwen3/gemma)")
 					}
@@ -146,9 +146,9 @@ func TestSampleCRValidation(t *testing.T) {
 				if sr.Spec.Config.EmbeddingModels == nil {
 					t.Error("milvus cache sample should have embedding_models configured")
 				}
-				if sr.Spec.Config.SemanticCache != nil {
-					if sr.Spec.Config.SemanticCache.BackendType != "milvus" {
-						t.Errorf("milvus cache sample backend_type = %v, want milvus", sr.Spec.Config.SemanticCache.BackendType)
+				if sr.Spec.Config.ResponseCache != nil {
+					if sr.Spec.Config.ResponseCache.BackendType != "milvus" {
+						t.Errorf("milvus cache sample backend_type = %v, want milvus", sr.Spec.Config.ResponseCache.BackendType)
 					}
 				}
 			}
@@ -158,12 +158,12 @@ func TestSampleCRValidation(t *testing.T) {
 
 func TestSampleCRsParseable(t *testing.T) {
 	// Test that all sample CRs can be parsed without errors
-	projectRoot := filepath.Join("..", "..", "..")
+	projectRoot := filepath.Join("..", "..")
 	samplesDir := filepath.Join(projectRoot, "config", "samples")
 
 	entries, err := os.ReadDir(samplesDir)
 	if err != nil {
-		t.Skipf("Samples directory not found: %s", samplesDir)
+		t.Fatalf("Required samples directory not readable: %s: %v", samplesDir, err)
 		return
 	}
 

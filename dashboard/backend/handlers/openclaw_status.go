@@ -89,11 +89,8 @@ func (h *OpenClawHandler) TokenHandler() http.HandlerFunc {
 func (h *OpenClawHandler) gatewayHostCandidates(containerName string) []string {
 	candidates := []string{}
 
-	// First priority: container name (DNS resolution within bridge network)
-	if containerName != "" {
-		candidates = append(candidates, containerName)
-	}
-
+	// Explicit topology always wins. This is useful when the dashboard and
+	// OpenClaw gateways live in different container or host networks.
 	if explicit := strings.TrimSpace(os.Getenv("OPENCLAW_GATEWAY_HOST")); explicit != "" {
 		candidates = append(candidates, explicit)
 	}
@@ -105,8 +102,15 @@ func (h *OpenClawHandler) gatewayHostCandidates(containerName string) []string {
 		}
 	}
 
+	// Prefer loopback for host-mode/local development before container DNS.
+	// Some desktop DNS resolvers map arbitrary container-looking names to a
+	// synthetic reachable address, which makes a TCP-only probe a false
+	// positive and sends local traffic away from the published port.
+	candidates = append(candidates, "127.0.0.1")
+	if containerName != "" {
+		candidates = append(candidates, containerName)
+	}
 	candidates = append(candidates,
-		"127.0.0.1",
 		"host.docker.internal",
 		"host.containers.internal",
 	)

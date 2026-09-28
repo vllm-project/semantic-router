@@ -113,7 +113,7 @@ COPY --from=go-builder /app/candle-binding/target/release/libcandle_semantic_rou
 COPY config/config.yaml /app/config/
 ENV LD_LIBRARY_PATH=/app/lib
 EXPOSE 50051
-COPY scripts/entrypoint.sh /app/entrypoint.sh
+COPY tools/docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 ENTRYPOINT ["/app/entrypoint.sh"]
 ```
@@ -131,7 +131,7 @@ services:
 
 For the optional testing profile, create an override Dockerfile to configure pip mirrors.
 
-1) Create `tools/mock-vllm/Dockerfile.cn`:
+1) Create `tools/test/services/mock-vllm/Dockerfile.cn`:
 
 ```Dockerfile
 FROM python:3.11-slim

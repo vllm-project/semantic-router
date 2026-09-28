@@ -5,10 +5,12 @@ package apiserver
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -31,17 +33,127 @@ func TestResolveConfigPersistencePathsUsesRuntimeOverrideSourcePath(t *testing.T
 	}
 }
 
+func TestConfigBackupDirUsesPersistentOverride(t *testing.T) {
+	backupDir := filepath.Join(t.TempDir(), "router-config-backups")
+	t.Setenv(configBackupDirEnv, backupDir)
+	t.Setenv(configBaseDirEnv, "/app")
+	if got := configBackupDir("/app/config/config.yaml"); got != backupDir {
+		t.Fatalf("config backup dir = %q, want %q", got, backupDir)
+	}
+}
+
+func TestHandleConfigPutMutatesRuntimeOwnedSourceAndKeepsStateFlat(t *testing.T) {
+	tempDir := t.TempDir()
+	stateDir := filepath.Join(tempDir, ".vllm-sr")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatalf("mkdir state dir: %v", err)
+	}
+	activePath := filepath.Join(stateDir, "runtime-config.yaml")
+	readonlySourcePath := filepath.Join(tempDir, "source-config.yaml")
+	oldYAML := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("old_route"))
+	if err := os.WriteFile(activePath, oldYAML, 0o600); err != nil {
+		t.Fatalf("write active config: %v", err)
+	}
+	if err := os.WriteFile(readonlySourcePath, oldYAML, 0o400); err != nil {
+		t.Fatalf("write read-only source config: %v", err)
+	}
+	t.Setenv(sourceConfigPathEnv, activePath)
+	t.Setenv(runtimeConfigPathEnv, activePath)
+	t.Setenv(configBaseDirEnv, tempDir)
+
+	deployYAML := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("new_route"))
+	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(deployYAML)})
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+	apiServer := &ClassificationAPIServer{configPath: activePath}
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	setConfigPrecondition(t, req, activePath)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleConfigPut(rr, req)
+
+	if rr.Code != http.StatusOK && rr.Code != http.StatusAccepted {
+		t.Fatalf("expected successful update, got %d: %s", rr.Code, rr.Body.String())
+	}
+	assertDeployedDecisionName(t, activePath, "new_route")
+	assertDeployedDecisionName(t, readonlySourcePath, "old_route")
+	backupDir := filepath.Join(stateDir, "config-backups")
+	if entries, readErr := os.ReadDir(backupDir); readErr != nil || len(entries) == 0 {
+		t.Fatalf("expected flat state backups in %s: entries=%v err=%v", backupDir, entries, readErr)
+	}
+	nestedStateDir := filepath.Join(stateDir, ".vllm-sr")
+	if _, statErr := os.Stat(nestedStateDir); !os.IsNotExist(statErr) {
+		t.Fatalf("did not expect nested runtime state at %s", nestedStateDir)
+	}
+}
+
+func TestHandleConfigPutRejectsUnavailableBackupStore(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	current := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("old_route"))
+	if writeErr := os.WriteFile(configPath, current, 0o600); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	backupPath := filepath.Join(tempDir, "not-a-directory")
+	if writeErr := os.WriteFile(backupPath, []byte("occupied"), 0o600); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	t.Setenv(configBackupDirEnv, backupPath)
+
+	next := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("new_route"))
+	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(next)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPut, apiConfigPath, bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	setConfigPrecondition(t, request, configPath)
+	response := httptest.NewRecorder()
+	server := &ClassificationAPIServer{configPath: configPath}
+	server.handleConfigPut(response, request)
+
+	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), "BACKUP_ERROR") {
+		t.Fatalf("unavailable backup store returned %d: %s", response.Code, response.Body.String())
+	}
+	stored, readErr := os.ReadFile(configPath)
+	if readErr != nil || !bytes.Equal(stored, current) {
+		t.Fatalf("config changed without a backup: stored=%q err=%v", stored, readErr)
+	}
+}
+
+func TestDetectPythonCLIRootRequiresRuntimeSyncModule(t *testing.T) {
+	cliRoot := t.TempDir()
+	t.Setenv("VLLM_SR_CLI_PATH", cliRoot)
+	if got := detectPythonCLIRoot(); got != "" {
+		t.Fatalf("detectPythonCLIRoot() = %q for incomplete CLI root", got)
+	}
+
+	moduleDir := filepath.Join(cliRoot, "cli", "commands")
+	if err := os.MkdirAll(moduleDir, 0o755); err != nil {
+		t.Fatalf("mkdir runtime sync module dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(moduleDir, "runtime_support.py"), []byte(""), 0o644); err != nil {
+		t.Fatalf("write runtime sync module: %v", err)
+	}
+	if got := detectPythonCLIRoot(); got != cliRoot {
+		t.Fatalf("detectPythonCLIRoot() = %q, want %q", got, cliRoot)
+	}
+}
+
 func TestHandleConfigPutWritesSourceConfigAndSyncsRuntimeOverride(t *testing.T) {
 	tempDir, sourcePath, runtimePath := setupRuntimeOverrideConfigFiles(t, "old_route", "old_route")
 	deployYAML := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("new_route"))
-	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(deployYAML), DSL: "ROUTE new_route"})
+	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(deployYAML)})
 	if err != nil {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
 
 	apiServer := &ClassificationAPIServer{configPath: runtimePath}
-	req := httptest.NewRequest(http.MethodPut, "/config/router", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	setConfigPrecondition(t, req, runtimePath)
 	rr := httptest.NewRecorder()
 
 	apiServer.handleConfigPut(rr, req)
@@ -58,19 +170,60 @@ func TestHandleConfigPutWritesSourceConfigAndSyncsRuntimeOverride(t *testing.T) 
 	if err != nil {
 		t.Fatalf("read backup dir: %v", err)
 	}
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 backup in %s, got %d", backupDir, len(entries))
+	backupCount := 0
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "config.") && strings.HasSuffix(entry.Name(), ".yaml") {
+			backupCount++
+		}
 	}
-
-	dslPath := filepath.Join(tempDir, ".vllm-sr", "config.dsl")
-	if _, err := os.Stat(dslPath); err != nil {
-		t.Fatalf("expected archived DSL at %s: %v", dslPath, err)
+	if backupCount != 1 {
+		t.Fatalf("expected 1 YAML backup in %s, got %d", backupDir, backupCount)
 	}
 
 	nestedBackupDir := filepath.Join(tempDir, ".vllm-sr", ".vllm-sr", "config-backups")
 	if _, err := os.Stat(nestedBackupDir); !os.IsNotExist(err) {
 		t.Fatalf("did not expect nested backup dir %s to exist", nestedBackupDir)
 	}
+}
+
+func TestHandleConfigPutRestoresSourceWhenRuntimeSyncFails(t *testing.T) {
+	_, sourcePath, runtimePath := setupRuntimeOverrideConfigFiles(t, "old_route", "old_route")
+	deployYAML := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("new_route"))
+	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(deployYAML)})
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	previousRunner := runtimeConfigSyncRunner
+	calls := 0
+	runtimeConfigSyncRunner = func(string) (string, error) {
+		calls++
+		if calls == 1 {
+			return "", fmt.Errorf("runtime sync unavailable")
+		}
+		data, readErr := os.ReadFile(sourcePath)
+		if readErr != nil {
+			return "", readErr
+		}
+		if writeErr := os.WriteFile(runtimePath, data, 0o644); writeErr != nil {
+			return "", writeErr
+		}
+		return runtimePath, nil
+	}
+	t.Cleanup(func() { runtimeConfigSyncRunner = previousRunner })
+
+	apiServer := &ClassificationAPIServer{configPath: runtimePath}
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	setConfigPrecondition(t, req, runtimePath)
+	rr := httptest.NewRecorder()
+	apiServer.handleConfigPut(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rr.Code, rr.Body.String())
+	}
+	assertDeployedDecisionName(t, sourcePath, "old_route")
+	assertDeployedDecisionName(t, runtimePath, "old_route")
 }
 
 func TestHandleConfigRollbackReadsSourceBackupDirAndSyncsRuntimeOverride(t *testing.T) {
@@ -115,8 +268,9 @@ func TestHandleConfigRollbackReadsSourceBackupDirAndSyncsRuntimeOverride(t *test
 
 	body := []byte(`{"version":"20260323-120000"}`)
 	apiServer := &ClassificationAPIServer{configPath: runtimePath}
-	req := httptest.NewRequest(http.MethodPost, "/config/router/rollback", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/config/rollback", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	setConfigPrecondition(t, req, runtimePath)
 	rr := httptest.NewRecorder()
 
 	apiServer.handleConfigRollback(rr, req)

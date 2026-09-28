@@ -1,0 +1,219 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1672" height="941" viewBox="0 0 1672 941" role="img" aria-labelledby="title desc">
+  <title id="title">MoM and Routing Workgroup</title>
+  <desc id="desc">One model call enters a versioned routing recipe and qualified model pool. The recipe can select, cascade, fuse, or run a bounded workflow before returning one response. Evaluation, canary, promotion, and rollback form a controlled improvement loop.</desc>
+  <defs>
+    <linearGradient id="blue-panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fbff"/>
+      <stop offset="1" stop-color="#eaf3ff"/>
+    </linearGradient>
+    <linearGradient id="green-panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbfff9"/>
+      <stop offset="1" stop-color="#eef8e9"/>
+    </linearGradient>
+    <linearGradient id="amber-panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffdf8"/>
+      <stop offset="1" stop-color="#fff3dc"/>
+    </linearGradient>
+    <linearGradient id="violet-panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fdfcff"/>
+      <stop offset="1" stop-color="#f3efff"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#1d2939" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#111827"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+    <g id="cube">
+      <path d="M 0 10 L 18 0 L 36 10 L 18 20 Z" fill="currentColor" fill-opacity="0.35" stroke="#111827" stroke-width="2"/>
+      <path d="M 0 10 L 18 20 L 18 42 L 0 32 Z" fill="currentColor" fill-opacity="0.70" stroke="#111827" stroke-width="2"/>
+      <path d="M 18 20 L 36 10 L 36 32 L 18 42 Z" fill="currentColor" fill-opacity="0.95" stroke="#111827" stroke-width="2"/>
+    </g>
+    <style>
+      .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+      .title { font-size: 42px; font-weight: 760; letter-spacing: -0.6px; fill: #111827; }
+      .subtitle { font-size: 21px; font-weight: 450; fill: #475467; }
+      .panel-title { font-size: 22px; font-weight: 750; fill: #111827; letter-spacing: 0.3px; }
+      .section-title { font-size: 17px; font-weight: 760; fill: #111827; letter-spacing: 0.3px; }
+      .body { font-size: 16px; font-weight: 480; fill: #344054; }
+      .small { font-size: 14px; font-weight: 520; fill: #475467; }
+      .tiny { font-size: 12px; font-weight: 650; fill: #667085; letter-spacing: 0.4px; }
+      .card { stroke: #111827; stroke-width: 2.2; }
+      .line { fill: none; stroke: #111827; stroke-width: 2.5; marker-end: url(#arrow); }
+      .blue-line { fill: none; stroke: #2563eb; stroke-width: 2.6; marker-end: url(#arrow-blue); }
+    </style>
+  </defs>
+
+  <rect width="1672" height="941" fill="#ffffff"/>
+
+  <!-- Brand and workgroup identity -->
+  <g class="sans" transform="translate(48 35)">
+    <path d="M0 8.65h16.22V40L0 8.65z" fill="#FDB515"/>
+    <path d="M24.33 7.57L38.93 0 28.12 40H16.22l8.11-32.43z" fill="#30A2FF"/>
+    <text x="53" y="25" font-size="25" font-weight="780" fill="#111827">vLLM</text>
+    <text x="53" y="42" font-size="12" font-weight="720" letter-spacing="1.4" fill="#475467">SEMANTIC ROUTER</text>
+  </g>
+  <g class="sans" text-anchor="end">
+    <text x="1624" y="50" class="tiny">WORKGROUP 01</text>
+    <text x="1624" y="75" font-size="16" font-weight="650" fill="#2563eb">@vllm-sr.ai</text>
+  </g>
+
+  <g class="sans" text-anchor="middle">
+    <text x="836" y="105" class="title">MoM &amp; ROUTING</text>
+    <text x="836" y="137" class="subtitle">Make a model pool behave like one measurable, continuously improving model.</text>
+  </g>
+
+  <!-- One model call -->
+  <g class="sans" filter="url(#soft-shadow)">
+    <rect x="40" y="247" width="210" height="290" rx="15" fill="url(#blue-panel)" class="card"/>
+    <text x="145" y="285" text-anchor="middle" class="panel-title">ONE MODEL CALL</text>
+    <rect x="83" y="317" width="124" height="148" rx="10" fill="#fff" stroke="#111827" stroke-width="2.2"/>
+    <path d="M169 317v35h38" fill="#f8fafc" stroke="#111827" stroke-width="2.2"/>
+    <rect x="102" y="345" width="64" height="46" rx="13" fill="#b9d9ff" stroke="#111827" stroke-width="2"/>
+    <circle cx="119" cy="368" r="3.3" fill="#111827"/><circle cx="134" cy="368" r="3.3" fill="#111827"/><circle cx="149" cy="368" r="3.3" fill="#111827"/>
+    <path d="M114 391l-10 10v-17" fill="#b9d9ff" stroke="#111827" stroke-width="2"/>
+    <circle cx="105" cy="421" r="3.3" fill="#475467"/>
+    <line x1="118" y1="421" x2="183" y2="421" stroke="#111827" stroke-width="2"/>
+    <circle cx="105" cy="441" r="3.3" fill="#475467"/>
+    <line x1="118" y1="441" x2="174" y2="441" stroke="#111827" stroke-width="2"/>
+    <text x="145" y="500" text-anchor="middle" class="body">Stable model name</text>
+    <text x="145" y="520" text-anchor="middle" class="small">OpenAI-compatible API</text>
+  </g>
+
+  <!-- Versioned recipe -->
+  <path d="M250 392 H298" class="line"/>
+  <g class="sans" filter="url(#soft-shadow)">
+    <rect x="300" y="209" width="278" height="366" rx="15" fill="url(#blue-panel)" class="card"/>
+    <text x="439" y="248" text-anchor="middle" class="panel-title">VERSIONED RECIPE</text>
+    <rect x="329" y="269" width="220" height="55" rx="10" fill="#fff" stroke="#2563eb" stroke-width="2"/>
+    <text x="346" y="291" class="tiny" fill="#2563eb">OBJECTIVE</text>
+    <text x="346" y="312" class="body">Quality · Cost · Latency</text>
+    <text x="333" y="355" class="section-title">Signals</text>
+    <rect x="333" y="369" width="62" height="28" rx="14" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="364" y="388" text-anchor="middle" class="small">intent</text>
+    <rect x="402" y="369" width="87" height="28" rx="14" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="445.5" y="388" text-anchor="middle" font-size="13" fill="#475467">complexity</text>
+    <rect x="496" y="369" width="49" height="28" rx="14" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="520.5" y="388" text-anchor="middle" class="small">risk</text>
+    <text x="333" y="431" class="section-title">Constraints</text>
+    <text x="333" y="457" class="body">Policy · Budget · Availability</text>
+    <line x1="333" y1="481" x2="545" y2="481" stroke="#98a2b3" stroke-width="1.5" stroke-dasharray="5 5"/>
+    <text x="333" y="516" class="section-title">Routing decision</text>
+    <rect x="485" y="500" width="60" height="31" rx="8" fill="#fff" stroke="#2563eb" stroke-width="1.8"/>
+    <text x="515" y="521" text-anchor="middle" font-size="14" font-weight="720" fill="#2563eb">v12</text>
+    <text x="439" y="552" text-anchor="middle" class="small">Portable · reviewable · reversible</text>
+  </g>
+
+  <!-- Model pool and collaboration patterns -->
+  <path d="M578 392 H622" class="line"/>
+  <g class="sans" filter="url(#soft-shadow)">
+    <rect x="624" y="164" width="618" height="456" rx="17" fill="#fcfcfd" class="card"/>
+    <text x="933" y="201" text-anchor="middle" class="panel-title">MODEL POOL + COLLABORATION</text>
+    <text x="933" y="225" text-anchor="middle" class="small">Qualified models work together through one bounded execution contract</text>
+
+    <rect x="649" y="248" width="275" height="157" rx="12" fill="url(#blue-panel)" stroke="#111827" stroke-width="1.9"/>
+    <text x="786.5" y="278" text-anchor="middle" class="section-title">SELECT</text>
+    <g transform="translate(694 298)" color="#8bc1ff"><use href="#cube"/></g>
+    <g transform="translate(768 298)" color="#9ed58f"><use href="#cube"/></g>
+    <g transform="translate(842 298)" color="#ffc86d"><use href="#cube"/></g>
+    <path d="M712 350 V374 H842 V350 M777 350 V374" fill="none" stroke="#111827" stroke-width="2"/>
+    <path d="M777 374 V389" class="line"/>
+    <text x="786.5" y="394" text-anchor="middle" class="small">Best qualified model</text>
+
+    <rect x="942" y="248" width="275" height="157" rx="12" fill="url(#green-panel)" stroke="#111827" stroke-width="1.9"/>
+    <text x="1079.5" y="278" text-anchor="middle" class="section-title">CASCADE / FALLBACK</text>
+    <g transform="translate(974 312)" color="#8bc1ff"><use href="#cube"/></g>
+    <line x1="1015" y1="333" x2="1055" y2="333" stroke="#111827" stroke-width="2.2" marker-end="url(#arrow)"/>
+    <circle cx="1072" cy="333" r="10" fill="#fff" stroke="#111827" stroke-width="2"/>
+    <line x1="1083" y1="333" x2="1125" y2="333" stroke="#111827" stroke-width="2.2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+    <g transform="translate(1140 312)" color="#9ed58f"><use href="#cube"/></g>
+    <text x="1079.5" y="386" text-anchor="middle" class="small">Escalate only when needed</text>
+
+    <rect x="649" y="424" width="275" height="167" rx="12" fill="url(#amber-panel)" stroke="#111827" stroke-width="1.9"/>
+    <text x="786.5" y="454" text-anchor="middle" class="section-title">PARALLEL + JUDGE</text>
+    <g transform="translate(683 474) scale(.82)" color="#8bc1ff"><use href="#cube"/></g>
+    <g transform="translate(755 474) scale(.82)" color="#9ed58f"><use href="#cube"/></g>
+    <g transform="translate(827 474) scale(.82)" color="#ffc86d"><use href="#cube"/></g>
+    <path d="M698 512 V532 H844 V512 M770 512 V532" fill="none" stroke="#111827" stroke-width="2"/>
+    <path d="M770 532 V547" class="line"/>
+    <circle cx="770" cy="557" r="17" fill="#fff" stroke="#111827" stroke-width="2"/>
+    <path d="M761 557l6 6 13-15" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="855" y="563" text-anchor="middle" class="small">Compare answers</text>
+
+    <rect x="942" y="424" width="275" height="167" rx="12" fill="url(#violet-panel)" stroke="#111827" stroke-width="1.9"/>
+    <text x="1079.5" y="454" text-anchor="middle" class="section-title">FUSION / WORKFLOW</text>
+    <g transform="translate(971 489) scale(.72)" color="#8bc1ff"><use href="#cube"/></g>
+    <line x1="1005" y1="504" x2="1038" y2="504" stroke="#111827" stroke-width="2.2" marker-end="url(#arrow)"/>
+    <rect x="1045" y="484" width="42" height="42" rx="10" fill="#fde68a" stroke="#111827" stroke-width="2"/>
+    <path d="M1057 505l8 8 12-17" fill="none" stroke="#111827" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="1089" y1="504" x2="1122" y2="504" stroke="#111827" stroke-width="2.2" marker-end="url(#arrow)"/>
+    <rect x="1129" y="484" width="42" height="42" rx="10" fill="#ddd6fe" stroke="#111827" stroke-width="2"/>
+    <text x="1150" y="512" text-anchor="middle" font-size="25" font-weight="700" fill="#111827">Σ</text>
+    <text x="1079.5" y="563" text-anchor="middle" class="small">Combine bounded steps</text>
+  </g>
+
+  <!-- One response -->
+  <path d="M1242 392 H1286" class="line"/>
+  <g class="sans" filter="url(#soft-shadow)">
+    <rect x="1288" y="247" width="210" height="290" rx="15" fill="url(#green-panel)" class="card"/>
+    <text x="1393" y="285" text-anchor="middle" class="panel-title">ONE RESPONSE</text>
+    <rect x="1331" y="317" width="124" height="148" rx="10" fill="#fff" stroke="#111827" stroke-width="2.2"/>
+    <path d="M1417 317v35h38" fill="#f8fafc" stroke="#111827" stroke-width="2.2"/>
+    <rect x="1350" y="345" width="64" height="46" rx="13" fill="#cceec3" stroke="#111827" stroke-width="2"/>
+    <line x1="1364" y1="362" x2="1400" y2="362" stroke="#111827" stroke-width="2"/>
+    <line x1="1364" y1="374" x2="1390" y2="374" stroke="#111827" stroke-width="2"/>
+    <path d="M1362 391l-10 10v-17" fill="#cceec3" stroke="#111827" stroke-width="2"/>
+    <circle cx="1353" cy="421" r="3.3" fill="#475467"/>
+    <line x1="1366" y1="421" x2="1431" y2="421" stroke="#111827" stroke-width="2"/>
+    <circle cx="1353" cy="441" r="3.3" fill="#475467"/>
+    <line x1="1366" y1="441" x2="1422" y2="441" stroke="#111827" stroke-width="2"/>
+    <text x="1393" y="500" text-anchor="middle" class="body">Measurable behavior</text>
+    <text x="1393" y="520" text-anchor="middle" class="small">One MoM identity</text>
+  </g>
+
+  <!-- Controlled improvement loop -->
+  <g class="sans">
+    <text x="836" y="675" text-anchor="middle" class="panel-title">CONTROLLED IMPROVEMENT LOOP</text>
+    <text x="836" y="700" text-anchor="middle" class="small">Change the recipe without making production behavior unpredictable</text>
+
+    <rect x="242" y="729" width="238" height="93" rx="12" fill="url(#blue-panel)" stroke="#111827" stroke-width="2"/>
+    <circle cx="278" cy="775" r="19" fill="#fff" stroke="#2563eb" stroke-width="2"/>
+    <path d="M270 775l6 6 12-15" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="309" y="764" class="section-title">EVALUATE</text>
+    <text x="309" y="790" class="small">Quality · cost · latency</text>
+
+    <path d="M480 775 H531" class="line"/>
+    <rect x="533" y="729" width="238" height="93" rx="12" fill="url(#amber-panel)" stroke="#111827" stroke-width="2"/>
+    <rect x="559" y="752" width="42" height="48" rx="6" fill="#fff" stroke="#111827" stroke-width="2"/>
+    <path d="M570 767h20M570 777h20M570 787h14" stroke="#111827" stroke-width="2"/>
+    <text x="619" y="764" class="section-title">CANDIDATE</text>
+    <text x="619" y="790" class="small">Versioned recipe</text>
+
+    <path d="M771 775 H822" class="line"/>
+    <rect x="824" y="729" width="238" height="93" rx="12" fill="url(#violet-panel)" stroke="#111827" stroke-width="2"/>
+    <path d="M852 796V761l18-11 18 11v35l-18 11z" fill="#ddd6fe" stroke="#111827" stroke-width="2"/>
+    <path d="M870 750v57M852 761l18 11 18-11" fill="none" stroke="#111827" stroke-width="1.7"/>
+    <text x="900" y="764" font-size="15" font-weight="760" fill="#111827">SHADOW / CANARY</text>
+    <text x="900" y="790" class="small">Compare before traffic</text>
+
+    <path d="M1062 775 H1113" class="line"/>
+    <rect x="1115" y="729" width="315" height="93" rx="12" fill="url(#green-panel)" stroke="#111827" stroke-width="2"/>
+    <path d="M1145 784l13 13 25-33" fill="none" stroke="#388e3c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="1200" y="764" class="section-title">PROMOTE OR ROLLBACK</text>
+    <text x="1200" y="790" class="small">Auditable activation · safe reversal</text>
+
+    <path d="M1272 822 V864 H361 V824" class="blue-line"/>
+    <text x="817" y="888" text-anchor="middle" class="tiny" fill="#2563eb">OUTCOMES + FEEDBACK BECOME THE NEXT REVIEWABLE INPUT</text>
+  </g>
+
+  <!-- Ownership boundary -->
+  <g class="sans">
+    <rect x="40" y="900" width="1592" height="1" fill="#e4e7ec"/>
+    <text x="48" y="925" class="tiny">OWNS</text>
+    <text x="100" y="925" class="small">model pools · versioned recipes · multi-model collaboration · lifecycle policy</text>
+    <text x="1624" y="925" text-anchor="end" class="small">Signals come from Router Models · Decisions execute through the Data Plane</text>
+  </g>
+</svg>

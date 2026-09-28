@@ -1,8 +1,4 @@
 {
-  "title": {
-    "message": "vLLM-SR",
-    "description": "The title in the navbar"
-  },
   "logo.alt": {
     "message": "vLLM Semantic Router 标志",
     "description": "The alt text of navbar logo"
@@ -58,6 +54,26 @@
   "item.label.GitHub Issues": {
     "message": "问题反馈",
     "description": "Navbar item with label GitHub Issues"
+  },
+  "item.label.More": {
+    "message": "更多",
+    "description": "Navbar item with label More"
+  },
+  "item.label.Model Hub": {
+    "message": "模型库",
+    "description": "Navbar item with label Model Hub"
+  },
+  "item.label.Hugging Face": {
+    "message": "Hugging Face",
+    "description": "Navbar item with label Hugging Face"
+  },
+  "item.label.Discussions": {
+    "message": "讨论区",
+    "description": "Navbar item with label Discussions"
+  },
+  "item.label.Dashboard": {
+    "message": "控制台",
+    "description": "Navbar item with label Dashboard"
   },
   "item.label.GitHub": {
     "message": "GitHub",

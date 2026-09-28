@@ -4,7 +4,7 @@
 
 `memory` is a route-local plugin for retrieving and storing conversation memory.
 
-It aligns to `config/plugin/memory/session-memory.yaml`.
+It aligns to `config/fragments/plugin/memory/session-memory.yaml`.
 
 ## Key Advantages
 

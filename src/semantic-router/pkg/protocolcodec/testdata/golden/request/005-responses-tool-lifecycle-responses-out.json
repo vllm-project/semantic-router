@@ -1,0 +1,67 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Weather in Paris?",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    },
+    {
+      "arguments": "{\"city\":\"Paris\"}",
+      "call_id": "call_weather_1",
+      "id": "item_weather_1",
+      "name": "lookup_weather",
+      "type": "function_call"
+    },
+    {
+      "call_id": "call_weather_1",
+      "output": [
+        {
+          "text": "Sunny, 21 C",
+          "type": "input_text"
+        }
+      ],
+      "type": "function_call_output"
+    },
+    {
+      "content": [
+        {
+          "text": "Summarize it.",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "max_output_tokens": 32,
+  "model": "routed-model",
+  "parallel_tool_calls": false,
+  "tool_choice": {
+    "name": "lookup_weather",
+    "type": "function"
+  },
+  "tools": [
+    {
+      "description": "Look up current weather",
+      "name": "lookup_weather",
+      "parameters": {
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "type": "object"
+      },
+      "strict": true,
+      "type": "function"
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,7 +10,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"gopkg.in/yaml.v2"
 
@@ -20,11 +21,9 @@ var (
 	configOnce sync.Once
 	configErr  error
 	configMu   sync.RWMutex
-
-	configUpdateMu          sync.Mutex
-	configUpdateSubscribers = map[uint64]chan *RouterConfig{}
-	configUpdateNextID      uint64
 )
+
+const ConfigBaseDirEnv = "VLLM_SR_CONFIG_BASE_DIR"
 
 // Load loads the configuration from the specified YAML file once and caches it globally.
 func Load(configPath string) (*RouterConfig, error) {
@@ -71,52 +70,83 @@ func Parse(configPath string) (*RouterConfig, error) {
 		"size_bytes": len(data),
 	})
 
-	return parseYAMLBytesWithBaseDir(data, filepath.Dir(resolved))
+	baseDir, err := configBaseDir(filepath.Dir(resolved))
+	if err != nil {
+		return nil, err
+	}
+	return parseYAMLBytesWithBaseDir(data, baseDir)
+}
+
+func configBaseDir(defaultDir string) (string, error) {
+	override := strings.TrimSpace(os.Getenv(ConfigBaseDirEnv))
+	if override == "" {
+		return filepath.Clean(defaultDir), nil
+	}
+	if !filepath.IsAbs(override) {
+		return "", fmt.Errorf("%s must be an absolute directory: %q", ConfigBaseDirEnv, override)
+	}
+	cleaned := filepath.Clean(override)
+	info, err := os.Stat(cleaned)
+	if err != nil {
+		return "", fmt.Errorf("invalid %s directory %q: %w", ConfigBaseDirEnv, cleaned, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s must name a directory: %q", ConfigBaseDirEnv, cleaned)
+	}
+	return cleaned, nil
 }
 
 // ParseYAMLBytes parses config YAML content without touching the filesystem.
 func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
-	return parseYAMLBytesWithBaseDir(data, "")
+	return parseYAMLBytesWithOptions(data, "", true)
 }
 
 func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, error) {
+	return parseYAMLBytesWithOptions(data, baseDir, true)
+}
+
+// ParseYAMLBytesWithoutEnvExpansion validates in-memory YAML while preserving
+// ${VAR} references verbatim. It is intended for read-only validation APIs
+// that must not expose process environment values in normalized output.
+func ParseYAMLBytesWithoutEnvExpansion(data []byte) (*RouterConfig, error) {
+	return parseYAMLBytesWithOptions(data, "", false)
+}
+
+func parseYAMLBytesWithOptions(
+	data []byte,
+	baseDir string,
+	expandEnvironment bool,
+) (*RouterConfig, error) {
 	raw, err := parseRawConfigMap(data)
 	if err != nil {
 		return nil, err
 	}
-	if rejectErr := rejectDeprecatedUserConfigFields(raw); rejectErr != nil {
-		return nil, rejectErr
-	}
-	if rejectErr := rejectRemovedStructureFields(raw); rejectErr != nil {
-		return nil, rejectErr
-	}
-	if rejectErr := rejectRemovedTaxonomyLegacyFields(raw); rejectErr != nil {
-		return nil, rejectErr
-	}
-	if rejectErr := rejectRemovedDecisionToolFields(raw); rejectErr != nil {
-		return nil, rejectErr
-	}
-	if rejectErr := rejectRemovedRouterLearningFields(raw); rejectErr != nil {
-		return nil, rejectErr
-	}
-	if rejectErr := rejectUnsupportedRouterLearningFields(raw); rejectErr != nil {
-		return nil, rejectErr
+	if normalizeErr := validateAndNormalizeRawConfig(raw); normalizeErr != nil {
+		return nil, normalizeErr
 	}
 
-	expandEnvSubstitutionsInMap(raw)
+	if expandEnvironment {
+		expandEnvSubstitutionsInMap(raw)
+	}
 	expandedData, marshalErr := yaml.Marshal(raw)
 	if marshalErr != nil {
-		return nil, fmt.Errorf("failed to marshal config after environment expansion: %w", marshalErr)
+		return nil, fmt.Errorf("failed to marshal normalized config input: %w", marshalErr)
 	}
 
-	// Warn about unknown YAML fields (typos) before parsing into typed structs.
-	WarnUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
-
-	cfg, err := parseRouterConfigPayload(expandedData, raw)
+	if !isCanonicalConfig(raw) {
+		return nil, canonicalConfigRequiredError(raw)
+	}
+	if validationErr := validateKnownFields(raw, reflect.TypeOf(CanonicalConfig{})); validationErr != nil {
+		return nil, validationErr
+	}
+	cfg, err := parseCanonicalConfigPayload(expandedData, raw)
 	if err != nil {
 		return nil, err
 	}
 	cfg.ConfigBaseDir = baseDir
+	documentDigest := sha256.Sum256(data)
+	cfg.DocumentHash = hex.EncodeToString(documentDigest[:])
+	cfg.SkipExternalAssetValidation = !expandEnvironment
 	if err := finalizeParsedConfig(cfg); err != nil {
 		return nil, err
 	}
@@ -126,6 +156,47 @@ func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, erro
 		"base_dir":       baseDir,
 	})
 	return cfg, nil
+}
+
+func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
+	validators := []func(map[string]interface{}) error{
+		normalizeResponseCacheAliases,
+		rejectDeprecatedUserConfigFields,
+		rejectRemovedEvaluationFields,
+		rejectRemovedStructureFields,
+		rejectRemovedTaxonomyLegacyFields,
+		rejectRemovedDecisionToolFields,
+		rejectRemovedRouterLearningFields,
+		rejectUnsupportedRouterLearningFields,
+	}
+	for _, validate := range validators {
+		if err := validate(raw); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rejectRemovedEvaluationFields(raw map[string]interface{}) error {
+	removed := make([]string, 0)
+	if _, ok := raw["evaluation_catalog"]; ok {
+		removed = append(removed, "evaluation_catalog")
+	}
+	routing := nestedStringMap(raw["routing"])
+	if cards, ok := routing["modelCards"].([]interface{}); ok {
+		for index, rawCard := range cards {
+			if _, ok := nestedStringMap(rawCard)["evaluations"]; ok {
+				removed = append(removed, fmt.Sprintf("routing.modelCards[%d].evaluations", index))
+			}
+		}
+	}
+	if len(removed) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"removed config fields are no longer supported: %s; move benchmark definitions, indices, and model-linked records under evaluation",
+		strings.Join(removed, ", "),
+	)
 }
 
 func parseRawConfigMap(data []byte) (map[string]interface{}, error) {
@@ -331,7 +402,7 @@ func rejectUnsupportedGlobalRouterLearningFields(raw map[string]interface{}) err
 	if err := rejectUnknownMapFields(
 		"global.router.learning",
 		learning,
-		[]string{"enabled", "adaptation", "protection"},
+		[]string{"enabled", "adaptation", "protection", "state_store"},
 	); err != nil {
 		return err
 	}
@@ -349,7 +420,7 @@ func rejectUnsupportedGlobalRouterLearningFields(raw map[string]interface{}) err
 	); err != nil {
 		return err
 	}
-	return nil
+	return rejectUnsupportedRouterLearningStateStoreFields(learning)
 }
 
 func rejectUnsupportedDecisionAdaptationFields(raw map[string]interface{}) error {
@@ -407,13 +478,35 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 		}
 	}
 	if tuning, ok := raw["tuning"]; ok {
-		if err := rejectUnknownMapFields(prefix+".tuning", nestedStringMap(tuning), []string{
+		tuningMap := nestedStringMap(tuning)
+		if err := rejectUnknownMapFields(prefix+".tuning", tuningMap, []string{
 			"idle_timeout_seconds",
 			"min_turns_before_switch",
 			"switch_margin",
 			"stability_weight",
+			"progress_gate",
 		}); err != nil {
 			return err
+		}
+		if gate, ok := tuningMap["progress_gate"]; ok {
+			if err := rejectUnknownMapFields(
+				prefix+".tuning.progress_gate",
+				nestedStringMap(gate),
+				[]string{
+					"enabled",
+					"mode",
+					"calibration_id",
+					"window_size",
+					"window_ttl_seconds",
+					"min_window_outcomes",
+					"min_consecutive_regressions",
+					"min_consecutive_recoveries",
+					"cooldown_seconds",
+					"max_switches_per_window",
+				},
+			); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -435,13 +528,6 @@ func rejectUnknownMapFields(prefix string, raw map[string]interface{}, allowed [
 	}
 	sort.Strings(unknown)
 	return fmt.Errorf("unsupported Router Learning config fields: %s", strings.Join(unknown, ", "))
-}
-
-func parseRouterConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {
-	if !isCanonicalConfig(raw) {
-		return nil, canonicalConfigRequiredError(raw)
-	}
-	return parseCanonicalConfigPayload(data, raw)
 }
 
 func parseCanonicalConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {
@@ -487,7 +573,7 @@ func canonicalConfigRequiredError(raw map[string]interface{}) error {
 		detail = fmt.Sprintf("unexpected top-level keys: %s", strings.Join(unsupported, ", "))
 	}
 	return fmt.Errorf(
-		"config file must use canonical v0.3 version/listeners/providers/routing/global; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3 providers/routing/global",
+		"config file must use the canonical v0.3 hierarchy; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3",
 		detail,
 	)
 }
@@ -503,6 +589,7 @@ func finalizeParsedConfig(cfg *RouterConfig) error {
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
 	}
+	applyBatchConcurrencyMigration(cfg)
 	if err := validateConfigStructure(cfg); err != nil {
 		logging.ComponentDebugEvent("config", "config_validation_failed", map[string]interface{}{
 			"error": err.Error(),
@@ -524,14 +611,26 @@ func logParsedDecisions(cfg *RouterConfig) {
 }
 
 func deprecatedUserConfigFields(raw map[string]interface{}) []string {
-	fields := []string{}
-
 	routing := nestedStringMap(raw["routing"])
+	providers := nestedStringMap(raw["providers"])
+	fields := deprecatedRoutingConfigFields(routing)
+	fields = append(fields, deprecatedProviderConfigFields(providers)...)
+	fields = append(fields, deprecatedGlobalConfigFields(nestedStringMap(raw["global"]))...)
+	fields = append(fields, deprecatedDecisionConfigFields(routing)...)
+	return fields
+}
+
+func deprecatedRoutingConfigFields(routing map[string]interface{}) []string {
+	fields := []string{}
 	if _, ok := routing["models"]; ok {
 		fields = append(fields, "routing.models")
 	}
+	fields = append(fields, deprecatedModelCardFields(routing)...)
+	return fields
+}
 
-	providers := nestedStringMap(raw["providers"])
+func deprecatedProviderConfigFields(providers map[string]interface{}) []string {
+	fields := []string{}
 	for _, key := range []string{
 		"model_targets",
 		"backends",
@@ -544,31 +643,74 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 			fields = append(fields, "providers."+key)
 		}
 	}
+	providerDefaults := nestedStringMap(providers["defaults"])
+	for _, key := range []string{"default_model", "default_reasoning_effort", "reasoning_families"} {
+		if _, ok := providerDefaults[key]; ok {
+			fields = append(fields, "providers.defaults."+key)
+		}
+	}
+	fields = append(fields, deprecatedProviderModelFields(providers)...)
+	return fields
+}
 
-	if models, ok := providers["models"].([]interface{}); ok {
-		for index, rawModel := range models {
-			model := nestedStringMap(rawModel)
-			for _, key := range []string{
-				"access",
-				"endpoints",
-				"access_key",
-				"param_size",
-				"context_window_size",
-				"description",
-				"capabilities",
-				"loras",
-				"quality_score",
-				"modality",
-				"tags",
-			} {
-				if _, ok := model[key]; ok {
-					fields = append(fields, fmt.Sprintf("providers.models[%d].%s", index, key))
-				}
+func deprecatedProviderModelFields(providers map[string]interface{}) []string {
+	models, ok := providers["models"].([]interface{})
+	if !ok {
+		return nil
+	}
+	fields := []string{}
+	for index, rawModel := range models {
+		fields = append(fields, deprecatedProviderModelFieldNames(nestedStringMap(rawModel), index)...)
+	}
+	return fields
+}
+
+func deprecatedProviderModelFieldNames(model map[string]interface{}, index int) []string {
+	fields := []string{}
+	for _, key := range []string{
+		"access", "endpoints", "access_key", "param_size", "context_window_size",
+		"description", "capabilities", "loras", "quality_score", "modality", "tags",
+	} {
+		if _, ok := model[key]; ok {
+			fields = append(fields, fmt.Sprintf("providers.models[%d].%s", index, key))
+		}
+	}
+	if _, ok := model["reasoning_family"]; ok {
+		fields = append(fields, fmt.Sprintf("providers.models[%d].reasoning_family", index))
+	}
+	return append(fields, deprecatedBackendRefFields(model, index)...)
+}
+
+func deprecatedBackendRefFields(model map[string]interface{}, modelIndex int) []string {
+	refs, ok := model["backend_refs"].([]interface{})
+	if !ok {
+		return nil
+	}
+	fields := []string{}
+	for backendIndex, rawRef := range refs {
+		if _, ok := nestedStringMap(rawRef)["type"]; ok {
+			fields = append(fields, fmt.Sprintf(
+				"providers.models[%d].backend_refs[%d].type", modelIndex, backendIndex,
+			))
+		}
+	}
+	return fields
+}
+
+func deprecatedModelCardFields(routing map[string]interface{}) []string {
+	fields := []string{}
+	if cards, ok := routing["modelCards"].([]interface{}); ok {
+		for index, rawCard := range cards {
+			if _, ok := nestedStringMap(rawCard)["quality_score"]; ok {
+				fields = append(fields, fmt.Sprintf("routing.modelCards[%d].quality_score", index))
 			}
 		}
 	}
+	return fields
+}
 
-	global := nestedStringMap(raw["global"])
+func deprecatedGlobalConfigFields(global map[string]interface{}) []string {
+	fields := []string{}
 	if _, ok := global["modules"]; ok {
 		fields = append(fields, "global.modules")
 	}
@@ -577,9 +719,6 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 	if _, ok := embeddings["bert"]; ok {
 		fields = append(fields, "global.model_catalog.embeddings.bert")
 	}
-
-	fields = append(fields, deprecatedDecisionConfigFields(routing)...)
-
 	return fields
 }
 
@@ -620,11 +759,14 @@ func removedStructureFields(raw map[string]interface{}) []string {
 
 func unsupportedTopLevelConfigFields(raw map[string]interface{}) []string {
 	allowed := map[string]bool{
-		"version":   true,
-		"listeners": true,
-		"providers": true,
-		"routing":   true,
-		"global":    true,
+		"version":     true,
+		"listeners":   true,
+		"providers":   true,
+		"evaluation":  true,
+		"routing":     true,
+		"entrypoints": true,
+		"recipes":     true,
+		"global":      true,
 	}
 
 	fields := make([]string, 0)
@@ -654,110 +796,4 @@ func nestedStringMap(raw interface{}) map[string]interface{} {
 	default:
 		return map[string]interface{}{}
 	}
-}
-
-// Replace replaces the globally cached config. It is safe for concurrent readers.
-func Replace(newCfg *RouterConfig) {
-	decisionNames := make([]string, 0, len(newCfg.Decisions))
-	for _, d := range newCfg.Decisions {
-		decisionNames = append(decisionNames, d.Name)
-	}
-	logging.ComponentDebugEvent("config", "config_replace_started", map[string]interface{}{
-		"decision_count": len(newCfg.Decisions),
-		"decision_names": decisionNames,
-	})
-
-	configMu.Lock()
-	config = newCfg
-	configErr = nil
-	configMu.Unlock()
-
-	// Notify listeners of config change.
-	configUpdateMu.Lock()
-	subscribers := make(map[uint64]chan *RouterConfig, len(configUpdateSubscribers))
-	for id, ch := range configUpdateSubscribers {
-		subscribers[id] = ch
-	}
-	configUpdateMu.Unlock()
-
-	if len(subscribers) == 0 {
-		logging.ComponentDebugEvent("config", "config_update_listener_missing", nil)
-		return
-	}
-	for id, ch := range subscribers {
-		select {
-		case ch <- newCfg:
-			logging.ComponentDebugEvent("config", "config_update_notified", map[string]interface{}{
-				"subscriber_id":  id,
-				"decision_count": len(newCfg.Decisions),
-			})
-		default:
-			logging.ComponentWarnEvent("config", "config_update_notification_skipped", map[string]interface{}{
-				"subscriber_id":  id,
-				"reason":         "channel_full",
-				"decision_count": len(newCfg.Decisions),
-			})
-		}
-	}
-}
-
-// Get returns the current configuration
-func Get() *RouterConfig {
-	configMu.RLock()
-	defer configMu.RUnlock()
-	return config
-}
-
-type ConfigUpdateSubscription struct {
-	ch        chan *RouterConfig
-	closeOnce sync.Once
-	closeFn   func()
-}
-
-func (s *ConfigUpdateSubscription) Updates() <-chan *RouterConfig {
-	if s == nil {
-		return nil
-	}
-	return s.ch
-}
-
-func (s *ConfigUpdateSubscription) Close() {
-	if s == nil {
-		return
-	}
-	s.closeOnce.Do(func() {
-		if s.closeFn != nil {
-			s.closeFn()
-		}
-	})
-}
-
-func SubscribeConfigUpdates(buffer int) *ConfigUpdateSubscription {
-	if buffer <= 0 {
-		buffer = 1
-	}
-
-	id := atomic.AddUint64(&configUpdateNextID, 1)
-	ch := make(chan *RouterConfig, buffer)
-
-	configUpdateMu.Lock()
-	configUpdateSubscribers[id] = ch
-	configUpdateMu.Unlock()
-
-	return &ConfigUpdateSubscription{
-		ch: ch,
-		closeFn: func() {
-			configUpdateMu.Lock()
-			delete(configUpdateSubscribers, id)
-			configUpdateMu.Unlock()
-			close(ch)
-		},
-	}
-}
-
-// WatchConfigUpdates returns a compatibility channel that receives config
-// updates. New code should prefer SubscribeConfigUpdates so callers can
-// explicitly release their subscription.
-func WatchConfigUpdates() <-chan *RouterConfig {
-	return SubscribeConfigUpdates(1).Updates()
 }

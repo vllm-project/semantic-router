@@ -1,0 +1,112 @@
+{
+  "operation": "response",
+  "cases": [
+    {
+      "name": "assistant_metadata",
+      "body": {
+        "id": "chatcmpl_1",
+        "object": "chat.completion",
+        "created": 100,
+        "model": "provider-model",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "stop",
+            "stop_reason": 106,
+            "token_ids": [13],
+            "routed_experts": null,
+            "logprobs": {
+              "content": [
+                {
+                  "token": "done",
+                  "logprob": -0.1,
+                  "bytes": [100, 111, 110, 101],
+                  "top_logprobs": [
+                    {
+                      "token": "done",
+                      "logprob": -0.1,
+                      "bytes": [100, 111, 110, 101]
+                    }
+                  ]
+                }
+              ],
+              "refusal": []
+            },
+            "message": {
+              "id": "msg_1",
+              "role": "assistant",
+              "content": "done",
+              "refusal": "",
+              "reasoning_content": "inspect",
+              "reasoning": "inspect",
+              "annotations": [
+                {
+                  "type": "url_citation",
+                  "url_citation": {
+                    "url": "https://example.com/source",
+                    "title": "Source",
+                    "start_index": 0,
+                    "end_index": 4
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 2,
+          "completion_tokens": 1,
+          "total_tokens": 3
+        }
+      }
+    },
+    {
+      "name": "audio_output",
+      "body": {
+        "id": "chatcmpl_audio",
+        "object": "chat.completion",
+        "created": 100,
+        "model": "provider-model",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "stop",
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "audio": {
+                "id": "audio_1",
+                "data": "UklGRg==",
+                "expires_at": 200,
+                "transcript": "done"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "legacy_function_call",
+      "body": {
+        "id": "chatcmpl_legacy",
+        "object": "chat.completion",
+        "created": 100,
+        "model": "provider-model",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "function_call",
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "function_call": {
+                "name": "lookup",
+                "arguments": "{\"q\":\"weather\"}"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

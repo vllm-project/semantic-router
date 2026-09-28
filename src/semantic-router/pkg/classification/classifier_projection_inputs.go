@@ -10,33 +10,51 @@ import (
 type projectionMatchAccessor func(*SignalResults) []string
 
 var projectionMatchAccessors = map[string]projectionMatchAccessor{
-	config.SignalTypeKeyword:      func(results *SignalResults) []string { return results.MatchedKeywordRules },
-	config.SignalTypeEmbedding:    func(results *SignalResults) []string { return results.MatchedEmbeddingRules },
-	config.SignalTypeDomain:       func(results *SignalResults) []string { return results.MatchedDomainRules },
-	config.SignalTypeFactCheck:    func(results *SignalResults) []string { return results.MatchedFactCheckRules },
-	config.SignalTypeUserFeedback: func(results *SignalResults) []string { return results.MatchedUserFeedbackRules },
-	config.SignalTypeReask:        func(results *SignalResults) []string { return results.MatchedReaskRules },
-	config.SignalTypePreference:   func(results *SignalResults) []string { return results.MatchedPreferenceRules },
-	config.SignalTypeLanguage:     func(results *SignalResults) []string { return results.MatchedLanguageRules },
-	config.SignalTypeContext:      func(results *SignalResults) []string { return results.MatchedContextRules },
-	config.SignalTypeStructure:    func(results *SignalResults) []string { return results.MatchedStructureRules },
-	config.SignalTypeComplexity:   func(results *SignalResults) []string { return results.MatchedComplexityRules },
-	config.SignalTypeModality:     func(results *SignalResults) []string { return results.MatchedModalityRules },
-	config.SignalTypeAuthz:        func(results *SignalResults) []string { return results.MatchedAuthzRules },
-	config.SignalTypeJailbreak:    func(results *SignalResults) []string { return results.MatchedJailbreakRules },
-	config.SignalTypePII:          func(results *SignalResults) []string { return results.MatchedPIIRules },
-	config.SignalTypeKB:           func(results *SignalResults) []string { return results.MatchedKBRules },
-	config.SignalTypeConversation: func(results *SignalResults) []string { return results.MatchedConversationRules },
-	config.SignalTypeEvent:        func(results *SignalResults) []string { return results.MatchedEventRules },
-	config.SignalTypeProjection:   func(results *SignalResults) []string { return results.MatchedProjectionRules },
+	config.SignalTypeKeyword:       func(results *SignalResults) []string { return results.MatchedKeywordRules },
+	config.SignalTypeEmbedding:     func(results *SignalResults) []string { return results.MatchedEmbeddingRules },
+	config.SignalTypeDomain:        func(results *SignalResults) []string { return results.MatchedDomainRules },
+	config.SignalTypeFactCheck:     func(results *SignalResults) []string { return results.MatchedFactCheckRules },
+	config.SignalTypeUserFeedback:  func(results *SignalResults) []string { return results.MatchedUserFeedbackRules },
+	config.SignalTypeReask:         func(results *SignalResults) []string { return results.MatchedReaskRules },
+	config.SignalTypePreference:    func(results *SignalResults) []string { return results.MatchedPreferenceRules },
+	config.SignalTypeLanguage:      func(results *SignalResults) []string { return results.MatchedLanguageRules },
+	config.SignalTypeContext:       func(results *SignalResults) []string { return results.MatchedContextRules },
+	config.SignalTypeStructure:     func(results *SignalResults) []string { return results.MatchedStructureRules },
+	config.SignalTypeComplexity:    func(results *SignalResults) []string { return results.MatchedComplexityRules },
+	config.SignalTypeModality:      func(results *SignalResults) []string { return results.MatchedModalityRules },
+	config.SignalTypeAuthz:         func(results *SignalResults) []string { return results.MatchedAuthzRules },
+	config.SignalTypeJailbreak:     func(results *SignalResults) []string { return results.MatchedJailbreakRules },
+	config.SignalTypeSafety:        func(results *SignalResults) []string { return results.MatchedSafetyRules },
+	config.SignalTypePII:           func(results *SignalResults) []string { return results.MatchedPIIRules },
+	config.SignalTypeKB:            func(results *SignalResults) []string { return results.MatchedKBRules },
+	config.SignalTypeConversation:  func(results *SignalResults) []string { return results.MatchedConversationRules },
+	config.SignalTypeEvent:         func(results *SignalResults) []string { return results.MatchedEventRules },
+	config.SignalTypeInputModality: func(results *SignalResults) []string { return results.MatchedInputModalityRules },
+	config.SignalTypeProjection:    func(results *SignalResults) []string { return results.MatchedProjectionRules },
 }
 
 func projectionScoreValue(score config.ProjectionScore, results *SignalResults) float64 {
 	total := 0.0
 	for _, input := range score.Inputs {
+		if input.Weight == 0 {
+			continue
+		}
 		total += input.Weight * projectionInputValue(input, results)
 	}
 	return total
+}
+
+func projectionScoreHasFailedInput(score config.ProjectionScore, results *SignalResults) bool {
+	for _, input := range score.Inputs {
+		if input.Weight == 0 {
+			continue
+		}
+		key := signalConfidenceKey(strings.ToLower(strings.TrimSpace(input.Type)), input.Name)
+		if _, failed := results.SignalErrors[key]; failed {
+			return true
+		}
+	}
+	return false
 }
 
 func projectionInputValue(input config.ProjectionScoreInput, results *SignalResults) float64 {

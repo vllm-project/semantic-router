@@ -1,133 +1,83 @@
-# Advanced Tool Filtering for Tool Selection
-
-Issue: [#1002](https://github.com/vllm-project/semantic-router/issues/1002)
-
+---
+title: Advanced Tool Filtering for Tool Selection
+description: Defines an optional reranker that combines embedding, lexical, tag, name, and category signals for explainable tool selection.
+created: 2026-01-14
+status: Implemented
 ---
 
-## Current
+> **Status:** Implemented · **Created:** 2026-01-14
 
-Currently tool selection only uses embedding similarity, similarity threshold, and top-k. When embeddings are similar but intent is inconsistent, tools from incorrect domains may be selected.
+## Problem
 
-[#1002](https://github.com/vllm-project/semantic-router/issues/1002) proposes the need to introduce advanced tool filtering capabilities to reduce these misselections through sophisticated relevance filtering, while maintaining default behavior unchanged.
+Embedding similarity can retrieve tools that are linguistically close but wrong for
+the user's intent. Returning too many near matches increases tool-choice ambiguity and
+can expose tools from an unrelated domain.
 
-## Solution
+Tool relevance is not authorization, but relevance should still be inspectable and
+configurable.
 
-After embedding candidate set retrieval, add an **optional advanced filtering stage**. This stage applies deterministic filtering (allow/block lists, optional category gating, lexical overlap thresholds) and a **combined score reranker** that fuses embedding similarity with lexical, tag, name, and category signals. If `advanced_filtering.enabled=false`, existing behavior remains unchanged.
+## Implemented design
 
-Solution advantages: maintains controllable latency, introduces no new model dependencies, and is fully explainable through configuration.
-
-## Comparative Test Results
-
-Test configuration:
-
-- Query set: 20 queries (17 positive examples, 3 negative examples), covering weather, email, search, calculation, calendar, and other scenarios
-- Tool library: 5 tools (get_weather, search_web, calculate, send_email, create_calendar_event)
-- Iterations: 10
-- Advanced filtering configuration: `min_lexical_overlap=1`, `min_combined_score=0.35`, `weights={embed:0.7, lexical:0.2, tag:0.05, name:0.05}`
-
-Evaluation results:
-
-![Advanced Tool Filtering Evaluation Results](../../static/img/proposals/advanced-tool-filtering.png)
-
-| Metric | Baseline | Advanced | Delta |
-|--------|----------|----------|-------|
-| **Accuracy** | 55.00% | 90.00% | **+35.00%** |
-| **Precision** | 78.57% | 94.12% | **+15.55%** |
-| **Recall** | 64.71% | 94.12% | **+29.41%** |
-| **False Positive Rate** | 100.00% | 33.33% | **-66.67%** |
-| Avg Latency | 0.0162 ms | 0.0197 ms | +0.0036 ms |
-| P95 Latency | 0.0256 ms | 0.0288 ms | +0.0032 ms |
-
-## Data Flow
+Advanced filtering is an optional stage in the `tool_selection` plugin's add mode:
 
 ```mermaid
-flowchart TD
-    A[Request with tool_choice=auto] --> B[Extract classification text]
-    B --> C{Tools DB enabled?}
-    C -->|No| D[Exit]
-    C -->|Yes| E{advanced_filtering.enabled?}
-    E -->|No| F[FindSimilarTools: embedding + threshold + top-k]
-    E -->|Yes| G[FindSimilarToolsWithScores: embedding + threshold + candidate pool]
-    G --> H[Allow/block + category filter + lexical overlap]
-    H --> I[Compute combined score + rerank]
-    I --> J[Select top-k tools]
-    F --> K[Update request tools]
-    J --> K[Update request tools]
+flowchart LR
+  Query --> Retrieve["Embedding candidate retrieval"]
+  Retrieve --> Rules["Allow/block and optional category gates"]
+  Rules --> Lexical["Lexical-overlap filter"]
+  Lexical --> Score["Weighted reranking"]
+  Score --> TopK["Final top-k tools"]
 ```
 
-## Configuration Changes
+When disabled, tool selection keeps the ordinary embedding retrieval path.
 
-Advanced filtering is disabled by default. When enabled, the following fields take effect.
+## Scoring
 
-| Field | Type | Default | Range / Description |
-|-------|------|---------|---------------------|
-| `enabled` | bool | `false` | Enable advanced filtering. |
-| `candidate_pool_size` | int | `max(top_k*5, 20)` | If set and >0, use directly. |
-| `min_lexical_overlap` | int | `0` | Minimum unique token overlap between query and tool vocabulary. |
-| `min_combined_score` | float | `0.0` | Combined score threshold, range [0.0, 1.0]. |
-| `weights.embed` | float | `1.0` | If no weights are set, embed defaults to 1.0. |
-| `weights.lexical` | float | `0.0` | Optional weight, range [0.0, 1.0]. |
-| `weights.tag` | float | `0.0` | Optional weight, range [0.0, 1.0]. |
-| `weights.name` | float | `0.0` | Optional weight, range [0.0, 1.0]. |
-| `weights.category` | float | `0.0` | Optional weight, range [0.0, 1.0]. |
-| `use_category_filter` | bool | `false` | If true, filter by category when confidence is sufficient. |
-| `category_confidence_threshold` | float | `nil` | If set, category filtering only applies when decision confidence ≥ threshold. |
-| `allow_tools` | []string | `[]` | Tool name whitelist; when non-empty, only these tools are retained. |
-| `block_tools` | []string | `[]` | Tool name blacklist. |
+The reranker can combine normalized embedding similarity with lexical overlap and
+matches on tool tags, name, and category. Operators choose the weights and a minimum
+combined score.
 
-## Scoring and Filtering Implementation
+The score is a relevance heuristic, not a probability. Weights and thresholds should
+be calibrated on the deployment's own tool catalog and request set.
 
-### Tokenization
+## Configuration boundary
 
-Tokenization rules: convert to lowercase and split at non-alphanumeric characters. Only Unicode letters and numbers are counted as tokens. 
-Implementation: [src/semantic-router/pkg/tools/relevance.go#L240](https://github.com/samzong/semantic-router/blob/feat/advanced-tool-filtering/src/semantic-router/pkg/tools/relevance.go#L240).
+The main controls are:
 
-### Lexical Overlap
+| Control | Purpose |
+| --- | --- |
+| `candidate_pool_size` | Limits the wider pool considered before final top-k selection. |
+| `min_lexical_overlap` | Requires a minimum number of shared normalized terms. |
+| `min_combined_score` | Rejects candidates below the final reranking score. |
+| `weights` | Balances embedding, lexical, tag, name, and category evidence. |
+| `allow_tools` / `block_tools` | Applies deterministic catalog restrictions. |
+| `use_category_filter` | Enables category gating when category evidence is available. |
 
-Lexical overlap counts the intersection of the following **unique tokens**:
+Use the maintained tool-selection fragment and current configuration schema for exact
+field types and defaults.
 
-- Tool name
-- Tool description
-- Tool category
+## Failure and security behavior
 
-Tags are not included. Tags are a separate signal.
+Invalid weights and thresholds are rejected during configuration validation. Runtime
+failure follows the plugin's configured fallback behavior.
 
-### Combined Score Formula
+Allow and block lists do not replace authorization. The caller or execution layer must
+still verify that the user is permitted to invoke a selected tool.
 
-For each candidate tool:
+## Scope and non-goals
 
-```
-combined = (w_embed * embed + w_lexical * lexical + w_tag * tag + w_name * name + w_category * category) / (w_embed + w_lexical + w_tag + w_name + w_category)
-```
+Advanced filtering reranks a bounded set of tool candidates. It does not execute
+tools, infer user permission, guarantee intent correctness, or add another model
+dependency.
 
-- `embed` is the similarity score, clamped to [0,1].
-- `lexical` and `tag` are overlap scores, normalized by query token count / tag token count.
-- `name` and `category` are binary scores (0 or 1).
-- If no weights are set, embed defaults to 1.0.
-- If all weights are explicitly set to 0, the combined score is 0; when `min_combined_score > 0`, all candidates will be filtered.
+## Evaluation
 
-### Category Confidence Gating
+Evaluate on a versioned catalog and labeled request set. Report precision, recall,
+empty-selection rate, catalog coverage, and added latency. Percentage improvements
+require a reproducible dataset, baseline configuration, and evaluation artifact.
 
-Category filtering only takes effect when all of the following conditions are met:
+## References
 
-- `use_category_filter` is true,
-- A category exists, and
-- Decision confidence ≥ `category_confidence_threshold` (if set).
-
-## Error Handling and Fallback
-
-- When tool selection fails and `tools.fallback_to_empty=true`: the request continues with **no tools** and a warning is logged.
-- If `fallback_to_empty=false`: the request returns a classification error.
-- Invalid advanced configuration values are rejected during configuration loading (range validation in `validator.go`).
-
-## API Changes
-
-New or modified APIs and signatures:
-
-```go
-// src/semantic-router/pkg/tools/tools.go
-func (db *ToolsDatabase) FindSimilarToolsWithScores(query string, topK int) ([]ToolSimilarity, error)
-
-// src/semantic-router/pkg/tools/relevance.go
-func FilterAndRankTools(query string, candidates []ToolSimilarity, topK int, advanced *config.AdvancedToolFilteringConfig, selectedCategory string) []openai.ChatCompletionToolParam
-```
+- [Tool-selection plugin guide](../tutorials/plugin/tool-selection)
+- [Maintained add-mode fragment](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/tool-selection/add-from-database.yaml)
+- [Related issue #1002](https://github.com/vllm-project/semantic-router/issues/1002)

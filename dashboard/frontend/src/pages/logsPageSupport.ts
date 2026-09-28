@@ -5,6 +5,11 @@ export interface LogEntry {
 
 export type LogLevel = 'all' | 'error' | 'warn' | 'info' | 'debug' | 'other'
 
+export function describeLogsAvailability(supported: boolean | null): string {
+  if (supported === null) return 'Detecting'
+  return supported ? 'Available' : 'Unavailable'
+}
+
 export function getLogLevel(line: string): Exclude<LogLevel, 'all'> {
   const normalized = line.toLocaleLowerCase()
   if (normalized.includes('"level":"error"') || normalized.includes('[error]')) return 'error'

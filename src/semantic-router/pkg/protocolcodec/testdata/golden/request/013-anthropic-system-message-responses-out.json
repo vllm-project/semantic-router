@@ -1,0 +1,36 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "before",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    },
+    {
+      "content": [
+        {
+          "text": "policy update",
+          "type": "input_text"
+        }
+      ],
+      "role": "system",
+      "type": "message"
+    },
+    {
+      "content": [
+        {
+          "text": "after",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "max_output_tokens": 32,
+  "model": "routed-model"
+}

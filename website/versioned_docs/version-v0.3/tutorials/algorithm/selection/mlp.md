@@ -4,7 +4,7 @@
 
 `mlp` is a GPU-accelerated neural network selection algorithm. It uses a Multi-Layer Perceptron to learn non-linear decision boundaries for model selection, trained on historical query-to-model assignment data.
 
-It aligns to `config/algorithm/selection/mlp.yaml`.
+It aligns to `config/fragments/algorithm/selection/mlp.yaml`.
 
 **Reference**: This is part of the ML-based model selection family alongside KNN, KMeans, and SVM.
 

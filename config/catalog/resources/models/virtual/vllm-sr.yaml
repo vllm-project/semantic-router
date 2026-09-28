@@ -1,0 +1,343 @@
+- id: vllm-sr/mom-v1-blend
+  display_name: MoM V1 Blend
+  description: Balances measured quality, latency, and cost across reasoning, simple,
+    and general requests.
+  kind: virtual
+  publisher: vllm-sr.ai
+  presentation:
+    logo: package:vllm
+    monogram: v
+    monochrome: false
+  distribution:
+    type: router_recipe
+    source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
+  family: mom
+  generation: 1
+  policy_version: 3.0.0
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - multimodal
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  asset: mom-v1
+  entrypoint: vllm-sr/mom-v1-blend
+  recipe: balance
+  traits:
+  - balanced
+  - chat
+  - reasoning
+  - tools
+  - multimodal
+  roles:
+  - name: reasoning
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: simple
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: medium
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  verification:
+    authority: vllm-sr-maintainers
+    status: claimed
+- id: vllm-sr/mom-v1-lite
+  display_name: MoM V1 Lite
+  description: Prioritizes known cost within task-specific quality bands for tools,
+    reasoning, and economy routing.
+  kind: virtual
+  publisher: vllm-sr.ai
+  presentation:
+    logo: package:vllm
+    monogram: v
+    monochrome: false
+  distribution:
+    type: router_recipe
+    source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
+  family: mom
+  generation: 1
+  policy_version: 3.0.0
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  asset: mom-v1
+  entrypoint: vllm-sr/mom-v1-lite
+  recipe: cost
+  traits:
+  - cost_optimized
+  - chat
+  - reasoning
+  - tools
+  roles:
+  - name: tools
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - tools
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: reasoning
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: economy
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  verification:
+    authority: vllm-sr-maintainers
+    status: claimed
+- id: vllm-sr/mom-v1-flash
+  display_name: MoM V1 Flash
+  description: Prioritizes measured first-token or output-token latency within task-specific
+    quality bands.
+  kind: virtual
+  publisher: vllm-sr.ai
+  presentation:
+    logo: package:vllm
+    monogram: v
+    monochrome: false
+  distribution:
+    type: router_recipe
+    source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
+  family: mom
+  generation: 1
+  policy_version: 3.0.0
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - multimodal
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  asset: mom-v1
+  entrypoint: vllm-sr/mom-v1-flash
+  recipe: speed
+  traits:
+  - latency_optimized
+  - chat
+  - reasoning
+  - tools
+  - multimodal
+  roles:
+  - name: tools
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - tools
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: reasoning
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: fast
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  verification:
+    authority: vllm-sr-maintainers
+    status: claimed
+- id: vllm-sr/mom-v1-ultra
+  display_name: MoM V1 Ultra
+  description: Combines strict quality selection with bounded review and agent workflows.
+  kind: virtual
+  publisher: vllm-sr.ai
+  presentation:
+    logo: package:vllm
+    monogram: v
+    monochrome: false
+  distribution:
+    type: router_recipe
+    source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
+  family: mom
+  generation: 1
+  policy_version: 3.0.0
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - multimodal
+  - orchestration
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  asset: mom-v1
+  entrypoint: vllm-sr/mom-v1-ultra
+  recipe: accuracy
+  traits:
+  - accuracy_optimized
+  - chat
+  - reasoning
+  - tools
+  - multimodal
+  - orchestration
+  roles:
+  - name: agent
+    required: true
+    minimum_candidates: 2
+    traits:
+    - chat
+    - reasoning
+    - tools
+    - structured_output
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: review
+    required: true
+    minimum_candidates: 2
+    traits:
+    - chat
+    - reasoning
+    - structured_output
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: reasoning
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: simple
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  verification:
+    authority: vllm-sr-maintainers
+    status: claimed
+- id: vllm-sr/mom-v1-vault
+  display_name: MoM V1 Vault
+  description: Contains prompt attacks and routes private or sensitive work to
+    the operator-assigned model pools.
+  kind: virtual
+  publisher: vllm-sr.ai
+  presentation:
+    logo: package:vllm
+    monogram: v
+    monochrome: false
+  distribution:
+    type: router_recipe
+    source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
+  family: mom
+  generation: 1
+  policy_version: 3.0.0
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tool_isolation
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  asset: mom-v1
+  entrypoint: vllm-sr/mom-v1-vault
+  recipe: vault
+  traits:
+  - privacy
+  - chat
+  - reasoning
+  - tool_isolation
+  - private_deployment
+  roles:
+  - name: sensitive
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - private_deployment
+    recommended_pool: []
+  - name: private
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - private_deployment
+    recommended_pool: []
+  verification:
+    authority: vllm-sr-maintainers
+    status: claimed

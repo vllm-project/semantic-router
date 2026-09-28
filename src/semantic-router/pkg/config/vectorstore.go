@@ -39,12 +39,26 @@ type VectorStoreConfig struct {
 	EmbeddingModel string `json:"embedding_model,omitempty" yaml:"embedding_model,omitempty"`
 
 	// EmbeddingDimension is the dimensionality of the embedding vectors.
-	// Default: 768
+	// Default: 0 (the prepared model's native output dimension).
 	EmbeddingDimension int `json:"embedding_dimension,omitempty" yaml:"embedding_dimension,omitempty"`
 
 	// IngestionWorkers is the number of concurrent ingestion pipeline workers.
 	// Default: 2
 	IngestionWorkers int `json:"ingestion_workers,omitempty" yaml:"ingestion_workers,omitempty"`
+
+	// IngestionDrainTimeoutSeconds bounds how long shutdown waits for in-flight
+	// ingestion jobs to drain before cancelling them. This is a shutdown grace
+	// window, not a per-file ingest budget: on shutdown the pipeline stops
+	// accepting new jobs, waits up to this long for currently-running jobs to
+	// finish, then cancels the rest so a wedged embedder or backend cannot block
+	// process shutdown indefinitely.
+	//
+	// Size it to comfortably exceed the typical single-job latency (file size ×
+	// chunk count × per-chunk embed + backend insert), while staying *below* the
+	// deployment's shutdown grace period (e.g. Kubernetes
+	// terminationGracePeriodSeconds, default 30s) so the drain actually runs
+	// before the platform force-kills the process. Default: 25.
+	IngestionDrainTimeoutSeconds int `json:"ingestion_drain_timeout_seconds,omitempty" yaml:"ingestion_drain_timeout_seconds,omitempty"`
 
 	// SupportedFormats lists the allowed file extensions for upload.
 	// Default: [".txt", ".md", ".json", ".csv", ".html"]
@@ -59,7 +73,7 @@ type VectorStoreConfig struct {
 	// LlamaStack holds Llama Stack backend configuration.
 	// When backend_type is "llama_stack", vSR delegates vector storage and
 	// embedding to a locally-running Llama Stack instance via its REST API.
-	// Llama Stack handles embedding internally, so vSR's CandleEmbedder is
+	// Llama Stack handles embedding internally, so vSR's prepared embedder is
 	// not used for insert/search — only Llama Stack's configured model is used.
 	LlamaStack *LlamaStackVectorStoreConfig `json:"llama_stack,omitempty" yaml:"llama_stack,omitempty"`
 
@@ -289,18 +303,11 @@ func (c *VectorStoreConfig) ApplyDefaults() {
 	if c.EmbeddingModel == "" {
 		c.EmbeddingModel = "bert"
 	}
-	if c.EmbeddingDimension <= 0 {
-		// Default dimension depends on model:
-		// - bert/multimodal = 384
-		// - qwen3/gemma/mmbert = 768
-		if c.EmbeddingModel == "bert" || c.EmbeddingModel == "multimodal" {
-			c.EmbeddingDimension = 384
-		} else {
-			c.EmbeddingDimension = 768
-		}
-	}
 	if c.IngestionWorkers <= 0 {
 		c.IngestionWorkers = 2
+	}
+	if c.IngestionDrainTimeoutSeconds <= 0 {
+		c.IngestionDrainTimeoutSeconds = 25
 	}
 	if len(c.SupportedFormats) == 0 {
 		c.SupportedFormats = []string{".txt", ".md", ".json", ".csv", ".html"}

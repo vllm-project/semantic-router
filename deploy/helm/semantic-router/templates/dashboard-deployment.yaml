@@ -40,6 +40,7 @@ spec:
         {{- include "semantic-router.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: dashboard
     spec:
+      serviceAccountName: {{ include "semantic-router.dashboardServiceAccountName" . }}
       securityContext:
         {{- toYaml .Values.dashboard.podSecurityContext | nindent 8 }}
       {{- with .Values.imagePullSecrets }}
@@ -48,13 +49,25 @@ spec:
       {{- end }}
       containers:
       - name: dashboard
-        image: "{{ .Values.dashboard.image.repository }}:{{ .Values.dashboard.image.tag }}"
+        image: "{{ .Values.dashboard.image.repository }}:{{ default .Chart.AppVersion .Values.dashboard.image.tag }}"
         imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.dashboard.securityContext | nindent 10 }}
         ports:
         - containerPort: {{ .Values.dashboard.service.targetPort }}
           name: http
           protocol: TCP
         env:
+        - name: DASHBOARD_CONFIG_DIR
+          value: {{ .Values.dashboard.persistence.mountPath | quote }}
+        # Lets the config write/deploy handlers patch this ConfigMap through
+        # the Kubernetes API instead of the read-only mounted file (#3688).
+        - name: VLLM_SR_K8S_CONFIGMAP_NAME
+          value: {{ include "semantic-router.configMapName" . | quote }}
+        - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         - name: TARGET_ROUTER_API_URL
           value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
         - name: TARGET_ROUTER_METRICS_URL
@@ -79,6 +92,11 @@ spec:
           value: "{{ .Values.dashboard.persistence.mountPath }}/auth.db"
         - name: DASHBOARD_WORKFLOW_DB_PATH
           value: "{{ .Values.dashboard.persistence.mountPath }}/workflow.sqlite"
+        - name: VLLM_SR_RECIPE_STORE_DIR
+          value: "{{ .Values.dashboard.persistence.mountPath }}/recipe-store"
+        {{- else }}
+        - name: VLLM_SR_RECIPE_STORE_DIR
+          value: "/app/data/recipe-store"
         {{- end }}
         {{- if .Values.dependencies.observability.prometheus.enabled }}
         - name: TARGET_PROMETHEUS_URL

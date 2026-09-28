@@ -1,0 +1,10 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "max_tokens": 32,
+    "messages": [
+      {"role": "user", "content": [{"type": "text", "text": "hello", "cache_control": {"type": "forever", "ttl": "24h"}}]}
+    ]
+  }
+}

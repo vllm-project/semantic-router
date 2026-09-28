@@ -11,7 +11,7 @@ translation:
 
 `svm` 用于采用 **SVM 选择器**的路由。
 
-对应 `config/algorithm/selection/svm.yaml`。
+对应 `config/fragments/algorithm/selection/svm.yaml`。
 
 ## 主要优势
 

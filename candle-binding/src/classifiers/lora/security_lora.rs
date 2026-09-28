@@ -11,10 +11,13 @@ use candle_core::Result;
 use std::path::Path;
 use std::time::Instant;
 
-/// Classifier backend enum to avoid Box<dyn Trait>
+/// Classifier backend enum to avoid Box<dyn Trait>. Both variants are boxed
+/// since an unboxed enum is sized for its largest variant regardless of which
+/// one is active, and HighPerformanceBertClassifier/TraditionalModernBertClassifier
+/// are both large structs.
 enum ClassifierBackend {
-    Bert(HighPerformanceBertClassifier),
-    ModernBert(TraditionalModernBertClassifier),
+    Bert(Box<HighPerformanceBertClassifier>),
+    ModernBert(Box<TraditionalModernBertClassifier>),
 }
 
 /// Security detector with real model inference (merged LoRA models)
@@ -63,7 +66,7 @@ impl SecurityLoRAClassifier {
                 );
                 candle_core::Error::from(unified_err)
             })?;
-            ClassifierBackend::ModernBert(classifier)
+            ClassifierBackend::ModernBert(Box::new(classifier))
         } else {
             // Use standard BERT classifier
             let classifier = HighPerformanceBertClassifier::new(model_path, num_classes, use_cpu)
@@ -76,7 +79,7 @@ impl SecurityLoRAClassifier {
                 );
                 candle_core::Error::from(unified_err)
             })?;
-            ClassifierBackend::Bert(classifier)
+            ClassifierBackend::Bert(Box::new(classifier))
         };
 
         // Load threshold from global config
@@ -123,6 +126,17 @@ impl SecurityLoRAClassifier {
         }
     }
 
+    /// Classify using the appropriate backend and return the full probability
+    /// distribution alongside the top-1 prediction.
+    fn classify_with_backend_probabilities(&self, text: &str) -> Result<(usize, f32, Vec<f32>)> {
+        match &self.backend {
+            ClassifierBackend::Bert(c) => c
+                .classify_text_with_probabilities(text)
+                .map_err(|e| candle_core::Error::Msg(format!("BERT classification failed: {}", e))),
+            ClassifierBackend::ModernBert(c) => c.classify_text_with_probabilities(text),
+        }
+    }
+
     /// Load threat labels from model config.json using unified config loader
     fn load_labels_from_config(model_path: &str) -> Result<Vec<String>> {
         use crate::core::config_loader;
@@ -165,6 +179,47 @@ impl SecurityLoRAClassifier {
         };
 
         Ok((predicted_class, confidence, label))
+    }
+
+    /// Classify text and return (class_index, confidence, label, probabilities)
+    /// for FFI compatibility. The probabilities array lets callers read the
+    /// probability of a specific class directly instead of only the confidence
+    /// of whichever class wins argmax.
+    pub fn classify_with_index_and_probabilities(
+        &self,
+        text: &str,
+    ) -> Result<(usize, f32, String, Vec<f32>)> {
+        // Use appropriate backend (BERT or ModernBERT/mmBERT) for classification
+        let (predicted_class, confidence, probabilities) = self
+            .classify_with_backend_probabilities(text)
+            .map_err(|e| {
+                let unified_err = model_error!(
+                    ModelErrorType::LoRA,
+                    "jailbreak classification",
+                    format!("Classification failed: {}", e),
+                    text
+                );
+                candle_core::Error::from(unified_err)
+            })?;
+
+        // Map class index to label - fail if class not found
+        let label = if predicted_class < self.threat_types.len() {
+            self.threat_types[predicted_class].clone()
+        } else {
+            let unified_err = model_error!(
+                ModelErrorType::LoRA,
+                "jailbreak classification",
+                format!(
+                    "Invalid class index {} not found in labels (max: {})",
+                    predicted_class,
+                    self.threat_types.len()
+                ),
+                text
+            );
+            return Err(candle_core::Error::from(unified_err));
+        };
+
+        Ok((predicted_class, confidence, label, probabilities))
     }
 
     /// Detect security threats using real model inference

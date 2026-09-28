@@ -1,0 +1,11 @@
+{
+  "model_id": "Qwen/Qwen3-0.6B",
+  "repository": "Qwen/Qwen3-0.6B-GGUF",
+  "revision": "23749fefcc72300e3a2ad315e1317431b06b590a",
+  "filename": "Qwen3-0.6B-Q8_0.gguf",
+  "sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+  "size_bytes": 639446688,
+  "server_image": "ghcr.io/ggml-org/llama.cpp:server@sha256:7149802e349d69ac0bc6bf05ff210a13f6ba83cc15af6f4be5d38ce7ef825abb",
+  "server_revision": "f072b103714dfa1eee531f80b24512faf38e3dd2",
+  "server_version": "b11058"
+}

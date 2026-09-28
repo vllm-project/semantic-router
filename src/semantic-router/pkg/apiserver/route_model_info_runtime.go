@@ -20,12 +20,17 @@ func (s *ClassificationAPIServer) getSystemInfo() SystemInfo {
 		Architecture: runtime.GOARCH,
 		OS:           runtime.GOOS,
 		MemoryUsage:  fmt.Sprintf("%.2f MB", float64(m.Alloc)/1024/1024),
-		GPUAvailable: false, // TODO: Implement GPU detection.
 	}
 }
 
 func (s *ClassificationAPIServer) loadModelsRuntimeState() *startupstatus.State {
-	if s == nil || s.configPath == "" {
+	if s == nil {
+		return nil
+	}
+	if s.runtimeRegistry != nil {
+		return s.runtimeRegistry.StartupState()
+	}
+	if s.configPath == "" {
 		return nil
 	}
 
@@ -80,13 +85,15 @@ func buildModelsInfoSummary(runtimeState *startupstatus.State, models []ModelInf
 }
 
 func enrichModelInfo(model ModelInfo, runtimeState *startupstatus.State) ModelInfo {
-	resolvedPath := canonicalModelPath(model.ModelPath)
-	if resolvedPath != "" && resolvedPath != model.ModelPath {
-		model.ResolvedModelPath = resolvedPath
-	}
+	if model.Metadata["lifecycle"] != "external" {
+		resolvedPath := canonicalModelPath(model.ModelPath)
+		if resolvedPath != "" && resolvedPath != model.ModelPath {
+			model.ResolvedModelPath = resolvedPath
+		}
 
-	if registry := lookupModelRegistryInfo(model.ModelPath); registry != nil {
-		model.Registry = registry
+		if registry := lookupModelRegistryInfo(model.ModelPath); registry != nil {
+			model.Registry = registry
+		}
 	}
 
 	model.State = resolveModelState(model, runtimeState)

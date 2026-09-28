@@ -3,17 +3,15 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: general-expert
-      reasoning_families:
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-      default_reasoning_effort: high
+      model: general-expert
+      reasoning_effort: high
     models:
       - name: base-model
-        reasoning_family: qwen3
+        reasoning:
+          family: qwen3
         backend_refs:
           - name: local-vllm
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   routing:
@@ -224,9 +222,10 @@ config:
             lora_name: general-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.8
     signals:
       domains:
@@ -328,7 +327,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8

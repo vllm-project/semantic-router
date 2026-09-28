@@ -27,11 +27,11 @@ func (c *Classifier) limitMatchedSignalsByTopK(
 		return matched
 	}
 
-	topK := 1
+	topK := 0
 	if c != nil && c.Config != nil && c.Config.EmbeddingConfig.TopK != nil {
 		topK = *c.Config.EmbeddingConfig.TopK
 	}
-	if topK == 0 || len(matched) <= topK {
+	if topK <= 0 || len(matched) <= topK {
 		return matched
 	}
 
@@ -54,10 +54,8 @@ func (c *Classifier) limitMatchedSignalsByTopK(
 		return ranked[i].score > ranked[j].score
 	})
 
-	keep := make(map[string]struct{}, topK)
 	limited := make([]string, 0, topK)
 	for _, entry := range ranked[:topK] {
-		keep[entry.name] = struct{}{}
 		limited = append(limited, entry.name)
 	}
 

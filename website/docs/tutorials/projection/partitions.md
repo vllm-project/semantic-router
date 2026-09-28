@@ -8,19 +8,6 @@ sidebar_position: 2
 
 `routing.projections.partitions` coordinates competing `domain` or `embedding` signals and keeps one winner.
 
-Use partitions when:
-
-- several related domain or embedding signals can all match the same request
-- downstream routing should work from one resolved winner instead of multiple overlapping matches
-- you want fallback behavior when nothing in the partition fires
-
-## Key Advantages
-
-- Collapses competing domain or embedding matches to one winner before decisions run.
-- Provides a stable default fallback when no member clearly wins.
-- Keeps downstream decisions simple — they read the resolved raw signal, not partition logic.
-- Supports softmax renormalization for confidence-aware winner selection.
-
 ## What Problem Does It Solve?
 
 Without partitions, a request can match several nearby domain or embedding lanes at once. That is often undesirable for routing:
@@ -33,7 +20,7 @@ Partitions solve that by coordinating the detector results after signal extracti
 
 ## How Partitions Behave at Runtime
 
-In the current implementation:
+Partitions follow these rules:
 
 - partitions only accept `domain` or `embedding` members
 - all members in one partition must share the same type
@@ -53,7 +40,7 @@ Two practical consequences:
 
 So partitions are not "named projection outputs" in the same sense as mappings. They are coordination over existing signal names.
 
-## Canonical YAML
+## Configuration
 
 ```yaml
 routing:
@@ -93,10 +80,6 @@ PROJECTION partition balance_intent_partition {
 | `members` | existing `domain` or `embedding` signal names to coordinate |
 | `default` | fallback member synthesized when none of the members matched |
 
-## Configuration
-
-Partitions are configured under `routing.projections.partitions`. Each partition requires a `name`, `semantics` (`exclusive` or `softmax_exclusive`), a list of `members`, and a `default`. See the [Canonical YAML](#canonical-yaml) and [Config Fields](#config-fields) sections above for full field reference.
-
 ## When to Use
 
 Use partitions when:
@@ -113,14 +96,7 @@ Do not use partitions when:
 - the group mixes unrelated concepts that should not compete with each other
 - you need a reusable named tier like `balance_reasoning`; that belongs in a mapping, not a partition
 
-## Design Notes
-
-- Keep raw detector definitions under `routing.signals`; partitions only coordinate them.
-- Group members that belong to the same routing question, such as one domain family or one embedding family.
-- Add `default` when downstream routing should keep a stable fallback even if no member clearly wins.
-- If you use `softmax_exclusive` on embedding partitions, native DSL validation can warn when member centroids are too similar to separate cleanly.
-
-## Next Steps
-
-- Pair a winner with [Scores](./scores) when the resolved signal should still contribute to a weighted route score.
-- Use [Mappings](./mappings) when decisions should read named routing bands instead of raw signal winners.
+Partitions make no additional model calls; they coordinate results produced by
+their member signals. A configured default is a routing fallback, not evidence
+that the default actually matched. See a complete example in the
+[`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml).

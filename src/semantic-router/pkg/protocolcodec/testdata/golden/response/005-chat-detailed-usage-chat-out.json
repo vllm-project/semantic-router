@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "length",
+      "index": 0,
+      "message": {
+        "content": "answer",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 100,
+  "id": "response_usage_1",
+  "model": "routed-model",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 7,
+    "completion_tokens_details": {
+      "reasoning_tokens": 4
+    },
+    "prompt_tokens": 10,
+    "prompt_tokens_details": {
+      "cache_write_tokens": 2,
+      "cached_tokens": 3
+    },
+    "total_tokens": 17
+  }
+}

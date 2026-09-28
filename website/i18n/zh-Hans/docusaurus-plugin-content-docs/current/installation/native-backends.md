@@ -1,56 +1,28 @@
 ---
-sidebar_position: 5
-description: Candle、ONNX 与非 CGO 构建的原生后端能力与生命周期契约。
+title: 路由器运行时
+description: 配置路由分类、安全检查和嵌入模型。
+translation:
+  source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
+  source_file: "docs/installation/native-backends.md"
+  outdated: false
 ---
 
-# 原生后端（Native Backends）
+Router Runtime 运行 Vela 分类、嵌入、重排序和安全检查模型。默认设置见 [Vela 模型](../tutorials/global/vela-models.md)。负责回答用户的 LLM 在[模型配置](/zh-Hans/docs/installation/model-configuration)中单独设置。
 
-Semantic Router 使用原生 Rust 与 CGo 绑定来实现学习型分类器、基于 embedding 的信号、多模态 embedding 以及基于 MLP 的模型选择。Router 通过 `CurrentNativeBackendCapabilities` 暴露所选后端的运行时能力契约；调用方应以该契约为准，而不是通过 build tag 或包名来猜测是否支持某项能力。
+## 选择运行方式 {#choose-a-running-mode}
 
-## 后端选择
+| | 进程内模型 | 外部服务 |
+| --- | --- | --- |
+| 模型在哪里运行 | Router 进程内 | 独立服务中 |
+| 需要准备什么 | 模型文件和兼容的 CPU 或 GPU 运行环境 | API 地址和凭据 |
+| 从这里开始 | [运行进程内模型](runtime/in-process.md) | [连接外部服务](runtime/external.md) |
 
-| 构建形态 | 后端名称 | 选择方式 |
-|-------------|--------------|--------------------|
-| 默认 CGO 构建 | `candle` | 未启用 `onnx` tag 且 CGO 开启。 |
-| ONNX 构建 | `onnx` | 启用 `onnx` tag 且 CGO 开启。 |
-| 非 CGO 或 Windows 构建 | `stub` | `CGO_ENABLED=0` 或在 Windows 上构建。 |
+需要在本地执行推理时，使用进程内模型。如果模型已在其他地方提供服务，或需要单独管理硬件，使用外部服务。同一个 Router 可以同时使用这两种方式。
 
-示例：
+## 按用途配置 {#configure-a-use-case}
 
-```bash
-# Default Candle-backed build from the Go router module.
-cd src/semantic-router
-go build ./cmd
+- [嵌入模型](runtime/embeddings.md)：语义匹配、缓存和向量存储。
+- [安全模型](runtime/safety.md)：Guard、Safety、Hazard、PII 和依据检查。
+- [重排序](../tutorials/plugin/rag.md#neural-reranking)：在生成答案前，为检索候选评分。
 
-# ONNX-backed build.
-cd src/semantic-router
-go build -tags=onnx ./cmd
-
-# Non-CGo stub build for environments where native bindings are unavailable.
-cd src/semantic-router
-CGO_ENABLED=0 go build ./cmd
-```
-
-## 运行时能力（Runtime capabilities）
-
-| 能力 | `candle` | `onnx` | `stub` |
-|------------|----------|--------|--------|
-| 统一批量分类（Unified batch classification） | Yes | No | No |
-| LoRA 批量分类（LoRA batch classification） | Yes | No | No |
-| 批量 embedding（Batched embedding） | Yes | Yes | No |
-| 多模态 embedding（Multimodal embedding） | Yes | No | No |
-| 模态路由（Modality routing） | Yes | No | No |
-| MLP selector | Yes | No | No |
-| 显式重置（Explicit reset） | No | No | No |
-
-当所选后端未声明支持“统一批量分类”或“LoRA 批量分类”时，Router 会在分类层尽早失败。不要因为 Go 包能编译就假设 ONNX 或非 CGO 构建具备与 Candle 一致的分类器行为。
-
-## 生命周期预期（Lifecycle expectations）
-
-当前没有任何后端声明支持 `explicit_reset`。在部署与热加载规划中，应将原生模型状态视为进程级别所有：
-
-- 若要切换后端，或进行需要干净原生状态的模型家族变更，优先使用进程重启
-- 控制面在决定是否启用后端特定功能时，应以运行时能力输出为准
-- ONNX 部署应限制在其声明支持的能力范围内：在 ONNX 分类器达到一致性之前，主要是批量 embedding
-
-后端生命周期重置支持与更深层的 ONNX 分类器一致性，会作为原生绑定工作流的架构债务持续跟踪。
+启动失败、并发限制和配置重载的处理方法见[运维与故障排查](runtime/lifecycle-diagnostics.md)。

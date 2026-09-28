@@ -102,6 +102,39 @@ func OpenRouterAPISession(ctx context.Context, client *kubernetes.Clientset, opt
 	return newSession(localPort, stop), nil
 }
 
+// OpenServiceEndpointSession establishes a port-forward to an arbitrary
+// in-cluster service endpoint. Testcases that need to observe a dependency
+// directly, rather than drive the profile service, use this.
+func OpenServiceEndpointSession(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+	namespace string,
+	service string,
+	servicePort string,
+) (*ServiceSession, error) {
+	localPort, err := getAvailablePort()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get available port: %w", err)
+	}
+
+	stop, err := helpers.StartPortForward(
+		ctx,
+		client,
+		opts.RestConfig,
+		namespace,
+		service,
+		fmt.Sprintf("%s:%s", localPort, servicePort),
+		opts.Verbose,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start port forwarding to %s/%s: %w", namespace, service, err)
+	}
+
+	time.Sleep(2 * time.Second)
+	return newSession(localPort, stop), nil
+}
+
 // BaseURL returns the local HTTP base URL.
 func (s *ServiceSession) BaseURL() string {
 	return s.baseURL

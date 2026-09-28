@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`context` 检测需要更大**有效上下文窗口**的请求。映射到 `config/signal/context/`，在 `routing.signals.context` 中声明。
+`context` 检测需要更大**有效上下文窗口**的请求。映射到 `config/fragments/signal/context/`，在 `routing.signals.context` 中声明。
 
 该族为启发式：按 token 窗口需求路由，而非分类器推理。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/context/`
+源片段族：`config/fragments/signal/context/`
 
 ```yaml
 routing:

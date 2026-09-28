@@ -1,0 +1,57 @@
+id: gemini
+display_name: Google Gemini
+description: Gemini through its OpenAI-compatible API.
+category: model_api
+support_tier: native
+default_base_url: https://generativelanguage.googleapis.com/v1beta/openai
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+reasoning_transport: top_level_effort
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+  injected_header: x-user-gemini-key
+presentation:
+  logo: package:gemini
+  monogram: G
+  monochrome: false
+  featured: true
+conformance:
+  status: fixture_verified
+  verified_at: 2026-09-04
+models:
+- catalog: google/gemini-3.6-flash
+  relationship: first_party
+  id: gemini-3.6-flash
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models
+- catalog: google/gemini-3.7-flash
+  relationship: first_party
+  id: gemini-3.7-flash
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/latest-model
+- catalog: google/gemini-3.8-flash
+  relationship: first_party
+  id: gemini-3.8-flash
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models

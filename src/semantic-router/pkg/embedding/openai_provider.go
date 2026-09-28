@@ -15,32 +15,40 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 const (
-	maxErrorBodyBytes     = 4096
-	defaultTimeoutSeconds = 10
-	baseRetryDelay        = 50 * time.Millisecond
-	maxRetryDelay         = 500 * time.Millisecond
+	maxErrorBodyBytes       = 4096
+	defaultTimeoutSeconds   = 10
+	defaultMaxResponseBytes = 16 * 1024 * 1024
+	baseRetryDelay          = 50 * time.Millisecond
+	maxRetryDelay           = 500 * time.Millisecond
 )
 
 type OpenAICompatibleConfig struct {
+	APIKey            string `json:"-"`
 	BaseURL           string
 	Model             string
 	APIKeyEnv         string
 	TimeoutSeconds    int
 	MaxRetries        int
+	MaxResponseBytes  int64
 	Dimensions        int
 	ExpectedDimension int
 	HTTPClient        *http.Client
 }
 
 type OpenAICompatibleProvider struct {
+	connector         *connector.Client
+	apiKey            string
 	endpoint          string
 	model             string
 	apiKeyEnv         string
 	timeout           time.Duration
 	maxRetries        int
+	maxResponseBytes  int64
 	dimensions        int
 	expectedDimension int
 	client            *http.Client
@@ -83,6 +91,10 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 	if cfg.TimeoutSeconds < 0 {
 		return nil, fmt.Errorf("embedding endpoint timeout_seconds must be non-negative")
 	}
+	maxResponseBytes, err := resolveMaxResponseBytes(cfg.MaxResponseBytes)
+	if err != nil {
+		return nil, err
+	}
 
 	timeoutSeconds := cfg.TimeoutSeconds
 	if timeoutSeconds == 0 {
@@ -98,16 +110,45 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		client = &copyClient
 	}
 
-	return &OpenAICompatibleProvider{
+	provider := &OpenAICompatibleProvider{
 		endpoint:          endpoint,
+		apiKey:            cfg.APIKey,
 		model:             model,
 		apiKeyEnv:         strings.TrimSpace(cfg.APIKeyEnv),
 		timeout:           timeout,
 		maxRetries:        max(0, cfg.MaxRetries),
+		maxResponseBytes:  maxResponseBytes,
 		dimensions:        cfg.Dimensions,
 		expectedDimension: cfg.ExpectedDimension,
 		client:            client,
-	}, nil
+	}
+	if cfg.HTTPClient == nil {
+		remote, err := connector.New(endpoint, func(_ context.Context, req *http.Request) error {
+			key, err := provider.resolveAPIKey()
+			if err != nil {
+				return err
+			}
+			if key != "" {
+				req.Header.Set("Authorization", "Bearer "+key)
+			}
+			return nil
+		}, connector.Options{AttemptTimeout: timeout, MaxRetries: 0, MaxRequestBytes: 16 * 1024 * 1024, MaxResponseBytes: maxResponseBytes, MaxErrorBytes: maxErrorBodyBytes})
+		if err != nil {
+			return nil, err
+		}
+		provider.connector = remote
+	}
+	return provider, nil
+}
+
+func resolveMaxResponseBytes(maxResponseBytes int64) (int64, error) {
+	if maxResponseBytes < 0 {
+		return 0, fmt.Errorf("embedding endpoint max_response_bytes must be non-negative")
+	}
+	if maxResponseBytes == 0 {
+		return defaultMaxResponseBytes, nil
+	}
+	return maxResponseBytes, nil
 }
 
 func (p *OpenAICompatibleProvider) Embed(ctx context.Context, text string) ([]float32, error) {
@@ -181,6 +222,25 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 		return nil, err
 	}
 
+	if p.connector != nil {
+		response, callErr := p.connector.Do(ctx, connector.Operation{Name: "embedding.v1", Method: http.MethodPost, RetrySafe: true}, body)
+		if callErr != nil {
+			var transport *connector.Error
+			if errors.As(callErr, &transport) && (transport.StatusCode == http.StatusUnauthorized || transport.StatusCode == http.StatusForbidden) {
+				return nil, fmt.Errorf("embedding provider authentication failed: %w", callErr)
+			}
+			return nil, callErr
+		}
+		decoded, decodeErr := decodeEmbeddingResponse(bytes.NewReader(response), p.maxResponseBytes)
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		if decoded.Error != nil && decoded.Error.Message != "" {
+			return nil, fmt.Errorf("embedding provider error: %s", decoded.Error.Message)
+		}
+		return p.parseEmbeddings(decoded.Data, len(texts))
+	}
+
 	attemptCtx := ctx
 	var cancel context.CancelFunc
 	if p.timeout > 0 {
@@ -209,14 +269,27 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 		return nil, responseError(resp)
 	}
 
-	var decoded embeddingsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return nil, fmt.Errorf("decode embedding response: %w", err)
+	decoded, err := decodeEmbeddingResponse(resp.Body, p.maxResponseBytes)
+	if err != nil {
+		return nil, err
 	}
 	if decoded.Error != nil && decoded.Error.Message != "" {
 		return nil, fmt.Errorf("embedding provider error: %s", decoded.Error.Message)
 	}
 	return p.parseEmbeddings(decoded.Data, len(texts))
+}
+
+func decodeEmbeddingResponse(body io.Reader, maxResponseBytes int64) (embeddingsResponse, error) {
+	responseBody, err := httputil.ReadLimitedBody(body, maxResponseBytes)
+	if err != nil {
+		return embeddingsResponse{}, fmt.Errorf("read embedding response: %w", err)
+	}
+
+	var decoded embeddingsResponse
+	if err := json.NewDecoder(bytes.NewReader(responseBody)).Decode(&decoded); err != nil {
+		return embeddingsResponse{}, fmt.Errorf("decode embedding response: %w", err)
+	}
+	return decoded, nil
 }
 
 func (p *OpenAICompatibleProvider) parseEmbeddings(data []embeddingDatum, expectedCount int) ([][]float32, error) {
@@ -283,6 +356,9 @@ func (p *OpenAICompatibleProvider) convertEmbedding(values []float64) ([]float32
 }
 
 func (p *OpenAICompatibleProvider) resolveAPIKey() (string, error) {
+	if p.apiKey != "" {
+		return p.apiKey, nil
+	}
 	if p.apiKeyEnv == "" {
 		return "", nil
 	}
@@ -342,6 +418,10 @@ func responseError(resp *http.Response) error {
 }
 
 func shouldRetryEmbeddingError(err error) bool {
+	var transport *connector.Error
+	if errors.As(err, &transport) {
+		return transport.Retryable
+	}
 	var httpErr *embeddingHTTPError
 	if errors.As(err, &httpErr) {
 		return httpErr.retryable
@@ -360,4 +440,13 @@ func isTimeoutError(err error) bool {
 func isTemporaryNetworkError(err error) bool {
 	var netErr net.Error
 	return errors.As(err, &netErr) && netErr.Temporary()
+}
+
+// Close releases idle owned connections without stopping the remote service.
+func (p *OpenAICompatibleProvider) Close() error {
+	if p.connector != nil {
+		return p.connector.Close()
+	}
+	p.client.CloseIdleConnections()
+	return nil
 }

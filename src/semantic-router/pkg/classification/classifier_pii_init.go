@@ -1,9 +1,11 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -74,7 +76,8 @@ func createPIIInitializer() PIIInitializer {
 
 // MmBERT32KPIIInitializerImpl uses mmBERT-32K (YaRN RoPE, 32K context) for PII detection.
 type MmBERT32KPIIInitializerImpl struct {
-	usedMmBERT32K bool
+	maxSequenceLength int
+	usedMmBERT32K     bool
 }
 
 func (c *MmBERT32KPIIInitializerImpl) Init(modelID string, useCPU bool, numClasses int) error {
@@ -82,7 +85,7 @@ func (c *MmBERT32KPIIInitializerImpl) Init(modelID string, useCPU bool, numClass
 		"backend":   "mmbert_32k",
 		"model_ref": modelID,
 	})
-	err := candle_binding.InitMmBert32KPIIClassifier(modelID, useCPU)
+	err := candle_binding.InitMmBert32KPIIClassifierWithMaxSequenceLength(modelID, useCPU, c.maxSequenceLength)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mmBERT-32K PII detector: %w", err)
 	}
@@ -94,20 +97,11 @@ func (c *MmBERT32KPIIInitializerImpl) Init(modelID string, useCPU bool, numClass
 	return nil
 }
 
-// createMmBERT32KPIIInitializer creates an mmBERT-32K PII initializer.
-func createMmBERT32KPIIInitializer() PIIInitializer {
-	return &MmBERT32KPIIInitializerImpl{}
-}
-
-type PIIInference interface {
-	ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error)
-}
-
 type PIIInferenceImpl struct{}
 
-func (c *PIIInferenceImpl) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
+func (c *PIIInferenceImpl) ClassifyTokens(_ context.Context, text string) (tasks.TokenClassificationResult, error) {
 	// Auto-detecting inference - uses whichever classifier was initialized (LoRA or Traditional)
-	return candle_binding.ClassifyCandleBertTokens(text)
+	return nativeTokenResult(candle_binding.ClassifyCandleBertTokens(text))
 }
 
 // createPIIInference creates the PII inference (auto-detecting).
@@ -119,12 +113,12 @@ func createPIIInference() PIIInference {
 // Entity types are returned as "LABEL_{class_id}" by Rust and translated Go-side via PIIMapping.
 type MmBERT32KPIIInferenceImpl struct{}
 
-func (c *MmBERT32KPIIInferenceImpl) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
+func (c *MmBERT32KPIIInferenceImpl) ClassifyTokens(_ context.Context, text string) (tasks.TokenClassificationResult, error) {
 	entities, err := candle_binding.ClassifyMmBert32KPII(text)
 	if err != nil {
-		return candle_binding.TokenClassificationResult{}, err
+		return tasks.TokenClassificationResult{}, err
 	}
-	return candle_binding.TokenClassificationResult{Entities: entities}, nil
+	return nativeTokenResult(candle_binding.TokenClassificationResult{Entities: entities}, nil)
 }
 
 // createMmBERT32KPIIInference creates mmBERT-32K PII inference.

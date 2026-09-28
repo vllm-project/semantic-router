@@ -1,0 +1,6 @@
+{
+  "operation": "request",
+  "body": {
+    "input": "hello"
+  }
+}

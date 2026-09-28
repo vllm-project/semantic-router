@@ -2,28 +2,112 @@ package services
 
 // HasFactCheckClassifier returns true when the fact-check classifier has been initialized.
 func (s *ClassificationService) HasFactCheckClassifier() bool {
-	return s.classifier != nil &&
-		s.classifier.GetFactCheckClassifier() != nil &&
-		s.classifier.GetFactCheckClassifier().IsInitialized()
+	if s == nil {
+		return false
+	}
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
+	classifier := s.classifierSnapshot()
+	return classifier != nil &&
+		classifier.GetFactCheckClassifier() != nil &&
+		classifier.GetFactCheckClassifier().IsInitialized()
 }
 
 // HasHallucinationDetector returns true when the hallucination detector has been initialized.
 func (s *ClassificationService) HasHallucinationDetector() bool {
-	return s.classifier != nil &&
-		s.classifier.GetHallucinationDetector() != nil &&
-		s.classifier.GetHallucinationDetector().IsInitialized()
+	if s == nil {
+		return false
+	}
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
+	classifier := s.classifierSnapshot()
+	return classifier != nil && classifier.IsHallucinationDetectorReady()
 }
 
 // HasHallucinationExplainer returns true when the hallucination NLI explainer is initialized.
 func (s *ClassificationService) HasHallucinationExplainer() bool {
-	return s.classifier != nil &&
-		s.classifier.GetHallucinationDetector() != nil &&
-		s.classifier.GetHallucinationDetector().IsNLIInitialized()
+	if s == nil {
+		return false
+	}
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
+	classifier := s.classifierSnapshot()
+	return classifier != nil && classifier.IsHallucinationExplainerReady()
 }
 
 // HasFeedbackDetector returns true when the feedback detector has been initialized.
 func (s *ClassificationService) HasFeedbackDetector() bool {
-	return s.classifier != nil &&
-		s.classifier.GetFeedbackDetector() != nil &&
-		s.classifier.GetFeedbackDetector().IsInitialized()
+	if s == nil {
+		return false
+	}
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
+	classifier := s.classifierSnapshot()
+	return classifier != nil &&
+		classifier.GetFeedbackDetector() != nil &&
+		classifier.GetFeedbackDetector().IsInitialized()
+}
+
+// HasAnyFactCheckClassifier reports aggregate reachable-recipe inventory
+// readiness while HasFactCheckClassifier remains scoped to the default API.
+func (s *ClassificationService) HasAnyFactCheckClassifier() bool {
+	if s == nil {
+		return false
+	}
+	s.runtimeMutex.RLock()
+	if s.recipeClassifiers != nil {
+		ready := s.recipeClassifiers.HasAnyFactCheckClassifier()
+		s.runtimeMutex.RUnlock()
+		return ready
+	}
+	s.runtimeMutex.RUnlock()
+	return s.HasFactCheckClassifier()
+}
+
+// HasAnyHallucinationDetector reports aggregate reachable-recipe inventory
+// readiness while HasHallucinationDetector remains scoped to the default API.
+func (s *ClassificationService) HasAnyHallucinationDetector() bool {
+	if s == nil {
+		return false
+	}
+	s.runtimeMutex.RLock()
+	if s.recipeClassifiers != nil {
+		ready := s.recipeClassifiers.HasAnyHallucinationDetector()
+		s.runtimeMutex.RUnlock()
+		return ready
+	}
+	s.runtimeMutex.RUnlock()
+	return s.HasHallucinationDetector()
+}
+
+// HasAnyHallucinationExplainer reports aggregate reachable-recipe inventory
+// readiness while HasHallucinationExplainer remains scoped to the default API.
+func (s *ClassificationService) HasAnyHallucinationExplainer() bool {
+	if s == nil {
+		return false
+	}
+	s.runtimeMutex.RLock()
+	if s.recipeClassifiers != nil {
+		ready := s.recipeClassifiers.HasAnyHallucinationExplainer()
+		s.runtimeMutex.RUnlock()
+		return ready
+	}
+	s.runtimeMutex.RUnlock()
+	return s.HasHallucinationExplainer()
+}
+
+// HasAnyFeedbackDetector reports aggregate reachable-recipe inventory readiness
+// while HasFeedbackDetector remains scoped to the default API.
+func (s *ClassificationService) HasAnyFeedbackDetector() bool {
+	if s == nil {
+		return false
+	}
+	s.runtimeMutex.RLock()
+	if s.recipeClassifiers != nil {
+		ready := s.recipeClassifiers.HasAnyFeedbackDetector()
+		s.runtimeMutex.RUnlock()
+		return ready
+	}
+	s.runtimeMutex.RUnlock()
+	return s.HasFeedbackDetector()
 }

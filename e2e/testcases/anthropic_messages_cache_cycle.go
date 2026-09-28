@@ -16,7 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("anthropic-messages-cache-cycle", pkgtestcases.TestCase{
-		Description: "Verify cache_creation_input_tokens on first request and cache_read_input_tokens on repeat (anthropic-shim profile)",
+		Description: "Verify cache_creation_input_tokens on first request and cache_read_input_tokens on repeat (provider-protocols profile)",
 		Tags:        []string{"anthropic", "cache", "functional"},
 		Fn:          testAnthropicMessagesCacheCycle,
 	})
@@ -69,11 +69,11 @@ type anthropicCacheResponse struct {
 //     usage.cache_read_input_tokens > 0.
 //
 // Both requests share the same x-vsr-test-session-id header so the shim's
-// per-session tracker sees the prefix repeat. The router's outbound emitter
+// per-session tracker sees the prefix repeat. The Anthropic response codec
 // must propagate the synthesised usage fields onto the Anthropic-shaped
 // response unchanged; any loss or zero-overwrite fails the test.
 //
-// Requires the anthropic-shim profile.
+// Requires the provider-protocols profile.
 func testAnthropicMessagesCacheCycle(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Anthropic] Testing cache-cycle assertions on /v1/messages")

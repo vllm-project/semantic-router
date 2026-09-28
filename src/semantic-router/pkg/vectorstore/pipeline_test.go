@@ -33,7 +33,7 @@ type mockEmbedder struct {
 	called int
 }
 
-func (m *mockEmbedder) Embed(_ string) ([]float32, error) {
+func (m *mockEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
 	m.called++
 	if m.err != nil {
 		return nil, m.err
@@ -91,7 +91,7 @@ func newIngestionPipelineTestFixture() *ingestionPipelineTestFixture {
 func (f *ingestionPipelineTestFixture) cleanup() {
 	GinkgoHelper()
 
-	f.pipeline.Stop()
+	_ = f.pipeline.Stop(context.Background())
 	Expect(os.RemoveAll(f.tempDir)).To(Succeed())
 }
 
@@ -306,7 +306,7 @@ var _ = Describe("IngestionPipeline status, detach, and lifecycle", func() {
 
 	It("should start and stop idempotently", func() {
 		f.pipeline.Start()
-		f.pipeline.Stop()
-		f.pipeline.Stop()
+		_ = f.pipeline.Stop(context.Background())
+		_ = f.pipeline.Stop(context.Background())
 	})
 })

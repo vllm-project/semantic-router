@@ -1,21 +1,22 @@
-import React, { useState } from 'react'
+import React from 'react'
+import clsx from 'clsx'
 import Head from '@docusaurus/Head'
+import Link from '@docusaurus/Link'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
-import ValuePillars from '@site/src/components/homepage/ValuePillars'
 import IntegrationArchitecture from '@site/src/components/homepage/IntegrationArchitecture'
 import UseCaseExplorer from '@site/src/components/homepage/UseCaseExplorer'
 import CompatibilityBand from '@site/src/components/homepage/CompatibilityBand'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
+import YouTubeSection from '@site/src/components/YouTubeSection'
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import TestimonialsRail from '@site/src/components/TestimonialsRail'
 import { researchPapers } from '@site/src/data/researchContent'
 import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
-import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
 import SemanticTerrainHero from '@site/src/components/site/SemanticTerrainHero'
 import ScrollReveal from '@site/src/components/site/ScrollReveal'
 import {
@@ -33,7 +34,7 @@ const homepageMetaTitle = translate({
 const homepageMetaDescription = translate({
   id: 'homepage.meta.description',
   message:
-    'We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.',
+    'Mixture-of-Models is a serving architecture for heterogeneous LLM inference. vLLM Semantic Router makes it practical to deploy.',
 })
 const homepageSocialTitle = translate({
   id: 'homepage.meta.socialTitle',
@@ -46,23 +47,23 @@ const heroStats = [
       id: 'homepage.stats.signals.label',
       message: 'Signals',
     }),
-    value: '16',
+    value: '20',
     description: translate({
       id: 'homepage.stats.signals.description',
       message:
-        '16 signal families across heuristic and learned detectors, from knowledge base routing to history-aware reasks.',
+        '20 signal families spanning request context, safety, intent, preference, and system state.',
     }),
   },
   {
     label: translate({
       id: 'homepage.stats.algorithms.label',
-      message: 'Selection',
+      message: 'Algorithms',
     }),
-    value: '12',
+    value: '16',
     description: translate({
       id: 'homepage.stats.algorithms.description',
       message:
-        '12 routing strategies spanning rules, latency heuristics, reinforcement learning, and ML selection.',
+        '11 selection algorithms and 5 loopers for choosing, composing, and retrying model calls.',
     }),
   },
   {
@@ -79,6 +80,35 @@ const heroStats = [
   },
 ]
 
+/* The four beats of the routing decision. The gate stage is the claim: hard
+ * constraints remove paths, and only what survives is ranked. */
+const sovereigntyStages = [
+  {
+    id: 'request',
+    label: translate({ id: 'homepage.sovereignty.stage.request', message: 'Request' }),
+    detail: translate({ id: 'homepage.sovereignty.stage.request.detail', message: 'Identity + context' }),
+    gate: false,
+  },
+  {
+    id: 'constraints',
+    label: translate({ id: 'homepage.sovereignty.stage.constraints', message: 'Hard constraints' }),
+    detail: translate({ id: 'homepage.sovereignty.stage.constraints.detail', message: 'Residency · locality · auth' }),
+    gate: true,
+  },
+  {
+    id: 'eligible',
+    label: translate({ id: 'homepage.sovereignty.stage.eligible', message: 'Eligible pool' }),
+    detail: translate({ id: 'homepage.sovereignty.stage.eligible.detail', message: 'Approved paths only' }),
+    gate: false,
+  },
+  {
+    id: 'rank',
+    label: translate({ id: 'homepage.sovereignty.stage.rank', message: 'Rank' }),
+    detail: translate({ id: 'homepage.sovereignty.stage.rank.detail', message: 'Quality · latency · cost' }),
+    gate: false,
+  },
+]
+
 const architectureDimensions = [
   {
     marker: '01',
@@ -92,7 +122,7 @@ const architectureDimensions = [
     }),
     unified: translate({
       id: 'homepage.capabilities.models.value',
-      message: 'Compose personalized model paths.',
+      message: 'Compose policy-specific model paths.',
     }),
   },
   {
@@ -103,7 +133,7 @@ const architectureDimensions = [
     }),
     fragmented: translate({
       id: 'homepage.capabilities.compute.reality',
-      message: 'GPUs, accelerators, edge, and cloud coexist.',
+      message: 'GPU generations and accelerators differ in capacity and latency.',
     }),
     unified: translate({
       id: 'homepage.capabilities.compute.value',
@@ -122,7 +152,7 @@ const architectureDimensions = [
     }),
     unified: translate({
       id: 'homepage.capabilities.location.value',
-      message: 'Keep data within its boundaries.',
+      message: 'Route to configured local, private, or cloud backends.',
     }),
   },
   {
@@ -137,115 +167,191 @@ const architectureDimensions = [
     }),
     unified: translate({
       id: 'homepage.capabilities.preference.value',
-      message: 'Make every preference executable.',
+      message: 'Express preferences as routing policy.',
     }),
   },
 ]
 
-const encoderTracks = [
+const momScorecards = [
   {
-    label: 'SEQ_CLS',
-    mode: 'cls' as const,
-    text: translate({
-      id: 'homepage.aiTech.track.sequence',
-      message:
-        'Sequence classification for domain, jailbreak, fact-check, and feedback routing.',
+    title: translate({
+      id: 'homepage.momProof.livecodebench.title',
+      message: 'LiveCodeBench',
+    }),
+    result: translate({
+      id: 'homepage.momProof.livecodebench.result',
+      message: '92.6 vs Fugu Ultra 92.0',
+    }),
+    image: '/img/mom-proof/livecodebench-scorecard-dark.png',
+    alt: translate({
+      id: 'homepage.momProof.livecodebench.alt',
+      message: 'LiveCodeBench dark scorecard showing VSR Closed at 92.6',
     }),
   },
   {
-    label: 'TOKEN',
-    mode: 'token' as const,
-    text: translate({
-      id: 'homepage.aiTech.track.token',
-      message:
-        'Token labeling for PII and safety-sensitive spans that need localized intervention.',
+    title: translate({
+      id: 'homepage.momProof.gpqa.title',
+      message: 'GPQA-Diamond',
+    }),
+    result: translate({
+      id: 'homepage.momProof.gpqa.result',
+      message: '96.0 vs Fugu Ultra 95.5',
+    }),
+    image: '/img/mom-proof/gpqa-diamond-scorecard-dark.png',
+    alt: translate({
+      id: 'homepage.momProof.gpqa.alt',
+      message: 'GPQA-Diamond dark scorecard showing VSR Closed at 96.0',
     }),
   },
   {
-    label: 'EMBED',
-    mode: 'pool' as const,
-    text: translate({
-      id: 'homepage.aiTech.track.embedding',
-      message:
-        'Embedding paths for semantic cache, knowledge base routing, and similarity scoring.',
+    title: translate({
+      id: 'homepage.momProof.hle.title',
+      message: 'Humanity\'s Last Exam',
     }),
-  },
-  {
-    label: 'RER',
-    mode: 'cross' as const,
-    text: translate({
-      id: 'homepage.aiTech.track.rerank',
-      message:
-        'Cross-encoder reranking for high-precision candidate selection and multi-modal signals.',
+    result: translate({
+      id: 'homepage.momProof.hle.result',
+      message: '50.0 matches Fugu Ultra',
+    }),
+    image: '/img/mom-proof/humanitys-last-exam-scorecard-dark.png',
+    alt: translate({
+      id: 'homepage.momProof.hle.alt',
+      message: 'Humanity\'s Last Exam dark scorecard showing VSR Closed at 50.0',
     }),
   },
 ]
 
-const encoderCards = [
+type ExampleProduct = {
+  label: string
+  to?: string
+}
+
+function ExampleProducts({ products }: { products: ExampleProduct[] }): JSX.Element {
+  return (
+    <span className="site-prose">
+      {products.map((product, index) => (
+        <React.Fragment key={product.label}>
+          {index > 0 && ', '}
+          {product.to ? <Link to={product.to}>{product.label}</Link> : product.label}
+        </React.Fragment>
+      ))}
+    </span>
+  )
+}
+
+const alternativeComparison = [
   {
-    marker: 'BIE',
-    title: translate({
-      id: 'homepage.aiTech.cap.biEncoder',
-      message: 'Bi-Encoder Embeddings',
+    capability: translate({
+      id: 'homepage.alternatives.examples.capability',
+      message: 'Examples',
     }),
-    text: translate({
-      id: 'homepage.aiTech.cap.biEncoder.desc',
-      message:
-        'Independently encode queries and candidates into dense vectors for similarity search and semantic caching.',
+    semanticRouter: 'vLLM Semantic Router',
+    aiGateway: (
+      <ExampleProducts
+        products={[
+          { label: 'Agent Router', to: '/docs/installation/k8s/ai-gateway' },
+          { label: 'LiteLLM' },
+          { label: 'agentgateway', to: '/docs/installation/k8s/agentgateway' },
+        ]}
+      />
+    ),
+    llmd: (
+      <ExampleProducts
+        products={[
+          { label: 'llm-d', to: '/docs/installation/k8s/llm-d' },
+          { label: 'vLLM Router' },
+          { label: 'AIBrix gateway', to: '/docs/installation/k8s/aibrix' },
+        ]}
+      />
+    ),
+  },
+  {
+    capability: translate({
+      id: 'homepage.alternatives.decides.capability',
+      message: 'What it decides',
+    }),
+    semanticRouter: translate({
+      id: 'homepage.alternatives.decides.semanticRouter',
+      message: 'Which model, recipe and policy serve a request',
+    }),
+    aiGateway: translate({
+      id: 'homepage.alternatives.decides.aiGateway',
+      message: 'How a request reaches a backend',
+    }),
+    llmd: translate({
+      id: 'homepage.alternatives.decides.llmd',
+      message: 'Which healthy replica inside the chosen pool',
     }),
   },
   {
-    marker: 'XCE',
-    title: translate({
-      id: 'homepage.aiTech.cap.crossEncoder',
-      message: 'Cross-Encoder Learning',
+    capability: translate({
+      id: 'homepage.alternatives.reads.capability',
+      message: 'What it reads',
     }),
-    text: translate({
-      id: 'homepage.aiTech.cap.crossEncoder.desc',
-      message:
-        'Joint cross-attention scoring of query-candidate pairs for high-precision reranking.',
+    semanticRouter: translate({
+      id: 'homepage.alternatives.reads.semanticRouter',
+      message: 'Request content, policy, semantic evidence',
     }),
-  },
-  {
-    marker: 'CLS',
-    title: translate({
-      id: 'homepage.aiTech.cap.classification',
-      message: 'Classification',
+    aiGateway: translate({
+      id: 'homepage.alternatives.reads.aiGateway',
+      message: 'Protocol, credentials, rate limits',
     }),
-    text: translate({
-      id: 'homepage.aiTech.cap.classification.desc',
-      message:
-        'Domain, jailbreak, PII and fact-check classification across 14 MMLU categories via ModernBERT with LoRA.',
+    llmd: translate({
+      id: 'homepage.alternatives.reads.llmd',
+      message: 'Load, prefix-cache locality, replica health',
     }),
   },
   {
-    marker: 'ATT',
-    title: translate({
-      id: 'homepage.aiTech.cap.attention',
-      message: 'Full Attention',
+    capability: translate({
+      id: 'homepage.alternatives.owns.capability',
+      message: 'What it owns',
     }),
-    text: translate({
-      id: 'homepage.aiTech.cap.attention.desc',
-      message:
-        'Bidirectional attention across tokens and sentences, with full context instead of causal masking.',
+    semanticRouter: translate({
+      id: 'homepage.alternatives.owns.semanticRouter',
+      message: 'The model, recipe and policy decision',
     }),
-  },
-  {
-    marker: '2DM',
-    title: translate({ id: 'homepage.aiTech.cap.2dmse', message: '2DMSE' }),
-    text: translate({
-      id: 'homepage.aiTech.cap.2dmse.desc',
-      message:
-        'Adjust embedding layers and dimensions at inference time to trade compute for accuracy on the fly.',
+    aiGateway: translate({
+      id: 'homepage.alternatives.owns.aiGateway',
+      message: 'Provider translation, credentials, rate limits, traffic policy',
+    }),
+    llmd: translate({
+      id: 'homepage.alternatives.owns.llmd',
+      message: 'Endpoint selection inside a pool',
     }),
   },
   {
-    marker: 'MRL',
-    title: translate({ id: 'homepage.aiTech.cap.mrl', message: 'MRL' }),
-    text: translate({
-      id: 'homepage.aiTech.cap.mrl.desc',
-      message:
-        'Truncate embedding vectors to any dimension without retraining to balance accuracy and speed per request.',
+    capability: translate({
+      id: 'homepage.alternatives.runs.capability',
+      message: 'Where it runs',
+    }),
+    semanticRouter: translate({
+      id: 'homepage.alternatives.runs.semanticRouter',
+      message: 'An Envoy ExtProc filter',
+    }),
+    aiGateway: translate({
+      id: 'homepage.alternatives.runs.aiGateway',
+      message: 'The data plane',
+    }),
+    llmd: translate({
+      id: 'homepage.alternatives.runs.llmd',
+      message: 'A pool scheduler, such as the llm-d Endpoint Picker',
+    }),
+  },
+  {
+    capability: translate({
+      id: 'homepage.alternatives.receipt.capability',
+      message: 'Decision receipt',
+    }),
+    semanticRouter: translate({
+      id: 'homepage.alternatives.receipt.semanticRouter',
+      message: 'x-vsr-selected-model',
+    }),
+    aiGateway: translate({
+      id: 'homepage.alternatives.receipt.aiGateway',
+      message: 'Varies by implementation',
+    }),
+    llmd: translate({
+      id: 'homepage.alternatives.receipt.llmd',
+      message: 'Varies by implementation',
     }),
   },
 ]
@@ -258,31 +364,23 @@ function CapabilitySection(): JSX.Element {
     >
       <div className="site-shell-container">
         <ScrollReveal>
+          <header className={`site-section-intro ${styles.capabilityHeading}`}>
+            <SectionLabel>
+              <Translate id="homepage.capabilities.label">Architecture</Translate>
+            </SectionLabel>
+            <h2 id="mixture-architecture-title">
+              <Translate id="homepage.capabilities.heading">
+                Unify heterogeneous inference
+              </Translate>
+            </h2>
+            <p>
+              <Translate id="homepage.capabilities.description">
+                Unify a fragmented model landscape across four dimensions.
+              </Translate>
+            </p>
+          </header>
+
           <div className={styles.capabilityFrame}>
-            <header className={styles.capabilityHeading}>
-              <SectionLabel className={styles.capabilityLabel}>
-                <Translate id="homepage.capabilities.label">Architecture</Translate>
-              </SectionLabel>
-              <h2 id="mixture-architecture-title">
-                <Translate id="homepage.capabilities.heading">
-                  Unify heterogeneous inference.
-                </Translate>
-              </h2>
-            </header>
-
-            <div className={styles.capabilitySummary}>
-              <p>
-                <Translate id="homepage.capabilities.description">
-                  Unify a fragmented model landscape across four dimensions.
-                </Translate>
-              </p>
-              <PillLink className={styles.capabilityCta} to="/docs/intro">
-                <Translate id="homepage.capabilities.docsCta">
-                  Explore how it works
-                </Translate>
-              </PillLink>
-            </div>
-
             <div
               className={styles.architectureMatrix}
               role="table"
@@ -345,29 +443,127 @@ function CapabilitySection(): JSX.Element {
   )
 }
 
-function EncoderIntelligenceSection(): JSX.Element {
-  const [encoderMode, setEncoderMode] = useState<'cls' | 'token' | 'pool' | 'cross'>('cls')
-
+function AlternativesSection(): JSX.Element {
   return (
-    <section className={styles.encoderSection} aria-labelledby="encoder-intelligence-title">
+    <section
+      className={styles.capabilitySection}
+      aria-labelledby="alternatives-title"
+    >
       <div className="site-shell-container">
         <ScrollReveal>
-          <div className={styles.sectionHeading}>
+          <header className={`site-section-intro ${styles.capabilityHeading}`}>
             <SectionLabel>
-              <Translate id="homepage.aiTech.label">
-                Signal intelligence
+              <Translate id="homepage.alternatives.label">
+                Where it fits
+              </Translate>
+            </SectionLabel>
+            <h2 id="alternatives-title">
+              <Translate id="homepage.alternatives.heading">
+                One decision layer, two neighbours
+              </Translate>
+            </h2>
+            <p>
+              <Translate id="homepage.alternatives.description">
+                What the Router owns next to an AI Gateway and an Inference
+                Router. The three components make no overlapping decisions.
+              </Translate>
+            </p>
+          </header>
+
+          <div className={styles.capabilityFrame}>
+            <div
+              className={`${styles.architectureMatrix} ${styles.alternativesMatrix}`}
+              role="table"
+              aria-label={translate({
+                id: 'homepage.alternatives.table.aria',
+                message:
+                  'Semantic Router compared with an AI Gateway and an Inference Router',
+              })}
+            >
+              <div className={styles.matrixHeader} role="row">
+                <span role="columnheader">
+                  <Translate id="homepage.alternatives.table.capability">
+                    Capability
+                  </Translate>
+                </span>
+                <span role="columnheader">
+                  <Translate id="homepage.alternatives.table.semanticRouter">
+                    Semantic Router
+                  </Translate>
+                </span>
+                <span role="columnheader">
+                  <Translate id="homepage.alternatives.table.aiGateway">
+                    AI Gateway
+                  </Translate>
+                </span>
+                <span role="columnheader">
+                  <Translate id="homepage.alternatives.table.llmd">
+                    Inference Router
+                  </Translate>
+                </span>
+              </div>
+
+              {alternativeComparison.map(item => (
+                <div key={item.capability} className={styles.matrixRow} role="row">
+                  <div className={styles.matrixDimension} role="rowheader">
+                    <strong>{item.capability}</strong>
+                  </div>
+                  <div className={styles.matrixUnified} role="cell">
+                    <span className={styles.matrixMobileLabel}>
+                      <Translate id="homepage.alternatives.table.semanticRouter">
+                        Semantic Router
+                      </Translate>
+                    </span>
+                    <p>{item.semanticRouter}</p>
+                  </div>
+                  <div className={styles.matrixFragmented} role="cell">
+                    <span className={styles.matrixMobileLabel}>
+                      <Translate id="homepage.alternatives.table.aiGateway">
+                        AI Gateway
+                      </Translate>
+                    </span>
+                    <p>{item.aiGateway}</p>
+                  </div>
+                  <div className={styles.matrixFragmented} role="cell">
+                    <span className={styles.matrixMobileLabel}>
+                      <Translate id="homepage.alternatives.table.llmd">
+                        Inference Router
+                      </Translate>
+                    </span>
+                    <p>{item.llmd}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </ScrollReveal>
+      </div>
+    </section>
+  )
+}
+
+function MixtureOfModelsProofSection(): JSX.Element {
+  return (
+    <section className={styles.momProofSection} aria-labelledby="mom-proof-title">
+      <div className="site-shell-container">
+        <ScrollReveal>
+          <div className={styles.momProofHeading}>
+            <SectionLabel>
+              <Translate id="homepage.momProof.label">
+                Mixture-of-Models proof
               </Translate>
             </SectionLabel>
             <div>
-              <h2 id="encoder-intelligence-title">
-                <Translate id="homepage.aiTech.title">
-                  Intelligence before generation.
+              <h2 id="mom-proof-title">
+                <Translate id="homepage.momProof.title">
+                  One Model API can beat frontier models
                 </Translate>
               </h2>
               <p>
-                <Translate id="homepage.aiTech.description">
-                  Purpose-built encoders extract intent, context, safety, and
-                  modality before a generative model is selected.
+                <Translate id="homepage.momProof.description">
+                  vLLM Semantic Router keeps the public surface as vllm-sr/auto,
+                  then coordinates closed, open, and hybrid model pools inside the
+                  serving layer.
                 </Translate>
               </p>
             </div>
@@ -375,60 +571,38 @@ function EncoderIntelligenceSection(): JSX.Element {
         </ScrollReveal>
 
         <ScrollReveal delay={70}>
-          <div className={styles.encoderFrame}>
-            <div className={styles.encoderShowcase}>
-              <div className={styles.encoderLead}>
-                <div className={styles.encoderLeadCopy}>
-                  <SectionLabel>
-                    <Translate id="homepage.aiTech.leadLabel">
-                      Signal surfaces
-                    </Translate>
-                  </SectionLabel>
-                  <p>
-                    <Translate id="homepage.aiTech.leadCopy">
-                      Sequence classification, token labeling, embeddings, and
-                      reranking collapse into one system-intelligence layer.
-                    </Translate>
-                  </p>
-                </div>
-
-                <div className={styles.encoderTrackList} role="tablist" aria-label="Encoder signal modes">
-                  {encoderTracks.map((track) => {
-                    const isActive = encoderMode === track.mode
-                    return (
-                      <button
-                        key={track.label}
-                        type="button"
-                        role="tab"
-                        aria-selected={isActive}
-                        className={`${styles.encoderTrack} ${isActive ? styles.encoderTrackActive : ''}`}
-                        onClick={() => setEncoderMode(track.mode)}
-                      >
-                        <span className={styles.encoderTrackLabel}>{track.label}</span>
-                        <span className={styles.encoderTrackText}>{track.text}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-
-                <div className={styles.encoderActions}>
-                  <PillLink
-                    className={styles.encoderCta}
-                    href="https://huggingface.co/LLM-Semantic-Router"
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <Translate id="homepage.aiTech.primaryCta">
-                      Hugging Face Models
-                    </Translate>
-                  </PillLink>
-                </div>
+          <div className={styles.momProofFrame}>
+            <div className={styles.momProofArchitecture}>
+              <div className={styles.momProofArchitectureCopy}>
+                <SectionLabel>
+                  <Translate id="homepage.momProof.architectureLabel">
+                    Router-side collaboration
+                  </Translate>
+                </SectionLabel>
+                <h3>
+                  <Translate id="homepage.momProof.architectureTitle">
+                    The app calls one model. The router builds the team.
+                  </Translate>
+                </h3>
+                <p>
+                  <Translate id="homepage.momProof.architectureCopy">
+                    Route by task shape, risk, confidence, and model capability;
+                    run bounded collaboration; return one OpenAI-compatible
+                    response.
+                  </Translate>
+                </p>
               </div>
 
-              <div className={styles.encoderPipelineFrame}>
-                <TransformerPipelineAnimation
-                  mode={encoderMode}
-                  onModeChange={setEncoderMode}
+              <div className={styles.momProofArchitectureImageWrap}>
+                <img
+                  className={styles.momProofArchitectureImage}
+                  src="/img/mom-proof/architecture-router-dark.png"
+                  alt={translate({
+                    id: 'homepage.momProof.architectureAlt',
+                    message:
+                      'vLLM Semantic Router routes heterogeneous closed and open model pools',
+                  })}
+                  loading="lazy"
                 />
               </div>
             </div>
@@ -436,16 +610,83 @@ function EncoderIntelligenceSection(): JSX.Element {
         </ScrollReveal>
 
         <ScrollReveal delay={120}>
-          <div className={styles.encoderCardGrid}>
-            {encoderCards.map(card => (
-              <article key={card.marker} className={styles.encoderCard}>
-                <span className={styles.encoderCardMarker}>{card.marker}</span>
-                <div className={styles.encoderCardCopy}>
+          <div className={styles.momScorecardGrid}>
+            {momScorecards.map(card => (
+              <article key={card.image} className={styles.momScorecard}>
+                <div className={styles.momScorecardHeader}>
                   <h3>{card.title}</h3>
-                  <p>{card.text}</p>
+                  <p>{card.result}</p>
                 </div>
+                <img
+                  className={styles.momScorecardImage}
+                  src={card.image}
+                  alt={card.alt}
+                  loading="lazy"
+                />
               </article>
             ))}
+          </div>
+        </ScrollReveal>
+      </div>
+    </section>
+  )
+}
+
+/* Residency and authorization are eliminated as hard constraints before any
+ * ranking happens. Deliberately no claim that data never leaves your estate —
+ * docs/overview/use-cases.md is explicit that "local" is not an end-to-end
+ * privacy guarantee, and the homepage should not say otherwise. */
+function DataSovereigntySection(): JSX.Element {
+  return (
+    <section className={styles.sovereigntySection}>
+      <div className="site-shell-container">
+        <ScrollReveal>
+          <div className={styles.sovereigntyFrame}>
+            <div className={`site-section-intro ${styles.sovereigntyCopy}`}>
+              <SectionLabel>
+                <Translate id="homepage.sovereignty.label">Data sovereignty</Translate>
+              </SectionLabel>
+              <h2>
+                <Translate id="homepage.sovereignty.title">
+                  Keep regulated traffic on approved paths
+                </Translate>
+              </h2>
+              <p>
+                <Translate id="homepage.sovereignty.description">
+                  Residency, locality, and authorization are hard constraints, not preferences.
+                  Ineligible paths are removed before ranking ever runs.
+                </Translate>
+              </p>
+            </div>
+
+            <ol className={styles.constraintFlow}>
+              {sovereigntyStages.map((stage, index) => (
+                <li
+                  key={stage.id}
+                  className={clsx(styles.constraintStage, {
+                    [styles.constraintStageGate]: stage.gate,
+                  })}
+                  style={{ '--stage-delay': `${index * 0.5}s` } as React.CSSProperties}
+                >
+                  <span className={styles.constraintStageIndex}>
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <strong>{stage.label}</strong>
+                  <span className={styles.constraintStageDetail}>{stage.detail}</span>
+                </li>
+              ))}
+            </ol>
+
+            <div className={styles.constraintFooter}>
+              <p className={styles.constraintNote}>
+                <Translate id="homepage.sovereignty.note">
+                  A request fails closed instead of reaching a provider your policy does not allow.
+                </Translate>
+              </p>
+              <PillLink className={styles.sovereigntyCta} to="/docs/overview/signal-driven-decisions" muted>
+                <Translate id="homepage.sovereignty.cta">How routing policy works</Translate>
+              </PillLink>
+            </div>
           </div>
         </ScrollReveal>
       </div>
@@ -465,17 +706,18 @@ function FinalCtaSection(): JSX.Element {
               </SectionLabel>
               <h2>
                 <Translate id="homepage.finalCta.title">
-                  Compose your Mixture-of-Models.
+                  Compose your Mixture-of-Models
                 </Translate>
               </h2>
               <p>
                 <Translate id="homepage.finalCta.description">
-                  Shape every model path with signals, preferences, and policy.
+                  Shape model paths with signals, preferences, and policy.
                 </Translate>
               </p>
             </div>
             <div className={styles.finalCtaActions}>
               <PillLink
+                className={styles.finalCtaPrimary}
                 href="https://app.vllm-sr.ai/playground"
                 rel="noreferrer"
                 target="_blank"
@@ -547,11 +789,25 @@ export default function Home(): JSX.Element {
           }}
         />
       </Head>
-      <main className={styles.page} data-theme="dark">
+      <main className={styles.page}>
         <SemanticTerrainHero />
 
         <div className={styles.bandGraphite}>
-          <ValuePillars />
+          <ScrollReveal>
+            <TestimonialsRail />
+          </ScrollReveal>
+        </div>
+
+        <div className={styles.bandGraphite}>
+          <ScrollReveal delay={50}>
+            <InstallQuickStartSection />
+          </ScrollReveal>
+        </div>
+
+        <div className={styles.bandRaised}>
+          <ScrollReveal delay={50}>
+            <YouTubeSection />
+          </ScrollReveal>
         </div>
 
         <div className={styles.bandBlack}>
@@ -563,9 +819,7 @@ export default function Home(): JSX.Element {
         </div>
 
         <div className={styles.bandBlack}>
-          <ScrollReveal>
-            <TestimonialsRail />
-          </ScrollReveal>
+          <AlternativesSection />
         </div>
 
         <div className={styles.bandRaised}>
@@ -575,17 +829,15 @@ export default function Home(): JSX.Element {
         </div>
 
         <div className={styles.bandBlack}>
-          <EncoderIntelligenceSection />
-        </div>
-
-        <div className={styles.bandGraphite}>
-          <ScrollReveal delay={50}>
-            <InstallQuickStartSection />
-          </ScrollReveal>
+          <MixtureOfModelsProofSection />
         </div>
 
         <div className={styles.bandBlack}>
           <UseCaseExplorer />
+        </div>
+
+        <div className={styles.bandRaised}>
+          <DataSovereigntySection />
         </div>
 
         <div className={styles.bandGraphite}>

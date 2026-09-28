@@ -1,0 +1,13 @@
+{
+  "operation": "stream",
+  "stream": {
+    "public_model": "public-model",
+    "provider_model": "provider-model",
+    "stream_options": {"include_usage": true},
+    "chunks": [
+      "data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"inspect the evidence\"},\"finish_reason\":null}]}\n\n",
+      "data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"final answer\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+      "data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"choices\":[],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":5,\"total_tokens\":7,\"completion_tokens_details\":{\"reasoning_tokens\":3}}}\n\ndata: [DONE]\n\n"
+    ]
+  }
+}

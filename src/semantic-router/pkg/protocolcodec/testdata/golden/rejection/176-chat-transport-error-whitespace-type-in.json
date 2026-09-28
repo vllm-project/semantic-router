@@ -1,0 +1,9 @@
+{
+  "operation": "error",
+  "body": {
+    "error": {
+      "type": "  ",
+      "message": "Provider failed."
+    }
+  }
+}

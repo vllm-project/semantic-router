@@ -31,10 +31,10 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		return nil, err
 	}
 
-	logging.Debugf("MilvusStore.Retrieve: query='%s', user_id='%s', limit=%d, threshold=%.4f, hybrid=%v (mode=%s)",
-		opts.Query, opts.UserID, limit, threshold, opts.HybridSearch, opts.HybridMode)
+	logging.Debugf("MilvusStore.Retrieve: query=%s, user_id='%s', limit=%d, threshold=%.4f, hybrid=%v (mode=%s)",
+		logging.ContentDescriptor(opts.Query), opts.UserID, limit, threshold, opts.HybridSearch, opts.HybridMode)
 
-	embedding, err := GenerateEmbedding(opts.Query, m.embeddingConfig)
+	embedding, err := GenerateEmbeddingWithContext(ctx, opts.Query, m.embeddingConfig)
 	if err != nil {
 		status = "error"
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)

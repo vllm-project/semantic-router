@@ -1,0 +1,19 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "stream this",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "routed-model",
+  "stream": true,
+  "stream_options": {
+    "include_obfuscation": false
+  }
+}

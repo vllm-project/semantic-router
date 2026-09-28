@@ -1,0 +1,5 @@
+# ONNX-to-IR and native tokenizer conversion; no PyTorch exporter is involved.
+openvino==2025.1.0
+openvino-tokenizers==2025.1.0
+transformers==4.51.3
+huggingface_hub==0.36.2

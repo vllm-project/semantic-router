@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -10,7 +11,9 @@ import (
 )
 
 type routingYAMLDocument struct {
-	Routing config.CanonicalRouting `yaml:"routing"`
+	Routing     config.CanonicalRouting      `yaml:"routing"`
+	Entrypoints []config.CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
+	Recipes     []config.CanonicalRecipe     `yaml:"recipes,omitempty"`
 }
 
 // EmitRoutingYAML compiles DSL source and emits the v0.3 routing fragment.
@@ -28,8 +31,11 @@ func EmitRoutingYAML(input string) ([]byte, []error) {
 
 // EmitRoutingYAMLFromConfig marshals only the DSL-owned routing surface.
 func EmitRoutingYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
+	canonical := config.CanonicalConfigFromRouterConfig(cfg)
 	doc := routingYAMLDocument{
-		Routing: config.CanonicalRoutingFromRouterConfig(cfg),
+		Routing:     canonical.Routing,
+		Entrypoints: canonical.Entrypoints,
+		Recipes:     canonical.Recipes,
 	}
 	return yaml.Marshal(doc)
 }
@@ -39,6 +45,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 	d := &decompiler{cfg: cfg}
 	d.pluginTemplates = make(map[string]*pluginTemplate)
 	d.extractPluginTemplates()
+	d.decompileRoutingStrategy()
 
 	d.writeSection("SIGNALS")
 	d.decompileSignals()
@@ -63,11 +70,32 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 // DecompileRoutingToAST converts runtime config to a routing-only AST.
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
-	prog := &Program{}
+	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: cloneModelBindings(cfg.ModelBindings), CandidateRequirements: cfg.CandidateRequirements.Clone(), DataPolicy: cfg.DataPolicy.Clone()}
 	d.appendSignalsToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
 	return prog
+}
+
+func (d *decompiler) decompileRoutingStrategy() {
+	if d.cfg.Strategy == "" && len(d.cfg.ModelBindings) == 0 && d.cfg.CandidateRequirements == nil && d.cfg.DataPolicy == nil {
+		return
+	}
+	d.writeSection("ROUTING PROFILE")
+	d.write("ROUTING {\n")
+	d.decompileRoutingPolicies()
+	if d.cfg.Strategy != "" {
+		d.write("  strategy: %s\n", d.cfg.Strategy)
+	}
+	if len(d.cfg.ModelBindings) > 0 {
+		// Convert the canonical structs through their JSON tags, then use the
+		// DSL formatter so object keys retain the grammar's identifier syntax.
+		bindings, _ := json.Marshal(d.cfg.ModelBindings)
+		var fields map[string]interface{}
+		_ = json.Unmarshal(bindings, &fields)
+		d.write("  model_bindings: %s\n", formatPluginConfigValue(fields))
+	}
+	d.write("}\n\n")
 }
 
 func (d *decompiler) appendSignalsToProgram(prog *Program) {
@@ -191,8 +219,14 @@ func (d *decompiler) appendOperationalSignals(prog *Program) {
 }
 
 func (d *decompiler) appendSafetySignals(prog *Program) {
+	for i := range d.cfg.SafetyRules {
+		prog.Signals = append(prog.Signals, d.safetyToSignal(&d.cfg.SafetyRules[i]))
+	}
 	for _, jb := range d.cfg.JailbreakRules {
 		prog.Signals = append(prog.Signals, d.jailbreakToSignal(&jb))
+	}
+	for i := range d.cfg.HallucinationRules {
+		prog.Signals = append(prog.Signals, d.hallucinationToSignal(&d.cfg.HallucinationRules[i]))
 	}
 	for _, pii := range d.cfg.PIIRules {
 		prog.Signals = append(prog.Signals, d.piiToSignal(&pii))
@@ -227,16 +261,13 @@ func (d *decompiler) writeRoutingModelFields(model config.RoutingModel) {
 	if model.ContextWindowSize > 0 {
 		d.write("  context_window_size: %d\n", model.ContextWindowSize)
 	}
+	if model.MaxOutputTokens > 0 {
+		d.write("  max_output_tokens: %d\n", model.MaxOutputTokens)
+	}
 	d.writeOptionalRoutingModelString("description", model.Description)
 	d.writeOptionalRoutingModelArray("capabilities", model.Capabilities)
 	d.writeRoutingModelLoRAs(model.LoRAs)
 	d.writeOptionalRoutingModelArray("tags", model.Tags)
-	if model.QualityScore != 0 {
-		d.write(
-			"  quality_score: %s\n",
-			strconv.FormatFloat(model.QualityScore, 'f', -1, 64),
-		)
-	}
 	d.writeOptionalRoutingModelString("modality", model.Modality)
 }
 
@@ -277,6 +308,9 @@ func routingModelToDecl(model config.RoutingModel) *ModelDecl {
 	if model.ContextWindowSize > 0 {
 		fields["context_window_size"] = IntValue{V: model.ContextWindowSize}
 	}
+	if model.MaxOutputTokens > 0 {
+		fields["max_output_tokens"] = IntValue{V: model.MaxOutputTokens}
+	}
 	if model.Description != "" {
 		fields["description"] = StringValue{V: model.Description}
 	}
@@ -298,9 +332,6 @@ func routingModelToDecl(model config.RoutingModel) *ModelDecl {
 	}
 	if len(model.Tags) > 0 {
 		fields["tags"] = stringsToArray(model.Tags)
-	}
-	if model.QualityScore != 0 {
-		fields["quality_score"] = FloatValue{V: model.QualityScore}
 	}
 	if model.Modality != "" {
 		fields["modality"] = StringValue{V: model.Modality}

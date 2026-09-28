@@ -1,59 +1,29 @@
 package extproc
 
 import (
+	"math"
 	"net/url"
 	"sort"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
-type routerReplayAggregateResponse struct {
-	Object               string                            `json:"object"`
-	RecordCount          int                               `json:"record_count"`
-	Summary              routerReplayAggregateCostSummary  `json:"summary"`
-	ModelSelection       []routerReplayAggregateValue      `json:"model_selection"`
-	DecisionDistribution []routerReplayAggregateValue      `json:"decision_distribution"`
-	SignalDistribution   []routerReplayAggregateValue      `json:"signal_distribution"`
-	TokenVolume          routerReplayAggregateTokenVolume  `json:"token_volume"`
-	TokenBreakdown       routerReplayAggregateTokenBuckets `json:"token_breakdown"`
-	AvailableDecisions   []string                          `json:"available_decisions"`
-	AvailableModels      []string                          `json:"available_models"`
-}
+type routerReplayAggregateResponse = routerreplay.AggregateResponse
 
-type routerReplayAggregateCostSummary struct {
-	TotalSaved          float64 `json:"total_saved"`
-	BaselineSpend       float64 `json:"baseline_spend"`
-	ActualSpend         float64 `json:"actual_spend"`
-	Currency            string  `json:"currency,omitempty"`
-	CostRecordCount     int     `json:"cost_record_count"`
-	ExcludedRecordCount int     `json:"excluded_record_count"`
-}
+type routerReplayLifecycleSummary = routerreplay.LifecycleSummary
 
-type routerReplayAggregateValue struct {
-	Name  string `json:"name"`
-	Value int    `json:"value"`
-}
+type routerReplayAggregateCostSummary = routerreplay.AggregateCostSummary
 
-type routerReplayAggregateTokenVolume struct {
-	InputTokens         int `json:"input_tokens"`
-	OutputTokens        int `json:"output_tokens"`
-	TotalTokens         int `json:"total_tokens"`
-	ExcludedRecordCount int `json:"excluded_record_count"`
-}
+type routerReplayAggregateValue = routerreplay.AggregateValue
 
-type routerReplayAggregateTokenBuckets struct {
-	ByDecision      []routerReplayAggregateTokenEntry `json:"by_decision"`
-	BySelectedModel []routerReplayAggregateTokenEntry `json:"by_selected_model"`
-}
+type routerReplayAggregateTokenVolume = routerreplay.AggregateTokenVolume
 
-type routerReplayAggregateTokenEntry struct {
-	Name         string `json:"name"`
-	InputTokens  int    `json:"input_tokens"`
-	OutputTokens int    `json:"output_tokens"`
-	TotalTokens  int    `json:"total_tokens"`
-}
+type routerReplayAggregateTokenBuckets = routerreplay.AggregateTokenBuckets
+
+type routerReplayAggregateTokenEntry = routerreplay.AggregateTokenEntry
 
 func (r *OpenAIRouter) handleRouterReplayAggregateAPI(
 	method string,
@@ -72,9 +42,10 @@ func (r *OpenAIRouter) handleRouterReplayAggregateAPI(
 		return r.createErrorResponse(400, err.Error())
 	}
 
-	allRecords := r.collectRouterReplayRecords()
-	filteredRecords := filterRouterReplayRecords(allRecords, filters)
-	payload := buildRouterReplayAggregatePayload(allRecords, filteredRecords)
+	payload, err := r.queryRouterReplayAggregate(filters)
+	if err != nil {
+		return r.createErrorResponse(500, "router replay storage query failed")
+	}
 	return r.createRouterReplayJSONResponse(200, payload)
 }
 
@@ -85,36 +56,85 @@ func buildRouterReplayAggregatePayload(
 	return routerReplayAggregateResponse{
 		Object:               "router_replay.aggregate",
 		RecordCount:          len(filteredRecords),
+		Lifecycle:            buildRouterReplayLifecycleSummary(filteredRecords),
 		Summary:              buildRouterReplayAggregateCostSummary(filteredRecords),
 		ModelSelection:       buildRouterReplayModelSelection(filteredRecords),
 		DecisionDistribution: buildRouterReplayDecisionDistribution(filteredRecords),
 		SignalDistribution:   buildRouterReplaySignalDistribution(filteredRecords),
 		TokenVolume:          buildRouterReplayTokenVolume(filteredRecords),
 		TokenBreakdown:       buildRouterReplayTokenBreakdown(filteredRecords),
+		AvailableRecipes:     collectRouterReplayRecipeOptions(allRecords),
 		AvailableDecisions:   collectRouterReplayDecisionOptions(allRecords),
 		AvailableModels:      collectRouterReplayModelOptions(allRecords),
 	}
+}
+
+func buildRouterReplayLifecycleSummary(
+	records []routerreplay.RoutingRecord,
+) routerReplayLifecycleSummary {
+	summary := routerReplayLifecycleSummary{}
+	for _, record := range records {
+		switch record.LifecycleState {
+		case routerreplay.LifecycleCompleted:
+			summary.Completed++
+		case routerreplay.LifecycleFailed:
+			summary.Failed++
+		case routerreplay.LifecycleAborted:
+			summary.Aborted++
+		case routerreplay.LifecycleInProgress:
+			summary.InProgress++
+		default:
+			summary.Unknown++
+		}
+	}
+	return summary
 }
 
 func buildRouterReplayAggregateCostSummary(
 	records []routerreplay.RoutingRecord,
 ) routerReplayAggregateCostSummary {
 	summary := routerReplayAggregateCostSummary{}
+	byCurrency := make(map[string]*routerreplay.CurrencyCostSummary)
 	for _, record := range records {
-		if record.ActualCost == nil || record.BaselineCost == nil || record.CostSavings == nil {
+		if record.LifecycleState != routerreplay.LifecycleCompleted ||
+			record.TotalTokens == nil || record.BaselineModel == nil || *record.BaselineModel == "" ||
+			record.Currency == nil || normalizeReplayCurrency(*record.Currency) == "" {
 			continue
 		}
-
-		summary.TotalSaved += *record.CostSavings
-		summary.BaselineSpend += *record.BaselineCost
-		summary.ActualSpend += *record.ActualCost
-		if summary.Currency == "" && record.Currency != nil {
-			summary.Currency = *record.Currency
+		if !finiteReplayCost(record.ActualCost) || !finiteReplayCost(record.BaselineCost) || !finiteReplayCost(record.CostSavings) {
+			continue
 		}
+		currency := normalizeReplayCurrency(*record.Currency)
+		group := byCurrency[currency]
+		if group == nil {
+			group = &routerreplay.CurrencyCostSummary{Currency: currency}
+			byCurrency[currency] = group
+		}
+		group.TotalSaved += *record.CostSavings
+		group.BaselineSpend += *record.BaselineCost
+		group.ActualSpend += *record.ActualCost
+		group.CostRecordCount++
 		summary.CostRecordCount++
+	}
+	for _, group := range byCurrency {
+		summary.ByCurrency = append(summary.ByCurrency, *group)
+	}
+	sort.Slice(summary.ByCurrency, func(i, j int) bool {
+		return summary.ByCurrency[i].Currency < summary.ByCurrency[j].Currency
+	})
+	if len(summary.ByCurrency) == 1 {
+		group := summary.ByCurrency[0]
+		summary.Currency = group.Currency
+		summary.TotalSaved = group.TotalSaved
+		summary.BaselineSpend = group.BaselineSpend
+		summary.ActualSpend = group.ActualSpend
 	}
 	summary.ExcludedRecordCount = len(records) - summary.CostRecordCount
 	return summary
+}
+
+func finiteReplayCost(value *float64) bool {
+	return value != nil && !math.IsNaN(*value) && !math.IsInf(*value, 0)
 }
 
 func buildRouterReplayModelSelection(
@@ -136,7 +156,7 @@ func buildRouterReplayDecisionDistribution(
 ) []routerReplayAggregateValue {
 	counts := make(map[string]int)
 	for _, record := range records {
-		name := record.Decision
+		name := config.RoutingDecisionKey(config.RecipeName(record.Recipe), record.Decision)
 		if name == "" {
 			name = "Unknown"
 		}
@@ -220,7 +240,7 @@ func buildRouterReplayTokenBreakdown(
 
 		accumulateRouterReplayTokenEntry(
 			decisionBuckets,
-			routerReplayFallbackName(record.Decision),
+			routerReplayFallbackName(config.RoutingDecisionKey(config.RecipeName(record.Recipe), record.Decision)),
 			promptTokens,
 			completionTokens,
 			totalTokens,
@@ -323,6 +343,16 @@ func collectRouterReplayDecisionOptions(records []routerreplay.RoutingRecord) []
 	for _, record := range records {
 		if record.Decision != "" {
 			values[record.Decision] = struct{}{}
+		}
+	}
+	return sortRouterReplayOptionSet(values)
+}
+
+func collectRouterReplayRecipeOptions(records []routerreplay.RoutingRecord) []string {
+	values := make(map[string]struct{})
+	for _, record := range records {
+		if record.Recipe != "" {
+			values[record.Recipe] = struct{}{}
 		}
 	}
 	return sortRouterReplayOptionSet(values)

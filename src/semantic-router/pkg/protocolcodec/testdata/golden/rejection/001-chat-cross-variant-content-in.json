@@ -1,0 +1,20 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "source-model",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "hello",
+            "image_url": {
+              "url": "https://example.com/image.png"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

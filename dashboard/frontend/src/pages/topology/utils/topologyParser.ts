@@ -16,6 +16,7 @@ import type {
   SignalConfig,
   SignalType,
 } from '../types'
+import { SIGNAL_TYPES } from '../constants'
 import { extractSignals } from './topologySignalParser'
 
 /**
@@ -26,8 +27,8 @@ export function parseConfigToTopology(config: ConfigData): ParsedTopology {
   const signals = extractSignals(config)
   const decisions = extractDecisions(config)
   const models = extractModels(config)
-  const strategy = config.global?.router?.strategy || 'priority'
-  const defaultModel = config.providers?.defaults?.default_model
+  const strategy = config.routing?.strategy || config.global?.router?.strategy || 'priority'
+  const defaultModel = config.providers?.defaults?.model
 
   return { globalPlugins, signals, decisions, models, strategy, defaultModel }
 }
@@ -40,7 +41,11 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
   const promptGuard = config.global?.model_catalog?.modules?.prompt_guard || config.prompt_guard
   const piiModel =
     config.global?.model_catalog?.modules?.classifier?.pii || config.classifier?.pii_model
-  const semanticCache = config.global?.stores?.semantic_cache || config.semantic_cache
+  const responseCache =
+    config.global?.stores?.response_cache ||
+    config.global?.stores?.semantic_cache ||
+    config.response_cache ||
+    config.semantic_cache
   const promptGuardModel = promptGuard?.model_id || promptGuard?.model_ref
   const piiModelRef = piiModel?.model_id || piiModel?.model_ref
 
@@ -75,14 +80,14 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
   }
 
   // 3. Semantic Cache (Global)
-  if (semanticCache) {
+  if (responseCache) {
     plugins.push({
-      type: 'semantic_cache',
-      enabled: semanticCache.enabled ?? false,
+      type: 'response_cache',
+      enabled: responseCache.enabled ?? false,
       config: {
-        backend_type: semanticCache.backend_type,
-        similarity_threshold: semanticCache.similarity_threshold,
-        ttl_seconds: semanticCache.ttl_seconds,
+        backend_type: responseCache.backend_type,
+        similarity_threshold: responseCache.similarity_threshold,
+        ttl_seconds: responseCache.ttl_seconds,
       },
     })
   }
@@ -114,9 +119,10 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
         return {
           model: ref.model,
           use_reasoning: ref.use_reasoning,
+          reasoning_mode: ref.reasoning_mode,
           reasoning_effort: ref.reasoning_effort,
           lora_name: ref.lora_name,
-          reasoning_family: modelConfig?.reasoning_family,
+          reasoning_family: modelConfig?.reasoning?.family,
         }
       })
 
@@ -178,6 +184,7 @@ function extractDecisionAlgorithm(
 
   return {
     type: algorithm.type as AlgorithmConfig['type'],
+    minimum_candidates: algorithm.minimum_candidates,
     confidence: algorithm.confidence,
     concurrent: algorithm.concurrent,
     latency_aware: algorithm.latency_aware,
@@ -194,6 +201,7 @@ function extractDecisionAlgorithm(
     svm: algorithm.svm,
     mlp: algorithm.mlp,
     multi_factor: algorithm.multi_factor,
+    prompt: algorithm.prompt,
   }
 }
 
@@ -246,7 +254,7 @@ function extractModels(config: ConfigData): ModelConfig[] {
   config.providers?.models?.forEach((model) => {
     models.push({
       name: model.name,
-      reasoning_family: model.reasoning_family,
+      reasoning_family: model.reasoning?.family,
     })
   })
 
@@ -303,27 +311,9 @@ function normalizeModelScores(
  * Group signals by type
  */
 export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, SignalConfig[]> {
-  const groups: Record<SignalType, SignalConfig[]> = {
-    keyword: [],
-    embedding: [],
-    domain: [],
-    fact_check: [],
-    user_feedback: [],
-    reask: [],
-    preference: [],
-    language: [],
-    context: [],
-    structure: [],
-    complexity: [],
-    modality: [],
-    authz: [],
-    jailbreak: [],
-    pii: [],
-    kb: [],
-    conversation: [],
-    event: [],
-    projection: [],
-  }
+  const groups = Object.fromEntries(
+    SIGNAL_TYPES.map((signalType) => [signalType, [] as SignalConfig[]]),
+  ) as Record<SignalType, SignalConfig[]>
 
   signals.forEach((signal) => {
     if (groups[signal.type]) {

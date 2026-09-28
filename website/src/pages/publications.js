@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import ResearchLayout from '@site/src/components/research/ResearchLayout'
 import { localizeResearchEntries, researchPapers, researchTalks, sortResearchEntries } from '@site/src/data/researchContent'
 import styles from './publications.module.css'
 
@@ -22,100 +23,48 @@ const getLabelTranslation = (type, label) => {
   }
 }
 
-function AwardCard({ item, index }) {
+function ResearchEntryRow({ item }) {
   const isPaper = item.type === 'paper'
-  const isFeatured = item.featured
-  const isSpotlight = item.spotlight === true
-  const awardTypeLabel = item.categoryLabel || (isPaper
-    ? translate({ id: 'publications.awardType.paper', message: 'Research publication' })
-    : translate({ id: 'publications.awardType.talk', message: 'Conference presentation' }))
-  const peopleLabel = isPaper
-    ? translate({ id: 'publications.detail.authors', message: 'Authors:' })
-    : translate({ id: 'publications.detail.speakers', message: 'Speakers:' })
-  const venueLabel = translate({ id: 'publications.detail.venue', message: 'Venue:' })
+  const typeLabel = isPaper
+    ? translate({ id: 'publications.type.paper', message: 'Paper' })
+    : translate({ id: 'publications.type.talk', message: 'Talk' })
+  const people = isPaper ? item.authors : item.speakers
 
   return (
-    <div
-      className={`${styles.awardCard} ${isPaper ? styles.paperAward : styles.talkAward} ${isFeatured ? styles.featuredAward : ''} ${isSpotlight ? styles.spotlightCard : ''}`}
-      style={{ '--animation-delay': `${index * 0.1}s` }}
-    >
-      {/* Award Frame */}
-      <div className={styles.awardFrame}>
-        {/* Award Header with Medal */}
-        <div className={styles.awardHeader}>
-          <div className={styles.medalContainer}>
-            <div className={`${styles.medal} ${isPaper ? styles.paperMedal : styles.talkMedal}`}>
-              {isPaper ? 'P' : 'T'}
-            </div>
-          </div>
-          <div className={styles.awardType}>
-            {awardTypeLabel}
-          </div>
-        </div>
-
-        {/* Award Content */}
-        <div className={styles.awardContent}>
-          {item.categoryLabel && (
-            <div className={isSpotlight ? styles.spotlightBadge : styles.categoryBadge}>
-              {item.categoryLabel}
-            </div>
-          )}
-          <h3 className={styles.awardTitle}>{item.title}</h3>
-
-          <div className={styles.awardDetails}>
-            <div className={styles.awardAuthors}>
-              <span className={styles.authorLabel}>{peopleLabel}</span>
-              <span className={styles.authorNames}>
-                {isPaper ? item.authors : item.speakers}
-              </span>
-            </div>
-
-            {item.venue && (
-              <div className={styles.awardVenue}>
-                <span className={styles.venueLabel}>{venueLabel}</span>
-                <span className={styles.venueName}>{item.venue}</span>
-              </div>
-            )}
-          </div>
-
-          <div className={styles.awardDescription}>
-            {item.abstract}
-          </div>
-        </div>
-
-        {/* Year and Actions Row */}
-        <div className={styles.yearAndActions}>
-          <span className={styles.awardYear}>{item.year}</span>
-          {item.links && item.links.length > 0 && (
+    <article className={styles.row}>
+      <span className={styles.rowYear}>{item.year}</span>
+      <span className={`${styles.rowType} ${isPaper ? styles.rowTypePaper : styles.rowTypeTalk}`}>
+        {typeLabel}
+      </span>
+      <div className={styles.rowBody}>
+        <h3 className={styles.rowTitle}>{item.title}</h3>
+        <p className={styles.rowMeta}>
+          {people}
+          {item.venue && (
             <>
-              {item.links.map((link, linkIndex) => (
-                <a
-                  key={linkIndex}
-                  href={link.url}
-                  className={`${styles.awardLink} ${
-                    link.type === 'paper' ? styles.primaryLink : styles.secondaryLink
-                  }`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {getLabelTranslation(link.type, link.label)}
-                </a>
-              ))}
+              {' · '}
+              {item.venue}
             </>
           )}
-        </div>
-
-        {/* Award Footer */}
-        <div className={styles.awardFooter}>
-          <div className={styles.awardSeal}>
-            <div className={styles.sealInner}>
-              <span className={styles.sealText}>vLLM</span>
-              <span className={styles.sealSubtext}>Semantic Router</span>
-            </div>
-          </div>
-        </div>
+        </p>
       </div>
-    </div>
+      {item.links && item.links.length > 0 && (
+        <div className={styles.rowLinks}>
+          {item.links.map((link, linkIndex) => (
+            <a
+              key={linkIndex}
+              href={link.url}
+              className={styles.rowLink}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {getLabelTranslation(link.type, link.label)}
+              <span aria-hidden="true">↗</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </article>
   )
 }
 
@@ -154,21 +103,11 @@ export default function Publications() {
         message: 'Latest research publications, talks, and scientific contributions from the vLLM Semantic Router project.',
       })}
     >
-      <div className={`${styles.container} publications-page`}>
-        <header className={styles.header}>
-          <div className={styles.wallDecoration}>
-            <div className={styles.wallPattern}></div>
-          </div>
-          <h1 className={styles.title}>
-            <Translate id="publications.title">Papers & Talks</Translate>
-          </h1>
-          <p className={styles.subtitle}>
-            <span className={styles.subtitleHighlight}>
-              <Translate id="publications.subtitle">Research, talks, and position papers from the vLLM Semantic Router project.</Translate>
-            </span>
-          </p>
-        </header>
-
+      <ResearchLayout
+        activeKey="publications"
+        title={<Translate id="publications.title">Papers & Talks</Translate>}
+        description={<Translate id="publications.subtitle">Research, talks, and position papers from the vLLM Semantic Router project.</Translate>}
+      >
         <div className={styles.filterSection}>
           <div className={styles.filterButtons}>
             <button
@@ -204,58 +143,46 @@ export default function Publications() {
           </div>
         </div>
 
-        <main>
-          {activeFilter === 'all'
-            ? (
-                <div className={styles.awardWall}>
-                  {/* Research Publications Wall */}
-                  <section className={styles.awardSection}>
-                    <div className={styles.sectionHeader}>
-                      <h2 className={styles.sectionTitle}>
-                        <Translate id="publications.papers.title">Research Publications</Translate>
-                      </h2>
-                      <div className={styles.sectionDivider}></div>
-                    </div>
-                    <div className={styles.awardsGrid}>
-                      {sortedPapers.map((item, index) => (
-                        <AwardCard key={item.id} item={item} index={index} />
-                      ))}
-                    </div>
-                  </section>
-
-                  {/* Conference Presentations Wall */}
-                  <section className={styles.awardSection}>
-                    <div className={styles.sectionHeader}>
-                      <h2 className={styles.sectionTitle}>
-                        <Translate id="publications.talks.title">Conference Presentations</Translate>
-                      </h2>
-                      <div className={styles.sectionDivider}></div>
-                    </div>
-                    <div className={styles.awardsGrid}>
-                      {sortedTalks.map((item, index) => (
-                        <AwardCard key={item.id} item={item} index={index + sortedPapers.length} />
-                      ))}
-                    </div>
-                  </section>
-                </div>
-              )
-            : (
-                <div className={styles.filteredAwards}>
-                  <div className={styles.awardsGrid}>
-                    {filteredItems.map((item, index) => (
-                      <AwardCard key={item.id} item={item} index={index} />
+        {activeFilter === 'all'
+          ? (
+              <div className={styles.groups}>
+                <section className={styles.group}>
+                  <h2 className={styles.groupTitle}>
+                    <Translate id="publications.papers.title">Research Publications</Translate>
+                  </h2>
+                  <div className={styles.list}>
+                    {sortedPapers.map(item => (
+                      <ResearchEntryRow key={item.id} item={item} />
                     ))}
                   </div>
-                </div>
-              )}
+                </section>
 
-          {filteredItems.length === 0 && (
-            <div className={styles.emptyState}>
-              <p>{emptyMessage}</p>
-            </div>
-          )}
-        </main>
-      </div>
+                <section className={styles.group}>
+                  <h2 className={styles.groupTitle}>
+                    <Translate id="publications.talks.title">Conference Presentations</Translate>
+                  </h2>
+                  <div className={styles.list}>
+                    {sortedTalks.map(item => (
+                      <ResearchEntryRow key={item.id} item={item} />
+                    ))}
+                  </div>
+                </section>
+              </div>
+            )
+          : (
+              <div className={styles.list}>
+                {filteredItems.map(item => (
+                  <ResearchEntryRow key={item.id} item={item} />
+                ))}
+              </div>
+            )}
+
+        {filteredItems.length === 0 && (
+          <div className={styles.emptyState}>
+            <p>{emptyMessage}</p>
+          </div>
+        )}
+      </ResearchLayout>
     </Layout>
   )
 }

@@ -33,8 +33,12 @@ const (
 
 // NewReMoMLooper creates a new ReMoM looper
 func NewReMoMLooper(cfg *config.LooperConfig) *ReMoMLooper {
+	return newReMoMLooper(cfg, ownClient(NewClient(cfg)))
+}
+
+func newReMoMLooper(cfg *config.LooperConfig, binding clientBinding) *ReMoMLooper {
 	return &ReMoMLooper{
-		BaseLooper: NewBaseLooper(cfg),
+		BaseLooper: newBaseLooper(cfg, binding),
 	}
 }
 
@@ -88,7 +92,6 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 	req *Request,
 	messages *openai.ChatCompletionNewParams,
 	cfg *config.ReMoMAlgorithmConfig,
-	streaming bool,
 	sem chan struct{},
 ) remomParallelResult {
 	modelName := mc.Model
@@ -105,20 +108,24 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 	}
 	defer func() { <-sem }()
 
-	msgCopy := cloneRequest(messages)
+	msgCopy := toolFreeLooperRequest(messages)
 	if cfg.Temperature > 0 {
 		msgCopy.Temperature = openai.Float(cfg.Temperature)
 	}
+	if cfg.MaxCompletionTokens != nil {
+		// Algorithm policy takes precedence over caller token fields. Clear the
+		// deprecated field so upstreams never receive conflicting limits.
+		msgCopy.MaxTokens = (openai.ChatCompletionNewParams{}).MaxTokens
+		msgCopy.MaxCompletionTokens = openai.Int(int64(*cfg.MaxCompletionTokens))
+	}
 
 	startTime := time.Now()
-	resp, err := l.client.CallModel(
+	resp, err := l.dispatchModel(
 		ctx,
+		req,
 		msgCopy,
-		modelName,
-		streaming,
-		idx+1,
-		nil,
-		accessKeyForModel(req, modelName),
+		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(req, modelName)},
+		CallOptions{DecisionName: req.DecisionName, Iteration: idx + 1},
 	)
 	elapsed := time.Since(startTime)
 
@@ -159,6 +166,7 @@ type remomResultCollector struct {
 	minSuccessful int
 	onError       string
 	responses     []*ModelResponse
+	usableCount   int
 	errs          []error
 }
 
@@ -174,32 +182,46 @@ func (c *remomResultCollector) handleResult(res remomParallelResult) ([]*ModelRe
 	if res.err != nil {
 		c.errs = append(c.errs, res.err)
 		if c.onError == config.ReMoMOnErrorFail {
-			return nil, fmt.Errorf("model call %d failed: %w", res.index, res.err), true
+			return c.responses, fmt.Errorf("model call %d failed: %w", res.index, res.err), true
+		}
+		return nil, nil, false
+	}
+	if res.resp == nil {
+		err := fmt.Errorf("model call %d returned a nil response", res.index)
+		c.errs = append(c.errs, err)
+		if c.onError == config.ReMoMOnErrorFail {
+			return c.responses, err, true
 		}
 		return nil, nil, false
 	}
 	c.responses = append(c.responses, res.resp)
-	if len(c.responses) < c.minSuccessful {
+	if !isUsableReMoMResponse(res.resp) {
+		err := fmt.Errorf("model call %d returned no usable content or reasoning", res.index)
+		c.errs = append(c.errs, err)
+		if c.onError == config.ReMoMOnErrorFail {
+			return c.responses, err, true
+		}
 		return nil, nil, false
 	}
-	if len(c.responses) < c.numCalls {
-		logging.Infof("[ReMoM] Quorum reached with %d/%d successful responses", len(c.responses), c.numCalls)
+	c.usableCount++
+	if c.usableCount < c.minSuccessful {
+		return nil, nil, false
+	}
+	if c.usableCount < c.numCalls {
+		logging.Infof("[ReMoM] Quorum reached with %d/%d usable responses", c.usableCount, c.numCalls)
 	}
 	return c.responses, nil, true
 }
 
 func (c *remomResultCollector) handleContextDone(err error) ([]*ModelResponse, error) {
-	if len(c.responses) > 0 && c.onError != config.ReMoMOnErrorFail {
-		return c.responses, err
-	}
-	return nil, err
+	return c.responses, err
 }
 
 func (c *remomResultCollector) finalize() ([]*ModelResponse, error) {
-	if len(c.responses) == 0 {
-		return nil, fmt.Errorf("all %d model calls failed: %v", c.numCalls, c.errs)
+	if c.usableCount == 0 {
+		return c.responses, fmt.Errorf("all %d model calls failed or returned no usable response: %v", c.numCalls, c.errs)
 	}
-	logging.Infof("[ReMoM] Collected %d/%d successful responses", len(c.responses), c.numCalls)
+	logging.Infof("[ReMoM] Collected %d/%d usable responses", c.usableCount, c.numCalls)
 	return c.responses, nil
 }
 
@@ -230,6 +252,11 @@ type IntermediateResp struct {
 	Reasoning        string `json:"reasoning,omitempty"`
 	CompactedContent string `json:"compacted_content,omitempty"`
 	TokenCount       int    `json:"token_count,omitempty"`
+	// Usage is the backend-reported usage for this response. It is carried so
+	// the next round's synthesis prompt compacts at the same observed
+	// bytes-per-token ratio as CompactedContent; it is not part of the
+	// published intermediate-response payload.
+	Usage TokenUsage `json:"-"`
 }
 
 // Default synthesis templates
@@ -270,12 +297,17 @@ type remomScheduleResult struct {
 	modelsUsed        map[string]bool
 	totalIterations   int
 	usage             TokenUsage
+	completedFinal    bool
+}
+
+type remomRoundExecution struct {
+	round              RoundResponse
+	usableResponses    []*ModelResponse
+	attemptedResponses []*ModelResponse
 }
 
 // Execute implements the Looper interface for ReMoM
 func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
-	l.client.SetDecisionName(req.DecisionName)
-
 	var cfg *config.ReMoMAlgorithmConfig
 	if req.Algorithm != nil && req.Algorithm.ReMoM != nil {
 		cfg = req.Algorithm.ReMoM
@@ -291,6 +323,9 @@ func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, err
 	if len(cfg.BreadthSchedule) == 0 {
 		return nil, fmt.Errorf("breadth_schedule cannot be empty")
 	}
+	if err := config.ValidateReMoMAlgorithmConfig(cfg); err != nil {
+		return nil, fmt.Errorf("invalid remom configuration: %w", err)
+	}
 
 	schedule := append([]int{}, cfg.BreadthSchedule...)
 	schedule = append(schedule, 1)
@@ -302,7 +337,10 @@ func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, err
 		return nil, err
 	}
 
-	finalResponse := result.allRoundResponses[len(result.allRoundResponses)-1].Responses[0]
+	finalResponse, err := selectReMoMFinalResponse(result.allRoundResponses, result.completedFinal)
+	if err != nil {
+		return nil, err
+	}
 	finalModelResp := &ModelResponse{
 		Content:          finalResponse.Content,
 		ReasoningContent: finalResponse.Reasoning,
@@ -320,6 +358,9 @@ func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, err
 		candidateResponses,
 	)
 	finalResponse.Content = finalModelResp.Content
+	if strings.TrimSpace(finalResponse.Content) == "" {
+		return nil, fmt.Errorf("remom produced no assistant content")
+	}
 	modelsUsedSlice := make([]string, 0, len(result.modelsUsed))
 	for model := range result.modelsUsed {
 		modelsUsedSlice = append(modelsUsedSlice, model)
@@ -357,7 +398,10 @@ func (l *ReMoMLooper) runReMoMSchedule(
 		currentMessages = updatedMessages
 
 		isFinalRound := roundIdx == len(schedule)-1
-		roundResp, responses, err := l.executeReMoMRound(ctx, req, cfg, roundIdx, numCalls, currentMessages, isFinalRound)
+		roundExecution, err := l.executeReMoMRound(ctx, req, cfg, roundIdx, numCalls, currentMessages, isFinalRound)
+		usage = usage.Add(roundExecution.attemptedResponses...)
+		totalIterations += len(roundExecution.attemptedResponses)
+		trackReMoMModelsUsed(modelsUsed, roundExecution.attemptedResponses)
 		if err != nil {
 			if canFallbackToPreviousReMoMRound(cfg, allRoundResponses) {
 				logging.Warnf("[ReMoM] Round %d failed; using previous round responses as fallback: %v", roundIdx+1, err)
@@ -366,11 +410,8 @@ func (l *ReMoMLooper) runReMoMSchedule(
 			return nil, err
 		}
 
-		allRoundResponses = append(allRoundResponses, roundResp)
-		trackReMoMModelsUsed(modelsUsed, responses)
-		usage = usage.Add(responses...)
-		totalIterations += len(responses)
-		logging.Infof("[ReMoM] Round %d completed: %d responses", roundIdx+1, len(responses))
+		allRoundResponses = append(allRoundResponses, roundExecution.round)
+		logging.Infof("[ReMoM] Round %d completed: %d usable responses", roundIdx+1, len(roundExecution.usableResponses))
 	}
 
 	return &remomScheduleResult{
@@ -378,6 +419,7 @@ func (l *ReMoMLooper) runReMoMSchedule(
 		modelsUsed:        modelsUsed,
 		totalIterations:   totalIterations,
 		usage:             usage,
+		completedFinal:    len(allRoundResponses) == len(schedule),
 	}, nil
 }
 
@@ -416,6 +458,7 @@ func intermediateResponsesToModelResponses(responses []IntermediateResp) []*Mode
 			Content:          ir.Content,
 			ReasoningContent: ir.Reasoning,
 			Model:            ir.Model,
+			Usage:            ir.Usage,
 		})
 	}
 	return prevResponses
@@ -436,24 +479,32 @@ func (l *ReMoMLooper) executeReMoMRound(
 	roundIdx, numCalls int,
 	currentMessages *openai.ChatCompletionNewParams,
 	isFinalRound bool,
-) (RoundResponse, []*ModelResponse, error) {
+) (remomRoundExecution, error) {
+	var execution remomRoundExecution
 	modelCalls := l.distributeCallsToModels(cfg, numCalls, req.ModelRefs)
 	if isFinalRound {
 		modelCalls = remomFinalRoundModelCalls(cfg, modelCalls, req.ModelRefs)
 	}
-	responses, err := l.executeParallelCalls(ctx, req, cfg, modelCalls, currentMessages, req.IsStreaming)
+	responses, err := l.executeParallelCalls(ctx, req, cfg, modelCalls, currentMessages)
+	execution.attemptedResponses = responses
 	if err != nil {
 		if cfg.OnError == "fail" {
-			return RoundResponse{}, nil, fmt.Errorf("round %d failed: %w", roundIdx+1, err)
+			return execution, fmt.Errorf("round %d failed: %w", roundIdx+1, err)
 		}
 		logging.Warnf("[ReMoM] Round %d had errors but continuing (on_error=skip)", roundIdx+1)
 	}
 	if len(responses) == 0 {
-		return RoundResponse{}, nil, fmt.Errorf("round %d: all model calls failed", roundIdx+1)
+		return execution, fmt.Errorf("round %d: all model calls failed", roundIdx+1)
 	}
 
+	responses = usableReMoMResponses(responses)
+	if len(responses) == 0 {
+		return execution, fmt.Errorf("round %d: model calls returned no usable content or reasoning", roundIdx+1)
+	}
 	responses = l.sortAndShuffle(cfg, responses)
-	return l.buildReMoMRoundResponse(cfg, roundIdx+1, numCalls, responses), responses, nil
+	execution.usableResponses = responses
+	execution.round = l.buildReMoMRoundResponse(cfg, roundIdx+1, numCalls, responses)
+	return execution, nil
 }
 
 func remomFinalRoundModelCalls(cfg *config.ReMoMAlgorithmConfig, defaultCalls []ModelCall, modelRefs []config.ModelRef) []ModelCall {
@@ -484,12 +535,15 @@ func (l *ReMoMLooper) buildReMoMRoundResponse(
 	}
 	for i := 0; i < maxResponses; i++ {
 		resp := responses[i]
+		synthesisText := reMoMSynthesisText(resp)
+		bytesPerToken := reMoMBytesPerToken(resp)
 		roundResp.Responses = append(roundResp.Responses, IntermediateResp{
 			Model:            resp.Model,
 			Content:          resp.Content,
 			Reasoning:        resp.ReasoningContent,
-			CompactedContent: l.compactResponse(cfg, resp.Content),
-			TokenCount:       estimateTokens(resp.Content),
+			CompactedContent: l.compactResponse(cfg, synthesisText, bytesPerToken),
+			TokenCount:       estimateTokens(synthesisText, bytesPerToken),
+			Usage:            resp.Usage,
 		})
 	}
 	return roundResp
@@ -501,74 +555,6 @@ func trackReMoMModelsUsed(modelsUsed map[string]bool, responses []*ModelResponse
 	}
 }
 
-// formatReMoMJSONResponse creates a non-streaming JSON response
-func (l *ReMoMLooper) formatReMoMJSONResponse(
-	finalResponse IntermediateResp,
-	allRoundResponses []RoundResponse,
-	modelsUsed []string,
-	iterations int,
-	usage TokenUsage,
-	cfg *config.ReMoMAlgorithmConfig,
-) (*Response, error) {
-	completion := map[string]interface{}{
-		"id":      fmt.Sprintf("chatcmpl-remom-%d", time.Now().UnixNano()),
-		"object":  "chat.completion",
-		"created": time.Now().Unix(),
-		"model":   finalResponse.Model,
-		"choices": []map[string]interface{}{
-			{
-				"index": 0,
-				"message": map[string]interface{}{
-					"role":    "assistant",
-					"content": finalResponse.Content,
-				},
-				"finish_reason": "stop",
-			},
-		},
-		"usage": usage.Map(),
-	}
-
-	// Add intermediate responses if enabled
-	if cfg.IncludeIntermediateResponses {
-		completion["reasoning_mom_responses"] = allRoundResponses
-	}
-
-	responseBody, err := json.Marshal(completion)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return &Response{
-		Body:                  responseBody,
-		ContentType:           "application/json",
-		Model:                 finalResponse.Model,
-		ModelsUsed:            modelsUsed,
-		Iterations:            iterations,
-		AlgorithmType:         "remom",
-		IntermediateResponses: allRoundResponses,
-		Usage:                 usage,
-	}, nil
-}
-
-// formatReMoMStreamingResponse creates an SSE streaming response
-func (l *ReMoMLooper) formatReMoMStreamingResponse(
-	finalResponse IntermediateResp,
-	allRoundResponses []RoundResponse,
-	modelsUsed []string,
-	iterations int,
-	usage TokenUsage,
-	cfg *config.ReMoMAlgorithmConfig,
-) (*Response, error) {
-	timestamp := time.Now().Unix()
-	id := fmt.Sprintf("chatcmpl-remom-%d", timestamp)
-	sseBody := buildReMoMStreamingSSE(id, timestamp, finalResponse, allRoundResponses, cfg.IncludeIntermediateResponses)
-
-	resp := streamingLooperResponse(sseBody, finalResponse.Model, modelsUsed, iterations, "remom")
-	resp.IntermediateResponses = allRoundResponses
-	resp.Usage = usage
-	return resp, nil
-}
-
 // executeParallelCalls executes model calls in parallel with concurrency control.
 func (l *ReMoMLooper) executeParallelCalls(
 	ctx context.Context,
@@ -576,7 +562,6 @@ func (l *ReMoMLooper) executeParallelCalls(
 	cfg *config.ReMoMAlgorithmConfig,
 	modelCalls []ModelCall,
 	messages *openai.ChatCompletionNewParams,
-	streaming bool,
 ) ([]*ModelResponse, error) {
 	numCalls := len(modelCalls)
 	maxConcurrent := remomParallelMaxConcurrent(numCalls, cfg.MaxConcurrent)
@@ -593,7 +578,7 @@ func (l *ReMoMLooper) executeParallelCalls(
 
 	for i, call := range modelCalls {
 		go func(idx int, mc ModelCall) {
-			results <- l.remomRunOneParallelCall(roundCtx, idx, numCalls, mc, req, messages, cfg, streaming, sem)
+			results <- l.remomRunOneParallelCall(roundCtx, idx, numCalls, mc, req, messages, cfg, sem)
 		}(i, call)
 	}
 
@@ -605,13 +590,20 @@ func (l *ReMoMLooper) buildSynthesisPrompt(cfg *config.ReMoMAlgorithmConfig, ori
 	// Prepare reference responses
 	var refResponses []ReferenceResponse
 	for _, resp := range prevResponses {
-		compacted := l.compactResponse(cfg, resp.Content)
+		synthesisText := reMoMSynthesisText(resp)
+		if strings.TrimSpace(synthesisText) == "" {
+			continue
+		}
+		compacted := l.compactResponse(cfg, synthesisText, reMoMBytesPerToken(resp))
 		refResp := ReferenceResponse{
 			Content: compacted,
 			Model:   resp.Model,
 		}
 		if cfg.IncludeReasoning && resp.ReasoningContent != "" {
 			refResp.Reasoning = resp.ReasoningContent
+			if strings.TrimSpace(resp.Content) == "" {
+				refResp.Content = ""
+			}
 		}
 		refResponses = append(refResponses, refResp)
 	}
@@ -647,37 +639,11 @@ func (l *ReMoMLooper) buildSynthesisPrompt(cfg *config.ReMoMAlgorithmConfig, ori
 	return appendOutputContractForPrompt(buf.String(), embeddedOutputContract(originalContent)), nil
 }
 
-// compactResponse compacts a response based on strategy
-func (l *ReMoMLooper) compactResponse(cfg *config.ReMoMAlgorithmConfig, content string) string {
-	strategy := cfg.CompactionStrategy
-	if strategy == "" {
-		strategy = "full"
-	}
-
-	switch strategy {
-	case "last_n_tokens":
-		maxTokens := cfg.CompactionTokens
-		if maxTokens <= 0 {
-			maxTokens = 1000
-		}
-		// Rough heuristic: ~4 chars per token
-		maxChars := maxTokens * 4
-		if len(content) <= maxChars {
-			return content
-		}
-		return content[len(content)-maxChars:]
-	case "full":
-		fallthrough
-	default:
-		return content
-	}
-}
-
 // sortAndShuffle sorts responses by length and shuffles
 func (l *ReMoMLooper) sortAndShuffle(cfg *config.ReMoMAlgorithmConfig, responses []*ModelResponse) []*ModelResponse {
-	// Sort by content length (descending)
+	// Sort by the internal synthesis text length (descending).
 	sort.Slice(responses, func(i, j int) bool {
-		return len(responses[i].Content) > len(responses[j].Content)
+		return len(reMoMSynthesisText(responses[i])) > len(reMoMSynthesisText(responses[j]))
 	})
 
 	// Shuffle with seed for reproducibility. PCG seeds in O(1) (16-byte state)
@@ -777,10 +743,4 @@ func replaceLastMessage(req *openai.ChatCompletionNewParams, newContent string) 
 	}
 
 	return &result
-}
-
-// estimateTokens estimates token count from text (rough heuristic)
-func estimateTokens(text string) int {
-	// Rough heuristic: ~4 chars per token
-	return len(text) / 4
 }

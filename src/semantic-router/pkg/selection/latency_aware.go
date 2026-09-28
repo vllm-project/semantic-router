@@ -109,13 +109,15 @@ func (s *LatencyAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 		getModelNames(selCtx.CandidateModels), scored.best.modelRef.Model, scored.bestScore, confidence)
 
 	return &SelectionResult{
-		SelectedModel: scored.best.modelRef.Model,
-		LoRAName:      scored.best.modelRef.LoRAName,
-		Score:         scored.bestScore,
-		Confidence:    confidence,
-		Method:        MethodLatencyAware,
-		Reasoning:     reasoning,
-		AllScores:     scored.allScores,
+		SelectedModel:     scored.best.modelRef.Model,
+		SelectedCandidate: scored.best.modelRef,
+		LoRAName:          scored.best.modelRef.LoRAName,
+		Score:             scored.bestScore,
+		ScoreDirection:    LowerIsBetter,
+		Confidence:        confidence,
+		Method:            MethodLatencyAware,
+		Reasoning:         reasoning,
+		AllScores:         scored.allScores,
 	}, nil
 }
 
@@ -277,12 +279,14 @@ func latencyReasoning(hasTPOT, hasTTFT bool, tpotPercentile, ttftPercentile int)
 func (s *LatencyAwareSelector) defaultToFirst(selCtx *SelectionContext, reason string) *SelectionResult {
 	first := selCtx.CandidateModels[0]
 	return &SelectionResult{
-		SelectedModel: first.Model,
-		LoRAName:      first.LoRAName,
-		Score:         1.0,
-		Confidence:    0.0,
-		Method:        MethodLatencyAware,
-		Reasoning:     reason,
+		SelectedModel:     first.Model,
+		SelectedCandidate: &first,
+		LoRAName:          first.LoRAName,
+		Score:             1.0,
+		ScoreDirection:    LowerIsBetter,
+		Confidence:        0.0,
+		Method:            MethodLatencyAware,
+		Reasoning:         reason,
 		AllScores: map[string]float64{
 			first.Model: 1.0,
 		},

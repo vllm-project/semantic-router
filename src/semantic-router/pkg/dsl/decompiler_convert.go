@@ -55,6 +55,9 @@ func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 
 func (d *decompiler) embeddingToSignal(emb *config.EmbeddingRule) *SignalDecl {
 	fields := make(map[string]Value)
+	if emb.PrototypeScoring != nil {
+		fields["prototype_scoring"] = ObjectValue{Fields: prototypeScoringFields(emb.PrototypeScoring)}
+	}
 	if emb.SimilarityThreshold != 0 {
 		fields["threshold"] = FloatValue{V: float64(emb.SimilarityThreshold)}
 	}
@@ -63,6 +66,16 @@ func (d *decompiler) embeddingToSignal(emb *config.EmbeddingRule) *SignalDecl {
 	}
 	if emb.AggregationMethodConfiged != "" {
 		fields["aggregation_method"] = StringValue{V: string(emb.AggregationMethodConfiged)}
+	}
+	for _, list := range []struct {
+		name   string
+		values []string
+	}{
+		{"image_candidates", emb.ImageCandidates}, {"negative_candidates", emb.NegativeCandidates}, {"negative_image_candidates", emb.NegativeImageCandidates},
+	} {
+		if len(list.values) > 0 {
+			fields[list.name] = stringsToArray(list.values)
+		}
 	}
 	if emb.QueryModality != "" && emb.QueryModality != config.QueryModalityText {
 		fields["query_modality"] = StringValue{V: string(emb.QueryModality)}
@@ -165,6 +178,9 @@ func (d *decompiler) conversationToSignal(rule *config.ConversationRule) *Signal
 
 func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl {
 	fields := make(map[string]Value)
+	if comp.PrototypeScoring != nil {
+		fields["prototype_scoring"] = ObjectValue{Fields: prototypeScoringFields(comp.PrototypeScoring)}
+	}
 	if comp.Threshold != 0 {
 		fields["threshold"] = FloatValue{V: float64(comp.Threshold)}
 	}
@@ -212,6 +228,17 @@ func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
 	return &SignalDecl{SignalType: "authz", Name: rb.Name, Fields: fields}
 }
 
+func (d *decompiler) hallucinationToSignal(rule *config.HallucinationRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.UseNLI {
+		fields["use_nli"] = BoolValue{V: true}
+	}
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	return &SignalDecl{SignalType: "hallucination", Name: rule.Name, Fields: fields}
+}
+
 func (d *decompiler) jailbreakToSignal(jb *config.JailbreakRule) *SignalDecl {
 	fields := make(map[string]Value)
 	if jb.Method != "" {
@@ -222,6 +249,9 @@ func (d *decompiler) jailbreakToSignal(jb *config.JailbreakRule) *SignalDecl {
 	}
 	if jb.IncludeHistory {
 		fields["include_history"] = BoolValue{V: true}
+	}
+	if jb.Direction != "" {
+		fields["direction"] = StringValue{V: jb.Direction}
 	}
 	if jb.Description != "" {
 		fields["description"] = StringValue{V: jb.Description}
@@ -337,8 +367,16 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	route := &RouteDecl{
 		Name:        dec.Name,
 		Description: dec.Description,
+		OnUnknown:   string(dec.Rules.OnUnknown),
 		Priority:    dec.Priority,
 		Tier:        dec.Tier,
+	}
+
+	if dec.Action != nil {
+		route.Action = &ActionDecl{
+			Type:        dec.Action.Type,
+			Destination: dec.Action.Destination,
+		}
 	}
 
 	// WHEN
@@ -349,6 +387,7 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 		ref := &ModelRef{
 			Model:     mr.Model,
 			Reasoning: mr.UseReasoning,
+			Mode:      mr.ReasoningMode,
 			Effort:    mr.ReasoningEffort,
 			LoRA:      mr.LoRAName,
 			Weight:    mr.Weight,
@@ -409,10 +448,24 @@ func configModelRefToDSLModelRef(model config.ModelRef) *ModelRef {
 	return &ModelRef{
 		Model:     model.Model,
 		Reasoning: model.UseReasoning,
+		Mode:      model.ReasoningMode,
 		Effort:    model.ReasoningEffort,
 		LoRA:      model.LoRAName,
 		Weight:    model.Weight,
 	}
+}
+
+// normalizedRuleOperator trims and upper-cases a rule-tree operator for
+// comparison. A rule tree loaded through the standard config path has
+// already been normalized (see config.NormalizeRuleOperator), but the
+// decompiler also runs directly against configs assembled without going
+// through that path (e.g. a Kubernetes CR merged for preview), so decompiling
+// must not assume the operator is already canonical: an unnormalized value
+// like "or" must still be recognized as OR rather than falling through to a
+// nil expression (dropping the WHEN clause and matching every request) or an
+// invalid lowercase keyword in decompiled DSL text.
+func normalizedRuleOperator(operator string) string {
+	return strings.ToUpper(strings.TrimSpace(operator))
 }
 
 func decompileRuleNodeToExpr(node *config.RuleCombination) BoolExpr {
@@ -420,9 +473,9 @@ func decompileRuleNodeToExpr(node *config.RuleCombination) BoolExpr {
 		return nil
 	}
 	if node.Type != "" {
-		return &SignalRefExpr{SignalType: node.Type, SignalName: node.Name}
+		return decompileSignalRefNode(node)
 	}
-	switch node.Operator {
+	switch normalizedRuleOperator(node.Operator) {
 	case "AND":
 		exprs := flattenRuleNodeToExprs(node, "AND")
 		if len(exprs) == 0 {
@@ -451,8 +504,28 @@ func decompileRuleNodeToExpr(node *config.RuleCombination) BoolExpr {
 	return nil
 }
 
+func decompileSignalRefNode(
+	node *config.RuleCombination,
+) *SignalRefExpr {
+	fields := map[string]Value{}
+	if node.Label != "" {
+		fields["label"] = StringValue{V: node.Label}
+	}
+	if node.Predicate != nil {
+		fields["predicate"] = structurePredicateValue(node.Predicate)
+	}
+	if node.OnError != "" {
+		fields["on_error"] = StringValue{V: node.OnError}
+	}
+	return &SignalRefExpr{
+		SignalType: node.Type,
+		SignalName: node.Name,
+		Fields:     fields,
+	}
+}
+
 func flattenRuleNodeToExprs(node *config.RuleCombination, op string) []BoolExpr {
-	if node.Operator == op {
+	if normalizedRuleOperator(node.Operator) == op {
 		var exprs []BoolExpr
 		for i := range node.Conditions {
 			exprs = append(exprs, flattenRuleNodeToExprs(&node.Conditions[i], op)...)
@@ -473,6 +546,9 @@ func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelPar
 	}
 	if mr.ReasoningEffort != "" {
 		opts = append(opts, fmt.Sprintf("effort = %q", mr.ReasoningEffort))
+	}
+	if mr.ReasoningMode != "" {
+		opts = append(opts, fmt.Sprintf("mode = %q", mr.ReasoningMode))
 	}
 	if mr.LoRAName != "" {
 		opts = append(opts, fmt.Sprintf("lora = %q", mr.LoRAName))

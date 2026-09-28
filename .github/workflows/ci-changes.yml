@@ -1,290 +1,155 @@
-name: CI Changes
+name: CI Plan
+
 on:
   workflow_call:
+    inputs:
+      profile:
+        type: string
+        default: pr
+      full:
+        type: boolean
+        default: false
+      draft:
+        type: boolean
+        default: false
+      verification:
+        description: Explicit verification for a manual run; normal entrypoints use changed paths.
+        type: string
+        default: ''
     outputs:
+      plan:
+        value: ${{ jobs.plan.outputs.plan }}
+      dispatch:
+        value: ${{ jobs.plan.outputs.dispatch }}
+      worker_labels:
+        value: ${{ jobs.plan.outputs.worker_labels }}
+      image_producers:
+        value: ${{ jobs.plan.outputs.image_producers }}
+      images:
+        value: ${{ jobs.plan.outputs.images }}
+      build_images:
+        value: ${{ jobs.plan.outputs.build_images }}
+      published_images:
+        value: ${{ jobs.plan.outputs.published_images }}
+      publish_images:
+        value: ${{ jobs.plan.outputs.publish_images }}
+      build_native:
+        value: ${{ jobs.plan.outputs.build_native }}
+      multiarch:
+        value: ${{ jobs.plan.outputs.multiarch }}
+      publish_helm:
+        value: ${{ jobs.plan.outputs.publish_helm }}
+      publish_python:
+        value: ${{ jobs.plan.outputs.publish_python }}
+      component_batches:
+        value: ${{ jobs.plan.outputs.component_batches }}
+      quality:
+        value: ${{ jobs.plan.outputs.quality }}
+      generated:
+        value: ${{ jobs.plan.outputs.generated }}
+      security:
+        value: ${{ jobs.plan.outputs.security }}
       core:
-        value: ${{ jobs.filter.outputs.core }}
+        value: ${{ jobs.plan.outputs.core }}
+      storage:
+        value: ${{ jobs.plan.outputs.storage }}
       dashboard:
-        value: ${{ jobs.filter.outputs.dashboard }}
-      website:
-        value: ${{ jobs.filter.outputs.website }}
-      docs:
-        value: ${{ jobs.filter.outputs.docs }}
-      helm:
-        value: ${{ jobs.filter.outputs.helm }}
-      e2e:
-        value: ${{ jobs.filter.outputs.e2e }}
-      ci:
-        value: ${{ jobs.filter.outputs.ci }}
-      docker:
-        value: ${{ jobs.filter.outputs.docker }}
-      make:
-        value: ${{ jobs.filter.outputs.make }}
-      agent_text:
-        value: ${{ jobs.filter.outputs.agent_text }}
-      agent_exec:
-        value: ${{ jobs.filter.outputs.agent_exec }}
-      # Per-profile e2e change detection
-      e2e_istio:
-        value: ${{ jobs.filter.outputs.e2e_istio }}
-      e2e_agentgateway:
-        value: ${{ jobs.filter.outputs.e2e_agentgateway }}
-      e2e_kubernetes:
-        value: ${{ jobs.filter.outputs.e2e_kubernetes }}
-      e2e_aibrix:
-        value: ${{ jobs.filter.outputs.e2e_aibrix }}
-      e2e_dashboard:
-        value: ${{ jobs.filter.outputs.e2e_dashboard }}
-      e2e_dynamic_config:
-        value: ${{ jobs.filter.outputs.e2e_dynamic_config }}
-      e2e_multimodal_routing:
-        value: ${{ jobs.filter.outputs.e2e_multimodal_routing }}
-      e2e_llm_d:
-        value: ${{ jobs.filter.outputs.e2e_llm_d }}
-      e2e_routing_strategies:
-        value: ${{ jobs.filter.outputs.e2e_routing_strategies }}
-      e2e_production_stack:
-        value: ${{ jobs.filter.outputs.e2e_production_stack }}
-      e2e_response_api:
-        value: ${{ jobs.filter.outputs.e2e_response_api }}
-      e2e_response_api_redis:
-        value: ${{ jobs.filter.outputs.e2e_response_api_redis }}
-      e2e_response_api_redis_cluster:
-        value: ${{ jobs.filter.outputs.e2e_response_api_redis_cluster }}
-      e2e_ml_model_selection:
-        value: ${{ jobs.filter.outputs.e2e_ml_model_selection }}
-      e2e_multi_endpoint:
-        value: ${{ jobs.filter.outputs.e2e_multi_endpoint }}
-      e2e_authz_rbac:
-        value: ${{ jobs.filter.outputs.e2e_authz_rbac }}
-      e2e_streaming:
-        value: ${{ jobs.filter.outputs.e2e_streaming }}
-      e2e_anthropic_shim:
-        value: ${{ jobs.filter.outputs.e2e_anthropic_shim }}
-      e2e_common:
-        value: ${{ jobs.filter.outputs.e2e_common }}
-      docs_only:
-        value: ${{ jobs.filter.outputs.docs_only }}
+        value: ${{ jobs.plan.outputs.dashboard }}
+      operator:
+        value: ${{ jobs.plan.outputs.operator }}
+      local:
+        value: ${{ jobs.plan.outputs.local }}
+      recipes:
+        value: ${{ jobs.plan.outputs.recipes }}
+      native-shared:
+        value: ${{ jobs.plan.outputs.native-shared }}
+      native-independent:
+        value: ${{ jobs.plan.outputs.native-independent }}
+      performance:
+        value: ${{ jobs.plan.outputs.performance }}
+      package:
+        value: ${{ jobs.plan.outputs.package }}
+      tools:
+        value: ${{ jobs.plan.outputs.tools }}
+      e2e-router:
+        value: ${{ jobs.plan.outputs.e2e-router }}
+      e2e-fixtures:
+        value: ${{ jobs.plan.outputs.e2e-fixtures }}
+      e2e-dashboard:
+        value: ${{ jobs.plan.outputs.e2e-dashboard }}
+
+permissions:
+  contents: read
 
 jobs:
-  filter:
-    runs-on: ubuntu-latest
+  plan:
+    name: Resolve Contracts
+    runs-on: ubuntu-24.04
     outputs:
-      core: ${{ steps.changes.outputs.core }}
-      dashboard: ${{ steps.changes.outputs.dashboard }}
-      website: ${{ steps.changes.outputs.website }}
-      docs: ${{ steps.changes.outputs.docs }}
-      helm: ${{ steps.changes.outputs.helm }}
-      e2e: ${{ steps.changes.outputs.e2e }}
-      ci: ${{ steps.changes.outputs.ci }}
-      docker: ${{ steps.changes.outputs.docker }}
-      make: ${{ steps.changes.outputs.make }}
-      agent_text: ${{ steps.changes.outputs.agent_text }}
-      agent_exec: ${{ steps.changes.outputs.agent_exec }}
-      # Per-profile e2e outputs
-      e2e_istio: ${{ steps.changes.outputs.e2e_istio }}
-      e2e_agentgateway: ${{ steps.changes.outputs.e2e_agentgateway }}
-      e2e_kubernetes: ${{ steps.changes.outputs.e2e_kubernetes }}
-      e2e_aibrix: ${{ steps.changes.outputs.e2e_aibrix }}
-      e2e_dashboard: ${{ steps.changes.outputs.e2e_dashboard }}
-      e2e_dynamic_config: ${{ steps.changes.outputs.e2e_dynamic_config }}
-      e2e_multimodal_routing: ${{ steps.changes.outputs.e2e_multimodal_routing }}
-      e2e_llm_d: ${{ steps.changes.outputs.e2e_llm_d }}
-      e2e_routing_strategies: ${{ steps.changes.outputs.e2e_routing_strategies }}
-      e2e_production_stack: ${{ steps.changes.outputs.e2e_production_stack }}
-      e2e_response_api: ${{ steps.changes.outputs.e2e_response_api }}
-      e2e_response_api_redis: ${{ steps.changes.outputs.e2e_response_api_redis }}
-      e2e_response_api_redis_cluster: ${{ steps.changes.outputs.e2e_response_api_redis_cluster }}
-      e2e_ml_model_selection: ${{ steps.changes.outputs.e2e_ml_model_selection }}
-      e2e_multi_endpoint: ${{ steps.changes.outputs.e2e_multi_endpoint }}
-      e2e_authz_rbac: ${{ steps.changes.outputs.e2e_authz_rbac }}
-      e2e_streaming: ${{ steps.changes.outputs.e2e_streaming }}
-      e2e_anthropic_shim: ${{ steps.changes.outputs.e2e_anthropic_shim }}
-      e2e_common: ${{ steps.changes.outputs.e2e_common }}
-      docs_only: ${{ steps.docs_only.outputs.docs_only }}
+      plan: ${{ steps.plan.outputs.plan }}
+      dispatch: ${{ steps.plan.outputs.dispatch }}
+      worker_labels: ${{ steps.plan.outputs.worker_labels }}
+      image_producers: ${{ steps.plan.outputs.image_producers }}
+      images: ${{ steps.plan.outputs.images }}
+      build_images: ${{ steps.plan.outputs.build_images }}
+      published_images: ${{ steps.plan.outputs.published_images }}
+      publish_images: ${{ steps.plan.outputs.publish_images }}
+      build_native: ${{ steps.plan.outputs.build_native }}
+      multiarch: ${{ steps.plan.outputs.multiarch }}
+      publish_helm: ${{ steps.plan.outputs.publish_helm }}
+      publish_python: ${{ steps.plan.outputs.publish_python }}
+      component_batches: ${{ steps.plan.outputs.component_batches }}
+      quality: ${{ steps.plan.outputs.quality }}
+      generated: ${{ steps.plan.outputs.generated }}
+      security: ${{ steps.plan.outputs.security }}
+      core: ${{ steps.plan.outputs.core }}
+      storage: ${{ steps.plan.outputs.storage }}
+      dashboard: ${{ steps.plan.outputs.dashboard }}
+      operator: ${{ steps.plan.outputs.operator }}
+      local: ${{ steps.plan.outputs.local }}
+      recipes: ${{ steps.plan.outputs.recipes }}
+      native-shared: ${{ steps.plan.outputs.native-shared }}
+      native-independent: ${{ steps.plan.outputs.native-independent }}
+      performance: ${{ steps.plan.outputs.performance }}
+      package: ${{ steps.plan.outputs.package }}
+      tools: ${{ steps.plan.outputs.tools }}
+      e2e-router: ${{ steps.plan.outputs.e2e-router }}
+      e2e-fixtures: ${{ steps.plan.outputs.e2e-fixtures }}
+      e2e-dashboard: ${{ steps.plan.outputs.e2e-dashboard }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - id: changes
-        uses: dorny/paths-filter@v3
-        with:
-          token: ${{ github.token }}
-          filters: |
-            core:
-              - 'src/**'
-              - 'candle-binding/**'
-              - 'openvino-binding/**'
-              - 'bench/**'
-              - 'config/**'
-              - 'scripts/**'
-              - 'deploy/examples/**'
-              - 'tools/**'
-              - 'go.mod'
-              - 'go.sum'
-              - 'Cargo.toml'
-              - 'Cargo.lock'
-              - 'pyproject.toml'
-              - 'e2e/testing/llm-katan/**'
-              - 'e2e/testing/anthropic-shim/**'
-            dashboard:
-              - 'dashboard/**'
-            website:
-              - 'website/**'
-            docs:
-              - 'docs/**'
-              - '**/*.md'
-              - '**/*.mdx'
-            helm:
-              - 'deploy/helm/**'
-            e2e:
-              - 'e2e/testing/**'
-              - 'e2e/**'
-              - 'deploy/kubernetes/**'
-              - 'deploy/kserve/**'
-              - 'deploy/openshift/**'
-            ci:
-              - '.github/workflows/**'
-            docker:
-              - 'src/vllm-sr/Dockerfile*'
-              - 'dashboard/backend/Dockerfile'
-              - 'tools/docker/Dockerfile*'
-              - 'docker/**'
-            make:
-              - 'Makefile'
-              - 'tools/make/**'
-            operator:
-              - 'deploy/operator/**'
-            perf:
-              - 'perf/**'
-            bindings:
-              - 'ml-binding/**'
-              - 'nlp-binding/**'
-              - 'onnx-binding/**'
-            agent_text:
-              - 'AGENTS.md'
-              - 'docs/agent/**'
-              - 'tools/agent/skills/**'
-              - 'src/fleet-sim/AGENTS.md'
-              - 'src/fleet-sim/fleet_sim/optimizer/AGENTS.md'
-              - 'src/vllm-sr/cli/AGENTS.md'
-              - 'src/semantic-router/pkg/config/AGENTS.md'
-              - 'src/semantic-router/pkg/classification/AGENTS.md'
-              - 'src/semantic-router/pkg/extproc/AGENTS.md'
-              - 'deploy/operator/api/v1alpha1/AGENTS.md'
-              - 'deploy/operator/controllers/AGENTS.md'
-              - 'dashboard/frontend/src/AGENTS.md'
-              - 'dashboard/frontend/src/pages/AGENTS.md'
-              - 'dashboard/frontend/src/components/AGENTS.md'
-              - 'dashboard/backend/handlers/AGENTS.md'
-              - 'e2e/testcases/AGENTS.md'
-              - '.github/copilot-instructions.md'
-              - '.github/PULL_REQUEST_TEMPLATE.md'
-              - '.github/ISSUE_TEMPLATE/**'
-              - '.prowlabels.yaml'
-            agent_exec:
-              - 'tools/agent/*.yaml'
-              - 'tools/agent/scripts/**'
-              - 'tools/make/agent.mk'
-              - '.github/workflows/ci-changes.yml'
-              - '.github/workflows/integration-test-k8s.yml'
-              - '.github/workflows/integration-test-memory.yml'
-              - '.github/workflows/integration-test-vllm-sr-cli.yml'
-              - '.github/workflows/pre-commit.yml'
-            # Per-profile e2e filters
-            e2e_istio:
-              - 'e2e/profiles/istio/**'
-              - 'deploy/kubernetes/istio/**'
-            e2e_agentgateway:
-              - 'e2e/profiles/agentgateway/**'
-              - 'deploy/kubernetes/agentgateway/**'
-            e2e_kubernetes:
-              - 'e2e/profiles/ai-gateway/**'
-              - 'deploy/kubernetes/ai-gateway/**'
-            e2e_aibrix:
-              - 'e2e/profiles/aibrix/**'
-              - 'deploy/kubernetes/aibrix/**'
-            e2e_dashboard:
-              - 'e2e/profiles/dashboard/**'
-              - 'e2e/testcases/dashboard_*.go'
-              - 'e2e/testcases/security_policy_apply.go'
-              - 'deploy/kubernetes/observability/dashboard/**'
-              - 'dashboard/backend/handlers/security_policy*.go'
-              - 'dashboard/backend/handlers/deploy.go'
-              - 'dashboard/backend/handlers/canonical_transport.go'
-            e2e_dynamic_config:
-              - 'e2e/profiles/dynamic-config/**'
-            e2e_multimodal_routing:
-              - 'e2e/profiles/multimodal-routing/**'
-            e2e_llm_d:
-              - 'e2e/profiles/llm-d/**'
-              - 'deploy/kubernetes/llmd-base/**'
-            e2e_routing_strategies:
-              - 'e2e/profiles/routing-strategies/**'
-              - 'deploy/kubernetes/routing-strategies/**'
-            e2e_production_stack:
-              - 'e2e/profiles/production-stack/**'
-              - 'deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml'
-              - 'deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml'
-            e2e_response_api:
-              - 'e2e/profiles/response-api/**'
-              - 'e2e/profiles/response-api-redis/**'
-              - 'e2e/profiles/response-api-redis-cluster/**'
-              - 'deploy/kubernetes/response-api/**'
-            e2e_response_api_redis:
-              - 'e2e/profiles/response-api-redis/**'
-              - 'deploy/kubernetes/response-api/redis.yaml'
-            e2e_response_api_redis_cluster:
-              - 'e2e/profiles/response-api-redis-cluster/**'
-              - 'deploy/kubernetes/response-api/redis-cluster.yaml'
-            e2e_ml_model_selection:
-              - 'e2e/profiles/ml-model-selection/**'
-              - 'src/semantic-router/pkg/modelselection/**'
-              - 'src/training/model_selection/ml_model_selection/**'
-              - 'ml-binding/**'
-            e2e_multi_endpoint:
-              - 'e2e/profiles/multi-endpoint/**'
-              - 'e2e/config/config.multi-endpoint.yaml'
-              - 'scripts/multi-endpoint/**'
-            e2e_authz_rbac:
-              - 'e2e/profiles/authz-rbac/**'
-              - 'e2e/config/config.authz-rbac.yaml'
-              - 'e2e/config/authz-profile-*.yaml'
-              - 'src/semantic-router/pkg/classification/authz*.go'
-              - 'src/semantic-router/pkg/authz/**'
-              - 'dashboard/backend/handlers/security_policy*.go'
-            e2e_streaming:
-              - 'e2e/profiles/streaming/**'
-              - 'deploy/kubernetes/streaming/**'
-              - 'src/semantic-router/pkg/extproc/processor_req_body_streamed*.go'
-            e2e_anthropic_shim:
-              - 'e2e/profiles/anthropic-shim/**'
-              - 'e2e/testing/anthropic-shim/**'
-              - 'deploy/kubernetes/anthropic-backend/**'
-              - 'src/semantic-router/pkg/anthropic/outbound*.go'
-            # Common e2e code that affects all profiles
-            e2e_common:
-              - 'e2e/pkg/**'
-              - 'e2e/cmd/**'
-              - 'e2e/testcases/**'
-              - 'e2e/*.go'
-              - 'e2e/go.mod'
-              - 'e2e/go.sum'
-      - id: docs_only
+      - run: python3 -m pip install PyYAML==6.0.3
+      - id: base
+        name: Resolve the base the merge ref applies to
+        env:
+          EVENT_BEFORE: ${{ github.event.before }}
         run: |
-          python3 tools/agent/scripts/ci_docs_only.py \
-            --website "${{ steps.changes.outputs.website }}" \
-            --docs "${{ steps.changes.outputs.docs }}" \
-            --agent-text "${{ steps.changes.outputs.agent_text }}" \
-            --core "${{ steps.changes.outputs.core }}" \
-            --dashboard "${{ steps.changes.outputs.dashboard }}" \
-            --helm "${{ steps.changes.outputs.helm }}" \
-            --e2e "${{ steps.changes.outputs.e2e }}" \
-            --docker "${{ steps.changes.outputs.docker }}" \
-            --make "${{ steps.changes.outputs.make }}" \
-            --ci "${{ steps.changes.outputs.ci }}" \
-            --agent-exec "${{ steps.changes.outputs.agent_exec }}" \
-            --operator "${{ steps.changes.outputs.operator }}" \
-            --perf "${{ steps.changes.outputs.perf }}" \
-            --bindings "${{ steps.changes.outputs.bindings }}" \
-            --github-output
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            sha="$(git rev-parse --verify "$GITHUB_SHA^1")"
+          else
+            sha="$EVENT_BEFORE"
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - id: plan
+        env:
+          PROFILE: ${{ inputs.profile }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          FULL: ${{ inputs.full }}
+          DRAFT: ${{ inputs.draft }}
+          VERIFICATION: ${{ inputs.verification }}
+        run: |
+          flags=()
+          if [[ "$FULL" == true ]]; then flags+=(--full); fi
+          if [[ "$DRAFT" == true ]]; then flags+=(--draft); fi
+          if [[ -n "$VERIFICATION" ]]; then flags+=(--verification "$VERIFICATION"); fi
+          python3 tools/ci/ci_plan.py --profile "$PROFILE" \
+            --base "$BASE_SHA" --head "$GITHUB_SHA" "${flags[@]}" \
+            --output .agent-harness/ci/plan.json --github-output "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-plan
+          path: .agent-harness/ci/plan.json
+          include-hidden-files: true
+          if-no-files-found: error

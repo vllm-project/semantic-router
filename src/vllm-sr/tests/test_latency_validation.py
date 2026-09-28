@@ -1,11 +1,13 @@
-"""Tests for legacy latency validation behavior."""
+"""Tests for latency-aware algorithm validation behavior."""
 
 import os
 import tempfile
+
+import pytest
 import yaml
 
 from cli.config_migration import migrate_config_data
-from cli.parser import parse_user_config
+from cli.parser import ConfigParseError, parse_user_config
 from cli.validator import validate_user_config
 
 
@@ -30,7 +32,7 @@ def _parse_config(config_yaml: str):
         os.unlink(temp_path)
 
 
-def test_validate_rejects_legacy_latency_condition():
+def test_validate_rejects_unsupported_signal_condition():
     config_yaml = """
 version: v0.1
 listeners:
@@ -68,12 +70,10 @@ providers:
   default_model: "test_model"
 """
 
-    config = _parse_config(config_yaml)
-    errors = validate_user_config(config)
-
-    assert any(
-        "legacy latency config is no longer supported" in str(error) for error in errors
-    )
+    with pytest.raises(
+        ConfigParseError, match=r"conditions.*type: 'latency' is not one of"
+    ):
+        _parse_config(config_yaml)
 
 
 def test_validate_accepts_latency_aware_configuration():

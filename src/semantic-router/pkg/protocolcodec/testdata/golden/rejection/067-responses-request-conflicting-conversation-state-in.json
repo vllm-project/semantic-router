@@ -1,0 +1,9 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "provider-model",
+    "input": "Continue.",
+    "previous_response_id": "resp_previous",
+    "conversation": "conv_1"
+  }
+}

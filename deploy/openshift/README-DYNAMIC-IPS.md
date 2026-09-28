@@ -1,237 +1,61 @@
-# Dynamic IP Configuration for Cross-Cluster Deployments
+# Backend address discovery on OpenShift
 
-## Overview
+[`config-openshift.yaml`](config-openshift.yaml) is a template. Its
+`DYNAMIC_MODEL_A_IP` and `DYNAMIC_MODEL_B_IP` values are replaced by
+[`deploy-to-openshift.sh`](deploy-to-openshift.sh) after the selected backend
+Services exist.
 
-This deployment uses **dynamic IP configuration** to ensure portability across different OpenShift/Kubernetes clusters. Instead of hardcoding ClusterIPs, the deployment script automatically discovers service IPs at deployment time.
+```text
+deploy backend Services
+  -> read Service addresses
+  -> render a temporary canonical Router config
+  -> create or update the semantic-router-config ConfigMap
+  -> roll out the Router
+```
 
-## Architecture
+This keeps cluster-specific addresses out of Git, but it does not make a
+ClusterIP a durable service-discovery contract. If your environment supports
+stable Service DNS from the Router namespace, prefer DNS names in a maintained
+deployment overlay.
 
-### Pod Structure
-
-1. **semantic-router Pod**:
-   - Container 1: `semantic-router` (ExtProc service)
-   - Container 2: `envoy-proxy` (Proxy)
-
-2. **vllm-model-a Pod**:
-   - Container: `model-a` (llm-katan serving Qwen3-0.6B)
-
-3. **vllm-model-b Pod**:
-   - Container: `model-b` (llm-katan serving Qwen3-0.6B)
-
-All pods run in the same namespace: `vllm-semantic-router-system`
-
-### Dynamic IP Discovery Process
-
-The `deploy-split.sh` script implements dynamic IP configuration:
+## Verify the rendered config
 
 ```bash
-# 1. Deploy vLLM model services first
-oc apply -f deployment-split.yaml
-
-# 2. Wait for services to get ClusterIPs
-MODEL_A_IP=$(oc get svc vllm-model-a -o jsonpath='{.spec.clusterIP}')
-MODEL_B_IP=$(oc get svc vllm-model-b -o jsonpath='{.spec.clusterIP}')
-
-# 3. Generate config with actual IPs
-sed "s/172.30.64.134/$MODEL_A_IP/g" config-split.yaml > dynamic-config.yaml
-
-# 4. Create ConfigMap with dynamic config
-oc create configmap semantic-router-config --from-file=dynamic-config.yaml
+oc get services --namespace vllm-semantic-router-system
+oc get configmap semantic-router-config \
+  --namespace vllm-semantic-router-system \
+  -o jsonpath='{.data.config\.yaml}'
 ```
 
-## Benefits
+Confirm that:
 
-### ✅ Cross-Cluster Portability
+- no `DYNAMIC_*` placeholder remains;
+- each endpoint port matches its Service;
+- the model names match the backend's served-model names;
+- the Router pod mounts the current ConfigMap.
 
-- Works on any OpenShift/Kubernetes cluster
-- No manual IP configuration needed
-- IPs are discovered automatically
-
-### ✅ Service-Based Routing
-
-- Uses Kubernetes ClusterIP services
-- Automatic service discovery
-- Load balancing handled by Kubernetes
-
-### ✅ Separation of Concerns
-
-- vLLM models in separate pods
-- Independent scaling
-- Better resource isolation
-
-## Deployment
-
-### Quick Deploy
+Probe the Services from inside the namespace if the Router cannot connect:
 
 ```bash
-cd deploy/openshift/single-namespace
-./deploy-split.sh
+oc run endpoint-check --rm -i --restart=Never \
+  --namespace vllm-semantic-router-system \
+  --image=curlimages/curl -- \
+  curl --fail-with-body http://MODEL_SERVICE:PORT/v1/models
 ```
 
-### What Happens
+Replace `MODEL_SERVICE:PORT` with the Service DNS name and port. Do not paste a
+credential into this command.
 
-1. **Namespace Creation**: `vllm-semantic-router-system`
-2. **Image Build**: `llm-katan` image (if not exists)
-3. **PVC Creation**: Persistent volumes for models and cache
-4. **Service Deployment**: vLLM model services created first
-5. **IP Discovery**: Script queries ClusterIPs dynamically
-6. **Config Generation**: Creates config with actual IPs
-7. **Router Deployment**: semantic-router deployed with dynamic config
-8. **Route Creation**: OpenShift routes for external access
+## Common failures
 
-### Verification
+- **Placeholder remains:** the deployment script did not find the expected
+  Service; check the selected backend mode and namespace.
+- **Address changed after deployment:** rerun the config render or move to
+  Service DNS.
+- **ConfigMap changed but Router did not:** inspect the deployment's volume and
+  restart policy.
+- **Connection refused:** check Service endpoints, target port, and backend
+  readiness before changing Router policy.
 
-```bash
-# Check all pods are running
-oc get pods -n vllm-semantic-router-system
-
-# Verify services have ClusterIPs
-oc get svc -n vllm-semantic-router-system
-
-# Test Model-A endpoint
-oc exec deployment/semantic-router -c semantic-router -- \
-  curl -s http://$(oc get svc vllm-model-a -o jsonpath='{.spec.clusterIP}'):8000/v1/models
-
-# Test Model-B endpoint
-oc exec deployment/semantic-router -c semantic-router -- \
-  curl -s http://$(oc get svc vllm-model-b -o jsonpath='{.spec.clusterIP}'):8001/v1/models
-```
-
-## Configuration Files
-
-### Template: config-split.yaml
-
-Contains **placeholder IPs** that get replaced:
-
-```yaml
-providers:
-  models:
-    - name: "Model-A"
-      backend_refs:
-        - name: "model-a-endpoint"
-          endpoint: "172.30.64.134:8000"  # PLACEHOLDER - replaced at deploy time
-    - name: "Model-B"
-      backend_refs:
-        - name: "model-b-endpoint"
-          endpoint: "172.30.116.177:8001"  # PLACEHOLDER - replaced at deploy time
-```
-
-### Generated: ConfigMap
-
-Contains **actual ClusterIPs** discovered during deployment:
-
-```yaml
-providers:
-  models:
-    - name: "Model-A"
-      backend_refs:
-        - name: "model-a-endpoint"
-          endpoint: "172.30.64.134:8000"  # Actual ClusterIP from cluster
-    - name: "Model-B"
-      backend_refs:
-        - name: "model-b-endpoint"
-          endpoint: "172.30.116.177:8001"  # Actual ClusterIP from cluster
-```
-
-## Testing on Different Clusters
-
-### Scenario: Deploy to New Cluster
-
-```bash
-# 1. Login to new cluster
-oc login https://new-cluster-api.example.com:6443
-
-# 2. Run deploy script (IPs auto-discovered)
-cd deploy/openshift/single-namespace
-./deploy-split.sh
-
-# 3. Verify new ClusterIPs
-oc get svc -n vllm-semantic-router-system
-# vllm-model-a   ClusterIP   10.96.10.50   <none>   8000/TCP
-# vllm-model-b   ClusterIP   10.96.20.80   <none>   8001/TCP
-
-# 4. Check config has new IPs
-oc get configmap semantic-router-config -o yaml | grep address:
-#     address: "10.96.10.50"  # New cluster IP for Model-A
-#     address: "10.96.20.80"  # New cluster IP for Model-B
-```
-
-## Troubleshooting
-
-### Issue: Classification Errors
-
-If you see classification errors, verify model connectivity:
-
-```bash
-# From semantic-router pod, test Model-A
-oc exec deployment/semantic-router -c semantic-router -- \
-  curl http://$(oc get svc vllm-model-a -o jsonpath='{.spec.clusterIP}'):8000/health
-
-# Test Model-B
-oc exec deployment/semantic-router -c semantic-router -- \
-  curl http://$(oc get svc vllm-model-b -o jsonpath='{.spec.clusterIP}'):8001/health
-```
-
-### Issue: IP Discovery Fails
-
-If the script fails to get ClusterIPs:
-
-```bash
-# Check services exist
-oc get svc -n vllm-semantic-router-system
-
-# Manually verify ClusterIPs
-oc get svc vllm-model-a -o jsonpath='{.spec.clusterIP}'
-oc get svc vllm-model-b -o jsonpath='{.spec.clusterIP}'
-```
-
-### Issue: ConfigMap Not Updated
-
-Restart semantic-router to pick up new config:
-
-```bash
-oc rollout restart deployment/semantic-router -n vllm-semantic-router-system
-oc rollout status deployment/semantic-router -n vllm-semantic-router-system
-```
-
-## Comparison: Alternative Approaches
-
-### ❌ Hardcoded IPs (Original)
-
-```yaml
-address: "172.30.64.134"  # Works only on specific cluster
-```
-
-### ❌ Localhost (Sidecar Pattern)
-
-```yaml
-address: "127.0.0.1"  # Requires all containers in same pod
-```
-
-### ✅ Dynamic IPs (Current Solution)
-
-```yaml
-address: "$DISCOVERED_IP"  # Works on any cluster
-```
-
-### 🚀 DNS Names (Future Enhancement)
-
-```yaml
-address: "vllm-model-a.vllm-semantic-router-system.svc.cluster.local"
-```
-
-**Note**: Requires Go code changes to accept DNS names (see `src/semantic-router/pkg/config/validator.go`)
-
-## Future Improvements
-
-1. **DNS-Based Routing**: Modify validator to accept Kubernetes service DNS names
-2. **Multi-Cluster Support**: Deploy across multiple clusters with federation
-3. **Auto-Scaling**: Horizontal pod autoscaling based on traffic
-4. **Health Checks**: Enhanced health probes for better reliability
-
-## Related Files
-
-- `deploy-split.sh`: Main deployment script with dynamic IP logic (deploy/openshift/single-namespace/deploy-split.sh:109-164)
-- `config-split.yaml`: Configuration template with placeholder IPs (deploy/openshift/single-namespace/config-split.yaml:30-41)
-- `deployment-split.yaml`: Kubernetes manifests for split architecture (deploy/openshift/single-namespace/deployment-split.yaml)
-- `validator.go`: IP validation code (requires modification for DNS support) (src/semantic-router/pkg/config/validator.go:20-51)
+The generated file is temporary deployment state. Do not commit it as a new
+canonical config.

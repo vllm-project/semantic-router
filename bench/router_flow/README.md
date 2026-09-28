@@ -1,92 +1,83 @@
-# Router Flow Multi-Agent Eval
+# Router Flow Evaluation
 
-This directory contains a small, reproducible comparison harness for Router
-Flow. It covers benchmark-style families such as coding, terminal debugging,
-reasoning, science/math, and long context, but it is not a replacement for
-official SWE-bench, TerminalBench, LiveCodeBench, GPQA, or other benchmark
-adapters.
+This directory contains two evaluation paths for Router Flow:
 
-For publishable benchmark rows, use `bench/router_flow/real_eval/`, which runs
-EvalScope benchmark adapters and collects EvalScope report JSON into the
-Fugu-aligned table/charts. The lightweight `flow_eval.py` runner below is only
-for development smoke tests and qualitative regression triage.
+- `flow_eval.py` is a lightweight development harness for comparing several
+  model arms on the same local prompt set.
+- [`real_eval/`](real_eval/README.md) runs maintained EvalScope adapters and is
+  the path for benchmark scores intended for external comparison.
 
-For the signal/decision design contract and staged eval order, see
-[`SIGNAL_DECISION_EVAL_PLAN.md`](SIGNAL_DECISION_EVAL_PLAN.md). Current
-publishable evals use one benchmark-specific `vllm-sr/auto` recipe per row.
-Closed-model recipes are shown as `VSR 1.0 Pro`, and single-open-model recipes
-are shown as `VSR 1.0`. Current recipes include
-`configs/amd_auto_gpqa_omni.yaml`, `configs/amd_auto_livecode_omni.yaml`,
-`configs/amd_auto_livecode_glm52_omni.yaml`, and
-`configs/amd_auto_livecode_kimi_k27_code_omni.yaml`.
+The lightweight harness is useful for prompt, output-contract, timeout, and
+trace regression checks. Its bundled prompts are proxies; they must not be
+reported as official SWE-bench, TerminalBench, LiveCodeBench, GPQA, or other
+benchmark results.
 
-Use the lightweight runner to compare the same prompt set across arms such as:
+See [`SIGNAL_DECISION_EVAL_PLAN.md`](SIGNAL_DECISION_EVAL_PLAN.md) for the
+durable signal, decision, and evaluation design rules used by benchmark-specific
+recipes under `configs/`.
 
-- `vsr=vllm-sr/auto`
-- `single=<worker-model>`
+## Run a development comparison
 
-## Quick Run
+Start an OpenAI-compatible endpoint that exposes the model aliases named in
+the command, then run each arm against the same prompt file:
 
 ```bash
 python bench/router_flow/flow_eval.py \
   --dataset bench/router_flow/frontier_proxy_prompts.jsonl \
-  --base-url http://localhost:8899/v1 \
-  --arm vsr=vllm-sr/auto \
-  --arm single=claude-worker \
-  --output-dir bench/router_flow/results/local
+  --base-url http://127.0.0.1:8899/v1 \
+  --arm auto=vllm-sr/auto \
+  --arm single=worker-model \
+  --limit 5 \
+  --output-dir bench/router_flow/results/local-smoke
 ```
 
-With an OpenAI-compatible judge:
+Without a judge, the harness records responses and request metrics but does not
+claim answer quality. To score answers, provide a separate OpenAI-compatible
+judge and name the environment variable that contains its key:
 
 ```bash
-export OPENROUTER_API_KEY=...
+export ROUTER_FLOW_JUDGE_KEY='<set outside shell history when possible>'
 python bench/router_flow/flow_eval.py \
   --dataset bench/router_flow/frontier_proxy_prompts.jsonl \
-  --base-url http://localhost:8899/v1 \
-  --arm vsr=vllm-sr/auto \
-  --arm single=claude-worker \
-  --judge-base-url https://openrouter.ai/api/v1 \
-  --judge-model openai/gpt-4.1-mini \
-  --output-dir bench/router_flow/results/amd-flow
+  --base-url http://127.0.0.1:8899/v1 \
+  --arm auto=vllm-sr/auto \
+  --arm single=worker-model \
+  --judge-base-url https://judge.example.com/v1 \
+  --judge-api-key-env ROUTER_FLOW_JUDGE_KEY \
+  --judge-model judge-model \
+  --limit 5 \
+  --output-dir bench/router_flow/results/local-judged
 ```
 
-The runner writes:
+For a local Qwen endpoint whose default chat template hides final answer text,
+pass the endpoint-specific option explicitly:
 
-- `samples.jsonl`: per-item answers, score, latency, token usage, looper headers;
-- `summary.json`: pass rate, mean score, mean latency, token totals by arm and
-  category.
+```bash
+--request-extra-json '{"chat_template_kwargs":{"enable_thinking":false}}'
+```
 
-For local vLLM smoke runs with Qwen chat templates, add
-`--request-extra-json '{"chat_template_kwargs":{"enable_thinking":false}}'` so
-single-model baselines return visible answer text instead of reasoning-only
-content. Use `--judge-request-extra-json` the same way when the judge is also a
-local Qwen/vLLM endpoint.
+Use `--judge-request-extra-json` for the same adjustment on the judge. These
+options change the evaluated request and must be recorded with the result.
 
-The `results/` directory is git-ignored. Do not commit API keys, private host
-details, or raw private validation logs.
+Each run writes:
 
-## Report Rendering
+- `samples.jsonl`, containing per-item responses, grades when present, latency,
+  token usage, and looper headers;
+- `summary.json`, containing aggregate counts and metrics by arm and category.
 
-After running arms into separate result directories, render a table and SVG
-charts:
+## Render a development report
 
 ```bash
 python bench/router_flow/render_report.py \
-  --results bench/router_flow/results/amd-auto \
-  --results bench/router_flow/results/amd-fusion \
-  --results bench/router_flow/results/amd-flow \
+  --results bench/router_flow/results/local-judged \
   --reference-json bench/router_flow/public_reference_scores.json \
-  --output-dir bench/router_flow/results/amd-report
+  --output-dir bench/router_flow/results/local-report
 ```
 
-The report script writes:
+The renderer creates Markdown and CSV tables, SVG charts, and metadata. Values
+loaded from `public_reference_scores.json` are contextual references, not
+locally reproduced results. Preserve that distinction in titles, legends, and
+external write-ups.
 
-- `benchmark_table.md`
-- `benchmark_table.csv`
-- `overall_bars.svg`
-- `benchmark_bars.svg`
-- `metadata.json`
-
-Rows from `public_reference_scores.json` are contextual public reference
-columns. They are not generated by this proxy harness and should be labeled as
-such in any external writeup.
+`bench/router_flow/results/` is ignored by Git. Review prompts, responses, and
+headers for credentials or private data before sharing an artifact.

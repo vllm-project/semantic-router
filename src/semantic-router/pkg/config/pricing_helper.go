@@ -7,15 +7,29 @@ package config
 // has no pricing entry at all. Accepts both short names and provider model IDs.
 func (c *RouterConfig) GetFullModelPricing(modelName string) (ModelPricing, bool) {
 	if modelConfig, ok := c.resolveModelConfig(modelName); ok {
-		p := modelConfig.Pricing
-		if p.PromptPer1M != 0 || p.CompletionPer1M != 0 || p.CachedInputPer1M != 0 || p.CacheWritePer1M != nil || p.Currency != "" {
-			if p.Currency == "" {
-				p.Currency = "USD"
-			}
-			return p, true
+		if pricing, configured := normalizeConfiguredPricing(modelConfig.Pricing); configured {
+			return pricing, true
 		}
 	}
+
+	// A routed LoRA name is the model identity returned by the backend, but
+	// transport and billing belong to its base provider model. An unpriced LoRA
+	// therefore inherits the base model's rates; an explicitly priced alias above
+	// remains an override.
+	if _, baseModel, ok := c.resolveLoRABaseModel(modelName); ok {
+		return normalizeConfiguredPricing(baseModel.Pricing)
+	}
 	return ModelPricing{}, false
+}
+
+func normalizeConfiguredPricing(pricing ModelPricing) (ModelPricing, bool) {
+	if pricing.PromptPer1M == 0 && pricing.CompletionPer1M == 0 && pricing.CachedInputPer1M == 0 && pricing.CacheWritePer1M == nil && pricing.Currency == "" {
+		return ModelPricing{}, false
+	}
+	if pricing.Currency == "" {
+		pricing.Currency = "USD"
+	}
+	return pricing, true
 }
 
 // GetMostExpensiveFullModelPricing returns the configured model with the

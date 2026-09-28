@@ -42,11 +42,13 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 	// optional system string). Anything richer would risk warnings that
 	// later PRs in the series may add.
 	resp, err := sendAnthropicMessagesRequest(ctx, anthropicMessagesRequestBody{
-		Model:     "MoM",
+		Model:     "e2e-protocol",
 		MaxTokens: 32,
 		System:    "You are a helpful assistant.",
 		Messages: []anthropicMessage{
-			{Role: "user", Content: "Hello."},
+			// The protocol fixture excludes cache and security short-circuits:
+			// this request must exercise an actual upstream translation.
+			{Role: "user", Content: "Protocol marker probe __VSR_PROTOCOL_HEADER_7F9C__."},
 		},
 	}, localPort)
 	if err != nil {
@@ -67,6 +69,8 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 	inbound := resp.Header.Get("x-vsr-client-protocol")
 	outbound := resp.Header.Get("x-vsr-upstream-protocol")
 	lossiness := resp.Header.Get("x-vsr-protocol-warnings")
+	responsePath := resp.Header.Get("x-vsr-response-path")
+	recipe := resp.Header.Get("x-vsr-selected-recipe")
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
@@ -74,9 +78,14 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 			"inbound_protocol":  inbound,
 			"outbound_protocol": outbound,
 			"lossiness":         lossiness,
+			"response_path":     responsePath,
+			"recipe":            recipe,
 		})
 	}
 
+	if responsePath != "upstream" || recipe != "e2e-protocol" {
+		return fmt.Errorf("protocol probe did not reach its upstream recipe: path=%q recipe=%q", responsePath, recipe)
+	}
 	if inbound != "anthropic" {
 		return fmt.Errorf("expected x-vsr-client-protocol=anthropic, got %q", inbound)
 	}

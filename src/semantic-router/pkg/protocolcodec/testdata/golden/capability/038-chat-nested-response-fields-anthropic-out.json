@@ -1,0 +1,34 @@
+{
+  "cases": [
+    {
+      "name": "assistant_metadata",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "lossy_translation"
+        }
+      }
+    },
+    {
+      "name": "audio_output",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "upstream_unavailable",
+          "code": "unsupported_upstream_audio"
+        }
+      }
+    },
+    {
+      "name": "legacy_function_call",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "upstream_unavailable",
+          "code": "unsupported_upstream_function_call"
+        }
+      }
+    }
+  ]
+}

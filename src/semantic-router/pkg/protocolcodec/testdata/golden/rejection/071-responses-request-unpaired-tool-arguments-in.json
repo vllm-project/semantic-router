@@ -1,0 +1,15 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "input": [
+      {
+        "type": "function_call",
+        "id": "item_1",
+        "call_id": "call_1",
+        "name": "lookup",
+        "arguments": "{\"query\":\"\\ud800\"}"
+      }
+    ]
+  }
+}

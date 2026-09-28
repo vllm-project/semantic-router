@@ -1,54 +1,67 @@
-# 代码规范
+---
+title: 代码风格与质量
+translation:
+  source_commit: "f53d10fbf1021f9204e03afe2dd9a3374979e829"
+  source_file: "docs/community/code-style.md"
+  outdated: false
+---
 
-为保持高质量代码库，我们遵循特定的代码风格指南，并使用自动化工具强制执行。
+# 代码风格与质量
 
-## 强制质量检查
+格式化和静态检查由仓库配置强制执行。使用已入库的工具，不要另维护一套编辑器规则。
 
-我们使用 `pre-commit` hooks 确保一致性。**提交 PR 前必须通过这些检查。**
+## 运行共享检查
 
-### 配置 Pre-commit
-
-**安装 pre-commit：**
+安装仓库管理的 hook，并对已跟踪文件运行：
 
 ```bash
-pip install pre-commit
-# 或
-brew install pre-commit
+make precommit-install
+make precommit-check
 ```
 
-**安装 hooks：**
+复现容器化 pre-commit 工作流：
 
 ```bash
-pre-commit install
-```
-
-**手动运行检查：**
-
-```bash
-pre-commit run --all-files
-# 或
 make precommit-local
 ```
 
-## 语言规范
+常规变更文件路径：
 
-### Go 代码
+```bash
+make impact ENV=cpu CHANGED_FILES="path/one path/two"
+make check CHANGED_FILES="path/one path/two"
+```
 
-- 使用 `gofmt` 格式化
-- **命名：** 使用有意义的变量和函数名
-- **注释：** 为导出的函数和类型添加文档
-- **模块：** 运行 `make check-go-mod-tidy` 检查所有模块是否整洁
-- **Lint：** 运行 `make go-lint` 检查问题，或 `make go-lint-fix` 自动修复
+## 语言约定
 
-### Rust 代码
+### Go
 
-- 使用 `cargo fmt` 格式化
-- 使用 `cargo clippy` 进行 lint
-- 使用 `Result` 类型处理错误
-- 为公共 API 编写文档
+- 用 `gofmt` 格式化。
+- 优先保持包内聚，只有在所有权或可测性变好时才拆分。
+- 导出 API 的用途不明显时再写文档。
+- 用 `make check-go-mod-tidy` 校验模块元数据。
+- 用 `make go-lint` 跑仓库的 lint 配置。
 
-### Python 代码
+### Rust
 
-- 遵循 **PEP 8** 风格指南
-- 使用类型注解
-- 为类和函数编写 docstrings
+- 用 `cargo fmt` 格式化。
+- 通过仓库报告的校验路径跑 `cargo clippy`。
+- 正常失败路径返回带类型的错误，不要 panic。
+- 把 unsafe 和 FFI 边界做小，并写清楚。
+
+### Python
+
+- 支持你正在改的包所声明的 Python 版本。
+- 在公开和非平凡接口上使用类型标注。
+- 把命令编排和可复用逻辑分开。
+- 组件有 Make 目标时，用该目标跑测试。
+
+### TypeScript 和 React
+
+- 遵循控制面板的 ESLint 和 TypeScript 配置。
+- 当 helper 或 hook 负责数据获取和转换时，不要把这些逻辑放进展示组件。
+- 为用户可见行为补充聚焦的组件或 E2E 覆盖。
+
+## 生成文件
+
+不要手改生成的 API 参考、schema 或目录块。改源头并跑所属生成器，然后在同一 pull request 里同时提交源和输出。

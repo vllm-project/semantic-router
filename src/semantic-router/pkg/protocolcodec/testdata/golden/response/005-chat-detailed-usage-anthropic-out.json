@@ -1,0 +1,35 @@
+{
+  "container": null,
+  "content": [
+    {
+      "text": "answer",
+      "type": "text"
+    }
+  ],
+  "id": "response_usage_1",
+  "model": "routed-model",
+  "role": "assistant",
+  "stop_details": null,
+  "stop_reason": "max_tokens",
+  "stop_sequence": null,
+  "type": "message",
+  "usage": {
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 0,
+      "ephemeral_5m_input_tokens": 2
+    },
+    "cache_creation_input_tokens": 2,
+    "cache_read_input_tokens": 3,
+    "inference_geo": "global",
+    "input_tokens": 5,
+    "output_tokens": 7,
+    "output_tokens_details": {
+      "thinking_tokens": 4
+    },
+    "server_tool_use": {
+      "web_fetch_requests": 0,
+      "web_search_requests": 0
+    },
+    "service_tier": "standard"
+  }
+}

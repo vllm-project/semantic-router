@@ -1,0 +1,4 @@
+{
+  "operation": "request",
+  "body_json": "{\"model\":\"client-model\",\"max_tokens\":16,\"messages\":["
+}

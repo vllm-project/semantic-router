@@ -1,0 +1,8 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "input": "hello",
+    "max_output_tokens": 16.5
+  }
+}

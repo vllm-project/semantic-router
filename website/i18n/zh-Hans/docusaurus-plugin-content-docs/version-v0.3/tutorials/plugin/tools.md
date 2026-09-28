@@ -11,7 +11,7 @@ translation:
 
 `tools` 是路由局部插件：工具过滤与语义工具选择。
 
-对应 `config/plugin/tools/semantic-select.yaml`。
+对应 `config/fragments/plugin/tools/semantic-select.yaml`。
 
 ## 主要优势
 

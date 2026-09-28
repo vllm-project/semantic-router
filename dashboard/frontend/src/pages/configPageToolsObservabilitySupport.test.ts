@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
@@ -61,12 +60,10 @@ describe('tools observability structured fields', () => {
       size_buckets: [1, 8, 16],
     })
 
-    expect(() =>
-      normalizeBatchMetrics({ duration_buckets: [0.1, 0.05] }),
-    ).toThrow(/strictly increasing/i)
-    expect(() =>
-      normalizeBatchMetrics({ size_buckets: [1, 1.5] }),
-    ).toThrow(/integer/i)
+    expect(() => normalizeBatchMetrics({ duration_buckets: [0.1, 0.05] })).toThrow(
+      /strictly increasing/i,
+    )
+    expect(() => normalizeBatchMetrics({ size_buckets: [1, 1.5] })).toThrow(/integer/i)
     expect(() =>
       normalizeTracingConfig({
         enabled: true,
@@ -119,18 +116,5 @@ describe('tools observability structured fields', () => {
     expect(markup).toContain('Minimum batch size')
     expect(markup).not.toContain('textarea')
     expect(markup).not.toContain('(JSON)')
-  })
-
-  it('wires every observability structure into typed modal controls', () => {
-    const source = readFileSync(
-      new URL('./ConfigPageToolsObservabilitySection.tsx', import.meta.url),
-      'utf8',
-    )
-    expect(source).toContain('<TracingExporterEditor')
-    expect(source).toContain('<TracingSamplingEditor')
-    expect(source).toContain('<TracingResourceEditor')
-    expect(source).toContain('<BatchSizeRangesEditor')
-    expect(source).toContain('<MetricBucketsEditor')
-    expect(source).not.toMatch(/Configuration \(JSON\)|Buckets \(JSON\)|Ranges \(JSON\)/)
   })
 })

@@ -1,4 +1,4 @@
-/* Homepage sections inherit band tokens from index.module.css (.bandBlack / .bandGraphite). */
+/* Homepage sections share the same color-mode tokens as docs. */
 
 .bandSection,
 .lightSection,
@@ -17,65 +17,32 @@
   z-index: 1;
 }
 
+/* Layout and measures come from the global .site-section-intro lockup in
+ * section-surfaces.css. Only spacing lives here. */
 .sectionHeader {
   display: grid;
   gap: 0.75rem;
-  max-width: min(100%, 40rem);
   margin-bottom: var(--site-section-gap);
-}
-
-.sectionHeaderWide {
-  max-width: min(100%, 48rem);
-}
-
-.eyebrow {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  padding: 0.35rem 0.75rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  background: var(--site-surface-soft);
-  color: var(--site-muted);
-  font-size: var(--site-text-caption);
-  font-weight: var(--site-font-weight-semibold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  transition:
-    border-color var(--site-transition-fast),
-    background var(--site-transition-fast),
-    color var(--site-transition-fast),
-    box-shadow var(--site-transition-fast);
-}
-
-.eyebrow:hover {
-  border-color: var(--site-hover-border);
-  background: var(--site-hover-surface-bg);
-  color: var(--site-brand-blue);
-  box-shadow: var(--site-hover-glow);
 }
 
 .sectionTitle {
   margin: 0;
-  max-width: none;
   font-size: var(--site-text-h2);
   font-weight: var(--site-font-weight-semibold);
   line-height: 1.18;
   letter-spacing: -0.025em;
   color: var(--site-text-strong);
-  text-wrap: pretty;
+  text-wrap: balance;
   overflow-wrap: normal;
   word-break: normal;
 }
 
 .sectionSubtitle {
   margin: 0;
-  max-width: none;
-  width: 100%;
   color: var(--site-muted-bright);
   font-size: var(--site-text-small);
   line-height: var(--site-leading-relaxed);
-  text-wrap: pretty;
+  text-wrap: balance;
   overflow-wrap: normal;
 }
 
@@ -156,7 +123,7 @@
 }
 
 .featureCard:hover h3 {
-  color: var(--site-brand-blue);
+  color: var(--site-hover-text);
 }
 
 .featureCard h3 {
@@ -186,7 +153,7 @@
 }
 
 .featureLink:hover {
-  color: var(--site-brand-blue);
+  color: var(--site-hover-text);
   text-decoration: none;
 }
 

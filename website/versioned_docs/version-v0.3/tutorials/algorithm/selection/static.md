@@ -4,7 +4,7 @@
 
 `static` is the simplest selection algorithm: the route keeps its candidate list, and the selection policy stays fixed. The first candidate in `modelRefs` always wins.
 
-It aligns to `config/algorithm/selection/static.yaml`.
+It aligns to `config/fragments/algorithm/selection/static.yaml`.
 
 ## Key Advantages
 

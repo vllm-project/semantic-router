@@ -1,130 +1,68 @@
-name: Pre-commit
+name: Source Quality
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch: # Allow manual triggering
+  workflow_call:
+    inputs:
+      docs_only:
+        description: Skip native-language tooling for documentation-only changes.
+        required: true
+        type: boolean
+      website:
+        description: Build the website when its source or contracts change.
+        type: boolean
+        default: false
+      verifications:
+        description: Selected source-quality activity from the CI plan.
+        type: string
+        default: "[]"
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
-  changes:
-    uses: ./.github/workflows/ci-changes.yml
-
-  docs-precommit:
-    needs: changes
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      && needs.changes.outputs.docs_only == 'true'
-      && github.event_name != 'workflow_dispatch'
-      && (github.event_name != 'pull_request'
-          || !contains(github.event.pull_request.labels.*.name, 'ci/full'))
-    runs-on: ubuntu-latest
-    name: Docs and website lightweight checks
-
+  quality:
+    name: Checks
+    runs-on: ubuntu-24.04
     steps:
-      - name: Check out the repo
+      - name: Check Out the Planned Source
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
-      - name: Set up Node
-        if: needs.changes.outputs.website == 'true'
-        uses: actions/setup-node@v5
-        with:
-          node-version: 20
-
-      - name: Cache Node dependencies
-        if: needs.changes.outputs.website == 'true'
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            website/node_modules
-          key: ${{ runner.os }}-node-docs-ci-${{ hashFiles('website/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-docs-ci-
-
-      - name: Run docs CI gate
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            export AGENT_BASE_REF="origin/${{ github.base_ref }}"
-          else
-            export AGENT_BASE_REF="HEAD^"
-          fi
-          make agent-docs-ci-gate
-
-      - name: Build website
-        if: needs.changes.outputs.website == 'true'
-        run: |
-          cd website
-          npm ci
-          npm run build
-
-  full-precommit:
-    needs: changes
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      && (needs.changes.outputs.docs_only != 'true'
-          || github.event_name == 'workflow_dispatch'
-          || (github.event_name == 'pull_request'
-              && contains(github.event.pull_request.labels.*.name, 'ci/full')))
-    runs-on: ubuntu-latest
-    name: Run pre-commit hooks check file lint
-
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Fetch full history for pre-commit
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+          python-version: "3.12"
+      - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
-
-      - name: Set up Node
-        uses: actions/setup-node@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
-
-      - name: Set up Rust
+          node-version: 22
+      - name: Set Up Rust
+        if: ${{ !inputs.docs_only }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.90
+          toolchain: "1.90"
           components: rustfmt, clippy
-
-      - name: Install system dependencies
+      - name: Install System Dependencies
+        if: ${{ !inputs.docs_only }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            make \
-            build-essential \
-            pkg-config \
-            shellcheck
-
-      - name: Set up golangci-lint
+          sudo apt-get install -y make build-essential pkg-config shellcheck
+      - name: Resolve Go Linter Version
+        if: ${{ !inputs.docs_only }}
+        id: golangci_lint
+        run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
+      - name: Set Up Go Linter
+        if: ${{ !inputs.docs_only }}
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.5.0
+          version: ${{ steps.golangci_lint.outputs.version }}
           install-mode: binary
           args: --help
-
-      - name: Cache Rust dependencies
+      - name: Cache Rust Dependencies
+        if: ${{ !inputs.docs_only }}
         uses: actions/cache@v4
         with:
           path: |
@@ -136,115 +74,67 @@ jobs:
           key: ${{ runner.os }}-cargo-precommit-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-precommit-
-
-      - name: Cache Go dependencies
+      - name: Cache Go Dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ~/go/pkg/mod
+          path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-precommit-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-precommit-
-
-      - name: Cache Node dependencies
+      - name: Cache Node Dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.npm
+          path: ~/.npm
           key: ${{ runner.os }}-node-precommit-${{ hashFiles('website/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-precommit-
-
-      - name: Cache pre-commit environments
+      - name: Cache Pre-Commit Environments
         uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
           key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: |
             ${{ runner.os }}-precommit-
-
-      - name: Install tree-sitter for security scan
-        run: |
-          # Pin tree-sitter core + grammars to an ABI-compatible set (see
-          # security-scan.yml); unpinned installs segfault the scanner on ABI drift.
-          pip install \
-            tree-sitter==0.25.2 \
-            tree-sitter-python==0.25.0 \
-            tree-sitter-javascript==0.25.0 \
-            tree-sitter-typescript==0.23.2 \
-            tree-sitter-go==0.25.0 \
-            tree-sitter-rust==0.24.0
-
-      - name: Run AST supply chain security scan
-        run: |
-          python3 tools/security/ast_security_scanner.py \
-            scan . --fail-on HIGH
-
-      - name: Run AST PR diff security scan
-        if: github.event_name == 'pull_request'
-        run: |
-          python3 tools/security/ast_security_scanner.py \
-            diff "origin/${{ github.base_ref }}" --fail-on HIGH
-
-      - name: Run agent CI lint on changed files
+      - name: Install Reference Generator Dependencies
+        run: python -m pip install -r tools/docs/requirements.txt
+      # Verify committed references before website builds consume them.
+      - name: Check Generated References
+        run: make docs-generated-check docs-cli-test docs-community-test docs-check-translation-coverage
+      - name: Check Changed Source
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            export AGENT_BASE_REF="origin/${{ github.base_ref }}"
+            export BASE_REF="origin/${{ github.base_ref }}"
           else
-            export AGENT_BASE_REF="HEAD^"
+            export BASE_REF="HEAD^"
           fi
-          make agent-ci-lint
-
-      - name: Diagnose gofmt state before pre-commit
+          make check CI_STATIC_ONLY=true
+      - name: Build Website
+        if: inputs.website
+        working-directory: website
         run: |
-          echo "=== Go version ==="
-          go version
-          echo "=== gofmt version ==="
-          gofmt -h 2>&1 | head -3 || true
-          echo "=== Files needing gofmt (gofmt -l) ==="
-          NEEDS_FMT=$(gofmt -l $(find . -name "*.go" -not -path "./.git/*" -not -path "./.venv/*") 2>/dev/null)
-          if [ -n "$NEEDS_FMT" ]; then
-            echo "Files that need formatting:"
-            echo "$NEEDS_FMT"
-            echo ""
-            echo "=== Diffs ==="
-            for f in $NEEDS_FMT; do
-              echo "--- $f ---"
-              gofmt -d "$f" || true
-            done
-          else
-            echo "All Go files are properly formatted"
-          fi
-          echo "=== git status (any working tree changes) ==="
-          git status --short || true
-
-      - name: Run pre-commit check
-        run: make precommit-check
+          npm ci
+          npm run build
+      - name: Record Quality Evidence
+        if: inputs.verifications != '[]'
         env:
-          CI: true
-
-      - name: Show pre-commit results
+          VERIFICATIONS: ${{ inputs.verifications }}
+          CHECK_WEBSITE: ${{ inputs.website }}
+        run: |
+          python3 -m pip install PyYAML==6.0.3
+          checks=(--check changed-source-format-lint --check generated-reference-contracts)
+          if [ "$CHECK_WEBSITE" = true ]; then checks+=(--check website-build); fi
+          python3 tools/ci/workflow_evidence.py --verifications "$VERIFICATIONS" --id quality \
+            "${checks[@]}" --output .agent-harness/quality-result.json
+      - uses: actions/upload-artifact@v4
+        if: inputs.verifications != '[]'
+        with:
+          name: ci-result-quality
+          path: .agent-harness/quality-result.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Show Failure Context
         if: failure()
         run: |
-          echo "::error::Pre-commit hooks failed. Please fix the issues and commit again."
-          echo ""
-          echo "=== Files with gofmt issues (gofmt -l) ==="
-          gofmt -l $(find . -name "*.go" -not -path "./.git/*") || true
-          echo ""
-          echo "=== gofmt diff for all modified Go files ==="
-          gofmt -d $(find . -name "*.go" -not -path "./.git/*") || true
-          echo ""
-          echo "=== Working tree changes after pre-commit run ==="
-          git diff --name-only || true
-          echo ""
-          echo "=== Full git diff ==="
-          git diff || true
-          echo ""
-          echo "To reproduce the full PR pre-commit baseline locally:"
-          echo "  make agent-pr-gate"
-          echo ""
-          echo "To run the local branch prelint bundle manually:"
-          echo "  make precommit-branch-gate AGENT_BASE_REF=origin/${{ github.base_ref }}"
-          echo ""
-          echo "To run only the pre-commit workflow locally:"
-          echo "  make precommit-local"
+          git status --short
+          git diff --stat
+          echo "Reproduce with make check BASE_REF=origin/${{ github.base_ref }}"

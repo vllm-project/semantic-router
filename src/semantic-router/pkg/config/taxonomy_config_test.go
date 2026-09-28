@@ -525,6 +525,16 @@ func TestToolsPluginConfigValidate(t *testing.T) {
 	if err := filteredWithoutLists.Validate(); err == nil {
 		t.Fatal("expected filtered mode without allow/block lists to fail validation")
 	}
+
+	stripHistory := &ToolsPluginConfig{Enabled: true, Mode: ToolsPluginModeNone, StripToolHistory: true}
+	if err := stripHistory.Validate(); err != nil {
+		t.Fatalf("strip history Validate() unexpected error: %v", err)
+	}
+
+	stripHistory.Mode = ToolsPluginModePassthrough
+	if err := stripHistory.Validate(); err == nil {
+		t.Fatal("expected strip_tool_history outside mode=none to fail validation")
+	}
 }
 
 func TestParseYAMLBytesRejectsLegacyDecisionToolFields(t *testing.T) {

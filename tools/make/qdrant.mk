@@ -43,7 +43,7 @@ stop-qdrant: ## Stop and remove Qdrant container
 	@$(LOG_TARGET)
 	@$(CONTAINER_RUNTIME) stop $(QDRANT_CONTAINER) || true
 	@$(CONTAINER_RUNTIME) rm $(QDRANT_CONTAINER) || true
-	@rm -rf /tmp/qdrant-data 2>/dev/null || sudo rm -rf /tmp/qdrant-data 2>/dev/null || true
+	@rm -rf /tmp/qdrant-data 2>/dev/null || sudo -n rm -rf /tmp/qdrant-data 2>/dev/null || true
 	@echo "Qdrant container stopped and removed"
 
 restart-qdrant: stop-qdrant start-qdrant ## Restart Qdrant container
@@ -61,13 +61,13 @@ qdrant-status: ## Show status of Qdrant container
 clean-qdrant: stop-qdrant ## Clean up Qdrant data
 	@$(LOG_TARGET)
 	@echo "Cleaning up Qdrant data..."
-	@rm -rf /tmp/qdrant-data 2>/dev/null || sudo rm -rf /tmp/qdrant-data 2>/dev/null || true
+	@rm -rf /tmp/qdrant-data 2>/dev/null || sudo -n rm -rf /tmp/qdrant-data 2>/dev/null || true
 	@echo "Qdrant data directory cleaned"
 
 test-qdrant: start-qdrant rust ## Run Qdrant integration tests
 	@$(LOG_TARGET)
 	@echo "Running Qdrant integration tests..."
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/ml-binding/target/release:$${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 	export SKIP_QDRANT_TESTS=false && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v \
 		./pkg/cache/ \

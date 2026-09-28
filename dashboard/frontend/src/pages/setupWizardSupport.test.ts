@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSetupConfig,
   createSetupRequestGuard,
   createModelDraft,
   filterSetupModels,
@@ -9,6 +10,7 @@ import {
   removeSetupModel,
   restoreSetupModel,
   summarizeSetupConfig,
+  switchSetupModelProvider,
   type ModelDraft,
 } from "./setupWizardSupport";
 
@@ -46,6 +48,31 @@ describe("setup wizard model drafts", () => {
     ]);
 
     expect(next.baseUrl).toBe("vllm:8002");
+  });
+
+  it("selects an Ollama endpoint when switching an untouched local model", () => {
+    const model = switchSetupModelProvider(modelDraft(), "ollama");
+    expect(model.providerKind).toBe("ollama");
+    expect(model.baseUrl).toBe("host.docker.internal:11434");
+
+    const config = buildSetupConfig([model], model.id) as {
+      providers: { models: Array<{ backend_refs: Array<Record<string, unknown>> }> };
+    };
+    expect(config.providers.models[0].backend_refs[0]).toMatchObject({
+      provider: "ollama",
+      endpoint: "host.docker.internal:11434",
+      protocol: "http",
+    });
+    expect(switchSetupModelProvider(modelDraft({ baseUrl: "vllm:8001" }), "ollama").baseUrl)
+      .toBe("host.docker.internal:11434");
+  });
+
+  it("keeps an explicitly entered endpoint when changing providers", () => {
+    const model = switchSetupModelProvider(
+      modelDraft({ baseUrl: "http://my-model-host:11434" }),
+      "ollama",
+    );
+    expect(model.baseUrl).toBe("http://my-model-host:11434");
   });
 
   it("reports duplicate model names and local endpoints at field level", () => {
@@ -153,5 +180,61 @@ describe("setup wizard model drafts", () => {
         },
       }),
     ).toEqual({ models: 2, decisions: 1, signals: 2, canActivate: true });
+  });
+
+  it("summarizes entrypoint-only recipe routing collections", () => {
+    expect(
+      summarizeSetupConfig({
+        providers: { models: [{ name: "shared" }] },
+        routing: { decisions: [], signals: {} },
+        recipes: [
+          {
+            name: "balanced",
+            routing: {
+              decisions: [{ name: "balanced-route" }],
+              signals: { keywords: [{ name: "balanced-keyword" }] },
+            },
+          },
+          {
+            name: "private",
+            routing: {
+              decisions: [{ name: "private-route" }],
+              signals: { pii: [{ name: "private-pii" }] },
+            },
+          },
+        ],
+      }),
+    ).toEqual({ models: 1, decisions: 2, signals: 2, canActivate: true });
+  });
+});
+
+describe("setup wizard provider projection", () => {
+  it("derives provider wire behavior from the shared provider catalog", () => {
+    const models = [
+      modelDraft({ id: "local", name: "qwen/qwen3.5-rocm" }),
+      modelDraft({
+        id: "claude",
+        name: "anthropic/claude-opus-4.1",
+        providerKind: "anthropic",
+        baseUrl: "https://api.anthropic.com",
+      }),
+    ];
+
+    const config = buildSetupConfig(models, "local") as {
+      providers: { models: Array<Record<string, unknown>> };
+    };
+    const [local, claude] = config.providers.models;
+
+    expect(local).not.toHaveProperty("api_format");
+    expect(local.backend_refs).toEqual([
+      expect.objectContaining({ provider: "vllm", endpoint: "vllm:8000" }),
+    ]);
+    expect(claude).toMatchObject({ api_format: "anthropic" });
+    expect(claude.backend_refs).toEqual([
+      expect.objectContaining({
+        provider: "anthropic",
+        base_url: "https://api.anthropic.com",
+      }),
+    ]);
   });
 });

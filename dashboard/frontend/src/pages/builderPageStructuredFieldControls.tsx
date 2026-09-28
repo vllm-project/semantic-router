@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { KeyValueEditor } from '@/components/KeyValueEditor'
 import { ObjectListEditor, type ObjectEditorField } from '@/components/ObjectListEditor'
 import { StringListEditor } from '@/components/StringListEditor'
+import { DECISION_SIGNAL_TYPES } from '@/generated/routerConfigContract'
 import type { FieldSchema } from '@/lib/dslMutations'
 import type { DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 
@@ -97,7 +98,10 @@ function KeyValueField({
     (entry): entry is [string, string] => typeof entry[1] === 'string',
   )
   return (
-    <FieldShell schema={schema} onClear={value === undefined ? undefined : () => onChange(undefined)}>
+    <FieldShell
+      schema={schema}
+      onClear={value === undefined ? undefined : () => onChange(undefined)}
+    >
       <KeyValueEditor
         value={Object.fromEntries(entries)}
         onChange={onChange}
@@ -199,7 +203,9 @@ function RecursiveObjectListField({
             <section key={index} className={styles.structuredCard}>
               <div className={styles.structuredCardHeader}>
                 <div>
-                  <span className={styles.structuredIndex}>{String(index + 1).padStart(2, '0')}</span>
+                  <span className={styles.structuredIndex}>
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
                   <h4>{structuredItemLabel(schema, item, index)}</h4>
                 </div>
                 <button
@@ -213,7 +219,9 @@ function RecursiveObjectListField({
               </div>
               {errors.length > 0 ? (
                 <ul className={styles.structuredErrors} aria-live="polite">
-                  {errors.map((error) => <li key={error}>{error}</li>)}
+                  {errors.map((error) => (
+                    <li key={error}>{error}</li>
+                  ))}
                 </ul>
               ) : null}
               <div className={styles.structuredCardBody}>
@@ -315,6 +323,20 @@ function RuleNodeEditor({
   const operator = typeof node.operator === 'string' ? node.operator.toUpperCase() : ''
   const mode = ['AND', 'OR', 'NOT'].includes(operator) ? operator : 'signal'
   const conditions = normalizeStructuredObjectList(node.conditions)
+  const predicate = normalizeStructuredObject(node.predicate)
+
+  const updatePredicate = (key: 'gt' | 'gte' | 'lt' | 'lte', rawValue: string) => {
+    const nextPredicate = { ...predicate }
+    if (rawValue === '') delete nextPredicate[key]
+    else nextPredicate[key] = Number(rawValue)
+    onChange(
+      updateStructuredObjectField(
+        node,
+        'predicate',
+        Object.keys(nextPredicate).length > 0 ? nextPredicate : undefined,
+      ),
+    )
+  }
 
   const setMode = (nextMode: string) => {
     if (nextMode === 'signal') {
@@ -341,29 +363,94 @@ function RuleNodeEditor({
       </label>
 
       {mode === 'signal' ? (
-        <div className={styles.ruleLeafGrid}>
-          <label className={styles.structuredMiniLabel}>
-            Signal Type
-            <input
-              className={styles.fieldInput}
-              value={typeof node.type === 'string' ? node.type : ''}
-              onChange={(event) =>
-                onChange(updateStructuredObjectField(node, 'type', event.target.value || undefined))
-              }
-              placeholder="domain"
-            />
-          </label>
-          <label className={styles.structuredMiniLabel}>
-            Signal Name
-            <input
-              className={styles.fieldInput}
-              value={typeof node.name === 'string' ? node.name : ''}
-              onChange={(event) =>
-                onChange(updateStructuredObjectField(node, 'name', event.target.value || undefined))
-              }
-              placeholder="technical"
-            />
-          </label>
+        <div className={styles.ruleConditions}>
+          <div className={styles.ruleLeafGrid}>
+            <label className={styles.structuredMiniLabel}>
+              Signal Type
+              <select
+                className={styles.fieldInput}
+                value={typeof node.type === 'string' ? node.type : ''}
+                onChange={(event) =>
+                  onChange(
+                    updateStructuredObjectField(node, 'type', event.target.value || undefined),
+                  )
+                }
+              >
+                <option value="">Select signal type</option>
+                {DECISION_SIGNAL_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.structuredMiniLabel}>
+              Signal Name
+              <input
+                className={styles.fieldInput}
+                value={typeof node.name === 'string' ? node.name : ''}
+                onChange={(event) =>
+                  onChange(
+                    updateStructuredObjectField(node, 'name', event.target.value || undefined),
+                  )
+                }
+                placeholder="technical"
+              />
+            </label>
+            {node.type === 'classifier' || node.label !== undefined ? (
+              <label className={styles.structuredMiniLabel}>
+                Classifier Label
+                <input
+                  className={styles.fieldInput}
+                  value={typeof node.label === 'string' ? node.label : ''}
+                  onChange={(event) =>
+                    onChange(
+                      updateStructuredObjectField(node, 'label', event.target.value || undefined),
+                    )
+                  }
+                  placeholder="SAFE"
+                />
+              </label>
+            ) : null}
+            {node.type === 'classifier' || node.on_error !== undefined ? (
+              <label className={styles.structuredMiniLabel}>
+                On Error
+                <select
+                  className={styles.fieldInput}
+                  value={typeof node.on_error === 'string' ? node.on_error : ''}
+                  onChange={(event) =>
+                    onChange(
+                      updateStructuredObjectField(
+                        node,
+                        'on_error',
+                        event.target.value || undefined,
+                      ),
+                    )
+                  }
+                >
+                  <option value="">Use root policy</option>
+                  <option value="no_match">No match</option>
+                  <option value="match">Match</option>
+                </select>
+              </label>
+            ) : null}
+          </div>
+          <fieldset className={styles.ruleNode}>
+            <legend className={styles.structuredMiniLabel}>Numeric Predicate</legend>
+            <div className={styles.ruleLeafGrid}>
+              {(['gt', 'gte', 'lt', 'lte'] as const).map((key) => (
+                <label key={key} className={styles.structuredMiniLabel}>
+                  {key}
+                  <input
+                    className={styles.fieldInput}
+                    type="number"
+                    value={typeof predicate[key] === 'number' ? String(predicate[key]) : ''}
+                    onChange={(event) => updatePredicate(key, event.target.value)}
+                  />
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </div>
       ) : (
         <div className={styles.ruleConditions}>
@@ -377,7 +464,9 @@ function RuleNodeEditor({
                   onClick={() =>
                     onChange({
                       ...node,
-                      conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index),
+                      conditions: conditions.filter(
+                        (_, conditionIndex) => conditionIndex !== index,
+                      ),
                     })
                   }
                   disabled={mode === 'NOT' && conditions.length <= 1}
@@ -413,13 +502,12 @@ function RuleNodeEditor({
   )
 }
 
-function RuleField({
-  schema,
-  value,
-  onChange,
-}: Omit<StructuredFieldEditorProps, 'renderField'>) {
+function RuleField({ schema, value, onChange }: Omit<StructuredFieldEditorProps, 'renderField'>) {
   return (
-    <FieldShell schema={schema} onClear={value === undefined ? undefined : () => onChange(undefined)}>
+    <FieldShell
+      schema={schema}
+      onClear={value === undefined ? undefined : () => onChange(undefined)}
+    >
       <RuleNodeEditor value={value} onChange={onChange} />
     </FieldShell>
   )

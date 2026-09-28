@@ -1,0 +1,28 @@
+# This profile runs classifier.pii with a remote token_spans.v1 backend and no
+# local PII model, so it never runs candle token classification and does not
+# need the mmbert32k-pii-detector weights. It still needs *a*
+# pii_type_mapping.json on disk: IsPIIEnabled()/LoadPIIMapping() require the
+# mapping regardless of backend, and the token_spans decoder resolves every
+# label a provider returns against it - an unmapped label is a rejected
+# response, not a silent pass. This ConfigMap supplies a minimal stand-in
+# mapping via extraVolumes/extraVolumeMounts, applied as a prerequisite so it
+# exists before the semantic-router Helm install (which creates its own
+# namespace and blocks on --wait).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vllm-semantic-router-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pii-remote-backend-mapping
+  namespace: vllm-semantic-router-system
+data:
+  # Index 0 is the outside label: token_spans.v1 rejects a span carrying it,
+  # because providers send entity spans only.
+  pii_type_mapping.json: |
+    {
+      "label_to_idx": {"O": 0, "EMAIL_ADDRESS": 1, "PERSON": 2, "PHONE_NUMBER": 3},
+      "idx_to_label": {"0": "O", "1": "EMAIL_ADDRESS", "2": "PERSON", "3": "PHONE_NUMBER"}
+    }

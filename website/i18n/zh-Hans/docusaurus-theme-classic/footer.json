@@ -59,6 +59,10 @@
     "message": "愿景论文",
     "description": "The label of footer link with label=Vision Paper linking to /vision-paper"
   },
+  "link.item.label.Decision Paper": {
+    "message": "Decision 论文",
+    "description": "The label of footer link with label=Decision Paper linking to /decision-paper"
+  },
   "link.item.label.License": {
     "message": "许可证",
     "description": "The label of footer link with label=License linking to https://github.com/vllm-project/semantic-router/blob/main/LICENSE"

@@ -341,6 +341,23 @@ export function normalizeTaxonomyClassifierListResponse(raw: unknown): TaxonomyC
   }
 }
 
+// Joins the knowledge base asset directory and its manifest file name for display.
+// Either half may arrive with its own separators (config commonly writes
+// `path: knowledge_bases/mmlu/`), so trim the seam before joining.
+export function formatKnowledgeBaseSourcePath(source: TaxonomyClassifierRecord['source']): string {
+  const path = (source?.path ?? '').trim()
+  const manifest = (source?.manifest ?? '').trim().replace(/^\/+/, '')
+  if (!manifest) {
+    return path
+  }
+  const root = path.replace(/\/+$/, '')
+  if (!root) {
+    // `path` was empty, or nothing but separators such as the filesystem root.
+    return path ? `/${manifest}` : manifest
+  }
+  return `${root}/${manifest}`
+}
+
 export function formatSignalReference(reference: TaxonomySignalReference): string {
   const targetKind = reference.target.kind || 'unknown'
   const targetValue = reference.target.value || 'unknown'

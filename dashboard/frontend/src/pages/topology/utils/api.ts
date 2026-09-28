@@ -1,6 +1,6 @@
 // topology/utils/api.ts - API calls for topology
 
-import { TestQueryResult, MatchedSignal, SignalType, EvaluatedRule, ConfigData } from '../types'
+import { TestQueryResult, MatchedSignal, SignalType, EvaluatedRule, ConfigData, TestQueryMode } from '../types'
 
 /**
  * Backend API response format for test-query
@@ -8,19 +8,25 @@ import { TestQueryResult, MatchedSignal, SignalType, EvaluatedRule, ConfigData }
 interface TestQueryResponse {
   query: string
   mode: 'simulate' | 'dry-run'
-  matchedSignals: Array<{
+  matchedSignals?: Array<{
     type: string
     name: string
-    confidence: number
+    confidence: number | null
+    confidenceAvailable?: boolean
     value?: number
     reason?: string
-  }>
+  }> | null
+  decisionConfidence?: number | null
+  decisionConfidenceAvailable?: boolean
+  signalErrorMatches?: Record<string, boolean>
   matchedDecision: string | null
-  matchedModels: string[]
-  highlightedPath: string[]
+  matchedModels?: string[] | null
+  highlightedPath?: string[] | null
   isAccurate: boolean
   evaluatedRules?: Array<{
     decisionName: string
+    expression?: string
+    state?: string
     ruleOperator: string
     conditions?: string[] | null
     matchedCount: number
@@ -29,78 +35,80 @@ interface TestQueryResponse {
     priority: number
     matchedModels?: string[]
   }>
+  evalTrace?: TestQueryResult['evalTrace']
+  signalErrors?: Record<string, string>
+  appliedUnknownPolicies?: Record<string, string>
+  decisionError?: string
+  selectedModel?: string
+  recommendedModels?: string[]
+  selectionStatus?: string
+  selectionMethod?: string
+  selectionReason?: string
   routingLatency?: number
   warning?: string
   isFallbackDecision?: boolean  // True if matched decision is a system fallback
   fallbackReason?: string       // Reason for fallback
 }
 
-/**
- * Call backend Dry-Run API for accurate routing verification
- */
-export async function testQueryDryRun(query: string): Promise<TestQueryResult> {
-  const response = await fetch('/api/topology/test-query', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query,
-      mode: 'dry-run',
-    }),
-  })
-
-  if (!response.ok) {
-    throw new Error(`Dry-run API failed: ${response.statusText}`)
-  }
-
-  const data: TestQueryResponse = await response.json()
-
-  // Convert to frontend TestQueryResult format
-  return {
-    query: data.query,
-    mode: data.mode,
-    isAccurate: data.isAccurate,
-    matchedSignals: convertSignals(data.matchedSignals),
-    matchedDecision: data.matchedDecision,
-    matchedModels: data.matchedModels,
-    highlightedPath: data.highlightedPath,
-    evaluatedRules: convertEvaluatedRules(data.evaluatedRules),
-    routingLatency: data.routingLatency,
-    warning: data.warning,
-    isFallbackDecision: data.isFallbackDecision,
-    fallbackReason: data.fallbackReason,
-  }
+/** Call the live router; failed previews remain failed previews. */
+export async function testQueryDryRun(
+  query: string,
+  model?: string,
+): Promise<TestQueryResult> {
+  return requestTestQuery(query, 'dry-run', model)
 }
 
-/**
- * Call backend Simulate API for simulated routing (also uses backend now)
- */
-export async function testQuerySimulate(query: string): Promise<TestQueryResult> {
+/** Explicit simulation requests never substitute for live verification. */
+export async function testQuerySimulate(
+  query: string,
+  model?: string,
+): Promise<TestQueryResult> {
+  return requestTestQuery(query, 'simulate', model)
+}
+
+async function requestTestQuery(
+  query: string,
+  mode: TestQueryMode,
+  model?: string,
+): Promise<TestQueryResult> {
   const response = await fetch('/api/topology/test-query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query,
-      mode: 'simulate',
-    }),
+    body: JSON.stringify({ query, mode, model }),
   })
-
-  if (!response.ok) {
-    throw new Error(`Simulate API failed: ${response.statusText}`)
+  let data: TestQueryResponse
+  try {
+    data = await response.json()
+  } catch {
+    throw new Error(`Router preview failed (HTTP ${response.status})`)
   }
-
-  const data: TestQueryResponse = await response.json()
+  if (!data || typeof data.query !== 'string') {
+    throw new Error(`Router preview failed (HTTP ${response.status})`)
+  }
 
   return {
     query: data.query,
     mode: data.mode,
-    isAccurate: data.isAccurate,
+    isAccurate: response.ok && data.isAccurate === true,
     matchedSignals: convertSignals(data.matchedSignals),
-    matchedDecision: data.matchedDecision,
-    matchedModels: data.matchedModels,
-    highlightedPath: data.highlightedPath,
+    matchedDecision: data.matchedDecision ?? null,
+    decisionConfidence: data.decisionConfidence,
+    decisionConfidenceAvailable: data.decisionConfidenceAvailable,
+    signalErrorMatches: data.signalErrorMatches,
+    matchedModels: data.matchedModels ?? [],
+    highlightedPath: data.highlightedPath ?? [],
     evaluatedRules: convertEvaluatedRules(data.evaluatedRules),
+    evalTrace: data.evalTrace,
+    signalErrors: data.signalErrors,
+    appliedUnknownPolicies: data.appliedUnknownPolicies,
+    decisionError: data.decisionError,
+    selectedModel: data.selectedModel,
+    recommendedModels: data.recommendedModels,
+    selectionStatus: data.selectionStatus,
+    selectionMethod: data.selectionMethod,
+    selectionReason: data.selectionReason,
     routingLatency: data.routingLatency,
-    warning: data.warning,
+    warning: data.warning || (!response.ok ? `Router preview failed (HTTP ${response.status})` : undefined),
     isFallbackDecision: data.isFallbackDecision,
     fallbackReason: data.fallbackReason,
   }
@@ -110,13 +118,14 @@ export async function testQuerySimulate(query: string): Promise<TestQueryResult>
  * Convert backend signal format to frontend format
  */
 function convertSignals(signals: TestQueryResponse['matchedSignals']): MatchedSignal[] {
-  return signals.map(s => ({
+  return (signals ?? []).map(s => ({
     type: s.type as SignalType,
     name: s.name,
     matched: true, // Backend only returns matched signals
     value: s.value,
-    confidence: s.confidence,
-    score: s.confidence,
+    confidence: s.confidenceAvailable === false ? null : s.confidence,
+    confidenceAvailable: s.confidenceAvailable,
+    score: s.confidenceAvailable === false ? null : s.confidence,
     reason: s.reason,
     needsBackend: false,
   }))
@@ -132,7 +141,8 @@ function convertEvaluatedRules(rules?: TestQueryResponse['evaluatedRules']): Eva
     const conditions = r.conditions ?? []
     return {
       decisionName: r.decisionName,
-      condition: `${r.ruleOperator}(${conditions.join(', ')})`,
+      condition: r.expression ?? `${r.ruleOperator}(${conditions.join(', ')})`,
+      state: r.state,
       result: r.isMatch,
       priority: r.priority,
       matchedConditions: r.matchedCount,

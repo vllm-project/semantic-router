@@ -1,39 +1,48 @@
-# Image fixtures for multimodal-routing e2e profile
+# Multimodal routing image fixtures
 
-Each image is a small, license-clean fixture used by the `embedding-signal-image-routing` testcase to verify that the image-modality routing rules in the multimodal-routing profile cosine-match real visual content in their target categories.
+These images support the `embedding-signal-image-routing` E2E testcase. The
+test pairs every image with all three image-routing rules, checking one
+positive match and two cross-category non-matches for each fixture.
 
-## Fixture inventory
+## Inventory
 
-| File | Size | Target rule (positive case) | License |
-|---|---|---|---|
-| `passport_sample.jpg` | 45 KB | `identifier_document_imagery` | Gemini-generated, no upstream copyright |
-| `code_screenshot.jpg` | 15 KB | `code_or_terminal_imagery` | Gemini-generated, no upstream copyright |
-| `conference_room.jpg` | 30 KB | `ambient_office_imagery` | Gemini-generated, no upstream copyright |
+| File | Intended positive rule | Source |
+| --- | --- | --- |
+| `passport_sample.jpg` | `identifier_document_imagery` | AI-generated fictional specimen document |
+| `code_screenshot.jpg` | `code_or_terminal_imagery` | AI-generated code editor scene |
+| `conference_room.jpg` | `ambient_office_imagery` | AI-generated office scene |
 
-All three images were generated 2026-05-09 via Google Gemini (aistudio.google.com). Generated content has no upstream copyright holder. Original Gemini output (1024x1024 PNG, several MB each) was smart-cropped + downscaled to 384x384 to match SigLIP-base's native input resolution, then re-encoded as JPEG quality 85 for photographic content. Final sizes under 50 KB each.
+The images were generated with Google Gemini on 2026-05-09. The recorded
+workflow used text prompts rather than third-party source assets, and the
+fixtures are designed to contain no real identity data or product logos. The
+original 1024×1024 PNG outputs were cropped and downscaled to 384×384, then
+encoded as JPEG fixtures.
 
-## Why real images instead of synthetic PNGs
+The exact case matrix, expected decisions, and request text live in
+[`../embedding_signal_image_cases.json`](../embedding_signal_image_cases.json).
+Category-distinct images are required because a generic synthetic pattern does
+not provide a stable positive and negative routing contract.
 
-The earlier version of this fixture used a single 32x32 synthetic PNG reused across all test cases. That fixture exercised the pipeline (request-path image extractor + candle-binding image encoder + cosine math + response header propagation) but did NOT exercise rule specificity. A synthetic PNG's embedding lands wherever it happens to land in the shared multimodal space; it could pass any rule's threshold by accident, or fail all of them. A test that "passes" against synthetic input doesn't prove the runtime correctly identifies the right rule for the right image.
+## Source prompts
 
-The three real images here are visually distinct by design (each prompt describes a different photographic category) and let the testcase assert a 3x3 matrix: each image should FIRE its target rule and should NOT fire the two sibling rules. That's the rule-specificity assertion the synthetic-PNG fixture never made.
+The prompts are provenance records, not golden model outputs:
 
-## Regeneration prompts
+- `passport_sample.jpg`: a clearly fictional “SPECIMEN PASSPORT” on a desk,
+  with placeholder identity fields and no real national design.
+- `code_screenshot.jpg`: a dark editor showing generic Go-like source code,
+  line numbers, and no product branding.
+- `conference_room.jpg`: an empty meeting room with a table, chairs,
+  whiteboard, and no people or company signage.
 
-Reproducible via Gemini if regeneration is ever needed.
+Regeneration can change embeddings even when the prompt is unchanged. Treat a
+replacement as a fixture change: run the multimodal-routing E2E profile and
+review all nine positive/cross-category cases.
 
-### passport_sample.jpg (positive for `identifier_document_imagery`)
+## Adding or replacing a fixture
 
-> A flat lay photograph of a fictional sample passport open on a wooden desk surface. The visible page shows a placeholder photo, the heading "SPECIMEN PASSPORT," and clearly fictitious filler data ("JANE SAMPLE," issue date "01 JAN 2030," country code "ZZ"). Realistic government-document visual style with security-pattern background. Centered composition, soft overhead lighting. No real names, real signatures, real photos, or real personal information. No copyrighted security elements from any real country's passport design.
-
-### code_screenshot.jpg (positive for `code_or_terminal_imagery`)
-
-> A screenshot of programming source code displayed in a dark-mode editor with syntax highlighting. Monospace font with line numbers along the left margin. Keywords like "func," "if," "return" highlighted in blue and green. String literals in orange. Code shows a generic Go-style function definition with curly braces and indentation, about 25-30 lines visible. The editor window has a tab bar at the top and a status bar at the bottom but no specific brand or product logos. Plain dark gray editor chrome.
-
-### conference_room.jpg (positive for `ambient_office_imagery`)
-
-> A photograph of an empty modern conference room interior. A large whiteboard on one wall with simple geometric shapes drawn in colored marker (no readable text or words). A long meeting table in the center with chairs around it. Soft natural daylight coming through floor-to-ceiling windows on one side. Neutral wall colors, minimalist office aesthetic. No people in the frame. No company logos, brand names, or specific identifying signage anywhere in the scene.
-
-## Adding new fixtures
-
-If you add a new image fixture, document it in the inventory table above with its target rule and license posture. Keep individual file sizes under 50 KB; the testdata directory is checked into the repo and bloating it slows clones.
+- use content that is safe to distribute in this repository and record its
+  source here;
+- keep the image at 384×384 and below 50 KiB;
+- add or update the corresponding cases in
+  `embedding_signal_image_cases.json`;
+- verify both the intended positive rule and sibling-rule non-matches.

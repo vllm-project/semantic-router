@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -122,6 +123,7 @@ type ModelCapability struct {
 	ParamSize         float64 `json:"param_size"`          // Model size in billions of parameters
 	Cost              float64 `json:"cost"`                // Cost per 1M tokens
 	AvgQuality        float64 `json:"avg_quality"`         // Learned average quality score
+	QualityKnown      bool    `json:"quality_known"`       // False until catalog evidence or feedback exists
 	VerificationProb  float64 `json:"verification_prob"`   // Probability of passing self-verification
 	EscalationReward  float64 `json:"escalation_reward"`   // Expected reward from escalation
 	QuerySuccessCount int     `json:"query_success_count"` // Successful queries
@@ -132,7 +134,8 @@ type ModelCapability struct {
 // The algorithm routes to smaller models first and escalates based on
 // self-verification confidence, optimizing the cost-quality tradeoff.
 type AutoMixSelector struct {
-	config *AutoMixConfig
+	config      *AutoMixConfig
+	modelParams map[string]config.ModelParams
 
 	// Model capabilities indexed by model name
 	capabilities map[string]*ModelCapability
@@ -220,12 +223,12 @@ func (a *AutoMixSelector) Method() SelectionMethod {
 func (a *AutoMixSelector) InitializeFromConfig(modelConfig map[string]config.ModelParams) {
 	a.capMu.Lock()
 	defer a.capMu.Unlock()
+	a.modelParams = modelConfig
 
 	for model, params := range modelConfig {
-		// Use configured quality score if available, otherwise default to 0.8
-		qualityScore := params.QualityScore
-		if qualityScore <= 0 || qualityScore > 1.0 {
-			qualityScore = 0.8 // Default quality estimate
+		qualityScore, qualityKnown := params.EvidenceScore("")
+		if qualityKnown {
+			qualityScore = math.Max(0, math.Min(1, qualityScore/100))
 		}
 
 		paramSize := a.estimateParamSize(model)
@@ -233,6 +236,7 @@ func (a *AutoMixSelector) InitializeFromConfig(modelConfig map[string]config.Mod
 			Model:            model,
 			Cost:             params.Pricing.PromptPer1M,
 			AvgQuality:       qualityScore,
+			QualityKnown:     qualityKnown,
 			VerificationProb: 0.7,       // Default verification probability
 			ParamSize:        paramSize, // Estimate from model name
 		}
@@ -243,9 +247,10 @@ func (a *AutoMixSelector) InitializeFromConfig(modelConfig map[string]config.Mod
 			a.adaOpsSolver.RegisterModel(model, params.Pricing.PromptPer1M, paramSize)
 		}
 
-		// Initialize value function (higher for larger/better models)
+		// Missing intelligence evidence starts with no quality contribution.
+		// Cost and subsequent feedback can still differentiate candidates.
 		a.valueMu.Lock()
-		a.valueFunction[model] = cap.ParamSize / 100.0 // Normalize
+		a.valueFunction[model] = qualityScore
 		a.valueMu.Unlock()
 	}
 
@@ -260,28 +265,14 @@ func (a *AutoMixSelector) Select(ctx context.Context, selCtx *SelectionContext) 
 		return nil, err
 	}
 
-	// Sort candidates by cost (cheaper first for cascaded routing)
 	sortedCandidates := a.sortByCost(selCtx.CandidateModels)
-
-	// Calculate expected value for each model using POMDP
-	allScores := make(map[string]float64)
 	a.capMu.RLock()
-	a.valueMu.RLock()
 	defer a.capMu.RUnlock()
-	defer a.valueMu.RUnlock()
-
-	logging.Infof("[AutoMix] Evaluating %d candidates (tradeoff=%.2f):",
-		len(sortedCandidates), a.config.CostQualityTradeoff)
-	for _, model := range sortedCandidates {
-		modelName := model.Model
-		score := a.computeExpectedValue(modelName, selCtx)
-		allScores[modelName] = score
-		if cap, ok := a.capabilities[modelName]; ok {
-			logging.Infof("[AutoMix]   %s: cost=$%.2f, quality=%.2f, value=%.4f",
-				modelName, cap.Cost, cap.AvgQuality, score)
-		} else {
-			logging.Infof("[AutoMix]   %s: value=%.4f (no capability data)", modelName, score)
-		}
+	// Scoring and comparison observe one capability snapshot.
+	scores := a.scoreCandidatesLocked(sortedCandidates, selCtx)
+	candidateScores := make([]float64, len(scores))
+	for i, row := range scores {
+		candidateScores[i] = row.Score
 	}
 
 	// Find optimal starting model (not necessarily the best, but best value)
@@ -291,10 +282,10 @@ func (a *AutoMixSelector) Select(ctx context.Context, selCtx *SelectionContext) 
 
 	if a.config.CostAwareRouting {
 		// Cost-aware: select model with best value considering cost
-		selectedModel, selectedScore, reasoning = a.selectCostAware(sortedCandidates, allScores, selCtx)
+		selectedModel, selectedScore, reasoning = a.selectCostAware(sortedCandidates, candidateScores, selCtx)
 	} else {
 		// Quality-only: select model with highest expected quality
-		selectedModel, selectedScore, reasoning = a.selectQualityOnly(sortedCandidates, allScores)
+		selectedModel, selectedScore, reasoning = a.selectQualityOnly(sortedCandidates, candidateScores)
 	}
 
 	if selectedModel == nil {
@@ -316,14 +307,36 @@ func (a *AutoMixSelector) Select(ctx context.Context, selCtx *SelectionContext) 
 		selectedModel.Model, selectedScore, confidence, a.config.CostAwareRouting)
 
 	return &SelectionResult{
-		SelectedModel: selectedModel.Model,
-		LoRAName:      selectedModel.LoRAName,
-		Score:         selectedScore,
-		Confidence:    confidence,
-		Method:        MethodAutoMix,
-		Reasoning:     reasoning,
-		AllScores:     allScores,
+		SelectedModel:     selectedModel.Model,
+		SelectedCandidate: selectedModel,
+		LoRAName:          selectedModel.LoRAName,
+		Score:             selectedScore,
+		Confidence:        confidence,
+		Method:            MethodAutoMix,
+		Reasoning:         reasoning,
+		AllScores:         scores.Diagnostics(),
+		CandidateScores:   scores,
 	}, nil
+}
+
+// ScoreCandidates exposes the raw expected values that Hybrid combines. The
+// cost-aware starting-model adjustment belongs to Select, not this score set.
+func (a *AutoMixSelector) ScoreCandidates(_ context.Context, ctx *SelectionContext) (CandidateScores, error) {
+	if err := ValidateSelectionContext(ctx); err != nil {
+		return nil, err
+	}
+	refs := a.sortByCost(ctx.CandidateModels)
+	a.capMu.RLock()
+	defer a.capMu.RUnlock()
+	return a.scoreCandidatesLocked(refs, ctx), nil
+}
+
+func (a *AutoMixSelector) scoreCandidatesLocked(refs []config.ModelRef, ctx *SelectionContext) CandidateScores {
+	scores := make(CandidateScores, len(refs))
+	for i, ref := range refs {
+		scores[i] = CandidateScore{Candidate: ref, Score: a.computeExpectedValue(ref, ctx), Evidence: a.rankingEvidence(ref)}
+	}
+	return scores
 }
 
 // UpdateFeedback updates POMDP model based on verification outcomes
@@ -335,72 +348,85 @@ func (a *AutoMixSelector) UpdateFeedback(ctx context.Context, feedback *Feedback
 	a.capMu.Lock()
 	defer a.capMu.Unlock()
 
-	// Update winner model capabilities
-	if cap, ok := a.capabilities[feedback.WinnerModel]; ok {
-		cap.QuerySuccessCount++
-		cap.QueryTotalCount++
-
-		// Update verification probability with exponential moving average
-		alpha := 0.1 // Learning rate
-		cap.VerificationProb = cap.VerificationProb*(1-alpha) + 1.0*alpha
-		cap.AvgQuality = cap.AvgQuality*(1-alpha) + 1.0*alpha
-
-		// Update AdaOps belief state with observation
-		if a.adaOpsSolver != nil {
-			a.adaOpsSolver.UpdateBelief(feedback.WinnerModel, 1.0) // Winner = high performance
-		}
-
-		logging.Debugf("[AutoMix] Updated winner %s: verification_prob=%.3f, quality=%.3f",
-			feedback.WinnerModel, cap.VerificationProb, cap.AvgQuality)
-	}
-
-	// Update loser model capabilities (if this was a comparison)
+	a.updateFeedbackCapability(feedback.WinnerModel, 1)
 	if feedback.LoserModel != "" && !feedback.Tie {
-		if cap, ok := a.capabilities[feedback.LoserModel]; ok {
-			cap.QueryTotalCount++
-
-			alpha := 0.1
-			cap.VerificationProb = cap.VerificationProb*(1-alpha) + 0.0*alpha
-			cap.AvgQuality = cap.AvgQuality*(1-alpha) + 0.0*alpha
-
-			// Update AdaOps belief state with observation
-			if a.adaOpsSolver != nil {
-				a.adaOpsSolver.UpdateBelief(feedback.LoserModel, 0.0) // Loser = low performance
-			}
-
-			logging.Debugf("[AutoMix] Updated loser %s: verification_prob=%.3f, quality=%.3f",
-				feedback.LoserModel, cap.VerificationProb, cap.AvgQuality)
-		}
+		a.updateFeedbackCapability(feedback.LoserModel, 0)
 	}
 
 	// Run value iteration to update POMDP values (we already hold capMu.Lock)
 	a.updateValueFunctionLocked()
-
-	// Record updated metrics after feedback
-	if cap, ok := a.capabilities[feedback.WinnerModel]; ok {
-		RecordAutoMixCapability(feedback.WinnerModel, cap.VerificationProb, cap.AvgQuality,
-			cap.QuerySuccessCount, cap.QueryTotalCount)
-	}
-	if feedback.LoserModel != "" {
-		if cap, ok := a.capabilities[feedback.LoserModel]; ok {
-			RecordAutoMixCapability(feedback.LoserModel, cap.VerificationProb, cap.AvgQuality,
-				cap.QuerySuccessCount, cap.QueryTotalCount)
-		}
-	}
-
+	a.recordFeedbackMetrics(feedback)
 	return nil
+}
+
+func (a *AutoMixSelector) updateFeedbackCapability(model string, outcome float64) {
+	capability, ok := a.capabilities[model]
+	if !ok {
+		return
+	}
+	capability.QueryTotalCount++
+	if outcome == 1 {
+		capability.QuerySuccessCount++
+	}
+	const learningRate = 0.1
+	capability.VerificationProb = exponentialMovingAverage(
+		capability.VerificationProb, outcome, learningRate,
+	)
+	if !capability.QualityKnown {
+		capability.AvgQuality = outcome
+		capability.QualityKnown = true
+	} else {
+		capability.AvgQuality = exponentialMovingAverage(capability.AvgQuality, outcome, learningRate)
+	}
+	if a.adaOpsSolver != nil {
+		a.adaOpsSolver.UpdateBelief(model, outcome)
+	}
+	logging.Debugf(
+		"[AutoMix] Updated model %s: verification_prob=%.3f, quality=%.3f",
+		model, capability.VerificationProb, capability.AvgQuality,
+	)
+}
+
+func exponentialMovingAverage(current, observed, rate float64) float64 {
+	return current*(1-rate) + observed*rate
+}
+
+func (a *AutoMixSelector) recordFeedbackMetrics(feedback *Feedback) {
+	a.recordCapabilityMetric(feedback.WinnerModel)
+	if feedback.LoserModel != "" {
+		a.recordCapabilityMetric(feedback.LoserModel)
+	}
+}
+
+func (a *AutoMixSelector) recordCapabilityMetric(model string) {
+	capability, ok := a.capabilities[model]
+	if !ok {
+		return
+	}
+	RecordAutoMixCapability(
+		model, capability.VerificationProb, capability.AvgQuality,
+		capability.QuerySuccessCount, capability.QueryTotalCount,
+	)
 }
 
 // computeExpectedValue calculates the expected value of using a model
 // V(model) = R(model) + γ * E[V(s') | escalation possible]
-func (a *AutoMixSelector) computeExpectedValue(model string, selCtx *SelectionContext) float64 {
-	cap := a.capabilities[model]
+func (a *AutoMixSelector) computeExpectedValue(candidate config.ModelRef, selCtx *SelectionContext) float64 {
+	cap := a.capabilities[candidate.Model]
 	if cap == nil {
 		return 0.5 // Default value for unknown models
 	}
 
-	// Immediate reward: quality
-	quality := cap.AvgQuality
+	// Missing quality evidence contributes nothing; it is not treated as a
+	// measured zero. Cost and learned verification remain independent signals.
+	quality := 0.0
+	if cap.QueryTotalCount > 0 && cap.QualityKnown {
+		quality = cap.AvgQuality
+	} else if evidence := evidenceForCandidate(a.modelParams, candidate); evidence != nil {
+		quality = math.Max(0, math.Min(1, *evidence.Score/100))
+	} else if candidate.ReasoningEffort == "" && cap.QualityKnown {
+		quality = cap.AvgQuality
+	}
 
 	// Cost penalty (normalized)
 	costPenalty := 0.0
@@ -426,13 +452,11 @@ func (a *AutoMixSelector) computeExpectedValue(model string, selCtx *SelectionCo
 }
 
 // selectCostAware selects model optimizing cost-quality tradeoff
-func (a *AutoMixSelector) selectCostAware(candidates []config.ModelRef, scores map[string]float64, selCtx *SelectionContext) (*config.ModelRef, float64, string) {
-	var bestModel *config.ModelRef
-	bestValue := math.Inf(-1)
-
+func (a *AutoMixSelector) selectCostAware(candidates []config.ModelRef, scores []float64, selCtx *SelectionContext) (*config.ModelRef, float64, string) {
+	values := make(CandidateScores, 0, len(candidates))
 	for i := range candidates {
 		model := &candidates[i]
-		score := scores[model.Model]
+		score := scores[i]
 
 		cap := a.capabilities[model.Model]
 		if cap == nil {
@@ -453,42 +477,40 @@ func (a *AutoMixSelector) selectCostAware(candidates []config.ModelRef, scores m
 			value *= 1.1 // 10% bonus for likely-to-succeed models
 		}
 
-		if value > bestValue {
-			bestValue = value
-			bestModel = model
-		}
+		values = append(values, CandidateScore{Candidate: *model, Score: value, Evidence: a.rankingEvidence(*model)})
 	}
-
-	if bestModel == nil && len(candidates) > 0 {
-		bestModel = &candidates[0]
-		bestValue = scores[bestModel.Model]
+	if len(values) == 0 && len(candidates) > 0 {
+		values = append(values, CandidateScore{Candidate: candidates[0], Score: scores[0]})
 	}
-
-	reasoning := fmt.Sprintf("Cost-aware POMDP selection (tradeoff=%.2f, discount=%.2f)",
-		a.config.CostQualityTradeoff, a.config.DiscountFactor)
-
-	return bestModel, bestValue, reasoning
+	best := values.Best(HigherIsBetter, true)
+	if best < 0 {
+		return nil, 0, "no finite AutoMix values"
+	}
+	reasoning := fmt.Sprintf("Cost-aware POMDP selection (tradeoff=%.2f, discount=%.2f); %s",
+		a.config.CostQualityTradeoff, a.config.DiscountFactor, evidenceDiagnostic(values[best].Evidence))
+	return &values[best].Candidate, values[best].Score, reasoning
 }
 
 // selectQualityOnly selects the highest quality model regardless of cost
-func (a *AutoMixSelector) selectQualityOnly(candidates []config.ModelRef, scores map[string]float64) (*config.ModelRef, float64, string) {
-	var bestModel *config.ModelRef
-	var bestScore float64
-
-	for i := range candidates {
-		model := &candidates[i]
-		score := scores[model.Model]
-
-		if score > bestScore || bestModel == nil {
-			bestScore = score
-			bestModel = model
-		}
+func (a *AutoMixSelector) selectQualityOnly(candidates []config.ModelRef, scores []float64) (*config.ModelRef, float64, string) {
+	values := make(CandidateScores, len(candidates))
+	for i, candidate := range candidates {
+		values[i] = CandidateScore{Candidate: candidate, Score: scores[i], Evidence: a.rankingEvidence(candidate)}
 	}
+	best := values.Best(HigherIsBetter, true)
+	if best < 0 {
+		return nil, 0, "no finite AutoMix values"
+	}
+	reasoning := fmt.Sprintf("Quality-only POMDP selection (threshold=%.2f); %s",
+		a.config.VerificationThreshold, evidenceDiagnostic(values[best].Evidence))
+	return &values[best].Candidate, values[best].Score, reasoning
+}
 
-	reasoning := fmt.Sprintf("Quality-only POMDP selection (threshold=%.2f)",
-		a.config.VerificationThreshold)
-
-	return bestModel, bestScore, reasoning
+func (a *AutoMixSelector) rankingEvidence(candidate config.ModelRef) *modelcatalog.IndexResult {
+	if capability := a.capabilities[candidate.Model]; capability != nil && capability.QueryTotalCount > 0 {
+		return nil
+	}
+	return evidenceForCandidate(a.modelParams, candidate)
 }
 
 // sortByCost sorts models by cost (ascending)
@@ -499,7 +521,7 @@ func (a *AutoMixSelector) sortByCost(models []config.ModelRef) []config.ModelRef
 	a.capMu.RLock()
 	defer a.capMu.RUnlock()
 
-	sort.Slice(sorted, func(i, j int) bool {
+	sort.SliceStable(sorted, func(i, j int) bool {
 		capI := a.capabilities[sorted[i].Model]
 		capJ := a.capabilities[sorted[j].Model]
 
@@ -538,7 +560,10 @@ func (a *AutoMixSelector) updateValueFunctionLocked() {
 	// Simple value iteration: V(s) = R(s) + γ * max_a E[V(s')]
 	for model, cap := range a.capabilities {
 		// Current reward
-		reward := cap.AvgQuality
+		reward := 0.0
+		if cap.QualityKnown {
+			reward = cap.AvgQuality
+		}
 
 		// Expected future value (from escalation)
 		futureValue := 0.0

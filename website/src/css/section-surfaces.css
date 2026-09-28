@@ -1,37 +1,49 @@
 /* Shared section headers and compact card copy — avoids awkward forced line breaks. */
 
+/* Section intro.
+ *
+ * One treatment for every section: eyebrow, title and lede stacked flush left
+ * above the section's full-width content.
+ *
+ * No reading-measure cap on the title or lede. A capped measure made these
+ * one-sentence ledes wrap early and leave a hole to the right of them; uncapped
+ * they sit on a single line at wide viewports and wrap only when the frame
+ * genuinely runs out. `balance` then keeps whatever wrapping does happen even,
+ * rather than dropping two or three words onto a second line. */
 .site-section-intro {
   display: grid;
+  justify-items: start;
   gap: 0.85rem;
-  max-width: 46rem;
   margin-bottom: 2rem;
 }
 
-.site-section-intro--wide {
-  max-width: 52rem;
+.site-section-intro > * {
+  min-width: 0;
 }
 
+.site-section-intro > h2,
 .site-section-intro__title {
   max-width: none;
   margin: 0;
   font-size: var(--site-text-h2);
   line-height: var(--site-leading-tight);
-  text-wrap: pretty;
+  text-wrap: balance;
   overflow-wrap: normal;
   word-break: normal;
 }
 
-.site-section-intro__title--offset {
-  margin-top: 0.65rem;
-}
-
+/* `balance` rather than `pretty`: these ledes are one to three lines, and
+ * `pretty` only rescues a single-word last line. It left breaks like
+ * "...composes decisions, and executes / the selected path." Balance evens the
+ * lines instead, and browsers without it just fall back to normal wrapping. */
+.site-section-intro > p,
 .site-section-intro__lede {
-  max-width: 42rem;
+  max-width: none;
   margin: 0;
   color: var(--site-muted-bright);
   font-size: 1rem;
   line-height: 1.65;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 /* Single-line metadata in narrow cards (roles, affiliations, chip labels). */

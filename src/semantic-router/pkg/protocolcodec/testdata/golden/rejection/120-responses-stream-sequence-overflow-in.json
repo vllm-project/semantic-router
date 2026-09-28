@@ -1,0 +1,8 @@
+{
+  "operation": "stream",
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "chunks": [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":18446744073709551616,\"response\":{\"id\":\"response_1\",\"object\":\"response\",\"created_at\":1,\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n"
+  ]
+}

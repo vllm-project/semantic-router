@@ -1,0 +1,22 @@
+{
+  "id": "response_1",
+  "object": "chat.completion",
+  "created": 100,
+  "model": "provider-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "id": "item_1",
+        "role": "assistant",
+        "content": "hello"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 2,
+    "completion_tokens": 1,
+    "total_tokens": 3
+  }
+}

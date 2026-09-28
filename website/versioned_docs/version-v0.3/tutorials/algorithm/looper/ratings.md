@@ -4,7 +4,7 @@
 
 `ratings` is a **looper** algorithm that coordinates multiple candidates with bounded concurrency. It executes several candidate models and aggregates their results, using route-level rating signals for coordination.
 
-It aligns to `config/algorithm/looper/ratings.yaml`.
+It aligns to `config/fragments/algorithm/looper/ratings.yaml`.
 
 ## Key Advantages
 

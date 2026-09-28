@@ -1,0 +1,64 @@
+{
+  "cases": [
+    {
+      "name": "assistant_metadata",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "annotations": [
+                  {
+                    "type": "url_citation",
+                    "url_citation": {
+                      "end_index": 4,
+                      "start_index": 0,
+                      "title": "Source",
+                      "url": "https://example.com/source"
+                    }
+                  }
+                ],
+                "content": "done",
+                "reasoning_content": "inspect",
+                "refusal": "",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "audio_output",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "upstream_unavailable",
+          "code": "unsupported_upstream_audio"
+        }
+      }
+    },
+    {
+      "name": "legacy_function_call",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "upstream_unavailable",
+          "code": "unsupported_upstream_function_call"
+        }
+      }
+    }
+  ]
+}

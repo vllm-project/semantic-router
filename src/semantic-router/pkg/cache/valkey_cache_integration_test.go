@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -44,17 +44,10 @@ func valkeyIntegrationAddr() (string, int) {
 //     In CI (or when Redis already occupies 6379), `make start-valkey`
 //     maps Valkey to port 6380 and the Makefile test targets set
 //     VALKEY_PORT=6380 automatically.
-//  2. BERT model initialized for embeddings
+//  2. Deterministic vectors injected for storage/index behavior
 func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 	// Skip if SKIP_VALKEY_TESTS is set
-	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
-		t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
-	}
-
-	// Initialize BERT model for embeddings
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		t.Skipf("Failed to initialize BERT model: %v", err)
-	}
+	storagetest.Require(t, "valkey")
 
 	valkeyHost, valkeyPort := valkeyIntegrationAddr()
 
@@ -69,7 +62,7 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 	valkeyConfig.Index.Name = "test_valkey_idx"
 	valkeyConfig.Index.Prefix = "doc:"
 	valkeyConfig.Index.VectorField.Name = "embedding"
-	valkeyConfig.Index.VectorField.Dimension = 384 // BERT dimension
+	valkeyConfig.Index.VectorField.Dimension = 384 // fixture dimension
 	valkeyConfig.Index.VectorField.MetricType = "COSINE"
 	valkeyConfig.Index.IndexType = "HNSW"
 	valkeyConfig.Index.Params.M = 16
@@ -82,6 +75,7 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 
 	// Create cache
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
+		EmbeddingProvider:   storagetest.Vectors{Size: 384},
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
 		Enabled:             true,
@@ -89,19 +83,21 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 		EmbeddingModel:      "bert",
 	})
 	if err != nil {
-		t.Skipf("Valkey server not available (skipping integration test): %v", err)
+		storagetest.Unavailable(t, "valkey", fmt.Sprintf("Valkey server not available (skipping integration test): %v", err))
 	}
 	return cache
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_ConnectionCheck(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
 
-	err := cache.CheckConnection()
+	err := cache.CheckConnection(context.Background())
 	assert.NoError(t, err, "Connection check should succeed")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_IndexCreation(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -114,6 +110,7 @@ func TestValkeyCacheIntegration_IndexCreation(t *testing.T) {
 	assert.NotNil(t, result, "Index info should not be nil")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_AddEntry(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -127,7 +124,7 @@ func TestValkeyCacheIntegration_AddEntry(t *testing.T) {
 	responseBody := []byte(`{"choices":[{"message":{"content":"Paris is the capital of France."}}]}`)
 	ttlSeconds := 300
 
-	err := cache.AddEntry(requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := cache.AddEntry(context.Background(), requestID, model, query, requestBody, responseBody, ttlSeconds)
 	assert.NoError(t, err, "AddEntry should succeed")
 
 	// Wait for indexing
@@ -140,6 +137,7 @@ func TestValkeyCacheIntegration_AddEntry(t *testing.T) {
 	assert.NotNil(t, result, "SCAN result should not be nil")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_FindSimilar(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -151,7 +149,7 @@ func TestValkeyCacheIntegration_FindSimilar(t *testing.T) {
 	responseBody := []byte(`{"choices":[{"message":{"content":"Machine learning is a subset of AI."}}]}`)
 	ttlSeconds := 300
 
-	err := cache.AddEntry(requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := cache.AddEntry(context.Background(), requestID, model, query, requestBody, responseBody, ttlSeconds)
 	require.NoError(t, err)
 
 	// Wait for indexing with retry logic
@@ -179,6 +177,7 @@ func TestValkeyCacheIntegration_FindSimilar(t *testing.T) {
 	assert.Contains(t, string(foundResponse), "Machine learning", "Response should contain expected content")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_FindSimilarWithThreshold(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -190,7 +189,7 @@ func TestValkeyCacheIntegration_FindSimilarWithThreshold(t *testing.T) {
 	responseBody := []byte(`{"choices":[{"message":{"content":"Neural networks are computing systems."}}]}`)
 	ttlSeconds := 300
 
-	err := cache.AddEntry(requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := cache.AddEntry(context.Background(), requestID, model, query, requestBody, responseBody, ttlSeconds)
 	require.NoError(t, err)
 
 	// Wait for indexing
@@ -215,6 +214,7 @@ func TestValkeyCacheIntegration_FindSimilarWithThreshold(t *testing.T) {
 	}
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_AddPendingRequest(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -232,6 +232,7 @@ func TestValkeyCacheIntegration_AddPendingRequest(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_UpdateWithResponse(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -292,6 +293,7 @@ func TestValkeyCacheIntegration_UpdateWithResponse(t *testing.T) {
 	assert.Contains(t, string(foundResponse), "Python", "Updated response should be findable")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_UpdateWithResponseSpecialChars(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -343,6 +345,7 @@ func TestValkeyCacheIntegration_UpdateWithResponseSpecialChars(t *testing.T) {
 	}
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_TTLExpiration(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -356,7 +359,7 @@ func TestValkeyCacheIntegration_TTLExpiration(t *testing.T) {
 	responseBody := []byte(`{"choices":[{"message":{"content":"Short lived response"}}]}`)
 	ttlSeconds := 2 // 2 seconds
 
-	err := cache.AddEntry(requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := cache.AddEntry(context.Background(), requestID, model, query, requestBody, responseBody, ttlSeconds)
 	require.NoError(t, err)
 
 	// Wait for indexing
@@ -376,6 +379,7 @@ func TestValkeyCacheIntegration_TTLExpiration(t *testing.T) {
 	// Entry should be expired
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_GetStats(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -384,7 +388,7 @@ func TestValkeyCacheIntegration_GetStats(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		requestID := fmt.Sprintf("req_stats_%d", i)
 		query := fmt.Sprintf("Test query %d", i)
-		err := cache.AddEntry(requestID, "gpt-4", query, []byte("{}"), []byte("{}"), 300)
+		err := cache.AddEntry(context.Background(), requestID, "gpt-4", query, []byte("{}"), []byte("{}"), 300)
 		require.NoError(t, err)
 	}
 
@@ -398,16 +402,18 @@ func TestValkeyCacheIntegration_GetStats(t *testing.T) {
 	assert.GreaterOrEqual(t, stats.MissCount, int64(0), "Miss count should be non-negative")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_Close(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 
 	err := cache.Close()
 	assert.NoError(t, err, "Close should succeed")
 
-	err = cache.CheckConnection()
+	err = cache.CheckConnection(context.Background())
 	assert.Error(t, err, "Connection check should fail after close")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_IsEnabled(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -421,8 +427,9 @@ func TestValkeyCacheIntegration_IsEnabled(t *testing.T) {
 	valkeyConfig.Connection.Port = port
 
 	disabledCache, err := NewValkeyCache(ValkeyCacheOptions{
-		Enabled: false,
-		Config:  valkeyConfig,
+		EmbeddingProvider: storagetest.Vectors{Size: 384},
+		Enabled:           false,
+		Config:            valkeyConfig,
 	})
 	require.NoError(t, err)
 	defer func() { _ = disabledCache.Close() }()
@@ -430,6 +437,7 @@ func TestValkeyCacheIntegration_IsEnabled(t *testing.T) {
 	assert.False(t, disabledCache.IsEnabled(), "Cache should be disabled")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
 	host, port := valkeyIntegrationAddr()
 	valkeyConfig := &config.ValkeyConfig{}
@@ -437,14 +445,15 @@ func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
 	valkeyConfig.Connection.Port = port
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
-		Enabled: false,
-		Config:  valkeyConfig,
+		EmbeddingProvider: storagetest.Vectors{Size: 384},
+		Enabled:           false,
+		Config:            valkeyConfig,
 	})
 	require.NoError(t, err)
 	defer func() { _ = cache.Close() }()
 
 	// All operations should return nil/false when disabled
-	err = cache.AddEntry("req_1", "gpt-4", "test", []byte("{}"), []byte("{}"), 300)
+	err = cache.AddEntry(context.Background(), "req_1", "gpt-4", "test", []byte("{}"), []byte("{}"), 300)
 	assert.NoError(t, err, "AddEntry should not error when disabled")
 
 	err = cache.AddPendingRequest("req_2", "gpt-4", "test", []byte("{}"), 300)
@@ -454,17 +463,18 @@ func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
 	assert.NoError(t, err, "FindSimilar should not error when disabled")
 	assert.False(t, hit, "FindSimilar should return false when disabled")
 
-	err = cache.CheckConnection()
+	err = cache.CheckConnection(context.Background())
 	assert.NoError(t, err, "CheckConnection should not error when disabled")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_TTLZeroSkipsCaching(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
 
 	// Test AddEntry with TTL=0 (should skip caching)
 	requestID := "req_ttl_zero_1"
-	err := cache.AddEntry(requestID, "gpt-4", "test query", []byte("{}"), []byte("{}"), 0)
+	err := cache.AddEntry(context.Background(), requestID, "gpt-4", "test query", []byte("{}"), []byte("{}"), 0)
 	assert.NoError(t, err, "AddEntry with TTL=0 should not error")
 
 	// Test AddPendingRequest with TTL=0 (should skip caching)
@@ -473,14 +483,9 @@ func TestValkeyCacheIntegration_TTLZeroSkipsCaching(t *testing.T) {
 	assert.NoError(t, err, "AddPendingRequest with TTL=0 should not error")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
-	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
-		t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
-	}
-
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		t.Skipf("Failed to initialize BERT model: %v", err)
-	}
+	storagetest.Require(t, "valkey")
 
 	host, port := valkeyIntegrationAddr()
 	valkeyConfig := &config.ValkeyConfig{}
@@ -500,6 +505,7 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 	valkeyConfig.Development.AutoCreateIndex = true
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
+		EmbeddingProvider:   storagetest.Vectors{Size: 384},
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
 		Enabled:             true,
@@ -510,7 +516,7 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 	defer func() { _ = cache.Close() }()
 
 	// Add an entry and verify it works
-	err = cache.AddEntry("req_flat_1", "gpt-4", "test flat index", []byte("{}"), []byte(`{"result":"flat"}`), 300)
+	err = cache.AddEntry(context.Background(), "req_flat_1", "gpt-4", "test flat index", []byte("{}"), []byte(`{"result":"flat"}`), 300)
 	assert.NoError(t, err, "AddEntry should work with FLAT index")
 
 	time.Sleep(200 * time.Millisecond)
@@ -522,6 +528,7 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 	}
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_ConcurrentOperations(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -538,7 +545,7 @@ func TestValkeyCacheIntegration_ConcurrentOperations(t *testing.T) {
 				requestID := fmt.Sprintf("req_concurrent_%d_%d", id, j)
 				query := fmt.Sprintf("concurrent query %d %d", id, j)
 
-				err := cache.AddEntry(requestID, "gpt-4", query, []byte("{}"), []byte(fmt.Sprintf(`{"id":%d}`, id)), 300)
+				err := cache.AddEntry(context.Background(), requestID, "gpt-4", query, []byte("{}"), []byte(fmt.Sprintf(`{"id":%d}`, id)), 300)
 				if err != nil {
 					errChan <- err
 				}
@@ -565,9 +572,11 @@ func TestValkeyCacheIntegration_ConcurrentOperations(t *testing.T) {
 	assert.Empty(t, errors, "Concurrent operations should not produce errors")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_MultipleEntries(t *testing.T) {
-	cache := setupValkeyCacheIntegration(t)
-	defer func() { _ = cache.Close() }()
+	// Own index: this test asserts that each query returns its own response, so
+	// it must not rank against documents other tests left in the "doc:" prefix.
+	cache := newIsolatedValkeyCache(t, "multi", "COSINE", 0.8)
 
 	// Add multiple entries with different queries
 	entries := []struct {
@@ -580,13 +589,18 @@ func TestValkeyCacheIntegration_MultipleEntries(t *testing.T) {
 		{"req_multi_3", "What is DL?", "DL is deep learning"},
 	}
 
-	for _, entry := range entries {
-		err := cache.AddEntry(
+	// Keep the stored bodies so the lookup below compares against exactly what
+	// was written, instead of re-deriving the JSON with the same interpolation.
+	storedResponses := make([]string, len(entries))
+
+	for i, entry := range entries {
+		storedResponses[i] = fmt.Sprintf(`{"response":"%s"}`, entry.response)
+		err := cache.AddEntry(context.Background(),
 			entry.requestID,
 			"gpt-4",
 			entry.query,
 			[]byte(fmt.Sprintf(`{"query":"%s"}`, entry.query)),
-			[]byte(fmt.Sprintf(`{"response":"%s"}`, entry.response)),
+			[]byte(storedResponses[i]),
 			300,
 		)
 		require.NoError(t, err, "AddEntry should succeed for %s", entry.requestID)
@@ -595,37 +609,47 @@ func TestValkeyCacheIntegration_MultipleEntries(t *testing.T) {
 	// Wait for indexing
 	time.Sleep(300 * time.Millisecond)
 
-	// Verify we can find similar entries
-	for _, entry := range entries {
-		foundResponse, hit, err := cache.FindSimilar("gpt-4", entry.query)
-		assert.NoError(t, err, "FindSimilar should not error for %s", entry.query)
-
-		if hit {
-			assert.NotNil(t, foundResponse, "Response should be found for %s", entry.query)
+	// Verify we can find similar entries. Uses assert (not require) so that a
+	// conversion regression reports all three queries rather than aborting on
+	// the first one.
+	for i, entry := range entries {
+		result, err := cache.LookupSimilarWithThreshold(context.Background(), "gpt-4", entry.query, 0.8)
+		if !assert.NoError(t, err, "FindSimilar should not error for %s", entry.query) {
+			continue
 		}
+		if !assert.True(t, result.Found, "repeating %q verbatim must hit (similarity=%.4f, threshold=0.8)",
+			entry.query, result.Similarity) {
+			continue
+		}
+		assert.JSONEq(t, storedResponses[i], string(result.ResponseBody))
 	}
 }
 
-func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
-	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
-		t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
-	}
+// newIsolatedValkeyCache builds a cache backed by its own index and key prefix.
+//
+// setupValkeyCacheIntegration shares one index over the "doc:" prefix, and
+// nothing deletes those keys between tests, so a KNN search ranks over every
+// document every earlier test left behind. Any test that asserts *which* entry
+// came back has to search a keyspace it owns; entries are written with a TTL, so
+// the per-run prefix drains on its own.
+func newIsolatedValkeyCache(t *testing.T, label, metricType string, threshold float32) *ValkeyCache {
+	t.Helper()
 
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		t.Skipf("Failed to initialize BERT model: %v", err)
-	}
+	storagetest.Require(t, "valkey")
 
 	host, port := valkeyIntegrationAddr()
+	unique := time.Now().UnixNano()
+
 	valkeyConfig := &config.ValkeyConfig{}
 	valkeyConfig.Connection.Host = host
 	valkeyConfig.Connection.Port = port
 	valkeyConfig.Connection.Database = 0
 
-	valkeyConfig.Index.Name = fmt.Sprintf("test_l2_idx_%d", time.Now().UnixNano())
-	valkeyConfig.Index.Prefix = "l2:"
+	valkeyConfig.Index.Name = fmt.Sprintf("test_%s_idx_%d", label, unique)
+	valkeyConfig.Index.Prefix = fmt.Sprintf("%s_%d:", label, unique)
 	valkeyConfig.Index.VectorField.Name = "embedding"
 	valkeyConfig.Index.VectorField.Dimension = 384
-	valkeyConfig.Index.VectorField.MetricType = "L2"
+	valkeyConfig.Index.VectorField.MetricType = metricType
 	valkeyConfig.Index.IndexType = "HNSW"
 	valkeyConfig.Index.Params.M = 16
 	valkeyConfig.Index.Params.EfConstruction = 64
@@ -635,73 +659,47 @@ func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
 	valkeyConfig.Development.AutoCreateIndex = true
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
-		SimilarityThreshold: 0.5,
+		EmbeddingProvider:   storagetest.Vectors{Size: 384},
+		SimilarityThreshold: threshold,
 		TTLSeconds:          300,
 		Enabled:             true,
 		Config:              valkeyConfig,
 		EmbeddingModel:      "bert",
 	})
-	require.NoError(t, err, "Failed to create cache with L2 metric")
-	defer func() { _ = cache.Close() }()
+	require.NoError(t, err, "Failed to create cache with %s metric", metricType)
+	t.Cleanup(func() { _ = cache.Close() })
 
-	err = cache.AddEntry("req_l2_1", "gpt-4", "test L2 metric", []byte("{}"), []byte(`{"result":"L2"}`), 300)
+	return cache
+}
+
+// StorageIntegration: valkey
+func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
+	cache := newIsolatedValkeyCache(t, "l2", "L2", 0.5)
+
+	err := cache.AddEntry(context.Background(), "req_l2_1", "gpt-4", "test L2 metric", []byte("{}"), []byte(`{"result":"L2"}`), 300)
 	assert.NoError(t, err, "AddEntry should work with L2 metric")
 
 	time.Sleep(200 * time.Millisecond)
 
-	response, hit, err := cache.FindSimilar("gpt-4", "test L2 metric")
-	assert.NoError(t, err, "FindSimilar should work with L2 metric")
-	if hit {
-		assert.NotNil(t, response, "Response should be found")
-	}
+	result, err := cache.LookupSimilarWithThreshold(context.Background(), "gpt-4", "test L2 metric", 0.5)
+	require.NoError(t, err, "FindSimilar should work with L2 metric")
+	require.True(t, result.Found, "repeating the cached query verbatim must hit (similarity=%.4f, threshold=0.5)",
+		result.Similarity)
+	assert.JSONEq(t, `{"result":"L2"}`, string(result.ResponseBody))
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_IPMetricType(t *testing.T) {
-	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
-		t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
-	}
+	cache := newIsolatedValkeyCache(t, "ip", "IP", 0.5)
 
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		t.Skipf("Failed to initialize BERT model: %v", err)
-	}
-
-	host, port := valkeyIntegrationAddr()
-	valkeyConfig := &config.ValkeyConfig{}
-	valkeyConfig.Connection.Host = host
-	valkeyConfig.Connection.Port = port
-	valkeyConfig.Connection.Database = 0
-
-	valkeyConfig.Index.Name = fmt.Sprintf("test_ip_idx_%d", time.Now().UnixNano())
-	valkeyConfig.Index.Prefix = "ip:"
-	valkeyConfig.Index.VectorField.Name = "embedding"
-	valkeyConfig.Index.VectorField.Dimension = 384
-	valkeyConfig.Index.VectorField.MetricType = "IP"
-	valkeyConfig.Index.IndexType = "HNSW"
-	valkeyConfig.Index.Params.M = 16
-	valkeyConfig.Index.Params.EfConstruction = 64
-
-	valkeyConfig.Search.TopK = 1
-	valkeyConfig.Development.DropIndexOnStartup = true
-	valkeyConfig.Development.AutoCreateIndex = true
-
-	cache, err := NewValkeyCache(ValkeyCacheOptions{
-		SimilarityThreshold: 0.5,
-		TTLSeconds:          300,
-		Enabled:             true,
-		Config:              valkeyConfig,
-		EmbeddingModel:      "bert",
-	})
-	require.NoError(t, err, "Failed to create cache with IP metric")
-	defer func() { _ = cache.Close() }()
-
-	err = cache.AddEntry("req_ip_1", "gpt-4", "test IP metric", []byte("{}"), []byte(`{"result":"IP"}`), 300)
+	err := cache.AddEntry(context.Background(), "req_ip_1", "gpt-4", "test IP metric", []byte("{}"), []byte(`{"result":"IP"}`), 300)
 	assert.NoError(t, err, "AddEntry should work with IP metric")
 
 	time.Sleep(200 * time.Millisecond)
 
-	response, hit, err := cache.FindSimilar("gpt-4", "test IP metric")
-	assert.NoError(t, err, "FindSimilar should work with IP metric")
-	if hit {
-		assert.NotNil(t, response, "Response should be found")
-	}
+	result, err := cache.LookupSimilarWithThreshold(context.Background(), "gpt-4", "test IP metric", 0.5)
+	require.NoError(t, err, "FindSimilar should work with IP metric")
+	require.True(t, result.Found, "repeating the cached query verbatim must hit (similarity=%.4f, threshold=0.5)",
+		result.Similarity)
+	assert.JSONEq(t, `{"result":"IP"}`, string(result.ResponseBody))
 }

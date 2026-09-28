@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-在策略需要**单条路由内嵌套 `AND`、`OR`、`NOT`** 时使用 `config/decision/composite/`。
+在策略需要**单条路由内嵌套 `AND`、`OR`、`NOT`** 时使用 `config/fragments/decision/composite/`。
 
 适合业务逻辑与安全逻辑必须共存的真实生产策略。
 
@@ -36,7 +36,7 @@ translation:
 
 ## 配置
 
-源片段：`config/decision/composite/priority-safe-escalation.yaml`
+源片段：`config/fragments/decision/composite/priority-safe-escalation.yaml`
 
 ```yaml
 routing:

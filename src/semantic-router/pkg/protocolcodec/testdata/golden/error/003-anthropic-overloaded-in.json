@@ -1,0 +1,8 @@
+{
+  "error": {
+    "message": "Provider overloaded.",
+    "type": "overloaded_error"
+  },
+  "request_id": "req_provider_1",
+  "type": "error"
+}

@@ -130,3 +130,14 @@ func truncateString(s string, maxLen int) string {
 	}
 	return s[:maxLen-3] + "..."
 }
+
+// headerListContains reports whether a comma-separated header value contains
+// the exact entry after trimming whitespace around each element.
+func headerListContains(headerValue string, entry string) bool {
+	for _, part := range strings.Split(headerValue, ",") {
+		if strings.TrimSpace(part) == entry {
+			return true
+		}
+	}
+	return false
+}

@@ -3,10 +3,14 @@
 package apiserver
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
@@ -65,7 +69,7 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 			PromptGuard: config.PromptGuardConfig{
 				Enabled:              true,
 				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
-				UseMmBERT32K:         true,
+				Variant:              config.PromptGuardVariantMmBERT32K,
 				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
 			},
 			HallucinationMitigation: config.HallucinationMitigationConfig{
@@ -105,11 +109,45 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 				Categories: []config.Category{
 					{CategoryMetadata: config.CategoryMetadata{Name: "billing"}},
 				},
+				FactCheckRules: []config.FactCheckRule{
+					{Name: "verification-needed"},
+				},
 				UserFeedbackRules: []config.UserFeedbackRule{
 					{Name: "satisfied"},
 				},
 			},
+			Decisions: []config.Decision{{
+				Name: "model-backed-route",
+				Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
+					{Type: config.SignalTypeFactCheck, Name: "verification-needed"},
+					{Type: config.SignalTypeUserFeedback, Name: "satisfied"},
+				}},
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginHallucination,
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+					}),
+				}},
+			}},
 		},
+	}
+}
+
+func TestCategoryModelInfoReportsEffectiveVariant(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		model    config.CategoryModel
+		wantType string
+	}{
+		{name: "mmbert32k", model: config.CategoryModel{Variant: config.CategoryVariantMmBERT32K}, wantType: config.CategoryVariantMmBERT32K},
+		{name: "modernbert", model: config.CategoryModel{Variant: config.CategoryVariantModernBERT}, wantType: config.CategoryVariantModernBERT},
+		{name: "remote protocol", model: config.CategoryModel{Backend: &config.RemoteClassifierBackend{Protocol: config.RemoteClassifierProtocolHTTPClassify}}, wantType: config.RemoteClassifierProtocolHTTPClassify},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := categoryModelInfoType(test.model); got != test.wantType {
+				t.Fatalf("category model type = %q, want %q", got, test.wantType)
+			}
+		})
 	}
 }
 
@@ -185,6 +223,113 @@ func TestBuildModelsInfoResponseIncludesRuntimeSummaryAndRegistryMetadata(t *tes
 	}
 	if categoryModel.Registry.LocalPath != "models/mmbert32k-intent-classifier-merged" {
 		t.Fatalf("expected canonical local path, got %+v", categoryModel.Registry)
+	}
+}
+
+func TestLoadModelsRuntimeStateUsesReplicaLocalSnapshot(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "router-config.yaml")
+	cfg := &config.RouterConfig{StartupStatus: config.StartupStatusConfig{StoreBackend: "file"}}
+	local := routerruntime.NewRegistry(cfg)
+	other := routerruntime.NewRegistry(cfg)
+	localWriter := local.StartupStatusWriter(startupstatus.NewFileWriter(configPath))
+	otherWriter := other.StartupStatusWriter(startupstatus.NewFileWriter(configPath))
+
+	localState := startupstatus.State{
+		Phase:         "initializing_models",
+		PendingModels: []string{"local-model"},
+		TotalModels:   2,
+		ReadyModels:   1,
+	}
+	if err := localWriter.Write(localState); err != nil {
+		t.Fatalf("write local runtime state: %v", err)
+	}
+	if err := otherWriter.Write(startupstatus.State{
+		Phase:       "ready",
+		Ready:       true,
+		TotalModels: 99,
+		ReadyModels: 99,
+	}); err != nil {
+		t.Fatalf("write shared runtime state: %v", err)
+	}
+
+	apiServer := &ClassificationAPIServer{
+		configPath:      configPath,
+		runtimeRegistry: local,
+	}
+	state := apiServer.loadModelsRuntimeState()
+	if state == nil {
+		t.Fatal("expected replica-local runtime state")
+	}
+	if state.Phase != localState.Phase || state.Ready != localState.Ready ||
+		state.ReadyModels != localState.ReadyModels || state.TotalModels != localState.TotalModels {
+		t.Fatalf("loaded another replica's runtime state: %+v", state)
+	}
+
+	unobserved := &ClassificationAPIServer{
+		configPath:      configPath,
+		runtimeRegistry: routerruntime.NewRegistry(cfg),
+	}
+	if state := unobserved.loadModelsRuntimeState(); state != nil {
+		t.Fatalf("unobserved replica loaded shared runtime state: %+v", state)
+	}
+}
+
+func TestModelsInventoryHTTPKeepsReplicaStatusWhenStartupFileIsShared(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "router-config.yaml")
+	cfg := &config.RouterConfig{StartupStatus: config.StartupStatusConfig{StoreBackend: "file"}}
+	starting := routerruntime.NewRegistry(cfg)
+	ready := routerruntime.NewRegistry(cfg)
+
+	startingServer := &ClassificationAPIServer{config: cfg, configPath: configPath, runtimeRegistry: starting}
+	readyServer := &ClassificationAPIServer{config: cfg, configPath: configPath, runtimeRegistry: ready}
+	serveInventory := func(api *ClassificationAPIServer) *httptest.Server {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/api/v1/inventory/models", api.handleModelsInfo)
+		server := httptest.NewServer(mux)
+		t.Cleanup(server.Close)
+		return server
+	}
+	startingHTTP := serveInventory(startingServer)
+	readyHTTP := serveInventory(readyServer)
+
+	startingWriter := starting.StartupStatusWriter(startupstatus.NewFileWriter(configPath))
+	readyWriter := ready.StartupStatusWriter(startupstatus.NewFileWriter(configPath))
+	if err := startingWriter.Write(startupstatus.State{Phase: "initializing_models", Ready: false, TotalModels: 2, ReadyModels: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := readyWriter.Write(startupstatus.State{Phase: "ready", Ready: true, TotalModels: 3, ReadyModels: 3}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name   string
+		server *httptest.Server
+		phase  string
+		ready  bool
+		loaded int
+		total  int
+	}{
+		{name: "starting replica", server: startingHTTP, phase: "initializing_models", ready: false, loaded: 1, total: 2},
+		{name: "ready replica", server: readyHTTP, phase: "ready", ready: true, loaded: 3, total: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response, err := tc.server.Client().Get(tc.server.URL + "/api/v1/inventory/models")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("inventory status = %d, want 200", response.StatusCode)
+			}
+			var body ModelsInfoResponse
+			if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Summary.Phase != tc.phase || body.Summary.Ready != tc.ready ||
+				body.Summary.LoadedModels != tc.loaded || body.Summary.TotalModels != tc.total {
+				t.Fatalf("inventory exposed another replica's startup state: %+v", body.Summary)
+			}
+		})
 	}
 }
 
@@ -267,6 +412,53 @@ func TestBuildModelsInfoResponseIncludesConfiguredAuxiliaryModels(t *testing.T) 
 
 	for name, path := range expected {
 		requireReadyModel(t, modelsByName, name, path)
+	}
+}
+
+func TestBuildHallucinationModelsReportsTokenSpansAdapter(t *testing.T) {
+	cfg := buildAuxiliaryModelsConfig()
+	cfg.ExternalModels = append(cfg.ExternalModels, config.ExternalModelConfig{Name: "grounding", ModelName: "grounding-spans", ModelRole: config.ModelRoleClassification, ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 9000}})
+	if cfg.ModelDeployments == nil {
+		cfg.ModelDeployments = map[string]config.ModelDeployment{}
+	}
+	if cfg.ModelBindings == nil {
+		cfg.ModelBindings = map[string]config.ModelBinding{}
+	}
+	cfg.ModelDeployments["grounding"] = config.ModelDeployment{Provider: "http", ExternalModel: "grounding"}
+	cfg.ModelBindings["hallucination_detector"] = config.ModelBinding{Deployment: "grounding", Adapter: config.RemoteClassifierProtocolHTTPClassify, Contract: config.RemoteClassifierContractTokenSpans}
+
+	detector := requireModelInfo(t, buildHallucinationModels(cfg, classifierModelAvailability{}), "hallucination_detector")
+	if detector.Metadata["model_type"] != "token_spans_endpoint" || detector.Metadata["adapter"] != config.RemoteClassifierProtocolHTTPClassify || detector.Metadata["lifecycle"] != "external" {
+		t.Fatalf("token_spans detector metadata is not truthful: %+v", detector.Metadata)
+	}
+	if _, ok := detector.Metadata["include_explanation"]; ok {
+		t.Fatalf("a token_spans service has no explanation prompt to advertise: %+v", detector.Metadata)
+	}
+}
+
+func TestBuildHallucinationModelsOmitsLocalExplainerForEndpointBackend(t *testing.T) {
+	cfg := buildAuxiliaryModelsConfig()
+	cfg.HallucinationMitigation.HallucinationModel.Backend = config.HallucinationBackendEndpoint
+	cfg.HallucinationMitigation.HallucinationModel.Endpoint = "http://127.0.0.1:8077/v1"
+
+	models := buildHallucinationModels(cfg, classifierModelAvailability{})
+	detector := requireModelInfo(t, models, "hallucination_detector")
+	if detector.Metadata["backend"] != config.HallucinationBackendEndpoint ||
+		detector.Metadata["model_type"] != "openai_compatible_endpoint" ||
+		detector.Metadata["lifecycle"] != "external" {
+		t.Fatalf("endpoint detector metadata is not truthful: %+v", detector.Metadata)
+	}
+	if _, ok := detector.Metadata["use_cpu"]; ok {
+		t.Fatalf("endpoint detector must not advertise local runtime fields: %+v", detector.Metadata)
+	}
+	enriched := enrichModelInfo(detector, nil)
+	if enriched.Registry != nil || enriched.ResolvedModelPath != "" {
+		t.Fatalf("endpoint detector must not acquire local model metadata: %+v", enriched)
+	}
+	for _, model := range models {
+		if model.Name == "hallucination_explainer" {
+			t.Fatal("endpoint backend must not advertise the local hallucination explainer")
+		}
 	}
 }
 

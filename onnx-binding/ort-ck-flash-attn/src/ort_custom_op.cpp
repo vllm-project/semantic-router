@@ -1,266 +1,251 @@
-// ORT custom-op shared library: registers com.ck::CKFlashAttention.
-// Uses the raw ORT C API only -- no C++ wrappers that reference OrtGetApiBase.
-
+// ORT custom-op library for com.ck::CKFlashAttention. All failures return an
+// OrtStatus to the owning session; this library never selects another EP.
 #include "onnxruntime_c_api.h"
-
-#include <cmath>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <vector>
-
 #include "ck_flash_attn.h"
 
-static const OrtApi* g_api = nullptr;
+#include <atomic>
+#include <cmath>
+#include <cstdint>
+#include <exception>
+#include <limits>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
 
-// ── Helpers ────────────────────────────────────────────────────
-#define CHECK_ORT(expr)                                   \
-    do {                                                  \
-        OrtStatus* _s = (expr);                           \
-        if (_s) return _s;                                \
-    } while (0)
+#define CHECK_ORT(expr) do { OrtStatus* status = (expr); if (status) return status; } while (0)
 
-// ── CKFlashAttention kernel ────────────────────────────────────
-struct CKFlashAttentionKernel {
+namespace {
+std::atomic<const OrtApi*> shape_api{nullptr};
+
+struct Kernel {
+    const OrtApi* api;
     float scale;
-    int32_t window_size_left;
-    int32_t window_size_right;
+    int32_t left;
+    int32_t right;
 };
 
-static void* CreateKernel(const OrtApi* api, const OrtKernelInfo* info) {
-    auto* k = new CKFlashAttentionKernel();
-    api->KernelInfoGetAttribute_float(info, "scale", &k->scale);
-
-    int64_t wl = -1, wr = -1;
-    if (api->KernelInfoGetAttribute_int64(info, "window_size_left", &wl) != nullptr)
-        wl = -1;
-    if (api->KernelInfoGetAttribute_int64(info, "window_size_right", &wr) != nullptr)
-        wr = -1;
-
-    k->window_size_left  = static_cast<int32_t>(wl);
-    k->window_size_right = static_cast<int32_t>(wr);
-    return k;
+OrtStatus* Invalid(const OrtApi* api, const char* message) {
+    return api->CreateStatus(ORT_INVALID_ARGUMENT, message);
 }
 
-static void KernelCompute(void* op_kernel, OrtKernelContext* context) {
-    auto* kern = static_cast<CKFlashAttentionKernel*>(op_kernel);
-    const OrtApi* api = g_api;
+struct ShapeInfo {
+    const OrtApi* api;
+    OrtTensorTypeAndShapeInfo* value = nullptr;
+    ~ShapeInfo() { api->ReleaseTensorTypeAndShapeInfo(value); }
+};
 
-    // Get inputs
-    const OrtValue* q_val = nullptr;
-    const OrtValue* k_val = nullptr;
-    const OrtValue* v_val = nullptr;
-    const OrtValue* mask_val = nullptr;
-    api->KernelContext_GetInput(context, 0, &q_val);
-    api->KernelContext_GetInput(context, 1, &k_val);
-    api->KernelContext_GetInput(context, 2, &v_val);
-    api->KernelContext_GetInput(context, 3, &mask_val);
+struct Tensor {
+    std::vector<int64_t> shape;
+    size_t count = 0;
+    void* data = nullptr;
+};
 
-    // Q shape: [B, H, Sq, D]
-    OrtTensorTypeAndShapeInfo* q_info = nullptr;
-    api->GetTensorTypeAndShape(q_val, &q_info);
-    size_t q_ndim = 0;
-    api->GetDimensionsCount(q_info, &q_ndim);
-    std::vector<int64_t> q_shape(q_ndim);
-    api->GetDimensions(q_info, q_shape.data(), q_ndim);
-    api->ReleaseTensorTypeAndShapeInfo(q_info);
+OrtStatus* ReadTensor(const OrtApi* api, const OrtValue* value, Tensor& tensor) {
+    if (!value) return Invalid(api, "CKFlashAttention: required tensor is absent");
+    ShapeInfo info{api};
+    CHECK_ORT(api->GetTensorTypeAndShape(value, &info.value));
+    ONNXTensorElementDataType type;
+    CHECK_ORT(api->GetTensorElementType(info.value, &type));
+    if (type != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16)
+        return Invalid(api, "CKFlashAttention: tensors must be float16");
+    size_t rank = 0;
+    CHECK_ORT(api->GetDimensionsCount(info.value, &rank));
+    if (rank > 4) return Invalid(api, "CKFlashAttention: tensor rank exceeds four");
+    tensor.shape.resize(rank);
+    CHECK_ORT(api->GetDimensions(info.value, tensor.shape.data(), rank));
+    CHECK_ORT(api->GetTensorShapeElementCount(info.value, &tensor.count));
+    // CK's dispatch strides are signed int32. Reject overflow before any cast
+    // or multiplication, including the optional dense additive bias.
+    if (tensor.count > static_cast<size_t>(std::numeric_limits<int32_t>::max()))
+        return Invalid(api, "CKFlashAttention: tensor exceeds int32 dispatch indexing");
+    for (int64_t dimension : tensor.shape) {
+        if (dimension < 0 || dimension > std::numeric_limits<int32_t>::max())
+            return Invalid(api, "CKFlashAttention: invalid tensor dimension");
+    }
+    if (tensor.count) {
+        CHECK_ORT(api->GetTensorMutableData(const_cast<OrtValue*>(value), &tensor.data));
+        if (!tensor.data) return Invalid(api, "CKFlashAttention: tensor data is null");
+    }
+    return nullptr;
+}
 
-    int64_t batch    = q_shape[0];
-    int64_t nhead    = q_shape[1];
-    int64_t seqlen_q = q_shape[2];
-    int64_t hdim     = q_shape[3];
+OrtStatus* CreateKernelV2(const OrtCustomOp*, const OrtApi* api,
+                          const OrtKernelInfo* info, void** output) {
+    *output = nullptr;
+    try {
+        auto kernel = std::make_unique<Kernel>();
+        kernel->api = api;
+        CHECK_ORT(api->KernelInfoGetAttribute_float(info, "scale", &kernel->scale));
+        if (!std::isfinite(kernel->scale) || kernel->scale <= 0)
+            return Invalid(api, "CKFlashAttention: scale must be finite and positive");
+        // Exporters specify both attributes, including -1 for global attention.
+        // Missing or wrongly typed attributes must not silently change masking.
+        int64_t left = 0, right = 0;
+        CHECK_ORT(api->KernelInfoGetAttribute_int64(info, "window_size_left", &left));
+        CHECK_ORT(api->KernelInfoGetAttribute_int64(info, "window_size_right", &right));
+        if (left < -1 || right < -1 || left > INT32_MAX || right > INT32_MAX)
+            return Invalid(api, "CKFlashAttention: window bounds must be -1 or nonnegative int32");
+        kernel->left = static_cast<int32_t>(left);
+        kernel->right = static_cast<int32_t>(right);
+        *output = kernel.release();
+        return nullptr;
+    } catch (const std::exception& error) {
+        return api->CreateStatus(ORT_RUNTIME_EXCEPTION, error.what());
+    } catch (...) {
+        return api->CreateStatus(ORT_RUNTIME_EXCEPTION, "CKFlashAttention: kernel creation failed");
+    }
+}
 
-    // K shape for seqlen_k
-    OrtTensorTypeAndShapeInfo* k_info = nullptr;
-    api->GetTensorTypeAndShape(k_val, &k_info);
-    size_t k_ndim = 0;
-    api->GetDimensionsCount(k_info, &k_ndim);
-    std::vector<int64_t> k_shape(k_ndim);
-    api->GetDimensions(k_info, k_shape.data(), k_ndim);
-    api->ReleaseTensorTypeAndShapeInfo(k_info);
-    int64_t seqlen_k = k_shape[2];
-
-    // Allocate output
-    OrtValue* out_val = nullptr;
-    api->KernelContext_GetOutput(context, 0, q_shape.data(), q_ndim, &out_val);
-
-    // Get raw data pointers
-    void* q_data = nullptr;
-    void* k_data = nullptr;
-    void* v_data = nullptr;
-    void* o_data = nullptr;
-    api->GetTensorMutableData(const_cast<OrtValue*>(q_val), &q_data);
-    api->GetTensorMutableData(const_cast<OrtValue*>(k_val), &k_data);
-    api->GetTensorMutableData(const_cast<OrtValue*>(v_val), &v_data);
-    api->GetTensorMutableData(out_val, &o_data);
-
-    // Optional mask / additive bias.
-    // Shape can be [B, H_b, Sq, Sk] (2-D) or [B, H_b, 1, Sk] (1-D broadcast).
-    const void* mask_data = nullptr;
-    int32_t nhead_bias = 0;
-    int32_t bias_broadcast_sq = 0;
-    if (mask_val) {
-        OrtTensorTypeAndShapeInfo* m_info = nullptr;
-        api->GetTensorTypeAndShape(mask_val, &m_info);
-        size_t m_count = 0;
-        api->GetTensorShapeElementCount(m_info, &m_count);
-        size_t m_ndim = 0;
-        api->GetDimensionsCount(m_info, &m_ndim);
-        std::vector<int64_t> m_shape(m_ndim);
-        api->GetDimensions(m_info, m_shape.data(), m_ndim);
-        api->ReleaseTensorTypeAndShapeInfo(m_info);
-        if (m_count > 0) {
-            void* tmp = nullptr;
-            api->GetTensorMutableData(const_cast<OrtValue*>(mask_val), &tmp);
-            mask_data = tmp;
-            nhead_bias = (m_ndim >= 2) ? static_cast<int32_t>(m_shape[1]) : 1;
-            // Detect 1-D broadcast: Q dimension == 1 while actual seqlen_q > 1
-            if (m_ndim >= 3 && m_shape[2] == 1 && seqlen_q > 1)
-                bias_broadcast_sq = 1;
+OrtStatus* Compute(Kernel& kernel, OrtKernelContext* context) {
+    const OrtApi* api = kernel.api;
+    const OrtValue *q_value = nullptr, *k_value = nullptr, *v_value = nullptr, *bias_value = nullptr;
+    size_t count = 0;
+    CHECK_ORT(api->KernelContext_GetInputCount(context, &count));
+    if (count < 3 || count > 4) return Invalid(api, "CKFlashAttention: expected Q, K, V and optional bias");
+    CHECK_ORT(api->KernelContext_GetInput(context, 0, &q_value));
+    CHECK_ORT(api->KernelContext_GetInput(context, 1, &k_value));
+    CHECK_ORT(api->KernelContext_GetInput(context, 2, &v_value));
+    if (count == 4) CHECK_ORT(api->KernelContext_GetInput(context, 3, &bias_value));
+    Tensor q, k, v, bias;
+    CHECK_ORT(ReadTensor(api, q_value, q));
+    CHECK_ORT(ReadTensor(api, k_value, k));
+    CHECK_ORT(ReadTensor(api, v_value, v));
+    if (q.shape.size() != 4 || k.shape.size() != 4 || v.shape.size() != 4 ||
+        !q.count || !k.count || !v.count)
+        return Invalid(api, "CKFlashAttention: Q/K/V must be nonempty rank-four tensors");
+    if (q.shape[0] != k.shape[0] || q.shape[1] != k.shape[1] ||
+        q.shape[3] != k.shape[3] || k.shape != v.shape)
+        return Invalid(api, "CKFlashAttention: incompatible batch, heads, sequence or head dimensions");
+    const int64_t dimension = q.shape[3];
+    if (dimension != 32 && dimension != 64 && dimension != 128)
+        return Invalid(api, "CKFlashAttention: head dimension must be 32, 64 or 128");
+    int32_t bias_heads = 0, broadcast_query = 0;
+    if (bias_value) {
+        CHECK_ORT(ReadTensor(api, bias_value, bias));
+        if (bias.count) {
+            if (bias.shape.size() != 4 || bias.shape[0] != q.shape[0] ||
+                (bias.shape[1] != 1 && bias.shape[1] != q.shape[1]) ||
+                (bias.shape[2] != 1 && bias.shape[2] != q.shape[2]) ||
+                bias.shape[3] != k.shape[2])
+                return Invalid(api, "CKFlashAttention: bias must be [B,1|H,1|Sq,Sk]");
+            bias_heads = static_cast<int32_t>(bias.shape[1]);
+            broadcast_query = bias.shape[2] == 1 && q.shape[2] != 1;
         }
     }
+    OrtValue* output = nullptr;
+    CHECK_ORT(api->KernelContext_GetOutput(context, 0, q.shape.data(), q.shape.size(), &output));
+    if (!output) return Invalid(api, "CKFlashAttention: output allocation returned null");
+    void* output_data = nullptr;
+    CHECK_ORT(api->GetTensorMutableData(output, &output_data));
+    if (!output_data) return Invalid(api, "CKFlashAttention: output data is null");
+    void* stream = nullptr;
+    CHECK_ORT(api->KernelContext_GetGPUComputeStream(context, &stream));
+    const int result = ck_flash_attn_fwd(
+        static_cast<hipStream_t>(stream), q.data, k.data, v.data, bias.data, output_data,
+        static_cast<int32_t>(q.shape[0]), static_cast<int32_t>(q.shape[1]),
+        static_cast<int32_t>(q.shape[2]), static_cast<int32_t>(k.shape[2]),
+        static_cast<int32_t>(dimension), bias_heads, kernel.scale, kernel.left,
+        kernel.right, kernel.left >= 0 || kernel.right >= 0, broadcast_query);
+    if (result != 0) {
+        const std::string message = "CKFlashAttention: HIP/CK dispatch failed with code " + std::to_string(result);
+        return api->CreateStatus(ORT_EP_FAIL, message.c_str());
+    }
+    return nullptr;
+}
 
-    // Determine mask_type: use MASK_FROM_TOP_LEFT (1) when windowing is active.
-    int32_t mask_type = 0;
-    bool has_window = (kern->window_size_left >= 0 || kern->window_size_right >= 0);
-    if (has_window)
-        mask_type = 1;
+OrtStatus* KernelComputeV2(void* state, OrtKernelContext* context) {
+    auto& kernel = *static_cast<Kernel*>(state);
+    try { return Compute(kernel, context); }
+    catch (const std::exception& error) { return kernel.api->CreateStatus(ORT_RUNTIME_EXCEPTION, error.what()); }
+    catch (...) { return kernel.api->CreateStatus(ORT_RUNTIME_EXCEPTION, "CKFlashAttention: compute failed"); }
+}
 
-    void* stream_ptr = nullptr;
-    api->KernelContext_GetGPUComputeStream(context, &stream_ptr);
-    hipStream_t hip_stream = static_cast<hipStream_t>(stream_ptr);
+void KernelDestroy(void* state) { delete static_cast<Kernel*>(state); }
+const char* GetName(const OrtCustomOp*) { return "CKFlashAttention"; }
+const char* GetEP(const OrtCustomOp*) { return "ROCMExecutionProvider"; }
+size_t InputCount(const OrtCustomOp*) { return 4; }
+size_t OutputCount(const OrtCustomOp*) { return 1; }
+ONNXTensorElementDataType TensorType(const OrtCustomOp*, size_t) { return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16; }
+OrtCustomOpInputOutputCharacteristic InputCharacteristic(const OrtCustomOp*, size_t i) {
+    return i == 3 ? INPUT_OUTPUT_OPTIONAL : INPUT_OUTPUT_REQUIRED;
+}
+OrtCustomOpInputOutputCharacteristic OutputCharacteristic(const OrtCustomOp*, size_t) { return INPUT_OUTPUT_REQUIRED; }
+OrtMemType InputMemory(const OrtCustomOp*, size_t) { return OrtMemTypeDefault; }
+int Zero(const OrtCustomOp*) { return 0; }
+int StartVersion(const OrtCustomOp*) { return 1; }
+int EndVersion(const OrtCustomOp*) { return 999; }
+OrtStatus* InferOutputShape(const OrtCustomOp*, OrtShapeInferContext* context) {
+    const OrtApi* api = shape_api.load(std::memory_order_acquire);
+    OrtTensorTypeAndShapeInfo* info = nullptr;
+    CHECK_ORT(api->ShapeInferContext_GetInputTypeShape(context, 0, &info));
+    return api->ShapeInferContext_SetOutputTypeShape(context, 0, info);
+}
 
-    int rc = ck_flash_attn_fwd(
-        hip_stream,
-        q_data, k_data, v_data,
-        mask_data, o_data,
-        static_cast<int32_t>(batch),
-        static_cast<int32_t>(nhead),
-        static_cast<int32_t>(seqlen_q),
-        static_cast<int32_t>(seqlen_k),
-        static_cast<int32_t>(hdim),
-        nhead_bias,
-        kern->scale,
-        kern->window_size_left,
-        kern->window_size_right,
-        mask_type,
-        bias_broadcast_sq);
+struct Registration {
+    std::mutex mutex;
+    const OrtApi* api = nullptr;
+    OrtCustomOp op{};
+    OrtCustomOpDomain* domain = nullptr;
+    // RegisterCustomOpsLibrary_V2 retains the library for all sessions using it.
+    // The immutable shared domain must live equally long (ORT C API contract).
+    ~Registration() { if (domain) api->ReleaseCustomOpDomain(domain); }
+};
+Registration registration;
 
-    if (rc != 0) {
-        fprintf(stderr, "CKFlashAttention: ck_flash_attn_fwd returned %d "
-                "(B=%ld H=%ld Sq=%ld Sk=%ld D=%ld wl=%d wr=%d)\n",
-                rc, batch, nhead, seqlen_q, seqlen_k, hdim,
-                kern->window_size_left, kern->window_size_right);
+OrtCustomOp MakeOp() {
+    OrtCustomOp op{};
+    op.version = ORT_API_VERSION;
+    // ORT >= 1.16 selects V2 callbacks. No legacy callback can swallow errors.
+    op.CreateKernelV2 = CreateKernelV2;
+    op.KernelComputeV2 = KernelComputeV2;
+    op.KernelDestroy = KernelDestroy;
+    op.GetName = GetName;
+    op.GetExecutionProviderType = GetEP;
+    op.GetInputTypeCount = InputCount;
+    op.GetOutputTypeCount = OutputCount;
+    op.GetInputType = TensorType;
+    op.GetOutputType = TensorType;
+    op.GetInputCharacteristic = InputCharacteristic;
+    op.GetOutputCharacteristic = OutputCharacteristic;
+    op.GetInputMemoryType = InputMemory;
+    op.GetVariadicInputMinArity = Zero;
+    op.GetVariadicInputHomogeneity = Zero;
+    op.GetVariadicOutputMinArity = Zero;
+    op.GetVariadicOutputHomogeneity = Zero;
+    op.InferOutputShapeFn = InferOutputShape;
+    op.GetStartVersion = StartVersion;
+    op.GetEndVersion = EndVersion;
+    return op;
+}
+}  // namespace
+
+extern "C" ORT_EXPORT OrtStatus* ORT_API_CALL RegisterCustomOps(
+    OrtSessionOptions* options, const OrtApiBase* api_base) {
+    const OrtApi* api = api_base->GetApi(ORT_API_VERSION);
+    if (!api) {
+        // Every valid ORT ApiBase supports v1's CreateStatus. Never report
+        // success when this library's required API version is unavailable.
+        return api_base->GetApi(1)->CreateStatus(ORT_FAIL, "CKFlashAttention: incompatible ORT API version");
+    }
+    try {
+        std::lock_guard<std::mutex> lock(registration.mutex);
+        if (registration.api && registration.api != api)
+            return Invalid(api, "CKFlashAttention: one library cannot mix ORT API instances");
+        if (!registration.domain) {
+            OrtCustomOpDomain* domain = nullptr;
+            CHECK_ORT(api->CreateCustomOpDomain("com.ck", &domain));
+            registration.op = MakeOp();
+            OrtStatus* status = api->CustomOpDomain_Add(domain, &registration.op);
+            if (status) { api->ReleaseCustomOpDomain(domain); return status; }
+            registration.api = api;
+            registration.domain = domain;
+            shape_api.store(api, std::memory_order_release);
+        }
+        return api->AddCustomOpDomain(options, registration.domain);
+    } catch (const std::exception& error) {
+        return api->CreateStatus(ORT_RUNTIME_EXCEPTION, error.what());
+    } catch (...) {
+        return api->CreateStatus(ORT_RUNTIME_EXCEPTION, "CKFlashAttention: registration failed");
     }
 }
-
-static void KernelDestroy(void* op_kernel) {
-    delete static_cast<CKFlashAttentionKernel*>(op_kernel);
-}
-
-// ── OrtCustomOp vtable ─────────────────────────────────────────
-static const char* GetOpName(const OrtCustomOp*) { return "CKFlashAttention"; }
-static const char* GetEPType(const OrtCustomOp*) { return "ROCMExecutionProvider"; }
-
-static size_t GetInputTypeCount(const OrtCustomOp*) { return 4; }
-static ONNXTensorElementDataType GetInputType(const OrtCustomOp*, size_t) {
-    return ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED;
-}
-static OrtCustomOpInputOutputCharacteristic GetInputCharacteristic(const OrtCustomOp*, size_t i) {
-    if (i == 3) return OrtCustomOpInputOutputCharacteristic::INPUT_OUTPUT_OPTIONAL;
-    return OrtCustomOpInputOutputCharacteristic::INPUT_OUTPUT_REQUIRED;
-}
-
-static size_t GetOutputTypeCount(const OrtCustomOp*) { return 1; }
-static ONNXTensorElementDataType GetOutputType(const OrtCustomOp*, size_t) {
-    return ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED;
-}
-static OrtCustomOpInputOutputCharacteristic GetOutputCharacteristic(const OrtCustomOp*, size_t) {
-    return OrtCustomOpInputOutputCharacteristic::INPUT_OUTPUT_REQUIRED;
-}
-
-static OrtStatus* CreateKernelV2(const OrtCustomOp*, const OrtApi* api, const OrtKernelInfo* info, void** kernel) {
-    *kernel = CreateKernel(api, info);
-    return nullptr;
-}
-
-static OrtStatus* KernelComputeV2(void* op_kernel, OrtKernelContext* context) {
-    KernelCompute(op_kernel, context);
-    return nullptr;
-}
-
-static OrtStatus* InferOutputShape(const OrtCustomOp*, OrtShapeInferContext* ctx) {
-    const OrtTensorTypeAndShapeInfo* input_info = nullptr;
-    auto status = g_api->ShapeInferContext_GetInputTypeShape(ctx, 0, const_cast<OrtTensorTypeAndShapeInfo**>(&input_info));
-    if (status) return status;
-    status = g_api->ShapeInferContext_SetOutputTypeShape(ctx, 0, input_info);
-    return status;
-}
-
-static int GetStartVersion(const OrtCustomOp*) { return 1; }
-static int GetEndVersion(const OrtCustomOp*) { return 999; }
-
-static OrtCustomOp g_ck_flash_attn_op = {};
-
-static void* LegacyCreateKernel(const OrtCustomOp* op, const OrtApi* api, const OrtKernelInfo* info) {
-    return CreateKernel(api, info);
-}
-
-static void LegacyKernelCompute(void* op_kernel, OrtKernelContext* context) {
-    KernelCompute(op_kernel, context);
-}
-
-static OrtMemType GetInputMemType(const OrtCustomOp*, size_t) {
-    return OrtMemTypeDefault;
-}
-
-static int ReturnZero(const OrtCustomOp*) { return 0; }
-
-static void InitOp() {
-    memset(&g_ck_flash_attn_op, 0, sizeof(g_ck_flash_attn_op));
-    g_ck_flash_attn_op.version = ORT_API_VERSION;
-    g_ck_flash_attn_op.CreateKernel = LegacyCreateKernel;
-    g_ck_flash_attn_op.GetName = GetOpName;
-    g_ck_flash_attn_op.GetExecutionProviderType = GetEPType;
-    g_ck_flash_attn_op.GetInputType = GetInputType;
-    g_ck_flash_attn_op.GetInputTypeCount = GetInputTypeCount;
-    g_ck_flash_attn_op.GetOutputType = GetOutputType;
-    g_ck_flash_attn_op.GetOutputTypeCount = GetOutputTypeCount;
-    g_ck_flash_attn_op.KernelCompute = LegacyKernelCompute;
-    g_ck_flash_attn_op.KernelDestroy = KernelDestroy;
-    g_ck_flash_attn_op.GetInputCharacteristic = GetInputCharacteristic;
-    g_ck_flash_attn_op.GetOutputCharacteristic = GetOutputCharacteristic;
-    g_ck_flash_attn_op.GetInputMemoryType = GetInputMemType;
-    g_ck_flash_attn_op.GetVariadicInputMinArity = ReturnZero;
-    g_ck_flash_attn_op.GetVariadicInputHomogeneity = ReturnZero;
-    g_ck_flash_attn_op.GetVariadicOutputMinArity = ReturnZero;
-    g_ck_flash_attn_op.GetVariadicOutputHomogeneity = ReturnZero;
-    g_ck_flash_attn_op.CreateKernelV2 = CreateKernelV2;
-    g_ck_flash_attn_op.KernelComputeV2 = KernelComputeV2;
-    g_ck_flash_attn_op.InferOutputShapeFn = InferOutputShape;
-    g_ck_flash_attn_op.GetStartVersion = GetStartVersion;
-    g_ck_flash_attn_op.GetEndVersion = GetEndVersion;
-}
-
-// ── Library entry point ────────────────────────────────────────
-extern "C" {
-
-ORT_EXPORT OrtStatus* ORT_API_CALL RegisterCustomOps(
-    OrtSessionOptions* options,
-    const OrtApiBase* api_base)
-{
-    const OrtApi* api = api_base->GetApi(ORT_API_VERSION);
-    if (!api) return nullptr;
-    g_api = api;
-
-    InitOp();
-
-    OrtCustomOpDomain* domain = nullptr;
-    CHECK_ORT(api->CreateCustomOpDomain("com.ck", &domain));
-    CHECK_ORT(api->CustomOpDomain_Add(domain, &g_ck_flash_attn_op));
-    CHECK_ORT(api->AddCustomOpDomain(options, domain));
-
-    return nullptr;
-}
-
-} // extern "C"

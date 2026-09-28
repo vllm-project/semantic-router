@@ -1,6 +1,7 @@
 package modeldownload
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -73,26 +74,32 @@ func IsGatedModelError(err error, repoID string, hfToken string) bool {
 
 // DownloadModelWithProgress downloads a model with real-time progress output
 func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
+	return DownloadModelWithProgressContext(context.Background(), spec, config)
+}
+
+func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, config DownloadConfig) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if spec.PreparedArtifact != "" {
+		return provisionPreparedArtifact(ctx, spec)
+	}
+	if err := validateArtifactDownload(spec); err != nil {
+		return err
+	}
+	if err := invalidateModelRevision(spec); err != nil {
+		return fmt.Errorf("invalidate model revision: %w", err)
+	}
 	logging.Infof("Downloading model: %s", spec.LocalPath)
 
-	// Build huggingface-cli command
-	args := []string{
-		"download",
-		spec.RepoID,
-		"--local-dir", spec.LocalPath,
-	}
-
-	// Add revision if specified
-	if spec.Revision != "" && spec.Revision != "main" {
-		args = append(args, "--revision", spec.Revision)
-	}
+	args := buildDownloadArgs(spec)
 
 	// Use detected CLI command, default to "hf"
 	cliCmd := hfCommand
 	if cliCmd == "" {
 		cliCmd = "hf"
 	}
-	cmd := exec.Command(cliCmd, args...)
+	cmd := exec.CommandContext(ctx, cliCmd, args...)
 
 	// Set environment variables
 	env := os.Environ()
@@ -113,7 +120,13 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 
 	// Run command with real-time output
 	if err := cmd.Run(); err != nil {
-		if IsGatedModelError(err, spec.RepoID, config.HFToken) {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if immutableModelRevision(spec) {
+			return fmt.Errorf("failed to download pinned model %s: %w", spec.RepoID, err)
+		}
+		if !spec.Strict && IsGatedModelError(err, spec.RepoID, config.HFToken) {
 			logging.Warnf("⚠️  Skipping model '%s' (repo: %s): %v", spec.LocalPath, spec.RepoID, err)
 			logging.Warnf("   This is expected if HF_TOKEN is not available (e.g., PRs from forks)")
 			logging.Warnf("   To download gated models, set HF_TOKEN environment variable")
@@ -122,9 +135,50 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 		return fmt.Errorf("failed to download model %s: %w", spec.RepoID, err)
 	}
 
+	if spec.Strict {
+		complete, err := isSpecComplete(spec)
+		if err != nil {
+			return fmt.Errorf("verify downloaded artifact %s: %w", spec.LocalPath, err)
+		}
+		if !complete {
+			return fmt.Errorf("downloaded artifact %s is missing required provider files", spec.LocalPath)
+		}
+	}
+	if err := recordDownloadedModelRevision(spec); err != nil {
+		return fmt.Errorf("record downloaded model revision: %w", err)
+	}
 	logging.Infof("Successfully downloaded model: %s", spec.LocalPath)
 
 	return nil
+}
+
+// buildDownloadArgs assembles the huggingface-cli argument list for spec.
+//
+// Every exclude pattern gets its own `--exclude` flag. The typer-based `hf download`
+// takes `--exclude` as a repeatable single-value option, so `--exclude a b c` keeps
+// only `a` and treats `b` and `c` as extra positional filenames; the legacy
+// `huggingface-cli download` accepted `nargs=*`. Repeating the flag is the form both
+// CLIs parse the same way, whichever one the image ends up installing.
+func buildDownloadArgs(spec ModelSpec) []string {
+	args := []string{
+		"download",
+		spec.RepoID,
+		"--local-dir", spec.LocalPath,
+	}
+
+	// Add revision if specified
+	if spec.Revision != "" && spec.Revision != "main" {
+		args = append(args, "--revision", spec.Revision)
+	}
+
+	for _, pattern := range spec.ExcludePatterns {
+		if pattern == "" {
+			continue
+		}
+		args = append(args, "--exclude", pattern)
+	}
+
+	return args
 }
 
 // EnsureModels ensures all required models are downloaded
@@ -134,6 +188,15 @@ func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
 
 // EnsureModelsWithProgress ensures all required models are downloaded and reports progress.
 func EnsureModelsWithProgress(specs []ModelSpec, config DownloadConfig, reporter ProgressReporter) error {
+	return EnsureModelsWithProgressContext(context.Background(), specs, config, reporter)
+}
+
+func EnsureModelsWithProgressContext(
+	ctx context.Context,
+	specs []ModelSpec,
+	config DownloadConfig,
+	reporter ProgressReporter,
+) error {
 	// Check which models are missing
 	missing, err := GetMissingModels(specs)
 	if err != nil {
@@ -187,10 +250,13 @@ func EnsureModelsWithProgress(specs []ModelSpec, config DownloadConfig, reporter
 		return nil
 	}
 
-	successCount, skippedCount := downloadMissingModels(missing, config, specs, &pendingModels, &readyCount, reporter)
+	successCount, skippedCount, downloadErr := downloadMissingModels(ctx, missing, config, specs, &pendingModels, &readyCount, reporter)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	if successCount+skippedCount < len(missing) {
-		return fmt.Errorf("failed to download %d out of %d models", len(missing)-successCount-skippedCount, len(missing))
+		return fmt.Errorf("failed to download %d out of %d models: %w", len(missing)-successCount-skippedCount, len(missing), downloadErr)
 	}
 
 	if skippedCount > 0 {
@@ -212,14 +278,18 @@ func EnsureModelsWithProgress(specs []ModelSpec, config DownloadConfig, reporter
 // downloadMissingModels downloads each missing model serially, reporting progress.
 // Returns the number of successfully downloaded and gracefully skipped models.
 func downloadMissingModels(
+	ctx context.Context,
 	missing []ModelSpec,
 	config DownloadConfig,
 	specs []ModelSpec,
 	pendingModels *[]string,
 	readyCount *int,
 	reporter ProgressReporter,
-) (successCount, skippedCount int) {
+) (successCount, skippedCount int, downloadErr error) {
 	for _, spec := range missing {
+		if ctx.Err() != nil {
+			return successCount, skippedCount, downloadErr
+		}
 		reportProgress(reporter, ProgressState{
 			Phase:            "downloading",
 			DownloadingModel: spec.LocalPath,
@@ -228,7 +298,10 @@ func downloadMissingModels(
 			TotalModels:      len(specs),
 			Message:          fmt.Sprintf("Downloading model %s", spec.LocalPath),
 		})
-		if err := DownloadModelWithProgress(spec, config); err != nil {
+		if err := DownloadModelWithProgressContext(ctx, spec, config); err != nil {
+			if ctx.Err() != nil {
+				return successCount, skippedCount, downloadErr
+			}
 			if errors.Is(err, ErrGatedModelSkipped) || strings.Contains(err.Error(), ErrGatedModelSkipped.Error()) {
 				skippedCount++
 				logging.Infof("%s (skipped - gated model, HF_TOKEN not available)", spec.LocalPath)
@@ -243,6 +316,7 @@ func downloadMissingModels(
 				})
 				continue
 			}
+			downloadErr = errors.Join(downloadErr, fmt.Errorf("%s: %w", spec.LocalPath, err))
 			logging.Warnf("Failed to download model %s: %v", spec.RepoID, err)
 			continue
 		}
@@ -257,7 +331,7 @@ func downloadMissingModels(
 			Message:       fmt.Sprintf("Model %s is ready", spec.LocalPath),
 		})
 	}
-	return successCount, skippedCount
+	return successCount, skippedCount, downloadErr
 }
 
 func reportProgress(reporter ProgressReporter, state ProgressState) {
@@ -293,8 +367,12 @@ func removeString(values []string, target string) []string {
 
 // CheckHuggingFaceCLI checks if huggingface-cli is available and sets hfCommand
 func CheckHuggingFaceCLI() error {
+	return CheckHuggingFaceCLIContext(context.Background())
+}
+
+func CheckHuggingFaceCLIContext(ctx context.Context) error {
 	// Try 'hf env' command first (new recommended command)
-	cmd := exec.Command("hf", "env")
+	cmd := exec.CommandContext(ctx, "hf", "env")
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		hfCommand = "hf"
@@ -310,10 +388,16 @@ func CheckHuggingFaceCLI() error {
 		logging.Infof("Found huggingface-cli (hf command available)")
 		return nil
 	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 
 	// If 'hf' command fails, try legacy 'huggingface-cli' command
-	cmd = exec.Command("huggingface-cli", "--help")
+	cmd = exec.CommandContext(ctx, "huggingface-cli", "--help")
 	if helpErr := cmd.Run(); helpErr != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return fmt.Errorf("huggingface-cli not found: %w\nPlease install it with: pip install huggingface_hub[cli]", helpErr)
 	}
 

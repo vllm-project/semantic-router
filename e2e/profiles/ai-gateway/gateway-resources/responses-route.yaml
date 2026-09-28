@@ -1,0 +1,47 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: semantic-router-responses
+  namespace: default
+spec:
+  parentRefs:
+    - name: semantic-router
+      kind: Gateway
+      group: gateway.networking.k8s.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/responses
+      backendRefs:
+        - name: vllm-llama3-8b-instruct
+          kind: Service
+          group: ""
+          port: 8000
+---
+# The baseline currently pins Envoy AI Gateway v0.4, whose external processor
+# does not understand the Responses API. Keep the normal AI Gateway routes on
+# that processor while letting the Semantic Router exercise /v1/responses
+# directly through Envoy and the same OpenAI-compatible backend.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: disable-aigateway-for-responses
+  namespace: default
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router
+  type: JSONPatch
+  jsonPatches:
+    - type: type.googleapis.com/envoy.config.route.v3.RouteConfiguration
+      name: default/semantic-router/http
+      operation:
+        op: add
+        jsonPath: >-
+          ..routes[?(@.name == "httproute/default/semantic-router-responses/rule/0/match/0/*")]
+        path: typed_per_filter_config/envoy.filters.http.ext_proc~1aigateway
+        value:
+          "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExtProcPerRoute
+          disabled: true
