@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -86,7 +87,7 @@ func (s *QdrantStore) ensureCollection(ctx context.Context) error {
 		return fmt.Errorf("failed to check qdrant collection: %w", err)
 	}
 	if exists {
-		return nil
+		return s.ensureListIndexes(ctx)
 	}
 
 	dim := s.qdrantConfig.Dimension
@@ -105,17 +106,40 @@ func (s *QdrantStore) ensureCollection(ctx context.Context) error {
 		return fmt.Errorf("failed to create qdrant memory collection: %w", err)
 	}
 
-	for _, field := range []string{"user_id", "project_id", "memory_type"} {
-		if _, err := s.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
+	return s.ensureListIndexes(ctx)
+}
+
+// ensureListIndexes creates payload indexes used by List. An existing collection
+// still receives created_at so order-by works after upgrade. A duplicate index
+// is treated as success.
+func (s *QdrantStore) ensureListIndexes(ctx context.Context) error {
+	indexes := []struct {
+		name string
+		kind qdrant.FieldType
+	}{
+		{"user_id", qdrant.FieldType_FieldTypeKeyword},
+		{"project_id", qdrant.FieldType_FieldTypeKeyword},
+		{"memory_type", qdrant.FieldType_FieldTypeKeyword},
+		{"created_at", qdrant.FieldType_FieldTypeInteger},
+	}
+	for _, index := range indexes {
+		wait := true
+		_, err := s.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 			CollectionName: s.collectionName,
-			FieldName:      field,
-			FieldType:      qdrant.FieldType_FieldTypeKeyword.Enum(),
-		}); err != nil {
-			return fmt.Errorf("failed to create index on %q: %w", field, err)
+			FieldName:      index.name,
+			FieldType:      index.kind.Enum(),
+			Wait:           &wait,
+		})
+		if err != nil && !qdrantIndexAlreadyExists(err) {
+			return fmt.Errorf("failed to create index on %q: %w", index.name, err)
 		}
 	}
-
 	return nil
+}
+
+func qdrantIndexAlreadyExists(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "already exists") || strings.Contains(msg, "already exist")
 }
 
 // Qdrant only allows UUIDs and +ve integers.
@@ -364,15 +388,14 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 
 func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, error) {
 	if !s.enabled {
-		return &ListResult{}, nil
+		return nil, fmt.Errorf("qdrant store is not enabled")
 	}
-
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = 20
+	if opts.UserID == "" {
+		return nil, fmt.Errorf("user ID is required for listing memories")
 	}
-	if limit > 100 {
-		limit = 100
+	limit, offset, err := normalizeListWindow(opts)
+	if err != nil {
+		return nil, err
 	}
 
 	must := []*qdrant.Condition{
@@ -385,26 +408,63 @@ func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 		}
 		must = append(must, qdrant.NewMatchKeywords("memory_type", typeVals...))
 	}
+	filter := &qdrant.Filter{Must: must}
 
-	points, _, err := s.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
+	exact := true
+	total, err := s.client.Count(ctx, &qdrant.CountPoints{
 		CollectionName: s.collectionName,
-		Filter:         &qdrant.Filter{Must: must},
-		Limit:          qdrant.PtrOf(uint32(limit)), //nolint:gosec
-		WithPayload:    qdrant.NewWithPayload(true),
+		Filter:         filter,
+		Exact:          &exact,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("qdrant scroll failed: %w", err)
+		return nil, fmt.Errorf("qdrant count failed: %w", err)
 	}
 
-	memories := make([]*Memory, 0, len(points))
-	for _, pt := range points {
-		memories = append(memories, payloadToMemory(pt.Payload))
+	// Scroll orders by created_at only, and that value is whole seconds. Keep
+	// reading through the timestamp that touches the page end so the id
+	// tie-break cannot repeat a row on the next page.
+	direction := qdrant.Direction_Desc
+	window := offset + limit
+	collected := make([]*Memory, 0, window)
+	var cursor *qdrant.PointId
+	for createdAtPrefixNeedsMore(collected, window) {
+		if createdAtTieGroupExceeds(collected, window, maxListTieGroup) {
+			return nil, fmt.Errorf("qdrant list tie group exceeds %d rows", maxListTieGroup)
+		}
+		batch := window - len(collected)
+		if batch < 1 || batch > maxListLimit {
+			batch = maxListLimit
+		}
+		points, next, scrollErr := s.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
+			CollectionName: s.collectionName,
+			Filter:         filter,
+			Limit:          qdrant.PtrOf(uint32(batch)), //nolint:gosec
+			Offset:         cursor,
+			OrderBy:        &qdrant.OrderBy{Key: "created_at", Direction: &direction},
+			WithPayload:    qdrant.NewWithPayload(true),
+		})
+		if scrollErr != nil {
+			return nil, fmt.Errorf("qdrant scroll failed: %w", scrollErr)
+		}
+		if len(points) == 0 {
+			break
+		}
+		for _, pt := range points {
+			collected = append(collected, payloadToMemory(pt.Payload))
+		}
+		if next == nil {
+			break
+		}
+		cursor = next
 	}
+	sortMemoriesForList(collected)
+	page := pageMemories(collected, offset, limit)
 
 	return &ListResult{
-		Memories: memories,
-		Total:    len(memories),
+		Memories: page,
+		Total:    int(total),
 		Limit:    limit,
+		Offset:   offset,
 	}, nil
 }
 
