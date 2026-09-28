@@ -34,7 +34,12 @@ def state_digest(state: Any) -> str:
 def fingerprints(
     protected_rows: list[Path], protected_prompts: list[Path]
 ) -> tuple[dict[str, set[str]], dict[str, int]]:
-    keys: dict[str, set[str]] = {"id": set(), "input": set(), "prompt": set(), "state": set()}
+    keys: dict[str, set[str]] = {
+        "id": set(),
+        "input": set(),
+        "prompt": set(),
+        "state": set(),
+    }
     counts: dict[str, int] = {}
     for path in protected_rows:
         n = 0
@@ -75,7 +80,14 @@ def guard(
         hits["input"] += row["input_sha256"] in keys["input"]
         hits["prompt"] += collector_digest(prompt) in keys["prompt"]
         hits["state"] += state_digest(row["state"]) in keys["state"]
-    violations = not_row + not_train + prompt_mismatch + hits["id"] + hits["input"] + hits["prompt"]
+    violations = (
+        not_row
+        + not_train
+        + prompt_mismatch
+        + hits["id"]
+        + hits["input"]
+        + hits["prompt"]
+    )
     return {
         "schema": "decision2-m3a-target-guard/1",
         "prompts": len(wanted),
@@ -100,7 +112,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--protected-prompts", type=Path, action="append", default=[])
     parser.add_argument("--receipt", type=Path, required=True)
     args = parser.parse_args(argv)
-    receipt = guard(args.prompts, args.rows, args.protected_rows, args.protected_prompts)
+    receipt = guard(
+        args.prompts, args.rows, args.protected_rows, args.protected_prompts
+    )
     fd = os.open(args.receipt, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
         json.dump(receipt, stream, indent=1, sort_keys=True)

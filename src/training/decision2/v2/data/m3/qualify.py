@@ -54,7 +54,9 @@ PENDING = "pytorch_bf16_rocm_pending_repeatability"
 
 
 def ranked(ids: Iterable[str], salt: str) -> list[str]:
-    return sorted(ids, key=lambda i: hashlib.sha256((salt + i).encode("utf-8")).hexdigest())
+    return sorted(
+        ids, key=lambda i: hashlib.sha256((salt + i).encode("utf-8")).hexdigest()
+    )
 
 
 def _write(path: Path, data: bytes) -> str:
@@ -94,7 +96,9 @@ def sets(args: argparse.Namespace) -> int:
             if row["id"] in kinds:
                 tokens[row["id"]] = int(row["native"])
     if set(tokens) != set(kinds):
-        raise ValueError(f"{len(set(kinds) - set(tokens))} RP-v2 rows lack token counts")
+        raise ValueError(
+            f"{len(set(kinds) - set(tokens))} RP-v2 rows lack token counts"
+        )
     repeat, warm = draw(kinds, tokens)
     lines: dict[str, bytes] = {}
     with args.prompts.open("rb") as stream:
@@ -110,10 +114,16 @@ def sets(args: argparse.Namespace) -> int:
         name, path, expected = spec.split("=")
         data = Path(path).read_bytes()
         if hashlib.sha256(data).hexdigest() != expected:
-            raise ValueError(f"{name}: panel prompt file differs from the sealed eval prompts")
-        by_id = {json.loads(line)["id"]: line + b"\n" for line in data.splitlines() if line}
+            raise ValueError(
+                f"{name}: panel prompt file differs from the sealed eval prompts"
+            )
+        by_id = {
+            json.loads(line)["id"]: line + b"\n" for line in data.splitlines() if line
+        }
         take = SPOT[name]
-        picked = sorted(by_id) if take is None else sorted(ranked(by_id, "m3a-spot:")[:take])
+        picked = (
+            sorted(by_id) if take is None else sorted(ranked(by_id, "m3a-spot:")[:take])
+        )
         spot[name] = [by_id[i] for i in picked]
         panels[name] = {"prompt_sha256": expected, "items": len(picked)}
     spot_ids = {json.loads(line)["id"] for items in spot.values() for line in items}
@@ -148,7 +158,12 @@ def sets(args: argparse.Namespace) -> int:
         args.out_dir / "sets.json",
         (json.dumps(manifest, indent=1, sort_keys=True) + "\n").encode("utf-8"),
     )
-    print(json.dumps({k: v for k, v in manifest.items() if not k.endswith("_ids")}, sort_keys=True))
+    print(
+        json.dumps(
+            {k: v for k, v in manifest.items() if not k.endswith("_ids")},
+            sort_keys=True,
+        )
+    )
     return 0
 
 
@@ -242,7 +257,9 @@ def identity_check(
             if record.get(key) != value:
                 problems[key] = problems.get(key, 0) + 1
         if record.get("runtime_qualification") != PENDING:
-            problems["runtime_qualification"] = problems.get("runtime_qualification", 0) + 1
+            problems["runtime_qualification"] = (
+                problems.get("runtime_qualification", 0) + 1
+            )
         for key in RUN_CONSTANT:
             constants[key].add(str(record.get(key)))
     summary = manifest.get("collector") or {}
@@ -337,7 +354,9 @@ def compare_command(args: argparse.Namespace) -> int:
         "gates": gates,
         "pass": all(gates.values()),
     }
-    _write(args.out, (json.dumps(report, indent=1, sort_keys=True) + "\n").encode("utf-8"))
+    _write(
+        args.out, (json.dumps(report, indent=1, sort_keys=True) + "\n").encode("utf-8")
+    )
     print(json.dumps({"gates": gates, "pass": report["pass"]}, sort_keys=True))
     return 0 if report["pass"] else 3
 

@@ -51,7 +51,9 @@ def file_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def check_shard(manifest: dict[str, Any], output: Path, qualification: dict[str, Any]) -> list[str]:
+def check_shard(
+    manifest: dict[str, Any], output: Path, qualification: dict[str, Any]
+) -> list[str]:
     problems = []
     frozen = qualification["autotune_frozen"]
     if manifest.get("exit_code") != 0:
@@ -60,7 +62,10 @@ def check_shard(manifest: dict[str, Any], output: Path, qualification: dict[str,
         problems.append("image_id")
     if manifest.get("fla_reference_fallback") is not False:
         problems.append("fla_path")
-    if manifest.get("autotune_before") != frozen or manifest.get("autotune_after") != frozen:
+    if (
+        manifest.get("autotune_before") != frozen
+        or manifest.get("autotune_after") != frozen
+    ):
         problems.append("autotune_changed")
     if manifest.get("output_sha256") != file_sha256(output):
         problems.append("output_bytes")
@@ -83,16 +88,24 @@ def qualified_receipts(
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         problems = check_shard(manifest, output, qualification)
         if problems:
-            raise ValueError(f"{output.name}: shard not on the qualified runtime: {problems}")
+            raise ValueError(
+                f"{output.name}: shard not on the qualified runtime: {problems}"
+            )
         for record in read_jsonl(output):
             if record.get("runtime_qualification") != PENDING:
-                raise ValueError(f"{record.get('id')}: unexpected runtime qualification")
+                raise ValueError(
+                    f"{record.get('id')}: unexpected runtime qualification"
+                )
             for key, value in IDENTITY.items():
                 if record.get(key) != value:
-                    raise ValueError(f"{record.get('id')}: {key} differs from the qualified identity")
+                    raise ValueError(
+                        f"{record.get('id')}: {key} differs from the qualified identity"
+                    )
             for key, (value,) in package.items():
                 if record.get(key) != value:
-                    raise ValueError(f"{record.get('id')}: {key} differs from the qualified package")
+                    raise ValueError(
+                        f"{record.get('id')}: {key} differs from the qualified package"
+                    )
             receipts.append(dict(record, runtime_matches_validated=True))
         shard_report.append(
             {
@@ -107,13 +120,18 @@ def qualified_receipts(
                 "gpu_hours": round(manifest["gpu_hours"], 4),
             }
         )
-    return receipts, {"shards": shard_report, "package": {k: v[0] for k, v in package.items()}}
+    return receipts, {
+        "shards": shard_report,
+        "package": {k: v[0] for k, v in package.items()},
+    }
 
 
 def build(args: argparse.Namespace) -> dict[str, Any]:
     qualification = json.loads(args.qualification.read_text(encoding="utf-8"))
     guard = json.loads(args.guard.read_text(encoding="utf-8"))
-    if guard.get("pass") is not True or guard.get("prompts_sha256") != file_sha256(args.prompts):
+    if guard.get("pass") is not True or guard.get("prompts_sha256") != file_sha256(
+        args.prompts
+    ):
         raise ValueError("target guard did not pass on this prompt file")
     shards = []
     for spec in args.shard:
@@ -140,7 +158,13 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         revision=IDENTITY["model_revision"],
     )
     data = "".join(
-        canonical({"id": r["id"], "input_sha256": r["input_sha256"], "teacher_probs": r["teacher_probs"]})
+        canonical(
+            {
+                "id": r["id"],
+                "input_sha256": r["input_sha256"],
+                "teacher_probs": r["teacher_probs"],
+            }
+        )
         + "\n"
         for r in sorted(replay, key=lambda r: r["id"])
     ).encode("utf-8")
@@ -195,7 +219,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     report = build(parser.parse_args(argv))
-    print(json.dumps({k: report[k] for k in ("wave", "rows", "prompts", "content_sha256")}))
+    print(
+        json.dumps(
+            {k: report[k] for k in ("wave", "rows", "prompts", "content_sha256")}
+        )
+    )
     return 0
 
 

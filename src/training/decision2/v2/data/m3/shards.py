@@ -29,7 +29,12 @@ def _ids_and_lines(path: Path) -> list[tuple[str, bytes]]:
     with path.open("rb") as stream:
         for line in stream:
             if line.strip():
-                out.append((json.loads(line)["id"], line if line.endswith(b"\n") else line + b"\n"))
+                out.append(
+                    (
+                        json.loads(line)["id"],
+                        line if line.endswith(b"\n") else line + b"\n",
+                    )
+                )
     return out
 
 

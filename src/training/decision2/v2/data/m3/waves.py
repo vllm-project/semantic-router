@@ -70,7 +70,9 @@ def build(pools: dict, recipes: Path, out_dir: Path) -> dict[str, dict]:
                     rows.setdefault(row["id"], row)
     missing = sets["L"] - set(rows)
     if missing:
-        raise ValueError(f"{len(missing)} recipe ids not found, e.g. {sorted(missing)[:3]}")
+        raise ValueError(
+            f"{len(missing)} recipe ids not found, e.g. {sorted(missing)[:3]}"
+        )
     ordered = [rows[i] for i in sorted(rows)]
     waves = {
         "lux-wave1": sets["S"],
@@ -82,11 +84,15 @@ def build(pools: dict, recipes: Path, out_dir: Path) -> dict[str, dict]:
     out: dict[str, dict] = {
         "rp-v2.rows.jsonl": {
             "rows": len(ordered),
-            "sha256": _write(out_dir / "rp-v2.rows.jsonl", [canonical(r) + "\n" for r in ordered]),
+            "sha256": _write(
+                out_dir / "rp-v2.rows.jsonl", [canonical(r) + "\n" for r in ordered]
+            ),
         },
         "rp-v2.prompts.jsonl": {
             "rows": len(ordered),
-            "sha256": _write(out_dir / "rp-v2.prompts.jsonl", [prompt_line(r) for r in ordered]),
+            "sha256": _write(
+                out_dir / "rp-v2.prompts.jsonl", [prompt_line(r) for r in ordered]
+            ),
         },
     }
     for name, ids in waves.items():
@@ -106,15 +112,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--expect", action="append", default=[])
     args = parser.parse_args(argv)
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    out = build(json.loads(args.pools.read_text(encoding="utf-8")), args.recipes, args.out_dir)
+    out = build(
+        json.loads(args.pools.read_text(encoding="utf-8")), args.recipes, args.out_dir
+    )
     mismatched = []
     for spec in args.expect:
         name, _, expected = spec.partition("=")
         out[name]["expected_sha256"] = expected
         if out[name]["sha256"] != expected:
             mismatched.append(name)
-    receipt = {"schema": "decision2-m3a-waves/1", "files": out, "mismatched": mismatched}
-    _write(args.out_dir / "waves.receipt.json", [json.dumps(receipt, indent=1, sort_keys=True) + "\n"])
+    receipt = {
+        "schema": "decision2-m3a-waves/1",
+        "files": out,
+        "mismatched": mismatched,
+    }
+    _write(
+        args.out_dir / "waves.receipt.json",
+        [json.dumps(receipt, indent=1, sort_keys=True) + "\n"],
+    )
     print(json.dumps(receipt, sort_keys=True))
     return 1 if mismatched else 0
 
