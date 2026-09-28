@@ -40,6 +40,10 @@ SHA-256.
 | `arms/A0/` | Manifest and audits for the root TRAIN (rows not duplicated) |
 | `arms/A0s/` | A0 without FLUTE and without protected-overlap groups |
 | `arms/A0p/` | One fixed-derangement option-order copy of each eligible A0 Choice row |
+| `arms/A1/` | Cross-domain human-written dialogue decisions: ABCD customer-service chats (MIT) and Schema-Guided Dialogue (CC BY-SA 4.0); QASC was dropped by the shortcut gate |
+| `arms/A2/` | Project-generated verifiable counterfactual families (dates, counting, multi-hop lookup, injection-robust reading, ordering, units), English and Chinese |
+| `arms/A3/` | Long multi-paragraph evidence: MuSiQue-Full answerable/unanswerable twins (CC BY 4.0; Wikipedia CC BY-SA) |
+| `arms/A6g/` | Project-generated Score at level counts 2–10 with exact grade balance (band rubric, checklist, interpolation, rank position, evidence status), English and Chinese |
 | `replay/RP-v1q/` | Frozen replay prompt set (training-row form, gold labels) |
 | `replay/R2/<tier>/` | Own Decision 1.0 teacher distributions on RP-v1q (Kai, Lex, Eos, Sol, Nox, Lux) with per-type teacher-quality reports |
 | `audits/` | Aggregate overlap, embedding and shortcut receipts (no text, no ids) |
