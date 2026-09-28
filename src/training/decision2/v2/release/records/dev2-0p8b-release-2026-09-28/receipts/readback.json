@@ -1,0 +1,32 @@
+{
+  "card_data": {
+    "base_model": "llm-semantic-router/Decision-1.0-Eos-0.8B",
+    "base_model_relation": "finetune",
+    "license": "apache-2.0",
+    "license_name": null,
+    "tags": [
+      "decision-model",
+      "classification",
+      "system-one",
+      "safetensors"
+    ]
+  },
+  "card_problems": [],
+  "collection": {
+    "contains_repo": false,
+    "items": 0,
+    "private": true,
+    "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+    "title": "Decision 2.0"
+  },
+  "extra_remote": [],
+  "hash_mismatch": [],
+  "missing_remote": [],
+  "passed": true,
+  "private": true,
+  "remote_files": 31,
+  "repo": "llm-semantic-router/DEV2.0-0.8B",
+  "revision": "2667d883c5941356a436ba38824b0453dd2fa7b6",
+  "schema": "dev2-hub-readback/1",
+  "utc": "2026-09-28T13:55:32.692771+00:00"
+}

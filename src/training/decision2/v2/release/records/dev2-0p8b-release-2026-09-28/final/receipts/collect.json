@@ -1,0 +1,15 @@
+{
+  "collection": {
+    "items": [
+      "llm-semantic-router/DEV2.0-0.8B"
+    ],
+    "private": true,
+    "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00"
+  },
+  "gate_sha256": "fb989b538c46a9079f3c4a625e98dcfe6852c715ce90f8c275913fd1ac4d1717",
+  "passed": true,
+  "repo": "llm-semantic-router/DEV2.0-0.8B",
+  "revision": "0b631a85c19fb573aee34fc68bb413271ebe89f4",
+  "schema": "dev2-hub-collect/1",
+  "utc": "2026-09-28T14:30:13.848919+00:00"
+}

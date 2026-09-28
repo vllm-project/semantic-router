@@ -1,0 +1,20 @@
+{
+  "differing_files": [
+    "MODEL_MANIFEST.json"
+  ],
+  "files_candidate": 30,
+  "files_published": 30,
+  "manifest_candidate": "a1f5c3324013e309edaf5064e3d2d59604243f8cfe9ca29656d2c8f1b4c9bef0",
+  "manifest_field_diffs": [
+    {
+      "candidate": "89294e89f7c5116ac97baabcb078666f7b62af24",
+      "field": "builder.source_commit",
+      "published": "6d7e7a14851cdda3d8a7a81083df8369e3ac5532"
+    }
+  ],
+  "manifest_published": "2a19a65a0141a8d71939bbf82025e299266db404cadd8b2bc712d1a992e98e7e",
+  "method": "SHA-256 of every file of the published package directory vs the verified T = 1 candidate package (local run dev2-0p8b-t1-local-20260928T154015Z); field diff of the two MODEL_MANIFEST.json",
+  "passed": true,
+  "schema": "dev2-release-candidate-compare/1",
+  "utc": "2026-09-28T16:14:43.517006+00:00"
+}

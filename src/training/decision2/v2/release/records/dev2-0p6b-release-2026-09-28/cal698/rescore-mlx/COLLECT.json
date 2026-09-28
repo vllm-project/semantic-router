@@ -1,0 +1,122 @@
+{
+  "adapter": {
+    "args": [
+      "--checkpoint",
+      "{model}",
+      "--model-id",
+      "{model_id}",
+      "--model-revision",
+      "{revision}",
+      "--max-length",
+      "{max_length}",
+      "--calibration",
+      "{calibration}",
+      "--input",
+      "{input}",
+      "--output",
+      "{output}"
+    ],
+    "batch_policy": "one prompt per call, all its questions batched; no truncation",
+    "extra_mounts": [],
+    "image": "decision20-train-fast:host2",
+    "model_id": null,
+    "module": "training.model.infer",
+    "name": "decision2-typed",
+    "python": "python3",
+    "requires": [
+      "model_id",
+      "calibration",
+      "max_length"
+    ]
+  },
+  "adapter_module_sha256": "9d5a58324cc758ff92b74d00cfb2cf211b27a1d49b4025d4984f20c0b13f8eb3",
+  "ended_utc": "2026-09-28T15:03:08.755541+00:00",
+  "extra": {
+    "calibration": "/data/dev2/runs/release/inputs/dev2-0p6b/cal698/calibration.json",
+    "max_length": "8192",
+    "model_id": "dev2-06b/m4-t-a7-soup-cal698"
+  },
+  "gpu_label": "gpu0",
+  "gpu_wall_seconds": 331.00870766607113,
+  "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+  "label": "post-key same-panel",
+  "model_id": "dev2-06b/m4-t-a7-soup-cal698",
+  "model_path": "/data/dev2/runs/release/inputs/dev2-0p6b/staging-06bm4-62c61c10",
+  "model_revision": "0f96aa3932ea501589f794eff9949b52fd1c64835b92f0392da860c22b0442bf",
+  "panels": [
+    {
+      "argv": [
+        "python3",
+        "-m",
+        "training.model.infer",
+        "--checkpoint",
+        "/data/dev2/runs/release/inputs/dev2-0p6b/staging-06bm4-62c61c10",
+        "--model-id",
+        "dev2-06b/m4-t-a7-soup-cal698",
+        "--model-revision",
+        "0f96aa3932ea501589f794eff9949b52fd1c64835b92f0392da860c22b0442bf",
+        "--max-length",
+        "8192",
+        "--calibration",
+        "/data/dev2/runs/release/inputs/dev2-0p6b/cal698/calibration.json",
+        "--input",
+        "/data/dev2/private/panels/goldfree/mlx-diag.prompts.jsonl",
+        "--output",
+        "/data/dev2/runs/release/dev2-0p6b-cal698-rescore-mlx/output/mlx-diag.predictions.jsonl"
+      ],
+      "exit_code": 0,
+      "expected_rows": 2275,
+      "log_sha256": "b3d33e57296a58a7ab9af3926b8f59622019edeb449ff2950606319a922c42ac",
+      "output_rows": 2275,
+      "output_sha256": "03b067a6fb0f37931c10d621d66ef69fcfbbf19c7ce75d90ecad595955d754e8",
+      "panel": "mlx-diag",
+      "utc_end": "2026-09-28T15:03:08.739212+00:00",
+      "utc_start": "2026-09-28T14:57:37.730502+00:00",
+      "wall_seconds": 331.00870766607113
+    }
+  ],
+  "runtime": {
+    "device_name": "",
+    "devices": 1,
+    "fla": "0.5.2",
+    "hip": "7.2.53211",
+    "numpy": "2.3.5",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0",
+    "triton": "3.7.1"
+  },
+  "runtime_env": {
+    "HIP_FORCE_DEV_KERNARG": "1"
+  },
+  "schema": "dev2-same-panel-collect/1",
+  "source_mirror": {
+    "archive_sha256": "3ff52b295405eb9bf576c5d39879a2f5e57c1410cff7ab9ad4ca00f9c59c64d0",
+    "commit": "fa6d6ff3f2e99b17ca273aae4da4581a567d7d6c",
+    "content_manifest_sha256": "6c310ef68defba009ddd01bea19a9b601a694759f7541f06883572a4347538f7",
+    "created_utc": "2026-09-28T14:35:54Z",
+    "files": 1981,
+    "path": "src/training/decision2",
+    "schema": "dev2-mirror/1",
+    "tree": "36c38c9172c8cd80a047079748ebc0ebeded6935"
+  },
+  "sources": {
+    "benchmark/generate.py": "c6569d4c86c3b9ea2ebdda564d8ba4d3428cc807d41d39984379821cfbb9422c",
+    "benchmark/score.py": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "jev_arena/compare_v3.py": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "jev_arena/jevbench_public.py": "aec840b6497beeae8b63e9270670c22506265c086a84e889bc82f694146518cf",
+    "transfer/build.py": "717e31b62d1f9d09b30f1ae2365b2e59cdf0cf40209dda5e9e08b921a1fc184d",
+    "transfer/score.py": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca",
+    "v2/eval/adapters.py": "6717d108a1336efef8aded3fed8ec697d42dede7c125d3241387868d448c8f32",
+    "v2/eval/panels.py": "2fdde94500078a24940ca65bd9afb8952900cf40c4134dc7b0d66d792c10e807",
+    "v2/eval/same_panel.py": "e1bea1d231800ad9ae7ab571ac2e41ddf4436afdb630678c88e9469425138cd6"
+  },
+  "started_utc": "2026-09-28T14:57:31.231388+00:00",
+  "visible_devices": {
+    "CUDA_VISIBLE_DEVICES": null,
+    "HIP_VISIBLE_DEVICES": null,
+    "ROCR_VISIBLE_DEVICES": "0"
+  }
+}

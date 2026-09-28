@@ -1,0 +1,24 @@
+{
+  "repo": "llm-semantic-router/DEV2.0-0.6B",
+  "private": true,
+  "sha": "7b5d3ff2bf338194b0b485bda4d08b30b8fea88e",
+  "created_at": "2026-09-28 14:06:25+00:00",
+  "commits": [
+    {
+      "id": "7b5d3ff2bf338194b0b485bda4d08b30b8fea88e",
+      "title": "Decision 2.0 package DEV2.0-0.6B (release) from b655e2d5d744bd9d03d5cbafd815dbf955b25979-src_training_decision2",
+      "created_at": "2026-09-28 14:06:28+00:00"
+    },
+    {
+      "id": "06684b77f090e52f06978aec8229a669733e7d49",
+      "title": "initial commit",
+      "created_at": "2026-09-28 14:06:25+00:00"
+    }
+  ],
+  "branches": [
+    "main"
+  ],
+  "tags": [],
+  "gated": false,
+  "downloads": 0
+}

@@ -72,6 +72,11 @@ $S/v2/release/release.sh --spec <spec.json> --src $SRC --work /data/dev2/runs/re
   --cpu [--python <interpreter in the image>] [--mount <ro path>]... \
   [--parity typed-final:<goldfree prompts>:<sealed predictions>:<N>]... --upload \
   [--collect <gate.json>]
+# Qwen3.5-family packages on a GPU: reproduce the scored kernel runtime (the image exposes FLA
+# only through PYTHONPATH, which the isolated interpreter drops) with a copy of the scored run's
+# persisted Triton autotune cache
+$S/v2/release/release.sh ... --gpu <N> --track release --site /opt/decision-fla --require-kernels \
+  --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=<cache copy> --mount-rw <cache copy> ...
 ```
 
 Individual steps (all write one receipt; the orchestrator calls them in order):
@@ -98,6 +103,22 @@ release spec whose decision names anything else. `release.sh ... --upload
 decision to the uploaded revision and manifest (`gate evaluate --work W` prints
 the six gate items with their evidence), and `hub collect` adds the repository
 to the private "Decision 2.0" collection and reads it back.
+
+While the coordinator's judgement is still pending (for example an independent
+sealed confirmation), release engineering names a `status: draft` decision
+(`prepared_by`, no `decided_by`) that binds the same identity, report and paired
+comparison. It is enough to build, upload privately and verify (`--upload`
+without `--collect`); `gate seal`, and therefore `--collect`, accepts only a
+`status: final` decision with `decided_by`. Finalizing means: the coordinator
+fills in the card's confirmation line in the spec, writes the final decision,
+and reruns `release.sh ... --upload --collect` into a new work directory.
+
+A later revision of a collected release (for example a calibration-only
+revision) needs its own final decision and `--upload --collect
+--already-collected`. Collection items name a repository, not a revision, so
+the repository is already in the collection when the pre-collect readback runs;
+the flag makes that readback require the item instead of its absence, and
+`gate seal` then binds the new decision to the new revision.
 
 `hub download` is the real `hf download <repo> --revision <sha> --local-dir <fresh
 dir>` with a fresh cache. `readback` checks the private flag, the exact revision,

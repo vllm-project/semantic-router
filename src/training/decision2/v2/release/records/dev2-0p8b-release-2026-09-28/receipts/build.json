@@ -1,0 +1,97 @@
+{
+  "builder_commit": "4d94d6fd6494f41505b9157db691216882f610ef",
+  "card": {
+    "excluded": [
+      {
+        "key": "jpt08b",
+        "reason": "non-commercial licence"
+      }
+    ],
+    "figures_sha256": {
+      "assets/jevarena-v3-model-task.svg": "a3971a1aa655b5e9064c5cc8fcdff6030c41612da800a303fc50d719b28d998e",
+      "assets/jevarena-v3-rank.svg": "4c762e4169bdcd1a37f7494042409cc343bb3e8ce92a4852775140d9dcce3de7",
+      "assets/jevbench-public231-rank.svg": "2cd266f3cce8b8ca85e832b543c6934e9ade7cbaaa472b79dd8afadd02e83485"
+    },
+    "paired": {
+      "ci95": [
+        3.645529987266831,
+        13.315791818808199
+      ],
+      "delta": 7.6891294628828675,
+      "replicates": 5000,
+      "sha256": "4489c0ea734a3827edf662419c11faba9fff90deb33325b04460a3f7fbdcd557"
+    },
+    "readme_sha256": "df78a3863ac5631514e56989ed2fa26826d294533625975addd0c3bbd3e2a074",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "e3e08cd17fe38becdfa655c61d329de7d39c75ffb7db70861af4f88d87fe2682"
+      },
+      {
+        "key": "eos1",
+        "licence": "apache-2.0",
+        "report_sha256": "078d780c524602c7e51d57fe7ae40d99a35f5591a2abf91f78096a768aed3ca7"
+      },
+      {
+        "key": "intern",
+        "licence": "apache-2.0",
+        "report_sha256": "ddcdba6db2da3cfd93fafeb51bc1634694f5a6ed94aaf4ed1d9973dbe4d3f159"
+      },
+      {
+        "key": "kev",
+        "licence": "apache-2.0",
+        "report_sha256": "66fcffaf1353974e6b92fba56be7e9e9a4dfc030fcc39a21703fd131bf5da754"
+      }
+    ],
+    "tradeoffs": [
+      "Typed Score (correct): 107/400 versus 120/400",
+      "Human transfer H (median task macro-F1): 0.440 versus 0.461",
+      "mlx-diag non-English Noul (accuracy): 54.2% versus 59.2%",
+      "Transfer: mrf (macro-F1): 45.6% versus 62.5%",
+      "Transfer: conv go awry (macro-F1): 43.0% versus 57.1%",
+      "Transfer: flute (macro-F1): 38.7% versus 46.1%",
+      "Transfer: media ideology (macro-F1): 30.2% versus 36.6%",
+      "Transfer: wiki corpus (macro-F1): 44.0% versus 49.2%",
+      "Transfer: tempowic (macro-F1): 53.5% versus 58.2%",
+      "Transfer: ibc (macro-F1): 32.2% versus 35.2%",
+      "Transfer: persuasion (macro-F1): 49.7% versus 50.1%"
+    ]
+  },
+  "ended_utc": "2026-09-28T13:46:47.982555+00:00",
+  "files": 31,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b",
+    "temperature_by_type": {
+      "choice": 1.1226162977529484,
+      "noul": 1.0705289638177147,
+      "score": 0.3953193702868192
+    },
+    "text_parameter_count": 752393024
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "d10bd95c40a1417b8416d73fe7af9a9213d3c113804a6f2bc600f57cbf379594",
+  "package": "/data/dev2/runs/release/dev2-0p8b-release-20260928T134642Z/package/DEV2.0-0.8B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 753446208,
+    "packaged": {
+      "backbone": 752393024,
+      "head": 1053184,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "f32388d8b274420a81c9cdf5412c2752801084363a5badbff1fcf6090195ab32",
+    "status": "draft"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 30
+  },
+  "spec_sha256": "c7d0aa7d0363edcdc2341ad6d006b09be01ab305162f78ec722171bab179c63e",
+  "started_utc": "2026-09-28T13:46:42.665723+00:00"
+}

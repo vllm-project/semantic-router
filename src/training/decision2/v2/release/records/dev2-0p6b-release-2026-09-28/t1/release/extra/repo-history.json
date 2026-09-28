@@ -1,0 +1,61 @@
+{
+  "repo": "llm-semantic-router/DEV2.0-0.6B",
+  "private": true,
+  "sha": "e61b2b4419383672cb6a92d63699f7974e5f81ac",
+  "files": [
+    ".gitattributes",
+    "ATTRIBUTIONS.md",
+    "LICENSE",
+    "LICENSES/Qwen3-0.6B-Base-LICENSE.txt",
+    "MODEL_MANIFEST.json",
+    "NOTICE",
+    "README.md",
+    "assets/DEV2.0-0.6B-owl-banner.png",
+    "assets/jevarena-v3-model-task.svg",
+    "assets/jevarena-v3-rank.svg",
+    "assets/jevbench-public231-rank.svg",
+    "backbone/config.json",
+    "backbone/model.safetensors",
+    "chat_template.jinja",
+    "config.json",
+    "decision2/__init__.py",
+    "decision2/_vendor/__init__.py",
+    "decision2/_vendor/dev2model/__init__.py",
+    "decision2/_vendor/dev2model/calibration.py",
+    "decision2/_vendor/dev2model/data.py",
+    "decision2/_vendor/dev2model/decision_model.py",
+    "decision2/_vendor/dev2model/infer.py",
+    "decision2/_vendor/dev2model/lora.py",
+    "decision2/_vendor/dev2model/source.py",
+    "decision2/api.py",
+    "decision2/qwen.py",
+    "decision_config.json",
+    "decision_head.safetensors",
+    "evaluation/EVALUATION.md",
+    "evaluation/manifest.json",
+    "tokenizer.json",
+    "tokenizer_config.json"
+  ],
+  "commits": [
+    {
+      "id": "e61b2b4419383672cb6a92d63699f7974e5f81ac",
+      "title": "Decision 2.0 package DEV2.0-0.6B (release) from 89294e89f7c5116ac97baabcb078666f7b62af24-src_training_decision2"
+    },
+    {
+      "id": "a87eeb725b4edd5e7612342be662c4d11d470487",
+      "title": "Decision 2.0 package DEV2.0-0.6B (release) from c8af7ea348546339966c4aa98ba96a44902af238-src_training_decision2"
+    },
+    {
+      "id": "cb2bfd76e9d8a5e1b9a968dcafb7e18d8c01b3b9",
+      "title": "Decision 2.0 package DEV2.0-0.6B (release) from c5f941d53755dbf18260247a97566b4ea201887f-src_training_decision2"
+    },
+    {
+      "id": "7b5d3ff2bf338194b0b485bda4d08b30b8fea88e",
+      "title": "Decision 2.0 package DEV2.0-0.6B (release) from b655e2d5d744bd9d03d5cbafd815dbf955b25979-src_training_decision2"
+    },
+    {
+      "id": "06684b77f090e52f06978aec8229a669733e7d49",
+      "title": "initial commit"
+    }
+  ]
+}

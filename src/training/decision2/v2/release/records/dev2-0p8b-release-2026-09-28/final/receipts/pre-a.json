@@ -1,0 +1,247 @@
+{
+  "answers_sha256": "a061d0a346ba0c80a32a846e11f59fb6737d6586407d580cdb60ad6528d4e58f",
+  "checks": {
+    "multilingual": {
+      "passed": true,
+      "problems": []
+    },
+    "null-description": {
+      "passed": true,
+      "problems": []
+    },
+    "over-budget": {
+      "passed": true,
+      "problems": []
+    },
+    "policy-check": {
+      "passed": true,
+      "problems": []
+    },
+    "structured-state": {
+      "passed": true,
+      "problems": []
+    },
+    "support-routing": {
+      "passed": true,
+      "problems": []
+    }
+  },
+  "device": "cuda:0",
+  "load_seconds": 9.611106558935717,
+  "loaded_parameters": 753446208,
+  "mode": "run",
+  "model_name": "DEV2.0-0.8B",
+  "outputs": [
+    {
+      "id": "support-routing",
+      "input_sha256": "d97b537c37ddf12ca4117ff655a31fa14afbfd968729bc2b512beadca6054f88",
+      "latency_ms": 6942.871656967327,
+      "response": {
+        "answers": {
+          "receipt": {
+            "noul": 0.995606391460473,
+            "type": "noul"
+          },
+          "route": {
+            "choice": "returns",
+            "confidence": 0.9867691993028518,
+            "probabilities": {
+              "billing": 3.157438586830536e-05,
+              "returns": 0.998008667777958,
+              "technical": 0.001959757836173707
+            },
+            "type": "choice"
+          },
+          "urgency": {
+            "confidence": 0.9208245366147845,
+            "legend": {
+              "0": "Routine",
+              "1": "Soon",
+              "2": "Today"
+            },
+            "probabilities": {
+              "0": 0.002809018822959568,
+              "1": 0.012617796548736508,
+              "2": 0.9845731846283039
+            },
+            "score": 1.9817641658053442,
+            "type": "score"
+          }
+        },
+        "model": "DEV2.0-0.8B",
+        "usage": {
+          "input_tokens": 317,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "structured-state",
+      "input_sha256": "b8557ad323a641d6ea898abb86818d9e13d91e0d327bb0dabc8fe696c840d829",
+      "latency_ms": 52.4764908477664,
+      "response": {
+        "answers": {
+          "escalate": {
+            "noul": 0.8281602147763304,
+            "type": "noul"
+          },
+          "severity": {
+            "confidence": 0.9741647910798563,
+            "legend": {
+              "0": "Minor",
+              "1": "Moderate",
+              "2": "Major",
+              "3": "Critical",
+              "4": "Full outage"
+            },
+            "probabilities": {
+              "0": 0.0015940587872422438,
+              "1": 0.0021156056694594675,
+              "2": 0.000740579962555939,
+              "3": 0.0010877641829874862,
+              "4": 0.9944619913977549
+            },
+            "score": 3.9847080237345534,
+            "type": "score"
+          }
+        },
+        "model": "DEV2.0-0.8B",
+        "usage": {
+          "input_tokens": 283,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "policy-check",
+      "input_sha256": "af52e9c0442937e0032aca068ae665a0abe8a64c60de0cbe69de386d569ce7c0",
+      "latency_ms": 22.17119000852108,
+      "response": {
+        "answers": {
+          "action": {
+            "choice": "decline",
+            "confidence": 0.5715029397247,
+            "probabilities": {
+              "approve": 0.03255625479369904,
+              "decline": 0.8648149654039902,
+              "escalate": 0.10262877980231087
+            },
+            "type": "choice"
+          },
+          "eligible": {
+            "noul": 0.1865470548197822,
+            "type": "noul"
+          }
+        },
+        "model": "DEV2.0-0.8B",
+        "usage": {
+          "input_tokens": 236,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "multilingual",
+      "input_sha256": "28be6206986889181cc9bf19c4ad593721955ecdffc1c03da97e1be473bf496a",
+      "latency_ms": 52.30264109559357,
+      "response": {
+        "answers": {
+          "queue": {
+            "choice": "hardware",
+            "confidence": 0.8025461015757599,
+            "probabilities": {
+              "account": 4.543284703584075e-05,
+              "hardware": 0.9437378628395138,
+              "shipping": 0.05621670431345036
+            },
+            "type": "choice"
+          }
+        },
+        "model": "DEV2.0-0.8B",
+        "usage": {
+          "input_tokens": 112,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "null-description",
+      "input_sha256": "78429233af527c450bc84b2757198df46d011c93dad94bed70d567637c953928",
+      "latency_ms": 21.664364030584693,
+      "response": {
+        "answers": {
+          "intent": {
+            "choice": "cancel",
+            "confidence": 0.051679336753098104,
+            "probabilities": {
+              "cancel": 0.4962833350209225,
+              "pause": 0.262294997611032,
+              "upgrade": 0.24142166736804543
+            },
+            "type": "choice"
+          }
+        },
+        "model": "DEV2.0-0.8B",
+        "usage": {
+          "input_tokens": 99,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "over-budget",
+      "input_sha256": "9022743d7cdc7a9aab2c39bd872384a75af79f16f7974461f12219ad7ae47fb9",
+      "latency_ms": 56.08547083102167,
+      "response": {
+        "answers": {
+          "tone": {
+            "error": "max_length_exceeded",
+            "type": "score"
+          },
+          "weather": {
+            "error": "max_length_exceeded",
+            "type": "noul"
+          }
+        },
+        "model": "DEV2.0-0.8B",
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0
+        }
+      }
+    }
+  ],
+  "package_manifest_sha256": "0af27b1cbe9914ace33dda624ed4919f5f034bfa7f95a315aaaadd5a7353a91c",
+  "passed": true,
+  "profile": "qwen-full",
+  "runtime": {
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-0p8b-E8F-soup-nodeA-copy2"
+    },
+    "numpy": "2.3.5",
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 8,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1"
+}

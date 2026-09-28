@@ -1,0 +1,33 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-0.6B",
+  "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+  "identity": {
+    "model_sha256": "5b30b7e2e612cbf4a45dcab1cbe2bd05b2b6d25cfe91c376031cb22d5ce303a8"
+  },
+  "calibration": "none (temperature 1); CAL698 temperatures e1f7c909 evaluated and rejected under the 23:15 rule",
+  "report_sha256": "72cf01def4ac987919cd4f13b144652da5fd37a9cdf2c92487bd9c76736bbaa9",
+  "paired_sha256": "bd4ad6c72fa432b7970991a363b87d3017eb8e7895a2355a38326106566db614",
+  "supersedes": [
+    "f52e78736ed09b20c12a3958391440e853b997d8208b682a8fbd29cda8ddd663 (CAL698 package cb2bfd76)",
+    "f752dad2dbf0b73a8de0e7a86095e4f84849ca7a887f2559de03cfa4fd38fa51",
+    "72bc767e708364bc517ec6c331a05859924a651ddb0a72af59eaf34e23e1d1d0"
+  ],
+  "prepared_by": "Decision 2.0 release engineering, DEV2.0-0.6B worker (verified draft for the coordinator's final decision, T = 1 package)",
+  "decided_by": null,
+  "rationale": "Binding draft for the private build, upload and verification of the uncalibrated (T = 1) DEV2.0-0.6B package under the coordinator's 23:15 calibration rule. The CAL698 temperatures (Choice 0.592, Noul 0.588, Score 0.345) were evaluated on the development panels from the stored development predictions of the same weights and rejected: typed-DEV Brier 0.336 -> 0.396 and ECE-10 0.169 -> 0.300 (CSS pilot Brier 0.790 -> 0.790, ECE-15 0.072 -> 0.058), answers unchanged. It names the frozen identity 5b30b7e2 (staging 62c61c10), the post-key same-panel report of the raw scored run m4-t-a7-soup and its paired comparison with the adopted Decision 1.0 Kai run: v3 43.541 vs 35.938, +7.60 [+4.70, +10.76]; public 231 142; disclosed regression typed Choice 255 vs 277. The pk1 row-for-row check (receipt 5e79927c) applies. It approves nothing: the coordinator writes the final decision after JevArena-C1 scoring event 2 on this package.",
+  "pending": [
+    "JevArena-C1 scoring event 2 on revision e61b2b44 (card confirmation line; a card-only rerun with --upload --collect then produces the collected revision)",
+    "coordinator decision (status final, decided_by)"
+  ],
+  "verified_package": {
+    "revision": "e61b2b4419383672cb6a92d63699f7974e5f81ac",
+    "manifest_sha256": "a5cdabedf93835f028b871d0dc64ad8595e5369128f994d07bdee44dc1e999a9",
+    "build_time_draft_sha256": "4946f66658fcf3e838b475cb79ac5aff81aaf47df1462f15479ba467f8aa6b61",
+    "do_not_use": {
+      "a87eeb725b4edd5e7612342be662c4d11d470487": "kept the previous revision's calibration.json; re-hash failed; superseded"
+    }
+  }
+}

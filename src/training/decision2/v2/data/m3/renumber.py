@@ -279,6 +279,14 @@ def r2_command(args: argparse.Namespace) -> dict[str, Any]:
     return out
 
 
+def prompts_command(args: argparse.Namespace) -> dict[str, Any]:
+    rows = sorted(read_jsonl(args.rows), key=lambda r: r["id"])
+    data = "".join(
+        json.dumps(native_prompt(r), ensure_ascii=False) + "\n" for r in rows
+    )
+    return {"prompts": len(rows), "sha256": _write(args.out, data.encode("utf-8"))}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -297,8 +305,16 @@ def main(argv: list[str] | None = None) -> int:
     r2 = sub.add_parser("r2")
     r2.add_argument("--out-dir", type=Path, required=True)
     r2.add_argument("--tier", action="append", required=True)
+    pr = sub.add_parser("prompts")
+    pr.add_argument("--rows", type=Path, required=True)
+    pr.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
-    command = {"rows": rows_command, "lux": lux_command, "r2": r2_command}[args.command]
+    command = {
+        "rows": rows_command,
+        "lux": lux_command,
+        "r2": r2_command,
+        "prompts": prompts_command,
+    }[args.command]
     print(json.dumps(command(args), sort_keys=True))
     return 0
 
