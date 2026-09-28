@@ -31,6 +31,10 @@ class BuildProtectedInventoryTest(unittest.TestCase):
             },
         )
 
+    def test_projection_uses_review_id_when_id_is_absent(self) -> None:
+        row = {"review_id": "r7", "state": "s", "options": [], "family": "f"}
+        self.assertEqual(project_row(row), {"id": "r7", "state": "s", "options": []})
+
     def test_build_rejects_unprojected_answers_and_dedupes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

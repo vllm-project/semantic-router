@@ -55,9 +55,12 @@ def _strip_answers(value: Any) -> Any:
 
 
 def project_row(row: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(row.get("id"), str) or "state" not in row:
+    identity = row.get("id", row.get("review_id"))
+    if not isinstance(identity, str) or "state" not in row:
         raise ValueError("Protected row lacks id or state")
-    return {key: _strip_answers(row[key]) for key in INPUT_KEYS if key in row}
+    projected = {key: _strip_answers(row[key]) for key in INPUT_KEYS if key in row}
+    projected["id"] = identity
+    return projected
 
 
 def _contains_answer_key(value: Any) -> bool:
