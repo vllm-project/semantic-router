@@ -152,7 +152,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
 | node B GPU5–6 | ~27B |
-| node B GPU7 | research & data (owner); A7 may run short jobs (≤ 30 min, e.g. its embedding scan) under its own lease owner file when the GPU is idle/released |
+| node B GPU7 | research & data (owner) — SHARED from 2026-09-28 21:55 UTC+8 with the eval track's node-B comparator re-validation (~1.5 h, inference only; each writes its own lease owner entry, e.g. `owner.eval`) |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
 stop rule BEFORE launch (commit a prereg); run preflights (load/parity, zero-step, one-step + reload). If a preflight
@@ -184,6 +184,22 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 21:55 — **DEV2.0-0.8B APPROVED for private release** (eval gate checks + C1 event 1; integration `bf3ff2e6e`).
+  - Gate (a): human transfer not below the tier leaders (vs Intern-Decision +0.058 [−0.043, +0.119]; vs Kev +0.050
+    [−0.041, +0.122]); v3 vs Intern-Decision +6.70 [+0.63, +10.35], vs Kev +7.02 [+1.33, +11.25]. Gate (b): no type
+    collapsed (Choice .661 vs chance .267; Noul .764 vs .50; Score .268 [.226, .313] vs .20 — uses four of five levels,
+    never level 0, slightly below Eos 1.0 .300: disclose). Eos 1.0's own typed Noul is collapsed (97% "false").
+  - **C1 event 1 (sealed, independent):** DEV2.0-0.8B 40.24 vs Eos 1.0 37.94 (+2.31 [+0.29, +4.30]); vs Intern-Decision
+    +5.66 [+3.49, +7.78]; vs Kev +1.18 [−0.99, +3.37] (level). Disclose C1 regressions vs Eos 1.0: Russian star ratings,
+    tutoring-rapport Noul, Arabic multiple choice, long inputs (.577 vs .620), non-English (.422 vs .440).
+  - The card adds a C1 line (independent sealed confirmation, 2,874 human-labelled items) and these regressions; the
+    coordinator finalizes the release decision when the release worker's verification returns.
+  - **Node-B image gap:** `decision20-lux-runtime` (`ce895822`) lacks `causal_conv1d`; every eval node-B collection (Lux1
+    check, AutoJev-27B, Eikos, Jebadiah) used it, while the 27B track's formal runs used the kernel-equipped `dbe5f32b`.
+    The eval track re-collects those comparators on `dbe5f32b` now (node B GPU7, shared). **~27B track: do not finalize a
+    27B formal comparison until the re-validated AutoJev node-B comparator is published; if one already ran, re-pair it
+    against the new comparator.** If AutoJev's v3 moves, the 27B release threshold is recomputed.
 
 - 2026-09-28 21:35 — **AutoJev-27B TEACHER TARGETS AVAILABLE** (research & data M3a; gist 02; integration `5794726fe`).
   Re-qualification v2 passed every gate (warm-up covering every 512-token bucket to 8,096; frozen autotune cache; 910/910
@@ -749,3 +765,24 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
   `0b29686f…`, gold `c0277771…`). v1.1 seal `e3f411a8…` is logged. Record: `v2/eval/records/m3-sealed-c1-v1_1-2026-09-28.md`.
   The check is repeated before every scoring event against newly landed data; the key stays only on the coordinator
   workstation (a node sees it only transiently during a logged event).
+- **DEV2.0-0.8B gate checks + C1 event 1 (2026-09-28 ~21:50 UTC+8; record `v2/eval/records/m4-dev2-08b-gates-and-c1-event1-2026-09-28.md`).**
+  - Gates (post-key v3, stored predictions):
+    - Human transfer vs Intern-Decision is +0.058 [−0.043, +0.119] and vs Kev +0.050 [−0.041, +0.122]: not below the
+      leader.
+    - v3 composite is +6.70 [+0.63, +10.35] vs Intern and +7.02 [+1.33, +11.25] vs Kev.
+    - No candidate type collapsed (Choice .661, Noul .764, Score .268 vs chance .267/.50/.20). Score never predicts
+      level 0; disclose.
+    - Eos 1.0's typed Noul IS collapsed (97% false).
+  - **C1 v1.1 event 1 (sealed independent set; 1 of 3 used).** The recheck found no new C1 source in training (no
+    v1.2). C1 scores: candidate 40.24, Eos 1.0 37.94, Kev 39.06, Intern 34.58, JPT-0.8B 39.01 (internal only).
+    - Paired differences for the candidate: vs Eos **+2.31 [+0.29, +4.30]**, vs Intern **+5.66 [+3.49, +7.78]**, vs
+      Kev +1.18 [−0.99, +3.37].
+    - Disclosed regressions vs Eos 1.0: Russian star ratings, tutoring rapport, long inputs (.577 vs .620) and
+      non-English accuracy.
+  - **Gate check tool:** `python3 -m v2.eval.gates paired|types …` (stored predictions only). Future C1 events reuse the
+    event script pattern in the record (logged decryption, seal before gold).
+- **Node-B image gap (plan, not run):** the `decision20-lux-runtime` image (`ce895822`) lacks `causal_conv1d`. Every
+  eval node-B collection used it: Lux1 check, AutoJev, Eikos, Jebadiah. The 27B track's formal runs used the kernel image
+  `dbe5f32b`. Plan: re-collect the three 27B comparators plus Lux1 once on `dbe5f32b`, about 1.3 GPU-h. **Request node
+  B GPU5 or GPU6 from the ~27B track before the next 27B formal comparison**
+  (`v2/eval/records/m4-nodeB-revalidation-plan-2026-09-28.md`).
