@@ -103,7 +103,9 @@ async def chat_completions(request: Request):
         return error_response
     assert body is not None
     session_id = request.headers.get(SESSION_HEADER) or "__global__"
-    request.app.state.request_store.record(session_id, body, request.headers, raw_body)
+    request.app.state.request_store.record(
+        session_id, body, request.headers, raw_body, request.url.path
+    )
     try:
         req = ChatRequest.model_validate(body)
     except ValidationError as error:
