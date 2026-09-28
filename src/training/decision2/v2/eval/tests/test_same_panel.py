@@ -258,7 +258,14 @@ class SamePanelTests(unittest.TestCase):
                     )
                     same_panel.report(args)
                     reports.append(run_dir / "REPORT.json")
-            receipt = charts.render(reports, Path(tmp) / "charts")
+            with mock.patch.dict(
+                charts.LICENCE_CLASS, {"test/model": "non-commercial"}
+            ):
+                with self.assertRaisesRegex(ValueError, "licence filter"):
+                    charts.render(reports, Path(tmp) / "nc")
+                allowed = ("own", "permissive", "non-commercial")
+                receipt = charts.render(reports, Path(tmp) / "charts", allowed)
+            self.assertEqual(receipt["excluded_by_licence"], [])
             self.assertEqual(
                 [m["label"] for m in receipt["v3_ranking"]["models"]],
                 ["Model a", "Model b"],
@@ -325,6 +332,24 @@ class SamePanelTests(unittest.TestCase):
         self.assertEqual(result["category_changes"], 1)
         self.assertAlmostEqual(result["max_abs_numeric_drift"], 0.15)
         self.assertEqual(result["answer_slots"], 2)
+
+    def test_proxy_statistics(self) -> None:
+        from v2.eval import proxy_calibration as pc
+
+        self.assertEqual(pc.ranks([3.0, 1.0, 1.0, 2.0]), [4.0, 1.5, 1.5, 3.0])
+        self.assertAlmostEqual(pc.kendall_tau_b([1, 2, 3], [1, 2, 3]), 1.0)
+        self.assertAlmostEqual(pc.kendall_tau_b([1, 2, 3], [3, 2, 1]), -1.0)
+        loo = pc.loo_linear([1.0, 2.0, 3.0, 4.0], [2.0, 4.0, 6.0, 8.0])
+        self.assertAlmostEqual(loo["max"], 0.0)
+        result = pc.pairwise(
+            ["a", "b", "c"],
+            ["x", "x", "y"],
+            [1.0, 2.0, 3.0],
+            [1.0, 3.0, 2.0],
+            [0.1, 0.1, 0.1],
+        )
+        self.assertEqual((result["all"]["agree"], result["all"]["n"]), (2, 3))
+        self.assertEqual(result["same_tier"]["n"], 1)
 
     def test_count_safetensors_reads_headers_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

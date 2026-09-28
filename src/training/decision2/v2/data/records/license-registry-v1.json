@@ -1,0 +1,182 @@
+{
+  "css_flute_official_train": {
+    "license": "AFL-3.0",
+    "attribution": "Chakrabarty et al., FLUTE: Figurative Language Understanding through Textual Explanations (EMNLP 2022); ColumbiaNLP/FLUTE official train partition",
+    "evidence": "https://huggingface.co/datasets/ColumbiaNLP/FLUTE",
+    "redistribution": "private redistribution with attribution; FLUTE is also a CSS15 transfer task (same-task exposure disclosed; excluded from A0s, A0p and RP-v1)"
+  },
+  "decision2_programmatic_original_v1": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 2.0 rights-clean v1 programmatic generators",
+    "evidence": "rights-clean v2 manifest 61aa8830 source_rights: internally generated, pinned generators and objective oracle audits",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_targeted_programmatic_v1": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 2.0 targeted programmatic generators (interval conjunction, quantized median)",
+    "evidence": "rights-clean v2 manifest 61aa8830 source_rights: internally generated",
+    "redistribution": "unrestricted within the project"
+  },
+  "google_goemotions_official_train": {
+    "license": "CC-BY-4.0",
+    "attribution": "Demszky et al., GoEmotions (ACL 2020); google-research@2adf640a14f11025ae5a9d0ec493b78530d276d3 official train split",
+    "evidence": "https://github.com/google-research/google-research/tree/master/goemotions",
+    "redistribution": "permitted with attribution"
+  },
+  "legacy:cosmos_qa": {
+    "license": "CC-BY-4.0",
+    "attribution": "Huang et al., Cosmos QA (EMNLP 2019)",
+    "evidence": "https://huggingface.co/datasets/allenai/cosmos_qa",
+    "redistribution": "permitted with attribution"
+  },
+  "legacy:snli": {
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Bowman et al., SNLI (EMNLP 2015)",
+    "evidence": "https://nlp.stanford.edu/projects/snli/",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "legacy:squad2_answerability": {
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Rajpurkar et al., SQuAD 2.0 (ACL 2018)",
+    "evidence": "https://rajpurkar.github.io/SQuAD-explorer/",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "legacy:stage3_replay": {
+    "license": "mixed: project-generated (435 rows); CLINC150 CC-BY-3.0; BANKING77 CC-BY-4.0",
+    "attribution": "Larson et al., CLINC150 (EMNLP 2019); Casanueva et al., BANKING77 (2020); Decision 1.0 stage-3 replay generators",
+    "evidence": "https://github.com/clinc/oos-eval/blob/master/LICENSE ; https://huggingface.co/datasets/PolyAI/banking77",
+    "redistribution": "permitted with attribution"
+  },
+  "legacy:stage4-general-composition-v2": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 1.0 stage-4 general composition generators",
+    "evidence": "rights-clean v2 manifest 61aa8830 source_rights: internally generated",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a2": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A2",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a4": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a4h": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4 hard distractors",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a4r": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4 random distractors",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "redistribution": "unrestricted within the project"
+  },
+  "abcd_v1.1_train": {
+    "license": "MIT",
+    "attribution": "Chen et al., Action-Based Conversations Dataset (NAACL 2021); asappresearch/abcd@6b8700ce67c6b37b062dd7a60abc76d7ef832a97",
+    "evidence": "https://github.com/asappresearch/abcd/blob/6b8700ce67c6b37b062dd7a60abc76d7ef832a97/LICENSE",
+    "redistribution": "permitted with the MIT notice"
+  },
+  "sgd_dstc8_train": {
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Rastogi et al., Schema-Guided Dialogue (AAAI 2020); google-research-datasets/dstc8-schema-guided-dialogue@e852981ae34990f4358979625854259302feaa78",
+    "evidence": "https://github.com/google-research-datasets/dstc8-schema-guided-dialogue/blob/e852981ae34990f4358979625854259302feaa78/LICENSE.txt",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "qasc_train": {
+    "license": "CC-BY-4.0",
+    "attribution": "Khot et al., QASC (AAAI 2020); allenai/qasc@a34ba204eb9a33b919c10cc08f4f1c8dae5ec070",
+    "evidence": "https://huggingface.co/datasets/allenai/qasc",
+    "redistribution": "permitted with attribution"
+  },
+  "musique_full_v1.0_train": {
+    "license": "CC-BY-4.0 (dataset); Wikipedia text CC-BY-SA",
+    "attribution": "Trivedi et al., MuSiQue (TACL 2022); StonyBrookNLP/musique@922ac98f19a201998dbdae6d7f2887a5258dbdeb; data file from bdsaglam/musique@22873a405dd809893b22ada0b499299fb612d2df",
+    "evidence": "https://github.com/StonyBrookNLP/musique/blob/922ac98f19a201998dbdae6d7f2887a5258dbdeb/LICENSE",
+    "redistribution": "permitted with attribution; share-alike applies to Wikipedia-derived text"
+  },
+  "klue_ynat_train": {
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Park et al., KLUE (NeurIPS Datasets 2021), YNAT; klue/klue@349481ec73fff722f88e0453ca05c77a447d967c",
+    "evidence": "https://github.com/KLUE-benchmark/KLUE#license",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "klue_nli_train": {
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Park et al., KLUE, NLI; klue/klue@349481ec73fff722f88e0453ca05c77a447d967c",
+    "evidence": "https://github.com/KLUE-benchmark/KLUE#license",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "klue_mrc_train": {
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Park et al., KLUE, MRC; klue/klue@349481ec73fff722f88e0453ca05c77a447d967c",
+    "evidence": "https://github.com/KLUE-benchmark/KLUE#license",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "klue_sts_train": {
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Park et al., KLUE, STS; klue/klue@349481ec73fff722f88e0453ca05c77a447d967c",
+    "evidence": "https://github.com/KLUE-benchmark/KLUE#license",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "jglue_jcommonsenseqa_v1.3_train": {
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Kurihara et al., JGLUE (LREC 2022), JCommonsenseQA v1.3; yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c",
+    "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "jglue_jnli_v1.3_train": {
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Kurihara et al., JGLUE, JNLI v1.3; yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c",
+    "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "jglue_jsts_v1.3_train": {
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Kurihara et al., JGLUE, JSTS v1.3; yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c",
+    "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "argq30k_train": {
+    "license": "CC-BY-SA-3.0",
+    "attribution": "Gretz et al., A Large-scale Dataset for Argument Quality Ranking (AAAI 2020); ibm-research/argument_quality_ranking_30k@590726b3765b1b90c5e53a17e3b1f77d92d3aa8a",
+    "evidence": "https://huggingface.co/datasets/ibm-research/argument_quality_ranking_30k",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "saf_en_train": {
+    "license": "CC-BY-4.0",
+    "attribution": "Filighera et al., Short Answer Feedback (ACL 2022), communication networks (EN); Short-Answer-Feedback/saf_communication_networks_english@9358d6f0f87371c0a5f150502b14cb16e382195f",
+    "evidence": "https://huggingface.co/datasets/Short-Answer-Feedback/saf_communication_networks_english",
+    "redistribution": "permitted with attribution"
+  },
+  "saf_de_train": {
+    "license": "CC-BY-4.0",
+    "attribution": "Filighera et al., Short Answer Feedback, micro-job (DE); Short-Answer-Feedback/saf_micro_job_german@30db3effcfc07b638291cfcff248b84dbd8013db",
+    "evidence": "https://huggingface.co/datasets/Short-Answer-Feedback/saf_micro_job_german",
+    "redistribution": "permitted with attribution"
+  },
+  "decision2_verifiable_v2_a4v2h": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4 v2 hard distractors",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a4v2r": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4 v2 random distractors",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a6": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A6",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "redistribution": "unrestricted within the project"
+  }
+}

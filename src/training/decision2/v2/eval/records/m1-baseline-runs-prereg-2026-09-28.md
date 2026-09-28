@@ -90,6 +90,34 @@ Deferred to Milestone 2: this-that 1.2, Kev-0.8B, Intern-Decision-0.8B, Jet
 v6.2, Hopper (G), Nimble v2, Jebadiah 27B, Eikos-27B, Rune (CUDA-only runtimes
 need a parity-checked fallback).
 
+## Amendment A3 — Milestone 2 runs (before launch, 2026-09-28 13:45 UTC+8)
+
+- **Dev readouts for proxy calibration (node A GPU6–7):** typed DEV (1,600) and CSS
+  pilot (1,430) for the 16 matrix models with the same adapters, packages and runtime
+  as their formal rows (Lux1 with a copy of the frozen autotune cache). DEV2.0-0.6B
+  reuses its earlier dev/pilot predictions (same checkpoint `5380e01e`, adapter
+  `33dae46e`, calibration `dc29fc12`). AutoJev's dev panels run on node B with its
+  formal rerun. Proxy analysis uses only dev readouts and the already-published v3
+  aggregates: no v3 item, label or per-item output is used to build any proxy; the
+  candidate proxy list is fixed below before any dev readout is scored.
+- **Candidate proxies:** P = 100·√(T_dev·H_pilot); T_dev; H_pilot; typed-DEV Choice,
+  Noul, Score accuracy; the arithmetic mean of T_dev and H_pilot; P_type = 100·√(mean
+  of the three typed-DEV type accuracies × H_pilot); pilot micro accuracy. Evaluation:
+  Spearman and Kendall rank correlation with v3; leave-one-out linear prediction of v3
+  (mean absolute error, maximum error); pairwise order agreement over all model pairs
+  and over same-tier pairs; the rate of order agreement as a function of proxy gap.
+- **N1 Lux1 cross-node (node B GPU3):** formal three panels, image
+  `decision20-lux-runtime:latest` (`sha256:ce895822…`, package trees identical to the
+  node A image), a copy of the frozen node A autotune cache (tree `e215f8bd…`).
+  PASS iff bit-identical to node A D1 with no new autotune entries; FAIL means kernel
+  choice is not the only cross-node difference and 9B formal runs stay on node A.
+- **N2 AutoJev 27B same-node comparator (node B GPU4):** pinned package re-downloaded
+  on node B (`6f5b557e`, source `ee63c151`), same adapter, formal plus dev panels, with a
+  persisted autotune cache; compared against the node A predictions. The node B run is
+  the comparator for 27B formal runs (the 27B track trains on node B).
+- Rules unchanged: one shot, ≤ 0.5 GPU-hour per run (N2 ≤ 0.6), gold never mounted for
+  inference, gold-free seal before formal scoring.
+
 ## Reused results (identity verified, no new GPU time)
 
 Recorded predictions were located by SHA-256, adopted, sealed and re-scored with

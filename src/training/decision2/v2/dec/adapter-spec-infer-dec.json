@@ -1,0 +1,16 @@
+{
+  "name": "decision2-dec-lora",
+  "module": "v2.dec.infer_dec",
+  "args": [
+    "--checkpoint", "{model}",
+    "--source-path", "{source}",
+    "--model-id", "{model_id}",
+    "--model-revision", "{revision}",
+    "--max-length", "{max_length}",
+    "--calibration", "{calibration}",
+    "--input", "{input}",
+    "--output", "{output}"
+  ],
+  "requires": ["source", "model_id", "max_length", "calibration"],
+  "batch_policy": "one prompt per call, all its questions batched; no truncation; LoRA over the pinned Decision 1.0 source, residual readouts included"
+}

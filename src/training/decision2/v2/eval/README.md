@@ -55,6 +55,15 @@ python3 -m v2.eval.same_panel compare --run-dir <run-dir> \
 python3 -m v2.eval.same_panel table --report <run-dir>/REPORT.json --report ...
 ```
 
+Qwen3.5/FLA-based packages (Decision 1.0 Eos/Sol/Nox/Lux and most 2.0 decoder
+candidates) pick Triton kernel configurations by runtime autotuning. On one node the
+choice is stable across processes (Lux1 node A runs are bit-identical), but a
+different node chose differently and moved 43 of 8,778 Lux1 answers. Compare a
+candidate with its comparator on the same node and runtime, and persist the autotune
+cache with the run:
+`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=<run>/triton-cache --mount-rw <run>/triton-cache`
+(create the directory first).
+
 `REPORT.json` carries v3/T/H, Choice/Noul/Score, per-task macro-F1, JevBench tiers,
 calibration, order/label/counterfactual pair consistency, long-input and language
 screens, invalid counts, latency/throughput and loaded parameters.
