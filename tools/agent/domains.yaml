@@ -797,6 +797,8 @@ profiles:
     paths:
       - e2e/profiles/agentgateway/**
       - deploy/kubernetes/agentgateway/**
+      - e2e/testcases/full_duplex_routing.go
+      - src/semantic-router/pkg/extproc/processor_req_body_full_duplex*.go
   envoy-ai-gateway:
     display_name: Envoy AI Gateway
     owner: e2e
@@ -1022,6 +1024,8 @@ profiles:
       - src/semantic-router/pkg/llmprotocol/**
       - src/semantic-router/pkg/protocolcodec/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
+      - src/semantic-router/pkg/extproc/processor_req_body_full_duplex*.go
+      - e2e/testcases/full_duplex_routing.go
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
   provider-protocols:

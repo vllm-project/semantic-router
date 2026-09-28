@@ -1,5 +1,6 @@
 """Scenario acceptance boundaries migrated from separate backend servers."""
 
+import hashlib
 import json
 from unittest.mock import AsyncMock
 
@@ -165,6 +166,24 @@ async def test_cli_auth_canary_and_prefixed_paths(path, capsys):
         output = capsys.readouterr().out
         assert output.splitlines() == ["authorization-canary-received", path]
         assert "Bearer canary" not in output
+
+
+async def test_observation_reports_path_and_credential_digest():
+    session = {"x-vsr-test-session-id": "provider-path"}
+    async with client_for("cli") as client:
+        response = await client.post(
+            "/provider/v1/chat/completions",
+            json=body("hello"),
+            headers={**session, "Authorization": "Bearer canary"},
+        )
+        assert response.status_code == 200
+        observed = (await client.get("/debug/last-request", headers=session)).json()
+        assert observed["path"] == "/provider/v1/chat/completions"
+        assert (
+            observed["authorization_sha256"]
+            == hashlib.sha256(b"Bearer canary").hexdigest()
+        )
+        assert "Bearer canary" not in json.dumps(observed)
 
 
 async def test_demo_toolcall_roundtrip_and_creative_bypass():
