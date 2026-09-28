@@ -37,3 +37,18 @@ half Brier ≤0.25. Failure authorizes no three-type student. A pass authorizes
 only designing source-reviewed student/control arms with matched budgets and
 independent development promotion; this screen itself authorizes no training.
 Keep the receipt mode `0600` and publish only public-safe aggregates and hashes.
+
+## Pre-GPU CPU lock
+
+After the signed prospective registration, the exact source mirror and future
+container mount layout passed a CPU-only dry-run and provenance/cache preflight.
+The v3 roster is **96 rows from 96 independent groups**, 32 per type, with
+**zero group overlap** with either v1 or v2. Its ordered identity SHA-256 is
+`f35e56d4127d9c573671e232880b9de76abe67a69115e97a22f6187259b2cdae`.
+The mirrored script and TRAIN bytes matched their frozen SHA-256 values.
+The same pinned image attested the Kev model revision, all 30 publisher source
+files, the linked source worktree HEAD, and both official base weight shards
+from offline cache. Model fingerprint:
+`8e2c7fff2ef6ad7b195443fac287fb1ae4cd83c8c9af1a12dfb743501a3ec3e9`.
+No GPU or protected evaluation labels were used in this preflight. A result
+with any other roster digest is invalid for this protocol.
