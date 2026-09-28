@@ -13,11 +13,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-const servedWindowEvent = "served_context_window_below_model_card"
+const (
+	servedWindowEvent                  = "served_context_window_below_model_card"
+	servedContextWindowNotServedEvent  = "served_context_window_model_not_served"
+	servedContextWindowUnverifiedEvent = "served_context_window_unverified"
+)
 
 // vllmModelsHandler answers like vLLM's /v1/models: base models carry the
 // engine's max_model_len, which is null when unset.
@@ -66,14 +73,15 @@ providers:
 
 func TestServedContextWindowWarnsOnlyWhenTheBackendServesLess(t *testing.T) {
 	for _, tt := range []struct {
-		name         string
-		servedID     string
-		served       *int
-		statuses     []int
-		cardOverride int
-		wantCalls    int32
-		wantWindow   int
-		wantSource   string
+		name          string
+		servedID      string
+		served        *int
+		statuses      []int
+		cardOverride  int
+		wantCalls     int32
+		wantWindow    int
+		wantSource    string
+		wantNotServed bool
 	}{
 		{name: "built-in card above served", servedID: "Qwen/Qwen3.6-27B", served: intPtr(32_768), wantCalls: 1, wantWindow: 262_144, wantSource: "builtin"},
 		{name: "operator override above served", servedID: "Qwen/Qwen3.6-27B", served: intPtr(32_768), cardOverride: 65_536, wantCalls: 1, wantWindow: 65_536, wantSource: "operator"},
@@ -81,7 +89,7 @@ func TestServedContextWindowWarnsOnlyWhenTheBackendServesLess(t *testing.T) {
 		{name: "aligned override", servedID: "Qwen/Qwen3.6-27B", served: intPtr(32_768), cardOverride: 32_768, wantCalls: 1},
 		{name: "served above card", servedID: "Qwen/Qwen3.6-27B", served: intPtr(1_048_576), wantCalls: 1},
 		{name: "served length unset", servedID: "Qwen/Qwen3.6-27B", wantCalls: 1},
-		{name: "model not listed", servedID: "Qwen/Qwen3.6-35B-A3B", served: intPtr(32_768), wantCalls: 1},
+		{name: "model not listed", servedID: "Qwen/Qwen3.6-35B-A3B", served: intPtr(32_768), wantCalls: 1, wantNotServed: true},
 		{name: "unauthorized is not retried", servedID: "Qwen/Qwen3.6-27B", served: intPtr(32_768), statuses: []int{http.StatusUnauthorized}, wantCalls: 1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -99,6 +107,16 @@ func TestServedContextWindowWarnsOnlyWhenTheBackendServesLess(t *testing.T) {
 			(&OpenAIRouter{Config: cfg}).checkServedContextWindow(context.Background(), targets[0])
 
 			assert.Equal(t, tt.wantCalls, calls.Load())
+			notServed := logs.FilterMessage(servedContextWindowNotServedEvent).All()
+			if tt.wantNotServed {
+				require.Len(t, notServed, 1)
+				fields := notServed[0].ContextMap()
+				assert.Equal(t, "Qwen/Qwen3.6-27B", fields["upstream_model"])
+				assert.Equal(t, "qwen-long", fields["model"])
+				assert.Contains(t, fields["message"], "--served-model-name Qwen/Qwen3.6-27B")
+			} else {
+				assert.Empty(t, notServed)
+			}
 			warnings := logs.FilterMessage(servedWindowEvent).All()
 			if tt.wantWindow == 0 {
 				assert.Empty(t, warnings)
@@ -134,12 +152,73 @@ func TestServedContextWindowTargetsOnlyVLLMBackendsWithKnownWindows(t *testing.T
 	assert.Empty(t, servedContextWindowTargets(cfg))
 }
 
+// An in-scope backend that cannot be resolved still has to leave a trace,
+// otherwise "never probed" and "probed and aligned" read the same in the log.
+func TestServedContextWindowRecordsAnUnresolvableVLLMBackend(t *testing.T) {
+	core, logs := observer.New(zapcore.DebugLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+
+	cfg := servedWindowConfig(t, "http://127.0.0.1:8000", 0)
+	endpoint := cfg.VLLMEndpoints[0].Name
+	for name, profile := range cfg.ProviderProfiles {
+		profile.BaseURL = "://not a url"
+		cfg.ProviderProfiles[name] = profile
+	}
+
+	assert.Empty(t, servedContextWindowTargets(cfg))
+
+	events := logs.FilterMessage(servedContextWindowUnverifiedEvent).All()
+	require.Len(t, events, 1)
+	fields := events[0].ContextMap()
+	assert.Equal(t, "qwen-long", fields["model"])
+	assert.Equal(t, endpoint, fields["endpoint"])
+	assert.Contains(t, fields["error"], "base URL is not parseable")
+}
+
+// A backend that keeps answering "still loading" must not be mistaken for one
+// the Router gave up on, so there is no attempt ceiling to reach.
+func TestServedContextWindowKeepsProbingARetryableBackendPastAnyCeiling(t *testing.T) {
+	logs := newObservedEventLogger(t)
+	interval := servedContextWindowRetryInterval
+	servedContextWindowRetryInterval = time.Millisecond
+	t.Cleanup(func() { servedContextWindowRetryInterval = interval })
+
+	var calls atomic.Int32
+	backend := httptest.NewServer(vllmModelsHandler(t, &calls, nil, "Qwen/Qwen3.6-27B", intPtr(32_768)))
+	t.Cleanup(backend.Close)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	// Fail every attempt for a while, then let the read through. The old
+	// ceiling gave up after twenty tries and logged nothing.
+	failing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Add(1) < 40 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"Qwen/Qwen3.6-27B","max_model_len":32768}]}`))
+	}))
+	t.Cleanup(failing.Close)
+
+	cfg := servedWindowConfig(t, failing.URL, 0)
+	targets := servedContextWindowTargets(cfg)
+	require.Len(t, targets, 1)
+
+	go (&OpenAIRouter{Config: cfg}).checkServedContextWindow(ctx, targets[0])
+
+	require.Eventually(t, func() bool {
+		return len(logs.FilterMessage(servedWindowEvent).All()) == 1
+	}, 10*time.Second, 5*time.Millisecond, "the probe gave up before the backend answered")
+	assert.Empty(t, logs.FilterMessage(servedContextWindowUnverifiedEvent).All())
+}
+
 func TestPublishRouterStateChecksServedContextWindowUntilClose(t *testing.T) {
 	restoreProcessGlobals(t)
 	logs := newObservedEventLogger(t)
-	interval, attempts := servedContextWindowRetryInterval, servedContextWindowAttempts
-	servedContextWindowRetryInterval, servedContextWindowAttempts = 5*time.Millisecond, 1_000
-	t.Cleanup(func() { servedContextWindowRetryInterval, servedContextWindowAttempts = interval, attempts })
+	interval := servedContextWindowRetryInterval
+	servedContextWindowRetryInterval = 5 * time.Millisecond
+	t.Cleanup(func() { servedContextWindowRetryInterval = interval })
 
 	var served atomic.Int32
 	servedBackend := httptest.NewServer(vllmModelsHandler(t, &served, nil, "Qwen/Qwen3.6-27B", intPtr(32_768)))

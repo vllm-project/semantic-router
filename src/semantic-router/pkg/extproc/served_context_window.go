@@ -17,12 +17,9 @@ import (
 )
 
 // vLLM does not answer until its model has loaded, which can take longer than
-// the Router's own startup, so an unreachable backend is retried for about ten
-// minutes.
-var (
-	servedContextWindowRetryInterval = 30 * time.Second
-	servedContextWindowAttempts      = 20
-)
+// the Router's own startup, so an unreachable backend keeps being retried until
+// the configuration generation is retired.
+var servedContextWindowRetryInterval = 30 * time.Second
 
 type servedContextWindowTarget struct {
 	model         string
@@ -73,6 +70,7 @@ func servedContextWindowTargets(cfg *config.RouterConfig) []servedContextWindowT
 	}
 	registry, err := modelcatalog.BuiltIn()
 	if err != nil {
+		logServedContextWindowUnverified("", "", fmt.Errorf("model catalog unavailable, so no backend was probed: %w", err))
 		return nil
 	}
 	var targets []servedContextWindowTarget
@@ -89,16 +87,21 @@ func servedContextWindowTargets(cfg *config.RouterConfig) []servedContextWindowT
 		if err != nil || provider != "vllm" {
 			continue
 		}
+		// Everything past the vllm filter is an in-scope backend, so a failure
+		// to resolve it says the window was never read.
 		base, err := url.Parse(profile.BaseURL)
 		if err != nil {
+			logServedContextWindowUnverified(endpoint.Model, endpoint.Name, fmt.Errorf("base URL is not parseable: %w", err))
 			continue
 		}
 		listPath, err := registry.ResolveOperationPath(provider, profile.Protocol, "list_models", base.Path)
 		if err != nil {
+			logServedContextWindowUnverified(endpoint.Model, endpoint.Name, fmt.Errorf("model list path is unresolvable: %w", err))
 			continue
 		}
 		address, err := endpoint.ResolveAddress(cfg.ProviderProfiles)
 		if err != nil {
+			logServedContextWindowUnverified(endpoint.Model, endpoint.Name, fmt.Errorf("address is unresolvable: %w", err))
 			continue
 		}
 		card, source := endpoint.Model, ""
@@ -128,7 +131,7 @@ func servedContextWindowTargets(cfg *config.RouterConfig) []servedContextWindowT
 func (r *OpenAIRouter) checkServedContextWindow(ctx context.Context, target servedContextWindowTarget) {
 	authorize, err := configuredProviderAuthorizer(r.Config, target.profile, target.model)
 	if err != nil {
-		logServedContextWindowUnverified(target, err)
+		logServedContextWindowUnverified(target.model, target.endpoint, err)
 		return
 	}
 	client, err := connector.New(target.baseURL, authorize, connector.Options{
@@ -138,7 +141,7 @@ func (r *OpenAIRouter) checkServedContextWindow(ctx context.Context, target serv
 		MaxErrorBytes:    1 << 10,
 	})
 	if err != nil {
-		logServedContextWindowUnverified(target, err)
+		logServedContextWindowUnverified(target.model, target.endpoint, err)
 		return
 	}
 	defer func() { _ = client.Close() }()
@@ -149,15 +152,21 @@ func (r *OpenAIRouter) checkServedContextWindow(ctx context.Context, target serv
 		SuccessStatusCode: http.StatusOK,
 		RetrySafe:         true,
 	}
-	for attempt := 1; ; attempt++ {
+	// A backend that is still loading its model answers with a retryable
+	// failure, so the probe keeps going until the read succeeds or the
+	// configuration generation is retired. Any other failure is final.
+	for {
 		result, err := client.DoRequest(ctx, operation, connector.Request{Headers: target.profile.ExtraHeaders})
 		if err == nil {
 			reportServedContextWindow(target, result.Body)
 			return
 		}
+		if ctx.Err() != nil {
+			return
+		}
 		var failure *connector.Error
-		if ctx.Err() != nil || !errors.As(err, &failure) || !failure.Retryable || attempt >= servedContextWindowAttempts {
-			logServedContextWindowUnverified(target, err)
+		if !errors.As(err, &failure) || !failure.Retryable {
+			logServedContextWindowUnverified(target.model, target.endpoint, err)
 			return
 		}
 		timer := time.NewTimer(servedContextWindowRetryInterval)
@@ -173,7 +182,7 @@ func (r *OpenAIRouter) checkServedContextWindow(ctx context.Context, target serv
 func reportServedContextWindow(target servedContextWindowTarget, body []byte) {
 	var list servedModelList
 	if err := json.Unmarshal(body, &list); err != nil {
-		logServedContextWindowUnverified(target, err)
+		logServedContextWindowUnverified(target.model, target.endpoint, err)
 		return
 	}
 	for _, served := range list.Data {
@@ -198,13 +207,32 @@ func reportServedContextWindow(target servedContextWindowTarget, body []byte) {
 		}
 		return
 	}
-	logServedContextWindowUnverified(target, fmt.Errorf("backend does not list model %q", target.upstreamModel))
+	logServedContextWindowModelNotServed(target)
 }
 
-func logServedContextWindowUnverified(target servedContextWindowTarget, err error) {
+// A backend that answers but does not list the ID routing sends is a
+// misconfiguration rather than a value to wait for, so it warns instead of
+// staying at debug. The operator action is the same whether the served name
+// differs from the binding's ID or the backend has not registered it yet.
+func logServedContextWindowModelNotServed(target servedContextWindowTarget) {
+	logging.ComponentWarnEvent("extproc", "served_context_window_model_not_served", map[string]interface{}{
+		"model":                 target.model,
+		"model_card":            target.card,
+		"context_window_size":   target.declared,
+		"context_window_source": target.source,
+		"endpoint":              target.endpoint,
+		"upstream_model":        target.upstreamModel,
+		"message": fmt.Sprintf(
+			"vLLM at %s answered the model list but does not list %s, the name routing uses for %q, so its served context window could not be read. Start vLLM with --served-model-name %s, or point the %q binding at the name the backend serves.",
+			target.baseURL, target.upstreamModel, target.model, target.upstreamModel, target.endpoint,
+		),
+	})
+}
+
+func logServedContextWindowUnverified(model, endpoint string, err error) {
 	logging.ComponentDebugEvent("extproc", "served_context_window_unverified", map[string]interface{}{
-		"model":    target.model,
-		"endpoint": target.endpoint,
+		"model":    model,
+		"endpoint": endpoint,
 		"error":    err.Error(),
 	})
 }
