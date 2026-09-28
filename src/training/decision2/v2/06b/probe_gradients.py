@@ -72,7 +72,7 @@ def run(model: Any, packer: Any, records: list[dict[str, Any]]) -> dict[str, Any
         g = gradient(model, packer, [record], "native")
         reference = g if reference is None else reference + g
     out = {}
-    for mode in ("native", "bool", "float"):
+    for mode in ("native", "bool", "float") if model.bidirectional else ("native",):
         g = gradient(model, packer, records, mode)
         out[mode] = {
             "cosine_vs_unpadded": float(
