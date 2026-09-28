@@ -99,7 +99,7 @@ func validateMCPRAGBackend(c *RAGPluginConfig) error {
 	if mcpConfig.ToolName == "" {
 		return fmt.Errorf("MCP tool name is required")
 	}
-	return nil
+	return fmt.Errorf("RAG backend %q is not available: the router has no MCP tool invoker", c.Backend)
 }
 
 func validateOpenAIRAGBackend(c *RAGPluginConfig) error {
@@ -126,6 +126,9 @@ func validateHybridRAGBackend(c *RAGPluginConfig) error {
 	}
 	if hybridConfig.Primary == "" {
 		return fmt.Errorf("primary backend is required for hybrid RAG")
+	}
+	if hybridConfig.Primary == "mcp" || hybridConfig.Fallback == "mcp" {
+		return fmt.Errorf("RAG backend %q is not available: the router has no MCP tool invoker", "mcp")
 	}
 	return nil
 }
