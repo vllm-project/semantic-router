@@ -19,8 +19,10 @@ Rows keep the 2.0 contract of `build_a7.normalize_row`. They are deduplicated
 against the frozen A7 files and among themselves, never cross SELECT/CAL or a
 v1 held-out slice, and a row whose connected component (the same union-find as
 `build_a7.build`, over all source rows) already has frozen A7 rows inherits
-their partition; other components follow the AHO hash rule. Writes
-prelim/A7r.{train,aho}.jsonl and a count-only build manifest.
+their partition; other components follow the AHO hash rule. Amendment 4 then
+balances every Noul (family, language) cell per part to a true share in
+[0.45, 0.55] by cutting the majority class. Writes prelim/A7r.{train,aho}.jsonl
+and a count-only build manifest.
 """
 
 from __future__ import annotations
@@ -51,7 +53,8 @@ from v2.data.a7.build_a7 import (
 )
 from v2.data.freeze import canonical_jsonl, parse_jsonl
 
-VERSION = "a7-rec10-v1"
+VERSION = "a7-rec10-v2"
+BALANCE_LOW = 0.45
 SUB_ARM = "A7r"
 RECOVERED_SOURCES = ("stage1", "stage2")
 NOUL_PAIRS = {
@@ -295,6 +298,9 @@ def recover(spec: Mapping[str, Any], final_dirs: Sequence[Path]) -> dict[str, An
             row = dict(row, split="select", evaluation_role="select")
             validate_row(row, "select")
         parts[part].append(row)
+    balance_dropped = {}
+    for part in parts:
+        parts[part], balance_dropped[part] = balance_noul(parts[part])
     manifest = {
         "schema": "decision2.v2.a7.recover.v1",
         "version": VERSION,
@@ -312,6 +318,10 @@ def recover(spec: Mapping[str, Any], final_dirs: Sequence[Path]) -> dict[str, An
         "duplicates": dict(sorted(duplicates.items())),
         "isolation_dropped": dict(sorted(isolation_dropped.items())),
         "partition_assignment": dict(sorted(assignment.items())),
+        "noul_balance": {
+            "rule": f"per (family, language, part) true share in [{BALANCE_LOW}, {1 - BALANCE_LOW:.2f}]",
+            "majority_rows_dropped": balance_dropped,
+        },
         "parts": {
             part: {
                 "rows": len(rows),
@@ -323,6 +333,40 @@ def recover(spec: Mapping[str, Any], final_dirs: Sequence[Path]) -> dict[str, An
         },
     }
     return {"parts": parts, "manifest": manifest}
+
+
+def balance_noul(
+    rows: Sequence[dict[str, Any]], low: float = BALANCE_LOW
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Amendment 4: per (family, language) Noul cell keep the true share in [low, 1 - low].
+
+    The majority class is cut to floor(minority * (1 - low) / low) rows in
+    sha256("a7r-balance:" + id) order; Score rows pass through unchanged.
+    """
+    cells: dict[tuple[str, str], dict[str, list[dict[str, Any]]]] = (
+        collections.defaultdict(lambda: {"true": [], "false": []})
+    )
+    kept = []
+    for row in rows:
+        if row["task_type"] == "noul":
+            gold = row["options"][row["label"]]["key"]
+            cells[(row["family"], row["language"])][gold].append(row)
+        else:
+            kept.append(row)
+    dropped: dict[str, int] = {}
+    for (family, language), classes in sorted(cells.items()):
+        minority, majority = sorted(classes.values(), key=len)
+        cap = int(len(minority) * (1 - low) / low)
+        order = sorted(
+            majority,
+            key=lambda row: hashlib.sha256(
+                f"a7r-balance:{row['id']}".encode()
+            ).hexdigest(),
+        )
+        kept.extend(minority + order[:cap])
+        if len(majority) > cap:
+            dropped[f"{family}|{language}"] = len(majority) - cap
+    return sorted(kept, key=lambda row: row["id"]), dropped
 
 
 def main(argv: list[str] | None = None) -> int:

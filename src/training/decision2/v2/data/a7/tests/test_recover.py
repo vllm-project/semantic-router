@@ -98,6 +98,37 @@ class MapKeysTest(unittest.TestCase):
             recover.map_keys(gap)
 
 
+class BalanceTest(unittest.TestCase):
+    def test_majority_class_is_cut_to_the_share_bound(self) -> None:
+        def row(index: int, gold: str, family: str = "transition_set") -> dict:
+            keys = ["false", "true"]
+            return {
+                "id": f"r{index:03d}",
+                "task_type": "noul",
+                "family": family,
+                "language": "en",
+                "options": [{"key": k} for k in keys],
+                "label": keys.index(gold),
+            }
+
+        rows = [row(i, "true") for i in range(9)] + [
+            row(100 + i, "false") for i in range(40)
+        ]
+        rows += [row(200 + i, "true", "authorization") for i in range(10)]
+        rows += [row(300 + i, "false", "authorization") for i in range(12)]
+        score = {"id": "s1", "task_type": "score", "family": "rubric", "language": "en"}
+        kept, dropped = recover.balance_noul(rows + [score])
+        transition = [r for r in kept if r.get("family") == "transition_set"]
+        self.assertEqual(len(transition), 9 + 11)
+        self.assertEqual(dropped, {"transition_set|en": 29})
+        self.assertEqual(
+            len([r for r in kept if r.get("family") == "authorization"]), 22
+        )
+        self.assertIn(score, kept)
+        again, _ = recover.balance_noul(rows + [score])
+        self.assertEqual(kept, again)
+
+
 class RecoverTest(unittest.TestCase):
     def test_recover_dedupes_and_inherits_frozen_partitions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
