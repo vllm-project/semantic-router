@@ -193,6 +193,15 @@ version is **HOLD**, with no admitted Sol2B rows and zero GPU-hours. Its
 private receipt contains raw follow-up answer classes and is not a gist or
 card artifact.
 
+The separately frozen [ShARC v2 metadata screen](sol2b-sharc-human-policy-source-v2-result-2026-09-28.md)
+groups opposite Yes/No states within the same original tree **and** matching
+normalized question. It found **589 candidate pairs** across 581 exact rule
+snippets and 180 source URLs, meeting the predefined source-count floors.
+The v1 failure arose because every tree contains multiple question strings;
+v2 does not change that result. These are only potential source groups:
+answer-blind semantic review, shortcuts, overlap, native budget and matched
+training parity remain pending. **Zero rows admitted, zero GPU-hours.**
+
 The [ConTRoL CPU screen](qwen35-4b-context-nli-source-screen-2026-09-28.md),
 [0.6B gradient preflight](small06-gradient-conflict-preflight-result-2026-09-28.md),
 [0.6B one-update parity](small06-gradient-projection-parity-preflight-2026-09-28.md),
