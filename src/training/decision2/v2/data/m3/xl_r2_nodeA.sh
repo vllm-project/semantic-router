@@ -1,12 +1,13 @@
 #!/bin/bash
 # M3b XL recipe revision r2 on node A (CPU only): rescreen of the r1 rows, then the r2 build.
 #
-#   xl_r2_nodeA.sh CODE RUN rows|scan|scan-union|rescreen|targets|build|check|upload|readback
+#   xl_r2_nodeA.sh CODE RUN rows|scan|scan-union|rescreen|targets|targets-c|build|check|upload|readback
 #
 # CODE = src/training/decision2 of an exact mirror; RUN = output root (rescreen/, targets/,
-# build/). Rules: records/m3b-prereg-amendment-3-2026-09-28.md §2-§3 and amendment 2 §4.
-# Optional environment: PARALLEL scans at a time (default 4) with WORKERS processes each
-# (default 16; scan-union 64); TREE (the code tree hash, required by build).
+# build/). Rules: records/m3b-prereg-amendment-3-2026-09-28.md §2-§3, amendment 2 §4 and
+# amendment 4. Optional environment: PARALLEL scans at a time (default 4) with WORKERS
+# processes each (default 16; scan-union 64); TREE (the code tree hash, required by build);
+# LUX_C_REV (required by targets-c); MESSAGE (the upload commit message).
 set -euo pipefail
 CODE=$1
 RUN=$2
@@ -28,6 +29,8 @@ GAP=(--gap "H7=$F/h7.train.jsonl,$F/h7.train.tokens.jsonl"
 LUX_XL_REV=0ce4ca604cff506edbb69117f62df975e6dc0e6a
 T=$RUN/targets/m3/teachers/lux1/xl
 S=$RUN/rescreen/scan
+# Amendment 4: hits on these roles are disclosed; a hit on any other role excludes.
+DISCLOSED_ROLES=('v1_aho_*' 'a7_aho_*' rights_clean_select rights_clean_cal)
 cd "$CODE"
 
 expect() { # expect FILE SHA256
@@ -101,6 +104,14 @@ print(hashlib.sha1(b'blob %d\0' % len(d) + d).hexdigest())" "$T/w5.targets.jsonl
   }
   sha256sum "$T"/w*.targets.jsonl > "$RUN/targets/sha256.txt"
   ;;
+targets-c)
+  # The published Lux XL control waves at LUX_C_REV (only those present there are kept).
+  mkdir -p "$RUN/targets-c" && chmod 700 "$RUN/targets-c"
+  HF_HUB_CACHE=/data/dev2/hf-cache hf download "$REPO" --repo-type dataset --revision "${LUX_C_REV:?}" \
+    --include 'm3/teachers/lux1/xl/c-w*.targets.jsonl' --local-dir "$RUN/targets-c" > "$RUN/targets-c/download.log" 2>&1
+  for P in "$RUN"/targets-c/m3/teachers/lux1/xl/c-w*.targets.jsonl; do cp "$P" "$T/"; done
+  sha256sum "$T"/c-w*.targets.jsonl > "$RUN/targets-c/sha256.txt"
+  ;;
 build)
   expect "$F/h7.train.jsonl" 7c4133b05664de492bb80b40df5eef0f028257f10327a492564bea5f62813a32
   expect "$F/h8.train.jsonl" 1f19e5ab84e6b80182e99cd8e2b7efc79ec17275048e6daf7987afc335e7d361
@@ -114,15 +125,20 @@ build)
   LUX_R1=$LUX_R1,/data/dev2/runs/data/m3a/pk1/lux-wave4/wave4.targets.jsonl
   AJ_R1=$B/a0s-strict/autojev27.jsonl,$J/upload-aj-m/rp-v2/aj-m.targets.jsonl,$J/upload-aj-sl/rp-v2/aj-sl.targets.jsonl
   LUX_XL=$T/w1.targets.jsonl,$T/w2.targets.jsonl,$T/w3.targets.jsonl,$T/w4.targets.jsonl,$T/w5.targets.jsonl
+  # A control wave counts once published (targets-c); until then its prompt rows project.
   PENDING=()
   for W in c-w1 c-w2; do
-    if [ -f "$B/lux-xl/lux-xl-$W.rows.jsonl" ]; then
+    if [ -f "$T/$W.targets.jsonl" ]; then
+      LUX_XL=$LUX_XL,$T/$W.targets.jsonl
+    elif [ -f "$B/lux-xl/lux-xl-$W.rows.jsonl" ]; then
       PENDING+=(--pending "lux1=lux-xl-$W=$B/lux-xl/lux-xl-$W.rows.jsonl")
     fi
   done
+  DISCLOSE=()
+  for P in "${DISCLOSED_ROLES[@]}"; do DISCLOSE+=(--disclose-role "$P"); done
   nice -n 10 python3 -m v2.data.m3.xl_r2 build --pools "$POOLS" "${GAP[@]}" "${R1_ARGS[@]}" \
     --r1-revision "$R1_REV" --gap-revision "$GAP_REV" --rescreen "$RUN/rescreen/rescreen.private.json" \
-    --out-dir "$RUN/build" --targets "lux1=$LUX_R1" --targets "autojev27=$AJ_R1" \
+    "${DISCLOSE[@]}" --out-dir "$RUN/build" --targets "lux1=$LUX_R1" --targets "autojev27=$AJ_R1" \
     --extra-targets "lux1=$LUX_XL" "${PENDING[@]}" --code-commit "$COMMIT" --code-tree "${TREE:?}" \
     > "$RUN/build.stdout"
   ;;
@@ -150,7 +166,7 @@ upload)
   fi
   (cd "$RUN/upload" && find m3 -type f | LC_ALL=C sort | xargs sha256sum) > "$RUN/upload.sha256"
   HF_HUB_CACHE=/data/dev2/hf-cache hf upload "$REPO" "$X" m3/mixtures/xl-r2 --repo-type dataset \
-    --commit-message "M3b XL recipe revision r2: rescreened r1 + gap arms H7/H8" > "$RUN/upload.log" 2>&1
+    --commit-message "${MESSAGE:-M3b XL recipe revision r2: rescreened r1 + gap arms H7/H8}" > "$RUN/upload.log" 2>&1
   grep -oE 'commit/[0-9a-f]{40}' "$RUN/upload.log" | head -1 | cut -d/ -f2 > "$RUN/upload.revision"
   ;;
 readback)

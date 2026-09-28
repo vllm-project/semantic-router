@@ -6,7 +6,7 @@
         --r1-manifest-sha256 HEX --inventory-sha256 HEX --private P.json --public Q.json
     python3 -m v2.data.m3.xl_r2 build --pools xl-pools.json --gap H7=ROWS,TOKENS \\
         --gap H8=ROWS,TOKENS --r1-dir R1 --r1-manifest-sha256 HEX --rescreen P.json \\
-        --out-dir OUT [--targets lux1=a,b --extra-targets lux1=c,d --targets autojev27=e \\
+        [--disclose-role PATTERN ...] --out-dir OUT [--targets lux1=a,b --extra-targets lux1=c,d --targets autojev27=e \\
         --pending lux1=NAME=ROWS ...]
     python3 -m v2.data.m3.xl_r2 check --pools xl-pools.json --out-dir OUT --r1-dir R1 \\
         --r1-manifest-sha256 HEX --rescreen P.json --rows-dir RESCREEN/rows \\
@@ -23,7 +23,10 @@ quarantining roles and the receipt of the same scan over the whole union. A grou
 a hit in either pass is flagged in every pool (v2 group ids name the upstream item, not
 the arm).
 
-``build``: ``mx-xl-<variant>-r2`` = (r1 ``mx-xl-<variant>`` minus flagged groups) + H7 / H8
+``build`` excludes the flagged group ids with a hit on a role that matches none of the
+``--disclose-role`` patterns (amendment 4: ``v1_aho_*``, ``a7_aho_*`` and SELECT/CAL are
+disclosed, every evaluation role excludes; no pattern = every flagged group, r2-strict).
+``mx-xl-<variant>-r2`` = (r1 ``mx-xl-<variant>`` minus excluded groups) + H7 / H8
 whole groups in ``sha256("mx-xl-r2:<variant>:<pool>:" + group)`` order up to the gap
 targets. A group is skipped when it would put a human source above 8%, or English above
 60%, of the r2 total, which counts the base plus every candidate group; the short variant
@@ -40,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import fnmatch
 import hashlib
 import json
 import multiprocessing
@@ -574,6 +578,55 @@ def shift(new: dict[str, Any], old: dict[str, Any], name: str) -> dict[str, Any]
     }
 
 
+def exclusion(
+    receipt: dict[str, Any], disclose: list[str]
+) -> tuple[set[str], set[str], dict[str, Any]]:
+    """Split the rescreen's flagged group ids by role (amendment 4).
+
+    A group id is excluded when any of its hits, in any pool, has a role matching none
+    of the ``disclose`` patterns; the other flagged group ids stay and are disclosed.
+    """
+    hits = receipt["hits"]
+
+    def disclosed_role(role: str) -> bool:
+        return any(fnmatch.fnmatchcase(role, p) for p in disclose)
+
+    keys = [(p, g) for p, groups in hits.items() for g in groups]
+    if {g for _, g in keys} != set(receipt["flagged_group_ids"]):
+        raise ValueError("rescreen hits and flagged_group_ids disagree")
+    roles = sorted({r for p, g in keys for r in hits[p][g]["roles"]})
+    excluding = [r for r in roles if not disclosed_role(r)]
+    out = {g for p, g in keys if set(hits[p][g]["roles"]) & set(excluding)}
+    kept = set(receipt["flagged_group_ids"]) - out
+    shown = [(p, g) for p, g in keys if g in kept]
+    by_role: dict[str, collections.Counter] = collections.defaultdict(
+        collections.Counter
+    )
+    for p, g in shown:
+        for role in hits[p][g]["roles"]:
+            by_role[role][p] += 1
+    rule = {
+        "rule": "exclude group ids with a hit on a role outside disclosed_roles",
+        "disclosed_roles": list(disclose),
+        "hit_roles_excluding": excluding,
+        "hit_roles_disclosed": [r for r in roles if disclosed_role(r)],
+        "excluded_group_ids": len(out),
+        "disclosed_group_ids": len(kept),
+        "disclosed_hit_pool_groups": len(shown),
+        "disclosed_by_role_pool": {
+            r: dict(sorted(c.items())) for r, c in sorted(by_role.items())
+        },
+        "disclosed_by_method": {
+            m: sum(1 for p, g in shown if m in hits[p][g]["methods"])
+            for m in overlap.METHODS
+        },
+        "disclosed_with_E_or_L": sum(
+            1 for p, g in shown if {"E", "L"} & set(hits[p][g]["methods"])
+        ),
+    }
+    return out, kept, rule
+
+
 def excluded(old: list[dict], flagged: set[str]) -> dict[str, Any]:
     gone = [m for m in old if m["group"] in flagged]
     by_pool: dict[str, collections.Counter] = collections.defaultdict(
@@ -662,7 +715,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     r1 = r1_members(r1_ids, members)
     rescreen_raw = args.rescreen.read_bytes()
     receipt = json.loads(rescreen_raw)
-    flagged = set(receipt["flagged_group_ids"])
+    flagged, disclosed, rule = exclusion(receipt, args.disclose_role)
     gap = {pool: pools[pool] for pool in GAP_TARGETS}
     gap_ids = {m["id"] for groups in gap.values() for g in groups.values() for m in g}
     recipes, selection = build_recipes(r1, flagged, gap)
@@ -694,6 +747,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         pending_files[teacher][wave] = info[0]
     args.out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     r1_summary = {name: describe(rows, kinds) for name, rows in r1.items()}
+    r1_union = list({m["id"]: m for rows in r1.values() for m in rows}.values())
     for name, s in r1_summary.items():
         old = r1_manifest["recipes"][name]
         if (s["rows"], s["native_tokens"], s["by_pool"]) != (
@@ -738,7 +792,10 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "private_receipt_sha256": hashlib.sha256(rescreen_raw).hexdigest(),
             "public_receipt_sha256": receipt.get("public_receipt_sha256"),
             "inventory_sha256": receipt["inventory_sha256"],
-            "flagged_group_ids": len(flagged),
+            "flagged_group_ids": len(receipt["flagged_group_ids"]),
+            **rule,
+            "r1_union_excluded": excluded(r1_union, flagged),
+            "r1_union_disclosed": excluded(r1_union, disclosed),
         },
         "selection": selection,
         "teacher_files": {
@@ -755,6 +812,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             s["sha256"] = xl.write(args.out_dir, name, rows)
             s["r1_counterpart"] = old_name
             s["flagged_excluded"] = excluded(r1[old_name], flagged)
+            s["flagged_disclosed"] = excluded(rows, disclosed)
             s["gap"] = {
                 pool: {
                     "rows": sum(1 for m in rows if m["pool"] == pool),
@@ -787,7 +845,10 @@ def check(args: argparse.Namespace) -> dict[str, Any]:
     manifest_path = args.out_dir / "mx-xl-r2.manifest.json"
     manifest = json.loads(manifest_path.read_text())
     _, r1_ids = r1_recipes(args.r1_dir, args.r1_manifest_sha256)
-    flagged = set(json.loads(args.rescreen.read_text())["flagged_group_ids"])
+    receipt = json.loads(args.rescreen.read_text())
+    flagged, disclosed, rule = exclusion(
+        receipt, manifest["rescreen"]["disclosed_roles"]
+    )
     gap_specs = _gap_specs(args.gap)
     kinds = {
         name: spec["kind"]
@@ -827,6 +888,12 @@ def check(args: argparse.Namespace) -> dict[str, Any]:
     def ok(name: str, passed: bool, **detail: Any) -> None:
         results[name] = {"pass": bool(passed), **detail}
 
+    ok(
+        "exclusion_rule_matches_manifest",
+        all(manifest["rescreen"][k] == v for k, v in rule.items()),
+        excluded_group_ids=len(flagged),
+        disclosed_group_ids=len(disclosed),
+    )
     load_dropped = sum(
         n for k, n in manifest["dropped"].items() if k.split("|")[0] in GAP_TARGETS
     )
@@ -949,6 +1016,7 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--r1-revision", default="")
     b.add_argument("--gap-revision", default="")
     b.add_argument("--rescreen", type=Path, required=True)
+    b.add_argument("--disclose-role", action="append", default=[])
     b.add_argument("--out-dir", type=Path, required=True)
     b.add_argument("--targets", action="append", default=[])
     b.add_argument("--extra-targets", action="append", default=[])

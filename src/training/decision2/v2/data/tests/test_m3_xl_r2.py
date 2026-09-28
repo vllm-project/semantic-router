@@ -309,6 +309,44 @@ def _row(i: str, group: str, source: str, language: str, family: str = "f") -> d
     }
 
 
+class ExclusionTest(unittest.TestCase):
+    RECEIPT = {
+        "flagged_group_ids": ["g1", "g2", "g3"],
+        "hits": {
+            "H1": {
+                "g1": {"roles": ["v1_aho_a3"], "methods": ["L", "N"]},
+                "g2": {"roles": ["a7_aho_A7q", "decision_bench_v4"], "methods": ["S"]},
+            },
+            "H3": {
+                "g1": {"roles": ["css15_goldfree"], "methods": ["N"]},
+                "g3": {"roles": ["rights_clean_cal"], "methods": ["N"]},
+            },
+        },
+    }
+
+    def test_one_evaluation_hit_in_any_pool_excludes_the_group_id(self) -> None:
+        out, kept, rule = xl_r2.exclusion(
+            self.RECEIPT, ["v1_aho_*", "a7_aho_*", "rights_clean_cal"]
+        )
+        self.assertEqual((out, kept), ({"g1", "g2"}, {"g3"}))
+        self.assertEqual(
+            rule["hit_roles_excluding"], ["css15_goldfree", "decision_bench_v4"]
+        )
+        self.assertEqual(
+            rule["disclosed_by_role_pool"], {"rights_clean_cal": {"H3": 1}}
+        )
+        self.assertEqual(rule["disclosed_with_E_or_L"], 0)
+
+    def test_no_pattern_excludes_every_flagged_group(self) -> None:
+        out, kept, _ = xl_r2.exclusion(self.RECEIPT, [])
+        self.assertEqual((out, kept), ({"g1", "g2", "g3"}, set()))
+
+    def test_hits_must_match_the_flagged_ids(self) -> None:
+        bad = dict(self.RECEIPT, flagged_group_ids=["g1"])
+        with self.assertRaises(ValueError):
+            xl_r2.exclusion(bad, [])
+
+
 class BuildCheckTest(unittest.TestCase):
     def test_build_then_check_passes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -397,9 +435,29 @@ class BuildCheckTest(unittest.TestCase):
                 + common
             )
             rescreen = root / "rescreen.private.json"
+            hit = lambda roles, methods: {  # noqa: E731
+                "roles": roles,
+                "methods": methods,
+                "passes": ["per_pool"],
+            }
             rescreen.write_text(
-                json.dumps({"flagged_group_ids": ["g2"], "inventory_sha256": "i"})
+                json.dumps(
+                    {
+                        "flagged_group_ids": ["g1", "g2", "ga"],
+                        "inventory_sha256": "i",
+                        "hits": {
+                            "A0s-strict": {
+                                "ga": hit(["rights_clean_select"], ["N"]),
+                            },
+                            "H1": {
+                                "g1": hit(["v1_aho_a3"], ["E", "N"]),
+                                "g2": hit(["css15_native"], ["N"]),
+                            },
+                        },
+                    }
+                )
             )
+            disclose = ["v1_aho_*", "a7_aho_*", "rights_clean_select"]
             out = root / "out"
             report = root / "check.json"
             caps = (
@@ -410,6 +468,7 @@ class BuildCheckTest(unittest.TestCase):
                 xl_r2.main(
                     ["build", "--pools", str(root / "pools.json"), "--rescreen"]
                     + [str(rescreen), "--out-dir", str(out)]
+                    + [a for p in disclose for a in ("--disclose-role", p)]
                     + gap_args
                     + common
                     + ["--targets", f"lux1={lux}", "--extra-targets", f"lux1={wave}"]
@@ -428,6 +487,15 @@ class BuildCheckTest(unittest.TestCase):
             self.assertEqual(full["gap"]["H7"]["rows"], 1)
             self.assertEqual(full["gap"]["H8"]["groups"], 1)
             self.assertEqual(full["flagged_excluded"]["rows"], 1)
+            self.assertEqual(full["flagged_disclosed"]["rows"], 3)
+            rule = result["rescreen"]
+            self.assertEqual(rule["disclosed_roles"], disclose)
+            self.assertEqual(rule["hit_roles_excluding"], ["css15_native"])
+            self.assertEqual(
+                (rule["excluded_group_ids"], rule["disclosed_group_ids"]), (1, 2)
+            )
+            self.assertEqual(rule["disclosed_with_E_or_L"], 1)
+            self.assertEqual(rule["r1_union_disclosed"]["rows"], 3)
             self.assertEqual(full["coverage"]["lux1"]["rows_with_targets"], 2)
             self.assertEqual(full["coverage"]["lux1"]["pending"], {"lux-xl-c-w1": 1})
             self.assertEqual(full["coverage"]["lux1"]["without_gap_rows"], 3)
