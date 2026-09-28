@@ -1,5 +1,31 @@
 # DEV2.0-0.8B: private release build, upload and verification (2026-09-28)
 
+## Final release (2026-09-28 ≈22:30 UTC+8) — in the private "Decision 2.0" collection
+
+The coordinator decided to release (full-autonomy mandate). The spec's card got the
+JevArena-C1 event 1 line (DEV2.0-0.8B 40.24 vs Eos 1.0 37.94, +2.31 [+0.29, +4.30]; Kev 39.06;
+Intern-Decision 34.58; JPT not shown), the Kev licence note, and two added limits (C1 weak spots;
+Score level 0 never predicted on typed FINAL). Final decision
+[`DEV2.0-0.8B.decision.json`](dev2-0p8b-release-2026-09-28/DEV2.0-0.8B.decision.json)
+(SHA-256 `b2338c459d56a7b22b09365363532658060a0a67f53d19ec2784e47463b1a75e`, status final).
+`release.sh --upload --collect` from the mirror of `df779eb5d` on node A GPU5 (borrowed
+14:21–14:30Z, lease restored; 551 s, 0.153 GPU-hours) passed all 17 steps:
+
+- **Final revision `0b631a85c19fb573aee34fc68bb413271ebe89f4`**, manifest `0af27b1c…`
+  (only `README.md` differs from the draft package; every weight, config, tokenizer and
+  calibration hash is unchanged), 753,446,208 loaded parameters.
+- Real download + 31/31 re-hash; examples bit-identical across processes and after download
+  (`a061d0a3…`, as before); card example reproduced; full-panel parity 8,378 prompts, 0 changes,
+  max drift 0.0, before and after download.
+- `gate.json` (`fb989b53…`) binds the final decision to `0b631a85…` and manifest `0af27b1c…`,
+  six items pass; `collect` added the repository; collected readback: repository private,
+  collection "Decision 2.0" **private with exactly one item** (`llm-semantic-router/DEV2.0-0.8B`),
+  31/31 remote hashes, no card problems. HTTP readback: 12/12 card images and links, anonymous
+  access refused; the card shows the C1 line, Kev note and new limits, and no JPT number.
+
+Receipts: [`final/`](dev2-0p8b-release-2026-09-28/final/). The sections below describe the
+draft verification at `2667d883…`.
+
 **Result: every pipeline step and all six mechanical gate items pass; stopped before
 `--collect`.** The first Decision 2.0 release candidate (decoder recipe E8F, three-seed
 soup) is in the **private** repository `llm-semantic-router/DEV2.0-0.8B` at revision
