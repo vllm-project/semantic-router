@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A7 a7-dec10-v1 pipeline on node B, run from an exact mirror (CPU only).
+# A7 pipeline on node B, run from an exact mirror (CPU only); version from the spec.
 #
 # Usage: run_nodeB.sh <stage> [workers]
 #   build     pre-admission sub-arms, views and build manifest (host python)
@@ -10,7 +10,7 @@
 #   freeze    content hash + manifest (+tokens) per final file (runtime image)
 #   isolation cross-partition isolation against SELECT/CAL/A0 and published arms
 #   inventory token-annotated census of the 1.0 decoder corpora
-# Work dir: /data/dev2/private/a7/runs/a7-dec10-v1/<commit12>.
+# Work dir: /data/dev2/private/a7/runs/<version>/<commit12>; A7_SPEC overrides the spec.
 set -euo pipefail
 
 stage="${1:?stage}"
@@ -18,8 +18,10 @@ workers="${2:-64}"
 S="$(cd "$(dirname "$0")/../../.." && pwd)"
 mirror="$(cd "$S/../../.." && pwd)"
 commit="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"])' "$mirror/.dev2-mirror.json")"
-W="/data/dev2/private/a7/runs/a7-dec10-v1/${commit:0:12}"
 A7="$S/v2/data/a7"
+SPEC="${A7_SPEC:-$A7/specs/a7-dec10-v2.nodeB.json}"
+version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$SPEC")"
+W="/data/dev2/private/a7/runs/$version/${commit:0:12}"
 PI=/data/dev2/private/data/pi-v2/manifest.json
 IMAGE="${A7_IMAGE:-decision20-lux-runtime:latest}"
 SUBS=(A7h A7m A7g A7i A7p A7o)
@@ -39,7 +41,7 @@ in_image() {
 case "$stage" in
   build)
     log "build commit=$commit"
-    python3 -m v2.data.a7.build_a7 --spec "$A7/specs/a7-dec10-v1.nodeB.json" \
+    python3 -m v2.data.a7.build_a7 --spec "$SPEC" \
       --out-dir "$W/build" --commit "$commit" | tee -a "$W/logs/build.out"
     ;;
   lengths)

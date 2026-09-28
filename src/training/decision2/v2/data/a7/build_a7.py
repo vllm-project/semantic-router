@@ -8,7 +8,9 @@ sub-arm files, recipe views (A7 ids per 1.0 mixture) and a count-only build
 manifest. Protected panels are never opened here; the overlap, shortcut and
 native-budget screens run on these files and `v2.data.a7.admit` applies them.
 
-Rules: `records/a7-prereg-2026-09-28.md` (version a7-dec10-v1).
+Rules: `records/a7-prereg-2026-09-28.md` and its amendment 1 (version
+a7-dec10-v2, which adds rule 7d: construction-order `result_<n>` Choice keys are
+renumbered in display order).
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ import collections
 import hashlib
 import json
 import os
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -27,7 +30,8 @@ from training.model.data import INPUT_FIELDS, canonical, digest, validate_row
 from v2.data.freeze import canonical_jsonl
 from v2.data.textnorm import compact, normalize
 
-VERSION = "a7-dec10-v1"
+VERSION = "a7-dec10-v2"
+CONSTRUCTION_ORDER_KEY = re.compile(r"result_\d+")
 SCHEMA = "decision2.v2.a7.build.v1"
 SUB_ARMS = ("A7h", "A7m", "A7g", "A7i", "A7p", "A7o")
 GENERATED_SUB_ARMS = frozenset({"A7g", "A7p", "A7o"})
@@ -163,6 +167,28 @@ def check_rules(row: Mapping[str, Any], sub_arm: str) -> None:
         raise Excluded("opaque_score_keys")
 
 
+def rekey(row: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Rule 7d: renumber construction-order `result_<n>` Choice keys by position."""
+    options = row.get("options")
+    if row.get("task_type") != "choice" or not isinstance(options, list) or not options:
+        return row
+    keys = [
+        option.get("key") if isinstance(option, dict) else None for option in options
+    ]
+    if not all(
+        isinstance(key, str) and CONSTRUCTION_ORDER_KEY.fullmatch(key) for key in keys
+    ):
+        return row
+    positional = [f"result_{index}" for index in range(len(keys))]
+    if positional == keys:
+        return row
+    return {
+        **row,
+        "options": [dict(option, key=key) for option, key in zip(options, positional)],
+        "_a7_original_keys": keys,
+    }
+
+
 def normalize_row(
     row: Mapping[str, Any], source_name: str, source_sha256: str
 ) -> dict[str, Any]:
@@ -170,6 +196,7 @@ def normalize_row(
     key = source_key(row)
     sub_arm = sub_arm_of(source_name, key)
     check_rules(row, sub_arm)
+    row = rekey(row)
     template = row.get("render_template")
     origin: dict[str, Any] = {
         "version": VERSION,
@@ -182,6 +209,8 @@ def normalize_row(
     extra = {field: row[field] for field in AUDIT_EXTRA_FIELDS if field in row}
     if extra:
         origin["original_fields"] = extra
+    if "_a7_original_keys" in row:
+        origin["original_keys"] = row["_a7_original_keys"]
     out = {
         "id": f"a7:{source_name}:{row['id']}",
         "state": row["state"],
@@ -205,6 +234,16 @@ def normalize_row(
     out["input_sha256"] = digest({field: out[field] for field in INPUT_FIELDS})
     if row.get("input_sha256") not in (None, out["input_sha256"]):
         origin["original_input_sha256"] = row["input_sha256"]
+    elif "_a7_original_keys" in row:
+        origin["original_input_sha256"] = input_hash(
+            {
+                **row,
+                "options": [
+                    dict(o, key=k)
+                    for o, k in zip(row["options"], row["_a7_original_keys"])
+                ],
+            }
+        )
     try:
         validate_row(out, "train")
     except (TypeError, ValueError) as exc:
@@ -221,6 +260,10 @@ def state_key(state: Any) -> str | None:
 
 def input_hash(row: Mapping[str, Any]) -> str:
     return digest({field: row[field] for field in INPUT_FIELDS})
+
+
+def rekeyed_hash(row: Mapping[str, Any]) -> str:
+    return input_hash(rekey(row))
 
 
 class Components:
@@ -285,6 +328,7 @@ def _external_sets(
                 groups.add(row["group_id"])
             if all(field in row for field in INPUT_FIELDS):
                 inputs.add(input_hash(row))
+                inputs.add(rekeyed_hash(row))
                 key = state_key(row["state"])
                 if key is not None:
                     states.add(key)
@@ -313,7 +357,7 @@ def build(spec: Mapping[str, Any], commit: str | None = None) -> dict[str, Any]:
             seen_ids.add(row["id"])
             group = row.get("group_id")
             if isinstance(group, str) and all(field in row for field in INPUT_FIELDS):
-                link_inputs[input_hash(row)].append(group)
+                link_inputs[rekeyed_hash(row)].append(group)
                 key = state_key(row["state"])
                 if key is not None:
                     link_states[key].append(group)
@@ -408,7 +452,7 @@ def build(spec: Mapping[str, Any], commit: str | None = None) -> dict[str, Any]:
         members = []
         uncovered = collections.Counter()
         for row in read_pinned(entry):
-            digest_ = input_hash(row)
+            digest_ = rekeyed_hash(row)
             match = by_input.get(digest_)
             if match is not None:
                 members.append(

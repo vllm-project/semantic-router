@@ -123,6 +123,46 @@ class NormalizeTest(unittest.TestCase):
             build_a7.normalize_row(replayed, "stage4v2", "f" * 64)
 
 
+class RekeyTest(unittest.TestCase):
+    def test_construction_order_keys_are_renumbered_by_position(self) -> None:
+        raw = _raw(
+            20,
+            source="CLINC150 upstream train; CC-BY-3.0",
+            family="clinc_train",
+            keys=["result_2", "result_0", "result_1"],
+            label=0,
+        )
+        row = build_a7.normalize_row(raw, "stage1", "f" * 64)
+        self.assertEqual(
+            [o["key"] for o in row["options"]], ["result_0", "result_1", "result_2"]
+        )
+        self.assertEqual(row["label"], 0)
+        self.assertEqual(row["options"][0]["description"], "option result_2")
+        origin = row["audit_metadata"]["a7"]
+        self.assertEqual(origin["original_keys"], ["result_2", "result_0", "result_1"])
+        self.assertEqual(origin["original_input_sha256"], build_a7.input_hash(raw))
+        twin = dict(
+            raw,
+            id="row-21",
+            options=[
+                dict(o, key=k)
+                for o, k in zip(raw["options"], ["result_1", "result_2", "result_0"])
+            ],
+        )
+        self.assertEqual(build_a7.rekeyed_hash(twin), row["input_sha256"])
+
+    def test_other_key_schemes_are_unchanged(self) -> None:
+        for keys in (
+            ["c1", "c2", "c3"],
+            ["amber", "clover", "slate"],
+            ["result_0", "result_1", "result_2"],
+        ):
+            raw = _raw(22, keys=keys)
+            self.assertIs(build_a7.rekey(raw), raw)
+        noul = _raw(23, "noul")
+        self.assertIs(build_a7.rekey(noul), noul)
+
+
 class BuildTest(unittest.TestCase):
     def test_dedup_conflict_components_isolation_and_views(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
