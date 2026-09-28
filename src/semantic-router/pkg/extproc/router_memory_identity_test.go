@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -81,13 +82,64 @@ func TestMemoryEmbeddingIdentityFailureDoesNotAdoptLegacyData(t *testing.T) {
 	if got != nil || !errors.Is(err, boom) {
 		t.Fatalf("missing model fell through to untagged memory: %v, %v", got, err)
 	}
-	cfg.Memory.EmbeddingModel = "bert"
+	cfg.Memory.EmbeddingModel = "qwen3"
 	got, err = memoryConfigForIdentity(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 		t.Fatal("unsupported identity provider was initialized")
 		return embedding.ContentIdentity{}, nil
 	})
 	if got != cfg || err != nil {
 		t.Fatal("legacy non-mmbert memory changed")
+	}
+}
+
+func TestCandleBERTMemoryOpensVersionedNamespace(t *testing.T) {
+	t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "")
+	embed := func(context.Context, string) ([]float32, error) {
+		return nil, errors.New("namespace binding ran inference")
+	}
+	for _, backend := range []string{"milvus", "valkey", "qdrant"} {
+		t.Run(backend, func(t *testing.T) {
+			cfg := &config.RouterConfig{Memory: config.MemoryConfig{
+				Backend: backend, EmbeddingModel: "bert",
+				Milvus:     config.MemoryMilvusConfig{Collection: "existing"},
+				Valkey:     &config.MemoryValkeyConfig{IndexName: "existing_index", CollectionPrefix: "existing:"},
+				Qdrant:     &config.MemoryQdrantConfig{Collection: "existing"},
+				RedisCache: &config.MemoryRedisCacheConfig{Enabled: true, KeyPrefix: "hot:"},
+			}}
+			bind := func(runtime string) *config.RouterConfig {
+				t.Helper()
+				provider, err := embedding.NewFuncProvider(runtime, 384, embed)
+				if err != nil {
+					t.Fatal(err)
+				}
+				bound, err := bindMemoryEmbedding(cfg, embedding.NewSet(map[string]embedding.Provider{"bert": provider}, "bert"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				return bound
+			}
+			upgraded, reopened := bind("candle"), bind("candle")
+			if !reflect.DeepEqual(upgraded, reopened) || upgraded.Memory.RedisCache.KeyPrefix == "hot:" {
+				t.Fatal("Candle BERT memory namespace is unstable or shares the old hot cache")
+			}
+			if bind("ort") != cfg {
+				t.Fatal("BERT runtime with unchanged vectors moved to a new namespace")
+			}
+			switch backend {
+			case "milvus":
+				if upgraded.Memory.Milvus.Collection == "existing" || upgraded.Memory.Milvus.Dimension != 384 {
+					t.Fatal("upgraded Candle BERT reopened the old Milvus collection")
+				}
+			case "valkey":
+				if upgraded.Memory.Valkey.IndexName == "existing_index" || upgraded.Memory.Valkey.CollectionPrefix == "existing:" || upgraded.Memory.Valkey.Dimension != 384 {
+					t.Fatal("upgraded Candle BERT reopened the old Valkey index")
+				}
+			case "qdrant":
+				if upgraded.Memory.Qdrant.Collection == "existing" || upgraded.Memory.Qdrant.Dimension != 384 {
+					t.Fatal("upgraded Candle BERT reopened the old Qdrant collection")
+				}
+			}
+		})
 	}
 }
 

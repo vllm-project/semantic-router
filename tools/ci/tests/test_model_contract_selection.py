@@ -49,6 +49,7 @@ class ModelContractSelectionTests(unittest.TestCase):
         records = verification_records(load_domain_registry())
         for profile, runtime in (
             ("vela-halu", "candle"),
+            ("vela-shield", "candle"),
             ("vela-omni", "ort"),
             ("multimodal-routing", "ort"),
         ):

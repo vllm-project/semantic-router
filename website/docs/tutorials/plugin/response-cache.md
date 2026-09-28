@@ -31,10 +31,8 @@ plugins:
   - type: response_cache
     configuration:
       enabled: true
-      mode: exact_then_semantic
+      mode: exact
       scope: user
-      semantic:
-        similarity_threshold: 0.92
       ttl_seconds: 86400
       request_controls:
         enabled: true
@@ -50,6 +48,15 @@ plugins:
 - `semantic` (default): vector lookup only.
 - `exact`: normalized exact request lookup only.
 - `exact_then_semantic`: exact lookup first, then vector lookup on a miss.
+
+The shipped `config/config.yaml`, multi-objective example, and `memory.yaml`
+fragment use `exact`. It preserves reuse for identical requests without
+returning an answer to a different question solely because its embedding is
+similar. Choose `semantic` or `exact_then_semantic` explicitly only after
+validating the route's language and contradiction behavior. The built-in
+lexical guard recognizes English negation cues; a German `nicht` or Chinese
+`不` can otherwise receive a cached answer to the opposite question. The
+`high-recall.yaml` fragment remains an explicit semantic-cache example.
 
 The exact tier is available with the in-memory, Redis, Valkey, Milvus, Qdrant,
 and hybrid cache backends. Anthropic client requests are replayed in the
@@ -83,8 +90,16 @@ tokenizer, representation size, or inference settings starts a separate cache
 space. The router retains your tenant namespace and explicit cache revision;
 historical entries remain stored until their normal expiry or explicit cleanup.
 The first requests after a model upgrade are cache misses. Restarting with the
-same representation reuses its compatible cache. This binding does not infer
-the identity of a mutable remote embedding endpoint.
+same representation reuses its compatible cache. The router rejects a
+[remote embedding endpoint](../../installation/runtime/embeddings.md#remote-embeddings)
+for the semantic cache, because the cache needs local tokenizer windows.
+
+Candle `bert` embeddings are keyed by an encoder version instead, which changes
+whenever Candle BERT vectors change, as they did when padding tokens stopped
+counting toward the average. Upgrading across such a change starts a new BERT
+cache space. Entries written before the upgrade are not reused and remain until
+they expire, and the cache fills again from new traffic. BERT served by another
+runtime keeps its existing cache.
 
 ## Operations
 
@@ -104,6 +119,15 @@ entries without their original question are also misses. A rejected candidate
 does not prevent a later eligible fetched candidate from being used; remote
 search remains bounded by its candidate limit. This check does not establish
 semantic equivalence for word-order-only, cue-less, or non-English changes.
+
+Every served semantic hit records whether that check could judge the pair, as
+`cache.negation_guard` on the `response_cache` plugin span and as
+`negation_guard` on the `cache_hit` log event. `checked` means both questions
+use the same words, in any order, or differ only in negation cues such as `not`
+and `never`. `not_applicable` means some other word changed, which the cue list
+cannot judge, so the hit relied on vector similarity alone. Reworded English
+questions and most non-English hits report `not_applicable`; for example, the
+cue list does not recognize German `nicht` or Chinese `不`.
 
 The in-memory backend additionally supports the optional NLI verifier
 (`global.stores.response_cache.polarity_guard`; see

@@ -77,15 +77,23 @@
 {{- if not (get $config "version") -}}
 {{- $_ := set $config "version" "v0.3" -}}
 {{- end -}}
+{{- $liveConfig := include "semantic-router.liveConfig" . -}}
+{{- $configMapPolicy := .Values.configMap | default (dict) -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "semantic-router.fullname" . }}-config
+  name: {{ include "semantic-router.configMapName" . }}
   namespace: {{ include "semantic-router.namespace" . }}
   labels:
     {{- include "semantic-router.labels" . | nindent 4 }}
+  annotations:
+    semantic-router.vllm.ai/chart-config-revision: {{ get $configMapPolicy "applyValuesRevision" | default "" | quote }}
 data:
+  {{- if ne (trim $liveConfig) "" }}
+  config.yaml: {{ $liveConfig | toJson }}
+  {{- else }}
   config.yaml: |
     {{- toYaml $config | nindent 4 }}
+  {{- end }}
   tools_db.json: |
     {{- toJson .Values.toolsDb | nindent 4 }}

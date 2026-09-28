@@ -91,6 +91,9 @@ digest, rather than comparing against live GitHub activity. Changing a generator
 or its identity inputs requires a successful refresh; a network failure cannot
 silently reuse a snapshot from obsolete sources.
 
+Normal development, build, and deploy commands use the committed community
+snapshots. Refresh them only with the explicit commands in the table above.
+
 `make generated-contract-check` also checks the config schema, OpenAPI, and
 Operator reference, using the normal Go/native build prerequisites.
 `make generated-contract-generate` refreshes those public references in

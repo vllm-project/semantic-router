@@ -11,13 +11,13 @@ data:
   TARGET_ROUTER_API_URL: "http://semantic-router:8080"
   TARGET_ROUTER_METRICS_URL: "http://semantic-router:9190/metrics"
   ROUTER_CONFIG_PATH: "/app/config/config.yaml"
-  # ConfigMaps are immutable runtime inputs. The canonical Dashboard image
-  # starts under OpenShift's arbitrary UID with mutation capabilities disabled.
-  DASHBOARD_RUNTIME_CONFIG_WRITABLE: "false"
+  DASHBOARD_CONFIG_DIR: "/app/data"
+  # The mounted ConfigMap stays read-only; the Dashboard updates it through
+  # the Kubernetes API and waits for a router rollout to activate changes.
+  DASHBOARD_RUNTIME_CONFIG_WRITABLE: "true"
   DASHBOARD_RECIPE_STORE_WRITABLE: "false"
-  # ML service sidecar: connect to localhost since it's in the same pod
-  ML_SERVICE_URL: "http://127.0.0.1:8686"
-  ML_PIPELINE_ENABLED: "true"
+  ML_PIPELINE_ENABLED: "false"
+  OPENCLAW_ENABLED: "false"
 
 ---
 apiVersion: apps/v1
@@ -37,6 +37,7 @@ spec:
       labels:
         app: dashboard
     spec:
+      serviceAccountName: dashboard
       containers:
         - name: dashboard
           image: image-registry.openshift-image-registry.svc:5000/vllm-semantic-router-system/dashboard-custom:latest
@@ -48,6 +49,13 @@ spec:
           envFrom:
             - configMapRef:
                 name: dashboard-config
+          env:
+            - name: VLLM_SR_K8S_CONFIGMAP_NAME
+              value: semantic-router-config
+            - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           volumeMounts:
             - name: config
               mountPath: /app/config/config.yaml
@@ -57,8 +65,6 @@ spec:
               mountPath: /app/config/tools_db.json
               subPath: tools_db.json
               readOnly: true
-            - name: ml-data
-              mountPath: /app/data/ml-pipeline
           livenessProbe:
             httpGet:
               path: /healthz
@@ -79,59 +85,44 @@ spec:
               memory: "512Mi"
               cpu: "500m"
 
-        # ML Training Service sidecar (Python)
-        - name: ml-service
-          image: image-registry.openshift-image-registry.svc:5000/vllm-semantic-router-system/ml-training-service:latest
-          imagePullPolicy: Always
-          env:
-            # This unauthenticated API is only for the co-located dashboard.
-            - name: ML_SERVICE_HOST
-              value: "127.0.0.1"
-            - name: ML_SERVICE_PORT
-              value: "8686"
-            - name: PYTHONUNBUFFERED
-              value: "1"
-          volumeMounts:
-            - name: ml-data
-              mountPath: /app/data
-          resources:
-            requests:
-              memory: "512Mi"
-              cpu: "250m"
-            limits:
-              memory: "4Gi"
-              cpu: "2"
-          readinessProbe:
-            exec:
-              command:
-                - curl
-                - --fail
-                - --silent
-                - --max-time
-                - "5"
-                - http://127.0.0.1:8686/api/health
-            timeoutSeconds: 6
-            initialDelaySeconds: 10
-            periodSeconds: 10
-          livenessProbe:
-            exec:
-              command:
-                - curl
-                - --fail
-                - --silent
-                - --max-time
-                - "5"
-                - http://127.0.0.1:8686/api/health
-            timeoutSeconds: 6
-            initialDelaySeconds: 30
-            periodSeconds: 30
-
       volumes:
         - name: config
           configMap:
             name: semantic-router-config
-        - name: ml-data
-          emptyDir: {}
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dashboard
+  namespace: vllm-semantic-router-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dashboard-config-editor
+  namespace: vllm-semantic-router-system
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["semantic-router-config"]
+    verbs: ["get", "update", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dashboard-config-editor
+  namespace: vllm-semantic-router-system
+subjects:
+  - kind: ServiceAccount
+    name: dashboard
+    namespace: vllm-semantic-router-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dashboard-config-editor
 
 ---
 apiVersion: v1

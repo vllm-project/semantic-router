@@ -105,6 +105,14 @@ func newModelVerificationHandler(configPath string, options modelVerificationOpt
 			return
 		}
 
+		// Resolving the request and rate limit can outlive the permission check
+		// performed when the route was entered. Check again before using the
+		// configured provider credential for an outbound inference call.
+		if dashboardauth.RejectRevokedMutation(w, r) {
+			status = http.StatusForbidden
+			errorCode = "permission_revoked"
+			return
+		}
 		response, err := service.Verify(r.Context(), strings.TrimSpace(request.Model))
 		if err != nil {
 			var verificationErr *modelVerificationError

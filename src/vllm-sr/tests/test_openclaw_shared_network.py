@@ -17,6 +17,7 @@ from cli.runtime_stack import resolve_runtime_stack
 @pytest.fixture(autouse=True)
 def _split_runtime_topology(monkeypatch):
     monkeypatch.setenv("VLLM_SR_TOPOLOGY", "split")
+    monkeypatch.setenv("OPENCLAW_ENABLED", "true")
     monkeypatch.setattr(
         container_openclaw_support,
         "_runtime_socket_is_group_safe",
@@ -61,6 +62,42 @@ def _stub_valid_container_cli(monkeypatch, tmp_path):
         lambda preferred_path=None: str(docker_bin),
     )
     return docker_bin
+
+
+def test_dashboard_keeps_openclaw_disabled_without_opt_in(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+    monkeypatch.delenv("OPENCLAW_ENABLED")
+    socket_path = tmp_path / "docker.sock"
+    socket_path.touch()
+    monkeypatch.setenv("VLLM_SR_CONTAINER_SOCKET", str(socket_path))
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_start,
+        "get_runtime_images",
+        lambda **kwargs: {
+            "router": "test-image",
+            "envoy": "test-image",
+            "dashboard": "test-image",
+        },
+    )
+    captured = _capture_run_commands(monkeypatch)
+
+    rc, _, _ = container_cli.container_start_vllm_sr(
+        str(config_path),
+        {},
+        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        minimal=False,
+    )
+
+    assert rc == 0
+    dashboard_cmd = _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
+    assert "OPENCLAW_ENABLED=false" in dashboard_cmd
+    assert "ML_PIPELINE_ENABLED=false" in dashboard_cmd
+    assert not any("docker.sock" in arg for arg in dashboard_cmd)
+    assert not (tmp_path / ".vllm-sr" / "openclaw-data").exists()
 
 
 def test_container_start_vllm_sr_rejects_legacy_topology_override(

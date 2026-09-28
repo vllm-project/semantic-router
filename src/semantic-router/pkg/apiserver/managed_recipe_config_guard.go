@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
 const (
@@ -56,6 +58,21 @@ func (s *ClassificationAPIServer) acquireConfigMutationGuard(
 		guard.Release()
 		s.writeErrorResponse(w, http.StatusForbidden, "CONFIG_READ_ONLY", "This deployment uses read-only configuration. Update the configuration source and reload or roll out the deployment as appropriate.")
 		return nil, false
+	}
+	if _, declared := configwriter.ConfigMapTargetFromEnv(); declared && s.configPath != "" {
+		paths := resolveConfigPersistencePaths(s.configPath)
+		mounted, mountErr := os.ReadFile(paths.sourcePath)
+		persisted, readErr := readPersistedSourceConfig(paths.sourcePath)
+		if mountErr != nil || readErr != nil {
+			guard.Release()
+			s.writeErrorResponse(w, http.StatusServiceUnavailable, "CONFIG_SOURCE_UNAVAILABLE", "Unable to compare the mounted config with the ConfigMap before mutation.")
+			return nil, false
+		}
+		if !bytes.Equal(mounted, persisted) {
+			guard.Release()
+			s.writeErrorResponse(w, http.StatusConflict, "CONFIG_ROLLOUT_REQUIRED", "The ConfigMap has a saved change that this pod has not loaded. Roll out the deployment before another mutation.")
+			return nil, false
+		}
 	}
 	return guard, true
 }
@@ -196,6 +213,11 @@ func recipeManagedStateExistsAt(storeFD int) (bool, error) {
 func (s *ClassificationAPIServer) configMutationReadOnly() bool {
 	if cfg := s.currentConfig(); cfg != nil && cfg.ConfigSource == config.ConfigSourceKubernetes {
 		return true
+	}
+	if _, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		// A declared ConfigMap target persists writes through the Kubernetes API.
+		// The mounted file is intentionally read-only and remains stale until rollout.
+		return false
 	}
 	if s.configPath == "" {
 		return false
