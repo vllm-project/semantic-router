@@ -1,0 +1,157 @@
+{
+  "schema": "dev2-release-spec/1",
+  "kind": "release",
+  "repo_id": "llm-semantic-router/DEV2.0-2B",
+  "model_name": "DEV2.0-2B",
+  "profile": "qwen-full",
+  "checkpoint": "/data/dev2/runs/dec/m3/formal-candidates/staging-545a6784/m3/S2T-soup/checkpoint",
+  "expected_identity": {
+    "model_sha256": "073bd1f2fe62e39fe993f57006bab17ece50a7e6fc7c5ee72107fefddeb81da4"
+  },
+  "calibration": null,
+  "max_input_tokens": 16384,
+  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-2B.decision.build-draft.json",
+  "origin": {
+    "repo_id": "llm-semantic-router/Decision-1.0-Sol-2B",
+    "revision": "ce0c018a28de16d6639b1cd203b761bf643b89e6",
+    "relation": "finetune",
+    "summary": "Every weight of Decision 1.0 Sol was fine-tuned (nothing frozen, no adapter), with Decision 1.0 Sol's own answer probabilities as soft targets, and the release is the uniform average of three seeds of that fine-tune. Decision 1.0 Sol is itself a text-only fine-tune of [Qwen/Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) at `15852e8c16360a2fea060d615a32b45270f8a8fc` (Apache-2.0), whose text backbone and tokenizer this model inherits; the Qwen3.5 vision tower is not part of it."
+  },
+  "runtime_requirements": {
+    "python": "3.12.13",
+    "torch": "2.12.0+git6bbd260 (ROCm 7.2 build; one ROCm GPU tested)",
+    "transformers": "5.17.0",
+    "tokenizers": "0.23.2",
+    "safetensors": "0.8.0",
+    "flash-linear-attention": "0.5.2 (GPU gated-delta kernels)",
+    "causal-conv1d": "1.7.0 (GPU convolution kernels)",
+    "triton": "3.7.1 (persisted autotune cache)"
+  },
+  "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time) and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec, which for this non-residual checkpoint wraps the same DecisionModel without extra readouts. Checked on one GPU of the scoring node against the T = 1 predictions derived exactly from the sealed CAL698 predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, with the scored run's persisted Triton autotune cache.",
+  "scored": {
+    "label": "post-key same-panel run m3-S2T-soup-nodeA at T = 1 (predictions derived from the sealed CAL698 run by undoing its temperatures; adopted and sealed)",
+    "report_sha256": "08745acf9fc753bc1d3b0335dc3e341c697a657a9e6c7c26d85eebfebf4d160c",
+    "seal_sha256": "91a3df051724344b4c4d18bddb2215a81636af98de0d74f9eb9e7f286d88beab",
+    "predictions_sha256": {
+      "typed-final": "177e62c1ed5263f484ed43285a50c481c4103dd9d7f4056a3dd34f9d76d64647",
+      "css15": "2cdcf415bbd891f64f3c865067394b3e9a7479e2b26059e55d8ced3a719cf1c7",
+      "public231": "f3af4853b325f38754a3ee0f977c1aaf943ee04159a28ccd55c1faa68dd46b29",
+      "mlx-diag": "736a984af6304bf91bd6bfb0950522a09788236dd23978100dd06e76e767bf48"
+    },
+    "paired_sha256": "bca44e5f286312f2e96ac69b590347ddf37d81899dd762f5ce48475365c824ab",
+    "native_manifest": "/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA/output/typed-final.predictions.jsonl.manifest.json"
+  },
+  "licence": {
+    "components": [
+      {
+        "component": "DEV2.0-2B weights, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/DEV2.0-2B"
+      },
+      {
+        "component": "Decision 1.0 Sol-2B weights (direct weight origin, fully fine-tuned)",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/Decision-1.0-Sol-2B@ce0c018a"
+      },
+      {
+        "component": "Qwen3.5-2B text backbone and tokenizer (upstream of Decision 1.0 Sol)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3.5-2B@15852e8c"
+      }
+    ],
+    "files": [
+      {
+        "source": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Sol-2B/snapshots/ce0c018a28de16d6639b1cd203b761bf643b89e6/LICENSE",
+        "path": "LICENSE",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      },
+      {
+        "source": "/data/dev2/hf-cache/models--Qwen--Qwen3.5-2B/snapshots/15852e8c16360a2fea060d615a32b45270f8a8fc/LICENSE",
+        "path": "LICENSES/Qwen3.5-2B-LICENSE.txt",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      }
+    ],
+    "attributions": [
+      "[Decision 1.0 Sol-2B](https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B) at `ce0c018a28de16d6639b1cd203b761bf643b89e6`: direct weight origin; every weight was fine-tuned, and its own answer probabilities were the soft targets (Apache-2.0, `LICENSE`). Its own training data reach this model through its weights, among them Cosmos QA, SQuAD 2.0 answerability labels, SNLI, MultiNLI, CLINC150 and BANKING77; see its [attributions](https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/blob/ce0c018a28de16d6639b1cd203b761bf643b89e6/ATTRIBUTIONS.md).",
+      "[Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) at `15852e8c16360a2fea060d615a32b45270f8a8fc`: upstream text backbone and tokenizer of Decision 1.0 Sol (Apache-2.0, `LICENSES/Qwen3.5-2B-LICENSE.txt`).",
+      "Training data of this fine-tune (not redistributed here; each keeps its own licence). Own Decision 1.0 corpora: CLINC150 (Larson et al., EMNLP-IJCNLP 2019; CC BY 3.0), BANKING77 (Casanueva et al., 2020; CC BY 4.0), MultiNLI non-fiction genres (Williams, Nangia and Bowman, NAACL 2018; OANC terms). Decision 2.0 data: GoEmotions (Demszky et al., ACL 2020; CC BY 4.0), SNLI (Bowman et al., EMNLP 2015; CC BY-SA 4.0), TyDi QA (Clark et al., TACL 2020; Apache-2.0, Wikipedia text CC BY-SA), WinoGrande (Sakaguchi et al., AAAI 2020; Apache-2.0), SQuAD 2.0 (Rajpurkar et al., ACL 2018; CC BY-SA 4.0), GSM8K (Cobbe et al., 2021; MIT), MLQE-PE (Fomicheva et al., LREC 2022; CC0 annotations, Wikipedia text CC BY-SA), 2WikiMultihopQA (Ho et al., COLING 2020; Apache-2.0, Wikipedia text CC BY-SA), HotpotQA (Yang et al., EMNLP 2018; CC BY-SA 4.0), KLUE MRC and STS (Park et al., 2021; CC BY-SA 4.0), IBM ArgQ-30k (Gretz et al., AAAI 2020; CC BY-SA 3.0), JGLUE JSQuAD and JSTS (Kurihara et al., LREC 2022; CC BY-SA 4.0), QuAC (Choi et al., EMNLP 2018; CC BY-SA 4.0, its dataset card says MIT), DRCD (Shao et al., 2018; CC BY-SA 3.0), SQAC (Gutiérrez-Fandiño et al., 2022; CC BY-SA 4.0), CMRC 2018 (Cui et al., EMNLP 2019; CC BY-SA 4.0), GermanQuAD (Möller et al., 2021; CC BY 4.0), CommonsenseQA (Talmor et al., NAACL 2019; MIT), MultiWOZ 2.2 (Zang et al., 2020; MIT), MTOP (Li et al., EACL 2021; CC BY-SA 4.0), PIAF (Keraron et al., LREC 2020; MIT), SciTail (Khot et al., AAAI 2018; Apache-2.0), MuSiQue (Trivedi et al., TACL 2022; CC BY 4.0, Wikipedia text CC BY-SA), DBpedia-14 (Zhang et al., NeurIPS 2015; CC BY-SA 3.0), Taskmaster-2 (Byrne et al., 2020; CC BY 4.0), ROPES (Lin et al., MRQA 2019; CC BY 4.0), SAF (Filighera et al., ACL 2022; CC BY 4.0), QuaRTz (Tafjord et al., EMNLP 2019; CC BY 4.0), OneStopEnglish (Vajjala and Lučić, BEA 2018; CC BY-SA 4.0), and project-generated decision tasks.",
+      "Evaluation data shown on the card: JevArena v3 and JevBench public 231 (panels described in `evaluation/EVALUATION.md`); mlx-diag Choice from the MASSIVE 1.1 test split (FitzGerald et al., 2022; CC BY 4.0) and Noul from the PAWS-X test split (Yang et al., EMNLP 2019).",
+      "Owl banner: Decision 1.0 Sol mosaic owl, unchanged pixels, in the DEV2.0 name layout; wordmark set in Poppins (SIL Open Font License) and DejaVu Sans Bold."
+    ]
+  },
+  "card": {
+    "banner": "DEV2.0-2B-owl-banner.png",
+    "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
+    "paired": "/data/dev2/runs/release/dev2-2b-t1-derived/PAIRED-vs-same-limit-16k.json",
+    "calibration_text": "raw model probabilities (temperature 1). Per-type temperatures fitted on the clean 698-item calibration partition (Choice 0.742, Noul 0.816, Score 0.154) were evaluated and not adopted because they worsened calibration on out-of-distribution development data.",
+    "requirements_text": "Tested on one ROCm GPU with Python 3.12, PyTorch 2.12 and Transformers 5.17 (BF16 backbone, FP32 head). GPU answers match the evaluated predictions with the flash-linear-attention 0.5.2 and causal-conv1d 1.7.0 kernels and a persisted Triton autotune cache; without those kernels Transformers uses its reference implementation of the same operations, which is slower and differs slightly in the last digits.",
+    "text": {
+      "tagline": "A decision model for routing choices, yes/no checks and rubric scores over one state: native System One Choice, Noul and Score answers with probabilities, no chat API.",
+      "architecture": "The 24-layer Qwen3.5 text backbone inherited from Decision 1.0 Sol (18 gated-delta and 6 attention layers) reads the state, the question and every supplied candidate once; a shared candidate head scores the candidates against a global query and returns probabilities without generating text.",
+      "runtime_note": "The download includes a small local runtime (`decision2/`) for one CUDA or ROCm GPU; it does not start a hosted endpoint.",
+      "confirmation": "**Independent sealed confirmation (JevArena-C1): PLACEHOLDER — to be added after the final sealed scoring event.**",
+      "comparator_note": "Decision 1.0 Sol is shown from its stricter same-renderer run at this model's 16,384-token limit (JevArena v3 45.78; its adopted run scores 45.58). Decider 2B (Apache-2.0) and This-That 1.2 (MIT) declare their licences in model card metadata only; their repositories have no LICENSE file.",
+      "training": [
+        "**Recipe:** one epoch of full fine-tuning of every weight of Decision 1.0 Sol (backbone learning rate 5e-6, head 5e-5; cross-entropy plus 0.5 × Brier plus 0.5 × KL divergence to Decision 1.0 Sol's own answer probabilities on every row, as a trust region) on 56,198 decision rows (29.2M tokens, inputs up to 8,192 tokens) with seeds 20260926, 20260927 and 20260928, each seed's checkpoint chosen on a held-out selection set, then a uniform weight average of the three.",
+        "**Teacher:** Decision 1.0 Sol only; its own probabilities are the soft targets. No outputs of Jev or of any third-party decision model were used.",
+        "**Own Decision 1.0 training corpora (8,276 rows, a retention replay):** program-generated English and Chinese decision tasks labeled by program oracles (no model-written states or labels), plus the human labels of CLINC150 (CC BY 3.0), BANKING77 (CC BY 4.0) and MultiNLI non-fiction genres (OANC terms).",
+        "**Decision 2.0 data (47,922 rows, 20 languages):** project-generated verifiable rules, counterfactuals, hard negatives and multi-level Score tasks, plus the human labels of public datasets: reading comprehension and multi-hop evidence (TyDi QA, SQuAD 2.0, QuAC, HotpotQA, 2WikiMultihopQA, MuSiQue, DRCD, CMRC 2018, JSQuAD, KLUE MRC, SQAC, GermanQuAD, PIAF), commonsense and math (WinoGrande, CommonsenseQA, GSM8K, SciTail, ROPES, QuaRTz), dialogue and intent (MultiWOZ 2.2, Taskmaster-2, MTOP, CLINC150, BANKING77), topic, emotion and inference labels (DBpedia-14, GoEmotions, SNLI), and graded similarity and quality ratings (KLUE STS, JGLUE JSTS, MLQE-PE, IBM ArgQ-30k, SAF, OneStopEnglish). Most reading sources are CC BY-SA (3.0 or 4.0, or Wikipedia text under CC BY-SA); the others are CC BY, MIT, Apache-2.0 or CC0.",
+        "**Not used:** outputs of Jev or of any third-party decision model; the Cosmos QA and SQuAD 2.0 answerability labels that Decision 1.0 Sol was trained on (two shortcut-prone reading families; SQuAD 2.0 enters only through project-built evidence-removal pairs); and the MASSIVE, PAWS-X and XNLI sources behind the multilingual diagnostic. Datasets keep their own licences ([attributions](ATTRIBUTIONS.md))."
+      ],
+      "limitations": [
+        "**Seed dependence.** The three single fine-tunes differ on the development panels (development proxy 46.2, 42.6 and 48.1; 47.1 for their weight average); only the uniform average was evaluated on JevArena v3 and is released. A retrained seed of the same recipe can land below this model.",
+        "**Where it improves over Decision 1.0 Sol and where it does not.** The gain is typed reasoning (T 0.543 vs 0.425; Choice 445 vs 374 of 800, Noul 567 vs 438 of 800, Score 175 vs 155 of 400); human transfer is level (H 0.525 vs 0.493, +0.033, 95% CI [−0.044, +0.092]), and several transfer tasks are lower, most of all mrf (−0.094), wiki_corpus (−0.045) and flute (−0.032); the tradeoffs table lists every task below Decision 1.0 Sol.",
+        "**Against Decider 2B** the JevArena v3 margin is not significant (+3.94, 95% CI [−2.48, +5.67]). It comes from human transfer (+0.105, 95% CI [−0.008, +0.132], itself not significant), while typed accuracy is significantly lower (−0.040, 95% CI [−0.070, −0.009]). Choice is the weakest type relative to the 2B peers (typed Choice accuracy 0.556 vs 0.681 for Decider 2B and 0.661 for This-That 1.2), and the hard tier of JevBench public 231 is lower (57 vs 63).",
+        "**Score levels.** On typed Score it almost never predicts the lowest level (6 of 400 predictions; recall 0.03 on level 0), which Decision 1.0 Sol does predict (recall 0.29).",
+        "**Multilingual.** On the mlx-diag diagnostic, non-English Choice is level with Decision 1.0 Sol (66.5% vs 67.1%), non-English Noul (paraphrase pairs) is about 2 points lower (65.8% vs 68.0%), and Korean Noul is the weakest language (59% vs 63%, 100 items).",
+        "**Evaluation familiarity.** A stricter overlap screen run after training (covering 98% of the training rows; the rest are program-generated) found 45 training rows in 18 reading-passage groups (from MuSiQue, SQuAD 2.0, QuAC, HotpotQA and CommonsenseQA) that share long word sequences with items of the 15-task human-transfer panel; current data builds exclude such rows. No training row matched the typed panels, JevBench public 231 or the mlx-diag diagnostic.",
+        "**CPU.** CPU inference was not verified for this release: where the GPU-only causal-conv1d package is installed, Transformers routes the convolution to that kernel and a CPU run fails."
+      ],
+      "details": [
+        "**Weights:** the uniform average of three full fine-tunes of Decision 1.0 Sol with the same recipe and start; the seeds differ only in data order, and each seed's checkpoint was chosen on a held-out selection set (updates 366, 741 and 638).",
+        "**Comparator licences:** Decider 2B's model card declares Apache-2.0 and This-That 1.2's declares MIT (it is adapted from Decider 2B); neither repository has a LICENSE file. Bosun v3.1 1.7B ships Apache-2.0 LICENSE and NOTICE files."
+      ]
+    },
+    "reports": [
+      {
+        "key": "candidate",
+        "role": "candidate",
+        "report": "/data/dev2/runs/release/dev2-2b-t1-derived/REPORT.json",
+        "mlx": "/data/dev2/runs/release/dev2-2b-t1-derived-mlx/mlx-diag.score.json",
+        "label": "DEV2.0-2B"
+      },
+      {
+        "key": "sol1",
+        "role": "own-1.0",
+        "report": "/data/dev2/runs/dec/formal/m3/sol1-16k/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-sol1/mlx-diag.score.json",
+        "repo_id": "llm-semantic-router/Decision-1.0-Sol-2B",
+        "label": "Decision 1.0 Sol"
+      },
+      {
+        "key": "decider2b",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m1-adopt/decider2b/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-decider2b/mlx-diag.score.json",
+        "repo_id": "Mapika/decider-2b",
+        "label": "Decider 2B"
+      },
+      {
+        "key": "thisthat12",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m2/q4-thisthat12/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/q4-thisthat12/mlx-diag.score.json",
+        "repo_id": "flock-io/this-that-model-1.2",
+        "label": "This-That 1.2"
+      },
+      {
+        "key": "bosun17b",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m1/p3-bosun17b/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-bosun17b/mlx-diag.score.json",
+        "repo_id": "Hanno-Labs/bosun-v3.1-1.7b",
+        "label": "Bosun v3.1 1.7B"
+      }
+    ]
+  }
+}

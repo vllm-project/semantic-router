@@ -1,0 +1,62 @@
+"""Intersect the S2T training rows (ids only) with the M3b XL r2 rescreen flags (node A, private receipt).
+
+Prints counts only. Writes the per-group detail next to the id list (private, node A).
+usage: s2t_overlap.py <s2t-train-ids.jsonl> <rescreen.private.json> <index.jsonl> <detail-out.json>
+"""
+import collections
+import json
+import sys
+
+EXCLUDING = {"css15_goldfree", "css15_native", "decision_bench_v4", "jevbench_public231",
+             "jevbench_public231_native", "ml_parallel_dev_v1", "mlx_diag_v1"}
+
+ids_path, private_path, index_path, out_path = sys.argv[1:]
+rows = [json.loads(line) for line in open(ids_path)]
+priv = json.load(open(private_path))
+flag = {}
+for pool, groups in priv["hits"].items():
+    for gid, hit in groups.items():
+        entry = flag.setdefault(gid, {"pools": set(), "roles": set(), "methods": set()})
+        entry["pools"].add(pool)
+        entry["roles"].update(hit["roles"])
+        entry["methods"].update(hit["methods"])
+scanned_ids, scanned_groups = set(), set()
+with open(index_path) as fh:
+    for line in fh:
+        r = json.loads(line)
+        scanned_ids.add(r["id"])
+        scanned_groups.add(r["group"])
+
+by_role_rows, by_role_groups = collections.Counter(), collections.defaultdict(set)
+by_source_excl = collections.Counter()
+detail = {}
+covered_rows = sum(1 for r in rows if r["id"] in scanned_ids)
+covered_groups = len({r["group_id"] for r in rows if r["group_id"] in scanned_groups})
+flag_rows = 0
+for r in rows:
+    hit = flag.get(r["group_id"])
+    if not hit:
+        continue
+    flag_rows += 1
+    kind = "excluding" if hit["roles"] & EXCLUDING else "disclosed"
+    for role in hit["roles"]:
+        by_role_rows[role] += 1
+        by_role_groups[role].add(r["group_id"])
+    if kind == "excluding":
+        by_source_excl[r["source"]] += 1
+    detail[r["group_id"]] = {"kind": kind, "roles": sorted(hit["roles"]), "methods": sorted(hit["methods"]),
+                             "pools": sorted(hit["pools"])}
+excl_groups = {g for g, d in detail.items() if d["kind"] == "excluding"}
+excl_rows = sum(1 for r in rows if r["group_id"] in excl_groups)
+summary = {
+    "s2t_rows": len(rows), "s2t_groups": len({r["group_id"] for r in rows}),
+    "rows_in_rescreen_index": covered_rows, "groups_in_rescreen_index": covered_groups,
+    "flagged_rows": flag_rows, "flagged_groups": len(detail),
+    "excluding_rows": excl_rows, "excluding_groups": len(excl_groups),
+    "rows_by_role": dict(by_role_rows.most_common()),
+    "groups_by_role": {k: len(v) for k, v in sorted(by_role_groups.items(), key=lambda kv: -len(kv[1]))},
+    "excluding_rows_by_source": dict(by_source_excl.most_common()),
+    "excluding_methods": dict(collections.Counter(m for g in excl_groups for m in detail[g]["methods"])),
+}
+json.dump({"summary": summary, "groups": detail}, open(out_path, "x"), indent=1, sort_keys=True)
+print(json.dumps(summary, indent=1))

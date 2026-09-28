@@ -1,0 +1,4 @@
+cd /data/dev2/src/58f907b60a4edd672c403b1459fd5f92690124c7-src_training_decision2/src/training/decision2 && python3 -B -m v2.release.dev_calibration --label DEV2.0-2B-S2T-soup --panel-root /data/dev2/private/panels \
+  --typed-dev /data/dev2/runs/dec/m3/soup/S2T/dev/dev.predictions.jsonl --css-pilot /data/dev2/runs/dec/m3/soup/S2T/css-pilot/css-pilot.predictions.jsonl \
+  --source-calibration /data/dev2/runs/dec/m3/soup/S2T/cal698/calibration.json --candidate /data/dev2/runs/dec/m3/stage-cal/S2T-soup-cal698-16k/calibration.json \
+  --work /data/dev2/runs/release/dev2-2b/devcal-20260928T190108Z/work --output /data/dev2/runs/release/dev2-2b/devcal-20260928T190108Z/dev2-2b.json

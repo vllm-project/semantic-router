@@ -1,0 +1,121 @@
+{
+  "accuracy_unchanged": true,
+  "adopt": false,
+  "cal698": {
+    "css_pilot": {
+      "H_pilot": 0.3643186113409103,
+      "median_task_brier_sum": 0.7570194040354669,
+      "median_task_ece_pmax_15": 0.07864786011788703
+    },
+    "typed_dev": {
+      "T_dev": 0.61,
+      "brier": 0.2886212780700778,
+      "by_type": {
+        "choice": {
+          "brier": 0.2555370961512337,
+          "correct_n": 489,
+          "ece_10": 0.04327809311385305,
+          "n": 800
+        },
+        "noul": {
+          "brier": 0.32800171886673446,
+          "correct_n": 230,
+          "ece_10": 0.24856639861851526,
+          "n": 400
+        },
+        "score": {
+          "brier": 0.31540920111110926,
+          "correct_n": 257,
+          "ece_10": 0.2903032037926962,
+          "n": 400
+        }
+      },
+      "ece_10": 0.13446486583137437
+    }
+  },
+  "candidate_sha256": "d73e9ce464efcb7fe00def6680a0065488fc6e650c8ea42b479ddef9c04392e7",
+  "candidate_temperatures": {
+    "choice": 0.7424413478644758,
+    "noul": 0.8160842274832657,
+    "score": 0.15390519926841506
+  },
+  "criteria": {
+    "css_pilot_brier": {
+      "cal698": 0.7570194040354669,
+      "raw": 0.7478219879714587
+    },
+    "css_pilot_ece_15": {
+      "cal698": 0.07864786011788703,
+      "raw": 0.08030386140830187
+    },
+    "typed_dev_brier": {
+      "cal698": 0.2886212780700778,
+      "raw": 0.26741662255137727
+    },
+    "typed_dev_ece_10": {
+      "cal698": 0.13446486583137437,
+      "raw": 0.09511501440089833
+    }
+  },
+  "label": "DEV2.0-2B-S2T-soup",
+  "module_sha256": "6651e40b53ebd54caebfd85bc82e760f5df85d59df0794c9beb366e080430aed",
+  "panels": {
+    "css-pilot": {
+      "answer_changes_raw_vs_cal698": 0,
+      "answer_changes_stored_vs_raw": 0,
+      "slots": 1430,
+      "stored_sha256": "15a9eef6967ae2e3cf2375f58cf6af8ef7b3af9de3bf2f47f13578390d70424f"
+    },
+    "typed-dev": {
+      "answer_changes_raw_vs_cal698": 0,
+      "answer_changes_stored_vs_raw": 0,
+      "slots": 1600,
+      "stored_sha256": "c1c11d2444f3523384a6b2b2e7e6600935d5f1e1076bcefc5674d520af5419eb"
+    }
+  },
+  "raw": {
+    "css_pilot": {
+      "H_pilot": 0.3643186113409103,
+      "median_task_brier_sum": 0.7478219879714587,
+      "median_task_ece_pmax_15": 0.08030386140830187
+    },
+    "typed_dev": {
+      "T_dev": 0.61,
+      "brier": 0.26741662255137727,
+      "by_type": {
+        "choice": {
+          "brier": 0.26335092538249266,
+          "correct_n": 489,
+          "ece_10": 0.10138826710630533,
+          "n": 800
+        },
+        "noul": {
+          "brier": 0.31386864699091394,
+          "correct_n": 230,
+          "ece_10": 0.21424628205977936,
+          "n": 400
+        },
+        "score": {
+          "brier": 0.22909599244960985,
+          "correct_n": 257,
+          "ece_10": 0.13143188774013864,
+          "n": 400
+        }
+      },
+      "ece_10": 0.09511501440089833
+    }
+  },
+  "rule": "adopt CAL698 temperatures only if typed-DEV Brier and ECE and CSS-pilot Brier and ECE all do not worsen (coordinator 2026-09-28 23:15)",
+  "schema": "dev2-release-dev-calibration/1",
+  "source_calibration_sha256": "f87a162ba947e91d1fe0cddce71aff4594e8c6d5f9cce8b3a3cda28ddc180611",
+  "source_temperatures": {
+    "choice": 0.7424413478644758,
+    "noul": 0.8160842274832657,
+    "score": 0.15390519926841506
+  },
+  "worsened": [
+    "css_pilot_brier",
+    "typed_dev_brier",
+    "typed_dev_ece_10"
+  ]
+}

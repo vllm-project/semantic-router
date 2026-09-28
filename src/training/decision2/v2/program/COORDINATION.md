@@ -153,6 +153,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
 | node B GPU5–6 | ~27B |
+| node B GPU7 (after the research & data H7 / H8 Lux wave, ~04:30 UTC+8) | ~27B Milestone 3 (assigned 2026-09-29 04:05 UTC+8); more GPUs from the 9B track when its Milestone 3 ends |
 | node B GPU7 | research & data (owner) — SHARED from 2026-09-28 21:55 UTC+8 with the eval track's node-B comparator re-validation (~1.5 h, inference only; each writes its own lease owner entry, e.g. `owner.eval`) |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
@@ -186,6 +187,47 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 04:10 — DEV2.0-2B package verified (gist `07c-decision-2-release-2b.md`; integration `e2918d988`): private
+  `llm-semantic-router/DEV2.0-2B@b2c5d7eac4ef24648cbf9c23c26421f0960ca542`, manifest `63c61883…`, 1,883,930,944 loaded
+  parameters, T = 1 (CAL698 worsened typed-DEV Brier / ECE and CSS-pilot Brier), parity 0 changes on 10,653 prompts,
+  re-hash 33/33, Apache-2.0 lineage (Sol 1.0 `ce0c018a` ← Qwen/Qwen3.5-2B@15852e8c); draft decision `31ae8a98…`. The
+  release worker found 45 training rows (18 groups) sharing long word sequences with human-transfer items (no typed, public
+  231 or mlx-diag matches); the card sentence is draft until the eval overlap-impact check (running) returns. Final decision
+  and `--collect` follow that check.
+  - **HF private storage is capped at 100 GB** (the org has no paid plan); usage 67.37 GB after the 2B upload. Storage
+    plan: after each release, delete the stored LFS files of that model's staging copies (0.8B E8F soup in
+    `dev2-dec-staging`, 0.6B `dev2-release-staging-06bm4`, the Kai1 dry-run `dev2-release-staging`, and 2B S2T once
+    released), keeping re-hashed node copies; 9B / 27B releases use `qwen-adapter` packages bound to their public Apache-2.0
+    bases (no base redistribution). Every track checks headroom before uploading; datasets and eval artifacts stay.
+
+- 2026-09-29 04:05 — From ~27B Milestone 2 (gist 06; integration `76267432d`): HOLD. Best = Score arm (A6g + A6h) seed 1,
+  post-key v3 62.72 vs the >= 64.9 bar (AutoJev-27B re-measured 72.13; −9.42 [−10.65, −4.78]). Score data is the only
+  lever that beat its matched control post-key (+2.63 [+0.65, +6.85]; its Score family beats AutoJev .728 vs .705; human
+  transfer level with the peer; no type collapsed). 8K packaging worth 0.00 for the incumbent; A2 rules and AutoJev /
+  own-Lux distillation did not move v3 (the proxy over-predicted both). The remaining gap is Choice-side typed reasoning on
+  unseen families (constraint competition ~.39 vs 1.0; exception stack ~.6 vs .84). Coordinator: the 20.54 GPU-hour
+  overrun (vs ~14 approved) is accepted; Milestone 3 is APPROVED (A7's Stage1–4 typed curricula on a strict-base Score arm,
+  two seeds, 32K packaging) on node B GPU5–6 now + GPU7 after the data wave + 9B GPUs when free.
+  - **Release-path gaps to fix before any 27B release:** the release pipeline runs under `python -I`, so FLA kernels are not
+    importable and the package runtime takes the reference gated-delta path (fix: load the scored kernels explicitly and
+    fail if missing, as done for 0.8B); CAL698 fitting must use the 0.6B release worker's `calibrate_frozen.py` /
+    `dev_calibration.py` and the 23:15 rule; package at 32,768 tokens if the backbone supports it (18 inputs still over
+    8K). Disclose, if released: which A0s variant (with or without the shortcut families) and which CAL were used.
+  - LoRA seed soups: the average of seed updates is exactly representable as one LoRA of rank 2r (concatenate the scaled
+    B and A factors), so seed soups remain `qwen-adapter` packages.
+
+- 2026-09-29 03:30 — **Development proxy v2** (eval; "Eval runners" → "Development proxy v2"; integration `c3da006b8`): P stays
+  100·√(T_dev·H_pilot), recalibrated on 51 models (v3 ≈ 22.4 + 0.58·P); **tie band is now |ΔP| < 8** (supersedes 4). No
+  preregistered alternative (incl. the CSS-pilot three-task mean) beats P on within-tier ordering; 67 of 70 same-track
+  candidate pairs fall inside the band (P's order matches v3 only ~69% there). Rules for every size track:
+  - P may only DROP candidates at least 8 behind the best; siblings inside the band go to the formal runner, **at most three
+    finalists per tier per milestone** (limits selection on the post-key panel; C1 event 3 confirms the final picks).
+  - Read development panels at the candidate's formal input limit and on the kernel-equipped image (12 of 27 candidates
+    were not). P over-predicts JPT peers and 27B LoRA arms by ~4–5 v3 points; treat those readouts with that bias in mind.
+- 2026-09-29 03:30 — **Worktree rule:** one active worker per git worktree. When two workers of the same track run at the
+  same time, the coordinator gives the second its own worktree (e.g. `/home/xunliu/code/vllm-sr-dev2-eval-<suffix>` on a
+  branch `xunzhuo/decision-2-training-eval-<suffix>`); never share an index.
 
 - 2026-09-29 03:10 — Research & data M3b complete (gist 02, 03:10 entry; integration `189c6b39c`):
   - **XL r2 release recipes** (private revision `100536133e…`): mx-xl-full-r2 365,970 rows / 179.2M tokens, Choice / Noul /
@@ -859,8 +901,9 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
 
 ### Eval Milestone 2 updates (eval track, 2026-09-28 ~15:00 UTC+8)
 
-- **Recommended development proxy (for picking finalists):** keep **P = 100·√(T_dev × H_pilot)** (typed DEV family
-  macro × CSS-pilot median macro-F1). Calibrated on 16 models vs post-key v3: Spearman 0.94, leave-one-out v3 error
+- **(Tie band and linear map SUPERSEDED by "Development proxy v2" at the end of this section: within a tier |ΔP| < 8
+  is a tie; v3 ≈ 22.4 + 0.58·P.)** **Recommended development proxy (for picking finalists):** keep
+  **P = 100·√(T_dev × H_pilot)** (typed DEV family macro × CSS-pilot median macro-F1). Calibrated on 16 models vs post-key v3: Spearman 0.94, leave-one-out v3 error
   ±3.1 (RMSE 3.7, worst 7.4), 109/120 pairs and 14/18 same-tier pairs in v3 order; v3 ≈ 19.1 + 0.63·P. Per-checkpoint
   panel noise SD ≈ 1.3 P (difference SD ≈ 1.9, before seed noise). Pairs with |ΔP| ≥ 4 agree with v3 94% of the time;
   below that it is near a coin flip. Rule: **treat |ΔP| < 4 as a tie and send both to the formal runner**; never select
@@ -988,3 +1031,45 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
   ≤ 0.21, no exact 8-token span): **no v1.2**. Script `v2/eval/sealed/event2.sh <gpu> <mirror> [lease-name]` (a
   pre-decryption smoke for every model); batch DEV2.0-0.6B + Kai1, Lex, Bosun, GLiNER2.5-Decide, verified on node
   A mirror `b99032a66`. **Waiting on: batch confirmation and a node-A GPU (~0.1 GPU-h).**
+
+### Development proxy v2 (eval track, 2026-09-29 ~03:30 UTC+8; code at `c3da006b8` or later; supersedes the M2 tie band)
+
+Record `v2/eval/records/m5-proxy-v2-calibration-2026-09-29.md` (prereg `79482d863`, pushed before any proxy was computed).
+
+- **Scope.** 51 models, each with a post-key v3 run and a typed-DEV + CSS-pilot readout of the same weights: the
+  24-model matrix plus 27 formally run 2.0 candidates (0.6B T/V2/X/Z soups; 0.8B E8F s1–s3 + soup, B8F s1–s2, E8V
+  soup; 2B S2T soup; 4B X2, X4R/X4K s1–s2, N4T/N4J/N4L/N4LKr soups; 9B L2, M3 B-s1; 27B C0, M2-C1/S1/K1).
+  - Features were recomputed with one scorer on node A (CPU only). Development readouts are the only inputs; v3
+    composites are only the target; no v3 items and no C1.
+  - The v1 numbers reproduce exactly.
+- **Proxy v2 = P, unchanged: P = 100·√(T_dev·H_pilot).** Recalibrated **v3 ≈ 22.4 + 0.58·P** (LOO MAE 2.6 / RMSE 3.1
+  / worst 6.6; Spearman 0.94).
+  - None of the preregistered alternatives beats P: the CSS-pilot three-task mean (P_mean3), per-type typed-DEV terms,
+    arithmetic means and a fitted two-term model. The best reaches only a 0.38 bootstrap probability of ordering more
+    of the 129 within-tier decision pairs correctly.
+  - P gets 106/129. The alternatives get 98–105.
+- **Three-task mean (02:40 suggestion).** It fixes 0.6B (19/20 vs 16/20 pairs) but not other tiers (9B 2/4 vs 4/4).
+  Without the four 0.6B soups that motivated it, it is worse (86/109 vs 90/109). Not adopted.
+- **NEW TIE BAND: within a tier, |ΔP| < 8 is a tie** (was 4). Send every candidate within 8 P points of the best to
+  the formal runner and decide on the paired v3 CI. How often P's order matches v3 across within-tier pairs:
+
+  | \|ΔP\| | Pairs | P order = v3 | Reversed by ≥ 2 v3 points |
+  | --- | ---: | ---: | ---: |
+  | ≥ 8 | 43 | 91% | 2% |
+  | 4–8 | 67 | 76% | 10% |
+  | < 4 | 75 | 63% | 20% |
+
+  The old "94% at |ΔP| ≥ 4" was mostly cross-tier pairs. A normal-residual check puts the 10%-risk gap at ≈ 11, so
+  treat 8 as the minimum.
+- **No proxy separates close within-tier candidates reliably; ties go to the formal runner.**
+  - 67 of the 70 same-track candidate pairs (seeds, soups, sibling arms) lie inside |ΔP| < 8. There P matches v3
+    only 69% of the time and reverses 16% by ≥ 2 points.
+  - Use P to drop candidates ≥ 8 behind the best, never to pick among siblings.
+  - Never select on T_dev, H_pilot or a single typed-DEV type.
+- **Lineage offsets.** P over-predicts JPT peers and the 27B LoRA arms by about 4–5 v3 points and under-predicts
+  decoder candidates by about 1.5: across lineages it is a shortlist only.
+- **Readout hygiene.** 12 of the 27 candidates were read at a lower limit than their formal package (8K vs 16K,
+  4K vs 8K) or on the kernel-less node-B image. Read development panels at the formal limit and image.
+- **Re-run the calibration** when new formal candidates land:
+  `python3 -m v2.eval.proxy_calibration extract --spec <spec.json> --output <features.json>` (node A, CPU), then
+  `... analyze --features <features.json> --output <analysis.json>`.
