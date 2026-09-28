@@ -1,0 +1,38 @@
+{
+  "arm": "m2a-eb610-lr1e5",
+  "family": "encoder",
+  "start": {
+    "source": "eurobert-610m",
+    "path": "/runs/models/EuroBERT-610m",
+    "repo": "EuroBERT/EuroBERT-610m",
+    "revision": "d9af784ed20db6c2096e335ec6a67dd4a219924c",
+    "head_seed": 20260928
+  },
+  "data": {
+    "parent": "/work/data/hf-private-decision20-clean-v2",
+    "converter_bundle": "/work/models/Decision-1.0-Kai-0.6B"
+  },
+  "logical_batch": 16,
+  "max_micro_rows": 8,
+  "micro_token_budget": 32768,
+  "seed": "20260928-06b-m1",
+  "optimizer": {
+    "encoder_lr": 1e-05,
+    "head_lr": 0.0002,
+    "lr_min": 1e-06,
+    "warmup_ratio": 0.1,
+    "weight_decay": 0.01,
+    "clip": 1.0
+  },
+  "loss": {
+    "ce": 1.0,
+    "brier": 0.5,
+    "score_rps": 0.0,
+    "teacher_kl": 0.0
+  },
+  "teacher": null,
+  "milestones": "eighths",
+  "include_step0_in_best": false,
+  "gpu_hour_cap": 1.5,
+  "max_reserved_gib": 200
+}
