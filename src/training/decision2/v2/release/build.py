@@ -707,6 +707,8 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        # The manifest carries spec text (origin, scored label, licence sources) too.
+        screened = screen(stage)
         if layout.inventory(stage) != {
             **inventory,
             layout.MANIFEST_NAME: layout.sha_file(stage / layout.MANIFEST_NAME),

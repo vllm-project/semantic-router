@@ -695,6 +695,16 @@ class BuildTest(unittest.TestCase):
             self.assertEqual(canonical({}), "{}")
             self.assertEqual(len(hashlib.sha256(b"").hexdigest()), 64)
 
+            spec["scored"] = {"label": "scored run /data/dev2/runs/x"}  # manifest only
+            spec_path.write_text(json.dumps(spec))
+            build.BRAND_DIR = banner_dir
+            try:
+                with self.assertRaises(ValueError):
+                    build.build(spec_path, scratch / "out2" / "dev2-release-staging")
+            finally:
+                build.BRAND_DIR = original
+            self.assertFalse((scratch / "out2" / "dev2-release-staging").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
