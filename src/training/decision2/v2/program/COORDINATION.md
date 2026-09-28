@@ -34,6 +34,14 @@ recommended decision itself and records it. Governing rules for that autonomy:
   behavior, here in "Cross-track notes". No `AskQuestion` to the user during the push.
 - Workers still stop-and-record on failed preflights and never rerun failed arms to fill GPUs; autonomy is about not
   waiting on the user, not about lowering evidence bars.
+- **Operational first-release thresholds (coordinator, 15:55; post-key same-panel v3 composite):** "clearly beats own
+  1.0" = paired 95% CI lower bound > 0 against the tier's 1.0 on the same node; "close to the same-size first tier" =
+  at least 90% of the best measured open-weight peer's v3 in that tier (card-eligible or not), with human transfer not
+  significantly below it and no decision type collapsed. Current numbers: 0.6B beat Kai1 35.94 and reach ≥ 38.3
+  (GLiNER2.5-Decide 42.52); 0.8B beat Eos1 42.55; 2B beat Sol1 45.58 (≥ 44.5 vs Decider 2B 49.50 is then implied);
+  4B beat Nox1 56.47 (≥ 55.7 vs Decider 4B 61.88 implied); 9B beat Lux1 65.81; ~27B (no 1.0) reach ≥ 65.1 vs
+  AutoJev-27B 72.31. Update when the eval track measures stronger peers. After first release, keep optimizing toward
+  beating the tier leader.
 
 **Allocation update 2026-09-28 10:40 UTC+8:** node B was freed. The 0.8B–4B decoder track gains node B GPU0–2, the
 eval track gains node B GPU3–4, the new ~27B track gets node B GPU5–6, and research & data keeps node B GPU7 (no longer
@@ -173,6 +181,24 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 15:55 — From ~27B Milestone 1 (gist `06-decision-2-27b.md`; integration `1e34430b3`):
+  - **Qwen3.5-family (gated-delta) training runtime fix — 9B/Lux, 0.8B–4B decoder and 27B tracks, read this.** Keep the
+    image's FLA kernels on the import path: a launcher PYTHONPATH that shadows `/opt/decision-fla` silently falls back to
+    the reference gated-delta implementation, which crashed 27B LoRA within 13 updates in 6/6 attempts (a likely cause of
+    the earlier 9B SIGSEGV at step 106 as well). Also use a shared, persisted Triton autotune cache for training AND
+    reload: FLA without it trains but does not reproduce across processes; with it, reload matched within 6e-8 at
+    BEST368 speed. Details in `v2/27b/records/`.
+  - 27B incumbent (own-lineage BEST368 from official Qwen3.8-27B): post-key v3 56.75 vs AutoJev-27B 72.31
+    (−15.6 [−19.6, −10.8]); public 231 200 vs 200. The gap is typed reasoning on held-out families (T .555 vs .887;
+    constraint competition .295 vs 1.0, Score resource ledger .353 vs .705, exception stack .590 vs .843); human
+    transfer is level (H .581 vs .590).
+  - **Package input limits:** 76 human-transfer inputs exceeded the incumbent's 4,096-token package limit and counted as
+    failures (AutoJev: 13 invalid). Every tier packages at 8,192 tokens where the backbone supports it, and compares
+    against a same-limit control.
+  - Frozen-backbone decision heads also collapse out of distribution at 27B (best ≤ 40.7): the frozen-head route is
+    closed for every tier. Qwen3.5-27B with the BEST368 recipe does not displace Qwen3.8-27B (proxy 67.55 vs 68.44;
+    seed noise 0.70).
 
 - 2026-09-28 15:30 — RELEASE PIPELINE READY (gist `07-decision-2-release.md`; integration `ca32e7411`). One command on a
   node: `v2/release/release.sh --spec S --src <mirror> --work W --cpu|--gpu N --track T [--parity ...] --upload [--collect]`.
