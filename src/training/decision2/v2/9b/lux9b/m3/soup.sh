@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# usage: soup.sh SHA GPU NAME MEMBER_RUN...
-# CPU: uniform FP32 soup (v2.dec.soup) of each member run's SELECT-chosen BEST full checkpoint
-# into /data/dev2/runs/9b/m3/NAME-build/soup. GPU: CAL698 per-type temperatures for the soup
+# usage: soup.sh SHA GPU NAME MEMBER...
+# CPU: uniform FP32 soup (v2.dec.soup) into /data/dev2/runs/9b/m3/NAME-build/soup. A MEMBER is a
+# run name (its SELECT-chosen BEST full checkpoint) or an explicit full checkpoint path under
+# /m3/ (container view of /data/dev2/runs/9b/m3). GPU: CAL698 per-type temperatures for the soup
 # (v2.dec.calibrate_ckpt) and gold-free typed DEV + CSS pilot predictions with them.
 set -uo pipefail
 sha=$1; gpu=$2; name=$3; shift 3
@@ -15,6 +16,12 @@ build=$M3/$name-build
 mkdir -p "$build"
 members=()
 for run in "$@"; do
+  if [[ "$run" == /m3/* ]]; then
+    [ -f "$M3/${run#/m3/}/decision_config.json" ] || { echo "no checkpoint at $run" >&2; exit 2; }
+    members+=(--member "$run")
+    echo "$run" >> "$build/members.txt"
+    continue
+  fi
   best=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["checkpoint"])' "$M3/$run/run/BEST.json")
   members+=(--member "/m3/$run/run/$best")
   echo "$run $best" >> "$build/members.txt"
