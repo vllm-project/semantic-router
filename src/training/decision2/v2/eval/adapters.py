@@ -238,6 +238,21 @@ REGISTRY: dict[str, Adapter] = {
             requires=("source",),
         ),
         Adapter(
+            name="jet-v6.2",
+            module="v2.eval.native_jet",
+            args=(
+                "--model-path",
+                "{model}",
+                "--model-revision",
+                "{revision}",
+                *IO_ARGS,
+                "--device",
+                "{device}",
+            ),
+            model_id="michaljach/jet",
+            batch_policy="bundled Jet().decide, questions scored separately; 16,384-token limit, rejection invalid",
+        ),
+        Adapter(
             name="eikos-27b",
             module="inference.eikos",
             args=(
