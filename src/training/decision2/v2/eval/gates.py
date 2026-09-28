@@ -165,6 +165,7 @@ def types(args: argparse.Namespace) -> int:
     from benchmark.score import load_jsonl
 
     gold = load_jsonl(panels.path(args.panel_root, "typed-final", "gold"))
+    gold = list(gold.values()) if isinstance(gold, dict) else gold
     predictions = {
         row["id"]: row for row in read_jsonl(verified(args.run, "typed-final"))
     }
