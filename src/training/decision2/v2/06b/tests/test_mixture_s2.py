@@ -239,6 +239,40 @@ class ManifestComponentTest(unittest.TestCase):
             mixture.manifest_component(comp, count, 100, set())
 
 
+class TeacherMergeTest(unittest.TestCase):
+    def test_merge_checks_hashes_repeats_and_distributions(self):
+        merge = importlib.import_module("v2.06b.teacher_merge")
+        with tempfile.TemporaryDirectory() as tmp:
+
+            def write(name, entries):
+                path = Path(tmp) / name
+                path.write_text("".join(json.dumps(e) + "\n" for e in entries))
+                return path, common.file_sha256(path)
+
+            good = {"input_sha256": "0" * 64, "teacher_probs": {"a": 0.25, "b": 0.75}}
+            a = write("a.jsonl", [{"id": "x", **good}])
+            b = write("b.jsonl", [{"id": "y", **good}])
+            rows, report = merge.merge([a, b])
+            self.assertEqual([r["id"] for r in rows], ["x", "y"])
+            self.assertEqual(report["rows"], 2)
+            with self.assertRaises(ValueError):
+                merge.merge([a, a])
+            with self.assertRaises(ValueError):
+                merge.merge([(a[0], "1" * 64)])
+            bad = write(
+                "c.jsonl",
+                [
+                    {
+                        "id": "z",
+                        "input_sha256": "0" * 64,
+                        "teacher_probs": {"a": 0.5, "b": 0.6},
+                    }
+                ],
+            )
+            with self.assertRaises(ValueError):
+                merge.merge([bad])
+
+
 class OptionKeyTeacherTest(unittest.TestCase):
     def test_native_order_hash_guard_and_copies(self):
         train = importlib.import_module("v2.06b.train")
