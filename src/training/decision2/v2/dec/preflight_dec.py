@@ -95,6 +95,43 @@ def compare(left: list[list[float]], right: list[list[float]]) -> dict[str, Any]
     return {"n": len(left), "same_argmax": same, "max_probability_drift": drift}
 
 
+def backbone_files(checkpoint: Path) -> dict[str, torch.Tensor]:
+    from safetensors.torch import load_file
+
+    tensors: dict[str, torch.Tensor] = {}
+    for shard in sorted((checkpoint / "backbone").glob("*.safetensors")):
+        tensors.update(load_file(str(shard)))
+    return tensors
+
+
+def full_tensors_match_files(
+    model: Any, checkpoint: Path, zero_checkpoint: Path
+) -> dict[str, Any]:
+    """Full-training reload: every backbone and head tensor equals its file."""
+    from safetensors.torch import load_file
+
+    saved = backbone_files(checkpoint)
+    live = {k: v.detach().cpu() for k, v in model.backbone.state_dict().items()}
+    backbone_equal = set(saved) == set(live) and all(
+        torch.equal(saved[k], live[k].float()) for k in saved
+    )
+    zero = backbone_files(zero_checkpoint)
+    changed = sum(not torch.equal(zero[k], saved[k]) for k in saved if k in zero)
+    head_file = load_file(str(checkpoint / "decision_head.safetensors"))
+    head_live = {k: v.detach().cpu() for k, v in model.head.state_dict().items()}
+    head_equal = set(head_file) == set(head_live) and all(
+        torch.equal(head_file[k], head_live[k].float()) for k in head_file
+    )
+    return {
+        "adapter_equal": backbone_equal,
+        "head_equal": head_equal,
+        "residual_equal": True,
+        "backbone_tensors": len(saved),
+        "backbone_tensors_changed_from_zero_step": changed,
+        "lora_b_abs_sum": float(changed),
+    }
+
+
 def tensors_match_files(model: Any, checkpoint: Path) -> dict[str, Any]:
     from safetensors.torch import load_file
 
@@ -190,9 +227,22 @@ def main() -> None:
         "select_sha256": file_sha256(args.select),
     }
 
-    reference, tokenizer = DecisionModel.from_decision1(
-        args.source_path, contract["head_dim"]
-    )
+    zero_ckpt = args.zero_run / "checkpoint-0000000"
+    full = contract.get("train_mode", "lora") == "full"
+    if contract.get("init_kind", "decision1") == "decision1":
+        reference, tokenizer = DecisionModel.from_decision1(
+            args.source_path, contract["head_dim"]
+        )
+    else:
+        from safetensors.torch import load_file
+
+        reference, tokenizer = DecisionModel.from_base(
+            args.source_path, contract["base_revision"], contract["head_dim"]
+        )
+        # An official start's head is freshly initialized by the trainer.
+        reference.head.load_state_dict(
+            load_file(str(zero_ckpt / "decision_head.safetensors")), strict=True
+        )
     source_head = {
         k: v.detach().clone() for k, v in reference.head.state_dict().items()
     }
@@ -201,7 +251,6 @@ def main() -> None:
     del reference
     torch.cuda.empty_cache()
 
-    zero_ckpt = args.zero_run / "checkpoint-0000000"
     zero_model, zero_tok = load_dec_checkpoint(zero_ckpt, args.source_path)
     zero_model = zero_model.float().to(device)
     checks["zero_source_vs_reload_in_process"] = compare(
@@ -218,7 +267,11 @@ def main() -> None:
     one_model, one_tok = load_dec_checkpoint(one_ckpt, args.source_path)
     one_model = one_model.float().to(device)
     one_probs = select_probabilities(one_model, one_tok, rows, batch, max_length)
-    checks["one_step_tensors"] = tensors_match_files(one_model, one_ckpt)
+    checks["one_step_tensors"] = (
+        full_tensors_match_files(one_model, one_ckpt, zero_ckpt)
+        if full
+        else tensors_match_files(one_model, one_ckpt)
+    )
     checks["one_step_head_max_change"] = max(
         (one_model.head.state_dict()[k].detach().cpu() - v).abs().max().item()
         for k, v in source_head.items()

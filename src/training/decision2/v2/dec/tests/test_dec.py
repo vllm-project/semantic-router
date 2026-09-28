@@ -280,6 +280,13 @@ class TrainerHelperTest(unittest.TestCase):
             path.write_text(json.dumps(good[0]) + "\n")
             with self.assertRaises(ValueError):
                 load_teacher(path, rows)
+            self.assertEqual(set(load_teacher(path, rows, partial=True)), {"a"})
+            extra = [good[0], dict(good[1], input_sha256="renumbered")]
+            extra.append({"id": "gone", "input_sha256": "h9", "teacher_probs": {}})
+            path.write_text("".join(json.dumps(r) + "\n" for r in extra))
+            self.assertEqual(set(load_teacher(path, rows, partial=True)), {"a"})
+            with self.assertRaises(ValueError):
+                load_teacher(path, rows)
 
 
 class RuntimeCheckTest(unittest.TestCase):
@@ -372,6 +379,68 @@ class ScoreOverfitTest(unittest.TestCase):
         report = fit_report(rows, collapsed)
         self.assertEqual(report["status"], "FAIL")
         self.assertEqual(report["gold_levels_never_predicted"], {"L3": [1, 2]})
+
+
+class BatchingTest(unittest.TestCase):
+    def test_token_batches_respect_budget_and_cover_rows_once(self) -> None:
+        from v2.dec.batching import padded, row_windows, token_batches
+
+        lengths = [(i * 37) % 900 + 20 for i in range(500)]
+        batches = token_batches(lengths, seed=3, epoch=0, max_tokens=4096, max_rows=16)
+        self.assertEqual(
+            batches,
+            token_batches(lengths, seed=3, epoch=0, max_tokens=4096, max_rows=16),
+        )
+        self.assertNotEqual(
+            batches,
+            token_batches(lengths, seed=3, epoch=1, max_tokens=4096, max_rows=16),
+        )
+        self.assertEqual(sorted(i for b in batches for i in b), list(range(500)))
+        for batch in batches:
+            self.assertLessEqual(len(batch), 16)
+            self.assertLessEqual(
+                max(padded(lengths[i]) for i in batch) * len(batch), 4096
+            )
+        windows = row_windows(batches, 64)
+        self.assertEqual(sum(len(b) for w in windows for b in w), 500)
+        self.assertTrue(all(sum(len(b) for b in w) >= 64 for w in windows[:-1]))
+        with self.assertRaises(ValueError):
+            token_batches([5000], seed=0, epoch=0, max_tokens=4096, max_rows=4)
+
+
+class MixtureTest(unittest.TestCase):
+    def test_rule_7d_rekey_renumbers_and_rehashes(self) -> None:
+        from training.model.data import INPUT_FIELDS, digest
+        from v2.dec.build_mixture import rekey
+
+        row = {
+            "task_type": "choice",
+            "state": "s",
+            "instructions": "q",
+            "options": [
+                {"key": "result_2", "description": "a"},
+                {"key": "result_0", "description": "b"},
+                {"key": "result_1", "description": "c"},
+            ],
+            "label": 1,
+            "audit_metadata": {},
+        }
+        row["input_sha256"] = digest({f: row[f] for f in INPUT_FIELDS})
+        out = rekey(row)
+        self.assertEqual(
+            [o["key"] for o in out["options"]], ["result_0", "result_1", "result_2"]
+        )
+        self.assertEqual([o["description"] for o in out["options"]], ["a", "b", "c"])
+        self.assertEqual(out["label"], 1)
+        self.assertEqual(
+            out["audit_metadata"]["dec_rule_7d"]["original_keys"],
+            ["result_2", "result_0", "result_1"],
+        )
+        self.assertEqual(out["input_sha256"], digest({f: out[f] for f in INPUT_FIELDS}))
+        self.assertNotEqual(out["input_sha256"], row["input_sha256"])
+        self.assertIs(rekey(out), out)
+        other = dict(row, options=[{"key": "x", "description": "a"}] * 2)
+        self.assertIs(rekey(other), other)
 
 
 HAS_QWEN35 = HAS_TORCH and importlib.util.find_spec("transformers") is not None
