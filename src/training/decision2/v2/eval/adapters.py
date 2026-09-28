@@ -218,6 +218,26 @@ REGISTRY: dict[str, Adapter] = {
             requires=("source",),
         ),
         Adapter(
+            name="this-that-1.2",
+            module="inference.this_that",
+            args=(
+                "--version",
+                "1.2",
+                "--model-path",
+                "{model}",
+                "--source-path",
+                "{source}",
+                "--model-revision",
+                "{revision}",
+                *IO_ARGS,
+                "--device",
+                "{device}",
+            ),
+            model_id="flock-io/this-that-model-1.2",
+            batch_policy="TypedDecider.decide; Noul/Score are option projections; 1,536-token state limit, overflow invalid",
+            requires=("source",),
+        ),
+        Adapter(
             name="eikos-27b",
             module="inference.eikos",
             args=(
