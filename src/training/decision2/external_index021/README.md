@@ -12,7 +12,11 @@ no source examples, model predictions, credentials, or restricted data are.
 The model-independent protocol in `data/protocol-021.json` pins the Space Git
 revision, index/methodology JSON byte hashes, six critical public-kit file
 hashes, source corpus hash, area/benchmark weights, chance levels, panel,
-request counts and the 717-row exclusion rules. The compact
+request counts and the 717-row exclusion rules. It also pins the kit's 0.2.1
+revision
+[`87d4650b`](https://github.com/apolinario/decision-index/tree/87d4650b42b377c0291a89c1f1a879f9b31082bf):
+the SHA-256 of its three subset files and of the kept ToolRet, BRIGHT and
+Home run IDs after the common exclusions. The compact
 `data/published-021-summary.json` contains only the 68 entries' published
 rounded scores and per-benchmark aggregates for arithmetic parity tests.
 
@@ -51,28 +55,26 @@ The Space's `suite.requests=120340` and `suite.scoreable=119898` count the
 benchmarks, all in the headline. A complete run therefore schedules **150759**
 requests and scores **150317** after the 442 common exclusions. Relative to
 the 0.2 base, 0.2.1 removes ToolRet 315, BRIGHT 330 and Home 72 requests:
-717 altogether. The index counts 38 benchmarks across five weighted areas,
-with 13 gold benchmarks weighted 1.2 inside their areas. RouterBench and SGD
-stay visible but leave the headline. ACOS uses review-level F1, RAGTruth's
-chance is the always-hallucinated F1, and ToolRet/BRIGHT chance is recomputed
-per answerable query. ForecastBench retains its Brier-to-skill transform.
+717 altogether. The index counts 38 benchmarks across five areas, with 13
+gold benchmarks weighted 1.2 inside their areas. Area weights follow the
+exact square-root rule (Arts fixed at 10%); the published four-decimal
+weights are its rounding. RouterBench and SGD stay visible but leave the
+headline. ACOS uses review-level F1 averaged over complete reviews and
+multiplied by the answered share, RAGTruth's chance is the
+always-hallucinated F1, and ToolRet/BRIGHT chance is recomputed per
+answerable query. ForecastBench retains its Brier-to-skill transform.
 
 Selection operates on the kit's common-exclusion-adjusted rows. ToolRet and
 BRIGHT retain complete query groups only when a `scorable_id` has positive
 relevance. Home drops 48 test rows whose `state` equals a generated dev row,
-then one of each of 24 pairs with identical `state`. The generator recreates
-those exact counts. The Space does not publish **which copy** of each Home
-pair was kept; their option keys and wording differ. `--home-policy first`
-is a deterministic **provisional** default; `last` is available for a
-sensitivity check. `explicit` accepts an 88-run-ID keep list if the upstream
-maintainer provides one. An explicit list alone still needs provenance and
-per-row result comparison before an official-equivalence claim.
-
-If upstream row IDs remain unavailable, run both predeclared policies on the
-same frozen model and combine the predictions in one `results.jsonl`; running
-`run` once with `first` and again with `last` in resume mode fills the second
-copy of each duplicate pair. Then use `sensitivity` to report the two scores
-and their range. Neither endpoint is an official 0.2.1 rank.
+then the copy with the higher row ID in each of 24 pairs with identical
+`state`. A complete selection must reproduce the pinned hashes of the kit's
+0.2.1 keep lists for all three benchmarks, or it fails. `--home-policy first`
+(the default) keeps the earlier copy in the hash-verified row file, which
+reproduces the published Home list; `explicit` accepts the same 88 run IDs
+as a JSON file. `last` keeps the other copy of each pair as a sensitivity
+check only: running `run` once with `first` and again with `last` in resume
+mode fills the second copies, and `sensitivity` reports both scores.
 
 ## Run and score
 
@@ -110,12 +112,13 @@ PYTHONPATH=src/training/decision2:/path/to/decision-index-kit \
 `score` marks incomplete runs and evaluator errors. Unsupported/abstained
 questions stay in the denominator as failures. Its result is labelled an
 **independent provisional 0.2.1 reproduction** and `official_equivalent` is
-always false until upstream row identity and native per-request parity are
-established. The 68-row fixture replay reaches at most 0.0058 index-point
-drift from display rounding, but those are **published aggregates**: that
-check establishes panel arithmetic only. It cannot prove the ACOS/Home/
-retrieval native metrics, identical predictions, latency, or leaderboard
-admission. No Decision 2.0 checkpoint has been scored by this port yet.
+always false: matching row IDs do not establish native per-request parity of
+the evaluated package or leaderboard admission. The 68-row fixture replay
+reaches at most 0.0054 index-point drift from display rounding, but those are
+**published aggregates**: that check establishes panel arithmetic only. It
+cannot prove the ACOS/Home/retrieval native metrics, identical predictions,
+latency, or leaderboard admission. No Decision 2.0 checkpoint has been scored
+by this port yet.
 
 ## Tests and source terms
 

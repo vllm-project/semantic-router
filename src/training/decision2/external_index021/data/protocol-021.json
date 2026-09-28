@@ -8,6 +8,12 @@
     62,
     64
   ],
+  "area_sizing": {
+    "fixed": {
+      "arts": 0.1
+    },
+    "rule": "sqrt"
+  },
   "areas": [
     {
       "benchmarks": [
@@ -168,5 +174,18 @@
     "base_scoreable": 119898,
     "common_exclusions": 442,
     "common_exclusions_sha256": "331df32d4b719c7db43214d0e5d85859d39c3b2eb7d0b3812214cce150155e81"
+  },
+  "upstream_kit021": {
+    "revision": "87d4650b42b377c0291a89c1f1a879f9b31082bf",
+    "scoreable_keep_sha256": {
+      "2": "9c77197f20b41c1eb8edcb40039f4c6e4c145612357743167eeb333db3e3b28e",
+      "36": "64523e4a61e51a554b119951f7cb40dacd193c621d6163c267361cdbafb6e137",
+      "9": "f76d0ef2493916ba799a4e78e42d734100e152f2b73d6978ab2370a3866d6e87"
+    },
+    "subset_files_sha256": {
+      "bright-subset.json": "ed3a05220e09be2b96c02514345c61894f7a0ffc73e6884a100392d23692cfb8",
+      "home-appliances-subset.json": "d2d0df922a47a9757bef17f382a4ed4c5c3bfff953f941c29404e93a490bce2c",
+      "toolret-subset.json": "c301d5503955c14d99485e284d434bb1533f51229c34da1edc19dd8388116f01"
+    }
   }
 }

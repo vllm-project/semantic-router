@@ -102,6 +102,33 @@ class LeakAuditTest(unittest.TestCase):
         self.assertEqual(pooled["combined"]["option_surface"]["verdict"], "CLEAN")
         self.assertEqual(report["verdict_option_surface"], "CLEAN")
 
+    def test_fixed_score_levels_with_tied_classes_are_clean(self):
+        levels = [
+            "Not at all.",
+            "A bit.",
+            "Somewhat so.",
+            "Quite clearly so.",
+            "Fully.",
+        ]
+        golds = [0] * 30 + [1] * 50 + [2] * 50 + [3] * 20
+        questions = [
+            Question(
+                "p",
+                f"i{i}",
+                "rate",
+                f"c{i}",
+                "score",
+                ["0", "1", "2", "3", "4"],
+                levels,
+                g,
+            )
+            for i, g in enumerate(golds)
+        ]
+        group = leak_audit.audit_panel(questions, 200)["groups"]["rate"]
+        self.assertTrue(group["fixed_option_set"])
+        self.assertEqual(group["combined"]["option_surface"]["verdict"], "CLEAN")
+        self.assertEqual(group["cues"], {})
+
     def test_gold_always_displayed_first_is_a_position_leak(self):
         rng = random.Random(5)
         questions = []

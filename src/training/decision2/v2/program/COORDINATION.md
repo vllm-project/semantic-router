@@ -144,9 +144,9 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
 | node A GPU0–1 | 0.6B encoder |
-| node A GPU2–4 | research & data M3a: AutoJev-27B teacher targets (all shards on node A), then back to the 9B track (2026-09-28 18:45 UTC+8) |
+| node A GPU2–4 | research & data: AutoJev-27B re-qualification + target production (~1.5 h), then back to the 9B track (2026-09-28 20:15 UTC+8) |
 | node A GPU5 | 0.8B–4B decoder |
-| node A GPU6–7 | eval & peers |
+| node A GPU6–7 | 9B track Milestone 3 (lent by eval at 2026-09-28 20:30 UTC+8; eval borrows one back for a formal run or a C1 scoring event) |
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
 | node B GPU5–6 | ~27B |
@@ -181,6 +181,44 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 20:30 — From eval Milestone 3 (gist `01-decision-2-eval-peers.md`; integration `3773540e8`):
+  - Option-key audit of all eight eval panels: no `result_<n>` or out-of-order numbered keys; seven panels clean on every
+    surface cue. Development proxy and tie rule stand; leaky keys do not explain the dev-vs-v3 gap. Disclosed design
+    properties: typed-DEV `transition_table` never answers the current state (hurts weak models); public 231's correct
+    Choice option is the longest in 44 of 131 items (no model exploits it; <= 2.3 items) — an internal disclosure line only.
+  - **JevArena-C1 sealed confirmation set:** 2,874 items, 14 tasks, 8 post-cutoff sources, gold from the sources' human
+    labels (1,434 Choice / 695 Noul / 745 Score; 19% long; 32% non-English). Prompts hash `0b29686f…`, gold `c0277771…`;
+    encrypted bundle on node A with a private HF backup; key only in the coordinator workstation's private config; every
+    access logged. One-shot scoring for frozen release candidates and their comparators, at most three events, scheduled
+    with release decisions (event 1 = the first batch of release decisions).
+  - **HARD RULE: no track trains on any C1 registry dataset (any split) or reads the sealed directory.** Research & data and
+    A7: check every new arm against the C1 registry. (Done 20:40: dataset-level independence check over 2.33M training rows,
+    405 registry/manifest files, the teacher prompt pools and all 67,617 rows of the eight C1 sources found no C1 source
+    in training — the HalluTruthQA hit was a shared Arabic Wikipedia passage via TyDi QA. C1 v1.1 = the same 2,874 items,
+    new seal manifest `SEAL-v1.1.json` `e3f411a8…`, integration `a50a130ec`. The eval track repeats the check against data
+    landed after `d8eae3e4` before each scoring event.)
+  - Decision Index 0.2.1 harness ready (row identity closed; matches the upstream scorer on four public peers). Decisions:
+    reference Space revision `7cdcea3d` (the roster revision), dual scoring with the upstream kit, our own training-data
+    overlap check as the disclosed substitute for the board's unpublished contamination rule; nothing runs before a first
+    release is frozen (about 6–21 GPU-hours per run).
+  - Size tracks run formal runs with the frozen runner on their own GPUs; the eval track lends node A GPU6–7 to 9B.
+
+- 2026-09-28 20:15 — Research & data M3a (gist `02-decision-2-research-data.md`; integration `ecd7e23b1`):
+  - **Switch to the pk1 files now** (positional option keys; private HF dataset revision
+    `d8eae3e4fb5b91871c5aa7c13f0d94ea96e86ea7`, tree `m3/pk1/`): A0, A0s, A0p, RP-v1q and all six R2 tiers, plus the
+    re-derived canonical own-Lux A0 targets `56627939…` (replaces `dd160420…`). Old A0/A0s/A0p/RP-v1q/R2 files and their
+    Lux targets are superseded; a hard-label fallback for re-keyed rows is no longer needed. Lux picked the gold on all
+    117 re-keyed rows before and after, so the leak barely affected Lux itself.
+  - Own-Lux scaled targets are complete for every recipe row: waves 1 (S), 2 (M), 3 (L remainder, `450bdd7b…`, revision
+    `002e5b422bc74fc3a276be99daad1b7ad793520c`) and the new wave 4 (281 rows the recipes' approximate nesting had missed,
+    `084adacd…`, revision `03b1e72d4b4a4526b2e7f5db3659adb07f200a71`). Any run using full-S or full-M with Lux targets
+    must add `wave4.targets.jsonl`.
+  - AutoJev-27B: the runtime was bitwise repeatable across four processes on three GPUs (910/910) and matched the eval
+    track's AutoJev predictions (99.6% argmax), but failed the worker's stricter warm-up-cache gate because the warm-up
+    lacked long prompts. **Coordinator: re-qualify under a new preregistration** whose warm-up covers every
+    sequence-length bucket up to 8,192 tokens (a corrected gate design, not a rerun of a failed arm), then produce targets
+    on node A GPU2–4 (and node B GPU7 if useful; one node per target file). GPU2–4 return to the 9B track afterwards.
 
 - 2026-09-28 18:45 — **DATA v2 AVAILABLE** (research & data Milestone 2; gist `02-decision-2-research-data.md`; integration
   `66ee420b5`; private HF dataset revision `ed87a03ab80ca5b9560780bba51a83a77ff47d14`, new `m2/` tree with its own
@@ -590,3 +628,39 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
   - **0.8B.** Eos1 42.547, Intern 43.535, Kev 43.217, JPT-0.8B 40.085.
   - Paired intervals are in `v2/eval/records/m2-peers-and-jev-status-2026-09-28.md`.
 - **Proxy held on eight out-of-sample peers.** v3 ≈ 19.12 + 0.629·P was within about ±3 for every peer (−2.6 to +3.0).
+
+### Eval Milestone 3 updates (eval track, 2026-09-28 ~20:20 UTC+8; code at `b9eeb2624` or later)
+
+- **Leak audit: no panel carries the `result_<n>` option-key leak.** All eight panels were checked (SELECT, CAL, typed
+  DEV/FINAL, CSS pilot/CSS15, public 231, mlx-diag): no `result_<n>` keys, no numbered keys out of display order,
+  seven panels CLEAN on every option/state cue. Nothing is corrected; **the proxy P and the |ΔP| < 4 tie rule stand.**
+  Two design properties are disclosed. In typed-DEV `transition_table` the current state is never correct: weak models
+  fall for it, and dropping the family does not improve the proxy. In the public 231 the correct Choice option is the
+  unique longest description in 44/131 items (chance 23%); no model exploits it (≤ 2.3 items). Audit any new panel or
+  arm with `python3 -m v2.eval.leak_audit audit --panel <name> --output <json>` (record
+  `v2/eval/records/m3-leak-audit-2026-09-28.md`).
+- **JevArena-C1 v1 is SEALED:** 2,874 items, 14 tasks, 8 post-cutoff human-labelled public sources. Choice 1,434 /
+  Noul 695 / Score 745; 19% long inputs; 32% non-English (ar, ru, fi/sv/uk). It is encrypted at rest and the key is held
+  by the eval track.
+  - **Rule for every track:** never access `/data/dev2/private/sealed/`, and never train on any dataset in the C1 source
+    registry (`v2/eval/records/sealed-c1-source-registry-2026-09-28.md`, all 25 candidates, admitted or not).
+  - **Scoring:** one-shot, only for frozen release candidates (plus the same-tier 1.0 model and ≤ 2 open peers). At most
+    one candidate per size and three events in total. Request it through the coordinator together with the release
+    decision; procedure in `v2/eval/records/m3-sealed-c1-seal-2026-09-28.md`.
+- **Card charts** come from same-panel reports only and are licence-filtered:
+  `python3 -m v2.eval.charts --report … [--model-id "Decider 2B=Mapika/decider-2b"] [--display "<label>=<card label>"] --output-dir D`.
+  Current per-tier sets (own + permissive peers) are in the private eval-artifacts dataset under `m3/charts-v2/<tier>/`.
+- **Decision Index 0.2.1 harness is ready** (`v2/eval/records/m3-index021-harness-2026-09-28.md`). Row identity
+  matches the upstream 0.2.1 kept-row lists, and the port equals the upstream scorer on four public peer runs. One
+  frozen package costs ~150.5k requests (~6–21 GPU-h on one node-A GPU). It is not run before a first release is
+  frozen, and never enters the JevArena main score or the rank charts.
+- **Formal comparators:** unchanged from the lists above. Under the 17:55 packaging rule, compare against a same-limit
+  1.0 control: Lux1 16K 65.808 / 8K 65.231; Kai1 8K 35.969.
+- **JevArena-C1 v1.1 (2026-09-28 ~20:40 UTC+8, per the 20:30 decision):** a dataset-level source-independence check found
+  no C1 source (any split) in training. It covered training rows' provenance, registries, all track branches, and the
+  content of all 67,617 source rows, checked against training data through main `d8eae3e4` (A0/A0s incl. pk1, v1 arms,
+  data-v2 arms and recipes, A7 incl. the A7r/encoder sub-arms) plus the Lux/AutoJev teacher pools. The 13 weak text-level
+  matches trace to TyDi/MuSiQue Wikipedia, MultiNLI and MultiWOZ. **No task dropped; items unchanged** (prompts
+  `0b29686f…`, gold `c0277771…`). v1.1 seal `e3f411a8…` is logged. Record: `v2/eval/records/m3-sealed-c1-v1_1-2026-09-28.md`.
+  The check is repeated before every scoring event against newly landed data; the key stays only on the coordinator
+  workstation (a node sees it only transiently during a logged event).
