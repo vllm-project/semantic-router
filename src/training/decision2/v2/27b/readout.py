@@ -24,6 +24,9 @@ def main() -> None:
     parser.add_argument("--source-path", required=True)
     parser.add_argument("--cal", required=True)
     parser.add_argument("--panel", action="append", required=True, help="NAME=PROMPTS")
+    parser.add_argument(
+        "--aho", action="append", default=[], help="NAME=ROWS (arm held-out)"
+    )
     parser.add_argument("--model-id", required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
     args = parser.parse_args()
@@ -75,8 +78,28 @@ def main() -> None:
                 "4096",
             ]
         )
+    if args.aho:
+        run(
+            [
+                "-m",
+                "v2.27b.aho_eval",
+                "--run-dir",
+                str(args.run_dir),
+                "--source-path",
+                args.source_path,
+                *[part for spec in args.aho for part in ("--slice", spec)],
+                "--out-dir",
+                str(args.out_dir),
+            ]
+        )
     print(
-        json.dumps({"best": best, "panels": [s.split("=", 1)[0] for s in args.panel]})
+        json.dumps(
+            {
+                "best": best,
+                "panels": [s.split("=", 1)[0] for s in args.panel],
+                "aho": [s.split("=", 1)[0] for s in args.aho],
+            }
+        )
     )
 
 

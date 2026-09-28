@@ -14,6 +14,14 @@ BENCH=/data/decision20-20260926/runs
 IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
 MODEL=/source/$MODEL_SUBPATH
 STAGES=${STAGES:-admit,onestep,reload,full,readout}
+# Milestone 2 knobs (defaults reproduce Milestone 1): TRAIN_FILE host path of the
+# frozen mixture, SAVE_EVERY checkpoint spacing, ARM_CAP cumulative GPU-hour cap,
+# FULL_CAP per full attempt, AHO comma list NAME=HOST_ROWS read at the BEST checkpoint.
+TRAIN_FILE=${TRAIN_FILE:-$DATA/qwen38_27b_full4096_v1/train.jsonl}
+SAVE_EVERY=${SAVE_EVERY:-92}
+ARM_CAP=${ARM_CAP:-3.5}
+FULL_CAP=${FULL_CAP:-3.0}
+AHO=${AHO:-}
 # Training-stage import path; amendment 3 appends the image FLA overlay (/opt/decision-fla).
 TRAIN_PYTHONPATH=${TRAIN_PYTHONPATH:-/pipeline:/code}
 # Amendment 4: TRITON_AUTOTUNE_CACHE=1 shares one on-disk Triton autotune cache
@@ -45,9 +53,16 @@ if actual != manifest["files_sha256"]:
 print("vendored pipeline verified", len(actual), "files")
 EOF
 
+AHO_MOUNTS=() AHO_ARGS=()
+IFS=, read -r -a AHO_SPECS <<< "$AHO"
+for spec in "${AHO_SPECS[@]}"; do
+  [ -n "$spec" ] || continue
+  AHO_MOUNTS+=(--mount "${spec#*=}:/data/aho-${spec%%=*}.jsonl")
+  AHO_ARGS+=(--aho "${spec%%=*}=/data/aho-${spec%%=*}.jsonl")
+done
 COMMON_MOUNTS=(
   --mount "$RUN/pipeline:/pipeline" --mount "$CODE:/code" --mount "$SOURCE_MOUNT:/source"
-  --mount "$DATA/qwen38_27b_full4096_v1/train.jsonl:/data/train.jsonl"
+  --mount "$TRAIN_FILE:/data/train.jsonl" "${AHO_MOUNTS[@]}"
   --mount "$DATA/rights_clean_goemotions_v2/select.jsonl:/data/select.jsonl"
   --mount "$DATA/rights_clean_goemotions_v2/cal.jsonl:/data/cal.jsonl"
   --mount "$BENCH/dev.prompts.jsonl:/data/dev.prompts.jsonl"
@@ -88,8 +103,9 @@ if has admit; then
   docker run --rm --network none --entrypoint python3 -e PYTHONPATH=/code -e PYTHONDONTWRITEBYTECODE=1 \
     --mount "type=bind,src=$CODE,dst=/code,readonly" --mount "type=bind,src=$SOURCE_MOUNT,dst=/source,readonly" \
     --mount "type=bind,src=$DATA,dst=/datasrc,readonly" --mount "type=bind,src=$RUN/admit,dst=/out" \
+    --mount "type=bind,src=$TRAIN_FILE,dst=/train.jsonl,readonly" \
     -w /code "$IMAGE" -m v2.27b.admit_tokens --source "$MODEL" --family qwen --limit 4096 \
-    --partition train=/datasrc/qwen38_27b_full4096_v1/train.jsonl \
+    --partition train=/train.jsonl \
     --partition select=/datasrc/rights_clean_goemotions_v2/select.jsonl \
     --partition cal=/datasrc/rights_clean_goemotions_v2/cal.jsonl --output /out/admission.json
   python3 -c "import json,sys; r=json.load(open('$RUN/admit/admission.json')); sys.exit(0 if r['all_admitted'] else 3)"
@@ -115,19 +131,19 @@ if has full; then
   attempt=${ATTEMPT_START:-1}
   while [ ! -f "$RUN/full/$run/COMPLETE.json" ]; do
     used=$(python3 -c "import glob,json; print(sum(json.load(open(p))['gpu_hours'] for p in glob.glob('$RUN/receipts/*.json')))")
-    if python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) < 3.5 else 1)" "$used"; then :; else
-      echo "arm $ARM stopped: cumulative GPU-hours $used reached the 3.5 cap" >&2
+    if python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) < float(sys.argv[2]) else 1)" "$used" "$ARM_CAP"; then :; else
+      echo "arm $ARM stopped: cumulative GPU-hours $used reached the $ARM_CAP cap" >&2
       exit 1
     fi
     name=full
     [ "$attempt" -gt 1 ] && name=full-r$attempt
     latest=$(find "$RUN/full/$run" -maxdepth 1 -type d -name 'checkpoint-*' ! -name '*.pending' 2>/dev/null | sort | tail -1 || true)
     if [ -n "$latest" ]; then
-      train_launch "$name" 3.0 "exact resume from $(basename "$latest")" "$RUN/full" -- "${RESUME_ARGS[@]}" \
-        --save-every 92 --resume "/out/$run/$(basename "$latest")" --output "/out/$run" || true
+      train_launch "$name" "$FULL_CAP" "exact resume from $(basename "$latest")" "$RUN/full" -- "${RESUME_ARGS[@]}" \
+        --save-every "$SAVE_EVERY" --resume "/out/$run/$(basename "$latest")" --output "/out/$run" || true
     else
-      train_launch "$name" 3.0 "full 458-update arm" "$RUN/full" -- "${TRAIN_ARGS[@]}" \
-        --save-every 92 --output "/out/$run" || true
+      train_launch "$name" "$FULL_CAP" "full one-epoch arm" "$RUN/full" -- "${TRAIN_ARGS[@]}" \
+        --save-every "$SAVE_EVERY" --output "/out/$run" || true
     fi
     [ -f "$RUN/full/$run/COMPLETE.json" ] && break
     code=$(exit_of "$RUN/receipts/$name.json")
@@ -147,6 +163,6 @@ if has readout; then
   launch readout 1.0 "CAL fit and one DEV/CSS-pilot readout" "$RUN/full" -- \
     python3 -m v2.27b.readout --run-dir "/out/$run" --source-path "$MODEL" --cal /data/cal.jsonl \
     --panel dev=/data/dev.prompts.jsonl --panel css-pilot=/data/css-pilot.prompts.jsonl \
-    --model-id "decision2-27b-$ARM" --out-dir /out
+    "${AHO_ARGS[@]}" --model-id "decision2-27b-$ARM" --out-dir /out
 fi
 echo "arm $ARM stages $STAGES complete"
