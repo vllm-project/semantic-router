@@ -193,9 +193,11 @@ exactly one gist file and updates it in place:
     access logged. One-shot scoring for frozen release candidates and their comparators, at most three events, scheduled
     with release decisions (event 1 = the first batch of release decisions).
   - **HARD RULE: no track trains on any C1 registry dataset (any split) or reads the sealed directory.** Research & data and
-    A7: check every new arm against the C1 registry. Eval: before the first scoring event, publish C1 v1.1 dropping every
-    task whose source already appears anywhere in training data at dataset level (e.g., HalluTruthQA if present in data
-    v2), re-seal and disclose it.
+    A7: check every new arm against the C1 registry. (Done 20:40: dataset-level independence check over 2.33M training rows,
+    405 registry/manifest files, the teacher prompt pools and all 67,617 rows of the eight C1 sources found no C1 source
+    in training — the HalluTruthQA hit was a shared Arabic Wikipedia passage via TyDi QA. C1 v1.1 = the same 2,874 items,
+    new seal manifest `SEAL-v1.1.json` `e3f411a8…`, integration `a50a130ec`. The eval track repeats the check against data
+    landed after `d8eae3e4` before each scoring event.)
   - Decision Index 0.2.1 harness ready (row identity closed; matches the upstream scorer on four public peers). Decisions:
     reference Space revision `7cdcea3d` (the roster revision), dual scoring with the upstream kit, our own training-data
     overlap check as the disclosed substitute for the board's unpublished contamination rule; nothing runs before a first
@@ -654,3 +656,11 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
   frozen, and never enters the JevArena main score or the rank charts.
 - **Formal comparators:** unchanged from the lists above. Under the 17:55 packaging rule, compare against a same-limit
   1.0 control: Lux1 16K 65.808 / 8K 65.231; Kai1 8K 35.969.
+- **JevArena-C1 v1.1 (2026-09-28 ~20:40 UTC+8, per the 20:30 decision):** a dataset-level source-independence check found
+  no C1 source (any split) in training. It covered training rows' provenance, registries, all track branches, and the
+  content of all 67,617 source rows, checked against training data through main `d8eae3e4` (A0/A0s incl. pk1, v1 arms,
+  data-v2 arms and recipes, A7 incl. the A7r/encoder sub-arms) plus the Lux/AutoJev teacher pools. The 13 weak text-level
+  matches trace to TyDi/MuSiQue Wikipedia, MultiNLI and MultiWOZ. **No task dropped; items unchanged** (prompts
+  `0b29686f…`, gold `c0277771…`). v1.1 seal `e3f411a8…` is logged. Record: `v2/eval/records/m3-sealed-c1-v1_1-2026-09-28.md`.
+  The check is repeated before every scoring event against newly landed data; the key stays only on the coordinator
+  workstation (a node sees it only transiently during a logged event).
