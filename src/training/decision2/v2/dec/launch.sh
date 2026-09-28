@@ -15,8 +15,11 @@ cpu=0
 if [[ ${1:-} == --cpu ]]; then cpu=1; shift; fi
 [[ ${1:-} == -- ]] && shift
 
-image=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
-render=/dev/dri/renderD169 # node A GPU5 (PCI 0000:ab:00.0), the track allocation
+# Defaults are node A GPU5 (PCI 0000:ab:00.0). On node B set DEC_IMAGE, DEC_RENDER
+# and DEC_GPU_LABEL to an allocated GPU and that node's qualified image.
+image=${DEC_IMAGE:-sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54}
+render=${DEC_RENDER:-/dev/dri/renderD169}
+gpu_label=${DEC_GPU_LABEL:-node A GPU5}
 src=/data/dev2/src/$sha
 [[ -d $src/src/training/decision2 ]] || { echo "missing exact mirror $src" >&2; exit 2; }
 tree=$(cat "$src/TREE" 2>/dev/null || echo unknown)
@@ -44,12 +47,12 @@ set +e
 status=$?
 set -e
 end=$(date -u +%FT%TZ)
-python3 - "$receipt" "$name" "$sha" "$tree" "$image" "$start" "$end" "$status" "$cpu" "${argv[@]}" <<'EOF'
+python3 - "$receipt" "$name" "$sha" "$tree" "$image" "$start" "$end" "$status" "$cpu" "$gpu_label" "${argv[@]}" <<'EOF'
 import json, sys
-path, name, sha, tree, image, start, end, status, cpu, *argv = sys.argv[1:]
+path, name, sha, tree, image, start, end, status, cpu, gpu, *argv = sys.argv[1:]
 json.dump({"job": name, "source_commit": sha, "source_tree": tree, "image_id": image,
            "start_utc": start, "end_utc": end, "exit_status": int(status),
-           "gpu": None if cpu == "1" else "node A GPU5", "docker_argv": argv},
+           "gpu": None if cpu == "1" else gpu, "docker_argv": argv},
           open(path, "x"), indent=2)
 EOF
 exit $status
