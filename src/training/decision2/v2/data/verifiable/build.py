@@ -51,7 +51,7 @@ A6_GENERAL: tuple[ModuleType, ...] = (
 A6_FAMILIES: tuple[ModuleType, ...] = (*A6_GENERAL, a6_evidence_status)
 LEVELS = tuple(range(2, 11))
 HARMONIC = sum(Fraction(1, level) for level in LEVELS)
-DEFAULT_GROUPS = {"a2": 375, "a4": 167}
+DEFAULT_GROUPS = {"a2": 375, "a4": 167, "a4v2": 252}
 DEFAULT_A6_ROWS_PER_LEVEL = 600
 A4_NAMESPACE = "a4"
 
@@ -333,6 +333,186 @@ def build_a4(
     return hard, rand
 
 
+# ---------------------------------------------------------------- A4 v2
+
+A4V2_NAMESPACE = "a4v2"
+A4V2_K = 4
+
+
+A4V2_BLOCK = 6  # four Choice scenarios, then two Noul-pair scenarios
+
+
+class _Cell:
+    """Exact per-(family, language) blocks of four Choice scenarios: gold ranks and positions.
+
+    Within a block every rank and position is used once; which scenario receives
+    which is random. Nothing is chosen by looking at option texts, since
+    value-dependent selection is itself learnable. Noul scenarios yield one true
+    and one false row, so Noul balance holds inside every group.
+    """
+
+    def __init__(self, rng: Any) -> None:
+        self.rng = rng
+        self.turn = 0
+        self.choices = 0
+        self._new_block()
+
+    def _new_block(self) -> None:
+        self.ranks = self.rng.sample(range(A4V2_K), A4V2_K)
+        self.positions = self.rng.sample(range(A4V2_K), A4V2_K)
+
+    @property
+    def is_choice(self) -> bool:
+        return self.turn % A4V2_BLOCK < A4V2_K
+
+    @property
+    def rotation(self) -> int:
+        """Index among scenarios of the same kind, for family-level rotations."""
+        return self.choices if self.is_choice else self.turn - self.choices
+
+    def rank(self) -> int | None:
+        return self.ranks[self.choices % A4V2_K] if self.is_choice else None
+
+    def advance(self) -> int | None:
+        position = None
+        if self.is_choice:
+            position = self.positions[self.choices % A4V2_K]
+            self.choices += 1
+            if self.choices % A4V2_K == 0:
+                self._new_block()
+        self.turn += 1
+        return position
+
+
+def a4v2_rows(
+    module: ModuleType,
+    lang: str,
+    index: int,
+    seed: str,
+    cell: _Cell,
+    stats: BuildStats,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    family = module.FAMILY
+    ns_seed = f"{seed}/{A4V2_NAMESPACE}"
+    rng = core.make_rng(ns_seed, family, lang, index)
+    want = cell.rank()
+    for _attempt in range(50):
+        plan: core.A4v2Plan = module.a4v2_plan(rng, lang, cell.rotation)
+        candidates = [
+            a
+            for a in plan.alternatives
+            if not plan.ordered or want is None or a.key == want
+        ]
+        chosen = rng.choice(candidates)
+        rendered = chosen.render()
+        if rendered is not None:
+            break
+    else:
+        raise RuntimeError(f"{family} {index}: a4v2 scenario construction failed")
+    is_choice = cell.is_choice
+    position = cell.advance()
+    pick = core.make_rng(ns_seed, family, lang, index, "layout")
+    group_id = _group_id(A4V2_NAMESPACE, family, lang, ns_seed, index)
+    split = "select" if core.held_out(group_id) else "train"
+    rank = (
+        sorted([chosen.gold, *chosen.near], key=core.option_value).index(chosen.gold)
+        if plan.ordered
+        else None
+    )
+    true_first = pick.random() < 0.5
+    out: dict[str, list[dict[str, Any]]] = {"a4v2h": [], "a4v2r": []}
+    bad = 0
+    for arm, distractors in (("a4v2h", chosen.near), ("a4v2r", chosen.rand)):
+        meta = {
+            "subtype": rendered.subtype,
+            "a4_file": arm,
+            "gold_rank": rank if is_choice else None,
+            "distractors": "near" if arm == "a4v2h" else "random",
+        }
+        if is_choice:
+            descriptions = [""] * A4V2_K
+            descriptions[position] = chosen.gold
+            slots = [i for i in range(A4V2_K) if i != position]
+            for slot, text in zip(slots, pick.sample(distractors, len(distractors))):
+                descriptions[slot] = text
+            if len(set(descriptions)) != A4V2_K:
+                raise AssertionError(f"{family} {index}: duplicate option text")
+            tasks = [
+                (
+                    "choice",
+                    rendered.question,
+                    core.choice_options(descriptions),
+                    position,
+                )
+            ]
+        else:
+            far_only = [d for d in distractors if d not in chosen.near]
+            false_value = pick.choice(
+                far_only if arm == "a4v2r" and far_only else distractors
+            )
+            pair = [
+                ("noul", rendered.proposition(chosen.gold), core.noul_options(lang), 1),
+                ("noul", rendered.proposition(false_value), core.noul_options(lang), 0),
+            ]
+            tasks = pair if true_first else pair[::-1]
+        for variant_index, (task, instructions, options, label) in enumerate(tasks):
+            reparsed = module.reparse(rendered.state, instructions, options, lang)
+            bad += reparsed != label
+            out[arm].append(
+                core.make_row(
+                    arm=arm,
+                    family=family,
+                    lang=lang,
+                    index=index,
+                    variant_index=variant_index,
+                    group_id=group_id,
+                    state=rendered.state,
+                    instructions=instructions,
+                    options=options,
+                    label=label,
+                    task_type=task,
+                    template=f"{rendered.template}_{task}",
+                    edit="none: single hard-negative scenario",
+                    facts=rendered.facts,
+                    reparse_label=reparsed,
+                    meta=meta,
+                    split=split,
+                )
+            )
+    if bad:
+        stats.disagreements += bad
+        stats.dropped_rows += len(out["a4v2h"]) + len(out["a4v2r"])
+        stats.dropped_groups += 1
+        return [], []
+    return out["a4v2h"], out["a4v2r"]
+
+
+def a4v2_groups(groups_per_family: int | None) -> int:
+    groups = groups_per_family or DEFAULT_GROUPS["a4v2"]
+    return -(-groups // A4V2_BLOCK) * A4V2_BLOCK
+
+
+def build_a4v2(
+    seed: str, groups_per_family: int, zh_share: Fraction, stats: BuildStats
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Languages are assigned in whole blocks (4 Choice + 2 Noul-pair scenarios) per (family, language) cell."""
+    hard, rand = [], []
+    for module in A2_FAMILIES:
+        cells: dict[str, _Cell] = {}
+        for index in range(groups_per_family):
+            lang = language(index // A4V2_BLOCK, zh_share)
+            if lang not in cells:
+                cells[lang] = _Cell(
+                    core.make_rng(
+                        f"{seed}/{A4V2_NAMESPACE}", module.FAMILY, lang, "cell"
+                    )
+                )
+            h, r = a4v2_rows(module, lang, index, seed, cells[lang], stats)
+            hard += h
+            rand += r
+    return hard, rand
+
+
 # ---------------------------------------------------------------- manifest
 
 
@@ -435,6 +615,12 @@ def generate(
         parameters["seed_namespace"] = f"{seed}/{A4_NAMESPACE}"
         hard, rand = build_a4(seed, groups, share, stats)
         files = {"a4h": hard, "a4r": rand}
+    elif arm == "a4v2":
+        groups = a4v2_groups(groups_per_family)
+        parameters["effective_groups_per_family"] = groups
+        parameters["seed_namespace"] = f"{seed}/{A4V2_NAMESPACE}"
+        hard, rand = build_a4v2(seed, groups, share, stats)
+        files = {"a4v2h": hard, "a4v2r": rand}
     else:
         raise ValueError(f"unknown arm {arm}")
     split_files: dict[str, list[dict[str, Any]]] = {}
@@ -489,14 +675,16 @@ def write(
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--arm", choices=("a2", "a4", "a6"), required=True)
+    parser.add_argument("--arm", choices=("a2", "a4", "a4v2", "a6"), required=True)
     parser.add_argument("--seed", required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument(
         "--groups-per-family",
         type=int,
-        help="a2/a4: groups per family (default 375 / 167). a6: sets rows per level count to "
-        "round(5N / H) with H = sum 1/L over L=2..10, i.e. about 5N groups (default 600 rows per level count).",
+        help="a2/a4/a4v2: groups per family (default 375 / 167 / 252; a4v2 rounds up to a multiple of 6: "
+        "per block four single-row Choice groups and two Noul-pair groups). "
+        "a6: sets rows per level count to round(5N / H) with H = sum 1/L over L=2..10, i.e. about 5N groups "
+        "(default 600 rows per level count).",
     )
     parser.add_argument("--zh-share", type=float, default=0.3)
     args = parser.parse_args(argv)
@@ -505,7 +693,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not 0 <= args.zh_share <= 1:
         parser.error("--zh-share must be within [0, 1]")
     targets = [args.out_dir / f"{args.arm}.build.json"]
-    names = ("a4h", "a4r") if args.arm == "a4" else (args.arm,)
+    names = {"a4": ("a4h", "a4r"), "a4v2": ("a4v2h", "a4v2r")}.get(
+        args.arm, (args.arm,)
+    )
     targets += [
         args.out_dir / f"{n}.{part}.jsonl" for n in names for part in ("train", "aho")
     ]
