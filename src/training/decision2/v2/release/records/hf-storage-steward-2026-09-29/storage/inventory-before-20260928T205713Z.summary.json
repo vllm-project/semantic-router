@@ -1,0 +1,716 @@
+{
+ "utc": "2026-09-28T20:57:13.562248+00:00",
+ "org": "llm-semantic-router",
+ "org_plan": {
+  "canPay": false,
+  "periodEnd": null
+ },
+ "private_bytes": 65297982127,
+ "private_repos": [
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/dev2-9b-staging",
+   "used": 31783619693,
+   "sha": "8a98dc8261472999af7557da6117efd56bf742e4",
+   "lfs_by_top_folder": {
+    "m3/DW/": {
+     "objects": 11,
+     "bytes": 31783619693,
+     "pushed_first": "2026-09-28T20:19:32",
+     "pushed_last": "2026-09-28T20:19:32"
+    }
+   },
+   "branches": {
+    "main": "8a98dc8261472999af7557da6117efd56bf742e4"
+   },
+   "tags": 0,
+   "commits": 2
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/DEV2.0-2B",
+   "used": 7556388102,
+   "sha": "5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38",
+   "lfs_by_top_folder": {
+    "backbone/": {
+     "objects": 2,
+     "bytes": 7527335048,
+     "pushed_first": "2026-09-28T19:41:51",
+     "pushed_last": "2026-09-28T19:41:51"
+    },
+    "(root)": {
+     "objects": 2,
+     "bytes": 28413597,
+     "pushed_first": "2026-09-28T19:41:51",
+     "pushed_last": "2026-09-28T19:41:51"
+    },
+    "assets/": {
+     "objects": 1,
+     "bytes": 639457,
+     "pushed_first": "2026-09-28T19:41:51",
+     "pushed_last": "2026-09-28T19:41:51"
+    }
+   },
+   "branches": {
+    "main": "5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38"
+   },
+   "tags": 0,
+   "commits": 3
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/dev2-dec-staging",
+   "used": 7555748645,
+   "sha": "376c992cea89b473ff663d2d1bbbd08d006fc8a8",
+   "lfs_by_top_folder": {
+    "m3/S2T-soup/": {
+     "objects": 4,
+     "bytes": 7555748645,
+     "pushed_first": "2026-09-28T20:55:46",
+     "pushed_last": "2026-09-28T20:55:46"
+    }
+   },
+   "branches": {
+    "main": "376c992cea89b473ff663d2d1bbbd08d006fc8a8"
+   },
+   "tags": 0,
+   "commits": 10
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/decision-2.0-training-data",
+   "used": 3228804557,
+   "sha": "75e557f170979bdbc428b6ea698a2047e2d2a5cd",
+   "lfs_by_top_folder": {
+    "m3/mixtures/": {
+     "objects": 30,
+     "bytes": 1025111119,
+     "pushed_first": "2026-09-28T14:30:16",
+     "pushed_last": "2026-09-28T18:42:14"
+    },
+    "m2/arms/": {
+     "objects": 9,
+     "bytes": 729302820,
+     "pushed_first": "2026-09-28T09:18:10",
+     "pushed_last": "2026-09-28T09:18:10"
+    },
+    "v2/a7/": {
+     "objects": 16,
+     "bytes": 717609769,
+     "pushed_first": "2026-09-28T07:41:31",
+     "pushed_last": "2026-09-28T12:56:07"
+    },
+    "m3/teachers/": {
+     "objects": 15,
+     "bytes": 473001307,
+     "pushed_first": "2026-09-28T13:07:39",
+     "pushed_last": "2026-09-28T20:16:24"
+    },
+    "m3/arms/": {
+     "objects": 2,
+     "bytes": 129890774,
+     "pushed_first": "2026-09-28T17:20:35",
+     "pushed_last": "2026-09-28T17:20:35"
+    },
+    "v2/arms/": {
+     "objects": 4,
+     "bytes": 57900472,
+     "pushed_first": "2026-09-28T04:34:51",
+     "pushed_last": "2026-09-28T04:59:21"
+    },
+    "m3/pk1/": {
+     "objects": 3,
+     "bytes": 45633878,
+     "pushed_first": "2026-09-28T12:06:10",
+     "pushed_last": "2026-09-28T13:45:11"
+    },
+    "m2/mixtures/": {
+     "objects": 2,
+     "bytes": 21901416,
+     "pushed_first": "2026-09-28T09:36:32",
+     "pushed_last": "2026-09-28T09:36:32"
+    },
+    "(root)": {
+     "objects": 1,
+     "bytes": 15758057,
+     "pushed_first": "2026-09-26T14:39:22",
+     "pushed_last": "2026-09-26T14:39:22"
+    },
+    "m2/teachers/": {
+     "objects": 1,
+     "bytes": 12694945,
+     "pushed_first": "2026-09-28T10:33:23",
+     "pushed_last": "2026-09-28T10:33:23"
+    }
+   },
+   "branches": {
+    "main": "75e557f170979bdbc428b6ea698a2047e2d2a5cd"
+   },
+   "tags": 0,
+   "commits": 35
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/DEV2.0-0.8B",
+   "used": 3034384398,
+   "sha": "f458c34ccfb4a5d4d32babeda1570919adb1a3c8",
+   "lfs_by_top_folder": {
+    "backbone/": {
+     "objects": 1,
+     "bytes": 3009606928,
+     "pushed_first": "2026-09-28T13:51:17",
+     "pushed_last": "2026-09-28T13:51:17"
+    },
+    "(root)": {
+     "objects": 2,
+     "bytes": 24202909,
+     "pushed_first": "2026-09-28T13:51:17",
+     "pushed_last": "2026-09-28T13:51:17"
+    },
+    "assets/": {
+     "objects": 1,
+     "bytes": 574561,
+     "pushed_first": "2026-09-28T13:51:17",
+     "pushed_last": "2026-09-28T13:51:17"
+    }
+   },
+   "branches": {
+    "main": "f458c34ccfb4a5d4d32babeda1570919adb1a3c8"
+   },
+   "tags": 0,
+   "commits": 5
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/DEV2.0-0.6B",
+   "used": 2400450382,
+   "sha": "99c4e799392afa73241915aeb16fefa5ef3518d7",
+   "lfs_by_top_folder": {
+    "backbone/": {
+     "objects": 1,
+     "bytes": 2384233112,
+     "pushed_first": "2026-09-28T14:06:29",
+     "pushed_last": "2026-09-28T14:06:29"
+    },
+    "(root)": {
+     "objects": 2,
+     "bytes": 15636234,
+     "pushed_first": "2026-09-28T14:06:29",
+     "pushed_last": "2026-09-28T14:06:29"
+    },
+    "assets/": {
+     "objects": 1,
+     "bytes": 581036,
+     "pushed_first": "2026-09-28T14:06:29",
+     "pushed_last": "2026-09-28T14:06:29"
+    }
+   },
+   "branches": {
+    "main": "99c4e799392afa73241915aeb16fefa5ef3518d7"
+   },
+   "tags": 0,
+   "commits": 6
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/dev2-staging-06bm5-z",
+   "used": 2399869350,
+   "sha": "6b414780805d350cc88035e8fcd3998a285c3c9b",
+   "lfs_by_top_folder": {
+    "backbone/": {
+     "objects": 1,
+     "bytes": 2384233112,
+     "pushed_first": "2026-09-28T18:26:51",
+     "pushed_last": "2026-09-28T18:26:51"
+    },
+    "(root)": {
+     "objects": 2,
+     "bytes": 15636238,
+     "pushed_first": "2026-09-28T18:26:51",
+     "pushed_last": "2026-09-28T18:26:51"
+    }
+   },
+   "branches": {
+    "main": "6b414780805d350cc88035e8fcd3998a285c3c9b"
+   },
+   "tags": 0,
+   "commits": 2
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/Decision-1.0-Kai-0.6B-Router-Signals",
+   "used": 2322051120,
+   "sha": "de365e02392f528712fdee47e9d500560e373519",
+   "lfs_by_top_folder": {
+    "native/encoder/": {
+     "objects": 1,
+     "bytes": 1227771752,
+     "pushed_first": "2026-09-28T15:26:39",
+     "pushed_last": "2026-09-28T15:26:39"
+    },
+    "native/": {
+     "objects": 3,
+     "bytes": 1059916180,
+     "pushed_first": "2026-09-28T15:26:39",
+     "pushed_last": "2026-09-28T15:26:39"
+    },
+    "native/tokenizer/": {
+     "objects": 1,
+     "bytes": 34363188,
+     "pushed_first": "2026-09-28T15:26:39",
+     "pushed_last": "2026-09-28T15:26:39"
+    }
+   },
+   "branches": {
+    "main": "de365e02392f528712fdee47e9d500560e373519"
+   },
+   "tags": 0,
+   "commits": 2
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/vela-embedding-training",
+   "used": 1213065721,
+   "sha": "b17e0a946245acaa5c5a406bc1586e98a3bb1c1f",
+   "lfs_by_top_folder": {
+    "(root)": {
+     "objects": 1,
+     "bytes": 798963653,
+     "pushed_first": "2026-09-16T10:07:42",
+     "pushed_last": "2026-09-16T10:07:42"
+    },
+    "payload/masks/": {
+     "objects": 256,
+     "bytes": 210981632,
+     "pushed_first": "2026-09-16T04:16:37",
+     "pushed_last": "2026-09-16T04:16:38"
+    },
+    "payload/teacher-targets/": {
+     "objects": 308,
+     "bytes": 111304968,
+     "pushed_first": "2026-09-16T04:16:38",
+     "pushed_last": "2026-09-16T04:16:39"
+    },
+    "payload/data/": {
+     "objects": 4,
+     "bytes": 91815468,
+     "pushed_first": "2026-09-16T04:16:37",
+     "pushed_last": "2026-09-16T04:16:37"
+    }
+   },
+   "branches": {
+    "main": "b17e0a946245acaa5c5a406bc1586e98a3bb1c1f"
+   },
+   "tags": 2,
+   "commits": 3
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/Vela-1.0-Embedding-Data",
+   "used": 860931223,
+   "sha": "e6d3dc11574ff3606d85bc481a7c9668ad3f616a",
+   "lfs_by_top_folder": {
+    "components/": {
+     "objects": 2,
+     "bytes": 430758386,
+     "pushed_first": "2026-09-14T04:09:58",
+     "pushed_last": "2026-09-14T04:09:58"
+    },
+    "records/": {
+     "objects": 2,
+     "bytes": 294621098,
+     "pushed_first": "2026-09-14T04:09:58",
+     "pushed_last": "2026-09-14T04:09:58"
+    },
+    "stages/continued-e512/": {
+     "objects": 2,
+     "bytes": 109578906,
+     "pushed_first": "2026-09-14T07:04:46",
+     "pushed_last": "2026-09-14T07:04:46"
+    },
+    "stages/continued-t128/": {
+     "objects": 1,
+     "bytes": 25972833,
+     "pushed_first": "2026-09-14T06:03:12",
+     "pushed_last": "2026-09-14T06:03:12"
+    }
+   },
+   "branches": {
+    "main": "e6d3dc11574ff3606d85bc481a7c9668ad3f616a"
+   },
+   "tags": 0,
+   "commits": 4
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/Vela-1.0-Reranker-Data",
+   "used": 838096420,
+   "sha": "b3b92d1a6da0af5eaddeae56f48b08219c334810",
+   "lfs_by_top_folder": {
+    "stages/continued-r4833/": {
+     "objects": 2,
+     "bytes": 378722000,
+     "pushed_first": "2026-09-14T07:58:25",
+     "pushed_last": "2026-09-14T07:58:25"
+    },
+    "components/": {
+     "objects": 2,
+     "bytes": 161065117,
+     "pushed_first": "2026-09-14T04:10:08",
+     "pushed_last": "2026-09-14T04:10:08"
+    },
+    "records/": {
+     "objects": 2,
+     "bytes": 151368714,
+     "pushed_first": "2026-09-14T04:10:08",
+     "pushed_last": "2026-09-14T04:10:08"
+    },
+    "stages/continued-r1209/": {
+     "objects": 2,
+     "bytes": 146940589,
+     "pushed_first": "2026-09-14T06:04:37",
+     "pushed_last": "2026-09-14T06:04:37"
+    }
+   },
+   "branches": {
+    "main": "b3b92d1a6da0af5eaddeae56f48b08219c334810"
+   },
+   "tags": 0,
+   "commits": 4
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/vela-reranker-training",
+   "used": 779264945,
+   "sha": "2556f9f345f8908c6f8bfa433635879b522bab35",
+   "lfs_by_top_folder": {
+    "train/": {
+     "objects": 2,
+     "bytes": 470293644,
+     "pushed_first": "2026-09-15T19:30:29",
+     "pushed_last": "2026-09-15T19:30:29"
+    },
+    "(root)": {
+     "objects": 1,
+     "bytes": 143323140,
+     "pushed_first": "2026-09-16T10:06:10",
+     "pushed_last": "2026-09-16T10:06:10"
+    },
+    "continuations/layout-t2-8192-v1/": {
+     "objects": 6,
+     "bytes": 72561365,
+     "pushed_first": "2026-09-16T00:51:15",
+     "pushed_last": "2026-09-16T00:51:15"
+    },
+    "teacher/": {
+     "objects": 2,
+     "bytes": 50975189,
+     "pushed_first": "2026-09-15T19:30:29",
+     "pushed_last": "2026-09-15T19:30:29"
+    },
+    "source-native-metadata/": {
+     "objects": 1,
+     "bytes": 34363188,
+     "pushed_first": "2026-09-15T19:30:29",
+     "pushed_last": "2026-09-15T19:30:29"
+    },
+    "continuations/instruction-switch-v2/": {
+     "objects": 5,
+     "bytes": 6605189,
+     "pushed_first": "2026-09-16T03:44:00",
+     "pushed_last": "2026-09-16T03:44:00"
+    },
+    "draws/": {
+     "objects": 1,
+     "bytes": 1143230,
+     "pushed_first": "2026-09-15T19:35:29",
+     "pushed_last": "2026-09-15T19:35:29"
+    }
+   },
+   "branches": {
+    "main": "2556f9f345f8908c6f8bfa433635879b522bab35"
+   },
+   "tags": 13,
+   "commits": 15
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/semantic-router-cache-triplets",
+   "used": 370272796,
+   "sha": "a15e903a9df6e2d687e12a0f439aff5d2b857d54",
+   "lfs_by_top_folder": {
+    "multi-domain/": {
+     "objects": 1,
+     "bytes": 170834558,
+     "pushed_first": "2026-01-15T17:48:50",
+     "pushed_last": "2026-01-15T17:48:50"
+    },
+    "law/": {
+     "objects": 1,
+     "bytes": 91646933,
+     "pushed_first": "2026-01-15T17:48:30",
+     "pushed_last": "2026-01-15T17:48:30"
+    },
+    "programming/": {
+     "objects": 1,
+     "bytes": 51750573,
+     "pushed_first": "2026-01-15T17:48:37",
+     "pushed_last": "2026-01-15T17:48:37"
+    },
+    "psychology/": {
+     "objects": 1,
+     "bytes": 28603680,
+     "pushed_first": "2026-01-15T17:48:47",
+     "pushed_last": "2026-01-15T17:48:47"
+    },
+    "medical/": {
+     "objects": 1,
+     "bytes": 27437052,
+     "pushed_first": "2026-01-15T17:48:12",
+     "pushed_last": "2026-01-15T17:48:12"
+    }
+   },
+   "branches": {
+    "main": "a15e903a9df6e2d687e12a0f439aff5d2b857d54"
+   },
+   "tags": 0,
+   "commits": 7
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/Vela-1.0-Safety-Data",
+   "used": 271869727,
+   "sha": "e28a961d5819db73c8bdb914dee1beb103735828",
+   "lfs_by_top_folder": {
+    "(root)": {
+     "objects": 2,
+     "bytes": 271869727,
+     "pushed_first": "2026-09-14T04:23:05",
+     "pushed_last": "2026-09-14T04:23:05"
+    }
+   },
+   "branches": {
+    "main": "e28a961d5819db73c8bdb914dee1beb103735828"
+   },
+   "tags": 0,
+   "commits": 2
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/Vela-1.0-Guard-Data",
+   "used": 217712538,
+   "sha": "d016a98d00ce0dfd747d488a88be3bf0e8460c7c",
+   "lfs_by_top_folder": {
+    "(root)": {
+     "objects": 2,
+     "bytes": 126575795,
+     "pushed_first": "2026-09-14T04:23:00",
+     "pushed_last": "2026-09-14T04:23:00"
+    },
+    "stages/continued-512/": {
+     "objects": 1,
+     "bytes": 65937980,
+     "pushed_first": "2026-09-14T06:47:31",
+     "pushed_last": "2026-09-14T06:47:31"
+    },
+    "stages/retention-256/": {
+     "objects": 1,
+     "bytes": 21379807,
+     "pushed_first": "2026-09-14T06:47:31",
+     "pushed_last": "2026-09-14T06:47:31"
+    },
+    "stages/instruction-boundary-1000/": {
+     "objects": 1,
+     "bytes": 2153033,
+     "pushed_first": "2026-09-15T13:06:51",
+     "pushed_last": "2026-09-15T13:06:51"
+    },
+    "stages/boundary-retention-50/": {
+     "objects": 1,
+     "bytes": 1665923,
+     "pushed_first": "2026-09-15T08:00:19",
+     "pushed_last": "2026-09-15T08:00:19"
+    }
+   },
+   "branches": {
+    "main": "d016a98d00ce0dfd747d488a88be3bf0e8460c7c"
+   },
+   "tags": 0,
+   "commits": 5
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/Vela-1.0-Feedback-Data",
+   "used": 110045622,
+   "sha": "a6f904833a04ade667a89d2a8bf28a8b546dac5d",
+   "lfs_by_top_folder": {
+    "data/": {
+     "objects": 2,
+     "bytes": 110045622,
+     "pushed_first": "2026-09-14T04:02:23",
+     "pushed_last": "2026-09-14T04:02:23"
+    }
+   },
+   "branches": {
+    "main": "a6f904833a04ade667a89d2a8bf28a8b546dac5d"
+   },
+   "tags": 0,
+   "commits": 2
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/Vela-1.0-Base-Data",
+   "used": 94502011,
+   "sha": "6ea7f3b8ed8663082406c441b75ec6f8c5c40ba2",
+   "lfs_by_top_folder": {
+    "data/": {
+     "objects": 2,
+     "bytes": 94502011,
+     "pushed_first": "2026-09-14T04:02:29",
+     "pushed_last": "2026-09-14T04:02:29"
+    }
+   },
+   "branches": {
+    "main": "6ea7f3b8ed8663082406c441b75ec6f8c5c40ba2"
+   },
+   "tags": 0,
+   "commits": 2
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/Vela-1.0-Domain-Data",
+   "used": 86118201,
+   "sha": "462f25df17d60757e9be63ebd49951a0be95e35e",
+   "lfs_by_top_folder": {
+    "(root)": {
+     "objects": 1,
+     "bytes": 86118201,
+     "pushed_first": "2026-09-14T04:23:13",
+     "pushed_last": "2026-09-14T04:23:13"
+    }
+   },
+   "branches": {
+    "main": "462f25df17d60757e9be63ebd49951a0be95e35e"
+   },
+   "tags": 0,
+   "commits": 2
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/decision-2.0-eval-artifacts",
+   "used": 77527072,
+   "sha": "879adff549d5b359594c05ca6ed77a87e1448c67",
+   "lfs_by_top_folder": {
+    "m3/sealed-c1/": {
+     "objects": 1,
+     "bytes": 77527072,
+     "pushed_first": "2026-09-28T12:09:18",
+     "pushed_last": "2026-09-28T12:09:18"
+    }
+   },
+   "branches": {
+    "main": "879adff549d5b359594c05ca6ed77a87e1448c67"
+   },
+   "tags": 0,
+   "commits": 18
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/Vela-1.0-Modality-Data",
+   "used": 77264022,
+   "sha": "0d9968d71571e744c01ca1cc2e9288ae13114da7",
+   "lfs_by_top_folder": {
+    "(root)": {
+     "objects": 1,
+     "bytes": 77264022,
+     "pushed_first": "2026-09-14T04:23:18",
+     "pushed_last": "2026-09-14T04:23:18"
+    }
+   },
+   "branches": {
+    "main": "0d9968d71571e744c01ca1cc2e9288ae13114da7"
+   },
+   "tags": 0,
+   "commits": 2
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/Vela-1.0-PII-Data",
+   "used": 15240877,
+   "sha": "ac0397a0d8e5ddb90de8acaa445def58f0a52f27"
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/programming-cache-lora",
+   "used": 1192475,
+   "sha": "f8bc66b180dbfc33c12c5c3db80195f3431e9a31"
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/law-cache-lora",
+   "used": 1192474,
+   "sha": "775d9db56d48105528d2b4c8b056ce40db106d64"
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/medical-cache-lora",
+   "used": 596240,
+   "sha": "5601984cbedbe5484820c6c29844e600915d7568"
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/psychology-cache-lora",
+   "used": 596240,
+   "sha": "abd7446b0035d75b588af169dcd61d8cdd3bd10c"
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/multi-domain-cache-lora-L12",
+   "used": 596240,
+   "sha": "9e5adbae0dcbd451a0d7b6f2e5ecdf3d65b801d8"
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/dev2-release-staging",
+   "used": 581036,
+   "sha": "545377c01920c94d1758f7cc1e67678937ad7690"
+  },
+  {
+   "kind": "model",
+   "id": "llm-semantic-router/dev2-release-staging-06bm4",
+   "used": 0,
+   "sha": "55394bd8aed99457db33effa685bd2d9dbe8bc3f"
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/cache-embedding-test-sets",
+   "used": 0,
+   "sha": "b5f31a39d04509a09e13a23265f1d2a5aedf4c99"
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/PrivRoute-Bench",
+   "used": 0,
+   "sha": "3784746b251f4a866ee4c4ca3f4012dc6a86d4da"
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/Vela-1.0-FactCheck-Data",
+   "used": 0,
+   "sha": "e487703dea008c7443b470f5267593d3f750e93b"
+  },
+  {
+   "kind": "dataset",
+   "id": "llm-semantic-router/Vela-1.0-Hazard-Data",
+   "used": 0,
+   "sha": "8e40abc23b9d4a1594a32e81628d19c93830d37a"
+  }
+ ],
+ "collections": {
+  "Decision 2.0": [
+   "llm-semantic-router/DEV2.0-0.8B",
+   "llm-semantic-router/DEV2.0-0.6B",
+   "llm-semantic-router/DEV2.0-2B"
+  ]
+ }
+}

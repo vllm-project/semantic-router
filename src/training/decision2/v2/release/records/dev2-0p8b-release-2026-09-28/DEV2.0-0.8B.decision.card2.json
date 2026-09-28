@@ -1,0 +1,178 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "DEV2.0-0.8B",
+  "repo_id": "llm-semantic-router/DEV2.0-0.8B",
+  "identity": {
+    "model_sha256": "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b"
+  },
+  "report_sha256": "1f5cf33d85be3f4c8c8dea29654275e1e9939848a9d8d4d6d381c1152a8f0a11",
+  "paired_sha256": "fa62c29a1920dc8824b13ba5ccf1d8e9c4acaf68d8dad4e137cd1b6c84bc50bc",
+  "calibration": "none: raw model probabilities (temperature 1), no calibration.json; the CAL698 temperatures (calibration.json 9f76867d) were evaluated and rejected under the coordinator's 2026-09-28 23:15 UTC+8 rule",
+  "decided_by": "coordinator (Decision 2.0 program), under the user's full-autonomy mandate of 2026-09-28",
+  "prepared_by": "Decision 2.0 release engineering, DEV2.0-2B worker (0.8B card-only revision)",
+  "decided_utc": "2026-09-28T20:35:00Z",
+  "revision_kind": "card-only revision of the released DEV2.0-0.8B (7d08d0e1): same weights, same T = 1 package and every answer and score unchanged; only README.md, evaluation/* and MODEL_MANIFEST.json (builder.source_commit, README hash) change",
+  "action": "Publish the card-only revision of the private repository llm-semantic-router/DEV2.0-0.8B, already an item of the private 'Decision 2.0' collection (which holds DEV2.0-0.8B, DEV2.0-0.6B and DEV2.0-2B). The repository and the collection stay private.",
+  "approved_package": "The released T = 1 package of revision 7d08d0e12082ee6810a4221063342cefe45b6ac3 (MODEL_MANIFEST.json 2a19a65a...) rebuilt from the publishing commit with spec v2/release/specs/dev2-0p8b-card2.json: every model file must equal 7d08d0e1's; only README.md, evaluation/* and MODEL_MANIFEST.json may differ.",
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the Hub revision and package manifest it verified.",
+  "supersedes": {
+    "decision_sha256": "fedb18fa3634b1874b6508c75c4607fc59f3dd63961c4b43e0698b6faf378684",
+    "revision": "7d08d0e12082ee6810a4221063342cefe45b6ac3",
+    "manifest_sha256": "2a19a65a0141a8d71939bbf82025e299266db404cadd8b2bc712d1a992e98e7e",
+    "gate_sha256": "13398d428d4443ec589a3b89f4d95976286a31592b5ba9956117b970073ffd39",
+    "note": "the T = 1 calibration-only revision; its revision stays in the repository history"
+  },
+  "rationale": "Card-only revision adding two training-data disclosures. (a) Eval overlap-effect check (record v2/eval/records/m5-overlap-effects-2026-09-29.md, integration cae64f4e8): 33 of this model's training groups share topical phrases (no exact duplicates) with 11 scored evaluation items (9 media_ideology, 1 wiki_corpus, 1 mlx-diag); rescored without them or counting them all as errors, post-key v3 moves by at most 0.06 and no comparison or gate changes; no contamination signature. (b) 19 training rows were later quarantined in A7 v3 against development held-out slices (decoder M3 note, 2026-09-29 02:45; at most one could match an mlx-diag item). Weights, calibration (T = 1) and every answer are unchanged, so every figure of the T = 1 decision fedb18fa (v3 50.236, +7.69 [+3.65, +13.32] vs Eos 1.0; public 231 156; C1 event 1 40.24 vs 37.94) and the release gate still hold.",
+  "development_panel_check": {
+    "receipt": "v2/release/records/dev2-0p6b-release-2026-09-28/devcal/dev2-0p8b.json",
+    "receipt_sha256": "904afb3845e005010ec6a586d84ce105377a129ac19fb4d9fcbf1b7927dbbaf4",
+    "readout": "decoder-track development predictions of the E8F soup (identity 60356482, 8,192 tokens) with their CAL700 development temperatures undone (T = 1) and CAL698 applied, 0 answer changes (typed DEV 1,600 slots, CSS pilot 1,430 slots)",
+    "typed_dev": {
+      "raw": {
+        "brier": 0.26905552295284546,
+        "ece_10": 0.1279642993878181
+      },
+      "cal698": {
+        "brier": 0.3003285490451442,
+        "ece_10": 0.18011676821478864
+      }
+    },
+    "css_pilot": {
+      "raw": {
+        "median_task_brier_sum": 0.8339290493613282,
+        "median_task_ece_pmax_15": 0.12683458376639606
+      },
+      "cal698": {
+        "median_task_brier_sum": 0.8212476675565414,
+        "median_task_ece_pmax_15": 0.10852516361901819
+      }
+    },
+    "verdict": "reject CAL698: typed-DEV Brier and ECE both worsen"
+  },
+  "candidate": {
+    "recipe": "E8F: own Decision 1.0 Eos @363c4a5e, full fine-tuning on the M2 full mixture (A0s-r + v1 arms A1-A6h + all A7; 162,777 rows, 138.4M tokens, output d1dc33fc...), no teacher targets, seeds 20260926/27/28, uniform FP32 soup, no calibration (temperature 1), 16,384-token package",
+    "checkpoint": {
+      "repo_id": "llm-semantic-router/dev2-dec-staging",
+      "revision": "16c0929ac0df649d8223483e1adf419d78a647ed",
+      "folder": "m2/E8F-soup/checkpoint"
+    },
+    "calibration_sha256": null,
+    "max_input_tokens": 16384,
+    "loaded_parameters": 753446208,
+    "packaged_parameters": {
+      "backbone": 752393024,
+      "head": 1053184,
+      "residual": 0
+    },
+    "tier": "0.8B"
+  },
+  "gate_evidence": {
+    "post_key_v3": {
+      "candidate": 50.236,
+      "eos1_adopted": 42.547,
+      "delta": 7.69,
+      "ci95": [
+        3.65,
+        13.32
+      ],
+      "paired_sha256": "fa62c29a1920dc8824b13ba5ccf1d8e9c4acaf68d8dad4e137cd1b6c84bc50bc"
+    },
+    "vs_intern_decision_0p8b": {
+      "delta": 6.7,
+      "ci95": [
+        0.63,
+        10.35
+      ]
+    },
+    "vs_kev_0p8b": {
+      "delta": 7.02,
+      "ci95": [
+        1.33,
+        11.25
+      ]
+    },
+    "human_transfer": "not significantly below the tier leaders (H delta vs Intern +0.058 [-0.043, +0.119], vs Kev +0.050 [-0.041, +0.122]; vs Eos 1.0 -0.021 [-0.085, +0.088]); answer-based, unchanged",
+    "no_type_collapsed": "typed FINAL Choice .661, Noul .764, Score .268, none collapsed (eval record m4-dev2-08b-gates-and-c1-event1); answer-based, unchanged",
+    "jevarena_c1_event1": {
+      "candidate": 40.24,
+      "eos1": 37.94,
+      "delta": 2.31,
+      "ci95": [
+        0.29,
+        4.3
+      ],
+      "kev_0p8b": 39.06,
+      "intern_decision_0p8b": 34.58,
+      "items": 2874,
+      "note": "unchanged: the same weights give identical answers at temperature 1"
+    },
+    "public231": {
+      "candidate": 156,
+      "eos1": 142
+    },
+    "scored_run": {
+      "run": "m2-E8F-soup-nodeA at T = 1: the sealed CAL698 formal predictions (frozen runner, image f83b1d10..., node A GPU5) returned exactly to T = 1 by v2/release/retemper_predictions.py --undo (0 answer changes on typed 1,600, transfer 6,547, public 231 and mlx-diag 2,275 rows), adopted with same_panel adopt and sealed",
+      "report_sha256": "1f5cf33d85be3f4c8c8dea29654275e1e9939848a9d8d4d6d381c1152a8f0a11",
+      "seal_sha256": "522e813da74597418a9ef1a858e59e3d6f2839b7875c9cf29854182710ac73f1",
+      "predictions_sha256": {
+        "typed-final": "328c01294378c5a23bfc7fe560aa6d6715b70f65bf9e0104eabc3a7da0478426",
+        "css15": "995a0079601e71771336ddb663c2e31dd5910ff600e12c9f56b186be9841623d",
+        "public231": "8b030a6c0e01282a1e86b2e1355394c6cb84a0e0ac347af586e746481be392e8",
+        "mlx-diag": "5f333bc9bd20b0189d608ef5e1f232f26c443fc194ec5c7fb1ba1c7be48cf24d"
+      },
+      "paired_vs_adopted_eos1": {
+        "sha256": "fa62c29a1920dc8824b13ba5ccf1d8e9c4acaf68d8dad4e137cd1b6c84bc50bc",
+        "left_v3": 50.236,
+        "right_v3": 42.547,
+        "delta": 7.689,
+        "ci95": [
+          3.646,
+          13.316
+        ],
+        "replicates": 5000
+      },
+      "mlx_diag_score_sha256": "9c824e1dd695de659e525f1b38989bed0ad34bbc7c603dc178bc94bf2423eb57",
+      "probability_metrics_t1": {
+        "typed_brier": 0.25355869712809526,
+        "typed_ece_10": 0.10266916036296535,
+        "typed_by_type": {
+          "choice": {
+            "brier": 0.2232998440510428,
+            "ece_10": 0.08636307325793846
+          },
+          "noul": {
+            "brier": 0.20171442870045705,
+            "ece_10": 0.1336571180218999
+          },
+          "score": {
+            "brier": 0.41776494013747645,
+            "ece_10": 0.18483998073706442
+          }
+        },
+        "transfer_median_task_brier_sum": 0.6499635352175815,
+        "transfer_median_task_ece_pmax_15": 0.1635841262576665,
+        "public231_brier": 0.20042480910640192,
+        "public231_ece_pmax_15": 0.11361353621545191
+      }
+    }
+  },
+  "package_verification": {
+    "publish_run": "release.sh --upload --collect --already-collected into a new work directory from the publishing commit; receipts and gate.json recorded in v2/release/records/dev2-0p8b-release-2026-09-28/card2/"
+  },
+  "licence_decision": "apache-2.0, unchanged: every weight-lineage component is Apache-2.0 (own weights, Decision 1.0 Eos @363c4a5e, Qwen3.5-0.8B @2fc06364 text backbone and tokenizer). CC BY / CC BY-SA / MIT / OANC training data are credited in ATTRIBUTIONS.md. Kev-0.8B stays on the card with a note that its repository has no LICENSE file (card declares Apache-2.0); the XNLI-based (CC BY-NC) mlx-diag Score part and JPT-0.8B (CC BY-NC) stay off the card.",
+  "disclosures": [
+    "post-key same-panel label; public 231 is not the official sealed JevBench rank",
+    "typed Score 107 vs 120 of 400; never predicts Score level 0 on typed FINAL",
+    "human transfer H 0.440 vs 0.461; eight transfer tasks below Eos 1.0",
+    "mlx-diag non-English Noul 54.2% vs 59.2%",
+    "C1: below Eos 1.0 on Russian star ratings, tutoring-rapport Noul, Arabic multiple choice, long inputs and non-English overall",
+    "seed dependence: single seeds 49.78 / 47.36 / 41.08; released artifact is the three-seed soup",
+    "no teacher targets; training data families and licences",
+    "GPU-verified runtime; CPU not verified",
+    "calibration: raw probabilities (temperature 1); the CAL698 temperatures were evaluated and not adopted because they worsened calibration on out-of-distribution development data",
+    "evaluation familiarity: 33 training groups vs 11 evaluation items; v3 moves <= 0.06",
+    "19 training rows later quarantined in A7 v3 (development held-out overlap)"
+  ]
+}

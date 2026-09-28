@@ -1,0 +1,63 @@
+"""Read-only inventory of the org's Hub storage: repos, usedStorage, LFS objects, trees at every ref, commits.
+
+Runs on a node with the HF CLI's Python; prints one JSON document to stdout (no secrets).
+"""
+import json
+import sys
+from datetime import datetime, timezone
+
+from huggingface_hub import HfApi
+
+ORG = "llm-semantic-router"
+api = HfApi()
+doc = {"org": ORG, "utc": datetime.now(timezone.utc).isoformat(), "repos": [], "collections": []}
+
+
+def iso(d):
+    return d.isoformat() if hasattr(d, "isoformat") else d
+
+
+for kind, lister, getter in (("model", api.list_models, api.model_info),
+                             ("dataset", api.list_datasets, api.dataset_info),
+                             ("space", api.list_spaces, api.space_info)):
+    for info in lister(author=ORG, expand=["private"]):
+        full = getter(info.id, expand=["usedStorage", "private", "lastModified", "sha"])
+        row = {"kind": kind, "id": info.id, "private": bool(full.private),
+               "used": int(getattr(full, "used_storage", None) or 0),
+               "sha": getattr(full, "sha", None), "last_modified": iso(getattr(full, "last_modified", None))}
+        detail = kind != "space" and row["private"] and row["used"] > 50_000_000
+        if detail:
+            rtype = None if kind == "model" else kind
+            row["lfs"] = [{"filename": f.filename, "oid": f.file_oid, "size": f.size,
+                           "pushed_at": iso(f.pushed_at), "ref": f.ref}
+                          for f in api.list_lfs_files(info.id, repo_type=rtype)]
+            refs = api.list_repo_refs(info.id, repo_type=rtype)
+            row["refs"] = {"branches": {b.name: b.target_commit for b in refs.branches},
+                           "tags": {t.name: t.target_commit for t in refs.tags}}
+            trees = {}
+            for name, commit in list(row["refs"]["branches"].items()) + list(row["refs"]["tags"].items()):
+                entries = []
+                for e in api.list_repo_tree(info.id, repo_type=rtype, revision=commit, recursive=True):
+                    if getattr(e, "size", None) is None:
+                        continue
+                    lfs = getattr(e, "lfs", None)
+                    entries.append({"path": e.path, "size": e.size, "blob_id": e.blob_id,
+                                    "lfs_sha256": lfs.sha256 if lfs else None})
+                trees[name] = {"commit": commit, "files": entries}
+            row["trees"] = trees
+            row["commits"] = [{"id": c.commit_id, "created_at": iso(c.created_at), "title": c.title}
+                              for c in api.list_repo_commits(info.id, repo_type=rtype)]
+        doc["repos"].append(row)
+        print(f"{kind} {info.id} private={row['private']} used={row['used'] / 1e9:.2f}GB"
+              + (f" lfs={len(row['lfs'])}" if detail else ""), file=sys.stderr)
+
+for c in api.list_collections(owner=ORG, limit=100):
+    full = api.get_collection(c.slug)
+    doc["collections"].append({"slug": c.slug, "title": full.title, "private": full.private,
+                               "items": [{"type": i.item_type, "id": i.item_id} for i in full.items]})
+
+who = api.whoami()
+for org in who.get("orgs", []):
+    if org.get("name") == ORG:
+        doc["org_plan"] = {k: org.get(k) for k in ("plan", "canPay", "periodEnd") if k in org}
+json.dump(doc, sys.stdout, indent=1)

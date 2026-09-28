@@ -1,0 +1,260 @@
+"""Free stored LFS objects of Decision 2.0 staging model repos WITHOUT rewriting commit history.
+
+usage:
+  free_staging_lfs.py hash <node-label> <root> <relpath>...                       (stdlib only; prints JSON)
+  free_staging_lfs.py plan|apply <targets.json> <receipt.json> --node-label <label> [--copy-hashes <json>]...
+                      [--min-free-gb 40] [--cap-gb 100]
+
+targets.json lists staging folders in deletion order: repo, folder, category (released-duplicate | seed |
+superseded-soup | hold-nonbest | hold-best), node_copies [{label, root, strip_prefix?}] (the copy of repo path P
+is root/P with strip_prefix removed from the front of P),
+optional released (repo with the identical files) and records_naming_node_copy (required for objects pushed
+less than 2 hours ago). "hold-best" targets are used only while the projected free space is below --min-free-gb.
+
+An object is deleted only if
+  (a) every listed node copy exists and re-hashes NOW to the object's Hub SHA-256 (copies on this node are hashed
+      here; copies on other nodes come from `hash` output passed with --copy-hashes, computed minutes before);
+  (b) no kept path shares it: no path outside the chosen folders at any branch or tag of the same repo references
+      it, and no file with that SHA-256 exists at any branch or tag of any other org repo, except the target's
+      `released` repo for category released-duplicate (that identical copy is why the staging copy is redundant;
+      Hub LFS storage is per repository, and apply re-checks that the released copy still downloads);
+  (c) the repo is a Decision 2.0 staging model repo: name starts with "dev2-" and contains "staging", not a
+      DEV2.0-* repo, not in the "Decision 2.0" collection, never a dataset or space.
+apply calls permanently_delete_lfs_files(..., rewrite_history=False) and then verifies that the repo's commit list
+and refs are unchanged, that exactly the chosen objects are gone, that the deleted paths no longer download and that
+every same-SHA file elsewhere still downloads.
+"""
+import hashlib
+import json
+import sys
+import time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+ORG = "llm-semantic-router"
+PROTECTED = {f"{ORG}/DEV2.0-0.6B", f"{ORG}/DEV2.0-0.8B", f"{ORG}/DEV2.0-2B"}
+CATEGORIES = ("released-duplicate", "seed", "superseded-soup", "hold-nonbest", "hold-best")
+RECENT = timedelta(hours=2)
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for block in iter(lambda: fh.read(16 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+if sys.argv[1] == "hash":
+    label, root, rels = sys.argv[2], Path(sys.argv[3]), sys.argv[4:]
+    out = {"label": label, "root": str(root), "utc": now(), "sha256": {}, "size": {}}
+    for rel in rels:
+        p = root / rel
+        if p.is_file():
+            out["size"][rel] = p.stat().st_size
+            out["sha256"][rel] = sha256_file(p)
+    out["utc_done"] = now()
+    json.dump(out, sys.stdout, indent=1)
+    sys.exit(0)
+
+from huggingface_hub import HfApi, hf_hub_url  # noqa: E402
+from huggingface_hub.utils import build_hf_headers, get_session  # noqa: E402
+
+mode, targets_path, receipt_path = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
+assert mode in ("plan", "apply"), mode
+args = sys.argv[4:]
+
+
+def opt(name, default=None, many=False):
+    vals = [args[i + 1] for i, a in enumerate(args) if a == name]
+    return vals if many else (vals[-1] if vals else default)
+
+
+node_label = opt("--node-label")
+assert node_label, "--node-label is required"
+min_free = float(opt("--min-free-gb", "40")) * 1e9
+cap = float(opt("--cap-gb", "100")) * 1e9
+other_hashes = [json.load(open(p)) for p in opt("--copy-hashes", many=True)]
+targets = json.load(targets_path.open())
+api = HfApi()
+session = get_session()
+started = datetime.now(timezone.utc)
+
+
+def downloads(repo, path, revision, repo_type=None) -> int:
+    """HTTP status of a 1 KiB ranged GET of a file, redirects followed (200/206 = served)."""
+    url = hf_hub_url(repo, path, revision=revision, repo_type=repo_type)
+    headers = {**build_hf_headers(), "Range": "bytes=0-1023"}
+    try:
+        r = session.get(url, headers=headers, follow_redirects=True)
+    except TypeError:  # requests-based session
+        r = session.get(url, headers=headers, allow_redirects=True)
+    return r.status_code
+
+
+def private_total() -> int:
+    total = 0
+    for lister, getter in ((api.list_models, api.model_info), (api.list_datasets, api.dataset_info),
+                           (api.list_spaces, api.space_info)):
+        for info in lister(author=ORG, expand=["private"]):
+            if info.private:
+                total += int(getattr(getter(info.id, expand=["usedStorage"]), "used_storage", 0) or 0)
+    return total
+
+
+def repo_state(repo):
+    refs = api.list_repo_refs(repo)
+    heads = {**{f"branch:{b.name}": b.target_commit for b in refs.branches},
+             **{f"tag:{t.name}": t.target_commit for t in refs.tags}}
+    paths = {}  # oid -> set of "ref:path"
+    for name, commit in heads.items():
+        for e in api.list_repo_tree(repo, revision=commit, recursive=True):
+            lfs = getattr(e, "lfs", None)
+            if lfs:
+                paths.setdefault(lfs.sha256, set()).add(f"{name}:{e.path}")
+    return {"heads": heads, "commits": [c.commit_id for c in api.list_repo_commits(repo)],
+            "lfs": {f.file_oid: f for f in api.list_lfs_files(repo)}, "paths": paths,
+            "used": int(getattr(api.model_info(repo, expand=["usedStorage"]), "used_storage", 0) or 0)}
+
+
+# ---- (c) repo eligibility -------------------------------------------------------------------------------------
+collection_items = set()
+for c in api.list_collections(owner=ORG, limit=100):
+    if c.title.strip() == "Decision 2.0":
+        collection_items |= {i.item_id for i in api.get_collection(c.slug).items}
+for t in targets:
+    repo = t["repo"]
+    name = repo.split("/", 1)[1]
+    assert repo.startswith(ORG + "/") and name.startswith("dev2-") and "staging" in name, f"not a staging repo: {repo}"
+    assert repo not in PROTECTED and not name.startswith("DEV2.0"), f"released repo: {repo}"
+    assert repo not in collection_items, f"in the Decision 2.0 collection: {repo}"
+    assert t["category"] in CATEGORIES, t["category"]
+    api.model_info(repo)  # must exist as a MODEL repo (datasets/spaces are never touched)
+
+# ---- (b) same-SHA files anywhere in the org (all repo types, every branch and tag) ------------------------------
+state = {r: repo_state(r) for r in {t["repo"] for t in targets}}
+elsewhere = {}  # sha -> list of (repo_type, repo, ref, commit, path) over every org repo, target repos included
+candidate_shas = {oid for s in state.values() for oid in s["lfs"]}
+for rtype, lister in (("model", api.list_models), ("dataset", api.list_datasets), ("space", api.list_spaces)):
+    for info in lister(author=ORG):
+        refs = api.list_repo_refs(info.id, repo_type=rtype)
+        for ref in list(refs.branches) + list(refs.tags):
+            for e in api.list_repo_tree(info.id, repo_type=rtype, revision=ref.target_commit, recursive=True):
+                lfs = getattr(e, "lfs", None)
+                if lfs and lfs.sha256 in candidate_shas:
+                    elsewhere.setdefault(lfs.sha256, []).append((rtype, info.id, ref.name, ref.target_commit, e.path))
+
+# ---- selection in target order -------------------------------------------------------------------------------
+used_before = private_total()
+projected = used_before
+receipt = {"schema": "dev2-storage-free-staging-lfs/1", "mode": mode, "utc": started.isoformat(),
+           "node_label": node_label, "rewrite_history": False, "cap_bytes": int(cap),
+           "min_free_bytes": int(min_free), "private_used_before": used_before, "targets": []}
+chosen_by_repo = {}
+for t in targets:
+    repo, folder, st = t["repo"], t["folder"], state[t["repo"]]
+    entry = {k: t.get(k) for k in ("repo", "folder", "category", "released", "reason", "records_naming_node_copy")}
+    entry.update({"delete": [], "keep": [], "delete_bytes": 0})
+    receipt["targets"].append(entry)
+    if t["category"] == "hold-best" and cap - projected >= min_free:
+        entry["skipped"] = f"projected free {(cap - projected) / 1e9:.2f} GB >= {min_free / 1e9:.0f} GB: kept on the Hub"
+        continue
+    oids = sorted({o for o, ps in st["paths"].items() if any(p.split(":", 2)[2].startswith(folder) for p in ps)}
+                  | {o for o, f in st["lfs"].items() if f.filename.startswith(folder) and o not in st["paths"]})
+    released_shas = set()
+    if t.get("released"):
+        released_shas = {s.lfs.sha256 for s in api.model_info(t["released"], files_metadata=True).siblings if s.lfs}
+    for oid in oids:
+        f = st["lfs"].get(oid)
+        if f is None:
+            entry["keep"].append({"sha256": oid, "kept_because": "no stored object (already deleted)"})
+            continue
+        in_folder = sorted(p.split(":", 2)[2] for p in st["paths"].get(oid, ()) if p.split(":", 2)[2].startswith(folder))
+        rel = in_folder[0] if in_folder else f.filename
+        e = {"path": rel, "paths_in_folder": in_folder, "sha256": oid, "size": f.size,
+             "pushed_at": f.pushed_at.isoformat(), "node_copies": []}
+        why = []
+        for copy in t["node_copies"]:
+            strip = copy.get("strip_prefix", "")
+            node_rel = rel[len(strip):] if rel.startswith(strip) else None
+            path = Path(copy["root"]) / node_rel if node_rel else None
+            if node_rel is None:
+                got = None
+            elif copy["label"] == node_label:
+                got = sha256_file(path) if path.is_file() else None
+                e["node_copies"].append({"label": node_label, "path": str(path), "sha256": got, "hashed_utc": now()})
+            else:
+                src = next((h for h in other_hashes if h["label"] == copy["label"] and h["root"] == copy["root"]), None)
+                got = src["sha256"].get(node_rel) if src else None
+                e["node_copies"].append({"label": copy["label"], "path": str(path), "sha256": got,
+                                         "hashed_utc": src["utc"] if src else None})
+            if got is None:
+                why.append(f"no node copy on {copy['label']}")
+            elif got != oid:
+                why.append(f"node copy on {copy['label']} differs")
+        outside = sorted(p for p in st["paths"].get(oid, ()) if not p.split(":", 2)[2].startswith(folder))
+        if outside:
+            why.append(f"shared with kept path(s) in the same repo {outside[:3]}")
+        foreign = [x for x in elsewhere.get(oid, []) if x[1] != repo and not (
+            t["category"] == "released-duplicate" and x[1] == t.get("released"))]
+        if foreign:
+            why.append(f"same SHA-256 kept in {sorted({x[1] for x in foreign})[:4]}")
+        if t["category"] == "released-duplicate" and oid not in released_shas:
+            why.append(f"not in {t.get('released')} at main")
+        if started - f.pushed_at < RECENT and not t.get("records_naming_node_copy"):
+            why.append("pushed < 2 h ago and no record names the node copy")
+        e["same_sha_elsewhere"] = [list(x) for x in elsewhere.get(oid, []) if x[1] != repo]
+        if why:
+            entry["keep"].append({**e, "kept_because": "; ".join(why)})
+        else:
+            entry["delete"].append(e)
+            entry["delete_bytes"] += f.size
+            chosen_by_repo.setdefault(repo, {})[oid] = f
+    projected -= entry["delete_bytes"]
+    print(f"{repo} {folder} [{t['category']}]: delete {len(entry['delete'])} ({entry['delete_bytes'] / 1e9:.3f} GB), "
+          f"keep {len(entry['keep'])} {[k['kept_because'] for k in entry['keep']]}{' ' + entry.get('skipped', '')}",
+          file=sys.stderr)
+receipt["projected_private_used_after"] = projected
+receipt["repo_state_before"] = {r: {"heads": s["heads"], "commits": s["commits"], "used": s["used"],
+                                    "lfs_objects": len(s["lfs"])} for r, s in state.items()}
+
+# ---- apply + verification ------------------------------------------------------------------------------------
+if mode == "apply":
+    for repo, objs in chosen_by_repo.items():
+        api.permanently_delete_lfs_files(repo, list(objs.values()), rewrite_history=False)
+    receipt["deleted_utc"] = now()
+    time.sleep(20)
+    checks = {}
+    for repo, s in state.items():
+        after = repo_state(repo)
+        gone = set(s["lfs"]) - set(after["lfs"])
+        chosen = set(chosen_by_repo.get(repo, {}))
+        checks[repo] = {
+            "commits_unchanged": after["commits"] == s["commits"],
+            "heads_unchanged": after["heads"] == s["heads"],
+            "objects_gone_equal_chosen": gone == chosen,
+            "unexpected_gone": sorted(gone - chosen), "chosen_still_listed": sorted(chosen - gone),
+            "used_after": after["used"], "lfs_objects_after": len(after["lfs"]),
+            "deleted_paths_http": {}, "same_sha_elsewhere_http": {}}
+        for oid, f in chosen_by_repo.get(repo, {}).items():
+            for p in sorted(s["paths"].get(oid, ())):
+                kind, name, path = p.split(":", 2)
+                checks[repo]["deleted_paths_http"][p] = downloads(repo, path, s["heads"][f"{kind}:{name}"])
+            for rtype, other, ref, commit, path in elsewhere.get(oid, []):
+                if other == repo:
+                    continue
+                code = downloads(other, path, commit, None if rtype == "model" else rtype)
+                checks[repo]["same_sha_elsewhere_http"][f"{other}@{commit[:12]}:{path}"] = code
+    receipt["verification"] = checks
+    receipt["private_used_after"] = private_total()
+    receipt["ok"] = all(c["commits_unchanged"] and c["heads_unchanged"] and c["objects_gone_equal_chosen"]
+                        and all(v not in (200, 206) for v in c["deleted_paths_http"].values())
+                        and all(v in (200, 206) for v in c["same_sha_elsewhere_http"].values())
+                        for c in checks.values())
+json.dump(receipt, receipt_path.open("x"), indent=1, default=str)
+print(json.dumps({k: receipt.get(k) for k in ("mode", "private_used_before", "projected_private_used_after",
+                                               "private_used_after", "ok")}))
