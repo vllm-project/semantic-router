@@ -29,6 +29,12 @@
   "license": "Apache-2.0",
   "redistribution": "permitted with the licence notice; messages and human rating means unchanged, levels derived as documented"
  },
+ "a7:sentimix_hinglish_train": {
+  "attribution": "Patwa et al., SemEval-2020 Task 9: Overview of Sentiment Analysis of Code-Mixed Tweets (SemEval 2020); Zenodo 10.5281/zenodo.3974927 Semeval_2020_task9_data.zip, Hinglish train split",
+  "evidence": "https://zenodo.org/records/3974927 (record licence cc-by-4.0)",
+  "license": "CC-BY-4.0",
+  "redistribution": "permitted with attribution; tweets rebuilt by joining the released tokens with single spaces; labels unchanged"
+ },
  "dec10:banking77_train": {
   "attribution": "Casanueva et al., Efficient Intent Detection with Dual Sentence Encoders (2020); PolyAI-LDN/task-specific-datasets@57ec275d8078af65b7731c2a98be812d844a6d6b banking_data train",
   "evidence": "https://github.com/PolyAI-LDN/task-specific-datasets/tree/57ec275d8078af65b7731c2a98be812d844a6d6b/banking_data; Decision 1.0 Sol/Nox/Lux ATTRIBUTIONS.md",

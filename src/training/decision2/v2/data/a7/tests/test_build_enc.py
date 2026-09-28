@@ -70,6 +70,27 @@ class SourceRowsTest(unittest.TestCase):
         self.assertEqual(rows[0]["options"][2]["key"], "2")
         self.assertTrue(rows[0]["state"].startswith("Message: "))
 
+    def test_sentimix_blocks_become_tweets(self) -> None:
+        import zipfile
+
+        conll = (
+            "meta\t1\tpositive\nbahut\tHin\nacha\tHin\n:)\tO\n\n"
+            "meta\t2\tneutral\nkal\tHin\nmilte\tHin\n\n"
+            "meta\t3\tEng\nbroken\tEng\n\n"
+            "meta\t4\tnegative\nbahut\tHin\nacha\tHin\n:)\tO\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "sentimix.zip")
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr(build_enc.SENTIMIX_MEMBER, conll)
+            rows, skipped = build_enc.sentimix_rows(_entry(path, "sentimix"))
+        self.assertEqual([r["state"] for r in rows], ["Message: kal milte"])
+        self.assertEqual(rows[0]["language"], "hi-en")
+        self.assertEqual(rows[0]["label"], 1)
+        self.assertEqual(
+            skipped, {"empty_or_unknown_label": 1, "conflicting_labels": 2}
+        )
+
     def test_sts_rows_exclude_data_track_pairs_and_their_sentences(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             klue = Path(tmp, "klue.json")

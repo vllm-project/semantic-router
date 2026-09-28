@@ -1,7 +1,8 @@
-"""Build the A7 encoder-family sub-arms (`a7-enc10-v2`) from pinned human-labelled sources.
+"""Build the A7 encoder-family sub-arms (`a7-enc10-v3`) from pinned human-labelled sources.
 
-Rules: `records/a7-enc10-prereg-2026-09-28.md` and its amendment 1 (A7x
-distractors from the same scenario only). States are rendered from the
+Rules: `records/a7-enc10-prereg-2026-09-28.md` with amendment 1 (A7x
+distractors from the same scenario only) and amendment 2 (SentiMix Hinglish in
+A7s). States are rendered from the
 upstream files; instructions and option descriptions are the fixed English
 templates below; labels are the publishers' human labels. No 1.0 roster text is
 read. Writes prelim/<sub>.{train,aho}.jsonl and a count-only build manifest for
@@ -18,6 +19,7 @@ import io
 import json
 import math
 import tarfile
+import zipfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -36,7 +38,7 @@ from v2.data.a7.build_a7 import (
 from v2.data.freeze import canonical_jsonl
 from v2.data.textnorm import normalize
 
-VERSION = "a7-enc10-v2"
+VERSION = "a7-enc10-v3"
 ENC_SUB_ARMS = ("A7q", "A7k", "A7s", "A7x")
 TIE_BAND = 0.1
 BALANCE_RATIO = 1.2
@@ -382,23 +384,19 @@ def sts_rows(
 # --- A7s: AfriSenti Swahili ----------------------------------------------------
 
 
-def afrisenti_rows(
+def sentiment_rows(
+    items: Sequence[tuple[str, str, str]],
+    *,
+    family: str,
+    source: str,
+    language: str,
     entry: Mapping[str, Any],
-) -> tuple[list[dict[str, Any]], collections.Counter]:
-    reader = csv.DictReader(
-        io.StringIO(read_verified(entry).decode("utf-8")), delimiter="\t"
-    )
-    skipped: collections.Counter[str] = collections.Counter()
+    skipped: collections.Counter,
+) -> list[dict[str, Any]]:
+    """(upstream id, text, label) -> A7s Score rows; conflicts and repeats dropped."""
     labels_by_text: dict[str, set[str]] = collections.defaultdict(set)
-    items = []
-    for item in reader:
-        text = (item.get("tweet") or "").strip()
-        label = (item.get("label") or "").strip().lower()
-        if not text or label not in SENTIMENT_LABELS:
-            skipped["empty_or_unknown_label"] += 1
-            continue
+    for _, text, label in items:
         labels_by_text[normalize(text)].add(label)
-        items.append((item["ID"], text, label))
     rows, seen = [], set()
     for upstream_id, text, label in items:
         key = normalize(text)
@@ -412,11 +410,11 @@ def afrisenti_rows(
         rows.append(
             score_row(
                 sub_arm="A7s",
-                family="afrisenti_sw",
-                source="a7:afrisenti_sw_train",
+                family=family,
+                source=source,
                 upstream_id=upstream_id,
-                group=f"afrisenti_sw:{_sha(key)[:24]}",
-                language="sw",
+                group=f"{family}:{_sha(key)[:24]}",
+                language=language,
                 state=f"Message: {text}",
                 instructions=SENTIMENT_INSTRUCTIONS,
                 levels=SENTIMENT_LEVELS,
@@ -425,6 +423,75 @@ def afrisenti_rows(
                 entry=entry,
             )
         )
+    return rows
+
+
+def afrisenti_rows(
+    entry: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], collections.Counter]:
+    reader = csv.DictReader(
+        io.StringIO(read_verified(entry).decode("utf-8")), delimiter="\t"
+    )
+    skipped: collections.Counter[str] = collections.Counter()
+    items = []
+    for item in reader:
+        text = (item.get("tweet") or "").strip()
+        label = (item.get("label") or "").strip().lower()
+        if not text or label not in SENTIMENT_LABELS:
+            skipped["empty_or_unknown_label"] += 1
+            continue
+        items.append((item["ID"], text, label))
+    rows = sentiment_rows(
+        items,
+        family="afrisenti_sw",
+        source="a7:afrisenti_sw_train",
+        language="sw",
+        entry=entry,
+        skipped=skipped,
+    )
+    return rows, skipped
+
+
+SENTIMIX_MEMBER = "Semeval_2020_task9_data/Hinglish/Hinglish_train_14k_split_conll.txt"
+
+
+def sentimix_rows(
+    entry: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], collections.Counter]:
+    """Amendment 2: SentiMix Hinglish training tweets (CoNLL blocks) for A7s."""
+    with zipfile.ZipFile(io.BytesIO(read_verified(entry))) as archive:
+        text = archive.read(SENTIMIX_MEMBER).decode("utf-8")
+    skipped: collections.Counter[str] = collections.Counter()
+    items: list[tuple[str, str, str]] = []
+    header: list[str] | None = None
+    tokens: list[str] = []
+
+    def close() -> None:
+        if header is None:
+            return
+        label = header[2].strip().lower() if len(header) > 2 else ""
+        if label not in SENTIMENT_LABELS or not tokens:
+            skipped["empty_or_unknown_label"] += 1
+        else:
+            items.append((header[1], " ".join(tokens), label))
+
+    for line in text.splitlines():
+        if line.startswith("meta\t"):
+            close()
+            header, tokens = line.split("\t"), []
+        elif line.strip() and header is not None:
+            token = line.split("\t")[0]
+            if token:
+                tokens.append(token)
+    close()
+    rows = sentiment_rows(
+        items,
+        family="sentimix_hinglish",
+        source="a7:sentimix_hinglish_train",
+        language="hi-en",
+        entry=entry,
+        skipped=skipped,
+    )
     return rows, skipped
 
 
@@ -568,6 +635,7 @@ def build(
         ("A7q", lambda: oasst_rows(sources["oasst1"])),
         ("A7k", lambda: sts_rows([sources["klue_sts"], sources["jsts"]], excluded_ids)),
         ("A7s", lambda: afrisenti_rows(sources["afrisenti_sw"])),
+        ("A7s-sentimix", lambda: sentimix_rows(sources["sentimix"])),
         ("A7x", lambda: massive_rows(sources["massive"])),
     ]
     for name, make in builders:
