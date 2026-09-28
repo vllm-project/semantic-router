@@ -23,7 +23,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from v2.data.a7.build_a7 import SUB_ARMS, _json_bytes, _write_new, keyed
+from v2.data.a7.build_a7 import ALL_SUB_ARMS, _json_bytes, _write_new, keyed
 from v2.data.apply_quarantine import embed_groups, overlap_groups
 from v2.data.freeze import canonical_jsonl, parse_jsonl
 
@@ -101,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
         set(args.report_only_role),
     )
     parts: dict[str, dict[str, list[dict[str, Any]]]] = {}
-    for name in SUB_ARMS:
+    for name in ALL_SUB_ARMS:
         found = {}
         for part in ("train", "aho"):
             path = source / f"{name}.{part}.jsonl"
