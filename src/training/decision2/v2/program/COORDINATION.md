@@ -185,6 +185,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-28 23:40 — From eval (integration `b99032a66`):
+  - **Node-B comparators re-collected on the kernel-equipped image `dbe5f32b`** (replacements, disclosed; old runs kept as
+    records): AutoJev-27B 72.133 / public 201 (was 72.310 / 200; −0.18 [−0.69, +0.48]); Eikos-27B 69.290 / 212; Jebadiah
+    65.472 / 176; Lux1 node B now identical to node A (0 of 8,778 answers differ; the old image differed in 43).
+    **27B release threshold is now >= 64.9** (90% of AutoJev-27B's 72.13).
+  - **Comparability rule (supersedes every earlier "same-node" rule):** a candidate and its comparator must run on the SAME
+    IMAGE (kernel-equipped, `dbe5f32b` or an attested equivalent with FLA + causal-conv1d) with the SAME FROZEN, persisted
+    autotune cache. With that, nodes A and B give identical answers, so formal runs may use either node.
+  - DEV2.0-0.6B gates pass: human transfer vs GLiNER2.5-Decide +0.039 [−0.013, +0.167], vs Bosun +0.137 [+0.010, +0.192];
+    v3 vs Bosun +5.02 [−1.35, +7.80], vs Lex +12.52 [+3.47, +18.12]; no type collapsed (Choice .319, Noul .552, Score .333).
+    Disclose: typed accuracy significantly below Bosun (−0.038); Noul only narrowly above chance; Score leans on levels 0
+    and 4.
+  - C1 event 2 is prepared (independence recheck over 9.9M rows found no C1 source; smoke-before-decrypt script
+    `v2/eval/sealed/event2.sh`); batch DEV2.0-0.6B + Kai1, Lex, Bosun, GLiNER2.5-Decide. The coordinator confirms it
+    once the 0.6B calibration decision fixes the final package identity.
+
 - 2026-09-28 23:15 — **CALIBRATION RULE AMENDED (supersedes the 22:30 rule).** For DEV2.0-0.6B the CAL698 per-type
   temperatures (Choice 0.592 / Noul 0.588 / Score 0.345) improved CAL698 itself (ECE .079 → .031) but worsened every
   evaluation panel (typed ECE .118 → .191, human-transfer median ECE .070 → .120, public 231 ECE .116 → .144) with zero
@@ -821,11 +837,29 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
   `dbe5f32b`. Plan: re-collect the three 27B comparators plus Lux1 once on `dbe5f32b`, about 1.3 GPU-h. **Request node
   B GPU5 or GPU6 from the ~27B track before the next 27B formal comparison**
   (`v2/eval/records/m4-nodeB-revalidation-plan-2026-09-28.md`).
-- **Node-B re-validation on the kernel image `dbe5f32b` (2026-09-28 22:45 UTC+8, node B GPU7 shared with the data
-  track; interim, AutoJev first).** **New 27B comparator: AutoJev-27B node-B run `m4/nodeB-kernel/autojev27`, v3
-  72.133 (T .8869, H .5867), public 201** (disclosed replacement for `m2/n2-autojev27-nodeB` 72.310/200 on the
-  kernel-less image `ce895822`). Paired new vs old −0.18 [−0.69, +0.48], vs node A −0.18 [−0.49, +0.40]: a tie.
-  With the kernel, typed FINAL is **identical to node A** (0/2,000 answers differ; old image 11); CSS still differs in
-  27/6,547 slots (old 37), public 2/231. 27B threshold: **≥ 64.9** (90% of 72.13; line above updated). Predictions:
-  node A `/data/dev2/runs/eval/m4/nodeB-kernel/autojev27` and private eval-artifacts `m4/nodeB-kernel/autojev27`
-  (commit `742bdf50`). Eikos, Jebadiah and the Lux1 check follow; the final record follows with them.
+- **Node-B re-validation on the kernel image `dbe5f32b` (2026-09-28 23:30 UTC+8; node B GPU7 shared with the data
+  track; record `v2/eval/records/m4-nodeB-kernel-06b-gates-c1e2prep-2026-09-28.md`).** One smoke run and one run each,
+  1.33 GPU-h.
+  - **New node-B 27B comparators (disclosed replacements; old runs kept as records):** AutoJev-27B
+    `m4/nodeB-kernel/autojev27` **72.133** / public 201 (was 72.310 / 200); Eikos-27B `…/eikos27b` 69.290 / 212 (was
+    69.201); Jebadiah-27B `…/jebadiah27b` 65.472 / 176 (was 65.472 / 177). New vs old are ties (AutoJev −0.18
+    [−0.69, +0.48]). **27B threshold: ≥ 64.9** (90% of 72.13; line above updated; node A's 72.31 is a tie).
+  - **The kernel explains the node A/B differences.** Lux1 on `dbe5f32b` with node A's frozen autotune cache is
+    **bit-identical to node A** (0/8,778 answers, drift 0.0; the old image differed in 43). AutoJev's typed FINAL now
+    matches node A exactly (old 11 differences); the remaining 27 CSS + 2 public slots fit fresh autotuning. The
+    "same-node" rule can become a **same-image + same frozen autotune cache** rule (the earlier hardware attribution was
+    wrong).
+  - Runner (`e9cd637b1`, merged with the other track's `--shared-lease`): end-of-job lines now go to the named lease
+    entry (a bug had appended two lines to the data track's GPU7 `owner`, since overwritten by them); `--shared` /
+    `--shared-lease NAME` skip the idle check and record the co-tenancy in `GPU-TIME.json`.
+- **DEV2.0-0.6B gate checks (`m4-t-a7-soup`, v3 43.54).** Human transfer vs GLiNER2.5-Decide +0.039 [−0.013, +0.167],
+  vs Bosun **+0.137 [+0.010, +0.192]**: not below either. v3 vs GLiNER2.5 +1.02 [−1.77, +7.80], vs Bosun +5.02
+  [−1.35, +7.80], vs Kai1 **+7.60 [+4.70, +10.76]**, vs Lex **+12.52 [+3.47, +18.12]**. **No candidate type collapsed**
+  (Choice .319, Noul .552, Score .333). Disclose: typed accuracy below Bosun (−0.038 [−0.068, −0.010]); Noul is
+  narrow (lower bound .518, 78% one side); Score leans on levels 0 and 4. Peers: Kai1 Noul, GLiNER2.5 Score, Bosun
+  Score and Lex Choice/Noul are collapsed.
+- **C1 event 2: prepared, not run.** Recheck vs `9bb9790b` / `780d2743` (**`aj-sl`**) / `12912429` and local pools
+  (`m3a2`, new `m3b`): no C1 source in 9.92M rows; 0 OVERLAP, 9 weak REVIEW (3 new, Lux-XL prompt pools, containment
+  ≤ 0.21, no exact 8-token span): **no v1.2**. Script `v2/eval/sealed/event2.sh <gpu> <mirror> [lease-name]` (a
+  pre-decryption smoke for every model); batch DEV2.0-0.6B + Kai1, Lex, Bosun, GLiNER2.5-Decide, verified on node
+  A mirror `b99032a66`. **Waiting on: batch confirmation and a node-A GPU (~0.1 GPU-h).**
