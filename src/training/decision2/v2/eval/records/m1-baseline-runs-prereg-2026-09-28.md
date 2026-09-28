@@ -142,6 +142,12 @@ relaunched once as Q2b with no other change.
 node A, adapter `this-that-1.2` (native Choice; Noul/Score are option projections;
 1,536-token state overflow invalid); formal + dev + mlx-diag; same rules.
 
+**A4.3 (Q5, before launch).** `michaljach/jet@fbc3d2da` (v6.2.0, merged BF16
+Qwen3_5ForCausalLM; every release file checked against `release-manifest.json`), 4B /
+node A, adapter `jet-v6.2` (`v2/eval/native_jet.py`, bundled `Jet().decide`, release
+calibration temperatures; native 16,384-token rejection invalid; release targets CUDA,
+run as `unvalidated_rocm`); formal + dev + mlx-diag; ≤ 0.5 GPU-hour; same rules.
+
 ## Reused results (identity verified, no new GPU time)
 
 Recorded predictions were located by SHA-256, adopted, sealed and re-scored with
