@@ -112,8 +112,9 @@ def convert(
         kind = row["task_type"]
         stats[kind]["rows"] += 1
         answer = receipt["answers"].get("decision")
-        if answer is None:
+        if answer is None or "error" in answer:
             stats[kind]["no_native_answer"] += 1
+            stats[kind][f"no_answer:{(answer or {}).get('error', 'null')}"] += 1
             continue
         probs = teacher_distribution(row, answer)
         ordered = [probs[option["key"]] for option in row["options"]]
@@ -155,6 +156,11 @@ def convert(
             "rows": counts["rows"],
             "targets": n,
             "no_native_answer": counts["no_native_answer"],
+            "no_answer_reasons": {
+                key.split(":", 1)[1]: value
+                for key, value in sorted(counts.items())
+                if key.startswith("no_answer:")
+            },
             "argmax_accuracy_vs_gold": (
                 round(counts["argmax_correct"] / n, 4) if n else None
             ),
@@ -176,6 +182,8 @@ def repeat_max_abs_diff(
     worst, compared, mismatched = 0.0, 0, 0
     for row in repeat:
         a, b = first[row["id"]]["answers"]["decision"], row["answers"]["decision"]
+        a = None if a is None or "error" in a else a
+        b = None if b is None or "error" in b else b
         if (a is None) != (b is None):
             mismatched += 1
             continue
