@@ -60,7 +60,7 @@
     "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
     "paired": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup/PAIRED-vs-kai1.json",
     "calibration_text": "raw model probabilities, exactly as evaluated (no post-hoc temperature was fitted); the score table reports their Brier score and 10-bin ECE on the typed decisions.",
-    "requirements_text": "Tested with Python 3.12, PyTorch 2.12 and Transformers 5.17 on one ROCm GPU (BF16 backbone, FP32 head), where answers match the evaluated predictions, and on CPU (FP32), where probabilities can differ slightly in the last digits.",
+    "requirements_text": "Tested with Python 3.12, PyTorch 2.12 and Transformers 5.17 on one ROCm GPU (BF16 backbone, FP32 head), where answers match the evaluated predictions, and on CPU (FP32), where probabilities can differ from the GPU results by a few thousandths. Transformers 5.17 prints a Mistral tokenizer-regex warning when it finds the package's root `config.json`; it does not change tokenization and can be ignored.",
     "text": {
       "tagline": "A compact decision model for routing choices, yes/no checks and rubric scores over one state: native System One Choice, Noul and Score answers with probabilities, no chat API.",
       "architecture": "The 28-layer Qwen3-0.6B text backbone (causal attention) reads the state, the question and every supplied candidate once; a shared candidate head scores the candidates against a global query and returns probabilities without generating text.",
