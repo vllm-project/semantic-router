@@ -879,7 +879,11 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--github-output", type=Path)
     plan.set_defaults(func=command_plan)
     plan_all = subparsers.add_parser("plan-all")
-    plan_all.add_argument("--shards", type=int, default=3)
+    plan_all.add_argument(
+        "--shards",
+        type=int,
+        help="group recipes per source into this many shards instead of one job per recipe",
+    )
     plan_all.add_argument("--github-output", type=Path)
     plan_all.set_defaults(func=command_plan_all)
     sources = subparsers.add_parser("sources")
