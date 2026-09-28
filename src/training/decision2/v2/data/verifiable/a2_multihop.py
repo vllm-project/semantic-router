@@ -385,6 +385,142 @@ def a4_scenario(rng: random.Random, lang: str) -> A4Scenario:
     )
 
 
+V2_LURES = {
+    "en": {
+        "city": (
+            "{p} often travels to {v} to see clients.",
+            "{p} grew up in {v}.",
+            "{p}'s mentor is based in {v}.",
+        ),
+        "floor": (
+            "{p} often books the meeting room on the {v}.",
+            "{p}'s mentor sits on the {v}.",
+            "{p} runs a weekly workshop on the {v}.",
+        ),
+    },
+    "zh": {
+        "city": ("{p}经常去{v}拜访客户。", "{p}是在{v}长大的。", "{p}的导师常驻{v}。"),
+        "floor": (
+            "{p}经常预订{v}的会议室。",
+            "{p}的导师在{v}办公。",
+            "{p}每周在{v}主持一次培训。",
+        ),
+    },
+}
+
+
+def a4v2_plan(rng: random.Random, lang: str, turn: int) -> core.A4v2Plan:
+    """Eight teams plus three person-linked lures; each candidate value appears exactly once."""
+    hop = rng.choice(HOPS)
+    lex, t = LEX[lang], T[lang]
+    kind = "floor" if hop.startswith("floor") else "city"
+    co = core.company(rng, lang, CO_SUFFIX[lang])
+    teams = rng.sample(lex["teams"], 8)
+    if kind == "floor":
+        values = [floor_text(f, lang) for f in rng.sample(range(2, 21), 11)]
+    else:
+        values = rng.sample(lex["cities"], 11)
+    lures, pool = values[:3], values[3:]
+    building_of: dict[str, str] = {}
+    city_of: dict[str, str] = {}
+    if hop == "city3":
+        buildings = list(lex["buildings"])
+        rng.shuffle(buildings)
+        city_of = dict(zip(buildings, pool))
+        building_of = {
+            team: buildings[i] if i < len(buildings) else rng.choice(buildings)
+            for i, team in enumerate(teams)
+        }
+        value_of = {team: city_of[building_of[team]] for team in teams}
+    else:
+        value_of = dict(zip(teams, pool))
+    projects = (
+        dict(zip(rng.sample(lex["projects"], 8), teams)) if hop == "floor3" else {}
+    )
+    target = core.people(rng, lang, 1)[0]
+    others = core.people(rng, lang, rng.randint(3, 6), exclude=[target])
+    other_team = {p: rng.choice(teams) for p in others}
+    other_project = (
+        {p: rng.choice(sorted(projects)) for p in others} if projects else {}
+    )
+    lure_lines = [
+        template.format(p=target, v=v)
+        for template, v in zip(V2_LURES[lang][kind], lures)
+    ]
+    order_seed = rng.getrandbits(64)
+    style = rng.randrange(2)
+    ask = t["q_floor" if kind == "floor" else "q_city"].format(p=target)
+    prop = t["n_floor" if kind == "floor" else "n_city"]
+
+    def render(team: str) -> core.A4v2Render:
+        lines: list[str] = []
+        if projects:
+            project_of_team = {v: k for k, v in projects.items()}
+            lines.append(t["assign"][0].format(p=target, j=project_of_team[team]))
+            lines += [t["assign"][0].format(p=p, j=j) for p, j in other_project.items()]
+            lines += [t["run"][0].format(j=j, t=tm) for j, tm in projects.items()]
+        else:
+            lines += [
+                t["member"][style].format(p=p, t=tm)
+                for p, tm in [(target, team), *other_team.items()]
+            ]
+        for tm in teams:
+            if hop == "city3":
+                lines.append(t["building"][style].format(t=tm, b=building_of[tm]))
+            elif kind == "floor":
+                lines.append(t["floor"][style].format(t=tm, f=value_of[tm]))
+            else:
+                lines.append(t["city"][style].format(t=tm, c=value_of[tm]))
+        if hop == "city3":
+            lines += [
+                t["bcity"][style].format(b=b, c=c)
+                for b, c in city_of.items()
+                if b in building_of.values()
+            ]
+        lines += lure_lines
+        random.Random(order_seed).shuffle(lines)
+        pad = core.filler(
+            rng, lang, core.words(" ".join(lines), lang) + 20, [target, *others, co]
+        )
+        sec = core.SECTION[lang]
+        state = core.compose(
+            t["title"].format(co=co),
+            [
+                (sec["background"], [t["intro"].format(co=co), *pad[0]]),
+                (sec["record"], lines),
+                (sec["notes"], pad[1]),
+            ],
+            lang,
+        )
+        facts = {
+            "hop": hop,
+            "target": target,
+            "target_team": team,
+            "value_of": value_of,
+            "building_of": building_of,
+            "city_of": city_of,
+            "projects": projects,
+            "lures": lures,
+            "answer": value_of[team],
+        }
+        return core.A4v2Render(
+            state, facts, hop, f"{hop}_v2", ask, lambda v: prop.format(p=target, v=v)
+        )
+
+    present = sorted(set(value_of.values()), key=lambda v: rng.random())
+    alternatives = []
+    for gold in present:
+        team = rng.choice([tm for tm in teams if value_of[tm] == gold])
+        others_present = [v for v in present if v != gold] + lures
+        rand = rng.sample(others_present, 3)
+        while set(rand) == set(lures):
+            rand = rng.sample(others_present, 3)
+        alternatives.append(
+            core.A4v2Alternative(0, gold, list(lures), rand, lambda tm=team: render(tm))
+        )
+    return core.A4v2Plan(False, alternatives)
+
+
 # ---------------------------------------------------------------- oracle 2
 
 
