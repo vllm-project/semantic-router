@@ -17,11 +17,23 @@ from typing import Any
 
 from .run import digest, file_digest, load_prompts, local_revision, synchronize
 
-MODEL_ID = "Hanno-Labs/bosun-v3.1-0.6b"
-MODEL_REVISION = "1d8b6f9611f9b64b514ce8b57cd86398fbc31a3b"
-BASE_ID = "Qwen/Qwen3-0.6B"
-BASE_REVISION = "c1899de289a04d12100db370d81485cdf75e47ca"
-ADAPTER_VERSION = "bosun-v31-06b-native-predict-v1"
+VARIANTS = {
+    "0.6b": (
+        "Hanno-Labs/bosun-v3.1-0.6b",
+        "1d8b6f9611f9b64b514ce8b57cd86398fbc31a3b",
+        "Qwen/Qwen3-0.6B",
+        "c1899de289a04d12100db370d81485cdf75e47ca",
+        "bosun-v31-06b-native-predict-v1",
+    ),
+    "1.7b": (
+        "Hanno-Labs/bosun-v3.1-1.7b",
+        "1d8dc82a20e4a32ed60927a47272d6efff48eed2",
+        "Qwen/Qwen3-1.7B",
+        "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
+        "bosun-v31-17b-native-predict-v1",
+    ),
+}
+MODEL_ID, MODEL_REVISION, BASE_ID, BASE_REVISION, ADAPTER_VERSION = VARIANTS["0.6b"]
 
 
 def _manifest_files(model_path: Path) -> dict[str, str]:
@@ -46,16 +58,21 @@ def _manifest_files(model_path: Path) -> dict[str, str]:
     return files
 
 
-def verify_packages(model_path: Path, base_path: Path) -> dict[str, Any]:
-    if not local_revision(model_path, MODEL_REVISION):
+def verify_packages(
+    model_path: Path, base_path: Path, size: str = "0.6b"
+) -> dict[str, Any]:
+    if size not in VARIANTS:
+        raise ValueError(f"Unknown Bosun size: {size}")
+    model_id, model_revision, base_id, base_revision, _ = VARIANTS[size]
+    if not local_revision(model_path, model_revision):
         raise ValueError("Bosun source revision is not locally attested")
-    if not local_revision(base_path, BASE_REVISION):
+    if not local_revision(base_path, base_revision):
         raise ValueError("Bosun's Qwen base revision is not locally attested")
     files = _manifest_files(model_path)
     config = json.loads((model_path / "config.json").read_text(encoding="utf-8"))
     if (
-        config.get("base_model_name_or_path") != BASE_ID
-        or config.get("base_model_revision") != BASE_REVISION
+        config.get("base_model_name_or_path") != base_id
+        or config.get("base_model_revision") != base_revision
         or config.get("prompt_schema") != "bosun-decision-prompt-v3-stable-slots"
         or config.get("decision_token_count") != 256
         or config.get("decision_token_assignment") != "presented_slot"
@@ -65,10 +82,10 @@ def verify_packages(model_path: Path, base_path: Path) -> dict[str, Any]:
     if len(base_files) < 2 or any(not file.is_file() for file in base_files):
         raise ValueError("Pinned Bosun base package is incomplete")
     return {
-        "model_id": MODEL_ID,
-        "model_revision": MODEL_REVISION,
-        "base_model_id": BASE_ID,
-        "base_revision": BASE_REVISION,
+        "model_id": model_id,
+        "model_revision": model_revision,
+        "base_model_id": base_id,
+        "base_revision": base_revision,
         "source_manifest_sha256": file_digest(model_path / "manifest.json"),
         "source_files_sha256": files,
         "base_files_sha256": {file.name: file_digest(file) for file in base_files},
@@ -148,7 +165,12 @@ def project(
 
 
 def collect(
-    *, model_path: Path, base_path: Path, prompts: Path, output: Path
+    *,
+    model_path: Path,
+    base_path: Path,
+    prompts: Path,
+    output: Path,
+    size: str = "0.6b",
 ) -> dict[str, Any]:
     if output.exists() or output.with_name(output.name + ".manifest.json").exists():
         raise FileExistsError("Refusing to overwrite Bosun predictions")
@@ -157,7 +179,8 @@ def collect(
         model_path.resolve(strict=True),
         base_path.resolve(strict=True),
     )
-    identity = verify_packages(model_path, base_path)
+    identity = verify_packages(model_path, base_path, size)
+    model_id, model_revision, base_id, base_revision, adapter_version = VARIANTS[size]
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
@@ -168,8 +191,8 @@ def collect(
     torch.cuda.set_device(0)
     config = AutoConfig.from_pretrained(str(model_path), trust_remote_code=True)
     if (
-        config.base_model_name_or_path != BASE_ID
-        or config.base_model_revision != BASE_REVISION
+        config.base_model_name_or_path != base_id
+        or config.base_model_revision != base_revision
     ):
         raise ValueError("Loaded Bosun config differs from pinned manifest")
     # Only the lookup path changes; the base files and revision are checked above.
@@ -223,9 +246,9 @@ def collect(
                     {"state": row["state"], "questions": row["questions"]}
                 ),
                 "backend": "bosun-v31-native",
-                "model_id": MODEL_ID,
-                "model_revision": MODEL_REVISION,
-                "adapter_version": ADAPTER_VERSION,
+                "model_id": model_id,
+                "model_revision": model_revision,
+                "adapter_version": adapter_version,
             }
             target.write(
                 json.dumps(receipt, ensure_ascii=False, allow_nan=False) + "\n"
@@ -234,7 +257,7 @@ def collect(
             counts["items"] += 1
     manifest = {
         **identity,
-        "adapter_version": ADAPTER_VERSION,
+        "adapter_version": adapter_version,
         "input_sha256": file_digest(prompts),
         "output_sha256": file_digest(output),
         "counts": counts,
@@ -258,12 +281,14 @@ def main() -> None:
     parser.add_argument("--base-path", type=Path, required=True)
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--size", choices=tuple(VARIANTS), default="0.6b")
     args = parser.parse_args()
     result = collect(
         model_path=args.model_path,
         base_path=args.base_path,
         prompts=args.input,
         output=args.output,
+        size=args.size,
     )
     print(json.dumps({"output": str(args.output), "counts": result["counts"]}))
 
