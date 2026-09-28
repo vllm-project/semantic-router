@@ -6,7 +6,7 @@ Use this guide when you need one of the following:
 
 - large OpenAI-compatible request bodies that should not be fully buffered by the gateway before ExtProc sees them;
 - agentgateway `FullDuplexStreamed` ExtProc processing;
-- Envoy AI Gateway or raw Envoy `STREAMED` request body processing;
+- Agent Router (formerly Envoy AI Gateway) or raw Envoy `STREAMED` request body processing, or raw Envoy `FULL_DUPLEX_STREAMED`;
 - streamed Chat Completions clients (`"stream": true`) that may be short-circuited by Semantic Router before the upstream backend responds.
 
 ## How it works
@@ -68,9 +68,9 @@ The Operator's standalone Envoy sidecar keeps `request_body_mode: BUFFERED`
 for the reason given in [Raw Envoy](#raw-envoy), so this setting only changes
 behavior when an existing Gateway invokes ExtProc in a streamed mode.
 
-## Envoy AI Gateway / Envoy Gateway
+## Agent Router / Envoy Gateway
 
-For Envoy AI Gateway examples that use `EnvoyPatchPolicy`, change the Semantic Router ExtProc filter from buffered request bodies to streamed request bodies.
+For Agent Router examples that use `EnvoyPatchPolicy`, change the Semantic Router ExtProc filter from buffered request bodies to streamed request bodies.
 
 ```yaml
 apiVersion: gateway.envoyproxy.io/v1alpha1
@@ -114,9 +114,9 @@ A complete Kubernetes example is available in `deploy/kubernetes/streaming/aigw-
 
 ## Raw Envoy
 
-If a raw Envoy route table or backend depends on Semantic Router's request headers, as the configuration `vllm-sr serve` generates does, keep its ExtProc filter on `request_body_mode: BUFFERED`. In `STREAMED` mode, Envoy passes the request headers on as soon as Semantic Router answers them. A body that arrives after that answer can still be rewritten, but Envoy no longer applies [header mutations](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ext_proc/v3/external_processor.proto#envoy-v3-api-field-service-ext-proc-v3-commonresponse-header-mutation) to that request. Semantic Router sets the provider credential, the provider request path and the `x-selected-model` routing header at end-of-stream, so such a request reaches Envoy's default route with its original path and the client's own `Authorization` header. Whether a request is affected depends on how long its body takes to arrive, so the failures are intermittent.
+If a raw Envoy route table or backend depends on Semantic Router's request headers, as the configuration `vllm-sr serve` generates does, use `request_body_mode: BUFFERED` or the `FULL_DUPLEX_STREAMED` configuration described below. In `STREAMED` mode, Envoy passes the request headers on as soon as Semantic Router answers them. A body that arrives after that answer can still be rewritten, but Envoy no longer applies [header mutations](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ext_proc/v3/external_processor.proto#envoy-v3-api-field-service-ext-proc-v3-commonresponse-header-mutation) to that request. Semantic Router sets the provider credential, the provider request path and the `x-selected-model` routing header at end-of-stream, so such a request reaches Envoy's default route with its original path and the client's own `Authorization` header. Whether a request is affected depends on how long its body takes to arrive, so the failures are intermittent. With `request_body_mode: FULL_DUPLEX_STREAMED`, `request_trailer_mode: SEND` and `global.router.streamed_body` enabled, Envoy applies these header changes, because Semantic Router holds its reply to the request headers until the body is routed. Keep that filter's `failure_mode_allow` at its default, `false`: while the reply is held, a failed ExtProc stream would otherwise let Envoy forward the request with the client's original headers.
 
-The Envoy AI Gateway example above routes on `x-ai-eg-model`, which Semantic Router does not set, so its routing does not depend on these header changes.
+The Agent Router example above routes on `x-ai-eg-model`, which Semantic Router does not set, so its routing does not depend on these header changes.
 
 ## agentgateway
 
@@ -158,11 +158,16 @@ spec:
 
 agentgateway does not support a separate `Streamed` request-body mode. Use `FullDuplexStreamed` for streamed request bodies and enable `global.router.streamed_body` in Semantic Router.
 
+To route on `x-selected-model` or another header Semantic Router sets, add `phase: PreRouting` under `traffic`: in the default `PostRouting` phase, agentgateway selects the route before ExtProc runs.
+
 Semantic Router detects the negotiated ExtProc body mode. With
 `FullDuplexStreamed`, it buffers intermediate request chunks without emitting
-body replacements, then sends the complete processed request as one
-end-of-stream `StreamedBodyResponse`. With Envoy `STREAMED`, it retains the
-one-response-per-chunk behavior required by that mode.
+body replacements and holds its reply to the request headers until the body is
+routed. It then sends the header reply, carrying the routing header mutations,
+followed by the complete processed request as one `StreamedBodyResponse`; when
+the request has trailers, they mark the end of the body and are answered last.
+With Envoy `STREAMED`, it retains the one-response-per-chunk behavior required
+by that mode.
 
 ## Configure an immediate streamed looper response
 
@@ -282,4 +287,4 @@ With `request_body_mode: STREAMED` or `requestBodyMode: FullDuplexStreamed`, Sem
 - **Client expected SSE but got JSON**: the OpenAI request did not include `"stream": true`, or the matched path is a non-streaming immediate response. Add `"stream": true` for Chat Completions looper routes and verify the matched decision.
 - **agentgateway rejects `Streamed`**: agentgateway supports `FullDuplexStreamed`, not `Streamed`. Use `requestBodyMode: FullDuplexStreamed`.
 - **Duplicate or partial upstream request body**: gateway and Semantic Router streamed modes are mismatched. Enable both the gateway streamed request-body mode and Semantic Router `streamed_body.enabled`.
-- **Some requests reach the default backend with the client's `Authorization` header**: a raw Envoy filter uses `request_body_mode: STREAMED`. Switch it to `BUFFERED`, as described in [Raw Envoy](#raw-envoy).
+- **Some requests reach the default backend with the client's `Authorization` header**: a raw Envoy filter uses `request_body_mode: STREAMED`. Switch it to `BUFFERED`, or to `FULL_DUPLEX_STREAMED` with `request_trailer_mode: SEND` and `streamed_body` enabled, as described in [Raw Envoy](#raw-envoy).

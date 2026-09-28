@@ -239,17 +239,18 @@ def make_plan(
 
 
 def component_batches(verifications: list[dict]) -> list[dict]:
-    """Pack compatible lightweight contracts without changing their identities."""
+    """Give every selected component contract an independent Actions worker."""
+    workers = load_catalog()["component_workers"]
     return [
-        {"id": name, **worker, "verifications": selected}
-        for name, worker in load_catalog()["component_workers"].items()
-        if (
-            selected := [
-                row
-                for row in verifications
-                if row["executor"] == "tools" and row["worker"] == name
-            ]
-        )
+        {
+            "id": row["id"],
+            "worker": row["worker"],
+            **workers[row["worker"]],
+            "display_name": row["display_name"],
+            "verifications": [row],
+        }
+        for row in verifications
+        if row["executor"] == "tools"
     ]
 
 
@@ -304,6 +305,7 @@ def github_outputs(plan: dict) -> dict[str, str]:
         # callers only need these fields to select their workflow behavior.
         "plan": {
             "profile": plan["profile"],
+            "base_sha": plan["base_sha"],
             "quality_context": plan["quality_context"],
         },
         "dispatch": dispatch,
