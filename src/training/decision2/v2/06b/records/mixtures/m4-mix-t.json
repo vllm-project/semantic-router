@@ -1,0 +1,100 @@
+{
+  "template": "S2",
+  "unit": "qwen3-0.6b-base-native-segmented",
+  "tokenizer": "/work/models/Qwen3-0.6B-Base",
+  "seed": "decision2-06b-m4-a7",
+  "max_row_tokens": 8192,
+  "hf_dataset": "llm-semantic-router/decision-2.0-training-data",
+  "base": [
+    {
+      "arm": "A0s",
+      "hf_revision": "5c0255ed6a05d08b2fcb863e8045289eedd996cd",
+      "path": "/runs/m3/data/v2-5c0255ed/A0s.train.jsonl",
+      "sha256": "df90cb7f20236fa41ada83d020fb47cbee8d8367cf74d9a67e240ff920994c68",
+      "rows": 7299,
+      "exclude_families": [
+        "natural_cosmos_qa",
+        "natural_squad2_answerability"
+      ],
+      "renumber_option_keys": true
+    }
+  ],
+  "components": [
+    {
+      "name": "A6",
+      "policy": "token_budget",
+      "tokens": 2033987,
+      "seed": "decision2-06b-m3-a6-rho",
+      "note": "identical budget, seed and arms as the Milestone 3 (a2) slice",
+      "arms": [
+        {
+          "arm": "A6g",
+          "hf_revision": "5c0255ed6a05d08b2fcb863e8045289eedd996cd",
+          "path": "/runs/m3/data/v2-5c0255ed/A6g.train.jsonl",
+          "sha256": "ac94b7f4f1e7d8b73ddbffebe15035aa3b47cca9c825f622d0ec8d04bd7fc02f",
+          "rows": 4905
+        },
+        {
+          "arm": "A6h",
+          "hf_revision": "5c0255ed6a05d08b2fcb863e8045289eedd996cd",
+          "path": "/runs/m3/data/v2-5c0255ed/A6h.train.jsonl",
+          "sha256": "23440f0c5561077780973259777fca4aa80400f5b30e9df6e1376f6d9aa31927",
+          "rows": 5622
+        }
+      ]
+    },
+    {
+      "name": "A7",
+      "policy": "view_then_equal_shares",
+      "fill_to_total_tokens": 20000000,
+      "hf_revision": "3a4efc7768e3458e392f44e83391313fc25e49df",
+      "exclude_families": [
+        "natural_cosmos_qa",
+        "natural_squad2_answerability"
+      ],
+      "view": {
+        "name": "dec10-natural24k",
+        "path": "/runs/m4/data/a7-3a4efc77/dec10-natural24k.json",
+        "sha256": "efc0ec300ca5dc15a7451682ad2a894152b79915e4db37822164f09d588de8b8"
+      },
+      "arms": [
+        {
+          "arm": "A7h",
+          "path": "/runs/m4/data/a7-3a4efc77/A7h.train.jsonl",
+          "sha256": "86474b739d8297ebb98ca6ea818c7f6c3cef153a1d778108e6a6723336812718",
+          "rows": 6877
+        },
+        {
+          "arm": "A7m",
+          "path": "/runs/m4/data/a7-3a4efc77/A7m.train.jsonl",
+          "sha256": "dd9b1ef029f87e9f7c33165002b5dc74e26776ae28edabe503ef85fd7df9b692",
+          "rows": 10767
+        },
+        {
+          "arm": "A7i",
+          "path": "/runs/m4/data/a7-3a4efc77/A7i.train.jsonl",
+          "sha256": "0b8284b1e08229698e9516be7104fe2b6f7dad79ec25eddc3cd3c1ad48e72e12",
+          "rows": 18526
+        },
+        {
+          "arm": "A7g",
+          "path": "/runs/m4/data/a7-3a4efc77/A7g.train.jsonl",
+          "sha256": "cc87e0b7a441774aaacbd34b59425294bf8fd5f1b678f92c9a15fd008dcdfddd",
+          "rows": 57123
+        },
+        {
+          "arm": "A7p",
+          "path": "/runs/m4/data/a7-3a4efc77/A7p.train.jsonl",
+          "sha256": "cc9217e6128da1910784cb1839127a3edf7e5b90d5c795cd104d78f35f2f137e",
+          "rows": 10149
+        },
+        {
+          "arm": "A7o",
+          "path": "/runs/m4/data/a7-3a4efc77/A7o.train.jsonl",
+          "sha256": "dbba002225188fb4dca8f45d15a4801c41a8964d313ee49eba335e2af6355625",
+          "rows": 34569
+        }
+      ]
+    }
+  ]
+}

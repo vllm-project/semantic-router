@@ -1,0 +1,96 @@
+{
+  "axis_ci95": {
+    "H": {
+      "delta": {
+        "high": 0.12905975910166928,
+        "low": -0.01922175873084704
+      },
+      "left": {
+        "high": 0.4804828302782303,
+        "low": 0.30917912493543137
+      },
+      "right": {
+        "high": 0.39628124028824696,
+        "low": 0.26131972720925967
+      }
+    },
+    "T": {
+      "delta": {
+        "high": 0.05687500000000001,
+        "low": -0.010312500000000002
+      },
+      "left": {
+        "high": 0.409375,
+        "low": 0.3609375
+      },
+      "right": {
+        "high": 0.381875,
+        "low": 0.34249999999999997
+      }
+    }
+  },
+  "bootstrap": {
+    "confidence_level": 0.95,
+    "fixed_css_label_universe": true,
+    "invalid_or_missing": "counted as incorrect; never removed from draws",
+    "unit": "paired typed groups within family; CSS tasks then paired items within sampled task"
+  },
+  "ci95": {
+    "high": 7.809851431660606,
+    "low": -0.39048741599340053
+  },
+  "coverage": {
+    "css_evaluation_items": 6547,
+    "css_evaluation_tasks": 15,
+    "typed_independent_groups": 400,
+    "typed_items": 1600
+  },
+  "css_gold_sha256": "1cda9623032138bb7b124be0c1b0a4239c06bed7be3169264e6eb31805c19ba4",
+  "label": "post-key same-panel",
+  "models": {
+    "left": "m4-v2-soup",
+    "right": "kai1-8k"
+  },
+  "panel_sha256": "201f01fb3e5468d8457b2cc603a0d0081a8b2114bc5d547e879cac802f5a692c",
+  "point": {
+    "delta": {
+      "H": 0.03986079759274386,
+      "T": 0.0234375,
+      "score": 3.160930190956634
+    },
+    "left": {
+      "H": 0.39737285075697093,
+      "T": 0.3853125,
+      "score": 39.12962133183701
+    },
+    "right": {
+      "H": 0.3575120531642271,
+      "T": 0.361875,
+      "score": 35.968691140880374
+    }
+  },
+  "predictions_sha256": {
+    "left": {
+      "css": "295a738555d0cd7a73265f01443cdb4843981323915360f0d913692f97c7ee60",
+      "typed": "c4200a9ae1e2cebb247806548b469cfb3128f8ebe19f22129bf1204b36608e5f"
+    },
+    "right": {
+      "css": "48593d4da1125d9055ad1791edf67a22d2e52cef58f090d64bb499fd1ddaa02b",
+      "typed": "762d721a0f297f0f8f7e588c0c432bb3a0e9074c46630a0a10c0b2df81f6791b"
+    }
+  },
+  "replicates": 5000,
+  "schema_version": "jevarena-v3-paired-aggregate/1",
+  "seed": 20260927,
+  "source_sha256": {
+    "arena_base": "d1b819d07db29f9eaee7269d1a4ffc50b949ff80eeabaa7de8a1ea265cc55ec7",
+    "arena_v3": "3d5b4aea031efb0d05ae7a501983868fe3bb9e42ca37e23fce5da8c002720cd8",
+    "css": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca",
+    "css_compare": "17d2264511783c07847bb6d29d6722338a02c92abb825aaa140053e7b4760d46",
+    "css_panel": "717e31b62d1f9d09b30f1ae2365b2e59cdf0cf40209dda5e9e08b921a1fc184d",
+    "paired_v3": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "typed": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "typed_panel": "c6569d4c86c3b9ea2ebdda564d8ba4d3428cc807d41d39984379821cfbb9422c"
+  },
+  "typed_gold_sha256": "707dd28dfbab10d124d437434023729f319501542e999e536fce9b7ff7f2361e"
+}
