@@ -8,8 +8,8 @@ teacher targets: H7 / H8 rows of the r2 recipes train on gold labels.
     queue starts a wave only when its prompt file has the expected SHA-256.
   - Image `decision20-lux-runtime:latest` = `sha256:ce895822…`, source mirror `5f5cd80a…`.
   - Collector: `inference.run --backend lux --over-budget-invalid`.
-  - Triton cache: the node-B Lux cache of own-Lux RP-v2 waves 1–4. At the w1 and w2 publications it held 1,762 files
-    with tree digest `299151ab…`, and no file in it was newer than the XL prompt files.
+  - Triton cache: the node-B Lux cache of own-Lux RP-v2 waves 1–4. At the w1, w2 and w3 publications it held 1,762
+    files with tree digest `299151ab…`, and no file in it was newer than the XL prompt files.
 - **Conversion and upload:** on node A from the exact mirror of `81f673aed`. Private dataset
   `llm-semantic-router/decision-2.0-training-data`, tree `m3/teachers/lux1/xl/`, with `README.md`
   ([source](hf-lux1-xl-readme.md)) and `coverage.json`.
@@ -20,7 +20,7 @@ teacher targets: H7 / H8 rows of the r2 recipes train on gold labels.
 | --- | ---: | ---: | ---: | --- | --- | ---: | ---: | --- |
 | w1 | 60,000 | 60,000 | 0 / 0 | 9,674 / 8,268 / 42,058 | 0.785 / 0.808 / 0.428 | 2,547 s | 0.708 | `b1df84c48c35e965d5ad4276b125e080f325ffb4` |
 | w2 | 60,000 | 60,000 | 0 / 0 | 47,923 / 10,462 / 1,615 | 0.913 / 0.894 / 0.871 | 2,298 s | 0.638 | `30e0a1f79ee9b81b726c6c58d4458361b2f986c6` |
-| w3 | 60,000 | pending | pending | pending | pending | pending | pending | pending |
+| w3 | 60,000 | 60,000 | 0 / 0 | 23,971 / 23,334 / 12,695 | 0.767 / 0.774 / 0.644 | 2,919 s | 0.811 | `530b0bce352b2edbe32436c2a0acf3561640a990` |
 | w4 | 60,000 | pending | pending | pending | pending | pending | pending | pending |
 | w5 | 12,215 | pending | pending | pending | pending | pending | pending | pending |
 
@@ -28,6 +28,7 @@ teacher targets: H7 / H8 rows of the r2 recipes train on gold labels.
 | --- | --- | --- | --- | --- |
 | w1 | `4a852b74794801e061facf42911f2a26434af8083a773268a481a1a481aebc7f` | `e4fc42f8dd3ee41b0787f48c25ae6ecf52d575808bc7d7e4e2458433091682fb` | `a7a1042b69f2f4a15e73b06fbf69fcebd75eadee38fb3ad50e748d112557477d` | `2d788516cfaf1fbb4b52d16daedb60a7692efc861cee5305fc41bc18caae54f0` |
 | w2 | `a659c3e59774387f6f9f008a55182c374e321685f57ea3dcc0fe3c5fe5a1f2f2` | `a75c7dea9a7531eb57d588fcc2ee191ea3a6c99bd8a808d9a570342c455bf48a` | `fda194e4705c23aa2dc0e5ef453f06454b4c6584592a6754c52e53288d49123e` | `6141df2e60415d3c76028eca150a30a1a4697dfee9abbcfea2b6e49570db8ce8` |
+| w3 | `6d141c96b54a9548b4572c04c4fbd30e413b168a43d583f3086000413a207c73` | `68f11e6ccd51ad697d16595239047d38f5c4e0bbf3a07fe30e862707765fbb03` | `564ed94522ec16ad456e99ab757e7e45ebc784ed0a82e03fa860a644f4a936d2` | `711adb23e1aa36fc466c7e30b4a75f0342e68ab0c1b90077da97805fd2b9265d` |
 
 `README.md` `fd2379c2…` and `coverage.json` `cc54efde…` were uploaded with w1.
 
@@ -54,7 +55,7 @@ teacher targets: H7 / H8 rows of the r2 recipes train on gold labels.
      identity, an attested revision, the validated runtime and no runtime differences;
    - the image id is `ce895822…`.
 4. **Copy:** node B → local → node A (gzip), with SHA-256 checked locally and on node A. w1 and w2 reused node-A
-   copies whose SHA-256 matched node B.
+   copies whose SHA-256 matched node B; w3 was transferred by the script.
 5. **Conversion:** `v2.data.m2.targets --prompts --attestation --provenance`.
    - Per row: model identity, attested revision and validated runtime.
    - Prompt digest checked on the prompt file as sent; each prompt equals the training row's native prompt.
@@ -104,8 +105,8 @@ rows.
   previous worker set them aside when building the waves.
 - By pool: H5 27,814, G6 11,439, A7g 10,524, E11 10,158, A7o 9,761, H1 9,347, H6 8,037, H3 7,264, G2 5,382, V1:A3
   692, A7r 244, A7i 169, A7q 87, V1:A4v2h 39.
-- Covering them takes two more waves, about 2 GPU-h on node B GPU7 at the w1–w2 rate of about 9k tokens/s. Until then,
-  control rows without a target train on gold labels.
+- Covering them takes two more waves, about 1.2–1.6 GPU-h on node B GPU7. That estimate uses the w1–w3 rates of 23
+  prompts/s and 11.6k tokens/s. Until then, control rows without a target train on gold labels.
 
 ## Automation (w2–w5)
 
@@ -140,7 +141,7 @@ Events are JSON lines in `/tmp/m3b/luxxl-publish.events.jsonl` (local) and in
 
 ## GPU-hours (node B GPU7)
 
-- **Finished:** w1 0.708 and w2 0.638, 1.346 GPU-h so far.
-- **Pending:** w3 was at 50,224 of 60,000 prompts at 16:33 UTC. w4 and w5 are expected by about 18:30 UTC.
+- **Finished:** w1 0.708, w2 0.638 and w3 0.811, 2.157 GPU-h so far.
+- **Pending:** w4 started at 16:38 UTC and w5 follows. Both are expected to be published by about 17:45 UTC.
 
 Conversion, upload and readback run on node A and the local machine, CPU only.
