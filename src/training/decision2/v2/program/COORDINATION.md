@@ -86,6 +86,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | A7 own-1.0 corpora | `/home/xunliu/code/vllm-sr-dev2-a7` | `xunzhuo/decision-2-training-a7` |
 | release engineering (DEV2.0-0.6B) | `/home/xunliu/code/vllm-sr-dev2-release-06b` | `xunzhuo/decision-2-training-release-06b` |
 | release engineering (DEV2.0-2B) | `/home/xunliu/code/vllm-sr-dev2-release-2b` | `xunzhuo/decision-2-training-release-2b` |
+| eval: human-transfer dev panel | `/home/xunliu/code/vllm-sr-dev2-eval-devpanel` | `xunzhuo/decision-2-training-eval-devpanel` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -147,9 +148,9 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | --- | --- |
 | node A GPU0 | 0.6B track (owner) — SHARED from 2026-09-28 22:30 UTC+8 with the DEV2.0-0.6B release worker for short CAL698-calibration / re-score jobs (≤ 30 min; own lease owner entry `owner.release`) |
 | node A GPU1 | 0.6B track (post-release optimization) |
-| node A GPU2–4 | 9B track (returned 2026-09-28 21:31 UTC+8 after AutoJev target production). **9B track: read the 21:00 cross-track note (A7 is mostly NEW data for Lux) and the 21:35 AutoJev note before planning work on these GPUs.** |
+| node A GPU2–4 | ~27B Milestone 3 (moved from the 9B track 2026-09-29 04:30 UTC+8; the 27B track may train on node A — same image + frozen autotune cache per the comparability rule; formal comparisons stay on node B) |
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
-| node A GPU6–7 | 9B track Milestone 3 (lent by eval at 2026-09-28 20:30 UTC+8; eval borrows one back for a formal run or a C1 scoring event) |
+| node A GPU6–7 | 9B track Milestone 4 (2026-09-29 04:30 UTC+8); the eval track may use short shared-lease jobs on any GPU for development-panel scoring |
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
 | node B GPU5–6 | ~27B |
@@ -187,6 +188,23 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 04:30 — From 9B Milestone 3 (gist 05; integration `850522e49`): 9B stays on Lux 1.0.
+  - Best: **DW** = ½ × (full-fine-tune three-seed soup on A7 + v1 + v2-M, 116M tokens) + ½ × Lux 1.0 (weight interpolation):
+    post-key v3 68.571 vs Lux1 65.808, +2.763 [−2.085, +6.202] — HOLD (lower bound < 0). Typed reasoning gain is
+    significant (T +.076 [+.054, +.098]; constraint competition .863, exception stack .882, resource ledger .662 vs Lux1
+    .777 / .760 / .568); human transfer flat and noisy (reddit humor −.167); public 231 179 vs 183 (hard −4); mlx-diag .813 vs
+    .828. Staged private `dev2-9b-staging@8a98dc82` (`m3/DW/`); scored run `/data/dev2/runs/9b/formal-m3/DW-16k`.
+    Coordinator: HOLD — a typed-only gain with flat human transfer and regressions is what the brief warns against.
+  - Findings: A7's Stage curricula are Lux's typed-reasoning lever; full fine-tuning is seed-unstable (transition-table
+    collapse in 3 of 5 runs) and soups + interpolation toward the 1.0 model repair it (interpolation beats both endpoints);
+    **human transfer is the binding axis for 9B and 4B** and the 3-task CSS pilot cannot see it; AutoJev targets transferred
+    poorly at 9B (arm B 64.600, −1.208); the shared renderer alone costs Lux 0.58 v3 (same-renderer Lux1 at 16K = 65.231),
+    so the stricter 9B comparator stays the adopted 65.808.
+  - A0s-strict EXISTS (research & data, gist 02 entry 22:00; also part of XL r1 / r2) — use it rather than in-materializer
+    exclusions.
+  - Coordinator actions: a broader human-transfer DEVELOPMENT panel is commissioned from the eval track (separate worktree);
+    9B Milestone 4 continues the DW line on node A GPU6–7; node A GPU2–4 move to ~27B Milestone 3.
 
 - 2026-09-29 04:25 — **Own-Lux targets now cover 100% of mx-xl-full-r2 (365,970) and mx-xl-short-r2 (373,577)** and all six
   r2 controls: wave `h-w1` (25,664 H7 / H8 prompts) at private revision `75e557f170979bdbc428b6ea698a2047e2d2a5cd`, under
