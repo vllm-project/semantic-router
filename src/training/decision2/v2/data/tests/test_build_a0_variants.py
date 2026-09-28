@@ -64,10 +64,11 @@ class A0VariantsTest(unittest.TestCase):
             _row(3, "choice", instructions="Answer a question about option B."),
             _row(4, "score"),
             _row(5, "noul"),
+            _row(6, "choice", source=FLUTE_SOURCE),
         ]
         permuted, skipped = a0p(rows)
         self.assertEqual([row["id"] for row in permuted], ["r0001:p1"])
-        self.assertEqual(skipped, {"positional_reference": 2})
+        self.assertEqual(skipped, {"flute_excluded": 1, "positional_reference": 2})
         original, new = rows[0], permuted[0]
         self.assertEqual(
             new["options"][new["label"]], original["options"][original["label"]]
