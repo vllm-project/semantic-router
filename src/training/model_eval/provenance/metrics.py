@@ -31,7 +31,12 @@ def classification_metrics(
     y_pred: Sequence[int],
     label_mapping: dict[str, int],
 ) -> dict[str, Any]:
-    """Accuracy, macro and weighted F1, and the per label breakdown."""
+    """Accuracy, macro and weighted F1, and the per label breakdown.
+
+    A label with no rows keeps its per label entry with support 0, but it is
+    left out of the macro average: its F1 of 0 would describe the split, not
+    the model.
+    """
     if len(y_true) != len(y_pred):
         raise ValueError("y_true and y_pred must have the same length")
     if not y_true:
@@ -59,9 +64,8 @@ def classification_metrics(
 
     rows = len(y_true)
     correct = sum(1 for true, pred in zip(y_true, y_pred, strict=True) if true == pred)
-    scores = [entry["f1"] for entry in per_label.values()]
-    weights = [entry["support"] for entry in per_label.values()]
-    weighted = sum(f1 * support for f1, support in zip(scores, weights, strict=True))
+    scores = [entry["f1"] for entry in per_label.values() if entry["support"]]
+    weighted = sum(entry["f1"] * entry["support"] for entry in per_label.values())
     return {
         "rows": rows,
         "accuracy": correct / rows,
