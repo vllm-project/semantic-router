@@ -146,7 +146,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | --- | --- |
 | node A GPU0 | DEV2.0-0.6B release verification (lent by the 0.6B track, 2026-09-28 21:30 UTC+8); back to 0.6B afterwards |
 | node A GPU1 | 0.6B track (post-release optimization) |
-| node A GPU2–4 | research & data: AutoJev-27B re-qualification + target production (~1.5 h), then back to the 9B track (2026-09-28 20:15 UTC+8). **9B track: read the 21:00 cross-track note (A7 is mostly NEW data for Lux) before planning work on these GPUs.** |
+| node A GPU2–4 | 9B track (returned 2026-09-28 21:31 UTC+8 after AutoJev target production). **9B track: read the 21:00 cross-track note (A7 is mostly NEW data for Lux) and the 21:35 AutoJev note before planning work on these GPUs.** |
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
 | node A GPU6–7 | 9B track Milestone 3 (lent by eval at 2026-09-28 20:30 UTC+8; eval borrows one back for a formal run or a C1 scoring event) |
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
@@ -185,6 +185,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-28 21:35 — **AutoJev-27B TEACHER TARGETS AVAILABLE** (research & data M3a; gist 02; integration `5794726fe`).
+  Re-qualification v2 passed every gate (warm-up covering every 512-token bucket to 8,096; frozen autotune cache; 910/910
+  bitwise identical across four processes / three GPUs; 99.61% argmax vs the eval track's predictions). All files produced
+  on node A, under `m3/teachers/autojev27/`, each with per-row attestation and a `PROVENANCE.md` carrying the caveat:
+  - AJ-M (M recipes) 84,523 targets `ba52dd86…` at private revision `3a99bf1c26ac7924ec1216cdf1f703e1a5f21ae6`;
+  - AJ-A0s (pk1 A0s rows) 7,299 `97a071af…` at `9bb9790b014d17d7dad50677b4f057f20e50460c`;
+  - AJ-SL (S and L recipes minus M) 37,219 `1254cb47…` at `780d27439c5a07650a37b9a0ce3369dae3359baf`.
+  Agreement with gold (Choice / Noul / Score): AutoJev ≈ .84 / .83 / .61 vs own-Lux ≈ .79 / .79 / .55 on the same rows.
+  Every size track may adopt them now; every AutoJev-distilled candidate needs a matched Lux-target control, and its
+  card and records disclose the teacher provenance caveat. Node A GPU2–4 are back with the 9B track.
+
 - 2026-09-28 21:30 — **SECOND RELEASE CANDIDATE: DEV2.0-0.6B** (0.6B Milestone 4; gist `03-decision-2-06b-encoder.md`;
   integration `2747b817a`).
   - `m4-t-a7-soup`: official Qwen3-0.6B-Base, (a2) recipe (backbone LR 1e-5, 10% warmup), trained on A0s-r + A6 + the A7
@@ -207,6 +218,7 @@ exactly one gist file and updates it in place:
   - **Proxy mis-ranking at 0.6B:** P favoured the mixture-v2 soup by +6.94 but v3 put the A7 soup ahead by 4.4 (v2 soup:
     39.13, +3.19 [−0.33, +8.11] vs Kai1); CSS pilot rose for v2 while CSS15 fell (.397 vs .480). Eval: check whether data v2
     contains same-source datasets for the CSS-pilot tasks that rose (dataset-level, not only lexical/embedding overlap).
+    (Reassigned at 21:35 to research & data Milestone 3b, which owns the v2 source registry; eval need not duplicate it.)
     Research & data: mixture v2 gave the best public 231 (151) at 0.6B but lower transfer and mlx-diag — revisit the
     recipe's Choice share and why its multilingual arms didn't lift mlx-diag.
   - Post-release updates: a new candidate replaces a released size only if it clearly beats the released model (paired
