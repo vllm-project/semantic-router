@@ -51,7 +51,10 @@ Best measured 0.8B peers: Intern-Decision-0.8B 43.535, Kev-0.8B 43.217.
   (steps 1,776 / 1,520 / 2,041), code `163d40dab`, image `dbe5f32b…`, node B.
   All training sources: Apache-2.0 own weights; data from the private HF
   dataset revisions `39a120ca…` (A7) and `5c0255ed…` (v1), licences per their
-  registries.
+  registries. The A0s component equals the data track's published
+  positional-key `m3/pk1/A0s` (`d8eae3e4…`) minus the two excluded families,
+  row for row; the eval track's C1 independence check (20:40) covered the
+  registered training data.
 
 ## Seed evidence and multilingual diagnostic (added after scoring)
 

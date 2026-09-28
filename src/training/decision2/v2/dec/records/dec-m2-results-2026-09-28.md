@@ -25,6 +25,12 @@ Code: checks `aac6959ad`–`56525ff81`, trainer/builder/driver `15ef238ef`,
 | (b) Score-only overfit | **PASS**: 288/288 (32 rows per level count L = 2..10, every level predicted). The same checkpoint answers level 0 on 399/400 typed-DEV Score items → the 0.8B DEV Score collapse is a transfer limit, not a defect. | valid |
 | (c) runtime | **Fixed.** Every GPU entry point requires FLA gated-delta + causal-conv1d kernels and a shared persisted Triton autotune cache; preflight requires exact cross-process reload (all M2 arms: drift ≤ 9e-8, 700/700). Node B's M1 image `ce895822…` lacked causal-conv1d (reference convolution; node B now `dbe5f32b…`, identical versions to node A); M1 C1/E1 had no persisted cache (≤ 5/700 cross-process flips). | flagged runtime-noncompliant, not invalid |
 
+**Data check after the data track published positional-key files (20:15,
+revision `d8eae3e4…`, `m3/pk1/A0s`):** the decoder's locally renumbered A0s-r
+(6,547 rows) equals pk1 A0s minus the 752 excluded-family rows exactly
+(identical id, input hash and label for all 6,547 rows; no other difference).
+Every M2 mixture therefore used the canonical renumbered A0s.
+
 ## Same-limit 1.0 controls (post-key, node A, 8,192 tokens, shared 2.0 renderer)
 
 | 1.0 model | v3 | vs adopted native run | T | H | Choice / Noul / Score | public231 |
