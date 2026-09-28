@@ -644,7 +644,7 @@ config:
               mode: replace
       - name: urgent_request
         description: Urgent requests requiring immediate attention
-        priority: 30
+        priority: 1
         rules:
           operator: OR
           conditions:
@@ -716,7 +716,7 @@ config:
               mode: replace
       - name: explain_action
         description: Requests that ask for an explanation of code or behavior
-        priority: 30
+        priority: 1
         rules:
           operator: OR
           conditions:
@@ -728,7 +728,7 @@ config:
             use_reasoning: false
       - name: fix_action
         description: Requests that ask to repair a bug or failing behavior
-        priority: 30
+        priority: 1
         rules:
           operator: OR
           conditions:
@@ -740,7 +740,7 @@ config:
             use_reasoning: false
       - name: generate_action
         description: Requests that ask to write new code
-        priority: 30
+        priority: 1
         rules:
           operator: OR
           conditions:

@@ -28,11 +28,13 @@ class RequestStore:
         body: dict[str, Any],
         headers: Mapping[str, str] | None,
         raw_body: bytes,
+        path: str,
     ) -> None:
         if session_id in self._store:
             self._store.move_to_end(session_id)
         elif len(self._store) >= _MAX_REQUEST_STORE_SESSIONS:
             self._store.popitem(last=False)
+        authorization = (headers or {}).get("authorization")
         observed_headers: dict[str, str] = {}
         header_values: dict[str, list[str]] = {}
         for name, value in (headers or {}).items():
@@ -55,6 +57,14 @@ class RequestStore:
             # ingress E2E uses this to catch a key leaking to the provider.
             "api_key_present": any(
                 name.lower() == "api-key" for name in (headers or {})
+            ),
+            "path": path,
+            # A digest, never the credential itself, so gateway E2E can check
+            # which credential reached the provider.
+            "authorization_sha256": (
+                hashlib.sha256(authorization.encode()).hexdigest()
+                if authorization is not None
+                else None
             ),
             "headers": observed_headers,
             "header_values": header_values,
@@ -115,14 +125,17 @@ async def health() -> dict[str, str]:
 
 @router.get("/v1/models")
 async def models(request: Request) -> dict:
+    card: dict = {
+        "id": request.app.state.settings.model,
+        "object": "model",
+        "owned_by": "provider-mocker",
+    }
+    if request.app.state.settings.max_model_len is not None:
+        card["max_model_len"] = request.app.state.settings.max_model_len
     return {
         "object": "list",
         "data": [
-            {
-                "id": request.app.state.settings.model,
-                "object": "model",
-                "owned_by": "provider-mocker",
-            },
+            card,
             {
                 "id": "openai/workflow-planner",
                 "object": "model",

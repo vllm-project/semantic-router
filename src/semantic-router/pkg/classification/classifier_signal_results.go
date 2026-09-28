@@ -121,4 +121,5 @@ type SignalMetricsCollection struct {
 	Metadata      SignalMetrics `json:"metadata"`
 	Classifier    SignalMetrics `json:"classifier"`
 	InputModality SignalMetrics `json:"input_modality"`
+	Action        SignalMetrics `json:"action"`
 }

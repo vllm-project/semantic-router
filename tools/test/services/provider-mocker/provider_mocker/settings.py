@@ -13,17 +13,25 @@ class Settings:
     model: str = "openai/gpt-oss-20b"
     shadow_control: bool = False
     expected_authorization: str | None = None
+    max_model_len: int | None = None
 
     @classmethod
     def from_env(cls):
         scenario = os.getenv("PROVIDER_MOCKER_SCENARIO", "default")
         if scenario not in SCENARIOS:
             raise ValueError(f"unknown PROVIDER_MOCKER_SCENARIO: {scenario}")
+        max_model_len: int | None = None
+        raw_max_model_len = os.getenv("PROVIDER_MOCKER_MAX_MODEL_LEN")
+        if raw_max_model_len:
+            max_model_len = int(raw_max_model_len)
+            if max_model_len <= 0:
+                raise ValueError("PROVIDER_MOCKER_MAX_MODEL_LEN must be positive")
         return cls(
             scenario=scenario,
             model=os.getenv("PROVIDER_MOCKER_MODEL", "openai/gpt-oss-20b"),
             shadow_control=os.getenv("PROVIDER_MOCKER_SHADOW_CONTROL") == "true",
             expected_authorization=os.getenv("PROVIDER_MOCKER_EXPECT_AUTHORIZATION"),
+            max_model_len=max_model_len,
         )
 
 

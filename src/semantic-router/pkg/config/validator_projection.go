@@ -390,6 +390,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeMetadata:      collectMetadataRuleNames(cfg.MetadataRules),
 		SignalTypeClassifier:    collectClassifierRuleNames(cfg.ClassifierRules),
 		SignalTypeInputModality: collectInputModalityRuleNames(cfg.InputModalityRules),
+		SignalTypeAction:        collectActionRuleNames(cfg.ActionRules),
 	}
 	return declared
 }
