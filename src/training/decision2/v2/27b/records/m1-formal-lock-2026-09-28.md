@@ -36,6 +36,24 @@ a seed replicate and not eligible for promotion. **C0 takes the formal slot.**
 4. Labels: "post-key same-panel" for v3; public231 is a public-subset rerun,
    not the official JevBench rank. No release or publication decision here.
 
+## Amendment F2 (after the parity preflight, before any formal prediction)
+
+The rerun parity collection succeeded (DEV 1,600 valid; CSS pilot 1,428 valid,
+2 over budget as before) and scores exactly the package's qualification
+readout: DEV 1,211/1,600 (791/258/162), CSS pilot 845/1,430, median macro-F1
+.62052, P_dev 68.53. Against the **historical node B source-run predictions**
+named in step 1 it fails `panel_parity` (DEV 6 category changes, p99 .0498,
+max .191; CSS pilot 20 changes). That reference was a lock error: the v3 gate
+audit had already recorded those source predictions as non-transferable
+near-tie differences (DEV 1,213 vs 1,211). The gate's intended reference is
+the qualified package-native run behind the passing parity receipt
+`d53236da…` (node A, same-GPU source/package parity, zero drift). Today's
+predictions are **bit-identical** to it: 1,600/1,600 and 1,430/1,430 answers
+identical, 0 category changes, 0.0 drift (reference files `562849a8…`,
+`601c9e19…`). This is stricter than the gate, so the one-shot formal
+collection proceeds with nothing else changed. The failed comparison and its
+receipts are kept.
+
 ## Amendment F1 (before any parity outcome)
 
 The first parity collection computed DEV predictions but could not write them:
