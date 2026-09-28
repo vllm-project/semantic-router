@@ -18,12 +18,21 @@ import os
 from pathlib import Path
 from typing import Any
 
-from training.model.data import canonical, digest, validate_row
+from training.model.data import canonical, validate_row
 from v2.data.build_a0_variants import native_prompt
 
 
 def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.open(encoding="utf-8") if line.strip()]
+
+
+def collector_digest(prompt: dict[str, Any]) -> str:
+    # Must equal inference.run.digest: key order as stored in the prompt file, unsorted.
+    payload = {"state": prompt["state"], "questions": prompt["questions"]}
+    encoded = json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+    )
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def teacher_distribution(
@@ -58,6 +67,7 @@ def _entropy(probs: list[float]) -> float:
 
 def convert(
     train_rows: list[dict[str, Any]],
+    prompt_rows: list[dict[str, Any]],
     teacher_rows: list[dict[str, Any]],
     *,
     teacher: str,
@@ -65,10 +75,14 @@ def convert(
     revision: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     by_id = {row["id"]: row for row in teacher_rows}
-    if len(by_id) != len(teacher_rows):
-        raise ValueError("duplicate teacher receipt id")
-    if set(by_id) != {row["id"] for row in train_rows}:
-        raise ValueError("teacher receipts do not cover exactly the RP-v1 ids")
+    prompts = {row["id"]: row for row in prompt_rows}
+    ids = {row["id"] for row in train_rows}
+    if len(by_id) != len(teacher_rows) or len(prompts) != len(prompt_rows):
+        raise ValueError("duplicate teacher receipt or prompt id")
+    if set(by_id) != ids or set(prompts) != ids:
+        raise ValueError(
+            "teacher receipts or prompts do not cover exactly the RP-v1 ids"
+        )
     replay: list[dict[str, Any]] = []
     stats: dict[str, collections.Counter[str]] = collections.defaultdict(
         collections.Counter
@@ -89,8 +103,10 @@ def convert(
             raise ValueError(
                 f"{row['id']}: teacher runtime differs from its validated runtime"
             )
-        prompt = native_prompt(row)
-        expected = digest({"state": prompt["state"], "questions": prompt["questions"]})
+        prompt = prompts[row["id"]]
+        if canonical(prompt) != canonical(native_prompt(row)):
+            raise ValueError(f"{row['id']}: prompt file differs from its training row")
+        expected = collector_digest(prompt)
         if receipt.get("source_input_sha256") != expected:
             raise ValueError(f"{row['id']}: teacher answered a different prompt")
         kind = row["task_type"]
@@ -181,6 +197,7 @@ def repeat_max_abs_diff(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--train", type=Path, required=True)
+    parser.add_argument("--prompts", type=Path, required=True)
     parser.add_argument("--teacher-output", type=Path, required=True)
     parser.add_argument("--repeat-output", type=Path)
     parser.add_argument("--teacher", required=True)
@@ -193,6 +210,7 @@ def main() -> None:
     teacher_rows = load_jsonl(args.teacher_output)
     replay, report = convert(
         train_rows,
+        load_jsonl(args.prompts),
         teacher_rows,
         teacher=args.teacher,
         model_id=args.model_id,
