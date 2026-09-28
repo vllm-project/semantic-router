@@ -141,6 +141,11 @@ report and paired hashes unchanged), point `gate_receipt` at it, commit, push, m
 The README change yields a new revision; `gate seal` binds the final decision to it before the
 collection add and the collected readback.
 
+Suggested card addition for that final build: the eval track's gate check
+([m4 record](../../eval/records/m4-dev2-08b-gates-and-c1-event1-2026-09-28.md)) found that on typed
+FINAL Score the candidate never predicts level 0 of five (35 gold items); the Limits bullet on
+Score could say so next to "107 vs 120 of 400".
+
 ## GPU-hours
 
 0.147 (node A GPU5, the release run's wall clock). CPU rehearsals, HTTP readback and gate
