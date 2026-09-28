@@ -37,6 +37,9 @@ def main() -> None:
 
     from training.model.decision_model import DecisionModel, collate, encode
 
+    from .runtime_check import require_runtime
+
+    runtime = require_runtime()
     temperature: float | dict[str, float] = 1.0
     if args.package_temperatures:
         report = json.loads((args.package / "temperature.json").read_text())
@@ -105,6 +108,7 @@ def main() -> None:
         "truncation_policy": "none; over-budget questions produce an invalid answer",
         "counts": counts,
         "torch_version": torch.__version__,
+        "runtime": runtime,
     }
     write_output(args.output, predictions, manifest)
     print(json.dumps({"output": str(args.output), "counts": counts}), flush=True)
