@@ -1,11 +1,12 @@
 """Teacher-target replay files for the ~27B KL arms (CPU, deterministic).
 
-The KL arms keep the M2-C control's rows and tokens: TRAIN = pk1 A0s admitted at
-the training limit, and the replay pool = the pk1 versions of exactly the
-control's A0s-resample rows (ids suffixed ``#r1``), each carrying a teacher's
-``teacher_probs``. With the trainer's replay fraction 1/3 every pool row is
-used once, so the epoch has the control's 10,748 examples and 672 updates;
-only the KL term on the resample block (and the pk1 option keys) differ.
+The KL arms keep the M2-C control's rows: TRAIN = the pk1 base admitted at the
+training limit, and the replay pool = the pk1 versions of exactly the control's
+A0s-resample rows (ids suffixed ``#r1``), each carrying a teacher's
+``teacher_probs``; families absent from the base (``--exclude-family``) are
+dropped from both. The manifest's replay fraction makes the trainer draw every
+pool row once, so only the KL term on the resample block (and the base) differ
+from the control.
 Teacher rows join by ``id`` and must match the pk1 ``input_sha256`` and option
 keys and sum to one within 1e-5.
 """
@@ -82,9 +83,25 @@ def attach(
     return out, {"rows": len(out), "teacher_argmax_equals_gold": agreement}
 
 
+def replay_fraction(train: int, pool: int) -> str:
+    """Smallest 7-digit fraction for which the trainer draws the whole pool once."""
+    from training.model.plan import replay_count
+
+    fraction = math.floor(pool / (train + pool) * 1e7) / 1e7
+    while replay_count(train, pool, fraction) != pool:
+        fraction = round(fraction + 1e-7, 7)
+    return f"{fraction:.7f}"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pk1-a0s", type=Path, required=True)
+    parser.add_argument(
+        "--exclude-family",
+        action="append",
+        default=[],
+        help="Family absent from this base (dropped from the control's rows too)",
+    )
     parser.add_argument("--control", type=Path, required=True, help="M2-C mixture file")
     parser.add_argument(
         "--teacher", action="append", required=True, help="NAME=TARGETS"
@@ -116,15 +133,19 @@ def main() -> None:
     train = sorted(
         (row for row in pk1 if lengths[row["id"]] <= args.limit), key=lambda r: r["id"]
     )
-    control = read_jsonl(args.control)
+    excluded = set(args.exclude_family)
+    if any(row["family"] in excluded for row in train):
+        raise SystemExit("the base still contains an excluded family")
+    control = [row for row in read_jsonl(args.control) if row["family"] not in excluded]
     base_ids = {row["id"] for row in control if not row["id"].endswith(SUFFIX)}
     if {row["id"] for row in train} != base_ids:
-        raise SystemExit("pk1 A0s admission differs from the control's A0s rows")
+        raise SystemExit("base admission differs from the control's A0s rows")
     resample = sorted(
         row["id"][: -len(SUFFIX)] for row in control if row["id"].endswith(SUFFIX)
     )
     by_id = {row["id"]: row for row in train}
     pool = [by_id[i] for i in resample]
+    fraction = replay_fraction(len(train), len(pool))
     args.output_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
     files, teachers = {}, {}
     train_path = args.output_dir / "pk1-a0s-4k.train.jsonl"
@@ -156,7 +177,10 @@ def main() -> None:
                 "option_key_renumbering" in r["audit_metadata"] for r in pool
             ),
         },
-        "trainer_replay_fraction": "1/3 (pool fully used; 10,748 examples, 672 updates)",
+        "excluded_families": sorted(excluded),
+        "trainer_replay_fraction": fraction,
+        "examples_per_epoch": len(train) + len(pool),
+        "updates_at_batch_16": math.ceil((len(train) + len(pool)) / 16),
         "teachers": teachers,
         "files_sha256": files,
     }
