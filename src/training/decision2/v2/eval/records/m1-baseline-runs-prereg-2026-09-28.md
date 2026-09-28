@@ -148,6 +148,18 @@ node A, adapter `jet-v6.2` (`v2/eval/native_jet.py`, bundled `Jet().decide`, rel
 calibration temperatures; native 16,384-token rejection invalid; release targets CUDA,
 run as `unvalidated_rocm`); formal + dev + mlx-diag; ≤ 0.5 GPU-hour; same rules.
 
+**A4.3.1 (Q5 technical stop and correction).** Q5 was stopped by the operator after
+224 s (0.062 GPU-hour; nothing sealed or scored) when a gold-free output check showed
+1,200 of 2,000 typed-final slots recorded as native rejections: Jet's API rejects Noul
+`criteria` ("noul questions take no criteria"), and the collector caught every
+`ValueError`. It also returned Noul as `probability` and Score probabilities as a list,
+which the frozen scorer does not read. Adapter v2 sends one question per call, appends
+the Noul true/false meanings to the instructions (the APUS adapter's mapping), maps
+answers onto the scorer's fields, and treats only the 16,384-token message as invalid
+(anything else stops the run); regression tests added. A 20-item typed-final smoke run
+(separate `smoke/` directory, answer-shape check only, no gold) precedes a single
+relaunch as Q5b with no other change.
+
 ## Reused results (identity verified, no new GPU time)
 
 Recorded predictions were located by SHA-256, adopted, sealed and re-scored with

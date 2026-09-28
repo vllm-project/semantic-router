@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from benchmark.score import evaluate_answer
 from v2.eval import native_jet
 from v2.eval.same_panel import input_digest
 
@@ -20,10 +21,35 @@ class Jet:
         assert MARKER == "release"
 
     def decide(self, state, questions):
-        if state == "long":
-            raise ValueError("q: complete prompt exceeds 16384 tokens; no truncation applied")
-        return {"answers": {name: {"type": q["type"], "yes": 0.9} for name, q in questions.items()}}
+        answers = {}
+        for name, q in questions.items():
+            if q["type"] == "noul" and "criteria" in q:
+                raise ValueError("noul questions take no criteria")
+            if state == "long" and q["type"] == "score":
+                raise ValueError(f"{name}: complete prompt exceeds 16384 tokens; no truncation applied")
+            if state == "broken":
+                raise ValueError("unknown question type")
+            if q["type"] == "noul":
+                assert "Yes means: allowed" in q["instructions"]
+                answers[name] = {"type": "noul", "probability": 0.8, "confidence": 0.3}
+            elif q["type"] == "score":
+                answers[name] = {"type": "score", "score": 1.8, "level": "high",
+                                 "probabilities": [0.1, 0.0, 0.9], "confidence": 0.5}
+            else:
+                answers[name] = {"type": "choice", "choice": "a",
+                                 "probabilities": {"a": 0.7, "b": 0.3}, "confidence": 0.1}
+        return {"answers": answers}
 """
+
+QUESTIONS = {
+    "c": {"type": "choice", "instructions": "?", "criteria": {"a": "A", "b": "B"}},
+    "n": {
+        "type": "noul",
+        "instructions": "?",
+        "criteria": {"true": "allowed", "false": "denied"},
+    },
+    "s": {"type": "score", "instructions": "?", "criteria": ["low", "mid", "high"]},
+}
 
 
 def release(root: Path, revision: str = native_jet.MODEL_REVISION) -> Path:
@@ -58,57 +84,71 @@ class NativeJetTest(unittest.TestCase):
         patcher = mock.patch.dict(sys.modules, {"torch": fake_torch})
         patcher.start()
         self.addCleanup(patcher.stop)
-        for name in ("jet", "inference", "format", "runtime"):
-            sys.modules.pop(name, None)
-        self.addCleanup(
-            lambda: [
-                sys.modules.pop(n, None)
-                for n in ("jet", "inference", "format", "runtime")
-            ]
-        )
-        self.path_before = list(sys.path)
-        self.addCleanup(lambda: sys.path.__setitem__(slice(None), self.path_before))
+        release_modules = ("jet", "inference", "format", "runtime")
+        saved = {
+            name: sys.modules.pop(name)
+            for name in release_modules
+            if name in sys.modules
+        }
+        path_before = list(sys.path)
 
-    def test_collects_answers_and_records_native_rejection_as_invalid(self) -> None:
+        def restore() -> None:
+            for name in release_modules:
+                sys.modules.pop(name, None)
+            sys.modules.update(saved)
+            sys.path[:] = path_before
+
+        self.addCleanup(restore)
+
+    def run_collect(
+        self, tmp: str, states: list[str]
+    ) -> tuple[dict, list[dict], list[dict]]:
+        root = Path(tmp) / "model"
+        root.mkdir()
+        release(root)
+        rows = [
+            {"id": str(i), "state": s, "questions": QUESTIONS}
+            for i, s in enumerate(states)
+        ]
+        prompts = Path(tmp) / "prompts.jsonl"
+        prompts.write_text(
+            "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8"
+        )
+        output = Path(tmp) / "out.jsonl"
+        summary = native_jet.collect(
+            model_path=root,
+            revision=native_jet.MODEL_REVISION,
+            prompts=prompts,
+            output=output,
+        )
+        got = [
+            json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()
+        ]
+        return summary, rows, got
+
+    def test_maps_answers_onto_scorer_fields_and_rejects_per_question(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "model"
-            root.mkdir()
-            release(root)
-            rows = [
-                {
-                    "id": "a",
-                    "state": "short",
-                    "questions": {"q": {"type": "noul", "instructions": "?"}},
-                },
-                {
-                    "id": "b",
-                    "state": "long",
-                    "questions": {"q": {"type": "noul", "instructions": "?"}},
-                },
-            ]
-            prompts = Path(tmp) / "prompts.jsonl"
-            prompts.write_text(
-                "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8"
-            )
-            output = Path(tmp) / "out.jsonl"
-            summary = native_jet.collect(
-                model_path=root,
-                revision=native_jet.MODEL_REVISION,
-                prompts=prompts,
-                output=output,
-            )
-            got = [
-                json.loads(line)
-                for line in output.read_text(encoding="utf-8").splitlines()
-            ]
+            summary, rows, got = self.run_collect(tmp, ["short", "long"])
         self.assertEqual(summary["native_rejections"], 1)
         self.assertEqual(summary["verified_files"], 5)
-        self.assertEqual(got[0]["answers"]["q"]["yes"], 0.9)
-        self.assertEqual(got[1]["answers"]["q"]["invalid_reason"], "native_rejection")
+        first = got[0]["answers"]
+        self.assertEqual(first["n"], {"type": "noul", "noul": 0.8, "confidence": 0.3})
+        self.assertEqual(first["s"]["probabilities"], {"0": 0.1, "1": 0.0, "2": 0.9})
+        for name, value in (("c", "a"), ("n", True), ("s", 2)):
+            gold = {"value": value, "label_to_semantic": {"a": "a", "b": "b"}}
+            verdict = evaluate_answer(QUESTIONS[name], gold, first[name])
+            self.assertTrue(verdict.get("correct"), (name, verdict))
+        second = got[1]["answers"]
+        self.assertEqual(second["s"]["invalid_reason"], "native_rejection")
+        self.assertEqual(second["c"]["choice"], "a")
         self.assertEqual(
-            got[1]["source_input_sha256"],
-            input_digest(rows[1]["state"], rows[1]["questions"]),
+            got[1]["source_input_sha256"], input_digest(rows[1]["state"], QUESTIONS)
         )
+
+    def test_other_native_errors_stop_the_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(ValueError, "unknown question type"):
+                self.run_collect(tmp, ["broken"])
 
     def test_rejects_modified_release_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -3,9 +3,12 @@
 The release ships top-level modules named ``inference``, ``format`` and ``runtime``,
 which would collide with this repository's ``inference`` package, so this collector
 lives outside it and imports nothing from it. Every release file is checked against
-``release-manifest.json`` before loading. Prompts over the native 16,384-token limit
-are rejected by the release without truncation and recorded as invalid answers. The
-release targets Linux + NVIDIA CUDA; ROCm runs are labelled ``unvalidated_rocm``.
+``release-manifest.json`` before loading. Questions are sent one per call (the release
+scores them separately anyway). Jet's API takes no Noul criteria, so the panel's
+true/false meanings are appended to the instructions as in the APUS adapter; answers
+are mapped onto the scorer's fields. Only the native 16,384-token rejection becomes an
+invalid answer; any other error stops the run. The release targets Linux + NVIDIA
+CUDA; ROCm runs are labelled ``unvalidated_rocm``.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ from v2.eval.same_panel import input_digest, sha_file
 
 MODEL_ID = "michaljach/jet"
 MODEL_REVISION = "fbc3d2daa679e0d4bd9f99c9912b6496d5a41f0a"
-ADAPTER_VERSION = "jet-v6.2-native-v1"
+ADAPTER_VERSION = "jet-v6.2-native-v2"
 
 
 def attested_revision(model_path: Path) -> str | None:
@@ -59,11 +62,39 @@ def verify_release(model_path: Path, revision: str) -> dict[str, Any]:
     }
 
 
-def invalid_answers(questions: dict[str, Any], reason: str) -> dict[str, Any]:
-    return {
-        name: {"type": q.get("type"), "invalid_reason": reason}
-        for name, q in questions.items()
-    }
+def native_question(question: dict[str, Any]) -> dict[str, Any]:
+    """Map a panel question onto Jet's API, which takes no criteria for Noul."""
+    if question["type"] != "noul":
+        return question
+    criteria = question.get("criteria")
+    if not isinstance(criteria, dict) or set(criteria) != {"true", "false"}:
+        raise ValueError("Jet Noul mapping requires true/false criteria")
+    instructions = (
+        f"{question['instructions']}"
+        f"\nYes means: {criteria['true']}\nNo means: {criteria['false']}"
+    )
+    return {"type": "noul", "instructions": instructions}
+
+
+def panel_answer(answer: dict[str, Any]) -> dict[str, Any]:
+    """Map Jet's typed answer onto the frozen scorer's answer fields."""
+    if answer["type"] == "noul":
+        return {
+            "type": "noul",
+            "noul": answer["probability"],
+            "confidence": answer["confidence"],
+        }
+    if answer["type"] == "score":
+        mapped = dict(answer)
+        mapped["probabilities"] = {
+            str(level): p for level, p in enumerate(answer["probabilities"])
+        }
+        return mapped
+    return answer
+
+
+def is_length_rejection(exc: ValueError) -> bool:
+    return "complete prompt exceeds" in str(exc)
 
 
 def collect(
@@ -89,18 +120,25 @@ def collect(
         for row in rows:
             torch.cuda.synchronize()
             started = time.perf_counter()
+            answers: dict[str, Any] = {}
             error = None
-            try:
-                answers = engine.decide(row["state"], row["questions"])["answers"]
-            except ValueError as exc:
-                answers, error = (
-                    invalid_answers(row["questions"], "native_rejection"),
-                    str(exc)[:200],
-                )
-                rejected += 1
+            for name, question in row["questions"].items():
+                try:
+                    result = engine.decide(
+                        row["state"], {name: native_question(question)}
+                    )
+                except ValueError as exc:
+                    if not is_length_rejection(exc):
+                        raise
+                    answers[name] = {
+                        "type": question["type"],
+                        "invalid_reason": "native_rejection",
+                    }
+                    error = str(exc)[:200]
+                    rejected += 1
+                    continue
+                answers[name] = panel_answer(result["answers"][name])
             torch.cuda.synchronize()
-            if answers.keys() != row["questions"].keys():
-                raise ValueError(f"{row['id']}: Jet answers do not match question IDs")
             target.write(
                 json.dumps(
                     {
