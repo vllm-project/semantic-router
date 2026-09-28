@@ -122,6 +122,61 @@ var endpoints = []endpointSpec{
 	},
 }
 
+// Client-shaped errors must beat availability on the same no-model deployment:
+// a request the server can reject without a model is a 400, not a retryable
+// 503. These hold the validation-before-readiness contract in the running
+// image, not just in unit tests.
+var badRequestEndpoints = []endpointSpec{
+	{
+		Name: "embeddings-malformed-image",
+		Path: "/api/v1/diagnostics/embeddings",
+		Body: `{"images":["data:image/png;base64,!!!!"]}`,
+		Code: "INVALID_IMAGE",
+	},
+	{
+		Name: "embeddings-unsafe-image",
+		Path: "/api/v1/diagnostics/embeddings",
+		Body: `{"images":["https://example.com/cat.png"]}`,
+		Code: "INVALID_IMAGE",
+	},
+	{
+		Name: "embeddings-malformed-audio",
+		Path: "/api/v1/diagnostics/embeddings",
+		Body: `{"audios":["data:audio/wav;base64,YQ=="]}`,
+		Code: "INVALID_AUDIO",
+	},
+	{
+		Name: "embeddings-negative-dimension",
+		Path: "/api/v1/diagnostics/embeddings",
+		Body: `{"texts":["hi"],"dimension":-1}`,
+		Code: "INVALID_DIMENSION",
+	},
+	{
+		Name: "embeddings-no-inputs",
+		Path: "/api/v1/diagnostics/embeddings",
+		Body: `{}`,
+		Code: "INVALID_INPUT",
+	},
+	{
+		Name: "similarity-negative-dimension",
+		Path: "/api/v1/diagnostics/similarity",
+		Body: `{"text1":"hello","text2":"world","dimension":-1}`,
+		Code: "INVALID_DIMENSION",
+	},
+	{
+		Name: "similarity-missing-text",
+		Path: "/api/v1/diagnostics/similarity",
+		Body: `{"text1":"hello"}`,
+		Code: "INVALID_INPUT",
+	},
+	{
+		Name: "batch-similarity-empty-candidates",
+		Path: "/api/v1/diagnostics/similarity/batch",
+		Body: `{"query":"hello","candidates":[]}`,
+		Code: "INVALID_INPUT",
+	},
+}
+
 func testModelNotReady503(
 	ctx context.Context,
 	client *kubernetes.Clientset,
@@ -150,6 +205,41 @@ func testModelNotReady503(
 		if resp.StatusCode != http.StatusServiceUnavailable {
 			return fmt.Errorf(
 				"%s: expected 503, got %d",
+				ep.Name,
+				resp.StatusCode,
+			)
+		}
+
+		var e errorEnvelope
+		if err := json.Unmarshal(resp.Body, &e); err != nil {
+			return fmt.Errorf("%s: invalid JSON: %w", ep.Name, err)
+		}
+
+		if e.Error.Code != ep.Code {
+			return fmt.Errorf(
+				"%s: expected error code %q, got %q",
+				ep.Name,
+				ep.Code,
+				e.Error.Code,
+			)
+		}
+	}
+
+	for _, ep := range badRequestEndpoints {
+		resp, err := postJSON(
+			ctx,
+			httpClient,
+			http.MethodPost,
+			session.URL(ep.Path),
+			[]byte(ep.Body),
+		)
+		if err != nil {
+			return fmt.Errorf("%s: %w", ep.Name, err)
+		}
+
+		if resp.StatusCode != http.StatusBadRequest {
+			return fmt.Errorf(
+				"%s: malformed request on an unavailable generation must be a 400, got %d",
 				ep.Name,
 				resp.StatusCode,
 			)

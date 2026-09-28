@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,8 @@ import (
 	"testing"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -301,6 +304,147 @@ func TestEmbeddingEndpointsReturn503WhenNotReady(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEmbeddingEndpointsValidateShapeBeforeAvailability(t *testing.T) {
+	api := newRecipeEmbeddingAPIServer(t, "multimodal", embedding.NewSet(nil, ""))
+
+	tests := []struct {
+		name    string
+		path    string
+		body    string
+		handler func(http.ResponseWriter, *http.Request)
+	}{
+		{"malformed image", "/api/v1/embeddings", `{"recipe":"default","images":["data:image/png;base64,!!!!"]}`, api.handleEmbeddings},
+		{"unsafe image url", "/api/v1/embeddings", `{"recipe":"default","images":["https://example.com/cat.png"]}`, api.handleEmbeddings},
+		{"malformed audio", "/api/v1/embeddings", `{"recipe":"default","audios":["data:audio/wav;base64,YQ=="]}`, api.handleEmbeddings},
+		{"negative dimension", "/api/v1/embeddings", `{"recipe":"default","texts":["hi"],"dimension":-1}`, api.handleEmbeddings},
+		{"no inputs", "/api/v1/embeddings", `{"recipe":"default"}`, api.handleEmbeddings},
+		{"similarity negative dimension", "/api/v1/similarity", `{"recipe":"default","text1":"hello","text2":"world","dimension":-1}`, api.handleSimilarity},
+		{"similarity missing text", "/api/v1/similarity", `{"recipe":"default","text1":"hello"}`, api.handleSimilarity},
+		{"batch similarity empty candidates", "/api/v1/similarity/batch", `{"recipe":"default","query":"hello","candidates":[]}`, api.handleBatchSimilarity},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			tc.handler(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for a malformed request, got %d: %s", rr.Code, rr.Body.String())
+			}
+			if strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
+				t.Fatalf("an invalid request was reported as retryable readiness: %s", rr.Body.String())
+			}
+		})
+	}
+}
+
+// The same deployment still answers 503 for media it could serve if it had
+// prepared a model, so validation ordering must not turn availability into a
+// client error.
+func TestEmbeddingEndpointsReportUnavailableMediaAs503(t *testing.T) {
+	api := newRecipeEmbeddingAPIServer(t, "multimodal", embedding.NewSet(nil, ""))
+
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"text", `{"recipe":"default","texts":["hi"]}`},
+		{"image", `{"recipe":"default","images":["data:image/png;base64,aGVsbG8="]}`},
+		{"audio", `{"recipe":"default","audios":["` + apiAudioFixture() + `"]}`},
+		{"named model", `{"recipe":"default","model":"multimodal","audios":["` + apiAudioFixture() + `"]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			api.handleEmbeddings(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/embeddings", strings.NewReader(tc.body)))
+			if recorder.Code != http.StatusServiceUnavailable || !strings.Contains(recorder.Body.String(), "EMBEDDING_NOT_READY") {
+				t.Fatalf("expected 503 EMBEDDING_NOT_READY for valid unavailable media, got %d: %s", recorder.Code, recorder.Body.String())
+			}
+		})
+	}
+}
+
+// apiWidthProvider is a prepared text encoder advertising exactly one output
+// width, standing in for a model whose native dimensionality is not 768.
+type apiWidthProvider struct {
+	*embedding.FuncProvider
+	width int
+}
+
+func (p *apiWidthProvider) EmbeddingInfo() embedding.ModelInfo {
+	return embedding.ModelInfo{Dimension: p.width, Dimensions: []int{p.width}, Modalities: []string{"text"}}
+}
+
+func apiWidthProviderOf(width int) embedding.Provider {
+	fp, _ := embedding.NewFuncProvider("synthetic", width, func(_ context.Context, text string) ([]float32, error) {
+		var sum float32
+		for _, b := range []byte(text) {
+			sum += float32(b)
+		}
+		vector := make([]float32, width)
+		for i := range vector {
+			vector[i] = float32((i%7)+1) * sum / float32(width)
+		}
+		return vector, nil
+	})
+	return &apiWidthProvider{FuncProvider: fp, width: width}
+}
+
+// An omitted dimension is the provider's own output width, not a router-chosen
+// constant, so a prepared encoder advertising only 384 still scores a request
+// that names it. Inventing 768 here answered 400 ErrCapability instead of a score.
+func TestSimilarityDefaultsToProviderNativeDimension(t *testing.T) {
+	const width = 384
+	prepared := embedding.NewSet(map[string]embedding.Provider{"multimodal": apiWidthProviderOf(width)}, "multimodal")
+	api := newRecipeEmbeddingAPIServer(t, "multimodal", prepared)
+
+	recorder := httptest.NewRecorder()
+	api.handleSimilarity(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/similarity",
+		strings.NewReader(`{"recipe":"default","model":"multimodal","text1":"hello","text2":"world"}`)))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("an omitted dimension was rejected: HTTP %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var response SimilarityResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Recipe != "default" || response.ModelUsed != "multimodal" {
+		t.Fatalf("wrong recipe or model: %+v", response)
+	}
+	if response.Similarity <= 0 || response.Similarity > 1 {
+		t.Fatalf("expected a cosine score in (0, 1], got %v", response.Similarity)
+	}
+
+	// Only the router's invented default is gone: a width the provider does not
+	// advertise is still the client's error.
+	recorder = httptest.NewRecorder()
+	api.handleSimilarity(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/similarity",
+		strings.NewReader(`{"recipe":"default","model":"multimodal","text1":"hello","text2":"world","dimension":768}`)))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for an unsupported dimension, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+// newRecipeEmbeddingAPIServer serves one recipe from an already prepared
+// generation, so a handler answers from the providers that generation owns.
+func newRecipeEmbeddingAPIServer(t *testing.T, modelType string, prepared *embedding.Set) *ClassificationAPIServer {
+	t.Helper()
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingConfig.ModelType = modelType
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"vision": {Provider: "ort", Device: "cpu", Artifact: t.TempDir()}}
+	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "vision", Contract: "embedding.v1", Adapter: "vela_omni"}}
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Embeddings: prepared})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := services.NewRecipeClassificationService(classifiers, cfg)
+	t.Cleanup(func() { _ = service.Close() })
+	return &ClassificationAPIServer{config: cfg, classificationSvc: service}
 }
 
 func TestCheckEmbeddingReadinessNilSetReturnsNotReady(t *testing.T) {

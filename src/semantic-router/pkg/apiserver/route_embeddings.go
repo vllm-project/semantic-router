@@ -47,11 +47,12 @@ func isEmbeddingModelNotReady(err error) bool {
 // text-ready-only deployment from attempting image inference (which would 500)
 // and a multimodal-only deployment from being rejected for text-only requests.
 //
-// It answers the generation-level question, so it runs before media selection:
-// an input this generation never prepared is an unavailable model, not an
-// unsupported one. Media selection still owns the per-model answer, so an
-// unsupported dimension, layer, or encoder on a ready deployment stays a client
-// error.
+// It answers the generation-level question, so it runs before media selection
+// but after the model-independent request shape: an input this generation never
+// prepared is an unavailable model, not an unsupported one, while a payload that
+// no deployment could encode stays a client error everywhere. Media selection
+// still owns the per-model answer, so an unsupported dimension, layer, or
+// encoder on a ready deployment stays a client error.
 func checkEmbeddingReadiness(set *embedding.Set, req EmbeddingRequest) error {
 	if len(req.Texts) == 0 && len(req.Images) == 0 && len(req.Audios) == 0 {
 		return nil
@@ -165,13 +166,6 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 		s.writeEmbeddingRuntimeError(w, prepareErr)
 		return
 	}
-	// Availability of the models this generation prepared is decided before media
-	// selection, which would otherwise report an unprepared deployment's media
-	// inputs as an unsupported client error.
-	if err := checkEmbeddingReadiness(prepared, request); err != nil {
-		s.writeEmbeddingNotReady(w, "generate embedding", err)
-		return
-	}
 	req, ok := s.prepareEmbeddingRequest(w, request, prepared)
 	if !ok {
 		return
@@ -200,6 +194,20 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 
 func (s *ClassificationAPIServer) prepareEmbeddingRequest(w http.ResponseWriter, req EmbeddingRequest, prepared *embedding.Set) (EmbeddingRequest, bool) {
 	applyEmbeddingDefaults(&req)
+	// Request shape is decided before availability. A malformed image, audio
+	// payload, or dimension is a client error on every deployment, so a router
+	// that prepared no model must not report it as a retryable 503.
+	if code, message, ok := validateEmbeddingRequestShape(req); !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
+		return EmbeddingRequest{}, false
+	}
+	// Availability of the models this generation prepared is decided before media
+	// selection, which would otherwise report an unprepared deployment's media
+	// inputs as an unsupported client error.
+	if err := checkEmbeddingReadiness(prepared, req); err != nil {
+		s.writeEmbeddingNotReady(w, "generate embedding", err)
+		return EmbeddingRequest{}, false
+	}
 	if prepared != nil {
 		selected, err := selectOwnedEmbeddingMediaModel(prepared, req)
 		if err != nil {
@@ -209,18 +217,22 @@ func (s *ClassificationAPIServer) prepareEmbeddingRequest(w http.ResponseWriter,
 		}
 		req = selected
 	}
-	var availableLayers []int
-	for _, model := range prepared.Models() {
-		if model.Name == req.Model {
-			availableLayers = model.Layers
-			break
-		}
-	}
-	if code, message, ok := validateEmbeddingRequest(req, availableLayers); !ok {
+	if code, message, ok := validateEmbeddingRequest(req, embeddingLayers(prepared, req.Model)); !ok {
 		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
 		return EmbeddingRequest{}, false
 	}
 	return req, true
+}
+
+// embeddingLayers reports the layer exits the selected model advertises, so
+// target_layer is validated against the loaded manifest instead of a fixed set.
+func embeddingLayers(prepared *embedding.Set, model string) []int {
+	for _, info := range prepared.Models() {
+		if info.Name == model {
+			return info.Layers
+		}
+	}
+	return nil
 }
 
 func averageEmbeddingProcessingTime(totalProcessingTime int64, req EmbeddingRequest) float64 {
@@ -246,6 +258,18 @@ func applyEmbeddingDefaults(req *EmbeddingRequest) {
 }
 
 func validateEmbeddingRequest(req EmbeddingRequest, availableLayers []int) (string, string, bool) {
+	if code, message, ok := validateEmbeddingRequestShape(req); !ok {
+		return code, message, false
+	}
+	return validateEmbeddingTargetLayer(req, availableLayers)
+}
+
+// validateEmbeddingRequestShape enforces the model-independent input contract:
+// inputs are present, image and audio payloads decode within their documented
+// bounds, and the requested dimension is a nonnegative int32. These answers do
+// not depend on which provider the generation prepared, so they are decided
+// before availability.
+func validateEmbeddingRequestShape(req EmbeddingRequest) (string, string, bool) {
 	if len(req.Texts) == 0 && len(req.Images) == 0 && len(req.Audios) == 0 {
 		return "INVALID_INPUT", "at least one of texts, images or audios must be provided", false
 	}
@@ -254,9 +278,6 @@ func validateEmbeddingRequest(req EmbeddingRequest, availableLayers []int) (stri
 	}
 	if !isValidDimension(req.Dimension) {
 		return "INVALID_DIMENSION", fmt.Sprintf(invalidDimensionMessage, req.Dimension), false
-	}
-	if req.TargetLayer < 0 || req.TargetLayer > math.MaxInt32 || (req.TargetLayer > 0 && req.Model != "auto" && !slices.Contains(availableLayers, req.TargetLayer)) {
-		return "INVALID_LAYER", fmt.Sprintf("target_layer must be 0 or one of the loaded model layers: %s (got %d)", formatLayerList(availableLayers), req.TargetLayer), false
 	}
 	if len(req.Audios) > maxAudiosPerRequest {
 		return "INVALID_INPUT", "at most 8 audios may be provided per request", false
@@ -267,6 +288,16 @@ func validateEmbeddingRequest(req EmbeddingRequest, availableLayers []int) (stri
 		}
 	}
 
+	return "", "", true
+}
+
+// validateEmbeddingTargetLayer is the per-model half of the contract: a layer
+// exit only means something for a model that advertises it, so this runs after
+// media selection has named the model.
+func validateEmbeddingTargetLayer(req EmbeddingRequest, availableLayers []int) (string, string, bool) {
+	if req.TargetLayer < 0 || req.TargetLayer > math.MaxInt32 || (req.TargetLayer > 0 && req.Model != "auto" && !slices.Contains(availableLayers, req.TargetLayer)) {
+		return "INVALID_LAYER", fmt.Sprintf("target_layer must be 0 or one of the loaded model layers: %s (got %d)", formatLayerList(availableLayers), req.TargetLayer), false
+	}
 	return "", "", true
 }
 
@@ -301,8 +332,11 @@ func (s *ClassificationAPIServer) parseSimilarityRequest(w http.ResponseWriter, 
 	if req.Model == "" {
 		req.Model = "auto"
 	}
+	// An omitted dimension stays the provider-native default. Inventing one here
+	// would reject a model whose advertised width differs, turning a valid
+	// request into ErrCapability and a 400.
 	if req.Dimension == 0 {
-		req.Dimension = 768
+		req.Dimension = defaultEmbeddingDimension
 	}
 	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
 		req.QualityPriority = 0.5
