@@ -263,6 +263,7 @@ domains:
       - tools/models/classifier-operating-point/**
       - tools/calibration/image-routing/**
       - bench/grounded_fusion/fusioneval/**
+      - bench/memory_coldstart/**
       - tools/make/go-tools.mk
     checks: [make go-tools-test]
     verifications: [core]
@@ -796,6 +797,8 @@ profiles:
     paths:
       - e2e/profiles/agentgateway/**
       - deploy/kubernetes/agentgateway/**
+      - e2e/testcases/full_duplex_routing.go
+      - src/semantic-router/pkg/extproc/processor_req_body_full_duplex*.go
   envoy-ai-gateway:
     display_name: Envoy AI Gateway
     owner: e2e
@@ -1012,6 +1015,8 @@ profiles:
       - src/semantic-router/pkg/llmprotocol/**
       - src/semantic-router/pkg/protocolcodec/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
+      - src/semantic-router/pkg/extproc/processor_req_body_full_duplex*.go
+      - e2e/testcases/full_duplex_routing.go
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
   provider-protocols:
@@ -1024,6 +1029,7 @@ profiles:
       - tools/test/services/provider-mocker/**
       - e2e/testcases/anthropic_*.go
       - e2e/testcases/protocol_codec_*.go
+      - e2e/testcases/testdata/agent_clients/**
       - deploy/kubernetes/provider-mocker/**
       - src/semantic-router/pkg/llmprotocol/**
       - src/semantic-router/pkg/protocolcodec/**
@@ -1052,6 +1058,7 @@ profiles:
       - e2e/profiles/response-api/**
       - e2e/testcases/anthropic_response_api_streaming.go
       - e2e/testcases/protocol_codec_*.go
+      - e2e/testcases/testdata/agent_clients/**
       - deploy/kubernetes/response-api/gwapi-resources.yaml
       - deploy/kubernetes/response-api/provider-mocker.yaml
       - tools/test/services/provider-mocker/**

@@ -26,14 +26,18 @@ type responsesResponseWire struct {
 	Conversation         json.RawMessage   `json:"conversation,omitempty"`
 	ConversationID       string            `json:"conversation_id,omitempty"`
 	Metadata             map[string]string `json:"metadata"`
+	AccessPrograms       json.RawMessage   `json:"access_programs,omitempty"`
 	Background           json.RawMessage   `json:"background,omitempty"`
+	Billing              json.RawMessage   `json:"billing,omitempty"`
 	CompletedAt          json.RawMessage   `json:"completed_at,omitempty"`
+	FrequencyPenalty     json.RawMessage   `json:"frequency_penalty,omitempty"`
 	Instructions         json.RawMessage   `json:"instructions"`
 	MaxOutputTokens      json.RawMessage   `json:"max_output_tokens,omitempty"`
 	MaxToolCalls         json.RawMessage   `json:"max_tool_calls,omitempty"`
 	Moderation           json.RawMessage   `json:"moderation,omitempty"`
 	OutputText           json.RawMessage   `json:"output_text,omitempty"`
 	ParallelToolCalls    json.RawMessage   `json:"parallel_tool_calls"`
+	PresencePenalty      json.RawMessage   `json:"presence_penalty,omitempty"`
 	Prompt               json.RawMessage   `json:"prompt,omitempty"`
 	PromptCacheKey       json.RawMessage   `json:"prompt_cache_key,omitempty"`
 	PromptCacheOptions   json.RawMessage   `json:"prompt_cache_options,omitempty"`
@@ -45,6 +49,7 @@ type responsesResponseWire struct {
 	Temperature          json.RawMessage   `json:"temperature"`
 	Text                 json.RawMessage   `json:"text,omitempty"`
 	ToolChoice           json.RawMessage   `json:"tool_choice"`
+	ToolUsage            json.RawMessage   `json:"tool_usage,omitempty"`
 	Tools                json.RawMessage   `json:"tools"`
 	TopLogprobs          json.RawMessage   `json:"top_logprobs,omitempty"`
 	TopP                 json.RawMessage   `json:"top_p"`
@@ -152,7 +157,24 @@ func responsesResponseMetadataDiagnostics(wire responsesResponseWire, policy llm
 		"top_p":      len(wire.TopP) > 0,
 		"truncation": len(wire.Truncation) > 0, "user": len(wire.User) > 0,
 	}, "response request-echo metadata is not model output")
+	diagnostics = appendDiagnostics(diagnostics, responsesProviderDecorationDiagnostics(wire, policy, ""), policy.Limits.Diagnostics)
 	return diagnostics
+}
+
+func responsesProviderDecorationDiagnostics(wire responsesResponseWire, policy llmprotocol.Policy, prefix string) llmprotocol.Diagnostics {
+	var diagnostics llmprotocol.Diagnostics
+	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, map[string]bool{
+		prefix + "access_programs":   rawJSONNonNull(wire.AccessPrograms),
+		prefix + "billing":           rawJSONNonNull(wire.Billing),
+		prefix + "frequency_penalty": rawJSONNonNull(wire.FrequencyPenalty),
+		prefix + "presence_penalty":  rawJSONNonNull(wire.PresencePenalty),
+		prefix + "tool_usage":        rawJSONNonNull(wire.ToolUsage),
+	}, "provider response decoration has no protocol-neutral representation")
+	return diagnostics
+}
+
+func rawJSONNonNull(raw json.RawMessage) bool {
+	return len(raw) > 0 && !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
 }
 
 func decodeResponsesResponseResource(
@@ -276,6 +298,8 @@ func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprot
 		return decodeResponsesMessageOutput(output, item, policy, diagnostics)
 	case "function_call":
 		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}}}
+	case "custom_tool_call":
+		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: item.CallID, Name: item.Name, Arguments: item.Input}}}
 	case "reasoning":
 		return decodeResponsesReasoningOutput(output, item, policy)
 	case "image_generation_call":
@@ -496,7 +520,7 @@ func encodeResponsesOutputText(items []llmprotocol.OutputItem) json.RawMessage {
 }
 
 func encodeResponsesOutputItem(item llmprotocol.OutputItem) ([]responsesItemWire, error) {
-	message := llmprotocol.Message(item)
+	message := llmprotocol.Message{ID: item.ID, Role: item.Role, Content: item.Content}
 	return encodeResponsesMessage(message, "output")
 }
 

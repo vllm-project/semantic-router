@@ -6,7 +6,7 @@ REQUESTED_RUNTIME="${VLLM_SR_RUNTIME:-auto}"
 INSTALL_ROOT="${VLLM_SR_INSTALL_ROOT:-$HOME/.local/share/vllm-sr}"
 BIN_DIR="${VLLM_SR_BIN_DIR:-$HOME/.local/bin}"
 PIP_SPEC="${VLLM_SR_PIP_SPEC:-}"
-REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-dev}"
+REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-stable}"
 PYTHON_BIN="${VLLM_SR_PYTHON:-}"
 REQUESTED_PLATFORM="${VLLM_SR_INSTALL_PLATFORM:-${VLLM_SR_PLATFORM:-auto}}"
 AUTO_LAUNCH="${VLLM_SR_INSTALL_AUTO_LAUNCH:-1}"
@@ -23,7 +23,8 @@ COLOR_WHITE=""
 COLOR_MUTED=""
 COLOR_SUCCESS=""
 
-DASHBOARD_URL="http://localhost:8700"
+DASHBOARD_PORT=""
+DASHBOARD_URL=""
 
 init_colors() {
   if [ ! -t 1 ] || [ -n "${NO_COLOR:-}" ]; then
@@ -76,6 +77,18 @@ die() {
   printf '%b\n' "${COLOR_ORANGE}[error]${COLOR_RESET} $*" >&2
   exit 1
 }
+
+resolve_dashboard_port() {
+  local offset="${VLLM_SR_PORT_OFFSET:-0}"
+  [[ "$offset" =~ ^[0-9]{1,5}$ ]] || die "VLLM_SR_PORT_OFFSET must be a non-negative integer"
+  offset=$((10#$offset))
+  # The Router's gRPC host port (50051) is the highest offset port.
+  (( offset <= 65535 - 50051 )) || die "VLLM_SR_PORT_OFFSET produces a host port above 65535"
+  printf '%s\n' "$((8700 + offset))"
+}
+
+DASHBOARD_PORT="$(resolve_dashboard_port)"
+DASHBOARD_URL="http://localhost:$DASHBOARD_PORT"
 
 is_truthy() {
   case "${1:-}" in
@@ -206,7 +219,7 @@ Options:
   --bin-dir PATH           Launcher directory. Default: ~/.local/bin
   --channel stable|dev     Package channel to install when --pip-spec is not
                            set. The dev channel resolves and pins the newest
-                           published .dev package. Default: dev
+                           published .dev package. Default: stable
   --pip-spec SPEC          Explicit Python package spec to install. Overrides
                            --channel when set
   --python PATH            Explicit Python interpreter to use
@@ -389,13 +402,13 @@ print_dashboard_access() {
   printf '%b\n' "${COLOR_WHITE}Dashboard access${COLOR_RESET}"
   printf '  local        %s\n' "$DASHBOARD_URL"
   if [ -n "$primary_ip" ]; then
-    printf '  network      http://%s:8700\n' "$primary_ip"
+    printf '  network      http://%s:%s\n' "$primary_ip" "$DASHBOARD_PORT"
   fi
   printf '\n'
 
   if is_remote_session; then
     printf '%b\n' "${COLOR_WHITE}Remote access${COLOR_RESET}"
-    printf '  ssh tunnel   ssh -L 8700:localhost:8700 %s@%s\n' "${USER:-user}" "$host_label"
+    printf '  ssh tunnel   ssh -L %s:localhost:%s %s@%s\n' "$DASHBOARD_PORT" "$DASHBOARD_PORT" "${USER:-user}" "$host_label"
     printf '  then open    %s\n' "$DASHBOARD_URL"
     printf '\n'
   fi
@@ -997,7 +1010,7 @@ print_next_steps() {
     primary_ip="$(detect_primary_ip || true)"
     printf '  dashboard    %s\n' "$DASHBOARD_URL"
     if [ -n "$primary_ip" ]; then
-      printf '  network      http://%s:8700\n' "$primary_ip"
+      printf '  network      http://%s:%s\n' "$primary_ip" "$DASHBOARD_PORT"
     fi
     printf '  stop         vllm-sr stop\n'
     if [ -n "$LAUNCH_PLATFORM" ]; then
@@ -1011,7 +1024,7 @@ print_next_steps() {
     printf '\n'
     if is_remote_session; then
       host_label="$(detect_host_label)"
-      printf '  tunnel       ssh -L 8700:localhost:8700 %s@%s\n' "${USER:-user}" "$host_label"
+      printf '  tunnel       ssh -L %s:localhost:%s %s@%s\n' "$DASHBOARD_PORT" "$DASHBOARD_PORT" "${USER:-user}" "$host_label"
     fi
   else
     printf '  verify       vllm-sr --version\n'

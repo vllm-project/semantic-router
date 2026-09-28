@@ -20,7 +20,6 @@
     },
     {
       "content": "Sunny, 21 C",
-      "id": "item_3a3234ffe986ecf50f4eafa2",
       "role": "tool",
       "tool_call_id": "call_weather_1"
     },

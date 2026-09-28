@@ -23,6 +23,9 @@ func (r *OpenAIRouter) applySemanticReasoningMode(
 	if request == nil {
 		return false
 	}
+	if preserveExplicitAnthropicReasoning(request, targetFormat) {
+		return false
+	}
 	family := r.getModelReasoningFamily(model)
 	if family == nil {
 		return false
