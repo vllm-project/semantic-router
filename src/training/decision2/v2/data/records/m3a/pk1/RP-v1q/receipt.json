@@ -1,0 +1,26 @@
+{
+ "already_positional_result_keys": 1,
+ "gold_key_rank_before": {
+  "largest": 5,
+  "largest_but_one": 15,
+  "other": 1,
+  "smallest": 1
+ },
+ "input_canonical_lines": true,
+ "input_sha256": "90a4ffaea3fa9a2e6c68e86f20352bfd8b0c83ee602238f1e7c0daf15a38c5b3",
+ "output_sha256": "1eb960bc7554532a4a2a834a73a639b4cba0149bb0f67b81fd160e3b26c26b01",
+ "remaining_construction_order_rows": 0,
+ "renumbered": 22,
+ "renumbered_by_type_family": {
+  "choice|stage4_replay_banking_train": 4,
+  "choice|stage4_replay_clinc_train": 7,
+  "choice|stage4_replay_evidence": 2,
+  "choice|stage4_replay_mapping": 1,
+  "choice|stage4_replay_policy": 5,
+  "choice|stage4_replay_rubric": 3
+ },
+ "rows": 1517,
+ "rule": "positional result_<n> Choice keys (A7 amendment 1, rule 7d)",
+ "schema": "decision2-m3a-pk1/1",
+ "unchanged_rows_byte_identical": true
+}

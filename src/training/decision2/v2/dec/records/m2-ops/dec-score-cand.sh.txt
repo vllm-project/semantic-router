@@ -1,0 +1,10 @@
+set -u
+SRC=$1; run=$2; label=$3; tier=$4; comp=$5; ctl=$6; src_pkg=$7
+S=/data/dev2/src/$SRC/src/training/decision2; cd $S; export PYTHONPATH=$S
+[ -f $run/SEAL.json ] || python3 -m v2.eval.same_panel seal --run-dir $run > $run.seal.log 2>&1
+[ -f $run/REPORT.json ] || python3 -m v2.eval.same_panel report --run-dir $run --label "$label" --tier $tier --family decision2 --count-safetensors $src_pkg > $run.report.log 2>&1
+python3 -m v2.eval.same_panel compare --run-dir $run --comparator-run-dir $comp --left-name "$label" --right-name adopted-1.0 > $run.compare-adopted.log 2>&1
+python3 -m v2.eval.same_panel compare --run-dir $run --comparator-run-dir $ctl --left-name "$label" --right-name same-limit-1.0 > $run.compare-samelimit.log 2>&1
+grep -A2 "^| Model" $run/REPORT.md | tail -1 | cut -c1-330
+echo "vs adopted: $(tail -1 $run.compare-adopted.log)"
+echo "vs same-limit: $(tail -1 $run.compare-samelimit.log)"

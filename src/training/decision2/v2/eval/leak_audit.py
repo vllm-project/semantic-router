@@ -489,6 +489,14 @@ def audit_group(
     pooled row (several groups) the prior is conditioned on the group, so a cue must
     add information beyond each group's own label prior.
     """
+    signatures: dict[str, set] = defaultdict(set)
+    for question in questions:
+        signatures[question.group].add(tuple(zip(question.keys, question.descriptions)))
+    fixed_questions = sum(len(signatures[q.group]) == 1 for q in questions)
+    varying = [q for q in questions if len(signatures[q.group]) > 1]
+    if not varying:
+        return fixed_option_set_entry(questions, replicates, seed, pooled)
+    questions = varying
     features = [option_features(question) for question in questions]
     if pooled:
         for question, rows in zip(questions, features):
@@ -540,11 +548,74 @@ def audit_group(
         combined["option_and_state_surface"] = assess(present_option + present_state)
     return {
         "questions": len(questions),
+        "fixed_option_set_questions_excluded": fixed_questions,
         "clusters": len(set(clusters)),
         "small": len(set(clusters)) < SMALL_GROUP,
         "chance": mean(chance),
         "label_prior": mean(prior),
         "reference": reference_name,
+        "prior_conditioned_on_group": pooled,
+        "cues": cues,
+        "combined": combined,
+        "facts": deterministic_facts(questions),
+    }
+
+
+def fixed_option_set_entry(
+    questions: list[Question], replicates: int, seed: int, pooled: bool
+) -> dict[str, Any]:
+    """Every group shows one option set: option-surface cues are functions of the
+    option identity, so they carry no item-level information (CLEAN by construction).
+    The state cue can still vary per item and is assessed."""
+    features = [option_features(question) for question in questions]
+    if pooled:
+        for question, rows in zip(questions, features):
+            for row in rows:
+                for name in PRIOR_FEATURES:
+                    if name in row:
+                        row[name] = f"{question.group}|{row[name]}"
+    clusters = [question.cluster for question in questions]
+    chance = [1.0 / len(question.keys) for question in questions]
+    prior = cross_validated(questions, features, PRIOR_FEATURES)
+    reference = chance if mean(chance) >= mean(prior) else prior
+    clean = {
+        "alone": mean(reference),
+        "with_prior": mean(reference),
+        "model": "fixed_option_set",
+        "gain_over_reference": 0.0,
+        "gain_ci95": (0.0, 0.0),
+        "verdict": "CLEAN",
+    }
+    cues: dict[str, Any] = {}
+    combined: dict[str, Any] = {"option_surface": clean}
+    if any("state_position" in row for rows in features for row in rows):
+        alone = cross_validated(questions, features, STATE_CUES)
+        added = cross_validated(questions, features, PRIOR_FEATURES + STATE_CUES)
+        model, best = (
+            ("alone", alone) if mean(alone) >= mean(added) else ("with_prior", added)
+        )
+        gain = mean(best) - mean(reference)
+        interval = cluster_bootstrap(
+            clusters, [b - r for b, r in zip(best, reference)], replicates, seed
+        )
+        cues["state_position"] = {
+            "alone": mean(alone),
+            "with_prior": mean(added),
+            "model": model,
+            "gain_over_reference": gain,
+            "gain_ci95": interval,
+            "verdict": verdict(gain, interval),
+        }
+        combined["option_and_state_surface"] = cues["state_position"]
+    return {
+        "questions": len(questions),
+        "fixed_option_set_questions_excluded": len(questions),
+        "fixed_option_set": True,
+        "clusters": len(set(clusters)),
+        "small": len(set(clusters)) < SMALL_GROUP,
+        "chance": mean(chance),
+        "label_prior": mean(prior),
+        "reference": "chance" if reference is chance else "label_prior",
         "prior_conditioned_on_group": pooled,
         "cues": cues,
         "combined": combined,

@@ -145,15 +145,38 @@ def public_ranking(reports: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def apply_overrides(
+    reports: list[dict[str, Any]],
+    model_ids: dict[str, str] | None = None,
+    renames: dict[str, str] | None = None,
+) -> None:
+    """Fill a missing model id (never replace one) and set card display labels.
+
+    Both maps are keyed by the report's original label."""
+    for report in reports:
+        model = report["model"]
+        label = model["label"]
+        if model_ids and label in model_ids:
+            if model.get("model_id") not in (None, model_ids[label]):
+                raise ValueError(f"{label}: report already names {model['model_id']}")
+            model["model_id"] = model_ids[label]
+        if renames and label in renames:
+            model["label"] = renames[label]
+
+
 def render(
     paths: list[Path],
     output_dir: Path,
     allowed_licences: tuple[str, ...] = DEFAULT_LICENCES,
+    model_ids: dict[str, str] | None = None,
+    renames: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     from jev_arena.render import ranking_svg as public_ranking_svg
     from publication.render_arena_v3 import ranking_svg, task_matrix_svg
 
-    reports, excluded = filter_licences(load_reports(paths), allowed_licences)
+    loaded = load_reports(paths)
+    apply_overrides(loaded, model_ids, renames)
+    reports, excluded = filter_licences(loaded, allowed_licences)
     if len(reports) < 2:
         raise ValueError("fewer than two reports remain after the licence filter")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -173,6 +196,8 @@ def render(
         "created_utc": utc_now(),
         "reports": {str(path): sha_file(path) for path in paths},
         "allowed_licences": list(allowed_licences),
+        "model_id_overrides": model_ids or {},
+        "display_labels": renames or {},
         "excluded_by_licence": excluded,
         "figures": {name: sha_file(output_dir / name) for name in figures},
         "v3_ranking": v3,
@@ -194,9 +219,23 @@ def main() -> None:
         choices=("own", "permissive", "non-commercial", "research-only"),
         help="licence classes shown on the card (default: own and permissive)",
     )
+    parser.add_argument(
+        "--model-id",
+        action="append",
+        default=[],
+        help="LABEL=MODEL_ID for a report that lacks a model id (licence lookup)",
+    )
+    parser.add_argument(
+        "--display",
+        action="append",
+        default=[],
+        help="LABEL=DISPLAY label shown on the card",
+    )
     args = parser.parse_args()
     allowed = tuple(args.allow_licence) if args.allow_licence else DEFAULT_LICENCES
-    receipt = render(args.report, args.output_dir, allowed)
+    model_ids = dict(item.split("=", 1) for item in args.model_id)
+    renames = dict(item.split("=", 1) for item in args.display)
+    receipt = render(args.report, args.output_dir, allowed, model_ids, renames)
     print(
         json.dumps(
             {"figures": receipt["figures"], "excluded": receipt["excluded_by_licence"]},

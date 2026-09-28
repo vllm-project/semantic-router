@@ -1,0 +1,21 @@
+set -u
+SRC=$1
+R=/data/dev2/runs/dec/m2; A=$R/arms; O=$R/soup
+until grep -q "soup dev readouts done" $O/OPERATIONS.log 2>/dev/null; do sleep 30; done
+until grep -q "m2-B8F-s2 postrun complete" $A/OPERATIONS.log 2>/dev/null; do sleep 30; done
+S=/data/dev2/src/$SRC/src/training/decision2/v2/dec; L=$S/launch.sh
+export DEC_IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1 DEC_DATA=/data/dev2/runs/dec/data-cleanv2 DEC_RENDER=/dev/dri/renderD145 DEC_GPU_LABEL="node B GPU2"
+CAL698=/hf/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/ed87a03ab80ca5b9560780bba51a83a77ff47d14/m2/cal/CAL698/cal.jsonl
+bash $L m2-E8F-soup-cal698 $SRC $O/cal698-16k -- -m v2.dec.calibrate_ckpt --checkpoint /runs/m2/soup/build/E8F-soup --cal $CAL698 --max-length 16384 --output /out/calibration.json
+for s in s1 s2 s3; do b=$(python3 -c "import json;print(json.load(open('$A/full/m2-E8F-$s/BEST.json'))['checkpoint'])")
+  bash $L m2-E8F-$s-cal698 $SRC $R/cal698/E8F-$s -- -m v2.dec.calibrate_ckpt --checkpoint /runs/m2/arms/full/m2-E8F-$s/$b --cal $CAL698 --max-length 16384 --output /out/calibration.json; done
+U=$R/hf-staging/batch2; mkdir -p $U/m2
+for spec in m2-E8F-s2:E8F-s2 m2-E8F-s3:E8F-s3 m2-B8F-s2:B8F-s2; do arm=${spec%%:*} short=${spec##*:}
+  b=$(python3 -c "import json;print(json.load(open('$A/full/$arm/BEST.json'))['checkpoint'])")
+  mkdir -p $U/m2/$short/cal; cp -al $A/full/$arm/$b $U/m2/$short/$b; cp $A/full/$arm-post/cal/calibration.json $U/m2/$short/cal/calibration.json; done
+for s in s1 s2 s3; do mkdir -p $U/m2/E8F-$s/cal698-16k; cp $R/cal698/E8F-$s/calibration.json $U/m2/E8F-$s/cal698-16k/calibration.json; done
+mkdir -p $U/m2/E8F-soup/cal700 $U/m2/E8F-soup/cal698-16k; cp -al $O/build/E8F-soup $U/m2/E8F-soup/checkpoint; cp $O/cal700/calibration.json $U/m2/E8F-soup/cal700/; cp $O/cal698-16k/calibration.json $U/m2/E8F-soup/cal698-16k/; cp $O/members.txt $U/m2/E8F-soup/
+cd $U && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > ../batch2.sha256
+/data/dev2/tools/hf-cli/bin/hf upload llm-semantic-router/dev2-dec-staging $U . --repo-type model --commit-message "M2 decoder batch 2: E8F-s2, E8F-s3, B8F-s2, E8F seed soup; CAL700 and CAL698 (16K) calibrations" > ../batch2.upload.log 2>&1
+echo "upload exit $?" >> ../batch2.upload.log
+echo "$(date -u +%FT%TZ) batch2 uploaded" >> $O/OPERATIONS.log

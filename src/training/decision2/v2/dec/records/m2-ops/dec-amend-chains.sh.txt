@@ -1,0 +1,16 @@
+set -u
+SRC=$1
+C=/data/dev2/runs/dec/m2/chains
+D=/data/dev2/src/$SRC/src/training/decision2/v2/dec/drive_arm.sh
+NOX=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
+BASE4=/hf/models--Qwen--Qwen3.5-4B-Base/snapshots/1001bb4d826a52d1f399e183466143f4da7b741b
+TEACH=/data/dev2/runs/dec/m2/teacher/nox-control-a0sr/nox-teacher.jsonl
+HALF=/data/dev2/runs/dec/m2/data/m2-half-a7-v1/train.jsonl
+KARGS="--train /runs/m2/data/m2-control-a0sr/train.jsonl --teacher /runs/m2/teacher/nox-control-a0sr/nox-teacher.jsonl --teacher-kl-weight 0.5 --batching tokens --max-batch-tokens 16384 --max-batch-rows 16 --update-rows 16"
+FARGS="--train /runs/m2/data/m2-half-a7-v1/train.jsonl --train-mode full --backbone-lr 1e-5 --head-lr 1e-4 --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64 --seed 20260926"
+waitfor() { while pgrep -f "$C/$1" >/dev/null; do sleep 30; done; while [ ! -f "$2" ]; do sleep 30; done; }
+(waitfor gpu1.sh $TEACH; DEC_NODE=b bash $D m2-X4K-s1 1 $SRC m2/arms $NOX -- $KARGS --seed 20260926) > $C/gpu1-amend.log 2>&1 &
+(waitfor gpu2.sh $TEACH; DEC_NODE=b bash $D m2-X4K-s2 2 $SRC m2/arms $NOX -- $KARGS --seed 20260927) > $C/gpu2-amend.log 2>&1 &
+(waitfor gpu3.sh $HALF; DEC_NODE=b bash $D m2-E4F-h-s1 3 $SRC m2/arms $NOX -- $FARGS) > $C/gpu3-amend.log 2>&1 &
+(waitfor gpu4.sh $HALF; DEC_NODE=b bash $D m2-B4F-h-s1 4 $SRC m2/arms $BASE4 -- $FARGS --init base --revision 1001bb4d826a52d1f399e183466143f4da7b741b) > $C/gpu4-amend.log 2>&1 &
+echo queued-amend

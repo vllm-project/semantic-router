@@ -1,0 +1,13 @@
+set -u
+SRC=$1
+while pgrep -f "m2/chains/gpu0.sh" >/dev/null; do sleep 30; done
+S=/data/dev2/src/$SRC/src/training/decision2/v2/dec; L=$S/launch.sh; R=/data/dev2/runs/dec/m2/controls; mkdir -p $R
+export DEC_IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1 DEC_DATA=/data/dev2/runs/dec/data-cleanv2 DEC_RENDER=/dev/dri/renderD129 DEC_GPU_LABEL="node B GPU0"
+H=/hf
+for spec in "nox1 models--llm-semantic-router--Decision-1.0-Nox-4B cde2a68dbaa557ea65dc458104d410a0802ee259" "sol1 models--llm-semantic-router--Decision-1.0-Sol-2B ce0c018a28de16d6639b1cd203b761bf643b89e6" "eos1 models--llm-semantic-router--Decision-1.0-Eos-0.8B 363c4a5e56afc115b1c78c837633956d0bbb63ab"; do
+  set -- $spec; name=$1 repo=$2 rev=$3
+  for panel in dev css-pilot; do
+    bash $L m2-ctl-$name-$panel $SRC $R/$name-$panel -- -m v2.dec.infer_1p0 --package $H/$repo/snapshots/$rev --model-id llm-semantic-router/${repo#models--llm-semantic-router--} --model-revision $rev --input /panels/$panel.prompts.jsonl --output /out/$name.$panel.predictions.jsonl
+  done
+done
+echo "$(date -u +%FT%TZ) node B same-runtime 1.0 controls done" >> $R/OPERATIONS.log

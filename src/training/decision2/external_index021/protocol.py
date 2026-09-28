@@ -36,6 +36,35 @@ def chance_skill(raw: float, chance: float) -> float:
     return clip((raw - chance) / (1 - chance))
 
 
+def area_weights(s: dict | None = None) -> dict[str, float]:
+    """Exact square-root area weights; the published weights are their rounding."""
+    s = s or spec()
+    sizing = s["area_sizing"]
+    if sizing["rule"] != "sqrt":
+        raise ValueError(f"unsupported area sizing rule {sizing['rule']!r}")
+    fixed = sizing["fixed"]
+    size = {
+        a["id"]: math.sqrt(len(a["benchmarks"]))
+        for a in s["areas"]
+        if a["id"] not in fixed
+    }
+    rest = 1 - sum(fixed.values())
+    weights = {
+        a["id"]: (
+            fixed[a["id"]]
+            if a["id"] in fixed
+            else rest * size[a["id"]] / sum(size.values())
+        )
+        for a in s["areas"]
+    }
+    for area in s["areas"]:
+        if round(weights[area["id"]], 4) != area["weight"]:
+            raise ValueError(
+                f"sqrt rule disagrees with the published {area['id']} weight"
+            )
+    return weights
+
+
 def aggregate(
     benchmarks: dict[int | str, dict], *, require_complete: bool = True
 ) -> dict:
@@ -46,6 +75,7 @@ def aggregate(
     display-rounding drift; they do not validate row-level scoring.
     """
     s = spec()
+    area_weight = area_weights(s)
     values = {int(key): value for key, value in benchmarks.items()}
     expected = {number for area in s["areas"] for number in area["benchmarks"]}
     missing = expected - values.keys()
@@ -73,7 +103,7 @@ def aggregate(
         areas.append(
             {
                 "id": area["id"],
-                "weight": area["weight"],
+                "weight": area_weight[area["id"]],
                 "raw": mean("raw"),
                 "skill": mean("skill"),
                 "coverage": mean("coverage"),
