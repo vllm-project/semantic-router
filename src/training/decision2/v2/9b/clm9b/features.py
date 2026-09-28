@@ -36,7 +36,7 @@ class FeatureSet:
         device: torch.device,
         pooling: str = "last",
     ):
-        from safetensors.torch import load_file
+        from safetensors import safe_open
 
         if representation not in REPRESENTATIONS:
             raise ValueError(representation)
@@ -47,15 +47,15 @@ class FeatureSet:
         )
         self.rows = read_rows(self.folder)
         if representation == "joint":
-            self.table = load_file(str(self.folder / "joint.safetensors"))[
-                f"L{layer}"
-            ].to(device)
-            valid_key = "j_valid"
+            filename, name, valid_key = "joint.safetensors", f"L{layer}", "j_valid"
         else:
-            self.table = load_file(str(self.folder / "texts.safetensors"))[
-                f"{pooling}_L{layer}"
-            ].to(device)
-            valid_key = "d_valid"
+            filename, name, valid_key = (
+                "texts.safetensors",
+                f"{pooling}_L{layer}",
+                "d_valid",
+            )
+        with safe_open(str(self.folder / filename), framework="pt") as handle:
+            self.table = handle.get_tensor(name).to(device)
         n = len(self.rows)
         width = max(len(row["keys"]) for row in self.rows)
         candidate = torch.full((n, width), -1, dtype=torch.long)
