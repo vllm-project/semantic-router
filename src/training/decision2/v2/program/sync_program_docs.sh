@@ -127,17 +127,24 @@ for env_var, default, required in (
 if not replacements:
     sys.exit("sync_program_docs: no node addresses found in nodes.env")
 labels = sorted(set(replacements.values()))
-pattern = re.compile(
-    r"(?<![A-Za-z0-9])(?:"
-    + "|".join(re.escape(t) for t in sorted(replacements, key=len, reverse=True))
-    + r")(?![A-Za-z0-9])",
-    re.IGNORECASE | re.ASCII,
-)
+ip_like = re.compile(r"[0-9]{1,3}(?:[._-][0-9]{1,3}){3}")
+
+
+def alternation(found, edge):
+    alternatives = "|".join(re.escape(t) for t in sorted(found, key=len, reverse=True))
+    return re.compile(rf"(?<![{edge}])(?:{alternatives})(?![{edge}])", re.IGNORECASE | re.ASCII)
+
+
+names = [t for t in replacements if not ip_like.fullmatch(t)]
+addresses = [t for t in replacements if ip_like.fullmatch(t)]
+patterns = [alternation(names, "A-Za-z0-9")] if names else []
+patterns += [alternation(addresses, "0-9")] if addresses else []
 shown = ", ".join(f'"{name}"' for name in labels)
 for source, target in SOURCES:
     with open(os.path.join(source_dir, source), encoding="utf-8") as handle:
         text, omitted = drop_private(handle.read(), source)
-    text = pattern.sub(lambda m: replacements[m.group(0).lower()], text)
+    for pattern in patterns:
+        text = pattern.sub(lambda m: replacements[m.group(0).lower()], text)
     for name in labels:
         q = re.escape(name)
         text = re.sub(rf"{q} = `{q}`(?: \({q}\))?", name, text)
