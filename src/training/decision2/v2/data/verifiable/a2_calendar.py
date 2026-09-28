@@ -718,6 +718,88 @@ def _to_business(day: date, holiday: date | None, step: int) -> date:
     return day
 
 
+V2_FIRST, V2_LAST = date(2025, 3, 3), date(2027, 3, 1)
+V2_WIDTH = {"cal": 24, "week": 24, "bus": 16, "eom": 6}
+
+
+def _v2_space(kind: str) -> list[date]:
+    if kind == "eom":
+        return [core.month_end(2023 + m // 12, m % 12 + 1) for m in range(96)]
+    days = [V2_FIRST + timedelta(days=i) for i in range((V2_LAST - V2_FIRST).days)]
+    return [d for d in days if d.weekday() < 5] if kind == "bus" else days
+
+
+def a4v2_plan(rng: random.Random, lang: str, turn: int) -> core.A4v2Plan:
+    """Deadline options first (rank-balanced value windows), then a record that yields the gold."""
+    scene = _Scene(rng, lang)
+    kind = rng.choices(KINDS, weights=KIND_WEIGHTS)[0]
+    space = _v2_space(kind)
+    sets = core.rank_windows(rng, 0, len(space) - 1, 4, V2_WIDTH[kind])
+    every = {space[i] for gold, near, rand in sets for i in (gold, *near, *rand)}
+    dl = scene.t["dl"]
+    question = {
+        "en": f"Which date is {dl}, that is, the last day that still counts as on time?",
+        "zh": f"{dl}是哪一天（即仍算按时的最后一天）？",
+    }[lang]
+    template = {"en": f"Is {dl} {{v}}?", "zh": f"{dl}为{{v}}吗？"}[lang]
+
+    def render(end: date) -> core.A4v2Render | None:
+        shown = [scene.fmt(d) for d in every]
+        for _ in range(20):
+            lo, hi = N_RANGE[kind]
+            n = rng.randint(lo, hi)
+            holiday = None
+            if kind == "bus":
+                pool = [end - timedelta(days=i) for i in range(1, 26)]
+                pool = [d for d in pool if d.weekday() < 5 and d not in every]
+                holiday = rng.choice(pool)
+                start = rng.choice(_bus_starts(end, n, holiday))
+            elif kind == "eom":
+                first = date(end.year, end.month, 1) - timedelta(days=1)
+                start = first - timedelta(days=rng.randrange(first.day))
+            else:
+                start = end - timedelta(days=n if kind == "cal" else 7 * n)
+            if deadline(kind, start, n, holiday) != end:
+                continue
+            record = scene.record(
+                kind, n, start, holiday, None, kind == "bus" or rng.random() < 0.3
+            )
+            scene.pad(rng, record, shown)
+            state = scene.state(record)
+            if any(core.mentions(state, text) for text in shown):
+                continue
+            facts = _facts(
+                scene,
+                kind=kind,
+                n=n,
+                start=start,
+                holiday=holiday,
+                deadline=end,
+                question="date",
+            )
+            return core.A4v2Render(
+                state,
+                facts,
+                kind,
+                f"{scene.domain}_date_{kind}_v2",
+                question,
+                lambda v: template.format(v=v),
+            )
+        return None
+
+    alternatives = [
+        core.A4v2Alternative(
+            r,
+            scene.fmt(space[gold]),
+            [scene.fmt(space[i]) for i in near],
+            [scene.fmt(space[i]) for i in rand],
+            lambda end=space[gold]: render(end),
+        )
+        for r, (gold, near, rand) in enumerate(sets)
+    ]
+    return core.A4v2Plan(True, alternatives)
+
+
 # ---------------------------------------------------------------- oracle 2
 
 _START = {

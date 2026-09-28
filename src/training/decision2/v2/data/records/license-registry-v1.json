@@ -161,6 +161,18 @@
     "evidence": "https://huggingface.co/datasets/Short-Answer-Feedback/saf_micro_job_german",
     "redistribution": "permitted with attribution"
   },
+  "decision2_verifiable_v2_a4v2h": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4 v2 hard distractors",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "redistribution": "unrestricted within the project"
+  },
+  "decision2_verifiable_v2_a4v2r": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4 v2 random distractors",
+    "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+    "redistribution": "unrestricted within the project"
+  },
   "decision2_verifiable_v2_a6": {
     "license": "project-generated (no third-party text)",
     "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A6",
