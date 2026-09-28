@@ -1,0 +1,128 @@
+{
+  "schema": "TEMPLATE-dev2-release-spec/1",
+  "_template": {
+    "status": "TEMPLATE: not a release spec. v2.release.build refuses this schema on purpose; copy it, set schema to dev2-release-spec/1 and replace every PLACEHOLDER value before any build.",
+    "fill_after": "a Milestone 3 finalist passes the ~27B release gate (post-key v3 >= 64.9, human transfer not significantly below AutoJev-27B, no decision type collapsed) and the coordinator records a release decision",
+    "checkpoint": "the finalist's qwen-adapter checkpoint (a v2.27b.lora_soup output with soup_manifest.json, or one seed's BEST); expected_identity.model_sha256 = checkpoint_fingerprint(checkpoint, base.path)",
+    "calibration": "the adopted CAL698 report from v2.release.calibrate_frozen --source-path --require-kernels --max-length 32768 (inference.max_length must equal max_input_tokens), or null when v2.release.dev_calibration rejected it (then say T = 1 and give the rejected temperatures in card.calibration_text)",
+    "release_sh": "run release.sh with --base-path set to base.path, --require-kernels, --site /opt/decision-fla, --env TRITON_CACHE_AUTOTUNING=1 and --env TRITON_CACHE_DIR=<copy of the formal run's post-run frozen autotune cache> mounted with --mount-rw, and --parity for every scored panel",
+    "frozen_autotune_cache": "PLACEHOLDER: path and tree hash of the formal run's post-run Triton autotune cache (the one a release run must reuse)"
+  },
+  "kind": "release",
+  "repo_id": "llm-semantic-router/DEV2.0-27B",
+  "model_name": "DEV2.0-27B",
+  "profile": "qwen-adapter",
+  "checkpoint": "PLACEHOLDER: /data/dev2/runs/27b/<finalist>/checkpoint",
+  "expected_identity": {
+    "model_sha256": "PLACEHOLDER: 64-hex checkpoint_fingerprint(checkpoint, base.path).model_sha256"
+  },
+  "base": {
+    "repo_id": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "path": "/data/decision20-20260926/models/Qwen3.8-27B",
+    "licence": "apache-2.0",
+    "redistribution": "not redistributed: the package pins the base by repository revision and per-file SHA-256, and it is fetched or supplied at load time"
+  },
+  "calibration": {
+    "path": "PLACEHOLDER: adopted CAL698 calibration.json (or set calibration to null for T = 1)",
+    "sha256": "PLACEHOLDER: 64-hex SHA-256 of that file"
+  },
+  "max_input_tokens": 32768,
+  "gate_receipt": "PLACEHOLDER: /data/dev2/runs/release/decisions/DEV2.0-27B.decision.json",
+  "origin": {
+    "repo_id": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "relation": "adapter",
+    "summary": "PLACEHOLDER: a PEFT LoRA adapter (rank, alpha, every text projection) and a native candidate head trained on the frozen Qwen3.8-27B text backbone at `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` (Apache-2.0), which is not redistributed; say whether the release is a uniform seed soup."
+  },
+  "runtime_requirements": {
+    "python": "3.12.13",
+    "torch": "2.12.0+git6bbd260 (ROCm 7.2 build; one ROCm GPU tested)",
+    "transformers": "5.17.0",
+    "peft": "0.21.0",
+    "flash-linear-attention": "0.5.2 (GPU gated-delta kernels)",
+    "causal-conv1d": "1.7.0 (GPU convolution kernels)",
+    "triton": "PLACEHOLDER: version of the image's triton (persisted autotune cache)",
+    "tokenizers": "PLACEHOLDER",
+    "safetensors": "PLACEHOLDER"
+  },
+  "runtime_equivalence": "PLACEHOLDER: how decision2/qwen.py (adapter profile, pinned base, BF16 backbone / FP32 head, adopted calibration or T = 1) matches the scored kernel-path execution, and the release.sh --parity checks run with the frozen autotune cache.",
+  "scored": {
+    "label": "PLACEHOLDER: post-key same-panel run <formal run id> (kernel path, frozen autotune cache, 32,768-token limit)",
+    "report_sha256": "PLACEHOLDER",
+    "seal_sha256": "PLACEHOLDER",
+    "predictions_sha256": {
+      "typed-final": "PLACEHOLDER",
+      "css15": "PLACEHOLDER",
+      "public231": "PLACEHOLDER"
+    },
+    "paired_sha256": "PLACEHOLDER",
+    "native_manifest": "PLACEHOLDER: <formal run>/output/typed-final.predictions.jsonl.manifest.json"
+  },
+  "licence": {
+    "components": [
+      {
+        "component": "DEV2.0-27B LoRA adapter, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/DEV2.0-27B"
+      },
+      {
+        "component": "Qwen3.8-27B text backbone and tokenizer (pinned external base, not redistributed)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3.8-27B@1d4bf0f2"
+      }
+    ],
+    "files": [
+      {
+        "source": "/data/decision20-20260926/models/Qwen3.8-27B/LICENSE",
+        "path": "LICENSE",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      },
+      {
+        "source": "/data/decision20-20260926/models/Qwen3.8-27B/LICENSE",
+        "path": "LICENSES/Qwen3.8-27B-LICENSE.txt",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      }
+    ],
+    "attributions": [
+      "[Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) at `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`: frozen text backbone and tokenizer of this adapter, not redistributed (Apache-2.0, `LICENSES/Qwen3.8-27B-LICENSE.txt`).",
+      "PLACEHOLDER: training data of the finalist's mixture (A0s-strict, A6g / A6h and, for the A7 arm, the A7 curricula including the A7i BANKING77 / CLINC150 labels), each with its own licence.",
+      "PLACEHOLDER: evaluation data shown on the card.",
+      "PLACEHOLDER: banner credits."
+    ]
+  },
+  "card": {
+    "banner": "PLACEHOLDER: DEV2.0-27B-owl-banner.png (must exist in v2/release/brand)",
+    "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
+    "paired": "PLACEHOLDER: PAIRED json of the formal run against the peers",
+    "calibration_text": "PLACEHOLDER: adopted CAL698 temperatures, or raw probabilities (T = 1) with the rejected CAL698 temperatures",
+    "requirements_text": "PLACEHOLDER: tested hardware and software; the flash-linear-attention and causal-conv1d kernels with a persisted Triton autotune cache; the pinned base download.",
+    "text": {
+      "tagline": "PLACEHOLDER",
+      "architecture": "PLACEHOLDER",
+      "runtime_note": "PLACEHOLDER",
+      "confirmation": "PLACEHOLDER",
+      "comparator_note": "PLACEHOLDER",
+      "training": ["PLACEHOLDER"],
+      "limitations": [
+        "PLACEHOLDER: disclosures required by the Milestone 3 preregistration (strict base, CAL698 or T = 1 with the rejected temperatures, the 32,768-token limit, the A7 composition, soup or seed)."
+      ],
+      "details": ["PLACEHOLDER"]
+    },
+    "reports": [
+      {
+        "key": "candidate",
+        "role": "candidate",
+        "report": "PLACEHOLDER: <formal run>/REPORT.json",
+        "label": "DEV2.0-27B"
+      },
+      {
+        "key": "autojev27",
+        "role": "peer",
+        "report": "PLACEHOLDER: node B kernel run REPORT.json of AutoJev-27B",
+        "repo_id": "PLACEHOLDER",
+        "label": "AutoJev-27B"
+      }
+    ]
+  }
+}
