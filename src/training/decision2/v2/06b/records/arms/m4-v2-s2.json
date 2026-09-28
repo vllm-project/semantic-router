@@ -1,0 +1,60 @@
+{
+  "arm": "m4-v2-s2",
+  "family": "qwen-causal",
+  "start": {
+    "path": "/work/models/Qwen3-0.6B-Base",
+    "repo": "Qwen/Qwen3-0.6B-Base",
+    "revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+    "head_seed": 20260928,
+    "architecture": "official causal endpoint + global query shared head (training.model.decision_model)",
+    "collapse_stop": {
+      "step": 1124,
+      "min_select": 350
+    }
+  },
+  "data": {
+    "parent": "/work/data/hf-private-decision20-clean-v2",
+    "converter_bundle": "/work/models/Decision-1.0-Kai-0.6B",
+    "mixture": {
+      "template": "materialized",
+      "path": "/runs/m4/data/m4-mix-v2.train.jsonl",
+      "sha256": "0eedee75259c17869dbd3f8de93b39b2d5e2e7da442113347084b167fa07a47e",
+      "build_spec": "src/training/decision2/v2/06b/records/mixtures/m4-mix-v2.json",
+      "build_report_sha256": "77d6f854845d9348ee63e1ce2fe6ceb8e0e54cc18ae830307ba1eb2a016124a9",
+      "expected": {
+        "train_rows": 47922,
+        "train_ids_sha256": "1bd2841dfb8299ddb7d163806ab2d367a421c7130700670a5fc4582319acb27e"
+      }
+    }
+  },
+  "logical_batch": 16,
+  "max_micro_rows": 8,
+  "micro_token_budget": 32768,
+  "seed": "20260928-06b-m4-s2",
+  "optimizer": {
+    "encoder_lr": 1e-05,
+    "head_lr": 0.0002,
+    "lr_min": 1e-06,
+    "warmup_ratio": 0.1,
+    "weight_decay": 0.01,
+    "clip": 1.0
+  },
+  "loss": {
+    "ce": 1.0,
+    "brier": 0.5,
+    "score_rps": 0.0,
+    "teacher_kl": 1.0
+  },
+  "teacher": {
+    "path": "/runs/m4/teacher/lux1-a0-rpv2m.merged.jsonl",
+    "sha256": "358a883d0b53a3b8b7ff627aa974b9d965444b2427384eb1bbbbd8c5477e87b5",
+    "format": "option-key",
+    "source": "own Lux1 targets: canonical A0 TRAIN file 752b7c8f (decoder track, Lux cdf4d3ef, T 2.00544) + research & data RP-v2 waves 1 (47049a6b @ HF 7885baf6) and 2 (2c6ab38d @ HF 6bd8eb4d), Lux bd45a30a native runtime; merged by v2.06b.teacher_merge",
+    "screen": "RP-v2 argmax vs gold Choice .79, Noul .78-.79, Score .55-.56 (research & data teachers record); A0 file TRAIN agreement .835/.894/.866",
+    "coverage": "subset"
+  },
+  "milestones": "eighths",
+  "include_step0_in_best": false,
+  "gpu_hour_cap": 1.8,
+  "max_reserved_gib": 200
+}

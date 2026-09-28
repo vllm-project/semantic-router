@@ -84,6 +84,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | ~27B | `/home/xunliu/code/vllm-sr-dev2-27b` | `xunzhuo/decision-2-training-27b` |
 | release engineering | `/home/xunliu/code/vllm-sr-dev2-release` | `xunzhuo/decision-2-training-release` |
 | A7 own-1.0 corpora | `/home/xunliu/code/vllm-sr-dev2-a7` | `xunzhuo/decision-2-training-a7` |
+| release engineering (DEV2.0-0.6B) | `/home/xunliu/code/vllm-sr-dev2-release-06b` | `xunzhuo/decision-2-training-release-06b` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -143,14 +144,15 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
-| node A GPU0–1 | 0.6B encoder |
-| node A GPU2–4 | research & data: AutoJev-27B re-qualification + target production (~1.5 h), then back to the 9B track (2026-09-28 20:15 UTC+8) |
-| node A GPU5 | 0.8B–4B decoder |
+| node A GPU0 | DEV2.0-0.6B release verification (lent by the 0.6B track, 2026-09-28 21:30 UTC+8); back to 0.6B afterwards |
+| node A GPU1 | 0.6B track (post-release optimization) |
+| node A GPU2–4 | 9B track (returned 2026-09-28 21:31 UTC+8 after AutoJev target production). **9B track: read the 21:00 cross-track note (A7 is mostly NEW data for Lux) and the 21:35 AutoJev note before planning work on these GPUs.** |
+| node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
 | node A GPU6–7 | 9B track Milestone 3 (lent by eval at 2026-09-28 20:30 UTC+8; eval borrows one back for a formal run or a C1 scoring event) |
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
 | node B GPU5–6 | ~27B |
-| node B GPU7 | research & data (owner); A7 may run short jobs (≤ 30 min, e.g. its embedding scan) under its own lease owner file when the GPU is idle/released |
+| node B GPU7 | research & data (owner) — SHARED from 2026-09-28 21:55 UTC+8 with the eval track's node-B comparator re-validation (~1.5 h, inference only; each writes its own lease owner entry, e.g. `owner.eval`) |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
 stop rule BEFORE launch (commit a prereg); run preflights (load/parity, zero-step, one-step + reload). If a preflight
@@ -173,6 +175,7 @@ exactly one gist file and updates it in place:
 | `06-decision-2-27b.md` | ~27B |
 | `07-decision-2-release.md` | release engineering |
 | `08-decision-2-own10-corpora.md` | A7 own-1.0 corpora |
+| `07b-decision-2-release-06b.md` | release engineering for DEV2.0-0.6B |
 
 - Create: write the file locally with exactly that name, then `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -a <local-path>`.
   Update: `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -f <file-name> <local-path>`. Never modify or delete other files.
@@ -181,6 +184,104 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 21:55 — **DEV2.0-0.8B APPROVED for private release** (eval gate checks + C1 event 1; integration `bf3ff2e6e`).
+  - Gate (a): human transfer not below the tier leaders (vs Intern-Decision +0.058 [−0.043, +0.119]; vs Kev +0.050
+    [−0.041, +0.122]); v3 vs Intern-Decision +6.70 [+0.63, +10.35], vs Kev +7.02 [+1.33, +11.25]. Gate (b): no type
+    collapsed (Choice .661 vs chance .267; Noul .764 vs .50; Score .268 [.226, .313] vs .20 — uses four of five levels,
+    never level 0, slightly below Eos 1.0 .300: disclose). Eos 1.0's own typed Noul is collapsed (97% "false").
+  - **C1 event 1 (sealed, independent):** DEV2.0-0.8B 40.24 vs Eos 1.0 37.94 (+2.31 [+0.29, +4.30]); vs Intern-Decision
+    +5.66 [+3.49, +7.78]; vs Kev +1.18 [−0.99, +3.37] (level). Disclose C1 regressions vs Eos 1.0: Russian star ratings,
+    tutoring-rapport Noul, Arabic multiple choice, long inputs (.577 vs .620), non-English (.422 vs .440).
+  - The card adds a C1 line (independent sealed confirmation, 2,874 human-labelled items) and these regressions; the
+    coordinator finalizes the release decision when the release worker's verification returns.
+  - **Node-B image gap:** `decision20-lux-runtime` (`ce895822`) lacks `causal_conv1d`; every eval node-B collection (Lux1
+    check, AutoJev-27B, Eikos, Jebadiah) used it, while the 27B track's formal runs used the kernel-equipped `dbe5f32b`.
+    The eval track re-collects those comparators on `dbe5f32b` now (node B GPU7, shared). **~27B track: do not finalize a
+    27B formal comparison until the re-validated AutoJev node-B comparator is published; if one already ran, re-pair it
+    against the new comparator.** If AutoJev's v3 moves, the 27B release threshold is recomputed.
+
+- 2026-09-28 21:35 — **AutoJev-27B TEACHER TARGETS AVAILABLE** (research & data M3a; gist 02; integration `5794726fe`).
+  Re-qualification v2 passed every gate (warm-up covering every 512-token bucket to 8,096; frozen autotune cache; 910/910
+  bitwise identical across four processes / three GPUs; 99.61% argmax vs the eval track's predictions). All files produced
+  on node A, under `m3/teachers/autojev27/`, each with per-row attestation and a `PROVENANCE.md` carrying the caveat:
+  - AJ-M (M recipes) 84,523 targets `ba52dd86…` at private revision `3a99bf1c26ac7924ec1216cdf1f703e1a5f21ae6`;
+  - AJ-A0s (pk1 A0s rows) 7,299 `97a071af…` at `9bb9790b014d17d7dad50677b4f057f20e50460c`;
+  - AJ-SL (S and L recipes minus M) 37,219 `1254cb47…` at `780d27439c5a07650a37b9a0ce3369dae3359baf`.
+  Agreement with gold (Choice / Noul / Score): AutoJev ≈ .84 / .83 / .61 vs own-Lux ≈ .79 / .79 / .55 on the same rows.
+  Every size track may adopt them now; every AutoJev-distilled candidate needs a matched Lux-target control, and its
+  card and records disclose the teacher provenance caveat. Node A GPU2–4 are back with the 9B track.
+
+- 2026-09-28 21:30 — **SECOND RELEASE CANDIDATE: DEV2.0-0.6B** (0.6B Milestone 4; gist `03-decision-2-06b-encoder.md`;
+  integration `2747b817a`).
+  - `m4-t-a7-soup`: official Qwen3-0.6B-Base, (a2) recipe (backbone LR 1e-5, 10% warmup), trained on A0s-r + A6 + the A7
+    Eos/Lux natural pool, three same-init seeds, uniform weight soup. Post-key v3 43.54 vs Kai1 35.94: +7.60
+    [+4.71, +10.76]; vs Kai1 at 8K +7.57; vs GLiNER2.5-Decide (tier leader) +1.02 [−1.77, +7.80]; public 231 142; mlx-diag
+    61.5. Disclose: typed FINAL Choice 255 vs Kai1 277 (−22). Checkpoint: private
+    `llm-semantic-router/dev2-release-staging-06bm4@62c61c10…`, profile `qwen-full`; scored runs
+    `/data/dev2/runs/06b/m4/formal/m4-t-a7-soup` (+ `-mlx`). The brief's primary 0.6B routes (Kai / Lex continuation,
+    EuroBERT, mmBERT, bidirectional Qwen) were all tested in M1–M4 and none beat Kai1 or trained stably; the official-Qwen
+    backup route won on evidence — state the weight origin plainly on the card.
+  - Coordinator decisions: (1) release engineering for DEV2.0-0.6B starts now, in parallel with 0.8B (separate worktree,
+    node A GPU0); (2) its A0s renumbering inside the mixture builder counts as "renumbered data" if release engineering
+    verifies it matches the published pk1 A0s row for row; (3) canonical Lux A0 file going forward is the pk1 `56627939…`
+    (`752b7c8f…`, used by this candidate, agrees 99.5% — disclosed); (4) the replacement of the typed-DEV Noul floor by an
+    in-distribution Noul check is accepted with disclosure (written before any formal run; that floor measured one family,
+    `rule_precedence`, where no model up to 4B has signal) — the eval track still checks "no type collapsed" on v3.
+  - **C1 scheduling:** event 1 = DEV2.0-0.8B (running); event 2 = DEV2.0-0.6B plus any other candidate frozen by then;
+    event 3 = the final family confirmation. C1 confirms, it does not block later-tier releases; cards get a C1 line when
+    available (a card-only revision).
+  - **Proxy mis-ranking at 0.6B:** P favoured the mixture-v2 soup by +6.94 but v3 put the A7 soup ahead by 4.4 (v2 soup:
+    39.13, +3.19 [−0.33, +8.11] vs Kai1); CSS pilot rose for v2 while CSS15 fell (.397 vs .480). Eval: check whether data v2
+    contains same-source datasets for the CSS-pilot tasks that rose (dataset-level, not only lexical/embedding overlap).
+    (Reassigned at 21:35 to research & data Milestone 3b, which owns the v2 source registry; eval need not duplicate it.)
+    Research & data: mixture v2 gave the best public 231 (151) at 0.6B but lower transfer and mlx-diag — revisit the
+    recipe's Choice share and why its multilingual arms didn't lift mlx-diag.
+  - Post-release updates: a new candidate replaces a released size only if it clearly beats the released model (paired
+    post-key CI lower bound > 0), as a new private revision with a card update.
+
+- 2026-09-28 21:05 — **A7 Milestone 2 complete** (gist `08-decision-2-own10-corpora.md`; integration `f344f1aec`; private HF
+  dataset revision `0b47239ed36ce539b2350e35af88a26140d867f7`). The A7 track is finished; remaining source ideas move to
+  research & data.
+  - Embedding scan (same model/thresholds as research & data) found no near-duplicate of any eval/dev panel; 64 groups
+    (323 rows) overlapping the stricter PI-v3 additions were removed → **switch to `a7-dec10-v3`** (138,011 rows,
+    126.15M tokens; A7g / A7p / A7o byte-identical to v2).
+  - **New human-labelled Score / multilingual sub-arms (adopt them — they target the Score and multilingual gaps, e.g. the
+    0.8B candidate's disclosed losses):** A7q OASST1 ratings (23,537 Score rows, 5 levels, 23 languages), A7k KLUE-STS +
+    JSTS (2,190 Score, 6 levels, ko/ja), A7s SentiMix Hinglish + AfriSenti Swahili (12,860 Score, 3 levels), A7r recovered
+    Noul (7,061, en/zh, balanced). Templates are the repo's own; 730 A7q rows exceed 1,024 tokens.
+  - **A7x MASSIVE is ablation-only and never in a release-candidate mixture** (MASSIVE test items are part of mlx-diag); an
+    ablation using it reports mlx-diag without its MASSIVE items.
+  - Research & data: A7k excludes every KLUE-STS/JSTS pair already in A6h / H6; if you rebuild H6 or A6h2, keep A7k pairs
+    out of your held-out and sealed slices; PI-v4 adds A7's held-out slices as protected and A7 TRAIN as report-only.
+  - The positional option-key tool is shared at `src/training/decision2/v2/common/option_keys.py`. The 22 re-keyed RP-v1q
+    prompts' R2 targets were already re-derived on the fixed prompts in research & data M3a.
+
+- 2026-09-28 21:00 — **FIRST RELEASE CANDIDATE: DEV2.0-0.8B** (decoder Milestone 2; gist `04-decision-2-decoder-08b-4b.md`;
+  integration `18ef6e625`).
+  - Recipe "E8F": own Eos 1.0, FULL fine-tuning (not LoRA) on the full A7 + v1 mixture (138.4M tokens), three seeds,
+    uniform weight soup, CAL698 calibration, packaged `qwen-full` at 16,384 tokens. Post-key v3 50.236 vs Eos 1.0 42.547:
+    +7.69 [+3.65, +13.32] (node A); public 231 156 vs 142; also ~6.7 above the best measured 0.8B peer (Intern-Decision
+    43.535). Gains are typed reasoning (Choice 529 vs 315, Noul 611 vs 410); disclosed losses: −13 Score items, −0.021
+    human transfer, about −5 points multilingual Noul on mlx-diag; single seeds vary (49.78 / 47.36 / 41.08), so the soup
+    matters. Checkpoint: private `llm-semantic-router/dev2-dec-staging@16c0929a`, folder `m2/E8F-soup/`; scored run
+    `/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA`. Release engineering + C1 scoring event 1 start now.
+  - **A7 IS MOSTLY NEW DATA FOR THE Eos / Lux LINEAGE.** Per the A7 inventory, the Stage1–4 curricula (A7g / A7o / A7p /
+    A7i) trained only Sol and Nox; Eos and Lux saw only the natural 24k pool. That is why E8F gained so much typed
+    reasoning. **9B track:** treat the full A7 (plus v1 / v2) as new training data for Lux, not a small retention replay —
+    an E8F-style run (full-data fine-tuning, three seeds, uniform soup, own-Lux soft targets as a trust region) is the
+    highest-expected-value 9B arm. For Sol / Nox (2B / 4B), A7 is their own data, so new information has to come from v2.
+  - **Comparator rule:** compare against the STRICTER of the adopted 1.0 run and a same-renderer / same-limit 1.0 control
+    (the shared 2.0 renderer alone costs Nox 1.0 0.78 on v3: 55.689 vs adopted 56.470, so 4B compares against 56.470).
+  - Trainer checks at 0.8B–4B: no padding bug (gradient cosine >= 0.9985; the probe's preset thresholds were tighter than
+    kernel precision, disclosed); the Score overfit fits all levels 2..10, so the 0.8B "all level 0" on DEV Score was a
+    transfer limit, not a bug. Enforce FLA + causal-conv1d + shared persisted autotune cache in every Qwen3.5-family job.
+  - **Node B image gap:** node B's earlier image lacked the causal-conv1d kernel (a fallback computed the same operation).
+    Eval track: some node B collections (e.g., the AutoJev node-B 27B comparator) used that image — re-validate node-B
+    comparators on the kernel-equipped image before the next 27B formal comparison.
+  - A0s (incl. pk1) still contains 752 rows of the two excluded shortcut families (natural_cosmos_qa,
+    natural_squad2_answerability). Research & data: publish a strict variant without them; new runs use it; candidates
+    already trained with them disclose it.
 
 - 2026-09-28 20:30 — From eval Milestone 3 (gist `01-decision-2-eval-peers.md`; integration `3773540e8`):
   - Option-key audit of all eight eval panels: no `result_<n>` or out-of-order numbered keys; seven panels clean on every
@@ -664,3 +765,24 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
   `0b29686f…`, gold `c0277771…`). v1.1 seal `e3f411a8…` is logged. Record: `v2/eval/records/m3-sealed-c1-v1_1-2026-09-28.md`.
   The check is repeated before every scoring event against newly landed data; the key stays only on the coordinator
   workstation (a node sees it only transiently during a logged event).
+- **DEV2.0-0.8B gate checks + C1 event 1 (2026-09-28 ~21:50 UTC+8; record `v2/eval/records/m4-dev2-08b-gates-and-c1-event1-2026-09-28.md`).**
+  - Gates (post-key v3, stored predictions):
+    - Human transfer vs Intern-Decision is +0.058 [−0.043, +0.119] and vs Kev +0.050 [−0.041, +0.122]: not below the
+      leader.
+    - v3 composite is +6.70 [+0.63, +10.35] vs Intern and +7.02 [+1.33, +11.25] vs Kev.
+    - No candidate type collapsed (Choice .661, Noul .764, Score .268 vs chance .267/.50/.20). Score never predicts
+      level 0; disclose.
+    - Eos 1.0's typed Noul IS collapsed (97% false).
+  - **C1 v1.1 event 1 (sealed independent set; 1 of 3 used).** The recheck found no new C1 source in training (no
+    v1.2). C1 scores: candidate 40.24, Eos 1.0 37.94, Kev 39.06, Intern 34.58, JPT-0.8B 39.01 (internal only).
+    - Paired differences for the candidate: vs Eos **+2.31 [+0.29, +4.30]**, vs Intern **+5.66 [+3.49, +7.78]**, vs
+      Kev +1.18 [−0.99, +3.37].
+    - Disclosed regressions vs Eos 1.0: Russian star ratings, tutoring rapport, long inputs (.577 vs .620) and
+      non-English accuracy.
+  - **Gate check tool:** `python3 -m v2.eval.gates paired|types …` (stored predictions only). Future C1 events reuse the
+    event script pattern in the record (logged decryption, seal before gold).
+- **Node-B image gap (plan, not run):** the `decision20-lux-runtime` image (`ce895822`) lacks `causal_conv1d`. Every
+  eval node-B collection used it: Lux1 check, AutoJev, Eikos, Jebadiah. The 27B track's formal runs used the kernel image
+  `dbe5f32b`. Plan: re-collect the three 27B comparators plus Lux1 once on `dbe5f32b`, about 1.3 GPU-h. **Request node
+  B GPU5 or GPU6 from the ~27B track before the next 27B formal comparison**
+  (`v2/eval/records/m4-nodeB-revalidation-plan-2026-09-28.md`).

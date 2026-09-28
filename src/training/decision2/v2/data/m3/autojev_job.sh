@@ -33,7 +33,11 @@ done
 [[ -f "$input" && -d "$cache" && -n "$label" ]] || { echo "missing input, cache or label" >&2; exit 2; }
 [[ ! -e "$output" ]] || { echo "refusing to overwrite $output" >&2; exit 2; }
 [[ "$(docker image inspect --format '{{.Id}}' "$IMAGE_ID")" == "$IMAGE_ID" ]]
-vram="$(rocm-smi -d "$gpu" --showmemuse 2>/dev/null | awk -F': ' '/VRAM%/ {v = $NF} END {print v}')"
+for _ in $(seq 24); do
+  vram="$(rocm-smi -d "$gpu" --showmemuse 2>/dev/null | awk -F': ' '/VRAM%/ {v = $NF} END {print v}')"
+  [[ "${vram:-100}" -le 2 ]] && break
+  sleep 5
+done
 [[ "${vram:-100}" -le 2 ]] || { echo "GPU$gpu is in use (VRAM ${vram}%)" >&2; exit 2; }
 
 autotune_digest() {
