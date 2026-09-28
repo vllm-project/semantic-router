@@ -3,18 +3,20 @@
     python3 -m v2.data.m3.waves --pools pools-mx-v2.json --recipes DIR --out-dir DIR \\
         [--expect FILE=SHA256 ...]
 
-Rebuilds the RP-v2 pool with `v2.data.m2.rp_pool` semantics (every non-A0s row of
-mx-v2-full-L and mx-v2-short-M, sorted by id) and writes, sorted by id:
+With S, M, L = the non-A0s ids of (full-S, short-S), (full-M, short-M), (full-L, short-M),
+writes, sorted by id:
 
-- ``rp-v2.rows.jsonl`` and ``rp-v2.prompts.jsonl`` (the full pool),
-- ``lux-wave1/2/3.prompts.jsonl``: S recipes; M recipes minus S; L remainder
-  (the own-Lux waves published in Milestone 2),
-- ``aj-m.prompts.jsonl`` (every non-A0s row of the M recipes = Lux waves 1 + 2) and
-  ``aj-l.prompts.jsonl`` (the L remainder = Lux wave 3).
+- ``rp-v2.rows.jsonl`` / ``rp-v2.prompts.jsonl``: the Milestone 2 RP-v2 pool = L
+  (`v2.data.m2.rp_pool` semantics),
+- ``lux-wave1/2/3.prompts.jsonl``: S within L; M minus S; L minus S and M (the own-Lux
+  waves published in Milestone 2); ``lux-wave4.prompts.jsonl``: S and M rows outside L,
+  which RP-v2 missed because the recipes nest only approximately,
+- ``mx-v2-all.rows.jsonl``: every non-A0s row of S, M and L,
+- ``aj-m.prompts.jsonl`` (M) and ``aj-sl.prompts.jsonl`` (S and L minus M): the AutoJev
+  waves before and after A0s.
 
-The recipes must nest (S within M within L). Every written file is checked against
-``--expect`` hashes when given, so a node-A rebuild can be proven byte-identical to
-the node-B files the Lux targets were produced from.
+Every written file is checked against ``--expect`` hashes when given, so a node-A rebuild
+can be proven byte-identical to the node-B files the Lux targets were produced from.
 """
 
 from __future__ import annotations
@@ -59,42 +61,39 @@ def _write(path: Path, lines: list[str]) -> str:
 
 
 def build(pools: dict, recipes: Path, out_dir: Path) -> dict[str, dict]:
-    sets = {name: recipe_ids(recipes, files) for name, files in RECIPES.items()}
-    if not sets["S"] <= sets["M"] <= sets["L"]:
-        raise ValueError("recipes are not nested S within M within L")
+    small, medium, large = (recipe_ids(recipes, f) for f in RECIPES.values())
+    everything = small | medium | large
     rows: dict[str, dict] = {}
     for spec in pools.values():
         for path in spec["rows"]:
             for row in read_jsonl(Path(path)):
-                if row["id"] in sets["L"]:
+                if row["id"] in everything:
                     rows.setdefault(row["id"], row)
-    missing = sets["L"] - set(rows)
+    missing = everything - set(rows)
     if missing:
         raise ValueError(
             f"{len(missing)} recipe ids not found, e.g. {sorted(missing)[:3]}"
         )
     ordered = [rows[i] for i in sorted(rows)]
+    pool = [r for r in ordered if r["id"] in large]
     waves = {
-        "lux-wave1": sets["S"],
-        "lux-wave2": sets["M"] - sets["S"],
-        "lux-wave3": sets["L"] - sets["M"],
-        "aj-m": sets["M"],
-        "aj-l": sets["L"] - sets["M"],
+        "lux-wave1": small & large,
+        "lux-wave2": medium - small,
+        "lux-wave3": large - small - medium,
+        "lux-wave4": (small | medium) - large,
+        "aj-m": medium,
+        "aj-sl": (small | large) - medium,
     }
-    out: dict[str, dict] = {
-        "rp-v2.rows.jsonl": {
-            "rows": len(ordered),
-            "sha256": _write(
-                out_dir / "rp-v2.rows.jsonl", [canonical(r) + "\n" for r in ordered]
-            ),
-        },
-        "rp-v2.prompts.jsonl": {
-            "rows": len(ordered),
-            "sha256": _write(
-                out_dir / "rp-v2.prompts.jsonl", [prompt_line(r) for r in ordered]
-            ),
-        },
-    }
+    out: dict[str, dict] = {}
+    for name, selected, render in (
+        ("rp-v2.rows.jsonl", pool, lambda r: canonical(r) + "\n"),
+        ("rp-v2.prompts.jsonl", pool, prompt_line),
+        ("mx-v2-all.rows.jsonl", ordered, lambda r: canonical(r) + "\n"),
+    ):
+        out[name] = {
+            "rows": len(selected),
+            "sha256": _write(out_dir / name, [render(r) for r in selected]),
+        }
     for name, ids in waves.items():
         lines = [prompt_line(r) for r in ordered if r["id"] in ids]
         out[f"{name}.prompts.jsonl"] = {

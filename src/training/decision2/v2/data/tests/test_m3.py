@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from v2.data.build_a0_variants import native_prompt
-from v2.data.m3 import guard, qualify, shards, teacher_targets
+from v2.data.m3 import guard, qualify, shards, teacher_targets, waves
 from v2.data.replay_targets import collector_digest
 from v2.data.tests.test_build_a0_variants import _row
 
@@ -96,6 +96,41 @@ class QualifyTest(unittest.TestCase):
         )
         wrong = dict(receipt, model_revision="main")
         self.assertFalse(qualify.identity_check([wrong], manifest, 1)["pass"])
+
+
+class WavesTest(unittest.TestCase):
+    def test_waves_partition_recipes_that_nest_only_approximately(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rows = [_row(i, "choice") for i in range(1, 9)]
+            _jsonl(root / "arm.jsonl", rows)
+            recipe = {
+                "mx-v2-full-S": [1, 2, 7],
+                "mx-v2-short-S": [2],
+                "mx-v2-full-M": [1, 2, 3, 8],
+                "mx-v2-short-M": [2, 4],
+                "mx-v2-full-L": [1, 2, 3, 4, 5],
+            }
+            for name, members in recipe.items():
+                entries = [{"id": f"r{i:04d}", "pool": "H1"} for i in members]
+                _jsonl(
+                    root / f"{name}.ids.jsonl", entries + [{"id": "a0", "pool": "A0s"}]
+                )
+            out_dir = root / "out"
+            out_dir.mkdir()
+            out = waves.build(
+                {"H1": {"rows": [str(root / "arm.jsonl")]}}, root, out_dir
+            )
+            counts = {k: v["rows"] for k, v in out.items()}
+            self.assertEqual(counts["rp-v2.rows.jsonl"], 5)
+            self.assertEqual(counts["mx-v2-all.rows.jsonl"], 7)
+            self.assertEqual(counts["lux-wave1.prompts.jsonl"], 2)
+            self.assertEqual(counts["lux-wave2.prompts.jsonl"], 3)
+            self.assertEqual(counts["lux-wave3.prompts.jsonl"], 1)
+            self.assertEqual(counts["lux-wave4.prompts.jsonl"], 2)
+            self.assertEqual(
+                counts["aj-m.prompts.jsonl"] + counts["aj-sl.prompts.jsonl"], 7
+            )
 
 
 class ShardsTest(unittest.TestCase):
