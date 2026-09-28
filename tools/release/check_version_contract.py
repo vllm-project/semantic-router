@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -29,9 +30,6 @@ HELM_CHART_PATH = REPO_ROOT / "deploy/helm/semantic-router/Chart.yaml"
 HELM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/helm-publish.yml"
 DOCKER_PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/docker-publish.yml"
 RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/release.yml"
-CI_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/ci.yml"
-CI_CHANGES_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/ci-changes.yml"
-CI_PLAN_PATH = REPO_ROOT / "tools/ci/ci_plan.py"
 CI_IMAGE_INVENTORY_PATH = REPO_ROOT / "tools/ci/classify_pr_changes.py"
 CI_IMAGE_ARTIFACTS_PATH = REPO_ROOT / "tools/ci/image_artifacts.py"
 SIM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/pypi-publish-vllm-sr-sim.yml"
@@ -353,28 +351,23 @@ def validate_source_helm_app_version(
 
 
 def validate_release_image_bridge(errors: list[str]) -> None:
-    """Require the qualified CI image list to reach the promotion matrix."""
+    """Require the canonical release image list to reach build and promotion."""
 
     markers = (
         (
-            CI_PLAN_PATH,
-            "release image inventory selection",
-            "publish_images = list(PRODUCTION_RELEASE_IMAGES)",
-        ),
-        (
-            CI_CHANGES_WORKFLOW_PATH,
-            "CI plan image output",
-            "publish_images: ${{ steps.plan.outputs.publish_images }}",
-        ),
-        (
-            CI_WORKFLOW_PATH,
-            "CI image output",
-            "value: ${{ jobs.plan.outputs.publish_images }}",
+            RELEASE_WORKFLOW_PATH,
+            "release image input",
+            "images: ${{ needs.validate.outputs.images }}",
         ),
         (
             RELEASE_WORKFLOW_PATH,
-            "release image input",
-            "images: ${{ needs.ci.outputs.publish_images }}",
+            "release image validation output",
+            "images: ${{ steps.contract.outputs.release_images_json }}",
+        ),
+        (
+            RELEASE_WORKFLOW_PATH,
+            "release image builder",
+            "uses: ./.github/workflows/build-artifacts.yml",
         ),
         (
             DOCKER_PUBLISH_WORKFLOW_PATH,
@@ -504,6 +497,9 @@ def write_github_outputs(
         output.write(f"helm_app_version={contract.helm_app_version}\n")
         output.write(f"sim_version={contract.sim_version}\n")
         output.write(f"release_images={','.join(contract.release_images)}\n")
+        output.write(
+            f"release_images_json={json.dumps(list(contract.release_images))}\n"
+        )
         output.write(
             f"catalog_snapshot={catalog_snapshot_for_version(release_version)}\n"
         )

@@ -88,6 +88,9 @@ test-rust-ci:
 		}; \
 		cargo test --release --no-default-features --lib "$$test_filter" -- --test-threads=1 --nocapture || exit 1; \
 	done
+	@cd candle-binding && cargo test --no-default-features --locked \
+		--test qwen3_classification_api_test \
+		--test classification_output_demo
 
 # Test Rust unit tests (with release optimization for performance)
 # Note: Uses TEST_GPU_DEVICE env var (default: 2) to avoid GPU 0/1 which may be busy
