@@ -138,7 +138,10 @@ The `fact-check` and `feedback` datasets are restricted the same way, to the
 mmBERT checkpoints trained on them. Their labels can be read without the text:
 each fact-check source corpus carries one label, and the feedback SAT class is a
 few templates, each with `!`, that appear in both train and validation. Vela
-FactCheck and Vela Feedback need held-out sets from other corpora.
+FactCheck and Vela Feedback need held-out sets from other corpora. A legacy
+checkpoint's label order is checked against the legacy registry, and a gap
+report counts coverage per served artifact, so it still lists Vela FactCheck and
+Vela Feedback as unmeasured when only these results are passed.
 
 A referenced manifest supplies the identity every number is published under, so
 it also selects the bytes: the run downloads the repository and revision the

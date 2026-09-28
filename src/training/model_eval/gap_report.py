@@ -191,10 +191,16 @@ def _collect(
         (baseline["task"], baseline["artifact"]["repo"]): baseline
         for baseline in baselines
     }
-    for task in sorted(inventory):
-        if not any(key[0] == task for key in measured):
+    # A baseline of another artifact, such as the legacy checkpoint a split is
+    # restricted to, does not measure the one the router serves.
+    for task, artifact in sorted(inventory.items()):
+        if (task, artifact.hf_repo) not in measured:
             findings.append(
-                ("coverage", f"{task}: no baseline has been measured for this task")
+                (
+                    "coverage",
+                    f"{task}: no baseline has been measured for the served "
+                    f"`{artifact.artifact_name}`",
+                )
             )
 
     for baseline in baselines:

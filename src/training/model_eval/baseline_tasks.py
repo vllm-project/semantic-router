@@ -174,14 +174,24 @@ def _mapping_from_sidecar(model_dir: Path) -> dict[str, int]:
     return {}
 
 
-def check_registry_label_order(task: str, mapping: dict[str, int]) -> list[str]:
-    """Compare the artifact's class order against the evaluation registry copy.
+def check_registry_label_order(
+    task: str, repo: str, mapping: dict[str, int]
+) -> list[str]:
+    """Compare the artifact's class order against its own registry copy.
 
     A permuted order still yields plausible accuracy, so this comparison is the
-    only place the mismatch becomes visible.
+    only place the mismatch becomes visible. A legacy checkpoint is compared
+    with the legacy registry, since the served model may add classes it never
+    had, as Vela Feedback adds NO_FEEDBACK.
     """
     registry_key = REGISTRY_ALIASES.get(task, task)
-    entry = MODEL_REGISTRY.get(registry_key)
+    legacy = LEGACY_MODEL_REGISTRY.get(registry_key, {})
+    registry = (
+        LEGACY_MODEL_REGISTRY
+        if repo in (legacy.get("id"), legacy.get("lora_id"))
+        else MODEL_REGISTRY
+    )
+    entry = registry.get(registry_key)
     if not entry:
         return [f"{task}: no evaluation registry entry to cross-check"]
     registry_labels = list(entry.get("labels", []))

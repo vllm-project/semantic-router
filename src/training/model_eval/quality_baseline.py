@@ -188,7 +188,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     findings = (
         registry_drift(inventory, MODEL_REGISTRY)
         + uncovered_artifacts(config)
-        + check_registry_label_order(args.task, mapping)
+        + check_registry_label_order(args.task, measured.repo, mapping)
         + _provenance_findings(args, measured)
     )
     for finding in findings:
