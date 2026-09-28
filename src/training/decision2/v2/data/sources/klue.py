@@ -56,6 +56,7 @@ NLI_TEXT = {
 }
 
 MRC_STATE = "제목: {title}\n본문: {context}"
+MRC_STATE_UNTITLED = "본문: {context}"
 MRC_INSTRUCTIONS = "지문의 내용만으로 다음 질문에 답할 수 있습니까?\n질문: {question}"
 
 STS_LEVELS = (3, 4, 5, 6)
@@ -378,6 +379,13 @@ def mrc(root: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         if type(impossible) is not bool:
             raise ValueError(f"{where}: is_impossible must be a boolean")
         context = text(record, "context", where)
+        title = record.get("title")
+        title = title.strip() if isinstance(title, str) else ""
+        state = (
+            MRC_STATE.format(title=title, context=context)
+            if title
+            else MRC_STATE_UNTITLED.format(context=context)
+        )
         rows.append(
             make_row(
                 arm=A5,
@@ -387,9 +395,7 @@ def mrc(root: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 language="ko",
                 group_key=normalize(context),
                 local_id=guid,
-                state=MRC_STATE.format(
-                    title=text(record, "title", where), context=context
-                ),
+                state=state,
                 instructions=MRC_INSTRUCTIONS.format(
                     question=text(record, "question", where)
                 ),
