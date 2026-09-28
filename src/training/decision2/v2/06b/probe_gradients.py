@@ -80,6 +80,16 @@ def run(model: Any, packer: Any, records: list[dict[str, Any]]) -> dict[str, Any
             ),
             "norm_ratio_vs_unpadded": float(g.norm() / reference.norm()),
         }
+    # Training runs with deterministic algorithms (warn_only); compare that path too.
+    torch.use_deterministic_algorithms(True, warn_only=True)
+    g = gradient(model, packer, records, "native")
+    torch.use_deterministic_algorithms(False)
+    out["native_deterministic"] = {
+        "cosine_vs_unpadded": float(
+            torch.nn.functional.cosine_similarity(g, reference, dim=0)
+        ),
+        "norm_ratio_vs_unpadded": float(g.norm() / reference.norm()),
+    }
     out["lengths"] = [packer.encode(r)["input_tokens"] for r in records]
     return out
 
