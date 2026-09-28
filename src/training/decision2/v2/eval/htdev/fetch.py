@@ -11,6 +11,10 @@ from argv. GitHub, Zenodo and other URL files are fetched over HTTPS. A file who
 sha256 differs from its pin is refused and nothing is written for it; an existing
 snapshot file is re-verified, never overwritten.
 
+`fetch --reuse <dir>` first looks for each pinned file, by sha256, among the files of
+`<dir>/<key>/` (or the isolation worker's key name, `ISO_KEYS`) and hard-links (else
+copies) a match instead of downloading it.
+
 `pin` fetches the public files anonymously (HF `resolve/<revision>` URLs) into a scratch
 directory and writes a new pins file with the measured sha256s; it refuses to change a
 sha256 that is already pinned.
@@ -34,6 +38,12 @@ DEFAULT_DEST = Path("/data/dev2/private/htdev/sources")
 DEFAULT_HF_CACHE = "/data/dev2/hf-cache"
 SNAPSHOT_SCHEMA = "dev2-htdev-snapshot/1"
 TIMEOUT = 120
+ISO_KEYS = {
+    "claim_stance": "claimstance",
+    "empathic_reactions": "empathic",
+    "wic_tsv": "wictsv",
+    "moral_stories": "moralstories",
+}
 
 
 def sha_file(path: Path) -> str:
@@ -83,8 +93,27 @@ def download_hub(spec: dict[str, Any], relative: str, target: Path) -> None:
     shutil.copyfile(cached, target)
 
 
+def reuse_index(key: str, dirs: list[Path]) -> dict[str, Path]:
+    """sha256 -> path of every file under <dir>/<key>/ (or its isolation key name)."""
+    index: dict[str, Path] = {}
+    for base in dirs:
+        for name in dict.fromkeys((key, ISO_KEYS.get(key, key))):
+            root = base / name
+            if not root.is_dir():
+                continue
+            for path in sorted(root.rglob("*")):
+                if path.is_file() and not path.is_symlink():
+                    index.setdefault(sha_file(path), path)
+    return index
+
+
 def place(
-    spec: dict[str, Any], relative: str, root: Path, expected: str | None, hub: bool
+    spec: dict[str, Any],
+    relative: str,
+    root: Path,
+    expected: str | None,
+    hub: bool,
+    reuse: dict[str, Path] | None = None,
 ) -> str:
     """Fetch one file into root/relative; returns its sha256 (refuses a mismatch)."""
     target = root / relative
@@ -94,6 +123,15 @@ def place(
             raise ValueError(f"{relative}: existing file sha256 differs from the pin")
         return digest
     target.parent.mkdir(parents=True, exist_ok=True)
+    if expected and reuse and expected in reuse:
+        try:
+            os.link(reuse[expected], target)
+        except OSError:
+            shutil.copyfile(reuse[expected], target)
+        if sha_file(target) != expected:
+            target.unlink()
+            raise ValueError(f"{relative}: reused file sha256 differs from the pin")
+        return expected
     with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as handle:
         partial = Path(handle.name)
     try:
@@ -123,7 +161,13 @@ def snapshot(key: str, spec: dict[str, Any], files: dict[str, str]) -> dict[str,
     }
 
 
-def fetch_source(key: str, spec: dict[str, Any], dest: Path, hub: bool) -> dict:
+def fetch_source(
+    key: str,
+    spec: dict[str, Any],
+    dest: Path,
+    hub: bool,
+    reuse: list[Path] | None = None,
+) -> dict:
     if spec.get("unavailable"):
         raise ValueError(f"{key}: unavailable ({spec['unavailable']})")
     missing = [name for name, digest in spec["files"].items() if not digest]
@@ -131,8 +175,9 @@ def fetch_source(key: str, spec: dict[str, Any], dest: Path, hub: bool) -> dict:
         raise ValueError(f"{key}: {len(missing)} files have no pinned sha256")
     root = dest / key
     root.mkdir(parents=True, exist_ok=True)
+    index = reuse_index(key, reuse) if reuse else None
     files = {
-        relative: place(spec, relative, root, digest, hub)
+        relative: place(spec, relative, root, digest, hub, index)
         for relative, digest in sorted(spec["files"].items())
     }
     record = snapshot(key, spec, files)
@@ -155,8 +200,18 @@ def fetch(args: argparse.Namespace) -> int:
         if spec.get("unavailable"):
             report[key] = {"status": "unavailable"}
             continue
-        record = fetch_source(key, spec, args.dest, hub=True)
-        report[key] = {"status": "ok", "files": len(record["files"])}
+        before = (
+            {p for p in (args.dest / key).rglob("*") if p.is_file()}
+            if (args.dest / key).is_dir()
+            else set()
+        )
+        record = fetch_source(key, spec, args.dest, hub=True, reuse=args.reuse)
+        linked = sum(
+            (args.dest / key / r).stat().st_nlink > 1
+            and (args.dest / key / r) not in before
+            for r in record["files"]
+        )
+        report[key] = {"status": "ok", "files": len(record["files"]), "linked": linked}
     print(json.dumps(report, indent=1, sort_keys=True))
     return 0
 
@@ -188,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
     one.add_argument("--pins", type=Path, default=PINS)
     one.add_argument("--dest", type=Path, default=DEFAULT_DEST)
     one.add_argument("--key", action="append")
+    one.add_argument("--reuse", type=Path, action="append")
     two = commands.add_parser("pin")
     two.add_argument("--pins", type=Path, default=PINS)
     two.add_argument("--dest", type=Path, required=True)
