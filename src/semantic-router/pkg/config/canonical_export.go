@@ -308,6 +308,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 				TimeoutSec: cfg.StreamedBodyTimeoutSec,
 			},
 			SkipProcessing: cfg.SkipProcessing,
+			Handoff:        cfg.Handoff,
 			ModelSelection: cfg.ModelSelection,
 			Learning:       cfg.RouterLearning,
 			Fallback:       cfg.Fallback.Clone(),

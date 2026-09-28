@@ -1159,6 +1159,9 @@
         "skip_processing": {
           "$ref": "#/$defs/SkipProcessingConfig"
         },
+        "handoff": {
+          "$ref": "#/$defs/HandoffConfig"
+        },
         "model_selection": {
           "$ref": "#/$defs/ModelSelectionConfig"
         },
@@ -2902,6 +2905,15 @@
           "type": "string"
         },
         "use_nli": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HandoffConfig": {
+      "properties": {
+        "enabled": {
           "type": "boolean"
         }
       },

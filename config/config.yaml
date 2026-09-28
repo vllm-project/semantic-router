@@ -1817,6 +1817,8 @@ global:
       timeout_sec: 15
     skip_processing:
       enabled: false
+    handoff:
+      enabled: false
     model_selection:
       method: hybrid
       enabled: true
