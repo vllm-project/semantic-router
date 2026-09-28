@@ -70,6 +70,17 @@ class WaterfillTest(unittest.TestCase):
         self.assertEqual(mixtures.waterfill({"a": 5, "b": 7}, 100), {"a": 5, "b": 7})
 
 
+class GroupFamilyTest(unittest.TestCase):
+    def test_group_spanning_families_counts_toward_first_name(self):
+        members = [
+            {"family": "stage4_replay_natural_high_k"},
+            {"family": "stage4_replay_clinc_train"},
+        ]
+        self.assertEqual(
+            mixtures.group_family("g", members), "stage4_replay_clinc_train"
+        )
+
+
 class FamilyEqualTest(unittest.TestCase):
     def setUp(self):
         self.base, base_len = rows("base", 60)

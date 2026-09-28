@@ -195,10 +195,8 @@ def take_at_most(order: list[str], sizes: dict[str, int], target: int) -> list[s
 
 
 def group_family(group_id: str, members: list[dict[str, Any]]) -> str:
-    families = {row["family"] for row in members}
-    if len(families) != 1:
-        raise ValueError(f"group {group_id} spans families {sorted(families)}")
-    return families.pop()
+    """A group spanning families (A7i replay pairs) counts toward its first family by name."""
+    return min(row["family"] for row in members)
 
 
 def family_order(
@@ -596,7 +594,8 @@ def main() -> None:
             "family_equal": "drop arm groups sharing group_id or input_sha256 with the"
             " mixture so far; water-filled equal integer per-family token shares;"
             " per family the longest seeded prefix at or below the share plus the"
-            " next group if that lands closer",
+            " next group if that lands closer; a group spanning families counts"
+            " toward its first family by name",
             "repeat": "pass 1 = rows so far; whole passes #r1.. while they fit under"
             " the matched total, then a stratified seeded whole-group prefix by the"
             " same closest rule; |total - matched| <= 0.5%",
