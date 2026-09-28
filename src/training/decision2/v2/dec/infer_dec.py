@@ -56,6 +56,9 @@ def main() -> None:
     parser.add_argument("--model-revision", required=True)
     parser.add_argument("--max-length", type=int, default=8192)
     parser.add_argument("--calibration", type=Path)
+    parser.add_argument(
+        "--max-items", type=int, help="Smoke run on the first N prompts only"
+    )
     args = parser.parse_args()
     if (
         args.output.exists()
@@ -63,6 +66,8 @@ def main() -> None:
     ):
         raise FileExistsError("Refusing to overwrite predictions or manifest")
     rows = load_prompts(args.input)
+    if args.max_items is not None:
+        rows = rows[: args.max_items]
 
     import torch
 
