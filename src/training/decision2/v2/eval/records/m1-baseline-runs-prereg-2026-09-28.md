@@ -170,6 +170,16 @@ error stops; release targets CUDA, run as `unvalidated_rocm`). Formal + dev + ml
 ≤ 0.5 GPU-hour. Gold-free smoke runs of 20 items on typed-final and mlx-diag (answer
 shapes only) come first, as for Q5b.
 
+**A4.5 (Q7, before launch).** `frontier-infra/jebadiah-27b@c68db2b5` (merged BF16
+Qwen3_5ForCausalLM, all index shards present, chat template checked against
+`prompt_contract.json`), 27B / node B, adapter `jebadiah-27b`
+(`v2/eval/native_jebadiah.py`, bundled `scripts/` Scorer as in `decide_standalone.py`,
+fp32 candidate logits, shipped per-type temperatures). Its renderer cuts states over
+2,048 tokens; cut prompts are never scored and count as invalid (`over_budget`), as do
+Choice questions with more options than its single-token labels; any other error stops
+the run. Unvalidated ROCm. Formal + dev; ≤ 0.8 GPU-hour; gold-free 20-item smoke runs
+(typed-final, public231) first. Paired against AutoJev on node B.
+
 ## Reused results (identity verified, no new GPU time)
 
 Recorded predictions were located by SHA-256, adopted, sealed and re-scored with

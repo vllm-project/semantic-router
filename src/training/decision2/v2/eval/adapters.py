@@ -271,6 +271,24 @@ REGISTRY: dict[str, Adapter] = {
             ),
         ),
         Adapter(
+            name="jebadiah-27b",
+            module="v2.eval.native_jebadiah",
+            args=(
+                "--model-path",
+                "{model}",
+                "--model-revision",
+                "{revision}",
+                *IO_ARGS,
+                "--device",
+                "{device}",
+            ),
+            model_id="frontier-infra/jebadiah-27b",
+            batch_policy=(
+                "bundled scripts/ Scorer, fp32 candidate logits, shipped per-type T;"
+                " 2,048-token render budget, cut prompts invalid (never scored)"
+            ),
+        ),
+        Adapter(
             name="eikos-27b",
             module="inference.eikos",
             args=(
