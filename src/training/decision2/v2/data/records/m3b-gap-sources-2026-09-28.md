@@ -4,7 +4,8 @@
 private HF dataset `llm-semantic-router/decision-2.0-training-data` at revision
 **`09f73967bc21b2b1e27160397272b7f66a1ef3af`**, folder `m3/arms/`. Gate 10 (same-source) is
 recorded as PASS by the same-source audit (`m3b-same-source-2026-09-28.md` §4d, `3824d2fda`).
-Gate 9 (node-B rebuild) is pending: another agent runs it, and this record did not wait for it.
+Gate 9 (node-B rebuild) also passes: all six build slices and the NQ extraction are byte-identical on
+node B (section 3, gate 9).
 
 - **Build:** exact mirror of `39bc74ec507c411c4720011860e411b727721940` (tree
   `c29aff6e62455b91873f2e78f2bfcc18e10b5637`).
@@ -229,8 +230,31 @@ loading match this record. No content-rule bug was found and no row changed. Cha
      published files.
    - Manifests, published path-stripped copies: H7 `28dd76a8…`/`1ac8a695…`, H8
      `cab69890…`/`584ceb65…` (TRAIN/AHO).
-9. **Node-B rebuild: pending** (another agent). Its interim report says the six build slices and
-   the NQ extraction came out byte-identical on node B from `39bc74ec5`.
+9. **Node-B rebuild: PASS** (CPU only, exact mirror of `39bc74ec5`, tree equal to `git archive`).
+   - **Runs:** the NQ extraction and both builds, with the Docker commands of `gap_nodeA.sh` in the
+     pinned image `f83b1d10…`. They ran under `nice -n 10` with at most 32 workers (`extract-nq
+     --workers 32`; its results are sorted by shard path). Wall time: extract 101 s; then H8 40 s and
+     H7 119 s in parallel.
+   - **Sources:** downloaded on node B from their origins at the same pins (HoVer GitHub `39b84697`,
+     nlp.cs.unc.edu and the HF card; NQ `e8103d56`, 64 shards; MIRACL corpus `d921ec7e`; HotpotQA
+     validation `1908d6af`; Zenodo 3974927). All 143 files equal node A's receipts. The 56 older
+     pinned source files, the tokenizer snapshot and `v1-rows.json` were already on node B with equal
+     hashes.
+   - **Byte-identical on both nodes:** `h7.{train,aho,sho}.jsonl` (`165e9681…`, `e10d6ffc…`,
+     `1c4afae3…`), `h8.{train,aho,sho}.jsonl` (`fc5adc2e…`, `372027e7…`, `c1983981…`), and
+     `nq-train.jsonl` `ad4140ed…` with its report `fa9146b1…`.
+   - **One substitution:** the nine v2 SHO slices were not copied to node B. The build reads
+     `--existing` only for `group_id`, `input_sha256`, a row count and a hash per file, so text-free
+     `{group_id, id, input_sha256}` projections made on node A (hash-checked on both ends) stand in for
+     them. The two `build.json` files therefore differ only inside `build.existing` (paths and the nine
+     projection hashes). Group (367,429), input (645,817) and per-file row counts are equal. With node
+     A's `existing` block substituted, both re-serialize to node A's `2a7efd28…` / `c45bd48a…`.
+   - **Audit, also reproduced (optional):** PI-v3 reassembled on node B hash-equal to `fc09b2bd…`, and
+     the 31 PI-v4 role files are identical. 102 of the 112 `audits/{h7,h8}` files are byte-identical
+     (tokens, budget, quarantined rows, the 72 cells, the 24 shortcut receipts, the length baselines).
+     The other 10 differ only in node-specific paths and receipt hashes.
+   - **Not compared:** finalize, because `freeze isolation` against the SHO partitions cannot run on
+     node B. The node-B SHO rows were deleted after hashing.
 10. **Same-source: PASS** per `m3b-same-source-2026-09-28.md` §4d (`3824d2fda`). No H7/H8 source
     is SAME DATASET or SAME PARENT CORPUS with a CSS pilot or CSS15 task.
 
@@ -306,8 +330,8 @@ of ≥ 2,000 native tokens. SHO slices are given by rows, groups and hash only.
 4. **Shortfalls.** TyDi windows for ko (4 rows), sw (6) and bn (50): v2 H5 already used nearly every
    usable question. HoVer coverage keeps 79 TRAIN groups: a HotpotQA parent carries about ten
    coverage rows, and whole-group quarantine hits large groups more often.
-5. **Publication before the gate-9 record.** This follows the brief, which says not to wait for
-   gates 9 and 10. The arms must be withdrawn if the node-B rebuild disagrees.
+5. **Publication before the gate-9 record.** Upload ran in parallel with the node-B rebuild, and the
+   arms would have been withdrawn if it had disagreed. It agreed (gate 9).
 6. **SHO.** Both final SHO slices were moved to `/data/dev2/private/sealed/m3b/{h7,h8}.sho.jsonl`
    on node A (mode 0600) and never uploaded. Node B's copies were deleted after the embedding scan.
    The intermediate build and audit copies stay in the private run directories.
@@ -344,17 +368,18 @@ of ≥ 2,000 native tokens. SHO slices are given by rows, groups and hash only.
   `nq-extract-64/`; `existing.json`.
 - **Node B:** embedding workspace `/data/dev2/private/data/m3b-gap/c1/` (manifest, final TRAIN and
   AHO copies, receipts). The driver is `/data/dev2/logs/data/embed-m3b-gap.sh` (`a435a2b9…`) and its
-  log `embed-m3b-gap.log`.
+  log `embed-m3b-gap.log`. The gate-9 rebuild is under `/data/dev2/runs/data/m3b/gap-nodeB/c1/`: build,
+  audits, and `logs/removed-sho.sha256`. The node-B sources are under
+  `/data/dev2/private/sources/m3b/`.
 - **Draft outputs** (superseded, never published): `/data/dev2/runs/data/m3b/gap/{arms,audits,r4,pi}`.
 
 ## 8. Open items
 
-- Gate 9 record (node-B rebuild agent).
-- **v2 arms re-screen.** The v2 arms were quarantined with PI-v3's nine report-only TRAIN roles in
-  the same scan, so the effect in gate 4 may have hidden hits there too. A report-only rescreen of
-  the v2 arms against PI-v3's 47 quarantining roles would size it. The A7 rescreens already used the
-  47 roles.
-- XL recipe revision r2 (amendment 2 §4), from the two node-A TRAIN files and their token files.
-  It is not built here.
+- **Rescreen of the older arms.** The v1 / v2 arms were quarantined with PI-v3's nine report-only
+  TRAIN roles in the same scan, so the effect in gate 4 may have hidden hits there too. The A7
+  rescreens already used the 47 quarantining roles. Amendment 3 rescreens every XL row against
+  PI-v4's quarantining roles only, before r2 is built.
+- XL recipe revision r2 (amendments 2 §4 and 3 §3), from the two node-A TRAIN files and their token
+  files. It is not built here.
 - Super-NaturalInstructions per-task review (instance licence, source, decision type), if wanted.
 - More NQ shards are available (223 unused) if more NQ volume is needed.
