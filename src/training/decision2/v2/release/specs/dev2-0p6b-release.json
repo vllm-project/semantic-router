@@ -8,9 +8,12 @@
   "expected_identity": {
     "model_sha256": "5b30b7e2e612cbf4a45dcab1cbe2bd05b2b6d25cfe91c376031cb22d5ce303a8"
   },
-  "calibration": null,
+  "calibration": {
+    "path": "/data/dev2/runs/release/inputs/dev2-0p6b/cal698/calibration.json",
+    "sha256": "e1f7c909f59d9e98334cf22e6623cb3da398b4456fb02df78cf81373a3fb94d9"
+  },
   "max_input_tokens": 8192,
-  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-0.6B.decision.build-draft.json",
+  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-0.6B.decision.build-draft-cal698.json",
   "origin": {
     "repo_id": "Qwen/Qwen3-0.6B-Base",
     "revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
@@ -24,28 +27,44 @@
     "tokenizers": "0.23.2",
     "safetensors": "0.8.0"
   },
-  "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time) and applies the per-state batching (all questions of one state in one batch), BF16-backbone / FP32-head execution, raw probabilities (temperature 1.0 as scored; no calibration file) and answer normalization of training.model.infer (adapter dev2-06b-causal-8k). Checked on one GPU of the scoring node against the sealed predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231, mlx-diag 2,275) by release.sh --parity.",
+  "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time) and applies the per-state batching (all questions of one state in one batch), BF16-backbone / FP32-head execution, the CAL698 per-type temperatures in calibration.json and the answer normalization of training.model.infer (adapter decision2-typed with --calibration). The calibrated predictions are the scored logits divided by the temperatures: answers are identical to the uncalibrated run on every scored prompt. Checked on one GPU of the scoring node against the sealed calibrated predictions by release.sh --parity.",
   "scored": {
-    "label": "post-key same-panel run m4-t-a7-soup (frozen runner, 8,192 tokens, raw probabilities)",
-    "report_sha256": "72cf01def4ac987919cd4f13b144652da5fd37a9cdf2c92487bd9c76736bbaa9",
-    "seal_sha256": "4e02a0b0cbba60445e4780029cfd488e9af5e04a84433f89bd7401f3b3613bfc",
+    "label": "post-key same-panel run m4-t-a7-soup with CAL698 temperatures (frozen runner re-score, 8,192 tokens)",
+    "report_sha256": "ffbb32a4e55f2df952c2cbcc5a3f0e43d4eff15d49f505a5790bce87d68f820d",
+    "seal_sha256": "ece9fcb20013d7d2a98f975afe1dc0f14de98b3127d382386b51afd5335227b2",
     "predictions_sha256": {
-      "typed-final": "16f01c21e1cc7e777fdae96eb6b518be9f85be4d392a749aed8c0fe11912a2ef",
-      "css15": "7b1b07f24572785294cc69bec39d934a28e9da865a122440d71e38241ff90c5f",
-      "public231": "7c1e9c6139ced2a21b4c0c7c44b0a55770d754a39669e2da8a5fae0fbbe12884",
-      "mlx-diag": "3cf5b5e00d53e07f93028a13f3060aef6f0bb2b3d871f825c636f8a34ab92163"
+      "typed-final": "5c9dc733bf49e67fb60940472d85b7b1adaca25282da3f22b9300f4f7bbccef7",
+      "css15": "2faa03848b0c68792805f34442456546ef9a38a45b2cac0b7110115e675a93d6",
+      "public231": "2da30ae27dff87718fd7bc511fa6e823e9bf3e664729293aec2646855d2d0aa3",
+      "mlx-diag": "03b067a6fb0f37931c10d621d66ef69fcfbbf19c7ce75d90ecad595955d754e8"
     },
-    "paired_sha256": "bd4ad6c72fa432b7970991a363b87d3017eb8e7895a2355a38326106566db614",
-    "native_manifest": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup/output/typed-final.predictions.jsonl.manifest.json"
+    "paired_sha256": "53df7087d48c8e68710309da4c9304d95c4b837d36fe84c44c0296b29e16b180",
+    "native_manifest": "/data/dev2/runs/release/dev2-0p6b-cal698-rescore/output/typed-final.predictions.jsonl.manifest.json"
   },
   "licence": {
     "components": [
-      {"component": "DEV2.0-0.6B weights, decision head, package runtime, card and artwork", "licence": "apache-2.0", "source": "llm-semantic-router/DEV2.0-0.6B"},
-      {"component": "Qwen3-0.6B-Base weights and tokenizer (direct weight origin, fully fine-tuned)", "licence": "apache-2.0", "source": "Qwen/Qwen3-0.6B-Base@da87bfb6"}
+      {
+        "component": "DEV2.0-0.6B weights, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/DEV2.0-0.6B"
+      },
+      {
+        "component": "Qwen3-0.6B-Base weights and tokenizer (direct weight origin, fully fine-tuned)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3-0.6B-Base@da87bfb6"
+      }
     ],
     "files": [
-      {"source": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab/LICENSE", "path": "LICENSE", "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"},
-      {"source": "/data/dev2/runs/release/inputs/dev2-0p6b/qwen3-0.6b-base-da87bfb6/LICENSE", "path": "LICENSES/Qwen3-0.6B-Base-LICENSE.txt", "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e"}
+      {
+        "source": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab/LICENSE",
+        "path": "LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      },
+      {
+        "source": "/data/dev2/runs/release/inputs/dev2-0p6b/qwen3-0.6b-base-da87bfb6/LICENSE",
+        "path": "LICENSES/Qwen3-0.6B-Base-LICENSE.txt",
+        "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e"
+      }
     ],
     "attributions": [
       "[Qwen3-0.6B-Base](https://huggingface.co/Qwen/Qwen3-0.6B-Base) at `da87bfb608c14b7cf20ba1ce41287e8de496c0cd`: direct weight origin; every weight was fine-tuned (Apache-2.0, `LICENSES/Qwen3-0.6B-Base-LICENSE.txt`). The tokenizer files are the Qwen3 tokenizer as saved by the training code.",
@@ -58,8 +77,8 @@
   "card": {
     "banner": "DEV2.0-0.6B-owl-banner.png",
     "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
-    "paired": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup/PAIRED-vs-kai1.json",
-    "calibration_text": "raw model probabilities, exactly as evaluated (no post-hoc temperature was fitted); the score table reports their Brier score and 10-bin ECE on the typed decisions.",
+    "paired": "/data/dev2/runs/release/dev2-0p6b-cal698-rescore/PAIRED-vs-kai1.json",
+    "calibration_text": "per-type temperatures fitted for this exact checkpoint on the clean 698-item calibration partition at the 8,192-token limit (Choice 0.592, Noul 0.588, Score 0.345; `calibration.json`). They sharpen the probabilities and leave every answer and accuracy unchanged; the score table reports typed Brier and 10-bin ECE of the calibrated probabilities.",
     "requirements_text": "Tested with Python 3.12, PyTorch 2.12 and Transformers 5.17 on one ROCm GPU (BF16 backbone, FP32 head), where answers match the evaluated predictions, and on CPU (FP32), where probabilities can differ from the GPU results by a few thousandths. Transformers 5.17 prints a Mistral tokenizer-regex warning when it finds the package's root `config.json`; it does not change tokenization and can be ignored.",
     "text": {
       "tagline": "A compact decision model for routing choices, yes/no checks and rubric scores over one state: native System One Choice, Noul and Score answers with probabilities, no chat API.",
@@ -81,15 +100,50 @@
         "**Same-limit comparison:** the table shows Decision 1.0 Kai at its published 1,024-token input limit. Run at this model's 8,192-token limit, Kai scores 35.97 on JevArena v3 and 127/231 on JevBench public, and the paired v3 difference is +7.57 (95% interval [+4.43, +10.59]).",
         "**Not clearly ahead of the strongest 0.6B peer:** against GLiNER2.5-Decide the v3 difference is +1.02 with a paired 95% interval of [−1.77, +7.80], which includes zero; its typed accuracy T is higher (0.410 vs 0.395).",
         "**Seed dependence:** the three single fine-tunes differed markedly on our development panels. Only their uniform average was evaluated and is released, so retraining the same recipe with another seed can give a noticeably weaker model.",
+        "**Calibration away from the calibration data:** the temperatures improve calibration on the in-distribution calibration partition (ECE 0.079 to 0.031) but worsen it on the evaluation panels: JevArena v3 typed ECE 0.191 versus 0.118 for the raw probabilities (Brier 0.332 vs 0.309), human-transfer median task ECE 0.120 vs 0.070. Treat probabilities as rankings more than as frequencies on unfamiliar inputs.",
         "**Multilingual yes/no checks:** on the mlx-diag diagnostic, non-English Choice (intent routing) is 70.2%, but non-English Noul (paraphrase detection) is 51.8%, below Bosun v3.1 0.6B (61.2%); treat non-English Noul answers with care."
       ]
     },
     "reports": [
-      {"key": "candidate", "role": "candidate", "report": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup/REPORT.json", "mlx": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup-mlx/mlx-diag.score.json", "label": "DEV2.0-0.6B"},
-      {"key": "kai1", "role": "own-1.0", "report": "/data/dev2/runs/eval/m1-adopt/kai1/REPORT.json", "mlx": "/data/dev2/runs/eval/m2/mlx/x-kai/mlx-diag.score.json", "repo_id": "llm-semantic-router/Decision-1.0-Kai-0.6B", "label": "Decision 1.0 Kai"},
-      {"key": "gliner25", "role": "peer", "report": "/data/dev2/runs/eval/m1/p1-gliner25/REPORT.json", "mlx": "/data/dev2/runs/eval/m2/mlx/x-gliner25/mlx-diag.score.json", "repo_id": "fastino/GLiNER2.5-Decide", "label": "GLiNER2.5-Decide"},
-      {"key": "bosun", "role": "peer", "report": "/data/dev2/runs/eval/m1-adopt/bosun/REPORT.json", "mlx": "/data/dev2/runs/eval/m2/mlx/x-bosun06/mlx-diag.score.json", "repo_id": "Hanno-Labs/bosun-v3.1-0.6b", "label": "Bosun v3.1 0.6B"},
-      {"key": "lex1", "role": "peer", "report": "/data/dev2/runs/eval/m1/r3-lex/REPORT.json", "mlx": "/data/dev2/runs/eval/m2/mlx/x-lex/mlx-diag.score.json", "repo_id": "llm-semantic-router/Decision-1.0-Lex-0.6B", "label": "Decision 1.0 Lex"}
+      {
+        "key": "candidate",
+        "role": "candidate",
+        "report": "/data/dev2/runs/release/dev2-0p6b-cal698-rescore/REPORT.json",
+        "mlx": "/data/dev2/runs/release/dev2-0p6b-cal698-rescore-mlx/mlx-diag.score.json",
+        "label": "DEV2.0-0.6B"
+      },
+      {
+        "key": "kai1",
+        "role": "own-1.0",
+        "report": "/data/dev2/runs/eval/m1-adopt/kai1/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-kai/mlx-diag.score.json",
+        "repo_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+        "label": "Decision 1.0 Kai"
+      },
+      {
+        "key": "gliner25",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m1/p1-gliner25/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-gliner25/mlx-diag.score.json",
+        "repo_id": "fastino/GLiNER2.5-Decide",
+        "label": "GLiNER2.5-Decide"
+      },
+      {
+        "key": "bosun",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m1-adopt/bosun/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-bosun06/mlx-diag.score.json",
+        "repo_id": "Hanno-Labs/bosun-v3.1-0.6b",
+        "label": "Bosun v3.1 0.6B"
+      },
+      {
+        "key": "lex1",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m1/r3-lex/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-lex/mlx-diag.score.json",
+        "repo_id": "llm-semantic-router/Decision-1.0-Lex-0.6B",
+        "label": "Decision 1.0 Lex"
+      }
     ]
   }
 }
