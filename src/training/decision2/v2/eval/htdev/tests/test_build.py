@@ -497,6 +497,7 @@ class FlaggedAndScanDropsTest(unittest.TestCase):
         for match, expected in (
             ("any", {"a/x|0", "a/x|1", "a/x|2"}),
             ("row", {"a/x|0"}),
+            ("rarest", {"a/x|0", "a/x|2"}),
         ):
             out = self.dir / match
             build.main(
@@ -519,6 +520,7 @@ class FlaggedAndScanDropsTest(unittest.TestCase):
             receipt = json.loads((out / "FLAGGED.json").read_text())
             self.assertEqual(receipt["tasks"]["a/x"]["match_any"], 3)
             self.assertEqual(receipt["tasks"]["a/x"]["match_row"], 1)
+            self.assertEqual(receipt["tasks"]["a/x"]["match_rarest"], 2)
 
     def test_scan_drops_collects_lexical_and_embedding(self):
         excluded = self.dir / "flagged.jsonl"

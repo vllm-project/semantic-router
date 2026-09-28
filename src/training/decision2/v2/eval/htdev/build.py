@@ -12,12 +12,15 @@
 pins.json) and writes the full admissible pool (`pool.jsonl`: id = `task|source item id`,
 state, question, gold, split, group, provenance) plus a count-only `POOL.json`.
 
-`flagged` drops the source rows the isolation ADMISSION.json flags (amendment 2 item 6):
-an item goes when one of its texts of >= 20 characters (state leaves, per-item option
-texts, overlap texts) has the `leaf_sha256` (sha256 of `schema.normalized(text)`) of a
-flagged row of its source (`--match any`, the recipe's rule), or, with `--match row`,
-only when every leaf of some flagged row is among the item's texts. Writes
-`flagged-ids.jsonl` and count-only `FLAGGED.json`.
+`flagged` drops the source rows the isolation ADMISSION.json flags (amendment 2 item 6).
+A flagged row is a set of `leaf_sha256` (sha256 of `schema.normalized(text)` of its
+string leaves); an item's leaves are its texts of >= 20 characters (state leaves,
+per-item option texts, overlap texts). `--match rarest` (default) identifies each flagged
+row by its most specific shown text: its leaves that occur in the source's pool with the
+lowest item count, and drops the items holding one of them. `--match any` drops an item
+sharing any flagged leaf (it also drops every item with a shared context string such as
+a Circa situation or a claim_stance topic); `--match row` only an item holding every
+leaf of a flagged row. FLAGGED.json counts all three rules. Writes `flagged-ids.jsonl`.
 
 `export-scan` writes the remaining pool in the shapes the item scans read:
 `overlap-protected.jsonl` (`v2.eval.sealed.overlap scan --protected`; hit ids equal pool
@@ -116,6 +119,10 @@ def code_commit() -> str:
         )
         return out.stdout.strip()
     except (OSError, subprocess.CalledProcessError):
+        for parent in Path(__file__).resolve().parents:
+            mirror = parent / ".dev2-mirror.json"
+            if mirror.is_file():
+                return json.loads(mirror.read_text(encoding="utf-8"))["commit"]
         return "unknown"
 
 
@@ -255,17 +262,31 @@ def flagged(args: argparse.Namespace) -> int:
         k: frozenset().union(*v) if v else frozenset()
         for k, v in rows_by_source.items()
     }
+    pool_rows = read_jsonl(args.pool)
+    own_leaves = [item_leaves(row) for row in pool_rows]
+    frequency: dict[str, Counter] = defaultdict(Counter)
+    for row, own in zip(pool_rows, own_leaves):
+        frequency[row["source"]].update(own & leaves.get(row["source"], frozenset()))
+    rarest: dict[str, set[str]] = defaultdict(set)
+    for key, flagged_rows in rows_by_source.items():
+        seen = frequency.get(key, Counter())
+        for leaf_set in flagged_rows:
+            shown = [leaf for leaf in leaf_set if seen[leaf]]
+            if shown:
+                low = min(seen[leaf] for leaf in shown)
+                rarest[key].update(leaf for leaf in shown if seen[leaf] == low)
     out, tasks = [], defaultdict(Counter)
-    for row in read_jsonl(args.pool):
-        own = item_leaves(row)
+    for row, own in zip(pool_rows, own_leaves):
         hit_any = bool(own & leaves.get(row["source"], frozenset()))
         hit_row = hit_any and any(
             leaf_set <= own for leaf_set in rows_by_source.get(row["source"], [])
         )
+        hit_rarest = bool(own & rarest.get(row["source"], set()))
         tasks[row["task"]]["pool"] += 1
         tasks[row["task"]]["match_any"] += hit_any
         tasks[row["task"]]["match_row"] += hit_row
-        if hit_row if args.match == "row" else hit_any:
+        tasks[row["task"]]["match_rarest"] += hit_rarest
+        if {"any": hit_any, "row": hit_row, "rarest": hit_rarest}[args.match]:
             out.append({"id": row["id"], "why": "admission-flagged-row"})
     private_dir(args.output_dir)
     data = jsonl_bytes(out)
@@ -925,7 +946,7 @@ def main(argv: list[str] | None = None) -> int:
     flag = commands.add_parser("flagged")
     flag.add_argument("--pool", type=Path, required=True)
     flag.add_argument("--admission", type=Path, required=True)
-    flag.add_argument("--match", choices=("any", "row"), default="any")
+    flag.add_argument("--match", choices=("rarest", "any", "row"), default="rarest")
     flag.add_argument("--output-dir", type=Path, required=True)
     flag.add_argument("--config", type=Path, default=CONFIG)
     two = commands.add_parser("export-scan")
