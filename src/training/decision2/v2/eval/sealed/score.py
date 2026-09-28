@@ -231,6 +231,10 @@ def summarize(rows) -> dict[str, Any]:
             "non_english": accuracy(lambda r: r[3] != "en"),
             "english": accuracy(lambda r: r[3] == "en"),
         },
+        "languages": {
+            language: accuracy(lambda r, language=language: r[3] == language)
+            for language in sorted({r[3] for r in rows})
+        },
         "licence_split": licence,
         "items": len(rows),
         "valid": sum(r[6] is not None for r in rows),
@@ -274,26 +278,43 @@ def paired(
     )
     for index, row in enumerate(rows_left):
         by_task_group[row[0]][row[1]].append(index)
-    point = summarize(rows_left)["c1"] - summarize(rows_right)["c1"]
-    rng = random.Random(seed)
-    draws = []
+    left_summary, right_summary = summarize(rows_left), summarize(rows_right)
     tasks = sorted(by_task_group)
+    kind_of = {task: left_summary["tasks"][task]["type"] for task in tasks}
+    kinds = sorted(set(kind_of.values()))
+    rng = random.Random(seed)
+    draws: list[float] = []
+    type_draws: dict[str, list[float]] = {kind: [] for kind in kinds}
     for _ in range(replicates):
-        total = 0.0
+        per_kind: dict[str, list[float]] = defaultdict(list)
         for task in tasks:
             groups = list(by_task_group[task].values())
             picked = [i for _ in groups for i in groups[rng.randrange(len(groups))]]
-            total += macro_f1(
-                [(rows_left[i][5], rows_left[i][6]) for i in picked]
-            ) - macro_f1([(rows_right[i][5], rows_right[i][6]) for i in picked])
-        draws.append(100 * total / len(tasks))
-    draws.sort()
+            per_kind[kind_of[task]].append(
+                macro_f1([(rows_left[i][5], rows_left[i][6]) for i in picked])
+                - macro_f1([(rows_right[i][5], rows_right[i][6]) for i in picked])
+            )
+        draws.append(100 * sum(sum(v) for v in per_kind.values()) / len(tasks))
+        for kind in kinds:
+            type_draws[kind].append(100 * sum(per_kind[kind]) / len(per_kind[kind]))
+
+    def interval(values: list[float]) -> list[float]:
+        ordered = sorted(values)
+        return [
+            ordered[int(0.025 * (replicates - 1))],
+            ordered[int(0.975 * (replicates - 1))],
+        ]
+
     return {
-        "delta": point,
-        "ci95": [
-            draws[int(0.025 * (replicates - 1))],
-            draws[int(0.975 * (replicates - 1))],
-        ],
+        "delta": left_summary["c1"] - right_summary["c1"],
+        "ci95": interval(draws),
+        "by_type": {
+            kind: {
+                "delta": left_summary["by_type"][kind] - right_summary["by_type"][kind],
+                "ci95": interval(type_draws[kind]),
+            }
+            for kind in kinds
+        },
         "replicates": replicates,
         "seed": seed,
         "unit": "source groups within each task",

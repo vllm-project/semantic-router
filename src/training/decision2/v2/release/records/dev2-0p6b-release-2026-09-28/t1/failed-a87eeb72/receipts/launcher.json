@@ -1,0 +1,14 @@
+{
+  "device": "cuda:0",
+  "env": [
+    "HIP_FORCE_DEV_KERNARG=1"
+  ],
+  "gpu": "0",
+  "image": "decision20-train-fast:host2",
+  "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+  "require_kernels": false,
+  "rw_mounts": [],
+  "schema": "dev2-release-launcher/1",
+  "sites": [],
+  "track": "release-06b"
+}

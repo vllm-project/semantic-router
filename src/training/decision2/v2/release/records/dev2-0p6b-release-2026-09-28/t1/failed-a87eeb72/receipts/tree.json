@@ -1,0 +1,15 @@
+{
+  "differs_from_pre_upload_package": [
+    "calibration.json"
+  ],
+  "extra": [
+    "calibration.json"
+  ],
+  "files": 32,
+  "hash_mismatch": [],
+  "manifest_sha256": "71c44582c21f17e49eca9657f0d284a8be845c4a6467b0f343f66bea6ff78601",
+  "missing": [],
+  "passed": false,
+  "schema": "dev2-hub-tree/1",
+  "utc": "2026-09-28T15:27:30.631535+00:00"
+}

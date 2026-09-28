@@ -56,6 +56,9 @@ def summarize(
         ):
             if key in value:
                 entry[key] = value[key]
+        kernels = (value.get("runtime") or {}).get("kernels")
+        if kernels:
+            entry["kernel_bindings"] = kernels["kernel_bindings"]
         if step in ("repeat-pre", "repeat-post"):
             entry["totals"] = value["totals"]
         if step.startswith("parity"):
@@ -77,12 +80,18 @@ def summarize(
             entry["card_problems"] = value["card_problems"]
         steps[step] = entry
     build = json.loads((receipts / "build.json").read_text(encoding="utf-8"))
+    launcher = receipts / "launcher.json"
     return {
         "schema": "dev2-release-receipt/1",
         "utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "source_commit": source,
         "device": device,
         "image": image,
+        "launcher": (
+            json.loads(launcher.read_text(encoding="utf-8"))
+            if launcher.is_file()
+            else None
+        ),
         "wall_seconds": wall_seconds,
         "gpu_hours": 0.0 if device == "cpu" else wall_seconds / 3600,
         "package_manifest_sha256": build["manifest_sha256"],

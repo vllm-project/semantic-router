@@ -1,0 +1,30 @@
+{
+  "backbone": {
+    "config": "backbone/config.json",
+    "weights": [
+      "backbone/model.safetensors"
+    ]
+  },
+  "calibration": {
+    "temperature_file": "calibration.json"
+  },
+  "decision_format": "vllm-sr-decision",
+  "decision_weights": {
+    "decision_head": "decision_head.safetensors"
+  },
+  "format_version": 2,
+  "manifest": "MODEL_MANIFEST.json",
+  "max_input_tokens": 16384,
+  "model_config": "decision_config.json",
+  "model_name": "DEV2.0-0.8B",
+  "package_schema": "dev2-package/1",
+  "runtime": {
+    "entry": "decision2.Decision2.from_pretrained",
+    "python_package": "decision2"
+  },
+  "runtime_family": "decision2-qwen-full",
+  "tokenizer": {
+    "config": "tokenizer_config.json",
+    "json": "tokenizer.json"
+  }
+}

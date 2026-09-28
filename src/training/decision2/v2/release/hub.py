@@ -103,6 +103,10 @@ def upload(args: argparse.Namespace) -> dict[str, Any]:
         folder_path=str(args.package),
         commit_message=args.message,
         ignore_patterns=["**/__pycache__/**", ".cache/**", "*.pyc"],
+        # The commit must leave exactly the package: files of an earlier revision that the
+        # package no longer has (e.g. a dropped calibration.json) are deleted; the Hub keeps
+        # .gitattributes.
+        delete_patterns=["*"],
     )
     revision = commit.oid
     info = api.model_info(args.repo, revision=revision)
@@ -165,6 +169,7 @@ def download(args: argparse.Namespace) -> dict[str, Any]:
         "files": len(files),
         "bytes": sum((args.dest / n).stat().st_size for n in files),
         "hub_added": sorted(n for n in layout.HUB_ADDED if (args.dest / n).is_file()),
+        "passed": bool(files),
     }
 
 

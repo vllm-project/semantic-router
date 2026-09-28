@@ -1,0 +1,19 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-0.6B",
+  "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+  "identity": {
+    "model_sha256": "5b30b7e2e612cbf4a45dcab1cbe2bd05b2b6d25cfe91c376031cb22d5ce303a8"
+  },
+  "report_sha256": "72cf01def4ac987919cd4f13b144652da5fd37a9cdf2c92487bd9c76736bbaa9",
+  "paired_sha256": "bd4ad6c72fa432b7970991a363b87d3017eb8e7895a2355a38326106566db614",
+  "prepared_by": "Decision 2.0 release engineering, DEV2.0-0.6B worker (build-time binding draft)",
+  "decided_by": null,
+  "rationale": "Binding draft for the private build, upload and verification of the second release candidate, 0.6B Milestone 4 m4-t-a7-soup (coordinator note 2026-09-28 21:30): official Qwen3-0.6B-Base da87bfb6, (a2) recipe on mixture T (A0s-r + A6 + the A7 v3 Eos/Lux natural pool, own-Lux teacher 752b7c8f on 6,430 A0s-r rows), uniform soup of three same-init seeds, profile qwen-full at 8,192 tokens with raw probabilities. It names the scored checkpoint identity (the fingerprint of private staging revision 62c61c10), the post-key same-panel report of run m4-t-a7-soup and its paired comparison with the adopted Decision 1.0 Kai run: v3 43.541 vs 35.938, +7.60 [+4.70, +10.76] (same-limit Kai 1.0 at 8K: +7.57 [+4.43, +10.59]; tier leader GLiNER2.5-Decide: +1.02 [-1.77, +7.80]); disclosed regression typed FINAL Choice 255 vs 277. Coordinator decision 21:30 (2) is met: the candidate's builder-renumbered A0s equals the published pk1 A0s (revision d8eae3e4, m3/pk1/A0s) minus the two excluded families row for row (6,547 / 6,547 identical canonical lines; receipt pk1-rows.json 5e79927c). It approves nothing: the coordinator writes the final decision after JevArena-C1 scoring event 2, and only a final decision can be sealed and added to the Decision 2.0 collection.",
+  "pending": [
+    "JevArena-C1 scoring event 2 result for this checkpoint (card confirmation line)",
+    "coordinator decision (status final, decided_by)"
+  ]
+}

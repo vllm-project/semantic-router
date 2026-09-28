@@ -1,0 +1,192 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-0.8B",
+  "repo_id": "llm-semantic-router/DEV2.0-0.8B",
+  "identity": {
+    "model_sha256": "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b"
+  },
+  "report_sha256": "e3e08cd17fe38becdfa655c61d329de7d39c75ffb7db70861af4f88d87fe2682",
+  "paired_sha256": "4489c0ea734a3827edf662419c11faba9fff90deb33325b04460a3f7fbdcd557",
+  "prepared_by": "Decision 2.0 release engineering",
+  "decided_by": null,
+  "rationale": "DRAFT for the coordinator. The E8F seed soup beats its own Decision 1.0 (Eos) on post-key same-panel JevArena v3 with a paired 95% interval excluding zero (50.236 vs 42.547, +7.689 [+3.646, +13.316]; vs the same-limit 16K control +7.875 [+3.688, +13.362]); public 231 156 vs 142. The private package was built from the exact scored bytes, uploaded, downloaded with the real hf download, re-hashed, loaded (753,446,208 parameters) and reproduced every scored prediction exactly on the scoring node; all six mechanical gate items pass. Regressions are disclosed on the card (typed Score 107 vs 120, human transfer H 0.440 vs 0.461, mlx-diag non-English Noul 54.2% vs 59.2%, eight transfer tasks, seed dependence). Pending: the JevArena-C1 result and the coordinator's decision.",
+  "candidate": {
+    "recipe": "E8F: own Decision 1.0 Eos @363c4a5e, full fine-tuning on the M2 full mixture (A0s-r + v1 arms A1-A6h + all A7; 162,777 rows, 138.4M tokens, output d1dc33fc...), no teacher targets, seeds 20260926/27/28, uniform FP32 soup, CAL698 frozen-checkpoint calibration, 16,384-token package",
+    "checkpoint": {
+      "repo_id": "llm-semantic-router/dev2-dec-staging",
+      "revision": "16c0929ac0df649d8223483e1adf419d78a647ed",
+      "folder": "m2/E8F-soup/checkpoint",
+      "staging_files_equal_scored_copy": "9/9 (checkpoint, both calibrations, members.txt)"
+    },
+    "calibration_sha256": "9f76867d5be618da315bd860aae689ed0cf2a2a20ea34d5bae485b011877e05c",
+    "max_input_tokens": 16384,
+    "loaded_parameters": 753446208,
+    "packaged_parameters": {
+      "backbone": 752393024,
+      "head": 1053184,
+      "residual": 0
+    },
+    "tier": "0.8B"
+  },
+  "scored": {
+    "run": "m2-E8F-soup-nodeA (frozen runner, image f83b1d10..., node A GPU5)",
+    "report_sha256": "e3e08cd17fe38becdfa655c61d329de7d39c75ffb7db70861af4f88d87fe2682",
+    "seal_sha256": "7b886cdcda830f0ec982f644235b4a512b7fca28de832533f9167f996a8940ef",
+    "predictions_sha256": {
+      "typed-final": "119256bdf8a3c5461468614b126f949760866f2ef0dc745b695b190fe2312e31",
+      "css15": "5ab525e8b019113238615072b2d634f61bf3694f96090ff56ad2e33ac83e7754",
+      "public231": "870abd5f146da051490be3d39bdc459fda7537cec8a8fdf0bcd5712a67ae0ed7"
+    },
+    "paired_vs_adopted_eos1": {
+      "sha256": "4489c0ea734a3827edf662419c11faba9fff90deb33325b04460a3f7fbdcd557",
+      "left_v3": 50.236,
+      "right_v3": 42.547,
+      "delta": 7.689,
+      "ci95": [
+        3.646,
+        13.316
+      ],
+      "replicates": 5000
+    },
+    "paired_vs_same_limit_eos1_16k": {
+      "sha256": "15140c116b17512563ae37e3a6b53d7b11d077972a2978f90c283f7a688230eb",
+      "right_v3": 42.361,
+      "delta": 7.875,
+      "ci95": [
+        3.688,
+        13.362
+      ],
+      "replicates": 5000
+    },
+    "mlx_diag_score_sha256": "4e2529fe243b05f2b984c483804d7d81f6a6ba54993cc0018278f300bc47d1ae"
+  },
+  "package": {
+    "manifest_sha256": "d10bd95c40a1417b8416d73fe7af9a9213d3c113804a6f2bc600f57cbf379594",
+    "files": 31,
+    "bytes": 3034575568,
+    "licence": "apache-2.0",
+    "readme_sha256": "df78a3863ac5631514e56989ed2fa26826d294533625975addd0c3bbd3e2a074",
+    "builder_commit": "4d94d6fd6494f41505b9157db691216882f610ef",
+    "build_receipt_sha256": "4cfb79bca5366febb8e26a5437ab4c0f8714e2750d9200dfeec9df8b5626baa8"
+  },
+  "hub": {
+    "verified_revision": "2667d883c5941356a436ba38824b0453dd2fa7b6",
+    "private": true,
+    "remote_files": 31,
+    "hash_mismatch": [],
+    "card_data": {
+      "base_model": "llm-semantic-router/Decision-1.0-Eos-0.8B",
+      "base_model_relation": "finetune",
+      "license": "apache-2.0",
+      "license_name": null,
+      "tags": [
+        "decision-model",
+        "classification",
+        "system-one",
+        "safetensors"
+      ]
+    },
+    "collection": {
+      "contains_repo": false,
+      "items": 0,
+      "private": true,
+      "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+      "title": "Decision 2.0"
+    },
+    "card_http_receipt_sha256": "d53a4f14b56b3b97bc67a1b52eb00c1ba075f051710a9ad01264130d519d2fb1",
+    "card_http_passed": true,
+    "anonymous_access": {
+      "model_api": 401,
+      "model_page": 401,
+      "readme": 401
+    }
+  },
+  "gate_evidence": {
+    "evaluated_with_commit": "a1c087bd6617d6b172ff58da175826c5e51756cd",
+    "evaluate_receipt_sha256": "5060f8f24d3ab9aa80e197588f215f4fd8e68128393ee27b9f57759973238a40",
+    "items": {
+      "1_beats_own_1_0": {
+        "passed": true,
+        "evidence": "paired v3 95% interval low +3.646 (sha 4489c0ea734a)"
+      },
+      "2_regressions_disclosed": {
+        "passed": true,
+        "evidence": "11 results below own 1.0 listed in the card tradeoffs table"
+      },
+      "3_download_hash_parameters": {
+        "passed": true,
+        "evidence": "tree 31 files re-hashed; loaded 753446208"
+      },
+      "4_native_examples": {
+        "passed": true,
+        "evidence": "examples and the card's Python block reproduced from the download"
+      },
+      "5_output_consistency": {
+        "passed": true,
+        "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run"
+      },
+      "6_card_design": {
+        "passed": true,
+        "evidence": "Hub card apache-2.0 / problems []"
+      }
+    },
+    "all_items_passed": true,
+    "parity": {
+      "css15": {
+        "prompts": 6547,
+        "slots": 6547,
+        "category_changes": 0,
+        "input_mismatch": 0,
+        "max_abs_drift": 0.0
+      },
+      "public231": {
+        "prompts": 231,
+        "slots": 231,
+        "category_changes": 0,
+        "input_mismatch": 0,
+        "max_abs_drift": 0.0
+      },
+      "typed-final": {
+        "prompts": 1600,
+        "slots": 2000,
+        "category_changes": 0,
+        "input_mismatch": 0,
+        "max_abs_drift": 0.0
+      }
+    },
+    "parity_post_download_identical": true,
+    "release_receipt_sha256": "b2b6a12c108a644bcbe6fa46f839221fb05213dff0e3aa8b04ec6e8c7bcd4c83",
+    "receipts_sha256": {
+      "spec": "c7d0aa7d0363edcdc2341ad6d006b09be01ab305162f78ec722171bab179c63e",
+      "launcher": "938f7149b07a098ba703eb18fadc4981c6bf664babd7be58afa5919c70040f20",
+      "build": "4cfb79bca5366febb8e26a5437ab4c0f8714e2750d9200dfeec9df8b5626baa8",
+      "pre-a": "300aeb899a6d9c732129b0356f7832f04b396ec068cdf81bb9f9117260ce1213",
+      "pre-b": "9f31d7cd558e797f50972f7317201f2dc45e56c85666e5448ce80f5beef3be55",
+      "repeat-pre": "45c2550dfeaebe8678893a43c3c639d263dce8727498ef5bb0576e2a5179adff",
+      "card-pre": "f6624e398f88a68bc1f6e28c88242b241a5674c2b7089bd665ed1c2d90c29306",
+      "parity-pre": "23e4201d49e548eeb902de77e847b3fb91c2f02589c3da025b0547cf530776a1",
+      "ensure": "004be78cdb49d22c5856d46ce81c5cb2aee0291426917566b4698c3bb29a1f80",
+      "upload": "4a8db6e28734a34601cef1cc2fb662e96f110ab4f9b6c3ea776f04042c07b646",
+      "download": "fe0a8d8d4791367cc2351bbb8d3631a075dee6d51357b150c82650e04edfd3c4",
+      "tree": "20926b88ac6aa94d20cf9bf4eedb33defc9e3c901ea61f63cc201576fbd69254",
+      "post": "acf7e35d89f300ec18f1f79bbe2fcadf726aeff4cc9af96df4c3af1d1bc5fb90",
+      "repeat-post": "d903e85748d89ae059fbf5562eee508f6b6f5f0a1a8adedbead7938935db04d1",
+      "card-post": "f072d550df2bcb14eaff896979e41691a73d96fa9d3cf902082ed074c7090123",
+      "parity-post": "c1d921fb296f1a2af0235a55a3879ba9ee8de701d1a182adcb423c7b5d5e919b",
+      "readback": "26577c9232be113987a38bea122b2dd3736006cad43d84db2141abd36833606e"
+    },
+    "gpu_hours": 0.1472,
+    "seal_refuses_this_draft": true
+  },
+  "pending": [
+    "JevArena-C1 scoring event 1 result for this checkpoint (card line 'Independent sealed confirmation' is a placeholder)",
+    "coordinator decision: status final, decided_by, rationale"
+  ],
+  "finalization": [
+    "Replace card.text.confirmation in v2/release/specs/dev2-0p8b-release.json with the C1 result line and point gate_receipt at the final decision file on node A.",
+    "Final decision = this file with status 'final', decided_by set and the rationale updated; keep identity, report_sha256 and paired_sha256 unchanged.",
+    "Commit, push, mirror; on node A with one lent GPU rerun release.sh with the flags of RELEASE-RECEIPT.json's launcher (--site /opt/decision-fla --require-kernels, a copy of the scored autotune cache, the three full-panel --parity specs) into a new work dir with --upload --collect. The README change gives a new revision; gate.json binds the final decision to it before the collection add."
+  ]
+}
