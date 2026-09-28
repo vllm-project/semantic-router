@@ -12,7 +12,10 @@ if str(CLI_ROOT) not in sys.path:
 from cli.catalog_provider_projection import (  # noqa: E402
     CatalogProviderProjectionError,
 )
-from cli.config_generator import generate_envoy_config_from_user_config  # noqa: E402
+from cli.config_generator import (  # noqa: E402
+    _model_cluster_id,
+    generate_envoy_config_from_user_config,
+)
 from cli.parser import parse_user_config  # noqa: E402
 from cli.validator import validate_user_config  # noqa: E402
 
@@ -212,7 +215,7 @@ routing:
         'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_type"]',
     ]
 
-    cluster = _cluster_by_name(rendered, "dynamo_model_cluster")
+    cluster = _cluster_by_name(rendered, f"{_model_cluster_id('dynamo-model')}_cluster")
     endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
     identities = [
         endpoint["metadata"]["filter_metadata"]["semantic-router"]
