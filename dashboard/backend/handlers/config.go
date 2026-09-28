@@ -136,9 +136,15 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			writeConfigPersistenceError(w, err)
 			return
 		}
+		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
+			return
+		}
 
 		if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
 			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", err), http.StatusInternalServerError)
+			return
+		}
+		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 			return
 		}
 		if configActivationDeferred() {
@@ -237,9 +243,15 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			writeConfigPersistenceError(w, err)
 			return
 		}
+		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
+			return
+		}
 
 		if err := applyWrittenConfig(configPath, configDir, existingData, false); err != nil {
 			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", err), http.StatusInternalServerError)
+			return
+		}
+		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 			return
 		}
 		if configActivationDeferred() {

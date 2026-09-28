@@ -75,10 +75,10 @@ def test_installation_doc_documents_runtime_options() -> None:
     assert "Podman" in content
 
 
-def test_install_script_defaults_to_dev_channel() -> None:
+def test_install_script_defaults_to_stable_channel() -> None:
     content = INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")
 
-    assert 'REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-dev}"' in content
+    assert 'REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-stable}"' in content
     assert "--channel stable|dev" in content
     assert "resolve_latest_dev_version" in content
     assert '"vllm-sr==$dev_version"' in content
@@ -118,8 +118,7 @@ def test_installation_surfaces_offer_minimal_human_and_agent_paths() -> None:
     assert "vllm-sr route probe" in agent_docs
 
     assert "name: vllm-sr" in skill
-    assert "--channel dev --mode cli --runtime skip --no-launch" in skill
-    assert "--channel stable --mode cli" not in skill
+    assert "--channel stable --mode cli --runtime skip --no-launch" in skill
     assert 'export PATH="$HOME/.local/bin:$PATH"' in skill
 
 

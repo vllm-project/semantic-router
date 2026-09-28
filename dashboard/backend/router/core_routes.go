@@ -245,8 +245,8 @@ func registerMLPipelineRoutes(mux routeRegistrar, cfg *config.Config, wf *workfl
 
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/jobs", auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet), mlHandler.ListJobsHandler())
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/jobs/", auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet), mlHandler.GetJobHandler())
-	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/ml-pipeline/benchmark", auth.PermMlPipeline, "ml.benchmark", auth.SensitivitySensitive, auth.ResourceOwnerML, 4<<20, http.MethodPost), mlHandler.RunBenchmarkHandler())
-	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/ml-pipeline/train", auth.PermMlPipeline, "ml.train", auth.SensitivitySensitive, auth.ResourceOwnerML, 4<<20, http.MethodPost), mlHandler.RunTrainHandler())
+	registerRouteFunc(mux, auth.ProtectedStreamingMutationRoute("/api/ml-pipeline/benchmark", auth.PermMlPipeline, "ml.benchmark", auth.SensitivitySensitive, auth.ResourceOwnerML, handlers.MLBenchmarkUploadMaxBytes, http.MethodPost), mlHandler.RunBenchmarkHandler())
+	registerRouteFunc(mux, auth.ProtectedStreamingMutationRoute("/api/ml-pipeline/train", auth.PermMlPipeline, "ml.train", auth.SensitivitySensitive, auth.ResourceOwnerML, handlers.MLTrainUploadMaxBytes, http.MethodPost), mlHandler.RunTrainHandler())
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/ml-pipeline/config", auth.PermMlPipeline, "ml.config", auth.SensitivitySensitive, auth.ResourceOwnerML, 4<<20, http.MethodPost), mlHandler.GenerateConfigHandler())
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/download/", auth.PermMlPipeline, auth.SensitivitySecret, auth.ResourceOwnerML, http.MethodGet), mlHandler.DownloadOutputHandler())
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/stream/", auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet), mlHandler.StreamProgressHandler())

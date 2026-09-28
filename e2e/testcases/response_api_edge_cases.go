@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	responseAPILargeInputSize        = 16000
+	// A buffered ExtProc request over 4 MiB exercises the gRPC limit as well
+	// as the codec and provider path. It remains below the 64 MiB codec limit.
+	responseAPILargeInputSize        = (5 << 20) + 1024
 	responseAPIConcurrentRequests    = 20
 	responseAPIConcurrentConcurrency = 5
 )
@@ -25,7 +27,7 @@ func init() {
 		Fn:          testResponseAPIEdgeEmptyInput,
 	})
 	pkgtestcases.Register("response-api-edge-large-input", pkgtestcases.TestCase{
-		Description: "Edge case - Large input payload",
+		Description: "Buffered input over 4 MiB reaches the provider without truncation",
 		Tags:        []string{"response-api", "edge-case"},
 		Fn:          testResponseAPIEdgeLargeInput,
 	})
@@ -88,7 +90,7 @@ func testResponseAPIEdgeLargeInput(ctx context.Context, client *kubernetes.Clien
 	largeInput := strings.Repeat(sentence, responseAPILargeInputSize/len(sentence)+1)
 	largeInput = largeInput[:responseAPILargeInputSize]
 	storeFalse := false
-	apiClient := fixtures.NewResponseAPIClient(session, 60*time.Second)
+	apiClient := fixtures.NewResponseAPIClient(session, 120*time.Second)
 	resp, raw, err := apiClient.Create(ctx, fixtures.ResponseAPIRequest{
 		Model:    "openai/gpt-oss-20b",
 		Input:    largeInput,
