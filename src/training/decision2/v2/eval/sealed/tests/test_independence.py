@@ -12,7 +12,8 @@ from v2.eval.sealed import independence
 class IndependenceTest(unittest.TestCase):
     def test_names_reads_provenance_not_row_text(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp) / "data"
+            root.mkdir()
             rows = [
                 {"source": "tydiqa_train", "state": "mentions DeliChess in text only"},
                 {
@@ -26,7 +27,7 @@ class IndependenceTest(unittest.TestCase):
             (root / "registry.json").write_text(
                 json.dumps({"arms": ["innoduel sample"]})
             )
-            terms = root / "terms.json"
+            terms = Path(tmp) / "terms.json"
             terms.write_text(
                 json.dumps(
                     {
@@ -36,7 +37,7 @@ class IndependenceTest(unittest.TestCase):
                     }
                 )
             )
-            out = root / "names.json"
+            out = Path(tmp) / "names.json"
             independence.names(Namespace(terms=terms, root=[root], output=out))
             result = json.loads(out.read_text())
         self.assertEqual(result["sources_found"], ["delichess", "innoduel"])
