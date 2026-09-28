@@ -33,7 +33,8 @@ exercises response framing and image decoding; it does not simulate image qualit
 
 `provider_mocker/schema_contract.json` keeps the pinned OpenAI/Anthropic field
 inventories and provider extensions. Unknown fields return the native protocol's
-error envelope. Request observation preserves the original JSON and only the
+error envelope. Request observation preserves the original JSON, the request path,
+a SHA-256 digest of the `Authorization` header (not the credential) and only the
 `x-vsr-test-session-id` and `x-vsr-e2e-*` headers. Sessions use that header or query
 parameter and otherwise share `__global__`. Observation and cache state are bounded
 and local to the single service worker.
