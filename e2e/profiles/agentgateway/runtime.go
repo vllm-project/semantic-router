@@ -13,6 +13,7 @@ import (
 
 const (
 	gatewayAPICRDsURL           = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml"
+	providerMockerImage         = "semantic-router-ci/provider-mocker:e2e-test"
 	timeoutAgentGatewayInstall  = 10 * time.Minute
 	timeoutSemanticRouterDeploy = 20 * time.Minute
 	timeoutDemoLLMDeploy        = 10 * time.Minute
@@ -79,6 +80,21 @@ func (p *Profile) deployDemoLLM(ctx context.Context, deployer *helm.Deployer, op
 	if err := p.applyManifest(ctx, opts.KubeConfig, "deploy/kubernetes/agentgateway/demo-llm.yaml"); err != nil {
 		return err
 	}
+	mockProviderPatch := fmt.Sprintf(
+		`{"spec":{"template":{"spec":{"containers":[{"name":"vllm-sim","image":%q,"imagePullPolicy":"Never","args":null}]}}}}`,
+		providerMockerImage,
+	)
+	if err := p.runKubectl(
+		ctx,
+		opts.KubeConfig,
+		"patch",
+		"deployment/vllm-llama3-8b-instruct",
+		"--type=strategic",
+		"--patch",
+		mockProviderPatch,
+	); err != nil {
+		return fmt.Errorf("use observable mock provider in agentgateway E2E: %w", err)
+	}
 	return deployer.WaitForDeployment(ctx, "default", "vllm-llama3-8b-instruct", timeoutDemoLLMDeploy)
 }
 
@@ -91,9 +107,10 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 	release.Wait = false
 	release.Timeout = "10m"
 	release.Set = map[string]string{
-		"image.repository": "ghcr.io/vllm-project/semantic-router/extproc",
-		"image.tag":        opts.ImageTag,
-		"image.pullPolicy": "Never",
+		"image.repository":                               "ghcr.io/vllm-project/semantic-router/extproc",
+		"image.tag":                                      opts.ImageTag,
+		"image.pullPolicy":                               "Never",
+		"config.global.router.handoff.enabled":           "true",
 		"config.global.router.streamed_body.enabled":     "true",
 		"config.global.router.streamed_body.max_bytes":   "10485760",
 		"config.global.router.streamed_body.timeout_sec": "30",
