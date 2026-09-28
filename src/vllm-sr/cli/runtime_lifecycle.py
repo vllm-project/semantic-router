@@ -30,8 +30,8 @@ from cli.container_cli import (
     container_stop_container,
     load_openclaw_registry,
 )
-from cli.grafana_credentials import grafana_password_path
 from cli.container_runtime import get_container_runtime
+from cli.grafana_credentials import grafana_password_path
 from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
 from cli.runtime_stack import RuntimeStackLayout
 from cli.terminal import echo, fields, heading, progress, success
