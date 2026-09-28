@@ -4,16 +4,20 @@
 (revision attested per row). These are our own model's targets, the clean default. They carry no third-party caveat,
 unlike `m3/teachers/autojev27/`.
 
-**Rows:** every row of `m3/mixtures/xl/mx-xl-full` ∪ `mx-xl-short` (r1) that had no own-Lux target (the
-`*.lux1.missing.jsonl` lists there). XL-full ids come first, then XL-short-only ids, each part sorted by id, cut into
-five waves:
+**Rows:** every row of `m3/mixtures/xl/mx-xl-full` ∪ `mx-xl-short` (r1) and of their four `cx-xl-*` controls that had
+no own-Lux target (the `*.lux1.missing.jsonl` lists there). XL-full ids come first, then XL-short-only ids, each part
+sorted by id, cut into five waves. The control-only rows (in no XL recipe's missing list) follow in two control waves
+(M3b amendment 3 §4), sorted by id:
 
 | Wave | Prompts |
 | --- | ---: |
 | `w1`–`w4` | 60,000 each |
 | `w5` | 12,215 |
+| `c-w1` | 60,000 |
+| `c-w2` | 40,957 |
 
-That is 252,215 prompts in total. `w4` holds the last 32,554 XL-full rows and the first 27,446 XL-short-only rows.
+That is 252,215 recipe prompts and 100,957 control-only prompts. `w4` holds the last 32,554 XL-full rows and the first
+27,446 XL-short-only rows. Control-wave files are named `c-w<k>.*` and have the same format as `w<k>.*`.
 
 ## Files per wave
 
@@ -32,7 +36,7 @@ That is 252,215 prompts in total. `w4` holds the last 32,554 XL-full rows and th
     mean gold probability, normalized entropy and Brier;
   - SHA-256 of the targets, attestation, prompts, rows and teacher output;
   - `provenance`: guard receipt, launcher, image, collector summary, wall time and GPU-hours.
-- **`coverage.json`** (uploaded with `w1`): for each XL recipe and control, the rows with own-Lux targets before and after
+- **`coverage.json`** (uploaded with `w1`, refreshed with `c-w1`): for each XL recipe and control, the rows with own-Lux targets before and after
   each wave, and the rows no wave covers.
 
 ## How the targets were made
@@ -56,15 +60,15 @@ That is 252,215 prompts in total. `w4` holds the last 32,554 XL-full rows and th
 
 ## Coverage (own-Lux targets, rows of the recipe)
 
-| Recipe | Rows | Before | After all five waves | Left without a target |
+| Recipe | Rows | Before | After w1–w5 | After c-w1 and c-w2 |
 | --- | ---: | ---: | ---: | ---: |
-| `mx-xl-full` | 340,698 | 128,144 | 340,698 | 0 |
-| `mx-xl-short` | 355,855 | 123,876 | 355,855 | 0 |
-| `cx-xl-a7v1-full` | 191,605 | 12,413 | 170,089 | 21,516 |
-| `cx-xl-a7v1-short` | 167,071 | 11,172 | 157,460 | 9,611 |
-| `cx-xl-v2v1-full` | 296,514 | 127,186 | 225,542 | 70,972 |
-| `cx-xl-v2v1-short` | 282,695 | 123,974 | 227,074 | 55,621 |
+| `mx-xl-full` | 340,698 | 128,144 | 340,698 | 340,698 |
+| `mx-xl-short` | 355,855 | 123,876 | 355,855 | 355,855 |
+| `cx-xl-a7v1-full` | 191,605 | 12,413 | 170,089 | 191,605 |
+| `cx-xl-a7v1-short` | 167,071 | 11,172 | 157,460 | 167,071 |
+| `cx-xl-v2v1-full` | 296,514 | 127,186 | 225,542 | 296,514 |
+| `cx-xl-v2v1-short` | 282,695 | 123,974 | 227,074 | 282,695 |
 
-- **Control-only rows:** 100,957 rows of the four controls are in neither XL recipe, and no wave covers them. They
-  train on gold labels unless a later wave covers them.
+- **Per wave:** `coverage.json` gives the counts after every wave, including the controls after `c-w1`.
 - **r2 rows:** H7 / H8 rows of the r2 recipes have no teacher targets and train on gold labels (M3b amendment 2).
+  Targets for rows that the amendment 3 rescreen flags stay published but are not referenced by any r2 recipe.

@@ -142,5 +142,26 @@ class CoverageTest(unittest.TestCase):
             self.assertEqual(ctrl["after_wave"][-1]["share"], 0.75)
 
 
+class ControlIdsTest(unittest.TestCase):
+    def test_control_rows_outside_both_recipes_sorted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lists = {
+                "mx-xl-full": "ab",
+                "mx-xl-short": "bc",
+                "cx-xl-a7v1-full": "azd",
+                "cx-xl-a7v1-short": "d",
+                "cx-xl-v2v1-full": "cy",
+                "cx-xl-v2v1-short": "",
+            }
+            for name, ids in lists.items():
+                _jsonl(root / f"{name}.lux1.missing.jsonl", [{"id": i} for i in ids])
+            self.assertEqual(luxxl.control_only_ids(root), ["d", "y", "z"])
+            out = root / "c.jsonl"
+            argv = ["control-ids", "--missing-dir", str(root), "--out", str(out)]
+            self.assertEqual(luxxl.main(argv), 0)
+            self.assertEqual(out.read_text().splitlines()[0], '{"id": "d"}')
+
+
 if __name__ == "__main__":
     unittest.main()

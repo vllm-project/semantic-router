@@ -6,6 +6,7 @@
         --triton-cache-files N --triton-cache-sha256 H --out provenance.json
     python3 -m v2.data.m3.luxxl coverage --manifest mx-xl.manifest.json --missing-dir DIR \\
         --wave lux-xl-w1=lux-xl-w1.prompts.jsonl ... --out coverage.json
+    python3 -m v2.data.m3.luxxl control-ids --missing-dir DIR --out control-only.missing.jsonl
 
 ``provenance`` checks one finished node-B wave before conversion: the target guard passed on
 exactly this prompt file, the Milestone 2 launcher exited 0 on it, the collector summary
@@ -13,7 +14,9 @@ reports the pinned Lux1 identity, an attested revision, the validated runtime an
 prompt collected in one pass, and the image is the one of own-Lux waves 1-4. It writes the
 path-free JSON that ``v2.data.m2.targets --provenance`` copies into the report (``per_row``
 into every attestation line). ``coverage`` counts, per XL recipe, the rows that gain an
-own-Lux target with each wave and the rows no wave covers.
+own-Lux target with each wave and the rows no wave covers. ``control-ids`` lists the rows of
+the four ``cx-xl-*`` controls that lack an own-Lux target and are in neither XL recipe's missing
+list (M3b amendment 3 §4), sorted by id, as ``v2.data.m3.xl_prompts --missing`` input.
 """
 
 from __future__ import annotations
@@ -188,6 +191,23 @@ def coverage(
     return out
 
 
+CONTROLS = (
+    "cx-xl-a7v1-full",
+    "cx-xl-a7v1-short",
+    "cx-xl-v2v1-full",
+    "cx-xl-v2v1-short",
+)
+RECIPES = ("mx-xl-full", "mx-xl-short")
+
+
+def control_only_ids(missing_dir: Path) -> list[str]:
+    def ids(name: str) -> set[str]:
+        return set(_ids(missing_dir / f"{name}.lux1.missing.jsonl"))
+
+    controls = set().union(*(ids(name) for name in CONTROLS))
+    return sorted(controls - set().union(*(ids(name) for name in RECIPES)))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -209,7 +229,16 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--missing-dir", type=Path, required=True)
     c.add_argument("--wave", action="append", required=True, help="NAME=PROMPTS")
     c.add_argument("--out", type=Path, required=True)
+    k = sub.add_parser("control-ids")
+    k.add_argument("--missing-dir", type=Path, required=True)
+    k.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
+    if args.command == "control-ids":
+        ids = control_only_ids(args.missing_dir)
+        with args.out.open("x", encoding="utf-8") as stream:
+            stream.writelines(json.dumps({"id": i}) + "\n" for i in ids)
+        print(json.dumps({"control_only_ids": len(ids)}))
+        return 0
     if args.command == "provenance":
         result = provenance(args)
     else:

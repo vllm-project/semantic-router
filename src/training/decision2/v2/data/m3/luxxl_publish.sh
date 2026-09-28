@@ -3,6 +3,10 @@
 #
 # Usage: luxxl_publish.sh MIRROR_SHA WAVE...        e.g. luxxl_publish.sh <full-sha> 2 3 4 5
 #
+# WAVE is 1-5 (lux-xl-w<k>, queue m3b-luxxl-queue.sh) or c1 / c2 (control waves lux-xl-c-w<k>,
+# M3b amendment 3 §4, queue luxxl_control_queue.sh from the node-B mirror of MIRROR_SHA; files
+# c-w<k>.*; c1 also refreshes README.md and coverage.json).
+#
 # Runs on the local machine and reaches the nodes only through dssh ($DSSH, default
 # /tmp/m3a/dssh), so no node address is printed. For each wave k, in order:
 #   1. wait for LUX_XL_W<k>_DONE in node B's teach.log (every 120 s, at most 6 h);
@@ -35,6 +39,7 @@ B=/data/dev2/runs/data/m3b-lux
 BP=/data/dev2/private/data/teachers-v2/m3b
 BL=/data/dev2/logs/data
 TC=/data/dev2/runs/data/triton-cache-lux-nodeB
+CQ=$M/v2/data/m3/luxxl_control_queue.sh
 REPO=llm-semantic-router/decision-2.0-training-data
 DEST=m3/teachers/lux1/xl
 mkdir -p "$LOCAL"
@@ -57,7 +62,13 @@ na "cat /data/dev2/src/$sha-src_training_decision2/.dev2-mirror.json" | grep -q 
 event started all 0 "$sha waves $*"
 
 publish() {
-  local k=$1 name="lux-xl-w$1" P="$W/publish/w$1" U="$W/upload-w$1" L="$LOCAL/w$1"
+  local k=$1 name stem marker queue_file
+  if [[ "$k" == c* ]]; then
+    name="lux-xl-c-w${k#c}" stem="c-w${k#c}" marker="LUX_XL_C_W${k#c}_DONE" queue_file=$CQ
+  else
+    name="lux-xl-w$k" stem="w$k" marker="LUX_XL_W${k}_DONE" queue_file=$BL/m3b-luxxl-queue.sh
+  fi
+  local P="$W/publish/$stem" U="$W/upload-$stem" L="$LOCAL/$stem"
   local i state out_sha out_rows image launcher queue teach_mirror tc_files tc_sha pa pb have got rev
   mkdir -p "$L"
   state=$(na "if [ -f $P/published.json ]; then echo published; elif [ -e $U ] || [ -e $P/upload.log ]; then echo partial; else echo fresh; fi") \
@@ -69,7 +80,7 @@ publish() {
   esac
   event waiting "$k" 0
   for ((i = 0; i < 180; i++)); do
-    nb "grep -qx LUX_XL_W${k}_DONE $BL/teach.log" && break
+    nb "grep -qx $marker $BL/teach.log" && break
     sleep 120
   done
   ((i < 180)) || fail timeout_waiting "$k"
@@ -79,7 +90,7 @@ publish() {
   nb "cat $B/$name.jsonl.log" > "$L/collector.log" || fail collector_log "$k"
   read -r out_sha out_rows < <(nb "sha256sum < $B/$name.jsonl | cut -d' ' -f1; wc -l < $B/$name.jsonl" | tr '\n' ' ')
   image=$(nb "docker image inspect --format '{{.Id}}' decision20-lux-runtime:latest")
-  read -r launcher queue < <(nb "sha256sum $BL/teach.sh $BL/m3b-luxxl-queue.sh | cut -d' ' -f1" | tr '\n' ' ')
+  read -r launcher queue < <(nb "sha256sum $BL/teach.sh $queue_file | cut -d' ' -f1" | tr '\n' ' ')
   teach_mirror=$(nb "grep -o 'src/[0-9a-f]\{40\}-src_training_decision2' $BL/teach.sh | head -1 | cut -c5-44")
   read -r tc_files tc_sha < <(nb "cd $TC && find . -type f | wc -l && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1" | tr '\n' ' ')
   pb=$(nb "sha256sum < $BP/$name.prompts.jsonl | cut -d' ' -f1")
@@ -129,27 +140,30 @@ publish() {
   na "umask 077; mkdir $U && cd $M && python3 -m v2.data.m2.targets --wave $name --rows $W/$name.rows.jsonl \
     --prompts $W/$name.prompts.jsonl --teacher-output $W/teacher/$name.jsonl --teacher lux \
     --model-id llm-semantic-router/Decision-1.0-Lux-9B --revision bd45a30aee8c84032791c245c70f86dee5389cc8 \
-    --provenance $P/provenance.json --out $U/w$k.targets.jsonl --attestation $U/w$k.attestation.jsonl \
-    --report $U/w$k.report.json > $P/convert.stdout 2>&1" || fail convert_failed "$k"
-  if [[ "$k" == 1 ]]; then
+    --provenance $P/provenance.json --out $U/$stem.targets.jsonl --attestation $U/$stem.attestation.jsonl \
+    --report $U/$stem.report.json > $P/convert.stdout 2>&1" || fail convert_failed "$k"
+  if [[ "$k" == 1 || "$k" == c1 ]]; then
+    local waves j
+    waves=$(for j in 1 2 3 4 5; do printf -- '--wave lux-xl-w%s=%s ' "$j" "$W/lux-xl-w$j.prompts.jsonl"; done)
+    [[ "$k" == c1 ]] && waves+=$(for j in 1 2; do printf -- ' --wave lux-xl-c-w%s=%s' "$j" "$W/lux-xl-c-w$j.prompts.jsonl"; done)
     na "cp $M/v2/data/records/hf-lux1-xl-readme.md $U/README.md && cd $M && python3 -m v2.data.m3.luxxl coverage \
-      --manifest $X/mx-xl.manifest.json --missing-dir $X $(for j in 1 2 3 4 5; do printf -- '--wave lux-xl-w%s=%s ' "$j" "$W/lux-xl-w$j.prompts.jsonl"; done) \
-      --out $U/coverage.json > /dev/null" || fail first_wave_files "$k"
+      --manifest $X/mx-xl.manifest.json --missing-dir $X $waves --out $U/coverage.json > /dev/null" \
+      || fail readme_coverage_files "$k"
   fi
   event converted "$k" 0 "$(na "cat $P/convert.stdout" | tr -d '"{}' | tr ',' ';')"
   na "! grep -rlq -e /data/ -e /root/ $U" || fail path_leak "$k"
-  na "cat $U/w$k.report.json" > "$L/w$k.report.json" || fail fetch_report "$k"
-  bash "$GUARD" -- "$L/w$k.report.json" > "$L/private-check.txt" 2>&1 || fail private_value_in_report "$k"
+  na "cat $U/$stem.report.json" > "$L/$stem.report.json" || fail fetch_report "$k"
+  bash "$GUARD" -- "$L/$stem.report.json" > "$L/private-check.txt" 2>&1 || fail private_value_in_report "$k"
 
   event upload_started "$k" 0
   na "export HF_HUB_CACHE=/data/dev2/hf-cache; hf upload $REPO $U $DEST --repo-type dataset \
-    --commit-message 'Add own-Lux XL targets wave $k (node B GPU7, M3b prereg 3)' > $P/upload.log 2>&1" \
+    --commit-message 'Add own-Lux XL targets wave $stem (node B GPU7, M3b prereg 3 / amendment 3)' > $P/upload.log 2>&1" \
     || fail upload_failed "$k"
   rev=$(na "grep -o 'commit/[0-9a-f]\{40\}' $P/upload.log | tail -1 | cut -d/ -f2")
   hex "${rev:-}" 40 || fail upload_revision_unknown "$k"
   event uploaded "$k" 0 "$rev"
 
-  na "bash -s -- $REPO $U $DEST $rev $P w$k" <<'EOF' || fail readback_mismatch "$k" "$rev"
+  na "bash -s -- $REPO $U $DEST $rev $P $stem" <<'EOF' || fail readback_mismatch "$k" "$rev"
 set -euo pipefail
 repo=$1 up=$2 dest=$3 rev=$4 work=$5 wave=$6
 export HF_HUB_CACHE=/data/dev2/hf-cache
@@ -173,7 +187,7 @@ EOF
 }
 
 for k in "$@"; do
-  [[ "$k" =~ ^[1-5]$ ]] || fail bad_wave "$k"
+  [[ "$k" =~ ^([1-5]|c[12])$ ]] || fail bad_wave "$k"
   publish "$k"
 done
 event all_done all 0
