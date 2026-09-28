@@ -132,10 +132,26 @@ metadata:
   namespace: default
 spec:
   jsonPatches:
+  # Strip identity headers supplied by the client before the authenticated
+  # principal is injected by the deployment's authn/authz filter chain.
   - name: default/semantic-router/http
     operation:
       op: add
       path: /default_filter_chain/filters/0/typed_config/http_filters/0
+      value:
+        name: envoy.filters.http.lua
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+          inlineCode: |
+            function envoy_on_request(request_handle)
+              request_handle:headers():remove("x-authz-user-id")
+              request_handle:headers():remove("x-authz-user-groups")
+            end
+    type: type.googleapis.com/envoy.config.listener.v3.Listener
+  - name: default/semantic-router/http
+    operation:
+      op: add
+      path: /default_filter_chain/filters/0/typed_config/http_filters/1
       value:
         name: semantic-router-extproc
         typedConfig:

@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/openai/openai-go"
@@ -32,34 +34,49 @@ type ToolSimilarity struct {
 
 // ToolsDatabase manages a collection of tools with semantic search capabilities
 type ToolsDatabase struct {
-	entries             []ToolEntry
-	mu                  sync.RWMutex
-	similarityThreshold float32
-	enabled             bool
-	modelType           string // Model type to use for embeddings (e.g., "mmbert", "qwen3", "gemma")
-	targetDim           int    // Target dimension for embeddings
-	provider            embedding.Provider
+	entries              []ToolEntry
+	mu                   sync.RWMutex
+	similarityThreshold  float32
+	enabled              bool
+	backend              string
+	modelType            string // Model type to use for embeddings (e.g., "mmbert", "qwen3", "gemma")
+	targetDim            int    // Target dimension for embeddings
+	provider             embedding.Provider
+	providerIdentity     string
+	retrievalFingerprint string
 }
 
 // ToolsDatabaseOptions holds options for creating a new tools database
 type ToolsDatabaseOptions struct {
 	SimilarityThreshold float32
 	Enabled             bool
+	Backend             string
 	ModelType           string // Model type to use for embeddings
 	TargetDimension     int    // Target dimension for embeddings
 	Provider            embedding.Provider
+	ProviderIdentity    string
 }
 
 // NewToolsDatabase creates a new tools database with the given options
 func NewToolsDatabase(options ToolsDatabaseOptions) *ToolsDatabase {
-	return &ToolsDatabase{
+	database := &ToolsDatabase{
 		entries:             []ToolEntry{},
 		similarityThreshold: options.SimilarityThreshold,
 		enabled:             options.Enabled,
+		backend:             strings.ToLower(strings.TrimSpace(options.Backend)),
 		modelType:           options.ModelType,
 		targetDim:           options.TargetDimension,
 		provider:            options.Provider,
+		providerIdentity:    strings.TrimSpace(options.ProviderIdentity),
 	}
+	if database.backend == "" && options.Provider != nil {
+		database.backend = strings.ToLower(strings.TrimSpace(options.Provider.Backend()))
+	}
+	if database.backend == "" {
+		database.backend = "candle"
+	}
+	database.retrievalFingerprint = database.computeRetrievalFingerprint(nil)
+	return database
 }
 
 // IsEnabled returns whether the tools database is enabled
@@ -123,7 +140,7 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 				if err != nil {
 					resultChan <- result{entry: entry, err: err}
 				} else {
-					entry.Embedding = embedding
+					entry.Embedding = append([]float32(nil), embedding...)
 					resultChan <- result{entry: entry, err: nil}
 				}
 			}
@@ -162,6 +179,7 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 			successCount++
 		}
 	}
+	db.retrievalFingerprint = db.computeRetrievalFingerprint(db.entries)
 
 	logging.ComponentEvent("tools", "tool_database_loaded", map[string]interface{}{
 		"file_path":        filePath,
@@ -186,12 +204,19 @@ func (db *ToolsDatabase) AddTool(tool openai.ChatCompletionToolParam, descriptio
 		return fmt.Errorf("failed to generate embedding for tool %s: %w", tool.Function.Name, err)
 	}
 
-	entry := ToolEntry{Tool: tool, Description: description, Embedding: embedding, Category: category, Tags: tags}
+	entry := ToolEntry{
+		Tool:        tool,
+		Description: description,
+		Embedding:   append([]float32(nil), embedding...),
+		Category:    category,
+		Tags:        append([]string(nil), tags...),
+	}
 
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	db.entries = append(db.entries, entry)
+	db.retrievalFingerprint = db.computeRetrievalFingerprint(db.entries)
 	logging.ComponentEvent("tools", "tool_added", map[string]interface{}{
 		"tool_name":       tool.Function.Name,
 		"category":        category,
@@ -271,9 +296,12 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 		return []ToolSimilarity{}, nil
 	}
 
-	// Sort by similarity (highest first)
+	// Sort by similarity (highest first). Equal scores need an explicit
+	// identity tie-break: entries are appended by concurrent embedding
+	// workers, so preserving input order would make an otherwise unchanged
+	// catalog produce a different provider-visible prefix from run to run.
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].Similarity > results[j].Similarity
+		return toolSimilarityLess(results[i], results[j])
 	})
 
 	limit := topK
@@ -289,6 +317,59 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 
 	logging.Infof("Found %d similar tools for query: %s", len(selected), logging.ContentDescriptor(query))
 	return selected, nil
+}
+
+// toolSimilarityLess defines the total ordering shared by embedding and
+// advanced-relevance retrieval. Similarity remains the primary signal; a
+// canonical identity/definition key breaks ties so worker completion order or
+// caller slice order cannot perturb deterministic tool selection. NaN scores
+// are sorted last as a defensive measure for malformed embedding providers.
+func toolSimilarityLess(left, right ToolSimilarity) bool {
+	leftNaN := math.IsNaN(float64(left.Similarity))
+	rightNaN := math.IsNaN(float64(right.Similarity))
+	if leftNaN || rightNaN {
+		if leftNaN != rightNaN {
+			return !leftNaN
+		}
+		return toolSimilarityTieKey(left) < toolSimilarityTieKey(right)
+	}
+	if left.Similarity != right.Similarity {
+		return left.Similarity > right.Similarity
+	}
+	return toolSimilarityTieKey(left) < toolSimilarityTieKey(right)
+}
+
+func descendingFloat32Less(left, right float32) bool {
+	leftNaN := math.IsNaN(float64(left))
+	rightNaN := math.IsNaN(float64(right))
+	if leftNaN != rightNaN {
+		return !leftNaN
+	}
+	if leftNaN {
+		return false
+	}
+	return left > right
+}
+
+// toolSimilarityTieKey includes the provider definition and bounded catalog
+// metadata. Names are normally unique, but retaining the complete key keeps
+// duplicate-name entries deterministic as well; when every field is equal the
+// serialized provider definition is identical, so their relative order cannot
+// affect the wire prefix.
+func toolSimilarityTieKey(candidate ToolSimilarity) string {
+	encoded, err := json.Marshal(candidate.Entry.Tool)
+	if err != nil {
+		encoded = []byte(candidate.Entry.Tool.Function.Name)
+	}
+	tags := append([]string(nil), candidate.Entry.Tags...)
+	sort.Strings(tags)
+	return strings.Join([]string{
+		candidate.Entry.Tool.Function.Name,
+		string(encoded),
+		candidate.Entry.Description,
+		candidate.Entry.Category,
+		strings.Join(tags, "\x00"),
+	}, "\x00")
 }
 
 func (db *ToolsDatabase) embedText(text string) ([]float32, error) {

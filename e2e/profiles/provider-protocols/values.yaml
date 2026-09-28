@@ -62,6 +62,34 @@ config:
                 - instructions
                 - tools
               on_unsupported: reject
+      - name: sticky_provider_prefix_decision
+        description: Preserve a cache-marked Anthropic tool prefix while admitting one new tool
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: conversation
+              name: sticky_provider_prefix
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+          - type: tool_selection
+            configuration:
+              enabled: true
+              mode: filter
+              relevance_threshold: 0.9
+              preserve_count: 1
+              sticky:
+                enabled: true
+                max_tools: 2
+                max_new_tools_per_turn: 1
+                pin_called_tools: true
       - name: prompt_cache_disabled
         description: Preserve the disabled prompt-cache policy contract
         priority: 60
@@ -110,6 +138,16 @@ config:
             # needs a signal match to route, and the gateway provides a
             # safety-net in case the router produces no match.
             - ""
+      conversation:
+        - name: sticky_provider_prefix
+          description: Select the isolated two-tool sticky provider-prefix E2E route
+          feature:
+            type: count
+            source:
+              type: tool_definition
+          predicate:
+            gte: 2
+            lte: 2
     modelCards:
       - name: MoM
         description: Deterministic Anthropic Messages provider fixture
@@ -148,6 +186,13 @@ config:
       response_cache:
         enabled: false
         embedding_model: mmbert
+      tool_sessions:
+        backend: local
+        ttl_seconds: 300
+        max_sessions: 32
+        max_sessions_per_identity: 4
+        max_state_bytes: 4096
+        timeout_ms: 50
       memory:
         embedding_model: mmbert
       vector_store:
@@ -160,3 +205,7 @@ resources:
   requests:
     cpu: 500m
     memory: 2Gi
+
+extraEnv:
+  - name: USER_SCOPE_NAMESPACE_SECRET
+    value: e2e-sticky-provider-prefix-secret

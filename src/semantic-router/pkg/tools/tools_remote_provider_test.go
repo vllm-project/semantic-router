@@ -65,3 +65,48 @@ func TestToolsDatabaseUsesRemoteProvider(t *testing.T) {
 		t.Fatalf("results = %+v, want weather tool", results)
 	}
 }
+
+func TestToolsDatabaseTieBreakIsDeterministic(t *testing.T) {
+	database := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
+		Enabled:             true,
+		SimilarityThreshold: 0,
+		ModelType:           config.EmbeddingModelTypeRemote,
+		TargetDimension:     3,
+		Provider: &stubToolEmbeddingProvider{embeddings: map[string][]float32{
+			"alpha description": {1, 0, 0},
+			"zeta description":  {1, 0, 0},
+			"same query":        {1, 0, 0},
+		}},
+	})
+
+	// Add in the reverse lexical order to model nondeterministic worker
+	// completion order. Equal similarity must still produce one stable order.
+	for _, entry := range []struct {
+		name        string
+		description string
+	}{
+		{name: "zeta", description: "zeta description"},
+		{name: "alpha", description: "alpha description"},
+	} {
+		if err := database.AddTool(openai.ChatCompletionToolParam{
+			Type:     "function",
+			Function: openai.FunctionDefinitionParam{Name: entry.name},
+		}, entry.description, "", nil); err != nil {
+			t.Fatalf("AddTool(%s) failed: %v", entry.name, err)
+		}
+	}
+
+	results, err := database.FindSimilarToolsWithScores("same query", 2)
+	if err != nil {
+		t.Fatalf("FindSimilarToolsWithScores failed: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("result count = %d, want 2", len(results))
+	}
+	if got := results[0].Entry.Tool.Function.Name; got != "alpha" {
+		t.Fatalf("first tied result = %q, want alpha", got)
+	}
+	if got := results[1].Entry.Tool.Function.Name; got != "zeta" {
+		t.Fatalf("second tied result = %q, want zeta", got)
+	}
+}

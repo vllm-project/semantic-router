@@ -214,6 +214,23 @@ func (c *RouterConfig) GetModelAPIFormat(modelName string) string {
 	return APIFormatOpenAI
 }
 
+// GetModelCapabilities returns a copy of the declared capabilities for a
+// logical model name. Direct model names, provider external IDs, and LoRA
+// aliases all resolve through the same model lookup seams used by the other
+// model metadata helpers.
+func (c *RouterConfig) GetModelCapabilities(modelName string) []string {
+	if c == nil || c.ModelConfig == nil {
+		return nil
+	}
+	if modelConfig, ok := c.resolveModelConfig(modelName); ok {
+		return append([]string(nil), modelConfig.Capabilities...)
+	}
+	if _, baseConfig, ok := c.resolveLoRABaseModel(modelName); ok {
+		return append([]string(nil), baseConfig.Capabilities...)
+	}
+	return nil
+}
+
 // GetModelAccessKey returns the access key for the given model.
 func (c *RouterConfig) GetModelAccessKey(modelName string) string {
 	return c.GetModelAccessKeyForProvider(modelName, "")

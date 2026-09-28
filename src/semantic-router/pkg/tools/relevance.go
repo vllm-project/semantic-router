@@ -3,6 +3,7 @@
 package tools
 
 import (
+	"math"
 	"sort"
 	"strings"
 	"unicode"
@@ -128,13 +129,11 @@ func weightedCandidateCombinedScore(
 
 func sortScoredCandidatesByCombinedThenSimilarity(scored []scoredCandidate) {
 	sort.Slice(scored, func(i, j int) bool {
-		if scored[i].CombinedScore == scored[j].CombinedScore {
-			if scored[i].Similarity == scored[j].Similarity {
-				return scored[i].Entry.Tool.Function.Name < scored[j].Entry.Tool.Function.Name
-			}
-			return scored[i].Similarity > scored[j].Similarity
+		if scored[i].CombinedScore == scored[j].CombinedScore ||
+			(math.IsNaN(float64(scored[i].CombinedScore)) && math.IsNaN(float64(scored[j].CombinedScore))) {
+			return toolSimilarityLess(scored[i].ToolSimilarity, scored[j].ToolSimilarity)
 		}
-		return scored[i].CombinedScore > scored[j].CombinedScore
+		return descendingFloat32Less(scored[i].CombinedScore, scored[j].CombinedScore)
 	})
 }
 
@@ -202,7 +201,7 @@ func selectTopKBySimilarity(candidates []ToolSimilarity, topK int) []openai.Chat
 	sorted := make([]ToolSimilarity, len(candidates))
 	copy(sorted, candidates)
 	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Similarity > sorted[j].Similarity
+		return toolSimilarityLess(sorted[i], sorted[j])
 	})
 
 	limit := topK

@@ -47,6 +47,56 @@ func TestSelectedModelsHaveGatewayBackendRoutes(t *testing.T) {
 	}
 }
 
+func TestGatewayStripsClientIdentityBeforeExtProc(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoder := yaml.NewDecoder(strings.NewReader(string(raw)))
+	for {
+		var resource map[string]any
+		if err := decoder.Decode(&resource); errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			t.Fatalf("decode gateway resources: %v", err)
+		}
+		if resource["kind"] != "EnvoyPatchPolicy" {
+			continue
+		}
+		spec := profileMap(t, resource, "spec")
+		patches, ok := spec["jsonPatches"].([]any)
+		if !ok {
+			continue
+		}
+		stripsIdentity := false
+		extprocIndex := -1
+		for _, rawPatch := range patches {
+			patch := rawPatch.(map[string]any)
+			operation := patch["operation"].(map[string]any)
+			if operation["path"] == "/default_filter_chain/filters/0/typed_config/http_filters/0" {
+				value := operation["value"].(map[string]any)
+				if value["name"] != "envoy.filters.http.lua" {
+					continue
+				}
+				typedConfig := value["typedConfig"].(map[string]any)
+				code := typedConfig["inlineCode"].(string)
+				stripsIdentity = strings.Contains(code, `remove("x-authz-user-id")`) &&
+					strings.Contains(code, `remove("x-authz-user-groups")`)
+			}
+			if operation["path"] == "/default_filter_chain/filters/0/typed_config/http_filters/1" {
+				value := operation["value"].(map[string]any)
+				if value["name"] == "semantic-router-extproc" {
+					extprocIndex = 1
+				}
+			}
+		}
+		if stripsIdentity && extprocIndex == 1 {
+			return
+		}
+	}
+	t.Fatal("Gateway must remove client identity headers before inserting ext_proc")
+}
+
 func profileGatewayRoutes(t *testing.T) (map[string][]string, map[string]bool) {
 	t.Helper()
 	routes := make(map[string][]string)

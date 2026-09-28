@@ -60,8 +60,11 @@ func (r *OpenAIRouter) applySelectedTools(
 		}
 		return nil
 	}
+	changed := !toolDefinitionsEqual(request.Tools, selectedTools)
 	request.Tools = append([]llmprotocol.Tool(nil), selectedTools...)
-	request.Generation++
+	if changed {
+		request.Generation++
+	}
 	logging.Infof("Auto-selected %d tools via strategy %q (confidence=%.3f, latency=%s) for query: %s",
 		len(selectedTools), strategyID, confidence, latency.Round(time.Millisecond),
 		logging.ContentDescriptor(classificationText))
@@ -228,6 +231,17 @@ func (r *OpenAIRouter) handleToolSelectionDecisionPlugin(
 		earlyCfg = &config.ToolsPluginConfig{Enabled: true, Mode: config.ToolsPluginModePassthrough}
 	}
 
+	mode := strings.TrimSpace(tsPlugin.Mode)
+	if mode == "" {
+		mode = config.ToolSelectionModeAdd
+	}
+	// A sticky turn may have no inbound tools for the protocol decoder to use
+	// when defaulting tool_choice, so make the default explicit here.
+	if tsPlugin.Sticky != nil && tsPlugin.Sticky.Enabled &&
+		request != nil && request.ToolChoice.Mode == "" {
+		request.ToolChoice.Mode = llmprotocol.ToolChoiceAuto
+	}
+
 	shouldContinue, err := r.handleEarlyToolModes(request, response, ctx, earlyCfg)
 	if err != nil {
 		return false, err
@@ -238,13 +252,11 @@ func (r *OpenAIRouter) handleToolSelectionDecisionPlugin(
 
 	classificationText, historySummary, ok := buildToolClassificationText(userContent, nonUserMessages)
 	if !ok {
-		logging.Infof("No content available for tool classification")
-		return true, nil
-	}
-
-	mode := strings.TrimSpace(tsPlugin.Mode)
-	if mode == "" {
-		mode = config.ToolSelectionModeAdd
+		if !r.shouldApplyStickyToolSelection(request, tsPlugin, ctx) {
+			logging.Infof("No content available for tool classification")
+			return true, nil
+		}
+		classificationText, historySummary = "", ""
 	}
 
 	switch mode {
@@ -496,7 +508,7 @@ func resolveDecisionToolsConfig(ctx *RequestContext) *config.ToolsPluginConfig {
 }
 
 func mergeAdvancedToolFiltering(base *config.AdvancedToolFilteringConfig, toolsCfg *config.ToolsPluginConfig) *config.AdvancedToolFilteringConfig {
-	if toolsCfg == nil || toolsCfg.EffectiveMode() != config.ToolsPluginModeFiltered {
+	if toolsCfg == nil || !toolsCfg.Enabled || toolsCfg.EffectiveMode() != config.ToolsPluginModeFiltered {
 		return base
 	}
 	allowTools, blockTools := mergeToolFilters(base, toolsCfg)
@@ -579,15 +591,21 @@ func unionToolBlockLists(left, right []string) []string {
 func filterToolsByDecisionPolicy(tools []llmprotocol.Tool, allowTools, blockTools []string) []llmprotocol.Tool {
 	allowSet := make(map[string]bool, len(allowTools))
 	for _, t := range allowTools {
-		allowSet[t] = true
+		name := strings.ToLower(strings.TrimSpace(t))
+		if name != "" {
+			allowSet[name] = true
+		}
 	}
 	blockSet := make(map[string]bool, len(blockTools))
 	for _, t := range blockTools {
-		blockSet[t] = true
+		name := strings.ToLower(strings.TrimSpace(t))
+		if name != "" {
+			blockSet[name] = true
+		}
 	}
 	filtered := make([]llmprotocol.Tool, 0, len(tools))
 	for _, tool := range tools {
-		name := tool.Name
+		name := strings.ToLower(strings.TrimSpace(tool.Name))
 		if blockSet[name] {
 			continue
 		}

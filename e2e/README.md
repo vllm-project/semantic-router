@@ -115,6 +115,8 @@ until the selected cases are known to be isolated.
 ### Supported Profiles
 
 - **envoy-ai-gateway**: baseline routing, safety, cache, and decision contracts.
+- **sticky-tool-selection-expiry**: short-TTL local-store expiry coverage for sticky tool selection.
+- **sticky-tool-selection-redis**: affected-change Redis restart persistence and unavailable-store fallback coverage for sticky tool selection.
 - **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
 - **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **aibrix**: AIBrix gateway and control-plane integration.

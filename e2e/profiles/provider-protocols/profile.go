@@ -17,6 +17,7 @@ var (
 	resourceManifests = []string{
 		"e2e/profiles/provider-protocols/gateway-resources/backend.yaml",
 		"e2e/profiles/provider-protocols/gateway-resources/gwapi-resources.yaml",
+		"e2e/profiles/ai-gateway/gateway-resources/sticky-auth-fixture.yaml",
 	}
 	waitDeployments = []helpers.DeploymentRef{
 		{Namespace: "provider-protocols-system", Name: "provider-mocker"},

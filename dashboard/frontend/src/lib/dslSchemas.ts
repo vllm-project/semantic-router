@@ -7,7 +7,6 @@ import {
 } from './routerConfigSchema'
 import type { FieldSchema } from './dslSchemaTypes'
 export type { FieldSchema } from './dslSchemaTypes'
-
 const PII_SIGNAL_FIELDS: FieldSchema[] = [
   {
     key: 'threshold',
@@ -810,6 +809,22 @@ function getCuratedPluginFieldSchema(pluginType: string): FieldSchema[] {
           placeholder: '0.5',
         },
         { key: 'preserve_count', label: 'Preserve Count', type: 'number', placeholder: '0' },
+        {
+          key: 'sticky',
+          label: 'Session-Scoped Sticky Selection',
+          type: 'object',
+          fields: [
+            { key: 'enabled', label: 'Enabled', type: 'boolean' },
+            { key: 'max_tools', label: 'Max Tools', type: 'number', placeholder: '16' },
+            {
+              key: 'max_new_tools_per_turn',
+              label: 'Max New Tools Per Turn',
+              type: 'number',
+              placeholder: '2',
+            },
+            { key: 'pin_called_tools', label: 'Pin Called Tools', type: 'boolean' },
+          ],
+        },
       ]
     case 'request_params':
       return [

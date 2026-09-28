@@ -16,7 +16,18 @@ from ci_plan import (  # noqa: E402
     performance_base,
     previous_release,
 )
-from classify_pr_changes import classify, full_e2e_profiles  # noqa: E402
+from classify_pr_changes import (  # noqa: E402
+    NIGHTLY_IMAGES,
+    PRODUCTION_RELEASE_IMAGES,
+    classify,
+    full_e2e_profiles,
+)
+from classify_pr_changes import (  # noqa: E402
+    NIGHTLY_IMAGES,
+    PRODUCTION_RELEASE_IMAGES,
+    classify,
+    full_e2e_profiles,
+)
 from domain_registry import load_domain_registry, profile_records  # noqa: E402
 from run_model_tests import CLASSIFIER_TESTS, OWNED_OMNI_TESTS  # noqa: E402
 from verification_catalog import (  # noqa: E402
@@ -490,6 +501,102 @@ class SelectionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             previous_release("1.0.0", ["v0.3.0"])
 
+    def test_sticky_provider_prefix_selects_provider_protocols_profile(self) -> None:
+        result = classify(["e2e/testcases/sticky_tool_selection_provider_prefix.go"])
+
+        self.assertEqual(
+            result.profiles,
+            ("envoy-ai-gateway", "provider-protocols"),
+        )
+
+    def test_sticky_merge_selects_prefix_and_redis_profiles(self) -> None:
+        result = classify(["src/semantic-router/pkg/sessiontools/merge.go"])
+
+        self.assertEqual(
+            result.profiles,
+            (
+                "envoy-ai-gateway",
+                "sticky-tool-selection-expiry",
+                "sticky-tool-selection-redis",
+                "provider-protocols",
+            ),
+        )
+
+    def test_sticky_redis_store_skips_provider_protocols_profile(self) -> None:
+        result = classify(["src/semantic-router/pkg/sessiontools/store_redis.go"])
+
+        self.assertEqual(
+            result.profiles,
+            ("envoy-ai-gateway", "sticky-tool-selection-redis"),
+        )
+
+    def test_sticky_runtime_seams_select_all_sticky_profiles(self) -> None:
+        paths = (
+            "src/semantic-router/pkg/extproc/req_tool_selection_plugin.go",
+            "src/semantic-router/pkg/tools/fingerprint.go",
+            "src/semantic-router/pkg/tools/retrieval_fingerprint.go",
+        )
+
+        for path in paths:
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertEqual(
+                    result.profiles,
+                    (
+                        "envoy-ai-gateway",
+                        "sticky-tool-selection-expiry",
+                        "sticky-tool-selection-redis",
+                        "provider-protocols",
+                    ),
+                )
+
+    def test_sticky_provider_generation_seams_select_provider_protocols_profile(
+        self,
+    ) -> None:
+        paths = (
+            "src/semantic-router/pkg/extproc/req_filter_tools.go",
+            "src/semantic-router/pkg/extproc/req_filter_tools_generation.go",
+        )
+
+        for path in paths:
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertEqual(
+                    result.profiles,
+                    ("envoy-ai-gateway", "provider-protocols"),
+                )
+
+    def test_sticky_redis_profile_selects_itself(self) -> None:
+        result = classify(["e2e/profiles/sticky-tool-selection-redis/profile.go"])
+
+        self.assertEqual(
+            result.profiles,
+            ("envoy-ai-gateway", "sticky-tool-selection-redis"),
+        )
+
+    def test_sticky_expiry_profile_selects_itself(self) -> None:
+        result = classify(["e2e/profiles/sticky-tool-selection-expiry/profile.go"])
+
+        self.assertEqual(
+            result.profiles,
+            ("envoy-ai-gateway", "sticky-tool-selection-expiry"),
+        )
+
+    def test_sticky_expiry_case_selects_expiry_profile(self) -> None:
+        result = classify(["e2e/testcases/sticky_tool_selection_expiry.go"])
+
+        self.assertEqual(
+            result.profiles,
+            ("envoy-ai-gateway", "sticky-tool-selection-expiry"),
+        )
+
+    def test_sticky_restart_helper_selects_restart_profiles(self) -> None:
+        result = classify(["e2e/testcases/response_api_restart_recovery.go"])
+
+        self.assertEqual(
+            result.profiles,
+            ("envoy-ai-gateway", "sticky-tool-selection-redis"),
+        )
     def test_release_performance_base_uses_a_compatible_vela_anchor(self):
         self.assertEqual(
             performance_base("0.4.0", ["v0.3.0"]),
@@ -574,6 +681,25 @@ class SelectionTests(unittest.TestCase):
         )
         self.assertIn(identity, full_cpu_ids())
         self.assertFalse((ROOT / ".github/workflows/riscv-qemu.yml").exists())
+
+    def test_release_and_nightly_image_lifecycles_are_distinct(self) -> None:
+        self.assertEqual(
+            PRODUCTION_RELEASE_IMAGES,
+            (
+                "dashboard",
+                "extproc",
+                "extproc-rocm",
+                "operator",
+                "operator-bundle",
+                "vllm-sr",
+                "vllm-sr-cuda",
+                "vllm-sr-rocm",
+            ),
+        )
+        self.assertEqual(
+            set(NIGHTLY_IMAGES) - set(PRODUCTION_RELEASE_IMAGES),
+            {"vllm-sr-sim"},
+        )
 
     def test_runtime_combinations_are_qualified_rows_not_cartesian_product(self):
         records = verification_records(load_domain_registry())

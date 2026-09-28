@@ -84,6 +84,22 @@ func TestFilterToolsByDecisionPolicy_EmptyTools(t *testing.T) {
 	assert.Empty(t, filtered)
 }
 
+func TestFilterToolsByDecisionPolicy_CanonicalizesNames(t *testing.T) {
+	tools := []llmprotocol.Tool{
+		makeTool(" Read_File "),
+		makeTool("write_file"),
+		makeTool("search_web"),
+	}
+
+	filtered := filterToolsByDecisionPolicy(
+		tools,
+		[]string{"read_file", "search_web"},
+		[]string{" WRITE_FILE "},
+	)
+
+	assert.Equal(t, []string{" Read_File ", "search_web"}, []string{filtered[0].Name, filtered[1].Name})
+}
+
 func TestToolsPluginModeConstants(t *testing.T) {
 	assert.Equal(t, "none", config.ToolsPluginModeNone)
 	assert.Equal(t, "passthrough", config.ToolsPluginModePassthrough)
