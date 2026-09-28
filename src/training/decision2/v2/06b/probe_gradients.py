@@ -90,6 +90,18 @@ def run(model: Any, packer: Any, records: list[dict[str, Any]]) -> dict[str, Any
         ),
         "norm_ratio_vs_unpadded": float(g.norm() / reference.norm()),
     }
+    # Training also enables non-reentrant gradient checkpointing.
+    model.backbone.gradient_checkpointing_enable(
+        gradient_checkpointing_kwargs={"use_reentrant": False}
+    )
+    g = gradient(model, packer, records, "native")
+    model.backbone.gradient_checkpointing_disable()
+    out["native_checkpointed"] = {
+        "cosine_vs_unpadded": float(
+            torch.nn.functional.cosine_similarity(g, reference, dim=0)
+        ),
+        "norm_ratio_vs_unpadded": float(g.norm() / reference.norm()),
+    }
     out["lengths"] = [packer.encode(r)["input_tokens"] for r in records]
     return out
 
