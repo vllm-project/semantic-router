@@ -46,11 +46,11 @@
     "teacher_kl": 1.0
   },
   "teacher": {
-    "path": "/runs/m4/teacher/lux1-train.dec752b7.jsonl",
-    "sha256": "752b7c8fff7c430f1019d8b47779ba4f3a62e18fee510bc1a5c9a926b38fad88",
+    "path": "/runs/m4/teacher/lux1-a0-rpv2m.merged.jsonl",
+    "sha256": "358a883d0b53a3b8b7ff627aa974b9d965444b2427384eb1bbbbd8c5477e87b5",
     "format": "option-key",
-    "source": "canonical own-Lux TRAIN teacher (decoder track): Decision-1.0-Lux-9B cdf4d3ef on the 2.0 rendering, per-type temperature 2.00544; matches the 0.6B file 2d90bc5b (argmax 99.4-99.9%, mean TV <= .005)",
-    "screen": "coordinator 16:45 canonical file; TRAIN agreement choice .835, noul .894, score .866",
+    "source": "own Lux1 targets: canonical A0 TRAIN file 752b7c8f (decoder track, Lux cdf4d3ef, T 2.00544) + research & data RP-v2 waves 1 (47049a6b @ HF 7885baf6) and 2 (2c6ab38d @ HF 6bd8eb4d), Lux bd45a30a native runtime; merged by v2.06b.teacher_merge",
+    "screen": "RP-v2 argmax vs gold Choice .79, Noul .78-.79, Score .55-.56 (research & data teachers record); A0 file TRAIN agreement .835/.894/.866",
     "coverage": "subset"
   },
   "milestones": "eighths",
