@@ -450,6 +450,7 @@ func addMatchedSignalHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 	builder.addJoined(headers.VSRMatchedReask, ctx.VSRMatchedReask)
 	builder.addJoined(headers.VSRMatchedPreference, ctx.VSRMatchedPreference)
 	builder.addJoined(headers.VSRMatchedLanguage, ctx.VSRMatchedLanguage)
+	builder.addJoined(headers.VSRMatchedAction, ctx.VSRMatchedAction)
 	builder.addJoined(headers.VSRMatchedContext, ctx.VSRMatchedContext)
 	builder.addInt(headers.VSRContextTokenCount, ctx.VSRContextTokenCount)
 	builder.addJoined(headers.VSRMatchedStructure, ctx.VSRMatchedStructure)

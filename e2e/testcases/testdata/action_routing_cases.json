@@ -1,0 +1,34 @@
+[
+  {
+    "name": "Explain request - code explanation",
+    "description": "explain_action matches a request that asks for an explanation of code",
+    "query": "Can you explain what this function does and why it is written this way?",
+    "expected_decision": "explain_action",
+    "expected_matched_signal": "explain",
+    "should_match": true
+  },
+  {
+    "name": "Fix request - bug repair",
+    "description": "fix_action matches a request that asks to repair a bug",
+    "query": "This test keeps failing, can you fix the bug in the authentication logic?",
+    "expected_decision": "fix_action",
+    "expected_matched_signal": "fix",
+    "should_match": true
+  },
+  {
+    "name": "Generate request - new code",
+    "description": "generate_action matches a request that asks to write new code",
+    "query": "Write me a function that parses a CSV file and returns the unique values in a column",
+    "expected_decision": "generate_action",
+    "expected_matched_signal": "generate",
+    "should_match": true
+  },
+  {
+    "name": "Other request - no action",
+    "description": "A request that names no action should not trigger any action decision",
+    "query": "What is the capital of France?",
+    "expected_decision": "",
+    "expected_matched_signal": "",
+    "should_match": false
+  }
+]

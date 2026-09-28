@@ -65,6 +65,8 @@ var BaselineRouterContract = []string{
 	"language-routing",
 	// Reask signal rule matching and routing (issue #3178)
 	"reask-routing",
+	// Action signal rule matching and routing
+	"action-routing",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.

@@ -259,6 +259,10 @@ const (
 	// Example: "en,zh,es"
 	VSRMatchedLanguage = "x-vsr-matched-language"
 
+	// VSRMatchedAction contains the single matched action signal name.
+	// Example: "explain"
+	VSRMatchedAction = "x-vsr-matched-action"
+
 	// VSRMatchedContext contains comma-separated list of matched context rule names.
 	// Example: "low_token_count,high_token_count"
 	VSRMatchedContext = "x-vsr-matched-context"
