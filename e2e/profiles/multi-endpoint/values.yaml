@@ -119,6 +119,15 @@ config:
           - type: system_prompt
             configuration:
               system_prompt: You are a helpful assistant operating under strict data protection policies. Never store, log, or repeat any personal information shared by the user.
+      - name: default_to_dev
+        description: Route unmatched requests to the configured default model
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: qwen14b-dev
+            use_reasoning: false
     signals:
       keywords:
         - name: code_keywords

@@ -309,6 +309,49 @@ shape and does not switch graphs automatically. Use the smallest graph that
 covers your workload; a 32K graph can add substantial latency to short requests.
 Changing Guard's budget does not change other enabled classifiers' limits.
 
+## Compare with the 98x paper setup
+
+The [98x routing paper](https://arxiv.org/abs/2603.12646) benchmarks one
+classifier and prompt-compression setup on an AMD Instinct MI300X. The
+maintained [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
+and the reference [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)
+use different settings, so the paper's latency and memory figures describe that
+benchmark rather than these configurations.
+
+| Setting | Paper benchmark | Current setting |
+| --- | --- | --- |
+| Router models | Three mmBERT-32K classifier sessions (270M parameters, FP16) for domain, jailbreak and PII | Vela AMD recipe: ten Vela 1.0 307M task models at native precision; Domain, Guard and PII cover those three tasks |
+| CK Flash Attention | All three classifiers, on ORT ROCm | Vela AMD recipe: Embedding and Reranker only. Guard uses ORT ROCm, and Domain, PII and the other classifiers use MIGraphX |
+| Prompt compression | On, with a 512-token budget | Off by default and in the Vela AMD recipe. The reference config enables it with `max_tokens: 4096` |
+| Weights for TextRank, position, TF-IDF and novelty | 0.20, 0.40, 0.35, 0.05 | Reference config: 0.4, 0.2, 0.3, 0.1 |
+| Position depth | 0.5 | Reference config: 0.1 |
+| Sentences always kept | First 3 and last 2 | Reference config: first 3 and last 2 |
+| Classifiers that read compressed text | Domain, jailbreak and PII in the latency tables | Domain reads it. Jailbreak and PII read the full prompt through `skip_signals`, which matches the production setup the paper describes |
+
+The paper's router GPU footprint of under 800 MB covers its three classifier
+sessions with compression on. The Vela AMD recipe loads ten task models, so
+size Router memory from measurements on your hardware.
+
+To use the paper's 512-token compression profile, add this block to your
+config:
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      prompt_compression:
+        enabled: true
+        profile: default
+        max_tokens: 512
+        skip_signals: [jailbreak, pii]
+```
+
+The `default` profile supplies the paper's weights, position depth and kept
+sentences. Explicit weight fields and `position_depth` override the profile, so
+remove them if you start from the reference config. Compression shortens only
+the text used for signal evaluation. Compare routing results on representative
+requests before you change the budget.
+
 ## Production checklist
 
 - Pin the Router, vLLM image, and model revision.

@@ -57,6 +57,7 @@ type RoutePolicy struct {
 	Public                bool
 	Revalidate            bool
 	MaxBodyBytes          int64
+	StreamBody            bool
 	ProxyUpstream         bool
 	MaxAuthAge            time.Duration
 }
@@ -191,6 +192,22 @@ func ProtectedMutationRoute(
 		Pattern:  pattern,
 		Policies: policiesForMethods(permission, AuditRequired, auditAction, sensitivity, owner, false, true, maxBodyBytes, false, methods...),
 	}
+}
+
+// ProtectedStreamingMutationRoute bounds large uploads without buffering them
+// in the authentication layer. The handler must revalidate before committing.
+func ProtectedStreamingMutationRoute(
+	pattern, permission, auditAction string,
+	sensitivity Sensitivity,
+	owner ResourceOwner,
+	maxBodyBytes int64,
+	methods ...string,
+) RouteContract {
+	contract := ProtectedMutationRoute(pattern, permission, auditAction, sensitivity, owner, maxBodyBytes, methods...)
+	for index := range contract.Policies {
+		contract.Policies[index].StreamBody = true
+	}
+	return contract
 }
 
 func ProtectedDelegatedAuditRoute(
@@ -360,6 +377,9 @@ func ValidateRouteContract(contract RouteContract) error {
 		}
 		if policy.MaxBodyBytes < 0 {
 			return fmt.Errorf("route %q %s has a negative body limit", pattern, method)
+		}
+		if policy.StreamBody && (!policy.Revalidate || policy.MaxBodyBytes == 0) {
+			return fmt.Errorf("route %q %s streams a body without a revalidated bound", pattern, method)
 		}
 		if policy.MaxAuthAge < 0 {
 			return fmt.Errorf("route %q %s has a negative authorization age", pattern, method)

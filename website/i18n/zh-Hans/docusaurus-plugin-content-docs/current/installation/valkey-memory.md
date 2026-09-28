@@ -152,11 +152,15 @@ global:
         index_ef_construction: 256
       embedding_model: bert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.70
+      default_similarity_threshold: 0.40
       hybrid_search: true
-      hybrid_mode: rerank
+      hybrid_mode: weighted
       adaptive_threshold: true
 ```
+
+此示例的阈值适用于使用加权混合评分的 `bert`（`mom-embedding-light`）。
+其他嵌入模型和检索模式应分别验证事实召回与无关查询后再选择阈值。
+较低阈值也可能同时召回更正前后的事实；在生产环境使用前应检查更新后的事实。
 
 ### 配置参考
 
