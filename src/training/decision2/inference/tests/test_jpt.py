@@ -11,6 +11,7 @@ from unittest.mock import patch
 from inference.jpt import (
     MODEL_REVISION,
     SOURCE_REVISION,
+    VARIANTS,
     collect,
     model_fingerprint,
     verify_source,
@@ -65,6 +66,29 @@ class JptCollectorTest(unittest.TestCase):
                 model_revision=MODEL_REVISION + "-changed",
                 prompts=Path("missing-prompts"),
                 output=Path("missing-output"),
+            )
+
+    def test_size_variants_pin_their_own_release(self) -> None:
+        self.assertEqual(VARIANTS["9b"][1], MODEL_REVISION)
+        self.assertEqual(VARIANTS["0.8b"][2], 1.140)
+        self.assertEqual(VARIANTS["4b"][2], 1.036)
+        with self.assertRaisesRegex(ValueError, "JPT 0.8b requires the pinned"):
+            collect(
+                model_path=Path("missing-model"),
+                source_path=Path("missing-source"),
+                model_revision=MODEL_REVISION,
+                prompts=Path("missing-prompts"),
+                output=Path("missing-output"),
+                size="0.8b",
+            )
+        with self.assertRaisesRegex(ValueError, "Unknown JPT size"):
+            collect(
+                model_path=Path("missing-model"),
+                source_path=Path("missing-source"),
+                model_revision=MODEL_REVISION,
+                prompts=Path("missing-prompts"),
+                output=Path("missing-output"),
+                size="27b",
             )
 
 

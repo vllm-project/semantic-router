@@ -13,6 +13,7 @@ from inference.bosun06 import (
     BASE_ID,
     BASE_REVISION,
     MODEL_REVISION,
+    VARIANTS,
     candidates_for,
     project,
     verify_packages,
@@ -76,6 +77,27 @@ class Bosun06Test(unittest.TestCase):
             with patch("inference.bosun06.local_revision", side_effect=[True, True]):
                 receipt = verify_packages(model, base)
             self.assertEqual(receipt["model_revision"], MODEL_REVISION)
+            with patch("inference.bosun06.local_revision", side_effect=[True, True]):
+                with self.assertRaisesRegex(ValueError, "contract differs"):
+                    verify_packages(model, base, "1.7b")
+            model_id, revision, base_id, base_revision, _ = VARIANTS["1.7b"]
+            config.update(
+                base_model_name_or_path=base_id, base_model_revision=base_revision
+            )
+            (model / "config.json").write_text(json.dumps(config))
+            config_sha = hashlib.sha256(
+                (model / "config.json").read_bytes()
+            ).hexdigest()
+            (model / "manifest.json").write_text(
+                json.dumps({"files": {"config.json": config_sha}})
+            )
+            with patch("inference.bosun06.local_revision", side_effect=[True, True]):
+                receipt = verify_packages(model, base, "1.7b")
+            self.assertEqual(
+                (receipt["model_id"], receipt["model_revision"]), (model_id, revision)
+            )
+            with self.assertRaisesRegex(ValueError, "Unknown Bosun size"):
+                verify_packages(model, base, "4b")
             (model / "config.json").write_text("{}")
             with patch("inference.bosun06.local_revision", side_effect=[True, True]):
                 with self.assertRaisesRegex(ValueError, "differs"):
