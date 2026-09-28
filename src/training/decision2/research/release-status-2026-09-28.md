@@ -202,6 +202,15 @@ v2 does not change that result. These are only potential source groups:
 answer-blind semantic review, shortcuts, overlap, native budget and matched
 training parity remain pending. **Zero rows admitted, zero GPU-hours.**
 
+The separately frozen [Eos 0.8B FEVEROUS TRAIN metadata audit](eos08-feverous-source-screen-v2-metadata-result-2026-09-28.md)
+read the publisher's 71,292 annotation records and quarantined one malformed
+empty-label placeholder. It found 64 page-disjoint candidate records in each
+of REFUTES, NOT ENOUGH INFO and SUPPORTS, but downloaded no Wikipedia page
+bodies. Native Eos token exposure, source/protected overlap and answer-blind
+semantic review remain unresolved. The three publisher labels are categorical;
+their mapping to an ordinal Score is an unvalidated training hypothesis.
+**Eos source admission remains HOLD, zero GPU-hours.**
+
 The [ConTRoL CPU screen](qwen35-4b-context-nli-source-screen-2026-09-28.md),
 [0.6B gradient preflight](small06-gradient-conflict-preflight-result-2026-09-28.md),
 [0.6B one-update parity](small06-gradient-projection-parity-preflight-2026-09-28.md),
