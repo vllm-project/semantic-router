@@ -517,7 +517,8 @@ def render_readme(ctx: dict[str, Any]) -> str:
         "the official sealed JevBench rank."
         + mlx_note
         + " Ranks include only the models shown. "
-        "[Methods and per-model results](evaluation/EVALUATION.md)",
+        + (f"{text['comparator_note']} " if text.get("comparator_note") else "")
+        + "[Methods and per-model results](evaluation/EVALUATION.md)",
         "",
         f"### Tradeoffs versus {own_label}",
         "",
@@ -681,7 +682,12 @@ def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
             "tasks then items, 5,000 replicates. " + paired_text,
             "",
             *([mlx_text, ""] if mlx_text else []),
-            "Comparators under non-commercial, research-only or unknown licences are not shown on this card.",
+            "Comparators under non-commercial, research-only or unknown licences are not shown on this card."
+            + (
+                f" {ctx['text']['comparator_note']}"
+                if ctx["text"].get("comparator_note")
+                else ""
+            ),
             "",
             *rows,
             "",
