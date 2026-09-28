@@ -176,6 +176,43 @@ REGISTRY: dict[str, Adapter] = {
             model_id="kirp/jpt-9b",
             requires=("source",),
         ),
+        *(
+            Adapter(
+                name=f"jpt-{size}",
+                module="inference.jpt",
+                args=(
+                    "--size",
+                    size,
+                    "--model-path",
+                    "{model}",
+                    "--source-path",
+                    "{source}",
+                    "--model-revision",
+                    "{revision}",
+                    *IO_ARGS,
+                ),
+                model_id=f"kirp/jpt-{size}",
+                batch_policy="llm2jev HF backend label log-probs, one prompt per call",
+                requires=("source",),
+            )
+            for size in ("0.8b", "4b")
+        ),
+        Adapter(
+            name="bosun17",
+            module="inference.bosun06",
+            args=(
+                "--size",
+                "1.7b",
+                "--model-path",
+                "{model}",
+                "--base-path",
+                "{base}",
+                *IO_ARGS,
+            ),
+            model_id="Hanno-Labs/bosun-v3.1-1.7b",
+            batch_policy="BosunForDecision.predict, one question per call",
+            requires=("base",),
+        ),
         Adapter(
             name="autojev27",
             module="inference.autojev27",
