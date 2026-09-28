@@ -58,7 +58,7 @@ func GenerateReport(comparisons []ComparisonResult, metadata ReportMetadata) *Re
 
 // SaveJSON saves the report as JSON
 func (r *Report) SaveJSON(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("failed to create report directory: %w", err)
 	}
 
@@ -67,7 +67,7 @@ func (r *Report) SaveJSON(path string) error {
 		return fmt.Errorf("failed to marshal report: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write report file: %w", err)
 	}
 
@@ -77,7 +77,7 @@ func (r *Report) SaveJSON(path string) error {
 
 // SaveMarkdown saves the report as Markdown
 func (r *Report) SaveMarkdown(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("failed to create report directory: %w", err)
 	}
 
@@ -146,7 +146,7 @@ func (r *Report) SaveMarkdown(path string) error {
 		}
 	}
 
-	if err := os.WriteFile(path, []byte(md.String()), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(md.String()), 0o644); err != nil {
 		return fmt.Errorf("failed to write markdown report: %w", err)
 	}
 
@@ -156,7 +156,7 @@ func (r *Report) SaveMarkdown(path string) error {
 
 // SaveHTML saves the report as HTML
 func (r *Report) SaveHTML(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("failed to create report directory: %w", err)
 	}
 
@@ -237,7 +237,7 @@ func (r *Report) SaveHTML(path string) error {
 	html.WriteString(`</body>`)
 	html.WriteString(`</html>`)
 
-	if err := os.WriteFile(path, []byte(html.String()), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(html.String()), 0o644); err != nil {
 		return fmt.Errorf("failed to write HTML report: %w", err)
 	}
 

@@ -115,7 +115,11 @@ impl BertSimilarity {
 
         let config = std::fs::read_to_string(config_filename)?;
         let config: Config = serde_json::from_str(&config)?;
-        let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
+        let mut tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
+        // all-MiniLM's tokenizer.json pads every input to 128 tokens, and
+        // get_embedding averages every position, so pads would otherwise skew it.
+        // Output changes here need a new candleBERTNamespace in pkg/embedding.
+        tokenizer.with_padding(None);
 
         // Use the approximate GELU for better performance
         // Keep original activation function to match PyTorch exactly
@@ -125,7 +129,7 @@ impl BertSimilarity {
         } else {
             unsafe {
                 VarBuilder::from_mmaped_safetensors(
-                    &[weights_filename.clone()],
+                    std::slice::from_ref(&weights_filename),
                     DType::F32,
                     &device,
                 )?
@@ -225,6 +229,36 @@ impl BertSimilarity {
         let embedding = pooled.to_dtype(DType::F32)?;
 
         normalize_l2(&embedding)
+    }
+
+    /// Byte ranges of `text` that each fit the model's window.
+    ///
+    /// [`get_embedding`] truncates at the window, so a caller that embeds a long
+    /// input once sees only its opening. Embedding each range instead keeps
+    /// every part of the input reachable. Ranges overlap by half a window so a
+    /// sentence cut by one boundary is whole inside its neighbour.
+    pub fn window_byte_ranges(
+        &self,
+        text: &str,
+        max_length: Option<usize>,
+    ) -> Result<Vec<(usize, usize)>> {
+        let window = max_length.unwrap_or(512);
+        let mut tokenizer = self.tokenizer.clone();
+        tokenizer.with_truncation(None).map_err(E::msg)?;
+        let encoding = tokenizer.encode(text, false).map_err(E::msg)?;
+        let offsets: Vec<(usize, usize)> = encoding
+            .get_offsets()
+            .iter()
+            .copied()
+            .filter(|(start, end)| end > start)
+            .collect();
+        // Every window is encoded with its own two special tokens.
+        let budget = window.saturating_sub(2).max(1);
+        Ok(crate::core::tokenization_window::window_ranges(
+            &offsets,
+            budget,
+            budget.div_ceil(2),
+        ))
     }
 
     /// Calculate cosine similarity between two texts

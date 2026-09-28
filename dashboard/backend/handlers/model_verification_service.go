@@ -188,7 +188,7 @@ func (service *modelVerificationService) verifyTarget(ctx context.Context, targe
 }
 
 func modelVerificationTargetKey(target modelVerificationTarget) string {
-	payload, _ := json.Marshal(struct {
+	payload, _ := json.Marshal(struct { //nolint:gosec // G117: the key only hashes the request target and is never logged or persisted
 		Model         string            `json:"model"`
 		ProviderModel string            `json:"provider_model"`
 		Backend       string            `json:"backend"`
@@ -332,7 +332,11 @@ func legacyModelVerificationURL(endpoint routerconfig.VLLMEndpoint, dialect stri
 		return "", fmt.Errorf("backend address is invalid")
 	}
 	path := "/v1/chat/completions"
-	if strings.EqualFold(strings.TrimSpace(dialect), "anthropic") || strings.EqualFold(strings.TrimSpace(endpoint.Type), "anthropic") {
+	switch {
+	case strings.EqualFold(strings.TrimSpace(dialect), routerconfig.APIFormatResponses):
+		path = "/v1/responses"
+	case strings.EqualFold(strings.TrimSpace(dialect), routerconfig.APIFormatAnthropic),
+		strings.EqualFold(strings.TrimSpace(endpoint.Type), routerconfig.APIFormatAnthropic):
 		path = "/v1/messages"
 	}
 	return (&url.URL{Scheme: protocol, Host: host, Path: path}).String(), nil
@@ -349,13 +353,13 @@ func profiledModelVerificationURL(profile *routerconfig.ProviderProfile) (string
 	if baseURL.User != nil {
 		return "", fmt.Errorf("provider base URL user info is unsupported")
 	}
-	chatPath, err := profile.ResolveChatPath()
+	createPath, err := profile.ResolveCreatePath("")
 	if err != nil {
 		return "", err
 	}
-	pathURL, err := url.Parse(chatPath)
+	pathURL, err := url.Parse(createPath)
 	if err != nil || pathURL.IsAbs() || pathURL.Host != "" {
-		return "", fmt.Errorf("provider chat path is invalid")
+		return "", fmt.Errorf("provider create path is invalid")
 	}
 	return (&url.URL{
 		Scheme:   baseURL.Scheme,

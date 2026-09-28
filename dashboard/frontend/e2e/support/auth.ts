@@ -71,8 +71,8 @@ const defaultSettings = {
   platform: '',
   envoyUrl: '',
   routerEvalEndpoint: '',
-  evaluationAvailable: true,
-  evaluationUnavailableReason: '',
+  srBenchAvailable: true,
+  srBenchUnavailableReason: '',
 }
 
 export const dashboardSettingsResponse = (

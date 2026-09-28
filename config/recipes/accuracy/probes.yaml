@@ -14,7 +14,7 @@ fixtures:
       media_type: image/png
       sha256: sha256:431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460
       data_base64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=
-router_eval_endpoint: /api/v1/eval
+router_eval_endpoint: /api/v1/routing/preview
 evaluation:
   request_timeout_seconds: 300
   concurrency: 4

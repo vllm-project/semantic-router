@@ -21,26 +21,17 @@ def build_vsr_canonical_patch(
     model_name: str, reasoning_family: str | None
 ) -> tuple[dict[str, Any], str | None]:
     """Build a canonical v0.3 patch for reasoning-family wiring."""
-    card_patch: dict[str, Any] = {"name": model_name}
     provider_model_patch: dict[str, Any] = {"name": model_name}
-    patch: dict[str, Any] = {
-        "providers": {"models": [provider_model_patch]},
-        "routing": {"modelCards": [card_patch]},
-    }
+    patch: dict[str, Any] = {"providers": {"models": [provider_model_patch]}}
 
     if reasoning_family in REASONING_FAMILY_PATCHES:
-        patch["providers"]["defaults"] = {
-            "reasoning_families": {
-                reasoning_family: REASONING_FAMILY_PATCHES[reasoning_family]
-            }
-        }
-        provider_model_patch["reasoning_family"] = reasoning_family
+        provider_model_patch["reasoning"] = {"family": reasoning_family}
         return patch, None
 
     manual_follow_up = (
-        "Set providers.models[].reasoning_family and add a matching "
-        "providers.defaults.reasoning_families entry before merging this patch. "
-        "Supported families: qwen3, deepseek, gpt-oss."
+        "Set providers.models[].reasoning to a built-in family or define its "
+        "type, parameter, levels, and default inline before merging this patch. "
+        "Built-in families include qwen3, deepseek, and gpt-oss."
     )
     return patch, manual_follow_up
 
@@ -100,8 +91,8 @@ def generate_vsr_canonical_patch(
         ),
         "merge_instructions": (
             "Merge the generated patch into config/config.yaml. "
-            "It updates providers.defaults.reasoning_families and "
-            "providers.models plus routing.modelCards for the evaluated model."
+            "It updates the evaluated providers.models binding; built-in "
+            "reasoning definitions remain catalog-owned."
         ),
         "suggested_vsr_patch": suggested_patch,
     }

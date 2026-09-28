@@ -39,7 +39,7 @@ func TestComplexityWorkerCountBoundsNonCandleRuntime(t *testing.T) {
 }
 
 func TestComplexityClassifier_ClassifyDetailedWithImageUsesPrototypeBanks(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"analyze the root cause":        makeEmbedding(1.0, 0.0),
 		"trace the failure":             makeEmbedding(0.99, 0.08),
 		"quick summary":                 makeEmbedding(0.0, 1.0),
@@ -61,7 +61,7 @@ func TestComplexityClassifier_ClassifyDetailedWithImageUsesPrototypeBanks(t *tes
 	}, "qwen3", config.PrototypeScoringConfig{
 		ClusterSimilarityThreshold: 0.98,
 		MaxPrototypes:              2,
-	})
+	}, provider, provider)
 	if err != nil {
 		t.Fatalf("failed to create complexity classifier: %v", err)
 	}
@@ -88,23 +88,18 @@ func TestComplexityClassifier_ClassifyDetailedWithImageUsesPrototypeBanks(t *tes
 }
 
 func TestComplexityClassifier_ClassifyDetailedWithImageWithoutCache(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"hard text":     makeEmbedding(0.5, 0.5),
 		"easy text":     makeEmbedding(0.5, 0.5),
 		"visual query":  makeEmbedding(0.5, 0.5),
 		"fallback text": makeEmbedding(0.5, 0.5),
 	})
-	stubMultiModalImageLookup(t, map[string][]float32{
-		"hard-image":    makeEmbedding(1.0, 0.0),
-		"easy-image":    makeEmbedding(0.0, 1.0),
-		"request-image": makeEmbedding(1.0, 0.0),
+	image := stubMultiModalImageLookup(t, map[string][]float32{
+		testImageURI("hard-image"):    makeEmbedding(1.0, 0.0),
+		testImageURI("easy-image"):    makeEmbedding(0.0, 1.0),
+		testImageURI("request-image"): makeEmbedding(1.0, 0.0),
 	})
-
-	originalMMText := getMultiModalTextEmbedding
-	getMultiModalTextEmbedding = func(text string, targetDim int) ([]float32, error) {
-		return makeEmbedding(0.5, 0.5), nil
-	}
-	t.Cleanup(func() { getMultiModalTextEmbedding = originalMMText })
+	provider.image = image
 
 	classifier, err := NewComplexityClassifier([]config.ComplexityRule{
 		{
@@ -112,22 +107,22 @@ func TestComplexityClassifier_ClassifyDetailedWithImageWithoutCache(t *testing.T
 			Threshold: 0.2,
 			Hard: config.ComplexityCandidates{
 				Candidates:      []string{"hard text"},
-				ImageCandidates: []string{"hard-image"},
+				ImageCandidates: []string{testImageURI("hard-image")},
 			},
 			Easy: config.ComplexityCandidates{
 				Candidates:      []string{"easy text"},
-				ImageCandidates: []string{"easy-image"},
+				ImageCandidates: []string{testImageURI("easy-image")},
 			},
 		},
 	}, "qwen3", config.PrototypeScoringConfig{
 		ClusterSimilarityThreshold: 0.98,
 		MaxPrototypes:              2,
-	})
+	}, provider, provider)
 	if err != nil {
 		t.Fatalf("failed to create complexity classifier: %v", err)
 	}
 
-	results, err := classifier.ClassifyDetailedWithImage("visual query", "request-image")
+	results, err := classifier.ClassifyDetailedWithImage("visual query", testImageURI("request-image"))
 	if err != nil {
 		t.Fatalf("ClassifyDetailedWithImage failed without cache: %v", err)
 	}

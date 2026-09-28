@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import ServiceNotConfigured, { type ServiceConfig } from './ServiceNotConfigured'
 import ProductLoadingState from './ProductLoadingState'
@@ -23,54 +23,72 @@ export default function EmbeddedServicePage({
   src,
   iframeTitle,
 }: EmbeddedServicePageProps) {
-  const [availability, setAvailability] = useState<'checking' | 'available' | 'missing'>('checking')
+  const [availability, setAvailability] = useState<'checking' | 'available' | 'missing' | 'failed'>(
+    'checking',
+  )
   const [frameKey, setFrameKey] = useState(0)
   const [frameLoading, setFrameLoading] = useState(true)
   const [frameSlow, setFrameSlow] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const checkAvailability = useCallback(async () => {
-    setAvailability('checking')
-    setError(null)
-    try {
-      const response = await fetch(availabilityUrl, {
-        method: 'HEAD',
-      })
-      setAvailability(response.status === 503 ? 'missing' : 'available')
-    } catch {
-      // The embedded endpoint can reject HEAD while still serving GET. Let the iframe
-      // provide the final connection state instead of turning a transient probe into a dead end.
-      setAvailability('available')
-    }
-  }, [availabilityUrl])
-
   useEffect(() => {
     let active = true
+    let timedOut = false
     const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 12000)
 
     const run = async () => {
       try {
-        const response = await fetch(availabilityUrl, {
+        let response = await fetch(availabilityUrl, {
           method: 'HEAD',
           signal: controller.signal,
         })
-        if (active) setAvailability(response.status === 503 ? 'missing' : 'available')
+        if (response.status === 405) {
+          response = await fetch(availabilityUrl, { signal: controller.signal })
+        }
+        if (!active) return
+        if (response.status === 503) {
+          setAvailability('missing')
+        } else if (response.ok) {
+          setAvailability('available')
+        } else {
+          setAvailability('failed')
+          setFrameLoading(false)
+          setError(
+            response.status === 401 || response.status === 403
+              ? `Access to ${service.name} was denied. Check your session and permissions, then try again.`
+              : `${service.name} is unavailable (HTTP ${response.status}). Try again when the service is ready.`,
+          )
+        }
       } catch (requestError) {
         if (
           active &&
-          !(requestError instanceof DOMException && requestError.name === 'AbortError')
+          (timedOut ||
+            !(requestError instanceof DOMException && requestError.name === 'AbortError'))
         ) {
-          setAvailability('available')
+          setAvailability('failed')
+          setFrameLoading(false)
+          setError(
+            timedOut
+              ? `${service.name} took too long to respond. Try again.`
+              : `Could not connect to ${service.name}. Check your connection and try again.`,
+          )
         }
+      } finally {
+        window.clearTimeout(timer)
       }
     }
 
     void run()
     return () => {
       active = false
+      window.clearTimeout(timer)
       controller.abort()
     }
-  }, [availabilityUrl])
+  }, [availabilityUrl, frameKey, service.name])
 
   useEffect(() => {
     if (!frameLoading || availability !== 'available') return
@@ -79,6 +97,7 @@ export default function EmbeddedServicePage({
   }, [availability, frameKey, frameLoading])
 
   const reloadFrame = () => {
+    setAvailability('checking')
     setFrameLoading(true)
     setFrameSlow(false)
     setError(null)
@@ -88,14 +107,7 @@ export default function EmbeddedServicePage({
   if (availability === 'missing') {
     return (
       <div className={styles.page}>
-        <ServiceNotConfigured
-          service={service}
-          onRetry={() => {
-            setFrameLoading(true)
-            setFrameSlow(false)
-            void checkAvailability()
-          }}
-        />
+        <ServiceNotConfigured service={service} onRetry={reloadFrame} />
       </div>
     )
   }
@@ -111,9 +123,13 @@ export default function EmbeddedServicePage({
         <div className={styles.actions}>
           <span className={styles.status} aria-live="polite">
             <span className={styles.statusDot} aria-hidden="true" />
-            {availability === 'checking' ? 'Checking connection' : 'Connected through dashboard'}
+            {availability === 'checking'
+              ? 'Checking connection'
+              : availability === 'failed'
+                ? 'Connection unavailable'
+                : 'Connected through dashboard'}
           </span>
-          <button type="button" onClick={reloadFrame} disabled={availability !== 'available'}>
+          <button type="button" onClick={reloadFrame} disabled={availability === 'checking'}>
             Reload
           </button>
           <a href={src} target="_blank" rel="noopener noreferrer">
@@ -131,42 +147,49 @@ export default function EmbeddedServicePage({
         </div>
       ) : null}
 
-      <section className={styles.frameShell} aria-label={`${title} embedded workspace`}>
-        <div className={styles.frameRail}>
-          <span>{service.name}</span>
-          <span>Secure same-origin proxy</span>
-        </div>
-
-        {(availability === 'checking' || frameLoading) && (
-          <div className={styles.loading} role="status" aria-live="polite">
-            <ProductLoadingState
-              label={frameSlow ? `Still connecting to ${service.name}` : `Loading ${service.name}`}
-              compact
-            />
+      {availability !== 'failed' ? (
+        <section className={styles.frameShell} aria-label={`${title} embedded workspace`}>
+          <div className={styles.frameRail}>
+            <span>{service.name}</span>
+            <span>Secure same-origin proxy</span>
           </div>
-        )}
 
-        {availability === 'available' ? (
-          <iframe
-            key={`${frameKey}-${src}`}
-            src={src}
-            className={styles.frame}
-            title={iframeTitle}
-            allowFullScreen
-            referrerPolicy="same-origin"
-            onLoad={() => {
-              setFrameLoading(false)
-              setFrameSlow(false)
-              setError(null)
-            }}
-            onError={() => {
-              setFrameLoading(false)
-              setFrameSlow(false)
-              setError(`Could not load ${service.name}. Check the service and proxy configuration.`)
-            }}
-          />
-        ) : null}
-      </section>
+          {(availability === 'checking' || frameLoading) && (
+            <div className={styles.loading} role="status" aria-live="polite">
+              <ProductLoadingState
+                label={
+                  frameSlow ? `Still connecting to ${service.name}` : `Loading ${service.name}`
+                }
+                compact
+              />
+            </div>
+          )}
+
+          {availability === 'available' ? (
+            <iframe
+              key={`${frameKey}-${src}`}
+              src={src}
+              className={styles.frame}
+              title={iframeTitle}
+              allowFullScreen
+              referrerPolicy="same-origin"
+              onLoad={() => {
+                setFrameLoading(false)
+                setFrameSlow(false)
+                setError(null)
+              }}
+              onError={() => {
+                setAvailability('failed')
+                setFrameLoading(false)
+                setFrameSlow(false)
+                setError(
+                  `Could not load ${service.name}. Check the service and proxy configuration.`,
+                )
+              }}
+            />
+          ) : null}
+        </section>
+      ) : null}
     </div>
   )
 }

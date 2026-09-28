@@ -61,7 +61,7 @@ func TestClosestField(t *testing.T) {
 	}
 }
 
-func TestWarnUnknownFields_DetectsTypos(t *testing.T) {
+func TestCollectUnknownFields_DetectsTypos(t *testing.T) {
 	type Search struct {
 		TopK int `yaml:"topk"`
 	}
@@ -79,13 +79,13 @@ func TestWarnUnknownFields_DetectsTypos(t *testing.T) {
 		},
 	}
 
-	warnings := collectUnknownFields(raw, reflect.TypeOf(Cache{}))
-	assert.Len(t, warnings, 1)
-	assert.Contains(t, warnings[0], `"top_k"`)
-	assert.Contains(t, warnings[0], `"topk"`)
+	diagnostics := collectUnknownFields(raw, reflect.TypeOf(Cache{}))
+	assert.Len(t, diagnostics, 1)
+	assert.Contains(t, diagnostics[0], `"top_k"`)
+	assert.Contains(t, diagnostics[0], `"topk"`)
 }
 
-func TestWarnUnknownFields_NoSuggestionForDistantTypo(t *testing.T) {
+func TestCollectUnknownFields_NoSuggestionForDistantTypo(t *testing.T) {
 	type Config struct {
 		Name string `yaml:"name"`
 	}
@@ -94,13 +94,13 @@ func TestWarnUnknownFields_NoSuggestionForDistantTypo(t *testing.T) {
 		"xyzzy_blorp_foobar": "wat",
 	}
 
-	warnings := collectUnknownFields(raw, reflect.TypeOf(Config{}))
-	assert.Len(t, warnings, 1)
-	assert.Contains(t, warnings[0], `"xyzzy_blorp_foobar"`)
-	assert.NotContains(t, warnings[0], "did you mean")
+	diagnostics := collectUnknownFields(raw, reflect.TypeOf(Config{}))
+	assert.Len(t, diagnostics, 1)
+	assert.Contains(t, diagnostics[0], `"xyzzy_blorp_foobar"`)
+	assert.NotContains(t, diagnostics[0], "did you mean")
 }
 
-func TestWarnUnknownFields_ValidConfig(t *testing.T) {
+func TestCollectUnknownFields_ValidConfig(t *testing.T) {
 	type Inner struct {
 		Port int `yaml:"port"`
 	}
@@ -116,11 +116,11 @@ func TestWarnUnknownFields_ValidConfig(t *testing.T) {
 		},
 	}
 
-	warnings := collectUnknownFields(raw, reflect.TypeOf(Config{}))
-	assert.Empty(t, warnings, "valid config should produce no warnings")
+	diagnostics := collectUnknownFields(raw, reflect.TypeOf(Config{}))
+	assert.Empty(t, diagnostics, "valid config should produce no unknown-field diagnostics")
 }
 
-func TestWarnUnknownFields_SliceOfStructs(t *testing.T) {
+func TestCollectUnknownFields_SliceOfStructs(t *testing.T) {
 	type Item struct {
 		Name string `yaml:"name"`
 	}
@@ -137,13 +137,13 @@ func TestWarnUnknownFields_SliceOfStructs(t *testing.T) {
 		},
 	}
 
-	warnings := collectUnknownFields(raw, reflect.TypeOf(Config{}))
-	assert.Len(t, warnings, 1)
-	assert.Contains(t, warnings[0], `"naem"`)
-	assert.Contains(t, warnings[0], `"name"`)
+	diagnostics := collectUnknownFields(raw, reflect.TypeOf(Config{}))
+	assert.Len(t, diagnostics, 1)
+	assert.Contains(t, diagnostics[0], `"naem"`)
+	assert.Contains(t, diagnostics[0], `"name"`)
 }
 
-func TestWarnUnknownFields_MapValues(t *testing.T) {
+func TestCollectUnknownFields_MapValues(t *testing.T) {
 	type Params struct {
 		Weight int `yaml:"weight"`
 	}
@@ -160,39 +160,39 @@ func TestWarnUnknownFields_MapValues(t *testing.T) {
 		},
 	}
 
-	warnings := collectUnknownFields(raw, reflect.TypeOf(Config{}))
-	assert.Len(t, warnings, 1)
-	assert.Contains(t, warnings[0], `"wieght"`)
-	assert.Contains(t, warnings[0], `"weight"`)
+	diagnostics := collectUnknownFields(raw, reflect.TypeOf(Config{}))
+	assert.Len(t, diagnostics, 1)
+	assert.Contains(t, diagnostics[0], `"wieght"`)
+	assert.Contains(t, diagnostics[0], `"weight"`)
 }
 
-func TestWarnUnknownFields_CanonicalConfig(t *testing.T) {
+func TestCollectUnknownFields_CanonicalConfig(t *testing.T) {
 	raw := map[string]interface{}{
 		"version": "0.3",
 		"routing": map[interface{}]interface{}{},
 		"global":  map[interface{}]interface{}{},
 	}
-	warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
-	assert.Empty(t, warnings, "minimal valid canonical config should produce no warnings")
+	diagnostics := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
+	assert.Empty(t, diagnostics, "minimal valid canonical config should produce no unknown-field diagnostics")
 }
 
-func TestWarnUnknownFields_CanonicalConfigTypo(t *testing.T) {
+func TestCollectUnknownFields_CanonicalConfigTypo(t *testing.T) {
 	raw := map[string]interface{}{
 		"version":  "0.3",
 		"routingg": map[interface{}]interface{}{}, // typo
 	}
-	warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
-	assert.Len(t, warnings, 1)
-	assert.Contains(t, warnings[0], `"routingg"`)
-	assert.Contains(t, warnings[0], `"routing"`)
+	diagnostics := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
+	assert.Len(t, diagnostics, 1)
+	assert.Contains(t, diagnostics[0], `"routingg"`)
+	assert.Contains(t, diagnostics[0], `"routing"`)
 }
 
-func TestWarnUnknownFields_ReferenceConfig(t *testing.T) {
+func TestCollectUnknownFields_ReferenceConfig(t *testing.T) {
 	data := readReferenceConfigYAML(t)
 	raw, err := parseRawConfigMap(data)
 	if err != nil {
 		t.Fatalf("failed to parse reference config: %v", err)
 	}
-	warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
-	assert.Empty(t, warnings, "reference config must produce zero warnings: %v", warnings)
+	diagnostics := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
+	assert.Empty(t, diagnostics, "reference config must produce zero unknown-field diagnostics: %v", diagnostics)
 }

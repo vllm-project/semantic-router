@@ -10,12 +10,10 @@ Release intent, architecture debt, and changing GitHub state have different
 lifecycles. The local board gives maintainers one current view without copying
 daily issue and pull-request state into versioned plans.
 
-The canonical state split is:
-
-- release intent lives in `tools/agent/docs/plans/`
-- architecture gaps live in `tools/agent/docs/tech-debt/`
-- durable operating rules live in the relevant governance docs
-- daily issue and PR state lives in `.agent-harness/maintainer/`
+Release intent may use a focused file under `tools/agent/docs/plans/` when the
+work genuinely spans sessions. Owned work and debt belong in GitHub issues;
+the compact repository-only fallback is `architecture-risks.md`. Daily issue
+and PR state lives only in `.agent-harness/maintainer/`.
 
 ## Local Board
 
@@ -94,10 +92,12 @@ active release-plan tasks:
 
 ## Built-in Model Catalog Releases
 
-`config/recipes/built-in/latest/` is the authoring source for the catalog that
-ships with `vllm-sr`. The package mirror under
-`src/vllm-sr/cli/model_assets/latest/` is generated; update it with
-`tools/release/sync_model_catalog.py` rather than editing it directly.
+`config/catalog/manifest.yaml` and `config/catalog/resources/` are the authored
+catalog facts. Generation writes the distributable snapshot beside the recipe
+bundles under `config/recipes/built-in/latest/`. The CLI reads that tree in a
+source checkout; `make model-catalog-package-stage` creates an ignored package
+mirror only while building a wheel or sdist. Never edit or commit that staging
+tree.
 
 Immediately before a stable `vX.Y.Z` tag, create the matching catalog snapshot:
 
@@ -106,9 +106,9 @@ make built-in-model-snapshot RELEASE_VERSION=X.Y.Z
 ```
 
 The command creates `config/recipes/built-in/vX.Y/`, updates its release
-metadata and bundle digests, and generates the matching package resources. It
-refuses to overwrite an existing snapshot. Commit both generated trees in the
-release-preparation change.
+metadata and bundle digests, and stages matching package resources for the
+release build. It refuses to overwrite an existing snapshot. Commit the
+immutable `config/recipes` snapshot, never the ignored package staging tree.
 
 Before tagging, verify the version contract and source/package parity. Published
 snapshots are release inputs and must not be rewritten; policy changes belong
@@ -152,7 +152,7 @@ release-plan tasks that do not already match an open milestone issue unless
 
 ```text
 Run semantic-router maintainer ops for MILESTONE_NAME. Use
-tools/agent/docs/maintainer-ops.md and the maintainer release skill. Sync GitHub
+tools/agent/docs/maintainer-ops.md and the maintainer-ops skill. Sync GitHub
 issues, PRs, milestones, labels, review state, and CI state. Regenerate
 .agent-harness/maintainer/current.json, today.md, milestone notes,
 release-readiness.md, and proposed-actions.json. Compare the active release
@@ -233,6 +233,98 @@ are retained.
 Use the maintainer board to decide what needs review, rebase, unblock, or
 close-candidate follow-up. Use `stale.yml` only for the automated stale/close
 lifecycle.
+
+### Assignee inactivity policy
+
+Open `accepted` issues with at least one assignee are subject to a daily
+two-stage inactivity sweep run by `maintenance.yml` →
+`unassign-inactive-assignees.yml`. Each assignee moves through the stages
+independently:
+
+- **15 days** without activity from that assignee: they receive a warning
+  comment naming them. No label is applied — the comment is the record.
+- **30 days** without activity **and** at least the 15-day grace window since
+  their own warning: the assignee is removed and a notice is posted. The issue
+  stays open and `accepted` for anyone to pick up.
+
+An assignee is never removed without a warning on record. An assignee first
+seen well past 30 days is warned on that run and only becomes removable a full
+grace window later, so a contributor cannot be dropped without notice on the
+sweep's first encounter with them.
+
+#### What counts as activity
+
+Activity is attributed to one assignee at a time, from Timeline API events:
+
+- their own comments and reviews on the issue;
+- their own comments, reviews, and force-pushes on a pull request
+  cross-referenced from the issue, plus opening such a pull request;
+- commits on those pull requests whose GitHub author or committer is that
+  assignee, read from the commit list rather than the timeline, which carries
+  only a git identity;
+- being assigned to the issue, which starts or restarts their clock.
+
+Every cross-referenced pull request in the same repository is evaluated, not
+just the most recent; the scan stops early only once activity recent enough to
+settle the outcome as active has been found.
+
+Deliberately excluded: bot writes, label and milestone churn, mentions, and
+anything done by another person. A linked pull request's `updated_at` is not
+used, so review traffic and CI writes on somebody else's pull request cannot
+keep an inactive assignee assigned, and an active co-assignee never shields an
+inactive one.
+
+#### Recovering and overriding
+
+- **Activity resumes.** Any qualifying event supersedes a pending warning; the
+  next sweep reports the assignee as recovered and takes no action. A fresh
+  warning is only posted if they go quiet for another 15 days.
+- **Extending an assignment.** Reassign the contributor (`gh issue edit
+  <n> --add-assignee <login>`) — the `assigned` event restarts their clock.
+- **Pausing an issue entirely.** Add the `hold` label. Issues carrying any
+  label listed in the workflow's `exempt_labels` input (default `hold`) are
+  skipped. Locked issues are skipped too, since they cannot receive a warning.
+- **Undoing a removal.** Re-assign the contributor. The removal notice from the
+  previous cycle is superseded by the new `assigned` event.
+
+#### Failure behaviour
+
+Every read that could prove recent activity fails closed: if the timeline,
+linked pull request, or comment lookup fails, that assignment is left untouched
+and the run is marked failed. Every write is guarded by a per-assignee marker
+comment, so a run that dies partway through resumes rather than double-posting
+or re-removing; the removal notice is always posted before the assignment is
+removed, and the removal is retried on the next run if it did not land. Re-run
+the workflow to retry a failed sweep — it only redoes what did not complete.
+
+Each run writes a job summary listing every transition, the days of inactivity
+behind it, and any failed evaluation.
+
+#### Running it manually
+
+```bash
+gh workflow run maintenance.yml -f task=unassign
+```
+
+That runs the standard policy with the scheduled defaults. To preview a sweep or
+override a threshold, dispatch the workflow itself, which takes `dry_run`,
+`warn_after_days`, `unassign_after_days`, and `exempt_labels`:
+
+```bash
+gh workflow run unassign-inactive-assignees.yml -f dry_run=true
+```
+
+A direct dispatch defaults to `dry_run=true`, so it reports the transitions it
+would make and mutates nothing until you pass `-f dry_run=false`.
+
+Sweeps are serialized repository-wide by a single concurrency group, so a manual
+dispatch queues behind an in-flight scheduled sweep instead of racing it and
+double-posting a warning or removal notice.
+
+The workflow logic lives in `.github/scripts/unassign-inactive.js` and is
+covered by `.github/scripts/__tests__/`, run in CI by the `github-scripts-tests`
+pre-commit hook. Run it locally with `npm --prefix .github/scripts ci && npm
+--prefix .github/scripts test`.
 
 Manual trigger example:
 

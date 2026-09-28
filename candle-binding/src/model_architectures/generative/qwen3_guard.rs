@@ -487,6 +487,33 @@ impl Qwen3GuardModel {
     /// - `mode`: Classification mode ("input" for user prompts, "output" for model responses)
     ///
     /// Returns raw generated text that should be parsed by the caller
+    pub(crate) fn input_token_count(&self, text: &str, mode: &str) -> Result<usize, String> {
+        let cache = match mode {
+            "input" => &self.prefix_cache_input,
+            "output" => &self.prefix_cache_output,
+            _ => return Err("invalid guard mode".into()),
+        };
+        if let Some(cache) = cache {
+            let suffix = qwen3_guard_generation::cached_guard_suffix(text, mode);
+            Ok(cache.prefix_length()
+                + self
+                    .tokenizer
+                    .encode(suffix.as_str(), true)
+                    .map_err(|e| e.to_string())?
+                    .len())
+        } else {
+            Ok(self
+                .tokenizer
+                .encode(self.format_prompt(text, mode), true)
+                .map_err(|e| e.to_string())?
+                .len())
+        }
+    }
+
+    pub(crate) fn output_token_budget(&self) -> usize {
+        self.config.max_tokens
+    }
+
     pub fn generate_guard(
         &mut self,
         text: &str,

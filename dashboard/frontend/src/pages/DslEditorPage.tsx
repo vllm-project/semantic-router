@@ -287,10 +287,8 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
       setShowImportModal(false)
       setImportText('')
       setImportError(null)
-    } catch {
-      setImportError(
-        'Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.',
-      )
+    } catch (err) {
+      setImportError(`Failed to import YAML: ${err instanceof Error ? err.message : String(err)}`)
     }
   }, [importText, importYaml])
 
@@ -347,7 +345,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
   }, [importUrl])
 
   // Diagnostic counts (3 severity levels per design doc)
-  const errorCount = diagnostics.filter((d) => d.level === 'error').length
+  const errorCount = diagnostics.filter((d) => d.level === 'error').length + (compileError ? 1 : 0)
   const warnCount = diagnostics.filter((d) => d.level === 'warning').length
   const constraintCount = diagnostics.filter((d) => d.level === 'constraint').length
 
@@ -689,6 +687,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
             <div className={styles.outputContent}>
               {compileError && (
                 <div
+                  role="alert"
                   style={{
                     padding: 'var(--spacing-md)',
                     color: 'var(--color-danger)',

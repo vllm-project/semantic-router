@@ -1,0 +1,127 @@
+id: openai
+display_name: OpenAI
+description: OpenAI models and reasoning families.
+category: model_api
+support_tier: native
+default_base_url: https://api.openai.com/v1
+protocols:
+- openai/chat-completions@1
+- openai/responses@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+- openai/responses@1#create
+- openai/responses@1#list_models
+reasoning_transport: top_level_effort
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+  injected_header: x-user-openai-key
+presentation:
+  logo: package:openai
+  monogram: O
+  monochrome: true
+  featured: true
+conformance:
+  status: fixture_verified
+  verified_at: 2026-09-04
+models:
+- catalog: openai/gpt-6-astra
+  relationship: first_party
+  id: gpt-6-astra
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_modes: [enabled]
+  reasoning_efforts: [low, medium, high, xhigh, max]
+  reasoning_efforts_by_protocol:
+    openai/chat-completions@1: [low, medium, high, xhigh]
+  pricing:
+    currency: USD
+    prompt_per_1m: 10.0
+    cached_input_per_1m: 1.0
+    cache_write_per_1m: 12.5
+    completion_per_1m: 50.0
+  restrictions:
+    tools_protocols:
+    - openai/responses@1
+    long_context_pricing:
+      input_threshold_tokens: 272000
+      prompt_multiplier: 2.0
+      cached_input_multiplier: 2.0
+      cache_write_multiplier: 2.0
+      completion_multiplier: 1.5
+    unsupported_request_fields:
+      openai/chat-completions@1:
+      - temperature
+      - top_p
+      - top_logprobs
+      - logprobs
+      openai/responses@1:
+      - temperature
+      - top_p
+      - top_logprobs
+    unsupported_include_values:
+    - message.output_text.logprobs
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-07
+    source: https://developers.openai.com/api/docs/models/gpt-6-astra
+- catalog: openai/gpt-5.4
+  relationship: first_party
+  id: gpt-5.4
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.4
+- catalog: openai/gpt-5.5
+  relationship: first_party
+  id: gpt-5.5
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.5
+- catalog: openai/gpt-5.6-sol
+  relationship: first_party
+  id: gpt-5.6-sol
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-sol
+- catalog: openai/gpt-5.6-terra
+  relationship: first_party
+  id: gpt-5.6-terra
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-terra
+- catalog: openai/gpt-5.6-luna
+  relationship: first_party
+  id: gpt-5.6-luna
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-luna

@@ -23,7 +23,7 @@ const (
 	maxProbesBytes   int64 = 8 << 20
 	maxDSLBytes      int64 = 8 << 20
 	maxREADMEBytes   int64 = 2 << 20
-	// Match Router's /api/v1/eval JSON request limit. Stress probes exercise
+	// Match Router's /api/v1/routing/preview JSON request limit. Stress probes exercise
 	// 524K-token bands and can exceed 2 MiB after JSON materialization.
 	maxRequestBytes           = 10 << 20
 	maxGeneratedTextBytes     = 10 << 20

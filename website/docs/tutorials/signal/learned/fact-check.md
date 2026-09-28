@@ -50,3 +50,8 @@ The fact-check classifier processes request text through
 whether verification is useful; it does not verify a claim. See a complete
 example:
 [`config/fragments/signal/fact-check/needs-verification.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/fact-check/needs-verification.yaml).
+
+When a reachable routing decision depends on this signal, its configured model
+must initialize successfully or Router startup fails. A model used only by the
+standalone diagnostics API remains best-effort and does not block unrelated
+routes when it is unavailable.

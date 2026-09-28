@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
   // By default, Docusaurus generates a sidebar from the docs folder structure
   tutorialSidebar: [
     'intro',
+    'faq',
     {
       type: 'category',
       label: 'Overview',
@@ -33,6 +34,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'installation/installation',
+        'installation/agent',
         {
           type: 'category',
           label: 'Plan a Deployment',
@@ -99,7 +101,9 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/learned/embedding',
                 'tutorials/signal/learned/modality',
                 'tutorials/signal/learned/fact-check',
+                'tutorials/signal/learned/hallucination',
                 'tutorials/signal/learned/jailbreak',
+                'tutorials/signal/learned/safety',
                 'tutorials/signal/learned/pii',
                 'tutorials/signal/learned/preference',
                 'tutorials/signal/learned/reask',
@@ -204,7 +208,9 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/memory',
                 'tutorials/plugin/rag',
                 'tutorials/plugin/router-replay',
+                'tutorials/plugin/shadow-dispatch',
                 'tutorials/plugin/response-cache',
+                'tutorials/plugin/prompt-cache',
               ],
             },
             {
@@ -228,8 +234,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
-            'tutorials/global/safety-models-and-policy',
-            'tutorials/global/remote-embeddings',
+            'tutorials/global/vela-models',
           ],
         },
       ],
@@ -247,7 +252,22 @@ const sidebars: SidebarsConfig = {
             id: 'installation/configuration',
           },
           items: [
+            'installation/configuration-contract',
             'installation/configuration-workflows',
+            {
+              type: 'category',
+              label: 'Models',
+              link: {
+                type: 'doc',
+                id: 'installation/model-configuration',
+              },
+              items: [
+                'installation/catalog-backed-models',
+                'installation/custom-models',
+                'installation/model-reasoning',
+                'installation/model-configuration-patterns',
+              ],
+            },
           ],
         },
         {
@@ -346,24 +366,29 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Runtime Reference',
+          label: 'Router Runtime',
+          link: { type: 'doc', id: 'installation/native-backends' },
           items: [
-            'installation/native-backends',
+            {
+              type: 'category',
+              label: 'Run models',
+              items: [
+                'installation/runtime/in-process',
+                'installation/runtime/openvino',
+                'installation/runtime/external',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Model guides',
+              items: [
+                'installation/runtime/embeddings',
+                'installation/runtime/safety',
+              ],
+            },
+            'installation/runtime/lifecycle-diagnostics',
           ],
         },
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Fleet Simulator',
-      collapsed: false,
-      items: [
-        'fleet-sim/overview',
-        'fleet-sim/getting-started',
-        'fleet-sim/use-cases',
-        'fleet-sim/sim-algorithms',
-        'fleet-sim/power-model',
-        'fleet-sim/guide',
       ],
     },
     {
@@ -379,6 +404,7 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Routing & Selection',
           items: [
+            'proposals/decision-ranking-semantics',
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
             'proposals/prompt-classification-routing',
@@ -409,6 +435,8 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Configuration & Protocols',
           items: [
+            'proposals/open-intelligence-index-and-model-arena',
+            'proposals/unified-model-catalog-and-evaluation-index',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
           ],
@@ -428,9 +456,39 @@ const sidebars: SidebarsConfig = {
       label: 'Model Training',
       collapsed: false,
       items: [
-        'training/training-overview',
-        'training/model-performance-eval',
-        'training/ml-model-selection',
+        {
+          type: 'category',
+          label: 'Start Here',
+          collapsed: false,
+          items: [
+            'training/training-overview',
+            'training/model-catalog',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Embedding Models',
+          items: [
+            'training/mmbert-32k-models',
+            'training/multimodal-embeddings',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Classifier Models',
+          items: [
+            'training/classifier-models',
+            'training/mmbert-safety-classifier',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Evaluate and Select',
+          items: [
+            'training/model-performance-eval',
+            'training/ml-model-selection',
+          ],
+        },
       ],
     },
     {
@@ -439,7 +497,24 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'benchmarking/overview',
-        'benchmarking/evaluation-plane',
+        'benchmarking/open-intelligence-index',
+        'benchmarking/agent-evaluation-loop',
+        'benchmarking/custom-evaluations',
+        {
+          type: 'category',
+          label: 'sr-bench 1.0',
+          link: {
+            type: 'doc',
+            id: 'benchmarking/sr-bench/index',
+          },
+          items: [
+            'benchmarking/sr-bench/shared-worker',
+            'benchmarking/sr-bench/tasks-and-targets',
+            'benchmarking/sr-bench/plan-and-run',
+            'benchmarking/sr-bench/iterate',
+            'benchmarking/sr-bench/results',
+          ],
+        },
       ],
     },
     {
@@ -447,11 +522,27 @@ const sidebars: SidebarsConfig = {
       label: 'API Reference',
       collapsed: false,
       items: [
+        'api/cli',
         'api/router',
+        'api/configuration-schema',
         'api/apiserver',
+        'api/openapi',
         'api/session-identification',
         'api/semantic-router-crd',
         'api/crd-reference',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Fleet Simulator',
+      collapsed: false,
+      items: [
+        'fleet-sim/overview',
+        'fleet-sim/getting-started',
+        'fleet-sim/use-cases',
+        'fleet-sim/sim-algorithms',
+        'fleet-sim/power-model',
+        'fleet-sim/guide',
       ],
     },
     {
@@ -471,6 +562,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'community/overview',
+        'community/model-provider-day-0-support',
         'community/development',
         'community/documentation',
         'community/translation-guide',

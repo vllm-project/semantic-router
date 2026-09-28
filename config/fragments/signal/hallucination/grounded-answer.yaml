@@ -1,0 +1,13 @@
+# Hallucination signal.
+#
+# Checks the model's answer against the grounding context the request carried
+# (tool results or retrieved context), so it is only available after the model
+# has answered. The hallucination plugin of the decision selected for the
+# request enforces on it; decision rules cannot read it. use_nli asks the
+# detector for span-level NLI explanations.
+routing:
+  signals:
+    hallucination:
+      - name: ungrounded_claims
+        use_nli: true
+        description: Detect claims the grounding context does not support.

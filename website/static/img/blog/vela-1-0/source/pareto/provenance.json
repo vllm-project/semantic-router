@@ -1,0 +1,94 @@
+{
+  "upstream_repository": "llm-semantic-router/Vela-1.0-Omni-Nano",
+  "revision": "0496b39a51c8199592e58cbff81c250f056bd94b",
+  "companion_mini_revision": "f7fafd36abf49adf88b1b2ec0186c68b008eeb07",
+  "retrieved_utc": "2026-09-19",
+  "reason": "Current official complete-panel figures for both variants are primary; selected-task figures remain separate. Shared numeric data is identical across both pinned repositories. Total stored parameters include all three modalities.",
+  "files": [
+    {
+      "file": "omni-nano-general-english41.svg",
+      "sha256": "5e111208bd77f5e8c54f0a2fdc3d794f798dc54f55f91dbdd6efa72f3dc4ee12",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/0496b39a51c8199592e58cbff81c250f056bd94b/assets/general-english41-nano.svg"
+    },
+    {
+      "file": "omni-nano-general-audio19.svg",
+      "sha256": "c9323c2b7bde2c83191b17f48a8dad2e7b2b9e0ea409fd6219deb98d22411b5f",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/0496b39a51c8199592e58cbff81c250f056bd94b/assets/general-audio19-nano.svg"
+    },
+    {
+      "file": "omni-nano-pareto-imdb.svg",
+      "sha256": "838010ac666c3c6cbafd0cc93db1bd2c0c91c8193f6da60089da619bb41cb847",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/0496b39a51c8199592e58cbff81c250f056bd94b/assets/pareto-imdb.svg"
+    },
+    {
+      "file": "omni-nano-pareto-nmsqa.svg",
+      "sha256": "30e501f8d44e65edc5b0cd353c6d5db117c9dfdee432b8efcd3007ac950b0f6c",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/0496b39a51c8199592e58cbff81c250f056bd94b/assets/pareto-nmsqa.svg"
+    },
+    {
+      "file": "general-rank-figures-nano.json",
+      "sha256": "5e1c74b2bfb7b2929acde6bae9024ed901c445da30c602fed11495849db16f98",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/general-rank-figures.json"
+    },
+    {
+      "file": "omni-mini-general-english41.svg",
+      "sha256": "46af30f78f6933bbc041d5196683ea66ad6a3ca4bd3994a63aff214e7aec1850",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/assets/general-english41-mini.svg"
+    },
+    {
+      "file": "omni-mini-general-audio19.svg",
+      "sha256": "3bda8e60aa469619684f9b2eda11428858af37c68f327e6a3bce952e26690a9a",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/assets/general-audio19-mini.svg"
+    },
+    {
+      "file": "omni-mini-pareto-mridingham.svg",
+      "sha256": "e67dcbd6480c9ae1814ac998c8433aac4144f3a22ff76d31334eae1b38a364c6",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/assets/pareto-mridingham.svg"
+    },
+    {
+      "file": "omni-mini-pareto-sibfleurs.svg",
+      "sha256": "0e9f2d12a733faed12bbfaa268b433ab218a22257ed6897eaf948d5a847092a5",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/assets/pareto-sibfleurs.svg"
+    },
+    {
+      "file": "general-rank-figures-mini.json",
+      "sha256": "d331384f6737993ba87808758de17af882be612d8eae88a3f6877d87f50a4984",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/general-rank-figures.json"
+    },
+    {
+      "file": "general-rank-data.json",
+      "sha256": "afe45b1da29a031941039a1a0d919560d67cf70abf4055630f4400fbc4a7c632",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/general-rank-data.json"
+    },
+    {
+      "file": "complete-panel-ranks.json",
+      "sha256": "984bb6f9cb61621b6823542d35bad1facf5ec250849d6988433e924acbf2682d",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/complete-panel-ranks.json"
+    },
+    {
+      "file": "complete-panel-ranks.md",
+      "sha256": "6a502ae1d574f6e106f4cda920493e86ba64701a36b2a73e0d82fb5c8b7d16f4",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/complete-panel-ranks.md"
+    },
+    {
+      "file": "pareto-data.json",
+      "sha256": "6bbe5db8eca18a79817a2e429fcaa77da64ea32312773dc6c303c84093dfbb12",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/pareto-data.json"
+    },
+    {
+      "file": "pareto-new-frontiers.json",
+      "sha256": "7f0cb117da69d8c3f42cc76276bb494f1ace07d230f131cf9f2b7711462d6ba4",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/pareto-new-frontiers.json"
+    },
+    {
+      "file": "pareto-methodology.md",
+      "sha256": "380b4f110e7628fbaa7aef4fad17b15964b2adcce7cf3aa8f207c421e8faaaac",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/pareto-methodology.md"
+    },
+    {
+      "file": "pareto-points.csv",
+      "sha256": "301a8f7efd0a522fa37bc1e62a0238e78a4881d8cc9806ab3b54949aeefdc128",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/pareto-points.csv"
+    }
+  ]
+}

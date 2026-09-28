@@ -14,6 +14,7 @@ without taking over serving-layer scheduling.
 
 | Proposal | Created | Status | Scope |
 | --- | --- | --- | --- |
+| [Decision Ranking Semantics](./decision-ranking-semantics) | 2026-09-01 | Proposal | Tier, priority, and comparable-confidence ordering for decision selection. |
 | [Routing Scope: Per-Query and Capacity-Aware Routing](./batch-and-capacity-aware-routing) | 2026-07-14 | Decision record | Keeps semantic routing per-query and capacity handling in the serving layer. |
 | [Router Learning](./router-learning-memory-and-adaptations) | 2026-06-20 | Implemented | Online adaptation, route protection, and offline recipe improvement. |
 | [Prompt Classification Routing](./prompt-classification-routing) | 2025-10-08 | Proposal | Keyword, regex, embedding, and classifier signal fusion. |
@@ -50,8 +51,11 @@ different client and transport protocols.
 
 | Proposal | Created | Status | Scope |
 | --- | --- | --- | --- |
+| [Open Intelligence Index 1.0 and Unified Model Arena](./open-intelligence-index-and-model-arena) | 2026-09-09 | Implemented | Defines the six open core benchmarks, complete-case index, physical/virtual ranking, operator evidence, routing objectives, and benchmark-version migration. |
+| [Unified Model Catalog and Evaluation Index](./unified-model-catalog-and-evaluation-index) | 2026-09-04 | Implemented | Unifies provider, protocol, model, reasoning, presentation, Day-0, and benchmark-comparison metadata. |
 | [Unified Config Contract v0.3](./unified-config-contract-v0-3) | 2026-03-17 | Implemented | One configuration contract across authoring and deployment surfaces. |
 | [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor) | 2026-02-18 | Proposal | Protocol-independent access to the routing engine. |
+| [Standalone HTTP Gateway](./standalone-http-gateway) | 2026-08-31 | Proposal | A separate gateway binary linking the router packages; run routing without Envoy, simplifying deployment. |
 
 ## Serving Integrations
 

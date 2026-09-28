@@ -62,7 +62,7 @@ standalone canonical Router configuration. Its `config.model_selection`,
 `config.strategy`, and `config.decisions` fields must be reviewed and mapped to
 `global.router.model_selection`, `global.router.strategy`, and
 `routing.decisions` in a complete config. Add the required listeners and
-providers, then run `vllm-sr validate --config ...` before deployment.
+providers, then run `vllm-sr config validate --config ...` before deployment.
 
 :::
 
@@ -182,7 +182,7 @@ match the names recorded in the benchmark data and the configured provider
 aliases.
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 ## Evaluate before rollout
@@ -221,7 +221,8 @@ selectors do not compensate for unrepresentative benchmark data.
 
 ## References
 
-- [Training Router Models](./training-overview)
+- [Model training overview](./training-overview)
+- [Current model catalog](./model-catalog)
 - [Model Performance Evaluation](./model-performance-eval)
 - [Training source and complete CLI options](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_selection/ml_model_selection)
 - [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540)

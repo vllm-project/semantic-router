@@ -1,0 +1,867 @@
+"""Evaluation validation and deterministic index materialization."""
+
+from __future__ import annotations
+
+import math
+from collections import defaultdict
+from dataclasses import dataclass, field
+from itertools import pairwise
+from typing import Any
+
+from catalog_common import (
+    MIN_PIECEWISE_POINTS,
+    PAIR_LENGTH,
+    SLUG,
+    VERSIONED_ID,
+    CatalogBuildError,
+)
+from catalog_common import (
+    is_finite_number as _is_finite_number,
+)
+from catalog_common import (
+    mapping as _mapping,
+)
+from catalog_common import (
+    nonempty_string as _nonempty_string,
+)
+from catalog_common import (
+    reject_unknown as _reject_unknown,
+)
+from catalog_common import (
+    sequence as _sequence,
+)
+from catalog_common import (
+    validate_https_url as _validate_https_url,
+)
+
+
+def metric_catalog(benchmarks: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    metrics: dict[str, dict[str, Any]] = {}
+    for benchmark_index, benchmark in enumerate(benchmarks):
+        path = f"benchmarks[{benchmark_index}]"
+        _reject_unknown(
+            benchmark,
+            {
+                "id",
+                "display_name",
+                "domain",
+                "tags",
+                "source",
+                "default_profile",
+                "profiles",
+                "metrics",
+            },
+            path,
+        )
+        benchmark_id = _nonempty_string(benchmark.get("id"), f"{path}.id")
+        if not VERSIONED_ID.fullmatch(benchmark_id):
+            raise CatalogBuildError(
+                f"{path}.id must be a namespaced semantic-version identity"
+            )
+        if benchmark.get("source") is not None:
+            _validate_https_url(benchmark["source"], f"{path}.source")
+        _validate_benchmark_tags(benchmark.get("tags"), f"{path}.tags")
+        profiles = _benchmark_profiles(benchmark, path)
+        for metric_index, raw_metric in enumerate(
+            _sequence(benchmark.get("metrics"), f"{path}.metrics")
+        ):
+            metric = _mapping(raw_metric, f"{path}.metrics[{metric_index}]")
+            _reject_unknown(
+                metric,
+                {"id", "unit", "direction", "range", "normalization"},
+                f"{path}.metrics[{metric_index}]",
+            )
+            metric_id = (
+                f"{benchmark_id}#"
+                f"{_nonempty_string(metric.get('id'), f'{path}.metrics[{metric_index}].id')}"
+            )
+            _validate_metric(metric, f"{path}.metrics[{metric_index}]")
+            if metric_id in metrics:
+                raise CatalogBuildError(f"duplicate benchmark metric: {metric_id}")
+            metrics[metric_id] = {
+                **metric,
+                "benchmark": benchmark_id,
+                "domain": benchmark.get("domain"),
+                "profiles": profiles,
+            }
+    return metrics
+
+
+def _validate_benchmark_tags(value: Any, path: str) -> None:
+    if value is None:
+        return
+    tags = _sequence(value, path)
+    if not tags:
+        raise CatalogBuildError(f"{path} cannot be empty when declared")
+    seen: set[str] = set()
+    for tag in tags:
+        if not isinstance(tag, str) or not SLUG.fullmatch(tag) or tag in seen:
+            raise CatalogBuildError(f"{path} must contain unique slug tags")
+        seen.add(tag)
+
+
+def _benchmark_profiles(benchmark: dict[str, Any], path: str) -> frozenset[str]:
+    profiles: set[str] = set()
+    for profile_index, raw_profile in enumerate(
+        _sequence(benchmark.get("profiles"), f"{path}.profiles")
+    ):
+        profile_path = f"{path}.profiles[{profile_index}]"
+        profile = _mapping(raw_profile, profile_path)
+        _reject_unknown(profile, {"id", "display_name", "description"}, profile_path)
+        profile_id = _nonempty_string(profile.get("id"), f"{profile_path}.id")
+        if not SLUG.fullmatch(profile_id) or profile_id in profiles:
+            raise CatalogBuildError(f"{profile_path}.id is invalid or duplicated")
+        _nonempty_string(profile.get("display_name"), f"{profile_path}.display_name")
+        _nonempty_string(profile.get("description"), f"{profile_path}.description")
+        profiles.add(profile_id)
+    default_profile = _nonempty_string(
+        benchmark.get("default_profile"), f"{path}.default_profile"
+    )
+    if default_profile not in profiles:
+        raise CatalogBuildError(f"{path}.default_profile is not declared in profiles")
+    return frozenset(profiles)
+
+
+def _validate_metric(metric: dict[str, Any], path: str) -> None:
+    _nonempty_string(metric.get("unit"), f"{path}.unit")
+    value_range = _sequence(metric.get("range"), f"{path}.range")
+    if (
+        len(value_range) != PAIR_LENGTH
+        or not all(_is_finite_number(value) for value in value_range)
+        or value_range[0] >= value_range[1]
+    ):
+        raise CatalogBuildError(f"{path}.range is invalid")
+    if metric.get("direction") not in {"higher_is_better", "lower_is_better"}:
+        raise CatalogBuildError(f"{path}.direction is unsupported")
+    if metric.get("normalization") is not None:
+        normalization = _mapping(metric["normalization"], f"{path}.normalization")
+        _validate_normalization(normalization, f"{path}.normalization")
+
+
+def validate_indices(
+    items: list[dict[str, Any]], metrics: dict[str, dict[str, Any]]
+) -> None:
+    index_ids = {item.get("id") for item in items}
+    edges: dict[str, set[str]] = defaultdict(set)
+    for index, item in enumerate(items):
+        path = f"indices[{index}]"
+        identity, domains = _validate_index_header(item, path)
+        total, direct_domain_weights, has_nested_component = _validate_index_components(
+            item, path, identity, index_ids, metrics, edges
+        )
+        if not math.isclose(total, 1.0, abs_tol=1e-9):
+            raise CatalogBuildError(
+                f"{path}.component weights must sum to 1, got {total}"
+            )
+        _validate_direct_domain_weights(
+            path, domains, direct_domain_weights, has_nested_component
+        )
+    _validate_index_cycles(
+        {identity for identity in index_ids if isinstance(identity, str)}, edges
+    )
+
+
+def _validate_direct_domain_weights(
+    path: str,
+    domains: dict[str, Any],
+    direct_domain_weights: dict[str, float],
+    has_nested_component: bool,
+) -> None:
+    if has_nested_component:
+        return
+    matches = set(direct_domain_weights) == set(domains) and all(
+        math.isclose(direct_domain_weights[domain], float(weight), abs_tol=1e-9)
+        for domain, weight in domains.items()
+    )
+    if not matches:
+        raise CatalogBuildError(f"{path}.domains do not match direct component weights")
+
+
+_INDEX_FIELDS = {
+    "id",
+    "display_name",
+    "description",
+    "methodology",
+    "aggregation",
+    "scale",
+    "missing",
+    "domains",
+    "components",
+}
+_NORMALIZATION_FIELDS = {"type", "min", "max", "k", "x0", "points", "values"}
+_NORMALIZATION_TYPES = {
+    "identity",
+    "one_minus",
+    "linear_clamp",
+    "piecewise_linear",
+    "logistic",
+    "lookup",
+}
+
+
+def _validate_index_header(
+    item: dict[str, Any], path: str
+) -> tuple[str, dict[str, Any]]:
+    _reject_unknown(item, _INDEX_FIELDS, path)
+    identity = _nonempty_string(item.get("id"), f"{path}.id")
+    if not VERSIONED_ID.fullmatch(identity):
+        raise CatalogBuildError(
+            f"{path}.id must be a namespaced semantic-version identity"
+        )
+    if item.get("aggregation") != "weighted_mean":
+        raise CatalogBuildError(f"{path}.aggregation is unsupported")
+    if item.get("methodology") is not None:
+        _validate_https_url(item["methodology"], f"{path}.methodology")
+    _validate_index_scale(item, path)
+    _validate_index_missing_policy(item, path)
+    return identity, _validate_index_domains(item, path)
+
+
+def _validate_index_scale(item: dict[str, Any], path: str) -> None:
+    scale = _sequence(item.get("scale"), f"{path}.scale")
+    if (
+        len(scale) != PAIR_LENGTH
+        or not all(_is_finite_number(value) for value in scale)
+        or scale[0] >= scale[1]
+    ):
+        raise CatalogBuildError(f"{path}.scale is invalid")
+
+
+def _validate_index_missing_policy(item: dict[str, Any], path: str) -> None:
+    missing = _mapping(item.get("missing"), f"{path}.missing")
+    _reject_unknown(missing, {"policy", "minimum"}, f"{path}.missing")
+    policy = missing.get("policy")
+    if policy not in {"require_all", "require_coverage", "reported_only"}:
+        raise CatalogBuildError(f"{path}.missing.policy is unsupported")
+    if policy == "require_coverage" and not _is_finite_number(missing.get("minimum")):
+        raise CatalogBuildError(f"{path}.missing.minimum is required")
+
+
+def _validate_index_domains(item: dict[str, Any], path: str) -> dict[str, Any]:
+    domains = _mapping(item.get("domains"), f"{path}.domains")
+    if not domains or any(
+        not _is_finite_number(weight) or weight <= 0 for weight in domains.values()
+    ):
+        raise CatalogBuildError(f"{path}.domains must contain positive finite weights")
+    total = sum(float(weight) for weight in domains.values())
+    if not math.isclose(total, 1.0, abs_tol=1e-9):
+        raise CatalogBuildError(f"{path}.domain weights must sum to 1, got {total}")
+    return domains
+
+
+def _validate_index_components(
+    item: dict[str, Any],
+    path: str,
+    identity: str,
+    index_ids: set[Any],
+    metrics: dict[str, dict[str, Any]],
+    edges: dict[str, set[str]],
+) -> tuple[float, dict[str, float], bool]:
+    components = _sequence(item.get("components"), f"{path}.components")
+    if not components:
+        raise CatalogBuildError(f"{path}.components cannot be empty")
+    total = 0.0
+    direct_domains: dict[str, float] = defaultdict(float)
+    nested = False
+    for component_index, raw_component in enumerate(components):
+        component_path = f"{path}.components[{component_index}]"
+        weight, domain, dependency = _validate_index_component(
+            raw_component, component_path, index_ids, metrics
+        )
+        total += weight
+        if domain is not None:
+            direct_domains[domain] += weight
+        if dependency is not None:
+            nested = True
+            edges[identity].add(dependency)
+    return total, direct_domains, nested
+
+
+def _validate_index_component(
+    raw_component: Any,
+    path: str,
+    index_ids: set[Any],
+    metrics: dict[str, dict[str, Any]],
+) -> tuple[float, str | None, str | None]:
+    component = _mapping(raw_component, path)
+    _reject_unknown(
+        component,
+        {
+            "benchmark",
+            "metric",
+            "benchmark_profile",
+            "benchmark_profiles",
+            "index",
+            "weight",
+            "normalization",
+        },
+        path,
+    )
+    direct = any(
+        key in component
+        for key in ("benchmark", "metric", "benchmark_profile", "benchmark_profiles")
+    )
+    dependency_declared = "index" in component
+    if direct == dependency_declared:
+        raise CatalogBuildError(f"{path} must reference exactly one metric or index")
+    dependency = (
+        None if direct else _nonempty_string(component.get("index"), f"{path}.index")
+    )
+    metric_id: str | None = None
+    if direct:
+        benchmark = _nonempty_string(component.get("benchmark"), f"{path}.benchmark")
+        metric = _nonempty_string(component.get("metric"), f"{path}.metric")
+        profiles = _validate_component_profiles(component, path)
+        metric_id = f"{benchmark}#{metric}"
+    if metric_id and metric_id not in metrics:
+        raise CatalogBuildError(f"{path} references an unknown metric")
+    if metric_id:
+        unknown_profiles = set(profiles).difference(metrics[metric_id]["profiles"])
+        if unknown_profiles:
+            raise CatalogBuildError(
+                f"{path}.benchmark_profiles contains profiles not declared by its "
+                f"benchmark: {', '.join(sorted(unknown_profiles))}"
+            )
+    if dependency and dependency not in index_ids:
+        raise CatalogBuildError(f"{path} references an unknown index")
+    weight = component.get("weight")
+    if not _is_finite_number(weight) or weight <= 0:
+        raise CatalogBuildError(f"{path}.weight must be positive")
+    normalization_path = f"{path}.normalization"
+    normalization = _mapping(
+        component.get("normalization", {"type": "identity"}), normalization_path
+    )
+    _validate_normalization(normalization, normalization_path)
+    domain = str(metrics[metric_id]["domain"]) if metric_id else None
+    return float(weight), domain, str(dependency) if dependency else None
+
+
+def _validate_component_profiles(component: dict[str, Any], path: str) -> list[str]:
+    singular = component.get("benchmark_profile")
+    plural = component.get("benchmark_profiles")
+    if (singular is None) == (plural is None):
+        raise CatalogBuildError(
+            f"{path} must declare exactly one of benchmark_profile or benchmark_profiles"
+        )
+    if singular is not None:
+        return [_nonempty_string(singular, f"{path}.benchmark_profile")]
+    profiles = [
+        _nonempty_string(value, f"{path}.benchmark_profiles[{index}]")
+        for index, value in enumerate(_sequence(plural, f"{path}.benchmark_profiles"))
+    ]
+    if not profiles or len(profiles) != len(set(profiles)):
+        raise CatalogBuildError(
+            f"{path}.benchmark_profiles must contain unique profile identifiers"
+        )
+    return profiles
+
+
+def _component_profiles(component: dict[str, Any]) -> list[str]:
+    if component.get("benchmark_profiles") is not None:
+        return [str(profile) for profile in component["benchmark_profiles"]]
+    return [str(component["benchmark_profile"])]
+
+
+def _validate_normalization(normalization: dict[str, Any], path: str) -> None:
+    _reject_unknown(normalization, _NORMALIZATION_FIELDS, path)
+    kind = normalization.get("type")
+    if kind not in _NORMALIZATION_TYPES:
+        raise CatalogBuildError(f"{path}.type is unsupported")
+    if kind == "linear_clamp":
+        _validate_linear_clamp(normalization, path)
+    elif kind == "piecewise_linear":
+        _validate_piecewise_points(normalization.get("points"), path)
+    elif kind == "logistic":
+        _validate_logistic(normalization, path)
+    elif kind == "lookup":
+        _validate_lookup(normalization.get("values"), path)
+
+
+def _validate_linear_clamp(normalization: dict[str, Any], path: str) -> None:
+    minimum, maximum = normalization.get("min"), normalization.get("max")
+    if (
+        not _is_finite_number(minimum)
+        or not _is_finite_number(maximum)
+        or minimum >= maximum
+    ):
+        raise CatalogBuildError(f"{path} bounds are invalid")
+
+
+def _validate_piecewise_points(points: Any, path: str) -> None:
+    if not isinstance(points, list) or len(points) < MIN_PIECEWISE_POINTS:
+        raise CatalogBuildError(f"{path}.points requires at least two entries")
+    previous_input: float | None = None
+    for point_index, point in enumerate(points):
+        point_path = f"{path}.points[{point_index}]"
+        if not isinstance(point, dict) or set(point) != {"input", "output"}:
+            raise CatalogBuildError(f"{point_path} is invalid")
+        point_input, point_output = point["input"], point["output"]
+        if not _is_finite_number(point_input) or not _is_finite_number(point_output):
+            raise CatalogBuildError(f"{point_path} must be finite")
+        if not 0 <= point_output <= 1:
+            raise CatalogBuildError(
+                f"{path}.points must have increasing inputs and outputs in [0, 1]"
+            )
+        if previous_input is not None and point_input <= previous_input:
+            raise CatalogBuildError(
+                f"{path}.points must have increasing inputs and outputs in [0, 1]"
+            )
+        previous_input = float(point_input)
+
+
+def _validate_logistic(normalization: dict[str, Any], path: str) -> None:
+    k, x0 = normalization.get("k"), normalization.get("x0")
+    if not _is_finite_number(k) or not _is_finite_number(x0) or k == 0:
+        raise CatalogBuildError(f"{path} requires finite non-zero k and finite x0")
+
+
+def _validate_lookup(values: Any, path: str) -> None:
+    if not isinstance(values, dict) or not values:
+        raise CatalogBuildError(f"{path}.values is invalid")
+    if any(
+        not isinstance(key, str)
+        or not key
+        or not _is_finite_number(value)
+        or not 0 <= value <= 1
+        for key, value in values.items()
+    ):
+        raise CatalogBuildError(f"{path}.values is invalid")
+
+
+def _validate_index_cycles(index_ids: set[str], edges: dict[str, set[str]]) -> None:
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(identity: str) -> None:
+        if identity in visiting:
+            raise CatalogBuildError(f"index dependency cycle includes {identity}")
+        if identity in visited:
+            return
+        visiting.add(identity)
+        for dependency in edges.get(identity, set()):
+            visit(dependency)
+        visiting.remove(identity)
+        visited.add(identity)
+
+    for identity in sorted(index_ids):
+        visit(identity)
+
+
+def normalize_component(value: float, normalization: dict[str, Any]) -> float:
+    kind = normalization.get("type", "identity")
+    if kind == "identity":
+        return min(1.0, max(0.0, value))
+    if kind == "one_minus":
+        return min(1.0, max(0.0, 1.0 - value))
+    if kind == "linear_clamp":
+        minimum = float(normalization["min"])
+        maximum = float(normalization["max"])
+        return min(1.0, max(0.0, (value - minimum) / (maximum - minimum)))
+    if kind == "piecewise_linear":
+        return _piecewise_normalization(value, normalization["points"])
+    if kind == "logistic":
+        return 1.0 / (
+            1.0
+            + math.exp(
+                -float(normalization["k"]) * (value - float(normalization["x0"]))
+            )
+        )
+    if kind == "lookup":
+        return _lookup_normalization(value, normalization["values"])
+    raise CatalogBuildError(f"unsupported normalization: {kind}")
+
+
+def _piecewise_normalization(value: float, points: list[dict[str, Any]]) -> float:
+    if value <= points[0]["input"]:
+        return float(points[0]["output"])
+    for left, right in pairwise(points):
+        if value <= right["input"]:
+            ratio = (value - left["input"]) / (right["input"] - left["input"])
+            return float(left["output"] + ratio * (right["output"] - left["output"]))
+    return float(points[-1]["output"])
+
+
+def _lookup_normalization(value: float, values: dict[str, Any]) -> float:
+    key = format(value, "g")
+    try:
+        return float(values[key])
+    except KeyError as error:
+        raise CatalogBuildError(
+            f"lookup normalization has no entry for {key}"
+        ) from error
+
+
+@dataclass
+class _IndexAccumulation:
+    weighted: float = 0.0
+    present_weight: float = 0.0
+    components: list[dict[str, Any]] = field(default_factory=list)
+    provenance: set[str] = field(default_factory=set)
+    domain_weighted: dict[str, float] = field(
+        default_factory=lambda: defaultdict(float)
+    )
+    domain_coverage: dict[str, float] = field(
+        default_factory=lambda: defaultdict(float)
+    )
+
+
+class _IndexEvaluator:
+    def __init__(
+        self,
+        model: dict[str, Any],
+        reasoning_effort: str,
+        measurements: dict[tuple[str, str, str], tuple[float, dict[str, Any]]],
+        definitions: dict[str, dict[str, Any]],
+        benchmarks: dict[str, dict[str, Any]],
+    ) -> None:
+        self.model = model
+        self.reasoning_effort = reasoning_effort
+        self.measurements = measurements
+        self.definitions = definitions
+        self.benchmarks = benchmarks
+        self.memo: dict[str, dict[str, Any]] = {}
+
+    def compute(self, index_id: str, visiting: set[str]) -> dict[str, Any]:
+        if index_id in self.memo:
+            return self.memo[index_id]
+        if index_id in visiting:
+            raise CatalogBuildError(f"index dependency cycle includes {index_id}")
+        visiting.add(index_id)
+        definition = self.definitions[index_id]
+        accumulation = self._accumulate(definition, visiting)
+        visiting.remove(index_id)
+        return self._store(index_id, self._result(index_id, definition, accumulation))
+
+    def _accumulate(
+        self, definition: dict[str, Any], visiting: set[str]
+    ) -> _IndexAccumulation:
+        accumulation = _IndexAccumulation()
+        for component in definition["components"]:
+            (
+                value,
+                domain,
+                provenance,
+                evaluation_id,
+                selected_profile,
+            ) = self._component_value(component, visiting)
+            accumulation.provenance.update(provenance)
+            component_result = _missing_component_result(component)
+            if value is None:
+                accumulation.components.append(component_result)
+                continue
+            if evaluation_id is not None:
+                component_result["evaluation"] = evaluation_id
+            if selected_profile is not None:
+                component_result["benchmark_profile"] = selected_profile
+            normalized = normalize_component(
+                value, component.get("normalization", {"type": "identity"})
+            )
+            _accumulate_component(
+                accumulation, component, component_result, value, normalized, domain
+            )
+        return accumulation
+
+    def _component_value(
+        self, component: dict[str, Any], visiting: set[str]
+    ) -> tuple[float | None, str | None, set[str], str | None, str | None]:
+        metric_id = component.get("metric")
+        if metric_id:
+            benchmark = str(component["benchmark"])
+            for benchmark_profile in _component_profiles(component):
+                measurement = self.measurements.get(
+                    (benchmark, benchmark_profile, str(metric_id))
+                )
+                if measurement is None:
+                    continue
+                value, record = measurement
+                return (
+                    value,
+                    str(self.benchmarks[benchmark]["domain"]),
+                    {str(record["id"])},
+                    str(record["id"]),
+                    benchmark_profile,
+                )
+            return None, None, set(), None, None
+        dependency_id = str(component["index"])
+        dependency = self.compute(dependency_id, visiting)
+        provenance = set(dependency["provenance"])
+        if dependency["status"] != "available" or dependency["score"] is None:
+            return None, None, provenance, None, None
+        lower, upper = self.definitions[dependency_id]["scale"]
+        value = (dependency["score"] - lower) / (upper - lower)
+        return float(value), None, provenance, None, None
+
+    def _result(
+        self,
+        index_id: str,
+        definition: dict[str, Any],
+        accumulation: _IndexAccumulation,
+    ) -> dict[str, Any]:
+        available = _index_is_available(definition, accumulation.present_weight)
+        status = "available"
+        if not available:
+            status = "partial" if accumulation.present_weight > 0 else "missing"
+        result: dict[str, Any] = {
+            "model": self.model["id"],
+            "reasoning_effort": self.reasoning_effort,
+            "index": index_id,
+            "status": status,
+            "score": _index_score(definition, accumulation, available),
+            "coverage": accumulation.present_weight,
+            "components": accumulation.components,
+            "provenance": sorted(accumulation.provenance),
+        }
+        domains = _index_domain_scores(definition, accumulation, available)
+        if domains:
+            result["domains"] = domains
+        return result
+
+    def _store(self, index_id: str, result: dict[str, Any]) -> dict[str, Any]:
+        self.memo[index_id] = result
+        return result
+
+
+def _accumulate_component(
+    accumulation: _IndexAccumulation,
+    component: dict[str, Any],
+    result: dict[str, Any],
+    value: float,
+    normalized: float,
+    domain: str | None,
+) -> None:
+    weight = float(component["weight"])
+    accumulation.weighted += weight * normalized
+    accumulation.present_weight += weight
+    if domain is not None:
+        accumulation.domain_weighted[domain] += weight * normalized
+        accumulation.domain_coverage[domain] += weight
+    result.update(
+        {
+            "weight": weight,
+            "status": "available",
+            "value": value,
+            "normalized": normalized,
+        }
+    )
+    accumulation.components.append(result)
+
+
+def _missing_component_result(component: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "weight": component["weight"],
+        "status": "missing",
+        "value": None,
+        "normalized": None,
+    }
+    if component.get("metric"):
+        result["benchmark"] = component["benchmark"]
+        result["metric"] = component["metric"]
+        if component.get("benchmark_profiles") is not None:
+            result["benchmark_profiles"] = list(component["benchmark_profiles"])
+        else:
+            result["benchmark_profile"] = component["benchmark_profile"]
+    if component.get("index"):
+        result["index"] = component["index"]
+    return result
+
+
+def _index_is_available(definition: dict[str, Any], present_weight: float) -> bool:
+    if present_weight <= 0:
+        return False
+    policy = definition["missing"]["policy"]
+    if policy == "require_all":
+        return math.isclose(present_weight, 1.0, abs_tol=1e-9)
+    if policy == "require_coverage":
+        return present_weight >= float(definition["missing"]["minimum"])
+    return policy == "reported_only"
+
+
+def _index_score(
+    definition: dict[str, Any], accumulation: _IndexAccumulation, available: bool
+) -> float | None:
+    if not available:
+        return None
+    policy = definition["missing"]["policy"]
+    normalized = accumulation.weighted
+    if policy != "require_all":
+        normalized /= accumulation.present_weight
+    lower, upper = definition["scale"]
+    return float(lower + normalized * (upper - lower))
+
+
+def _index_domain_scores(
+    definition: dict[str, Any], accumulation: _IndexAccumulation, available: bool
+) -> dict[str, float]:
+    if not available:
+        return {}
+    lower, upper = definition["scale"]
+    return {
+        domain: float(
+            lower + (accumulation.domain_weighted[domain] / coverage) * (upper - lower)
+        )
+        for domain, coverage in sorted(accumulation.domain_coverage.items())
+    }
+
+
+def _available_evaluations(
+    evaluations: list[dict[str, Any]],
+) -> dict[
+    str,
+    dict[str, dict[tuple[str, str, str], tuple[float, dict[str, Any]]]],
+]:
+    records_by_model: dict[
+        str,
+        dict[str, dict[tuple[str, str, str], tuple[float, dict[str, Any]]]],
+    ] = defaultdict(lambda: defaultdict(dict))
+    for record in evaluations:
+        if record.get("status") != "available":
+            continue
+        model = str(record["model"])
+        effort = str(record["reasoning_effort"])
+        benchmark = str(record["benchmark"])
+        profile = str(record["benchmark_profile"])
+        for metric, value in record.get("metrics", {}).items():
+            records_by_model[model][effort][(benchmark, profile, metric)] = (
+                float(value),
+                record,
+            )
+    return records_by_model
+
+
+def _model_reasoning_efforts(
+    model: dict[str, Any],
+    reasoning_families: dict[str, dict[str, Any]],
+    measurements: dict[str, Any],
+) -> list[str]:
+    family_id = model.get("reasoning_family")
+    if family_id is None:
+        efforts = ["default"]
+    else:
+        family = reasoning_families[str(family_id)]
+        efforts = list(family.get("levels") or family.get("modes") or [])
+    for effort in sorted(measurements):
+        if effort not in efforts:
+            efforts.append(effort)
+    return efforts
+
+
+def index_leaf_components(
+    indices: list[dict[str, Any]], index_id: str
+) -> list[dict[str, Any]]:
+    """Return benchmark leaves in deterministic dependency order."""
+
+    definitions = {str(definition["id"]): definition for definition in indices}
+
+    def visit(identity: str, visiting: set[str]) -> list[dict[str, Any]]:
+        if identity in visiting:
+            raise CatalogBuildError(f"index dependency cycle includes {identity}")
+        definition = definitions.get(identity)
+        if definition is None:
+            raise CatalogBuildError(f"unknown index dependency: {identity}")
+        visiting.add(identity)
+        leaves: list[dict[str, Any]] = []
+        for component in definition["components"]:
+            if component.get("benchmark"):
+                leaves.append(component)
+            else:
+                leaves.extend(visit(str(component["index"]), visiting))
+        visiting.remove(identity)
+        return leaves
+
+    return visit(index_id, set())
+
+
+def index_results(resources: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    measurements = _available_evaluations(resources["evaluations"])
+    definitions = {definition["id"]: definition for definition in resources["indices"]}
+    benchmarks = {
+        definition["id"]: definition for definition in resources["benchmarks"]
+    }
+    reasoning_families = {
+        definition["id"]: definition for definition in resources["reasoning_families"]
+    }
+    results: list[dict[str, Any]] = []
+    for model in resources["models"]:
+        model_measurements = measurements.get(model["id"], {})
+        for effort in _model_reasoning_efforts(
+            model, reasoning_families, model_measurements
+        ):
+            evaluator = _IndexEvaluator(
+                model,
+                effort,
+                model_measurements.get(effort, {}),
+                definitions,
+                benchmarks,
+            )
+            results.extend(
+                evaluator.compute(definition["id"], set())
+                for definition in resources["indices"]
+            )
+    return results
+
+
+def evaluation_coverage(
+    resources: dict[str, list[dict[str, Any]]],
+    default_index: str,
+    results: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Materialize required benchmark slots without inventing missing scores."""
+
+    materialized = results if results is not None else index_results(resources)
+    by_identity = {
+        (result["model"], result["reasoning_effort"], result["index"]): result
+        for result in materialized
+    }
+
+    def leaf_components(
+        result: dict[str, Any], visiting: set[str]
+    ) -> list[dict[str, Any]]:
+        index_id = str(result["index"])
+        if index_id in visiting:
+            raise CatalogBuildError(f"index dependency cycle includes {index_id}")
+        visiting.add(index_id)
+        leaves: list[dict[str, Any]] = []
+        for component in result["components"]:
+            if "benchmark" in component:
+                leaves.append(component)
+                continue
+            dependency_id = str(component["index"])
+            dependency_key = (
+                result["model"],
+                result["reasoning_effort"],
+                dependency_id,
+            )
+            dependency = by_identity.get(dependency_key)
+            if dependency is None:
+                raise CatalogBuildError(
+                    "missing materialized index dependency: "
+                    f"{result['model']}#{result['reasoning_effort']}#{dependency_id}"
+                )
+            leaves.extend(leaf_components(dependency, visiting))
+        visiting.remove(index_id)
+        return leaves
+
+    rows: list[dict[str, Any]] = []
+    for result in materialized:
+        if result["index"] != default_index:
+            continue
+        for component in leaf_components(result, set()):
+            row: dict[str, Any] = {
+                "model": result["model"],
+                "reasoning_effort": result["reasoning_effort"],
+                "benchmark": component["benchmark"],
+                "benchmark_profiles": list(
+                    component.get("benchmark_profiles")
+                    or [component["benchmark_profile"]]
+                ),
+                "metric": component["metric"],
+                "status": component["status"],
+            }
+            if component.get("benchmark_profile") is not None:
+                row["benchmark_profile"] = component["benchmark_profile"]
+            if component.get("value") is not None:
+                row["value"] = component["value"]
+            if component.get("evaluation"):
+                row["evaluation"] = component["evaluation"]
+            rows.append(row)
+    return rows

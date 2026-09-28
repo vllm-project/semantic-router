@@ -103,17 +103,6 @@ export default function ConfigPageConnectModelAdvanced({
                 placeholder="e.g. 131072"
               />
             </Field>
-            <Field label="Quality score" hint="0–1">
-              <input
-                type="number"
-                min="0"
-                max="1"
-                step="0.01"
-                value={value.qualityScore}
-                onChange={(event) => update('qualityScore', event.target.value)}
-                placeholder="e.g. 0.9"
-              />
-            </Field>
             <Field label="Capabilities" hint="Comma separated" fullWidth>
               <input
                 value={value.capabilities}

@@ -16,6 +16,8 @@ import (
 
 const defaultVectorStoreSearchMaxResponseBytes int64 = 4 * 1024 * 1024
 
+const defaultVectorStoreTimeout = 60 * time.Second
+
 // VectorStoreClient handles interactions with OpenAI Vector Store API
 type VectorStoreClient struct {
 	httpClient             *http.Client
@@ -31,12 +33,17 @@ func NewVectorStoreClient(baseURL string, apiKey string) *VectorStoreClient {
 
 // NewVectorStoreClientWithSearchResponseLimit creates a client with a search response ceiling.
 func NewVectorStoreClientWithSearchResponseLimit(baseURL string, apiKey string, maxResponseBytes int64) *VectorStoreClient {
+	return NewVectorStoreClientWithTimeout(baseURL, apiKey, maxResponseBytes, defaultVectorStoreTimeout)
+}
+
+// NewVectorStoreClientWithTimeout creates a client with a search response ceiling and timeout.
+func NewVectorStoreClientWithTimeout(baseURL string, apiKey string, maxResponseBytes int64, timeout time.Duration) *VectorStoreClient {
 	if maxResponseBytes == 0 {
 		maxResponseBytes = defaultVectorStoreSearchMaxResponseBytes
 	}
 	return &VectorStoreClient{
 		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
+			Timeout: timeout,
 			Transport: &http.Transport{
 				MaxIdleConns:        100,
 				MaxIdleConnsPerHost: 10,

@@ -116,7 +116,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
       <span className={styles.divider} />
 
       {wasmError ? (
-        <span className={styles.statusError}>
+        <span className={styles.statusError} title={wasmError}>
           <span className={styles.dot} /> WASM Error
         </span>
       ) : wasmReady ? (

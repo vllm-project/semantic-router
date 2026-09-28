@@ -22,9 +22,10 @@ This demonstrates inconsistent classifier usage between components.
 """
 
 import json
-import sys
+import time
 import unittest
 import uuid
+from http import HTTPStatus
 
 import requests
 
@@ -34,9 +35,11 @@ from test_base import SemanticRouterTestBase
 # Constants
 CLASSIFICATION_API_URL = "http://localhost:8080"
 ENVOY_URL = "http://localhost:8801"
-BATCH_ENDPOINT = "/api/v1/classify/batch"
-SECURITY_ENDPOINT = "/api/v1/classify/security"
+BATCH_ENDPOINT = "/api/v1/diagnostics/classify/batch"
+SECURITY_ENDPOINT = "/api/v1/diagnostics/classify/security"
 OPENAI_ENDPOINT = "/v1/chat/completions"
+MIN_DETECTION_RATE_PERCENT = 50
+RESPONSE_PREVIEW_LENGTH = 100
 
 # Base jailbreak test cases - will be made unique each run to avoid caching
 JAILBREAK_TEST_TEMPLATES = [
@@ -97,8 +100,6 @@ SAFE_TEST_TEMPLATES = [
 
 def generate_unique_test_cases():
     """Generate unique test cases with timestamp to avoid caching."""
-    import time
-
     timestamp = str(int(time.time() * 1000))[-8:]  # Last 8 digits of milliseconds
     unique_id = str(uuid.uuid4())[:8]
     cache_buster = f"{timestamp}-{unique_id}"
@@ -143,7 +144,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
             health_response = requests.get(
                 f"{CLASSIFICATION_API_URL}/health", timeout=5
             )
-            if health_response.status_code != 200:
+            if health_response.status_code != HTTPStatus.OK:
                 self.skipTest(
                     f"Classification API health check failed: {health_response.status_code}"
                 )
@@ -164,7 +165,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                 json=test_payload,
                 timeout=60,  # Increased timeout for setup
             )
-            if envoy_response.status_code >= 500:
+            if envoy_response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
                 self.skipTest(
                     f"Envoy/ExtProc health check failed: {envoy_response.status_code}"
                 )
@@ -181,7 +182,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
         """
         TEST 1: Batch API Jailbreak Detection (ModernBERT Classifier Path)
 
-        WHAT IS TESTED: /api/v1/classify/batch with task_type="security"
+        WHAT IS TESTED: /api/v1/diagnostics/classify/batch with task_type="security"
         CLASSIFIER PATH: Unified classifier with ModernBERT fallback
         EXPECTED RESULT: ✅ WORKING - Should detect jailbreak with ~99% confidence
 
@@ -251,7 +252,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                     f"classified as 'safe' instead of detecting threat",
                 )
                 self.fail(
-                    f"Security detection failed: jailbreak content classified as 'safe'"
+                    "Security detection failed: jailbreak content classified as 'safe'"
                 )
             elif is_jailbreak_detected:
                 self.print_test_result(
@@ -271,7 +272,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
         """
         TEST 2: Direct Security API Endpoint
 
-        WHAT IS TESTED: /api/v1/classify/security endpoint (direct security classification)
+        WHAT IS TESTED: /api/v1/diagnostics/classify/security endpoint (direct security classification)
         CLASSIFIER PATH: Different implementation from batch API
         EXPECTED RESULT: ⚠️ MAY VARY - May show implementation differences
 
@@ -303,7 +304,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
             timeout=10,
         )
 
-        if response.status_code == 200:
+        if response.status_code == HTTPStatus.OK:
             response_json = response.json()
             # Different response format than batch endpoint
             is_jailbreak = response_json.get("is_jailbreak", False)
@@ -314,7 +315,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
 
             # Detection based on is_jailbreak field
             is_jailbreak_detected = is_jailbreak
-            threat_category = (
+            (
                 detection_types[0]
                 if detection_types
                 else ("jailbreak" if is_jailbreak else "safe")
@@ -352,10 +353,10 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                 )
                 # Don't fail the test - document the discrepancy instead
                 print(
-                    f"⚠️  NOTE: Batch endpoint correctly detects this as 'jailbreak' but direct endpoint doesn't"
+                    "⚠️  NOTE: Batch endpoint correctly detects this as 'jailbreak' but direct endpoint doesn't"
                 )
                 print(
-                    f"⚠️  This suggests different implementations between batch and direct security endpoints"
+                    "⚠️  This suggests different implementations between batch and direct security endpoints"
                 )
         else:
             self.print_response_info(
@@ -415,7 +416,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
         )
 
         # Check if the request went through (indicating security bypass)
-        request_allowed = response.status_code == 200
+        request_allowed = response.status_code == HTTPStatus.OK
 
         response_content = ""
         if request_allowed:
@@ -427,7 +428,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                         .get("message", {})
                         .get("content", "")
                     )
-            except:
+            except (AttributeError, IndexError, KeyError, TypeError, ValueError):
                 response_content = "Could not parse response"
 
         # Check if response contains harmful instructions
@@ -457,7 +458,9 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                     else "✅ NO"
                 ),
                 "Response Preview": (
-                    response_content[:100] + "..." if response_content else "No content"
+                    response_content[:RESPONSE_PREVIEW_LENGTH] + "..."
+                    if response_content
+                    else "No content"
                 ),
             },
         )
@@ -526,7 +529,9 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
 
         print(f"\n📊 Detailed Analysis of {len(results)} Classifications:")
 
-        for i, (result, test_case) in enumerate(zip(results, all_test_cases)):
+        for i, (result, test_case) in enumerate(
+            zip(results, all_test_cases, strict=False)
+        ):
             actual_category = result.get("category", "unknown")
             confidence = result.get("confidence", 0.0)
 
@@ -581,7 +586,9 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
 
         # Test should fail if there are significant issues
         has_major_issues = (
-            detection_rate < 50 or len(routing_bugs) > 0 or safe_misclassified_count > 1
+            detection_rate < MIN_DETECTION_RATE_PERCENT
+            or len(routing_bugs) > 0
+            or safe_misclassified_count > 1
         )
 
         self.print_test_result(
@@ -660,7 +667,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
         data_lines = [
             line
             for line in lines
-            if line.startswith("data: ") and not line == "data: [DONE]"
+            if line.startswith("data: ") and line != "data: [DONE]"
         ]
         self.assertGreater(len(data_lines), 0, "No SSE data lines found")
 
@@ -700,7 +707,9 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                     "✅ YES" if "data: [DONE]" in response_text else "❌ NO"
                 ),
                 "Message Preview": (
-                    content[:100] + "..." if len(content) > 100 else content
+                    content[:RESPONSE_PREVIEW_LENGTH] + "..."
+                    if len(content) > RESPONSE_PREVIEW_LENGTH
+                    else content
                 ),
             },
         )
@@ -789,7 +798,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
         streaming_lines = [
             line
             for line in streaming_response.text.split("\n")
-            if line.startswith("data: ") and not line == "data: [DONE]"
+            if line.startswith("data: ") and line != "data: [DONE]"
         ]
         streaming_json = json.loads(streaming_lines[0][6:])
         streaming_choice = streaming_json["choices"][0]

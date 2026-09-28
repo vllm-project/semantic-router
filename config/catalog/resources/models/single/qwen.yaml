@@ -1,0 +1,477 @@
+- id: qwen/qwen3.8-max
+  display_name: Qwen3.8 Max
+  description: Alibaba Cloud current frontier Qwen model for multimodal reasoning and agents.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+  family: qwen3.8
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  reasoning_family: qwen3.8
+  verification:
+    authority: Alibaba Cloud
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+  tags:
+  - proprietary
+  - multimodal
+  - frontier
+  - agentic
+  released_at: '2026-08-10'
+- id: qwen/qwen3.8-27b
+  display_name: Qwen3.8 27B
+  description: Dense open-weight Qwen3.8 multimodal model for reasoning and agentic work.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3.8-27B
+    license: Apache-2.0
+  family: qwen3.8
+  parameter_size: 27B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  reasoning_family: qwen3.8
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Qwen/Qwen3.8-27B
+  tags:
+  - open_weights
+  - multimodal
+  - dense
+  - agentic
+  released_at: '2026-08-19'
+- id: qwen/qwen3.8-flash-next
+  display_name: Qwen3.8 Flash-Next
+  description: Efficient open-weight multimodal Qwen preview with six billion active language parameters.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    license: Qwen-Community-1.0
+  family: qwen3.8
+  parameter_size: 180B (6B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  reasoning_family: qwen3.8
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - efficient
+  - agentic
+  released_at: '2026-08-26'
+- id: qwen/qwen3.8-2.4t-a95b
+  display_name: Qwen3.8 2.4T A95B
+  description: Qwen's largest open-weight text model for coding, research, and long-horizon agents.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3.8-2.4T-A95B
+    license: Qwen3.8-Max
+  family: qwen3.8
+  parameter_size: 2.4T (95B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+    max_output_tokens: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  reasoning_family: qwen3.8-always-on
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Qwen/Qwen3.8-2.4T-A95B
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - frontier
+  - agentic
+  released_at: '2026-08-13'
+- id: qwen/qwen3.7-max
+  display_name: Qwen3.7 Max
+  description: Alibaba Cloud Qwen3.7 frontier model for complex multimodal agents.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+  family: qwen3.7
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  reasoning_family: qwen3
+  verification:
+    authority: Alibaba Cloud
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+  tags:
+  - proprietary
+  - multimodal
+  - frontier
+  - agentic
+  released_at: '2026-05-21'
+- id: qwen/qwen3.6-27b
+  display_name: Qwen3.6 27B
+  description: Dense open-weight Qwen multimodal model for reasoning and agents.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3.6-27B
+    license: Apache-2.0
+  family: qwen3.6
+  parameter_size: 27B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  reasoning_family: qwen3
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Qwen/Qwen3.6-27B
+  tags:
+  - open_weights
+  - multimodal
+  - dense
+  released_at: '2026-04-22'
+- id: qwen/qwen3.6-35b-a3b
+  display_name: Qwen3.6 35B A3B
+  description: Efficient open-weight Qwen multimodal MoE model for private serving.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3.6-35B-A3B
+    license: Apache-2.0
+  family: qwen3.6
+  parameter_size: 35B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  reasoning_family: qwen3
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Qwen/Qwen3.6-35B-A3B
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - efficient
+  released_at: '2026-04-16'
+- id: qwen/qwen3.5-397b-a17b
+  display_name: Qwen3.5 397B A17B
+  description: Frontier Qwen3.5 multimodal MoE checkpoint with switchable reasoning.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3.5-397B-A17B
+    license: Apache-2.0
+  family: qwen3.5
+  reasoning_family: qwen3
+  parameter_size: 397B (17B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3.5-397B-A17B
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - moe
+  - frontier
+  released_at: '2026-02-16'
+- id: qwen/qwen3.5-122b-a10b
+  display_name: Qwen3.5 122B A10B
+  description: Efficient Qwen3.5 multimodal MoE checkpoint with switchable reasoning.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3.5-122B-A10B
+    license: Apache-2.0
+  family: qwen3.5
+  reasoning_family: qwen3
+  parameter_size: 122B (10B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3.5-122B-A10B
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - moe
+  - efficient
+  released_at: '2026-02-24'
+- id: qwen/qwen3-235b-a22b-thinking-2507
+  display_name: Qwen3 235B A22B Thinking 2507
+  description: Updated large Qwen3 thinking checkpoint for reasoning and agentic workloads.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507
+    license: Apache-2.0
+  family: qwen3
+  reasoning_family: qwen3-always-on
+  parameter_size: 235B (22B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - agentic
+  released_at: '2025-07-25'
+- id: qwen/qwen3-30b-a3b-thinking-2507
+  display_name: Qwen3 30B A3B Thinking 2507
+  description: Updated compact Qwen3 thinking MoE checkpoint for efficient reasoning.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507
+    license: Apache-2.0
+  family: qwen3
+  reasoning_family: qwen3-always-on
+  parameter_size: 30B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - efficient
+  released_at: '2025-07-29'

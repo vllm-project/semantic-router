@@ -10,9 +10,10 @@ import (
 
 func TestInMemoryExactCacheIsPartitionedAndHonorsTTL(t *testing.T) {
 	cache := NewInMemoryCache(InMemoryCacheOptions{
-		Enabled:    true,
-		TTLSeconds: 60,
-		MaxEntries: 10,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		TTLSeconds:        60,
+		MaxEntries:        10,
 	})
 	defer func() { _ = cache.Close() }()
 
@@ -38,9 +39,10 @@ func TestInMemoryExactCacheIsPartitionedAndHonorsTTL(t *testing.T) {
 // The in-memory backend checks cancellation explicitly because it has no driver.
 func TestInMemoryExactCacheHonorsCancellation(t *testing.T) {
 	cache := NewInMemoryCache(InMemoryCacheOptions{
-		Enabled:    true,
-		TTLSeconds: 60,
-		MaxEntries: 10,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		TTLSeconds:        60,
+		MaxEntries:        10,
 	})
 	defer func() { _ = cache.Close() }()
 

@@ -77,7 +77,6 @@ const GlobalSettingsEditor: React.FC<{
   const tracing = getObj(observability, 'tracing')
   const metrics = getObj(observability, 'metrics')
   const modelSelection = getObj(local, 'model_selection')
-  const reasoningFamilies = getObj(local, 'reasoning_families')
   const looper = getObj(local, 'looper')
   const listeners = getListeners(local, 'listeners')
 
@@ -168,7 +167,6 @@ const GlobalSettingsEditor: React.FC<{
         local={local}
         collapsedSections={collapsedSections}
         modelSelection={modelSelection}
-        reasoningFamilies={reasoningFamilies}
         looper={looper}
         listeners={listeners}
         onToggleSection={toggleCollapse}

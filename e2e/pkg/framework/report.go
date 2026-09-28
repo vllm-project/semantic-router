@@ -25,10 +25,11 @@ type TestReport struct {
 	KindVersion string    `json:"kind_version,omitempty"`
 
 	// Test Results
-	TestResults []TestResult `json:"test_results"`
-	TotalTests  int          `json:"total_tests"`
-	PassedTests int          `json:"passed_tests"`
-	FailedTests int          `json:"failed_tests"`
+	ExpectedCases []string     `json:"expected_cases"`
+	TestResults   []TestResult `json:"test_results"`
+	TotalTests    int          `json:"total_tests"`
+	PassedTests   int          `json:"passed_tests"`
+	FailedTests   int          `json:"failed_tests"`
 
 	// Cluster Information
 	ClusterInfo ClusterInfo `json:"cluster_info"`
@@ -209,7 +210,7 @@ func (rg *ReportGenerator) WriteJSON(filename string) error {
 		return fmt.Errorf("failed to marshal report: %w", err)
 	}
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	if err := os.WriteFile(filename, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write report file: %w", err)
 	}
 
@@ -220,7 +221,7 @@ func (rg *ReportGenerator) WriteJSON(filename string) error {
 func (rg *ReportGenerator) WriteMarkdown(filename string) error {
 	md := rg.generateMarkdown()
 
-	if err := os.WriteFile(filename, []byte(md), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(md), 0o644); err != nil {
 		return fmt.Errorf("failed to write markdown report: %w", err)
 	}
 

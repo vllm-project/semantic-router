@@ -83,7 +83,6 @@ func candleContradiction(_ context.Context, cached, incoming string) (float32, e
 
 func TestPolarityNLIRegression(t *testing.T) {
 	ensureNLIExplainer(t)
-	installVerifier(t, candleContradiction)
 
 	c := NewInMemoryCache(InMemoryCacheOptions{
 		SimilarityThreshold: polarityTestThreshold,
@@ -92,6 +91,7 @@ func TestPolarityNLIRegression(t *testing.T) {
 		EvictionPolicy:      FIFOEvictionPolicyType,
 		PolarityGuard:       PolarityGuardOptions{UseNLI: true, ContradictionThreshold: 0.5},
 	})
+	installVerifier(t, c, candleContradiction)
 	t.Cleanup(func() { _ = c.Close() })
 
 	lookup := func(cached, incoming string) (LookupResult, float32) {
@@ -103,8 +103,15 @@ func TestPolarityNLIRegression(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NLI classification failed for %q / %q: %v", cached, incoming, err)
 		}
-		result, err := c.finishFindSimilarSearch(context.Background(), time.Now(), entry.Model, incoming,
-			polarityTestThreshold, 0, entry, 1.0, 1, 0)
+		result, err := c.finishFindSimilarSearch(
+			context.Background(), time.Now(), entry.Model, incoming, polarityTestThreshold,
+			cacheSearchResult{
+				bestIndex:      0,
+				bestEntry:      entry,
+				bestSimilarity: 1.0,
+				entriesChecked: 1,
+			},
+		)
 		if err != nil {
 			t.Fatalf("lookup failed: %v", err)
 		}

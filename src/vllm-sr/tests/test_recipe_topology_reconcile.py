@@ -15,6 +15,7 @@ from cli.storage_secrets import (
 from recipe_topology_test_support import (
     _REDIS_NAMED_MOUNT,
     _STORAGE_CASES,
+    REQUIRES_LINUX_MEMFD,
     _remove_transition,
     _repair_transition,
     _storage_snapshot,
@@ -311,6 +312,7 @@ def test_repair_apply_preserves_stopped_sidecar_before_snapshot_clone(
 
 
 @pytest.mark.parametrize("service,mount,port", _STORAGE_CASES)
+@REQUIRES_LINUX_MEMFD
 def test_repair_apply_clones_exact_storage_data_and_runtime_contract(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -390,6 +392,7 @@ def test_repair_apply_clones_exact_storage_data_and_runtime_contract(
 
 
 @pytest.mark.parametrize("service", ["router", "envoy"])
+@REQUIRES_LINUX_MEMFD
 def test_runtime_replacement_pins_immutable_image_id_when_tag_drifts(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, service: str
 ):
@@ -437,6 +440,7 @@ def test_runtime_replacement_pins_immutable_image_id_when_tag_drifts(
     assert not list(tmp_path.iterdir())
 
 
+@REQUIRES_LINUX_MEMFD
 def test_router_replacement_rewrites_and_verifies_management_publication(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
@@ -709,6 +713,7 @@ def test_repair_rejects_container_network_namespace(monkeypatch, tmp_path: Path)
         topology._repair_storage(tmp_path / "topology.json", transition)
 
 
+@REQUIRES_LINUX_MEMFD
 def test_clone_rejects_replacement_with_different_immutable_image_id(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):

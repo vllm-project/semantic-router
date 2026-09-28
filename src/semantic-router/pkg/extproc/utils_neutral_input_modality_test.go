@@ -24,6 +24,61 @@ func assertInputModalityFacts(t *testing.T, got, want classification.InputModali
 	}
 }
 
+func TestExtractSemanticRequestSignalsPreservesInlineImagesAcrossProtocols(t *testing.T) {
+	const want = "data:image/png;base64,aGVsbG8="
+	tests := []struct {
+		name   string
+		format llmprotocol.WireFormat
+		body   string
+	}{
+		{
+			name:   "chat completions",
+			format: llmprotocol.OpenAIChatV1,
+			body: `{"model":"vision-model","messages":[{"role":"user","content":[
+				{"type":"image_url","image_url":{"url":"data:image/png;base64,aGVsbG8="}}
+			]}]}`,
+		},
+		{
+			name:   "responses",
+			format: llmprotocol.OpenAIResponsesV1,
+			body: `{"model":"vision-model","input":[{"type":"message","role":"user","content":[
+				{"type":"input_image","image_url":"data:image/png;base64,aGVsbG8="}
+			]}]}`,
+		},
+		{
+			name:   "anthropic messages",
+			format: llmprotocol.AnthropicMessagesV1,
+			body: `{"model":"vision-model","max_tokens":32,"messages":[{"role":"user","content":[
+				{"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGVsbG8="}}
+			]}]}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := decodeSignalRequest(t, test.format, test.body)
+			snapshot := extractSemanticRequestSignals(request)
+			if snapshot.FirstImageURL != want {
+				t.Fatalf("FirstImageURL = %q, want %q", snapshot.FirstImageURL, want)
+			}
+		})
+	}
+}
+
+func TestExtractSemanticRequestSignalsRejectsRemoteImageURL(t *testing.T) {
+	request := &llmprotocol.Request{Messages: []llmprotocol.Message{{
+		Role: llmprotocol.RoleUser,
+		Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentImage,
+			URL:  "https://example.invalid/image.png",
+		}},
+	}}}
+	snapshot := extractSemanticRequestSignals(request)
+	if snapshot.FirstImageURL != "" {
+		t.Fatalf("FirstImageURL = %q, remote URLs must not reach the classifier", snapshot.FirstImageURL)
+	}
+}
+
 func TestExtractSemanticRequestSignalsCountsChatInputModalities(t *testing.T) {
 	request := decodeSignalRequest(t, llmprotocol.OpenAIChatV1, `{
 		"model": "vision-model",

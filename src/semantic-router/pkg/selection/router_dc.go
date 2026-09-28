@@ -320,13 +320,14 @@ func (r *RouterDCSelector) Select(ctx context.Context, selCtx *SelectionContext)
 		bestModel.Model, bestScore, confidence)
 
 	return &SelectionResult{
-		SelectedModel: bestModel.Model,
-		LoRAName:      bestModel.LoRAName,
-		Score:         softmaxScores[bestModel.Model],
-		Confidence:    confidence,
-		Method:        MethodRouterDC,
-		Reasoning:     reasoning,
-		AllScores:     softmaxScores,
+		SelectedModel:     bestModel.Model,
+		SelectedCandidate: bestModel,
+		LoRAName:          bestModel.LoRAName,
+		Score:             softmaxScores[bestModel.Model],
+		Confidence:        confidence,
+		Method:            MethodRouterDC,
+		Reasoning:         reasoning,
+		AllScores:         softmaxScores,
 	}, nil
 }
 
@@ -464,13 +465,14 @@ func (r *RouterDCSelector) defaultSelection(selCtx *SelectionContext, reason str
 	logging.Warnf("[RouterDC] Default candidate selection: %s, using first candidate %s", reason, firstModel.Model)
 
 	return &SelectionResult{
-		SelectedModel: firstModel.Model,
-		LoRAName:      firstModel.LoRAName,
-		Score:         allScores[firstModel.Model],
-		Confidence:    0.5,
-		Method:        MethodRouterDC,
-		Reasoning:     fmt.Sprintf("Default candidate selection: %s", reason),
-		AllScores:     allScores,
+		SelectedModel:     firstModel.Model,
+		SelectedCandidate: firstModel,
+		LoRAName:          firstModel.LoRAName,
+		Score:             allScores[firstModel.Model],
+		Confidence:        0.5,
+		Method:            MethodRouterDC,
+		Reasoning:         fmt.Sprintf("Default candidate selection: %s", reason),
+		AllScores:         allScores,
 	}, nil
 }
 

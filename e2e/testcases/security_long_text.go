@@ -16,7 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("security-long-text", pkgtestcases.TestCase{
-		Description: "Verify /api/v1/classify/security detects a jailbreak placed past the classifier's sequence limit",
+		Description: "Verify /api/v1/diagnostics/classify/security detects a jailbreak placed past the classifier's sequence limit",
 		Tags:        []string{"kubernetes", "apiserver", "classification", "security", "jailbreak", "api"},
 		Fn:          testSecurityLongText,
 	})
@@ -42,7 +42,7 @@ func testSecurityLongText(
 	defer session.Close()
 
 	httpClient := session.HTTPClient(60 * time.Second)
-	url := session.URL("/api/v1/classify/security")
+	url := session.URL("/api/v1/diagnostics/classify/security")
 
 	prompt, err := firstBlockedJailbreakPrompt("e2e/testcases/testdata/jailbreak_detection_cases.json")
 	if err != nil {
@@ -128,7 +128,7 @@ func classifySecurity(
 	var result securityClassifyResponse
 	body, err := json.Marshal(map[string]interface{}{"text": text})
 	if err != nil {
-		return result, fmt.Errorf("marshal /api/v1/classify/security payload: %w", err)
+		return result, fmt.Errorf("marshal /api/v1/diagnostics/classify/security payload: %w", err)
 	}
 
 	resp, err := postJSON(ctx, httpClient, http.MethodPost, url, body)
@@ -136,10 +136,10 @@ func classifySecurity(
 		return result, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return result, fmt.Errorf("expected /api/v1/classify/security status 200, got %d: %s", resp.StatusCode, string(resp.Body))
+		return result, fmt.Errorf("expected /api/v1/diagnostics/classify/security status 200, got %d: %s", resp.StatusCode, string(resp.Body))
 	}
 	if err := json.Unmarshal(resp.Body, &result); err != nil {
-		return result, fmt.Errorf("decode /api/v1/classify/security response: %w", err)
+		return result, fmt.Errorf("decode /api/v1/diagnostics/classify/security response: %w", err)
 	}
 	return result, nil
 }

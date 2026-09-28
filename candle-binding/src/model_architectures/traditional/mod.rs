@@ -20,11 +20,10 @@ pub mod modernbert;
 
 // Local copy of candle-transformers models with Flash Attention support
 // IMPORTANT: This local copy is necessary because:
-// 1. Flash Attention 2 support: The upstream candle-transformers ModernBERT doesn't support
-//    Flash Attention 2, which is required for efficient 32K context processing
-// 2. Extended context support: We need custom handling for Extended32K variant with YaRN RoPE scaling
-// 3. Runtime max_position_embeddings override: We need to override config values at runtime
-//    for Extended32K models, which requires mutable Config fields
+// 1. Memory-bounded attention preserves global and local attention at long context lengths.
+// 2. Flash Attention 2 is used only when its API preserves the layer's mask semantics.
+// 3. Classifier loaders share checkpoint-defined RoPE/cache capacity and an explicit
+//    input budget; variant names do not expand the model's context capacity.
 //
 // This creates a type shadowing situation where local types (Config, ModernBert, etc.) are used
 // instead of upstream types. This is intentional but should be documented.

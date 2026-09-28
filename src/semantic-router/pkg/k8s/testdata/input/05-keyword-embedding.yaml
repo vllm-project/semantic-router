@@ -8,7 +8,8 @@ spec:
   defaultModel: "qwen-2.5-14b"
   models:
     - name: "qwen-2.5-14b"
-      reasoningFamily: "qwen3"
+      reasoning:
+        family: "qwen3"
       pricing:
         inputTokenPrice: 0.000001    # $1 per 1M - balanced performance
         outputTokenPrice: 0.000002   # $2 per 1M
@@ -17,7 +18,8 @@ spec:
           description: "Customer support agent"
 
     - name: "qwen-2.5-72b"
-      reasoningFamily: "qwen3"
+      reasoning:
+        family: "qwen3"
       pricing:
         inputTokenPrice: 0.000003    # $3 per 1M - for urgent/complex issues
         outputTokenPrice: 0.000006   # $6 per 1M

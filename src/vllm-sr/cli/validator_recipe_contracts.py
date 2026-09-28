@@ -65,7 +65,10 @@ def _recipe_name_contract(
 ) -> tuple[set[str], list[ValidationError]]:
     errors: list[ValidationError] = []
     top_level_has_profile = bool(
-        config.routing.signals.model_dump(exclude_defaults=True, exclude_none=True)
+        config.routing.candidate_requirements is not None
+        or config.routing.data_policy is not None
+        or config.routing.model_bindings
+        or config.routing.signals.model_dump(exclude_defaults=True, exclude_none=True)
         or config.routing.projections.model_dump(
             exclude_defaults=True, exclude_none=True
         )
@@ -75,6 +78,13 @@ def _recipe_name_contract(
     recipe_names = {"default"}
     explicit_default_seen = False
     for recipe in config.recipes:
+        if recipe.name == "@global":
+            errors.append(
+                ValidationError(
+                    "Recipe name '@global' is reserved for shared model services",
+                    field="recipes.@global",
+                )
+            )
         explicit_default_allowed = (
             recipe.name == "default"
             and not top_level_has_profile
@@ -85,6 +95,7 @@ def _recipe_name_contract(
                 ValidationError(
                     f"Duplicate recipe name '{recipe.name}'",
                     field=f"recipes.{recipe.name}",
+                    hint="Rename one recipe so every recipe has a unique name.",
                 )
             )
         if recipe.name == "default":
@@ -216,6 +227,7 @@ def _validate_entrypoints(
                 ValidationError(
                     f"Entrypoint references unknown recipe '{entrypoint.recipe}'",
                     field=f"entrypoints.{index}.recipe",
+                    hint=("Change this to the name of a recipe defined under recipes."),
                 )
             )
         for model_name in entrypoint.model_names:
@@ -233,6 +245,11 @@ def _validate_entrypoints(
                         f"Entrypoint model '{model_name}' conflicts with a "
                         "configured model or reserved alias",
                         field=f"entrypoints.{index}.model_names",
+                        hint=(
+                            "Use a distinct entrypoint model name; do not reuse "
+                            "a configured model or reserved alias such as "
+                            "vllm-sr/auto."
+                        ),
                     )
                 )
     return errors

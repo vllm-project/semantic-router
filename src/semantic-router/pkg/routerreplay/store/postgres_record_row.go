@@ -22,7 +22,7 @@ const postgresRecordSelectColumns = `
 	prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 	session_id, turn_index, previous_response_id, conversation_id,
-	cache_similarity, context_token_count, hallucination_span_details, recipe
+	cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata
 `
 
 type postgresRowScanner interface {
@@ -30,6 +30,8 @@ type postgresRowScanner interface {
 }
 
 type postgresInsertRecord struct {
+	routingMetadataJSON          []byte
+	safetyEvidenceJSON           []byte
 	record                       Record
 	signalsJSON                  []byte
 	projectionsJSON              []byte
@@ -47,6 +49,8 @@ type postgresInsertRecord struct {
 }
 
 type postgresRecordRow struct {
+	routingMetadataJSON          []byte
+	safetyEvidenceJSON           []byte
 	record                       Record
 	signalsJSON                  []byte
 	projectionsJSON              []byte
@@ -99,6 +103,8 @@ func marshalPostgresInsertJSON(record Record, out *postgresInsertRecord) error {
 		target  *[]byte
 		marshal func() ([]byte, error)
 	}{
+		{"safety evidence", &out.safetyEvidenceJSON, func() ([]byte, error) { return marshalPostgresSafety(record) }},
+		{"routing metadata", &out.routingMetadataJSON, func() ([]byte, error) { return marshalPostgresRoutingMetadata(record) }},
 		{"signals", &out.signalsJSON, func() ([]byte, error) { return json.Marshal(record.Signals) }},
 		{"projections", &out.projectionsJSON, func() ([]byte, error) { return json.Marshal(record.Projections) }},
 		{"projection scores", &out.projectionScoresJSON, func() ([]byte, error) { return json.Marshal(record.ProjectionScores) }},
@@ -207,6 +213,8 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.record.ContextTokenCount,
 		record.hallucinationSpanDetailsJSON,
 		emptyStringSQL(record.record.Recipe),
+		record.safetyEvidenceJSON,
+		record.routingMetadataJSON,
 	}
 }
 
@@ -227,7 +235,7 @@ func scanPostgresRecordList(rows *sql.Rows) (_ []Record, err error) {
 	for rows.Next() {
 		record, scanErr := scanPostgresRecord(rows)
 		if scanErr != nil {
-			continue
+			return nil, scanErr
 		}
 		records = append(records, record)
 	}
@@ -304,10 +312,18 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.record.ContextTokenCount,
 		&row.hallucinationSpanDetailsJSON,
 		&row.recipe,
+		&row.safetyEvidenceJSON,
+		&row.routingMetadataJSON,
 	}
 }
 
 func (row *postgresRecordRow) decode() (Record, error) {
+	if err := unmarshalPostgresSafety(row.safetyEvidenceJSON, &row.record); err != nil {
+		return Record{}, err
+	}
+	if err := unmarshalPostgresRoutingMetadata(row.routingMetadataJSON, &row.record); err != nil {
+		return Record{}, err
+	}
 	if err := row.unmarshalDecodedJSON(); err != nil {
 		return Record{}, err
 	}

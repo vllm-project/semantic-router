@@ -66,6 +66,34 @@ func validateJailbreakContracts(cfg *RouterConfig) error {
 			)
 		}
 
+		// Direction is compared as written for the same reason as method: the
+		// runtime reads the raw value (JailbreakRule.Stage), so a misspelt
+		// "Response" would silently load as a request-stage rule.
+		switch rule.Direction {
+		case "", SignalDirectionRequest:
+		case SignalDirectionResponse:
+			if method == JailbreakMethodContrastive {
+				return fmt.Errorf(
+					"routing.signals.jailbreak %q: direction %q scores the model's output with "+
+						"the sequence classifier; method %q compares a prompt against patterns "+
+						"and is request-stage only",
+					name, rule.Direction, JailbreakMethodContrastive,
+				)
+			}
+			if rule.IncludeHistory {
+				return fmt.Errorf(
+					"routing.signals.jailbreak %q: include_history has no meaning with direction %q; "+
+						"a single response carries no conversation history",
+					name, rule.Direction,
+				)
+			}
+		default:
+			return fmt.Errorf(
+				"routing.signals.jailbreak %q: unknown direction %q; valid values are %q and %q",
+				name, rule.Direction, SignalDirectionRequest, SignalDirectionResponse,
+			)
+		}
+
 		if method != JailbreakMethodContrastive &&
 			(len(rule.JailbreakPatterns) > 0 || len(rule.BenignPatterns) > 0) {
 			return fmt.Errorf(

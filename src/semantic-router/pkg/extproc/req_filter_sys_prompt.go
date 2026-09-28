@@ -41,7 +41,7 @@ func (r *OpenAIRouter) addSystemPromptIfConfigured(modifiedBody []byte, category
 
 	// Start system prompt plugin span
 	startTime := time.Now()
-	promptCtx, promptSpan := tracing.StartPluginSpan(ctx.TraceContext, "system_prompt", categoryName)
+	_, promptSpan := tracing.StartPluginSpan(ctx.TraceContext, "system_prompt", categoryName)
 
 	mode := decision.GetSystemPromptMode()
 	var injected bool
@@ -51,17 +51,17 @@ func (r *OpenAIRouter) addSystemPromptIfConfigured(modifiedBody []byte, category
 
 	if err != nil {
 		logging.Errorf("Error adding system prompt to request: %v", err)
-		tracing.RecordError(promptSpan, err)
+		tracing.RecordError(promptSpan, "system_prompt_injection_failed")
 		tracing.EndPluginSpan(promptSpan, "error", latencyMs, "injection_failed")
 		metrics.RecordRequestError(model, "serialization_error")
 		return nil, status.Errorf(codes.Internal, "error adding system prompt: %v", err)
 	}
 
-	// Keep legacy attributes for backward compatibility
+	// Record the applied plugin outcome.
 	tracing.SetSpanAttributes(promptSpan,
 		attribute.Bool("system_prompt.injected", injected),
 		attribute.String("system_prompt.mode", mode),
-		attribute.String(tracing.AttrCategoryName, categoryName))
+		attribute.String(tracing.AttrDecisionName, categoryName))
 
 	if injected {
 		ctx.VSRInjectedSystemPrompt = true
@@ -69,8 +69,6 @@ func (r *OpenAIRouter) addSystemPromptIfConfigured(modifiedBody []byte, category
 	} else {
 		tracing.EndPluginSpan(promptSpan, "skipped", latencyMs, "no_injection_needed")
 	}
-
-	ctx.TraceContext = promptCtx
 
 	return modifiedBody, nil
 }

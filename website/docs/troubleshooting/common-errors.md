@@ -12,7 +12,7 @@ once:
 vllm-sr status
 vllm-sr logs router
 vllm-sr logs envoy
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 The examples below are fragments. Add them to the corresponding section of a
@@ -32,7 +32,7 @@ container:
 
 ```bash
 test -r config.yaml
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 Follow the field path in the validation error. Do not add missing fields to a
@@ -50,6 +50,84 @@ The process cannot open the path it received. Check:
 
 Use `vllm-sr status` to identify the active workspace before inspecting
 container mounts.
+
+## Entrypoint / Recipe Validation
+
+`vllm-sr config validate` (or `vllm-sr validate`) includes a repair hint for common multi-recipe wiring errors.
+
+### Unknown recipe
+
+```text
+Entrypoint references unknown recipe 'missing-recipe'
+Hint: Change this to the name of a recipe defined under recipes.
+```
+
+Broken:
+
+```yaml
+entrypoints:
+  - model_names: [my-model]
+    recipe: missing-recipe
+recipes:
+  - name: production
+```
+
+Corrected:
+
+```yaml
+entrypoints:
+  - model_names: [my-model]
+    recipe: production
+recipes:
+  - name: production
+```
+
+### Duplicate recipe name
+
+```text
+Duplicate recipe name 'production'
+Hint: Rename one recipe so every recipe has a unique name.
+```
+
+Give each recipe a distinct `name`, then update entrypoints that refer to the
+renamed recipe:
+
+```yaml
+recipes:
+  - name: production
+  - name: staging
+entrypoints:
+  - model_names: [my-model]
+    recipe: production
+```
+
+### Model or reserved alias collision
+
+```text
+Entrypoint model 'vllm-sr/auto' conflicts with a configured model or reserved alias
+Hint: Use a distinct entrypoint model name; do not reuse a configured model or
+reserved alias such as vllm-sr/auto.
+```
+
+Broken:
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: production
+```
+
+Corrected:
+
+```yaml
+entrypoints:
+  - model_names: [customer-production]
+    recipe: production
+```
+
+See the
+[entrypoints and recipes tutorial](../tutorials/global/entrypoints-and-recipes.md)
+and [recipes tutorial](../tutorials/global/recipes.md) for complete examples.
 
 ## Response cache cannot start
 
@@ -303,15 +381,15 @@ providers:
         - name: local-vllm
           endpoint: 10.0.0.1:8000
           protocol: http
-          type: vllm
+          provider: vllm
 ```
 
 Use `base_url` when the provider requires a complete API root such as
 `https://provider.example/v1`. Use a hostname reachable from the Router
 network; `localhost` refers to the Router container itself.
 
-The version segment in that API root is accepted for every provider `type`.
-Types whose own endpoint suffix already carries the version, such as
+The version segment in that API root is accepted for every Provider ID.
+Providers whose own operation path already carries the version, such as
 `anthropic` and `minimax`, do not repeat it, so both
 `https://provider.example/v1` and `https://provider.example` resolve to the
 same upstream path.
@@ -383,7 +461,7 @@ precision and recall at the chosen operating point.
 
 ```bash
 # Validate the source configuration.
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 
 # Identify the active local stack and component state.
 vllm-sr status

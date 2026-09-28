@@ -1,6 +1,7 @@
 """Management-listener contract for the local split container stack."""
 
 from cli.consts import DEFAULT_METRICS_PORT, DEFAULT_ROUTER_PORT
+from cli.models import UserConfig
 from cli.parser import parse_user_config
 from cli.runtime_stack import RuntimeStackLayout
 
@@ -11,15 +12,21 @@ _ROUTER_SERVICE_PORTS = frozenset({DEFAULT_ROUTER_PORT, DEFAULT_METRICS_PORT})
 def _managed_management_listener(
     config_path: str, stack_layout: RuntimeStackLayout
 ) -> dict[str, int | str]:
+    return resolve_managed_management_listener(
+        parse_user_config(config_path), stack_layout
+    )
+
+
+def resolve_managed_management_listener(
+    config: UserConfig, stack_layout: RuntimeStackLayout
+) -> dict[str, int | str]:
     """Resolve the management listener contract for the split Docker stack."""
 
-    management = _management_api_config(config_path)
+    management = _management_api_config(config)
     bind_address, port = _management_endpoint(management)
     _validate_management_access(management)
     _validate_management_endpoint(bind_address, port)
-    host_port = port + stack_layout.port_offset
-    if host_port > _MAX_PORT:
-        raise ValueError("management API host port is outside the valid range")
+    host_port = stack_layout.host_port(port, name="management API host port")
     return {
         "bind_address": bind_address,
         "port": port,
@@ -27,8 +34,7 @@ def _managed_management_listener(
     }
 
 
-def _management_api_config(config_path: str) -> dict | None:
-    config = parse_user_config(config_path)
+def _management_api_config(config: UserConfig) -> dict | None:
     global_config = config.global_ or {}
     services = global_config.get("services")
     if services is None:

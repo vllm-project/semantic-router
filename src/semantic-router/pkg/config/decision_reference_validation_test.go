@@ -13,11 +13,12 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: m1
+    model: m1
   models:
     - name: m1
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
           api_key: secret
 routing:
   modelCards:
@@ -34,11 +35,12 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: ghost
+    model: ghost
   models:
     - name: m1
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
           api_key: secret
 routing:
   modelCards:

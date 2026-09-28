@@ -1,0 +1,200 @@
+- id: anthropic/claude-fable-5.1
+  display_name: Claude Fable 5.1
+  description: Anthropic high-capability model with extended context and output limits.
+  kind: physical
+  publisher: Anthropic
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://www.anthropic.com/claude/fable
+  family: claude-fable
+  reasoning_family: claude-effort-always-on
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.anthropic.com/claude/fable
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-09-01'
+- id: anthropic/claude-opus-5
+  display_name: Claude Opus 5
+  description: Anthropic frontier model for high-complexity reasoning, software, and agents.
+  kind: physical
+  publisher: Anthropic
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  family: claude-opus
+  reasoning_family: claude-effort-adaptive
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-07-24'
+- id: anthropic/claude-sonnet-5
+  display_name: Claude Sonnet 5
+  description: Anthropic frontier Sonnet model for reasoning, coding, and production agents.
+  kind: physical
+  publisher: Anthropic
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  family: claude-sonnet
+  reasoning_family: claude-effort-adaptive
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-06-30'
+- id: anthropic/claude-fable-5
+  display_name: Claude Fable 5
+  description: Anthropic Fable model for high-capability reasoning and agentic work.
+  kind: physical
+  publisher: Anthropic
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  family: claude-fable
+  reasoning_family: claude-effort-always-on
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-06-09'
+- id: anthropic/claude-opus-4.8
+  display_name: Claude Opus 4.8
+  description: Anthropic long-context model for advanced coding and agentic tasks.
+  kind: physical
+  publisher: Anthropic
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  family: claude-opus
+  reasoning_family: claude-effort-opt-in
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-05-28'

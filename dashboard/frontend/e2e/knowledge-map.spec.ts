@@ -23,7 +23,7 @@ async function mockKnowledgeMap(page: Page) {
     })
   })
 
-  await page.route('**/api/router/config/kbs/privacy_kb/map/metadata', async route => {
+  await page.route('**/api/router/api/v1/storage/knowledge-bases/privacy_kb/map/metadata', async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

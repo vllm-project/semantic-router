@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 import subprocess
 import sys
@@ -8,180 +9,255 @@ from pathlib import Path
 from unittest import mock
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+CI_DIR = SCRIPT_DIR.parents[1] / "ci"
+for path in (SCRIPT_DIR, CI_DIR):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
-agent_resolution = importlib.import_module("agent_resolution")
-agent_changed_files = importlib.import_module("agent_changed_files")
-agent_context_resolution = importlib.import_module("agent_context_resolution")
-run_agent_precommit_lint = importlib.import_module("run_agent_precommit_lint")
+changed_files = importlib.import_module("changed_files")
+harness = importlib.import_module("harness")
 
 
-class AgentResolutionChangedFilesPathTests(unittest.TestCase):
+class ChangedFilesTests(unittest.TestCase):
     def test_split_changed_files_accepts_common_separators(self) -> None:
-        changed_files = agent_resolution.split_changed_files(
-            "tools/agent/scripts/agent_gate.py tools/make/agent.mk,"
+        result = changed_files.split_changed_files(
+            "tools/agent/scripts/harness.py tools/make/agent.mk,"
             "\nsrc/semantic-router/pkg/apiserver/server.go"
         )
 
         self.assertEqual(
-            changed_files,
+            result,
             [
                 "src/semantic-router/pkg/apiserver/server.go",
-                "tools/agent/scripts/agent_gate.py",
+                "tools/agent/scripts/harness.py",
                 "tools/make/agent.mk",
             ],
         )
 
-    def test_get_changed_files_reads_changed_files_path(self) -> None:
+    def test_get_changed_files_reads_path_without_git_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            changed_files_path = Path(temp_dir) / "changed-files.txt"
-            changed_files_path.write_text(
-                "./tools/agent/scripts/agent_gate.py\n"
+            path = Path(temp_dir) / "changed-files.txt"
+            path.write_text(
+                "./tools/agent/scripts/harness.py\n"
                 "tools/make/agent.mk\n"
-                "tools/agent/scripts/agent_gate.py\n",
+                "tools/agent/scripts/harness.py\n",
                 encoding="utf-8",
             )
-
-            changed_files = agent_resolution.get_changed_files(
-                None, None, str(changed_files_path)
-            )
+            with mock.patch.object(changed_files, "git_changed_files") as git_diff:
+                result = changed_files.get_changed_files("", None, str(path))
 
         self.assertEqual(
-            changed_files,
-            [
-                "tools/agent/scripts/agent_gate.py",
-                "tools/make/agent.mk",
-            ],
-        )
-
-    def test_get_changed_files_prefers_path_when_explicit_is_empty(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            changed_files_path = Path(temp_dir) / "changed-files.txt"
-            changed_files_path.write_text(
-                "tools/agent/scripts/agent_changed_files.py\n",
-                encoding="utf-8",
-            )
-
-            with mock.patch.object(
-                agent_changed_files, "git_changed_files"
-            ) as git_diff:
-                changed_files = agent_resolution.get_changed_files(
-                    "", None, str(changed_files_path)
-                )
-
-        self.assertEqual(
-            changed_files,
-            ["tools/agent/scripts/agent_changed_files.py"],
+            result,
+            ["tools/agent/scripts/harness.py", "tools/make/agent.mk"],
         )
         git_diff.assert_not_called()
 
-    def test_resolve_e2e_profiles_does_not_mutate_registry_profiles(self) -> None:
-        test_domain_registry = {
-            "domains": {},
-            "profiles": {
-                "envoy-ai-gateway": {
-                    "selection": "pr",
-                    "default_local": True,
-                    "full_ci": True,
-                    "paths": ["src/semantic-router/**"],
-                },
-                "manual-smoke": {
-                    "selection": "manual",
-                    "paths": ["src/semantic-router/**"],
-                },
-            },
-        }
+    def test_missing_changed_files_path_has_clear_error(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unable to read changed files"):
+            changed_files.load_changed_files("does-not-exist")
 
-        local_profiles, _, _, _ = agent_context_resolution.resolve_e2e_profiles(
-            ["src/semantic-router/pkg/apiserver/server.go"],
-            test_domain_registry,
-            set(),
-        )
-
-        self.assertEqual(local_profiles, ["envoy-ai-gateway", "manual-smoke"])
-        self.assertTrue(
-            test_domain_registry["profiles"]["envoy-ai-gateway"]["default_local"]
-        )
-
-
-class RunAgentPrecommitLintTests(unittest.TestCase):
-    def test_resolve_changed_files_tries_head_parent_when_default_diff_is_empty(
+    def test_git_changed_files_includes_branch_worktree_and_untracked_paths(
         self,
     ) -> None:
-        explicit_files = [
-            f"tools/security/generated_{index}.py"
-            for index in range(run_agent_precommit_lint.MAX_PRECOMMIT_PATHS + 1)
-        ]
+        outputs = {
+            (
+                "rev-parse",
+                "--verify",
+                "--end-of-options",
+                "origin/main^{commit}",
+            ): (0, "base\n"),
+            ("merge-base", "HEAD", "origin/main"): (0, "base\n"),
+            ("diff", "--name-only", "--no-renames", "-z", "base...HEAD"): (
+                0,
+                "committed.py\0shared.py\0",
+            ),
+            ("diff", "--name-only", "--no-renames", "-z", "HEAD"): (
+                0,
+                "working tree.py\0shared.py\0",
+            ),
+            ("ls-files", "--others", "--exclude-standard", "-z"): (
+                0,
+                "untracked.py\0",
+            ),
+        }
 
-        with (
-            mock.patch.dict(os.environ, {}, clear=True),
-            mock.patch.object(sys, "argv", ["hook", *explicit_files]),
-            mock.patch.object(
-                run_agent_precommit_lint,
-                "git_changed_files",
-                side_effect=[
-                    [],
-                    ["tools/agent/scripts/run_agent_precommit_lint.py"],
-                ],
-            ) as git_changed_files,
-        ):
-            resolved = run_agent_precommit_lint.resolve_changed_files()
+        def fake_run(
+            command: list[str], **_: object
+        ) -> subprocess.CompletedProcess[str]:
+            returncode, stdout = outputs[tuple(command[1:])]
+            return subprocess.CompletedProcess(command, returncode, stdout, "")
+
+        with mock.patch.object(changed_files.subprocess, "run", side_effect=fake_run):
+            result = changed_files.git_changed_files("origin/main")
 
         self.assertEqual(
-            resolved,
-            ["tools/agent/scripts/run_agent_precommit_lint.py"],
+            result,
+            ["committed.py", "shared.py", "untracked.py", "working tree.py"],
         )
-        self.assertEqual(
-            git_changed_files.call_args_list,
-            [
-                mock.call(None),
-                mock.call("HEAD^"),
+
+
+class RenamedFilesTests(unittest.TestCase):
+    old_path = "dashboard/frontend/src/components/Moved.tsx"
+    new_path = "website/src/components/Moved.tsx"
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.git("init", "--quiet")
+        self.git("config", "diff.renames", "true")
+        source = self.root / self.old_path
+        source.parent.mkdir(parents=True)
+        source.write_text("export const moved = true;\n", encoding="utf-8")
+        self.git("add", self.old_path)
+        self.git("commit", "--quiet", "--signoff", "-m", "Add component")
+        (self.root / self.new_path).parent.mkdir(parents=True)
+        self.git("mv", self.old_path, self.new_path)
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(
+            args=[
+                "git",
+                "-c",
+                "user.name=Test Author",
+                "-c",
+                "user.email=test@example.org",
+                *args,
             ],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    def test_local_staged_rename_keeps_both_paths(self) -> None:
+        with mock.patch.object(changed_files, "REPO_ROOT", self.root):
+            paths = changed_files.git_changed_files("HEAD")
+        self.assertEqual(paths, [self.old_path, self.new_path])
+
+    def test_local_committed_rename_keeps_both_paths(self) -> None:
+        self.git("commit", "--quiet", "--signoff", "-m", "Move component")
+        with mock.patch.object(changed_files, "REPO_ROOT", self.root):
+            paths = changed_files.git_changed_files("HEAD^")
+        self.assertEqual(paths, [self.old_path, self.new_path])
+
+    def test_ci_plan_keeps_the_source_domain_after_a_rename(self) -> None:
+        self.git("commit", "--quiet", "--signoff", "-m", "Move component")
+        output = self.root / "plan.json"
+        subprocess.run(
+            args=[
+                sys.executable,
+                str(CI_DIR / "ci_plan.py"),
+                "--base",
+                self.git("rev-parse", "HEAD^"),
+                "--head",
+                self.git("rev-parse", "HEAD"),
+                "--output",
+                str(output),
+            ],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            check=True,
         )
+        plan = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(plan["paths"], [self.old_path, self.new_path])
+        self.assertIn("dashboard", plan["expected_verification_ids"])
+        self.assertFalse(plan["quality_context"]["docs_only"])
 
-    def test_main_passes_changed_files_via_temp_file(self) -> None:
-        captured: dict[str, str] = {}
 
-        def fake_run(cmd, *, cwd, check, env):
-            self.assertEqual(
-                cmd,
-                ["make", "agent-lint", "AGENT_SKIP_PRECOMMIT_BASELINE=1"],
-            )
-            self.assertFalse(check)
-            self.assertEqual(cwd, run_agent_precommit_lint.REPO_ROOT)
+class ImpactTests(unittest.TestCase):
+    def test_impact_contains_facts_without_skill_or_completion_policy(self) -> None:
+        result = harness.build_impact(["tools/make/agent.mk"], "cpu")
 
-            changed_files_path = Path(env["AGENT_CHANGED_FILES_PATH"])
-            captured["path"] = str(changed_files_path)
-            captured["content"] = changed_files_path.read_text(encoding="utf-8")
-            self.assertTrue(changed_files_path.exists())
-
-            return subprocess.CompletedProcess(cmd, 0)
-
-        with (
-            mock.patch.dict(os.environ, {}, clear=True),
-            mock.patch.object(
-                run_agent_precommit_lint,
-                "resolve_changed_files",
-                return_value=[
-                    "tools/agent/scripts/agent_gate.py",
-                    "tools/make/agent.mk",
-                ],
-            ),
-            mock.patch.object(
-                run_agent_precommit_lint.subprocess,
-                "run",
-                side_effect=fake_run,
-            ),
-        ):
-            result = run_agent_precommit_lint.main()
-
-        self.assertEqual(result, 0)
         self.assertEqual(
-            captured["content"],
-            "tools/agent/scripts/agent_gate.py\ntools/make/agent.mk",
+            result["domains"], [{"name": "harness", "owner": "maintainers"}]
         )
-        self.assertFalse(Path(captured["path"]).exists())
+        self.assertEqual(result["checks"], ["make harness-check"])
+        self.assertNotIn("primary_skill", result)
+        self.assertNotIn("completion_boundary", result)
+        self.assertNotIn("loop_mode", result)
+
+    def test_verify_requires_an_explicit_selection(self) -> None:
+        self.assertEqual(harness.run_verify((), ()), 2)
+
+
+class BaseReferenceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.git("init", "--quiet")
+        (self.root / "file.txt").write_text("first\n", encoding="utf-8")
+        self.git("add", "file.txt")
+        self.git("commit", "--quiet", "--signoff", "-m", "First")
+        (self.root / "file.txt").write_text("second\n", encoding="utf-8")
+        self.git("commit", "--quiet", "--signoff", "-am", "Second")
+        patch = mock.patch.object(changed_files, "REPO_ROOT", self.root)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(
+            args=[
+                "git",
+                "-c",
+                "user.name=Test Author",
+                "-c",
+                "user.email=test@example.org",
+                *args,
+            ],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    def test_missing_explicit_reference_does_not_fall_back(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid base ref 'missing-base'"):
+            changed_files.resolve_base_ref("missing-base")
+
+    def test_missing_environment_reference_does_not_fall_back(self) -> None:
+        with (
+            mock.patch.dict(os.environ, {"BASE_REF": "missing-base"}),
+            self.assertRaisesRegex(ValueError, "invalid base ref 'missing-base'"),
+        ):
+            changed_files.resolve_base_ref(None)
+
+    def test_explicit_reference_takes_precedence(self) -> None:
+        with mock.patch.dict(os.environ, {"BASE_REF": "missing-base"}):
+            self.assertEqual(changed_files.resolve_base_ref("HEAD"), "HEAD")
+
+    def test_non_commit_reference_is_rejected(self) -> None:
+        for reference in ("HEAD:file.txt", "HEAD^{tree}"):
+            with (
+                self.subTest(reference=reference),
+                self.assertRaisesRegex(ValueError, "invalid base ref"),
+            ):
+                changed_files.resolve_base_ref(reference)
+
+    def test_default_reference_keeps_its_fallback(self) -> None:
+        with mock.patch.dict(os.environ, {"BASE_REF": ""}):
+            self.assertEqual(changed_files.resolve_base_ref(None), "HEAD^")
+            self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+            self.assertEqual(changed_files.resolve_base_ref(None), "origin/main")
+
+    def test_cli_reports_invalid_base_without_a_traceback(self) -> None:
+        result = subprocess.run(
+            args=[
+                sys.executable,
+                str(SCRIPT_DIR / "harness.py"),
+                "changed-files",
+                "--base-ref",
+                "refs/heads/missing-base-reference-test",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("invalid base ref", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
 
 
 if __name__ == "__main__":

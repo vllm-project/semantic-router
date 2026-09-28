@@ -19,6 +19,12 @@ package looper
 import (
 	"context"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
 // ExecuteWithLatency runs l.Execute and records the wall-clock latency of the
@@ -34,11 +40,58 @@ func ExecuteWithLatency(ctx context.Context, l Looper, req *Request) (*Response,
 	if req != nil {
 		ctx = contextWithRoutingRecipe(ctx, req.RecipeName)
 	}
+	algorithm := looperAlgorithm(req)
+	tracker, ctx, span := newAttemptTracker(ctx, algorithm)
+	tracing.SetSpanAttributes(span,
+		attribute.String("looper.algorithm", algorithm),
+		attribute.Int("looper.candidate_count", looperCandidateCount(req)),
+		attribute.Bool("looper.streaming", req != nil && req.IsStreaming),
+	)
+
 	start := time.Now()
 	resp, err := l.Execute(ctx, req)
-	if err != nil || resp == nil {
-		return resp, err
+	duration := time.Since(start)
+	status := "succeeded"
+	if err != nil {
+		status = string(classifyExecutionStatus(err))
+		tracing.SetSpanAttributes(span, attribute.String("error.type", status))
+		span.SetStatus(codes.Error, status)
 	}
-	resp.LatencyMs = time.Since(start).Milliseconds()
-	return resp, nil
+	tracing.SetSpanAttributes(span,
+		attribute.String("looper.status", status),
+		attribute.Int("looper.attempt_count", tracker.attemptCount()),
+	)
+	if resp != nil {
+		resp.LatencyMs = duration.Milliseconds()
+		resp.ExecutionTrace = tracker.snapshot()
+		tracing.SetSpanAttributes(span,
+			attribute.Int("looper.final_attempt.ordinal", resp.ExecutionTrace.FinalAttemptOrdinal),
+			attribute.String("looper.final_model", resp.Model),
+			attribute.Int64("looper.prompt_tokens", resp.Usage.PromptTokens),
+			attribute.Int64("looper.completion_tokens", resp.Usage.CompletionTokens),
+			attribute.Int64("looper.total_tokens", resp.Usage.TotalTokens),
+		)
+	}
+	metrics.RecordLooperExecution(algorithm, status, duration.Seconds())
+	span.End()
+	return resp, err
+}
+
+func looperAlgorithm(req *Request) string {
+	if req == nil || req.Algorithm == nil {
+		return "unknown"
+	}
+	return req.Algorithm.Type
+}
+
+func looperCandidateCount(req *Request) int {
+	if req == nil {
+		return 0
+	}
+	return len(req.ModelRefs)
+}
+
+func classifyExecutionStatus(err error) AttemptStatus {
+	status, _ := classifyAttemptError(err)
+	return status
 }

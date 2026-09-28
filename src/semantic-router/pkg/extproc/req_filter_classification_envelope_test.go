@@ -13,11 +13,12 @@ func TestMetadataDecisionEvaluatesWithoutTextContent(t *testing.T) {
 version: v0.3
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: model-a

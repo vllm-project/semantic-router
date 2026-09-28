@@ -34,7 +34,7 @@ func decodeResponsesInput(raw json.RawMessage, request *llmprotocol.Request, pol
 }
 
 var responsesItemUnionFields = []string{
-	"arguments", "call_id", "caller", "content", "encrypted_content", "id", "name", "namespace",
+	"arguments", "call_id", "caller", "content", "encrypted_content", "id", "input", "name", "namespace",
 	"output", "phase", "result", "role", "status", "summary", "type",
 }
 
@@ -76,10 +76,10 @@ func decodeResponsesItemWire(body json.RawMessage, policy llmprotocol.Policy, pr
 
 func isSupportedResponsesItemType(itemType string, providerOutput bool) bool {
 	if providerOutput {
-		return itemType == "message" || itemType == "function_call" || itemType == "reasoning" || itemType == "image_generation_call"
+		return itemType == "message" || itemType == "function_call" || itemType == "custom_tool_call" || itemType == "reasoning" || itemType == "image_generation_call"
 	}
 	switch itemType {
-	case "message", "function_call", "function_call_output", "reasoning", "item_reference", "image_generation_call":
+	case "message", "function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output", "reasoning", "item_reference", "image_generation_call":
 		return true
 	default:
 		return false
@@ -104,6 +104,18 @@ func validateResponsesItemVariant(body json.RawMessage, itemType string, provide
 		}
 		return responsesItemDecodeError(providerOutput, "item includes a field from another union variant: "+field, nil)
 	}
+	if itemType == "custom_tool_call" || itemType == "custom_tool_call_output" {
+		required := []string{"call_id", "input", "name"}
+		if itemType == "custom_tool_call_output" {
+			required = []string{"call_id", "output"}
+		}
+		for _, field := range required {
+			value, present := object[field]
+			if !present || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+				return responsesItemDecodeError(providerOutput, "custom tool item is missing required field: "+field, nil)
+			}
+		}
+	}
 	if itemType == "image_generation_call" {
 		for _, field := range []string{"id", "status", "result"} {
 			if _, present := object[field]; !present {
@@ -127,6 +139,10 @@ func responsesItemAllowedFields(itemType string) []string {
 		return []string{"arguments", "call_id", "caller", "id", "name", "namespace", "status", "type"}
 	case "function_call_output":
 		return []string{"call_id", "caller", "id", "name", "namespace", "output", "status", "type"}
+	case "custom_tool_call":
+		return []string{"call_id", "caller", "id", "input", "name", "namespace", "status", "type"}
+	case "custom_tool_call_output":
+		return []string{"call_id", "caller", "id", "output", "status", "type"}
 	case "reasoning":
 		return []string{"content", "encrypted_content", "id", "status", "summary", "type"}
 	case "item_reference":
@@ -178,7 +194,9 @@ func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	if item.Namespace != "" {
 		return rejectUnsupportedRequestField("input.namespace", json.RawMessage(`true`))
 	}
-	if item.Status != "" && item.Type != "image_generation_call" {
+	if item.Status != "" && item.Type != "" && item.Type != "message" &&
+		item.Type != "function_call" && item.Type != "function_call_output" &&
+		item.Type != "custom_tool_call" && item.Type != "custom_tool_call_output" && item.Type != "image_generation_call" {
 		return rejectUnsupportedRequestField("input.status", json.RawMessage(`true`))
 	}
 	return nil
@@ -196,11 +214,16 @@ func decodeResponsesInputItemKind(
 	case "function_call":
 		request.Messages = append(request.Messages, decodeResponsesFunctionCall(item, index, policy))
 		return nil
+	case "custom_tool_call":
+		request.Messages = append(request.Messages, decodeResponsesCustomCall(item, index, policy))
+		return nil
 	case "function_call_output":
 		if item.Name != "" {
 			return rejectUnsupportedRequestField("input.function_call_output.name", json.RawMessage(`true`))
 		}
-		return decodeResponsesFunctionResult(item, request, policy)
+		return decodeResponsesToolResult(item, request, policy, "")
+	case "custom_tool_call_output":
+		return decodeResponsesToolResult(item, request, policy, llmprotocol.ToolKindCustom)
 	case "reasoning":
 		return decodeResponsesReasoningItem(item, request, policy)
 	case "image_generation_call":
@@ -262,14 +285,28 @@ func decodeResponsesFunctionCall(item responsesItemWire, index int, policy llmpr
 	}}}
 }
 
-func decodeResponsesFunctionResult(item responsesItemWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+func decodeResponsesCustomCall(item responsesItemWire, index int, policy llmprotocol.Policy) llmprotocol.Message {
+	id := item.CallID
+	if id == "" {
+		id = item.ID
+	}
+	if id == "" && policy.MissingStableIDs == llmprotocol.MissingIDGenerateStable {
+		id = llmprotocol.StableID("responses-custom", fmt.Sprint(index), item.Name, item.Input)
+	}
+	return llmprotocol.Message{ID: item.ID, Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{
+		Kind:     llmprotocol.ContentToolCall,
+		ToolCall: &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: id, Name: item.Name, Arguments: item.Input},
+	}}}
+}
+
+func decodeResponsesToolResult(item responsesItemWire, request *llmprotocol.Request, policy llmprotocol.Policy, kind llmprotocol.ToolKind) error {
 	content, err := decodeResponsesContent(item.Output, policy, responsesFunctionOutputContent)
 	if err != nil {
 		return err
 	}
 	request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
 		Kind:       llmprotocol.ContentToolResult,
-		ToolResult: &llmprotocol.ToolResult{CallID: item.CallID, Content: content},
+		ToolResult: &llmprotocol.ToolResult{Kind: kind, CallID: item.CallID, Content: content},
 	}}})
 	return nil
 }
@@ -692,16 +729,21 @@ func decodeResponsesObjectToolChoice(raw json.RawMessage, policy llmprotocol.Pol
 		Type string `json:"type"`
 		Name string `json:"name"`
 	}
-	if decodeWireValue(raw, &named, policy) != nil || named.Type != "function" || named.Name == "" {
+	if decodeWireValue(raw, &named, policy) != nil ||
+		(named.Type != "function" && named.Type != "custom") || named.Name == "" {
 		return llmprotocol.ToolChoice{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_choice", "Responses tool choice is invalid", nil)
 	}
-	return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: named.Name}, nil
+	choice := llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: named.Name}
+	if named.Type == "custom" {
+		choice.Kind = llmprotocol.ToolKindCustom
+	}
+	return choice, nil
 }
 
 func unsupportedResponsesToolChoice(typeName string) bool {
 	switch typeName {
 	case "allowed_tools", "apply_patch", "code_interpreter", "computer", "computer_use",
-		"computer_use_preview", "custom", "file_search", "mcp",
+		"computer_use_preview", "file_search", "mcp",
 		"programmatic_tool_calling", "shell", "web_search_preview", "web_search_preview_2025_03_11":
 		return true
 	default:

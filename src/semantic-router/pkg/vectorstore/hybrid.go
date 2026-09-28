@@ -393,10 +393,15 @@ func fuseWeighted(all map[string]*FusedChunk, config *HybridSearchConfig) {
 
 	for _, fc := range all {
 		normBM25 := 0.0
-		if bm25Range > 0 {
-			normBM25 = (fc.BM25Score - bm25Min) / bm25Range
-		} else if fc.BM25Score > 0 {
-			normBM25 = 1.0
+		// A zero BM25 score means this candidate had no lexical match. Keep
+		// that missing signal at zero instead of applying the min-max formula
+		// to it, which would make it negative when bm25Min is positive.
+		if fc.BM25Score > 0 {
+			if bm25Range > 0 {
+				normBM25 = (fc.BM25Score - bm25Min) / bm25Range
+			} else {
+				normBM25 = 1.0
+			}
 		}
 		fc.FinalScore = wV*fc.VectorScore + wB*normBM25 + wN*fc.NgramScore
 	}
@@ -472,10 +477,14 @@ func GenericHybridRerank(
 	}
 	config.applyDefaults()
 
-	// Fetch an expanded candidate set from the base vector search.
-	expandedTopK := topK * rerankCandidateMultiplier
-	if expandedTopK < 50 {
-		expandedTopK = 50
+	// Fetch an expanded candidate set from the base vector search. A non-positive
+	// topK means unlimited results, so preserve that contract for candidate fetches.
+	expandedTopK := 0
+	if topK > 0 {
+		expandedTopK = topK * rerankCandidateMultiplier
+		if expandedTopK < 50 {
+			expandedTopK = 50
+		}
 	}
 
 	vectorResults, err := backend.Search(ctx, vectorStoreID, queryEmbedding,
@@ -518,7 +527,11 @@ func GenericHybridRerank(
 		keyToIdx[k] = i
 	}
 
-	results := make([]SearchResult, 0, topK)
+	resultCapacity := topK
+	if resultCapacity < 0 {
+		resultCapacity = 0
+	}
+	results := make([]SearchResult, 0, resultCapacity)
 	for _, fc := range fused {
 		if fc.FinalScore < float64(threshold) {
 			continue

@@ -52,7 +52,7 @@ func testAPIServerClassificationEndpoints(
 	defer session.Close()
 
 	httpClient := session.HTTPClient(30 * time.Second)
-	_, configDoc, err := fetchRouterConfigDocument(ctx, httpClient, session.URL("/config/router"))
+	_, configDoc, err := fetchRouterConfigDocument(ctx, httpClient, session.URL("/api/v1/config"))
 	if err != nil {
 		return err
 	}
@@ -61,18 +61,18 @@ func testAPIServerClassificationEndpoints(
 	// by the API server's focused tests; mutating the shared live fixture here
 	// would be deployment-specific and could contaminate later E2E cases.
 
-	metricsDoc, err := fetchClassificationMetricsDocument(ctx, httpClient, session.URL("/metrics/classification"))
+	metricsDoc, err := fetchClassificationMetricsDocument(ctx, httpClient, session.URL("/api/v1/observability/classification-metrics"))
 	if err != nil {
 		return err
 	}
 	if metricsDoc.DecisionCount != len(configDoc.Routing.Decisions) {
-		return fmt.Errorf("expected /metrics/classification decision_count=%d, got %d", len(configDoc.Routing.Decisions), metricsDoc.DecisionCount)
+		return fmt.Errorf("expected /api/v1/observability/classification-metrics decision_count=%d, got %d", len(configDoc.Routing.Decisions), metricsDoc.DecisionCount)
 	}
 
 	combinedKeys, err := fetchCombinedClassificationKeys(
 		ctx,
 		httpClient,
-		session.URL("/api/v1/classify/combined"),
+		session.URL("/api/v1/diagnostics/classify/combined"),
 		map[string]string{"text": "Briefly explain what an API is."},
 	)
 	if err != nil {
@@ -100,15 +100,15 @@ func fetchRouterConfigDocument(
 		return nil, nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("expected /config/router status 200, got %d: %s", resp.StatusCode, string(resp.Body))
+		return nil, nil, fmt.Errorf("expected /api/v1/config status 200, got %d: %s", resp.StatusCode, string(resp.Body))
 	}
 
 	var doc routerConfigDocument
 	if err := json.Unmarshal(resp.Body, &doc); err != nil {
-		return nil, nil, fmt.Errorf("decode /config/router response: %w", err)
+		return nil, nil, fmt.Errorf("decode /api/v1/config response: %w", err)
 	}
 	if len(doc.Routing.Decisions) == 0 {
-		return nil, nil, fmt.Errorf("expected /config/router to include routing decisions")
+		return nil, nil, fmt.Errorf("expected /api/v1/config to include routing decisions")
 	}
 	return resp.Body, &doc, nil
 }
@@ -123,15 +123,15 @@ func fetchClassificationMetricsDocument(
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("expected /metrics/classification status 200, got %d: %s", resp.StatusCode, string(resp.Body))
+		return nil, fmt.Errorf("expected /api/v1/observability/classification-metrics status 200, got %d: %s", resp.StatusCode, string(resp.Body))
 	}
 
 	var doc classificationMetricsDocument
 	if err := json.Unmarshal(resp.Body, &doc); err != nil {
-		return nil, fmt.Errorf("decode /metrics/classification response: %w", err)
+		return nil, fmt.Errorf("decode /api/v1/observability/classification-metrics response: %w", err)
 	}
 	if !doc.RouterConfigAPI {
-		return nil, fmt.Errorf("expected /metrics/classification to advertise router_config_api=true")
+		return nil, fmt.Errorf("expected /api/v1/observability/classification-metrics to advertise router_config_api=true")
 	}
 	return &doc, nil
 }
@@ -144,7 +144,7 @@ func fetchCombinedClassificationKeys(
 ) ([]string, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("marshal /api/v1/classify/combined payload: %w", err)
+		return nil, fmt.Errorf("marshal /api/v1/diagnostics/classify/combined payload: %w", err)
 	}
 
 	resp, err := postJSON(ctx, httpClient, http.MethodPost, url, body)
@@ -152,17 +152,17 @@ func fetchCombinedClassificationKeys(
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("expected /api/v1/classify/combined status 200, got %d: %s", resp.StatusCode, string(resp.Body))
+		return nil, fmt.Errorf("expected /api/v1/diagnostics/classify/combined status 200, got %d: %s", resp.StatusCode, string(resp.Body))
 	}
 
 	var document map[string]json.RawMessage
 	if err := json.Unmarshal(resp.Body, &document); err != nil {
-		return nil, fmt.Errorf("decode /api/v1/classify/combined response: %w", err)
+		return nil, fmt.Errorf("decode /api/v1/diagnostics/classify/combined response: %w", err)
 	}
 	keys := []string{"intent", "pii", "security", "processing_time_ms"}
 	for _, key := range keys {
 		if _, ok := document[key]; !ok {
-			return nil, fmt.Errorf("expected /api/v1/classify/combined response to include %q", key)
+			return nil, fmt.Errorf("expected /api/v1/diagnostics/classify/combined response to include %q", key)
 		}
 	}
 	return keys, nil

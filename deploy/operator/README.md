@@ -49,7 +49,7 @@ model paths before applying one.
 | Sample | What it demonstrates |
 | --- | --- |
 | `vllm.ai_v1alpha1_semanticrouter_simple.yaml` | Small standalone CR with a KServe backend. |
-| `vllm.ai_v1alpha1_semanticrouter_gateway.yaml` | Existing-Gateway mode; the user still owns the `HTTPRoute`. |
+| `vllm.ai_v1alpha1_semanticrouter_gateway.yaml` | Standalone Router plus a user-managed `HTTPRoute` to Envoy port 8801. |
 | `vllm.ai_v1alpha1_semanticrouter_llamastack.yaml` | Label-based Llama Stack service discovery. |
 | `vllm.ai_v1alpha1_semanticrouter_openshift.yaml` | OpenShift-oriented workload and Route settings. |
 | `vllm.ai_v1alpha1_semanticrouter_route.yaml` | OpenShift Route creation. |
@@ -81,13 +81,19 @@ self-contained mode for a cluster without a shared Gateway.
 
 ### Existing Gateway
 
-With `spec.gateway.existingRef`, the controller resolves the referenced Gateway
-and changes the workload to gateway-integration mode. Automatic `HTTPRoute`
-creation is not implemented. Apply and manage a route that matches your Gateway
-and Service separately.
+For ordinary Gateway HTTP forwarding, omit `spec.gateway.existingRef` and
+apply the Gateway sample's `HTTPRoute`. It targets the standalone Router
+Service's `envoy-http` port **8801**, where the Envoy sidecar invokes ExtProc.
+Keep the route in the Router Service namespace and allow that namespace on
+the Gateway listener. Verify `Accepted=True`, `ResolvedRefs=True`, and a real
+completion through the Gateway.
 
-Do not assume the Gateway sample creates ingress traffic just because the CR is
-ready; verify both the Gateway reference and your `HTTPRoute` status.
+With `spec.gateway.existingRef`, the controller resolves the referenced Gateway
+and omits the sidecar. The Gateway must then own the inference data plane:
+configure its ExtProc integration with the Router Service's gRPC port (default
+**50051**) and routes to the real model Services. The Operator does not create
+those policies or an `HTTPRoute`. The Router `api` port (default **8080**) is
+for management requests, not an inference route backend.
 
 ### OpenShift Route
 

@@ -13,7 +13,8 @@ type CacheAffinityContext struct {
 	// TurnIndex is the number of prior turns in this session (0 = first turn).
 	TurnIndex int
 
-	// PreviousModel is the model used in the immediately preceding turn.
+	// PreviousModel is the model used in the immediately preceding turn, or the
+	// model that last served PromptCacheKey when the session has none.
 	// Empty means either first turn or unavailable history.
 	PreviousModel string
 
@@ -21,6 +22,10 @@ type CacheAffinityContext struct {
 	// It provides an explicit continuation signal for server-side conversation
 	// chains and inline-history requests alike.
 	PreviousResponseID string
+
+	// PromptCacheKey is the client's prompt_cache_key. Like PreviousResponseID,
+	// it is an explicit continuation signal from the client.
+	PromptCacheKey string
 
 	// HistoryTokens estimates the token count of prior conversation state,
 	// excluding the current user turn.
@@ -62,6 +67,9 @@ const (
 	// wrPreviousResponseFloor keeps a small continuation signal for Response API
 	// chains that rely on server-side history instead of resending messages.
 	wrPreviousResponseFloor = 0.15
+
+	// wrPromptCacheKeyFloor gives the same floor to a client prompt_cache_key.
+	wrPromptCacheKeyFloor = 0.15
 
 	// E_m weights shape per-candidate signed affinity before tanh squashing.
 	// same_model terms reward staying on the previous model for continuation-
@@ -121,7 +129,8 @@ func ComputeCacheAffinityAdjustments(
 	// Requests without prior context do not benefit from cache affinity.
 	hasContinuation := ctx.TurnIndex > 0 ||
 		ctx.HistoryTokens > 0 ||
-		ctx.PreviousResponseID != ""
+		ctx.PreviousResponseID != "" ||
+		ctx.PromptCacheKey != ""
 	if !hasContinuation {
 		return CacheAffinityResult{}
 	}
@@ -137,6 +146,9 @@ func ComputeCacheAffinityAdjustments(
 	wReq := clampF(wrReuse*reuseRatio+wrMass*historyMass+wrTurn*turnDepth, 0, 1)
 	if ctx.PreviousResponseID != "" {
 		wReq = math.Max(wReq, wrPreviousResponseFloor)
+	}
+	if ctx.PromptCacheKey != "" {
+		wReq = math.Max(wReq, wrPromptCacheKeyFloor)
 	}
 	result.WReq = wReq
 

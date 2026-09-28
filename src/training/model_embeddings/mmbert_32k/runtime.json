@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "purpose": "Reproducible ROCm validation baseline; not the unrecoverable historical training image",
+  "image": "rocm/pytorch:rocm7.2_ubuntu22.04_py3.11_pytorch_release_2.10.0@sha256:8ea1aa153bbd57b0b37ee20ed97dac5ee22edd0dfbd31f8937767e9c04f9e1d5",
+  "image_metadata": {
+    "rocm": "7.2",
+    "python": "3.11",
+    "pytorch": "2.10.0",
+    "ubuntu": "22.04"
+  },
+  "historical_artifact_evidence": {
+    "foundation_pytorch": "2.3 + ROCm 6.2",
+    "embedder_pytorch": "2.9.1+git8907517",
+    "embedder_sentence_transformers": "5.3.0.dev0",
+    "embedder_transformers": "4.57.6"
+  }
+}

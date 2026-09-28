@@ -1,0 +1,45 @@
+id: stepfun
+display_name: StepFun
+description: Step models through StepFun's OpenAI-compatible API.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.stepfun.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+reasoning_transport: top_level_effort
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:stepfun
+  monogram: S
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: stepfun/step-3.7-flash
+  relationship: first_party
+  id: step-3.7-flash
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_effort
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-06
+    source: https://platform.stepfun.com/docs/zh/guides/developer/reasoning
+- catalog: stepfun/step-3.5-flash
+  relationship: first_party
+  id: step-3.5-flash
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-06
+    source: https://platform.stepfun.com/docs/zh/guides/developer/reasoning

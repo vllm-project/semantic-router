@@ -18,11 +18,11 @@ To reproduce the containerized pre-commit workflow:
 make precommit-local
 ```
 
-The changed-file validation report may require additional language or domain
-checks:
+For the normal changed-file path:
 
 ```bash
-make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+make impact ENV=cpu CHANGED_FILES="path/one path/two"
+make check CHANGED_FILES="path/one path/two"
 ```
 
 ## Language conventions
@@ -30,7 +30,7 @@ make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
 ### Go
 
 - Format with `gofmt`.
-- Keep packages and files focused on one responsibility.
+- Prefer cohesive packages and split only where ownership or testability improves.
 - Document exported APIs where their purpose is not self-evident.
 - Verify module metadata with `make check-go-mod-tidy`.
 - Use `make go-lint` for the repository lint configuration.

@@ -22,6 +22,7 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeModality:      func(target *MatchedSignals) *[]string { return &target.Modality },
 	config.SignalTypeAuthz:         func(target *MatchedSignals) *[]string { return &target.Authz },
 	config.SignalTypeJailbreak:     func(target *MatchedSignals) *[]string { return &target.Jailbreak },
+	config.SignalTypeSafety:        func(target *MatchedSignals) *[]string { return &target.Safety },
 	config.SignalTypePII:           func(target *MatchedSignals) *[]string { return &target.PII },
 	config.SignalTypeKB:            func(target *MatchedSignals) *[]string { return &target.KB },
 	config.SignalTypeConversation:  func(target *MatchedSignals) *[]string { return &target.Conversation },
@@ -52,6 +53,7 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		Modality:      signals.MatchedModalityRules,
 		Authz:         signals.MatchedAuthzRules,
 		Jailbreak:     signals.MatchedJailbreakRules,
+		Safety:        signals.MatchedSafetyRules,
 		PII:           signals.MatchedPIIRules,
 		KB:            signals.MatchedKBRules,
 		Conversation:  signals.MatchedConversationRules,
@@ -125,6 +127,7 @@ func getUnmatchedSignals(
 	collectUnmatchedRuleNames(&unmatched.Modality, cfg.ModalityRules, signals.MatchedModalityRules, func(rule config.ModalityRule) string { return rule.Name })
 	collectUnmatchedAuthzRules(&unmatched.Authz, cfg.GetRoleBindings(), signals.MatchedAuthzRules)
 	collectUnmatchedRuleNames(&unmatched.Jailbreak, cfg.JailbreakRules, signals.MatchedJailbreakRules, func(rule config.JailbreakRule) string { return rule.Name })
+	collectUnmatchedRuleNames(&unmatched.Safety, cfg.SafetyRules, signals.MatchedSafetyRules, func(rule config.SafetyRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.PII, cfg.PIIRules, signals.MatchedPIIRules, func(rule config.PIIRule) string { return rule.Name })
 	collectUnmatchedProjectionOutputs(&unmatched.Projection, cfg.Projections.Mappings, signals.MatchedProjectionRules)
 	collectUnmatchedRuleNames(&unmatched.Metadata, cfg.MetadataRules, signals.MatchedMetadataRules, func(rule config.MetadataRule) string { return rule.Name })

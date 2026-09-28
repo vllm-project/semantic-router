@@ -19,8 +19,10 @@ from cli.algorithms import (  # noqa: E402
     AutoMixSelectionConfig,
     FusionAlgorithmConfig,
     HybridSelectionConfig,
+    MultiFactorObjectiveConfig,
     MultiFactorSelectionConfig,
     PromptSelectionConfig,
+    QualityEvidenceConfig,
     RatingsAlgorithmConfig,
     ReMoMAlgorithmConfig,
     RouterDCSelectionConfig,
@@ -208,12 +210,33 @@ class TestMultiFactorSelectionConfig:
         config = MultiFactorSelectionConfig(
             weights={"quality": 0.4, "latency": 0.2, "cost": 0.2, "load": 0.2},
             slo={"max_tpot_ms": 200, "max_ttft_ms": 800, "max_cost_per_1m": 5.0},
+            quality={
+                "index": "vllm-sr/coding@1.0.0",
+                "on_missing": "disable_quality",
+            },
             latency_percentile=95,
             on_no_candidates="cheapest",
         )
         assert config.weights.quality == 0.4
         assert config.slo.max_ttft_ms == 800
+        assert config.quality.index == "vllm-sr/coding@1.0.0"
+        assert config.quality.on_missing == "disable_quality"
         assert config.latency_percentile == 95
+
+    def test_quality_evidence_defaults_to_strict_missingness(self):
+        quality = QualityEvidenceConfig(index="vllm-sr/intelligence@1.0.0")
+        assert quality.on_missing == "exclude"
+
+    @pytest.mark.parametrize(
+        "quality",
+        [
+            {"index": " vllm-sr/coding@1.0.0"},
+            {"index": "vllm-sr/coding@1.0.0", "on_missing": "impute"},
+        ],
+    )
+    def test_quality_evidence_rejects_ambiguous_contracts(self, quality):
+        with pytest.raises(PydanticValidationError):
+            MultiFactorSelectionConfig(quality=quality)
 
 
 class TestReMoMAlgorithmConfig:
@@ -285,6 +308,7 @@ class TestFusionAlgorithmConfig:
 
     def test_default_values(self):
         config = FusionAlgorithmConfig()
+        assert config.analysis_mode == "separate"
         assert config.include_analysis is True
         assert config.include_intermediate_responses is True
         assert config.on_error == "skip"
@@ -312,6 +336,23 @@ class TestFusionAlgorithmConfig:
         assert config.max_concurrent == 2
         assert config.max_completion_tokens == 512
         assert config.temperature == 0.2
+
+    @pytest.mark.parametrize("analysis_mode", ["separate", "one_call", "none"])
+    def test_analysis_mode_values(self, analysis_mode):
+        config = FusionAlgorithmConfig(analysis_mode=analysis_mode)
+        assert config.analysis_mode == analysis_mode
+
+    def test_analysis_mode_rejects_unknown_value(self):
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(analysis_mode="automatic")
+
+    @pytest.mark.parametrize("analysis_mode", ["one_call", "none"])
+    def test_analysis_mode_rejects_unused_analysis_template(self, analysis_mode):
+        with pytest.raises(PydanticValidationError, match="analysis_template requires"):
+            FusionAlgorithmConfig(
+                analysis_mode=analysis_mode,
+                analysis_template="compare {{responses}}",
+            )
 
     def test_positive_limits(self):
         with pytest.raises(PydanticValidationError):
@@ -406,11 +447,68 @@ class TestAlgorithmConfigIntegration:
         config = AlgorithmConfig(
             type="multi_factor",
             multi_factor=MultiFactorSelectionConfig(
-                weights={"quality": 0.4, "latency": 0.2, "cost": 0.2, "load": 0.2}
+                weights={"quality": 0.4, "latency": 0.2, "cost": 0.2, "load": 0.2},
+                quality={"index": "vllm-sr/intelligence@1.0.0"},
             ),
         )
         assert config.type == "multi_factor"
         assert config.multi_factor.weights.quality == 0.4
+        assert config.multi_factor.quality.on_missing == "exclude"
+
+    def test_multi_factor_lexicographic_objective(self):
+        config = AlgorithmConfig(
+            type="multi_factor",
+            multi_factor=MultiFactorSelectionConfig(
+                objective=MultiFactorObjectiveConfig(
+                    strategy="lexicographic",
+                    priorities=[
+                        {"factor": "quality", "tolerance": 0.02},
+                        {"factor": "cost"},
+                    ],
+                ),
+                quality={
+                    "index": "vllm-sr/intelligence@1.0.0",
+                    "min_coverage": 1.0,
+                    "min_score": 40,
+                },
+            ),
+        )
+
+        assert config.multi_factor.objective.priorities[0].factor == "quality"
+        assert config.multi_factor.quality.min_coverage == 1.0
+        assert config.multi_factor.quality.min_score == 40
+
+    @pytest.mark.parametrize(
+        "multi_factor",
+        [
+            {
+                "objective": {
+                    "strategy": "lexicographic",
+                    "priorities": [{"factor": "quality"}],
+                },
+                "weights": {"quality": 1},
+            },
+            {
+                "objective": {
+                    "strategy": "lexicographic",
+                    "priorities": [
+                        {"factor": "cost"},
+                        {"factor": "cost"},
+                    ],
+                }
+            },
+            {
+                "quality": {
+                    "index": "vllm-sr/intelligence@1.0.0",
+                    "on_missing": "disable_quality",
+                    "min_score": 40,
+                }
+            },
+        ],
+    )
+    def test_multi_factor_rejects_ambiguous_objectives(self, multi_factor):
+        with pytest.raises(PydanticValidationError):
+            MultiFactorSelectionConfig.model_validate(multi_factor)
 
     def test_workflows_algorithm_config(self):
         """Test AlgorithmConfig with workflows dynamic config."""

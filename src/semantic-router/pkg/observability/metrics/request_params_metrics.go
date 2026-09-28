@@ -31,14 +31,6 @@ var (
 		},
 		[]string{"decision"},
 	)
-
-	RequestParamsUnknownFieldStripped = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "sr_request_params_unknown_field_stripped_total",
-			Help: "Total number of unknown fields stripped from requests",
-		},
-		[]string{"decision", "field"},
-	)
 )
 
 func RecordBlockedParam(decision, param string) {
@@ -51,8 +43,4 @@ func RecordMaxTokensCapped(decision string) {
 
 func RecordMaxNCapped(decision string) {
 	RequestParamsMaxNCapped.WithLabelValues(decision).Inc()
-}
-
-func RecordUnknownFieldStripped(decision, field string) {
-	RequestParamsUnknownFieldStripped.WithLabelValues(decision, field).Inc()
 }

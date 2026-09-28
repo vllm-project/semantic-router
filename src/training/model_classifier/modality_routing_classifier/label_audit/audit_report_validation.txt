@@ -1,0 +1,13 @@
+judged 758/758 rows of validation | rubric hashes {'75a64835': 758}
+agreement original vs judge (strict):    702/758 = 0.9261  kappa=0.883
+agreement original vs judge (inclusive): 725/758 = 0.9565  (inclusive = strict, but AR+vh counts as BOTH)
+
+confusion, rows=original cols=judge (strict), order AR/DIFFUSION/BOTH:
+  AR         [299, 1, 0]
+  DIFFUSION  [12, 288, 0]
+  BOTH       [43, 0, 115]
+
+disagreements: 56 | by judge confidence {'H': 42, 'M': 14} | vh among judge=AR: 35/354
+tags: {'non_english': 43, 'truncated': 87, 'about_images': 3, 'prompt_writing': 8, 'ambiguous': 1, 'no_request': 1, 'deliverable_visual': 5}
+
+--- disagreements (original -> judge), confident ones first, showing 0 ---

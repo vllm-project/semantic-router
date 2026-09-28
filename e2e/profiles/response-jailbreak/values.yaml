@@ -8,12 +8,13 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: openai/mock-model
+      model: openai/mock-model
     models:
       - name: openai/mock-model
         backend_refs:
-          - name: mock-vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+          - name: provider-mocker
+            provider: vllm
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
   routing:
     # Both response_jailbreak decisions are selected by a deterministic
@@ -22,10 +23,12 @@ config:
     # a passthrough to a concrete backend model, which skips plugins
     # entirely (see performDecisionEvaluation).
     #
-    # There is deliberately no jailbreak signal rule here: prompt_guard is
-    # enabled for the response filter, but nothing on the request path
-    # thresholds it, so the probe prompt reaches the backend and comes back
-    # as LLM output - which is the surface under test.
+    # There is deliberately no request-direction jailbreak rule here:
+    # prompt_guard is enabled for the response filter, but nothing on the
+    # request path thresholds it, so the probe prompt reaches the backend and
+    # comes back as LLM output - which is the surface under test. The one
+    # jailbreak rule below has direction: response, so it is scored from that
+    # output only.
     decisions:
       - name: response_jailbreak_block
         description: Blocks the response when the guardrail flags LLM output
@@ -80,6 +83,15 @@ config:
           operator: OR
           keywords:
             - __response_warn_probe__
+      # Scored from the model's output, not the request. The block and warn
+      # decisions above enforce on this observation through their
+      # response_jailbreak plugins; their plugin thresholds are ignored once
+      # this rule exists, so the threshold that decides lives here.
+      jailbreak:
+        - name: unsafe_completion
+          direction: response
+          threshold: 0.5
+          description: Detect jailbreak content in the model's own output.
     modelCards:
       - name: openai/mock-model
   global:
@@ -111,7 +123,7 @@ config:
     model_catalog:
       kbs: []
       external:
-        # The same mock-vllm that serves the chat backend also serves the
+        # The same provider-mocker that serves the chat backend also serves the
         # http_classify contract on /classify. It scores only the first
         # CLASSIFY_WINDOW_CHARS of whatever it is sent, the way a real
         # sequence classifier only ever sees its own sequence window - which
@@ -122,7 +134,7 @@ config:
           model_role: guardrail
           llm_model_name: mock-guardrail
           llm_endpoint:
-            address: mock-vllm.default.svc.cluster.local
+            address: provider-mocker.default.svc.cluster.local
             port: 8000
             protocol: http
           llm_timeout_seconds: 10
@@ -132,7 +144,10 @@ config:
           model_ref: ""
           model_id: ""
           variant: ""
-          protocol: http_classify
+          backend:
+            protocol: http_classify
+            contract: label_distribution.v1
+            model: mock-guardrail
           threshold: 0.5
           positive_labels: [jailbreak]
           jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json

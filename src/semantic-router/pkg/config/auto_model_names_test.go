@@ -118,11 +118,12 @@ routing:
     - name: model-a
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 global:
   router:
     auto_model_names: []

@@ -13,11 +13,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // BenchmarkConfig defines the parameters for a benchmark run
 type BenchmarkConfig struct {
+	EmbeddingProvider embedding.Provider
 	CacheSize         int     // Number of entries to pre-populate
 	ConcurrencyLevels []int   // Different concurrency levels to test
 	RequestsPerLevel  int     // Number of requests per concurrency level
@@ -282,6 +283,7 @@ func runBenchmarkScenario(config BenchmarkConfig, concurrency int) BenchmarkResu
 		HNSWEfConstruction:  200,
 		HNSWEfSearch:        50,
 		EmbeddingModel:      embeddingModel,
+		EmbeddingProvider:   config.EmbeddingProvider,
 	})
 	defer cache.Close()
 
@@ -478,104 +480,7 @@ func printResults(results []BenchmarkResult) {
 	}
 }
 
-var (
-	// Ensure thread-safe single initialization using sync.Once
-	modelsInitOnce sync.Once
-	modelsInitErr  error
-)
-
-// InitEmbeddingModels initializes the embedding models needed for benchmarks
-// This should be called once before running any benchmarks
-// It initializes Qwen3 which has continuous batching support for better performance
-//
-// Thread-safe: Multiple concurrent calls will only initialize once
-//
-// Environment Variables:
-//
-//	QWEN3_MODEL_PATH - Path to Qwen3 embedding model (optional)
-//	GEMMA_MODEL_PATH - Path to Gemma embedding model (optional)
-//	USE_GPU - Set to "true" or "1" to use GPU instead of CPU (default: CPU)
-//	USE_HNSW - Set to "true" or "1" to enable HNSW indexing, "false" or "0" to disable (default: read from config)
-//
-// Example:
-//
-//	export QWEN3_MODEL_PATH=/path/to/Qwen3-Embedding-0.6B
-//	export USE_GPU=true
-//	export USE_HNSW=true
-func InitEmbeddingModels() error {
-	// Thread-safe initialization - only executes once regardless of concurrent calls
-	modelsInitOnce.Do(func() {
-		modelsInitErr = initEmbeddingModelsOnce()
-	})
-	return modelsInitErr
-}
-
-// initEmbeddingModelsOnce performs the actual initialization (called by sync.Once)
-func initEmbeddingModelsOnce() error {
-	// Check if GPU should be used
-	useGPU := false
-	useGPUEnv := os.Getenv("USE_GPU")
-	if useGPUEnv == "true" || useGPUEnv == "1" {
-		useGPU = true
-	}
-
-	deviceType := "CPU"
-	if useGPU {
-		deviceType = "GPU"
-	}
-
-	fmt.Printf("Initializing Qwen3 embedding model with FIXED continuous batching on %s...\n", deviceType)
-
-	// Check for environment variable first
-	qwen3Path := os.Getenv("QWEN3_MODEL_PATH")
-
-	// If environment variable not set, try common paths
-	var qwen3Paths []string
-	if qwen3Path != "" {
-		fmt.Printf("Using Qwen3 model path from QWEN3_MODEL_PATH: %s\n", qwen3Path)
-		qwen3Paths = []string{qwen3Path}
-	} else {
-		fmt.Println("QWEN3_MODEL_PATH not set, trying default paths...")
-		qwen3Paths = []string{
-			"./models/mom-embedding-pro",
-			"./candle-binding/models/mom-embedding-pro",
-			"../models/mom-embedding-pro",
-			"models/mom-embedding-pro",
-		}
-	}
-
-	// Continuous batching configuration
-	maxBatchSize := 64      // Batch up to 64 requests together
-	maxWaitMs := uint64(10) // Wait max 10ms for batch to fill
-
-	var lastErr error
-	useCPU := !useGPU
-	for i, path := range qwen3Paths {
-		fmt.Printf("  Attempt %d/%d: Trying %s (device: %s)\n", i+1, len(qwen3Paths), path, deviceType)
-
-		// Use InitEmbeddingModelsBatched with FIXED scheduler (returns Vec instead of Tensor!)
-		err := candle_binding.InitEmbeddingModelsBatched(path, maxBatchSize, maxWaitMs, useCPU)
-		if err == nil {
-			fmt.Printf("Qwen3 embedding model initialized from: %s\n", path)
-			fmt.Printf("  Device: %s\n", deviceType)
-			fmt.Printf("  TRUE Continuous batching: ENABLED ✨ (FIXED - no CUDA context errors!)\n")
-			fmt.Printf("    - Max batch size: %d requests\n", maxBatchSize)
-			fmt.Printf("    - Max wait time: %dms\n", maxWaitMs)
-			fmt.Printf("    - Expected throughput: 10-15x improvement with concurrency!\n")
-			if useGPU {
-				fmt.Printf("  GPU acceleration: ENABLED\n")
-			}
-			return nil
-		}
-		lastErr = err
-	}
-
-	return fmt.Errorf("failed to initialize Qwen3 model on %s with continuous batching (tried %d paths): %w", deviceType, len(qwen3Paths), lastErr)
-}
-
-// RunStandaloneBenchmark runs a standalone benchmark (not as a test)
-// This function is exported so it can be called from the standalone benchmark tool
-// Note: Models should be initialized once before calling this function
+// RunStandaloneBenchmark executes using the provider supplied in BenchmarkConfig.
 func RunStandaloneBenchmark(ctx context.Context, config BenchmarkConfig) []BenchmarkResult {
 	var results []BenchmarkResult
 

@@ -85,9 +85,17 @@ export function RecipeProbeDetailPanel({ detail }: { detail: RecipeProbeDetail }
                   <dd>{detail.generated_text.target_text_bytes.toLocaleString()} bytes</dd>
                 </div>
                 <div>
-                  <dt>Filler character</dt>
+                  <dt>
+                    {detail.generated_text.text !== undefined
+                      ? 'Repeating text'
+                      : 'Filler character'}
+                  </dt>
                   <dd>
-                    <code>{JSON.stringify(detail.generated_text.character)}</code>
+                    <code>
+                      {JSON.stringify(
+                        detail.generated_text.text ?? detail.generated_text.character,
+                      )}
+                    </code>
                   </dd>
                 </div>
                 <div>

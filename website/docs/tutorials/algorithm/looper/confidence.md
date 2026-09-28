@@ -126,6 +126,19 @@ Both implement the AutoMix paper's cascade idea but differ in how the verificati
 | Extra infra | None | Requires running [`automix_verifier.py`](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_selection/rl_model_selection/automix_verifier.py) |
 | When to pick | Single-deployment setups; no extra server | Production routes where verifier model can be smaller/specialized |
 
+## Attempt observability
+
+Confidence executions create a `looper.execute` trace span with one
+`looper.attempt` child for each dispatched candidate or verifier call. Router
+Replay stores the corresponding bounded, content-free attempt records under
+`route_diagnostics.looper`, including status, threshold outcome, token usage,
+latency, and the final attempt ordinal. Prompts, responses, reasoning, endpoint
+URLs, credentials, and raw errors are never included in this structure.
+
+The first detailed-attempt implementation covers Confidence. Other Looper
+algorithms continue to expose their existing aggregate diagnostics until they
+adopt the shared attempt lifecycle.
+
 Every escalation sends the request and accumulated answer context to another
 candidate model. Make sure every candidate is allowed by the route's data
 policy, and bound latency and cost for the worst-case chain. See a complete example:

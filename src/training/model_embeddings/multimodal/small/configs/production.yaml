@@ -1,0 +1,55 @@
+schema_version: 1
+
+artifact:
+  repo_id: llm-semantic-router/multi-modal-embed-small
+  revision: fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4
+
+model:
+  text_encoder_name: sentence-transformers/all-MiniLM-L6-v2
+  text_encoder_revision: 1110a243fdf4706b3f48f1d95db1a4f5529b4d41
+  image_encoder_name: google/siglip-base-patch16-512
+  image_encoder_revision: 753a949581523b60257d93e18391e8c27f72eb22
+  audio_encoder_name: openai/whisper-tiny
+  audio_encoder_revision: 169d4a4341b33bc18d8881c4b69c2e104e1cc0af
+  output_dim: 384
+  max_text_length: 128
+  fusion_type: transformer
+  num_fusion_layers: 2
+  enable_layer_outputs: true
+
+training:
+  stage: 1
+  batch_size: 64
+  learning_rate: 1.0e-4
+  num_epochs: 6
+  grad_accum: 1
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  loss_type: matryoshka
+  matryoshka_dims: [32, 64, 128, 256, 384]
+  temperature: 0.07
+  seed: 42
+  use_amp: true
+  early_stop_patience: 3
+  early_stop_min_delta: 0.01
+  save_every_epoch: true
+  save_every_n_batches: 50
+  hardware_exception_retries: 3
+
+data:
+  mode: cached
+  feature_key: pixel_values
+  train_cache: ${MM_EMBED_SMALL_TRAIN_CACHE}
+  validation_cache: ${MM_EMBED_SMALL_VAL_CACHE}
+  sequential_shards: true
+  dynamic_discovery: false
+  validate_shards: true
+  num_workers: 0
+  pin_memory: true
+  dataset:
+    repo_id: liuhaotian/LLaVA-CC3M-Pretrain-595K
+    revision: 814894e93db9e12a1dee78b9669e20e8606fd590
+    reported_pairs: 595000
+
+runtime:
+  output_dir: ${MM_EMBED_SMALL_OUTPUT_DIR}

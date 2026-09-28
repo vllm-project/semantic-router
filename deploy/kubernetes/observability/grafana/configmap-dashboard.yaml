@@ -1121,12 +1121,368 @@ data:
           "type": "timeseries"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "ops"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 47
+          },
+          "id": null,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.5.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum(rate(llm_complexity_verdict_total[5m])) by (rule, verdict)",
+              "legendFormat": "{{rule}}:{{verdict}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Complexity Verdicts by Rule",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "ops"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 47
+          },
+          "id": null,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.5.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum(rate(llm_remote_connector_requests_total[5m])) by (operation, outcome)",
+              "legendFormat": "{{operation}} {{outcome}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Remote Classifier Outcomes",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "s"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 55
+          },
+          "id": null,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.5.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "histogram_quantile(0.95, sum(rate(llm_remote_connector_request_duration_seconds_bucket[5m])) by (le, operation))",
+              "legendFormat": "{{operation}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Remote Classifier Latency (P95)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "ops"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 55
+          },
+          "id": null,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.5.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum(rate(llm_complexity_evaluation_failures_total[5m])) by (source)",
+              "legendFormat": "{{source}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Complexity Evaluation Failures",
+          "type": "timeseries"
+        },
+        {
           "collapsed": false,
           "gridPos": {
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 47
+            "y": 63
           },
           "id": 400,
           "panels": [],
@@ -1160,7 +1516,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 48
+            "y": 64
           },
           "id": 15,
           "options": {
@@ -1218,7 +1574,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 8,
-            "y": 48
+            "y": 64
           },
           "id": 16,
           "options": {
@@ -1276,7 +1632,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 48
+            "y": 64
           },
           "id": 17,
           "options": {
@@ -1366,7 +1722,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 54
+            "y": 70
           },
           "id": 18,
           "options": {
@@ -1455,7 +1811,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 54
+            "y": 70
           },
           "id": 19,
           "options": {
@@ -1491,7 +1847,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 62
+            "y": 78
           },
           "id": 500,
           "panels": [],
@@ -1557,7 +1913,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 63
+            "y": 79
           },
           "id": 20,
           "options": {
@@ -1648,7 +2004,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 71
+            "y": 87
           },
           "id": 21,
           "options": {
@@ -1737,7 +2093,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 71
+            "y": 87
           },
           "id": 22,
           "options": {
@@ -1826,7 +2182,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 79
+            "y": 95
           },
           "id": 23,
           "options": {
@@ -1915,7 +2271,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 79
+            "y": 95
           },
           "id": 24,
           "options": {
@@ -1951,7 +2307,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 87
+            "y": 103
           },
           "id": 550,
           "panels": [],
@@ -2017,7 +2373,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 88
+            "y": 104
           },
           "id": 25,
           "options": {
@@ -2124,7 +2480,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 88
+            "y": 104
           },
           "id": 26,
           "options": {
@@ -2213,7 +2569,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 96
+            "y": 112
           },
           "id": 27,
           "options": {
@@ -2304,7 +2660,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 96
+            "y": 112
           },
           "id": 28,
           "options": {
@@ -2393,7 +2749,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 104
+            "y": 120
           },
           "id": 29,
           "options": {
@@ -2482,7 +2838,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 104
+            "y": 120
           },
           "id": 30,
           "options": {
@@ -2520,7 +2876,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 112
+            "y": 128
           },
           "id": 575,
           "panels": [],
@@ -2586,7 +2942,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 113
+            "y": 129
           },
           "id": 31,
           "options": {
@@ -2693,7 +3049,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 113
+            "y": 129
           },
           "id": 32,
           "options": {
@@ -2782,7 +3138,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 121
+            "y": 137
           },
           "id": 33,
           "options": {
@@ -2871,7 +3227,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 121
+            "y": 137
           },
           "id": 34,
           "options": {
@@ -2907,7 +3263,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 129
+            "y": 145
           },
           "id": 590,
           "panels": [],
@@ -2973,7 +3329,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 130
+            "y": 146
           },
           "id": 35,
           "options": {
@@ -3062,7 +3418,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 130
+            "y": 146
           },
           "id": 36,
           "options": {
@@ -3107,7 +3463,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 138
+            "y": 154
           },
           "id": 600,
           "panels": [],
@@ -3173,7 +3529,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 139
+            "y": 155
           },
           "id": 37,
           "options": {
@@ -3262,7 +3618,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 139
+            "y": 155
           },
           "id": 38,
           "options": {
@@ -3328,7 +3684,7 @@ data:
             "h": 6,
             "w": 6,
             "x": 0,
-            "y": 147
+            "y": 163
           },
           "id": 39,
           "options": {
@@ -3418,7 +3774,7 @@ data:
             "h": 6,
             "w": 18,
             "x": 6,
-            "y": 147
+            "y": 163
           },
           "id": 40,
           "options": {
@@ -3507,7 +3863,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 153
+            "y": 169
           },
           "id": 41,
           "options": {
@@ -3614,7 +3970,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 161
+            "y": 177
           },
           "id": 42,
           "options": {
