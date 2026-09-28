@@ -1,0 +1,29 @@
+"""Compact, shareable summary of an inventory JSON: private repos, per-folder LFS bytes, refs and commit counts."""
+import json
+import sys
+from collections import defaultdict
+
+doc = json.load(open(sys.argv[1]))
+out = {"utc": doc["utc"], "org": doc["org"], "org_plan": doc.get("org_plan"),
+       "private_bytes": sum(r["used"] for r in doc["repos"] if r["private"]),
+       "private_repos": [], "collections": {c["title"]: [i["id"] for i in c["items"]]
+                                            for c in doc["collections"] if c["private"]}}
+for r in sorted((r for r in doc["repos"] if r["private"]), key=lambda r: -r["used"]):
+    row = {"kind": r["kind"], "id": r["id"], "used": r["used"], "sha": r["sha"]}
+    if "lfs" in r:
+        folders = defaultdict(lambda: {"objects": 0, "bytes": 0, "pushed_first": None, "pushed_last": None})
+        for f in r["lfs"]:
+            parts = f["filename"].split("/")
+            key = "/".join(parts[:2]) + "/" if len(parts) > 2 else (parts[0] + "/" if len(parts) > 1 else "(root)")
+            g = folders[key]
+            g["objects"] += 1
+            g["bytes"] += f["size"]
+            g["pushed_first"] = min(filter(None, [g["pushed_first"], f["pushed_at"][:19]]))
+            g["pushed_last"] = max(filter(None, [g["pushed_last"], f["pushed_at"][:19]]))
+        row["lfs_by_top_folder"] = dict(sorted(folders.items(), key=lambda kv: -kv[1]["bytes"]))
+        row["branches"] = r["refs"]["branches"]
+        row["tags"] = len(r["refs"]["tags"])
+        row["commits"] = len(r["commits"])
+    out["private_repos"].append(row)
+json.dump(out, sys.stdout, indent=1)
+print()
