@@ -366,12 +366,71 @@ def absent(repo: str) -> dict[str, Any]:
         return {"repo_id": repo, "exists": False, "http_status": exc.code}
 
 
+def check_local(receipt: dict[str, Any], key: str, snapshot: Path) -> dict[str, Any]:
+    """Hash a downloaded snapshot against the remote LFS and small-file digests."""
+    candidate = receipt["candidates"][key]
+    mismatched, missing, checked = [], [], 0
+    for name, meta in candidate["files"].items():
+        path = snapshot / name
+        if not path.is_file():
+            if (
+                name.endswith((".safetensors", ".json", ".jinja", ".txt"))
+                or name == "LICENSE"
+            ):
+                missing.append(name)
+            continue
+        expected = meta.get("lfs_sha256") or candidate["small_file_sha256"].get(name)
+        if expected is None:
+            continue
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for block in iter(lambda: stream.read(1 << 24), b""):
+                digest.update(block)
+        checked += 1
+        if digest.hexdigest() != expected:
+            mismatched.append(name)
+    return {
+        "key": key,
+        "revision": candidate["revision"],
+        "files_checked": checked,
+        "missing": missing,
+        "mismatched": mismatched,
+        "passed": not missing and not mismatched and checked > 0,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--receipt", type=Path, help="Existing receipt for --check-local"
+    )
+    parser.add_argument(
+        "--check-local", action="append", default=[], help="KEY=SNAPSHOT_DIR"
+    )
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError("Refusing to overwrite a verification receipt")
+    if args.check_local:
+        receipt = json.loads(args.receipt.read_text(encoding="utf-8"))
+        results = [
+            check_local(receipt, *spec.split("=", 1)) for spec in args.check_local
+        ]
+        payload = {
+            "schema_version": "decision2-27b-local-snapshot-check/1",
+            "remote_receipt_sha256": hashlib.sha256(
+                args.receipt.read_bytes()
+            ).hexdigest(),
+            "results": [
+                dict(item, snapshot=Path(spec.split("=", 1)[1]).name)
+                for item, spec in zip(results, args.check_local)
+            ],
+        }
+        args.output.write_text(
+            json.dumps(payload, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        print(json.dumps(payload["results"]))
+        raise SystemExit(0 if all(item["passed"] for item in results) else 1)
     started = time.time()
     receipt = {
         "schema_version": "decision2-27b-candidate-verification/1",
