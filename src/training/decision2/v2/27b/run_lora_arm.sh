@@ -42,8 +42,8 @@ COMMON_MOUNTS=(
   --mount "$BENCH/dev.prompts.jsonl:/data/dev.prompts.jsonl"
   --mount "$BENCH/css-transfer-v1/css-pilot.prompts.jsonl:/data/css-pilot.prompts.jsonl"
 )
-TRAIN_ARGS=(
-  python3 -m training.model.train --model-path "$MODEL" --init-kind posttrained
+CONTRACT_ARGS=(
+  --init-kind posttrained
   --base-revision "$REVISION" --train /data/train.jsonl --select /data/select.jsonl
   --cal /data/cal.jsonl --objective ce_brier --brier-weight 0.5 --train-mode lora
   --lora-rank 8 --lora-alpha 16 --lora-dropout 0.05 --lora-lr 2e-5 --epochs 1
@@ -51,6 +51,9 @@ TRAIN_ARGS=(
   --backbone-lr 1e-6 --head-lr 1e-4 --weight-decay 0.01 --warmup-ratio 0.05
   --seed "$SEED" --gradient-checkpointing
 )
+TRAIN_ARGS=(python3 -m training.model.train --model-path "$MODEL" "${CONTRACT_ARGS[@]}")
+RESUME_ARGS=(python3 -m training.model.train --source-path "$MODEL" "${CONTRACT_ARGS[@]}")
+exit_of() { python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['exit_code'])" "$1"; }
 launch() {  # name cap purpose out_dir -- argv...
   local name=$1 cap=$2 purpose=$3 out=$4
   shift 5
@@ -81,12 +84,44 @@ if has reload; then
     --rows 32 --max-length 4096 --output /out/reload-parity.json
 fi
 if has full; then
-  launch full 3.0 "full 458-update arm" "$RUN/full" -- "${TRAIN_ARGS[@]}" \
-    --save-every 92 --output /out/run
+  # Amendment 2: exit 139 (native runtime fault) is an interruption, not an outcome.
+  # Before the first checkpoint: one fresh restart in a new directory; after it:
+  # exact resume from the latest complete checkpoint. At most two recoveries.
+  run=${RUN_NAME:-run}
+  attempt=${ATTEMPT_START:-1}
+  while [ ! -f "$RUN/full/$run/COMPLETE.json" ]; do
+    used=$(python3 -c "import glob,json; print(sum(json.load(open(p))['gpu_hours'] for p in glob.glob('$RUN/receipts/*.json')))")
+    if python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) < 3.5 else 1)" "$used"; then :; else
+      echo "arm $ARM stopped: cumulative GPU-hours $used reached the 3.5 cap" >&2
+      exit 1
+    fi
+    name=full
+    [ "$attempt" -gt 1 ] && name=full-r$attempt
+    latest=$(find "$RUN/full/$run" -maxdepth 1 -type d -name 'checkpoint-*' ! -name '*.pending' 2>/dev/null | sort | tail -1)
+    if [ -n "$latest" ]; then
+      launch "$name" 3.0 "exact resume from $(basename "$latest")" "$RUN/full" -- "${RESUME_ARGS[@]}" \
+        --save-every 92 --resume "/out/$run/$(basename "$latest")" --output "/out/$run" || true
+    else
+      launch "$name" 3.0 "full 458-update arm" "$RUN/full" -- "${TRAIN_ARGS[@]}" \
+        --save-every 92 --output "/out/$run" || true
+    fi
+    [ -f "$RUN/full/$run/COMPLETE.json" ] && break
+    code=$(exit_of "$RUN/receipts/$name.json")
+    if [ "$code" != 139 ] || [ "$attempt" -ge 3 ]; then
+      echo "arm $ARM stopped: exit $code on attempt $attempt" >&2
+      exit 1
+    fi
+    if [ -z "$(find "$RUN/full/$run" -maxdepth 1 -type d -name 'checkpoint-*' ! -name '*.pending' 2>/dev/null)" ]; then
+      run=run-r$((attempt + 1))
+    fi
+    attempt=$((attempt + 1))
+  done
+  echo "$run" > "$RUN/full/RUN_DIR"
 fi
 if has readout; then
+  run=$(cat "$RUN/full/RUN_DIR")
   launch readout 1.0 "CAL fit and one DEV/CSS-pilot readout" "$RUN/full" -- \
-    python3 -m v2.27b.readout --run-dir /out/run --source-path "$MODEL" --cal /data/cal.jsonl \
+    python3 -m v2.27b.readout --run-dir "/out/$run" --source-path "$MODEL" --cal /data/cal.jsonl \
     --panel dev=/data/dev.prompts.jsonl --panel css-pilot=/data/css-pilot.prompts.jsonl \
     --model-id "decision2-27b-$ARM" --out-dir /out
 fi
