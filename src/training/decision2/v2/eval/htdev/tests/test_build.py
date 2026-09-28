@@ -437,6 +437,54 @@ class PoolAndExportTest(unittest.TestCase):
                 build.main(args + ["--output-dir", str(tmp / "pool2")])
 
 
+class DisplayOrderTest(unittest.TestCase):
+    def test_written_criteria_keep_the_display_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            WRITERS["circa"](tmp / "sources" / "circa", False)
+            root = tmp / "sources" / "circa"
+            files = {
+                str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in root.rglob("*")
+                if p.is_file()
+            }
+            pins = {
+                "sources": {
+                    "circa": {
+                        "kind": "hf",
+                        "repo": "r",
+                        "revision": "x",
+                        "licence": "l",
+                        "licence_evidence": "e",
+                        "files": files,
+                    }
+                }
+            }
+            (tmp / "pins.json").write_text(json.dumps(pins))
+            build.main(
+                [
+                    "pool",
+                    "--sources-dir",
+                    str(tmp / "sources"),
+                    "--pins",
+                    str(tmp / "pins.json"),
+                    "--output-dir",
+                    str(tmp / "pool"),
+                ]
+            )
+            from v2.eval.htdev.sources import circa
+
+            by_id = {c.source_item_id: c for c in circa.candidates(root)}
+            orders = set()
+            for row in build.read_jsonl(tmp / "pool" / "pool.jsonl"):
+                keys = list(row["question"]["criteria"])
+                self.assertEqual(
+                    keys, list(by_id[row["source_item_id"]].question["criteria"])
+                )
+                orders.add(tuple(keys))
+            self.assertGreater(len(orders), 1)
+
+
 class FlaggedAndScanDropsTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

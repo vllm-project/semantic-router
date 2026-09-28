@@ -98,9 +98,10 @@ def sha_bytes(data: bytes) -> str:
 
 
 def jsonl_bytes(rows: list[dict[str, Any]]) -> bytes:
-    return "".join(
-        json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows
-    ).encode("utf-8")
+    """JSON lines in insertion order: criteria dicts carry the display order."""
+    return "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows).encode(
+        "utf-8"
+    )
 
 
 def private_dir(path: Path) -> None:
