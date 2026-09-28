@@ -245,7 +245,10 @@ def readback(args: argparse.Namespace) -> dict[str, Any]:
     front = readme.split("\n---\n", 1)[0]
     problems = check_rendered(readme, set(expected))
     for key in ("license", "base_model"):
-        if card_data.get(key) is None or f"{key}: {card_data.get(key)}" not in front:
+        value = card_data.get(key)
+        if isinstance(value, list) and len(value) == 1:
+            value = value[0]
+        if value is None or f"{key}: {value}" not in front:
             problems.append(
                 f"Hub-parsed card {key} differs from the README front matter"
             )

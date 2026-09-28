@@ -126,6 +126,9 @@ def render_charts(
     for entry in shown:
         data = json.loads(json.dumps(entry["data"]))
         data["model"]["label"] = entry.get("label") or data["model"]["label"]
+        if entry["role"] == "candidate":
+            # The packaged model is always drawn in the Decision 2.0 colour.
+            data["model"]["family"] = "decision2"
         path = relabeled / f"{entry['key']}.json"
         path.write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
