@@ -1,0 +1,72 @@
+{
+  "device": "cpu",
+  "gpu_hours": 0.0,
+  "image": "decision20-train-fast:host2",
+  "launcher": {
+    "device": "cpu",
+    "env": [],
+    "gpu": null,
+    "image": "decision20-train-fast:host2",
+    "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+    "require_kernels": false,
+    "rw_mounts": [],
+    "schema": "dev2-release-launcher/1",
+    "sites": [],
+    "track": null
+  },
+  "package_manifest_sha256": "cf150e2603fe83757f28d366af79108477be811b6710e5700c31c82f3d592c07",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 597103104,
+    "packaged": {
+      "backbone": 596049920,
+      "head": 1053184,
+      "residual": 0
+    }
+  },
+  "passed": true,
+  "schema": "dev2-release-receipt/1",
+  "source_commit": "aafd9c4c59856fa36af54544e38229fc044b81c8-src_training_decision2",
+  "steps": {
+    "build": {
+      "files": 31,
+      "manifest_sha256": "cf150e2603fe83757f28d366af79108477be811b6710e5700c31c82f3d592c07",
+      "passed": true,
+      "sha256": "d241b76fa2d5b380f799117a8b6fb10e99d2ef667496ddcf194f0967b92bf752"
+    },
+    "card-pre": {
+      "passed": true,
+      "seconds": 50.96011204505339,
+      "sha256": "9f4838001437696800aa3a33453440030c118cbb6d941221c31b8057fbd2a48e"
+    },
+    "pre-a": {
+      "answers_sha256": "7db090d43417a31b4704fdcaa7970785ea239a7fbe73da0bb12747f0eee36af9",
+      "device": "cpu",
+      "load_seconds": 6.322845448972657,
+      "loaded_parameters": 597103104,
+      "passed": true,
+      "sha256": "cdc2bb2ce305e90cce1992267929c99659ce9693fc3ee0a9bb6b99b1bcf31a4a"
+    },
+    "pre-b": {
+      "answers_sha256": "7db090d43417a31b4704fdcaa7970785ea239a7fbe73da0bb12747f0eee36af9",
+      "device": "cpu",
+      "load_seconds": 6.262799926102161,
+      "loaded_parameters": 597103104,
+      "passed": true,
+      "sha256": "0bef6a553c57a548468e03d5fb5c319d813dd26e9027cc2f3fed0ad4efe23570"
+    },
+    "repeat-pre": {
+      "bit_identical_answers": true,
+      "passed": true,
+      "sha256": "e556636ca0f33d5bdfd9f9ae46c67e104e3091e37ee0fa3fb7efdc6725c31685",
+      "totals": {
+        "category_changes": 0,
+        "max_abs_drift": 0.0,
+        "missing": 0,
+        "slots": 11
+      }
+    }
+  },
+  "utc": "2026-09-28T13:59:17.224368+00:00",
+  "wall_seconds": 307.65635347366333
+}

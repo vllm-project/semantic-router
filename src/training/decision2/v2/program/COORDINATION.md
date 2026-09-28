@@ -144,7 +144,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
-| node A GPU0 | DEV2.0-0.6B release verification (lent by the 0.6B track, 2026-09-28 21:30 UTC+8); back to 0.6B afterwards |
+| node A GPU0 | 0.6B track (owner) — SHARED from 2026-09-28 22:30 UTC+8 with the DEV2.0-0.6B release worker for short CAL698-calibration / re-score jobs (≤ 30 min; own lease owner entry `owner.release`) |
 | node A GPU1 | 0.6B track (post-release optimization) |
 | node A GPU2–4 | 9B track (returned 2026-09-28 21:31 UTC+8 after AutoJev target production). **9B track: read the 21:00 cross-track note (A7 is mostly NEW data for Lux) and the 21:35 AutoJev note before planning work on these GPUs.** |
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
@@ -184,6 +184,14 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 22:30 — DEV2.0-0.6B release engineering done up to the collection step (gist `07b-decision-2-release-06b.md`;
+  integration `33b9e366a`; private `llm-semantic-router/DEV2.0-0.6B@7b5d3ff2…`, draft decision `72bc767e…`). It shipped
+  the raw scored probabilities without CAL698. **Coordinator decision: calibrate before release** — fit per-type
+  temperatures on CAL698, confirm argmax is unchanged on every scored prompt (v3 composite unchanged), recompute/re-score
+  the calibration metrics, upload the calibrated package as a new private revision, then C1 event 2 scores THAT frozen
+  package, then finalize. Rule for every size: the frozen release package includes its CAL698 calibration before any C1
+  event or collection add.
 
 - 2026-09-28 22:20 — DEV2.0-0.8B package verified (release record `v2/release/records/dev2-0p8b-release-2026-09-28/`;
   integration `2aad3f96f`): private `llm-semantic-router/DEV2.0-0.8B@2667d883…`, 753,446,208 loaded parameters, manifest
