@@ -26,9 +26,9 @@ waitidle() {
   done
   return 1
 }
-sp() { (cd "$S" && PYTHONPATH="$S" python3 -m v2.eval.same_panel "$@"); }
+sp() { (cd "$S" && PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$S" python3 -m v2.eval.same_panel "$@"); }
 mlx() {
-  (cd "$S" && PYTHONPATH="$S" python3 -m v2.eval.multilingual_panel score \
+  (cd "$S" && PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$S" python3 -m v2.eval.multilingual_panel score \
     --panel /data/dev2/private/panels/mlx-diag-v1 --predictions "$1/output/mlx-diag.predictions.jsonl" \
     --output "$1/mlx-diag.score.json")
 }
