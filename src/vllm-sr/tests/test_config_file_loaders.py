@@ -282,6 +282,7 @@ def test_parse_user_config_accepts_decision_learning_controls(
     "tool_sessions",
     [
         {"backend": "local"},
+        {"backend": "${STORE_BACKEND}"},
         {
             "backend": "redis",
             "ttl_seconds": 1800,

@@ -152,8 +152,17 @@ def _tool_session_store_schema_errors(data: Dict[str, Any]) -> list[str]:
     tool_sessions = stores.get("tool_sessions")
     if not isinstance(tool_sessions, dict):
         return ["global.stores.tool_sessions must be an object"]
+    validation_payload = dict(tool_sessions)
+    backend = validation_payload.get("backend")
+    if isinstance(backend, str) and references_environment(backend):
+        # The Router expands the backend before applying its backend-specific
+        # Redis contract, so keep validating the remaining fields here while
+        # deferring that relationship until runtime.
+        validation_payload["backend"] = (
+            "redis" if "redis" in validation_payload else "local"
+        )
     try:
-        ToolSessionStoreConfig.model_validate(tool_sessions)
+        ToolSessionStoreConfig.model_validate(validation_payload)
     except ValidationError as exc:
         errors: list[str] = []
         for error in exc.errors():
