@@ -64,11 +64,24 @@ def main() -> None:
     parser.add_argument("--train", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-length", type=int, default=8192)
+    parser.add_argument(
+        "--shard-index",
+        type=int,
+        default=0,
+        help="Label only TRAIN rows whose position modulo --shard-count equals this",
+    )
+    parser.add_argument("--shard-count", type=int, default=1)
     args = parser.parse_args()
+    if not 0 <= args.shard_index < args.shard_count:
+        parser.error("need 0 <= --shard-index < --shard-count")
     if args.output.exists():
         raise FileExistsError(args.output)
     runtime = require_runtime()
-    rows = load_partition(args.train, "train")
+    rows = [
+        row
+        for position, row in enumerate(load_partition(args.train, "train"))
+        if position % args.shard_count == args.shard_index
+    ]
     temperatures = teacher_temperatures(args.teacher_path)
     source = source_fingerprint(args.teacher_path)
     device = torch.device("cuda:0")
@@ -153,6 +166,7 @@ def main() -> None:
             "teacher_source_fingerprint": source,
             "teacher_temperatures": temperatures,
             "train_sha256": file_sha256(args.train),
+            "shard": {"index": args.shard_index, "count": args.shard_count},
             "rows": len(rows),
             "output_sha256": file_sha256(args.output),
             "train_label_agreement": {

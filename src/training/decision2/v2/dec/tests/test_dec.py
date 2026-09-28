@@ -443,6 +443,208 @@ class MixtureTest(unittest.TestCase):
         self.assertIs(rekey(other), other)
 
 
+def _train_row(row_id: str, group: str, text: str, meta: dict | None = None) -> dict:
+    from training.model.data import INPUT_FIELDS, digest
+
+    row = {
+        "id": row_id,
+        "state": text,
+        "instructions": "pick",
+        "options": [
+            {"key": "result_0", "description": "a"},
+            {"key": "result_1", "description": "b"},
+        ],
+        "label": 0,
+        "task_type": "choice",
+        "family": "fam",
+        "group_id": group,
+        "language": "en",
+        "split": "train",
+        "source": "src",
+        "evaluation_role": "train",
+        "render_template": "t",
+        "audit_metadata": meta or {},
+    }
+    row["input_sha256"] = digest({f: row[f] for f in INPUT_FIELDS})
+    return row
+
+
+class RecipeMixtureTest(unittest.TestCase):
+    """Recipe id joins, summed budget ratios and original-hash dedup."""
+
+    def _build(self, root: Path, spec: dict, rows: dict[str, list[dict]]):
+        from unittest import mock
+
+        from training.model.data import file_sha256
+        from v2.dec import build_mixture
+
+        files = {}
+        for name, content in rows.items():
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("".join(json.dumps(r) + "\n" for r in content))
+            files[name] = {"sha256": file_sha256(path)}
+        (root / "registry.json").write_text(json.dumps({"files": files}))
+        registries = {
+            "d": build_mixture.Registry(root, "registry.json", ""),
+            "mx": build_mixture.Registry(root, "-", ""),
+        }
+        with mock.patch.object(
+            build_mixture,
+            "token_lengths",
+            lambda kept, tokenizer, workers: [10] * len(kept),
+        ):
+            return build_mixture.build(spec, registries, root, 1)
+
+    def test_recipe_ids_budget_list_and_original_hash_dedup(self) -> None:
+        from training.model.data import file_sha256
+
+        base = [_train_row(f"a{i}", f"g{i}", f"s{i}") for i in range(4)]
+        renumbered = _train_row(
+            "a4",
+            "g4",
+            "renumbered",
+            {"option_key_renumbering": {"original_input_sha256": "old-hash"}},
+        )
+        replay_twin = _train_row(
+            "r0", "h0", "twin", {"a7": {"original_input_sha256": "old-hash"}}
+        )
+        replay = [replay_twin] + [
+            _train_row(f"r{i}", f"h{i}", f"t{i}") for i in range(1, 9)
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ids = root / "recipe.ids.jsonl"
+            ids.write_text(
+                "".join(
+                    json.dumps({"id": r["id"], "pool": "P"}) + "\n"
+                    for r in base[1:] + [renumbered]
+                )
+                + json.dumps({"id": "zz", "pool": "Q"})
+                + "\n"
+            )
+            spec_ids = {
+                "file": "mx:recipe.ids.jsonl",
+                "sha256": file_sha256(ids),
+                "pool": "P",
+            }
+            spec = {
+                "name": "t",
+                "seed": "t",
+                "dedupe_original_hashes": True,
+                "components": [
+                    {"name": "P", "files": ["d:p.jsonl"], "ids": spec_ids},
+                    {
+                        "name": "R",
+                        "files": ["d:r.jsonl"],
+                        "budget_ratio": {"of": ["P"], "ratio": 1.5},
+                    },
+                ],
+            }
+            mixture, manifest = self._build(
+                root, spec, {"p.jsonl": base + [renumbered], "r.jsonl": replay}
+            )
+            self.assertEqual(manifest["components"]["P"]["in_recipe"], 4)
+            self.assertEqual(manifest["components"]["R"]["duplicate_input"], 1)
+            self.assertEqual(manifest["components"]["R"]["budget_tokens"], 60)
+            self.assertEqual(manifest["components"]["R"]["tokens"], 60)
+            self.assertNotIn("r0", {r["id"] for r in mixture})
+            self.assertNotIn("a0", {r["id"] for r in mixture})
+
+            spec["components"][0]["ids"] = dict(spec_ids, pool="Q")
+            with self.assertRaises(ValueError):
+                self._build(
+                    root, spec, {"p.jsonl": base + [renumbered], "r.jsonl": replay}
+                )
+            spec["components"][0]["ids"] = dict(spec_ids, sha256="0" * 64)
+            with self.assertRaises(ValueError):
+                self._build(
+                    root, spec, {"p.jsonl": base + [renumbered], "r.jsonl": replay}
+                )
+
+    def test_original_hash_dedup_is_opt_in(self) -> None:
+        from v2.dec.build_mixture import row_hashes
+
+        row = _train_row("x", "g", "s", {"a7": {"original_input_sha256": "h"}})
+        self.assertEqual(row_hashes(row, False), {row["input_sha256"]})
+        self.assertEqual(row_hashes(row, True), {row["input_sha256"], "h"})
+
+
+class MergeLabelsTest(unittest.TestCase):
+    def test_shards_must_cover_train_once_and_overrides_are_recorded(self) -> None:
+        import subprocess
+        import sys
+
+        rows = [_train_row(f"a{i}", f"g{i}", f"s{i}") for i in range(4)]
+
+        def label(row: dict, p: float) -> dict:
+            return {
+                "id": row["id"],
+                "input_sha256": row["input_sha256"],
+                "teacher_probs": {"result_0": p, "result_1": 1 - p},
+            }
+
+        root_dir = Path(__file__).resolve().parents[3]
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            train = tmp_path / "train.jsonl"
+            train.write_text("".join(json.dumps(r) + "\n" for r in rows))
+            shard0 = tmp_path / "s0.jsonl"
+            shard1 = tmp_path / "s1.jsonl"
+            override = tmp_path / "o.jsonl"
+            shard0.write_text(
+                "".join(json.dumps(label(r, 0.9)) + "\n" for r in rows[0::2])
+            )
+            shard1.write_text(
+                "".join(json.dumps(label(r, 0.8)) + "\n" for r in rows[1::2])
+            )
+            override.write_text(json.dumps(label(rows[1], 0.2)) + "\n")
+
+            def run(*extra: str) -> subprocess.CompletedProcess:
+                out = tmp_path / f"m{len(list(tmp_path.glob('m*.jsonl')))}.jsonl"
+                return (
+                    subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "v2.dec.merge_labels",
+                            "--train",
+                            str(train),
+                            *extra,
+                            "--output",
+                            str(out),
+                        ],
+                        cwd=root_dir,
+                        capture_output=True,
+                        text=True,
+                    ),
+                    out,
+                )
+
+            done, out = run(
+                "--part",
+                str(shard0),
+                "--part",
+                str(shard1),
+                "--override",
+                str(override),
+            )
+            self.assertEqual(done.returncode, 0, done.stderr)
+            merged = [json.loads(line) for line in out.read_text().splitlines()]
+            self.assertEqual([m["id"] for m in merged], [r["id"] for r in rows])
+            self.assertAlmostEqual(merged[1]["teacher_probs"]["result_0"], 0.2)
+            manifest = json.loads(
+                out.with_name(out.name + ".manifest.json").read_text()
+            )
+            self.assertEqual(manifest["rows_by_origin"], {"part": 3, "override0": 1})
+            missing, _ = run("--part", str(shard0))
+            self.assertNotEqual(missing.returncode, 0)
+            repeated, _ = run(
+                "--part", str(shard0), "--part", str(shard0), "--part", str(shard1)
+            )
+            self.assertNotEqual(repeated.returncode, 0)
+
+
 HAS_QWEN35 = HAS_TORCH and importlib.util.find_spec("transformers") is not None
 
 
