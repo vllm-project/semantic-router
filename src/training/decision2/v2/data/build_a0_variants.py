@@ -89,6 +89,9 @@ def a0p(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int
     for row in rows:
         if row["task_type"] != "choice":
             continue
+        if row["source"] == FLUTE_SOURCE:
+            skipped["flute_excluded"] += 1
+            continue
         if len(row["options"]) < 3:
             skipped["fewer_than_three_options"] += 1
             continue
