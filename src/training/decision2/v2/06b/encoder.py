@@ -275,11 +275,15 @@ def _torch_module() -> Any:
             bidirectional: bool = False,
             ordinal_score: bool = False,
             candidate_pool: str = "marker",
+            query_pool: str = "first",
         ):
             super().__init__()
             if candidate_pool not in ("marker", "span-mean"):
                 raise ValueError("candidate_pool must be marker or span-mean")
+            if query_pool not in ("first", "tokens-mean"):
+                raise ValueError("query_pool must be first or tokens-mean")
             self.candidate_pool = candidate_pool
+            self.query_pool = query_pool
             self.backbone = backbone
             self.head = CandidateHead(backbone.config.hidden_size, head_dim)
             self.bidirectional = bidirectional
@@ -301,10 +305,11 @@ def _torch_module() -> Any:
                 input_ids=batch["input_ids"], attention_mask=mask, return_dict=True
             ).last_hidden_state
             markers = self.candidates(hidden, batch)
-            logits = self.head(markers, hidden[:, 0]).float()
+            query = self.query(hidden, batch)
+            logits = self.head(markers, query).float()
             if self.ordinal is not None:
                 is_score = (batch["kind_ids"] == 2).float()[:, None]
-                ordinal = self.ordinal(hidden[:, 0], batch["valid_candidates"])
+                ordinal = self.ordinal(query, batch["valid_candidates"])
                 logits = logits + is_score * ordinal
             return logits.masked_fill(
                 ~batch["valid_candidates"], torch.finfo(torch.float32).min
@@ -315,7 +320,16 @@ def _torch_module() -> Any:
     ) -> torch.Tensor:
         return pool_candidates(hidden, batch, self.candidate_pool)
 
+    def query(self: Any, hidden: torch.Tensor, batch: dict[str, Any]) -> torch.Tensor:
+        if self.query_pool == "tokens-mean":
+            # Mean over every real token except the first, which can act as an attention sink.
+            keep = batch["attention_mask"].to(hidden.dtype).clone()
+            keep[:, 0] = 0
+            return (keep[:, :, None] * hidden).sum(1) / keep.sum(1, keepdim=True)
+        return hidden[:, 0]
+
     EncoderDecision.candidates = candidates
+    EncoderDecision.query = query
     return EncoderDecision
 
 
@@ -372,6 +386,7 @@ def from_official(
     seed: int = 20260928,
     ordinal_score: bool = False,
     candidate_pool: str = "marker",
+    query_pool: str = "first",
 ) -> tuple[Any, MarkerPacker, dict[str, Any]]:
     import torch
     from transformers import AutoModel
@@ -402,6 +417,7 @@ def from_official(
         bidirectional=bidirectional,
         ordinal_score=ordinal_score,
         candidate_pool=candidate_pool,
+        query_pool=query_pool,
     )
     packer = MarkerPacker(tokenizer, ids)
     metadata = {
@@ -423,6 +439,7 @@ def from_official(
         ),
         "score_readout": "latent-ordinal-v1" if ordinal_score else "candidate-head",
         "candidate_pool": candidate_pool,
+        "query_pool": query_pool,
     }
     metadata["loaded_parameters"] = (
         metadata["backbone_parameters"] + metadata["head_parameters"]
@@ -520,6 +537,7 @@ def load(
         bidirectional=bool(spec.get("bidirectional", False)),
         ordinal_score=metadata.get("score_readout") == "latent-ordinal-v1",
         candidate_pool=metadata.get("candidate_pool", "marker"),
+        query_pool=metadata.get("query_pool", "first"),
     )
     model.head.load_state_dict(load_file(str(root / "head.safetensors")), strict=True)
     if model.ordinal is not None:

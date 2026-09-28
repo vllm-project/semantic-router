@@ -236,6 +236,7 @@ class EncoderFamily:
             seed=int(spec["start"]["head_seed"]),
             ordinal_score=bool(spec["start"].get("ordinal_score", False)),
             candidate_pool=spec["start"].get("candidate_pool", "marker"),
+            query_pool=spec["start"].get("query_pool", "first"),
         )
         self.model.to(device)
         if hasattr(self.model.backbone, "gradient_checkpointing_enable"):
@@ -581,6 +582,22 @@ def run(
             raise FloatingPointError(f"Nonfinite loss at update {step}")
         if not preflight and step in steps:
             milestone(step)
+            stop = spec["start"].get("collapse_stop")
+            if (
+                stop
+                and step >= stop["step"]
+                and curve[-1]["metrics"]["correct"] < stop["min_select"]
+            ):
+                write_json(
+                    output / "STOPPED.json",
+                    {
+                        "reason": "preregistered collapse stop",
+                        "step": step,
+                        "select": curve[-1]["metrics"]["correct"],
+                        "rule": stop,
+                    },
+                )
+                raise RuntimeError("Preregistered collapse stop")
     log.close()
 
     if preflight:
