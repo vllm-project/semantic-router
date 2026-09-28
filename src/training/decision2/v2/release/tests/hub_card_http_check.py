@@ -6,9 +6,10 @@ of README.md is downloaded at the exact revision and hashed against
 MODEL_MANIFEST.json, in-page anchors must name a heading, absolute links must
 answer 200 (Hub links with the node's token), the model API at that revision
 must report the repository private with the card's metadata, and anonymous
-requests for the repository, its README and its model API must be refused. The
-rendered model page is fetched with the token and recorded (title and figures
-present). The token stays in the HF CLI's default file and never enters the receipt.
+requests for the repository, its README and its model API must be refused. Hub
+web pages refuse token auth, so a private collection link is checked through the
+collections API and the rendered model page's status is only recorded. The token
+stays in the HF CLI's default file and never enters the receipt.
 
     <hf-cli python> -m v2.release.tests.hub_card_http_check --repo R --revision SHA \
         --package PKG --output OUT.json
@@ -73,11 +74,21 @@ def main() -> None:
                 {"target": target, "kind": "anchor", "passed": target[1:] in headings}
             )
         elif target.startswith("http"):
-            response = get(target, target.startswith("https://huggingface.co/"))
+            # Hub web pages refuse token auth; a private collection is checked through its API.
+            collection = re.fullmatch(
+                r"https://huggingface\.co/collections/(.+)", target
+            )
+            url = (
+                f"https://huggingface.co/api/collections/{collection.group(1)}"
+                if collection
+                else target
+            )
+            response = get(url, target.startswith("https://huggingface.co/"))
             checks.append(
                 {
                     "target": target,
                     "kind": "absolute",
+                    "via": "api" if collection else "page",
                     "status": response.status_code,
                     "passed": response.status_code == 200,
                 }
@@ -120,12 +131,13 @@ def main() -> None:
     }
     page = get(f"https://huggingface.co/{args.repo}", True)
     title = manifest["model_name"]
-    rendered = {
-        "status": page.status_code,
-        "contains_title": title in page.text,
-        "contains_banner": f"{title}-owl-banner.png" in page.text,
-        "contains_charts": all(Path(c).name in page.text for c in layout.CHART_FILES),
-    }
+    rendered = {"status": page.status_code}
+    if page.status_code == 200:
+        rendered.update(
+            contains_title=title in page.text,
+            contains_banner=f"{title}-owl-banner.png" in page.text,
+            contains_charts=all(Path(c).name in page.text for c in layout.CHART_FILES),
+        )
     result = {
         "schema": "dev2-hub-card-http/1",
         "utc": hub.now(),
