@@ -49,7 +49,7 @@ class ReadoutMathTest(unittest.TestCase):
             }
         }
         result = paired_bootstrap((records, tasks), (records, tasks))["delta_b_minus_a"]
-        for name in ("T", "H", "proxy"):
+        for name in ("T", "H", "proxy", "H_mean", "proxy_mean_H"):
             self.assertEqual(result[name]["lower95"], 0.0)
             self.assertEqual(result[name]["upper95"], 0.0)
 
@@ -196,6 +196,25 @@ class TrainerHelperTest(unittest.TestCase):
         self.assertAlmostEqual(sum(totals.values()), len(rows))
         self.assertEqual(
             type_weights(rows, "none"), {"choice": 1.0, "noul": 1.0, "score": 1.0}
+        )
+
+    def test_matrix_v1_schedule_and_selection(self) -> None:
+        from v2.dec.train_dec import checkpoint_steps, selection_key
+
+        self.assertEqual(
+            sorted(checkpoint_steps(466, "even8", 32)),
+            [58, 116, 175, 233, 291, 350, 408, 466],
+        )
+        self.assertEqual(checkpoint_steps(1, "even8", 32), {1})
+        self.assertEqual(max(checkpoint_steps(466, "every", 32)), 466)
+        tie = {"family_macro_accuracy": 0.8, "family_macro_brier": 0.1}
+        worse_brier = {"family_macro_accuracy": 0.8, "family_macro_brier": 0.2}
+        self.assertGreater(
+            selection_key(worse_brier, 58, "matrix-v1"),
+            selection_key(tie, 116, "matrix-v1"),
+        )
+        self.assertGreater(
+            selection_key(tie, 116, "shared"), selection_key(worse_brier, 58, "shared")
         )
 
     def test_teacher_file_must_match_train_rows(self) -> None:

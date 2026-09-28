@@ -1,15 +1,16 @@
 """Zero-step parity and one-step reload gates for one decoder-track arm.
 
 Inputs are two throwaway trainer runs of the same arm configuration: one with
-``--zero-step-only`` and one with ``--max-steps 1``. The gate recomputes the
-full SELECT panel with the trainer's batching and requires:
+``--zero-step-only`` and one with ``--max-steps 1``. SELECT700 is recomputed
+with the trainer's batching.
 
-1. the untouched Decision 1.0 source, the in-memory zero-step arm model and its
-   reloaded zero-step checkpoint to agree (argmax identical, probability drift
-   at most ``ZERO_TOLERANCE``);
-2. the reloaded one-step checkpoint to reproduce the trainer's in-memory
-   post-update SELECT outputs (argmax identical, drift at most ``RELOAD_TOLERANCE``);
-3. the update to be finite and to move LoRA, head and any residual gate.
+Code-path identity is tested inside one process, where the runtime is
+deterministic: the untouched Decision 1.0 source and the reloaded zero-step
+checkpoint must agree exactly, and the reloaded one-step checkpoint must differ
+from the source. Comparisons against the trainer's own outputs cross a process
+boundary; concurrent jobs can autotune different Triton kernels there, so they
+use the measured-noise tolerance below. Reloaded adapter, head and residual
+tensors must equal the saved files bit for bit.
 """
 
 from __future__ import annotations
@@ -26,10 +27,13 @@ from training.model.data import file_sha256, load_partition
 from training.model.decision_model import DecisionModel, collate, encode
 from training.model.train import atomic_json
 
-from .dec_model import dec_fingerprint, load_dec_checkpoint
+from .dec_model import RESIDUAL_FILE, dec_fingerprint, load_dec_checkpoint
 
-ZERO_TOLERANCE = 1e-5
-RELOAD_TOLERANCE = 1e-4
+EXACT_TOLERANCE = 1e-6
+# Concurrent zero-step runs of one model measured max drift .027 with 5/700
+# argmax flips (Triton autotuning under contention); in-process runs were exact.
+CROSS_PROCESS_DRIFT = 0.05
+CROSS_PROCESS_MIN_SAME = 693
 
 
 def select_probabilities(
@@ -63,10 +67,9 @@ def select_probabilities(
 
 
 def stored_probabilities(path: Path, rows: list[dict[str, Any]]) -> list[list[float]]:
-    by_id = {}
-    for line in path.open(encoding="utf-8"):
-        record = json.loads(line)
-        by_id[record["id"]] = record
+    by_id = {
+        json.loads(line)["id"]: json.loads(line) for line in path.open(encoding="utf-8")
+    }
     result = []
     for row in rows:
         answer = by_id[row["id"]]["answer"]
@@ -88,6 +91,47 @@ def compare(left: list[list[float]], right: list[list[float]]) -> dict[str, Any]
     return {"n": len(left), "same_argmax": same, "max_probability_drift": drift}
 
 
+def tensors_match_files(model: Any, checkpoint: Path) -> dict[str, Any]:
+    from safetensors.torch import load_file
+
+    adapter = load_file(str(checkpoint / "adapter" / "adapter_model.safetensors"))
+    live = {
+        name.replace(".default", ""): p.detach().cpu()
+        for name, p in model.backbone.named_parameters()
+        if "lora_" in name
+    }
+    adapter_equal = set(adapter) == set(live) and all(
+        torch.equal(adapter[k], live[k].float()) for k in adapter
+    )
+    head_file = load_file(str(checkpoint / "decision_head.safetensors"))
+    head_live = {k: v.detach().cpu() for k, v in model.head.state_dict().items()}
+    head_equal = set(head_file) == set(head_live) and all(
+        torch.equal(head_file[k], head_live[k].float()) for k in head_file
+    )
+    residual_equal = True
+    if (checkpoint / RESIDUAL_FILE).is_file():
+        residual_file = load_file(str(checkpoint / RESIDUAL_FILE))
+        residual_live = model.residual_state()
+        residual_equal = set(residual_file) == set(residual_live) and all(
+            torch.equal(residual_file[k], residual_live[k]) for k in residual_file
+        )
+    return {
+        "adapter_equal": adapter_equal,
+        "head_equal": head_equal,
+        "residual_equal": residual_equal,
+        "lora_b_abs_sum": sum(
+            v.abs().sum().item() for k, v in live.items() if "lora_B" in k
+        ),
+    }
+
+
+def cross_ok(result: dict[str, Any]) -> bool:
+    return (
+        result["same_argmax"] >= CROSS_PROCESS_MIN_SAME
+        and result["max_probability_drift"] <= CROSS_PROCESS_DRIFT
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-path", type=Path, required=True)
@@ -97,20 +141,13 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     rows = load_partition(args.select, "select")
-    provenance = json.loads((args.zero_run / "provenance.json").read_text())
-    contract = provenance["contract"]
+    ignored = ("zero_step_only", "max_steps", "planned_updates", "checkpoint_steps")
+    contract = json.loads((args.zero_run / "provenance.json").read_text())["contract"]
     one_contract = json.loads((args.one_run / "provenance.json").read_text())[
         "contract"
     ]
-    comparable = {
-        k: v
-        for k, v in contract.items()
-        if k not in ("zero_step_only", "max_steps", "planned_updates")
-    }
-    if comparable != {
-        k: v
-        for k, v in one_contract.items()
-        if k not in ("zero_step_only", "max_steps", "planned_updates")
+    if {k: v for k, v in contract.items() if k not in ignored} != {
+        k: v for k, v in one_contract.items() if k not in ignored
     }:
         raise ValueError("Zero-step and one-step runs differ in arm configuration")
     batch, max_length = contract["eval_batch"], contract["max_length"]
@@ -123,6 +160,9 @@ def main() -> None:
     reference, tokenizer = DecisionModel.from_decision1(
         args.source_path, contract["head_dim"]
     )
+    source_head = {
+        k: v.detach().clone() for k, v in reference.head.state_dict().items()
+    }
     reference = reference.float().to(device)
     ref_probs = select_probabilities(reference, tokenizer, rows, batch, max_length)
     del reference
@@ -131,83 +171,83 @@ def main() -> None:
     zero_ckpt = args.zero_run / "checkpoint-0000000"
     zero_model, zero_tok = load_dec_checkpoint(zero_ckpt, args.source_path)
     zero_model = zero_model.float().to(device)
-    zero_probs = select_probabilities(zero_model, zero_tok, rows, batch, max_length)
+    checks["zero_source_vs_reload_in_process"] = compare(
+        ref_probs, select_probabilities(zero_model, zero_tok, rows, batch, max_length)
+    )
     del zero_model
     torch.cuda.empty_cache()
-    checks["zero_source_vs_trainer"] = compare(
+    checks["zero_source_vs_trainer_cross_process"] = compare(
         ref_probs,
         stored_probabilities(args.zero_run / "select-baseline-predictions.jsonl", rows),
     )
-    checks["zero_source_vs_reload"] = compare(ref_probs, zero_probs)
 
     one_ckpt = args.one_run / "checkpoint-0000001"
     one_model, one_tok = load_dec_checkpoint(one_ckpt, args.source_path)
     one_model = one_model.float().to(device)
     one_probs = select_probabilities(one_model, one_tok, rows, batch, max_length)
-    moved = {
-        "lora_b_abs_sum": sum(
-            p.detach().abs().sum().item()
-            for n, p in one_model.backbone.named_parameters()
-            if "lora_B" in n
-        ),
+    checks["one_step_tensors"] = tensors_match_files(one_model, one_ckpt)
+    checks["one_step_head_max_change"] = max(
+        (one_model.head.state_dict()[k].detach().cpu() - v).abs().max().item()
+        for k, v in source_head.items()
+    )
+    checks["one_step_gates"] = {
+        name: getattr(one_model, name).gate.item()
+        for name in ("ordinal_score", "layer_mix")
+        if getattr(one_model, name) is not None
     }
-    source_head, _ = DecisionModel.from_decision1(
-        args.source_path, contract["head_dim"]
-    )
-    moved["head_max_abs_change"] = max(
-        (a.detach().cpu() - b.detach()).abs().max().item()
-        for a, b in zip(
-            one_model.head.state_dict().values(), source_head.head.state_dict().values()
-        )
-    )
-    del source_head
-    for name in ("ordinal_score", "layer_mix"):
-        module = getattr(one_model, name)
-        if module is not None:
-            moved[f"{name}_gate"] = module.gate.item()
     del one_model
     torch.cuda.empty_cache()
-    checks["one_step_trainer_vs_reload"] = compare(
+    checks["one_step_source_vs_reload_in_process"] = compare(ref_probs, one_probs)
+    checks["one_step_trainer_vs_reload_cross_process"] = compare(
         stored_probabilities(
             args.one_run / "select-step-0000001-predictions.jsonl", rows
         ),
         one_probs,
     )
-    checks["one_step_changed_vs_source"] = compare(ref_probs, one_probs)
-    checks["moved"] = moved
-    train_events = [
+    events = [
         json.loads(line)
         for line in (args.one_run / "train-metrics.jsonl").open()
         if '"event": "train"' in line
     ]
-    checks["one_step_train_event"] = train_events[0] if train_events else None
+    checks["one_step_train_event"] = events[0] if events else None
     checks["zero_identity"] = dec_fingerprint(zero_ckpt, args.source_path)[
         "model_sha256"
     ]
     checks["one_identity"] = dec_fingerprint(one_ckpt, args.source_path)["model_sha256"]
 
+    exact = checks["zero_source_vs_reload_in_process"]
+    tensors = checks["one_step_tensors"]
     gates = {
-        "zero_trainer_parity": checks["zero_source_vs_trainer"]["same_argmax"]
-        == len(rows)
-        and checks["zero_source_vs_trainer"]["max_probability_drift"] <= ZERO_TOLERANCE,
-        "zero_reload_parity": checks["zero_source_vs_reload"]["same_argmax"]
-        == len(rows)
-        and checks["zero_source_vs_reload"]["max_probability_drift"] <= ZERO_TOLERANCE,
-        "one_step_reload_parity": checks["one_step_trainer_vs_reload"]["same_argmax"]
-        == len(rows)
-        and checks["one_step_trainer_vs_reload"]["max_probability_drift"]
-        <= RELOAD_TOLERANCE,
-        "one_step_finite": bool(train_events)
-        and all(math.isfinite(train_events[0][k]) for k in ("loss", "gradient_norm")),
-        "one_step_moved": moved["lora_b_abs_sum"] > 0
-        and moved["head_max_abs_change"] > 0
-        and all(abs(v) > 0 for k, v in moved.items() if k.endswith("_gate")),
+        "zero_reload_exact_in_process": exact["same_argmax"] == len(rows)
+        and exact["max_probability_drift"] <= EXACT_TOLERANCE,
+        "zero_trainer_cross_process": cross_ok(
+            checks["zero_source_vs_trainer_cross_process"]
+        ),
+        "one_step_reload_cross_process": cross_ok(
+            checks["one_step_trainer_vs_reload_cross_process"]
+        ),
+        "one_step_active_in_process": checks["one_step_source_vs_reload_in_process"][
+            "max_probability_drift"
+        ]
+        > 0,
+        "one_step_tensors_reload_bitwise": tensors["adapter_equal"]
+        and tensors["head_equal"]
+        and tensors["residual_equal"],
+        "one_step_moved": tensors["lora_b_abs_sum"] > 0
+        and checks["one_step_head_max_change"] > 0
+        and all(v != 0 for v in checks["one_step_gates"].values()),
+        "one_step_finite": bool(events)
+        and all(math.isfinite(events[0][k]) for k in ("loss", "gradient_norm")),
     }
     receipt = {
-        "schema_version": "dec-arm-preflight/1",
+        "schema_version": "dec-arm-preflight/2",
         "status": "PASS" if all(gates.values()) else "FAIL",
         "gates": gates,
-        "tolerances": {"zero": ZERO_TOLERANCE, "reload": RELOAD_TOLERANCE},
+        "tolerances": {
+            "exact_in_process": EXACT_TOLERANCE,
+            "cross_process_drift": CROSS_PROCESS_DRIFT,
+            "cross_process_min_same_argmax": CROSS_PROCESS_MIN_SAME,
+        },
         "checks": checks,
         "code_sha256": {
             name: file_sha256(Path(__file__).with_name(name))

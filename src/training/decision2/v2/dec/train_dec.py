@@ -118,6 +118,24 @@ def load_teacher(path: Path, rows: list[dict[str, Any]]) -> dict[str, dict[str, 
     return teacher
 
 
+def checkpoint_steps(planned: int, schedule: str, save_every: int) -> set[int]:
+    """Updates after which SELECT runs and a checkpoint is saved."""
+    if schedule == "even8":
+        return {round(planned * k / 8) for k in range(1, 9)} - {0} | {planned}
+    if schedule == "every":
+        return {s for s in range(1, planned + 1) if s % save_every == 0} | {planned}
+    raise ValueError("checkpoint schedule must be even8 or every")
+
+
+def selection_key(metrics: dict[str, Any], step: int, rule: str) -> tuple[float, ...]:
+    """Larger is better; matrix-v1 breaks accuracy ties by the earlier step."""
+    if rule == "matrix-v1":
+        return (metrics["family_macro_accuracy"], -step)
+    if rule == "shared":
+        return (metrics["family_macro_accuracy"], -metrics["family_macro_brier"], -step)
+    raise ValueError("selection rule must be matrix-v1 or shared")
+
+
 def attach_teacher_probs(item: dict[str, Any], probs: dict[str, float]) -> None:
     values = [float(probs[key]) for key in item["keys"]]
     total = math.fsum(values)
@@ -157,6 +175,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-length", type=int, default=8192)
     parser.add_argument("--head-dim", type=int, default=256)
     parser.add_argument("--save-every", type=int, default=32)
+    parser.add_argument(
+        "--checkpoint-schedule", choices=("even8", "every"), default="even8"
+    )
+    parser.add_argument(
+        "--selection", choices=("matrix-v1", "shared"), default="matrix-v1"
+    )
     parser.add_argument("--seed", type=int, default=20260926)
     parser.add_argument("--zero-step-only", action="store_true")
     args = parser.parse_args()
@@ -238,6 +262,7 @@ def main() -> None:
         args.epochs,
         args.max_steps,
     )
+    save_steps = checkpoint_steps(planned, args.checkpoint_schedule, args.save_every)
     contract = {
         "trainer_version": TRAINER_VERSION,
         "arm": args.arm,
@@ -271,12 +296,17 @@ def main() -> None:
         "eval_batch": args.eval_batch,
         "max_length": args.max_length,
         "head_dim": args.head_dim,
-        "save_every": args.save_every,
+        "checkpoint_schedule": args.checkpoint_schedule,
+        "checkpoint_steps": sorted(save_steps),
         "seed": args.seed,
         "planned_updates": planned,
         "train_count": len(train_items),
         "zero_step_only": args.zero_step_only,
-        "selection": "SELECT family-macro accuracy desc, normalized Brier asc, earliest step",
+        "selection": (
+            "SELECT family-macro accuracy desc, then earliest step (matrix v1)"
+            if args.selection == "matrix-v1"
+            else "SELECT family-macro accuracy desc, normalized Brier asc, earliest step"
+        ),
     }
     groups = [
         {
@@ -373,13 +403,9 @@ def main() -> None:
             if p.is_dir() and not p.name.endswith(".pending")
         ]
 
-        def rank(path: Path) -> tuple[float, float, int]:
+        def rank(path: Path) -> tuple[float, ...]:
             metrics = json.loads((path / "checkpoint.json").read_text())["dev_metrics"]
-            return (
-                metrics["family_macro_accuracy"],
-                -metrics["family_macro_brier"],
-                -int(path.name.split("-")[-1]),
-            )
+            return selection_key(metrics, int(path.name.split("-")[-1]), args.selection)
 
         best = max(checkpoints, key=rank)
         atomic_json(output / "LATEST.json", {"checkpoint": name, "step": step})
@@ -514,7 +540,7 @@ def main() -> None:
         if model.layer_mix is not None:
             event["layer_mix_gate"] = model.layer_mix.gate.item()
         log(event)
-        if step % args.save_every == 0 or step == planned:
+        if step in save_steps:
             metrics = evaluate(
                 model,
                 select_items,

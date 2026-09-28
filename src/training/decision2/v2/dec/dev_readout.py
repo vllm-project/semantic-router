@@ -23,7 +23,7 @@ from benchmark.score import evaluate_answer
 from transfer.score import evaluate as css_evaluate
 from transfer.score import macro_f1
 
-DRAWS = 5000
+DRAWS = 10000
 SEED = 20260928
 
 
@@ -89,8 +89,12 @@ def typed_T(
 
 
 def css_H(
-    tasks: dict[str, dict[str, Any]], indices: dict[str, list[int]] | None = None
+    tasks: dict[str, dict[str, Any]],
+    indices: dict[str, list[int]] | None = None,
+    *,
+    aggregate: str = "median",
 ) -> float:
+    """Median (C1 primary, v3 convention) or mean (matrix v1) task macro-F1."""
     scores = []
     for name, task in sorted(tasks.items()):
         idx = indices[name] if indices is not None else range(len(task["gold"]))
@@ -101,6 +105,8 @@ def css_H(
                 task["labels"],
             )
         )
+    if aggregate == "mean":
+        return statistics.mean(scores)
     return statistics.median(scores)
 
 
@@ -108,6 +114,7 @@ def summarize(
     records: list[dict[str, Any]], tasks: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:
     T, H = typed_T(records), css_H(tasks)
+    H_mean = css_H(tasks, aggregate="mean")
     by_type: dict[str, Counter] = defaultdict(Counter)
     by_family: dict[str, Counter] = defaultdict(Counter)
     score_points: Counter = Counter()
@@ -125,6 +132,8 @@ def summarize(
         "T": T,
         "H": H,
         "proxy": 100 * math.sqrt(T * H),
+        "H_mean": H_mean,
+        "proxy_mean_H": 100 * math.sqrt(T * H_mean),
         "typed_correct": sum(r["correct"] for r in records),
         "typed_answers": len(records),
         "by_type": {k: dict(v) for k, v in sorted(by_type.items())},
@@ -163,8 +172,11 @@ def paired_bootstrap(
         values = []
         for records, tasks in (a, b):
             T, H = typed_T(records, weights), css_H(tasks, indices)
-            values.append((T, H, 100 * math.sqrt(T * H)))
-        for name, i in (("T", 0), ("H", 1), ("proxy", 2)):
+            H_mean = css_H(tasks, indices, aggregate="mean")
+            values.append(
+                (T, H, 100 * math.sqrt(T * H), H_mean, 100 * math.sqrt(T * H_mean))
+            )
+        for i, name in enumerate(("T", "H", "proxy", "H_mean", "proxy_mean_H")):
             deltas[name].append(values[1][i] - values[0][i])
     result = {}
     for name, values in deltas.items():
