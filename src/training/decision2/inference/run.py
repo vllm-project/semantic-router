@@ -445,7 +445,7 @@ def collect(
                 # No native answer exists for this original row. Preserve its
                 # question IDs and count every answer slot as invalid/wrong.
                 response = {
-                    "answers": {key: None for key in row["questions"]},
+                    "answers": dict.fromkeys(row["questions"]),
                     "model": (
                         DECISION_BACKENDS[backend][1]
                         if backend in DECISION_BACKENDS

@@ -254,7 +254,9 @@ class CollectorTest(unittest.TestCase):
                     "inference.run.load_decider",
                     return_value=(
                         object(),
-                        lambda **_: (_ for _ in ()).throw(ValueError(message)),
+                        lambda message=message, **_: (_ for _ in ()).throw(
+                            ValueError(message)
+                        ),
                         {},
                     ),
                 ), self.assertRaisesRegex(ValueError, "^" + message.split(":")[0]):
