@@ -211,6 +211,16 @@ semantic review remain unresolved. The three publisher labels are categorical;
 their mapping to an ordinal Score is an unvalidated training hypothesis.
 **Eos source admission remains HOLD, zero GPU-hours.**
 
+The separately preregistered [PeerRead human-review Score source triage](peerread-score-source-triage-result-2026-09-28.md)
+inspected only publisher TRAIN review metadata. ACL 2017 and CoNLL 2016
+together have **281** explicit numerical recommendations, below the frozen
+400-review floor. ICLR 2017 has 2,166 unfiltered numerical recommendations,
+but assigned-review identity remains unresolved and that repository section
+has no accompanying license file. The source is **HOLD**, with zero rows
+admitted, zero GPU-hours and no new 0.8B/27B weight or score. The paper also
+warns that many aspect scores are not recoverable from review text, so a
+future native Score mapping requires an evidence-sufficiency review.
+
 The [ConTRoL CPU screen](qwen35-4b-context-nli-source-screen-2026-09-28.md),
 [0.6B gradient preflight](small06-gradient-conflict-preflight-result-2026-09-28.md),
 [0.6B one-update parity](small06-gradient-projection-parity-preflight-2026-09-28.md),
