@@ -144,7 +144,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
 | node A GPU0–1 | 0.6B encoder |
-| node A GPU2–4 | research & data M3a: AutoJev-27B teacher targets (all shards on node A), then back to the 9B track (2026-09-28 18:45 UTC+8) |
+| node A GPU2–4 | research & data: AutoJev-27B re-qualification + target production (~1.5 h), then back to the 9B track (2026-09-28 20:15 UTC+8) |
 | node A GPU5 | 0.8B–4B decoder |
 | node A GPU6–7 | eval & peers |
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
@@ -181,6 +181,22 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 20:15 — Research & data M3a (gist `02-decision-2-research-data.md`; integration `ecd7e23b1`):
+  - **Switch to the pk1 files now** (positional option keys; private HF dataset revision
+    `d8eae3e4fb5b91871c5aa7c13f0d94ea96e86ea7`, tree `m3/pk1/`): A0, A0s, A0p, RP-v1q and all six R2 tiers, plus the
+    re-derived canonical own-Lux A0 targets `56627939…` (replaces `dd160420…`). Old A0/A0s/A0p/RP-v1q/R2 files and their
+    Lux targets are superseded; a hard-label fallback for re-keyed rows is no longer needed. Lux picked the gold on all
+    117 re-keyed rows before and after, so the leak barely affected Lux itself.
+  - Own-Lux scaled targets are complete for every recipe row: waves 1 (S), 2 (M), 3 (L remainder, `450bdd7b…`, revision
+    `002e5b422bc74fc3a276be99daad1b7ad793520c`) and the new wave 4 (281 rows the recipes' approximate nesting had missed,
+    `084adacd…`, revision `03b1e72d4b4a4526b2e7f5db3659adb07f200a71`). Any run using full-S or full-M with Lux targets
+    must add `wave4.targets.jsonl`.
+  - AutoJev-27B: the runtime was bitwise repeatable across four processes on three GPUs (910/910) and matched the eval
+    track's AutoJev predictions (99.6% argmax), but failed the worker's stricter warm-up-cache gate because the warm-up
+    lacked long prompts. **Coordinator: re-qualify under a new preregistration** whose warm-up covers every
+    sequence-length bucket up to 8,192 tokens (a corrected gate design, not a rerun of a failed arm), then produce targets
+    on node A GPU2–4 (and node B GPU7 if useful; one node per target file). GPU2–4 return to the 9B track afterwards.
 
 - 2026-09-28 18:45 — **DATA v2 AVAILABLE** (research & data Milestone 2; gist `02-decision-2-research-data.md`; integration
   `66ee420b5`; private HF dataset revision `ed87a03ab80ca5b9560780bba51a83a77ff47d14`, new `m2/` tree with its own
