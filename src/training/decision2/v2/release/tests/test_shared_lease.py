@@ -8,27 +8,34 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = (ROOT / "eval/run_same_panel.sh", ROOT / "release/release.sh")
+RUNNER = ROOT / "eval/run_same_panel.sh"
+RELEASE = ROOT / "release/release.sh"
 
 
 class SharedLeaseTest(unittest.TestCase):
     def test_scripts_parse(self):
-        for script in SCRIPTS:
+        for script in (RUNNER, RELEASE):
             subprocess.run(["bash", "-n", str(script)], check=True)
 
-    def test_every_lease_write_goes_through_the_selected_entry(self):
-        for script in SCRIPTS:
+    def test_no_launcher_writes_the_owner_entry_directly(self):
+        for script in (RUNNER, RELEASE):
             text = script.read_text(encoding="utf-8")
+            self.assertIn("--shared-lease", text, script.name)
             self.assertIsNone(re.search(r'>>?\s*"\$lease/owner"', text), script.name)
-            self.assertIn('lease_file="$lease/owner.$shared"', text)
-            self.assertRegex(text, r'>\s*"\$lease_file"')
 
-    def test_shared_mode_skips_the_owner_checks(self):
-        text = SCRIPTS[0].read_text(encoding="utf-8")
-        shared, _, rest = text.partition('lease_file="$lease/owner.$shared"')
-        owner_check = rest.split("else", 1)[1].split("\nfi\n", 1)[0]
-        self.assertIn("leased by another track", owner_check)
-        self.assertIn("VRAM", owner_check)
+    def test_runner_shared_lease_is_a_named_entry_without_the_idle_gate(self):
+        text = RUNNER.read_text(encoding="utf-8")
+        self.assertIn('lease_name="owner.$2" shared=1', text)
+        self.assertRegex(
+            text, r'if \[\[ "\$lease_name" == "owner" && -f "\$lease/owner" \]\]'
+        )
+        self.assertRegex(text, r'if \[\[ "\$shared" == 0 && \(')
+        self.assertRegex(text, r'>\s*"\$lease/\$lease_name"')
+
+    def test_release_shared_lease_writes_only_its_entry(self):
+        text = RELEASE.read_text(encoding="utf-8")
+        self.assertIn('lease_file="$lease/owner.$shared"', text)
+        self.assertRegex(text, r'>\s*"\$lease_file"')
 
 
 if __name__ == "__main__":
