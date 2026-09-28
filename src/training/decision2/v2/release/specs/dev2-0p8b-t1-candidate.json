@@ -10,7 +10,7 @@
   },
   "calibration": null,
   "max_input_tokens": 16384,
-  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-0.8B.decision.t1-candidate.json",
+  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-0.8B.decision.t1.json",
   "origin": {
     "repo_id": "llm-semantic-router/Decision-1.0-Eos-0.8B",
     "revision": "363c4a5e56afc115b1c78c837633956d0bbb63ab",
