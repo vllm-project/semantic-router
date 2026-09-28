@@ -21,6 +21,7 @@ from execution_batches import (
     native_batches,
 )
 from provider_mocker_image import validate_acquisition
+from release_guard_waiver import planned_waiver
 from verification_catalog import full_cpu_ids, load_catalog
 
 
@@ -53,6 +54,11 @@ def evaluate_gate(
         required
     ):
         errors.append("plan records do not exactly match expected verification IDs")
+    for name, record in planned.items():
+        if record.get("known_issue_waiver") != planned_waiver(
+            plan.get("profile", ""), name
+        ):
+            errors.append(f"{name}: known-issue waiver differs from release policy")
     if plan.get("full_cpu") and not (plan.get("draft") and plan.get("profile") == "pr"):
         missing = set(full_cpu_ids()) - set(required)
         if missing:
@@ -124,7 +130,16 @@ def evaluate_gate(
         if not receipt or not record:
             errors.append(f"required verification {name}: missing")
             continue
-        if receipt.get("result") != "success":
+        waived = receipt.get("result") == "qualified-with-waiver"
+        waiver = record.get("known_issue_waiver") if waived else None
+        if waived and (
+            plan.get("profile") != "release"
+            or waiver != planned_waiver("release", name)
+            or not waiver
+        ):
+            errors.append(f"{name}: qualified-with-waiver is not allowed")
+            waiver = None
+        elif receipt.get("result") != "success" and not waived:
             errors.append(
                 f"required verification {name}: {receipt.get('result', 'missing status')}"
             )
@@ -141,7 +156,7 @@ def evaluate_gate(
         evidence = receipt.get("evidence", {})
         errors.extend(
             f"{name}: {error}"
-            for error in collection_errors(evidence, record["activity"])
+            for error in collection_errors(evidence, record["activity"], waiver=waiver)
         )
         if receipt.get("evidence_sha256") != digest(evidence):
             errors.append(f"{name}: evidence digest differs")
