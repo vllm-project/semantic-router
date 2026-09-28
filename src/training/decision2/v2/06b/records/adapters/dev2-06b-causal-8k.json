@@ -1,0 +1,24 @@
+{
+  "name": "dev2-06b-causal-8k",
+  "module": "training.model.infer",
+  "args": [
+    "--checkpoint",
+    "{model}",
+    "--model-id",
+    "{model_id}",
+    "--model-revision",
+    "{revision}",
+    "--max-length",
+    "8192",
+    "--input",
+    "{input}",
+    "--output",
+    "{output}"
+  ],
+  "model_id": null,
+  "python": "python3",
+  "batch_policy": "training.model.infer, one prompt per call, all its questions batched; 8,192-token cap, over-budget invalid, no truncation; raw probabilities (no CAL temperature)",
+  "requires": [
+    "model_id"
+  ]
+}
