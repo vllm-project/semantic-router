@@ -39,7 +39,7 @@ export default function EvaluationAvailabilityRoute({
   if (settingsError) {
     return (
       <SetupStatusPage
-        title="Unable to check Evaluation access"
+        title={`Unable to check ${featureName} access`}
         description={settingsError}
         actionLabel="Refresh access"
         onAction={onRefreshAccess}

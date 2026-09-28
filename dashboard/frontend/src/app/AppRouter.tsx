@@ -22,6 +22,7 @@ const AppRouter: React.FC = () => {
     srBenchUnavailableReason,
     mlPipelineAvailable,
     mlPipelineUnavailableReason,
+    mlPipelineAvailabilityChecked,
     settingsError,
     refreshSettings,
   } = useReadonly()
@@ -68,6 +69,7 @@ const AppRouter: React.FC = () => {
               canAccessMLSetup: canAccessMLSetup(user),
               mlPipelineAvailable,
               mlPipelineUnavailableReason,
+              mlPipelineAvailabilityChecked,
               user,
               setupMode,
               settingsLoading,

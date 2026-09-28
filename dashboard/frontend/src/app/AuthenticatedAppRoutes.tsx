@@ -42,6 +42,7 @@ interface AuthenticatedAppRoutesProps {
   canAccessMLSetup: boolean
   mlPipelineAvailable: boolean
   mlPipelineUnavailableReason: string
+  mlPipelineAvailabilityChecked: boolean
   user: PermissionUser | null
   setupMode: boolean
   settingsLoading: boolean
@@ -112,6 +113,7 @@ export const renderAuthenticatedAppRoutes = ({
   canAccessMLSetup,
   mlPipelineAvailable,
   mlPipelineUnavailableReason,
+  mlPipelineAvailabilityChecked,
   user,
   setupMode,
   settingsLoading,
@@ -179,7 +181,7 @@ export const renderAuthenticatedAppRoutes = ({
             available={mlPipelineAvailable}
             isLoading={settingsLoading}
             reason={mlPipelineUnavailableReason}
-            settingsError={settingsError}
+            settingsError={mlPipelineAvailabilityChecked ? null : settingsError}
             onRefreshAccess={onRefreshAccess}
             featureName="ML pipeline"
           >

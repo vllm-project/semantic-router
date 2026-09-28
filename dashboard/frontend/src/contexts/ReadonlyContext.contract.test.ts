@@ -46,4 +46,34 @@ describe('Dashboard capability settings fail closed', () => {
     expect(source).toContain('if (controller.signal.aborted) return')
     expect(source).toContain('return () => controller.abort()')
   })
+
+  it('reads ML availability from the ML surface when settings are out of reach', () => {
+    const source = readFileSync(new URL('./ReadonlyContext.tsx', import.meta.url), 'utf8')
+
+    expect(source).toContain(
+      'const [mlPipelineAvailabilityChecked, setMLPipelineAvailabilityChecked] = useState(false)',
+    )
+    expect(source).toContain("await fetch('/api/ml-pipeline/availability', { signal })")
+    expect(source).toContain('await readMLPipelineAvailabilityFromMLSurface(controller.signal)')
+    expect(source).toContain('setMLPipelineAvailabilityChecked(false)')
+    expect(source).toContain('setMLPipelineAvailabilityChecked(true)')
+    // The fallback call runs only after a settings failure, so the
+    // config.read path keeps its single request.
+    const callIndex = source.indexOf(
+      'await readMLPipelineAvailabilityFromMLSurface(controller.signal)',
+    )
+    const catchIndex = source.indexOf('} catch (error) {', source.indexOf("await fetch('/api/settings'"))
+    expect(callIndex).toBeGreaterThan(catchIndex)
+  })
+
+  it('keeps the ML Setup error state off the settings failure once the ML surface answers', () => {
+    const source = readFileSync(
+      new URL('../app/AuthenticatedAppRoutes.tsx', import.meta.url),
+      'utf8',
+    )
+
+    expect(source).toContain(
+      'settingsError={mlPipelineAvailabilityChecked ? null : settingsError}',
+    )
+  })
 })

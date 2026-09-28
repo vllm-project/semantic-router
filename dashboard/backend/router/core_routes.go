@@ -222,6 +222,7 @@ func registerTopologyRoutes(mux routeRegistrar, cfg *config.Config, credentialPr
 }
 
 func registerMLPipelineRoutes(mux routeRegistrar, cfg *config.Config, wf *workflowstore.Store) {
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/availability", auth.PermMlPipeline, auth.SensitivityOperational, auth.ResourceOwnerML, http.MethodGet), handlers.MLPipelineAvailabilityHandler(cfg))
 	if !cfg.MLPipelineEnabled {
 		cfg.MLPipelineAvailable = false
 		cfg.MLPipelineUnavailableReason = "ML Pipeline is disabled. Enable it with ML_PIPELINE_ENABLED=true."

@@ -58,6 +58,7 @@ func TestDashboardRouteInventoryHasCompletePolicies(t *testing.T) {
 		}
 	}
 	for _, route := range []struct{ method, path string }{
+		{http.MethodGet, "/api/ml-pipeline/availability"},
 		{http.MethodGet, "/api/ml-pipeline/jobs"},
 		{http.MethodGet, "/api/ml-pipeline/jobs/job-1"},
 		{http.MethodPost, "/api/ml-pipeline/benchmark"},
@@ -85,6 +86,9 @@ func TestMLPipelineAvailabilityFollowsRouteRegistration(t *testing.T) {
 	}
 	if _, lookup := disabled.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/ml-pipeline/jobs"); lookup != auth.RouteNotFound {
 		t.Errorf("disabled ML route lookup = %v, want RouteNotFound", lookup)
+	}
+	if policy, lookup := disabled.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/ml-pipeline/availability"); lookup != auth.RouteFound || policy.Permission != auth.PermMlPipeline {
+		t.Errorf("disabled availability route = %v with policy %+v, want RouteFound under PermMlPipeline", lookup, policy)
 	}
 
 	_, enabledCfg := setupRouteInventoryServerWithConfig(t)
