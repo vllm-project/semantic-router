@@ -17,12 +17,13 @@ the gold is predicted under 5-fold cross-validation (folds by source group) by:
 chance; the label prior (gold frequency of the description and of semantic keys, i.e.
 words, true/false/none and Score levels); each cue alone and added to the prior; and a
 naive-Bayes combination of all option-surface cues (then also the state cue) with the
-prior. The gain of the combined model over the prior gets a cluster-bootstrap 95%
-interval.
+prior. A cue model is the better of the cue alone and the cue plus the prior; its gain
+over the reference (the better of chance and the prior) gets a cluster-bootstrap 95%
+interval. Pooled rows (all groups of one question type) condition the prior on the
+group, so a cue must add information beyond each group's own prior (amendment 1).
 
-Verdict (frozen before the first run): LEAK when the gain is at least 5 points and the
-interval is above 0; CUE when the interval is above 0 but the gain is below 5 points;
-otherwise CLEAN. Deterministic checks sit next to it: numbered keys out of display order
+Verdict: LEAK when the gain is at least 5 points and the interval is above 0; CUE when
+the interval is above 0 but the gain is below 5 points; otherwise CLEAN. Deterministic checks sit next to it: numbered keys out of display order
 (the A7 signature), `result_<n>` keys, distinct option orders and gold position counts.
 Receipts carry counts and accuracies only, never item text or gold values.
 
@@ -480,11 +481,27 @@ def audit_group(
     questions: list[Question],
     replicates: int = REPLICATES,
     seed: int = SEED,
+    pooled: bool = False,
 ) -> dict[str, Any]:
+    """Cue models against the reference (the better of chance and the label prior).
+
+    A cue model is the better of the cue alone and the cue added to the prior. In a
+    pooled row (several groups) the prior is conditioned on the group, so a cue must
+    add information beyond each group's own label prior.
+    """
     features = [option_features(question) for question in questions]
+    if pooled:
+        for question, rows in zip(questions, features):
+            for row in rows:
+                for name in PRIOR_FEATURES:
+                    if name in row:
+                        row[name] = f"{question.group}|{row[name]}"
     clusters = [question.cluster for question in questions]
     chance = [1.0 / len(question.keys) for question in questions]
     prior = cross_validated(questions, features, PRIOR_FEATURES)
+    reference_name, reference = (
+        ("chance", chance) if mean(chance) >= mean(prior) else ("label_prior", prior)
+    )
     present_option = tuple(
         name
         for name in OPTION_CUES
@@ -495,43 +512,40 @@ def audit_group(
         for name in STATE_CUES
         if any(name in row for rows in features for row in rows)
     )
-    cues: dict[str, Any] = {}
-    for name in present_option + present_state:
-        alone = cross_validated(questions, features, (name,))
-        added = cross_validated(questions, features, PRIOR_FEATURES + (name,))
-        deltas = [a - b for a, b in zip(added, prior)]
-        interval = cluster_bootstrap(clusters, deltas, replicates, seed)
-        cues[name] = {
+
+    def assess(names: tuple[str, ...]) -> dict[str, Any]:
+        alone = cross_validated(questions, features, names)
+        added = cross_validated(questions, features, PRIOR_FEATURES + names)
+        model, best = (
+            ("alone", alone) if mean(alone) >= mean(added) else ("with_prior", added)
+        )
+        gain = mean(best) - mean(reference)
+        interval = cluster_bootstrap(
+            clusters, [b - r for b, r in zip(best, reference)], replicates, seed
+        )
+        return {
             "alone": mean(alone),
             "with_prior": mean(added),
-            "gain_over_prior": mean(added) - mean(prior),
+            "model": model,
+            "gain_over_reference": gain,
             "gain_ci95": interval,
-            "verdict": verdict(mean(added) - mean(prior), interval),
+            "verdict": verdict(gain, interval),
         }
+
+    cues = {name: assess((name,)) for name in present_option + present_state}
     combined = {}
-    for label, names in (
-        ("option_surface", present_option),
-        ("option_and_state_surface", present_option + present_state),
-    ):
-        if not names or (label == "option_and_state_surface" and not present_state):
-            continue
-        surface = cross_validated(questions, features, names)
-        added = cross_validated(questions, features, PRIOR_FEATURES + names)
-        deltas = [a - b for a, b in zip(added, prior)]
-        interval = cluster_bootstrap(clusters, deltas, replicates, seed)
-        combined[label] = {
-            "surface_only": mean(surface),
-            "with_prior": mean(added),
-            "gain_over_prior": mean(added) - mean(prior),
-            "gain_ci95": interval,
-            "verdict": verdict(mean(added) - mean(prior), interval),
-        }
+    if present_option:
+        combined["option_surface"] = assess(present_option)
+    if present_option and present_state:
+        combined["option_and_state_surface"] = assess(present_option + present_state)
     return {
         "questions": len(questions),
         "clusters": len(set(clusters)),
         "small": len(set(clusters)) < SMALL_GROUP,
         "chance": mean(chance),
         "label_prior": mean(prior),
+        "reference": reference_name,
+        "prior_conditioned_on_group": pooled,
         "cues": cues,
         "combined": combined,
         "facts": deterministic_facts(questions),
@@ -609,7 +623,7 @@ def audit_panel(
         for name, items in sorted(by_group.items())
     }
     pooled = {
-        name: audit_group(items, replicates, seed)
+        name: audit_group(items, replicates, seed, pooled=True)
         for name, items in sorted(by_type.items())
     }
 
@@ -650,9 +664,11 @@ def audit(args: argparse.Namespace) -> int:
     result: dict[str, Any] = {
         "schema": SCHEMA,
         "rule": (
-            f"LEAK if the combined surface model beats the label prior by >= {LEAK_POINTS} "
-            "points with the cluster-bootstrap 95% interval above 0; CUE if the interval "
-            "is above 0 below that size; CLEAN otherwise (5-fold CV by source group)"
+            f"LEAK if the combined surface model beats the reference (the better of "
+            f"chance and the label prior; pooled rows condition the prior on the group) "
+            f"by >= {LEAK_POINTS} points with the cluster-bootstrap 95% interval above 0; "
+            "CUE if the interval is above 0 below that size; CLEAN otherwise "
+            "(5-fold CV by source group; amendment 1)"
         ),
         "folds": FOLDS,
         "replicates": args.replicates,
@@ -710,9 +726,9 @@ def render_markdown(result: dict[str, Any]) -> str:
         }.items():
             block = entry["combined"].get("option_surface")
             if block and (
-                worst_gain is None or block["gain_over_prior"] > worst_gain[0]
+                worst_gain is None or block["gain_over_reference"] > worst_gain[0]
             ):
-                worst_gain = (block["gain_over_prior"], block["gain_ci95"])
+                worst_gain = (block["gain_over_reference"], block["gain_ci95"])
                 worst_group = group
         cell = (
             f"{worst_group}: {worst_gain[0]:+.1f} {fmt_interval(worst_gain[1])}"
@@ -728,7 +744,7 @@ def render_markdown(result: dict[str, Any]) -> str:
         lines.append(f"### {name}")
         lines.append("")
         lines.append(
-            "| Group | n | Clusters | Chance | Prior | Surface only | Prior + surface | Gain [95% CI] | Verdict | Strongest single cue (gain) | Out-of-order numbered keys | Orders |"
+            "| Group | n | Clusters | Chance | Prior | Surface only | Surface + prior | Gain over reference [95% CI] | Verdict | Strongest single cue (gain) | Out-of-order numbered keys | Orders |"
         )
         lines.append(
             "| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | ---: | ---: |"
@@ -741,19 +757,19 @@ def render_markdown(result: dict[str, Any]) -> str:
             block = entry["combined"].get("option_surface") or {}
             best_cue = max(
                 entry["cues"].items(),
-                key=lambda item: item[1]["gain_over_prior"],
+                key=lambda item: item[1]["gain_over_reference"],
                 default=(None, None),
             )
             cue_text = (
-                f"{best_cue[0]} {best_cue[1]['gain_over_prior']:+.1f}"
+                f"{best_cue[0]} {best_cue[1]['gain_over_reference']:+.1f}"
                 if best_cue[0]
                 else "-"
             )
             lines.append(
                 f"| {group} | {entry['questions']} | {entry['clusters']} | {entry['chance']:.1f} | "
-                f"{entry['label_prior']:.1f} | {block.get('surface_only', float('nan')):.1f} | "
+                f"{entry['label_prior']:.1f} | {block.get('alone', float('nan')):.1f} | "
                 f"{block.get('with_prior', float('nan')):.1f} | "
-                f"{block.get('gain_over_prior', float('nan')):+.1f} {fmt_interval(block.get('gain_ci95'))} | "
+                f"{block.get('gain_over_reference', float('nan')):+.1f} {fmt_interval(block.get('gain_ci95'))} | "
                 f"{block.get('verdict', '-')}{' (small)' if entry['small'] else ''} | {cue_text} | "
                 f"{entry['facts']['numbered_keys_out_of_display_order']} | {entry['facts']['distinct_option_orders']} |"
             )

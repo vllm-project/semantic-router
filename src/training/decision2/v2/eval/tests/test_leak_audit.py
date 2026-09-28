@@ -55,7 +55,7 @@ class LeakAuditTest(unittest.TestCase):
         self.assertEqual(group["facts"]["result_n_key_rows"], 300)
         self.assertNotEqual(group["combined"]["option_surface"]["verdict"], "LEAK")
         self.assertLess(
-            abs(group["combined"]["option_surface"]["gain_over_prior"]), 5.0
+            abs(group["combined"]["option_surface"]["gain_over_reference"]), 5.0
         )
 
     def test_fixed_order_imbalanced_labels_are_explained_by_the_prior(self):
@@ -78,6 +78,29 @@ class LeakAuditTest(unittest.TestCase):
         self.assertGreater(group["label_prior"], 50.0)
         self.assertEqual(group["combined"]["option_surface"]["verdict"], "CLEAN")
         self.assertEqual(group["facts"]["distinct_option_orders"], 1)
+
+    def test_pooled_rows_condition_the_prior_on_the_group(self):
+        rng = random.Random(9)
+        questions = []
+        for task, weights, last in (("a", [8, 1, 1], "C "), ("b", [1, 1, 8], "C")):
+            for i in range(300):
+                questions.append(
+                    Question(
+                        "p",
+                        f"{task}{i}",
+                        task,
+                        f"{task}{i}",
+                        "choice",
+                        ["x", "y", "z"],
+                        ["A", "B", last],
+                        rng.choices([0, 1, 2], weights=weights)[0],
+                    )
+                )
+        report = leak_audit.audit_panel(questions, 200)
+        pooled = report["pooled_by_type"]["choice"]
+        self.assertTrue(pooled["prior_conditioned_on_group"])
+        self.assertEqual(pooled["combined"]["option_surface"]["verdict"], "CLEAN")
+        self.assertEqual(report["verdict_option_surface"], "CLEAN")
 
     def test_gold_always_displayed_first_is_a_position_leak(self):
         rng = random.Random(5)
