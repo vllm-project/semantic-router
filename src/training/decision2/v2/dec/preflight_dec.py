@@ -141,7 +141,13 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     rows = load_partition(args.select, "select")
-    ignored = ("zero_step_only", "max_steps", "planned_updates", "checkpoint_steps")
+    ignored = (
+        "zero_step_only",
+        "max_steps",
+        "planned_updates",
+        "checkpoint_steps",
+        "smoke_window_type",
+    )
     contract = json.loads((args.zero_run / "provenance.json").read_text())["contract"]
     one_contract = json.loads((args.one_run / "provenance.json").read_text())[
         "contract"

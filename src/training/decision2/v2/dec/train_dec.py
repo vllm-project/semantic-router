@@ -183,7 +183,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=20260926)
     parser.add_argument("--zero-step-only", action="store_true")
+    parser.add_argument(
+        "--smoke-window-type",
+        choices=TASK_TYPES,
+        help="One-step smoke only: update on the first fixed-order window containing this type",
+    )
     args = parser.parse_args()
+    if args.smoke_window_type and args.max_steps != 1:
+        parser.error("--smoke-window-type is only valid with --max-steps 1")
     if bool(args.teacher) != (args.teacher_kl_weight > 0):
         parser.error("--teacher and a positive --teacher-kl-weight go together")
     if not math.isfinite(args.teacher_kl_weight) or args.teacher_kl_weight < 0:
@@ -302,6 +309,7 @@ def main() -> None:
         "planned_updates": planned,
         "train_count": len(train_items),
         "zero_step_only": args.zero_step_only,
+        "smoke_window_type": args.smoke_window_type,
         "selection": (
             "SELECT family-macro accuracy desc, then earliest step (matrix v1)"
             if args.selection == "matrix-v1"
@@ -466,6 +474,10 @@ def main() -> None:
             break
         window_batches = all_batches[window : window + args.accumulation]
         indices = [index for batch in window_batches for _, index in batch]
+        if args.smoke_window_type and all(
+            train_rows[i]["task_type"] != args.smoke_window_type for i in indices
+        ):
+            continue
         window_weight = sum(example_weights[i] for i in indices)
         factor = learning_factor(step, planned, args.warmup_ratio)
         for group in optimizer.param_groups:
