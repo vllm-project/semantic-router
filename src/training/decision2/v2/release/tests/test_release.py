@@ -529,6 +529,27 @@ class GateTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 gate.check(spec, path)
 
+            draft = {
+                **{k: v for k, v in decision.items() if k != "decided_by"},
+                "status": "draft",
+                "prepared_by": "release engineering",
+            }
+            path.write_text(json.dumps(draft))
+            self.assertEqual(gate.check(spec, path)["status"], "draft")
+            with self.assertRaises(ValueError):
+                gate.check(spec, path, final=True)
+            for bad in (
+                {**draft, "decided_by": "coordinator"},
+                {k: v for k, v in draft.items() if k != "prepared_by"},
+                {**draft, "status": "pending"},
+                {k: v for k, v in decision.items() if k != "decided_by"},
+            ):
+                path.write_text(json.dumps(bad))
+                with self.assertRaises(ValueError):
+                    gate.check(spec, path)
+            path.write_text(json.dumps({**decision, "status": "final"}))
+            self.assertEqual(gate.check(spec, path, final=True)["status"], "final")
+
 
 class BuildTest(unittest.TestCase):
     def test_screen_refuses_private_text(self):

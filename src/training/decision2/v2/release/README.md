@@ -104,6 +104,15 @@ decision to the uploaded revision and manifest (`gate evaluate --work W` prints
 the six gate items with their evidence), and `hub collect` adds the repository
 to the private "Decision 2.0" collection and reads it back.
 
+While the coordinator's judgement is still pending (for example an independent
+sealed confirmation), release engineering names a `status: draft` decision
+(`prepared_by`, no `decided_by`) that binds the same identity, report and paired
+comparison. It is enough to build, upload privately and verify (`--upload`
+without `--collect`); `gate seal`, and therefore `--collect`, accepts only a
+`status: final` decision with `decided_by`. Finalizing means: the coordinator
+fills in the card's confirmation line in the spec, writes the final decision,
+and reruns `release.sh ... --upload --collect` into a new work directory.
+
 `hub download` is the real `hf download <repo> --revision <sha> --local-dir <fresh
 dir>` with a fresh cache. `readback` checks the private flag, the exact revision,
 each remote file's LFS SHA-256 or git blob id against the package, the Hub-parsed

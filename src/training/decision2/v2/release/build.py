@@ -508,6 +508,13 @@ def _components_text(packaged: dict[str, int], external: int | None) -> str:
 def build(spec_path: Path, output: Path) -> dict[str, Any]:
     started = dt.datetime.now(dt.timezone.utc)
     spec = load_spec(spec_path)
+    decision_record = None
+    if spec["kind"] == "release":
+        decision_path = Path(spec["gate_receipt"])
+        decision_record = {
+            "sha256": layout.sha_file(decision_path),
+            "status": _object(decision_path).get("status", "final"),
+        }
     if output.exists() or output.is_symlink():
         raise FileExistsError(output)
     if output.name != spec["repo_id"].rsplit("/", 1)[1]:
@@ -729,6 +736,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
         "card": card,
         "screen": screened,
         "licence": decision["spdx"],
+        "release_decision": decision_record,
         "builder_commit": (mirror or {}).get("commit"),
     }
     layout.write_json(receipt_dir / "BUILD.json", receipt)
