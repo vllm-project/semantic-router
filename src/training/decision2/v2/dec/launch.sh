@@ -20,6 +20,7 @@ if [[ ${1:-} == --cpu ]]; then cpu=1; shift; fi
 image=${DEC_IMAGE:-sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54}
 render=${DEC_RENDER:-/dev/dri/renderD169}
 gpu_label=${DEC_GPU_LABEL:-node A GPU5}
+data=${DEC_DATA:-/data/decision20-20260926/data/hf-private-decision20-clean-v2}
 src=/data/dev2/src/$sha
 [[ -d $src/src/training/decision2 ]] || { echo "missing exact mirror $src" >&2; exit 2; }
 tree=$(cat "$src/TREE" 2>/dev/null || echo unknown)
@@ -32,7 +33,7 @@ argv=(docker run --name "dec-$name" --rm --network none --shm-size 16g
   -e DEC_SOURCE_COMMIT="$sha" -e DEC_SOURCE_TREE="$tree" -e DEC_IMAGE_ID="$image"
   --mount "type=bind,src=$src/src/training/decision2,dst=/code,readonly"
   --mount "type=bind,src=/data/dev2/hf-cache,dst=/hf,readonly"
-  --mount "type=bind,src=/data/decision20-20260926/data/hf-private-decision20-clean-v2,dst=/data,readonly"
+  --mount "type=bind,src=$data,dst=/data,readonly"
   --mount "type=bind,src=/data/dev2/runs/dec/panels,dst=/panels,readonly"
   --mount "type=bind,src=/data/dev2/runs/dec,dst=/runs,readonly"
   --mount "type=bind,src=$out,dst=/out")
