@@ -253,6 +253,12 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	if !s.enabled {
 		return nil, nil
 	}
+	start := time.Now()
+	status := "error"
+	resultCount := -1
+	defer func() {
+		RecordMemoryRetrieval("qdrant", "retrieve", status, time.Since(start).Seconds(), resultCount)
+	}()
 
 	emb, err := GenerateEmbeddingWithContext(ctx, opts.Query, s.embeddingConfig)
 	if err != nil {
@@ -300,7 +306,12 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		results = append(results, &RetrieveResult{Memory: m, Score: sp.Score})
 	}
 
-	RecordMemoryStoreOperation("qdrant", "retrieve", "success", 0)
+	resultCount = len(results)
+	if resultCount == 0 {
+		status = "miss"
+	} else {
+		status = "hit"
+	}
 	return results, nil
 }
 
