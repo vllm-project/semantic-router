@@ -42,14 +42,24 @@ def main() -> None:
     from training.model.decision_model import collate, encode
 
     from .dec_model import dec_fingerprint, load_dec_checkpoint
+    from .runtime_check import require_runtime
 
+    runtime = require_runtime()
     identity = dec_fingerprint(selected["checkpoint"], args.source_path)
+    checkpoint_format = json.loads(
+        (Path(selected["checkpoint"]) / "decision_config.json").read_text()
+    ).get("checkpoint_format")
     loaded_source = {
         name.removeprefix("source/"): sha
         for name, sha in identity["files_sha256"].items()
         if name.startswith("source/")
     }
-    if _digest(loaded_source) != selected["initialization_source_sha256"]:
+    # A full checkpoint carries every weight itself; its start stays recorded
+    # in the run provenance (initialization_source_sha256).
+    if (
+        checkpoint_format != "full"
+        and _digest(loaded_source) != selected["initialization_source_sha256"]
+    ):
         raise ValueError(
             "Source files differ from the model source audited in provenance"
         )
@@ -117,6 +127,7 @@ def main() -> None:
             "max_length": max_length,
             "batch_size": args.batch_size,
             "device": "cuda:0",
+            "runtime": runtime,
         },
         **fit_report(records),
     }

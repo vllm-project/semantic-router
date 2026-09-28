@@ -1,0 +1,84 @@
+{
+  "arm": "m3-a-causal-mb1-s2",
+  "family": "qwen-causal",
+  "start": {
+    "path": "/work/models/Qwen3-0.6B-Base",
+    "repo": "Qwen/Qwen3-0.6B-Base",
+    "revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+    "head_seed": 20260929,
+    "architecture": "official causal endpoint + global query shared head (training.model.decision_model)",
+    "collapse_stop": {
+      "step": 300,
+      "min_select": 350
+    }
+  },
+  "data": {
+    "parent": "/work/data/hf-private-decision20-clean-v2",
+    "converter_bundle": "/work/models/Decision-1.0-Kai-0.6B",
+    "mixture": {
+      "template": "S",
+      "unit": "qwen3-0.6b-base-native-segmented",
+      "tokenizer": "/work/models/Qwen3-0.6B-Base",
+      "seed": "decision2-06b-m3-a6-rho",
+      "fraction_of_base": 0.5,
+      "hf_dataset": "llm-semantic-router/decision-2.0-training-data",
+      "hf_revision": "5c0255ed6a05d08b2fcb863e8045289eedd996cd",
+      "base": [
+        {
+          "arm": "A0s",
+          "path": "/runs/m3/data/v2-5c0255ed/A0s.train.jsonl",
+          "sha256": "df90cb7f20236fa41ada83d020fb47cbee8d8367cf74d9a67e240ff920994c68",
+          "rows": 7299
+        }
+      ],
+      "treatment": [
+        {
+          "arm": "A6g",
+          "path": "/runs/m3/data/v2-5c0255ed/A6g.train.jsonl",
+          "sha256": "ac94b7f4f1e7d8b73ddbffebe15035aa3b47cca9c825f622d0ec8d04bd7fc02f",
+          "rows": 4905
+        },
+        {
+          "arm": "A6h",
+          "path": "/runs/m3/data/v2-5c0255ed/A6h.train.jsonl",
+          "sha256": "23440f0c5561077780973259777fca4aa80400f5b30e9df6e1376f6d9aa31927",
+          "rows": 5622
+        }
+      ],
+      "expected": {
+        "train_rows": 12776,
+        "train_tokens": 6101929,
+        "train_ids_sha256": "29137bb362c858fa1efb64ad6e20af9d8dc2e55b8413ddf754ef680546fe957c"
+      }
+    }
+  },
+  "logical_batch": 16,
+  "max_micro_rows": 1,
+  "micro_token_budget": 32768,
+  "seed": "20260928-06b-m3-s2",
+  "optimizer": {
+    "encoder_lr": 2e-05,
+    "head_lr": 0.0002,
+    "lr_min": 1e-06,
+    "warmup_ratio": 0.05,
+    "weight_decay": 0.01,
+    "clip": 1.0
+  },
+  "loss": {
+    "ce": 1.0,
+    "brier": 0.5,
+    "score_rps": 0.0,
+    "teacher_kl": 1.0
+  },
+  "teacher": {
+    "path": "/runs/m2/teacher/lux1-train.teacher.jsonl",
+    "sha256": "2d90bc5b24756122735be6baf901c489cbd8a3c7f825b4b540976a6aaf9b976f",
+    "source": "own Decision-1.0-Lux-9B bd45a30a, eval-track frozen node-A autotune cache (private copy e215f8bd -> c94e66c5), TRAIN prompts only; predictions 813b06aa",
+    "screen": "SCREEN_PASS (choice .835, noul .893, score .866, three-level 102/102, half-Brier <= .119)",
+    "coverage": "subset"
+  },
+  "milestones": "eighths",
+  "include_step0_in_best": false,
+  "gpu_hour_cap": 1.0,
+  "max_reserved_gib": 200
+}

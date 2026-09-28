@@ -1,0 +1,15 @@
+{
+  "name": "decision1-lux-shared-renderer",
+  "module": "v2.9b.lux9b.infer_lux1",
+  "args": [
+    "--package", "{model}",
+    "--model-id", "{model_id}",
+    "--model-revision", "{revision}",
+    "--max-length", "{max_length}",
+    "--package-temperatures",
+    "--input", "{input}",
+    "--output", "{output}"
+  ],
+  "requires": ["model_id", "max_length"],
+  "batch_policy": "one prompt per call, all its questions batched; no truncation; untouched Decision 1.0 package through the shared from_decision1 renderer with its published temperatures"
+}

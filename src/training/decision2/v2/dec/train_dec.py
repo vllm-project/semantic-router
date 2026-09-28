@@ -38,7 +38,9 @@ from training.model.plan import epoch_batches, planned_updates
 from training.model.source import source_fingerprint
 from training.model.train import atomic_json, evaluate, fsync_tree, learning_factor
 
+from .batching import row_windows, token_batches
 from .dec_model import RESIDUALS, DecModel
+from .runtime_check import require_runtime
 
 TRAINER_VERSION = "dec-factor-trainer/1"
 TASK_TYPES = ("choice", "noul", "score")
@@ -52,7 +54,7 @@ SHARED_FILES = (
     "train.py",
     "infer.py",
 )
-OWN_FILES = ("train_dec.py", "dec_model.py")
+OWN_FILES = ("train_dec.py", "dec_model.py", "runtime_check.py", "batching.py")
 
 
 def utc_now() -> str:
@@ -85,16 +87,31 @@ def type_weights(rows: list[dict[str, Any]], mode: str) -> dict[str, float]:
     return {kind: len(rows) / (len(TASK_TYPES) * counts[kind]) for kind in TASK_TYPES}
 
 
-def load_teacher(path: Path, rows: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
-    """Map TRAIN id to a complete option-key distribution bound to its input hash."""
+def load_teacher(
+    path: Path, rows: list[dict[str, Any]], *, partial: bool = False
+) -> dict[str, dict[str, float]]:
+    """Map TRAIN id to a complete option-key distribution bound to its input hash.
+
+    With ``partial``, records whose id is absent from TRAIN or whose input hash
+    differs (for example a row whose option keys were renumbered) are skipped
+    and the covered rows alone receive the teacher term.
+    """
     by_id = {row["id"]: row for row in rows}
     teacher: dict[str, dict[str, float]] = {}
+    seen: set[str] = set()
     with path.open(encoding="utf-8") as stream:
         for line_number, line in enumerate(stream, 1):
             record = json.loads(line)
+            if record.get("id") in seen:
+                raise ValueError(f"{path}:{line_number}: repeated teacher id")
+            seen.add(record.get("id"))
             row = by_id.get(record.get("id"))
-            if row is None or record["id"] in teacher:
-                raise ValueError(f"{path}:{line_number}: unknown or repeated TRAIN id")
+            if partial and (
+                row is None or record.get("input_sha256") != row["input_sha256"]
+            ):
+                continue
+            if row is None:
+                raise ValueError(f"{path}:{line_number}: unknown TRAIN id")
             if record.get("input_sha256") != row["input_sha256"]:
                 raise ValueError(f"{path}:{line_number}: teacher input hash differs")
             probs = record.get("teacher_probs")
@@ -113,7 +130,7 @@ def load_teacher(path: Path, rows: list[dict[str, Any]]) -> dict[str, dict[str, 
             ):
                 raise ValueError(f"{path}:{line_number}: invalid teacher distribution")
             teacher[record["id"]] = probs
-    if set(teacher) != set(by_id):
+    if not teacher or (not partial and set(teacher) != set(by_id)):
         raise ValueError("Teacher file must cover every TRAIN row exactly once")
     return teacher
 
@@ -145,7 +162,29 @@ def attach_teacher_probs(item: dict[str, Any], probs: dict[str, float]) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--model-path", type=Path, required=True, help="Decision 1.0 package"
+        "--model-path",
+        type=Path,
+        required=True,
+        help="Decision 1.0 package, or an official Qwen3.5 snapshot with --init base",
+    )
+    parser.add_argument("--init", choices=("decision1", "base"), default="decision1")
+    parser.add_argument("--revision", help="Immutable revision for --init base")
+    parser.add_argument("--train-mode", choices=("lora", "full"), default="lora")
+    parser.add_argument("--backbone-lr", type=float, default=1e-5)
+    parser.add_argument("--gradient-checkpointing", choices=("on", "off"), default="on")
+    parser.add_argument(
+        "--batching",
+        choices=("rows", "tokens"),
+        default="rows",
+        help="rows: --microbatch rows x --accumulation; tokens: token-budget micro-batches",
+    )
+    parser.add_argument("--max-batch-tokens", type=int, default=32768)
+    parser.add_argument("--max-batch-rows", type=int, default=64)
+    parser.add_argument("--update-rows", type=int, default=64)
+    parser.add_argument(
+        "--teacher-partial",
+        action="store_true",
+        help="Teacher covers a subset of TRAIN (matching id and input hash)",
     )
     parser.add_argument("--train", type=Path, required=True)
     parser.add_argument("--select", type=Path, required=True)
@@ -195,9 +234,17 @@ def parse_args() -> argparse.Namespace:
         parser.error("--teacher and a positive --teacher-kl-weight go together")
     if not math.isfinite(args.teacher_kl_weight) or args.teacher_kl_weight < 0:
         parser.error("teacher KL weight must be finite and nonnegative")
-    for name in ("lora_lr", "head_lr", "residual_lr"):
+    for name in ("lora_lr", "head_lr", "residual_lr", "backbone_lr"):
         if not math.isfinite(getattr(args, name)) or getattr(args, name) <= 0:
             parser.error(f"{name} must be positive")
+    if (args.init == "base") != bool(args.revision):
+        parser.error("--init base needs --revision (and only then)")
+    if args.train_mode == "full" and args.residual:
+        parser.error("residual readouts extend LoRA continuations only")
+    if args.teacher_partial and not args.teacher:
+        parser.error("--teacher-partial needs --teacher")
+    if args.batching == "tokens" and args.smoke_window_type:
+        parser.error("--smoke-window-type needs --batching rows")
     return args
 
 
@@ -205,6 +252,7 @@ def main() -> None:
     args = parse_args()
     if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
         raise RuntimeError("A ROCm/CUDA BF16 device is required")
+    runtime = require_runtime()
     output = args.output
     if output.exists() and any(output.iterdir()):
         raise ValueError("Fresh run requires a new or empty output directory")
@@ -215,7 +263,11 @@ def main() -> None:
         {"train": train_rows, "select": select_rows, "cal": cal_rows}
     )
     weights_by_type = type_weights(train_rows, args.type_balance)
-    teacher = load_teacher(args.teacher, train_rows) if args.teacher else None
+    teacher = (
+        load_teacher(args.teacher, train_rows, partial=args.teacher_partial)
+        if args.teacher
+        else None
+    )
     data_sha = {
         "train": file_sha256(args.train),
         "select": file_sha256(args.select),
@@ -229,22 +281,44 @@ def main() -> None:
     torch.cuda.manual_seed_all(args.seed)
     device = torch.device("cuda:0")
     source = source_fingerprint(args.model_path)
-    base, tokenizer = DecisionModel.from_decision1(args.model_path, args.head_dim)
+    if args.init == "decision1":
+        base, tokenizer = DecisionModel.from_decision1(args.model_path, args.head_dim)
+    else:
+        base, tokenizer = DecisionModel.from_base(
+            args.model_path, args.revision, args.head_dim
+        )
     model = DecModel.wrap(base, tuple(args.residual))
-    attach_lora(
-        model,
-        rank=args.lora_rank,
-        alpha=args.lora_alpha,
-        dropout=args.lora_dropout,
-        source_kind="decision1",
-        source_fingerprint=source,
-    )
+    if args.train_mode == "lora":
+        attach_lora(
+            model,
+            rank=args.lora_rank,
+            alpha=args.lora_alpha,
+            dropout=args.lora_dropout,
+            source_kind=args.init,
+            source_fingerprint=source,
+        )
+    else:
+        model.backbone.requires_grad_(True)
+        model.head.requires_grad_(True)
+        model.metadata.update(
+            {
+                "checkpoint_format": "full",
+                "full_training_source": {
+                    "kind": args.init,
+                    "revision": args.revision,
+                    "source_fingerprint": source,
+                },
+            }
+        )
     model = model.float().to(device)
-    model.backbone.gradient_checkpointing_enable(
-        gradient_checkpointing_kwargs={"use_reentrant": False}
-    )
+    if args.gradient_checkpointing == "on":
+        model.backbone.gradient_checkpointing_enable(
+            gradient_checkpointing_kwargs={"use_reentrant": False}
+        )
     model.backbone.config.use_cache = False
-    model.metadata.update({"training_mode": "lora", "loss_version": LOSS_VERSION})
+    model.metadata.update(
+        {"training_mode": args.train_mode, "loss_version": LOSS_VERSION}
+    )
     pad_id = (
         tokenizer.pad_token_id
         if tokenizer.pad_token_id is not None
@@ -256,19 +330,42 @@ def main() -> None:
     train_items = [encode(row, tokenizer, args.max_length) for row in train_rows]
     if teacher is not None:
         for row, item in zip(train_rows, train_items):
-            attach_teacher_probs(item, teacher[row["id"]])
+            if row["id"] in teacher:
+                attach_teacher_probs(item, teacher[row["id"]])
     select_items = [encode(row, tokenizer, args.max_length) for row in select_rows]
     train_lengths = [len(item["ids"]) for item in train_items]
     example_weights = [weights_by_type[row["task_type"]] for row in train_rows]
-    planned = planned_updates(
-        len(train_items),
-        0,
-        0.0,
-        args.microbatch,
-        args.accumulation,
-        args.epochs,
-        args.max_steps,
-    )
+    token_windows = None
+    if args.batching == "tokens":
+        token_windows = [
+            window
+            for epoch in range(args.epochs)
+            for window in row_windows(
+                token_batches(
+                    train_lengths,
+                    seed=args.seed,
+                    epoch=epoch,
+                    max_tokens=args.max_batch_tokens,
+                    max_rows=args.max_batch_rows,
+                ),
+                args.update_rows,
+            )
+        ]
+        planned = (
+            min(len(token_windows), args.max_steps)
+            if args.max_steps
+            else len(token_windows)
+        )
+    else:
+        planned = planned_updates(
+            len(train_items),
+            0,
+            0.0,
+            args.microbatch,
+            args.accumulation,
+            args.epochs,
+            args.max_steps,
+        )
     save_steps = checkpoint_steps(planned, args.checkpoint_schedule, args.save_every)
     contract = {
         "trainer_version": TRAINER_VERSION,
@@ -278,21 +375,41 @@ def main() -> None:
         "objective": "ce_brier",
         "brier_weight": args.brier_weight,
         "model_source": source,
-        "init_kind": "decision1",
+        "init_kind": args.init,
+        "base_revision": args.revision,
+        "train_mode": args.train_mode,
+        "backbone_lr": args.backbone_lr if args.train_mode == "full" else None,
+        "gradient_checkpointing": args.gradient_checkpointing,
+        "batching": (
+            {
+                "kind": "tokens",
+                "max_batch_tokens": args.max_batch_tokens,
+                "max_batch_rows": args.max_batch_rows,
+                "update_rows": args.update_rows,
+            }
+            if args.batching == "tokens"
+            else {"kind": "rows"}
+        ),
         "data_sha256": data_sha,
         "type_balance": args.type_balance,
         "type_weights": weights_by_type,
         "teacher_kl_weight": args.teacher_kl_weight,
+        "teacher_partial": args.teacher_partial,
+        "teacher_rows": len(teacher) if teacher is not None else 0,
         "residuals": sorted(args.residual),
         "residual_lr": args.residual_lr if args.residual else None,
-        "lora": {
-            "rank": args.lora_rank,
-            "alpha": args.lora_alpha,
-            "dropout": args.lora_dropout,
-            "lr": args.lora_lr,
-            "target_modules": model.metadata["lora"]["target_modules"],
-            "peft_version": version("peft"),
-        },
+        "lora": (
+            {
+                "rank": args.lora_rank,
+                "alpha": args.lora_alpha,
+                "dropout": args.lora_dropout,
+                "lr": args.lora_lr,
+                "target_modules": model.metadata["lora"]["target_modules"],
+                "peft_version": version("peft"),
+            }
+            if args.train_mode == "lora"
+            else None
+        ),
         "head_lr": args.head_lr,
         "weight_decay": args.weight_decay,
         "warmup_ratio": args.warmup_ratio,
@@ -317,12 +434,21 @@ def main() -> None:
         ),
     }
     groups = [
-        {
-            "params": adapter_parameters(model),
-            "lr": args.lora_lr,
-            "peak_lr": args.lora_lr,
-            "name": "lora",
-        },
+        (
+            {
+                "params": adapter_parameters(model),
+                "lr": args.lora_lr,
+                "peak_lr": args.lora_lr,
+                "name": "lora",
+            }
+            if args.train_mode == "lora"
+            else {
+                "params": list(model.backbone.parameters()),
+                "lr": args.backbone_lr,
+                "peak_lr": args.backbone_lr,
+                "name": "backbone",
+            }
+        ),
         {
             "params": list(model.head.parameters()),
             "lr": args.head_lr,
@@ -370,7 +496,12 @@ def main() -> None:
                 "peft": version("peft"),
             },
             "device_name": torch.cuda.get_device_name(device),
-            "precision": "FP32 frozen backbone; FP32 LoRA/head/residual and Adam; BF16 autocast backbone; FP32 head/loss",
+            "runtime": runtime,
+            "precision": (
+                "FP32 frozen backbone; FP32 LoRA/head/residual and Adam; BF16 autocast backbone; FP32 head/loss"
+                if args.train_mode == "lora"
+                else "FP32 backbone/head and Adam; BF16 autocast backbone; FP32 head/loss"
+            ),
             "calibration_policy": "CAL rows are never fed to this trainer or checkpoint selector",
         },
     )
@@ -445,21 +576,13 @@ def main() -> None:
         metrics_file.close()
         return
     model.train()
-    batches = epoch_batches(
-        train_lengths,
-        [],
-        epoch=0,
-        seed=args.seed,
-        microbatch=args.microbatch,
-        replay_fraction=0.0,
-    )
-    all_batches = [
-        batch
-        for epoch in range(args.epochs)
-        for batch in (
-            batches
-            if epoch == 0
-            else epoch_batches(
+    if token_windows is not None:
+        windows = token_windows
+    else:
+        all_batches = [
+            batch
+            for epoch in range(args.epochs)
+            for batch in epoch_batches(
                 train_lengths,
                 [],
                 epoch=epoch,
@@ -467,13 +590,18 @@ def main() -> None:
                 microbatch=args.microbatch,
                 replay_fraction=0.0,
             )
-        )
-    ]
-    for window in range(0, len(all_batches), args.accumulation):
+        ]
+        windows = [
+            [
+                [index for _, index in batch]
+                for batch in all_batches[start : start + args.accumulation]
+            ]
+            for start in range(0, len(all_batches), args.accumulation)
+        ]
+    for window_batches in windows:
         if step >= planned:
             break
-        window_batches = all_batches[window : window + args.accumulation]
-        indices = [index for batch in window_batches for _, index in batch]
+        indices = [index for batch in window_batches for index in batch]
         if args.smoke_window_type and all(
             train_rows[i]["task_type"] != args.smoke_window_type for i in indices
         ):
@@ -488,9 +616,9 @@ def main() -> None:
         tokens = correct = 0
         window_started = time.perf_counter()
         for batch_ids in window_batches:
-            items = [train_items[index] for _, index in batch_ids]
+            items = [train_items[index] for index in batch_ids]
             weights = torch.tensor(
-                [example_weights[index] for _, index in batch_ids], device=device
+                [example_weights[index] for index in batch_ids], device=device
             )
             batch = {
                 key: (

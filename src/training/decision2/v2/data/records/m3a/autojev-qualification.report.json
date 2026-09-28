@@ -1,0 +1,214 @@
+{
+ "autotune_frozen": {
+  "entries": 6,
+  "sha256": "36caadf4a02c0d6c19e894ec9ebe33ac184c70bb608ab7dfc0ca2270375229ee"
+ },
+ "g1": {
+  "P1": {
+   "checks": {
+    "constant_package_hashes": true,
+    "exit_code": true,
+    "fla_path": true,
+    "image_id": true,
+    "loaded_parameters": true,
+    "receipt_identity": true,
+    "rows": true
+   },
+   "package_hashes": {
+    "native_model_sha256": [
+     "d0b1e161c17d60889744b6ccb5fa588bf80f9856f8535e6a04e083ffcf667ca2"
+    ],
+    "runtime_source_sha256": [
+     "550ccd857350c6771a1de03e4bcba9fb4412247b58bcdc9e8ac03de2ab9641a5"
+    ]
+   },
+   "pass": true,
+   "receipt_problems": {}
+  },
+  "P2": {
+   "checks": {
+    "constant_package_hashes": true,
+    "exit_code": true,
+    "fla_path": true,
+    "image_id": true,
+    "loaded_parameters": true,
+    "receipt_identity": true,
+    "rows": true
+   },
+   "package_hashes": {
+    "native_model_sha256": [
+     "d0b1e161c17d60889744b6ccb5fa588bf80f9856f8535e6a04e083ffcf667ca2"
+    ],
+    "runtime_source_sha256": [
+     "550ccd857350c6771a1de03e4bcba9fb4412247b58bcdc9e8ac03de2ab9641a5"
+    ]
+   },
+   "pass": true,
+   "receipt_problems": {}
+  },
+  "P3": {
+   "checks": {
+    "constant_package_hashes": true,
+    "exit_code": true,
+    "fla_path": true,
+    "image_id": true,
+    "loaded_parameters": true,
+    "receipt_identity": true,
+    "rows": true
+   },
+   "package_hashes": {
+    "native_model_sha256": [
+     "d0b1e161c17d60889744b6ccb5fa588bf80f9856f8535e6a04e083ffcf667ca2"
+    ],
+    "runtime_source_sha256": [
+     "550ccd857350c6771a1de03e4bcba9fb4412247b58bcdc9e8ac03de2ab9641a5"
+    ]
+   },
+   "pass": true,
+   "receipt_problems": {}
+  },
+  "P4": {
+   "checks": {
+    "constant_package_hashes": true,
+    "exit_code": true,
+    "fla_path": true,
+    "image_id": true,
+    "loaded_parameters": true,
+    "receipt_identity": true,
+    "rows": true
+   },
+   "package_hashes": {
+    "native_model_sha256": [
+     "d0b1e161c17d60889744b6ccb5fa588bf80f9856f8535e6a04e083ffcf667ca2"
+    ],
+    "runtime_source_sha256": [
+     "550ccd857350c6771a1de03e4bcba9fb4412247b58bcdc9e8ac03de2ab9641a5"
+    ]
+   },
+   "pass": true,
+   "receipt_problems": {}
+  }
+ },
+ "g3": {
+  "P1": false,
+  "P2": false,
+  "P3": false,
+  "P4": false
+ },
+ "gates": {
+  "G1_identity": true,
+  "G2_repeat": true,
+  "G3_autotune_frozen": false,
+  "G4_spot_check": true
+ },
+ "identity": {
+  "adapter_version": "autojev27-native-v1",
+  "backend": "autojev-native-eager",
+  "model_config_sha256": "bacbcbb281a53af5ef5cc6c9028601097d155bf981129f18a727219517921dcd",
+  "model_id": "denis-pplx/autojev-27b",
+  "model_revision": "6f5b557e037f5edb25c7dc92dbc6553e5a19c015",
+  "revision_attested": true
+ },
+ "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+ "package_hashes": {
+  "native_model_sha256": [
+   "d0b1e161c17d60889744b6ccb5fa588bf80f9856f8535e6a04e083ffcf667ca2"
+  ],
+  "runtime_source_sha256": [
+   "550ccd857350c6771a1de03e4bcba9fb4412247b58bcdc9e8ac03de2ab9641a5"
+  ]
+ },
+ "pairs": {
+  "P1:P2": {
+   "argmax_mismatches": 0,
+   "compared_distributions": 910,
+   "identical_answers": 910,
+   "max_drift": 0.0,
+   "mean_drift": 0.0,
+   "missing_prompts": 0,
+   "over_1e-2": 0,
+   "over_1e-3": 0,
+   "over_1e-6": 0,
+   "p50_drift": 0.0,
+   "p99_drift": 0.0,
+   "pass": true,
+   "questions": 910,
+   "validity_mismatches": 0
+  },
+  "P1:P3": {
+   "argmax_mismatches": 0,
+   "compared_distributions": 910,
+   "identical_answers": 910,
+   "max_drift": 0.0,
+   "mean_drift": 0.0,
+   "missing_prompts": 0,
+   "over_1e-2": 0,
+   "over_1e-3": 0,
+   "over_1e-6": 0,
+   "p50_drift": 0.0,
+   "p99_drift": 0.0,
+   "pass": true,
+   "questions": 910,
+   "validity_mismatches": 0
+  },
+  "P1:P4": {
+   "argmax_mismatches": 0,
+   "compared_distributions": 910,
+   "identical_answers": 910,
+   "max_drift": 0.0,
+   "mean_drift": 0.0,
+   "missing_prompts": 0,
+   "over_1e-2": 0,
+   "over_1e-3": 0,
+   "over_1e-6": 0,
+   "p50_drift": 0.0,
+   "p99_drift": 0.0,
+   "pass": true,
+   "questions": 910,
+   "validity_mismatches": 0
+  },
+  "P2:P3": {
+   "argmax_mismatches": 0,
+   "compared_distributions": 910,
+   "identical_answers": 910,
+   "max_drift": 0.0,
+   "mean_drift": 0.0,
+   "missing_prompts": 0,
+   "over_1e-2": 0,
+   "over_1e-3": 0,
+   "over_1e-6": 0,
+   "p50_drift": 0.0,
+   "p99_drift": 0.0,
+   "pass": true,
+   "questions": 910,
+   "validity_mismatches": 0
+  }
+ },
+ "pass": false,
+ "schema": "decision2-m3a-autojev-qualification/1",
+ "sets_sha256": "02d91835a211bbdc0e8e23d1435fa7e9267bec2260852ecfb791d3d3f6195842",
+ "spot": {
+  "P1:eval": {
+   "argmax_agreement": 0.9961315280464217,
+   "argmax_mismatches": 2,
+   "compared_distributions": 517,
+   "identical_answers": 307,
+   "max_drift": 0.05644808175604121,
+   "mean_drift": 0.001742863122492535,
+   "missing_prompts": 0,
+   "over_1e-2": 36,
+   "over_1e-3": 113,
+   "over_1e-6": 210,
+   "p50_drift": 0.0,
+   "p99_drift": 0.014883537326566942,
+   "pass": true,
+   "questions": 517,
+   "validity_mismatches": 0
+  }
+ },
+ "tolerances": {
+  "repeat_max_drift": 0.001,
+  "spot_max_p99_drift": 0.05,
+  "spot_min_argmax_agreement": 0.99
+ }
+}

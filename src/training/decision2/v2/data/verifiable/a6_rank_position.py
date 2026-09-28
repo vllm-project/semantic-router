@@ -134,7 +134,7 @@ LABELS = {
             "Cole Farm",
             "Dene Farm",
             "Elm Farm",
-            "Fallow Farm",
+            "Fallow Farm",  # codespell:ignore fallow
             "Glen Farm",
             "Hurst Farm",
             "Ivy Farm",
