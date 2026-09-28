@@ -3,6 +3,7 @@
 # the three seeds' postrun, uniform FP32 soup of their BEST checkpoints, CAL698 temperatures, typed DEV +
 # CSS pilot + SELECT readouts, then the development readout against Nox 1.0 and the M3 N4LKr soup.
 # With member groups (rule 5, the cross-arm soup), the soup averages all their seeds instead.
+# M4_CTL / M4_REF (optional) replace the Nox 1.0 control and the N4LKr reference soup (2B probe: sol1, S2T).
 # usage: m4-soup.sh <mirror-dir> <group e.g. N4LR> <gpu 0-4> <start path in container> [member group ...]
 set -u
 SRC=$1 G=$2 GPU=$3 START=$4
@@ -53,8 +54,8 @@ for panel in dev css-pilot; do
 done
 bash "$L" "m4-$G-soup-select" "$SRC" "$O/select" -- -m v2.dec.eval_rows --checkpoint "$CK" --rows /data/select.jsonl \
   --tag select --output /out || log "select FAILED"
-C=/data/dev2/runs/dec/m2/controls R=/data/dev2/runs/dec/m3/soup/N4LKr
-args=(--arm "nox1=$C/nox1-dev/nox1.dev.predictions.jsonl,$C/nox1-css-pilot/nox1.css-pilot.predictions.jsonl"
+C=/data/dev2/runs/dec/m2/controls CTL=${M4_CTL:-nox1} R=${M4_REF:-/data/dev2/runs/dec/m3/soup/N4LKr}
+args=(--arm "nox1=$C/$CTL-dev/$CTL.dev.predictions.jsonl,$C/$CTL-css-pilot/$CTL.css-pilot.predictions.jsonl"
   --arm "n4lkr=$R/dev/dev.predictions.jsonl,$R/css-pilot/css-pilot.predictions.jsonl")
 for m in "${MEMBERS[@]}"; do
   for s in s1 s2 s3; do
