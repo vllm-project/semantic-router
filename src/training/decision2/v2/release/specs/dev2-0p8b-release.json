@@ -71,12 +71,10 @@
     "text": {
       "tagline": "A compact decision model for routing choices, yes/no checks and rubric scores over one state: native System One Choice, Noul and Score answers with probabilities, no chat API.",
       "architecture": "The 24-layer Qwen3.5 text backbone inherited from Decision 1.0 Eos (18 gated-delta and 6 attention layers) reads the state, the question and every supplied candidate once; a shared candidate head scores the candidates against a global query and returns probabilities without generating text.",
+      "runtime_note": "The download includes a small local runtime (`decision2/`) for one CUDA or ROCm GPU; it does not start a hosted endpoint.",
       "confirmation": "**Independent sealed confirmation (JevArena-C1): PLACEHOLDER, result pending. The coordinator fills in this line after the one-shot C1 scoring event.**",
-      "details": [
-        "**Weights:** the uniform average of three full fine-tunes of Decision 1.0 Eos (same recipe and start, seeds 20260926, 20260927 and 20260928)."
-      ],
       "training": [
-        "**Recipe:** one epoch of full fine-tuning (backbone learning rate 1e-5, head 1e-4; cross-entropy plus 0.5 × Brier) on 162,777 decision rows (138.4M tokens); each seed's checkpoint was chosen on a held-out selection set. Hard labels only: no teacher, distillation or soft targets.",
+        "**Recipe:** one epoch of full fine-tuning (backbone learning rate 1e-5, head 1e-4; cross-entropy plus 0.5 × Brier) on 162,777 decision rows (138.4M tokens) with seeds 20260926, 20260927 and 20260928, each seed's checkpoint chosen on a held-out selection set, then a uniform weight average of the three. Hard labels only: no teacher, distillation or soft targets.",
         "**Own Decision 1.0 training corpora (130,157 rows):** program-generated English and Chinese decision tasks labeled by program oracles (no model-written states or labels), plus the human labels of CLINC150 (CC BY 3.0), BANKING77 (CC BY 4.0), MultiNLI non-fiction genres (OANC terms) and SNLI (CC BY-SA 4.0).",
         "**Decision 2.0 data arms (32,620 rows):** project-generated verifiable rules, counterfactuals, hard negatives and multi-level Score tasks, and the human labels of GoEmotions (CC BY 4.0), ABCD (MIT), Schema-Guided Dialogue (CC BY-SA 4.0), MuSiQue (CC BY 4.0; Wikipedia text CC BY-SA), KLUE YNAT and STS and JGLUE JCommonsenseQA, JNLI and JSTS (CC BY-SA 4.0), IBM ArgQ-30k (CC BY-SA 3.0) and SAF (CC BY 4.0), in English, Chinese, Japanese, Korean and German.",
         "**Not used:** outputs of Jev or of any third-party decision model, and two shortcut-prone reading families (Cosmos QA, SQuAD 2.0 answerability). Training data were screened for overlap with the evaluation panels. Datasets keep their own licences ([attributions](ATTRIBUTIONS.md))."
@@ -84,7 +82,8 @@
       "limitations": [
         "**Seed dependence.** The three single fine-tunes scored 49.78, 47.36 and 41.08 on JevArena v3 (8,192-token runs); only their uniform average is released (50.24 at 16,384 tokens). A retrained seed of the same recipe can land well below this model.",
         "**Where it improves and where it does not.** The gain over Decision 1.0 Eos is typed reasoning (Choice 529 vs 315, Noul 611 vs 410 of 800). Typed Score is lower (107 vs 120 of 400) and human transfer is slightly lower (H 0.440 vs 0.461); the tradeoffs table lists every task below Eos.",
-        "**Multilingual.** On the mlx-diag diagnostic, non-English Noul (paraphrase pairs) is about 5 points below Decision 1.0 Eos (54.2% vs 59.2%), while non-English Choice is level (68.7% vs 68.5%)."
+        "**Multilingual.** On the mlx-diag diagnostic, non-English Noul (paraphrase pairs) is about 5 points below Decision 1.0 Eos (54.2% vs 59.2%), while non-English Choice is level (68.7% vs 68.5%).",
+        "**CPU.** CPU inference was not verified for this release: where the GPU-only causal-conv1d package is installed, Transformers routes the convolution to that kernel and a CPU run fails."
       ]
     },
     "reports": [
