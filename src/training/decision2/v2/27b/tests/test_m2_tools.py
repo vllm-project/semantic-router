@@ -107,6 +107,36 @@ class MixtureTest(unittest.TestCase):
             mixtures.build(base, {}, dict(lengths), ["x=base:full,resample:full"], "s")
 
 
+class ReplayTest(unittest.TestCase):
+    def setUp(self):
+        self.replay = importlib.import_module("v2.27b.build_replay")
+        self.row = {
+            "id": "a",
+            "input_sha256": "h",
+            "task_type": "choice",
+            "label": 1,
+            "options": [{"key": "x"}, {"key": "y"}],
+        }
+
+    def test_attach_checks_and_suffixes(self):
+        teacher = {"a": {"input_sha256": "h", "teacher_probs": {"x": 0.25, "y": 0.75}}}
+        out, report = self.replay.attach([self.row], teacher)
+        self.assertEqual(out[0]["id"], "a#r1")
+        self.assertEqual(out[0]["teacher_probs"], {"x": 0.25, "y": 0.75})
+        self.assertEqual(report["teacher_argmax_equals_gold"], {"choice": 1.0})
+
+    def test_attach_rejects_mismatches(self):
+        bad = [
+            {},
+            {"a": {"input_sha256": "other", "teacher_probs": {"x": 0.5, "y": 0.5}}},
+            {"a": {"input_sha256": "h", "teacher_probs": {"x": 1.0}}},
+            {"a": {"input_sha256": "h", "teacher_probs": {"x": 0.5, "y": 0.6}}},
+        ]
+        for teacher in bad:
+            with self.assertRaises(ValueError):
+                self.replay.attach([self.row], teacher)
+
+
 class ContrastTest(unittest.TestCase):
     def test_css_macro_matches_frozen_scorer(self):
         from transfer.score import macro_f1

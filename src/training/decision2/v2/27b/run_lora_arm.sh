@@ -22,6 +22,11 @@ SAVE_EVERY=${SAVE_EVERY:-92}
 ARM_CAP=${ARM_CAP:-3.5}
 FULL_CAP=${FULL_CAP:-3.0}
 AHO=${AHO:-}
+# Teacher replay (KL arms): REPLAY_FILE host path of teacher_probs rows, with the
+# trainer's REPLAY_FRACTION and REPLAY_KL weight; unset means no replay.
+REPLAY_FILE=${REPLAY_FILE:-}
+REPLAY_FRACTION=${REPLAY_FRACTION:-0}
+REPLAY_KL=${REPLAY_KL:-0}
 # Training-stage import path; amendment 3 appends the image FLA overlay (/opt/decision-fla).
 TRAIN_PYTHONPATH=${TRAIN_PYTHONPATH:-/pipeline:/code}
 # Amendment 4: TRITON_AUTOTUNE_CACHE=1 shares one on-disk Triton autotune cache
@@ -60,9 +65,17 @@ for spec in "${AHO_SPECS[@]}"; do
   AHO_MOUNTS+=(--mount "${spec#*=}:/data/aho-${spec%%=*}.jsonl")
   AHO_ARGS+=(--aho "${spec%%=*}=/data/aho-${spec%%=*}.jsonl")
 done
+REPLAY_MOUNTS=() REPLAY_ARGS=() REPLAY_ADMIT=() REPLAY_PARTITION=()
+if [ -n "$REPLAY_FILE" ]; then
+  REPLAY_MOUNTS=(--mount "$REPLAY_FILE:/data/replay.jsonl")
+  REPLAY_ARGS=(--replay /data/replay.jsonl --replay-fraction "$REPLAY_FRACTION"
+    --replay-kl-weight "$REPLAY_KL")
+  REPLAY_ADMIT=(--mount "type=bind,src=$REPLAY_FILE,dst=/replay.jsonl,readonly")
+  REPLAY_PARTITION=(--partition replay=/replay.jsonl)
+fi
 COMMON_MOUNTS=(
   --mount "$RUN/pipeline:/pipeline" --mount "$CODE:/code" --mount "$SOURCE_MOUNT:/source"
-  --mount "$TRAIN_FILE:/data/train.jsonl" "${AHO_MOUNTS[@]}"
+  --mount "$TRAIN_FILE:/data/train.jsonl" "${AHO_MOUNTS[@]}" "${REPLAY_MOUNTS[@]}"
   --mount "$DATA/rights_clean_goemotions_v2/select.jsonl:/data/select.jsonl"
   --mount "$DATA/rights_clean_goemotions_v2/cal.jsonl:/data/cal.jsonl"
   --mount "$BENCH/dev.prompts.jsonl:/data/dev.prompts.jsonl"
@@ -75,7 +88,7 @@ CONTRACT_ARGS=(
   --lora-rank 8 --lora-alpha 16 --lora-dropout 0.05 --lora-lr 2e-5 --epochs 1
   --microbatch 1 --accumulation 16 --eval-batch 1 --max-length 4096 --head-dim 256
   --backbone-lr 1e-6 --head-lr 1e-4 --weight-decay 0.01 --warmup-ratio 0.05
-  --seed "$SEED" --gradient-checkpointing
+  --seed "$SEED" --gradient-checkpointing "${REPLAY_ARGS[@]}"
 )
 TRAIN_ARGS=(python3 -m training.model.train --model-path "$MODEL" "${CONTRACT_ARGS[@]}")
 RESUME_ARGS=(python3 -m training.model.train --source-path "$MODEL" "${CONTRACT_ARGS[@]}")
@@ -103,9 +116,9 @@ if has admit; then
   docker run --rm --network none --entrypoint python3 -e PYTHONPATH=/code -e PYTHONDONTWRITEBYTECODE=1 \
     --mount "type=bind,src=$CODE,dst=/code,readonly" --mount "type=bind,src=$SOURCE_MOUNT,dst=/source,readonly" \
     --mount "type=bind,src=$DATA,dst=/datasrc,readonly" --mount "type=bind,src=$RUN/admit,dst=/out" \
-    --mount "type=bind,src=$TRAIN_FILE,dst=/train.jsonl,readonly" \
+    --mount "type=bind,src=$TRAIN_FILE,dst=/train.jsonl,readonly" "${REPLAY_ADMIT[@]}" \
     -w /code "$IMAGE" -m v2.27b.admit_tokens --source "$MODEL" --family qwen --limit 4096 \
-    --partition train=/train.jsonl \
+    --partition train=/train.jsonl "${REPLAY_PARTITION[@]}" \
     --partition select=/datasrc/rights_clean_goemotions_v2/select.jsonl \
     --partition cal=/datasrc/rights_clean_goemotions_v2/cal.jsonl --output /out/admission.json
   python3 -c "import json,sys; r=json.load(open('$RUN/admit/admission.json')); sys.exit(0 if r['all_admitted'] else 3)"
