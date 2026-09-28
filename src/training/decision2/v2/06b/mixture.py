@@ -13,7 +13,8 @@ renumbering of construction-order option keys), components with a fixed token
 budget, a view-then-equal-shares policy for large corpora (every admissible
 member of a named view, then equal token shares per sub-arm, water-filled,
 whole groups in hash order), and a matched-token control that resamples the
-base (whole copies, then a stratified partial copy). Rows repeating any base
+base (whole copies, then a stratified partial copy), and a published recipe
+manifest joined to its arm files by id (`id_manifest`). Rows repeating any base
 input (before or after renumbering) or an earlier row, and groups with a row
 over `max_row_tokens`, are dropped and counted. S2 mixtures are built once
 (`python3 -m v2.06b.mixture`) and trained from the hash-pinned materialized file.
@@ -418,6 +419,71 @@ def view_component(
     )
 
 
+def manifest_component(
+    comp: dict[str, Any], count: Any, cap: int, seen: set[str]
+) -> tuple[list[dict[str, Any]], list[int], dict[str, Any]]:
+    """Rows of a published recipe manifest (`{id, pool, ...}` per line), joined by id.
+
+    Pools in `skip_pools` come from the base instead. Whole groups with a row
+    over the cap are dropped; rows repeating an earlier input are dropped.
+    """
+    path = Path(comp["manifest"]["path"])
+    if file_sha256(path) != comp["manifest"]["sha256"]:
+        raise ValueError("Recipe manifest differs from its frozen hash")
+    entries = [json.loads(line) for line in path.read_text().splitlines()]
+    if len(entries) != comp["manifest"]["rows"]:
+        raise ValueError("Recipe manifest row count differs")
+    skip = set(comp.get("skip_pools", []))
+    by_pool: dict[str, dict[str, dict[str, Any]]] = {}
+    for pool, arm_entries in comp["pools"].items():
+        by_pool[pool] = {row["id"]: row for e in arm_entries for row in arm_rows(e)}
+    wanted = [e for e in entries if e["pool"] not in skip]
+    missing = [e["id"] for e in wanted if e["id"] not in by_pool.get(e["pool"], {})]
+    if missing:
+        raise ValueError(f"{len(missing)} manifest ids are absent from their pools")
+    groups: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    for e in wanted:
+        row = by_pool[e["pool"]][e["id"]]
+        groups.setdefault(row["group_id"], []).append((e["pool"], row))
+    drops: Counter[str] = Counter()
+    used = set(seen)
+    picked: list[dict[str, Any]] = []
+    picked_tokens: list[int] = []
+    per_pool: Counter[str] = Counter()
+    per_pool_tokens: Counter[str] = Counter()
+    for members in groups.values():
+        sizes = [count(row) for _, row in members]
+        if max(sizes) > cap:
+            for pool, _ in members:
+                drops[f"{pool}:over_cap_group_rows"] += 1
+            continue
+        for (pool, row), size in zip(members, sizes):
+            if row["input_sha256"] in used:
+                drops[f"{pool}:repeats_earlier_input"] += 1
+                continue
+            used.add(row["input_sha256"])
+            picked.append(row)
+            picked_tokens.append(size)
+            per_pool[pool] += 1
+            per_pool_tokens[pool] += size
+    return (
+        picked,
+        picked_tokens,
+        {
+            "role": "treatment",
+            "policy": "id_manifest",
+            "manifest_rows": len(entries),
+            "skipped_pool_rows": dict(
+                sorted(Counter(e["pool"] for e in entries if e["pool"] in skip).items())
+            ),
+            "rows_by_pool": dict(sorted(per_pool.items())),
+            "tokens_by_pool": dict(sorted(per_pool_tokens.items())),
+            "dropped": {k: v for k, v in sorted(drops.items()) if v},
+            **profile(picked, picked_tokens),
+        },
+    )
+
+
 def resample_component(
     comp: dict[str, Any],
     base_rows: list[dict[str, Any]],
@@ -489,6 +555,8 @@ def build_s2(
             rows, counts, part = view_component(
                 comp, count, cap, seen, target, spec["seed"]
             )
+        elif comp["policy"] == "id_manifest":
+            rows, counts, part = manifest_component(comp, count, cap, seen)
         elif comp["policy"] == "resample_base":
             rows, counts, part = resample_component(
                 comp, base_rows, base_tokens, spec["seed"]

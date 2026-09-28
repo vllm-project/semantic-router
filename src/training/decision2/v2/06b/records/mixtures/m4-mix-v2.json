@@ -1,0 +1,120 @@
+{
+  "template": "S2",
+  "unit": "qwen3-0.6b-base-native-segmented",
+  "tokenizer": "/work/models/Qwen3-0.6B-Base",
+  "seed": "decision2-06b-m4-v2",
+  "max_row_tokens": 8192,
+  "hf_dataset": "llm-semantic-router/decision-2.0-training-data",
+  "base": [
+    {
+      "arm": "A0s",
+      "hf_revision": "5c0255ed6a05d08b2fcb863e8045289eedd996cd",
+      "path": "/runs/m3/data/v2-5c0255ed/A0s.train.jsonl",
+      "sha256": "df90cb7f20236fa41ada83d020fb47cbee8d8367cf74d9a67e240ff920994c68",
+      "rows": 7299,
+      "exclude_families": [
+        "natural_cosmos_qa",
+        "natural_squad2_answerability"
+      ],
+      "renumber_option_keys": true
+    }
+  ],
+  "components": [
+    {
+      "name": "mx-v2-full-M",
+      "policy": "id_manifest",
+      "hf_revision": "5c602c5ae76c3930d5ed191facef4ac710863b6d",
+      "note": "research & data D10 recipe mx-v2-full-M (0.6B at the 8,192 cap); its A0s pool is replaced by the shared A0s-r base",
+      "manifest": {
+        "path": "/runs/m4/data/m2-5c602c5a/mx-v2-full-M.ids.jsonl",
+        "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f",
+        "rows": 48687
+      },
+      "skip_pools": [
+        "A0s"
+      ],
+      "pools": {
+        "H1": [
+          {
+            "arm": "H1",
+            "path": "/runs/m4/data/m2-5c602c5a/H1.train.jsonl",
+            "sha256": "5d1c5133eff7dc9081876974f4ef4ac05f44cadba5bec49fc6e84e596f912b52",
+            "rows": 65432
+          }
+        ],
+        "H3": [
+          {
+            "arm": "H3",
+            "path": "/runs/m4/data/m2-5c602c5a/H3.train.jsonl",
+            "sha256": "46a7b68e0ec78cddba3501b6bd2c243408d0c079826f8cb8b2b98637715292b1",
+            "rows": 36376
+          }
+        ],
+        "H5": [
+          {
+            "arm": "H5",
+            "path": "/runs/m4/data/m2-5c602c5a/H5.train.jsonl",
+            "sha256": "0921f75b8c7cd865057b1adc9b45bcab1a377470a044732582b737e9b0c22f3a",
+            "rows": 94449
+          }
+        ],
+        "H6": [
+          {
+            "arm": "H6",
+            "path": "/runs/m4/data/m2-5c602c5a/H6.train.jsonl",
+            "sha256": "c4ffe4d6790ca737f3ce9327778493fe72483c84c9c447245c5181eced053e7d",
+            "rows": 36110
+          }
+        ],
+        "E11": [
+          {
+            "arm": "E11",
+            "path": "/runs/m4/data/m2-5c602c5a/E11.train.jsonl",
+            "sha256": "72eae02655246ab3261b828210269d906f0a18ee579b48770acc153fbca72f1f",
+            "rows": 24770
+          }
+        ],
+        "G2": [
+          {
+            "arm": "G2",
+            "path": "/runs/m4/data/m2-5c602c5a/G2.train.jsonl",
+            "sha256": "c013d183760a348e205dded3f01b735424bd2d6791a3df48af0dd1107869eedd",
+            "rows": 27050
+          }
+        ],
+        "G6": [
+          {
+            "arm": "G6",
+            "path": "/runs/m4/data/m2-5c602c5a/G6.train.jsonl",
+            "sha256": "884664923e7eb444c198f5f2ac7797a7a08438b47139e5a00a56cb38e898e236",
+            "rows": 25192
+          }
+        ],
+        "G4h": [
+          {
+            "arm": "G4h",
+            "path": "/runs/m4/data/m2-5c602c5a/G4h.train.jsonl",
+            "sha256": "be00a00d8cf6bbe2e5bbdd076b345c18b565a978c0343933e214598c377ba7e5",
+            "rows": 3799
+          }
+        ],
+        "V1S": [
+          {
+            "arm": "A6g",
+            "hf_revision": "5c0255ed6a05d08b2fcb863e8045289eedd996cd",
+            "path": "/runs/m3/data/v2-5c0255ed/A6g.train.jsonl",
+            "sha256": "ac94b7f4f1e7d8b73ddbffebe15035aa3b47cca9c825f622d0ec8d04bd7fc02f",
+            "rows": 4905
+          },
+          {
+            "arm": "A6h",
+            "hf_revision": "5c0255ed6a05d08b2fcb863e8045289eedd996cd",
+            "path": "/runs/m3/data/v2-5c0255ed/A6h.train.jsonl",
+            "sha256": "23440f0c5561077780973259777fca4aa80400f5b30e9df6e1376f6d9aa31927",
+            "rows": 5622
+          }
+        ]
+      }
+    }
+  ]
+}

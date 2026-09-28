@@ -196,6 +196,49 @@ class ResampleAndBuildTest(unittest.TestCase):
             mixture.build_s2(spec, count)
 
 
+class ManifestComponentTest(unittest.TestCase):
+    def test_join_by_id_with_group_cap_and_base_dedup(self):
+        files = ArmFiles()
+        base = row("b1", state="shared")
+        pool = [
+            row("p1", group="g1"),
+            row("p2", group="g1", tokens=500),
+            row("p3", group="g2"),
+            row("p4", group="g3", state="shared"),
+            row("p5", group="g4"),
+        ]
+        manifest_path = Path(files.dir.name) / "recipe.ids.jsonl"
+        entries = [{"id": "b1", "pool": "A0s"}] + [
+            {"id": r["id"], "pool": "P"} for r in pool[:4]
+        ]
+        manifest_path.write_text("".join(json.dumps(e) + "\n" for e in entries))
+        comp = {
+            "manifest": {
+                "path": str(manifest_path),
+                "sha256": common.file_sha256(manifest_path),
+                "rows": len(entries),
+            },
+            "skip_pools": ["A0s"],
+            "pools": {"P": [files.arm("P", pool)]},
+        }
+        rows, tokens, report = mixture.manifest_component(
+            comp, count, 100, {base["input_sha256"]}
+        )
+        self.assertEqual([r["id"] for r in rows], ["p3"])
+        self.assertEqual(
+            report["dropped"],
+            {"P:over_cap_group_rows": 2, "P:repeats_earlier_input": 1},
+        )
+        self.assertEqual(report["skipped_pool_rows"], {"A0s": 1})
+        entries.append({"id": "absent", "pool": "P"})
+        manifest_path.write_text("".join(json.dumps(e) + "\n" for e in entries))
+        comp["manifest"].update(
+            sha256=common.file_sha256(manifest_path), rows=len(entries)
+        )
+        with self.assertRaises(ValueError):
+            mixture.manifest_component(comp, count, 100, set())
+
+
 class OptionKeyTeacherTest(unittest.TestCase):
     def test_native_order_hash_guard_and_copies(self):
         train = importlib.import_module("v2.06b.train")
