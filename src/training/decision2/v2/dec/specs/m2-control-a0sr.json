@@ -1,0 +1,8 @@
+{
+  "name": "m2-control-a0sr-v1",
+  "seed": "dec-m2-control-v1",
+  "exclude_families": ["natural_cosmos_qa", "natural_squad2_answerability"],
+  "components": [
+    {"name": "A0s", "files": ["v1:v2/arms/A0s/train.jsonl"], "rekey": true}
+  ]
+}

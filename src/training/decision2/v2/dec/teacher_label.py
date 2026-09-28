@@ -25,6 +25,8 @@ from training.model.decision_model import DecisionModel, collate, encode
 from training.model.source import source_fingerprint
 from training.model.train import atomic_json
 
+from .runtime_check import require_runtime
+
 LABEL_VERSION = "dec-own-teacher-labels/1"
 TOKEN_BUDGET = 24_000
 
@@ -65,6 +67,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError(args.output)
+    runtime = require_runtime()
     rows = load_partition(args.train, "train")
     temperatures = teacher_temperatures(args.teacher_path)
     source = source_fingerprint(args.teacher_path)
@@ -164,6 +167,7 @@ def main() -> None:
             "seconds": seconds,
             "torch_version": torch.__version__,
             "device_name": torch.cuda.get_device_name(device),
+            "runtime": runtime,
         },
     )
     print(

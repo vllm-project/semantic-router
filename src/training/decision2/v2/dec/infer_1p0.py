@@ -30,17 +30,30 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-length", type=int, default=8192)
     parser.add_argument("--package-temperatures", action="store_true")
+    parser.add_argument(
+        "--max-items", type=int, help="Smoke run on the first N prompts only"
+    )
     args = parser.parse_args()
     rows = load_prompts(args.input)
+    if args.max_items is not None:
+        rows = rows[: args.max_items]
 
     import torch
 
     from training.model.decision_model import DecisionModel, collate, encode
 
+    from .runtime_check import require_runtime
+
+    runtime = require_runtime()
     temperature: float | dict[str, float] = 1.0
+    temperature_source = "none requested (1.0)"
     if args.package_temperatures:
-        report = json.loads((args.package / "temperature.json").read_text())
-        temperature = {k: float(v) for k, v in report["temperatures"].items()}
+        if (args.package / "temperature.json").is_file():
+            report = json.loads((args.package / "temperature.json").read_text())
+            temperature = {k: float(v) for k, v in report["temperatures"].items()}
+            temperature_source = "package temperature.json"
+        else:
+            temperature_source = "package ships no temperature.json (1.0)"
     source = source_fingerprint(args.package)
     model_sha = hashlib.sha256(
         canonical(source["files_sha256"]).encode("utf-8")
@@ -101,10 +114,12 @@ def main() -> None:
         "input_items": len(rows),
         "max_length": args.max_length,
         "temperature": temperature,
+        "temperature_source": temperature_source,
         "execution": "one benchmark item at a time; BF16 backbone, FP32 head",
         "truncation_policy": "none; over-budget questions produce an invalid answer",
         "counts": counts,
         "torch_version": torch.__version__,
+        "runtime": runtime,
     }
     write_output(args.output, predictions, manifest)
     print(json.dumps({"output": str(args.output), "counts": counts}), flush=True)
