@@ -1,5 +1,73 @@
 # DEV2.0-0.6B: private build, upload and verification (2026-09-28)
 
+## Update 23:15 UTC+8: CAL698-calibrated package, revision `cb2bfd76`, supersedes `7b5d3ff2`
+
+Coordinator decision 22:30: the frozen release package includes its CAL698 calibration before any
+C1 event or collection add. **New private revision `cb2bfd76e9d8a5e1b9a968dcafb7e18d8c01b3b9`,
+`MODEL_MANIFEST.json` `83d6ec2b58a7a454b90711e05fc543cfadc7b13f0fb532e60a0802d6afb9db75`** (32
+files). Stopped again before `--collect` (the collection holds only DEV2.0-0.8B). Receipts:
+[`dev2-0p6b-release-2026-09-28/cal698/`](dev2-0p6b-release-2026-09-28/cal698/).
+
+- **Fit.** `v2/release/calibrate_frozen.py` on CAL698 (`19cc1a8c…`, 698 rows: 319 Choice / 289 Noul /
+  90 Score; never panel, SELECT or sealed items) for the frozen weights (identity `5b30b7e2…`), node A
+  GPU0, scored image and execution (BF16 backbone, FP32 head, 8,192 tokens, one question per forward).
+  [`calibration.json`](dev2-0p6b-release-2026-09-28/cal698/calibration.json) `e1f7c909…`,
+  `frozen_checkpoint` policy: **T Choice 0.5917, Noul 0.5880, Score 0.3452** (all below 1: the soup is
+  under-confident in distribution). CAL698 before → after: NLL 0.447 → 0.396, Brier 0.118 → 0.111,
+  ECE 0.079 → 0.031 (Choice ECE 0.092 → 0.034, Noul 0.056 → 0.011, Score 0.110 → 0.161).
+- **Calibrated predictions.** One re-score with the eval track's frozen runner (registry adapter
+  `decision2-typed` = `training.model.infer` + `--calibration`, 8,192 tokens) on typed-final, css15,
+  public231 and mlx-diag. `v2/release/temperature_parity.py` against the raw scored run: **0 answer
+  changes on all 11,053 slots** (typed 2,000, transfer 6,547, public 231, mlx-diag 2,275), and the
+  calibrated numbers re-derived offline as softmax(log p / T) from the raw scored probabilities equal the
+  re-score within **1.3e-15** (so the logits were bit-identical and the calibration is exact).
+  The calibrated report ([REPORT](dev2-0p6b-release-2026-09-28/cal698/rescore/REPORT.json) `ffbb32a4…`)
+  has v3 43.541 (T 0.3953, H 0.4796), public 231 142 (48 / 54 / 40), identical per-task macro-F1, and the
+  same paired interval vs Kai 1.0 (+7.60 [+4.70, +10.76], `53df7087…`); mlx-diag accuracies identical.
+- **Calibration on the panels (raw → CAL698), disclosed on the card:**
+
+  | Metric | Raw | CAL698 |
+  | --- | ---: | ---: |
+  | Typed Brier / ECE-10 | 0.309 / 0.118 | 0.332 / 0.191 |
+  | Typed Choice Brier / ECE | 0.352 / 0.156 | 0.380 / 0.227 |
+  | Typed Noul Brier / ECE | 0.231 / 0.137 | 0.240 / 0.177 |
+  | Typed Score Brier / ECE | 0.378 / 0.040 | 0.423 / 0.226 |
+  | Transfer median task Brier-sum / ECE-15 | 0.565 / 0.070 | 0.598 / 0.120 |
+  | Public 231 Brier / ECE-15 | 0.233 / 0.116 | 0.253 / 0.144 |
+
+  In-distribution sharpening makes the already slightly over-confident panel probabilities worse; still
+  better than Kai 1.0's raw typed 0.390 / 0.209.
+- **Package and verification** (`release.sh --gpu 0 --shared-lease release`, all 15 steps pass,
+  [RELEASE-RECEIPT](dev2-0p6b-release-2026-09-28/cal698/release/RELEASE-RECEIPT.json)): every model file
+  byte-identical to `7b5d3ff2` (identity unchanged); changed files only `calibration.json` (added),
+  `config.json` (pointer names it), `README.md`, `evaluation/*`. Native examples bit-identical in three
+  processes; card example reproduced; parity against the calibrated re-score on 600 prompts (typed 150,
+  transfer 200, public 100, mlx-diag 150) **0 changes, drift 0.0** before and after the real
+  `hf download`; full-panel equality follows from the re-score equivalence above and the earlier
+  bit-exact raw parity on every prompt. Re-hash 32/32; readback private, 32 remote hashes, no card
+  problems; `hub_links` 14/14 and HTTP check 12/12, anonymous 401; all six `gate evaluate` items pass.
+- **Card.** Score table and evaluation page show the calibrated Brier / ECE; calibration line states the
+  temperatures; a limit states the panel calibration tradeoff; the GLiNER2.5-Decide LICENSE note is
+  now rendered; the C1 line stays a placeholder.
+- **Draft decision.** Build-time draft
+  [`…build-draft-cal698.json`](dev2-0p6b-release-2026-09-28/DEV2.0-0.6B.decision.build-draft-cal698.json)
+  (`f752dad2…`, supersedes `72bc767e…`); verified draft for the coordinator
+  [`DEV2.0-0.6B.decision.draft.json`](dev2-0p6b-release-2026-09-28/DEV2.0-0.6B.decision.draft.json)
+  (`f52e7873…`, names revision `cb2bfd76` and manifest `83d6ec2b…`). The finalizing rerun must point the
+  spec's `gate_receipt` at the final decision.
+- **Scored identity for C1 event 2:** DEV2.0-0.6B = private `llm-semantic-router/DEV2.0-0.6B` at
+  `cb2bfd76e9d8a5e1b9a968dcafb7e18d8c01b3b9` (manifest `83d6ec2b…`): weights `model_sha256`
+  `5b30b7e2…` + `calibration.json` `e1f7c909…` (CAL698 `19cc1a8c…`), 8,192-token limit, over-budget
+  inputs invalid. Run the package runtime, or `training.model.infer` through adapter `decision2-typed`
+  with `--extra max_length=8192 --extra calibration=<the package's calibration.json>` on node A. Answers
+  (so accuracy) are the same with or without calibration; probability metrics must use the calibrated
+  package.
+- **Launcher change.** `run_same_panel.sh` and `release.sh` gained `--shared-lease NAME` (writes only
+  `owner.NAME`, never reads or rewrites the owner's entry, skips the idle-VRAM gate), because GPU0 is shared
+  with the running 0.6B jobs. Default behaviour unchanged.
+- **GPU-hours this round:** 0.497 on shared node A GPU0 (fit 93 s, re-score 1,087 s + 338 s, release run
+  272 s; about 5× slower than idle because of the concurrent 0.6B training).
+
 **Result: every verification step passed; the package is in the private repository
 `llm-semantic-router/DEV2.0-0.6B` at revision `7b5d3ff2bf338194b0b485bda4d08b30b8fea88e`.
 Stopped before `--collect`: nothing was added to the "Decision 2.0" collection (still 0
