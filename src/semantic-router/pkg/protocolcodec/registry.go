@@ -89,7 +89,7 @@ func NewRegistry(codecs ...Codec) (*Registry, error) {
 }
 
 func NewBuiltinRegistry() *Registry {
-	registry, err := NewRegistry(OpenAIChatCodec{}, OpenAIResponsesCodec{}, AnthropicMessagesCodec{}, ImagesCodec{})
+	registry, err := NewRegistry(OpenAIChatCodec{}, OpenAIResponsesCodec{}, AnthropicMessagesCodec{}, ImagesCodec{}, SpeechCodec{})
 	if err != nil {
 		panic(err)
 	}

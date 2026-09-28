@@ -27,7 +27,7 @@ func TestRequiredCapabilitiesImageGenerationToolChoiceRequiresImageGeneration(t 
 
 func TestRequiredCapabilitiesSpeechGenerationRequiresSpeechGeneration(t *testing.T) {
 	required := RequiredCapabilities(Request{
-		SpeechGeneration: &SpeechGenerationOptions{Input: "hello"},
+		SpeechGeneration: &SpeechGenerationOptions{},
 	})
 	if !required.Supports(CapabilitySpeechGeneration) {
 		t.Fatalf("speech request must require speech_generation, got %v", required.Names())
