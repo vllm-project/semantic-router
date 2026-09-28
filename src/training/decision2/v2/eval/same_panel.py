@@ -788,6 +788,98 @@ def compare(args: argparse.Namespace) -> int:
     return 0
 
 
+# ----------------------------------------------------------------- repeat
+
+
+def answer_category(answer: Any) -> Any:
+    if not isinstance(answer, dict):
+        return None
+    if "choice" in answer:
+        return ("choice", answer.get("choice"))
+    if "noul" in answer:
+        value = answer.get("noul")
+        return ("noul", None if value is None or value == 0.5 else value > 0.5)
+    if "probabilities" in answer and isinstance(answer["probabilities"], dict):
+        probs = answer["probabilities"]
+        best = max(probs.values())
+        winners = sorted(k for k, v in probs.items() if abs(v - best) <= 1e-8)
+        return ("score", winners[0] if len(winners) == 1 else None)
+    return (
+        "score",
+        round(answer["score"]) if type(answer.get("score")) in (int, float) else None,
+    )
+
+
+def numeric_leaves(value: Any, prefix: str = "") -> dict[str, float]:
+    if isinstance(value, bool) or value is None:
+        return {}
+    if isinstance(value, (int, float)):
+        return {prefix: float(value)}
+    if isinstance(value, dict):
+        out: dict[str, float] = {}
+        for key, item in value.items():
+            out.update(numeric_leaves(item, f"{prefix}/{key}"))
+        return out
+    return {}
+
+
+def repeat_panel(left: Path, right: Path) -> dict[str, Any]:
+    a = {row["id"]: row for row in read_jsonl(left)}
+    b = {row["id"]: row for row in read_jsonl(right)}
+    changed = slots = 0
+    drift = 0.0
+    for item_id in sorted(set(a) | set(b)):
+        answers_a = (a.get(item_id) or {}).get("answers") or {}
+        answers_b = (b.get(item_id) or {}).get("answers") or {}
+        for key in sorted(set(answers_a) | set(answers_b)):
+            slots += 1
+            x, y = answers_a.get(key), answers_b.get(key)
+            if answer_category(x) != answer_category(y):
+                changed += 1
+            nx, ny = numeric_leaves(x), numeric_leaves(y)
+            for leaf in set(nx) | set(ny):
+                if leaf in nx and leaf in ny:
+                    drift = max(drift, abs(nx[leaf] - ny[leaf]))
+    return {
+        "originals": len(set(a) | set(b)),
+        "missing_left": len(set(b) - set(a)),
+        "missing_right": len(set(a) - set(b)),
+        "answer_slots": slots,
+        "category_changes": changed,
+        "max_abs_numeric_drift": drift,
+        "left_sha256": sha_file(left),
+        "right_sha256": sha_file(right),
+    }
+
+
+def repeat(args: argparse.Namespace) -> int:
+    result = {
+        "schema": "dev2-same-panel-repeat/1",
+        "label": LABEL,
+        "compared_utc": utc_now(),
+        "panels": {
+            panel: repeat_panel(
+                prediction_path(args.run_dir, panel),
+                prediction_path(args.comparator_run_dir, panel),
+            )
+            for panel in FORMAL_PANELS
+            if prediction_path(args.run_dir, panel).is_file()
+            and prediction_path(args.comparator_run_dir, panel).is_file()
+        },
+    }
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", args.name)
+    write_json(args.run_dir / f"REPEAT-vs-{safe}.json", result, exclusive=False)
+    print(
+        json.dumps(
+            {
+                p: {k: v[k] for k in ("category_changes", "max_abs_numeric_drift")}
+                for p, v in result["panels"].items()
+            }
+        )
+    )
+    return 0
+
+
 # ------------------------------------------------------------------ table
 
 
@@ -942,6 +1034,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--left-name", required=True)
     p.add_argument("--right-name", required=True)
     p.set_defaults(func=compare)
+
+    p = commands.add_parser("repeat")
+    common(p)
+    p.add_argument("--comparator-run-dir", type=Path, required=True)
+    p.add_argument("--name", required=True)
+    p.set_defaults(func=repeat)
 
     p = commands.add_parser("table")
     p.add_argument("--report", action="append", required=True)

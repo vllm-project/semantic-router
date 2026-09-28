@@ -253,6 +253,41 @@ class SamePanelTests(unittest.TestCase):
                         argparse.Namespace(run_dir=run_dir, panel_root=root)
                     )
 
+    def test_repeat_counts_category_changes_and_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            left, right = Path(tmp) / "a.jsonl", Path(tmp) / "b.jsonl"
+            write_jsonl(
+                left,
+                [
+                    {
+                        "id": "x",
+                        "answers": {
+                            "q": {"choice": "a", "probabilities": {"a": 0.6, "b": 0.4}},
+                            "n": {"noul": 0.7},
+                        },
+                    }
+                ],
+            )
+            write_jsonl(
+                right,
+                [
+                    {
+                        "id": "x",
+                        "answers": {
+                            "q": {
+                                "choice": "b",
+                                "probabilities": {"a": 0.45, "b": 0.55},
+                            },
+                            "n": {"noul": 0.7000004},
+                        },
+                    }
+                ],
+            )
+            result = same_panel.repeat_panel(left, right)
+        self.assertEqual(result["category_changes"], 1)
+        self.assertAlmostEqual(result["max_abs_numeric_drift"], 0.15)
+        self.assertEqual(result["answer_slots"], 2)
+
     def test_count_safetensors_reads_headers_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             header = json.dumps(
