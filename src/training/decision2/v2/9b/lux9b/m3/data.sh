@@ -17,9 +17,10 @@ docker run --rm --network none --cpus 48 -e PYTHONPATH=/code:/code/v2/9b -e PYTH
   --mount type=bind,src="$S",dst=/code,readonly \
   --mount type=bind,src=/data/decision20-20260926/models/Decision-1.0-Lux-9B,dst=/model,readonly \
   --mount type=bind,src=/data/decision20-20260926,dst=/d10root,readonly \
-  --mount type=bind,src=/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data,dst=/hfds,readonly \
+  --mount type=bind,src=/data/dev2/hf-cache,dst=/hfc,readonly \
   --mount type=bind,src="$out",dst=/out -w /code "$image" \
-  python3 -m lux9b.m3_data --spec "/code/v2/9b/lux9b/specs/$spec" --root hf=/hfds/snapshots \
+  python3 -m lux9b.m3_data --spec "/code/v2/9b/lux9b/specs/$spec" \
+    --root hf=/hfc/datasets--llm-semantic-router--decision-2.0-training-data/snapshots \
     --root d10=/d10root --root repo=/code --tokenizer /model --workers 48 --output-dir /out/build \
   > "$out/console.log" 2>&1
 status=$?

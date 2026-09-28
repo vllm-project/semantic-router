@@ -17,7 +17,7 @@ S=/data/dev2/src/$sha-src_training_decision2/src/training/decision2
 J=$S/v2/9b/lux9b/m3/job.sh
 M3=/data/dev2/runs/9b/m3
 SELECT=/d10/rights_clean_goemotions_v2/select.jsonl
-CAL=/hfds/snapshots/ed87a03ab80ca5b9560780bba51a83a77ff47d14/m2/cal/CAL698/cal.jsonl
+CAL=/hfc/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/ed87a03ab80ca5b9560780bba51a83a77ff47d14/m2/cal/CAL698/cal.jsonl
 TEACH=()
 [ "$teacher" = 1 ] && TEACH=(--teacher "/m3/data/$data/build/teacher.jsonl" --teacher-kl-weight 0.5 --teacher-partial)
 TRAIN=(-m v2.dec.train_dec --model-path /model --train "/m3/data/$data/build/train.jsonl" --select "$SELECT"

@@ -2,9 +2,9 @@
 # usage: job.sh SHA GPU NAME PURPOSE EXPECTED_MIN -- python3-args...
 # One GPU job in the pinned trainer image (FLA overlay, persisted Triton autotune cache) from
 # the exact subtree mirror of SHA. Run dir /data/dev2/runs/9b/m3/NAME (container /out).
-# Read-only mounts: /code mirror, /model Lux 1.0, /d10 rights-clean data, /hfds the private
-# dataset cache (snapshots/<revision>/...), /m3 earlier Milestone 3 runs and data, /panels
-# gold-free development prompts.
+# Read-only mounts: /code mirror, /model Lux 1.0, /d10 rights-clean data, /hfc the HF cache
+# (dataset snapshots link into cache-level blobs), /m3 earlier Milestone 3 runs and data,
+# /panels gold-free development prompts.
 set -euo pipefail
 sha=$1; gpu=$2; name=$3; purpose=$4; expected=$5; shift 5; [ "$1" = "--" ] && shift
 M3=/data/dev2/runs/9b/m3
@@ -20,7 +20,7 @@ exec "$S/v2/9b/lux9b/m3/run_gpu.sh" "$gpu" "$M3/$name" "$purpose" "$expected" --
   --mount type=bind,src="$S",dst=/code,readonly \
   --mount type=bind,src=/data/decision20-20260926/models/Decision-1.0-Lux-9B,dst=/model,readonly \
   --mount type=bind,src=/data/decision20-20260926/data,dst=/d10,readonly \
-  --mount type=bind,src=/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data,dst=/hfds,readonly \
+  --mount type=bind,src=/data/dev2/hf-cache,dst=/hfc,readonly \
   --mount type=bind,src="$M3",dst=/m3,readonly \
   --mount type=bind,src=/data/dev2/runs/dec/panels,dst=/panels,readonly \
   --mount type=bind,src="$M3/$name",dst=/out \
