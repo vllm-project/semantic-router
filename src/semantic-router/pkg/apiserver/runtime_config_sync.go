@@ -19,8 +19,16 @@ const (
 	runtimePlatformEnv   = "VLLM_SR_PLATFORM"
 	dashboardPlatformEnv = "DASHBOARD_PLATFORM"
 	configBaseDirEnv     = "VLLM_SR_CONFIG_BASE_DIR"
+	configBackupDirEnv   = "VLLM_SR_CONFIG_BACKUP_DIR"
 	defaultPythonCLIPath = "/app"
 )
+
+func configBackupDir(sourceConfigPath string) string {
+	if configured := strings.TrimSpace(os.Getenv(configBackupDirEnv)); configured != "" && filepath.IsAbs(configured) {
+		return filepath.Clean(configured)
+	}
+	return filepath.Join(configPersistenceBaseDir(sourceConfigPath), ".vllm-sr", "config-backups")
+}
 
 func configPersistenceBaseDir(sourceConfigPath string) string {
 	if configured := strings.TrimSpace(os.Getenv(configBaseDirEnv)); configured != "" && filepath.IsAbs(configured) {

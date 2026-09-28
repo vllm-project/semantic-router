@@ -127,7 +127,8 @@ func TestPreparedInventoryUsesPublishedGenerationAndPreservesStartupReadiness(t 
 		t.Fatalf("retiring generation leaked into current inventory: %+v", response)
 	}
 	api.configPath = filepath.Join(t.TempDir(), "config.yaml")
-	if err := startupstatus.NewFileWriter(api.configPath).Write(startupstatus.State{Phase: "initializing_models", Ready: false, TotalModels: 2, ReadyModels: 1}); err != nil {
+	writer := registry.StartupStatusWriter(startupstatus.NewFileWriter(api.configPath))
+	if err := writer.Write(startupstatus.State{Phase: "initializing_models", Ready: false, TotalModels: 2, ReadyModels: 1}); err != nil {
 		t.Fatal(err)
 	}
 	response = api.buildModelsInfoResponse()

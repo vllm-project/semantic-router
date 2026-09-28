@@ -80,10 +80,16 @@ func TestDashboardContainerUsesOneCatalogCapableRuntime(t *testing.T) {
 		filepath.Join(repositoryRoot, "deploy", "openshift", "dashboard", "dashboard-deployment.yaml"),
 	)
 	for _, required := range []string{
-		`DASHBOARD_RUNTIME_CONFIG_WRITABLE: "false"`,
+		// Runtime config writes go through the Kubernetes API to the
+		// semantic-router-config ConfigMap (issue #3688), a path the
+		// entrypoint's arbitrary-UID fail-closed check leaves enabled
+		// because it never touches the local filesystem.
+		`DASHBOARD_RUNTIME_CONFIG_WRITABLE: "true"`,
 		`DASHBOARD_RECIPE_STORE_WRITABLE: "false"`,
+		`VLLM_SR_K8S_CONFIGMAP_NAME`,
+		`serviceAccountName: dashboard`,
+		`resourceNames: ["semantic-router-config"]`,
 		"readOnly: true",
-		"emptyDir: {}",
 	} {
 		if !strings.Contains(openShiftDeployment, required) {
 			t.Fatalf("OpenShift Dashboard deployment omitted startup contract %q", required)

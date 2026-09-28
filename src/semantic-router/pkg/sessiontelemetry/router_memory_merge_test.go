@@ -1,7 +1,6 @@
 package sessiontelemetry
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -9,8 +8,8 @@ import (
 )
 
 // casSessionStateStore models one shared slot written by several router
-// replicas. Merge performs a real read-modify-write under the lock, which is
-// the contract the Redis store gets from WATCH/MULTI.
+// replicas. Load, Save, and Merge use the Redis store codec, so this double
+// cannot pass on a payload shape the production store would reject.
 type casSessionStateStore struct {
 	mu     sync.Mutex
 	stored map[string][]byte
@@ -29,17 +28,13 @@ func (s *casSessionStateStore) Load(sessionID string) (RouterSessionSnapshot, bo
 	if !ok {
 		return RouterSessionSnapshot{}, false, nil
 	}
-	var snapshot RouterSessionSnapshot
-	if err := json.Unmarshal(payload, &snapshot); err != nil {
-		return RouterSessionSnapshot{}, false, err
-	}
-	return snapshot, true, nil
+	return decodeRedisRouterSessionSnapshot(payload, sessionID)
 }
 
 func (s *casSessionStateStore) Save(snapshot RouterSessionSnapshot, _ time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	payload, err := json.Marshal(snapshot)
+	payload, err := encodeRedisRouterSessionSnapshot(snapshot)
 	if err != nil {
 		return err
 	}
@@ -53,13 +48,12 @@ func (s *casSessionStateStore) Merge(local RouterSessionSnapshot, _ time.Duratio
 	defer s.mu.Unlock()
 	merged := local
 	if payload, ok := s.stored[local.SessionID]; ok {
-		var remote RouterSessionSnapshot
-		if err := json.Unmarshal(payload, &remote); err != nil {
+		var err error
+		if merged, err = mergeStoredSnapshot(payload, local); err != nil {
 			return err
 		}
-		merged = mergeRouterSessionSnapshots(remote, local)
 	}
-	payload, err := json.Marshal(merged)
+	payload, err := encodeRedisRouterSessionSnapshot(merged)
 	if err != nil {
 		return err
 	}
@@ -303,7 +297,7 @@ func TestMergeStoredSnapshotRefusesUnreadablePayload(t *testing.T) {
 
 func TestMergeStoredSnapshotFoldsReadablePayload(t *testing.T) {
 	now := time.Now()
-	stored, err := json.Marshal(RouterSessionSnapshot{
+	stored, err := encodeRedisRouterSessionSnapshot(RouterSessionSnapshot{
 		SessionID:      "readable",
 		LastSeen:       now.Add(-time.Minute),
 		RecentOutcomes: []TurnOutcome{mergeTestOutcome("remote-turn", now.Add(-time.Minute))},
@@ -323,5 +317,50 @@ func TestMergeStoredSnapshotFoldsReadablePayload(t *testing.T) {
 	}
 	if len(merged.RecentOutcomes) != 2 {
 		t.Fatalf("merge dropped a writer's outcome: %+v", merged.RecentOutcomes)
+	}
+}
+
+func TestMergeStoredSnapshotKeepsTheStoreEncoding(t *testing.T) {
+	now := time.Now()
+	stored, err := encodeRedisRouterSessionSnapshot(RouterSessionSnapshot{
+		SessionID:      "codec",
+		LastSeen:       now.Add(-time.Minute),
+		RecentOutcomes: []TurnOutcome{mergeTestOutcome("remote-turn", now.Add(-time.Minute))},
+	})
+	if err != nil {
+		t.Fatalf("encode stored snapshot: %v", err)
+	}
+	local := RouterSessionSnapshot{
+		SessionID:      "codec",
+		LastSeen:       now,
+		RecentOutcomes: []TurnOutcome{mergeTestOutcome("local-turn", now)},
+	}
+	merged, err := mergeStoredSnapshot(stored, local)
+	if err != nil {
+		t.Fatalf("merge store encoding: %v", err)
+	}
+	payload, err := encodeRedisRouterSessionSnapshot(merged)
+	if err != nil {
+		t.Fatalf("encode merged snapshot: %v", err)
+	}
+	restored, found, err := decodeRedisRouterSessionSnapshot(payload, local.SessionID)
+	if err != nil || !found || len(restored.RecentOutcomes) != 2 {
+		t.Fatalf("merged write-back is not loadable: found=%t err=%v snapshot=%+v", found, err, restored)
+	}
+}
+
+func TestMergeStoredSnapshotRejectsForeignEncoding(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		payload []byte
+	}{
+		{name: "bare snapshot", payload: []byte(`{"SessionID":"codec"}`)},
+		{name: "different identity", payload: []byte(`{"version":2,"snapshot":{"SessionID":"other"}}`)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := mergeStoredSnapshot(test.payload, RouterSessionSnapshot{SessionID: "codec"}); err == nil {
+				t.Fatal("foreign encoding or identity merged without an error")
+			}
+		})
 	}
 }

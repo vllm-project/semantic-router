@@ -14,8 +14,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
+from cli.container_services import _is_port_in_use
 from cli.runtime_env_names import runtime_env_name_is_allowed
-from cli.runtime_stack import RuntimeStackLayout
+from cli.runtime_stack import BENCH_PORT_ENV, PORT_OFFSET_ENV, RuntimeStackLayout
 
 BENCH_CONFIG_ENV = ("SR_BENCH_URL", "SR_BENCH_TOKEN_ENV", "SR_BENCH_STORE")
 BENCH_TOKEN_ENV = "SR_BENCH_TOKEN"
@@ -172,6 +173,8 @@ def reconcile_bench_container(
 
     Identity covers every launch argument and credential. The previous image is
     the only permitted difference; even legacy workers carry the full identity.
+    A worker that never started is removed whatever its identity: it holds no
+    ledger state, and left in place its name would fail every later serve.
     """
     expected = next(
         (
@@ -204,6 +207,23 @@ def reconcile_bench_container(
         status = existing["status"]
         labels = existing["labels"]
     except (ValueError, KeyError, TypeError):
+        return None
+    if status == "created" and existing.get("id"):
+        subprocess.run(
+            [command[0], "rm", existing["id"]],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        host_port = int(command[command.index("-p") + 1].rsplit(":", 2)[-2])
+        if _is_port_in_use(host_port):
+            raise ValueError(
+                f"sr-bench port {host_port} is already in use, so {container_name} "
+                f"could not start. Stop the process using port {host_port}, set "
+                f"{BENCH_PORT_ENV} for both serve and benchmark, or set a different "
+                f"{PORT_OFFSET_ENV}."
+            )
         return None
     if status != "running":
         raise ValueError(
