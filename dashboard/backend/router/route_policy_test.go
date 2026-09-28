@@ -137,6 +137,7 @@ func TestOutboundDashboardRoutesRevalidateBeforeUse(t *testing.T) {
 		{"/api/tools/fetch-raw", "tools.fetch_raw"},
 		{"/api/topology/test-query", "topology.test_query"},
 		{"/api/mcp/servers/server-1/test", "mcp.server.test"},
+		{"/api/mcp/servers/test", "mcp.server.test"},
 		{"/api/openclaw/mcp", "openclaw.mcp.call"},
 	} {
 		policy, lookup := server.routePolicies.LookupRoutePolicy(http.MethodPost, test.path)
