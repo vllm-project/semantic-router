@@ -153,7 +153,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
 | node B GPU5–6 | ~27B |
-| node B GPU7 (after the research & data H7 / H8 Lux wave, ~04:30 UTC+8) | ~27B Milestone 3 (assigned 2026-09-29 04:05 UTC+8); more GPUs from the 9B track when its Milestone 3 ends |
+| node B GPU7 | ~27B Milestone 3 (H7 / H8 Lux wave finished and released 2026-09-29 04:14 UTC+8; assigned at 04:05); more GPUs from the 9B track when its Milestone 3 ends |
 | node B GPU7 | research & data (owner) — SHARED from 2026-09-28 21:55 UTC+8 with the eval track's node-B comparator re-validation (~1.5 h, inference only; each writes its own lease owner entry, e.g. `owner.eval`) |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
@@ -187,6 +187,12 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 04:25 — **Own-Lux targets now cover 100% of mx-xl-full-r2 (365,970) and mx-xl-short-r2 (373,577)** and all six
+  r2 controls: wave `h-w1` (25,664 H7 / H8 prompts) at private revision `75e557f170979bdbc428b6ea698a2047e2d2a5cd`, under
+  `m3/teachers/lux1/xl/` (`coverage-r2.json` `ecb6dc36…`); same Lux1 runtime, image and frozen cache as the earlier waves;
+  repeat check bitwise identical (integration `2d0e69965`). Runs that trained H7 / H8 rows on gold labels only should say
+  so. AutoJev targets for XL rows stay deferred. Node B GPU7 is now the ~27B track's.
 
 - 2026-09-29 04:10 — DEV2.0-2B package verified (gist `07c-decision-2-release-2b.md`; integration `e2918d988`): private
   `llm-semantic-router/DEV2.0-2B@b2c5d7eac4ef24648cbf9c23c26421f0960ca542`, manifest `63c61883…`, 1,883,930,944 loaded
