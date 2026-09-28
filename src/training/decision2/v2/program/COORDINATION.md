@@ -39,8 +39,8 @@ recommended decision itself and records it. Governing rules for that autonomy:
   at least 90% of the best measured open-weight peer's v3 in that tier (card-eligible or not), with human transfer not
   significantly below it and no decision type collapsed. Current numbers: 0.6B beat Kai1 35.94 and reach ≥ 38.3
   (GLiNER2.5-Decide 42.52); 0.8B beat Eos1 42.55; 2B beat Sol1 45.58 (≥ 44.5 vs Decider 2B 49.50 is then implied);
-  4B beat Nox1 56.47 (≥ 55.7 vs Decider 4B 61.88 implied); 9B beat Lux1 65.81; ~27B (no 1.0) reach ≥ 65.1 vs
-  AutoJev-27B 72.31. Update when the eval track measures stronger peers. After first release, keep optimizing toward
+  4B beat Nox1 56.47 (≥ 55.7 vs Decider 4B 61.88 implied); 9B beat Lux1 65.81; ~27B (no 1.0) reach ≥ 64.9 vs
+  AutoJev-27B 72.13 (node B, kernel image `dbe5f32b`, eval 22:45 UTC+8; was 72.31 on the kernel-less image). Update when the eval track measures stronger peers. After first release, keep optimizing toward
   beating the tier leader.
 
 **Allocation update 2026-09-28 10:40 UTC+8:** node B was freed. The 0.8B–4B decoder track gains node B GPU0–2, the
@@ -184,6 +184,17 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 23:15 — **CALIBRATION RULE AMENDED (supersedes the 22:30 rule).** For DEV2.0-0.6B the CAL698 per-type
+  temperatures (Choice 0.592 / Noul 0.588 / Score 0.345) improved CAL698 itself (ECE .079 → .031) but worsened every
+  evaluation panel (typed ECE .118 → .191, human-transfer median ECE .070 → .120, public 231 ECE .116 → .144) with zero
+  answer changes: CAL698 is in-distribution to training, where the model is under-confident, while the panels are out of
+  distribution. New rule for every size: fit CAL698 temperatures, but ADOPT them only if they do not worsen aggregate
+  calibration (ECE and Brier) on the development panels (typed DEV and CSS pilot) — decided on development panels, never
+  on formal ones; otherwise ship T = 1 (uncalibrated) and disclose the evaluated-and-rejected temperatures on the card.
+  The frozen package (with its adopted calibration) is fixed before any C1 event or collection add. The released
+  DEV2.0-0.8B gets the same retroactive check; a calibration-only revision (weights and answers unchanged) is allowed if
+  its CAL698 temperatures fail the rule.
 
 - 2026-09-28 22:35 — **DEV2.0-0.8B RELEASED (private).** `llm-semantic-router/DEV2.0-0.8B@0b631a85c19fb573aee34fc68bb413271ebe89f4`
   (manifest `0af27b1c…`; only README changed from the verified `2667d883`), the only item in the private "Decision 2.0"
@@ -810,3 +821,11 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
   `dbe5f32b`. Plan: re-collect the three 27B comparators plus Lux1 once on `dbe5f32b`, about 1.3 GPU-h. **Request node
   B GPU5 or GPU6 from the ~27B track before the next 27B formal comparison**
   (`v2/eval/records/m4-nodeB-revalidation-plan-2026-09-28.md`).
+- **Node-B re-validation on the kernel image `dbe5f32b` (2026-09-28 22:45 UTC+8, node B GPU7 shared with the data
+  track; interim, AutoJev first).** **New 27B comparator: AutoJev-27B node-B run `m4/nodeB-kernel/autojev27`, v3
+  72.133 (T .8869, H .5867), public 201** (disclosed replacement for `m2/n2-autojev27-nodeB` 72.310/200 on the
+  kernel-less image `ce895822`). Paired new vs old −0.18 [−0.69, +0.48], vs node A −0.18 [−0.49, +0.40]: a tie.
+  With the kernel, typed FINAL is **identical to node A** (0/2,000 answers differ; old image 11); CSS still differs in
+  27/6,547 slots (old 37), public 2/231. 27B threshold: **≥ 64.9** (90% of 72.13; line above updated). Predictions:
+  node A `/data/dev2/runs/eval/m4/nodeB-kernel/autojev27` and private eval-artifacts `m4/nodeB-kernel/autojev27`
+  (commit `742bdf50`). Eikos, Jebadiah and the Lux1 check follow; the final record follows with them.
