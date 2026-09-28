@@ -218,6 +218,23 @@ REGISTRY: dict[str, Adapter] = {
             requires=("source",),
         ),
         Adapter(
+            name="eikos-27b",
+            module="inference.eikos",
+            args=(
+                "--size",
+                "27b",
+                "--model-path",
+                "{model}",
+                "--model-revision",
+                "{revision}",
+                *IO_ARGS,
+                "--device",
+                "{device}",
+            ),
+            model_id="caiovicentino1/Eikos-27B",
+            batch_policy="bundled serve.Decider letter-logit readout with released calibration; one pass up to 160 options",
+        ),
+        Adapter(
             name="intern-0.8b",
             module="inference.intern_decision",
             args=(
