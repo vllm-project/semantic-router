@@ -6,11 +6,13 @@
 #       [--cpu | --gpu N --track TRACK] [--image IMAGE] [--python PY] [--mount PATH]... \
 #       [--mount-rw PATH]... [--env KEY=VALUE]... [--site DIR]... [--require-kernels] \
 #       [--threads N] [--base-path DIR] [--parity NAME:PROMPTS:PREDICTIONS:COUNT]... \
-#       [--parity-tolerance X] [--upload] [--collect]
+#       [--parity-tolerance X] [--shared-lease NAME] [--upload] [--collect]
 # --env takes non-secret runtime settings only (e.g. TRITON_CACHE_DIR of a persisted autotune
 # cache mounted with --mount-rw); --site names an image directory of kernel packages that the
 # isolated interpreter must import (e.g. /opt/decision-fla); --require-kernels makes the example
 # and parity processes fail unless the Qwen3.5 kernels and the persisted cache are in use.
+# --shared-lease NAME (a GPU the allocation table marks as shared) writes only
+# /data/dev2/leases/gpuN.lock/owner.NAME and never reads or rewrites the owner's entry.
 #
 # Steps (each writes <work>/receipts/<step>.json; any failure stops the run):
 #   build        v2.release.build: exact scored bytes + runtime + card -> <work>/package/<repo-name>
@@ -26,11 +28,11 @@
 # The container never mounts gold. --cpu exposes no GPU; --gpu takes a leased GPU like the eval runner.
 set -euo pipefail
 
-usage() { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 spec="" sha="" work="" device="cpu" gpu="" track="" image="decision20-train-fast:host2" python_bin="python3"
 threads="4" base_path="" upload=0 gate="" parity_tolerance="1e-4" mounts=() parity=()
-rw_mounts=() envs=() site_args=() kernel_args=()
+rw_mounts=() envs=() site_args=() kernel_args=() shared=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --spec) spec="$2"; shift 2 ;;
@@ -49,6 +51,7 @@ while [[ $# -gt 0 ]]; do
       envs+=(-e "$2"); shift 2 ;;
     --site) site_args+=(--site "$2"); shift 2 ;;
     --require-kernels) kernel_args=(--require-kernels); shift ;;
+    --shared-lease) shared="$2"; shift 2 ;;
     --threads) threads="$2"; shift 2 ;;
     --base-path) base_path="$2"; mounts+=("$2"); shift 2 ;;
     --parity) parity+=("$2"); shift 2 ;;
@@ -87,12 +90,16 @@ gpu_flags=()
 if [[ "$device" != "cpu" ]]; then
   [[ "$gpu" =~ ^[0-7]$ && -n "$track" ]] || { echo "--gpu N needs --track" >&2; exit 2; }
   lease="/data/dev2/leases/gpu$gpu.lock"
-  if [[ -f "$lease/owner" ]] && ! grep -qx "track=$track" "$lease/owner"; then
+  lease_file="$lease/owner"
+  if [[ -n "$shared" ]]; then
+    [[ "$shared" =~ ^[a-z0-9-]+$ ]] || { echo "--shared-lease takes a short lowercase name" >&2; exit 2; }
+    lease_file="$lease/owner.$shared"
+  elif [[ -f "$lease/owner" ]] && ! grep -qx "track=$track" "$lease/owner"; then
     echo "gpu$gpu is leased by another track" >&2; exit 1
   fi
   mkdir -p "$lease"
   printf 'track=%s\npurpose=%s\nstart_utc=%s\nexpected_end_utc=unknown\nrun_dir=%s\n' \
-    "$track" "release verification $repo" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$work" > "$lease/owner"
+    "$track" "release verification $repo" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$work" > "$lease_file"
   gpu_flags=(--device /dev/kfd --device /dev/dri --group-add video --security-opt seccomp=unconfined
              -e ROCR_VISIBLE_DEVICES="$gpu")
 else

@@ -4,8 +4,11 @@
 # Usage (SRC is a mirror directory name under /data/dev2/src: <sha> or <sha>-src_training_decision2):
 #   run_same_panel.sh --gpu N --track TRACK --src SRC --run-dir DIR --model-dir DIR \
 #       [--image IMAGE] [--mount HOST_PATH]... [--mount-rw HOST_PATH]... [--env KEY=VALUE]... \
-#       [--purpose TEXT] [--expected-end UTC] -- <same_panel collect arguments except --run-dir>
+#       [--purpose TEXT] [--expected-end UTC] [--shared-lease NAME] -- <same_panel collect arguments except --run-dir>
 # --env is for non-secret runtime settings only (for example TRITON_CACHE_DIR).
+# --shared-lease NAME is for a GPU the coordinator's allocation table marks as shared: the job
+# writes only /data/dev2/leases/gpuN.lock/owner.NAME, never reads or rewrites the owner's
+# entry, and skips the idle-VRAM check (the owner's jobs may be running).
 #
 # Mounts (same path inside and outside): the exact mirror /data/dev2/src/SHA (ro), the
 # gold-free panels only (ro), the model directory and extra mounts (ro), the run directory
@@ -14,10 +17,10 @@
 # GPU must show no allocated VRAM. Wall time lands in <run-dir>/GPU-TIME.json.
 set -euo pipefail
 
-usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 gpu="" track="" sha="" run_dir="" model_dir="" image="decision20-train-fast:host2"
-purpose="same-panel native collection" expected_end="" mounts=() rw_mounts=() envs=()
+purpose="same-panel native collection" expected_end="" mounts=() rw_mounts=() envs=() shared=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu="$2"; shift 2 ;;
@@ -31,6 +34,7 @@ while [[ $# -gt 0 ]]; do
     --env) envs+=(-e "$2"); shift 2 ;;
     --purpose) purpose="$2"; shift 2 ;;
     --expected-end) expected_end="$2"; shift 2 ;;
+    --shared-lease) shared="$2"; shift 2 ;;
     --) shift; break ;;
     *) usage ;;
   esac
@@ -47,20 +51,26 @@ mkdir -p "$run_dir"
 [[ ! -e "$run_dir/GPU-TIME.json" ]] || { echo "$run_dir already used" >&2; exit 1; }
 
 lease="/data/dev2/leases/gpu$gpu.lock"
-if [[ -f "$lease/owner" ]] && ! grep -qx "track=$track" "$lease/owner"; then
-  echo "gpu$gpu is leased by another track:" >&2
-  cat "$lease/owner" >&2
-  exit 1
-fi
-vram="$(rocm-smi -d "$gpu" --showmemuse 2>/dev/null | awk -F': ' '/VRAM%/ {v = $NF} END {print v}')"
-if [[ -z "$vram" || "$vram" != "0" ]]; then
-  echo "gpu$gpu is not idle (VRAM%=${vram:-unknown})" >&2
-  exit 1
+lease_file="$lease/owner"
+if [[ -n "$shared" ]]; then
+  [[ "$shared" =~ ^[a-z0-9-]+$ ]] || { echo "--shared-lease takes a short lowercase name" >&2; exit 2; }
+  lease_file="$lease/owner.$shared"
+else
+  if [[ -f "$lease/owner" ]] && ! grep -qx "track=$track" "$lease/owner"; then
+    echo "gpu$gpu is leased by another track:" >&2
+    cat "$lease/owner" >&2
+    exit 1
+  fi
+  vram="$(rocm-smi -d "$gpu" --showmemuse 2>/dev/null | awk -F': ' '/VRAM%/ {v = $NF} END {print v}')"
+  if [[ -z "$vram" || "$vram" != "0" ]]; then
+    echo "gpu$gpu is not idle (VRAM%=${vram:-unknown})" >&2
+    exit 1
+  fi
 fi
 mkdir -p "$lease"
 start_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf 'track=%s\npurpose=%s\nstart_utc=%s\nexpected_end_utc=%s\nrun_dir=%s\n' \
-  "$track" "$purpose" "$start_utc" "${expected_end:-unknown}" "$run_dir" > "$lease/owner"
+  "$track" "$purpose" "$start_utc" "${expected_end:-unknown}" "$run_dir" > "$lease_file"
 
 image_id="$(docker image inspect --format '{{.Id}}' "$image")"
 volumes=(-v "$src:$src:ro" -v "$panel_root/goldfree:$panel_root/goldfree:ro"
@@ -94,5 +104,5 @@ json.dump({"schema": "dev2-gpu-time/1", "gpu": int(gpu), "gpus": 1, "image": ima
            "wall_seconds": wall, "gpu_hours": wall / 3600, "exit_code": int(code)},
           open(path, "x"), indent=2)
 EOF
-printf 'last_job_end_utc=%s\nlast_job_exit=%s\n' "$end_utc" "$code" >> "$lease/owner"
+printf 'last_job_end_utc=%s\nlast_job_exit=%s\n' "$end_utc" "$code" >> "$lease_file"
 exit "$code"
