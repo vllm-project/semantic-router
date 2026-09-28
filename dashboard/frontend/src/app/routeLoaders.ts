@@ -7,6 +7,7 @@ export const loadLoginPage = () => import('../pages/LoginPage')
 export const loadInviteAcceptPage = () => import('../pages/InviteAcceptPage')
 export const loadBuilderPage = () => import('../pages/BuilderPage')
 export const loadConfigPage = () => import('../pages/ConfigPage')
+export const loadConfigSchemaReferencePage = () => import('../pages/ConfigSchemaReferencePage')
 export const loadDashboardPage = () => import('../pages/DashboardPage')
 export const loadEvaluationPage = () => import('../pages/EvaluationPage')
 export const loadInsightsPage = () => import('../pages/InsightsPage')
@@ -39,6 +40,10 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   { matches: (pathname) => pathname.startsWith('/playground'), load: loadPlaygroundPage },
   { matches: (pathname) => pathname.startsWith('/builder'), load: loadBuilderPage },
   { matches: (pathname) => pathname.startsWith('/models'), load: loadModelHubPage },
+  {
+    matches: (pathname) => pathname.startsWith('/config/reference'),
+    load: loadConfigSchemaReferencePage,
+  },
   { matches: (pathname) => pathname.startsWith('/config'), load: loadConfigPage },
   {
     matches: (pathname) => /^\/knowledge-bases\/[^/]+\/map\/?$/.test(pathname),

@@ -80,7 +80,9 @@ def run_test_commands(commands: list[str], label: str) -> int:
     return 0
 
 
-def run_precommit(changed_files: list[str], base_ref: str | None) -> int:
+def run_precommit(
+    changed_files: list[str], base_ref: str | None, *, ci_static_only: bool = False
+) -> int:
     files = [changed for changed in changed_files if (REPO_ROOT / changed).exists()]
     if not files:
         print("No existing changed files for pre-commit.")
@@ -89,6 +91,18 @@ def run_precommit(changed_files: list[str], base_ref: str | None) -> int:
     environment = os.environ.copy()
     if base_ref:
         environment["BASE_REF"] = base_ref
+    if ci_static_only:
+        # These checks retain local-hook behavior. CI assigns generated contracts
+        # and the trusted-base security scan one explicit execution owner each.
+        owned_elsewhere = {
+            "model-catalog-generated",
+            "cli-reference-generated",
+            "configuration-reference-generated",
+            "public-agent-skill",
+            "supply-chain-security-scan",
+        }
+        requested = set(filter(None, environment.get("SKIP", "").split(",")))
+        environment["SKIP"] = ",".join(sorted(requested | owned_elsewhere))
 
     precommit = Path(sys.executable).with_name("pre-commit")
     command = [str(precommit), "run", "--files", *files]
@@ -290,11 +304,9 @@ def run_rust_clippy_for_crate(crate_root: Path, changed_paths: set[Path]) -> int
         if parse_failures and not saw_compiler_message:
             sys.stderr.write("\n".join(parse_failures) + "\n")
             return result.returncode
-        print(
-            "Ignoring crate-wide Rust clippy findings outside the changed-file set "
-            f"for {crate_root.relative_to(REPO_ROOT)}."
-        )
-        return 0
+        if result.stdout:
+            sys.stderr.write(result.stdout)
+        return result.returncode
 
     if result.stderr:
         sys.stderr.write(result.stderr)

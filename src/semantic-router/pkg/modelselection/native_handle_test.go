@@ -1,3 +1,5 @@
+//go:build !windows && cgo && (amd64 || arm64)
+
 /*
 Copyright 2025 vLLM Semantic Router.
 

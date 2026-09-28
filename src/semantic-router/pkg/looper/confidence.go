@@ -119,8 +119,12 @@ type ConfidenceLooper struct {
 
 // NewConfidenceLooper creates a new ConfidenceLooper instance
 func NewConfidenceLooper(cfg *config.LooperConfig) *ConfidenceLooper {
+	return newConfidenceLooper(cfg, ownClient(NewClient(cfg)))
+}
+
+func newConfidenceLooper(cfg *config.LooperConfig, binding clientBinding) *ConfidenceLooper {
 	return &ConfidenceLooper{
-		BaseLooper: NewBaseLooper(cfg),
+		BaseLooper: newBaseLooper(cfg, binding),
 	}
 }
 
@@ -526,9 +530,6 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 	if len(req.ModelRefs) == 0 {
 		return nil, fmt.Errorf("no models configured")
 	}
-
-	// Set decision name in client for header transmission
-	l.client.SetDecisionName(req.DecisionName)
 
 	// Get config from algorithm
 	onError := "skip"
@@ -1192,7 +1193,8 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 		attempt.finish(attemptResult{
 			reason: reason, usable: &usable, accepted: &accepted,
 			score: &confidence, threshold: &evaluator.Threshold,
-			verifierType: MethodAutoMixEntailment,
+			verifierType:    MethodAutoMixEntailment,
+			verifierVersion: result.Version,
 		})
 	}
 	return confidence, accepted, nil

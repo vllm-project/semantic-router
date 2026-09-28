@@ -22,6 +22,9 @@ package looper
 import (
 	"context"
 	"fmt"
+	"io"
+	"sync"
+	"time"
 
 	"github.com/openai/openai-go"
 
@@ -30,12 +33,13 @@ import (
 
 // Request contains the input for looper execution
 type Request struct {
+	Grounding *GroundingBackends
 	// OriginalRequest is the OpenAI chat completion request from the client
 	OriginalRequest *openai.ChatCompletionNewParams
 
-	// BaseContextTokens is the Router's conservative estimate for the original
-	// request. Generated Looper stages add their own prompt growth before every
-	// backend dispatch and re-check the target model's context window.
+	// BaseContextTokens retains the legacy original-plus-growth estimate.
+	// Strict CandidateRequirements instead count each complete outbound stage
+	// and its effective output budget once, without adding this estimate.
 	BaseContextTokens int
 
 	// ModelRefs contains the list of models to potentially use, ordered by preference
@@ -44,6 +48,19 @@ type Request struct {
 	// ModelParams maps model names to their ModelParams configuration
 	// Used to lookup access_key and param_size for confidence routing
 	ModelParams map[string]config.ModelParams
+
+	// CandidateRequirements is the owning recipe's admission policy. Every
+	// generated stage rechecks this policy against its complete outbound request.
+	CandidateRequirements *config.CandidateRequirements
+
+	// PermittedModels contains the filtered assigned workers and explicitly
+	// configured helpers, including only their declared deployment aliases.
+	// A strict recipe never expands this boundary from the model catalog.
+	PermittedModels []string
+
+	// MaxTokensLimit retains the owning decision's cap after an algorithm
+	// overrides its stage output budget. It does not supply an omitted default.
+	MaxTokensLimit *int
 
 	// Algorithm defines the execution strategy
 	Algorithm *config.AlgorithmConfig
@@ -68,7 +85,9 @@ type Request struct {
 	// normalization and post-processing. OutputContract remains prompt text.
 	OutputContractSpec *config.OutputContractSpec
 
-	// Fusion carries request-level plugins[].id=fusion overrides.
+	// Fusion carries optional call-level configuration for direct Looper
+	// callers. A recipe-owned Fusion algorithm accepts only its trace-visibility
+	// fields; an algorithm-free internal call may use the complete configuration.
 	Fusion *config.FusionRequestConfig
 
 	// CachedPanel, when non-nil, replaces live Fusion analysis-model calls. Its
@@ -80,8 +99,20 @@ type Request struct {
 
 // Response contains the output from looper execution
 type Response struct {
-	// Body is the response body (JSON for non-streaming, SSE for streaming)
+	// Body preserves the direct Go caller's JSON/SSE view, including optional
+	// router traces. HTTP callers must use ProtocolBody and RouterExtensions
+	// through the strict transport boundary, never forward this view directly.
 	Body []byte
+
+	// These snapshots are written only by router emitters, before they attach
+	// optional evidence to Body. They cannot be populated from provider JSON.
+	protocolBody     []byte
+	routerExtensions []ResponseExtension
+
+	// BufferedBody is the completed Chat result behind a locally synthesized
+	// stream. It preserves alternative choices for semantic accounting without
+	// feeding a multi-choice aggregate through a single-choice stream decoder.
+	BufferedBody []byte `json:"-"`
 
 	// ContentType is "application/json" or "text/event-stream"
 	ContentType string
@@ -110,6 +141,12 @@ type Response struct {
 	// (extproc, dashboard, metrics) can read totals without re-parsing the body.
 	Usage TokenUsage `json:"usage,omitempty"`
 
+	// QuorumOutcome is set when a Fusion panel ended below its usable-response
+	// quorum and a policy decided what to serve. It lets callers record the
+	// decision in Replay and metrics on the success path, where no error carries
+	// the evidence.
+	QuorumOutcome *FusionQuorumOutcome `json:"-"`
+
 	// LatencyMs is the wall-clock latency, in milliseconds, of the full
 	// looper execution (all model calls plus algorithm overhead). It is set
 	// by ExecuteWithLatency rather than by individual Looper implementations,
@@ -128,6 +165,108 @@ type Looper interface {
 	Execute(ctx context.Context, req *Request) (*Response, error)
 }
 
+// ManagedLooper owns the resources created by Factory and must be closed by
+// its caller. Loopers built with FactoryWithClient borrow the supplied client.
+type ManagedLooper interface {
+	Looper
+	io.Closer
+}
+
+// WorkflowStateService is an opaque handle to a shared workflow tool-state
+// store. Create one per router generation with NewWorkflowStateService and pass
+// it to FactoryWithWorkflowState so independent HTTP turns share pause/resume
+// state. Safe for concurrent use.
+type WorkflowStateService struct {
+	store  workflowToolStateStore
+	ttl    time.Duration
+	wg     sync.WaitGroup
+	mu     sync.RWMutex
+	closed bool
+}
+
+// Acquire tries to get a read lease on the service. Returns false if closed.
+//
+// Safety invariant: wg.Add(1) is called while holding RLock. This is safe
+// because Close() sets s.closed = true under a write lock *before* calling
+// wg.Wait(). Once closed is true, no new Add(1) can happen, so Wait() will
+// observe a stable counter. Do not add a second Close() codepath without
+// preserving this ordering.
+func (s *WorkflowStateService) Acquire() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.closed {
+		return false
+	}
+	s.wg.Add(1)
+	return true
+}
+
+// Release releases a read lease on the service.
+func (s *WorkflowStateService) Release() {
+	if s != nil {
+		s.wg.Done()
+	}
+}
+
+// Store returns the underlying state store. Safe to use only while holding a lease.
+func (s *WorkflowStateService) Store() workflowToolStateStore {
+	if s == nil {
+		return nil
+	}
+	return s.store
+}
+
+// NewWorkflowStateService creates a shared workflow state store from the
+// looper configuration. The returned service should be stored on the router
+// and passed into every FactoryWithWorkflowState call.
+func NewWorkflowStateService(cfg *config.LooperConfig) *WorkflowStateService {
+	if cfg == nil {
+		return nil
+	}
+	flow := workflowFlowRuntimeConfig(cfg)
+	return &WorkflowStateService{
+		store: newWorkflowToolStateStoreFromConfig(flow),
+		ttl:   flow.State.WithDefaults().TTL(),
+	}
+}
+
+// CommitStorePolicy applies this generation's store policy inside the
+// generation-publication critical section. File-backed stores are shared
+// across overlapping generations, so TTL must not change while a candidate is
+// only warming up, and Process must not observe the new router with the
+// previous expiry policy.
+func (s *WorkflowStateService) CommitStorePolicy() {
+	if s == nil {
+		return
+	}
+	if store, ok := s.store.(*workflowFileToolStateStore); ok {
+		store.replaceTTL(s.ttl)
+	}
+}
+
+// Close releases resources held by the state service (e.g. Redis connections).
+func (s *WorkflowStateService) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.closed = true
+	s.mu.Unlock()
+
+	s.wg.Wait()
+	if s.store != nil {
+		return s.store.Close()
+	}
+	return nil
+}
+
 // UnsupportedAlgorithmError reports an algorithm that cannot be constructed
 // by the Looper runtime.
 type UnsupportedAlgorithmError struct {
@@ -138,31 +277,99 @@ func (e *UnsupportedAlgorithmError) Error() string {
 	return fmt.Sprintf("unsupported Looper algorithm %q", e.AlgorithmType)
 }
 
-type algorithmConstructor func(*config.LooperConfig) Looper
+type algorithmConstructor func(*config.LooperConfig, clientBinding) ManagedLooper
 
 var algorithmConstructors = map[string]algorithmConstructor{
-	config.DecisionAlgorithmConfidence: func(cfg *config.LooperConfig) Looper {
-		return NewConfidenceLooper(cfg)
+	config.DecisionAlgorithmConfidence: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newConfidenceLooper(cfg, binding)
 	},
-	config.DecisionAlgorithmFusion: func(cfg *config.LooperConfig) Looper {
-		return NewFusionLooper(cfg)
+	config.DecisionAlgorithmFusion: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newFusionLooper(cfg, binding)
 	},
-	config.DecisionAlgorithmRatings: func(cfg *config.LooperConfig) Looper {
-		return NewRatingsLooper(cfg)
+	config.DecisionAlgorithmRatings: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newRatingsLooper(cfg, binding)
 	},
-	config.DecisionAlgorithmReMoM: func(cfg *config.LooperConfig) Looper {
-		return NewReMoMLooper(cfg)
+	config.DecisionAlgorithmReMoM: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newReMoMLooper(cfg, binding)
 	},
-	config.DecisionAlgorithmWorkflows: func(cfg *config.LooperConfig) Looper {
-		return NewWorkflowsLooper(cfg)
+	config.DecisionAlgorithmWorkflows: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newWorkflowsLooper(cfg, binding)
 	},
 }
 
 // Factory creates a Looper instance based on the authoritative config catalog.
-func Factory(cfg *config.LooperConfig, algorithmType string) (Looper, error) {
+func Factory(cfg *config.LooperConfig, algorithmType string) (ManagedLooper, error) {
+	constructor, err := constructorFor(algorithmType)
+	if err != nil {
+		return nil, err
+	}
+	client, err := NewConnectorClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return constructor(cfg, ownClient(client)), nil
+}
+
+// FactoryWithClient creates a Looper that reuses the supplied client.
+func FactoryWithClient(cfg *config.LooperConfig, algorithmType string, client *Client) (Looper, error) {
+	constructor, err := constructorFor(algorithmType)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, fmt.Errorf("looper client is required")
+	}
+	return constructor(cfg, borrowClient(client)), nil
+}
+
+func constructorFor(algorithmType string) (algorithmConstructor, error) {
 	constructor, ok := algorithmConstructors[algorithmType]
 	if !config.IsLooperAlgorithmType(algorithmType) || !ok {
 		return nil, &UnsupportedAlgorithmError{AlgorithmType: algorithmType}
 	}
-	return constructor(cfg), nil
+	return constructor, nil
+}
+
+// FactoryWithWorkflowState creates a Looper and, for workflows, shares the
+// generation-owned tool-state store across independent requests.
+func FactoryWithWorkflowState(
+	cfg *config.LooperConfig,
+	algorithmType string,
+	stateService *WorkflowStateService,
+) (ManagedLooper, error) {
+	constructor, err := constructorFor(algorithmType)
+	if err != nil {
+		return nil, err
+	}
+	client, err := NewConnectorClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	binding := ownClient(client)
+	if algorithmType == config.DecisionAlgorithmWorkflows {
+		return newWorkflowsLooperWithService(cfg, binding, stateService), nil
+	}
+	return constructor(cfg, binding), nil
+}
+
+// FactoryWithClientAndWorkflowState reuses the supplied client and, for
+// workflows, the generation-owned tool-state store.
+func FactoryWithClientAndWorkflowState(
+	cfg *config.LooperConfig,
+	algorithmType string,
+	client *Client,
+	stateService *WorkflowStateService,
+) (Looper, error) {
+	constructor, err := constructorFor(algorithmType)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, fmt.Errorf("looper client is required")
+	}
+	binding := borrowClient(client)
+	if algorithmType == config.DecisionAlgorithmWorkflows {
+		return newWorkflowsLooperWithService(cfg, binding, stateService), nil
+	}
+	return constructor(cfg, binding), nil
 }

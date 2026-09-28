@@ -106,6 +106,9 @@
 
 .primaryButton,
 .secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 180px;
   min-height: 50px;
   padding: 0 1.25rem;
@@ -114,6 +117,7 @@
   font-size: 0.9rem;
   font-weight: 680;
   letter-spacing: 0.01em;
+  text-decoration: none;
   transition:
     color var(--transition-fast),
     background-color var(--transition-fast),

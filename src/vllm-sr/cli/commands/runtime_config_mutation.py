@@ -8,12 +8,22 @@ from pathlib import Path
 import yaml
 
 from cli.commands.runtime_paths import _write_runtime_config
+from cli.config_schema import routing_surface_catalog
 from cli.consts import PLATFORM_AMD, PLATFORM_NVIDIA
 from cli.utils import get_logger
 
 log = get_logger(__name__)
 
-ALGORITHM_TYPES = [
+_ALGORITHM_SURFACES = tuple(routing_surface_catalog()["algorithms"])
+_CANONICAL_ALGORITHM_TYPES = frozenset(
+    surface["type"] for surface in _ALGORITHM_SURFACES
+)
+
+# `serve --algorithm` is a mutation convenience, not the canonical algorithm
+# inventory. Keep this explicit opt-in policy because some algorithms require
+# user-authored payloads that the CLI must not invent. The full Router surface
+# remains discoverable through `vllm-sr config schema`.
+ALGORITHM_OVERRIDE_TYPES = (
     "static",
     "router_dc",
     "automix",
@@ -25,7 +35,10 @@ ALGORITHM_TYPES = [
     "svm",
     "mlp",
     "multi_factor",
-]
+)
+
+if not set(ALGORITHM_OVERRIDE_TYPES).issubset(_CANONICAL_ALGORITHM_TYPES):
+    raise RuntimeError("CLI algorithm override policy is stale against Router schema")
 
 ALGORITHM_HINTS = {
     "router_dc": "  Tip: Ensure models have 'description' fields",
@@ -40,17 +53,10 @@ ALGORITHM_HINTS = {
     "multi_factor": "  Tip: Configure decision.algorithm.multi_factor for SLO-aware scoring",
 }
 
-ALGORITHM_CONFIG_BLOCKS = (
-    "confidence",
-    "ratings",
-    "remom",
-    "fusion",
-    "workflows",
-    "router_dc",
-    "automix",
-    "hybrid",
-    "latency_aware",
-    "multi_factor",
+ALGORITHM_CONFIG_BLOCKS = tuple(
+    surface["config_field"]
+    for surface in _ALGORITHM_SURFACES
+    if surface.get("config_field")
 )
 
 RETIRED_ALGORITHM_CONFIG_BLOCKS = (
@@ -63,12 +69,9 @@ RETIRED_ALGORITHM_CONFIG_BLOCKS = (
 )
 
 EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {
-    "router_dc": "router_dc",
-    "automix": "automix",
-    "hybrid": "hybrid",
-    "workflows": "workflows",
-    "latency_aware": "latency_aware",
-    "multi_factor": "multi_factor",
+    surface["type"]: surface["config_field"]
+    for surface in _ALGORITHM_SURFACES
+    if surface.get("config_field")
 }
 
 DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
@@ -79,16 +82,24 @@ DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
     "workflows": {
         "template": "micro_agent",
     },
+    "multi_factor": {},
 }
 
 GPU_OVERRIDE_PREVIEW_LIMIT = 8
 TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
-# Platforms that flip router internal-model `use_cpu` flags to false by default
-# so local signal models run on the platform GPU.
+# Platforms with GPU defaults for router internal models. AMD semantic
+# embeddings retain their setting: MIGraphX mmBERT requires an authored budget.
 GPU_DEFAULT_PLATFORMS = (PLATFORM_AMD, PLATFORM_NVIDIA)
+SEMANTIC_EMBEDDING_USE_CPU_PATH = (
+    "global",
+    "model_catalog",
+    "embeddings",
+    "semantic",
+    "use_cpu",
+)
 GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
-    ("global", "model_catalog", "embeddings", "semantic", "use_cpu"),
+    SEMANTIC_EMBEDDING_USE_CPU_PATH,
     ("global", "model_catalog", "modules", "prompt_guard", "use_cpu"),
     ("global", "model_catalog", "modules", "classifier", "domain", "use_cpu"),
     ("global", "model_catalog", "modules", "classifier", "pii", "use_cpu"),
@@ -134,22 +145,30 @@ def _normalize_platform(value: str | None) -> str:
     return str(value).strip().lower()
 
 
+def _preserve_use_cpu_setting(path: str, platform: str) -> bool:
+    return platform == PLATFORM_AMD and path == ".".join(
+        SEMANTIC_EMBEDDING_USE_CPU_PATH
+    )
+
+
 def _set_use_cpu_false(
-    config_node: object, path: str, changed_paths: list[str]
+    config_node: object, path: str, changed_paths: list[str], platform: str
 ) -> None:
     if isinstance(config_node, dict):
         for key, value in config_node.items():
             current_path = f"{path}.{key}" if path else key
+            if _preserve_use_cpu_setting(current_path, platform):
+                continue
             if key == "use_cpu" and value is True:
                 config_node[key] = False
                 changed_paths.append(current_path)
             else:
-                _set_use_cpu_false(value, current_path, changed_paths)
+                _set_use_cpu_false(value, current_path, changed_paths, platform)
         return
 
     if isinstance(config_node, list):
         for index, item in enumerate(config_node):
-            _set_use_cpu_false(item, f"{path}[{index}]", changed_paths)
+            _set_use_cpu_false(item, f"{path}[{index}]", changed_paths, platform)
 
 
 def _ensure_mapping_path(
@@ -188,6 +207,11 @@ def _inject_missing_gpu_defaults(
             continue
 
         leaf_key = use_cpu_path[-1]
+        if _preserve_use_cpu_setting(".".join(use_cpu_path), platform):
+            if leaf_key not in parent:
+                parent[leaf_key] = True
+                changed_paths.append(".".join(use_cpu_path))
+            continue
         existing_value = parent.get(leaf_key)
         if existing_value is False:
             continue
@@ -239,9 +263,11 @@ def apply_platform_gpu_defaults(
     """
     Apply platform-specific GPU defaults.
 
-    For AMD (ROCm) and NVIDIA (CUDA) platforms, rewrite router internal model
-    `use_cpu` flags to false by default so `--platform amd` / `--platform nvidia`
-    run local signal models on the platform GPU. Set
+    AMD (ROCm) and NVIDIA (CUDA) platforms default local signal models to GPU.
+    AMD semantic embeddings retain their authored `use_cpu` value, defaulting
+    to true when absent. MIGraphX mmBERT embeddings require an explicit deployment
+    with an input budget; platform defaults never construct or modify bindings.
+    Set
     VLLM_SR_<PLATFORM>_PRESERVE_CPU=1/true/yes/on (e.g. VLLM_SR_NVIDIA_PRESERVE_CPU)
     or VLLM_SR_<PLATFORM>_FORCE_GPU=0/false/no/off
     to preserve CPU settings when the router does not have dedicated GPU headroom.
@@ -251,7 +277,7 @@ def apply_platform_gpu_defaults(
         return False
 
     changed_paths: list[str] = []
-    _set_use_cpu_false(merged_config, "", changed_paths)
+    _set_use_cpu_false(merged_config, "", changed_paths, resolved_platform)
     _inject_missing_gpu_defaults(merged_config, changed_paths, resolved_platform)
     if not changed_paths:
         log.info(
@@ -264,7 +290,7 @@ def apply_platform_gpu_defaults(
     if len(changed_paths) > GPU_OVERRIDE_PREVIEW_LIMIT:
         preview = f"{preview}, ..."
     log.info(
-        "Platform %s detected: set %d use_cpu flag(s) to false for GPU default (%s)",
+        "Platform %s detected: applied %d internal model use_cpu default(s) (%s)",
         resolved_platform,
         len(changed_paths),
         preview,
@@ -325,14 +351,14 @@ def _replace_algorithm_config(
         default_block = _default_algorithm_config_block(
             normalized_algorithm, decision_config
         )
-        if default_block:
+        if default_block is not None:
             algorithm_config[expected_block] = default_block
 
 
 def _default_algorithm_config_block(
     normalized_algorithm: str,
     decision_config: dict[str, object] | None,
-) -> dict[str, object]:
+) -> dict[str, object] | None:
     block = dict(DEFAULT_CONFIG_BLOCK_BY_ALGORITHM[normalized_algorithm])
     if normalized_algorithm != "workflows":
         return block
@@ -351,7 +377,7 @@ def _default_algorithm_config_block(
         block["mode"] = "static"
         block["roles"] = [{"name": "worker", "models": [models[0]]}]
     else:
-        block = {}
+        return None
     return block
 
 

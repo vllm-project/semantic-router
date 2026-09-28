@@ -196,7 +196,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     expect(footerGroupBoxes[0]?.y ?? 0).toBeLessThan(footerGroupBoxes[1]?.y ?? 0)
     expect(footerGroupBoxes[1]?.y ?? 0).toBeLessThan(footerGroupBoxes[2]?.y ?? 0)
 
-    await page.getByRole('button', { name: 'Enter Dashboard' }).click()
+    await page.getByRole('link', { name: 'Enter Dashboard' }).last().click()
     await expect(page).toHaveURL(/\/login$/)
     await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
 

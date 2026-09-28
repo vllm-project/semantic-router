@@ -69,7 +69,7 @@ func shouldRedactRouterReplayResponse(resp *http.Response) bool {
 		return false
 	}
 	path := resp.Request.URL.Path
-	return path == "/v1/router_replay" || strings.HasPrefix(path, "/v1/router_replay/")
+	return path == "/api/v1/observability/replays" || strings.HasPrefix(path, "/api/v1/observability/replays/")
 }
 
 func requestCanViewReplayFlowDetails(r *http.Request) bool {

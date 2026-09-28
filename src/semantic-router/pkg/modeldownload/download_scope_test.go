@@ -2,7 +2,6 @@ package modeldownload
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -53,6 +52,8 @@ func TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel(t *testing.T
 				},
 			}
 
+			cfg.EmbeddingConfig.ModelType = "mmbert"
+			cfg.Tools.Enabled = true
 			specs, err := BuildModelSpecs(cfg)
 			if err != nil {
 				t.Fatalf("BuildModelSpecs() error = %v", err)
@@ -104,13 +105,15 @@ func TestBuildModelSpecsLeavesNonEmbeddingModelsUnfiltered(t *testing.T) {
 	cfg := newEmbeddingOnlyConfig()
 	cfg.MoMRegistry[bertModelPath] = "sentence-transformers/all-MiniLM-L12-v2"
 	cfg.BertModelPath = bertModelPath
+	cfg.Memory.Enabled = true
+	cfg.Memory.EmbeddingModel = "bert"
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	spec, ok := findSpecByPath(specs, bertModelPath)
+	spec, ok := findSpecByPath(specs, config.ResolveModelPath(bertModelPath))
 	if !ok {
 		t.Fatalf("BuildModelSpecs() did not produce a spec for %q; got %#v", bertModelPath, specs)
 	}
@@ -131,12 +134,8 @@ func TestOnnxWeightExcludePatternsNeverMatchCandleRequiredFiles(t *testing.T) {
 	}
 
 	for _, pattern := range onnxWeightExcludePatterns {
-		suffix := strings.TrimPrefix(pattern, "*")
-		if suffix == pattern {
-			t.Fatalf("exclude pattern %q must be a suffix glob so it cannot shadow required files", pattern)
-		}
 		for _, file := range protected {
-			if strings.HasSuffix(file, suffix) {
+			if revisionArtifactExcluded(file, []string{pattern}) {
 				t.Fatalf("exclude pattern %q matches required file %q", pattern, file)
 			}
 		}

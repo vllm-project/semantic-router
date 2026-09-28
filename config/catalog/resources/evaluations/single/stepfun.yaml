@@ -91,7 +91,7 @@
 - id: independent/step-3.7-flash-high-humanitys-last-exam@1.0.0
   model: stepfun/step-3.7-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Step 3.7 Flash (high)
@@ -235,7 +235,7 @@
 - id: independent/step-3.5-flash-enabled-humanitys-last-exam@1.0.0
   model: stepfun/step-3.5-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Step 3.5 Flash (open weights)
@@ -343,7 +343,7 @@
 - id: independent/step3-vl-10b-enabled-humanitys-last-exam@1.0.0
   model: stepfun/step3-vl-10b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Step3-VL-10B

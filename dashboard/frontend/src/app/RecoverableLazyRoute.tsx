@@ -6,6 +6,7 @@ import {
   type ErrorInfo,
   type ReactNode,
 } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import RouteLoadingFallback from './RouteLoadingFallback'
 import { lazyRoutePage, resetDashboardRouteLoader, type RouteLoader } from './routeLoaders'
@@ -98,6 +99,7 @@ export default function RecoverableLazyRoute<Props extends object = Record<strin
   routeLabel,
   componentProps,
 }: RecoverableLazyRouteProps<Props>) {
+  const { pathname } = useLocation()
   const [attempt, setAttempt] = useState(0)
   const LazyPage = lazyRoutePage(loader)
   const RenderablePage = LazyPage as unknown as ComponentType<Record<string, unknown>>
@@ -109,7 +111,11 @@ export default function RecoverableLazyRoute<Props extends object = Record<strin
   }
 
   return (
-    <RouteLoadErrorBoundary key={attempt} routeLabel={routeLabel} onRetry={handleRetry}>
+    <RouteLoadErrorBoundary
+      key={`${pathname}:${attempt}`}
+      routeLabel={routeLabel}
+      onRetry={handleRetry}
+    >
       <Suspense fallback={<RouteLoadingFallback />}>
         <RenderablePage {...renderProps} />
       </Suspense>

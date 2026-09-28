@@ -31,6 +31,38 @@ func TestValidateFusionAlgorithmConfigRejectsInvalidAnalysisOverrides(t *testing
 	assert.Contains(t, err.Error(), "duplicated")
 }
 
+func TestFusionAnalysisModeDefaultsAndValidation(t *testing.T) {
+	assert.Equal(t, FusionAnalysisModeSeparate, EffectiveFusionAnalysisMode(""))
+	assert.Equal(t, FusionAnalysisModeSeparate, EffectiveFusionAnalysisMode("  separate  "))
+
+	for _, mode := range []string{
+		FusionAnalysisModeSeparate,
+		FusionAnalysisModeOneCall,
+		FusionAnalysisModeNone,
+	} {
+		t.Run(mode, func(t *testing.T) {
+			require.NoError(t, ValidateFusionAlgorithmConfig(&FusionAlgorithmConfig{AnalysisMode: mode}))
+		})
+	}
+
+	err := ValidateFusionAlgorithmConfig(&FusionAlgorithmConfig{AnalysisMode: "automatic"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "analysis_mode must be one of")
+}
+
+func TestFusionAnalysisModeRejectsUnusedAnalysisTemplate(t *testing.T) {
+	for _, mode := range []string{FusionAnalysisModeOneCall, FusionAnalysisModeNone} {
+		t.Run(mode, func(t *testing.T) {
+			err := ValidateFusionAlgorithmConfig(&FusionAlgorithmConfig{
+				AnalysisMode:     mode,
+				AnalysisTemplate: "compare {{responses}}",
+			})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "analysis_template requires analysis_mode=\"separate\"")
+		})
+	}
+}
+
 func TestFusionRequestConfigValidateAnalysisOverrides(t *testing.T) {
 	cfg := &FusionRequestConfig{
 		AnalysisOverrides: []FusionModelOverride{

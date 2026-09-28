@@ -72,7 +72,9 @@ def _inject_local_management_api_defaults(services: dict[str, object]) -> bool:
     publication is independently constrained to loopback by container_start.
     """
 
-    if "management_api" in services:
+    # A typed config round trip can emit {} for an omitted listener. It carries
+    # no authored fields, so it receives the same local defaults as omission.
+    if "management_api" in services and services["management_api"] != {}:
         return False
     services["management_api"] = dict(LOCAL_MANAGEMENT_API_DEFAULTS)
     return True

@@ -130,6 +130,10 @@ extern int detect_pii(const char* classifier_name, const char* text, PIIResultFF
 extern void free_classification_result(ClassificationResultFFI* result);
 extern void free_pii_result(PIIResultFFI* result);
 
+static inline void release_classification_result(ClassificationResultFFI result) {
+    free_classification_result(&result);
+}
+
 // ============================================================================
 // Multi-Modal Embedding Types & Functions
 // ============================================================================
@@ -207,6 +211,7 @@ type ClassResultWithProbs struct {
 	Class         int
 	Confidence    float32
 	Probabilities []float32
+	NumClasses    int
 }
 
 // TokenEntity represents a detected PII entity (candle_binding compatible)
@@ -647,25 +652,21 @@ func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
 	return classifyWithClassifier("jailbreak", text)
 }
 
-// ClassifyMmBert32KJailbreakWithProbs classifies text for jailbreak detection and
-// returns the full probability distribution. The ONNX backend does not yet extract
-// per-class probabilities, so Probabilities is empty and callers fall back to a
-// confidence-based estimate.
+// ClassifyMmBert32KJailbreakWithProbs classifies text for jailbreak detection
+// and returns the full probability distribution.
 func ClassifyMmBert32KJailbreakWithProbs(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("jailbreak", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("jailbreak", text)
 }
 
 // ClassifyMmBert32KFeedback classifies text for feedback detection
 func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
+}
+
+// ClassifyMmBert32KFeedbackWithProbs classifies text for feedback detection
+// and returns the full probability distribution.
+func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
+	return classifyWithClassifierProbabilities("feedback", text)
 }
 
 // ClassifyMmBert32KPII detects PII entities in text
@@ -710,6 +711,17 @@ func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 }
 
 func classifyWithClassifier(name, text string) (ClassResult, error) {
+	result, err := classifyWithClassifierProbabilities(name, text)
+	if err != nil {
+		return ClassResult{Class: -1, Confidence: 0}, err
+	}
+	return ClassResult{
+		Class:      result.Class,
+		Confidence: result.Confidence,
+	}, nil
+}
+
+func classifyWithClassifierProbabilities(name, text string) (ClassResultWithProbs, error) {
 	cName := C.CString(name)
 	defer C.free(unsafe.Pointer(cName))
 	cText := C.CString(text)
@@ -717,36 +729,32 @@ func classifyWithClassifier(name, text string) (ClassResult, error) {
 
 	var result C.ClassificationResultFFI
 	status := C.classify_text(cName, cText, &result)
+	defer C.release_classification_result(result)
 
 	if status != 0 || result.error {
-		return ClassResult{Class: -1, Confidence: 0}, fmt.Errorf("%s classification failed", name)
+		return ClassResultWithProbs{}, fmt.Errorf("%s classification failed", name)
 	}
 
-	defer C.free_classification_result(&result)
+	numClasses := int(result.num_classes)
+	probabilities := make([]float32, numClasses)
+	if result.probabilities != nil && numClasses > 0 {
+		cProbabilities := unsafe.Slice(result.probabilities, numClasses)
+		for index, probability := range cProbabilities {
+			probabilities[index] = float32(probability)
+		}
+	}
 
-	return ClassResult{
-		Class:      int(result.class_id),
-		Confidence: float32(result.confidence),
+	return ClassResultWithProbs{
+		Class:         int(result.class_id),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    numClasses,
 	}, nil
 }
 
 // ClassifyTextWithProbabilities classifies text with the generic classifier.
-// The ONNX FFI currently exposes the winning class and confidence; callers
-// receive a sparse probability vector with the winning score populated.
 func ClassifyTextWithProbabilities(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("generic", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	probabilities := make([]float32, result.Class+1)
-	if result.Class >= 0 {
-		probabilities[result.Class] = result.Confidence
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: probabilities,
-	}, nil
+	return classifyWithClassifierProbabilities("generic", text)
 }
 
 // ============================================================================
@@ -856,15 +864,7 @@ func ClassifyModernBertText(text string) (ClassResult, error) {
 
 // ClassifyModernBertTextWithProbabilities classifies with probabilities
 func ClassifyModernBertTextWithProbabilities(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("modernbert", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("modernbert", text)
 }
 
 // ClassifyModernBertJailbreakText classifies for jailbreak
@@ -873,19 +873,9 @@ func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
 }
 
 // ClassifyModernBertJailbreakTextWithProbs classifies for jailbreak and returns
-// the full probability distribution. The ONNX backend does not yet extract
-// per-class probabilities, so Probabilities is empty and callers fall back to
-// a confidence-based estimate.
+// the full probability distribution.
 func ClassifyModernBertJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("jailbreak", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("jailbreak", text)
 }
 
 // ClassifyJailbreakText classifies for jailbreak (legacy)
@@ -893,20 +883,10 @@ func ClassifyJailbreakText(text string) (ClassResult, error) {
 	return classifyWithClassifier("jailbreak", text)
 }
 
-// ClassifyJailbreakTextWithProbs classifies for jailbreak (legacy) and returns
-// the full probability distribution. The ONNX backend does not yet extract
-// per-class probabilities, so Probabilities is empty and callers fall back to
-// a confidence-based estimate.
+// ClassifyJailbreakTextWithProbs classifies for jailbreak and returns the full
+// probability distribution.
 func ClassifyJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("jailbreak", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("jailbreak", text)
 }
 
 // ClassifyCandleBertTokens classifies tokens
@@ -958,6 +938,22 @@ const (
 	// NLIError means an error occurred during classification
 	NLIError NLILabel = -1
 )
+
+// String preserves the label contract when the router selects ONNX bindings.
+func (l NLILabel) String() string {
+	switch l {
+	case NLIEntailment:
+		return "ENTAILMENT"
+	case NLINeutral:
+		return "NEUTRAL"
+	case NLIContradiction:
+		return "CONTRADICTION"
+	case NLIUnknown:
+		return "UNKNOWN"
+	default:
+		return "ERROR"
+	}
+}
 
 // ============================================================================
 // Hallucination Detection (stub - not implemented in onnx_binding)
@@ -1019,8 +1015,11 @@ func InitHallucinationModel(modelPath string, useCPU bool) error {
 // InitNLIModel initializes the NLI model
 // Note: Not yet implemented in onnx_binding
 func InitNLIModel(modelPath string, useCPU bool) error {
-	return fmt.Errorf("NLI model not yet implemented in onnx_binding")
+	return fmt.Errorf("%w: local NLI is not implemented", ErrBackendUnavailable)
 }
+
+// IsNLIModelInitialized remains false while this backend has no NLI model.
+func IsNLIModelInitialized() bool { return false }
 
 // DetectHallucinations detects hallucinations in text
 // Note: Not yet implemented in onnx_binding
@@ -1037,7 +1036,7 @@ func DetectHallucinationsWithNLI(context, question, answer string, threshold flo
 // ClassifyNLI performs NLI classification
 // Note: Not yet implemented in onnx_binding
 func ClassifyNLI(premise, hypothesis string) (*NLIResult, error) {
-	return nil, fmt.Errorf("NLI classification not yet implemented in onnx_binding")
+	return nil, fmt.Errorf("%w: local NLI is not implemented", ErrBackendUnavailable)
 }
 
 // ============================================================================
@@ -1068,6 +1067,12 @@ func ClassifyFeedbackText(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
 }
 
+// ClassifyFeedbackTextWithProbs classifies text for feedback detection and
+// returns the full probability distribution.
+func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
+	return classifyWithClassifierProbabilities("feedback", text)
+}
+
 // ============================================================================
 // Modality Classification (stub — Candle-only)
 // ============================================================================
@@ -1079,14 +1084,22 @@ type ModalityResult struct {
 	Confidence float32
 }
 
-// InitMmBert32KModalityClassifier is not supported in ONNX binding (Candle-only).
+// InitMmBert32KModalityClassifier loads the three-class response modality head.
 func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
-	return errors.New("modality classifier is not supported in ONNX binding; use Candle binding or disable modality routing")
+	return initClassifier("modality", modelPath, !useCPU)
 }
 
-// ClassifyMmBert32KModality is not supported in ONNX binding (Candle-only).
+// ClassifyMmBert32KModality returns the canonical response modality label.
 func ClassifyMmBert32KModality(text string) (ModalityResult, error) {
-	return ModalityResult{}, errors.New("modality classification is not supported in ONNX binding; use Candle binding or disable modality routing")
+	result, err := classifyWithClassifier("modality", text)
+	if err != nil {
+		return ModalityResult{}, err
+	}
+	labels := []string{"AR", "DIFFUSION", "BOTH"}
+	if result.Class < 0 || result.Class >= len(labels) {
+		return ModalityResult{}, fmt.Errorf("unknown modality class %d", result.Class)
+	}
+	return ModalityResult{Modality: labels[result.Class], ClassID: result.Class, Confidence: result.Confidence}, nil
 }
 
 // ============================================================================

@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // Security regression (issue #1961): include_history PII rules must detect a
@@ -27,7 +27,7 @@ func TestPIISignal_DetectsSecretInPriorUserTurn(t *testing.T) {
 	priorUserMessages := []string{secretTurn}
 	nonUserMessages := []string{"Sure, here is how rotation works."}
 
-	mockModel.setMockResponse(secretTurn, []candle_binding.TokenEntity{
+	mockModel.setMockResponse(secretTurn, []tasks.TokenEntity{
 		piiEntity("EMAIL", "alice@corp.example", 14, 32, 0.99),
 	}, nil)
 

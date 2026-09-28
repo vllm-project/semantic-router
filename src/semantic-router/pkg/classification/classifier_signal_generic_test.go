@@ -238,6 +238,38 @@ func TestGenericClassifierSignalRejectsNonFiniteScores(t *testing.T) {
 	}
 }
 
+func TestGenericClassifierSignalRejectsIncompleteOrInvalidScores(t *testing.T) {
+	for name, scores := range map[string]map[string]float64{
+		"empty":         {},
+		"missing_label": {"RISKY": 0.9},
+		"unknown_label": {"SAFE": 0.1, "OTHER": 0.9},
+		"extra_label":   {"SAFE": 0.1, "RISKY": 0.9, "OTHER": 0},
+		"negative":      {"SAFE": -0.1, "RISKY": 1},
+		"above_one":     {"SAFE": 0, "RISKY": 1.1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			classifier := &Classifier{}
+			results := &SignalResults{
+				SignalConfidences: map[string]float64{},
+				SignalValues:      map[string]float64{},
+				SignalErrors:      map[string]string{},
+				Metrics:           &SignalMetricsCollection{},
+			}
+			classifier.evaluateGenericClassifierRule(
+				context.Background(), results, &sync.Mutex{}, "route me",
+				config.ClassifierSignalRule{Name: "risk", Labels: []string{"SAFE", "RISKY"}},
+				fakeLabelClassifier{result: labelClassification{Scores: scores}},
+			)
+			if results.SignalErrors["classifier:risk"] != genericClassifierInvalidScoreCode {
+				t.Fatalf("signal errors = %v", results.SignalErrors)
+			}
+			if len(results.MatchedClassifierRules) != 0 || len(results.SignalValues) != 0 || len(results.SignalConfidences) != 0 {
+				t.Fatalf("invalid output published routing evidence: %+v", results)
+			}
+		})
+	}
+}
+
 func TestGenericClassifierSignalsRunInParallel(t *testing.T) {
 	started := make(chan struct{}, 2)
 	release := make(chan struct{})

@@ -234,6 +234,11 @@ class MemoryFeaturesTest(SemanticRouterTestBase):
         self.milvus = MilvusVerifier(
             address=milvus_address, collection=milvus_collection
         )
+        if os.environ.get("CI_REQUIRE_MEMORY_TESTS") == "1":
+            self.assertTrue(
+                self.milvus.is_available(),
+                "Required memory integration cannot verify its Milvus store",
+            )
 
     def send_memory_request(
         self,
@@ -288,6 +293,7 @@ class MemoryFeaturesTest(SemanticRouterTestBase):
             result = response.json()
             output_text = self._extract_output_text(result)
             result["_output_text"] = output_text
+            result["_replay_id"] = response.headers.get("x-vsr-replay-id", "")
 
             if verbose:
                 print(f"📥 Response status: {result.get('status', 'unknown')}")

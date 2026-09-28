@@ -113,7 +113,7 @@
 - id: independent/minimax-m3-humanitys-last-exam@1.0.0
   model: minimax/minimax-m3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: adaptive
   subject:
     source_model: MiniMax-M3
@@ -275,7 +275,7 @@
 - id: independent/minimax-m2-7-humanitys-last-exam@1.0.0
   model: minimax/minimax-m2.7
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: MiniMax-M2.7
@@ -365,7 +365,7 @@
 - id: minimax/minimax-m2.5-model-card-humanitys-last-exam@1.0.0
   model: minimax/minimax-m2.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: default
   subject:
     variant: MiniMax-M2.5
@@ -489,7 +489,7 @@
 - id: independent/minimax-m2-5-humanitys-last-exam@1.0.0
   model: minimax/minimax-m2.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: MiniMax-M2.5

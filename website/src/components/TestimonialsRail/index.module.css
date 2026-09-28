@@ -67,7 +67,7 @@
   border: 1px solid var(--site-border);
   border-radius: 14px;
   background: var(--site-bg);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.14);
+  box-shadow: var(--site-shadow-soft);
   transition:
     border-color 180ms ease,
     box-shadow 180ms ease,

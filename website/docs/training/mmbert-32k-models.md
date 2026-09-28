@@ -1,134 +1,130 @@
 ---
-title: mmBERT-32K Foundation, Embedding, and Reranking
-sidebar_label: mmBERT-32K Models
+title: Train Vela Embedding and Reranker
+sidebar_label: Embedding and Reranking
 ---
 
-# mmBERT-32K foundation, embedding, and reranking
+# Train Vela Embedding and Reranker
 
-Three models form one progressive text-retrieval family:
+Use Vela Embedding to find relevant documents efficiently, then Vela Reranker
+to improve the order of a smaller candidate set. Both adapt the shared
+[Vela Encoder](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M)
+and support a choice of encoder depth and output dimension.
 
-```text
-mmBERT base encoder
-  -> 32K YaRN masked-language continuation
-     -> bi-encoder embedding training
-     -> cross-encoder reranking training
-```
-
-The foundation supplies long multilingual representations. The embedder makes
-retrieval efficient by encoding inputs independently. The reranker spends more
-compute on a small candidate set by reading each query-document pair jointly.
-
-## Shared foundation
-
-[`mmbert-32k-yarn`](https://huggingface.co/llm-semantic-router/mmbert-32k-yarn)
-is a ModernBERT-family encoder with 22 Transformer layers, hidden size 768, and
-about 307 million parameters. It uses a 256K vocabulary and extends the base
-8,192-token position range to 32,768 tokens with YaRN rotary-position scaling.
-
-The checked workflow continues masked-language-model training on nine CC-100
-language streams. It packs full 32K sequences with explicit document
-boundaries and applies 30% token masking. The production configuration uses
-30,774 sequences, one epoch, learning rate `1e-5`, BF16, per-device batch 1,
-and gradient accumulation 16.
-
-This stage changes the encoder's language representation and long-context
-behavior; it does not add a routing head.
+To use the published models without training, follow
+[Embeddings and reranking](../installation/runtime/embeddings.md).
 
 ## Embedding model: bi-encoder
 
-[`mmbert-embed-32k-2d-matryoshka`](https://huggingface.co/llm-semantic-router/mmbert-embed-32k-2d-matryoshka)
-uses the 32K foundation as a bi-encoder:
+The embedding model encodes queries and documents independently into normalized
+vectors. Precompute document vectors, then compare a query vector with your
+index using cosine similarity or a dot product.
 
-```text
-query -----------------> shared encoder -> normalized query vector
-document --------------> shared encoder -> normalized document vector
-                                            cosine/dot-product similarity
-```
-
-Because the two inputs are encoded independently, document vectors can be
-precomputed and searched at scale.
-
-“2D Matryoshka” means the loss supervises two axes:
-
-- **Embedding dimension:** one trained vector can be truncated to 768, 512,
-  256, 128, or 64 dimensions.
-- **Encoder depth:** intermediate layers receive useful retrieval supervision,
-  enabling layer-selectable representations.
-
-The checked training path combines BGE-M3 retrieval examples with optional
-AllNLI examples and uses a multiple-negatives ranking objective wrapped by
-Sentence Transformers `Matryoshka2dLoss`. The production configuration uses a
-32K maximum length, one epoch, batch 16 with accumulation 2, learning rate
-`2e-5`, BF16, and STS-B for semantic-similarity evaluation.
+Train with query-positive pairs and useful negative documents. Add semantic
+similarity or paraphrase examples when your application also compares requests,
+groups related text, or detects repeated questions. Include the languages and
+domains your index will serve.
 
 ## Reranking model: cross-encoder
 
-[`mmbert-rerank-32k-2d-matryoshka`](https://huggingface.co/llm-semantic-router/mmbert-rerank-32k-2d-matryoshka)
-reads a query and candidate together:
+The reranker reads a query and a candidate document together, then returns a
+relevance score. Run it on the candidates returned by retrieval.
 
-```text
-[query, candidate] -> shared 32K encoder -> CLS representation -> relevance score
-```
+Train with complete candidate lists and relevance judgments. Hard negatives
+from your retrieval system help the model distinguish plausible but incorrect
+results. Keep documents with unknown relevance separate from judged negatives.
+The score orders candidates; it is not a probability that a document is correct.
 
-Joint attention is more expensive than bi-encoder search, but it can model
-fine-grained interactions between the query and candidate. Use it after initial
-retrieval, not over an entire corpus.
+## Choose depth, dimension, and context
 
-The model attaches scoring heads at layers 3, 6, 11, and 22 and at dimensions
-768, 512, 256, 128, and 64. That creates 20 layer/dimension heads. Training
-averages binary relevance loss across all heads, using BGE-M3 query-positive-
-negative records. The production configuration uses three negatives per query,
-one epoch, batch 16 with accumulation 2, learning rate `2e-5`, BF16, and
-gradient checkpointing.
+| Setting | Available choices | Tradeoff |
+| --- | --- | --- |
+| Encoder depth | 3, 6, 11, 22 layers | Fewer layers reduce encoder computation |
+| Dimension | 64, 128, 256, 512, 768 | Smaller embedding vectors reduce index storage and comparison cost |
+| Input limit | Up to 32,768 tokens | Longer inputs require more memory and time |
 
-The heads make early-layer scores trainable; the trainer itself still computes
-all hidden states. A runtime must implement early termination separately if it
-wants a latency saving.
+Training supervises all 20 depth/dimension combinations. Reranker has a trained
+scoring head for each combination; reducing its dimension does not skip encoder
+layers. Evaluate the combination you intend to deploy.
 
-## Run the checked configurations
+For embedding, use the same model revision, depth, and dimension for queries
+and indexed documents. Rebuild the index when these settings change. For
+reranking, the input budget covers the query, document, and special tokens
+together.
 
-Install the family dependencies and set local data and output paths:
+## Prepare a training run
+
+From a repository checkout, create an isolated environment with the appropriate
+PyTorch build for your accelerator and install the
+[training dependencies](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_embeddings/mmbert_32k/requirements.txt).
+ROCm uses PyTorch's `cuda` device name.
+
+Choose one starting point:
+
+- **New task:** download Vela Encoder and initialize the task from that complete
+  checkpoint.
+- **Continue a task:** download Vela Embedding or Reranker and select
+  `initialization: "continued_task"`. This keeps the trained encoder and heads
+  while starting a new optimizer.
+- **Resume an interrupted run:** use `--resume` to restore its optimizer and
+  progress.
+
+Prepare separate training and development corpora, a sampling plan, and a
+training configuration. The
+[training workflow reference](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_embeddings/mmbert_32k#train-a-new-task-from-a-standard-base)
+provides the JSON formats, supported losses, optional teacher supervision, and
+configuration fields.
+
+The commands below assume those files are ready under `/data/retrieval`.
+Set `VELA_TRAIN_CONFIG_SHA256` to the SHA-256 of your configuration file:
 
 ```bash
-python -m pip install --requirement \
-  src/training/model_embeddings/mmbert_32k/requirements.txt
+export PYTHONPATH="$PWD"
 
-export PYTHONPATH="$PWD/src"
-export MMBERT32K_FOUNDATION_DATA=/path/to/tokenized-cc100-32k
-export MMBERT32K_FOUNDATION_OUTPUT=/path/to/mmbert-32k-yarn
-export MMBERT32K_BGE_DATA=/path/to/bge-m3-data
-export MMBERT32K_EMBEDDER_OUTPUT=/path/to/mmbert-embed-32k-2d
-export MMBERT32K_RERANKER_OUTPUT=/path/to/mmbert-rerank-32k-2d
+python -m src.training.model_embeddings.mmbert_32k.newbase_training \
+  --config /data/retrieval/task.json \
+  --config-sha256 "${VELA_TRAIN_CONFIG_SHA256:?Set the configuration SHA-256}" \
+  --output /data/retrieval/run --device cuda
 ```
 
-Inspect each resolved command before starting a large run:
+The configuration selects `task: "embedding"` or `task: "reranker"`, datasets,
+input budgets, training steps, and evaluation intervals. Start with a small
+budget and inspect the first development results before extending the run.
+
+## Evaluate the trained checkpoint
+
+Evaluate a saved checkpoint against the same development corpus used for your
+baseline:
 
 ```bash
-python -m training.model_embeddings.mmbert_32k \
-  --config src/training/model_embeddings/mmbert_32k/configs/foundation.json \
-  --stage train --print-command
-
-python -m training.model_embeddings.mmbert_32k \
-  --config src/training/model_embeddings/mmbert_32k/configs/embedder.json \
-  --print-command
-
-python -m training.model_embeddings.mmbert_32k \
-  --config src/training/model_embeddings/mmbert_32k/configs/reranker.json \
-  --print-command
+python -m src.training.model_embeddings.mmbert_32k.newbase_scoring \
+  --model /data/retrieval/run/step-100 --task embedding \
+  --known-dev /data/retrieval/validation --split validation \
+  --output /data/retrieval/evaluation --device cpu --token-budget 32768
 ```
 
-Remove `--print-command` to run. Prepare the foundation dataset first with
-`--stage prepare`; use the exact preparation and data-integrity procedure in
-the [workflow README](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_embeddings/mmbert_32k).
+Replace the checkpoint path with a step your run saved. For a reranker, set
+`--task reranker`. Use development results to choose a checkpoint, then run a
+separate final comparison on held-out data.
 
-## Evaluate before release
+For embedding, compare retrieval, similarity, and multilingual transfer.
+For reranking, keep candidate lists fixed and compare ranking metrics such as
+nDCG. Measure short and long inputs separately, along with latency and memory
+at each deployed depth/dimension.
 
-For the foundation, verify long-context loading and masked-language loss on a
-held-out corpus. For the embedder, report retrieval Recall@k and semantic
-similarity at every supported dimension and selected layer. For the reranker,
-report ranking metrics and classification quality for all 20 heads, not only
-the largest final-layer head.
+A full MMTEB result requires its complete selected benchmark and matching
+evaluation protocol. A task subset can diagnose gaps, but cannot establish an
+overall benchmark score or leaderboard rank.
 
-Also measure latency and memory at the exact layer, dimension, sequence length,
-and batch size you intend to deploy. “Matryoshka” provides choices; it does not
-make every choice equally accurate.
+## Deploy the result
+
+Use [local model bindings](../installation/runtime/in-process.md) to select the
+checkpoint and serving engine. Test the selected depth, dimension, and input
+limit through [route preview](../installation/runtime/lifecycle-diagnostics.md).
+An ONNX deployment needs graphs exported from the same trained weights.
+
+## Earlier mmBERT workflows
+
+The original foundation, embedding, and reranker recipes remain in the
+[workflow README](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_embeddings/mmbert_32k).
+Their checked-in historical configurations reproduce the earlier mmBERT
+workflow. Use the Vela starting points above for new Vela task training.

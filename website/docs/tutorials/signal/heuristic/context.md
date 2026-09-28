@@ -62,7 +62,7 @@ Each rule is an inclusive token band: it matches when
 - Validation rejects a rule with neither limit, unparsable, negative, or
   oversized values, and `min_tokens` above `max_tokens`. The Router, the `vllm-sr`
   CLI, and the Dashboard apply the same rules, so a band that passes
-  `vllm-sr validate` also loads in the Router.
+  `vllm-sr config validate` also loads in the Router.
 
 Values accept `K` and `M` suffixes (`1.5K`, `0.5M`).
 

@@ -1,11 +1,17 @@
 package onnx_binding
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
 	"sync"
 	"testing"
+)
+
+var (
+	_ func(string) (ClassResultWithProbs, error) = ClassifyMmBert32KFeedbackWithProbs
+	_ func(string) (ClassResultWithProbs, error) = ClassifyFeedbackTextWithProbs
 )
 
 // Test constants
@@ -728,6 +734,20 @@ func TestClassificationStubs(t *testing.T) {
 		}
 	})
 
+	t.Run("ClassifyMmBert32KFeedbackWithProbs", func(t *testing.T) {
+		result, err := ClassifyMmBert32KFeedbackWithProbs("test text")
+		if err == nil {
+			t.Logf("Unexpected success: class=%d, confidence=%.2f, probabilities=%v", result.Class, result.Confidence, result.Probabilities)
+		}
+	})
+
+	t.Run("ClassifyFeedbackTextWithProbs", func(t *testing.T) {
+		result, err := ClassifyFeedbackTextWithProbs("test text")
+		if err == nil {
+			t.Logf("Unexpected success: class=%d, confidence=%.2f, probabilities=%v", result.Class, result.Confidence, result.Probabilities)
+		}
+	})
+
 	t.Run("ClassifyMmBert32KFactcheck", func(t *testing.T) {
 		result, err := ClassifyMmBert32KFactcheck("test text")
 		if err == nil {
@@ -789,8 +809,20 @@ func TestNLIStubs(t *testing.T) {
 
 	t.Run("InitNLIModel", func(t *testing.T) {
 		err := InitNLIModel("/fake/path", true)
-		if err == nil {
-			t.Fatal("Expected error for unimplemented function")
+		if !errors.Is(err, ErrBackendUnavailable) || IsNLIModelInitialized() {
+			t.Fatalf("unsupported NLI must remain unavailable: %v", err)
+		}
+	})
+
+	t.Run("LabelStrings", func(t *testing.T) {
+		for label, expected := range map[NLILabel]string{
+			NLIEntailment: "ENTAILMENT", NLINeutral: "NEUTRAL",
+			NLIContradiction: "CONTRADICTION", NLIUnknown: "UNKNOWN",
+			NLIError: "ERROR", NLILabel(42): "ERROR",
+		} {
+			if label.String() != expected {
+				t.Fatalf("label %d: got %q, expected %q", label, label.String(), expected)
+			}
 		}
 	})
 
@@ -810,8 +842,8 @@ func TestNLIStubs(t *testing.T) {
 
 	t.Run("ClassifyNLI", func(t *testing.T) {
 		result, err := ClassifyNLI("premise", "hypothesis")
-		if err == nil {
-			t.Fatalf("Expected error, got result: %v", result)
+		if !errors.Is(err, ErrBackendUnavailable) || result != nil || IsNLIModelInitialized() {
+			t.Fatalf("unsupported NLI produced a result or lost its cause: result=%v error=%v", result, err)
 		}
 	})
 }
@@ -881,9 +913,13 @@ func TestTypeDefinitions(t *testing.T) {
 			Class:         0,
 			Confidence:    0.8,
 			Probabilities: []float32{0.8, 0.15, 0.05},
+			NumClasses:    3,
 		}
 		if len(result.Probabilities) != 3 {
 			t.Errorf("Expected 3 probabilities, got %d", len(result.Probabilities))
+		}
+		if result.NumClasses != len(result.Probabilities) {
+			t.Errorf("Expected NumClasses to match probabilities, got %d", result.NumClasses)
 		}
 	})
 

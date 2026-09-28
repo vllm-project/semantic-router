@@ -1,7 +1,11 @@
-name: Core Security
+name: Security
 
 on:
   workflow_call:
+    inputs:
+      verification:
+        type: string
+        default: ""
   workflow_dispatch:
   schedule:
     - cron: "17 4 * * 1"
@@ -10,30 +14,32 @@ permissions:
   contents: read
 
 jobs:
-  ast-security-scan:
-    name: AST supply chain security scan
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+  security:
+    name: Code and Infrastructure Scans
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
     steps:
-      - name: Check out trusted scanner
+      - name: Check Out Trusted Scanner
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           path: base
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check out pull request as data
+      - name: Check Out Planned Source as Data
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
           path: pr-code
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Pin trusted scanner policy
+      - name: Pin Trusted Scanner Policy
         run: |
           if [ -f base/tools/security/ast-scan-allowlist.txt ]; then
             mkdir -p pr-code/tools/security
@@ -45,9 +51,9 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
-      - name: Install tree-sitter dependencies
+      - name: Install Scanner Dependencies
         run: |
           pip install \
             tree-sitter==0.25.2 \
@@ -57,15 +63,16 @@ jobs:
             tree-sitter-go==0.25.0 \
             tree-sitter-rust==0.24.0
 
-      - name: Test trusted AST scanner
+      - name: Test Trusted AST Scanner
         run: python3 base/tools/security/test_ast_security_scanner.py
 
-      - name: Run trusted AST codebase scan
+      - name: Scan Codebase with Trusted AST Scanner
         run: |
           python3 base/tools/security/ast_security_scanner.py \
             scan pr-code --fail-on HIGH
 
-      - name: Run trusted AST pull request diff scan
+      - name: Scan Pull Request Diff with Trusted AST Scanner
+        if: github.event_name == 'pull_request'
         run: |
           git -C pr-code remote add base \
             "${GITHUB_SERVER_URL}/${{ github.repository }}.git"
@@ -77,26 +84,17 @@ jobs:
 
       # Keep the legacy regex scanner advisory: it reports known baseline
       # false positives, while the AST codebase and PR-diff scans above gate HIGH.
-      - name: Run trusted regex fallback scan
+      - name: Run Advisory Regex Scan
         continue-on-error: true
         run: |
           python3 base/tools/security/scan_malicious_code.py \
             pr-code --fail-on HIGH
 
-  iac-security-scan:
-    name: Helm IaC security scan
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set up Helm
+      - name: Set Up Helm
         uses: azure/setup-helm@v4
 
-      - name: Render maintained first-party Helm resources
+      - name: Render Maintained Helm Resources
+        working-directory: pr-code
         shell: bash
         run: |
           mkdir -p .agent-harness/security/iac
@@ -161,14 +159,15 @@ jobs:
         with:
           version: v0.74.0
           scan-type: config
-          scan-ref: .agent-harness/security/iac
+          scan-ref: pr-code/.agent-harness/security/iac
           format: sarif
-          output: trivy-results.sarif
+          output: pr-code/trivy-results.sarif
           severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
           exit-code: "0"
-          trivyignores: tools/security/trivy-iac.yaml
+          trivyignores: pr-code/tools/security/trivy-iac.yaml
 
-      - name: Enforce high and critical IaC findings
+      - name: Enforce High and Critical IaC Findings
+        working-directory: pr-code
         run: |
           trivy config \
             --exit-code 1 \
@@ -176,14 +175,32 @@ jobs:
             --ignorefile tools/security/trivy-iac.yaml \
             .agent-harness/security/iac
 
-      - name: Upload Trivy results
+      - name: Upload Trivy Results
         if: >-
           always()
-          && hashFiles('trivy-results.sarif') != ''
+          && hashFiles('pr-code/trivy-results.sarif') != ''
           && (github.event_name != 'pull_request'
             || (github.event.pull_request.head.repo.full_name == github.repository
               && github.actor != 'dependabot[bot]'))
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: pr-code/trivy-results.sarif
           category: trivy/helm-router
+
+      - name: Record Security Evidence
+        if: inputs.verification != ''
+        working-directory: pr-code
+        env:
+          VERIFICATION: ${{ inputs.verification }}
+        run: |
+          python3 -m pip install PyYAML==6.0.3
+          python3 tools/ci/workflow_evidence.py --verification "$VERIFICATION" \
+            --check trusted-ast-scanner-contracts --check trusted-ast-codebase-scan \
+            --check rendered-helm-iac-scan --output .agent-harness/security-result.json
+      - uses: actions/upload-artifact@v4
+        if: inputs.verification != ''
+        with:
+          name: ci-result-security
+          path: pr-code/.agent-harness/security-result.json
+          include-hidden-files: true
+          if-no-files-found: error

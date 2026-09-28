@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
@@ -37,6 +38,7 @@ func TestNormalizeRouterOutcomeRequestIncludesTargetRef(t *testing.T) {
 		Metadata: map[string]string{
 			"run_id": " run-1 ",
 		},
+		RecordOnly: true,
 	})
 	if validationErr != nil {
 		t.Fatalf("expected valid outcome, got %v", validationErr)
@@ -44,8 +46,22 @@ func TestNormalizeRouterOutcomeRequestIncludesTargetRef(t *testing.T) {
 	if outcome.ReplayID != "replay-1" ||
 		outcome.TargetRef != "model-a" ||
 		outcome.Score != 0.75 ||
-		outcome.Metadata["run_id"] != "run-1" {
+		outcome.Metadata["run_id"] != "run-1" ||
+		!outcome.RecordOnly {
 		t.Fatalf("unexpected normalized outcome: %#v", outcome)
+	}
+}
+
+func TestNormalizeRouterOutcomePreservesOptionalScore(t *testing.T) {
+	for _, provided := range []bool{false, true} {
+		req := RouterOutcomeRequest{ReplayID: "replay-1", Target: "model", Verdict: "good_fit"}
+		if provided {
+			req.Score = routerOutcomeFloatPtr(0)
+		}
+		outcome, err := normalizeRouterOutcomeRequest(req)
+		if err != nil || outcome.Score != 0 || outcome.ScoreProvided != provided {
+			t.Fatalf("score presence lost: provided=%t outcome=%+v err=%v", provided, outcome, err)
+		}
 	}
 }
 
@@ -80,7 +96,7 @@ func TestHandleRouterOutcomeUsesLearningRuntime(t *testing.T) {
 		Verdict:   "good_fit",
 		Score:     routerOutcomeFloatPtr(1),
 	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/router/outcomes", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/observability/outcomes", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(learningOutcomeIdempotencyHeader, "outcome-key-1")
 	req = req.WithContext(withManagementPrincipal(req.Context(), managementPrincipal{
@@ -118,7 +134,7 @@ func TestHandleRouterOutcomeRequiresIdempotencyKey(t *testing.T) {
 		Target:   "model",
 		Verdict:  "good_fit",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/router/outcomes", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/observability/outcomes", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -126,6 +142,37 @@ func TestHandleRouterOutcomeRequiresIdempotencyKey(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleRouterOutcomeUsesAuthenticatedUserProvenance(t *testing.T) {
+	learningRuntime := &routerOutcomeLearningRuntime{}
+	runtimeRegistry := routerruntime.NewRegistry(nil)
+	runtimeRegistry.SetLearningRuntime(learningRuntime)
+	server := &ClassificationAPIServer{runtimeRegistry: runtimeRegistry}
+	body, _ := json.Marshal(RouterOutcomeRequest{
+		ReplayID: "replay-user",
+		Source:   "operator",
+		Target:   "model",
+		Verdict:  "good_fit",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/observability/outcomes", bytes.NewReader(body))
+	req.Header.Set(learningOutcomeIdempotencyHeader, "outcome-user-1")
+	req.Header.Set(headers.VSROutcomeSource, "user")
+	req.Header.Set(headers.VSROutcomePrincipal, "dashboard-session:session-1")
+	req = req.WithContext(withManagementPrincipal(req.Context(), managementPrincipal{
+		Role:        "dashboard_control_plane",
+		AuthEnabled: true,
+	}))
+	w := httptest.NewRecorder()
+
+	server.handleRouterOutcome(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if learningRuntime.last == nil || learningRuntime.last.Source != routerruntime.RouterOutcomeSourceUser {
+		t.Fatalf("persisted outcome source = %#v, want user", learningRuntime.last)
 	}
 }
 
@@ -137,7 +184,7 @@ func TestHandleRouterOutcomeRejectsInvalidScore(t *testing.T) {
 		Verdict:  "good_fit",
 		Score:    routerOutcomeFloatPtr(2),
 	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/router/outcomes", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/observability/outcomes", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(learningOutcomeIdempotencyHeader, "outcome-key-score")
 	w := httptest.NewRecorder()
@@ -156,7 +203,7 @@ func TestLearningOutcomeIngestPolicyRateLimit(t *testing.T) {
 		hits:   map[string][]time.Time{},
 	}
 	principal := managementPrincipal{Role: "operator", AuthEnabled: true}
-	req := httptest.NewRequest(http.MethodPost, "/v1/router/outcomes", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/observability/outcomes", nil)
 	req.Header.Set(learningOutcomeIdempotencyHeader, "k1")
 	if _, _, err := policy.enforce(req, principal); err != nil {
 		t.Fatalf("first request should pass: %#v", err)
@@ -168,6 +215,48 @@ func TestLearningOutcomeIngestPolicyRateLimit(t *testing.T) {
 	req.Header.Set(learningOutcomeIdempotencyHeader, "k3")
 	if _, _, err := policy.enforce(req, principal); err == nil || err.Code != "RATE_LIMITED" {
 		t.Fatalf("expected rate limit, got %#v", err)
+	}
+}
+
+func TestLearningOutcomeIngestPolicyIsolatesAuthenticatedSessions(t *testing.T) {
+	policy := &learningOutcomeIngestPolicy{
+		limit:  1,
+		window: learningOutcomeRateWindow,
+		hits:   map[string][]time.Time{},
+	}
+	principal := managementPrincipal{Role: "dashboard_control_plane", AuthEnabled: true}
+	requestForSession := func(key, sessionID string) *http.Request {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/observability/outcomes", nil)
+		req.Header.Set(learningOutcomeIdempotencyHeader, key)
+		req.Header.Set(headers.VSROutcomeSource, "user")
+		req.Header.Set(headers.VSROutcomePrincipal, "dashboard-session:"+sessionID)
+		return req
+	}
+
+	if _, source, err := policy.enforce(requestForSession("a-1", "session-a"), principal); err != nil ||
+		source != routerruntime.RouterOutcomeSourceUser {
+		t.Fatalf("first session request = source %q error %#v", source, err)
+	}
+	if _, source, err := policy.enforce(requestForSession("b-1", "session-b"), principal); err != nil ||
+		source != routerruntime.RouterOutcomeSourceUser {
+		t.Fatalf("independent session request = source %q error %#v", source, err)
+	}
+	if _, _, err := policy.enforce(requestForSession("a-2", "session-a"), principal); err == nil ||
+		err.Code != "RATE_LIMITED" {
+		t.Fatalf("expected only session-a to be saturated, got %#v", err)
+	}
+}
+
+func TestLearningOutcomeIngestPolicyRejectsDelegationFromOtherRoles(t *testing.T) {
+	policy := newLearningOutcomeIngestPolicy()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/observability/outcomes", nil)
+	req.Header.Set(learningOutcomeIdempotencyHeader, "operator-key")
+	req.Header.Set(headers.VSROutcomeSource, "user")
+	req.Header.Set(headers.VSROutcomePrincipal, "dashboard-session:session-a")
+
+	_, _, err := policy.enforce(req, managementPrincipal{Role: "operator", AuthEnabled: true})
+	if err == nil || err.Code != "INVALID_OUTCOME_PROVENANCE" {
+		t.Fatalf("non-Dashboard delegated provenance error = %#v", err)
 	}
 }
 

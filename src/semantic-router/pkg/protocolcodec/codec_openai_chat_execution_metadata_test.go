@@ -109,6 +109,49 @@ func TestOpenAIChatRequestRejectsProviderTokenizedToolArguments(t *testing.T) {
 	}
 }
 
+const ollamaChatToolCallResponseFixture = `{
+  "id":"chatcmpl-1","object":"chat.completion","created":7,"model":"llama3.2:3b",
+  "system_fingerprint":"fp_ollama",
+  "choices":[{"index":0,"finish_reason":"tool_calls","message":{"role":"assistant","content":"",
+    "tool_calls":[{"id":"call_1","index":0,"type":"function",
+      "function":{"name":"read_file","arguments":"{\"path\":\"billing.py\"}"}}]}}],
+  "usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}
+}`
+
+func TestOpenAIChatResponseAcceptsOllamaToolCallIndex(t *testing.T) {
+	engine := NewBuiltinEngine()
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1} {
+		translated, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, target, []byte(ollamaChatToolCallResponseFixture), nil)
+		if err != nil {
+			t.Fatalf("TranslateResponse(%s) error = %v", target, err)
+		}
+		if translated.Response.StopReason != llmprotocol.StopToolCall || len(translated.Response.Output) != 1 {
+			t.Fatalf("translated response (%s) = %+v", target, translated.Response)
+		}
+		assertDiagnosticFields(t, translated.Diagnostics, "choices.message.tool_calls.index")
+	}
+
+	unknown := strings.Replace(ollamaChatToolCallResponseFixture, `"index":0,"type"`, `"index":0,"future":1,"type"`, 1)
+	_, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, []byte(unknown), nil)
+	if err == nil || !strings.Contains(err.Error(), "invalid_upstream_json") {
+		t.Fatalf("unknown tool call field error = %v", err)
+	}
+}
+
+func TestOpenAIChatRequestAcceptsEchoedToolCallIndex(t *testing.T) {
+	raw := []byte(`{
+		"model":"client-model","messages":[{"role":"user","content":"read billing.py"},
+		{"role":"assistant","content":"","tool_calls":[{"id":"call_1","index":0,"type":"function",
+			"function":{"name":"read_file","arguments":"{}"}}]},
+		{"role":"tool","tool_call_id":"call_1","content":"ok"}]
+	}`)
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1} {
+		if _, err := NewBuiltinEngine().TranslateRequest(llmprotocol.OpenAIChatV1, target, raw, nil); err != nil {
+			t.Fatalf("TranslateRequest(%s) error = %v", target, err)
+		}
+	}
+}
+
 func TestOpenAIChatResponseExtensionEnvelopeRoundTripAndUnknownRejection(t *testing.T) {
 	engine := NewBuiltinEngine()
 	raw := []byte(vLLMChatResponseExtensionsFixture)

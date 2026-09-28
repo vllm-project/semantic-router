@@ -308,6 +308,7 @@ class TestFusionAlgorithmConfig:
 
     def test_default_values(self):
         config = FusionAlgorithmConfig()
+        assert config.analysis_mode == "separate"
         assert config.include_analysis is True
         assert config.include_intermediate_responses is True
         assert config.on_error == "skip"
@@ -335,6 +336,23 @@ class TestFusionAlgorithmConfig:
         assert config.max_concurrent == 2
         assert config.max_completion_tokens == 512
         assert config.temperature == 0.2
+
+    @pytest.mark.parametrize("analysis_mode", ["separate", "one_call", "none"])
+    def test_analysis_mode_values(self, analysis_mode):
+        config = FusionAlgorithmConfig(analysis_mode=analysis_mode)
+        assert config.analysis_mode == analysis_mode
+
+    def test_analysis_mode_rejects_unknown_value(self):
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(analysis_mode="automatic")
+
+    @pytest.mark.parametrize("analysis_mode", ["one_call", "none"])
+    def test_analysis_mode_rejects_unused_analysis_template(self, analysis_mode):
+        with pytest.raises(PydanticValidationError, match="analysis_template requires"):
+            FusionAlgorithmConfig(
+                analysis_mode=analysis_mode,
+                analysis_template="compare {{responses}}",
+            )
 
     def test_positive_limits(self):
         with pytest.raises(PydanticValidationError):

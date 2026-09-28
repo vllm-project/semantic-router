@@ -12,6 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -30,7 +31,7 @@ const (
 
 func init() {
 	pkgtestcases.Register("dashboard-restart-recovery", pkgtestcases.TestCase{
-		Description: "Dashboard workflow state and sealed Evaluation Plane evidence survive a pod restart",
+		Description: "Dashboard sessions/workflows survive restart while sr-bench owns durable evidence independently",
 		Tags:        []string{"dashboard", "functional", "restart"},
 		Fn:          testDashboardRestartRecovery,
 	})
@@ -54,20 +55,23 @@ func testDashboardRestartRecovery(ctx context.Context, client *kubernetes.Client
 		stop()
 		return err
 	}
-	evaluationRun, _, err := executeVerifiedEvaluationBaseline(
-		ctx, httpClient, baseURL, token, newEvaluationClientRequestID(),
-	)
+	evaluationRun, evidence, err := executeVerifiedSrBench(ctx, httpClient, baseURL, token)
 	if err != nil {
 		stop()
 		return fmt.Errorf("seed restart evaluation evidence: %w", err)
 	}
+	workerIdentity, err := srBenchWorkerIdentity(ctx, client)
+	if err != nil {
+		stop()
+		return err
+	}
 	stop()
 
-	if err := deleteDashboardPod(ctx, client, opts); err != nil {
+	if err = deleteDashboardPod(ctx, client, opts); err != nil {
 		return err
 	}
 
-	if err := waitForDashboardReady(ctx, client, opts); err != nil {
+	if err = waitForDashboardReady(ctx, client, opts); err != nil {
 		return err
 	}
 
@@ -77,13 +81,31 @@ func testDashboardRestartRecovery(ctx context.Context, client *kubernetes.Client
 	}
 	defer stop()
 
-	return verifyDashboardWorkflowStateAfterRestart(
-		ctx,
-		&http.Client{Timeout: 30 * time.Second},
-		fmt.Sprintf("http://localhost:%s", localPort),
-		opts,
-		evaluationRun.ID,
-	)
+	baseURL = fmt.Sprintf("http://localhost:%s", localPort)
+	if err = verifyDashboardWorkflowStateAfterRestart(ctx, httpClient, baseURL, token, opts, evaluationRun, evidence); err != nil {
+		return err
+	}
+	workerAfter, err := srBenchWorkerIdentity(ctx, client)
+	if err != nil {
+		return err
+	}
+	if workerAfter != workerIdentity {
+		return fmt.Errorf("dashboard restart changed the independently owned benchmark worker")
+	}
+	if err = verifySrBenchWorkerRestart(ctx, client, httpClient, baseURL, token, evaluationRun, evidence, opts); err != nil {
+		return err
+	}
+	if opts.SetDetails != nil {
+		opts.SetDetails(map[string]interface{}{
+			"mcp_server_id":                               dashboardRestartMCPServerID,
+			"prior_session_survived":                      true,
+			"dashboard_restart_preserved_worker_identity": true,
+			"sr_bench_worker_restart_preserved_evidence":  true,
+			"run_id":          evaluationRun.ID,
+			"evidence_sha256": evidence,
+		})
+	}
+	return nil
 }
 
 func seedDashboardWorkflowState(ctx context.Context, client *http.Client, baseURL string, verbose bool) (string, error) {
@@ -150,72 +172,68 @@ func createRestartTestMCPServer(ctx context.Context, client *http.Client, baseUR
 func verifyDashboardWorkflowStateAfterRestart(
 	ctx context.Context,
 	client *http.Client,
-	baseURL string,
+	baseURL, priorToken string,
 	opts pkgtestcases.TestCaseOptions,
-	evaluationRunID string,
+	run dashboardBenchRun,
+	evidence string,
 ) error {
-	const verifyTimeout = 90 * time.Second
-	deadline := time.Now().Add(verifyTimeout)
-	var lastErr error
-
-	for time.Now().Before(deadline) {
-		token, err := dashboardAuthToken(ctx, client, baseURL, opts.Verbose)
-		if err != nil {
-			lastErr = err
-			time.Sleep(3 * time.Second)
-			continue
-		}
-
-		if err := assertMCPServerPresent(ctx, client, baseURL, token, opts.Verbose, "after restart"); err != nil {
-			lastErr = err
-			time.Sleep(3 * time.Second)
-			continue
-		}
-
-		if err := assertWorkflowHealthOK(ctx, client, baseURL, token, opts.Verbose); err != nil {
-			lastErr = err
-			time.Sleep(3 * time.Second)
-			continue
-		}
-		if err := assertEvaluationReportPresentAfterRestart(ctx, client, baseURL, token, evaluationRunID); err != nil {
-			lastErr = err
-			time.Sleep(3 * time.Second)
-			continue
-		}
-
-		if opts.Verbose {
-			fmt.Printf("[Test] Dashboard workflow state survived restart (mcp_server_id=%s)\n", dashboardRestartMCPServerID)
-		}
-		if opts.SetDetails != nil {
-			opts.SetDetails(map[string]interface{}{
-				"mcp_server_id":              dashboardRestartMCPServerID,
-				"mcp_server_name":            dashboardRestartMCPServerName,
-				"evaluation_report_survived": true,
-				"survived":                   true,
-			})
-		}
-		return nil
+	// Use the original session as well as a new login. Re-bootstrap must not
+	// silently replace users, JWT secrets or persisted workflow records.
+	if _, err := dashboardAuthToken(ctx, client, baseURL, opts.Verbose); err != nil {
+		return fmt.Errorf("post-restart login: %w", err)
 	}
-
-	return fmt.Errorf("dashboard workflow state not recoverable after %s: %w", verifyTimeout, lastErr)
+	if err := assertMCPServerPresent(ctx, client, baseURL, priorToken, opts.Verbose, "after restart"); err != nil {
+		return err
+	}
+	if err := assertWorkflowHealthOK(ctx, client, baseURL, priorToken, opts.Verbose); err != nil {
+		return err
+	}
+	return assertSrBenchEvidenceUnchanged(ctx, client, baseURL, priorToken, run, evidence)
 }
 
-func assertEvaluationReportPresentAfterRestart(
-	ctx context.Context,
-	client *http.Client,
-	baseURL, token, runID string,
-) error {
-	report, err := fetchEvaluationReport(ctx, client, baseURL, token, runID)
+func assertSrBenchEvidenceUnchanged(ctx context.Context, client *http.Client, baseURL, token string, run dashboardBenchRun, evidence string) error {
+	actual, err := srBenchEvidenceDigest(ctx, client, baseURL, token, run)
 	if err != nil {
-		return fmt.Errorf("read sealed evaluation report after restart: %w", err)
+		return err
 	}
-	if err := verifyEvaluationReport(report); err != nil {
-		return fmt.Errorf("verify sealed evaluation report after restart: %w", err)
-	}
-	if err := verifyEvaluationArtifactDownload(ctx, client, baseURL, token, runID, report); err != nil {
-		return fmt.Errorf("verify evaluation artifacts after restart: %w", err)
+	if actual != evidence {
+		return fmt.Errorf("saved sr-bench report/results/calls/events changed after restart")
 	}
 	return nil
+}
+
+func verifySrBenchWorkerRestart(ctx context.Context, client *kubernetes.Clientset, httpClient *http.Client, baseURL, token string, run dashboardBenchRun, evidence string, opts pkgtestcases.TestCaseOptions) error {
+	before, err := srBenchWorkerIdentity(ctx, client)
+	if err != nil {
+		return err
+	}
+	if err = deleteDashboardProfilePod(ctx, client, "app="+srBenchDeployment, opts); err != nil {
+		return err
+	}
+	if err = helpers.WaitForDeploymentReady(ctx, client, dashboardRestartNamespace, srBenchDeployment, dashboardRestartRecoveryTimeout, dashboardRestartRecoveryInterval, opts.Verbose); err != nil {
+		return err
+	}
+	// The worker is ready before its Service's endpoint update is necessarily
+	// observed, so retry only the read, never submission or process mutation.
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		after, identityErr := srBenchWorkerIdentity(ctx, client)
+		err = identityErr
+		if err == nil && before == after {
+			err = fmt.Errorf("benchmark worker restart did not replace the worker process")
+		}
+		if err == nil {
+			err = assertSrBenchEvidenceUnchanged(ctx, httpClient, baseURL, token, run, evidence)
+		}
+		if err == nil || time.Now().After(deadline) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
+		}
+	}
 }
 
 func assertMCPServerPresent(ctx context.Context, client *http.Client, baseURL, token string, verbose bool, phase string) error {
@@ -301,19 +319,23 @@ func assertWorkflowHealthOK(ctx context.Context, client *http.Client, baseURL, t
 }
 
 func deleteDashboardPod(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	return deleteDashboardProfilePod(ctx, client, dashboardRestartPodLabel, opts)
+}
+
+func deleteDashboardProfilePod(ctx context.Context, client *kubernetes.Clientset, label string, opts pkgtestcases.TestCaseOptions) error {
 	pods, err := client.CoreV1().Pods(dashboardRestartNamespace).List(ctx, metav1.ListOptions{
-		LabelSelector: dashboardRestartPodLabel,
+		LabelSelector: label,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list dashboard pods: %w", err)
 	}
-	if len(pods.Items) == 0 {
-		return fmt.Errorf("no dashboard pods found in %s", dashboardRestartNamespace)
+	if len(pods.Items) != 1 {
+		return fmt.Errorf("expected exactly one profile pod for %s, found %d", label, len(pods.Items))
 	}
 
 	podName := pods.Items[0].Name
 	if opts.Verbose {
-		fmt.Printf("[Test] Deleting dashboard pod %s to simulate restart\n", podName)
+		fmt.Printf("[Test] Deleting profile pod %s to simulate restart\n", podName)
 	}
 
 	if err := client.CoreV1().Pods(dashboardRestartNamespace).Delete(ctx, podName, metav1.DeleteOptions{}); err != nil {
@@ -327,9 +349,9 @@ func waitForOldDashboardPodTerminated(ctx context.Context, client *kubernetes.Cl
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
 		_, err := client.CoreV1().Pods(dashboardRestartNamespace).Get(ctx, podName, metav1.GetOptions{})
-		if err != nil {
+		if apierrors.IsNotFound(err) {
 			if opts.Verbose {
-				fmt.Printf("[Test] Old dashboard pod %s terminated\n", podName)
+				fmt.Printf("[Test] Old profile pod %s terminated\n", podName)
 			}
 			return nil
 		}

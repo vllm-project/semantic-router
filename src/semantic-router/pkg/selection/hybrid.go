@@ -173,14 +173,14 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	}
 
 	// Collect scores from each component
-	componentScores := make(map[string]map[string]float64)
+	componentScores := make(map[string]CandidateScores)
 	var componentResults []*SelectionResult
 
 	// Get feedback-derived experience scores
 	if h.eloSelector != nil && h.config.ExperienceWeight > 0 {
 		result, err := h.eloSelector.Select(ctx, selCtx)
 		if err == nil && result != nil {
-			componentScores["experience"] = result.AllScores
+			componentScores["experience"] = result.ScoresFor(selCtx.CandidateModels)
 			componentResults = append(componentResults, result)
 		}
 	}
@@ -189,7 +189,7 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	if h.routerDCSelector != nil && h.config.RouterDCWeight > 0 {
 		result, err := h.routerDCSelector.Select(ctx, selCtx)
 		if err == nil && result != nil {
-			componentScores["router_dc"] = result.AllScores
+			componentScores["router_dc"] = result.ScoresFor(selCtx.CandidateModels)
 			componentResults = append(componentResults, result)
 		}
 	}
@@ -198,7 +198,7 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	if h.autoMixSelector != nil && h.config.AutoMixWeight > 0 {
 		result, err := h.autoMixSelector.Select(ctx, selCtx)
 		if err == nil && result != nil {
-			componentScores["automix"] = result.AllScores
+			componentScores["automix"] = result.ScoresFor(selCtx.CandidateModels)
 			componentResults = append(componentResults, result)
 		}
 	}
@@ -206,7 +206,7 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	// Normalize scores if enabled
 	if h.config.NormalizeScores {
 		for component, scores := range componentScores {
-			componentScores[component] = h.normalizeScores(scores)
+			componentScores[component] = NormalizeCandidateScores(scores, HigherIsBetter)
 		}
 	}
 
@@ -225,85 +225,80 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	for _, model := range selCtx.CandidateModels {
 		var experienceScore, dcScore, amScore float64
 		if scores, ok := componentScores["experience"]; ok {
-			experienceScore = scores[model.Model]
+			experienceScore, _ = scores.Get(model)
 		}
 		if scores, ok := componentScores["router_dc"]; ok {
-			dcScore = scores[model.Model]
+			dcScore, _ = scores.Get(model)
 		}
 		if scores, ok := componentScores["automix"]; ok {
-			amScore = scores[model.Model]
+			amScore, _ = scores.Get(model)
 		}
+		combined, _ := combinedScores.Get(model)
 		logging.Infof("[HybridSelector]   %s: experience=%.4f, dc=%.4f, am=%.4f → combined=%.4f",
-			model.Model, experienceScore, dcScore, amScore, combinedScores[model.Model])
+			model.Model, experienceScore, dcScore, amScore, combined)
 	}
 
-	bestModel, bestScore := h.selectBestModel(selCtx.CandidateModels, combinedScores)
-
-	if bestModel == nil {
+	best := combinedScores.Best(HigherIsBetter, false)
+	if best < 0 {
 		return nil, fmt.Errorf("could not select a model")
 	}
+	bestModel, bestScore := &combinedScores[best].Candidate, combinedScores[best].Score
 
 	// Calculate confidence from component agreement
-	confidence := h.calculateConfidence(componentResults, bestModel.Model)
+	confidence := h.calculateConfidence(componentResults, *bestModel)
 
-	h.recordComponentAgreement(componentResults, bestModel.Model)
+	h.recordComponentAgreement(componentResults, *bestModel)
 
 	// Build reasoning
-	reasoning := h.buildReasoning(componentScores, bestModel.Model)
+	reasoning := h.buildReasoning(componentScores, *bestModel)
 
 	logging.Infof("[HybridSelector] Selected model %s (score=%.4f, confidence=%.2f, components=%d)",
 		bestModel.Model, bestScore, confidence, len(componentResults))
 
 	return &SelectionResult{
-		SelectedModel: bestModel.Model,
-		LoRAName:      bestModel.LoRAName,
-		Score:         bestScore,
-		Confidence:    confidence,
-		Method:        MethodHybrid,
-		Reasoning:     reasoning,
-		AllScores:     combinedScores,
+		SelectedModel:     bestModel.Model,
+		SelectedCandidate: bestModel,
+		LoRAName:          bestModel.LoRAName,
+		Score:             bestScore,
+		Confidence:        confidence,
+		Method:            MethodHybrid,
+		Reasoning:         reasoning,
+		AllScores:         combinedScores.Diagnostics(),
+		CandidateScores:   combinedScores,
 	}, nil
 }
 
-func (h *HybridSelector) applyCacheAffinity(combinedScores map[string]float64, selCtx *SelectionContext) {
+func (h *HybridSelector) applyCacheAffinity(scores CandidateScores, selCtx *SelectionContext) {
 	if selCtx.CacheAffinityCtx == nil {
 		return
 	}
-
-	affinityResult := ComputeCacheAffinityAdjustments(
-		selCtx.CacheAffinityCtx, selCtx.CandidateModels, combinedScores)
-	for model, adj := range affinityResult.Adjustments {
-		if adj != 0 {
-			combinedScores[model] += adj
+	// Cache observations remain model-level. Project the best score per model,
+	// then apply each adjustment to all of that model's exact candidates.
+	modelScores := make(map[string]float64)
+	var refs []config.ModelRef
+	for _, row := range scores {
+		previous, exists := modelScores[row.Candidate.Model]
+		if !exists {
+			refs = append(refs, row.Candidate)
 		}
+		if !exists || row.Score > previous {
+			modelScores[row.Candidate.Model] = row.Score
+		}
+	}
+	affinity := ComputeCacheAffinityAdjustments(selCtx.CacheAffinityCtx, refs, modelScores)
+	for i := range scores {
+		scores[i].Score += affinity.Adjustments[scores[i].Candidate.Model]
 	}
 }
 
-func (h *HybridSelector) selectBestModel(candidates []config.ModelRef, combinedScores map[string]float64) (*config.ModelRef, float64) {
-	var bestModel *config.ModelRef
-	var bestScore float64
-
-	for i := range candidates {
-		model := &candidates[i]
-		score := combinedScores[model.Model]
-
-		if score > bestScore || bestModel == nil {
-			bestScore = score
-			bestModel = model
-		}
-	}
-
-	return bestModel, bestScore
-}
-
-func (h *HybridSelector) recordComponentAgreement(componentResults []*SelectionResult, bestModel string) {
+func (h *HybridSelector) recordComponentAgreement(componentResults []*SelectionResult, bestModel config.ModelRef) {
 	if len(componentResults) <= 1 {
 		return
 	}
 
 	agreementRatio := float64(0)
 	for _, r := range componentResults {
-		if r.SelectedModel == bestModel {
+		if r.SelectedCandidate != nil && CandidateIdentity(*r.SelectedCandidate) == CandidateIdentity(bestModel) {
 			agreementRatio++
 		}
 	}
@@ -367,118 +362,38 @@ func (h *HybridSelector) requiresWinnerFeedback() bool {
 }
 
 // combineScores combines scores from all components with weights
-func (h *HybridSelector) combineScores(componentScores map[string]map[string]float64, candidates []config.ModelRef) map[string]float64 {
-	result := make(map[string]float64)
-
-	// Initialize with zeros
-	for _, c := range candidates {
-		result[c.Model] = 0.0
-	}
-
-	// Weight mapping
-	weights := map[string]float64{
-		"experience": h.config.ExperienceWeight,
-		"router_dc":  h.config.RouterDCWeight,
-		"automix":    h.config.AutoMixWeight,
-	}
-
-	// Calculate total weight for normalization
-	totalWeight := 0.0
-	for component, scores := range componentScores {
-		if len(scores) > 0 {
-			totalWeight += weights[component]
-		}
-	}
-
-	if totalWeight == 0 {
-		// No component scores available, use uniform
-		for model := range result {
-			result[model] = 1.0 / float64(len(candidates))
-		}
-		return result
-	}
-
-	// Weighted combination
-	for component, scores := range componentScores {
-		weight := weights[component]
-		for model, score := range scores {
-			result[model] += (weight / totalWeight) * score
-		}
-	}
-
-	return result
-}
-
-// normalizeScores normalizes scores to [0, 1] range using min-max normalization
-func (h *HybridSelector) normalizeScores(scores map[string]float64) map[string]float64 {
-	if len(scores) == 0 {
-		return scores
-	}
-
-	minScore := math.Inf(1)
-	maxScore := math.Inf(-1)
-
-	for _, s := range scores {
-		if s < minScore {
-			minScore = s
-		}
-		if s > maxScore {
-			maxScore = s
-		}
-	}
-
-	// Avoid division by zero
-	if maxScore == minScore {
-		result := make(map[string]float64)
-		for model := range scores {
-			result[model] = 0.5
-		}
-		return result
-	}
-
-	result := make(map[string]float64)
-	for model, s := range scores {
-		result[model] = (s - minScore) / (maxScore - minScore)
-	}
-
-	return result
+func (h *HybridSelector) combineScores(components map[string]CandidateScores, candidates []config.ModelRef) CandidateScores {
+	return BlendCandidateScores(candidates, []ScoreComponent{
+		{Weight: h.config.ExperienceWeight, Scores: components["experience"]},
+		{Weight: h.config.RouterDCWeight, Scores: components["router_dc"]},
+		{Weight: h.config.AutoMixWeight, Scores: components["automix"]},
+	})
 }
 
 // applyCostAdjustment applies cost-based score adjustment
-func (h *HybridSelector) applyCostAdjustment(scores map[string]float64, costWeight float64) {
+func (h *HybridSelector) applyCostAdjustment(scores CandidateScores, costWeight float64) {
 	if len(h.modelCosts) == 0 || costWeight <= 0 {
 		return
 	}
-
-	// Find min and max costs
 	minCost, maxCost := math.MaxFloat64, 0.0
-	for model := range scores {
-		if cost, ok := h.modelCosts[model]; ok {
-			if cost < minCost {
-				minCost = cost
-			}
-			if cost > maxCost {
-				maxCost = cost
-			}
+	for _, row := range scores {
+		if cost, ok := h.modelCosts[row.Candidate.Model]; ok {
+			minCost, maxCost = math.Min(minCost, cost), math.Max(maxCost, cost)
 		}
 	}
-
-	if maxCost == minCost {
+	if maxCost <= minCost {
 		return
 	}
-
-	// Adjust scores: cheaper models get bonus
-	for model := range scores {
-		if cost, ok := h.modelCosts[model]; ok {
-			normalizedCost := (cost - minCost) / (maxCost - minCost)
-			costBonus := (1.0 - normalizedCost) * costWeight * h.config.CostWeight
-			scores[model] *= (1.0 + costBonus)
+	for i, row := range scores {
+		if cost, ok := h.modelCosts[row.Candidate.Model]; ok {
+			bonus := (1 - (cost-minCost)/(maxCost-minCost)) * costWeight * h.config.CostWeight
+			scores[i].Score *= 1 + bonus
 		}
 	}
 }
 
 // calculateConfidence calculates confidence based on component agreement
-func (h *HybridSelector) calculateConfidence(results []*SelectionResult, selectedModel string) float64 {
+func (h *HybridSelector) calculateConfidence(results []*SelectionResult, selectedModel config.ModelRef) float64 {
 	if len(results) == 0 {
 		return 0.5
 	}
@@ -488,7 +403,7 @@ func (h *HybridSelector) calculateConfidence(results []*SelectionResult, selecte
 	totalConfidence := 0.0
 
 	for _, r := range results {
-		if r.SelectedModel == selectedModel {
+		if r.SelectedCandidate != nil && CandidateIdentity(*r.SelectedCandidate) == CandidateIdentity(selectedModel) {
 			agreements++
 		}
 		totalConfidence += r.Confidence
@@ -505,23 +420,23 @@ func (h *HybridSelector) calculateConfidence(results []*SelectionResult, selecte
 }
 
 // buildReasoning creates a human-readable explanation
-func (h *HybridSelector) buildReasoning(componentScores map[string]map[string]float64, selectedModel string) string {
+func (h *HybridSelector) buildReasoning(componentScores map[string]CandidateScores, selectedModel config.ModelRef) string {
 	parts := []string{}
 
 	if scores, ok := componentScores["experience"]; ok {
-		if score, ok := scores[selectedModel]; ok {
+		if score, ok := scores.Get(selectedModel); ok {
 			parts = append(parts, fmt.Sprintf("Experience=%.3f", score))
 		}
 	}
 
 	if scores, ok := componentScores["router_dc"]; ok {
-		if score, ok := scores[selectedModel]; ok {
+		if score, ok := scores.Get(selectedModel); ok {
 			parts = append(parts, fmt.Sprintf("RouterDC=%.3f", score))
 		}
 	}
 
 	if scores, ok := componentScores["automix"]; ok {
-		if score, ok := scores[selectedModel]; ok {
+		if score, ok := scores.Get(selectedModel); ok {
 			parts = append(parts, fmt.Sprintf("AutoMix=%.3f", score))
 		}
 	}

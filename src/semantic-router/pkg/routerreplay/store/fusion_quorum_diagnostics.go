@@ -22,6 +22,13 @@ type FusionQuorumDiagnostics struct {
 	RequiredCount int                             `json:"required_count"`
 	UsableCount   int                             `json:"usable_count"`
 	Attempts      []FusionPanelAttemptDiagnostics `json:"attempts,omitempty"`
+
+	// SelectedPolicy is the recipe-owned quorum_failure_policy that was applied.
+	SelectedPolicy string `json:"selected_policy,omitempty"`
+	// FallbackTarget is set only when the fallback policy named a target.
+	FallbackTarget string `json:"fallback_target,omitempty"`
+	// Disposition is the stable, content-free outcome of the below-quorum panel.
+	Disposition string `json:"disposition,omitempty"`
 }
 
 // FusionPanelAttemptDiagnostics captures the terminal state and reported token

@@ -5,7 +5,7 @@ description: Use when calibrating or validating a maintained routing recipe agai
 
 # Routing calibration
 
-Use `tools/dev/router-calibration/router_calibration_loop.py` and the versioned
+Use `tools/calibration/recipe/router_calibration_loop.py` and the versioned
 probe schema in `config/schemas/recipe-probes-v1.schema.json`. Keep recipe
 changes in the local checkout; remote systems are validation mirrors only.
 

@@ -54,7 +54,7 @@ func (r *OpenAIRouter) getOrLoadToolDatabaseForSelection(absPath string) (*tools
 	}
 
 	emb := r.Config.EmbeddingModels
-	provider, err := toolsEmbeddingProvider(r.Config)
+	provider, err := toolsEmbeddingProvider(r.Config, r.Embeddings)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,6 @@
 """Dump DRACO items as JSONL for the fusioneval Go driver.
 
-The cached-panel evaluator splits generation (Go: cmd/fusioneval, which needs the
+The cached-panel evaluator splits generation (Go: bench/grounded_fusion/fusioneval, which needs the
 candle NLI + Ollama) from DRACO parsing (Python: datasets.py). This writes one
 item per line — ``{id, domain, question, context}`` — which the Go driver reads to
 generate the panel and synthesize the arms. ``context`` is populated for

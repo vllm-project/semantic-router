@@ -243,7 +243,7 @@ func NewSelector(cfg *config.MLModelSelectionConfig) (Selector, error) {
 }
 
 // loadPretrainedSelectorFromPath loads a pre-trained selector from the specified path
-// This is an internal helper to avoid collision with trainer.LoadPretrainedSelector
+// The configured models directory contains one artifact per algorithm.
 func loadPretrainedSelectorFromPath(algorithmType, modelsPath string) (Selector, error) {
 	// Construct model file path
 	modelPath := modelsPath + "/" + algorithmType + "_model.json"
@@ -652,7 +652,7 @@ func (s *KNNSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 	}
 
 	// Build feature vector: embedding + category one-hot (matches Python training format)
-	// Uses CombineEmbeddingWithCategory from trainer.go to ensure consistency
+	// Uses CombineEmbeddingWithCategory from features.go to ensure consistency
 	featureVector := CombineEmbeddingWithCategory(ctx.QueryEmbedding, ctx.CategoryName)
 
 	// Use ml-binding for selection
@@ -790,7 +790,7 @@ func (s *KMeansSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (
 	}
 
 	// Build feature vector: embedding + category one-hot (matches Python training format)
-	// Uses CombineEmbeddingWithCategory from trainer.go to ensure consistency
+	// Uses CombineEmbeddingWithCategory from features.go to ensure consistency
 	featureVector := CombineEmbeddingWithCategory(ctx.QueryEmbedding, ctx.CategoryName)
 
 	// Use ml-binding for selection
@@ -930,7 +930,7 @@ func (s *SVMSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 	}
 
 	// Build feature vector: embedding + category one-hot (matches Python training format)
-	// Uses CombineEmbeddingWithCategory from trainer.go to ensure consistency
+	// Uses CombineEmbeddingWithCategory from features.go to ensure consistency
 	featureVector := CombineEmbeddingWithCategory(ctx.QueryEmbedding, ctx.CategoryName)
 
 	// Use ml-binding for selection

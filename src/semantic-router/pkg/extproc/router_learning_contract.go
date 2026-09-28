@@ -82,6 +82,9 @@ func learningChangesModel(baseResult *selection.SelectionResult, result *selecti
 	if baseResult == nil || result == nil {
 		return false
 	}
+	if baseResult.SelectedCandidate != nil && result.SelectedCandidate != nil {
+		return selection.CandidateIdentity(*baseResult.SelectedCandidate) != selection.CandidateIdentity(*result.SelectedCandidate)
+	}
 	return strings.TrimSpace(baseResult.SelectedModel) != "" &&
 		strings.TrimSpace(result.SelectedModel) != "" &&
 		baseResult.SelectedModel != result.SelectedModel

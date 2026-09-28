@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 const weatherRequestTimeout = 12 * time.Second
@@ -105,7 +107,12 @@ func WeatherHandler() http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), weatherRequestTimeout)
 		defer cancel()
 
-		result, err := fetchWeather(ctx, location, unit)
+		result, revoked, err := fetchWeather(ctx, location, unit, func() bool {
+			return dashboardauth.RejectRevokedMutation(w, r)
+		})
+		if revoked {
+			return
+		}
 		if err != nil {
 			status := http.StatusBadGateway
 			if strings.Contains(err.Error(), "no weather results") {
@@ -131,15 +138,21 @@ func normalizeWeatherUnit(unit string) string {
 	}
 }
 
-func fetchWeather(ctx context.Context, location string, unit string) (*weatherLookupResult, error) {
+func fetchWeather(ctx context.Context, location string, unit string, rejectRevoked func() bool) (*weatherLookupResult, bool, error) {
+	if rejectRevoked() {
+		return nil, true, nil
+	}
 	target, err := geocodeLocation(ctx, location)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
+	if rejectRevoked() {
+		return nil, true, nil
+	}
 	forecast, err := fetchWeatherForecast(ctx, target, unit)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	return &weatherLookupResult{
@@ -165,7 +178,7 @@ func fetchWeather(ctx context.Context, location string, unit string) (*weatherLo
 			Precipitation:       forecast.Current.Precipitation,
 			PrecipitationUnit:   forecast.CurrentUnits.Precipitation,
 		},
-	}, nil
+	}, false, nil
 }
 
 func geocodeLocation(ctx context.Context, location string) (*weatherLocationResult, error) {

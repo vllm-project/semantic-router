@@ -12,11 +12,12 @@ const StrategyDefault = "default"
 // RetrievalInput carries shared context for tool retrieval. Strategies use the
 // fields they need; others may be left empty.
 type RetrievalInput struct {
-	Query              string
-	HistorySummary     string
-	Category           string
-	DecisionName       string
-	DecisionConfidence float64
+	Query                       string
+	HistorySummary              string
+	Category                    string
+	DecisionName                string
+	DecisionConfidence          float64
+	DecisionConfidenceAvailable bool
 	// TopK is the desired number of tools after post-retrieval filtering.
 	TopK int
 	// PoolSize is how many candidates to pull from the index (before advanced filters).

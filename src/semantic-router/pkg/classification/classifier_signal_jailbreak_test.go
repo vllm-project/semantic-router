@@ -2,7 +2,9 @@ package classification
 
 import (
 	"math"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -109,8 +111,7 @@ func TestFindBestJailbreakMatch_OnErrorAllow_DefaultToleratesFailure(t *testing.
 // TestFindBestJailbreakMatch_OnErrorBlock_TreatsFailureAsMatch verifies
 // on_error: block closes the gap @adaamko flagged on #2760: an
 // unreachable classifier endpoint must not look identical to a genuinely
-// clean request. With on_error: block, the rule reports a match at maximum
-// confidence instead of silently skipping the failed content.
+// clean request. With on_error: block, the rule reports a policy match with unavailable confidence.
 func TestFindBestJailbreakMatch_OnErrorBlock_TreatsFailureAsMatch(t *testing.T) {
 	classifier := newJailbreakTestClassifier(t, config.OnErrorBlock)
 	rule := config.JailbreakRule{Name: "default", Threshold: 0.5}
@@ -120,8 +121,8 @@ func TestFindBestJailbreakMatch_OnErrorBlock_TreatsFailureAsMatch(t *testing.T) 
 
 	bestType, bestScore := classifier.findBestJailbreakMatch(rule, []string{"some text"}, cache)
 
-	if bestScore != 1.0 {
-		t.Errorf("bestScore = %v, want 1.0 (fail-closed)", bestScore)
+	if bestScore != 0 {
+		t.Errorf("bestScore = %v, want 0 (unavailable score)", bestScore)
 	}
 	if bestType != JailbreakClassificationErrorType {
 		t.Errorf("bestType = %q, want %q", bestType, JailbreakClassificationErrorType)
@@ -188,8 +189,8 @@ func TestFindBestJailbreakMatch_OnErrorBlock_FailsClosedOnUninterpretableResult(
 		t.Errorf("bestType = %q, want %q (an uninterpretable result must fail closed under block)",
 			bestType, JailbreakClassificationErrorType)
 	}
-	if bestScore != 1.0 {
-		t.Errorf("bestScore = %v, want 1.0", bestScore)
+	if bestScore != 0 {
+		t.Errorf("bestScore = %v, want 0 (unavailable score)", bestScore)
 	}
 }
 
@@ -228,8 +229,8 @@ func TestFindBestJailbreakMatch_OnErrorBlock_FailsClosedWhenNoRealMatch(t *testi
 	if bestType != JailbreakClassificationErrorType {
 		t.Errorf("bestType = %q, want %q", bestType, JailbreakClassificationErrorType)
 	}
-	if bestScore != 1.0 {
-		t.Errorf("bestScore = %v, want 1.0", bestScore)
+	if bestScore != 0 {
+		t.Errorf("bestScore = %v, want 0 (unavailable score)", bestScore)
 	}
 }
 
@@ -238,3 +239,33 @@ var errClassifyUnreachable = &jailbreakTestError{"classifier endpoint unreachabl
 type jailbreakTestError struct{ msg string }
 
 func (e *jailbreakTestError) Error() string { return e.msg }
+
+func TestJailbreakPolicyMatchPreservesRealEvidenceWithoutInventingScore(t *testing.T) {
+	classifier := newJailbreakTestClassifier(t, config.OnErrorBlock)
+	for _, realFirst := range []bool{false, true} {
+		results := newTestSignalResults()
+		mu := &sync.Mutex{}
+		real := func() {
+			classifier.recordJailbreakRuleMatch(config.JailbreakRule{Name: "actual"}, "jailbreak", .97, time.Now(), results, mu)
+		}
+		if realFirst {
+			real()
+		}
+		classifier.recordJailbreakRuleMatch(config.JailbreakRule{Name: "failed"}, JailbreakClassificationErrorType, 0, time.Now(), results, mu)
+		if _, exists := results.SignalConfidences["jailbreak:failed"]; exists {
+			t.Fatal("policy error acquired confidence")
+		}
+		if !results.SignalErrorMatches["jailbreak:failed"] || !results.JailbreakDetected {
+			t.Fatal("policy match lost")
+		}
+		if !realFirst {
+			if results.JailbreakScoreAvailable || results.JailbreakType != JailbreakClassificationErrorType {
+				t.Fatal("error policy became model evidence")
+			}
+			real()
+		}
+		if !results.JailbreakScoreAvailable || results.JailbreakType != "jailbreak" || results.JailbreakConfidence != .97 {
+			t.Fatalf("real evidence lost: %+v", results)
+		}
+	}
+}

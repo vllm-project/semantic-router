@@ -28,7 +28,7 @@ const (
 // unverified because the Router is old, unavailable, changing, or pending.
 type ProvenanceVerificationStatus string
 
-// RouterConfigHashes is one normalized observation from Router /config/hash.
+// RouterConfigHashes is one normalized observation from Router /api/v1/config/hash.
 // Every non-empty digest uses the same sha256:<lowercase-hex> representation as
 // managed Recipe package digests.
 type RouterConfigHashes struct {
@@ -54,16 +54,16 @@ type ValidationProvenance struct {
 }
 
 // ConfigHashObserver is implemented by Router clients that support the
-// versioned /config/hash identity contract.
+// versioned /api/v1/config/hash identity contract.
 type ConfigHashObserver interface {
 	ObserveConfigHash(context.Context) (RouterConfigHashes, error)
 }
 
 type routerConfigHashResponse struct {
-	Hash        string `json:"hash"`
-	RuntimeHash string `json:"runtime_hash"`
-	ActiveHash  string `json:"active_hash"`
-	Status      string `json:"status"`
+	SourceConfigHash     string `json:"source_config_hash"`
+	GeneratedRuntimeHash string `json:"generated_runtime_hash"`
+	ActiveRuntimeHash    string `json:"active_runtime_hash"`
+	ActivationStatus     string `json:"activation_status"`
 }
 
 // ObserveConfigHash lets the production Eval client bracket an evaluation
@@ -106,12 +106,7 @@ func (e *HTTPRouterEvaluator) ObserveConfigHash(ctx context.Context) (RouterConf
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return RouterConfigHashes{}, errors.New("router config hash response contains trailing data")
 	}
-	return normalizeConfigHashObservation(RouterConfigHashes{
-		SourceConfigHash:     raw.Hash,
-		GeneratedRuntimeHash: raw.RuntimeHash,
-		ActiveRuntimeHash:    raw.ActiveHash,
-		ActivationStatus:     raw.Status,
-	})
+	return normalizeConfigHashObservation(RouterConfigHashes(raw))
 }
 
 func configHashEndpoint(base string) (string, error) {
@@ -119,7 +114,7 @@ func configHashEndpoint(base string) (string, error) {
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return "", errors.New("router API URL is not configured")
 	}
-	parsed.Path = strings.TrimRight(parsed.Path, "/") + "/config/hash"
+	parsed.Path = strings.TrimRight(parsed.Path, "/") + "/api/v1/config/hash"
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 	parsed.User = nil

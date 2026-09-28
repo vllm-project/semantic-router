@@ -48,36 +48,11 @@ docker run --rm \
         echo "ORT library: $ORT_DYLIB_PATH"
         echo ""
         
-        # The ort crate 2.0 expects API v23, but ORT 1.22 provides API v22
-        # We need to patch ort-sys to accept API v22
-        # This is done in-container to avoid polluting host cargo cache
-        
-        # First, ensure dependencies are downloaded
-        cargo fetch 2>/dev/null || true
-        
-        # Find and patch ort-sys version.rs
-        ORT_SYS_DIR=$(find $HOME/.cargo/registry/src -name "ort-sys-2.0*" -type d 2>/dev/null | head -1)
-        if [ -n "$ORT_SYS_DIR" ]; then
-            VERSION_FILE="$ORT_SYS_DIR/src/version.rs"
-            if [ -f "$VERSION_FILE" ]; then
-                echo "Patching ort-sys API version for ORT 1.22 compatibility..."
-                sed -i "s/ORT_API_VERSION: u32 = 23/ORT_API_VERSION: u32 = 22/" "$VERSION_FILE"
-            fi
-        fi
-        
-        # Also patch ort to not reject ORT 1.22
-        ORT_DIR=$(find $HOME/.cargo/registry/src -name "ort-2.0*" -type d 2>/dev/null | head -1)
-        if [ -n "$ORT_DIR" ]; then
-            LIB_FILE="$ORT_DIR/src/lib.rs"
-            if [ -f "$LIB_FILE" ] && grep -q "Ordering::Less =>" "$LIB_FILE"; then
-                echo "Patching ort version check for ORT 1.22..."
-                # Change: reject < 23 -> reject < 22
-                sed -i "s/Ordering::Less => {/Ordering::Less if lib_minor_version < 22 => {/" "$LIB_FILE"
-                # Add fallthrough case for Less when >= 22
-                sed -i "/Ordering::Equal => {}/i\\            Ordering::Less => crate::info!(\"Using ORT 1.22 with ort 2.0 compatibility mode\")," "$LIB_FILE"
-            fi
-        fi
-        
+        # Cargo.lock pins ort/ort-sys rc.10, whose native API is 22.
+        # Keep the matching ORT 1.22 runtime; never patch registry sources or
+        # disable the native ABI version check to force compatibility.
+        cargo fetch --locked
+
         # Build
         echo ""
         echo "Building with rocm-dynamic feature..."

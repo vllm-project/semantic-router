@@ -31,7 +31,7 @@ func TestHandleUploadFileStreamsToFileStore(t *testing.T) {
 	body, contentType := buildMultipartUpload(t, "file", "notes.txt", payload, map[string]string{
 		"purpose": "assistants",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/files", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/storage/files", body)
 	req.Header.Set("Content-Type", contentType)
 
 	rr := httptest.NewRecorder()
@@ -102,7 +102,7 @@ func newFileUploadServer(t *testing.T) (*ClassificationAPIServer, *vectorstore.F
 func uploadFile(t *testing.T, apiServer *ClassificationAPIServer, filename string, content []byte, purpose string) *httptest.ResponseRecorder {
 	t.Helper()
 	body, contentType := buildMultipartUpload(t, "file", filename, content, map[string]string{"purpose": purpose})
-	req := httptest.NewRequest(http.MethodPost, "/v1/files", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/storage/files", body)
 	req.Header.Set("Content-Type", contentType)
 	rr := httptest.NewRecorder()
 	apiServer.handleUploadFile(rr, req)
@@ -210,7 +210,7 @@ func TestHandleUploadFileUsesResolvedRuntimeConfig(t *testing.T) {
 	}
 }
 
-func TestHandleUploadFileHonorsPublishedConfigMutation(t *testing.T) {
+func TestHandleUploadFileKeepsActiveConfigUntilGenerationPublication(t *testing.T) {
 	apiServer, _ := newFileUploadServer(t)
 	apiServer.config = vectorStoreUploadConfig(1, ".pdf")
 
@@ -236,7 +236,14 @@ func TestHandleUploadFileHonorsPublishedConfigMutation(t *testing.T) {
 	apiServer.publishConfigMutation(vectorStoreUploadConfig(1, ".txt"))
 
 	rr := uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("candidate formats applied before publication, got %d: %s", rr.Code, rr.Body.String())
+	}
+	active := vectorStoreUploadConfig(1, ".txt")
+	apiServer.runtimeRegistry.UpdateConfig(active)
+	apiServer.runtimeConfig = newLiveRuntimeConfig(apiServer.config, apiServer.runtimeRegistry.CurrentConfig, nil)
+	rr = uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
 	if rr.Code != http.StatusOK {
-		t.Fatalf("expected published formats to apply, got %d: %s", rr.Code, rr.Body.String())
+		t.Fatalf("published generation formats did not apply, got %d: %s", rr.Code, rr.Body.String())
 	}
 }

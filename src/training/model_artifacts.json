@@ -1,6 +1,75 @@
 {
   "schema_version": 1,
   "collections": {
+    "vela-10-router-models": [
+      {
+        "artifact": "llm-semantic-router/Vela-1.0-Encoder-307M",
+        "owner": "src/training/model_embeddings/mmbert_32k",
+        "entrypoint": "foundation.py"
+      },
+      {
+        "artifact": "llm-semantic-router/Vela-1.0-Encoder-307M-Embedding",
+        "owner": "src/training/model_embeddings/mmbert_32k",
+        "entrypoint": "newbase_training.py",
+        "task": "embedding",
+        "artifact_base_model": "llm-semantic-router/Vela-1.0-Encoder-307M"
+      },
+      {
+        "artifact": "llm-semantic-router/Vela-1.0-Encoder-307M-Reranker",
+        "owner": "src/training/model_embeddings/mmbert_32k",
+        "entrypoint": "newbase_training.py",
+        "task": "reranker",
+        "artifact_base_model": "llm-semantic-router/Vela-1.0-Encoder-307M"
+      },
+      {
+        "artifact": "llm-semantic-router/Vela-1.0-Encoder-307M-Domain",
+        "owner": "src/training/model_classifier/sequence_repair",
+        "entrypoint": "train.py",
+        "artifact_base_model": "llm-semantic-router/Vela-1.0-Encoder-307M"
+      },
+      {
+        "artifact": "llm-semantic-router/Vela-1.0-Encoder-307M-Guard",
+        "owner": "src/training/model_classifier/sequence_repair",
+        "entrypoint": "train.py",
+        "artifact_base_model": "llm-semantic-router/Vela-1.0-Encoder-307M"
+      },
+      {
+        "artifact": "llm-semantic-router/Vela-1.0-Encoder-307M-Safety",
+        "owner": "src/training/model_classifier/sequence_repair",
+        "entrypoint": "train.py",
+        "artifact_base_model": "llm-semantic-router/Vela-1.0-Encoder-307M"
+      },
+      {
+        "artifact": "llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck",
+        "owner": "src/training/model_classifier/sequence_repair",
+        "entrypoint": "train.py",
+        "artifact_base_model": "llm-semantic-router/Vela-1.0-Encoder-307M"
+      },
+      {
+        "artifact": "llm-semantic-router/Vela-1.0-Encoder-307M-Feedback",
+        "owner": "src/training/model_classifier/sequence_repair",
+        "entrypoint": "train.py",
+        "artifact_base_model": "llm-semantic-router/Vela-1.0-Encoder-307M"
+      },
+      {
+        "artifact": "llm-semantic-router/Vela-1.0-Encoder-307M-Modality",
+        "owner": "src/training/model_classifier/sequence_repair",
+        "entrypoint": "train.py",
+        "artifact_base_model": "llm-semantic-router/Vela-1.0-Encoder-307M"
+      },
+      {
+        "artifact": "llm-semantic-router/Vela-1.0-Encoder-307M-PII",
+        "owner": "src/training/model_classifier/pii_model_fine_tuning_lora",
+        "entrypoint": "train_repair.py",
+        "artifact_base_model": "llm-semantic-router/Vela-1.0-Encoder-307M"
+      },
+      {
+        "artifact": "llm-semantic-router/Vela-1.0-Encoder-307M-Hazard",
+        "owner": "src/training/model_classifier/safety_classifier",
+        "entrypoint": "train_vela_hazard.py",
+        "artifact_base_model": "llm-semantic-router/Vela-1.0-Encoder-307M"
+      }
+    ],
     "mom-multilingual-embed": [
       {
         "artifact": "llm-semantic-router/mmbert-embed-32k-2d-matryoshka",

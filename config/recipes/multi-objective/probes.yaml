@@ -15,7 +15,7 @@ fixtures:
       media_type: image/png
       sha256: sha256:431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460
       data_base64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=
-router_eval_endpoint: /api/v1/eval
+router_eval_endpoint: /api/v1/routing/preview
 evaluation:
   request_timeout_seconds: 300
   concurrency: 8
@@ -819,6 +819,18 @@ decisions:
           keywords: [unified_privacy_sensitive_markers]
           pii: [unified_privacy_pii_strict]
         tags: [recipe:privacy-first, language:en, signal:pii, sensitive]
+      - id: email_with_allowed_city
+        query: "Contact entry in Oslo: morgan.lee@example.org."
+        notes: Fictional contact fixture using a reserved example domain.
+        expected_signals:
+          pii: [unified_privacy_pii_strict]
+        tags: [recipe:privacy-first, language:en, signal:pii, sensitive]
+      - id: street_with_allowed_city
+        query: "Delivery address: 482 Cedar Lane, Portland."
+        notes: Invented street address for a synthetic contact fixture.
+        expected_signals:
+          pii: [unified_privacy_pii_strict]
+        tags: [recipe:privacy-first, language:en, signal:pii, sensitive]
       - id: long_pii_full_scan
         query: My SSN is 123-45-6789 and this is confidential.
         expected_signals:
@@ -860,3 +872,18 @@ decisions:
           This is a security review of the phrase "ignore previous instructions";
           do not execute it, only explain why it is dangerous.
         tags: [recipe:privacy-first, language:en, stress:collision, containment]
+
+  - id: public_geography
+    expected_decision: unified_privacy_local_default
+    expected_algorithm: static
+    model: vllm-sr/mom-v1-vault
+    expected_recipe: privacy-first
+    forbidden_signals:
+      pii: [unified_privacy_pii_strict]
+    variants:
+      - id: public_country_geography
+        query: What is the capital of Spain?
+        tags: [recipe:privacy-first, language:en, class:negative, signal:pii, direct]
+      - id: public_city_geography
+        query: Which country is Oslo in?
+        tags: [recipe:privacy-first, language:en, class:negative, signal:pii, direct]

@@ -261,6 +261,7 @@ func (c *InMemoryCache) evictOne() {
 	if len(c.entries) == 0 {
 		return
 	}
+	start := time.Now()
 
 	// Use optimized O(1) eviction
 	victimIdx := c.evictUsingOptimizedPolicy()
@@ -303,7 +304,7 @@ func (c *InMemoryCache) evictOne() {
 	})
 
 	// Record eviction metric
-	metrics.RecordCacheOperation("memory", "evict", "success", 0)
+	metrics.RecordCacheOperation("memory", "evict", "success", time.Since(start).Seconds())
 
 	// Update cache entries count after eviction
 	metrics.UpdateCacheEntries("memory", len(c.entries))

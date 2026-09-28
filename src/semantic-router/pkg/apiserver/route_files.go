@@ -199,9 +199,9 @@ func (s *ClassificationAPIServer) handleListFiles(w http.ResponseWriter, r *http
 		records = filtered
 	}
 
-	response := map[string]interface{}{
-		"object": "list",
-		"data":   records,
+	response := objectListResponse[*vectorstore.FileRecord]{
+		Object: "list",
+		Data:   records,
 	}
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
@@ -213,7 +213,7 @@ func (s *ClassificationAPIServer) handleGetFile(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	id := extractPathParam(r.URL.Path, "/v1/files/")
+	id := extractPathParam(r.URL.Path, apiStorageFilesPath+"/")
 	if id == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "file ID is required")
 		return
@@ -235,7 +235,7 @@ func (s *ClassificationAPIServer) handleDeleteFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	id := extractPathParam(r.URL.Path, "/v1/files/")
+	id := extractPathParam(r.URL.Path, apiStorageFilesPath+"/")
 	if id == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "file ID is required")
 		return
@@ -246,10 +246,10 @@ func (s *ClassificationAPIServer) handleDeleteFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-		"id":      id,
-		"object":  "file",
-		"deleted": true,
+	s.writeJSONResponse(w, http.StatusOK, objectDeletedResponse{
+		ID:      id,
+		Object:  "file",
+		Deleted: true,
 	})
 }
 
@@ -260,8 +260,8 @@ func (s *ClassificationAPIServer) handleGetFileContent(w http.ResponseWriter, r 
 		return
 	}
 
-	// Extract file ID from /v1/files/{id}/content
-	path := strings.TrimPrefix(r.URL.Path, "/v1/files/")
+	// Extract file ID from /api/v1/storage/files/{id}/content
+	path := strings.TrimPrefix(r.URL.Path, apiStorageFilesPath+"/")
 	id := strings.TrimSuffix(path, "/content")
 	if id == "" || id == path {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "file ID is required")

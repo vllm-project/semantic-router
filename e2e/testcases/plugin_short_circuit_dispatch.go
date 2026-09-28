@@ -27,7 +27,7 @@ const (
 	// shortCircuitSessionHeader scopes the simulator's request-observation
 	// store. The simulator records each request it receives under this header
 	// and serves it back from GET /debug/last-request, answering 404 when the
-	// session never reached it (tools/mock-vllm/provider_boundary.py).
+	// session never reached it (tools/test/services/provider-mocker/provider_mocker/provider_boundary.py).
 	shortCircuitSessionHeader = "x-vsr-test-session-id"
 
 	// The baseline profile's upstream simulator

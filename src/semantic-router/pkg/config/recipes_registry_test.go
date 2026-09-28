@@ -252,3 +252,49 @@ recipes:
 		t.Fatalf("unexpected validation error: %v", err)
 	}
 }
+
+func TestHasFlowDecisionUsesAllRoutingProfiles(t *testing.T) {
+	t.Run("flat decisions", func(t *testing.T) {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name:      "wf",
+					Algorithm: &AlgorithmConfig{Type: DecisionAlgorithmWorkflows},
+					ModelRefs: []ModelRef{{Model: "worker"}},
+				}},
+			},
+		}
+		if !cfg.HasFlowDecision() {
+			t.Fatal("expected HasFlowDecision on flat workflows decision")
+		}
+	})
+
+	t.Run("recipe-only decisions", func(t *testing.T) {
+		cfg := &RouterConfig{
+			Recipes: []RoutingRecipe{{
+				Name: "agent",
+				Profile: RoutingProfile{
+					Decisions: []Decision{{
+						Name:      "wf",
+						Algorithm: &AlgorithmConfig{Type: DecisionAlgorithmWorkflows},
+						ModelRefs: []ModelRef{{Model: "worker"}},
+					}},
+				},
+			}},
+		}
+		if !cfg.HasFlowDecision() {
+			t.Fatal("expected HasFlowDecision when workflows live only on a named recipe")
+		}
+	})
+
+	t.Run("no workflows", func(t *testing.T) {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{Name: "static", ModelRefs: []ModelRef{{Model: "worker"}}}},
+			},
+		}
+		if cfg.HasFlowDecision() {
+			t.Fatal("HasFlowDecision = true, want false")
+		}
+	})
+}

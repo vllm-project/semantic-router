@@ -1,0 +1,513 @@
+.inventory,
+.detail {
+  min-width: 0;
+}
+.modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.8rem;
+  margin: 1.6rem 0;
+}
+.mode {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding: 1.2rem !important;
+  text-align: left;
+  background: var(--bg-primary, #101014) !important;
+  border-radius: 12px !important;
+}
+.mode > svg {
+  color: var(--text-secondary);
+  margin-bottom: 0.35rem;
+}
+.mode[aria-pressed='true'] {
+  border-color: var(--text-primary, #e4e4e7) !important;
+  background: var(--bg-secondary, #1c1c20) !important;
+}
+.mode > span,
+.mode small {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+.mode small {
+  margin-left: 0.4rem;
+}
+.modeQuestions {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+.modeQuestions strong {
+  color: var(--text-primary);
+  font-size: clamp(1.35rem, 2vw, 1.7rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+}
+.countNote {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: -0.7rem !important;
+}
+.filters,
+.questionFilters {
+  display: grid;
+  grid-template-columns: minmax(160px, 2fr) minmax(150px, 1fr);
+  gap: 1rem;
+  margin: 1.5rem 0;
+  align-items: end;
+}
+.questionFilters {
+  grid-template-columns: minmax(160px, 1.5fr) repeat(2, minmax(130px, 1fr));
+}
+.search > div,
+.searchInput {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search > div > svg {
+  position: absolute;
+  left: 0.8rem;
+  pointer-events: none;
+  color: var(--text-secondary);
+}
+.search input {
+  padding-left: 2.35rem;
+}
+.searchInput button {
+  position: absolute;
+  right: 3px;
+  padding: 0.3rem !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+.searchInput input {
+  padding-right: 2.2rem;
+}
+.group {
+  margin-top: 1.8rem;
+}
+.groupHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.8rem;
+}
+.groupHeading h3 {
+  margin: 0 !important;
+}
+.groupHeading > span,
+.cardFooter,
+.resultCount {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+.card {
+  border: 1px solid var(--border-color, #35353b);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card, var(--bg-secondary));
+  transition: border-color 150ms ease;
+}
+.card:hover {
+  border-color: var(--text-secondary, #8d8d98);
+}
+.cardLink {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  text-align: left;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 1.2rem !important;
+  background: transparent !important;
+}
+.cardLink:focus-visible {
+  outline-offset: -4px !important;
+}
+.cardTop {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  width: 100%;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.cardTop > svg:last-child {
+  margin-left: auto;
+}
+.cardLink h4 {
+  font-size: 1.1rem;
+  margin: 0.15rem 0 0 !important;
+  overflow-wrap: anywhere;
+}
+.cardDescription {
+  color: var(--text-secondary);
+  font-size: 12px;
+  min-height: 2.7em;
+  margin: 0 !important;
+  overflow-wrap: anywhere;
+}
+.cardMetrics {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  width: 100%;
+  margin-top: 0.4rem;
+  gap: 0.5rem;
+}
+.cardMetrics strong {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+.cardMetrics strong span,
+.cardMetrics > span {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+.explore {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.4rem;
+  font-size: 12px;
+}
+.cardFooter {
+  border-top: 1px solid var(--border-color);
+  padding: 0.65rem 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cardFooter button {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 12px !important;
+  padding: 0.3rem 0.5rem !important;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+.pagination,
+.pagination > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.pagination {
+  border-top: 1px solid var(--border-color);
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.pagination button,
+.detailHero > button,
+.back,
+.detailTabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-secondary);
+}
+.back {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0.5rem 0 !important;
+  color: var(--text-secondary) !important;
+}
+.detailHero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.5rem 0 2rem;
+}
+.eyebrow {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.07em;
+  margin-bottom: 0.6rem;
+}
+.detailHero h2 {
+  font-size: clamp(1.5rem, 3vw, 2rem) !important;
+}
+.detailHero p {
+  color: var(--text-secondary);
+  margin: 0.4rem 0 0 !important;
+}
+.detailTabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.6rem;
+  margin-bottom: 1.5rem;
+}
+.detailTabs button {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--text-secondary) !important;
+}
+.detailTabs button[aria-current='page'] {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+.questionList {
+  border-top: 1px solid var(--border-color);
+}
+.questionRow {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 1rem;
+  padding: 1rem 0.7rem !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  border-radius: 0 !important;
+  width: 100%;
+}
+.questionRow:hover {
+  background: var(--bg-secondary) !important;
+}
+.questionRow > div {
+  min-width: 0;
+  flex: 1;
+}
+.questionNumber {
+  color: var(--text-secondary);
+  min-width: 1.6rem;
+  font-size: 12px;
+}
+.questionPreview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.questionTags {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-top: 0.3rem;
+}
+.questionDetail,
+.about {
+  max-width: 900px;
+}
+.questionMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 1.4rem;
+}
+.questionMeta span + span::before {
+  content: '·';
+  margin-right: 0.4rem;
+}
+.questionBody {
+  font-size: 15px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.questionBody pre {
+  overflow: auto;
+  padding: 1rem;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  max-height: 500px;
+}
+.questionBody img {
+  max-width: 100%;
+}
+.questionBody table {
+  display: block;
+  overflow: auto;
+}
+.choices {
+  display: grid;
+  gap: 0.6rem;
+  padding-left: 2rem;
+}
+.choices li {
+  padding: 0.7rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+.choices li p {
+  margin: 0 !important;
+}
+.technical {
+  border-top: 1px solid var(--border-color);
+  margin-top: 2rem;
+  padding-top: 1rem;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.technical summary {
+  cursor: pointer;
+  margin-bottom: 0.6rem;
+}
+.technical dd {
+  margin: 0.2rem 0 1rem;
+  overflow-wrap: anywhere;
+}
+.coverage > div > p,
+.about > p,
+.sources p {
+  color: var(--text-secondary);
+}
+.bars {
+  margin: 1.5rem 0;
+  display: grid;
+  gap: 0.55rem;
+}
+.barRow {
+  display: grid;
+  grid-template-columns: 180px minmax(80px, 1fr) 50px;
+  align-items: center;
+  gap: 1rem;
+  background: transparent !important;
+  border-color: transparent !important;
+  text-align: left;
+  font-size: 12px !important;
+}
+.barRow[aria-pressed='true'] {
+  border-color: var(--border-color) !important;
+  background: var(--bg-secondary) !important;
+}
+.barRow > strong {
+  text-align: right;
+}
+.barTrack {
+  display: block;
+  height: 9px;
+  background: var(--bg-secondary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.barTrack > span {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 3px;
+}
+.strata {
+  margin-top: 2rem;
+  border-top: 1px solid var(--border-color);
+  padding-top: 1.5rem;
+}
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+.categoryGrid > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.categoryGrid strong {
+  display: block;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.categoryGrid span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.sources {
+  padding: 0;
+  list-style: none;
+  margin: 1.5rem 0;
+}
+.sources li {
+  border-bottom: 1px solid var(--border-color);
+  padding: 0.8rem 0;
+}
+.sources a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 1rem;
+  font-size: 12px;
+}
+@media (max-width: 1050px) {
+  .cards,
+  .categoryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 650px) {
+  .cards,
+  .filters,
+  .questionFilters,
+  .categoryGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .modes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mode {
+    padding: 0.85rem !important;
+  }
+  .mode > span {
+    font-size: 11px;
+  }
+  .detailHero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .barRow {
+    grid-template-columns: minmax(100px, 1.5fr) minmax(50px, 1fr) 35px;
+    gap: 0.5rem;
+  }
+  .questionRow {
+    gap: 0.5rem;
+  }
+  .questionNumber {
+    min-width: 1.2rem;
+  }
+}
+
+.searchField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}

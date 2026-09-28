@@ -1,3 +1,5 @@
+//go:build !windows && cgo && (amd64 || arm64)
+
 // Package ml_binding provides Go bindings for Linfa-based traditional ML algorithms.
 //
 // This package wraps Rust implementations of:

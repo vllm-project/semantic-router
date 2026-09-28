@@ -47,7 +47,10 @@ pub const MAX_MODEL_PATH_LENGTH: usize = 1000;
 /// - `text` must be a valid null-terminated C string or null
 /// - `path_type` should be 0 (Traditional) or 1 (LoRA)
 #[no_mangle]
-pub extern "C" fn validate_text_input(text: *const c_char, path_type: i32) -> ValidationResult {
+pub unsafe extern "C" fn validate_text_input(
+    text: *const c_char,
+    path_type: i32,
+) -> ValidationResult {
     // Check for null pointer
     if text.is_null() {
         return create_validation_error(
@@ -107,7 +110,7 @@ pub extern "C" fn validate_text_input(text: *const c_char, path_type: i32) -> Va
 /// - `texts_count` must match the actual array size
 /// - `path_type` should be 0 (Traditional) or 1 (LoRA)
 #[no_mangle]
-pub extern "C" fn validate_batch_input(
+pub unsafe extern "C" fn validate_batch_input(
     texts: *const *const c_char,
     texts_count: i32,
     path_type: i32,
@@ -141,7 +144,8 @@ pub extern "C" fn validate_batch_input(
     // Validate each text in the batch
     for i in 0..texts_count {
         let text_ptr = unsafe { *texts.offset(i as isize) };
-        let validation_result = validate_text_input(text_ptr, path_type);
+        // SAFETY: the batch contract keeps each referenced C string live for this call.
+        let validation_result = unsafe { validate_text_input(text_ptr, path_type) };
 
         if !validation_result.is_valid {
             // Add batch context to error message
@@ -185,7 +189,7 @@ pub extern "C" fn validate_batch_input(
 /// - `model_path` must be a valid null-terminated C string or null
 /// - `path_type` should be 0 (Traditional) or 1 (LoRA)
 #[no_mangle]
-pub extern "C" fn validate_model_path(
+pub unsafe extern "C" fn validate_model_path(
     model_path: *const c_char,
     path_type: i32,
 ) -> ValidationResult {
@@ -253,7 +257,7 @@ pub extern "C" fn validate_confidence_threshold(
     path_type: i32,
 ) -> ValidationResult {
     // Check confidence range
-    if confidence < 0.0 || confidence > 1.0 {
+    if !(0.0..=1.0).contains(&confidence) {
         return create_validation_error(
             ERROR_INVALID_CONFIDENCE,
             "Confidence threshold must be between 0.0 and 1.0",

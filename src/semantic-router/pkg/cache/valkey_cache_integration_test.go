@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -44,17 +44,10 @@ func valkeyIntegrationAddr() (string, int) {
 //     In CI (or when Redis already occupies 6379), `make start-valkey`
 //     maps Valkey to port 6380 and the Makefile test targets set
 //     VALKEY_PORT=6380 automatically.
-//  2. BERT model initialized for embeddings
+//  2. Deterministic vectors injected for storage/index behavior
 func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 	// Skip if SKIP_VALKEY_TESTS is set
-	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
-		t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
-	}
-
-	// Initialize BERT model for embeddings
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		t.Skipf("Failed to initialize BERT model: %v", err)
-	}
+	storagetest.Require(t, "valkey")
 
 	valkeyHost, valkeyPort := valkeyIntegrationAddr()
 
@@ -69,7 +62,7 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 	valkeyConfig.Index.Name = "test_valkey_idx"
 	valkeyConfig.Index.Prefix = "doc:"
 	valkeyConfig.Index.VectorField.Name = "embedding"
-	valkeyConfig.Index.VectorField.Dimension = 384 // BERT dimension
+	valkeyConfig.Index.VectorField.Dimension = 384 // fixture dimension
 	valkeyConfig.Index.VectorField.MetricType = "COSINE"
 	valkeyConfig.Index.IndexType = "HNSW"
 	valkeyConfig.Index.Params.M = 16
@@ -82,6 +75,7 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 
 	// Create cache
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
+		EmbeddingProvider:   storagetest.Vectors{Size: 384},
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
 		Enabled:             true,
@@ -89,11 +83,12 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 		EmbeddingModel:      "bert",
 	})
 	if err != nil {
-		t.Skipf("Valkey server not available (skipping integration test): %v", err)
+		storagetest.Unavailable(t, "valkey", fmt.Sprintf("Valkey server not available (skipping integration test): %v", err))
 	}
 	return cache
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_ConnectionCheck(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -102,6 +97,7 @@ func TestValkeyCacheIntegration_ConnectionCheck(t *testing.T) {
 	assert.NoError(t, err, "Connection check should succeed")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_IndexCreation(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -114,6 +110,7 @@ func TestValkeyCacheIntegration_IndexCreation(t *testing.T) {
 	assert.NotNil(t, result, "Index info should not be nil")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_AddEntry(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -140,6 +137,7 @@ func TestValkeyCacheIntegration_AddEntry(t *testing.T) {
 	assert.NotNil(t, result, "SCAN result should not be nil")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_FindSimilar(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -179,6 +177,7 @@ func TestValkeyCacheIntegration_FindSimilar(t *testing.T) {
 	assert.Contains(t, string(foundResponse), "Machine learning", "Response should contain expected content")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_FindSimilarWithThreshold(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -215,6 +214,7 @@ func TestValkeyCacheIntegration_FindSimilarWithThreshold(t *testing.T) {
 	}
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_AddPendingRequest(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -232,6 +232,7 @@ func TestValkeyCacheIntegration_AddPendingRequest(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_UpdateWithResponse(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -292,6 +293,7 @@ func TestValkeyCacheIntegration_UpdateWithResponse(t *testing.T) {
 	assert.Contains(t, string(foundResponse), "Python", "Updated response should be findable")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_UpdateWithResponseSpecialChars(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -343,6 +345,7 @@ func TestValkeyCacheIntegration_UpdateWithResponseSpecialChars(t *testing.T) {
 	}
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_TTLExpiration(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -376,6 +379,7 @@ func TestValkeyCacheIntegration_TTLExpiration(t *testing.T) {
 	// Entry should be expired
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_GetStats(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -398,6 +402,7 @@ func TestValkeyCacheIntegration_GetStats(t *testing.T) {
 	assert.GreaterOrEqual(t, stats.MissCount, int64(0), "Miss count should be non-negative")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_Close(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 
@@ -408,6 +413,7 @@ func TestValkeyCacheIntegration_Close(t *testing.T) {
 	assert.Error(t, err, "Connection check should fail after close")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_IsEnabled(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -421,8 +427,9 @@ func TestValkeyCacheIntegration_IsEnabled(t *testing.T) {
 	valkeyConfig.Connection.Port = port
 
 	disabledCache, err := NewValkeyCache(ValkeyCacheOptions{
-		Enabled: false,
-		Config:  valkeyConfig,
+		EmbeddingProvider: storagetest.Vectors{Size: 384},
+		Enabled:           false,
+		Config:            valkeyConfig,
 	})
 	require.NoError(t, err)
 	defer func() { _ = disabledCache.Close() }()
@@ -430,6 +437,7 @@ func TestValkeyCacheIntegration_IsEnabled(t *testing.T) {
 	assert.False(t, disabledCache.IsEnabled(), "Cache should be disabled")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
 	host, port := valkeyIntegrationAddr()
 	valkeyConfig := &config.ValkeyConfig{}
@@ -437,8 +445,9 @@ func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
 	valkeyConfig.Connection.Port = port
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
-		Enabled: false,
-		Config:  valkeyConfig,
+		EmbeddingProvider: storagetest.Vectors{Size: 384},
+		Enabled:           false,
+		Config:            valkeyConfig,
 	})
 	require.NoError(t, err)
 	defer func() { _ = cache.Close() }()
@@ -458,6 +467,7 @@ func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
 	assert.NoError(t, err, "CheckConnection should not error when disabled")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_TTLZeroSkipsCaching(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -473,14 +483,9 @@ func TestValkeyCacheIntegration_TTLZeroSkipsCaching(t *testing.T) {
 	assert.NoError(t, err, "AddPendingRequest with TTL=0 should not error")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
-	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
-		t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
-	}
-
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		t.Skipf("Failed to initialize BERT model: %v", err)
-	}
+	storagetest.Require(t, "valkey")
 
 	host, port := valkeyIntegrationAddr()
 	valkeyConfig := &config.ValkeyConfig{}
@@ -500,6 +505,7 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 	valkeyConfig.Development.AutoCreateIndex = true
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
+		EmbeddingProvider:   storagetest.Vectors{Size: 384},
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
 		Enabled:             true,
@@ -522,6 +528,7 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 	}
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_ConcurrentOperations(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -565,6 +572,7 @@ func TestValkeyCacheIntegration_ConcurrentOperations(t *testing.T) {
 	assert.Empty(t, errors, "Concurrent operations should not produce errors")
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_MultipleEntries(t *testing.T) {
 	// Own index: this test asserts that each query returns its own response, so
 	// it must not rank against documents other tests left in the "doc:" prefix.
@@ -627,13 +635,7 @@ func TestValkeyCacheIntegration_MultipleEntries(t *testing.T) {
 func newIsolatedValkeyCache(t *testing.T, label, metricType string, threshold float32) *ValkeyCache {
 	t.Helper()
 
-	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
-		t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
-	}
-
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		t.Skipf("Failed to initialize BERT model: %v", err)
-	}
+	storagetest.Require(t, "valkey")
 
 	host, port := valkeyIntegrationAddr()
 	unique := time.Now().UnixNano()
@@ -657,6 +659,7 @@ func newIsolatedValkeyCache(t *testing.T, label, metricType string, threshold fl
 	valkeyConfig.Development.AutoCreateIndex = true
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
+		EmbeddingProvider:   storagetest.Vectors{Size: 384},
 		SimilarityThreshold: threshold,
 		TTLSeconds:          300,
 		Enabled:             true,
@@ -669,6 +672,7 @@ func newIsolatedValkeyCache(t *testing.T, label, metricType string, threshold fl
 	return cache
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
 	cache := newIsolatedValkeyCache(t, "l2", "L2", 0.5)
 
@@ -684,6 +688,7 @@ func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
 	assert.JSONEq(t, `{"result":"L2"}`, string(result.ResponseBody))
 }
 
+// StorageIntegration: valkey
 func TestValkeyCacheIntegration_IPMetricType(t *testing.T) {
 	cache := newIsolatedValkeyCache(t, "ip", "IP", 0.5)
 

@@ -38,7 +38,7 @@ def _assert_no_log_decoration(value: str) -> None:
 def test_validate_result_uses_clean_stdout() -> None:
     config_path = REPO_ROOT / "config/config.yaml"
 
-    result = _run_cli("validate", "--config", str(config_path))
+    result = _run_cli("config", "validate", "--config", str(config_path))
 
     assert result.returncode == 0, result.stderr
     assert "✓ Configuration is valid" in result.stdout
@@ -51,7 +51,7 @@ def test_validate_failure_uses_clean_stderr(tmp_path: Path) -> None:
     config_path = tmp_path / "invalid.yaml"
     config_path.write_text("version: [\n", encoding="utf-8")
 
-    result = _run_cli("validate", "--config", str(config_path), cwd=tmp_path)
+    result = _run_cli("config", "validate", "--config", str(config_path), cwd=tmp_path)
 
     assert result.returncode == 1
     assert result.stdout == ""

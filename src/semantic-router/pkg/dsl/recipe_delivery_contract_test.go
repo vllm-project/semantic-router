@@ -14,6 +14,34 @@ import (
 
 const builtInRecipeCatalogDirectory = "built-in"
 
+func TestBuiltinRecipeDSLMergePreservesLearningDefaults(t *testing.T) {
+	directory := filepath.Join("..", "..", "..", "..", "config", "recipes", "built-in", "latest", "mom-v1")
+	yamlPath, dslPath := filepath.Join(directory, "config.yaml"), filepath.Join(directory, "recipe.dsl")
+	runtimeConfig, err := config.Parse(yamlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dslBytes, err := os.ReadFile(dslPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dsl := string(dslBytes)
+	diagnostics, parseErrors := Validate(dsl)
+	if len(parseErrors) > 0 {
+		t.Fatal(parseErrors)
+	}
+	// Portable bundles intentionally leave models unassigned and can report
+	// overlap advisories. Unlike deployed recipes, they need not be warning-free.
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Level != DiagWarning {
+			t.Fatal(diagnostic.String())
+		}
+	}
+	assertCanonicalRuntimeDSL(t, yamlPath, dslPath, dsl, runtimeConfig)
+	compiled := compileStableRecipeDSL(t, dslPath, dsl)
+	assertMergedRecipeDSL(t, yamlPath, dslPath, dsl, runtimeConfig, compiled)
+}
+
 func TestMaintainedRecipeDSLMatchesEveryRuntimeConfig(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "config", "recipes")
 	entries, err := os.ReadDir(root)
@@ -130,7 +158,17 @@ func assertMergedRecipeDSL(
 	if mergedDSL != dsl {
 		t.Fatalf("%s changes after compile, base merge, and runtime parse", dslPath)
 	}
+	if !reflect.DeepEqual(mergedConfig.RouterLearning, baseConfig.RouterLearning) {
+		t.Fatalf("%s changed global learning settings after DSL merge", yamlPath)
+	}
 	assertDecisionAdaptationsPreserved(t, yamlPath, baseConfig.Decisions, mergedConfig.Decisions)
+	for _, recipe := range baseConfig.Recipes {
+		mergedRecipe, ok := mergedConfig.RecipeByName(recipe.Name)
+		if !ok {
+			t.Fatalf("%s lost recipe %q", yamlPath, recipe.Name)
+		}
+		assertDecisionAdaptationsPreserved(t, yamlPath+" recipe "+string(recipe.Name), recipe.Profile.Decisions, mergedRecipe.Profile.Decisions)
+	}
 }
 
 func assertDecisionAdaptationsPreserved(

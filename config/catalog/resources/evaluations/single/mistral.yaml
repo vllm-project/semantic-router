@@ -73,7 +73,7 @@
 - id: independent/mistral-large-3-humanitys-last-exam@1.0.0
   model: mistral/mistral-large-3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: default
   subject:
     source_model: Mistral Large 3 (Non-reasoning)
@@ -235,7 +235,7 @@
 - id: independent/mistral-small-4-humanitys-last-exam@1.0.0
   model: mistral/mistral-small-4
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Mistral Small 4 (Reasoning)
@@ -361,7 +361,7 @@
 - id: independent/mistral-small-4-non-reasoning-humanitys-last-exam@1.0.0
   model: mistral/mistral-small-4
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: Mistral Small 4 (Non-reasoning)
@@ -469,7 +469,7 @@
 - id: independent/mistral-medium-3-5-humanitys-last-exam@1.0.0
   model: mistral/mistral-medium-3.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Mistral Medium 3.5
@@ -657,7 +657,7 @@
 - id: independent/mistral-small-3.2-humanitys-last-exam@1.0.0
   model: mistral/mistral-small-3.2-24b-instruct
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Mistral Small 3.2

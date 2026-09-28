@@ -85,7 +85,7 @@ func TestHandleBatchClassificationUsesResolvedClassificationService(t *testing.T
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/classify/batch",
+		"/api/v1/diagnostics/classify/batch",
 		bytes.NewBufferString(`{"texts":["resolver should win"],"task_type":"intent"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
@@ -294,12 +294,10 @@ func TestBuildModelsInfoResponseUsesResolvedRuntimeConfig(t *testing.T) {
 
 func TestRuntimeRegistryResolvesSharedDependencies(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	memoryStore := newMockMemoryStore()
 	manager := &vectorstore.Manager{}
 	fileStore := &vectorstore.FileStore{}
 
 	registry := routerruntime.NewRegistry(cfg)
-	registry.SetMemoryStore(memoryStore)
 	registry.SetVectorStoreRuntime(&routerruntime.VectorStoreRuntime{
 		Manager:   manager,
 		FileStore: fileStore,
@@ -309,9 +307,6 @@ func TestRuntimeRegistryResolvesSharedDependencies(t *testing.T) {
 		runtimeRegistry: registry,
 	}
 
-	if got := apiServer.currentMemoryStore(); got != memoryStore {
-		t.Fatalf("currentMemoryStore() = %v, want %v", got, memoryStore)
-	}
 	if got := apiServer.currentVectorStoreManager(); got != manager {
 		t.Fatalf("currentVectorStoreManager() = %v, want %v", got, manager)
 	}

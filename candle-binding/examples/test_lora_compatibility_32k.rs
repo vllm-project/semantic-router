@@ -115,8 +115,12 @@ fn main() -> Result<()> {
     }
 
     let model_vb = unsafe {
-        VarBuilder::from_mmaped_safetensors(&[model_weights_path.clone()], DType::F32, &device)
-            .map_err(|e| anyhow!("Failed to load model weights: {}", e))?
+        VarBuilder::from_mmaped_safetensors(
+            std::slice::from_ref(&model_weights_path),
+            DType::F32,
+            &device,
+        )
+        .map_err(|e| anyhow!("Failed to load model weights: {}", e))?
     };
 
     // Check for LoRA adapters first

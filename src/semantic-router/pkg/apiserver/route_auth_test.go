@@ -41,7 +41,7 @@ func TestManagementAuthDisabledAllowsConfigRoutes(t *testing.T) {
 	})
 	mux := server.setupRoutes()
 
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 	if rr.Code == http.StatusUnauthorized || rr.Code == http.StatusForbidden {
@@ -63,7 +63,7 @@ func TestManagementAuthBearerRejectsAnonymousConfigRead(t *testing.T) {
 	})
 	mux := server.setupRoutes()
 
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 	if rr.Code != http.StatusUnauthorized {
@@ -87,7 +87,7 @@ func TestManagementAuthBearerAllowsViewerConfigRead(t *testing.T) {
 	})
 	mux := server.setupRoutes()
 
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
@@ -111,7 +111,7 @@ func TestManagementAuthBearerRejectsViewerConfigWrite(t *testing.T) {
 	})
 	mux := server.setupRoutes()
 
-	req := httptest.NewRequest(http.MethodPatch, "/config/router", strings.NewReader(`{}`))
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/config", strings.NewReader(`{}`))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
@@ -136,7 +136,7 @@ func TestManagementAuthBearerRejectsInvalidToken(t *testing.T) {
 	})
 	mux := server.setupRoutes()
 
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
 	req.Header.Set("Authorization", "Bearer wrong-token")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
@@ -154,7 +154,7 @@ func TestManagementAuthBearerRequiresConfiguredTokens(t *testing.T) {
 	})
 	mux := server.setupRoutes()
 
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
 	req.Header.Set("Authorization", "Bearer unused")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
@@ -226,7 +226,7 @@ func TestManagementAuthPreservesCallerRequestID(t *testing.T) {
 	mux := server.setupRoutes()
 
 	const requestID = "req-phase1-auth-001"
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
 	req.Header.Set(managementRequestIDHeader, requestID)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)

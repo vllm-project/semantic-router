@@ -231,7 +231,7 @@
 - id: independent/ernie-4.5-300b-a47b-humanitys-last-exam@1.0.0
   model: baidu/ernie-4.5-300b-a47b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: ERNIE 4.5 300B A47B

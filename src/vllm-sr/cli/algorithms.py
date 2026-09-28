@@ -3,14 +3,22 @@
 import math
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from cli.config_schema import surface_types
+
+from .config_contract import QuorumFailurePolicy
+
+SUPPORTED_ALGORITHM_TYPES = frozenset(surface_types("algorithms"))
 
 
 class ModelRef(BaseModel):
     """Model reference in decision."""
 
     model: str
-    use_reasoning: bool | None = False
+    # Omission is not an authored false: runtime serialization must preserve
+    # the caller's choice and leave canonical defaulting to the Router.
+    use_reasoning: bool | None = None
     reasoning_description: str | None = None
     reasoning_mode: Literal["enabled", "disabled", "adaptive"] | None = None
     reasoning_effort: str | None = None  # Model-specific reasoning effort level.
@@ -172,6 +180,7 @@ class FusionAlgorithmConfig(BaseModel):
 
     model: str | None = None
     analysis_models: list[str] | None = None
+    analysis_mode: Literal["separate", "one_call", "none"] = "separate"
     analysis_overrides: list[FusionModelOverrideConfig] | None = None
     max_concurrent: int | None = Field(default=None, ge=1)
     max_completion_tokens: int | None = Field(default=None, ge=1)
@@ -181,10 +190,29 @@ class FusionAlgorithmConfig(BaseModel):
     include_analysis: bool | None = True
     include_intermediate_responses: bool | None = True
     on_error: Literal["skip", "fail"] | None = "skip"
+    # Panel-level policy for a usable-response count below
+    # min_successful_responses. Independent of on_error, which only governs a
+    # single failed panel attempt. Bounds here MUST match the Go validator in
+    # pkg/config/fusion_config.go (validateFusionQuorumFailure).
+    quorum_failure_policy: QuorumFailurePolicy | None = None
+    quorum_fallback_target: str | None = None
     analysis_template: str | None = None
     synthesis_template: str | None = None
     judge_prompt_version: str | None = "fusion-v1"
     grounding: FusionGroundingConfig | None = None
+
+    @model_validator(mode="after")
+    def validate_quorum_failure_policy(self):
+        target = (self.quorum_fallback_target or "").strip()
+        if self.quorum_failure_policy == "fallback" and not target:
+            raise ValueError(
+                "quorum_failure_policy 'fallback' requires quorum_fallback_target"
+            )
+        if self.quorum_failure_policy != "fallback" and target:
+            raise ValueError(
+                "quorum_fallback_target requires quorum_failure_policy 'fallback'"
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_analysis_override_models(self):
@@ -194,6 +222,11 @@ class FusionAlgorithmConfig(BaseModel):
             if model in seen:
                 raise ValueError(f"analysis override model {model!r} is duplicated")
             seen.add(model)
+
+        if self.analysis_mode != "separate" and (
+            self.analysis_template and self.analysis_template.strip()
+        ):
+            raise ValueError("analysis_template requires analysis_mode='separate'")
         return self
 
 
@@ -427,6 +460,7 @@ class MultiFactorSelectionConfig(BaseModel):
     slo: MultiFactorSLOConfig | None = None
     quality: QualityEvidenceConfig | None = None
     latency_percentile: int | None = Field(default=95, ge=1, le=100)
+    latency_metric: Literal["ttft", "tpot"] | None = None
     on_no_candidates: Literal["cheapest", "first", "fail"] | None = "cheapest"
 
     @model_validator(mode="after")
@@ -465,25 +499,8 @@ class AlgorithmConfig(BaseModel):
 
     Specifies how multiple models in a decision should be orchestrated.
 
-    Supports three categories of algorithms:
-
-    1. Looper algorithms (multi-model execution):
-       - "confidence": Try smaller models first, escalate if confidence is low
-       - "ratings": Coordinate bounded candidate execution
-       - "remom": Multi-round parallel reasoning with intelligent synthesis
-       - "fusion": Parallel panel deliberation with judge analysis and final synthesis
-       - "workflows": Router Flow dynamic/static micro-agent workflows
-
-    2. Selection algorithms (single model selection from candidates):
-       - "static": Use first model (default)
-       - "router_dc": Use embedding similarity for query-model matching
-       - "automix": Use POMDP-based cost-quality optimization
-       - "hybrid": Combine multiple selection methods
-       - "knn", "kmeans", "svm", "mlp": Shared ML model-selection selectors
-       - "multi_factor": Combine quality, latency, cost, and load
-
-    Cross-request learning systems live under global.router.learning.adaptation
-    and global.router.learning.protection.
+    The supported selector and looper types come from the generated Router
+    contract. Cross-request systems live under global.router.learning.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -492,28 +509,18 @@ class AlgorithmConfig(BaseModel):
     # is materialized by an Entrypoint.
     minimum_candidates: int | None = Field(default=None, ge=1)
 
-    # Algorithm type: looper ("confidence", "ratings", "remom", "fusion",
-    # "workflows") or
-    # selection ("static", "router_dc", "automix", "hybrid", "knn",
-    #            "kmeans", "svm", "mlp", "multi_factor", "latency_aware")
-    type: Literal[
-        "confidence",
-        "ratings",
-        "remom",
-        "fusion",
-        "workflows",
-        "static",
-        "router_dc",
-        "automix",
-        "hybrid",
-        "knn",
-        "kmeans",
-        "svm",
-        "mlp",
-        "multi_factor",
-        "latency_aware",
-        "prompt",
-    ]
+    type: str
+
+    @field_validator("type")
+    @classmethod
+    def validate_algorithm_type(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in SUPPORTED_ALGORITHM_TYPES:
+            supported = ", ".join(sorted(SUPPORTED_ALGORITHM_TYPES))
+            raise ValueError(
+                f"unsupported algorithm type {value!r}; choose one of: {supported}"
+            )
+        return normalized
 
     # Looper algorithm configurations
     confidence: ConfidenceAlgorithmConfig | None = None

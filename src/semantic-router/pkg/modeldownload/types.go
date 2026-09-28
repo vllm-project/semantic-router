@@ -1,15 +1,36 @@
 package modeldownload
 
+import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+
 // ModelSpec represents a model to be downloaded
 type ModelSpec struct {
 	// Local path where the model should be stored (e.g., "models/mom-embedding-light")
 	LocalPath string
 	// HuggingFace repository ID (e.g., "sentence-transformers/all-MiniLM-L12-v2")
 	RepoID string
-	// Git revision (commit hash, tag, or branch). Defaults to "main"
+	// Git revision (commit hash, tag, or branch). Empty leaves the revision
+	// unspecified for local reuse; a download uses HuggingFace's default branch.
 	Revision string
+	// PreparedArtifact selects a verified offline tensor-bundle contract rather
+	// than a native Hugging Face snapshot. ArtifactBundle is the image bundle name.
+	PreparedArtifact string
+	ArtifactBundle   string
 	// Required files to verify model completeness
 	RequiredFiles []string
+	// Each group requires at least one matching file, allowing native sharded
+	// weights and provider-supported ONNX layouts.
+	RequiredFileGroups [][]string
+	// RerankerSelections resolve omitted coordinates and the primary graph from
+	// downloaded encoder metadata. Every active selection must be available.
+	RerankerSelections []config.PairScorerSelection
+	// FilesOnly is used for a separate registered mapping or graph artifact.
+	FilesOnly bool
+	// CheckONNX verifies declared external tensor files for downloaded graphs.
+	CheckONNX bool
+	// Strict protects explicitly selected deployments and their companion files:
+	// populated directories require matching immutable revision metadata before
+	// any download; failures cannot degrade to an older or unavailable artifact.
+	Strict bool
 	// Glob patterns passed to `hf download --exclude` so artifacts the configured
 	// runtime never loads are skipped. Empty means the full snapshot is fetched.
 	ExcludePatterns []string

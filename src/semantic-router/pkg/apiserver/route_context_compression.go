@@ -61,7 +61,6 @@ type contextCompressionPreviewResponse struct {
 
 type contextCompressionStatsResponse struct {
 	contextcompression.Stats
-	Audit []managementAuditEntry `json:"audit,omitempty"`
 }
 
 type contextCompressionRecoveryInvalidateRequest struct {
@@ -107,9 +106,9 @@ func (s *ClassificationAPIServer) handleContextCompressionHealth(
 			recoveryStatus = "unavailable"
 		}
 	}
-	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-		"status":   status,
-		"recovery": recoveryStatus,
+	s.writeJSONResponse(w, http.StatusOK, compressionHealthResponse{
+		Status:   status,
+		Recovery: recoveryStatus,
 	})
 }
 
@@ -130,7 +129,6 @@ func (s *ClassificationAPIServer) handleContextCompressionStats(
 	}
 	s.writeJSONResponse(w, http.StatusOK, contextCompressionStatsResponse{
 		Stats: service.Stats(),
-		Audit: s.contextCompressionAuditEntries(),
 	})
 }
 
@@ -319,8 +317,8 @@ func (s *ClassificationAPIServer) handleContextCompressionRecoveryInvalidate(
 		)
 		return
 	}
-	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-		"deleted": deleted,
+	s.writeJSONResponse(w, http.StatusOK, recoveryInvalidationResponse{
+		Deleted: deleted,
 	})
 }
 

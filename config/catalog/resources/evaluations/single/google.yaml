@@ -73,7 +73,7 @@
 - id: independent/gemini-3-6-flash-humanitys-last-exam@1.0.0
   model: google/gemini-3.6-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Gemini 3.6 Flash (high)
@@ -235,7 +235,7 @@
 - id: independent/gemma-4-31b-humanitys-last-exam@1.0.0
   model: google/gemma-4-31b-it
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Gemma 4 31B (Reasoning)
@@ -397,7 +397,7 @@
 - id: independent/gemma-4-31b-non-reasoning-humanitys-last-exam@1.0.0
   model: google/gemma-4-31b-it
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Gemma 4 31B (Non-reasoning)
@@ -581,7 +581,7 @@
 - id: independent/gemini-3-8-flash-humanitys-last-exam@1.0.0
   model: google/gemini-3.8-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Gemini 3.8 Flash (high)
@@ -743,7 +743,7 @@
 - id: independent/gemini-3-8-flash-low-humanitys-last-exam@1.0.0
   model: google/gemini-3.8-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Gemini 3.8 Flash (low)
@@ -905,7 +905,7 @@
 - id: independent/gemini-3-8-flash-medium-humanitys-last-exam@1.0.0
   model: google/gemini-3.8-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Gemini 3.8 Flash (medium)
@@ -1067,7 +1067,7 @@
 - id: independent/gemini-3-7-flash-humanitys-last-exam@1.0.0
   model: google/gemini-3.7-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Gemini 3.7 Flash (high)
@@ -1229,7 +1229,7 @@
 - id: independent/gemini-3-7-flash-low-humanitys-last-exam@1.0.0
   model: google/gemini-3.7-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Gemini 3.7 Flash (low)
@@ -1393,7 +1393,7 @@
 - id: independent/gemini-3-7-flash-medium-humanitys-last-exam@1.0.0
   model: google/gemini-3.7-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Gemini 3.7 Flash (medium)
@@ -1483,7 +1483,7 @@
 - id: google/gemma-4-31b-model-card-humanitys-last-exam@1.0.0
   model: google/gemma-4-31b-it
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: enabled
   subject:
     variant: Gemma 4 31B
@@ -1663,7 +1663,7 @@
 - id: independent/gemma-3-27b-humanitys-last-exam@1.0.0
   model: google/gemma-3-27b-it
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Gemma 3 27B Instruct
@@ -1791,7 +1791,7 @@
 - id: independent/gemma-3-12b-humanitys-last-exam@1.0.0
   model: google/gemma-3-12b-it
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Gemma 3 12B Instruct
