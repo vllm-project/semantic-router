@@ -4,8 +4,9 @@
         --arm G2 --out-dir OUT
 
 Generator arms already hold AHO (``split=select``); SHO =
-``sha256("sho-v2:" + group_id) % 50 == 0`` among TRAIN groups. Rows are not
-otherwise changed. Writes ``<arm>.{train,aho,sho}.jsonl`` and a manifest.
+``sha256("sho-v2:" + group_id) % 50 == 0`` among TRAIN groups. Row ids get an
+arm prefix (generator ids are index-based and would repeat v1 arm ids); rows are
+not otherwise changed. Writes ``<arm>.{train,aho,sho}.jsonl`` and a manifest.
 """
 
 from __future__ import annotations
@@ -30,9 +31,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--aho", type=Path, required=True)
     parser.add_argument("--arm", required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--id-prefix", required=True)
     args = parser.parse_args(argv)
+    prefix = f"{args.id_prefix}:"
     train, sho = [], []
     for row in read_jsonl(args.train):
+        row = dict(row, id=prefix + row["id"])
         if is_sho(row["group_id"]):
             sho.append(
                 validate_row(
@@ -41,12 +45,16 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             train.append(validate_row(row, "train"))
-    aho = [validate_row(row, "select") for row in read_jsonl(args.aho)]
+    aho = [
+        validate_row(dict(row, id=prefix + row["id"]), "select")
+        for row in read_jsonl(args.aho)
+    ]
     args.out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     manifest = {
         "arm": args.arm,
         "inputs": {"train": file_sha256(args.train), "aho": file_sha256(args.aho)},
         "rule": "SHO = sha256('sho-v2:' + group_id) % 50 == 0 among TRAIN groups",
+        "id_prefix": prefix,
     }
     for name, rows in (("train", train), ("aho", aho), ("sho", sho)):
         data = "".join(canonical(r) + "\n" for r in sorted(rows, key=lambda r: r["id"]))
