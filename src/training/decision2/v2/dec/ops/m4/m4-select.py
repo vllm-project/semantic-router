@@ -2,9 +2,11 @@
 
 Reads only the soup watchers' development readouts (typed DEV + CSS pilot) and dev predictions on node B;
 never a v3 / public-231 / mlx-diag result. R is ``proxy_mean_H`` = 100·sqrt(T_dev·H_mean3) unless another
-readout statistic is named (proxy v2, if the eval track publishes it first).
+readout statistic is named.
 
-usage: python3 m4-select.py [--stat proxy_mean_H] [--band 4] [--cross N4LX] <group> ...
+Amendment 1: R = proxy_mean_H (P_mean3), tie band 9; the slot-2 typed-balance tie-break needs a gap < 1 R.
+
+usage: python3 m4-select.py [--stat proxy_mean_H] [--band 9] [--cross N4LX] <group> ...
 """
 
 from __future__ import annotations
@@ -104,7 +106,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("groups", nargs="+")
     parser.add_argument("--stat", default="proxy_mean_H")
-    parser.add_argument("--band", type=float, default=4.0)
+    parser.add_argument("--band", type=float, default=9.0)
     parser.add_argument("--cross", help="cross-arm soup group, if built (rule 5)")
     args = parser.parse_args()
     rows = [artifact(g, args.stat) for g in args.groups]
@@ -124,7 +126,7 @@ def main() -> None:
     finalists = pool[:1]
     if len(pool) >= 2:
         second = pool[1]
-        if len(pool) >= 3 and pool[1]["R"] - pool[2]["R"] < args.band:
+        if len(pool) >= 3 and pool[1]["R"] - pool[2]["R"] < 1.0:
             second = max(pool[1:3], key=lambda r: r["min_ratio"])
         finalists.append(second)
     print(
