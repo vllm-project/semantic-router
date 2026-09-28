@@ -10,7 +10,8 @@ or a ratio of an earlier component's tokens) takes whole groups, stratified by
 source × task type × language in a seed-keyed hash order. Tokens are native
 ``encode`` lengths under the given tokenizer (no truncation).
 
-Spec: {"name", "seed", "exclude_families": [...], "dedupe_original_hashes"?:
+Spec: {"name", "seed", "exclude_families": [...], "exclude_group_ids"?:
+{"file": "<source>:<path>", "sha256": <pinned>}, "dedupe_original_hashes"?:
 bool, "components": [{"name", "files": ["<source>:<path under the snapshot
 root>", ...], "view"?: "<source>:<path>", "ids"?: {"file": "<source>:<path>",
 "sha256": <pinned>, "pool": <pool>}, "rekey"?: bool, "budget_tokens"?: int,
@@ -24,7 +25,9 @@ its pools (id lists joined to arm files, as the data track's recipes are
 distributed); every listed id must be present in the component's files.
 ``dedupe_original_hashes`` also treats rows as duplicates when their
 pre-renumbering input hashes (``audit_metadata.option_key_renumbering`` or
-``audit_metadata.a7``) match any hash seen earlier.
+``audit_metadata.a7``) match any hash seen earlier. ``exclude_group_ids`` drops
+every row of the listed groups (a ``{"group_ids": [...]}`` file, for example the
+evaluation-panel exclusions of a data rescreen) before deduplication.
 """
 
 from __future__ import annotations
@@ -162,6 +165,13 @@ def build(
     mixture: list[dict[str, Any]] = []
     components: dict[str, dict[str, Any]] = {}
     inputs: dict[str, str] = {}
+    excluded_groups: set[str] = set()
+    if "exclude_group_ids" in spec:
+        reference = spec["exclude_group_ids"]
+        source, relative = reference["file"].split(":", 1)
+        path = registries[source].verified(relative, reference["sha256"])
+        inputs[reference["file"]] = file_sha256(path)
+        excluded_groups = set(json.loads(path.read_text())["group_ids"])
     for component in spec["components"]:
         name = component["name"]
         rows: list[dict[str, Any]] = []
@@ -198,6 +208,9 @@ def build(
             stats["in_view"] = len(rows)
         kept: list[dict[str, Any]] = []
         for row in rows:
+            if row["group_id"] in excluded_groups:
+                stats["excluded_group"] += 1
+                continue
             if row["family"] in excluded:
                 stats["excluded_family"] += 1
                 continue
