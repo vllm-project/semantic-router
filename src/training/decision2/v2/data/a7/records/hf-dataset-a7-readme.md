@@ -42,7 +42,16 @@ family × type cells with option-only or state-removed shortcuts dropped); an
 8,192-token native budget; isolation from SELECT/CAL, A0 and every published arm.
 Human-label shortcut results are disclosed diagnostics, not filters.
 
+**Version `a7-dec10-v3`** (this revision's `A7h`, `A7m`, `A7i`, `A7g`, `A7p`,
+`A7o`): the `a7-dec10-v2` files minus every group flagged by a GPU embedding scan
+(Qwen3-Embedding-0.6B, quarantine at cosine ≥ 0.93) and a lexical rescreen, both
+against PI-v3 (the evaluation/development panels plus the multilingual
+diagnostic `mlx-diag` and the v1 arm held-out slices). `admission.json` keeps the
+v2 admission and adds a `requarantine` section; `audits/embed.public.json` and
+`audits/<sub>/rescreen-overlap.public.json` are the aggregate receipts. Sub-arms
+without a removed group keep their v2 bytes.
+
 Rules and results: branch `xunzhuo/decision-2-training-a7`,
 `src/training/decision2/v2/data/a7/records/` (`a7-prereg-2026-09-28.md`,
-amendment 1, `a7-inventory-2026-09-28.md`, `a7-arms-v1-2026-09-28.md`).
+amendments 1–2, `a7-inventory-2026-09-28.md`, `a7-arms-v1-2026-09-28.md`).
 Private access does not waive upstream terms. Keep this dataset private.

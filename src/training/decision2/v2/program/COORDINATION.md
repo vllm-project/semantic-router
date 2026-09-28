@@ -144,11 +144,12 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
 | node A GPU0–1 | 0.6B encoder |
-| node A GPU2–4 | 9B + CLM |
+| node A GPU2 | 9B: L2 formal post-key run (~0.2 GPU-h), then research & data (2026-09-28 16:45 UTC+8) |
+| node A GPU3–4 | research & data: Lux teacher targets + embedding scans, ~4 h (from 2026-09-28 16:45 UTC+8) |
 | node A GPU5 | 0.8B–4B decoder |
 | node A GPU6–7 | eval & peers |
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
-| node B GPU3–4 | eval & peers (added 2026-09-28 10:40 UTC+8) |
+| node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
 | node B GPU5–6 | ~27B |
 | node B GPU7 | research & data (owner); A7 may run short jobs (≤ 30 min, e.g. its embedding scan) under its own lease owner file when the GPU is idle/released |
 
@@ -182,6 +183,42 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-28 16:45 — From 9B Milestone 2 (gist `05-decision-2-9b-clm.md`; integration `72cc17eed`) + GPU changes:
+  - Own-Lux soft replay (L2, KL 0.5) is the only arm beating plain Lux continuation: 3-seed mean proxy 71.42 vs control
+    70.19 and Lux 1.0 70.82; Score +18/+12/+9 over its control, CSS pilot above Lux 1.0 on all seeds. A tie with Lux 1.0
+    under the |ΔP| < 4 rule, so its preregistered seed gets ONE formal post-key run vs Lux1 on node A (approved); it is a
+    candidate only if the paired CI lower bound is > 0. Soft replay acts as a trust region: plain continuation on A0
+    slightly degrades Lux. The zero-gated ordinal Score readout never engaged (Lux already fits A0 Score rows); A6g/A6h at
+    25% substitution lowered typed three-level Score. Score gains need Score data the teacher/model does not already fit,
+    matching the three-level DEV shape, combined with soft replay.
+  - FLA + shared autotune cache: nine full 9B runs, no ROCm backward crash (production kernels, gradient checkpointing).
+  - **Canonical own-Lux TRAIN teacher file: decoder `752b7c8f…` (7,455 rows).** It matches the 9B file on the 7,324-row
+    overlap (argmax Choice 3,811/3,824, Noul 2,991/2,993, Score 503/507; mean max-prob gap 0.001–0.003). Research & data:
+    confirm it in the consolidation; everyone else reuses it.
+  - **GPU reallocation:** node A GPU3–4 → research & data now (~4 h), node A GPU2 → research & data after the 9B L2 formal
+    run. Research & data: generate Lux teacher targets on node A (Lux1's frozen reference runtime; seed the shared
+    autotune cache from the eval track's frozen node-A Lux1 cache). Keep one node per teacher file: if some Lux shards
+    were already produced on node B GPU7, either regenerate them on node A or finish that file on B7, and record which.
+    Node B GPU3–4 stay with the decoder track.
+
+- 2026-09-28 16:30 — From eval Milestone 2 (gist `01-decision-2-eval-peers.md`; integration `87bba6ec1`):
+  - **Calibrated development proxy (use it for finalist selection):** P = 100·√(T_dev·H_pilot); on 16 models Spearman
+    0.94, leave-one-out error ±3.1, v3 ≈ 19.12 + 0.629·P; held on 8 new peers (−2.6 to +3.0). **Tie rule: |ΔP| < 4 is a
+    tie** — send both to the formal runner instead of choosing on P. Details in "Eval runners".
+  - New peers (post-key v3 / public 231): 0.8B Intern-Decision 43.535 / 164 and Kev 43.217 / 147 (neither significantly
+    above Eos1); 2B This-That 1.2 46.112 / 147; 4B Jet v6.2 60.375 / 174 (significantly above Nox1), Hopper (research-only,
+    internal) 58.396 / 194; 9B Nimble v2 62.056 / 185 (Lux1 still best at 9B); 27B Eikos-27B (BF16 sibling of the board's
+    FP8 entry) 69.201 / 212, Jebadiah 65.472 / 177. Release thresholds are unchanged by these peers.
+  - Multilingual diagnostic panel `mlx-diag`: 2,275 prompts in 7 languages, isolated from TRAIN and the data arms; 18
+    models scored. Report it for every candidate (v3 cannot measure multilingual ability).
+  - Same-node rule: 9B formal runs on node A, 27B on node B (AutoJev has a node B run). Size tracks may run the frozen
+    formal runner on their own GPUs.
+  - Every new adapter gets a gold-free 20-item smoke run before its single full run.
+  - Eval artifacts (reports, seals, receipts, predictions; no prompts, gold or Jev) live in a private HF dataset.
+  - Coordinator decisions: Jebadiah's truncated (>2,048-token) states stay invalid under the frozen rule (a truncated view
+    may exist only as an internal supplemental row); Hopper stays internal-only everywhere; Eikos-27B's BF16 run is its
+    row, disclosed as the FP8 entry's BF16 sibling (FP8 only if a cheap ROCm path exists).
+
 - 2026-09-28 16:05 — From 0.8B–4B decoder Milestone 1 (gist `04-decision-2-decoder-08b-4b.md`; integration `87ca3002c`):
   - 4B X2 (own Nox 1.0 + own-Lux soft targets): post-key v3 55.993 vs Nox1 56.470 (paired CI [−3.09, +1.78]); public
     231 174 vs 173; typed T .584 vs .614 (Noul exception-stack −37), human transfer H .537 vs .519 (up on 11 of 15 tasks).
@@ -194,8 +231,7 @@ exactly one gist file and updates it in place:
     parameters: 0.8B 753.4M, 2B 1.884B, 4B 4.208B.
   - A third own-Lux label file exists: decoder `752b7c8f…` (7,455 TRAIN rows). Research & data: include it in the
     canonical Lux consolidation together with 0.6B `2d90bc5b…` and 9B `abaa1113…`.
-  - GPU request: the decoder track wants two more GPUs; node A GPU2–4 go to it when the 9B track's Milestone 2 releases
-    them (the coordinator will update the table).
+  - GPU request: satisfied at 16:30 with node B GPU3–4 (moved from eval). Node A GPU2–4 stay with the 9B track.
 
 - 2026-09-28 16:00 — **A7 (own Decision 1.0 decoder corpora) AVAILABLE — the largest data lever so far** (gist
   `08-decision-2-own10-corpora.md`; integration `7db1da83d`; private HF dataset `llm-semantic-router/decision-2.0-training-data`
@@ -465,3 +501,31 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
   **No track may train on MASSIVE, PAWS-X or XNLI test splits.** XNLI is CC BY-NC (internal diagnostic only).
 - **Card charts licence filter:** `python3 -m v2.eval.charts ...` now shows only own + permissive peers by default;
   `--allow-licence non-commercial` / `research-only` include JPT / Hopper rows (internal use only until the user decides).
+
+### Eval M2 peer adapters and comparators (eval track, 2026-09-28 ~17:30 UTC+8; code at `8001380d5` or later)
+
+- **New `--adapter` names:**
+  - `jet-v6.2`
+  - `nimble-v2`
+  - `jebadiah-27b` (node B)
+  - `hopper-g` (needs `--extra source=/data/dev2/tools/src/hopper --mount /data/dev2/tools/src/hopper`)
+  - `this-that-1.2`
+  - `kev-0.8b`
+  - `intern-0.8b`
+  - `eikos-27b`
+
+  `nimble-v2` and `hopper-g` load their pinned Qwen3.5 base from the offline cache: add
+  `--mount /data/dev2/hf-cache --env HF_HUB_CACHE=/data/dev2/hf-cache --env HF_HUB_OFFLINE=1` to `run_same_panel.sh`.
+- **Smoke first for any new adapter:** run `--max-items 20` on typed-final and mlx-diag (or public231) and check the
+  answer fields before the one-shot run. Jet's first run was stopped because its API rejects Noul `criteria`; the
+  collector now maps them.
+- **Same-tier comparators (post-key v3 / public 231; run dirs under `/data/dev2/runs/eval/`):**
+  - **4B.** Nox1 56.470 (`m1-adopt/nox1`), Decider 4B 61.882, Jet v6.2 60.375 (`m2/q5b-jet62`), Hopper (G) 58.396
+    (`m2/q8-hopperg`; research-only).
+  - **9B (node A).** Lux1 65.808, JPT-9B 60.994, Nimble v2 62.056 (`m2/q6-nimble2`).
+  - **27B (node B).** AutoJev 72.310, Eikos-27B BF16 69.201 (`m2/q3-eikos27b-nodeB`; best public so far, 212),
+    Jebadiah 65.472 (`m2/q7-jebadiah27b-nodeB`).
+  - **2B.** Sol1 45.580, Decider 2B 49.499, This-That 1.2 46.112.
+  - **0.8B.** Eos1 42.547, Intern 43.535, Kev 43.217, JPT-0.8B 40.085.
+  - Paired intervals are in `v2/eval/records/m2-peers-and-jev-status-2026-09-28.md`.
+- **Proxy held on eight out-of-sample peers.** v3 ≈ 19.12 + 0.629·P was within about ±3 for every peer (−2.6 to +3.0).
