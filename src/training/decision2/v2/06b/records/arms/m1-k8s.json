@@ -1,0 +1,31 @@
+{
+  "arm": "m1-k8s",
+  "family": "kai-native",
+  "start": {
+    "backend": "kai",
+    "bundle": "/work/models/Decision-1.0-Kai-0.6B",
+    "repo": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+    "revision": "7185f514f54b8f93c55998b1e8f9c5cc67f0d029",
+    "native_manifest_sha256": "c1bf07ab1c4c3fa1f819256d3de858d1ed87869bdfa663553280d7e78b88bee4"
+  },
+  "data": {
+    "parent": "/work/data/hf-private-decision20-clean-v2",
+    "converter_bundle": "/work/models/Decision-1.0-Kai-0.6B"
+  },
+  "logical_batch": 64,
+  "max_micro_rows": 8,
+  "micro_token_budget": 32768,
+  "seed": "20260928-06b-m1",
+  "optimizer": {"encoder_lr": 1e-05, "head_lr": 4e-05, "lr_min": 1e-06, "warmup_ratio": 0.05, "weight_decay": 0.01, "clip": 1.0},
+  "loss": {"ce": 1.0, "brier": 0.0, "score_rps": 0.1, "teacher_kl": 0.5},
+  "teacher": {
+    "path": "/runs/m1/teacher/kai1-train-8k.jsonl",
+    "sha256": "87140f84cb6912ef394ed8220fe2be2d3e24ce277aa0bef8754b610ebba00aa0",
+    "source": "Kai1 7185f514 native 8K FP32 probabilities on all 7,455 TRAIN inputs, gold-free",
+    "producer_commit": "8e35ab92aab1a8c0557efde6294777aa524f5981"
+  },
+  "milestones": "eighths",
+  "include_step0_in_best": true,
+  "gpu_hour_cap": 1.0,
+  "max_reserved_gib": 200
+}
