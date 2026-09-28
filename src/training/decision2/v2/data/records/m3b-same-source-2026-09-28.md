@@ -3,22 +3,40 @@
 Question: at 0.6B (Milestone 4) the development proxy favoured the mixture-v2 soup (V2) over the A7
 soup (T) by +6.94 P, but post-key v3 ranked T first (43.54 against 39.13). The CSS pilot rose for V2
 while CSS15 fell (.397 against .480). Did a training source that shares its origin with a CSS pilot
-task inflate the proxy, and which sources share an origin with a CSS15 task? This record is
-count-level and task-level only: no item text, no gold labels, no sealed path read, no GPU used.
+task inflate the proxy, and which sources share an origin with a CSS15 task? The record also covers
+the training lineage of the own-Lux teacher (V2 distils it on 99.7% of its rows, T on 24.5%) and
+gate 10 of amendment 2 (the H7 / H8 gap sources). It is count-level and task-level only: no item
+text, no gold labels, no sealed path read, no GPU used.
 
 **Answer.**
 
-- No v1, v2, A7 or A0s-strict source shares a dataset, parent corpus or annotation project with any
-  of the three CSS pilot tasks. **New quarantine list: empty.**
+- No source shares a dataset, parent corpus or annotation project with any of the three CSS pilot
+  tasks. That covers every v1, v2, A7, A0s-strict and H7 / H8 source, plus the teacher's own
+  training pool. **New quarantine list: empty.** No recipe revision is needed (§5).
+- **Teacher lineage: no shared origin (§4c).** The teacher is the unmodified 1.0 release
+  `Decision-1.0-Lux-9B@bd45a30a`. Lux, like Eos, trained on the 1.0 natural 24k pool. That pool has
+  8 sources and 30 families: Cosmos QA, SNLI, SQuAD 2.0, MultiNLI non-fiction, BANKING77, CLINC150
+  and generated Stage1–4 rows. None comes from Twitter or Reddit, and none is a stance, discourse,
+  dialogue or hate task.
+  - The older 2.0 CSS-linked families postdate Lux and are in neither its pool nor any current
+    pool. These are the TweetEval set and the stance and dialogue families built from CSS pilot
+    errors.
+  - T trains on 13,106 rows of the teacher's pool itself. V2 trains on none beyond the base that
+    both arms share.
+- **Gate 10 (H7 / H8): pass, nothing excluded (§4d).** HoVer, Natural Questions, TyDi QA, MIRACL
+  es/fa/fr/hi/zh and JCommonsenseQA are UNRELATED to all 18 tasks. SentiMix Spanglish is SAME TASK
+  FAMILY ONLY for emotion, and weakly for stance.
 - One source is the same dataset as a CSS15 task: `css_flute_official_train` (FLUTE) for `flute`.
   A0s-strict, all six XL recipes and every M4 mixture already exclude it. Only the root A0 file
   contains it (120 rows). Keep it excluded.
 - Four sources belong to the same task family as a CSS15 task but have a different origin. They
   should be disclosed, not quarantined: GoEmotions (emotion), ArgQ-30k (persuasion), OASST1 humour
-  ratings (reddit_humor), and SentiMix/AfriSenti (emotion).
+  ratings (reddit_humor), and SentiMix/AfriSenti (emotion). SentiMix Spanglish (emotion) joins
+  them if H8 enters a recipe.
 - The pilot "rise" for V2 is two tasks up (discourse, implicit hate) and one sharply down (stance).
   It is not significant, and the seed-mean pilot median is equal for the two arms. Typed DEV carries
   82% of the proxy gap. The misalignment is a proxy-composition effect, not a data-origin effect.
+  No development readout was inflated by a same-origin source or by the teacher lineage.
 
 ## 1. Method
 
@@ -29,9 +47,17 @@ count-level and task-level only: no item text, no gold labels, no sealed path re
   from local CSVs were identified from the paper's dataset section (Ziems et al., "Can Large
   Language Models Transform Computational Social Science?", arXiv 2305.03514) and the column maps.
 - **Sources.** The universe is every `source` id in `license-registry-v1.json` (30),
-  `license-registry-v2.json` (26 more) and `license-registry-a7-v1/v2.json` (14): 70 ids in total.
+  `license-registry-v2.json` (26 more) and `license-registry-a7-v1/v2.json` (14): 70 ids.
+  `license-registry-m3b.json` adds 4 more for H7 / H8: HoVer, Natural Questions, MIRACL and SentiMix
+  Spanglish. TyDi QA and JCommonsenseQA are already in the universe, which brings the total to 74.
   A0s-strict's six sources are among them. For each id, the origin comes from its registry
   attribution and evidence URL plus the upstream paper or dataset card.
+- **Teacher lineage.** Lux's pool comes from three places: the A7 inventory
+  (`a7/records/a7-inventory-2026-09-28.md`), the six 1.0 model cards, and the A7 v3 views
+  `dec10-natural24k` and `dec10-semantic24k`. The views' members were joined to the A7 v3 TRAIN and
+  AHO files on node A to count rows by source and family. The older pipeline's CSS-linked families
+  come from `training/data/` (`build_targeted_candidate.py`, `build_tweeteval_human.py`,
+  `build_rights_clean_v1.py`, the README, `targeted_open_evidence_v1.json`).
 - **Specific checks:**
   - ArgQ-30k collection and the `sources/argq.py` projection.
   - The MLQE-PE Ru-En source table (Fomicheva et al., arXiv 2010.04480, Table 3).
@@ -50,9 +76,12 @@ count-level and task-level only: no item text, no gold labels, no sealed path re
   - UNRELATED: everything else. Sharing only a platform (Reddit, Twitter, Wikipedia) or a domain
     (news), with independent sampling and no possible item coincidence, counts as UNRELATED. Links
     of this kind that the coordinator asked about are listed separately in §4b.
-- **Magnitudes.** Row and token counts come from count-only scans on node A of the M4 mixture files
-  (`m4-mix-t`, `m4-mix-v2`, `m4-mix-c`), the XL-full id manifest (native tokens), A0s-strict, and
-  SELECT/CAL.
+- **Magnitudes.** Row and token counts come from count-only scans on node A of:
+  - the M4 mixture files (`m4-mix-t`, `m4-mix-v2`, `m4-mix-c`);
+  - the XL-full id manifest (native tokens) and the 26 XL pool files;
+  - root A0, A0s-strict and SELECT/CAL;
+  - the A7 v3 files and views;
+  - the H7 / H8 TRAIN files and their four-method overlap receipts (hit groups per CSS task).
 
 ## 2. CSS tasks and their upstream datasets
 
@@ -124,6 +153,8 @@ both (15 invalid each). The CSS15 median is tempowic for T (.480) and wiki_corpu
 
 Arm membership: T = A0s-r + A6 slice + A7 v3. V2 = A0s-r + `mx-v2-full-M` (H1, H3, H5, H6, E11, G2,
 G6, G4h, V1S = A6g + A6h). XL-full = all pools in `m3b/mx-xl.manifest.json` (151.29M native tokens).
+Both arms start from `Qwen/Qwen3-0.6B-Base@da87bfb6`. The own-Lux teacher covers 6,430 of T's 26,203
+rows and 47,759 of V2's 47,922.
 
 ### 4a. Pairs that are not UNRELATED
 
@@ -150,7 +181,8 @@ G6, G4h, V1S = A6g + A6h). XL-full = all pools in `m3b/mx-xl.manifest.json` (151
 | News-domain sources: `onestop_english`, `dec10:multinli_nonfiction_train` (Slate and government genres), `klue_ynat_train` | media_ideology, ibc, mrf | Domain only. OneStopEnglish is Guardian articles rewritten for learners (2013–2016), and a same-publisher article in the AllSides-rated set is possible but unverified. MultiNLI Slate text is 1990s OANC. YNAT is Korean headlines |
 | NLI sources: `dec10:snli_train`, `legacy:snli`, `dec10:multinli_nonfiction_train`, `jglue_jnli_v1.3_train` | flute | Format only. FLUTE pairs are NLI-shaped, but the CSS task labels the figurative type. No other source is a figurative-language dataset |
 
-**All other pairs of the 70 source ids with the 18 tasks are UNRELATED.** They cover:
+**All other pairs of the 70 source ids with the 18 tasks are UNRELATED** (the four H7 / H8 ids are
+in §4d). They cover:
 
 - Project-generated sources: `decision2_*`, `legacy:stage4-general-composition-v2`, `dec10:generated_*`,
   and the generated part of `legacy:stage3_replay`.
@@ -163,7 +195,111 @@ G6, G4h, V1S = A6g + A6h). XL-full = all pools in `m3b/mx-xl.manifest.json` (151
 
 `decision2_targeted_programmatic_v1` in A0s-strict holds only the interval-conjunction and
 quantized-median families. The stance and dialogue-function families that the older pipeline built
-from CSS pilot errors are in no current pool.
+from CSS pilot errors are in no current pool (§4c).
+
+### 4c. Teacher lineage: own Lux 1.0 (and Eos)
+
+**Teacher identity.** The teacher is `Decision-1.0-Lux-9B@bd45a30a`. Its weights are byte-identical
+to Hub `main` `cdf4d3ef` (eval-track check), so it is the 1.0 release, not a 2.0 continuation.
+
+- The 2.0 continuation `lux9b-human-structured8360` (BEST224) starts from these weights. Its TRAIN
+  includes the 3,600 TweetEval rows below. It is on release HOLD and produced no target.
+- Lux's pool, per its card and the A7 inventory, is the natural 24k `natural-treatment.jsonl`
+  (`d56175ab`). That file is the natural 8k (Cosmos QA 4,000, SNLI 2,000, SQuAD 2.0 answerability
+  2,000) plus 16,000 Stage4 v2 rows.
+- Lux's final stage used the semantic variant `8f40cf03`: 21,329 rows are identical and 2,671 have
+  re-described options.
+- Eos trained on all 24,000 rows of the same pool; it is not an M4 teacher.
+- Lux and Eos never trained on the full Stage1–4 curricula (Sol and Nox did). Of the curricula they
+  saw only the 16,000 Stage4 v2 rows in the pool, which include 1,812 replayed Stage1–3 rows in the
+  joined view.
+
+The table gives the pool by source: 22,919 of 24,000 rows joined to A7 v3 on node A.
+
+| Pool source | Rows | Families | Class for all three pilot tasks | Evidence |
+| --- | ---: | --- | --- | --- |
+| `dec10:generated_stage4_v2` | 10,201 | 8 `stage4_*` (arithmetic, automaton, boolean, dense table, ordinal, registers, relations, scope) | UNRELATED | Project-generated, no third-party text |
+| `dec10:generated_stage1_3` | 1,812 | 15 replayed Stage1–3 families (authorization, evidence, high-k, mapping, policy, five arithmetic, evidence scope, three logic, transition set) | UNRELATED | as above |
+| `dec10:cosmos_qa_train` | 3,984 | `natural_cosmos_qa` | UNRELATED | Personal-narrative blog posts (Spinn3r) with crowd questions |
+| `dec10:snli_train` | 1,998 | `natural_snli` | UNRELATED | Flickr30k captions with crowd hypotheses |
+| `dec10:squad2_train` | 1,514 | `natural_squad2_answerability` | UNRELATED | Wikipedia articles |
+| `dec10:multinli_nonfiction_train` | 1,931 | `stage4_natural_nli` | UNRELATED | Government, Slate, travel and telephone genres. The telephone premises are Switchboard transcripts, the pool's only conversational text, labelled for entailment only |
+| `dec10:banking77_train`, `dec10:clinc150_train` | 645 + 834 | intent replay (banking, clinc, natural high-k) | UNRELATED | Crowd-written intent utterances |
+
+- The other 1,081 rows were removed by A7 admission (778) or requarantine (303). They come from the
+  same file and sources. The semantic view (20,253 joined rows) has the same 8 sources.
+- The A7 lexical screen flagged one CSS-pilot row in A7h and one in A7i. Both were method L only,
+  meaning a short field was contained in a window of a long pilot field. Both were removed, so T has
+  neither.
+- **T itself.** The six A7 v3 sub-arms in T (A7g, A7h, A7i, A7m, A7o, A7p; 138,011 TRAIN rows) hold
+  only these 8 sources.
+  - T's A7 component is 14,179 rows: 13,106 from the `dec10-natural24k` view (13.69M tokens) plus
+    1,073 fill rows.
+  - A node-A family scan finds no stance, discourse, dialogue, hate or tweet family in `m4-mix-t`,
+    `m4-mix-v2`, `m4-mix-c`, or any of the 26 XL pools (529,474 rows). The only keyword hits are the
+    §4a families and the two targeted Noul / Score families.
+
+**Older 2.0 CSS-linked sources.** These are in neither the teacher's pool nor any current pool, M4
+mixture or XL recipe:
+
+- **TweetEval, 3,600 rows (`build_tweeteval_human.py`).**
+  - The stance part covers the five non-Trump SemEval-2016 targets (1,500 rows). It is the **SAME
+    DATASET** as `semeval_stance`, with a different target, so it makes the stance pilot a
+    cross-target test.
+  - HatEval (500 rows) is SAME TASK FAMILY ONLY for `implicit_hate`.
+  - SemEval-2018 emotion (400 rows) is SAME TASK FAMILY ONLY for `emotion`.
+  - TweetEval reached only the 2.0 research mixes of 4,624, 5,824, 8,360 and 8,522 rows. The
+    BEST224 continuation above trained on the 8,360-row mix. `build_rights_clean_v1` removed all
+    3,600 rows from A0.
+- **`targeted_attributed_stance` and `targeted_dialogue_function`, 500 rows each.**
+  - Both come from source `decision2_targeted_programmatic_v1`. They were generated from aggregate
+    CSS pilot errors of six models, Lux 1.0 among them (`targeted_open_evidence_v1.json`), so they
+    postdate Lux.
+  - They are SAME TASK FAMILY ONLY for `semeval_stance` and `discourse`, by design. The builder
+    reports zero overlap with pilot text.
+  - They exist only in targeted-2k (`59d40112…`) and targeted-anchor-3024 (`18714248…`).
+  - Root A0, A0s-strict and every M4 and XL pool take only this source's interval-conjunction (450)
+    and quantized-median (150) families. The node-A scan found 0 stance or dialogue rows.
+
+**Could the lineage have inflated H_pilot (hence P) for V2?**
+
+- Not through shared origin, because there is none.
+- The direction also points the other way. T trains on the teacher's pool directly. V2 shares only
+  the base's 2,903 legacy 1.0 rows. V2's extra teacher coverage is on its own v2 prompts, whose
+  sources §4a and §4b classify.
+- Distillation can still pass on general decision behaviour. Lux's own pilot median macro-F1 is
+  .570 (its 1.0 observation in the 9B records), against .319 and .342 for the two soups. But a
+  general effect is not specific to the pilot, and CSS15 fell for V2 on 12 of 15 tasks.
+- M4 changes data and teacher coverage together (M4d), so its readouts cannot separate the two.
+
+### 4d. Gap arms H7 / H8 (amendment 2, gate 10)
+
+The sources are the six ids of `license-registry-m3b.json`, checked against all 18 tasks.
+
+- HotpotQA only keys HoVer groups and is never rendered. §4b already classifies it as
+  `hotpotqa_distractor_train`.
+- Text-level hits are groups per CSS task, counted in the H7 / H8 four-method overlap receipts on
+  node A (TRAIN + AHO + SHO).
+- Every hit group was quarantined whole.
+
+| Source (`source`) | Arm, families, TRAIN rows | Origin | Class | Text-level hits (quarantined groups) |
+| --- | --- | --- | --- | --- |
+| `hover_train_v1.1` | H7 `hover_answerable` + `hover_coverage`, 3,073 | Crowd-written claims over the intro paragraphs of HotpotQA's processed English Wikipedia (Jiang et al. 2020). Rows ask whether the paragraphs are enough to check the claim, or how many needed facts they state. The claim's truth never reaches a row | UNRELATED to all 18. Checked: mrf (fact-checking domain, but a different construct from headline credibility); wiki_politeness, conv_go_awry and wiki_corpus (talk pages, not articles); tropes (IMDb quotes) | CSS15: media_ideology 175, ibc 12, wiki_corpus 11, conv_go_awry 7, tropes 4, persuasion 2, wiki_politeness 1. Pilot: discourse 1 |
+| `natural_questions_train` | H7 `nq_window_removal`, 1,858 | Real Google search queries over English Wikipedia article pages (Kwiatkowski et al. 2019) | UNRELATED to all 18 (article namespace; same checks as HoVer) | CSS15: media_ideology 86, conv_go_awry 6, wiki_corpus 5, persuasion 4, tropes 4, mrf 1. Pilot: discourse 3, implicit_hate 1 |
+| `tydiqa_primary_train` (new items) | H8 `tydi_window_removal_<lang>`, 1,436 | The same dataset as the v2 source in §4b. New questions, disjoint by group from H5 and E11 | UNRELATED to all 18 | With MIRACL (shared `tydi-miracl` groups): CSS15 media_ideology 8, persuasion 1, wiki_corpus 1. Pilot: implicit_hate 1 |
+| `miracl_v1.0_train` (es, fa, fr, hi, zh) | H8 `miracl_relevance_<lang>` + `miracl_pool_<lang>`, 7,040 | Native-speaker queries and relevance judgments over non-English Wikipedia passages (Zhang et al. 2023). MIRACL-English is excluded as HAGRID's parent | UNRELATED to all 18 | see TyDi QA |
+| `jglue_jcommonsenseqa_v1.3_train` | H8 `jcqa`, 6,964 | Japanese crowd-written commonsense questions seeded from ConceptNet (JGLUE). The same dataset as v1 A5, with A5's items excluded | UNRELATED to all 18 | 0 |
+| `sentimix_spanglish_train` | H8 `sentimix_spanglish`, 5,986 | Code-mixed Spanish–English tweets with sentence polarity (SemEval-2020 Task 9). The same Zenodo release as A7s Hinglish | emotion: SAME TASK FAMILY ONLY. semeval_stance (pilot): SAME TASK FAMILY ONLY, weak (polarity, not stance; SemEval is only the shared venue, and the 2016 Task 6 collection is separate). implicit_hate and tempowic: UNRELATED (Twitter only; different collections, languages and years) | 0 |
+
+**Gate 10: PASS.**
+
+- No H7 / H8 source is SAME DATASET or SAME PARENT CORPUS with a pilot or CSS15 task, so none is
+  excluded.
+- SentiMix Spanglish joins the disclosure list (§5) if H8 enters a recipe.
+- The text-level hits are shared Wikipedia and news spans. 261 of H7's 307 CSS15-hit groups are
+  `media_ideology`. They are a matter for gates 4 and 5 (quarantined; embedding scan pending), not an
+  origin link.
+- As of amendment 2, no H7 / H8 row had been published or trained on.
 
 ## 5. Quarantine decision
 
@@ -180,8 +316,22 @@ from CSS pilot errors are in no current pool.
 - The rise itself is not a robust signal. H_pilot moved +.023 [−.030, +.048], the seed means are
   equal, and pilot micro accuracy fell. Most of the proxy gap is typed DEV plus a V2 soup effect:
   the V2 soup's T_dev is .461 against a seed mean of .379.
-- No readout that a pilot-sharing source would inflate was found. SELECT and CAL contain no CSS-origin
-  rows, and typed DEV is generated.
+- **Teacher lineage.** Lux 1.0's pool shares no origin with discourse or implicit hate, or with
+  stance (§4c). T trains on 13,106 rows of that pool. V2 trains only on the 2,903 legacy 1.0 rows
+  of the base that both arms share. V2's extra teacher coverage (47,759 against 6,430 rows) is on its
+  own v2 prompts. The teacher could not have carried same-origin pilot signal into V2.
+- **Readouts: none inflated.**
+  - Typed DEV is generated.
+  - The CSS pilot has no same-origin training row or teacher lineage in T or V2.
+  - SELECT700 (`32a4352d…`) and CAL700 (`3e34f6cb…`) each hold 400 GoEmotions and 300 generated
+    oracle rows and no CSS row (node-A count).
+
+**Recipes: no revision.**
+
+- XL r1 (the six recipes of `m3b/mx-xl.manifest.json`) stays as it is, and so do the M2 D10
+  recipes and controls.
+- Gate 10 excludes no H7 / H8 source from the planned r2 (amendment 2 §4). r2 still depends on the
+  other gates of amendment 2.
 
 **Formal panel: keep `css_flute_official_train` out.** It is the same dataset as CSS15 `flute`.
 
@@ -191,6 +341,9 @@ from CSS pilot errors are in no current pool.
 - Milestones 3–4 and all XL recipes use A0s or A0s-strict and contain no FLUTE row.
 - The older pipeline's Wikipedia-politeness train complement (`training/data/build_css_wiki_politeness`)
   is the same dataset as `wiki_politeness`. It is in no registry or pool and must stay out.
+- The older pipeline's TweetEval stance rows are the same dataset as the `semeval_stance` pilot
+  (§4c). They are in no registry or pool and must stay out. Any 2.0 research model trained on the
+  4,624- to 8,522-row mixes must report its stance pilot cell as cross-target supervised.
 
 **Disclose, do not quarantine.** Flag emotion, persuasion and reddit_humor as tasks whose family was
 seen in training, from a different origin:
@@ -199,6 +352,7 @@ seen in training, from a different origin:
 - ArgQ-30k for persuasion.
 - OASST1 humour ratings for reddit_humor.
 - SentiMix/AfriSenti for emotion.
+- SentiMix Spanglish for emotion (H8), only if it enters a recipe (r2).
 
 For XL-trained models these tasks are not zero-shot at the task-family level. They do not explain
 M4: every one of them fell for V2, or its exposure was equal in both arms.
@@ -218,9 +372,22 @@ M4: every one of them fell for V2, or its exposure was equal in both arms.
   Those were not traced. No recipe source is a figurative-language dataset.
 - **OneStopEnglish and media_ideology.** A same-publisher Guardian article is possible. Checking it
   needs test text.
-- **Teacher lineage.** V2 distils own-Lux targets on 99.7% of its rows, against 24.5% for T. Lux
-  1.0's own training corpus was not audited against CSS here. A teacher exposed to CSS-origin data
-  could transfer pilot behaviour without any same-source training row.
+- **Teacher lineage (resolved at dataset level in §4c; residuals).**
+  - Lux's final-stage run manifest was not found on either node. Its pool rests on its card and the
+    A7 inventory, and the 2,671 re-described semantic-24k options were not materialized.
+  - Two groups of text-level hits were not joined to the Lux pool: the two 1.0 rows with a pilot hit
+    (A7h 1, A7i 1) and the 1.0 Stage1 file's near-CSS15 contexts (27 RAOP, 1 Indian English; 2.0
+    `audit_css_train_near`). They are a few rows at most, and only the two A7 rows concern the pilot.
+  - Whether V2's stance drop in every seed pair reflects distilled Lux behaviour is untested. Lux maps
+    None to Against on 89 of 435 stance items in the 2.0 open evidence. A test would need pilot gold.
+  - Third-party pretraining of Lux's backbone and of `Qwen3-0.6B-Base` cannot be audited. The
+    student start is identical in both arms.
+  - AutoJev-27B's training data is undocumented and was not audited against CSS. M4 uses no AutoJev
+    target, but an AutoJev-distilled XL candidate would need this check.
+- **H7 / H8.** Gate 10 is dataset-level only. The text-level check is gates 4–5, and the embedding
+  scan is still pending. H7's densest text contact is with media_ideology: 261 of its 307 CSS15-hit
+  groups, all quarantined. SentiMix Spanglish's collection years and sampling come from the task
+  paper and were not re-verified.
 - **Scope.** This audit is dataset-level only. Text-level overlap is covered by the existing lexical
   and embedding scans (PI-v3). Per-task pilot confidence intervals were not computed; they would need
   pilot gold, and the aggregate paired intervals of `m4/contrast-v2.json` are used instead.
