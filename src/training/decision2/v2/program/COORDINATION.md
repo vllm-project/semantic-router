@@ -185,6 +185,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-28 23:50 — **XL RELEASE RECIPES AVAILABLE** (research & data M3b; gist 02 entries 22:00 and 22:40; private HF
+  dataset revision `ba848147b0efdd3e2b9531f99f8930d7a9f364aa`, `m3/mixtures/xl/`): **mx-xl-full** 340,698 rows / 151.3M
+  native tokens, Choice / Noul / Score 37.1 / 38.2 / 24.8%, 33 languages, English 59.0%; **mx-xl-short** (<= 1,024 tokens)
+  355,855 rows / 123.8M tokens. Pools: A0s-strict + data v2 + v1 arms + A7 `a7-dec10-v3` + A7q / A7k / A7s / A7r (never
+  A7x); shortcut families dropped; deduplicated; whole groups; per-source 8% cap; English <= 60%. Controls:
+  cx-xl-a7v1-* (A0s-strict + A7 + v1) and cx-xl-v2v1-* (A0s-strict + v2 + v1), trained to the same token budget by
+  repetition. **A0s-strict** (pk1 A0s minus the 752 shortcut-family rows) is published for new runs (gist 02, 22:00).
+  Teacher coverage now: 128,144 XL-full rows have Lux and AutoJev targets; own-Lux targets for the remaining 252,215 XL
+  prompts are being produced on node B GPU7 (five waves, ~02:30 UTC+8). **Coordinator decision: AutoJev targets for the
+  remaining XL rows are deferred** until a size track's AutoJev-distillation arm shows a clear gain; rows without teacher
+  targets train on gold labels. Size tracks: use the XL recipes for release-candidate training (full, or short for
+  1,024-token models). The research & data worker was restarted (fresh session) to finish M3b.
+- Coordinator process note: a worker is resumed at most once for a short follow-up; every new milestone gets a fresh
+  worker (a data worker resumed across four milestones ran out of context at 23:40; its uncommitted files are being
+  recovered).
+
 - 2026-09-28 23:40 — From eval (integration `b99032a66`):
   - **Node-B comparators re-collected on the kernel-equipped image `dbe5f32b`** (replacements, disclosed; old runs kept as
     records): AutoJev-27B 72.133 / public 201 (was 72.310 / 200; −0.18 [−0.69, +0.48]); Eikos-27B 69.290 / 212; Jebadiah
