@@ -38,7 +38,7 @@ extracted as an unlabelled parity input.
   bytes to Lux's `structured-segmented-candidate-endpoints-global-query-v2`),
   one causal pass; vectors at every option endpoint and at the final query
   token. This is the ordinary Decision head's input.
-- **Disaggregated (CLM-style)**: the state text (context, blank line, question
+- **Disaggregated (CLM-style)**: (superseded by the r1 amendment below) the state text (context, blank line, question
   instructions, structured values as prose) and each candidate text encoded
   alone, without special tokens. Candidates: Choice description (key if
   empty); Noul `key: description`; Score level description. Pooling: last
@@ -67,3 +67,34 @@ inputs are marked invalid).
 A failed gate stops that source's extraction; the failure is recorded and not
 retried with changed thresholds. GPU-hours are recorded from container
 start/end, including preflights.
+
+## Preflight r1 (official posttrained, 16 rows per partition): FAILED, method amended
+
+Code `59b277e70`, GPU2, 2026-09-28 03:10:53–03:11:23 UTC (30 s, 0.0083
+GPU-hour), exit 0, 7,936,684,544 parameters loaded, all digests matched.
+
+- **Joint parity failed the 0.999 gate.** Batched (right-padded,
+  length-sorted) joint prompts versus the same prompts run alone had minimum
+  cosine 0.9979 (TRAIN), 0.9957 (SELECT) and 0.9869 (CAL) across stored
+  layers. Disaggregated texts passed (minimum cosine ≥ 0.99991). The joint
+  features therefore depended on batch shape, which would make training and
+  serving features differ.
+- **Prose rendering inflated structured states.** One of 16 TRAIN rows (a dense
+  table) was 3,888 tokens as the native JSON prompt but 4,421 tokens as a
+  CLM-style prose state text, exceeding the 4,096 cap in the disaggregated
+  arms only.
+
+Prospective amendment (before any full extraction, head training or readout;
+threshold unchanged):
+
+1. Joint prompts run one per forward, the native per-question shape; the
+   gated joint check becomes repeat determinism of that shape, and the
+   batched-shape comparison is kept as a reported diagnostic.
+2. Disaggregated texts reuse the native prompt's own segments: the state text
+   is the native prefix (context, task type, question) and each candidate text
+   is that option's native `{"description","key"}` serialization. Joint and
+   disaggregated arms then see identical content and serialization; only the
+   encoding differs. CLM's prose rendering and description-only candidates are
+   serving-schema details, not hypotheses under test.
+
+Preflight r2 repeats the 16-row check with the amended code.

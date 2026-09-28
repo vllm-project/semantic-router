@@ -37,7 +37,7 @@ from .render import (
     text_sha256,
 )
 
-EXTRACT_VERSION = "decision2-9b-frozen-features-v1"
+EXTRACT_VERSION = "decision2-9b-frozen-features-v2"
 FINAL_LAYER = 32
 
 
@@ -385,6 +385,21 @@ def extract_texts(
     return store, index
 
 
+PARITY_MIN_COS = 0.999
+
+
+def _compare(stats, layer, observed, stored) -> None:
+    import torch
+
+    entry = stats.setdefault(str(layer), {"max_abs": 0.0, "min_cos": 1.0})
+    entry["max_abs"] = max(entry["max_abs"], float((observed - stored).abs().max()))
+    width = observed.shape[-1]
+    cosine = torch.nn.functional.cosine_similarity(
+        observed.reshape(-1, width), stored.reshape(-1, width), dim=-1
+    )
+    entry["min_cos"] = min(entry["min_cos"], float(cosine.min()))
+
+
 def parity_probe(
     backbone,
     tap,
@@ -399,57 +414,85 @@ def parity_probe(
     layers,
     sample,
 ):
-    """Recompute a fixed sample one input at a time and compare to batched features."""
+    """Fixed-sample checks of the stored features.
+
+    ``joint_repeat`` reruns single joint prompts (the stored shape) and must
+    match; ``joint_batched_diagnostic`` places the same prompts in one padded
+    batch to measure batch-shape sensitivity; ``texts`` compares batched text
+    features with single-text forwards. Gated: joint_repeat and texts.
+    """
     import torch
 
     valid = [r for r in records if r["j_valid"]]
     step = max(1, len(valid) // max(1, sample))
     chosen = valid[::step][:sample]
-    worst = {
-        "joint_max_abs": 0.0,
-        "joint_min_cos": 1.0,
-        "text_max_abs": 0.0,
-        "text_min_cos": 1.0,
+    report: dict[str, Any] = {
+        "sample_rows": len(chosen),
+        "joint_repeat": {},
+        "joint_batched_diagnostic": {},
+        "texts": {},
     }
-    for record in chosen:
-        hidden, _ = forward_layers(
-            backbone, tap, [joint_ids[record["j_batch_index"]]], pad_id, device, layers
-        )
+
+    def stored_joint(record, layer):
+        return joint_store[layer][
+            record["j_offset"] : record["j_offset"] + record["j_count"]
+        ]
+
+    def gather(hidden, row, record, layer):
         positions = torch.tensor(
             [*record["j_candidate_positions"], record["j_query_position"]],
             device=device,
         )
+        return hidden[layer][row].index_select(0, positions).cpu()
+
+    for record in chosen:
+        hidden, _ = forward_layers(
+            backbone, tap, [joint_ids[record["j_batch_index"]]], pad_id, device, layers
+        )
         for layer in layers:
-            single = hidden[layer][0].index_select(0, positions).cpu()
-            batched = joint_store[layer][
-                record["j_offset"] : record["j_offset"] + record["j_count"]
-            ]
-            worst["joint_max_abs"] = max(
-                worst["joint_max_abs"], float((single - batched).abs().max())
+            _compare(
+                report["joint_repeat"],
+                layer,
+                gather(hidden, 0, record, layer),
+                stored_joint(record, layer),
             )
-            worst["joint_min_cos"] = min(
-                worst["joint_min_cos"],
-                float(
-                    torch.nn.functional.cosine_similarity(single, batched, dim=-1).min()
-                ),
-            )
-        sha = record["d_state_sha"]
-        if sha in text_index:
+    if chosen:
+        hidden, _ = forward_layers(
+            backbone,
+            tap,
+            [joint_ids[r["j_batch_index"]] for r in chosen],
+            pad_id,
+            device,
+            layers,
+        )
+        for row, record in enumerate(chosen):
+            for layer in layers:
+                _compare(
+                    report["joint_batched_diagnostic"],
+                    layer,
+                    gather(hidden, row, record, layer),
+                    stored_joint(record, layer),
+                )
+    for record in chosen:
+        for sha in [record["d_state_sha"], *record["d_candidate_shas"][:2]]:
+            if sha not in text_index:
+                continue
             ids = texts[sha]
             hidden, _ = forward_layers(backbone, tap, [ids], pad_id, device, layers)
             for layer in layers:
-                single = hidden[layer][0, len(ids) - 1].cpu()
-                batched = text_store[f"last_L{layer}"][text_index[sha]]
-                worst["text_max_abs"] = max(
-                    worst["text_max_abs"], float((single - batched).abs().max())
+                _compare(
+                    report["texts"],
+                    layer,
+                    hidden[layer][0, len(ids) - 1].cpu(),
+                    text_store[f"last_L{layer}"][text_index[sha]],
                 )
-                worst["text_min_cos"] = min(
-                    worst["text_min_cos"],
-                    float(
-                        torch.nn.functional.cosine_similarity(single, batched, dim=0)
-                    ),
-                )
-    return {"sample_rows": len(chosen), **worst}
+    report["gate_min_cos"] = PARITY_MIN_COS
+    report["passed"] = all(
+        entry["min_cos"] >= PARITY_MIN_COS
+        for key in ("joint_repeat", "texts")
+        for entry in report[key].values()
+    )
+    return report
 
 
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -487,7 +530,12 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-length", type=int, default=4096)
     parser.add_argument("--token-budget", type=int, default=16384)
-    parser.add_argument("--max-batch-rows", type=int, default=32)
+    parser.add_argument(
+        "--max-batch-rows", type=int, default=32, help="disaggregated text batches"
+    )
+    parser.add_argument(
+        "--joint-batch-rows", type=int, default=1, help="joint prompts per forward"
+    )
     parser.add_argument(
         "--limit",
         type=int,
@@ -590,8 +638,9 @@ def main() -> None:
         "max_length": args.max_length,
         "truncation": "none; over-length inputs are marked invalid",
         "batching": {
-            "token_budget": args.token_budget,
-            "max_rows": args.max_batch_rows,
+            "joint_prompts_per_forward": args.joint_batch_rows,
+            "text_token_budget": args.token_budget,
+            "text_max_rows": max(args.max_batch_rows, 64),
             "padding": "right",
         },
         "limit": args.limit,
@@ -618,7 +667,7 @@ def main() -> None:
             device,
             pins.LAYERS,
             args.token_budget,
-            args.max_batch_rows,
+            args.joint_batch_rows,
             log,
         )
         text_store, text_index = extract_texts(
@@ -706,6 +755,14 @@ def main() -> None:
     manifest_path.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+    manifest["parity_passed"] = all(
+        entry["parity"]["passed"] for entry in manifest["inputs"].values()
+    )
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    if not manifest["parity_passed"]:
+        raise SystemExit("Feature parity gate failed; see manifest parity reports")
     print(
         json.dumps(
             {"manifest": str(manifest_path), "sha256": pins.file_sha256(manifest_path)}

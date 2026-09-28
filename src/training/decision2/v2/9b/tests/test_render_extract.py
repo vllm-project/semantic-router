@@ -7,12 +7,14 @@ sys.path.insert(0, str(HERE.parents[1]))
 sys.path.insert(0, str(HERE.parents[3]))
 
 from clm9b.extract import token_batches  # noqa: E402
-from clm9b.render import (  # noqa: E402
-    candidate_texts,
-    score_level_order,
-    state_text,
-    to_text,
-)
+from clm9b.lux_teacher import example_rows  # noqa: E402
+
+try:
+    import torch  # noqa: F401
+
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
 
 
 def row(
@@ -30,56 +32,42 @@ def row(
     }
 
 
+@unittest.skipUnless(HAS_TORCH, "native segment helpers import torch")
 class RenderTest(unittest.TestCase):
-    def test_structured_prose(self):
-        text = to_text({"owner": "Lee", "tags": ["a", {"b": 1}], "ok": True})
-        self.assertEqual(text, "owner: Lee\n\ntags:\n  - a\n  -\n    b: 1\n\nok: true")
+    def test_disaggregated_texts_are_the_native_segments(self):
+        from clm9b.render import candidate_texts, state_text
+        from training.model.decision_model import segments
 
-    def test_state_text_puts_question_last(self):
+        sample = row(
+            "choice",
+            [
+                {"key": "billing", "description": {"team": "payments"}},
+                {"key": "tech", "description": None},
+            ],
+            state={"owner": "Lee", "items": [1, 2]},
+        )
+        prefix, options, _ = segments(sample)
+        self.assertEqual(state_text(sample) + "\nOptions:", prefix)
         self.assertEqual(
-            state_text(row("noul", [])),
-            "The invoice was charged twice.\n\nIs this urgent?",
+            [f"\n<option>\n{text}\n</option>" for text in candidate_texts(sample)],
+            options,
         )
 
     def test_candidate_texts_are_state_independent(self):
+        from clm9b.render import candidate_texts
+
         options = [
             {"key": "false", "description": "No"},
             {"key": "true", "description": "Yes"},
         ]
-        first = candidate_texts(row("noul", options, state="A"))
-        second = candidate_texts(row("noul", options, state="B"))
-        self.assertEqual(first, ["false: No", "true: Yes"])
-        self.assertEqual(first, second)
-
-    def test_empty_descriptions_fall_back(self):
-        noul = candidate_texts(
-            row(
-                "noul",
-                [
-                    {"key": "true", "description": ""},
-                    {"key": "false", "description": None},
-                ],
-            )
-        )
         self.assertEqual(
-            noul,
-            [
-                "true: Yes. This is true: Is this urgent?",
-                "false: No. This is false: Is this urgent?",
-            ],
+            candidate_texts(row("noul", options, state="A")),
+            candidate_texts(row("noul", options, state="B")),
         )
-        choice = candidate_texts(
-            row(
-                "choice",
-                [
-                    {"key": "billing", "description": None},
-                    {"key": "tech", "description": "Faults"},
-                ],
-            )
-        )
-        self.assertEqual(choice, ["billing", "Faults"])
 
     def test_score_order_sorts_levels(self):
+        from clm9b.render import score_level_order
+
         options = [
             {"key": "2", "description": "high"},
             {"key": "0", "description": "low"},
@@ -108,6 +96,45 @@ class BatchTest(unittest.TestCase):
             padded = -(-max(lengths[i] for i in batch) // 8) * 8
             self.assertTrue(len(batch) == 1 or padded * len(batch) <= 1024)
             self.assertLessEqual(len(batch), 3)
+
+    def test_single_prompt_batches(self):
+        self.assertEqual(
+            token_batches([30, 10, 20], budget=10**6, max_rows=1), [[1], [2], [0]]
+        )
+
+
+class LuxExampleTest(unittest.TestCase):
+    def test_example_rows_use_lux_noul_defaults(self):
+        example = {
+            "requests": {
+                "r": {
+                    "state": "s",
+                    "questions": {
+                        "a": {"type": "noul", "instructions": "Is it?"},
+                        "b": {
+                            "type": "score",
+                            "instructions": "How?",
+                            "criteria": ["low", "high"],
+                        },
+                        "c": {
+                            "type": "choice",
+                            "instructions": "Which?",
+                            "criteria": {"x": "X", "y": "Y"},
+                        },
+                    },
+                }
+            }
+        }
+        rows = {r["id"]: r for r in example_rows(example)}
+        self.assertEqual(
+            rows["r/a"]["options"],
+            [
+                {"key": "false", "description": "The answer to the question is no."},
+                {"key": "true", "description": "The answer to the question is yes."},
+            ],
+        )
+        self.assertEqual([o["key"] for o in rows["r/b"]["options"]], ["0", "1"])
+        self.assertEqual([o["key"] for o in rows["r/c"]["options"]], ["x", "y"])
 
 
 if __name__ == "__main__":
