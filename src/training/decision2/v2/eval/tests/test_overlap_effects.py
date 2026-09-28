@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import io
 import json
 import random
+import statistics
 import tempfile
 import unittest
 from pathlib import Path
@@ -216,6 +219,19 @@ class FlaggedTest(unittest.TestCase):
                 "V1:A3": {"g4": {"roles": ["css15_native", "mlx_diag_v1"]}},
             }
             (root / "rescreen.private.json").write_text(json.dumps({"hits": hits}))
+            (root / "rows").mkdir()
+            rows = {
+                "H3": [("g1", "r1"), ("g1", "r2"), ("g2", "r3"), ("g3", "r4")],
+                "V1-A3": [("g4", "r5"), ("other", "r6")],
+            }
+            for pool, members in rows.items():
+                (root / "rows" / f"{pool}.jsonl").write_text(
+                    "".join(
+                        json.dumps({"group_id": g, "id": r, "input_sha256": f"h-{r}"})
+                        + "\n"
+                        for g, r in members
+                    )
+                )
             wanted = {
                 "css15_native",
                 "decision_bench_v4",
@@ -239,6 +255,37 @@ class FlaggedTest(unittest.TestCase):
         self.assertEqual(result["methods"]["css15"], {"L": 1, "L+N": 1})
         self.assertEqual(result["rescreen_private_cross_check"]["groups"], 3)
         self.assertNotIn("aho-1", json.dumps(result))
+        self.assertEqual(result["excluded_rows"], 4)
+        self.assertEqual(
+            result["excluded_groups"]["g1"],
+            {
+                "pools": ["H3"],
+                "row_ids": ["r1", "r2"],
+                "input_sha256": ["h-r1", "h-r2"],
+            },
+        )
+        self.assertEqual(result["item_groups"]["css/media_ideology/1"], ["g1", "g4"])
+        self.assertEqual(result["item_groups"]["hard-x-1"], ["g4"])
+        self.assertNotIn("fin-1", result["item_groups"])
+
+    def test_match_training_by_group_row_and_hash(self):
+        groups = {
+            "g1": {"pools": ["H3"], "row_ids": ["r1"], "input_sha256": ["h1"]},
+            "g2": {"pools": ["V1-A3"], "row_ids": ["r2"], "input_sha256": ["h2"]},
+        }
+        lines = [
+            {"group_id": "g1", "id": "r1", "input_sha256": "h1"},
+            {"group_id": "x", "id": "r2", "input_sha256": "hx"},
+            {"group_id": "y", "id": "z", "input_sha256": "q"},
+        ]
+        data = b"".join(json.dumps(row).encode() + b"\n" for row in lines)
+        files, matched = oe.match_training(groups, [("train", io.BytesIO(data))])
+        self.assertEqual(files[0]["rows"], 3)
+        self.assertEqual(files[0]["sha256"], hashlib.sha256(data).hexdigest())
+        self.assertEqual(
+            matched,
+            {"g1": {"group_id": 1, "id": 1, "input_sha256": 1}, "g2": {"id": 1}},
+        )
 
 
 class AggregatesTest(unittest.TestCase):
@@ -298,6 +345,150 @@ class AggregatesTest(unittest.TestCase):
         self.assertEqual(oe.ranks({"a": 2, "b": 3, "c": 2}), [["b"], ["a", "c"]])
         self.assertEqual(oe.ci_status({"low": -0.1, "high": 0.2}), "includes 0")
         self.assertEqual(oe.ci_status({"low": 0.1, "high": 0.2}), "above 0")
+
+
+class ExposureTest(unittest.TestCase):
+    def test_worst_case_misses_only_exposed_correct_answers(self):
+        model = {
+            "canonical": {"T": 0.5, "H": 0.4, "tasks": {}},
+            "typed": {},
+            "css": {
+                "c1": {"choice": "a", "correct": True, "gold_probability": 0.8},
+                "c2": {"choice": "b", "correct": False, "gold_probability": 0.1},
+                "c3": {"choice": "a", "correct": True, "gold_probability": 0.7},
+            },
+            "public": {"p1": {"tier": "hard", "correct": True}},
+            "mlx": {"m1": {"type": "noul", "language": "en", "correct": True}},
+        }
+        exposed = {
+            "typed-final": set(),
+            "css15": {"c1", "c2"},
+            "public231": {"p1"},
+            "mlx-diag": {"m1"},
+        }
+        worst = oe.worst_case_model(model, exposed)
+        self.assertIsNone(worst["css"]["c1"]["choice"])
+        self.assertFalse(worst["css"]["c1"]["correct"])
+        self.assertEqual(worst["css"]["c2"], model["css"]["c2"])
+        self.assertEqual(worst["css"]["c3"], model["css"]["c3"])
+        self.assertFalse(worst["public"]["p1"]["correct"])
+        self.assertFalse(worst["mlx"]["m1"]["correct"])
+        self.assertIsNone(worst["canonical"]["H"])
+        self.assertEqual(model["canonical"]["H"], 0.4)
+
+    def test_gold_probability_gap_is_weighted_by_task(self):
+        gold = {i: {"task": i[0]} for i in ("a1", "a2", "a3", "b1", "b2")}
+        outcomes = {
+            "a1": {"choice": "x", "gold_probability": 0.9},
+            "a2": {"choice": "x", "gold_probability": 0.5},
+            "a3": {"choice": None, "gold_probability": None},
+            "b1": {"choice": "y", "gold_probability": 0.2},
+            "b2": {"choice": "y", "gold_probability": 0.6},
+        }
+        gap = oe.gold_probability_gap(gold, outcomes, {"a1", "b1"})
+        self.assertEqual(gap["valid_flagged"], 2)
+        self.assertAlmostEqual(gap["flagged"], 0.55)
+        self.assertAlmostEqual(gap["unflagged_same_task"], 0.55)
+        self.assertAlmostEqual(gap["gap"], 0.0)
+
+    def test_tier_exposure_and_jobs(self):
+        rng = random.Random(11)
+        tgold, tleft, tright = typed_panel(rng)
+        cgold, cleft, cright = css_panel(rng)
+        public = {
+            f"p{i}": {"tier": "hard" if i % 2 else "easy", "correct": bool(i % 3)}
+            for i in range(10)
+        }
+
+        def model(typed_pred, css_pred):
+            counts = oe.typed_counts(tgold, typed_pred)
+            css = oe.css_outcomes(cgold, css_pred)
+            tasks = oe.css_task_f1(cgold, css, set())
+            return {
+                "typed": counts,
+                "css": css,
+                "public": dict(public),
+                "mlx": None,
+                "canonical": {
+                    "T": oe.typed_value(tgold, counts, set()),
+                    "H": statistics.median(tasks.values()),
+                    "tasks": tasks,
+                },
+            }
+
+        models = {"cand": model(tleft, cleft), "ref": model(tright, cright)}
+        gold = {
+            "typed-final": tgold,
+            "css15": cgold,
+            "public231": {k: {"tier": v["tier"]} for k, v in public.items()},
+            "mlx-diag": {},
+        }
+        task = sorted(EVALUATION_TASKS)[0]
+        flagged_css = sorted(i for i, r in cgold.items() if r["task"] == task)[:10]
+        exclude = {
+            "typed-final": set(),
+            "css15": set(flagged_css),
+            "public231": {"p1"},
+            "mlx-diag": set(),
+        }
+        item_groups = {
+            i: ["g-a" if n < 4 else "g-b"] for n, i in enumerate(flagged_css)
+        } | {"p1": ["g-b"]}
+        cfg = {"candidate": "cand", "own_1_0": ["ref"], "threshold_pool": ["ref"]}
+        with tempfile.TemporaryDirectory() as tmp:
+            receipt = Path(tmp) / "exposure.json"
+            receipt.write_text(
+                json.dumps(
+                    {
+                        "groups": ["g-a"],
+                        "files": [],
+                        "groups_by_pool": {"H3": 1},
+                        "methods_agree": True,
+                    }
+                )
+            )
+            info = oe.tier_exposure(
+                [str(receipt)], cfg, models, gold, exclude, item_groups
+            )
+        exposed = set(flagged_css[:4])
+        self.assertEqual(
+            info["counts"],
+            {"typed-final": 0, "css15": 4, "public231": 0, "mlx-diag": 0},
+        )
+        self.assertEqual(
+            info["exposed_correct"]["cand"]["css15"],
+            sum(models["cand"]["css"][i]["correct"] for i in exposed),
+        )
+        worst = info["values"]["worst_case"]["cand"]
+        self.assertLessEqual(
+            worst["tasks"][task], models["cand"]["canonical"]["tasks"][task]
+        )
+        self.assertEqual(
+            info["values"]["exposed_reduced"]["ref"]["tasks"][task],
+            oe.css_task_f1(cgold, models["ref"]["css"], exposed)[task],
+        )
+        self.assertEqual(
+            info["values"]["worst_case"]["ref"]["v3"],
+            oe.model_values(models["ref"], gold, {p: set() for p in oe.SCORED_PANELS})[
+                "v3"
+            ],
+        )
+        pairs = [{"tier": "t", "left": "cand", "right": "ref", "relation": "own_1_0"}]
+        jobs = oe.exposure_jobs(pairs, models, gold, exclude, {"t": info})
+        self.assertEqual(
+            [(kind, variant) for kind, _key, variant, _payload in jobs],
+            [
+                ("v3", "exposed_reduced"),
+                ("v3", "worst_case"),
+                ("contamination", "exposed"),
+            ],
+        )
+        units = jobs[2][3][0]
+        self.assertEqual(sum(len(f) for f, _u in units), 4)
+        self.assertEqual(
+            sum(len(u) for _f, u in units),
+            sum(r["task"] == task for r in cgold.values()) - len(flagged_css),
+        )
 
 
 if __name__ == "__main__":

@@ -1,7 +1,9 @@
 """Effect of evaluation items flagged by a later training-data rescreen, from stored predictions.
 
     python3 -m v2.eval.overlap_effects flagged --rescreen DIR --role ROLE [--role ROLE ...] \
-        [--expect-groups N] --output FLAGGED
+        [--expect-groups N] --output FLAGGED [--payload-output GROUPS]
+    python3 -m v2.eval.overlap_effects exposure --groups GROUPS --train FILE|- [--train ...] \
+        [--expect-sha256 SHA ...] --label NAME --output EXPOSURE
     python3 -m v2.eval.overlap_effects run --spec SPEC --flagged FLAGGED --output OUT [--jobs N]
 
 `flagged` reads the research & data rescreen's private overlap receipts under DIR
@@ -9,8 +11,13 @@
 collects every evaluation-item id that a training group hit in one of the named roles.
 Ids are assigned to the frozen panel that contains them (typed FINAL, CSS15, public 231,
 mlx-diag); ids in no frozen panel (for example Decision Bench v4) are counted per role
-but not scored. It also records which training pools hit each panel stratum and by
-which detection methods. FLAGGED holds item ids and stays on the node.
+but not scored. It also records which training pools hit each panel stratum, by which
+detection methods, and the rescreened row ids and input hashes of every excluded group.
+FLAGGED holds item ids and stays on the node; GROUPS holds only the training-side group,
+row and input-hash ids, for the node that stores a model's training file.
+
+`exposure` streams a model's training file(s) and lists the excluded groups present in
+them, matched by group id, row id or input hash (all three should agree).
 
 `run` rescores every model in SPEC from its sealed predictions on the full panels and
 without the flagged items (the same items for every model): typed T, human transfer H
@@ -30,6 +37,11 @@ comparator pair it runs:
   models, and the candidate-minus-comparator difference of that gap (items resampled
   within task and flag). A candidate that gains more on the flagged items than its
   comparator shows a positive difference.
+
+A candidate whose SPEC entry lists `exposure` receipts also gets its own-exposure
+analysis: the flagged items its training rows could have touched, the tier rescored
+without them (every model), a worst case in which the candidate misses every one of them
+it answered correctly, and the contamination check on those items alone.
 
 Outputs are aggregates only: no item ids, text, gold values or answers.
 """
@@ -74,9 +86,12 @@ from v2.eval.same_panel import (
 
 SCHEMA = "dev2-overlap-effects/1"
 FLAGGED_SCHEMA = "dev2-overlap-flagged/1"
+PAYLOAD_SCHEMA = "dev2-overlap-excluded-groups/1"
+EXPOSURE_SCHEMA = "dev2-overlap-exposure/1"
 SECOND_SEED = PAIRED_SEED + 1
 SCORED_PANELS = ("typed-final", "css15", "public231", "mlx-diag")
 MLX_TYPES = ("choice", "noul", "score")
+EXPOSURE_VARIANTS = ("exposed_reduced", "worst_case")
 
 
 def digest(value: Any) -> str:
@@ -183,6 +198,7 @@ def collect_flagged(
                 f"receipts give {len(excluded)} excluded groups, rescreen hits {len(from_hits)}"
             )
         cross_check = {"sha256": sha_file(private), "groups": len(from_hits)}
+    group_rows = excluded_rows(rescreen, group_pools, excluded)
     by_panel: dict[str, list[str]] = {panel: [] for panel in SCORED_PANELS}
     unscored: dict[str, set[str]] = defaultdict(set)
     strata: dict[str, dict[str, dict[str, int]]] = defaultdict(
@@ -230,7 +246,40 @@ def collect_flagged(
             panel: dict(sorted(rows.items())) for panel, rows in methods.items()
         },
         "gold_sha256": gold["sha256"],
+        "excluded_rows": sum(len(rows["row_ids"]) for rows in group_rows.values()),
+        "excluded_groups": group_rows,
+        "item_groups": {
+            item_id: sorted(item_groups[item_id])
+            for ids in by_panel.values()
+            for item_id in ids
+        },
     }
+
+
+def excluded_rows(
+    rescreen: Path, group_pools: dict[str, set[str]], excluded: set[str]
+) -> dict[str, dict[str, Any]]:
+    """Row ids and input hashes of every excluded group, from the rescreened rows."""
+    out = {
+        group_id: {
+            "pools": sorted(group_pools.get(group_id, ())),
+            "row_ids": [],
+            "input_sha256": [],
+        }
+        for group_id in sorted(excluded)
+    }
+    for pool in sorted({pool for g in excluded for pool in group_pools.get(g, ())}):
+        with (rescreen / "rows" / f"{pool}.jsonl").open(encoding="utf-8") as source:
+            for line in source:
+                row = json.loads(line)
+                entry = out.get(row.get("group_id"))
+                if entry is not None:
+                    entry["row_ids"].append(row["id"])
+                    entry["input_sha256"].append(row["input_sha256"])
+    missing = sum(not rows["row_ids"] for rows in out.values())
+    if missing:
+        raise ValueError(f"{missing} excluded groups have no rescreened rows")
+    return out
 
 
 def flagged(args: argparse.Namespace) -> int:
@@ -241,14 +290,110 @@ def flagged(args: argparse.Namespace) -> int:
             f"expected {args.expect_groups} groups, found {result['groups']}"
         )
     sha = write_json(args.output, result)
+    payload_sha = None
+    if args.payload_output is not None:
+        payload_sha = write_json(
+            args.payload_output,
+            {
+                "schema": PAYLOAD_SCHEMA,
+                "flagged_sha256": sha,
+                "groups": result["excluded_groups"],
+            },
+        )
     print(
         json.dumps(
             {
                 "output": str(args.output),
                 "sha256": sha,
+                "payload_sha256": payload_sha,
                 "groups": result["groups"],
+                "excluded_rows": result["excluded_rows"],
                 "counts": result["counts"],
                 "unscored_by_role": result["unscored_by_role"],
+            }
+        )
+    )
+    return 0
+
+
+# ---------------------------------------------------------------- exposure
+
+
+def match_training(
+    groups: dict[str, dict[str, Any]], streams: list[tuple[str, Any]]
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, int]]]:
+    """Rows of each training stream that belong to an excluded group, by group id, row id
+    or input hash."""
+    by_id = {row_id: g for g, rows in groups.items() for row_id in rows["row_ids"]}
+    by_hash = {h: g for g, rows in groups.items() for h in rows["input_sha256"]}
+    matched: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    files = []
+    for name, stream in streams:
+        sha, rows = hashlib.sha256(), 0
+        for raw in stream:
+            sha.update(raw)
+            if not raw.strip():
+                continue
+            row = json.loads(raw)
+            rows += 1
+            hits = set()
+            if row.get("group_id") in groups:
+                hits.add(("group_id", row["group_id"]))
+            if row.get("id") in by_id:
+                hits.add(("id", by_id[row["id"]]))
+            if row.get("input_sha256") in by_hash:
+                hits.add(("input_sha256", by_hash[row["input_sha256"]]))
+            for method, group_id in hits:
+                matched[group_id][method] += 1
+        files.append({"path": name, "sha256": sha.hexdigest(), "rows": rows})
+    return files, {g: dict(sorted(m.items())) for g, m in sorted(matched.items())}
+
+
+def exposure(args: argparse.Namespace) -> int:
+    payload = json.loads(args.groups.read_text(encoding="utf-8"))
+    groups = payload["groups"]
+    streams = []
+    for path in args.train:
+        streams.append((path, sys.stdin.buffer if path == "-" else open(path, "rb")))
+    try:
+        files, matched = match_training(groups, streams)
+    finally:
+        for _name, stream in streams:
+            if stream is not sys.stdin.buffer:
+                stream.close()
+    for expected, observed in zip(args.expect_sha256 or [], files):
+        if observed["sha256"] != expected:
+            raise ValueError(
+                f"{observed['path']}: sha256 {observed['sha256']} != {expected}"
+            )
+    by_method = {
+        method: sorted(g for g, m in matched.items() if method in m)
+        for method in ("group_id", "id", "input_sha256")
+    }
+    by_pool: dict[str, int] = defaultdict(int)
+    for group_id in matched:
+        for pool in groups[group_id]["pools"]:
+            by_pool[pool] += 1
+    result = {
+        "schema": EXPOSURE_SCHEMA,
+        "label": args.label,
+        "payload_sha256": sha_file(args.groups),
+        "files": files,
+        "groups": sorted(matched),
+        "groups_by_pool": dict(sorted(by_pool.items())),
+        "matched_rows": {g: m for g, m in matched.items()},
+        "methods_agree": len({tuple(v) for v in by_method.values()}) == 1,
+    }
+    sha = write_json(args.output, result)
+    print(
+        json.dumps(
+            {
+                "output": str(args.output),
+                "sha256": sha,
+                "files": files,
+                "groups": len(matched),
+                "groups_by_pool": result["groups_by_pool"],
+                "methods_agree": result["methods_agree"],
             }
         )
     )
@@ -519,7 +664,7 @@ def model_values(
     tasks = css_task_f1(gold["css15"], model["css"], exclude["css15"])
     h = (
         statistics.median(tasks.values())
-        if exclude["css15"]
+        if exclude["css15"] or model["canonical"]["H"] is None
         else model["canonical"]["H"]
     )
     return {
@@ -534,6 +679,33 @@ def model_values(
             else None
         ),
     }
+
+
+def worst_case_model(
+    model: dict[str, Any], exposed: dict[str, set[str]]
+) -> dict[str, Any]:
+    """The model with every exposed item it answered correctly scored as a miss."""
+    miss = {"choice": None, "correct": False, "gold_probability": None}
+    worst = {
+        **model,
+        "canonical": {**model["canonical"], "H": None},
+        "css": {
+            i: miss if i in exposed["css15"] and row["correct"] else row
+            for i, row in model["css"].items()
+        },
+        "public": {
+            i: {**row, "correct": False} if i in exposed["public231"] else row
+            for i, row in model["public"].items()
+        },
+    }
+    if exposed["typed-final"]:
+        raise ValueError("typed items are never flagged by the rescreen")
+    if model["mlx"] is not None:
+        worst["mlx"] = {
+            i: {**row, "correct": False} if i in exposed["mlx-diag"] else row
+            for i, row in model["mlx"].items()
+        }
+    return worst
 
 
 def check_full(
@@ -750,14 +922,16 @@ def contamination_units(
     right: dict[str, dict[str, Any]],
     flagged_ids: set[str],
     only_task: str | None = None,
+    drop: set[str] = frozenset(),
 ) -> list[tuple[list[tuple[int, int]], list[tuple[int, int]]]]:
-    """Per task with flagged items: (flagged, unflagged) paired correctness."""
+    """Per task with flagged items: (flagged, unflagged) paired correctness; items in
+    `drop` are on neither side."""
     by_task: dict[str, tuple[list[tuple[int, int]], list[tuple[int, int]]]] = (
         defaultdict(lambda: ([], []))
     )
     for item_id in sorted(gold):
         task = gold[item_id]["task"]
-        if only_task is None or task == only_task:
+        if item_id not in drop and (only_task is None or task == only_task):
             pair = (int(left[item_id]["correct"]), int(right[item_id]["correct"]))
             by_task[task][0 if item_id in flagged_ids else 1].append(pair)
     return [rows for _task, rows in sorted(by_task.items()) if rows[0] and rows[1]]
@@ -857,15 +1031,34 @@ def ranks(values: dict[str, float]) -> list[list[str]]:
     return order
 
 
-def mean_gold_probability(
-    outcomes: dict[str, dict[str, Any]], ids: set[str]
-) -> float | None:
-    probs = [
-        outcomes[i]["gold_probability"]
-        for i in ids
-        if outcomes[i]["choice"] is not None
-    ]
-    return statistics.mean(probs) if probs else None
+def gold_probability_gap(
+    gold: dict[str, dict[str, Any]],
+    outcomes: dict[str, dict[str, Any]],
+    flagged_ids: set[str],
+    only_task: str | None = None,
+) -> dict[str, float] | None:
+    """Mean gold-label probability of valid answers on flagged items minus the same-task
+    unflagged mean (weighted by valid flagged answers per task)."""
+    by_task: dict[str, tuple[list[float], list[float]]] = defaultdict(lambda: ([], []))
+    for item_id, row in gold.items():
+        outcome = outcomes[item_id]
+        if outcome["choice"] is not None and (
+            only_task is None or row["task"] == only_task
+        ):
+            side = 0 if item_id in flagged_ids else 1
+            by_task[row["task"]][side].append(outcome["gold_probability"])
+    units = [rows for _t, rows in sorted(by_task.items()) if rows[0] and rows[1]]
+    n = sum(len(f) for f, _u in units)
+    if not n:
+        return None
+    flagged_mean = sum(sum(f) for f, _u in units) / n
+    expected = sum(len(f) / n * statistics.fmean(u) for f, u in units)
+    return {
+        "valid_flagged": n,
+        "flagged": flagged_mean,
+        "unflagged_same_task": expected,
+        "gap": flagged_mean - expected,
+    }
 
 
 def bootstrap_jobs(
@@ -923,17 +1116,23 @@ def pair_entry(
     gold: dict[str, Any],
     exclude: dict[str, set[str]],
     focus: str,
+    exposure: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     lv, rv = values[pair["left"]], values[pair["right"]]
     entry: dict[str, Any] = {**pair, "v3": {}}
-    for variant, which in (
-        ("full", "full"),
-        ("full_seed2", "full"),
-        ("reduced", "reduced"),
-    ):
+    sides = {
+        "full": (lv["full"], rv["full"]),
+        "full_seed2": (lv["full"], rv["full"]),
+        "reduced": (lv["reduced"], rv["reduced"]),
+    }
+    if exposure is not None and exposure["any"]:
+        for variant in EXPOSURE_VARIANTS:
+            by_name = exposure["values"][variant]
+            sides[variant] = (by_name[pair["left"]], by_name[pair["right"]])
+    for variant, (left_values, right_values) in sides.items():
         point: dict[str, Any] = {
-            side: {"T": v[which]["T"], "H": v[which]["H"], "score": v[which]["v3"]}
-            for side, v in (("left", lv), ("right", rv))
+            side: {"T": v["T"], "H": v["H"], "score": v["v3"]}
+            for side, v in (("left", left_values), ("right", right_values))
         }
         point["delta"] = {
             k: point["left"][k] - point["right"][k] for k in ("T", "H", "score")
@@ -986,16 +1185,28 @@ def pair_entry(
             **contamination_point(units),
             "ci95": boot["contamination"][variant],
         }
+    entry["exposure"] = None
+    if exposure is not None:
+        entry["exposure"] = {"exposed_items": exposure["counts"]}
+        if "exposed" in boot["contamination"]:
+            units = contamination_units(
+                gold["css15"],
+                models[pair["left"]]["css"],
+                models[pair["right"]]["css"],
+                exposure["exposed"]["css15"],
+                None,
+                exclude["css15"] - exposure["exposed"]["css15"],
+            )
+            entry["exposure"]["contamination"] = {
+                "flagged_items": sum(len(f) for f, _u in units),
+                "unflagged_items": sum(len(u) for _f, u in units),
+                **contamination_point(units),
+                "ci95": boot["contamination"]["exposed"],
+            }
     cis = {
-        "v3": {v: entry["v3"][v]["ci95"] for v in ("full", "full_seed2", "reduced")},
-        "H": {
-            v: entry["v3"][v]["axis_ci95"]["H"]["delta"]
-            for v in ("full", "full_seed2", "reduced")
-        },
-        "T": {
-            v: entry["v3"][v]["axis_ci95"]["T"]["delta"]
-            for v in ("full", "full_seed2", "reduced")
-        },
+        "v3": {v: entry["v3"][v]["ci95"] for v in entry["v3"]},
+        "H": {v: entry["v3"][v]["axis_ci95"]["H"]["delta"] for v in entry["v3"]},
+        "T": {v: entry["v3"][v]["axis_ci95"]["T"]["delta"] for v in entry["v3"]},
         focus: {v: entry["focus_task"][v]["ci95"] for v in ("full", "reduced")},
         "public231": {v: entry["public231"][v]["ci95"] for v in ("full", "reduced")},
     }
@@ -1044,41 +1255,49 @@ def reproduce(
     return reproduction, problems
 
 
-def tier_summary(
-    cfg: dict[str, Any], values: dict[str, Any], out_pairs: dict[str, Any], focus: str
-) -> dict[str, Any]:
-    names = [
+def tier_names(cfg: dict[str, Any]) -> list[str]:
+    return [
         cfg["candidate"],
         *cfg.get("own_1_0", []),
         *cfg.get("peers", []),
         *cfg.get("internal_peers", []),
     ]
+
+
+def tier_summary(
+    cfg: dict[str, Any],
+    variant_values: dict[str, dict[str, Any]],
+    out_pairs: dict[str, Any],
+    focus: str,
+) -> dict[str, Any]:
+    """Ranks and release rules per variant; `variant_values[variant][model]`."""
+    names = tier_names(cfg)
     out: dict[str, Any] = {"models": names, "ranks": {}, "rules": {}}
     candidate = cfg["candidate"]
-    for variant in ("full", "reduced"):
+    for variant, values in variant_values.items():
         metrics = {
-            "v3": {n: values[n][variant]["v3"] for n in names},
-            "H": {n: values[n][variant]["H"] for n in names},
-            focus: {n: values[n][variant]["tasks"][focus] for n in names},
-            "public231": {n: values[n][variant]["public231"]["correct"] for n in names},
+            "v3": {n: values[n]["v3"] for n in names},
+            "H": {n: values[n]["H"] for n in names},
+            focus: {n: values[n]["tasks"][focus] for n in names},
+            "public231": {n: values[n]["public231"]["correct"] for n in names},
             "mlx": {
-                n: values[n][variant]["mlx"]["type_macro_accuracy"]
+                n: values[n]["mlx"]["type_macro_accuracy"]
                 for n in names
-                if values[n][variant]["mlx"] is not None
+                if values[n]["mlx"] is not None
             },
         }
         for metric, table in metrics.items():
             out["ranks"].setdefault(metric, {})[variant] = ranks(table)
-        best = max(cfg["threshold_pool"], key=lambda n: values[n][variant]["v3"])
-        threshold = 0.9 * values[best][variant]["v3"]
+        best = max(cfg["threshold_pool"], key=lambda n: values[n]["v3"])
+        threshold = 0.9 * values[best]["v3"]
         best_h = out_pairs[pair_key(candidate, best)]["v3"][variant]["axis_ci95"]["H"][
             "delta"
         ]
         out["rules"][variant] = {
             "best_peer": best,
             "threshold_v3": threshold,
-            "candidate_v3": values[candidate][variant]["v3"],
-            "meets_threshold": values[candidate][variant]["v3"] >= threshold,
+            "candidate_v3": values[candidate]["v3"],
+            "meets_threshold": values[candidate]["v3"] >= threshold,
             "v3_vs_own_1_0": {
                 right: ci_status(
                     out_pairs[pair_key(candidate, right)]["v3"][variant]["ci95"]
@@ -1088,10 +1307,192 @@ def tier_summary(
             "H_vs_best_peer_ci95": best_h,
             "H_significantly_below_best_peer": best_h["high"] < 0,
         }
-    out["rank_changes"] = [
-        metric for metric, by in out["ranks"].items() if by["full"] != by["reduced"]
-    ]
+    out["rank_changes"] = {
+        variant: [
+            metric
+            for metric, by in out["ranks"].items()
+            if variant in by and by[variant] != by["full"]
+        ]
+        for variant in variant_values
+        if variant != "full"
+    }
     return out
+
+
+def conclusion_changes(
+    out_pairs: dict[str, Any], out_tiers: dict[str, Any], variant: str
+) -> list[dict[str, Any]]:
+    """Every CI status, release rule or rank that differs between the full panels and
+    `variant`."""
+    changes = []
+    for key, entry in out_pairs.items():
+        for metric, status in entry["ci_status"].items():
+            if variant in status and status["full"] != status[variant]:
+                changes.append(
+                    {
+                        "pair": key,
+                        "metric": metric,
+                        "full": status["full"],
+                        variant: status[variant],
+                        "second_seed": status.get("full_seed2"),
+                    }
+                )
+    for tier, tier_out in out_tiers.items():
+        if variant not in tier_out["rules"]:
+            continue
+        full_rules, other = tier_out["rules"]["full"], tier_out["rules"][variant]
+        for rule in (
+            "best_peer",
+            "meets_threshold",
+            "v3_vs_own_1_0",
+            "H_significantly_below_best_peer",
+        ):
+            if full_rules[rule] != other[rule]:
+                changes.append(
+                    {
+                        "tier": tier,
+                        "rule": rule,
+                        "full": full_rules[rule],
+                        variant: other[rule],
+                    }
+                )
+        for metric in tier_out["rank_changes"].get(variant, []):
+            changes.append(
+                {
+                    "tier": tier,
+                    "rank": metric,
+                    "full": tier_out["ranks"][metric]["full"],
+                    variant: tier_out["ranks"][metric][variant],
+                }
+            )
+    return changes
+
+
+def tier_exposure(
+    paths: list[str],
+    cfg: dict[str, Any],
+    models: dict[str, dict[str, Any]],
+    gold: dict[str, Any],
+    exclude: dict[str, set[str]],
+    item_groups: dict[str, list[str]],
+) -> dict[str, Any]:
+    """Flagged items that the candidate's own training rows could have touched, and the
+    tier's scores without them (every model) or with the candidate missing each of them.
+    """
+    groups: set[str] = set()
+    receipts = []
+    for path in paths:
+        doc = json.loads(Path(path).read_text(encoding="utf-8"))
+        groups |= set(doc["groups"])
+        receipts.append(
+            {
+                "path": path,
+                "sha256": sha_file(Path(path)),
+                "files": doc["files"],
+                "groups": len(doc["groups"]),
+                "groups_by_pool": doc["groups_by_pool"],
+                "methods_agree": doc["methods_agree"],
+            }
+        )
+    exposed = {
+        panel: {i for i in exclude[panel] if groups & set(item_groups[i])}
+        for panel in SCORED_PANELS
+    }
+    strata: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for panel, ids in exposed.items():
+        for item_id in ids:
+            strata[panel][stratum(panel, gold[panel][item_id])] += 1
+    candidate, names = cfg["candidate"], tier_names(cfg)
+    info: dict[str, Any] = {
+        "candidate": candidate,
+        "receipts": receipts,
+        "groups": len(groups),
+        "counts": {panel: len(ids) for panel, ids in exposed.items()},
+        "strata": {p: dict(sorted(rows.items())) for p, rows in sorted(strata.items())},
+        "any": any(exposed.values()),
+        "exposed": exposed,
+        "exposed_correct": {
+            n: {
+                "css15": sum(models[n]["css"][i]["correct"] for i in exposed["css15"]),
+                "public231": sum(
+                    models[n]["public"][i]["correct"] for i in exposed["public231"]
+                ),
+                "mlx-diag": (
+                    sum(models[n]["mlx"][i]["correct"] for i in exposed["mlx-diag"])
+                    if models[n]["mlx"] is not None
+                    else None
+                ),
+            }
+            for n in names
+        },
+    }
+    if info["any"]:
+        none = {panel: set() for panel in SCORED_PANELS}
+        info["worst"] = worst_case_model(models[candidate], exposed)
+        info["values"] = {
+            "exposed_reduced": {
+                n: model_values(models[n], gold, exposed) for n in names
+            },
+            "worst_case": {
+                n: model_values(
+                    info["worst"] if n == candidate else models[n], gold, none
+                )
+                for n in names
+            },
+        }
+    return info
+
+
+def exposure_jobs(
+    pairs: list[dict[str, str]],
+    models: dict[str, dict[str, Any]],
+    gold: dict[str, Any],
+    exclude: dict[str, set[str]],
+    exposures: dict[str, dict[str, Any]],
+) -> list[tuple[str, str, str, tuple]]:
+    none = {panel: set() for panel in SCORED_PANELS}
+    jobs = []
+    for pair in pairs:
+        info = exposures.get(pair["tier"])
+        if info is None or not info["any"]:
+            continue
+        key = pair_key(pair["left"], pair["right"])
+        left, right = models[pair["left"]], models[pair["right"]]
+        exposed = info["exposed"]
+        for variant, left_model, excl in (
+            ("exposed_reduced", left, exposed),
+            ("worst_case", info["worst"], none),
+        ):
+            families = pair_families(
+                gold["typed-final"],
+                left_model["typed"],
+                right["typed"],
+                excl["typed-final"],
+            )
+            tasks = pair_tasks(
+                gold["css15"], left_model["css"], right["css"], excl["css15"]
+            )
+            jobs.append(
+                ("v3", key, variant, (families, tasks, PAIRED_REPLICATES, PAIRED_SEED))
+            )
+        units = contamination_units(
+            gold["css15"],
+            left["css"],
+            right["css"],
+            exposed["css15"],
+            None,
+            exclude["css15"] - exposed["css15"],
+        )
+        if units:
+            jobs.append(
+                (
+                    "contamination",
+                    key,
+                    "exposed",
+                    (units, PAIRED_REPLICATES, PAIRED_SEED),
+                )
+            )
+    return jobs
 
 
 def run(args: argparse.Namespace) -> int:
@@ -1110,12 +1511,6 @@ def run(args: argparse.Namespace) -> int:
             raise ValueError(f"{panel}: flagged ids outside the panel")
     none = {panel: set() for panel in SCORED_PANELS}
     focus = spec["focus_task"]
-    affected = {gold["css15"][i]["task"] for i in exclude["css15"]}
-    unflagged_same_tasks = {
-        i
-        for i, row in gold["css15"].items()
-        if row["task"] in affected and i not in exclude["css15"]
-    }
 
     models, values, problems = {}, {}, []
     for name, cfg in spec["models"].items():
@@ -1132,8 +1527,21 @@ def run(args: argparse.Namespace) -> int:
             flush=True,
         )
 
+    exposures = {
+        tier: tier_exposure(
+            spec["models"][cfg["candidate"]].get("exposure"),
+            cfg,
+            models,
+            gold,
+            exclude,
+            flagged_doc["item_groups"],
+        )
+        for tier, cfg in spec["tiers"].items()
+        if spec["models"][cfg["candidate"]].get("exposure")
+    }
     pairs = pairs_from_tiers(spec["tiers"])
     jobs = bootstrap_jobs(pairs, models, gold, exclude, focus)
+    jobs += exposure_jobs(pairs, models, gold, exclude, exposures)
     print(
         f"{len(jobs)} bootstrap jobs on {args.jobs} processes",
         file=sys.stderr,
@@ -1154,6 +1562,7 @@ def run(args: argparse.Namespace) -> int:
             gold,
             exclude,
             focus,
+            exposures.get(pair["tier"]),
         )
         for pair in pairs
     }
@@ -1161,45 +1570,21 @@ def run(args: argparse.Namespace) -> int:
         spec.get("reproduce", []), out_pairs, models
     )
     problems += reproduction_problems
-    out_tiers = {
-        tier: tier_summary(cfg, values, out_pairs, focus)
-        for tier, cfg in spec["tiers"].items()
+    out_tiers = {}
+    for tier, cfg in spec["tiers"].items():
+        names = tier_names(cfg)
+        variant_values = {
+            variant: {n: values[n][variant] for n in names}
+            for variant in ("full", "reduced")
+        }
+        if tier in exposures and exposures[tier]["any"]:
+            variant_values.update(exposures[tier]["values"])
+        out_tiers[tier] = tier_summary(cfg, variant_values, out_pairs, focus)
+    changes = conclusion_changes(out_pairs, out_tiers, "reduced")
+    exposure_changes = {
+        variant: conclusion_changes(out_pairs, out_tiers, variant)
+        for variant in EXPOSURE_VARIANTS
     }
-
-    changes = []
-    for key, entry in out_pairs.items():
-        for metric, status in entry["ci_status"].items():
-            if status["full"] != status["reduced"]:
-                changes.append({"pair": key, "metric": metric, **status})
-    for tier, tier_out in out_tiers.items():
-        full_rules, reduced_rules = (
-            tier_out["rules"]["full"],
-            tier_out["rules"]["reduced"],
-        )
-        for rule in (
-            "best_peer",
-            "meets_threshold",
-            "v3_vs_own_1_0",
-            "H_significantly_below_best_peer",
-        ):
-            if full_rules[rule] != reduced_rules[rule]:
-                changes.append(
-                    {
-                        "tier": tier,
-                        "rule": rule,
-                        "full": full_rules[rule],
-                        "reduced": reduced_rules[rule],
-                    }
-                )
-        for metric in tier_out["rank_changes"]:
-            changes.append(
-                {
-                    "tier": tier,
-                    "rank": metric,
-                    "full": tier_out["ranks"][metric]["full"],
-                    "reduced": tier_out["ranks"][metric]["reduced"],
-                }
-            )
 
     result = {
         "schema": SCHEMA,
@@ -1250,20 +1635,31 @@ def run(args: argparse.Namespace) -> int:
                         if model["mlx"] is not None
                         else None
                     ),
-                    "css15_gold_probability_flagged": mean_gold_probability(
-                        model["css"], exclude["css15"]
-                    ),
-                    "css15_gold_probability_unflagged_same_tasks": mean_gold_probability(
-                        model["css"], unflagged_same_tasks
-                    ),
+                    "css15_gold_probability": {
+                        "all_flagged": gold_probability_gap(
+                            gold["css15"], model["css"], exclude["css15"]
+                        ),
+                        "focus_task": gold_probability_gap(
+                            gold["css15"], model["css"], exclude["css15"], focus
+                        ),
+                    },
                 },
             }
             for name, model in models.items()
+        },
+        "exposure": {
+            tier: {
+                key: value
+                for key, value in info.items()
+                if key not in ("exposed", "values", "worst")
+            }
+            for tier, info in exposures.items()
         },
         "pairs": out_pairs,
         "tiers": out_tiers,
         "reproduction": reproduction,
         "changes": changes,
+        "exposure_changes": exposure_changes,
         "problems": problems,
     }
     sha = write_json(args.output, result)
@@ -1377,10 +1773,31 @@ def render(result: dict[str, Any]) -> str:
                 f"{c['difference_in_differences']:+.3f} "
                 f"{_ci(c['ci95']['difference_in_differences'], 3)} |"
             )
+    lines += [
+        "",
+        "## Flagged-item outcomes per model",
+        "",
+        "| Model | CSS15 flagged correct (valid) | gold prob. gap, all / focus | "
+        "public 231 item | mlx-diag item |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for name, model in result["models"].items():
+        fo = model["flagged_outcomes"]
+        gaps = [
+            f"{g['gap']:+.3f}" if g is not None else "n/a"
+            for g in (
+                fo["css15_gold_probability"]["all_flagged"],
+                fo["css15_gold_probability"]["focus_task"],
+            )
+        ]
+        lines.append(
+            f"| {name} | {fo['css15_correct']} ({fo['css15_valid']}) | "
+            f"{gaps[0]} / {gaps[1]} | {fo['public231_correct']} | "
+            f"{fo['mlx_correct'] if fo['mlx_correct'] is not None else 'n/a'} |"
+        )
     lines += ["", "## Rules and ranks", ""]
     for tier, tier_out in result["tiers"].items():
-        for variant in ("full", "reduced"):
-            rules = tier_out["rules"][variant]
+        for variant, rules in tier_out["rules"].items():
             lines.append(
                 f"- {tier} {variant}: threshold {rules['threshold_v3']:.3f} "
                 f"(0.9 x {rules['best_peer']}), candidate {rules['candidate_v3']:.3f}, "
@@ -1388,11 +1805,46 @@ def render(result: dict[str, Any]) -> str:
                 f"H vs best peer {_ci(rules['H_vs_best_peer_ci95'], 3)} "
                 f"(significantly below: {rules['H_significantly_below_best_peer']})"
             )
-        lines.append(f"- {tier} rank changes: {tier_out['rank_changes'] or 'none'}")
-    lines += ["", "## Conclusion changes", ""]
+        lines.append(f"- {tier} rank changes: {tier_out['rank_changes']}")
+    lines += ["", "## Conclusion changes (all flagged items removed)", ""]
     lines += [
         f"- {json.dumps(change, sort_keys=True)}" for change in result["changes"]
     ] or ["- none"]
+    lines += ["", "## Own-exposure analysis (post hoc)", ""]
+    for tier, info in result["exposure"].items():
+        lines.append(
+            f"- {tier} {info['candidate']}: {info['groups']} excluded groups in its "
+            f"training rows; exposed scored items {info['counts']} {info['strata']}; "
+            f"correct on them: {info['exposed_correct']}"
+        )
+    lines += [
+        "",
+        "| Pair | Δ v3 without own-exposed items | Δ v3 worst case | "
+        "exposed-item difference [95% CI] |",
+        "| --- | --- | --- | --- |",
+    ]
+    for key, entry in result["pairs"].items():
+        if entry["exposure"] is None or "exposed_reduced" not in entry["v3"]:
+            continue
+        cells = [
+            f"{entry['v3'][v]['point']['delta']['score']:+.2f} "
+            f"{_ci(entry['v3'][v]['ci95'], 2)}"
+            for v in EXPOSURE_VARIANTS
+        ]
+        c = entry["exposure"].get("contamination")
+        did = (
+            f"{c['difference_in_differences']:+.3f} "
+            f"{_ci(c['ci95']['difference_in_differences'], 3)} "
+            f"({c['flagged_items']} items)"
+            if c is not None
+            else "n/a"
+        )
+        lines.append(f"| {key} | {cells[0]} | {cells[1]} | {did} |")
+    for variant, changes in result["exposure_changes"].items():
+        lines += ["", f"Changes, {variant}:", ""]
+        lines += [f"- {json.dumps(change, sort_keys=True)}" for change in changes] or [
+            "- none"
+        ]
     lines += [
         "",
         f"Reproduction: {sum(r['match'] for r in result['reproduction'])} of "
@@ -1415,7 +1867,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     one.add_argument("--expect-groups", type=int)
     one.add_argument("--output", type=Path, required=True)
+    one.add_argument("--payload-output", type=Path)
     one.set_defaults(func=flagged)
+    three = sub.add_parser("exposure")
+    three.add_argument("--groups", type=Path, required=True)
+    three.add_argument("--train", action="append", required=True)
+    three.add_argument("--expect-sha256", action="append")
+    three.add_argument("--label", required=True)
+    three.add_argument("--output", type=Path, required=True)
+    three.set_defaults(func=exposure)
     two = sub.add_parser("run")
     two.add_argument("--spec", type=Path, required=True)
     two.add_argument("--flagged", type=Path, required=True)
