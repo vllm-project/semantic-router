@@ -40,7 +40,7 @@ def test_text_plus_visual_is_both(text):
 @pytest.mark.parametrize(
     "text",
     [
-        "Generate a marketing material or advertisment that consists of both text "
+        "Generate a marketing material or advertisement that consists of both text "
         "and multiple images, where text and images can be interleaved in an "
         "arbitrary order.",
         "In this task, you are given a high-level goal 'How to Make Tea Eggs'",

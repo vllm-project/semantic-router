@@ -37,7 +37,7 @@ BOTH_TEMPLATE = re.compile(
 # fifth letter and one prefix won't cover both.
 TEXT_VERB = re.compile(
     r"\b("
-    r"explain\w*|explanat\w*|describ\w*|teach\w*|learn\w*|understand\w*|"
+    r"explain\w*|explanat\w*|describes?|describing|described|teach\w*|learn\w*|understand\w*|"
     r"summari[sz]\w*|compar\w*|"
     r"walk me through|guide me through|help me|"
     r"tell me|writ(e|ing)|list|"
