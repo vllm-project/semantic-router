@@ -19,7 +19,13 @@ func (decoder *responsesStreamDecoder) decodeResponsesLifecycleEvent(
 	switch wire.Type {
 	case "response.created", "response.queued", "response.in_progress":
 		if decoder.started {
-			return nil, nil, nil
+			if event.DynamoNVExt == nil {
+				return nil, nil, nil
+			}
+			event.Type = llmprotocol.EventProviderOpaque
+			event.DynamoResponsesLifecycle = wire.Type
+			event.ResponseID, event.Model = wire.Response.ID, wire.Response.Model
+			return decoder.emitResponsesEvent(event)
 		}
 		applyResponsesStart(&event, wire)
 	case "response.completed", "response.incomplete":

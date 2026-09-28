@@ -414,10 +414,7 @@ func (encoder *responsesStreamEncoder) encodeResponsesOpaque(event llmprotocol.E
 		)
 	}
 	if event.DynamoNVExt != nil {
-		return nil, llmprotocol.NewError(
-			llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_nvext_translation",
-			"Dynamo nvext stream chunks cannot be translated across wire formats", nil,
-		)
+		return encoder.encodeDynamoResponsesLifecycle(event)
 	}
 	if encoder.policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat || encoder.context.Source != encoder.context.Target {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "opaque_event", "opaque provider event cannot cross formats", nil)
