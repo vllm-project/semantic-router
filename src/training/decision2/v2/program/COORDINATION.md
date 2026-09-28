@@ -185,6 +185,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-28 22:20 — DEV2.0-0.8B package verified (release record `v2/release/records/dev2-0p8b-release-2026-09-28/`;
+  integration `2aad3f96f`): private `llm-semantic-router/DEV2.0-0.8B@2667d883…`, 753,446,208 loaded parameters, manifest
+  `d10bd95c…`, real-download re-hash 31/31, parity 0 changed answers on all 8,378 scored prompts. Finalization (C1 line,
+  final decision, `--collect`) is running. **Card licence policy (applies to every size):** peers whose model card
+  declares a permissive licence may appear even without a LICENSE file (note it); mlx-diag parts built from
+  non-commercial sources (e.g., its XNLI-based Score part) are left off cards; a model is labelled `apache-2.0` when its
+  whole weight / tokenizer / code lineage is Apache-2.0, with training-data licences (e.g., CC BY-SA) credited on the card.
+  Release examples must load the scored kernels (the pipeline now fails if they are missing); cards state the tested
+  hardware and don't claim CPU support unless verified.
+
 - 2026-09-28 21:55 — **DEV2.0-0.8B APPROVED for private release** (eval gate checks + C1 event 1; integration `bf3ff2e6e`).
   - Gate (a): human transfer not below the tier leaders (vs Intern-Decision +0.058 [−0.043, +0.119]; vs Kev +0.050
     [−0.041, +0.122]); v3 vs Intern-Decision +6.70 [+0.63, +10.35], vs Kev +7.02 [+1.33, +11.25]. Gate (b): no type
