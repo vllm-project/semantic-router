@@ -4,7 +4,7 @@ description: 连接 AMD vLLM 后端，并在 AMD GPU 上运行 Vela 路由模型
 translation:
   source_commit: "96399a94b9030d66f46c5d45f9a838defc091153"
   source_file: "docs/installation/amd-rocm.md"
-  outdated: false
+  outdated: true
 ---
 
 # 使用 AMD ROCm 部署

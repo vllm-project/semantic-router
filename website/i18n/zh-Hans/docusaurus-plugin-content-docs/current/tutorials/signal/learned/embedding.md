@@ -2,7 +2,7 @@
 translation:
   source_commit: "91dd60a58fd0806b1b4d4404449e705f484d53de"
   source_file: "docs/tutorials/signal/learned/embedding.md"
-  outdated: false
+  outdated: true
 ---
 
 # 嵌入信号 {#embedding-signal}

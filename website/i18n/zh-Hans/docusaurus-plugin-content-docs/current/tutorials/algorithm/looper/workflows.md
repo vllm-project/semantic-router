@@ -2,7 +2,7 @@
 translation:
   source_commit: "9fbd7d85183341c61c25dfc526160eb0599434f8"
   source_file: "docs/tutorials/algorithm/looper/workflows.md"
-  outdated: false
+  outdated: true
 ---
 
 # 路由工作流

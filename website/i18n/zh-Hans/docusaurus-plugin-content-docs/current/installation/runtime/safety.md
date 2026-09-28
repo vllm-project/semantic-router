@@ -4,7 +4,7 @@ description: 配置 Vela Guard、Safety、Hazard 和 PII，并选择 Router 的�
 translation:
   source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
   source_file: "docs/installation/runtime/safety.md"
-  outdated: false
+  outdated: true
 ---
 
 Vela 安全模型用于检测提示词攻击、有害内容和个人信息。信号报告模型检测结果，决策和插件选择处理方式。仅启用模型不会自动拦截请求或脱敏。

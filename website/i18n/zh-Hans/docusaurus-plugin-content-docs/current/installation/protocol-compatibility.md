@@ -4,7 +4,7 @@ description: 将面向客户端的推理 API 与受支持的后端模型协议�
 translation:
   source_commit: "867155c924b6527d6a412e1412ce712a9e5cc9b8"
   source_file: "docs/installation/protocol-compatibility.md"
-  outdated: false
+  outdated: true
 ---
 
 # 协议兼容性矩阵

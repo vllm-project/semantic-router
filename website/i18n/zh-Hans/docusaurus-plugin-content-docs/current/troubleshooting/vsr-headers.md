@@ -2,7 +2,7 @@
 translation:
   source_commit: "bce357c513f391824e8320267d03977794c20f76"
   source_file: "docs/troubleshooting/vsr-headers.md"
-  outdated: false
+  outdated: true
 ---
 
 # VSR 路由头
