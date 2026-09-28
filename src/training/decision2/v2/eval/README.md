@@ -87,7 +87,10 @@ python3 -m v2.eval.dev_readout --run-dir <run-dir> \
 SELECT/CAL rows are `{"id": ..., "probabilities": [...]}` aligned with the partition's
 `options`; the readout reports correct/700, family-macro accuracy and Brier (six
 families), per-type accuracy, T_dev, H_pilot and the development proxy
-`100 * sqrt(T_dev * H_pilot)`.
+`100 * sqrt(T_dev * H_pilot)`. Within a tier, checkpoints less than 8 proxy points
+apart are ties: send them all to the formal runner (calibration on 51 models,
+`records/m5-proxy-v2-calibration-2026-09-29.md`; re-run it with
+`python3 -m v2.eval.proxy_calibration extract|analyze`).
 
 ## (c) Product-card charts from same-panel reports
 

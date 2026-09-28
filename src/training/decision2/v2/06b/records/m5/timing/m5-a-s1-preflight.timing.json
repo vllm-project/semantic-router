@@ -1,0 +1,1 @@
+{"run":"m5-a-s1-preflight","gpu":0,"render":"/dev/dri/renderD129","commit":"3755f206afd97b4218cfb9d09cc21b2f60ea943e-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T14:16:43Z","end_utc":"2026-09-28T14:17:34Z","wall_seconds":51,"gpu_hours":0.01417,"exit":0}

@@ -85,6 +85,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | release engineering | `/home/xunliu/code/vllm-sr-dev2-release` | `xunzhuo/decision-2-training-release` |
 | A7 own-1.0 corpora | `/home/xunliu/code/vllm-sr-dev2-a7` | `xunzhuo/decision-2-training-a7` |
 | release engineering (DEV2.0-0.6B) | `/home/xunliu/code/vllm-sr-dev2-release-06b` | `xunzhuo/decision-2-training-release-06b` |
+| release engineering (DEV2.0-2B) | `/home/xunliu/code/vllm-sr-dev2-release-2b` | `xunzhuo/decision-2-training-release-2b` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -176,6 +177,7 @@ exactly one gist file and updates it in place:
 | `07-decision-2-release.md` | release engineering |
 | `08-decision-2-own10-corpora.md` | A7 own-1.0 corpora |
 | `07b-decision-2-release-06b.md` | release engineering for DEV2.0-0.6B |
+| `07c-decision-2-release-2b.md` | release engineering for DEV2.0-2B |
 
 - Create: write the file locally with exactly that name, then `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -a <local-path>`.
   Update: `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -f <file-name> <local-path>`. Never modify or delete other files.
@@ -184,6 +186,107 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 03:30 — **Development proxy v2** (eval; "Eval runners" → "Development proxy v2"; integration `c3da006b8`): P stays
+  100·√(T_dev·H_pilot), recalibrated on 51 models (v3 ≈ 22.4 + 0.58·P); **tie band is now |ΔP| < 8** (supersedes 4). No
+  preregistered alternative (incl. the CSS-pilot three-task mean) beats P on within-tier ordering; 67 of 70 same-track
+  candidate pairs fall inside the band (P's order matches v3 only ~69% there). Rules for every size track:
+  - P may only DROP candidates at least 8 behind the best; siblings inside the band go to the formal runner, **at most three
+    finalists per tier per milestone** (limits selection on the post-key panel; C1 event 3 confirms the final picks).
+  - Read development panels at the candidate's formal input limit and on the kernel-equipped image (12 of 27 candidates
+    were not). P over-predicts JPT peers and 27B LoRA arms by ~4–5 v3 points; treat those readouts with that bias in mind.
+- 2026-09-29 03:30 — **Worktree rule:** one active worker per git worktree. When two workers of the same track run at the
+  same time, the coordinator gives the second its own worktree (e.g. `/home/xunliu/code/vllm-sr-dev2-eval-<suffix>` on a
+  branch `xunzhuo/decision-2-training-eval-<suffix>`); never share an index.
+
+- 2026-09-29 03:10 — Research & data M3b complete (gist 02, 03:10 entry; integration `189c6b39c`):
+  - **XL r2 release recipes** (private revision `100536133e…`): mx-xl-full-r2 365,970 rows / 179.2M tokens, Choice / Noul /
+    Score 31.9 / 45.6 / 22.6%, long-evidence share 29.0% (clears the 20% floor); mx-xl-short-r2 373,577 / 127.4M; a `nogap`
+    control keeps r1's balance. New arms H7 (English long evidence: HoVer, Natural Questions; 4,292 rows / 16.1M tokens)
+    and H8 (17 languages: TyDi QA, MIRACL, JCommonsenseQA, SentiMix Spanglish; 21,378 / 12.4M) at `09f73967` passed every
+    gate. Own-Lux targets cover every XL r1 row and control and all r2 rows except H7 / H8 (gold labels). PI-v4 manifest
+    `24b060da…` (87 roles; A7 held-out protected, A7 TRAIN report-only). Prefer XL r2 (or r1 if a tier needs its higher
+    Choice share) for new release-candidate training; the older M2 recipes are superseded.
+  - Same-source check: NO training source (nor Lux 1.0's pool) shares an origin with any CSS-pilot task; the v2 soup's proxy
+    lead came from typed DEV (82% of the gap). Nothing quarantined; FLUTE stays excluded.
+  - **Coordinator decisions:** (1) amendment 4 (post-results narrowing of the rescreen) is ACCEPTED as disclosed: exclude
+    hits against evaluation panels — formal (v3 typed + human transfer, public 231, C1, mlx-diag) and development readout
+    panels (typed DEV, CSS pilot); template sharing with our own SELECT / CAL splits (same generators by construction) is
+    tolerated and disclosed; the strict build `9f83ce9b` stays on record. (2) The rescreen's 305 excluded groups touch 82
+    CSS15 items (73 `media_ideology`, shared topical phrases, no exact duplicates), 33 Decision Bench v4, 1 mlx-diag and
+    1 public-231 item; models trained on r1 / v2 / v1 / A7 data (incl. the released DEV2.0-0.8B / 0.6B and the 2B
+    candidate) may have seen them — the eval track quantifies the effect from stored predictions before the card wording is
+    decided. (3) An own-Lux wave for the 25,664 H7 / H8 rows (~1 GPU-hour, new preregistration) is approved on node B GPU7.
+  - **Node B root filesystem is 99% full** because of `/root/jev-research-20260921` (1.9 TB of research data from a
+    2026-09-21 session; not ours; do NOT move or delete it). Docker's root is `/data/docker`. Every track: on node B write
+    only under `/data` — set `TMPDIR=/data/dev2/tmp`, keep HF / pip / uv / Triton caches under `/data/dev2`.
+
+- 2026-09-29 02:50 — **DEV2.0-2B APPROVED for private release** (eval record `m4-dev2-2b-gates-2026-09-29.md`; integration
+  `c149dca51`). Gates: human transfer vs Decider 2B +0.105 [−0.008, +0.132], vs This-That 1.2 +0.120 [−0.050, +0.223]; v3 vs
+  Decider 2B +3.94 [−2.48, +5.67], vs This-That +7.33 [−2.00, +13.60], vs Sol 1.0 16K +7.66 [+3.26, +10.81]; no type
+  collapsed (Choice .556, Noul .709, Score .438 vs chance .267 / .50 / .20). **Card disclosures to add (release worker):**
+  typed accuracy significantly below Decider 2B (−0.040 [−0.070, −0.009]) and Choice the weakest type vs peers (.556 vs .681
+  / .661); the margin over Decider 2B is not significant; the gain over Sol 1.0 is typed reasoning only (human transfer
+  level, +0.033 [−0.044, +0.092]); Score almost never predicts level 0 (6 of 400, recall .03); plus the decoder track's CSS15
+  losses (mrf, wiki_corpus, flute) and mlx-diag Korean .59 vs .63. Decider 2B (Apache-2.0) and This-That 1.2 (MIT) are
+  card-eligible with a note that their licences come from card metadata only (no LICENSE file). The C1 line is added after
+  C1 event 3 (card-only revision).
+
+- 2026-09-29 02:45 — From decoder Milestone 3 (gist 04; integration `7c331e1b7`):
+  - **THIRD RELEASE CANDIDATE: DEV2.0-2B** = S2T (Sol full fine-tuning, own-Sol soft targets as a trust region, three-seed
+    soup): post-key v3 53.437 vs the stricter Sol 1.0 16K control 45.781 (+7.66 [+3.26, +10.81]); vs adopted Sol1 45.580
+    +7.86; vs Decider 2B +3.94 [−2.48, +5.67]; public 231 171 vs 160; all four typed families up; no type collapsed.
+    Staged `dev2-dec-staging@545a6784`, folder `m3/S2T-soup/`, `qwen-full`, 16,384 tokens; scored run
+    `/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA`. Teacher: own Sol 1.0 only. Disclose: CSS15 mrf −.094, wiki_corpus
+    −.045, flute −.032; mlx-diag level overall but Korean .59 vs .63. Release engineering + eval gate checks start now; C1
+    does not block it (the card gets its C1 line at event 3).
+  - **4B HOLD:** best soup N4LKr (own-Lux targets, KL 1.0) 59.539, +3.07 [−4.90, +5.00] vs Nox1 — fails the lower-bound
+    rule; staged `dev2-dec-staging@784a894f`. The 4B paired interval is about ±5, so 4B needs roughly +5 v3. Only own-Lux
+    lifted CSS15 transfer at 4B (more at KL 1.0); AutoJev lowered it most; v2-M costs 4B 2–3 points of mlx-diag; at 4B the
+    proxy's transfer term is dominated by one pilot task (`discourse`) that v2 inflates.
+  - 0.8B follow-up E8V (E8F data + v2-M) 48.585 < released E8F soup → DEV2.0-0.8B stays. New disclosure for its next
+    card-only revision: 19 of its training rows were later quarantined in A7 v3 against development held-out slices (at most
+    one could match an mlx-diag item).
+  - **HF PRIVATE STORAGE POLICY (the org hit its private storage limit at 18:08 UTC):** keep released model repos, the
+    current release candidate's staging copy until it is released, datasets (training data, teacher targets) and eval
+    artifacts. For everything else in staging model repos (HOLD candidates, individual seeds, superseded soups): record
+    hashes, keep a re-hashed copy on the nodes, then delete the stored LFS files from the Hub without rewriting commit
+    history, and log each deletion in your records. Upload only soups and finalists, never individual seeds. Check storage
+    headroom before any large upload.
+
+- 2026-09-29 02:40 — From 0.6B Milestone 5 (gist 03; integration `9a2301c68`): no successor; the released DEV2.0-0.6B stands.
+  - Best soup Z (nine seeds: T + V2 + arm a) post-key v3 45.48, +1.94 [−0.82, +3.89] vs released (fails the successor
+    rule); best 0.6B human transfer (.498), typed Choice above Kai1 (288), half the calibration error; loses typed Noul −12
+    and mlx-diag −1.6 (multilingual Score). Staged as not-a-successor `dev2-staging-06bm5-z@6b414780…`.
+  - **Findings for research & data and all small tiers:** A7q / A7k / A7s (human multilingual Score) is the only arm with a
+    positive transfer signal (typed-DEV Score 101 → 165); **data v2 costs transfer at 0.6B even with Choice protected**
+    (stance collapses .539 → .395; suspect: v2's answerability-style Noul share); AutoJev-27B targets were no better than
+    own-Lux at 0.6B (−0.04 [−1.56, +2.12]).
+  - Proxy suggestion (eval): use the mean of the CSS pilot's three tasks instead of the median as the transfer term — it
+    ordered all four formal 0.6B soups correctly on human transfer; recalibration assigned to a fresh eval worker.
+  - Coordinator decisions: Z is not a release candidate and gets no C1 event; 0.6B Milestone 6 (node A GPU0–1) tests the
+    XL-full recipe against the A7-only XL control (`cx-xl-a7v1-full`), with more A7 curriculum and Lux targets on A7 rows,
+    three seeds + soups each.
+
+- 2026-09-29 02:15 — **DEV2.0-0.6B RELEASED (private)**: `llm-semantic-router/DEV2.0-0.6B@99c4e799392afa73241915aeb16fefa5ef3518d7`
+  (card-only revision of `e61b2b44`; manifest `0affd1b1…`; weights `5b30b7e2…`; T = 1; final decision `e22fe181…`, gate
+  `787c31c9…`; integration `313dafe98`). The private "Decision 2.0" collection holds exactly DEV2.0-0.8B and DEV2.0-0.6B.
+  The 0.6B card adds the C1 event 2 line, C1 weak spots vs Kai 1.0 and vs Bosun, and three typed-panel limits (accuracy
+  below Bosun −0.038 [−0.068, −0.010]; Noul only narrowly above chance; Score leaning on extreme levels).
+
+- 2026-09-29 02:05 — **C1 event 2 done (2 of 3 used)**; DEV2.0-0.6B APPROVED for private release (eval record
+  `m4-dev2-06b-c1-event2-2026-09-29.md`; integration `f422d2ce8`).
+  - C1: DEV2.0-0.6B 33.21 vs Kai1 17.77 (+15.44 [+13.51, +17.21]; every type interval excludes 0), vs Lex 20.82
+    (+12.39 [+10.30, +14.29]), vs GLiNER2.5-Decide 22.82 (+10.39 [+8.20, +12.55]), vs Bosun 35.03 (−1.82 [−4.05, +0.35],
+    level; Bosun better on Choice −3.73 and Noul −11.77, we are better on Score +8.97). Kai / Lex run at their published
+    1,024-token limit (525 of 2,874 items invalid; on tasks that fit, 29.4 vs 20.3 point estimate); GLiNER could not take 935.
+    Disclose vs Kai1: Arabic HalluTruthQA (hallucination 44.6 vs 54.2, find-the-truth 22.0 vs 25.2), narrative event
+    causality 14.9 vs 21.1, Arabic accuracy .339 vs .396; Noul is the weakest type (47.6).
+  - No C1 v1.2 (recheck over 19.46M rows clean). Before event 3, recheck Lux-XL waves 3–5, H7 / H8 gap arms and XL recipe r2.
+  - Coordinator decision: no extra C1 access for a same-limit Kai1 run now; Kai1 at 8K joins event 3 (the final family
+    event) as a comparator so the 0.6B card can later add a same-limit line (card-only revision).
+  - The 0.6B release finalizes on the frozen T = 1 package `e61b2b44` (card-only README revision, `--already-collected` not
+    applicable because it is not yet collected).
 
 - 2026-09-29 00:20 — **DEV2.0-0.8B current release revision = `7d08d0e12082ee6810a4221063342cefe45b6ac3`** (T = 1,
   calibration-only; manifest `2a19a65a…`; final decision `fedb18fa…` supersedes `b2338c45…`; gate `13398d42…`; weights
@@ -768,8 +871,9 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
 
 ### Eval Milestone 2 updates (eval track, 2026-09-28 ~15:00 UTC+8)
 
-- **Recommended development proxy (for picking finalists):** keep **P = 100·√(T_dev × H_pilot)** (typed DEV family
-  macro × CSS-pilot median macro-F1). Calibrated on 16 models vs post-key v3: Spearman 0.94, leave-one-out v3 error
+- **(Tie band and linear map SUPERSEDED by "Development proxy v2" at the end of this section: within a tier |ΔP| < 8
+  is a tie; v3 ≈ 22.4 + 0.58·P.)** **Recommended development proxy (for picking finalists):** keep
+  **P = 100·√(T_dev × H_pilot)** (typed DEV family macro × CSS-pilot median macro-F1). Calibrated on 16 models vs post-key v3: Spearman 0.94, leave-one-out v3 error
   ±3.1 (RMSE 3.7, worst 7.4), 109/120 pairs and 14/18 same-tier pairs in v3 order; v3 ≈ 19.1 + 0.63·P. Per-checkpoint
   panel noise SD ≈ 1.3 P (difference SD ≈ 1.9, before seed noise). Pairs with |ΔP| ≥ 4 agree with v3 94% of the time;
   below that it is near a coin flip. Rule: **treat |ΔP| < 4 as a tie and send both to the formal runner**; never select
@@ -897,3 +1001,45 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
   ≤ 0.21, no exact 8-token span): **no v1.2**. Script `v2/eval/sealed/event2.sh <gpu> <mirror> [lease-name]` (a
   pre-decryption smoke for every model); batch DEV2.0-0.6B + Kai1, Lex, Bosun, GLiNER2.5-Decide, verified on node
   A mirror `b99032a66`. **Waiting on: batch confirmation and a node-A GPU (~0.1 GPU-h).**
+
+### Development proxy v2 (eval track, 2026-09-29 ~03:30 UTC+8; code at `c3da006b8` or later; supersedes the M2 tie band)
+
+Record `v2/eval/records/m5-proxy-v2-calibration-2026-09-29.md` (prereg `79482d863`, pushed before any proxy was computed).
+
+- **Scope.** 51 models, each with a post-key v3 run and a typed-DEV + CSS-pilot readout of the same weights: the
+  24-model matrix plus 27 formally run 2.0 candidates (0.6B T/V2/X/Z soups; 0.8B E8F s1–s3 + soup, B8F s1–s2, E8V
+  soup; 2B S2T soup; 4B X2, X4R/X4K s1–s2, N4T/N4J/N4L/N4LKr soups; 9B L2, M3 B-s1; 27B C0, M2-C1/S1/K1).
+  - Features were recomputed with one scorer on node A (CPU only). Development readouts are the only inputs; v3
+    composites are only the target; no v3 items and no C1.
+  - The v1 numbers reproduce exactly.
+- **Proxy v2 = P, unchanged: P = 100·√(T_dev·H_pilot).** Recalibrated **v3 ≈ 22.4 + 0.58·P** (LOO MAE 2.6 / RMSE 3.1
+  / worst 6.6; Spearman 0.94).
+  - None of the preregistered alternatives beats P: the CSS-pilot three-task mean (P_mean3), per-type typed-DEV terms,
+    arithmetic means and a fitted two-term model. The best reaches only a 0.38 bootstrap probability of ordering more
+    of the 129 within-tier decision pairs correctly.
+  - P gets 106/129. The alternatives get 98–105.
+- **Three-task mean (02:40 suggestion).** It fixes 0.6B (19/20 vs 16/20 pairs) but not other tiers (9B 2/4 vs 4/4).
+  Without the four 0.6B soups that motivated it, it is worse (86/109 vs 90/109). Not adopted.
+- **NEW TIE BAND: within a tier, |ΔP| < 8 is a tie** (was 4). Send every candidate within 8 P points of the best to
+  the formal runner and decide on the paired v3 CI. How often P's order matches v3 across within-tier pairs:
+
+  | \|ΔP\| | Pairs | P order = v3 | Reversed by ≥ 2 v3 points |
+  | --- | ---: | ---: | ---: |
+  | ≥ 8 | 43 | 91% | 2% |
+  | 4–8 | 67 | 76% | 10% |
+  | < 4 | 75 | 63% | 20% |
+
+  The old "94% at |ΔP| ≥ 4" was mostly cross-tier pairs. A normal-residual check puts the 10%-risk gap at ≈ 11, so
+  treat 8 as the minimum.
+- **No proxy separates close within-tier candidates reliably; ties go to the formal runner.**
+  - 67 of the 70 same-track candidate pairs (seeds, soups, sibling arms) lie inside |ΔP| < 8. There P matches v3
+    only 69% of the time and reverses 16% by ≥ 2 points.
+  - Use P to drop candidates ≥ 8 behind the best, never to pick among siblings.
+  - Never select on T_dev, H_pilot or a single typed-DEV type.
+- **Lineage offsets.** P over-predicts JPT peers and the 27B LoRA arms by about 4–5 v3 points and under-predicts
+  decoder candidates by about 1.5: across lineages it is a shortlist only.
+- **Readout hygiene.** 12 of the 27 candidates were read at a lower limit than their formal package (8K vs 16K,
+  4K vs 8K) or on the kernel-less node-B image. Read development panels at the formal limit and image.
+- **Re-run the calibration** when new formal candidates land:
+  `python3 -m v2.eval.proxy_calibration extract --spec <spec.json> --output <features.json>` (node A, CPU), then
+  `... analyze --features <features.json> --output <analysis.json>`.

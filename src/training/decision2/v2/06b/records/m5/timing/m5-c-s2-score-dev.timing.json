@@ -1,0 +1,1 @@
+{"run":"m5-c-s2-score-dev","gpu":0,"render":"/dev/dri/renderD129","commit":"62a4be02fd41eda57cd4363d10dc2688468365dc-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T18:01:30Z","end_utc":"2026-09-28T18:01:30Z","wall_seconds":0,"gpu_hours":0.00000,"exit":0}

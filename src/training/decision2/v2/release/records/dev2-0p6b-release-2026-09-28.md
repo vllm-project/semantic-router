@@ -1,5 +1,56 @@
 # DEV2.0-0.6B: private build, upload and verification (2026-09-28)
 
+## Final release, 2026-09-29 ≈02:11 UTC+8 — revision `99c4e799`, in the private "Decision 2.0" collection
+
+The coordinator approved the release at 02:05 UTC+8 (full-autonomy mandate) after JevArena-C1 event 2
+([eval record](../../eval/records/m4-dev2-06b-c1-event2-2026-09-29.md)). The release is a card-only
+revision of the frozen T = 1 package `e61b2b44`.
+
+- **Final revision `99c4e799392afa73241915aeb16fefa5ef3518d7`** of private `llm-semantic-router/DEV2.0-0.6B`
+  (now `main`). Manifest `0affd1b13fd41446011f97cb723ce0d48ef1ed01e72d2837123518b34ccc2282`, 31 files, no
+  `calibration.json`, 597,103,104 loaded parameters.
+- **Final decision** [`DEV2.0-0.6B.decision.json`](dev2-0p6b-release-2026-09-28/DEV2.0-0.6B.decision.json),
+  SHA-256 **`e22fe181f6c245a15a1c341d136141ef529768c0b8fecb92d65ee909722b15b0`**. It is `status: final`,
+  decided by the coordinator, and names identity `5b30b7e2…`, report `72cf01de…` and paired file `bd4ad6c7…`.
+  It supersedes the drafts `bc59b2af…` and `4946f666…`. The run's `gate.json` (`787c31c9…`) binds it to
+  `99c4e799…` and manifest `0affd1b1…`; all six gate items pass.
+- **Card changes** (spec `specs/dev2-0p6b-release.json`). The C1 placeholder became the event 2 line:
+  33.21 vs Kai 1.0 17.77, +15.44 [+13.51, +17.21]; Bosun 35.03, −1.82 [−4.05, +0.35]; GLiNER2.5-Decide 22.82;
+  Lex 20.82; plus the input-limit caveat. Three limits were added:
+  - typed accuracy below Bosun (−0.038 [−0.068, −0.010]);
+  - typed Noul only narrowly above chance, and typed Score leaning on the lowest and highest levels;
+  - the C1 weak spots versus Kai (Arabic HalluTruthQA, narrative event causality, Arabic overall; Noul the
+    weakest type) and versus Bosun (weaker on Choice and Noul, stronger on Score).
+
+  The existing disclosures are unchanged. Every named comparator passes the 22:20 licence policy: Bosun is
+  Apache-2.0 with a LICENSE file; GLiNER2.5-Decide declares Apache-2.0 without a LICENSE file (noted on the card);
+  Kai and Lex are our own.
+- **Package = `e61b2b44` plus the card.** Only `README.md` and `MODEL_MANIFEST.json` differ from `e61b2b44`,
+  both in a CPU build-only preflight and on the Hub. In the manifest, the changed fields are the README hash,
+  the card hash and `builder.source_commit`. The evaluation page is unchanged.
+- **Verification.** One `release.sh --upload --collect` run from the mirror of `61d22cd30` passed all 17
+  steps in about 150 s ([command](dev2-0p6b-release-2026-09-28/final/extra/launch-command.txt)). It ran on
+  node A GPU5 via the shared-lease entry `owner.release` (18:08:24–18:11:20Z, then removed; the owner entry
+  was not touched).
+  - Native examples are bit-identical in three processes, answers `a7da72d4…`, the same as `e61b2b44`.
+    The card example reproduced before and after upload.
+  - **Exact parity (tolerance 0)** against the raw scored predictions on 600 prompts (typed 150, transfer
+    200, public 100, mlx-diag 150): 0 changes and drift 0.0, before and after the real download.
+  - A real `hf download` of `99c4e799…` with a fresh cache re-hashes 31/31 files.
+  - **Weights identical to `e61b2b44`.** All seven model files have equal SHA-256 in the download and in
+    the old manifest, and equal remote LFS / blob ids at both revisions; the identity is still `5b30b7e2…`
+    ([compare](dev2-0p6b-release-2026-09-28/final/extra/revision-compare.json)).
+  - Readback: repository private at `99c4e799…` (= `main`), 31/31 remote hashes, Hub card `apache-2.0`,
+    no card problems. HTTP check: 12/12 card images and files; anonymous model API, README and page refused
+    (401). `hub_links`: 14/14.
+  - Collection "Decision 2.0": private, **exactly two items**, `llm-semantic-router/DEV2.0-0.8B` and
+    `llm-semantic-router/DEV2.0-0.6B`.
+- **GPU-hours 0.042** (node A GPU5). The preflight build and the extra readbacks used no GPU.
+- Superseded revisions stay in the history: `e61b2b44` (frozen T = 1 package, placeholder card) and the
+  earlier `7b5d3ff2`, `cb2bfd76` and `a87eeb72` (never use `a87eeb72`).
+
+Receipts: [`final/`](dev2-0p6b-release-2026-09-28/final/).
+
 ## Update 23:50 UTC+8: CAL698 rejected on development panels; T = 1 revision `e61b2b44` is current
 
 Coordinator rule 23:15 (supersedes 22:30): CAL698 temperatures are adopted only if they do not worsen

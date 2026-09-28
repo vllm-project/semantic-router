@@ -1,0 +1,37 @@
+set -u
+# Decoder M3 arms on node B GPU0-4 (prereg 5c8bbc569): compose the AutoJev (J) teacher files,
+# then one preregistered chain per GPU through drive_arm.sh (preflight gate, full run, postrun).
+SRC=$1
+M=/data/dev2/runs/dec/m3
+S=/data/dev2/src/$SRC/src/training/decision2/v2/dec; L=$S/launch.sh; D=$S/drive_arm.sh
+HS=/hf/datasets--llm-semantic-router--decision-2.0-training-data/snapshots
+AJM=$HS/3a99bf1c26ac7924ec1216cdf1f703e1a5f21ae6/m3/teachers/autojev27/rp-v2/aj-m.targets.jsonl
+AJA=$HS/9bb9790b014d17d7dad50677b4f057f20e50460c/m3/teachers/autojev27/pk1/A0s-train.targets.jsonl
+NOX=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
+SOL=/hf/models--llm-semantic-router--Decision-1.0-Sol-2B/snapshots/ce0c018a28de16d6639b1cd203b761bf643b89e6
+TRAIN=/runs/m3/data/m3-v2m-ret/train.jsonl
+log() { echo "$(date -u +%FT%TZ) $*" >> $M/OPERATIONS.log; }
+export DEC_DATA=$M/data-sel700-cal698 DEC_IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
+for t in nox sol; do
+  [ -f $M/teacher/$t-aj/$t-aj-teacher.jsonl ] && continue
+  bash $L m3-compose-$t-aj $SRC $M/teacher/$t-aj --cpu -- -m v2.dec.merge_labels --train $TRAIN \
+    --part /runs/m3/teacher/$t/$t-teacher.jsonl --override $AJA --override $AJM --override-subset \
+    --output /out/$t-aj-teacher.jsonl && log "compose $t-aj done: $(tail -1 $M/teacher/$t-aj.stdout.log)" || { log "compose $t-aj FAILED"; exit 1; }
+done
+now=$(date -u +%FT%TZ)
+for g in 0 1 2; do printf 'track=dec\nstatus=busy\npurpose=M3 4B arms N4T then N4J (prereg 5c8bbc569)\nstart_utc=%s\nexpected_end_utc=2026-09-28T16:30:00Z\n' $now > /data/dev2/leases/gpu$g.lock/owner; done
+for g in 3 4; do printf 'track=dec\nstatus=busy\npurpose=M3 2B arms S2T then S2J (prereg 5c8bbc569)\nstart_utc=%s\nexpected_end_utc=2026-09-28T16:00:00Z\n' $now > /data/dev2/leases/gpu$g.lock/owner; done
+FULL="--train $TRAIN --train-mode full --backbone-lr 5e-6 --head-lr 5e-5 --teacher-kl-weight 0.5 --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64"
+TN=/runs/m3/teacher/nox/nox-teacher.jsonl; TNJ=/runs/m3/teacher/nox-aj/nox-aj-teacher.jsonl
+TS=/runs/m3/teacher/sol/sol-teacher.jsonl; TSJ=/runs/m3/teacher/sol-aj/sol-aj-teacher.jsonl
+arm() {  # name gpu start teacher seed
+  echo "DEC_NODE=b DEC_DATA_DIR=$M/data-sel700-cal698 bash $D $1 $2 $SRC m3/arms $3 -- $FULL --teacher $4 --seed $5"
+}
+C=$M/chains; mkdir -p $C $M/arms
+{ echo "set -u"; arm m3-N4T-s1 0 $NOX $TN 20260926; arm m3-N4J-s1 0 $NOX $TNJ 20260926; } > $C/gpu0.sh
+{ echo "set -u"; arm m3-N4T-s2 1 $NOX $TN 20260927; arm m3-N4J-s2 1 $NOX $TNJ 20260927; } > $C/gpu1.sh
+{ echo "set -u"; arm m3-N4T-s3 2 $NOX $TN 20260928; arm m3-N4J-s3 2 $NOX $TNJ 20260928; } > $C/gpu2.sh
+{ echo "set -u"; arm m3-S2T-s1 3 $SOL $TS 20260926; arm m3-S2T-s3 3 $SOL $TS 20260928; arm m3-S2J-s1 3 $SOL $TSJ 20260926; } > $C/gpu3.sh
+{ echo "set -u"; arm m3-S2T-s2 4 $SOL $TS 20260927; arm m3-S2J-s2 4 $SOL $TSJ 20260927; arm m3-S2J-s3 4 $SOL $TSJ 20260928; } > $C/gpu4.sh
+for g in 0 1 2 3 4; do nohup bash $C/gpu$g.sh > $C/gpu$g.log 2>&1 & done
+log "M3 chains launched (prereg 5c8bbc569)"

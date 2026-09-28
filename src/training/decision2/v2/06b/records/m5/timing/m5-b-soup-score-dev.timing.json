@@ -1,0 +1,1 @@
+{"run":"m5-b-soup-score-dev","gpu":1,"render":"/dev/dri/renderD137","commit":"3755f206afd97b4218cfb9d09cc21b2f60ea943e-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T16:31:37Z","end_utc":"2026-09-28T16:31:38Z","wall_seconds":1,"gpu_hours":0.00028,"exit":0}

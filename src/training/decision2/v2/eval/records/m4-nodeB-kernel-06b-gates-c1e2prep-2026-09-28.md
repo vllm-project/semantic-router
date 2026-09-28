@@ -129,3 +129,6 @@ or below chance.
   cache). All on node A `f83b1d10` or the GLiNER image, as in their stored runs. Any other candidate the coordinator
   adds is one line in `args()`.
 - **Needs from the coordinator:** batch confirmation and a node-A GPU (the 0.6B batch needs ~0.1 GPU-h).
+- **Update 2026-09-29:** the event ran on the confirmed frozen package `DEV2.0-0.6B@e61b2b44` after a second
+  independence recheck and script fixes (as prepared, every preflight would have aborted). Results:
+  `m4-dev2-06b-c1-event2-2026-09-29.md`.

@@ -1,0 +1,665 @@
+{
+ "schema": "dev2-proxy-calibration-spec/2",
+ "models": [
+  {
+   "key": "kai1",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1-adopt/kai1/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-kai/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-kai/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "lex",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1/r3-lex/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-lex/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-lex/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "bosun06",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1-adopt/bosun/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-bosun06/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-bosun06/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "gliner25",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1/p1-gliner25/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-gliner25/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-gliner25/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "eos1",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1/r4-eos1/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-eos1/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-eos1/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "jpt08b",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1/p2-jpt08b/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-jpt08b/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-jpt08b/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "sol1",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1-adopt/sol1/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-sol1/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-sol1/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "decider2b",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1-adopt/decider2b/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-decider2b/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-decider2b/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "bosun17b",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1/p3-bosun17b/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-bosun17b/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-bosun17b/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "nox1",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1-adopt/nox1/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-nox1/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-nox1/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "decider4b",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1-adopt/decider4b/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-decider4b/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-decider4b/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "jpt4b",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1/p4-jpt4b/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-jpt4b/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-jpt4b/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "lux1",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1/d1-lux1-autotune-cache/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-lux1/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-lux1/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "jpt9b",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1-adopt/jpt9b/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/dev/d-jpt9b/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/dev/d-jpt9b/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "dev20-06b",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m1-adopt/dev20-06b/REPORT.json",
+   "typed_dev": "/data/decision20-20260926/experiments/qwen3-06b-selected-r1/output/dev.predictions.jsonl",
+   "css_pilot": "/data/decision20-20260926/experiments/qwen3-06b-selected-r1/output/css.predictions.jsonl",
+   "same_runtime": true,
+   "note": "prior-session official-Qwen causal control (internal only); readout reused by identity as in v1"
+  },
+  {
+   "key": "autojev27",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m4/nodeB-kernel/autojev27/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m4/nodeB-kernel/autojev27/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m4/nodeB-kernel/autojev27/output/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "note": "node-B kernel image dbe5f32b re-collection (current 27B comparator)"
+  },
+  {
+   "key": "eikos27b",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m4/nodeB-kernel/eikos27b/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m4/nodeB-kernel/eikos27b/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m4/nodeB-kernel/eikos27b/output/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "note": "node-B kernel image dbe5f32b re-collection (current 27B comparator)"
+  },
+  {
+   "key": "jebadiah27b",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m4/nodeB-kernel/jebadiah27b/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m4/nodeB-kernel/jebadiah27b/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m4/nodeB-kernel/jebadiah27b/output/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "note": "node-B kernel image dbe5f32b re-collection (current 27B comparator)"
+  },
+  {
+   "key": "kev08b",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m2/q1-kev08b/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/q1-kev08b/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/q1-kev08b/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "intern08b",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m2/q2b-intern08b/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/q2b-intern08b/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/q2b-intern08b/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "thisthat12",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m2/q4-thisthat12/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/q4-thisthat12/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/q4-thisthat12/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "jet62",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m2/q5b-jet62/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/q5b-jet62/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/q5b-jet62/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "nimble2",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m2/q6-nimble2/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/q6-nimble2/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/q6-nimble2/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "hopperg",
+   "group": "comparator",
+   "track": "eval",
+   "report": "/data/dev2/runs/eval/m2/q8-hopperg/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m2/q8-hopperg/output/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m2/q8-hopperg/output/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "06b-m4-t-a7-soup",
+   "group": "candidate",
+   "track": "06b",
+   "report": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup/REPORT.json",
+   "typed_dev": "/data/dev2/runs/06b/m1/arms/m4-t-a7-soup/readout/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/06b/m1/arms/m4-t-a7-soup/readout/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "06b-m4-v2-soup",
+   "group": "candidate",
+   "track": "06b",
+   "report": "/data/dev2/runs/06b/m4/formal/m4-v2-soup/REPORT.json",
+   "typed_dev": "/data/dev2/runs/06b/m1/arms/m4-v2-soup/readout/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/06b/m1/arms/m4-v2-soup/readout/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "06b-m5-x-soup",
+   "group": "candidate",
+   "track": "06b",
+   "report": "/data/dev2/runs/06b/m5/formal/m5-x-soup/REPORT.json",
+   "typed_dev": "/data/dev2/runs/06b/m1/arms/m5-x-soup/readout/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/06b/m1/arms/m5-x-soup/readout/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "06b-m5-z-soup",
+   "group": "candidate",
+   "track": "06b",
+   "report": "/data/dev2/runs/06b/m5/formal/m5-z-soup/REPORT.json",
+   "typed_dev": "/data/dev2/runs/06b/m1/arms/m5-z-soup/readout/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/06b/m1/arms/m5-z-soup/readout/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "dec-m2-E8F-s1",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m2/m2-E8F-s1-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-E8F-s1/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-E8F-s1/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "note": "readout node B (kernel image), formal node A; same renderer, limit and calibration"
+  },
+  {
+   "key": "dec-m2-E8F-s2",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m2/m2-E8F-s2-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-E8F-s2/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-E8F-s2/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "note": "readout node B (kernel image), formal node A; same renderer, limit and calibration"
+  },
+  {
+   "key": "dec-m2-E8F-s3",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m2/m2-E8F-s3-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-E8F-s3/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-E8F-s3/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "note": "readout node B (kernel image), formal node A; same renderer, limit and calibration"
+  },
+  {
+   "key": "dec-m2-B8F-s1",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m2/m2-B8F-s1-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-B8F-s1/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-B8F-s1/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "note": "readout node B (kernel image), formal node A; same renderer, limit and calibration"
+  },
+  {
+   "key": "dec-m2-B8F-s2",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m2/m2-B8F-s2-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-B8F-s2/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-B8F-s2/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "note": "readout node B (kernel image), formal node A; same renderer, limit and calibration"
+  },
+  {
+   "key": "dec-m2-X4R-s1",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m2/m2-X4R-s1-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-X4R-s1/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-X4R-s1/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "note": "readout node B (kernel image), formal node A; same renderer, limit and calibration"
+  },
+  {
+   "key": "dec-m2-X4R-s2",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m2/m2-X4R-s2-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-X4R-s2/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-X4R-s2/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "note": "readout node B (kernel image), formal node A; same renderer, limit and calibration"
+  },
+  {
+   "key": "dec-m2-X4K-s1",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m2/m2-X4K-s1-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-X4K-s1/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-X4K-s1/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "note": "readout node B (kernel image), formal node A; same renderer, limit and calibration"
+  },
+  {
+   "key": "dec-m2-X4K-s2",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m2/m2-X4K-s2-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-X4K-s2/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-X4K-s2/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "note": "readout node B (kernel image), formal node A; same renderer, limit and calibration"
+  },
+  {
+   "key": "dec-m2-E8F-soup",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-E8F-soup/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-E8F-soup/css-pilot.predictions.jsonl",
+   "same_runtime": false,
+   "note": "readout at 8,192 tokens, formal at 16,384"
+  },
+  {
+   "key": "dec-m3-E8V-soup",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m3/m3-E8V-soup-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-m3-E8V-soup/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-m3-E8V-soup/css-pilot.predictions.jsonl",
+   "same_runtime": false,
+   "source": {
+    "node": "B",
+    "report": "/data/dev2/runs/dec/formal/m3/m3-E8V-soup-nodeA/REPORT.json",
+    "typed_dev": "/data/dev2/runs/dec/m3/soup/E8V/dev/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/dec/m3/soup/E8V/css-pilot/css-pilot.predictions.jsonl",
+    "report_node": "A"
+   },
+   "note": "readout at 8,192 tokens (node B), formal at 16,384"
+  },
+  {
+   "key": "dec-m3-S2T-soup",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-m3-S2T-soup/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-m3-S2T-soup/css-pilot.predictions.jsonl",
+   "same_runtime": false,
+   "source": {
+    "node": "B",
+    "report": "/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA/REPORT.json",
+    "typed_dev": "/data/dev2/runs/dec/m3/soup/S2T/dev/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/dec/m3/soup/S2T/css-pilot/css-pilot.predictions.jsonl",
+    "report_node": "A"
+   },
+   "note": "readout at 8,192 tokens (node B), formal at 16,384"
+  },
+  {
+   "key": "dec-m3-N4T-soup",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m3/m3-N4T-soup-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-m3-N4T-soup/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-m3-N4T-soup/css-pilot.predictions.jsonl",
+   "same_runtime": false,
+   "source": {
+    "node": "B",
+    "report": "/data/dev2/runs/dec/formal/m3/m3-N4T-soup-nodeA/REPORT.json",
+    "typed_dev": "/data/dev2/runs/dec/m3/soup/N4T/dev/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/dec/m3/soup/N4T/css-pilot/css-pilot.predictions.jsonl",
+    "report_node": "A"
+   },
+   "note": "readout at 8,192 tokens (node B), formal at 16,384"
+  },
+  {
+   "key": "dec-m3-N4J-soup",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m3/m3-N4J-soup-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-m3-N4J-soup/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-m3-N4J-soup/css-pilot.predictions.jsonl",
+   "same_runtime": false,
+   "source": {
+    "node": "B",
+    "report": "/data/dev2/runs/dec/formal/m3/m3-N4J-soup-nodeA/REPORT.json",
+    "typed_dev": "/data/dev2/runs/dec/m3/soup/N4J/dev/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/dec/m3/soup/N4J/css-pilot/css-pilot.predictions.jsonl",
+    "report_node": "A"
+   },
+   "note": "readout at 8,192 tokens (node B), formal at 16,384"
+  },
+  {
+   "key": "dec-m3-N4L-soup",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m3/m3-N4L-soup-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-m3-N4L-soup/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-m3-N4L-soup/css-pilot.predictions.jsonl",
+   "same_runtime": false,
+   "source": {
+    "node": "B",
+    "report": "/data/dev2/runs/dec/formal/m3/m3-N4L-soup-nodeA/REPORT.json",
+    "typed_dev": "/data/dev2/runs/dec/m3/soup/N4L/dev/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/dec/m3/soup/N4L/css-pilot/css-pilot.predictions.jsonl",
+    "report_node": "A"
+   },
+   "note": "readout at 8,192 tokens (node B), formal at 16,384"
+  },
+  {
+   "key": "dec-m3-N4LKr-soup",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/m3/m3-N4LKr-soup-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-m3-N4LKr-soup/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-m3-N4LKr-soup/css-pilot.predictions.jsonl",
+   "same_runtime": false,
+   "source": {
+    "node": "B",
+    "report": "/data/dev2/runs/dec/formal/m3/m3-N4LKr-soup-nodeA/REPORT.json",
+    "typed_dev": "/data/dev2/runs/dec/m3/soup/N4LKr/dev/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/dec/m3/soup/N4LKr/css-pilot/css-pilot.predictions.jsonl",
+    "report_node": "A"
+   },
+   "note": "readout at 8,192 tokens (node B), formal at 16,384"
+  },
+  {
+   "key": "dec-e1-X2",
+   "group": "candidate",
+   "track": "dec",
+   "report": "/data/dev2/runs/dec/formal/e1-x2-nodeA/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-e1-X2/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m5/proxy-v2/inputs/dec-e1-X2/css-pilot.predictions.jsonl",
+   "same_runtime": false,
+   "source": {
+    "node": "B",
+    "report": "/data/dev2/runs/dec/formal/e1-x2-nodeA/REPORT.json",
+    "typed_dev": "/data/dev2/runs/dec/e1/full/X2-post/dev/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/dec/e1/full/X2-post/css-pilot/css-pilot.predictions.jsonl",
+    "report_node": "A"
+   },
+   "note": "readout on the kernel-less node-B image ce895822"
+  },
+  {
+   "key": "9b-l2-8k",
+   "group": "candidate",
+   "track": "9b",
+   "report": "/data/dev2/runs/9b/formal/l2-8k/REPORT.json",
+   "typed_dev": "/data/dev2/runs/9b/m2/L2-dev/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/9b/m2/L2-css-pilot/css-pilot.predictions.jsonl",
+   "same_runtime": true
+  },
+  {
+   "key": "9b-m3-B-s1",
+   "group": "candidate",
+   "track": "9b",
+   "report": "/data/dev2/runs/9b/formal-m3/B-s1-16k/REPORT.json",
+   "typed_dev": "/data/dev2/runs/9b/m3/B-s1-dev/dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/9b/m3/B-s1-css-pilot/css-pilot.predictions.jsonl",
+   "same_runtime": false,
+   "note": "readout at 8,192 tokens, formal at 16,384"
+  },
+  {
+   "key": "27b-C0",
+   "group": "candidate",
+   "track": "27b",
+   "report": "/data/dev2/runs/eval/m5/proxy-v2/inputs/27b-C0/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m5/proxy-v2/inputs/27b-C0/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m5/proxy-v2/inputs/27b-C0/css-pilot.predictions.jsonl",
+   "same_runtime": true,
+   "source": {
+    "node": "B",
+    "report": "/data/dev2/runs/27b/formal-C0/same-panel/REPORT.json",
+    "typed_dev": "/data/dev2/runs/27b/formal-C0/parity/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/27b/formal-C0/parity/css-pilot.predictions.jsonl"
+   },
+   "note": "BEST368 incumbent; package-native parity readout (source-run readout P 68.44)"
+  },
+  {
+   "key": "27b-m2-C1",
+   "group": "candidate",
+   "track": "27b",
+   "report": "/data/dev2/runs/eval/m5/proxy-v2/inputs/27b-m2-C1/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m5/proxy-v2/inputs/27b-m2-C1/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m5/proxy-v2/inputs/27b-m2-C1/css-pilot.predictions.jsonl",
+   "same_runtime": false,
+   "source": {
+    "node": "B",
+    "report": "/data/dev2/runs/27b/m2-C1-formal/REPORT.json",
+    "typed_dev": "/data/dev2/runs/27b/M2-C-s1/full/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/27b/M2-C-s1/full/css-pilot.predictions.jsonl"
+   },
+   "note": "readout 4,096, formal 8,192"
+  },
+  {
+   "key": "27b-m2-S1",
+   "group": "candidate",
+   "track": "27b",
+   "report": "/data/dev2/runs/eval/m5/proxy-v2/inputs/27b-m2-S1/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m5/proxy-v2/inputs/27b-m2-S1/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m5/proxy-v2/inputs/27b-m2-S1/css-pilot.predictions.jsonl",
+   "same_runtime": false,
+   "source": {
+    "node": "B",
+    "report": "/data/dev2/runs/27b/m2-S1-formal/REPORT.json",
+    "typed_dev": "/data/dev2/runs/27b/M2-S-s1/full/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/27b/M2-S-s1/full/css-pilot.predictions.jsonl"
+   },
+   "note": "readout 4,096, formal 8,192"
+  },
+  {
+   "key": "27b-m2-K1",
+   "group": "candidate",
+   "track": "27b",
+   "report": "/data/dev2/runs/eval/m5/proxy-v2/inputs/27b-m2-K1/REPORT.json",
+   "typed_dev": "/data/dev2/runs/eval/m5/proxy-v2/inputs/27b-m2-K1/typed-dev.predictions.jsonl",
+   "css_pilot": "/data/dev2/runs/eval/m5/proxy-v2/inputs/27b-m2-K1/css-pilot.predictions.jsonl",
+   "same_runtime": false,
+   "source": {
+    "node": "B",
+    "report": "/data/dev2/runs/27b/m2-K1-formal/REPORT.json",
+    "typed_dev": "/data/dev2/runs/27b/M2-K-s1/full/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/27b/M2-K-s1/full/css-pilot.predictions.jsonl"
+   },
+   "note": "readout 4,096, formal 8,192"
+  }
+ ],
+ "sensitivity": {
+  "S1_exclude": [
+   "06b-m4-t-a7-soup",
+   "06b-m4-v2-soup",
+   "06b-m5-x-soup",
+   "06b-m5-z-soup"
+  ],
+  "S2_controls": [
+   {
+    "replaces": "kai1",
+    "key": "kai1-native-8k",
+    "group": "comparator",
+    "track": "06b",
+    "report": "/data/dev2/runs/06b/m2/formal/kai1-native-8k/REPORT.json",
+    "typed_dev": "/data/dev2/runs/06b/m1/verify/kai.dev.native8k.jsonl",
+    "css_pilot": "/data/dev2/runs/06b/m1/verify/kai.css-pilot.native8k.jsonl",
+    "same_runtime": true
+   },
+   {
+    "replaces": "eos1",
+    "key": "eos1-shared-8k",
+    "group": "comparator",
+    "track": "dec",
+    "report": "/data/dev2/runs/dec/formal/m2/eos1-8k/REPORT.json",
+    "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-eos1-nodeB/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-eos1-nodeB/css-pilot.predictions.jsonl",
+    "same_runtime": true
+   },
+   {
+    "replaces": "sol1",
+    "key": "sol1-shared-8k",
+    "group": "comparator",
+    "track": "dec",
+    "report": "/data/dev2/runs/dec/formal/m2/sol1-8k/REPORT.json",
+    "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-sol1-nodeB/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-sol1-nodeB/css-pilot.predictions.jsonl",
+    "same_runtime": true
+   },
+   {
+    "replaces": "nox1",
+    "key": "nox1-shared-8k",
+    "group": "comparator",
+    "track": "dec",
+    "report": "/data/dev2/runs/dec/formal/m2/nox1-8k/REPORT.json",
+    "typed_dev": "/data/dev2/runs/dec/m2/readouts/m2-nox1-nodeB/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/dec/m2/readouts/m2-nox1-nodeB/css-pilot.predictions.jsonl",
+    "same_runtime": true
+   },
+   {
+    "replaces": "lux1",
+    "key": "lux1-shared-8k",
+    "group": "comparator",
+    "track": "9b",
+    "report": "/data/dev2/runs/9b/formal/lux1-8k/REPORT.json",
+    "typed_dev": "/data/dev2/runs/9b/m2/lux0c-dev/dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/9b/m2/lux0c-css/css-pilot.predictions.jsonl",
+    "same_runtime": true
+   }
+  ],
+  "S3_exclude": [
+   "dec-m2-E8F-soup",
+   "dec-m3-E8V-soup",
+   "dec-m3-S2T-soup",
+   "dec-m3-N4T-soup",
+   "dec-m3-N4J-soup",
+   "dec-m3-N4L-soup",
+   "dec-m3-N4LKr-soup",
+   "dec-e1-X2",
+   "9b-m3-B-s1",
+   "27b-m2-C1",
+   "27b-m2-S1",
+   "27b-m2-K1"
+  ],
+  "S4_v1_keys": [
+   "kai1",
+   "lex",
+   "bosun06",
+   "gliner25",
+   "eos1",
+   "jpt08b",
+   "sol1",
+   "decider2b",
+   "bosun17b",
+   "nox1",
+   "decider4b",
+   "jpt4b",
+   "lux1",
+   "jpt9b",
+   "dev20-06b"
+  ],
+  "S4_v1_extra": [
+   {
+    "key": "autojev27-v1",
+    "group": "comparator",
+    "track": "eval",
+    "report": "/data/dev2/runs/eval/m2/n2-autojev27-nodeB/REPORT.json",
+    "typed_dev": "/data/dev2/runs/eval/m2/n2-autojev27-nodeB/output/typed-dev.predictions.jsonl",
+    "css_pilot": "/data/dev2/runs/eval/m2/n2-autojev27-nodeB/output/css-pilot.predictions.jsonl",
+    "same_runtime": true
+   }
+  ]
+ }
+}
