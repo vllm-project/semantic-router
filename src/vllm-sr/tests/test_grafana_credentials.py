@@ -222,3 +222,31 @@ def test_main_cli_help_does_not_mention_admin_password(monkeypatch):
     result = CliRunner().invoke(main, ["--help"])
     assert result.exit_code == 0
     assert "admin/admin" not in result.output
+
+
+def test_grafana_container_defaults_the_state_root_to_the_working_directory(
+    monkeypatch, tmp_path: Path
+):
+    # Regression: an omitted config_dir must resolve to $PWD/.vllm-sr for the
+    # credential file exactly as it does for the rendered templates, instead of
+    # raising after the previous Grafana container has already been removed.
+    monkeypatch.delenv(gc.GRAFANA_ADMIN_PASSWORD_ENV, raising=False)
+    monkeypatch.chdir(tmp_path)
+    captured: dict[str, object] = {}
+    _monkeypatch_grafana_container(monkeypatch, captured)
+    layout = resolve_runtime_stack()
+
+    container_support_services.container_start_grafana(
+        "test-network", stack_layout=layout
+    )
+
+    command = list(captured["cmd"])
+    working_directory = Path(os.getcwd())
+    mounted = working_directory / ".vllm-sr" / "grafana-credentials" / "admin-password"
+    assert mounted.is_file()
+    assert _file_mode(mounted) == 0o644
+    assert f"{mounted}:{gc.CONTAINER_GRAFANA_PASSWORD_PATH}:ro,z" in command
+    assert (
+        f"{working_directory / '.vllm-sr' / 'grafana' / 'grafana.serve.ini'}:"
+        f"{CONTAINER_GRAFANA_INI_PATH}:ro"
+    ) in command
