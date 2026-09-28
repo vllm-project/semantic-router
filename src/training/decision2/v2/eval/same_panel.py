@@ -904,13 +904,13 @@ def render_markdown(reports: list[dict[str, Any]]) -> str:
         "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | --- | ---: | --- | --- |\n"
     )
     rows = []
-    for rep in sorted(
-        reports,
-        key=lambda r: (
-            r["model"].get("tier") or "",
-            -((r.get("v3") or {}).get("score") or 0),
-        ),
-    ):
+
+    def order(rep: dict[str, Any]) -> tuple[float, float]:
+        tier = rep["model"].get("tier") or ""
+        size = float(tier[:-1]) if re.fullmatch(r"[0-9.]+B", tier) else math.inf
+        return size, -((rep.get("v3") or {}).get("score") or 0)
+
+    for rep in sorted(reports, key=order):
         typed = rep["panels"].get("typed-final", {})
         public = rep["panels"].get("public231", {})
         types = typed.get("by_type", {})

@@ -1,0 +1,3103 @@
+{
+ "schema": "decision2-v2-eval/decision-index-peer-roster/1",
+ "record_date": "2026-09-28",
+ "rule": "Decision Index scores are used only to choose peers. They must never enter JevArena/JevBench rank charts or be compared numerically with our results; every ranked number must come from peers rerun on our frozen panels.",
+ "source": {
+  "space": "multimodalart/jev-decision-index",
+  "revision": "7cdcea3dd14615192ff2e1f6fd13936a547b55d8",
+  "api_seen": {
+   "sha": "7cdcea3dd14615192ff2e1f6fd13936a547b55d8",
+   "lastModified": "2026-09-28T00:40:34.000Z",
+   "private": false,
+   "gated": false,
+   "disabled": false,
+   "sdk": "static"
+  },
+  "api_checks_utc": [
+   "2026-09-28T02:56Z (start)",
+   "2026-09-28T03:45:26Z (end)"
+  ],
+  "latest_commit_title": "0.2.1: Jet v6.2 joins",
+  "files": [
+   {
+    "path": "data/index.json",
+    "bytes": 952794,
+    "sha256": "a5a4aa0a2cce152056964a5c732c919f55fd8e0d1115f9cb7f849c35322eb9df"
+   },
+   {
+    "path": "data/index-v0.2.1.json",
+    "bytes": 952794,
+    "sha256": "a5a4aa0a2cce152056964a5c732c919f55fd8e0d1115f9cb7f849c35322eb9df"
+   },
+   {
+    "path": "data/methodology.json",
+    "bytes": 302940,
+    "sha256": "2ff75bb862498ddba4c4e39698bbe57118ad26252d21fa4de6e6ba4641ee1612"
+   },
+   {
+    "path": "data/methodology-v0.2.1.json",
+    "bytes": 302940,
+    "sha256": "2ff75bb862498ddba4c4e39698bbe57118ad26252d21fa4de6e6ba4641ee1612"
+   },
+   {
+    "path": "data/index-v2.json",
+    "bytes": 876063,
+    "sha256": "fad0e6b0ee996de2543c2aecb73325464338b8437286ebc8162b652efd8d51bc"
+   },
+   {
+    "path": "data/methodology-v2.json",
+    "bytes": 285266,
+    "sha256": "903cee829e68a7cb4592f91ba55558a5c725f8c80692cf0c846efa8b34f67b2f"
+   }
+  ],
+  "selection_file": "data/index.json (byte-identical to data/index-v0.2.1.json)",
+  "edition": {
+   "suite.edition": "release-v2.1",
+   "suite.label": "Decision Index 0.2.1",
+   "suite.panel_id": "decision-index-0.2.1",
+   "methodology.edition": {
+    "id": "v0.2.1",
+    "label": "Decision Index 0.2.1",
+    "date": "2026-09-28",
+    "panel_id": "decision-index-0.2.1",
+    "jev_version": "jev-1.13.0",
+    "jev_edition": "Full release v1"
+   }
+  },
+  "index_generated_utc": "2026-09-28T00:39:36+00:00",
+  "methodology_generated_utc": "2026-09-28T00:39:48+00:00",
+  "headline_metric": "balanced_skill",
+  "panel_benchmarks": 38,
+  "entrants": 70,
+  "entrants_by_kind": {
+   "LoRA + head": 8,
+   "full fine-tune": 24,
+   "inference technique": 15,
+   "head / adapter": 9,
+   "LoRA": 14
+  },
+  "own_weight_entrants": 55,
+  "hosted_reference_excluded": {
+   "engine": "jev",
+   "version": "jev-1.13.0",
+   "balanced_skill": 57.91,
+   "reason": "hosted/closed TypeSafe API"
+  },
+  "served_params_caveat": "Index served_params is the backbone count (methodology parameter_count_precedence); loaded counts here are from headers.",
+  "access": "public unauthenticated HF API/resolve/tree endpoints and public GitHub (git ls-remote, shallow blobless clone, raw files); headers via HTTP range reads only"
+ },
+ "prior_snapshot": {
+  "record": "src/training/decision2/research/decision-index-021-peer-roster-2026-09-27.md",
+  "index_sha256": "0e48d92d43f661391d1ff56392d9e84610d2f6737c2af2177334e494f355f73c",
+  "matched_space_commit": "34426d6a979c066e397aff63cf1385b4cd990f6c",
+  "generated_utc": "2026-09-27T03:42:13+00:00",
+  "entrants": 67,
+  "delta": {
+   "added": [
+    "hopper-g-1.2 (Hopper (G) 1.2, 40.77)",
+    "eikos-27b-fp8 (Eikos-27B, 53.13)",
+    "jpt-4b (JPT-4B, 43.04)",
+    "jet-v6.2 (Jet v6.2, 42.60)"
+   ],
+   "removed": [
+    "hopper (Hopper 1.1.1, 39.67; replaced by Hopper (G) 1.2)"
+   ],
+   "unchanged": "all 66 common entrants have identical scores and metadata",
+   "commits": [
+    "c3e02501 Hopper (G) 1.2 replaces Hopper 1.1.1",
+    "f1d9308d Eikos-27B-FP8 joins",
+    "df7f948e JPT-4B joins",
+    "7cdcea3d Jet v6.2 joins"
+   ]
+  }
+ },
+ "tier_rule": {
+  "size_measure": "parameters instantiated by the model's native text-decision path, from safetensors/GGUF headers (tied weights once; merged LoRA adds none); stored-only vision/audio/MTP listed separately",
+  "centers_B": {
+   "0.6B": 0.6,
+   "0.8B": 0.8,
+   "2B": 2,
+   "4B": 4,
+   "9B": 9,
+   "27B-dense": 27,
+   "26B-MoE": 26
+  },
+  "assignment": "nearest center in log space; MoE checkpoints only against the MoE tier",
+  "same_size": "max(P/c, c/P) <= 1.25 (the project's frozen same-size ratio)",
+  "adjacent": "1.25 < ratio <= 1.5: listed, optional stress tests only",
+  "bands_B": {
+   "0.6B": "0.48-0.69",
+   "0.8B": "0.69-1.00",
+   "2B": "1.60-2.50",
+   "4B": "3.20-5.00",
+   "9B": "7.20-11.25",
+   "27B-dense": "21.6-33.75",
+   "26B-MoE": "20.8-32.5 total"
+  },
+  "selection": "within a tier, own-weight entrants in Index order by suite.headline=balanced_skill; skip own 1.0, hosted, techniques without own weights, licence/weights blockers; typically top 2-3"
+ },
+ "peers": [
+  {
+   "role": "selected",
+   "engine": "bosun-v3.1-0.6b",
+   "index_rank": 49,
+   "index_balanced_skill": 14.32,
+   "index_variant": null,
+   "repo": "Hanno-Labs/bosun-v3.1-0.6b",
+   "revision": "1d8b6f9611f9b64b514ce8b57cd86398fbc31a3b",
+   "last_modified": "2026-09-23T00:36:12.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": [
+     "LICENSE",
+     "NOTICE"
+    ]
+   },
+   "base_model_card": "Qwen/Qwen3-0.6B",
+   "architecture": {
+    "architectures": [
+     "BosunForDecision"
+    ],
+    "model_type": "bosun"
+   },
+   "tier": "0.6B",
+   "base_revision": "Qwen/Qwen3-0.6B@c1899de289a04d12100db370d81485cdf75e47ca",
+   "params": {
+    "native_loaded": 606131200,
+    "stored": {
+     "base_Qwen3-0.6B": 751632384,
+     "base_unique_tied": 596049920,
+     "lora": 10092544,
+     "decision_rows": 524288
+    },
+    "dtype": "BF16",
+    "not_instantiated": "duplicate tied lm_head copy in the base file (155,582,464); decision rows overwrite existing vocab rows"
+   },
+   "license_flags": "Apache-2.0 (LICENSE, NOTICE: Clause Logic Inc.); base Qwen3 Apache-2.0",
+   "native_interface": {
+    "kind": "trust_remote_code BosunForDecision.predict(state, instructions, decision_type, candidates); 256 learned decision-token slots",
+    "files": [
+     "README.md",
+     "modeling_bosun.py",
+     "serving.json",
+     "config.json"
+    ],
+    "runtime_repo": "github.com/Hanno-Labs/jev-compatible-server@431b8e1e (Index code_url; HF package is self-contained)"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "<=255 runtime choices + null slot; tokenizer truncation=False (base context)",
+   "adapter": {
+    "exists": true,
+    "path": "inference/bosun06.py",
+    "model_id": "Hanno-Labs/bosun-v3.1-0.6b",
+    "revision": "1d8b6f9611f9b64b514ce8b57cd86398fbc31a3b",
+    "base": "Qwen/Qwen3-0.6B@c1899de2"
+   },
+   "prior_v3": {
+    "exists": true,
+    "record": "research/kai06-v3-postkey-result-2026-09-27.md",
+    "revision": "1d8b6f9611f9b64b514ce8b57cd86398fbc31a3b",
+    "status": "reusable by identity: current main equals the run revision"
+   },
+   "effort": {
+    "level": "none",
+    "blockers": []
+   },
+   "rationale": "Top 0.6B-band entrant by Index position; native three-type head; already qualified on v3."
+  },
+  {
+   "role": "selected",
+   "engine": "gliner-decide",
+   "index_rank": 53,
+   "index_balanced_skill": 11.21,
+   "index_variant": null,
+   "repo": "fastino/GLiNER2.5-Decide",
+   "revision": "5a7adf72a23b4d311abae6ce050d7f0012bb3416",
+   "last_modified": "2026-09-28T00:59:04.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": []
+   },
+   "base_model_card": "fastino/gliner2-large-v1",
+   "architecture": {
+    "architectures": [
+     "SpanExtractor"
+    ],
+    "model_type": "extractor"
+   },
+   "tier": "0.6B",
+   "params": {
+    "native_loaded": 486444053,
+    "stored": {
+     "model.safetensors": 486444053
+    },
+    "dtype": "F32"
+   },
+   "license_flags": "Apache-2.0 (card; no LICENSE file in repo); DeBERTa-v3-large encoder (MIT upstream)",
+   "native_interface": {
+    "kind": "gliner2 library AutoExtractor.classify_text / Classifier.score over caller label sets (SpanExtractor, deberta-v2 encoder)",
+    "files": [
+     "README.md",
+     "config.json",
+     "encoder_config/config.json"
+    ],
+    "runtime_repo": "github.com/fastino-ai/GLiNER2@55656fbfa01d3d4a77485e1a1eeeaf682990ccdf (HEAD = our pin)"
+   },
+   "cns": {
+    "choice": "yes (exclusive classification)",
+    "noul": "projection (yes/no labels)",
+    "score": "projection (ordinal labels, 2-10 levels in our adapter)"
+   },
+   "limits": "512-position encoder window (our adapter counts overflow invalid)",
+   "adapter": {
+    "exists": true,
+    "path": "inference/gliner25.py",
+    "model_id": "fastino/GLiNER2.5-Decide",
+    "revision": "7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6"
+   },
+   "identity_check": {
+    "from": "7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6",
+    "to": "5a7adf72a23b4d311abae6ce050d7f0012bb3416",
+    "changed": [
+     "README.md"
+    ],
+    "weights_config_tokenizer_unchanged": true
+   },
+   "prior_v3": {
+    "exists": false,
+    "note": "only a public231 pilot (inference/GLINER25_BASELINE.md); no JevArena v3 result"
+   },
+   "effort": {
+    "level": "low",
+    "blockers": [
+     "classification model: Noul/Score are projections",
+     "512-token window"
+    ]
+   },
+   "rationale": "Second 0.6B-band entrant (486M, ratio 1.233); native classifier, adapter exists."
+  },
+  {
+   "role": "selected",
+   "engine": "jpt-0.8b",
+   "index_rank": 46,
+   "index_balanced_skill": 19.22,
+   "index_variant": null,
+   "repo": "kirp/jpt-0.8b",
+   "revision": "1431c0509bbc10772cd59964cc7af5835c8720d6",
+   "last_modified": "2026-09-27T18:26:56.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "cc-by-nc-4.0",
+    "card_license_name": null,
+    "files": []
+   },
+   "base_model_card": "Qwen/Qwen3.5-0.8B",
+   "architecture": {
+    "architectures": [
+     "Qwen3_5ForConditionalGeneration"
+    ],
+    "model_type": "qwen3_5"
+   },
+   "tier": "0.8B",
+   "params": {
+    "native_loaded": 852985920,
+    "stored": {
+     "text": 752393024,
+     "vision": 100592896
+    },
+    "dtype": "BF16 (+2,592 F32)",
+    "not_instantiated_by_text_readout": {
+     "vision": 100592896
+    }
+   },
+   "license_flags": "CC BY-NC 4.0 (non-commercial: research evaluation allowed; flag before any commercial use); base Qwen3.5-0.8B Apache-2.0",
+   "native_interface": {
+    "kind": "llm2jev (>=0.6.1) /v1/systemone over SGLang/vLLM/HF; label log-probs on chat template; T=1.140",
+    "files": [
+     "README.md",
+     "chat_template.jinja"
+    ],
+    "runtime_repo": "github.com/tic-top/llm2jev@2b252d504972764211ef172c1155ac0fedc9c3de (HEAD = our JPT pin)"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "2-255 options; SGLang example --context-length 32768",
+   "index_run_revision": "5921ae03fbaff98fcbe781c1ff3f1200dc897fd1",
+   "identity_check": {
+    "from": "5921ae03fbaff98fcbe781c1ff3f1200dc897fd1",
+    "to": "1431c0509bbc10772cd59964cc7af5835c8720d6",
+    "changed": [
+     "README.md",
+     "+assets/*.png"
+    ],
+    "weights_config_tokenizer_unchanged": true
+   },
+   "adapter": {
+    "exists": "family",
+    "path": "inference/jpt.py",
+    "note": "pinned to kirp/jpt-9b@7114b0c3 and T=1.087; needs model/revision/T parameters"
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "low",
+    "blockers": [
+     "CC BY-NC 4.0 flag"
+    ]
+   },
+   "rationale": "Top 0.8B-band entrant; same llm2jev contract as the qualified JPT-9B."
+  },
+  {
+   "role": "selected",
+   "engine": "kev-0.8b-raised",
+   "index_rank": 48,
+   "index_balanced_skill": 14.6,
+   "index_variant": null,
+   "repo": "jaredpalmer/kev-0.8b",
+   "revision": "9a45d25eb2ab761841196625383fa1dff0e56c1e",
+   "last_modified": "2026-09-24T14:37:02.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": []
+   },
+   "base_model_card": "Qwen/Qwen3.5-0.8B-Base",
+   "architecture": {
+    "architectures": null,
+    "model_type": null
+   },
+   "tier": "0.8B",
+   "base_revision": "Qwen/Qwen3.5-0.8B-Base@dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+   "params": {
+    "native_loaded": 752917824,
+    "stored": {
+     "base_total": 873438784,
+     "base_text": 752393024,
+     "base_vision": 100592896,
+     "base_mtp": 20452864,
+     "lora": 10822656,
+     "head.pt_fp32": 524800
+    },
+    "dtype": "FP32 exact path (LoadOptions default); bf16 serve option",
+    "not_instantiated": {
+     "vision": 100592896,
+     "mtp": 20452864
+    },
+    "note": "LoRA merged at load (merge=True); head = q,k Linear(1024->256)+bias"
+   },
+   "license_flags": "Apache-2.0 (card; no LICENSE file in repo); base Qwen3.5 Apache-2.0",
+   "native_interface": {
+    "kind": "kev source Checkpoint.load -> DecisionModel.probs (pointer head, /v1/systemone)",
+    "files": [
+     "README.md",
+     "provenance.json",
+     "head.pt (zip/pickle metadata only)"
+    ],
+    "runtime_repo": "github.com/jaredpalmer/kev@45923b7a3460b6d36358e2e143455902c1eb856b (provenance; on public branches release/family-0924, research/overnight-r6)"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "8,192-token state and row limits (strict mode)",
+   "adapter": {
+    "exists": "family",
+    "path": "inference/kev.py",
+    "note": "pinned to jaredpalmer/kev-4b@139fdd94 + source 6d02f5d0; 0.8B needs source 45923b7a and its hashes"
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "low-medium",
+    "blockers": [
+     "provenance head_sha256 (bc77488a...) != head.pt LFS sha256 (f400bd12...): confirm hashing scheme at qualification"
+    ]
+   },
+   "rationale": "Second 0.8B-band entrant; same native package as the qualified Kev-4B control."
+  },
+  {
+   "role": "selected",
+   "engine": "intern-decision-0.8b",
+   "index_rank": 51,
+   "index_balanced_skill": 11.94,
+   "index_variant": null,
+   "repo": "internlm/Intern-Decision-0.8B",
+   "revision": "85a0cc5a99d67ea8d56dfe98115689212867171d",
+   "last_modified": "2026-09-26T08:14:02.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": [
+     "LICENSE",
+     "LICENSE-QWEN"
+    ]
+   },
+   "base_model_card": [
+    "Qwen/Qwen3.5-0.8B"
+   ],
+   "architecture": {
+    "architectures": [
+     "Qwen3_5ForConditionalGeneration"
+    ],
+    "model_type": "qwen3_5"
+   },
+   "tier": "0.8B",
+   "params": {
+    "native_loaded": 852985920,
+    "stored": {
+     "text": 752393024,
+     "vision": 100592896
+    },
+    "dtype": "BF16 (+2,592 F32)",
+    "not_instantiated_by_text_readout": {
+     "vision": 100592896
+    }
+   },
+   "license_flags": "Apache-2.0 (LICENSE, LICENSE-QWEN)",
+   "native_interface": {
+    "kind": "bundled inference.py DecisionEngine: one forward, logits before each <decision> placeholder, symbol softmax, T=2.7478",
+    "files": [
+     "README.md",
+     "inference.py",
+     "requirements.txt"
+    ],
+    "runtime_repo": "github.com/internlm/Intern-Decision@2f815802 (HF package self-contained)"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "<=62 options/question, 1-16 questions/request; 8,192 tokens, rejected without truncation",
+   "adapter": {
+    "exists": false
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "low-medium",
+    "blockers": [
+     "pins torch 2.9.1 / transformers 5.14.1 (CUDA default device)"
+    ]
+   },
+   "rationale": "Next 0.8B entrant after Tev1 (licence pending); native three-type engine, Apache-2.0."
+  },
+  {
+   "role": "selected",
+   "engine": "decider-2b-fp8-http",
+   "index_rank": 37,
+   "index_balanced_skill": 28.97,
+   "index_variant": "FP8",
+   "repo": "Mapika/decider-2b",
+   "revision": "533964dae8be954c5b5e19fa4948e48408094c1e",
+   "last_modified": "2026-09-24T21:04:31.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": []
+   },
+   "base_model_card": "Qwen/Qwen3.5-2B-Base",
+   "architecture": {
+    "architectures": [
+     "Qwen3_5ForCausalLM"
+    ],
+    "model_type": "qwen3_5_text"
+   },
+   "tier": "2B",
+   "params": {
+    "native_loaded": 1881825088,
+    "stored": {
+     "text": 1881825088
+    },
+    "dtype": "BF16 (Index row served an FP8 variant)"
+   },
+   "license_flags": "Apache-2.0 (card; no LICENSE file); base Qwen3.5-2B-Base Apache-2.0",
+   "native_interface": {
+    "kind": "bundled decider/ package system_one(state, questions); option-letter logits at answer slots; per-type T",
+    "files": [
+     "README.md",
+     "decider_config.json",
+     "decider/infer.py"
+    ],
+    "runtime_repo": "github.com/Mapika/decider@23579f7a (HF bundle is the inference subset)"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes (isolated levels)"
+   },
+   "limits": "255 options; 32,768 state tokens",
+   "adapter": {
+    "exists": true,
+    "path": "inference/run.py --backend decider",
+    "revision": "533964dae8be954c5b5e19fa4948e48408094c1e"
+   },
+   "prior_v3": {
+    "exists": true,
+    "record": "research/sol2b-own-source-formal-v3-result-2026-09-27.md",
+    "revision": "533964dae8be954c5b5e19fa4948e48408094c1e",
+    "status": "reusable by identity: current main equals the run revision"
+   },
+   "effort": {
+    "level": "none",
+    "blockers": []
+   },
+   "rationale": "Top 2B entrant; qualified same-panel peer."
+  },
+  {
+   "role": "selected",
+   "engine": "this-that-1.2",
+   "index_rank": 39,
+   "index_balanced_skill": 28.14,
+   "index_variant": null,
+   "repo": "flock-io/this-that-model-1.2",
+   "revision": "c4d1c30b8d512d278726de439b8cc81fccc70c8f",
+   "last_modified": "2026-09-23T16:43:03.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "mit",
+    "card_license_name": null,
+    "files": []
+   },
+   "base_model_card": "decider-2b",
+   "architecture": {
+    "architectures": [
+     "Qwen3_5ForCausalLM"
+    ],
+    "model_type": "qwen3_5_text"
+   },
+   "tier": "2B",
+   "params": {
+    "native_loaded": 1881825088,
+    "stored": {
+     "text": 1881825088
+    },
+    "dtype": "BF16"
+   },
+   "license_flags": "MIT (card: adapted from decider-2b under Apache-2.0); no LICENSE file in repo",
+   "native_interface": {
+    "kind": "thisthat.TypedDecider.decide(Question) one declared-option head",
+    "files": [
+     "README.md"
+    ],
+    "runtime_repo": "github.com/FLock-io/this-that-model@f57c9f0 (Release 1.2); HEAD 6af11c63"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "projection (no/yes options)",
+    "score": "projection (ordered options)"
+   },
+   "limits": "DEFAULT_MAX_STATE_TOKENS=1536 unchanged in prompt.py 4efe782 -> f57c9f0 -> 6af11c6 (native silently truncates)",
+   "adapter": {
+    "exists": "previous version",
+    "path": "inference/this_that.py",
+    "revision": "flock-io/this-that-model-1.0@3d927195, source 4efe782c"
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "low",
+    "blockers": [
+     "re-pin to 1.2 weights and source f57c9f0; backend refactor"
+    ]
+   },
+   "rationale": "Second 2B entrant (fine-tune of Decider 2B)."
+  },
+  {
+   "role": "selected",
+   "engine": "bosun-v3.1-1.7b",
+   "index_rank": 44,
+   "index_balanced_skill": 20.1,
+   "index_variant": null,
+   "repo": "Hanno-Labs/bosun-v3.1-1.7b",
+   "revision": "1d8dc82a20e4a32ed60927a47272d6efff48eed2",
+   "last_modified": "2026-09-23T00:36:11.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": [
+     "LICENSE",
+     "NOTICE"
+    ]
+   },
+   "base_model_card": "Qwen/Qwen3-1.7B",
+   "architecture": {
+    "architectures": [
+     "BosunForDecision"
+    ],
+    "model_type": "bosun"
+   },
+   "tier": "2B",
+   "base_revision": "Qwen/Qwen3-1.7B@70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
+   "params": {
+    "native_loaded": 1737985024,
+    "stored": {
+     "base_Qwen3-1.7B": 2031739904,
+     "base_unique_tied": 1720574976,
+     "lora": 17432576,
+     "decision_rows": 1048576
+    },
+    "dtype": "BF16",
+    "note": "header arithmetic with the 0.6B loader (modeling_bosun.py identical); not yet run-verified"
+   },
+   "license_flags": "Apache-2.0 (LICENSE, NOTICE)",
+   "native_interface": {
+    "kind": "same BosunForDecision.predict contract as 0.6B",
+    "files": [
+     "serving.json",
+     "config.json",
+     "modeling_bosun.py"
+    ]
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "<=255 choices + null slot",
+   "adapter": {
+    "exists": "family",
+    "path": "inference/bosun06.py",
+    "note": "0.6B-specific constants; parametrize model/base revision"
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "low",
+    "blockers": []
+   },
+   "rationale": "Third 2B-band entrant (1.74B, ratio 1.15)."
+  },
+  {
+   "role": "selected",
+   "engine": "jpt-4b",
+   "index_rank": 15,
+   "index_balanced_skill": 43.04,
+   "index_variant": null,
+   "repo": "kirp/jpt-4b",
+   "revision": "78312f855b8bebf83ae7e9e8f05b5a0f73f519a9",
+   "last_modified": "2026-09-27T18:04:47.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "cc-by-nc-4.0",
+    "card_license_name": null,
+    "files": []
+   },
+   "base_model_card": "Qwen/Qwen3.5-4B",
+   "architecture": {
+    "architectures": [
+     "Qwen3_5ForConditionalGeneration"
+    ],
+    "model_type": "qwen3_5"
+   },
+   "tier": "4B",
+   "params": {
+    "native_loaded": 4539265536,
+    "stored": {
+     "text": 4205751296,
+     "vision": 333514240
+    },
+    "dtype": "BF16 (+3,840 F32)",
+    "not_instantiated_by_text_readout": {
+     "vision": 333514240
+    }
+   },
+   "license_flags": "CC BY-NC 4.0 (non-commercial); base Qwen3.5-4B Apache-2.0",
+   "native_interface": {
+    "kind": "llm2jev /v1/systemone; label log-probs; T=1.036",
+    "files": [
+     "README.md"
+    ],
+    "runtime_repo": "github.com/tic-top/llm2jev@2b252d50"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "2-255 options",
+   "index_run_revision": "277ae37b7a6398a8ec3b86712ac16c1991ab6ef1",
+   "identity_check": {
+    "from": "277ae37b7a6398a8ec3b86712ac16c1991ab6ef1",
+    "to": "78312f855b8bebf83ae7e9e8f05b5a0f73f519a9",
+    "changed": [
+     "README.md",
+     ".gitattributes",
+     "+assets/*.png"
+    ],
+    "weights_config_tokenizer_unchanged": true
+   },
+   "adapter": {
+    "exists": "family",
+    "path": "inference/jpt.py",
+    "note": "parametrize for 4B, T=1.036"
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "low",
+    "blockers": [
+     "CC BY-NC 4.0 flag"
+    ]
+   },
+   "rationale": "Top 4B entrant (new since prior roster)."
+  },
+  {
+   "role": "selected",
+   "engine": "jet-v6.2",
+   "index_rank": 16,
+   "index_balanced_skill": 42.6,
+   "index_variant": null,
+   "repo": "michaljach/jet",
+   "revision": "fbc3d2daa679e0d4bd9f99c9912b6496d5a41f0a",
+   "last_modified": "2026-09-26T06:44:29.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": [
+     "LICENSE"
+    ]
+   },
+   "base_model_card": "Qwen/Qwen3.5-4B",
+   "architecture": {
+    "architectures": [
+     "Qwen3_5ForCausalLM"
+    ],
+    "model_type": "qwen3_5_text"
+   },
+   "tier": "4B",
+   "params": {
+    "native_loaded": 4205751296,
+    "stored": {
+     "text": 4205751296
+    },
+    "dtype": "BF16 (+3,840 F32)"
+   },
+   "license_flags": "Apache-2.0 (LICENSE)",
+   "native_interface": {
+    "kind": "bundled jet.py Jet().decide(state, questions); restricted label-token readout (runtime.py Qwen3_5ForCausalLM)",
+    "files": [
+     "README.md",
+     "runtime.py",
+     "jet.py"
+    ],
+    "runtime_repo": "github.com/michaljach/jet@f95e19c7 (records); HF tag v6.2.0 tree == main"
+   },
+   "cns": {
+    "choice": "yes (2-255)",
+    "noul": "yes",
+    "score": "yes (2-10 levels)"
+   },
+   "limits": "16,384 tokens, no truncation",
+   "adapter": {
+    "exists": false
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "low-medium",
+    "blockers": [
+     "card targets NVIDIA CUDA + flash-linear-attention 0.5.2"
+    ]
+   },
+   "rationale": "Second 4B entrant (new since prior roster)."
+  },
+  {
+   "role": "selected",
+   "engine": "hopper-g-1.2",
+   "index_rank": 18,
+   "index_balanced_skill": 40.77,
+   "index_variant": null,
+   "repo": "HopitAI/hopper-g",
+   "revision": "71d991f4df78c445a50a4bc952748cea89c2ac21",
+   "last_modified": "2026-09-27T19:49:08.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "other",
+    "card_license_name": "research-and-demo",
+    "files": []
+   },
+   "base_model_card": "Qwen/Qwen3.5-4B",
+   "architecture": {
+    "architectures": null,
+    "model_type": null
+   },
+   "tier": "4B",
+   "base_revision": "Qwen/Qwen3.5-4B@851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+   "params": {
+    "native_loaded": 4205751296,
+    "stored": {
+     "base_total": 4659865088,
+     "base_text": 4205751296,
+     "base_vision": 333514240,
+     "base_mtp": 120599552,
+     "lora": 32464896
+    },
+    "dtype": "BF16",
+    "not_instantiated_by_text_readout": {
+     "vision": 333514240,
+     "mtp": 120599552
+    },
+    "note": "LoRA merged at load (merge_and_unload); whether AutoModelForCausalLM builds the vision tower is Transformers-version dependent: measure at qualification"
+   },
+   "license_flags": "other: research-and-demo (card: research and demo use only, no commercial use; RACE-derived data); code Apache-2.0",
+   "native_interface": {
+    "kind": "hopper_decisions server (option-letter probabilities, per-kind calibration map)",
+    "files": [
+     "README.md",
+     "hopper.json",
+     "adapter_config.json"
+    ],
+    "runtime_repo": "github.com/hopit-ai/hopper tag g-1.2.0 -> 0204f92954f76fd8835f6050c271fc6e75ac3370"
+   },
+   "cns": {
+    "choice": "yes (<=26 letters; >26 via disclosed two-stage shortlist)",
+    "noul": "yes",
+    "score": "yes (<=26 levels)"
+   },
+   "limits": "refused if prompt exceeds model context",
+   "identity_check": {
+    "from": "d60a1d6ca3f3fa25e5daddea16b8ba2b431ebcee (card: evaluated release)",
+    "to": "71d991f4df78c445a50a4bc952748cea89c2ac21",
+    "changed": [
+     "README.md",
+     "CHECKSUMS.txt",
+     "adapter_config.json (task_type null -> CAUSAL_LM)"
+    ],
+    "weights_config_tokenizer_unchanged": true
+   },
+   "adapter": {
+    "exists": false
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "medium",
+    "blockers": [
+     "research-and-demo licence flag",
+     "CUDA 12.8 serving; shortlist embedder dependency"
+    ]
+   },
+   "rationale": "Third 4B entrant; replaced Hopper 1.1.1 on the board."
+  },
+  {
+   "role": "retained",
+   "engine": "decider-4b",
+   "index_rank": 19,
+   "index_balanced_skill": 40.7,
+   "index_variant": null,
+   "repo": "Mapika/decider-4b",
+   "revision": "eb5fbdfc9448473ec25e399882912863afbdb70e",
+   "last_modified": "2026-09-24T21:03:57.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": []
+   },
+   "base_model_card": "Qwen/Qwen3.5-4B-Base",
+   "architecture": {
+    "architectures": [
+     "Qwen3_5ForCausalLM"
+    ],
+    "model_type": "qwen3_5_text"
+   },
+   "tier": "4B",
+   "params": {
+    "native_loaded": 4205751296,
+    "stored": {
+     "text": 4205751296
+    },
+    "dtype": "BF16"
+   },
+   "license_flags": "Apache-2.0 (card)",
+   "native_interface": {
+    "kind": "bundled decider/ system_one",
+    "runtime_repo": "HF-bundled decider/ v1.4"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "255 options; 32,768 state tokens",
+   "adapter": {
+    "exists": true,
+    "path": "inference/run.py --backend decider",
+    "revision": "eb5fbdfc9448473ec25e399882912863afbdb70e"
+   },
+   "prior_v3": {
+    "exists": true,
+    "record": "research/decider4b-v3-peer-result-2026-09-27.md",
+    "revision": "eb5fbdfc9448473ec25e399882912863afbdb70e",
+    "status": "reusable by identity: current main equals the run revision"
+   },
+   "effort": {
+    "level": "none",
+    "blockers": []
+   },
+   "rationale": "4th by Index position, 0.07 behind Hopper (G); keep as already-qualified peer."
+  },
+  {
+   "role": "selected",
+   "engine": "jpt-9b",
+   "index_rank": 13,
+   "index_balanced_skill": 46.89,
+   "index_variant": null,
+   "repo": "kirp/jpt-9b",
+   "revision": "b447cc7ee105c0a76a22f8fde8ecf05074dc8be0",
+   "last_modified": "2026-09-27T18:27:02.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "cc-by-nc-4.0",
+    "card_license_name": null,
+    "files": []
+   },
+   "base_model_card": "Qwen/Qwen3.5-9B",
+   "architecture": {
+    "architectures": [
+     "Qwen3_5ForConditionalGeneration"
+    ],
+    "model_type": "qwen3_5"
+   },
+   "tier": "9B",
+   "params": {
+    "native_loaded": 9409813744,
+    "stored": {
+     "text": 8953803264,
+     "vision": 456010480
+    },
+    "dtype": "BF16 (+3,840 F32)",
+    "not_instantiated_by_text_readout": {
+     "vision": 456010480
+    }
+   },
+   "license_flags": "CC BY-NC 4.0 (non-commercial); base Qwen3.5-9B Apache-2.0",
+   "native_interface": {
+    "kind": "llm2jev; label log-probs; T=1.087",
+    "runtime_repo": "github.com/tic-top/llm2jev@2b252d50"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "2-255 options",
+   "index_run_revision": "7114b0c3d9bea6b82dfa2d0691e8d5562cd26d4e",
+   "identity_check": {
+    "from": "7114b0c3d9bea6b82dfa2d0691e8d5562cd26d4e",
+    "to": "b447cc7ee105c0a76a22f8fde8ecf05074dc8be0",
+    "changed": [
+     "README.md",
+     "+assets/*.png"
+    ],
+    "weights_config_tokenizer_unchanged": true
+   },
+   "adapter": {
+    "exists": true,
+    "path": "inference/jpt.py",
+    "revision": "7114b0c3d9bea6b82dfa2d0691e8d5562cd26d4e"
+   },
+   "prior_v3": {
+    "exists": true,
+    "record": "research/jpt9b-native-v3-peer-result-2026-09-28.md",
+    "revision": "7114b0c3d9bea6b82dfa2d0691e8d5562cd26d4e",
+    "status": "reusable by file identity: main moved to b447cc7e with card/asset-only changes"
+   },
+   "effort": {
+    "level": "none",
+    "blockers": [
+     "CC BY-NC 4.0 flag"
+    ]
+   },
+   "rationale": "Top 9B-band entrant; qualified."
+  },
+  {
+   "role": "selected",
+   "engine": "winnow-e4b-q8",
+   "index_rank": 22,
+   "index_balanced_skill": 39.89,
+   "index_variant": "Q8_0",
+   "repo": "EldanRing/Winnow-E4B",
+   "revision": "734302fe5fbfeb3f21a7ece62653c9539be4aaf3",
+   "last_modified": "2026-09-24T14:57:00.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": [
+     "LICENSE",
+     "NOTICE"
+    ]
+   },
+   "base_model_card": "google/gemma-4-E4B-it",
+   "architecture": {
+    "architectures": null,
+    "model_type": null
+   },
+   "tier": "9B",
+   "base_revision": "google/gemma-4-E4B-it@ee0ef6023621cff504d758262d4e04895a5af4a2",
+   "params": {
+    "native_loaded": 7518069290,
+    "stored": {
+     "Q8_0_gguf_lm": 7518069290,
+     "BF16_gguf_lm": 7518069290,
+     "of_which_per_layer_token_embd": 2818572288,
+     "token_embd": 671088640,
+     "mmproj_vision_audio": 478088384
+    },
+    "dtype": "GGUF Q8_0 (Index variant); BF16 GGUF also published",
+    "not_instantiated_text_only": {
+     "mmproj_vision_audio": 478088384
+    },
+    "note": "'E4B' is the effective size; per-layer embedding tables make the loaded total 7.52B (ratio 1.197 to 9B)"
+   },
+   "license_flags": "Apache-2.0 (LICENSE, NOTICE); Gemma 4 upstream Apache-2.0",
+   "native_interface": {
+    "kind": "winnow-inference: patched llama.cpp server /v1/systemone; candidate-answer logits; T=1.2574 (Q8)",
+    "files": [
+     "README.md",
+     "docs/QUICKSTART.md",
+     "release-manifest.json",
+     "SHA256SUMS"
+    ],
+    "runtime_repo": "github.com/EldanRing/winnow-inference@77d14580c6732ca2f3745750c1dc1fd446d8bcee"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "measured 8K text profile (64K probe); GGUF context_length 131072",
+   "adapter": {
+    "exists": false
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "high",
+    "blockers": [
+     "runtime backends are NVIDIA CUDA and Apple Metal only; ROCm/HIP build of the pinned patched llama.cpp unqualified"
+    ]
+   },
+   "rationale": "Next in-band trained 9B-tier entrant by actual count."
+  },
+  {
+   "role": "selected",
+   "engine": "nimble-v2",
+   "index_rank": 23,
+   "index_balanced_skill": 39.57,
+   "index_variant": null,
+   "repo": "bespokelabs/Bespoke-Nimble-9B-v2",
+   "revision": "4b8c04d1ac2cea3e41e5e3c4d2130bcead2c0abe",
+   "last_modified": "2026-09-23T06:09:03.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": [
+     "LICENSE"
+    ]
+   },
+   "base_model_card": "Qwen/Qwen3.5-9B",
+   "architecture": {
+    "architectures": null,
+    "model_type": null
+   },
+   "tier": "9B",
+   "base_revision": "Qwen/Qwen3.5-9B@c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+   "params": {
+    "native_loaded": 9453092080,
+    "stored": {
+     "base_total": 9653104368,
+     "base_text": 8953803264,
+     "base_vision": 456010480,
+     "base_mtp": 243290624,
+     "lora": 43278336
+    },
+    "dtype": "BF16",
+    "not_instantiated": {
+     "mtp": 243290624
+    },
+    "not_used_by_text_readout": {
+     "vision": 456010480
+    },
+    "note": "ParallelScorer loads Qwen3_5ForConditionalGeneration + unmerged PeftModel"
+   },
+   "license_flags": "Apache-2.0 (LICENSE)",
+   "native_interface": {
+    "kind": "bundled inference.py ParallelScorer.score(context, schema); allowed answer-token logits; T=2.179 (transferred, not refit)",
+    "files": [
+     "README.md",
+     "inference.py",
+     "serving_config.json",
+     "temperature_config.json"
+    ],
+    "runtime_repo": "github.com/bespokelabsai/nimble@62076b4f (HF package self-contained)"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes (boolean)",
+    "score": "yes (ordinal enum via score_fields)"
+   },
+   "limits": "<=255 choices (trained <=24); 8,192 tokens, rejected not truncated",
+   "adapter": {
+    "exists": false,
+    "note": "CPU preflight only (research/lux9b-same-panel-competitor-preflight-2026-09-27.md)"
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "low-medium",
+    "blockers": [
+     "reference scorer hard-codes .to('cuda') (HIP device name works under ROCm torch)"
+    ]
+   },
+   "rationale": "Third 9B-band trained entrant."
+  },
+  {
+   "role": "selected",
+   "engine": "autojev-27b",
+   "index_rank": 3,
+   "index_balanced_skill": 56.4,
+   "index_variant": null,
+   "repo": "denis-pplx/autojev-27b",
+   "revision": "6f5b557e037f5edb25c7dc92dbc6553e5a19c015",
+   "last_modified": "2026-09-22T03:52:39.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": [
+     "LICENSE",
+     "NOTICE",
+     "source/LICENSE"
+    ]
+   },
+   "base_model_card": "Qwen/Qwen3.8-27B",
+   "architecture": {
+    "architectures": [
+     "Qwen3_5Model"
+    ],
+    "model_type": "qwen3_5"
+   },
+   "tier": "27B-dense",
+   "base_revision": "Qwen/Qwen3.8-27B@1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+   "params": {
+    "native_loaded": 26086635760,
+    "stored": {
+     "text_incl_readout": 25625905664,
+     "vision": 460730096
+    },
+    "dtype": "BF16",
+    "not_used_by_text_readout": {
+     "vision": 460730096
+    }
+   },
+   "license_flags": "weights Apache-2.0 (LICENSE, NOTICE); code MIT (source/LICENSE)",
+   "native_interface": {
+    "kind": "bundled source/ DecisionModel + /v1/systemone server",
+    "runtime_repo": "github.com/denis-pplx/autojev@ee63c1515980491a742f0bd0685c8dc5ca1f00c3 (HEAD = our pin)"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "see adapter (unsupported questions kept invalid)",
+   "adapter": {
+    "exists": true,
+    "path": "inference/autojev27.py",
+    "revision": "6f5b557e037f5edb25c7dc92dbc6553e5a19c015"
+   },
+   "prior_v3": {
+    "exists": true,
+    "record": "research/autojev27-v3-public-peer-result-2026-09-28.md",
+    "revision": "6f5b557e037f5edb25c7dc92dbc6553e5a19c015",
+    "status": "reusable by identity: current main equals the run revision"
+   },
+   "effort": {
+    "level": "none",
+    "blockers": []
+   },
+   "rationale": "Top own-weight ~27B entrant; qualified."
+  },
+  {
+   "role": "selected",
+   "engine": "jebadiah-27b",
+   "index_rank": 5,
+   "index_balanced_skill": 54.67,
+   "index_variant": null,
+   "repo": "frontier-infra/jebadiah-27b",
+   "revision": "c68db2b5570f3c2bdab511088885a88bd8b3a814",
+   "last_modified": "2026-09-26T21:41:31.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": [
+     "LICENSE"
+    ]
+   },
+   "base_model_card": "Qwen/Qwen3.8-27B",
+   "architecture": {
+    "architectures": [
+     "Qwen3_5ForConditionalGeneration"
+    ],
+    "model_type": "qwen3_5"
+   },
+   "tier": "27B-dense",
+   "base_revision": "Qwen/Qwen3.8-27B@1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+   "params": {
+    "native_loaded": 26895998464,
+    "stored": {
+     "total": 27781427952,
+     "text": 26895998464,
+     "vision": 460730096,
+     "mtp": 424699392
+    },
+    "dtype": "BF16",
+    "not_instantiated": {
+     "vision": 460730096,
+     "mtp": 424699392
+    },
+    "note": "scripts/jebadiah_model.py loads Qwen3_5ForCausalLM (text only)"
+   },
+   "license_flags": "Apache-2.0 (LICENSE); eval data CC-BY-4.0 etc. per card",
+   "native_interface": {
+    "kind": "label-token logits at last prompt position (AINode decide renderer e5c08938); scripts/decide_standalone.py; per-type T",
+    "files": [
+     "README.md",
+     "jebadiah.json",
+     "temperatures.json",
+     "prompt_contract.json",
+     "scripts/jebadiah_model.py"
+    ],
+    "runtime_repo": "github.com/getainode/jebadiah@03bee20e (server/)"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "/v1/systemone Choice capped at 20 options (68 single-token labels in extended alphabet); training states cut at 2,048 tokens",
+   "index_run_revision": "1c0d794fc24b24b15175c6a912654fa5cd76e1bb",
+   "identity_check": {
+    "from": "1c0d794fc24b24b15175c6a912654fa5cd76e1bb",
+    "to": "c68db2b5570f3c2bdab511088885a88bd8b3a814",
+    "changed": [
+     "README.md"
+    ],
+    "weights_config_tokenizer_unchanged": true
+   },
+   "adapter": {
+    "exists": false,
+    "note": "research/decision2-27b-v3-roster-plan.json: hold_unqualified"
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "medium",
+    "blockers": [
+     "choose documented option-cap behaviour (20 vs 68 labels) before freeze"
+    ]
+   },
+   "rationale": "Second own-weight ~27B entrant."
+  },
+  {
+   "role": "selected",
+   "engine": "eikos-27b-fp8",
+   "index_rank": 6,
+   "index_balanced_skill": 53.13,
+   "index_variant": "FP8",
+   "repo": "caiovicentino1/Eikos-27B-FP8",
+   "revision": "bbdb02333652ad91cfa0dc2163efe8429138eb66",
+   "last_modified": "2026-09-27T12:32:48.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "mit",
+    "card_license_name": null,
+    "files": [
+     "LICENSE",
+     "LICENSE-Qwen",
+     "NOTICE"
+    ]
+   },
+   "base_model_card": "caiovicentino1/Eikos-27B",
+   "architecture": {
+    "architectures": [
+     "Qwen3_5ForConditionalGeneration"
+    ],
+    "model_type": "qwen3_5"
+   },
+   "tier": "27B-dense",
+   "params": {
+    "native_loaded": 27356728560,
+    "stored_logical": {
+     "total": 27781427952,
+     "text": 26895998464,
+     "vision": 460730096,
+     "mtp": 424699392
+    },
+    "fp8_e4m3_weights": 24350556160,
+    "bf16_scales": 3904000,
+    "dtype": "FP8 E4M3 per-channel weights + dynamic FP8 activations (compressed-tensors); vision/MTP/embeddings/lm_head BF16",
+    "not_instantiated": {
+     "mtp": 424699392
+    },
+    "not_used_by_text_readout": {
+     "vision": 460730096
+    }
+   },
+   "license_flags": "MIT (LICENSE) + base Qwen3.8-27B Apache-2.0 (LICENSE-Qwen, NOTICE)",
+   "native_interface": {
+    "kind": "letter-logit readout (letter-v1-semif, calib T=1) via vLLM>=0.30 serve_vllm.sh + serve.py HTTP API",
+    "files": [
+     "README.md",
+     "decision_config.json",
+     "decision_core.py",
+     "letter_adapter.py",
+     "serve_vllm.sh"
+    ],
+    "runtime_repo": "github.com/caiovicentino/eikos@e8d69362 (HF package self-contained)"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "<=160 options per pass (multi-pass beyond); vLLM max-model-len 16,384",
+   "bf16_sibling": "caiovicentino1/Eikos-27B@103a5647c0131fd00abc165675fcee243d33a789 (27,781,427,952 BF16; not the board artifact)",
+   "adapter": {
+    "exists": "family",
+    "path": "inference/eikos.py",
+    "note": "Eikos-4B letter readout only"
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "medium-high",
+    "blockers": [
+     "FP8 path needs vLLM>=0.30 on ROCm (OCP e4m3 checkpoint)"
+    ]
+   },
+   "rationale": "Third own-weight ~27B entrant (new since prior roster)."
+  },
+  {
+   "role": "selected",
+   "engine": "rune-26b-a4b-v3",
+   "index_rank": 1,
+   "index_balanced_skill": 57.44,
+   "index_variant": "bf16",
+   "repo": "surogate/rune-26b-a4b-GGUF",
+   "revision": "c6b360d47895bb77bdf3805a13ee5a5557ab1921",
+   "last_modified": "2026-09-26T14:10:30.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": []
+   },
+   "base_model_card": "google/gemma-4-26B-A4B-it",
+   "architecture": {
+    "architectures": [
+     "Gemma4ForConditionalGeneration"
+    ],
+    "model_type": "gemma4"
+   },
+   "tier": "26B-MoE",
+   "base_revision": "google/gemma-4-26B-A4B-it (card; revision not pinned)",
+   "params": {
+    "native_loaded": 25233141790,
+    "stored": {
+     "total": 25805936206,
+     "text": 25233141790,
+     "vision": 572794416
+    },
+    "dtype": "BF16 safetensors (repo name says GGUF; v1 GGUFs only in history at 2a155046)",
+    "not_instantiated_text_only": {
+     "vision": 572794416
+    }
+   },
+   "moe": {
+    "repo": "surogate/rune-26b-a4b-GGUF",
+    "rev": "c6b360d47895bb77bdf3805a13ee5a5557ab1921",
+    "num_experts": 128,
+    "experts_per_token": 8,
+    "num_layers": 30,
+    "hidden_size": 2816,
+    "moe_intermediate_size": 704,
+    "shared_expert_intermediate_size": null,
+    "dense_intermediate_size": 2112,
+    "tie_word_embeddings": true,
+    "total_stored": 25805936206,
+    "text_total": 25233141790,
+    "vision": 572794416,
+    "mtp": 0,
+    "routed_expert_params": 22837985280,
+    "shared_expert_params": 0,
+    "embedding_params": 738197504,
+    "non_routed_text_params": 2395156510,
+    "active_text_per_token": 3822530590,
+    "active_text_per_token_excl_embedding": 3084333086,
+    "routed_shapes_sample": [
+     [
+      "model.language_model.layers.N.experts.down_proj",
+      [
+       128,
+       2816,
+       704
+      ]
+     ],
+     [
+      "model.language_model.layers.N.experts.gate_up_proj",
+      [
+       128,
+       1408,
+       2816
+      ]
+     ]
+    ]
+   },
+   "index_run_revision": "bd4a7cbbed66af1a95dfbac12cabf52e6e677411",
+   "identity_check": {
+    "from": "bd4a7cbbed66af1a95dfbac12cabf52e6e677411",
+    "to": "c6b360d47895bb77bdf3805a13ee5a5557ab1921",
+    "changed": [
+     "README.md"
+    ],
+    "weights_config_tokenizer_unchanged": true
+   },
+   "license_flags": "Apache-2.0 (card; no LICENSE file); Gemma 4 upstream Apache-2.0",
+   "native_interface": {
+    "kind": "surogate serve /api/alpha/decisions (letter-softmax decisions); documented transformers fallback",
+    "files": [
+     "README.md",
+     "config.json"
+    ],
+    "runtime_repo": "github.com/invergent-ai/surogate@9071a52a (C++/CUDA 13 only)"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "262k context (served at 32,768); thinking opt-in, off by default",
+   "adapter": {
+    "exists": false
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "high",
+    "blockers": [
+     "native engine NVIDIA-only; transformers fallback must replicate surogate decisions rendering and be parity-checked"
+    ]
+   },
+   "rationale": "Only same-size own-weight MoE entrant; #1 on the Index."
+  },
+  {
+   "role": "adjacent-optional",
+   "engine": "decider-35b-nvfp4",
+   "index_rank": 12,
+   "index_balanced_skill": 47.11,
+   "index_variant": "NVFP4",
+   "repo": "Mapika/decider-35b-a3b-nvfp4",
+   "revision": "798555c06e419c4638c9ebd06c78ed8b5e92c868",
+   "last_modified": "2026-09-22T14:56:23.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": []
+   },
+   "base_model_card": "Mapika/decider-35b-a3b",
+   "architecture": {
+    "architectures": [
+     "Qwen3_5MoeForCausalLM"
+    ],
+    "model_type": "qwen3_5_moe_text"
+   },
+   "tier": "26B-MoE",
+   "params": {
+    "native_loaded": 34660610688,
+    "stored_packed": {
+     "U8_packed": 16808673280,
+     "BF16": 1043264128,
+     "scales": 2101146100
+    },
+    "dtype": "NVFP4 (Index artifact); BF16 sibling Mapika/decider-35b-a3b@91470e65478656eb68fde8c0ccdfe575d69d0309 = 34,660,610,688"
+   },
+   "moe": {
+    "repo": "Mapika/decider-35b-a3b",
+    "rev": "91470e65478656eb68fde8c0ccdfe575d69d0309",
+    "num_experts": 256,
+    "experts_per_token": 8,
+    "num_layers": 40,
+    "hidden_size": 2048,
+    "moe_intermediate_size": 512,
+    "shared_expert_intermediate_size": 512,
+    "dense_intermediate_size": null,
+    "tie_word_embeddings": false,
+    "total_stored": 34660610688,
+    "text_total": 34660610688,
+    "vision": 0,
+    "mtp": 0,
+    "routed_expert_params": 32212254720,
+    "shared_expert_params": 125911040,
+    "embedding_params": 508559360,
+    "non_routed_text_params": 2448355968,
+    "active_text_per_token": 3454988928,
+    "active_text_per_token_excl_embedding": 2946429568,
+    "routed_shapes_sample": [
+     [
+      "model.language_model.layers.N.mlp.experts.N.down_proj.weight",
+      [
+       2048,
+       512
+      ]
+     ],
+     [
+      "model.language_model.layers.N.mlp.experts.N.gate_proj.weight",
+      [
+       512,
+       2048
+      ]
+     ],
+     [
+      "model.language_model.layers.N.mlp.experts.N.up_proj.weight",
+      [
+       512,
+       2048
+      ]
+     ]
+    ]
+   },
+   "license_flags": "Apache-2.0 (card)",
+   "native_interface": {
+    "kind": "bundled decider/ system_one (use_graphs=False)",
+    "runtime_repo": "HF-bundled decider/"
+   },
+   "cns": {
+    "choice": "yes",
+    "noul": "yes",
+    "score": "yes"
+   },
+   "limits": "255 options; 32,768 state tokens",
+   "adapter": {
+    "exists": "family",
+    "path": "inference/run.py --backend decider",
+    "note": "usable with the BF16 sibling"
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "low-medium",
+    "blockers": [
+     "ratio 1.333 > 1.25 (adjacent)",
+     "NVFP4 targets Blackwell; BF16 sibling is not the exact Index artifact"
+    ]
+   },
+   "rationale": "Best adjacent MoE; outside the 1.25 band."
+  },
+  {
+   "role": "adjacent-optional",
+   "engine": "xor",
+   "index_rank": 17,
+   "index_balanced_skill": 41.48,
+   "index_variant": null,
+   "repo": "juspay/xor",
+   "revision": "8d2d70892c0d5f18e197793fffbfb3374a2c5fc8",
+   "last_modified": "2026-09-27T10:51:29.000Z",
+   "gated": false,
+   "private": false,
+   "license": {
+    "card": "apache-2.0",
+    "card_license_name": null,
+    "files": [
+     "LICENSE",
+     "THIRD_PARTY_NOTICES.md"
+    ]
+   },
+   "base_model_card": "Qwen/Qwen3.6-35B-A3B",
+   "architecture": {
+    "architectures": [
+     "Qwen3_5MoeForConditionalGeneration"
+    ],
+    "model_type": "qwen3_5_moe"
+   },
+   "tier": "26B-MoE",
+   "params": {
+    "native_loaded": 35107181936,
+    "stored": {
+     "text": 34660610688,
+     "vision": 446571248
+    },
+    "dtype": "BF16"
+   },
+   "moe": {
+    "repo": "juspay/xor",
+    "rev": "8d2d70892c0d5f18e197793fffbfb3374a2c5fc8",
+    "num_experts": 256,
+    "experts_per_token": 8,
+    "num_layers": 40,
+    "hidden_size": 2048,
+    "moe_intermediate_size": 512,
+    "shared_expert_intermediate_size": 512,
+    "dense_intermediate_size": null,
+    "tie_word_embeddings": false,
+    "total_stored": 35107181936,
+    "text_total": 34660610688,
+    "vision": 446571248,
+    "mtp": 0,
+    "routed_expert_params": 32212254720,
+    "shared_expert_params": 125911040,
+    "embedding_params": 508559360,
+    "non_routed_text_params": 2448355968,
+    "active_text_per_token": 3454988928,
+    "active_text_per_token_excl_embedding": 2946429568,
+    "routed_shapes_sample": [
+     [
+      "model.language_model.layers.N.mlp.experts.down_proj",
+      [
+       256,
+       2048,
+       512
+      ]
+     ],
+     [
+      "model.language_model.layers.N.mlp.experts.gate_up_proj",
+      [
+       256,
+       1024,
+       2048
+      ]
+     ]
+    ]
+   },
+   "license_flags": "Apache-2.0 (LICENSE, THIRD_PARTY_NOTICES.md)",
+   "native_interface": {
+    "kind": "serving bundle xor-1.1-serving.tar.gz on patched SGLang image; single-token candidate readout, forward+reverse option order",
+    "runtime_repo": "HF serving/ tarball; SGLang image prakhar1611/xor-sglang@sha256:94c48d2a..."
+   },
+   "cns": {
+    "choice": "yes (2-255)",
+    "noul": "yes",
+    "score": "yes (2-255)"
+   },
+   "limits": "Index unanswered share 12.1%",
+   "adapter": {
+    "exists": false
+   },
+   "prior_v3": {
+    "exists": false
+   },
+   "effort": {
+    "level": "high",
+    "blockers": [
+     "ratio 1.350 (adjacent)",
+     "CUDA SGLang image"
+    ]
+   },
+   "rationale": "Second adjacent MoE."
+  }
+ ],
+ "skipped": [
+  {
+   "tier": "0.6B",
+   "engine": "jeff-uncapped",
+   "reason": "inference technique: stock knowledgator/gliformer-large-v1 + github.com/logan-markewich/jeff (no own weights)",
+   "index_rank": 55,
+   "balanced_skill": 8.04,
+   "name": "jeff"
+  },
+  {
+   "tier": "0.6B",
+   "engine": "lumma-fev-0.6b",
+   "reason": "in band (0.649B) but not first tier: Index 2.97, near chance",
+   "index_rank": 67,
+   "balanced_skill": 2.97,
+   "name": "Lumma-Fev-0.6B"
+  },
+  {
+   "tier": "0.6B",
+   "engine": "lavoir",
+   "reason": "adjacent (0.42B, ratio 1.42); CC BY-NC 4.0",
+   "index_rank": 54,
+   "balanced_skill": 8.69,
+   "name": "Lavoir"
+  },
+  {
+   "tier": "0.6B",
+   "engine": "laya-1e28ac20",
+   "reason": "adjacent (0.42B, ratio 1.42); our laya.py covers the separate laya-typed-decisions repo",
+   "index_rank": 60,
+   "balanced_skill": 6.04,
+   "name": "Laya"
+  },
+  {
+   "tier": "0.8B",
+   "engine": "tev1-0.8b",
+   "reason": "card: weights licence 'being finalized' (no grant); letter generation, Choice only, 2-24 options",
+   "index_rank": 50,
+   "balanced_skill": 12.85,
+   "name": "Tev1-0.8B-experimental"
+  },
+  {
+   "tier": "0.8B",
+   "engine": "mojev",
+   "reason": "next after the three picks (Index 11.69)",
+   "index_rank": 52,
+   "balanced_skill": 11.69,
+   "name": "MoJev"
+  },
+  {
+   "tier": "2B",
+   "engine": "intern-decision-2b",
+   "reason": "next after the three picks (Index 19.38)",
+   "index_rank": 45,
+   "balanced_skill": 19.38,
+   "name": "Intern-Decision-2B"
+  },
+  {
+   "tier": "2B",
+   "engine": "lfm2600",
+   "reason": "adjacent (2.70B, ratio 1.35)",
+   "index_rank": 58,
+   "balanced_skill": 6.76,
+   "name": "LFM2.5-2.6B-RLCD"
+  },
+  {
+   "tier": "4B",
+   "engine": "jevk5",
+   "reason": "below top 3; adapter inference/jevk5.py pins alibiserikbay/JevK5@c4f7fdb3 (= main); no v3 result",
+   "index_rank": 24,
+   "balanced_skill": 38.81,
+   "name": "JevK5"
+  },
+  {
+   "tier": "4B",
+   "engine": "kev-4b-raised",
+   "reason": "below top 3; v3 result exists at jaredpalmer/kev-4b@139fdd94 (= main), research/decision2-4b-jevarena-v3-first-release-hold-2026-09-27.md",
+   "index_rank": 31,
+   "balanced_skill": 34.64,
+   "name": "Kev 4B"
+  },
+  {
+   "tier": "9B",
+   "engine": "winnow-12b-q8",
+   "reason": "adjacent (11.91B GGUF LM, ratio 1.32); optional larger stress test",
+   "index_rank": 9,
+   "balanced_skill": 50.02,
+   "name": "Winnow-12B"
+  },
+  {
+   "tier": "9B",
+   "engine": "jev-omni",
+   "reason": "adjacent (11.96B, ratio 1.33)",
+   "index_rank": 20,
+   "balanced_skill": 40.53,
+   "name": "Jev-Omni"
+  },
+  {
+   "tier": "9B",
+   "engine": "kev-9b-raised",
+   "reason": "next in band after the three picks (Index 38.48)",
+   "index_rank": 26,
+   "balanced_skill": 38.48,
+   "name": "Kev 9B"
+  },
+  {
+   "tier": "27B-dense",
+   "engine": "decider-chat-gemma4-31b",
+   "reason": "inference technique: stock google/gemma-4-31B-it@842da3794eaa0b77d5f08bae87a17459d91ff475 + github.com/Mapika/decider@23579f7a (no own weights); optional technique comparator",
+   "index_rank": 2,
+   "balanced_skill": 57.33,
+   "name": "Decider chat \u00b7 Gemma-4-31B"
+  },
+  {
+   "tier": "27B-dense",
+   "engine": "simple-jev-qwen3.8-27b",
+   "reason": "inference technique: stock Qwen/Qwen3.8-27B@1d4bf0f2 + github.com/featherless-ai/simple-jev (no own weights)",
+   "index_rank": 4,
+   "balanced_skill": 55.74,
+   "name": "simple-jev \u00b7 Qwen3.8-27B (featherless)"
+  },
+  {
+   "tier": "27B-dense",
+   "engine": "reflex-27b-v2",
+   "reason": "inference technique on stock Qwen/Qwen3.8-27B-FP8",
+   "index_rank": 7,
+   "balanced_skill": 52.16,
+   "name": "reflex 27B"
+  },
+  {
+   "tier": "27B-dense",
+   "engine": "decider-chat-qwen3.6-27b",
+   "reason": "inference technique on stock Qwen/Qwen3.6-27B",
+   "index_rank": 8,
+   "balanced_skill": 51.35,
+   "name": "Decider chat \u00b7 Qwen3.6-27B"
+  },
+  {
+   "tier": "27B-dense",
+   "engine": "jevfire-uncapped",
+   "reason": "inference technique on stock Qwen/Qwen3.8-27B-FP8",
+   "index_rank": 11,
+   "balanced_skill": 49.37,
+   "name": "Jevfire"
+  },
+  {
+   "tier": "26B-MoE",
+   "engine": "joshua-diffusion-full",
+   "reason": "inference technique (diffusion) on stock google/diffusiongemma-26B-A4B-it@f7f5b7f5 (no own weights)",
+   "index_rank": 10,
+   "balanced_skill": 49.47,
+   "name": "open-jev (JoshuaSP)"
+  },
+  {
+   "tier": "26B-MoE",
+   "engine": "djev",
+   "reason": "inference technique (diffusion) on stock diffusiongemma-26B-A4B-it",
+   "index_rank": 21,
+   "balanced_skill": 40.28,
+   "name": "djev"
+  },
+  {
+   "tier": "26B-MoE",
+   "engine": "razorback-one-read-3e296f08",
+   "reason": "inference technique on stock nvidia NVFP4 checkpoint",
+   "index_rank": 28,
+   "balanced_skill": 37.25,
+   "name": "openjev (razorback16)"
+  }
+ ],
+ "own_models_context": [
+  {
+   "tier": "0.6B",
+   "engine": "decision-kai-7185f514",
+   "name": "Decision 1.0 Kai",
+   "index_rank": 59,
+   "balanced_skill": 6.52,
+   "repo": "llm-semantic-router/Decision-1.0-Kai"
+  },
+  {
+   "tier": "0.6B",
+   "engine": "decision-lex",
+   "name": "Decision 1.0 Lex",
+   "index_rank": 63,
+   "balanced_skill": 4.54,
+   "repo": "llm-semantic-router/decision-1.0-lex"
+  },
+  {
+   "tier": "0.8B",
+   "engine": "decision-eos-0.8b",
+   "name": "Decision 1.0 Eos",
+   "index_rank": 47,
+   "balanced_skill": 18.41,
+   "repo": "llm-semantic-router/Decision-1.0-Eos-0.8B"
+  },
+  {
+   "tier": "2B",
+   "engine": "decision-sol-0665a411",
+   "name": "Decision 1.0 Sol",
+   "index_rank": 42,
+   "balanced_skill": 25.32,
+   "repo": "llm-semantic-router/Decision-1.0-Sol"
+  },
+  {
+   "tier": "4B",
+   "engine": "decision-nox-0bb83350",
+   "name": "Decision 1.0 Nox",
+   "index_rank": 32,
+   "balanced_skill": 34.36,
+   "repo": "llm-semantic-router/Decision-1.0-Nox"
+  },
+  {
+   "tier": "9B",
+   "engine": "decision-lux-9b",
+   "name": "Decision 1.0 Lux",
+   "index_rank": 14,
+   "balanced_skill": 43.49,
+   "repo": "llm-semantic-router/Decision-1.0-Lux-9B"
+  }
+ ],
+ "all_entrants_tier_map": [
+  {
+   "engine": "rune-26b-a4b-v3",
+   "name": "Surogate Rune 26B-A4B v3",
+   "index_rank": 1,
+   "balanced_skill": 57.44,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "surogate/rune-26b-a4b-GGUF",
+   "code_url": "https://github.com/invergent-ai/surogate",
+   "params": 25233141790,
+   "params_basis": "headers: text 25,233,141,790 under surogate (vision 572,794,416 only with --vision)",
+   "tier": "26B-MoE",
+   "ratio_to_center": 1.03,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "decider-chat-gemma4-31b",
+   "name": "Decider chat \u00b7 Gemma-4-31B",
+   "index_rank": 2,
+   "balanced_skill": 57.33,
+   "kind": "inference technique",
+   "technique": "autoregressive",
+   "repo": "google/gemma-4-31B-it",
+   "code_url": "https://github.com/Mapika/decider",
+   "params": 31273088876,
+   "params_basis": "HF API safetensors total of stock google/gemma-4-31B-it",
+   "tier": "27B-dense",
+   "ratio_to_center": 1.158,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "autojev-27b",
+   "name": "AutoJev-27B",
+   "index_rank": 3,
+   "balanced_skill": 56.4,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "denis-pplx/autojev-27b",
+   "code_url": "https://github.com/denis-pplx/autojev",
+   "params": 26086635760,
+   "params_basis": "headers: text 25,625,905,664 (incl. readout) + vision 460,730,096",
+   "tier": "27B-dense",
+   "ratio_to_center": 1.035,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "simple-jev-qwen3.8-27b",
+   "name": "simple-jev \u00b7 Qwen3.8-27B (featherless)",
+   "index_rank": 4,
+   "balanced_skill": 55.74,
+   "kind": "inference technique",
+   "technique": "autoregressive",
+   "repo": "Qwen/Qwen3.8-27B",
+   "code_url": "https://github.com/featherless-ai/simple-jev",
+   "params": 27781427952,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "27B-dense",
+   "ratio_to_center": 1.029,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "jebadiah-27b",
+   "name": "Jebadiah 27B",
+   "index_rank": 5,
+   "balanced_skill": 54.67,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "frontier-infra/jebadiah-27b",
+   "code_url": "https://github.com/getainode/jebadiah",
+   "params": 26895998464,
+   "params_basis": "headers: text-only path (stored 27,781,427,952 incl. vision 460,730,096, MTP 424,699,392)",
+   "tier": "27B-dense",
+   "ratio_to_center": 1.004,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "eikos-27b-fp8",
+   "name": "Eikos-27B",
+   "index_rank": 6,
+   "balanced_skill": 53.13,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "caiovicentino1/Eikos-27B-FP8",
+   "code_url": "https://github.com/caiovicentino/eikos",
+   "params": 27356728560,
+   "params_basis": "headers: FP8/BF16 text 26,895,998,464 + vision 460,730,096 under vLLM (MTP 424,699,392 not loaded)",
+   "tier": "27B-dense",
+   "ratio_to_center": 1.013,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "reflex-27b-v2",
+   "name": "reflex 27B",
+   "index_rank": 7,
+   "balanced_skill": 52.16,
+   "kind": "inference technique",
+   "technique": "autoregressive",
+   "repo": "Qwen/Qwen3.8-27B-FP8",
+   "code_url": "https://github.com/kshetrajna12/reflex",
+   "params": 27781427952,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "27B-dense",
+   "ratio_to_center": 1.029,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "decider-chat-qwen3.6-27b",
+   "name": "Decider chat \u00b7 Qwen3.6-27B",
+   "index_rank": 8,
+   "balanced_skill": 51.35,
+   "kind": "inference technique",
+   "technique": "autoregressive",
+   "repo": "Qwen/Qwen3.6-27B",
+   "code_url": "https://github.com/Mapika/decider",
+   "params": 27781427952,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "27B-dense",
+   "ratio_to_center": 1.029,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "winnow-12b-q8",
+   "name": "Winnow-12B",
+   "index_rank": 9,
+   "balanced_skill": 50.02,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "EldanRing/Winnow-12B",
+   "code_url": "https://github.com/EldanRing/winnow-inference",
+   "params": 11907350576,
+   "params_basis": "GGUF header: Q8_0 language model",
+   "tier": "9B",
+   "ratio_to_center": 1.323,
+   "band_status": "adjacent",
+   "own_model": false
+  },
+  {
+   "engine": "joshua-diffusion-full",
+   "name": "open-jev (JoshuaSP)",
+   "index_rank": 10,
+   "balanced_skill": 49.47,
+   "kind": "inference technique",
+   "technique": "diffusion",
+   "repo": "google/diffusiongemma-26B-A4B-it",
+   "code_url": "https://github.com/JoshuaSP/open-jev",
+   "params": 25823778864,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "26B-MoE",
+   "ratio_to_center": 1.007,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "jevfire-uncapped",
+   "name": "Jevfire",
+   "index_rank": 11,
+   "balanced_skill": 49.37,
+   "kind": "inference technique",
+   "technique": "autoregressive",
+   "repo": "Qwen/Qwen3.8-27B-FP8",
+   "code_url": "https://github.com/kikoncuo/jevfire",
+   "params": 27781427952,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "27B-dense",
+   "ratio_to_center": 1.029,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "decider-35b-nvfp4",
+   "name": "Decider 35B-A3B",
+   "index_rank": 12,
+   "balanced_skill": 47.11,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "Mapika/decider-35b-a3b-nvfp4",
+   "code_url": null,
+   "params": 34660610688,
+   "params_basis": "headers: logical count of the BF16 sibling; NVFP4 packs 2 values/byte",
+   "tier": "26B-MoE",
+   "ratio_to_center": 1.333,
+   "band_status": "adjacent",
+   "own_model": false
+  },
+  {
+   "engine": "jpt-9b",
+   "name": "JPT-9B",
+   "index_rank": 13,
+   "balanced_skill": 46.89,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "kirp/jpt-9b",
+   "code_url": "https://github.com/tic-top/llm2jev",
+   "params": 9409813744,
+   "params_basis": "headers: text 8,953,803,264 + vision 456,010,480",
+   "tier": "9B",
+   "ratio_to_center": 1.046,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "decision-lux-9b",
+   "name": "Decision 1.0 Lux",
+   "index_rank": 14,
+   "balanced_skill": 43.49,
+   "kind": "head / adapter",
+   "technique": "autoregressive",
+   "repo": "llm-semantic-router/Decision-1.0-Lux-9B",
+   "code_url": null,
+   "params": 7940895744,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "9B",
+   "ratio_to_center": 1.133,
+   "band_status": "same-size",
+   "own_model": true
+  },
+  {
+   "engine": "jpt-4b",
+   "name": "JPT-4B",
+   "index_rank": 15,
+   "balanced_skill": 43.04,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "kirp/jpt-4b",
+   "code_url": "https://github.com/tic-top/llm2jev",
+   "params": 4539265536,
+   "params_basis": "headers: text 4,205,751,296 + vision 333,514,240",
+   "tier": "4B",
+   "ratio_to_center": 1.135,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "jet-v6.2",
+   "name": "Jet v6.2",
+   "index_rank": 16,
+   "balanced_skill": 42.6,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "michaljach/jet",
+   "code_url": "https://github.com/michaljach/jet",
+   "params": 4205751296,
+   "params_basis": "headers: text-only BF16",
+   "tier": "4B",
+   "ratio_to_center": 1.051,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "xor",
+   "name": "Xor",
+   "index_rank": 17,
+   "balanced_skill": 41.48,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "juspay/xor",
+   "code_url": null,
+   "params": 35107181936,
+   "params_basis": "headers: text 34,660,610,688 + vision 446,571,248",
+   "tier": "26B-MoE",
+   "ratio_to_center": 1.35,
+   "band_status": "adjacent",
+   "own_model": false
+  },
+  {
+   "engine": "hopper-g-1.2",
+   "name": "Hopper (G) 1.2",
+   "index_rank": 18,
+   "balanced_skill": 40.77,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "HopitAI/hopper-g",
+   "code_url": "https://github.com/hopit-ai/hopper",
+   "params": 4205751296,
+   "params_basis": "headers: Qwen3.5-4B text 4,205,751,296 (LoRA 32,464,896 merged at load)",
+   "tier": "4B",
+   "ratio_to_center": 1.051,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "decider-4b",
+   "name": "Decider 4B",
+   "index_rank": 19,
+   "balanced_skill": 40.7,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "Mapika/decider-4b",
+   "code_url": "https://github.com/Mapika/decider",
+   "params": 4205751296,
+   "params_basis": "headers: text-only BF16",
+   "tier": "4B",
+   "ratio_to_center": 1.051,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "jev-omni",
+   "name": "Jev-Omni",
+   "index_rank": 20,
+   "balanced_skill": 40.53,
+   "kind": "LoRA + head",
+   "technique": "autoregressive",
+   "repo": "akhilaaa3/Jev-Omni",
+   "code_url": null,
+   "params": 11959730224,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "9B",
+   "ratio_to_center": 1.329,
+   "band_status": "adjacent",
+   "own_model": false
+  },
+  {
+   "engine": "djev",
+   "name": "djev",
+   "index_rank": 21,
+   "balanced_skill": 40.28,
+   "kind": "inference technique",
+   "technique": "diffusion",
+   "repo": "google/diffusiongemma-26B-A4B-it",
+   "code_url": "https://github.com/Davipar/djev-dev",
+   "params": 25823778864,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "26B-MoE",
+   "ratio_to_center": 1.007,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "winnow-e4b-q8",
+   "name": "Winnow-E4B",
+   "index_rank": 22,
+   "balanced_skill": 39.89,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "EldanRing/Winnow-E4B",
+   "code_url": "https://github.com/EldanRing/winnow-inference",
+   "params": 7518069290,
+   "params_basis": "GGUF header: Q8_0 language model (mmproj 478,088,384 not loaded text-only)",
+   "tier": "9B",
+   "ratio_to_center": 1.197,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "nimble-v2",
+   "name": "Bespoke Nimble 9B v2",
+   "index_rank": 23,
+   "balanced_skill": 39.57,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "bespokelabs/Bespoke-Nimble-9B-v2",
+   "code_url": "https://github.com/bespokelabsai/nimble",
+   "params": 9453092080,
+   "params_basis": "headers: Qwen3.5-9B text 8,953,803,264 + vision 456,010,480 + unmerged LoRA 43,278,336",
+   "tier": "9B",
+   "ratio_to_center": 1.05,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "jevk5",
+   "name": "JevK5",
+   "index_rank": 24,
+   "balanced_skill": 38.81,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "alibiserikbay/JevK5",
+   "code_url": "https://github.com/allebee/jevk5",
+   "params": 4205751296,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "4B",
+   "ratio_to_center": 1.051,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "lev",
+   "name": "lev",
+   "index_rank": 25,
+   "balanced_skill": 38.54,
+   "kind": "LoRA + head",
+   "technique": "autoregressive",
+   "repo": "interfaze-ai/lev",
+   "code_url": "https://github.com/Abhinavexists/lev",
+   "params": 4702332416,
+   "params_basis": "Index served_params (backbone) + trained_params (adapter/head)",
+   "tier": "4B",
+   "ratio_to_center": 1.176,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "kev-9b-raised",
+   "name": "Kev 9B",
+   "index_rank": 26,
+   "balanced_skill": 38.48,
+   "kind": "LoRA + head",
+   "technique": "autoregressive",
+   "repo": "jaredpalmer/kev-9b",
+   "code_url": "https://github.com/jaredpalmer/kev",
+   "params": 9696382704,
+   "params_basis": "Index served_params (backbone) + trained_params (adapter/head)",
+   "tier": "9B",
+   "ratio_to_center": 1.077,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "intern-decision-4b",
+   "name": "Intern-Decision-4B",
+   "index_rank": 27,
+   "balanced_skill": 37.81,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "internlm/Intern-Decision-4B",
+   "code_url": "https://github.com/internlm/Intern-Decision",
+   "params": 4539265536,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "4B",
+   "ratio_to_center": 1.135,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "razorback-one-read-3e296f08",
+   "name": "openjev (razorback16)",
+   "index_rank": 28,
+   "balanced_skill": 37.25,
+   "kind": "inference technique",
+   "technique": "diffusion",
+   "repo": "nvidia/diffusiongemma-26B-A4B-it-NVFP4",
+   "code_url": "https://github.com/vllm-project/vllm/pull/57250",
+   "params": 25823778864,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "26B-MoE",
+   "ratio_to_center": 1.007,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "neohorse-jev-4b",
+   "name": "NeoHorse-Jev-4B",
+   "index_rank": 29,
+   "balanced_skill": 36.75,
+   "kind": "head / adapter",
+   "technique": "autoregressive",
+   "repo": "TokenRhythm/NeoHorse-Jev-4B",
+   "code_url": "https://github.com/TokenRhythm/NeoHorse/tree/main/jev",
+   "params": 4540576768,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "4B",
+   "ratio_to_center": 1.135,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "solomon-v11-bf16-encoding",
+   "name": "Solomon v1.1",
+   "index_rank": 30,
+   "balanced_skill": 36.43,
+   "kind": "head / adapter",
+   "technique": "autoregressive",
+   "repo": "DoccyHealth/Solomon",
+   "code_url": null,
+   "params": 28006872817,
+   "params_basis": "Index served_params (backbone) + trained_params (adapter/head)",
+   "tier": "27B-dense",
+   "ratio_to_center": 1.037,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "kev-4b-raised",
+   "name": "Kev 4B",
+   "index_rank": 31,
+   "balanced_skill": 34.64,
+   "kind": "LoRA + head",
+   "technique": "autoregressive",
+   "repo": "jaredpalmer/kev-4b",
+   "code_url": "https://github.com/jaredpalmer/kev",
+   "params": 4692329984,
+   "params_basis": "Index served_params (backbone) + trained_params (adapter/head)",
+   "tier": "4B",
+   "ratio_to_center": 1.173,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "decision-nox-0bb83350",
+   "name": "Decision 1.0 Nox",
+   "index_rank": 32,
+   "balanced_skill": 34.36,
+   "kind": "head / adapter",
+   "technique": "autoregressive",
+   "repo": "llm-semantic-router/Decision-1.0-Nox",
+   "code_url": null,
+   "params": 4208383488,
+   "params_basis": "our 4B v3 record (native load)",
+   "tier": "4B",
+   "ratio_to_center": 1.052,
+   "band_status": "same-size",
+   "own_model": true
+  },
+  {
+   "engine": "jobe",
+   "name": "Jobe",
+   "index_rank": 33,
+   "balanced_skill": 32.35,
+   "kind": "inference technique",
+   "technique": "autoregressive",
+   "repo": "Qwen/Qwen3.5-4B",
+   "code_url": "https://github.com/MantisShrimpdev/jobe",
+   "params": 4659865088,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "4B",
+   "ratio_to_center": 1.165,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "vllm-pr57250",
+   "name": "mmastrac diffusiongemma (vLLM PR 57250)",
+   "index_rank": 34,
+   "balanced_skill": 32.24,
+   "kind": "inference technique",
+   "technique": "diffusion",
+   "repo": "google/diffusiongemma-26B-A4B-it",
+   "code_url": "https://github.com/vllm-project/vllm/pull/57250",
+   "params": 25823778864,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "26B-MoE",
+   "ratio_to_center": 1.007,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "pngwn-space-uncapped-full",
+   "name": "open-jev (pngwn)",
+   "index_rank": 35,
+   "balanced_skill": 29.91,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "pngwn/system-one-qwen3.5-4b-scorer-v2b",
+   "code_url": null,
+   "params": 4690341888,
+   "params_basis": "Index served_params (backbone) + trained_params (adapter/head)",
+   "tier": "4B",
+   "ratio_to_center": 1.173,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "tev1-4b",
+   "name": "Tev1-4B-experimental",
+   "index_rank": 36,
+   "balanced_skill": 29.24,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "togethercomputer/Tev1-4B-experimental",
+   "code_url": "https://github.com/togethercomputer/tev1",
+   "params": 4659865088,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "4B",
+   "ratio_to_center": 1.165,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "decider-2b-fp8-http",
+   "name": "Decider 2B",
+   "index_rank": 37,
+   "balanced_skill": 28.97,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "Mapika/decider-2b",
+   "code_url": null,
+   "params": 1881825088,
+   "params_basis": "headers: text-only BF16",
+   "tier": "2B",
+   "ratio_to_center": 1.063,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "openvons",
+   "name": "openvons",
+   "index_rank": 38,
+   "balanced_skill": 28.42,
+   "kind": "inference technique",
+   "technique": "autoregressive",
+   "repo": "Qwen/Qwen3-4B-Instruct-2507",
+   "code_url": "https://github.com/genai-craft/openvons",
+   "params": 4022468096,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "4B",
+   "ratio_to_center": 1.006,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "this-that-1.2",
+   "name": "this-that 1.2",
+   "index_rank": 39,
+   "balanced_skill": 28.14,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "flock-io/this-that-model-1.2",
+   "code_url": "https://github.com/FLock-io/this-that-model",
+   "params": 1881825088,
+   "params_basis": "headers: text-only BF16",
+   "tier": "2B",
+   "ratio_to_center": 1.063,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "metask-jev-4b",
+   "name": "Metask-Jev-4B",
+   "index_rank": 40,
+   "balanced_skill": 26.89,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "wayfind/metask-jev-4b-policy-mix",
+   "code_url": "https://github.com/metask-ai/metask-jev",
+   "params": 4539265536,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "4B",
+   "ratio_to_center": 1.135,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "semif",
+   "name": "SemIf",
+   "index_rank": 41,
+   "balanced_skill": 25.94,
+   "kind": "inference technique",
+   "technique": "autoregressive",
+   "repo": null,
+   "code_url": "https://github.com/TheoLeeCJ/openjev",
+   "params": 4659865088,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "4B",
+   "ratio_to_center": 1.165,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "decision-sol-0665a411",
+   "name": "Decision 1.0 Sol",
+   "index_rank": 42,
+   "balanced_skill": 25.32,
+   "kind": "head / adapter",
+   "technique": "autoregressive",
+   "repo": "llm-semantic-router/Decision-1.0-Sol",
+   "code_url": null,
+   "params": 1883930944,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "2B",
+   "ratio_to_center": 1.062,
+   "band_status": "same-size",
+   "own_model": true
+  },
+  {
+   "engine": "mini-jev",
+   "name": "mini-jev",
+   "index_rank": 43,
+   "balanced_skill": 20.98,
+   "kind": "inference technique",
+   "technique": "autoregressive",
+   "repo": "Qwen/Qwen3-4B-Instruct-2507",
+   "code_url": "https://github.com/r-ms/mini-jev",
+   "params": 4022468096,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "4B",
+   "ratio_to_center": 1.006,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "bosun-v3.1-1.7b",
+   "name": "Bosun v3.1 1.7B",
+   "index_rank": 44,
+   "balanced_skill": 20.1,
+   "kind": "LoRA + head",
+   "technique": "autoregressive",
+   "repo": "Hanno-Labs/bosun-v3.1-1.7b",
+   "code_url": "https://github.com/Hanno-Labs/jev-compatible-server",
+   "params": 1737985024,
+   "params_basis": "headers: Qwen3-1.7B tied body 1,720,574,976 - 22,528 (vocab resize) + LoRA 17,432,576",
+   "tier": "2B",
+   "ratio_to_center": 1.151,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "intern-decision-2b",
+   "name": "Intern-Decision-2B",
+   "index_rank": 45,
+   "balanced_skill": 19.38,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "internlm/Intern-Decision-2B",
+   "code_url": "https://github.com/internlm/Intern-Decision",
+   "params": 2213241664,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "2B",
+   "ratio_to_center": 1.107,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "jpt-0.8b",
+   "name": "JPT-0.8B",
+   "index_rank": 46,
+   "balanced_skill": 19.22,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "kirp/jpt-0.8b",
+   "code_url": "https://github.com/tic-top/llm2jev",
+   "params": 852985920,
+   "params_basis": "headers: text 752,393,024 + vision 100,592,896",
+   "tier": "0.8B",
+   "ratio_to_center": 1.066,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "decision-eos-0.8b",
+   "name": "Decision 1.0 Eos",
+   "index_rank": 47,
+   "balanced_skill": 18.41,
+   "kind": "head / adapter",
+   "technique": "autoregressive",
+   "repo": "llm-semantic-router/Decision-1.0-Eos-0.8B",
+   "code_url": null,
+   "params": 753446208,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.8B",
+   "ratio_to_center": 1.062,
+   "band_status": "same-size",
+   "own_model": true
+  },
+  {
+   "engine": "kev-0.8b-raised",
+   "name": "Kev 0.8B",
+   "index_rank": 48,
+   "balanced_skill": 14.6,
+   "kind": "LoRA + head",
+   "technique": "autoregressive",
+   "repo": "jaredpalmer/kev-0.8b",
+   "code_url": "https://github.com/jaredpalmer/kev",
+   "params": 752917824,
+   "params_basis": "headers: Qwen3.5-0.8B-Base text 752,393,024 + head.pt 524,800 (LoRA 10,822,656 merged at load)",
+   "tier": "0.8B",
+   "ratio_to_center": 1.063,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "bosun-v3.1-0.6b",
+   "name": "Bosun v3.1 0.6B",
+   "index_rank": 49,
+   "balanced_skill": 14.32,
+   "kind": "LoRA + head",
+   "technique": "autoregressive",
+   "repo": "Hanno-Labs/bosun-v3.1-0.6b",
+   "code_url": "https://github.com/Hanno-Labs/jev-compatible-server",
+   "params": 606131200,
+   "params_basis": "headers: Qwen3-0.6B tied body 596,049,920 - 11,264 (vocab resized to 151,925) + LoRA 10,092,544; equals our recorded native load",
+   "tier": "0.6B",
+   "ratio_to_center": 1.01,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "tev1-0.8b",
+   "name": "Tev1-0.8B-experimental",
+   "index_rank": 50,
+   "balanced_skill": 12.85,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "togethercomputer/Tev1-0.8B-experimental",
+   "code_url": "https://github.com/togethercomputer/tev1",
+   "params": 873438784,
+   "params_basis": "headers: text 752,393,024 + vision 100,592,896 + MTP 20,452,864",
+   "tier": "0.8B",
+   "ratio_to_center": 1.092,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "intern-decision-0.8b",
+   "name": "Intern-Decision-0.8B",
+   "index_rank": 51,
+   "balanced_skill": 11.94,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "internlm/Intern-Decision-0.8B",
+   "code_url": "https://github.com/internlm/Intern-Decision",
+   "params": 852985920,
+   "params_basis": "headers: text 752,393,024 + vision 100,592,896",
+   "tier": "0.8B",
+   "ratio_to_center": 1.066,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "mojev",
+   "name": "MoJev",
+   "index_rank": 52,
+   "balanced_skill": 11.69,
+   "kind": "head / adapter",
+   "technique": "autoregressive",
+   "repo": "MoLeMo-Lab/mojev",
+   "code_url": "https://github.com/MoLeMo-Lab/mojev",
+   "params": 854036544,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.8B",
+   "ratio_to_center": 1.068,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "gliner-decide",
+   "name": "GLiNER2.5-Decide",
+   "index_rank": 53,
+   "balanced_skill": 11.21,
+   "kind": "full fine-tune",
+   "technique": "GLi family",
+   "repo": "fastino/GLiNER2.5-Decide",
+   "code_url": "https://github.com/fastino-ai/GLiNER2",
+   "params": 486444053,
+   "params_basis": "headers: model.safetensors F32",
+   "tier": "0.6B",
+   "ratio_to_center": 1.233,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "lavoir",
+   "name": "Lavoir",
+   "index_rank": 54,
+   "balanced_skill": 8.69,
+   "kind": "full fine-tune",
+   "technique": "encoder",
+   "repo": "moganai/lavoir",
+   "code_url": "https://github.com/moganai/lavoir",
+   "params": 421562382,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.6B",
+   "ratio_to_center": 1.423,
+   "band_status": "adjacent",
+   "own_model": false
+  },
+  {
+   "engine": "jeff-uncapped",
+   "name": "jeff",
+   "index_rank": 55,
+   "balanced_skill": 8.04,
+   "kind": "inference technique",
+   "technique": "GLi family",
+   "repo": "knowledgator/gliformer-large-v1",
+   "code_url": "https://github.com/logan-markewich/jeff",
+   "params": 575683963,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "0.6B",
+   "ratio_to_center": 1.042,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "clm-v0.1-8b",
+   "name": "CLM-v0.1-8B",
+   "index_rank": 56,
+   "balanced_skill": 7.4,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "Contrastive-LM/CLM-v0.1-8B",
+   "code_url": "https://github.com/Contrastive-LM/CLM",
+   "params": 8190735360,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "9B",
+   "ratio_to_center": 1.099,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "gliner-base",
+   "name": "GLiNER 2.5 base",
+   "index_rank": 57,
+   "balanced_skill": 6.76,
+   "kind": "full fine-tune",
+   "technique": "GLi family",
+   "repo": "fastino/gliner2.5-base-v1",
+   "code_url": null,
+   "params": 193581591,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.6B",
+   "ratio_to_center": 3.099,
+   "band_status": "out-of-band",
+   "own_model": false
+  },
+  {
+   "engine": "lfm2600",
+   "name": "LFM2.5-2.6B-RLCD",
+   "index_rank": 58,
+   "balanced_skill": 6.76,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "monotykamary/LFM2.5-2.6B-RLCD",
+   "code_url": null,
+   "params": 2697198592,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "2B",
+   "ratio_to_center": 1.349,
+   "band_status": "adjacent",
+   "own_model": false
+  },
+  {
+   "engine": "decision-kai-7185f514",
+   "name": "Decision 1.0 Kai",
+   "index_rank": 59,
+   "balanced_skill": 6.52,
+   "kind": "head / adapter",
+   "technique": "encoder",
+   "repo": "llm-semantic-router/Decision-1.0-Kai",
+   "code_url": null,
+   "params": 571909635,
+   "params_basis": "our Kai 0.6B record (native load)",
+   "tier": "0.6B",
+   "ratio_to_center": 1.049,
+   "band_status": "same-size",
+   "own_model": true
+  },
+  {
+   "engine": "laya-1e28ac20",
+   "name": "Laya",
+   "index_rank": 60,
+   "balanced_skill": 6.04,
+   "kind": "full fine-tune",
+   "technique": "encoder",
+   "repo": "convaiinnovations/laya",
+   "code_url": "https://github.com/NandhaKishorM/laya",
+   "params": 421293830,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.6B",
+   "ratio_to_center": 1.424,
+   "band_status": "adjacent",
+   "own_model": false
+  },
+  {
+   "engine": "julia-1",
+   "name": "Julia 1",
+   "index_rank": 61,
+   "balanced_skill": 5.54,
+   "kind": "full fine-tune",
+   "technique": "encoder",
+   "repo": "SupersonicLabs/Julia-1",
+   "code_url": null,
+   "params": 144292870,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.6B",
+   "ratio_to_center": 4.158,
+   "band_status": "out-of-band",
+   "own_model": false
+  },
+  {
+   "engine": "akash-gemma",
+   "name": "system-one-gemma",
+   "index_rank": 62,
+   "balanced_skill": 5.07,
+   "kind": "LoRA + head",
+   "technique": "autoregressive",
+   "repo": null,
+   "code_url": "https://github.com/akash-kamat/system-one-gemma",
+   "params": 268098176,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "0.6B",
+   "ratio_to_center": 2.238,
+   "band_status": "out-of-band",
+   "own_model": false
+  },
+  {
+   "engine": "decision-lex",
+   "name": "Decision 1.0 Lex",
+   "index_rank": 63,
+   "balanced_skill": 4.54,
+   "kind": "head / adapter",
+   "technique": "encoder",
+   "repo": "llm-semantic-router/decision-1.0-lex",
+   "code_url": null,
+   "params": 571909635,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.6B",
+   "ratio_to_center": 1.049,
+   "band_status": "same-size",
+   "own_model": true
+  },
+  {
+   "engine": "gliner-multi",
+   "name": "GLiNER 2.5 multilingual",
+   "index_rank": 64,
+   "balanced_skill": 4.26,
+   "kind": "full fine-tune",
+   "technique": "GLi family",
+   "repo": "fastino/gliner2.5-multi-v1",
+   "code_url": null,
+   "params": 287355159,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.6B",
+   "ratio_to_center": 2.088,
+   "band_status": "out-of-band",
+   "own_model": false
+  },
+  {
+   "engine": "gliner-small",
+   "name": "GLiNER 2.5 small",
+   "index_rank": 65,
+   "balanced_skill": 3.82,
+   "kind": "full fine-tune",
+   "technique": "GLi family",
+   "repo": "fastino/gliner2.5-small-v1",
+   "code_url": null,
+   "params": 73881879,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.6B",
+   "ratio_to_center": 8.121,
+   "band_status": "out-of-band",
+   "own_model": false
+  },
+  {
+   "engine": "harsha",
+   "name": "Qwen-2.5-1B-RLCD",
+   "index_rank": 66,
+   "balanced_skill": 3.78,
+   "kind": "inference technique",
+   "technique": "autoregressive",
+   "repo": null,
+   "code_url": "https://huggingface.co/harshatheg/Qwen-2.5-1B-RLCD",
+   "params": 1543714304,
+   "params_basis": "Index served_params (stock/backbone)",
+   "tier": "2B",
+   "ratio_to_center": 1.296,
+   "band_status": "adjacent",
+   "own_model": false
+  },
+  {
+   "engine": "lumma-fev-0.6b",
+   "name": "Lumma-Fev-0.6B",
+   "index_rank": 67,
+   "balanced_skill": 2.97,
+   "kind": "LoRA",
+   "technique": "autoregressive",
+   "repo": "FrontiersMind/Lumma-fev-0.6b",
+   "code_url": null,
+   "params": 649282476,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.6B",
+   "ratio_to_center": 1.082,
+   "band_status": "same-size",
+   "own_model": false
+  },
+  {
+   "engine": "verdict-8af2496e",
+   "name": "Verdict",
+   "index_rank": 68,
+   "balanced_skill": 1.87,
+   "kind": "full fine-tune",
+   "technique": "GLi family",
+   "repo": "heman10x/rlcd-modernbert-151m",
+   "code_url": "https://github.com/Heman10x-NGU/Verdict-open-jev",
+   "params": 151378176,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.6B",
+   "ratio_to_center": 3.964,
+   "band_status": "out-of-band",
+   "own_model": false
+  },
+  {
+   "engine": "lumma-fev-0.1b",
+   "name": "Lumma-Fev-0.1B",
+   "index_rank": 69,
+   "balanced_skill": 1.78,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "FrontiersMind/Lumma-fev-0.1b",
+   "code_url": null,
+   "params": 154102848,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.6B",
+   "ratio_to_center": 3.894,
+   "band_status": "out-of-band",
+   "own_model": false
+  },
+  {
+   "engine": "lfm350-sdpa",
+   "name": "LFM2.5-350M-RLCD",
+   "index_rank": 70,
+   "balanced_skill": 1.38,
+   "kind": "full fine-tune",
+   "technique": "autoregressive",
+   "repo": "notnotsamuel/LFM2.5-350M-RLCD",
+   "code_url": null,
+   "params": 354483968,
+   "params_basis": "Index trained_params (own full weights)",
+   "tier": "0.6B",
+   "ratio_to_center": 1.693,
+   "band_status": "out-of-band",
+   "own_model": false
+  }
+ ],
+ "v3_panel_inputs": {
+  "typed_final_prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+  "css15_prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+  "public231_prompts_sha256": "642d3fac1b6521fe33df72f9228e4e364b7be7ea277893207f97da5bc75ddd"
+ }
+}

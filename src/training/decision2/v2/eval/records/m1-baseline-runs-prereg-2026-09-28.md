@@ -67,6 +67,29 @@ autotune choices differ between runs/nodes and change reduction order.
   and Lux1 is reported as the spread of R1/D1/D2 and r4 with no single number.
 - Budget: at most 0.3 GPU-hour each; one shot each.
 
+## Amendment A2 — refreshed Decision Index peers (before P1–P4)
+
+Selected from the refreshed roster
+(`decision-index-peer-roster-2026-09-28.md`, Space `7cdcea3d`, index SHA-256
+`a5a4aa0a…`); only peers whose existing adapters need a pin or size switch are
+run in Milestone 1. Index numbers stay in the roster record.
+
+| Run | Peer @ pinned revision | Tier | Loaded params (headers) | Adapter | Image |
+| --- | --- | --- | ---: | --- | --- |
+| P1 | `fastino/GLiNER2.5-Decide@7ee5da4c` (weights = `main` `5a7adf72`, README-only diff) | 0.6B | 486,444,053 | `gliner25`, variant `english`; Noul/Score are projections; 512-token encoder overflow invalid | `decision20-gliner25:host2` |
+| P2 | `kirp/jpt-0.8b@1431c050` (text 752,393,024; vision unused) | 0.8B | 852,985,920 stored | `jpt-0.8b` (llm2jev `2b252d50`, card T = 1.140) | pinned image |
+| P3 | `Hanno-Labs/bosun-v3.1-1.7b@1d8dc82a` on `Qwen/Qwen3-1.7B@70d244cc` | 2B | 1,737,985,024 | `bosun17` | pinned image |
+| P4 | `kirp/jpt-4b@78312f85` (text 4,205,751,296; vision unused) | 4B | 4,539,265,536 stored | `jpt-4b` (card T = 1.036) | pinned image |
+
+The JPT size switch and Bosun variant table are a separate shared-adapter
+commit with tests; the 9B/0.6B defaults keep their earlier identity strings.
+JPT weights are CC BY-NC 4.0: private evaluation is fine, public release of
+these rows needs the user's licence review. Same rules as above: one shot, at
+most 0.5 GPU-hour each, full denominators, gold-free seal before scoring.
+Deferred to Milestone 2: this-that 1.2, Kev-0.8B, Intern-Decision-0.8B, Jet
+v6.2, Hopper (G), Nimble v2, Jebadiah 27B, Eikos-27B, Rune (CUDA-only runtimes
+need a parity-checked fallback).
+
 ## Reused results (identity verified, no new GPU time)
 
 Recorded predictions were located by SHA-256, adopted, sealed and re-scored with
