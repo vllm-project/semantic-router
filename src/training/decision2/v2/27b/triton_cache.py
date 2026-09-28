@@ -11,7 +11,12 @@ regular file (symlinks and directories excluded), sorted by the path's bytes.
 tree hash equals the expected one, and writes ``<dest>.copy.json`` with the
 per-file manifest. ``finish`` rehashes the copy after a run and writes
 ``<dest>.post.json`` with the post-run tree hash and the added, changed and
-removed files.
+removed files, classified (amendment 2): autotune entries (``*.autotune.json``),
+Triton group manifests (``__grp__*.json``, whose absolute ``child_paths`` Triton
+rewrites whenever a copy in a new directory loads the group) and compiled-kernel
+files. ``frozen_check`` passes unless an autotune entry was added, changed or
+removed, a compiled-kernel file changed or disappeared, or a group manifest
+changed in more than its paths (compared with the frozen directory's file).
 """
 
 from __future__ import annotations
@@ -96,6 +101,67 @@ def copy(frozen: Path, dest: Path, expect: str) -> dict:
     return receipt
 
 
+def kind(name: str) -> str:
+    base = name.rsplit("/", 1)[-1]
+    if base.endswith(".autotune.json"):
+        return "autotune"
+    if base.startswith("__grp__") and base.endswith(".json"):
+        return "group"
+    return "kernel"
+
+
+def group_paths(path: Path) -> dict | None:
+    """A group manifest with each child path cut to ``<group dir>/<file>``."""
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    children = value.get("child_paths") if isinstance(value, dict) else None
+    if not isinstance(children, dict) or not all(
+        isinstance(v, str) for v in children.values()
+    ):
+        return None
+    return {
+        **value,
+        "child_paths": {
+            k: "/".join(Path(v).parts[-2:]) for k, v in sorted(children.items())
+        },
+    }
+
+
+def classify(
+    frozen: Path, dest: Path, added: list, changed: list, removed: list
+) -> dict:
+    out: dict = {
+        k: {"added": [], "changed": [], "removed": []}
+        for k in ("autotune", "kernel", "group")
+    }
+    out["group"]["path_rewrites"] = []
+    for label, names in (("added", added), ("changed", changed), ("removed", removed)):
+        for name in names:
+            out[kind(name)][label].append(name)
+    for name in list(out["group"]["changed"]):
+        old = group_paths(frozen / name)
+        if old is not None and old == group_paths(dest / name):
+            out["group"]["changed"].remove(name)
+            out["group"]["path_rewrites"].append(name)
+    flagged = {
+        "autotune": ("added", "changed", "removed"),
+        "kernel": ("changed", "removed"),
+        "group": ("changed", "removed"),
+    }
+    problems = [
+        f"{k} {label}: {name}"
+        for k, labels in flagged.items()
+        for label in labels
+        for name in out[k][label]
+    ]
+    return {
+        "classified": out,
+        "frozen_check": {"passed": not problems, "problems": problems},
+    }
+
+
 def finish(dest: Path) -> dict:
     before = json.loads(
         dest.with_name(dest.name + ".copy.json").read_text(encoding="utf-8")
@@ -115,6 +181,15 @@ def finish(dest: Path) -> dict:
         "removed": sorted(set(old) - set(new)),
     }
     result["unchanged"] = result["pre_sha256"] == result["post_sha256"]
+    result.update(
+        classify(
+            Path(before["frozen"]),
+            dest,
+            result["added"],
+            result["changed"],
+            result["removed"],
+        )
+    )
     write_json(dest.with_name(dest.name + ".post.json"), result)
     return result
 
@@ -148,6 +223,10 @@ def main() -> None:
                     "added": len(result["added"]),
                     "changed": len(result["changed"]),
                     "removed": len(result["removed"]),
+                    "path_rewrites": len(
+                        result["classified"]["group"]["path_rewrites"]
+                    ),
+                    "frozen_check": result["frozen_check"]["passed"],
                 }
             )
         )

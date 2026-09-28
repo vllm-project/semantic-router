@@ -17,7 +17,8 @@
 #            metrics of cal/cal.probs.jsonl -> cal698.summary.json
 # TRAIN_RUN: the completed trainer run whose BEST is CHECKPOINT; its SELECT700 probabilities are the
 # trainer's own (select-step-<BEST>-predictions.jsonl) and AHO reads its BEST. BASE, CAL_FILE and
-# CAL_SHA256 override the pinned base, CAL698 and its hash.
+# CAL_SHA256 override the pinned base, CAL698 and its hash. DRY_RUN=1: see kernel_common.sh (the
+# trainer SELECT extraction still runs; scoring is printed and argchecked).
 set -euo pipefail
 
 RUN=$1 GPU=$2 SRC=$3 CKPT=$4 LIMIT=$5 FROZEN=$6 CACHE_SHA=$7 LABEL=$8
@@ -35,6 +36,11 @@ cd "$S"
 export PYTHONPATH=$S
 source "$S/v2/27b/kernel_common.sh"
 has() { case ",$STAGES," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
+need "$BASE" "$CAL_FILE" "$SELECT_ROWS" "$FROZEN"
+if has aho && [ -n "$AHO" ] && [ -z "$TRAIN_RUN" ]; then
+  echo "the aho stage reads TRAIN_RUN's BEST; unset AHO for a soup" >&2
+  exit 2
+fi
 mkdir -p "$OUT/receipts"
 
 if [ -n "$TRAIN_RUN" ]; then
@@ -73,7 +79,6 @@ if has collect; then
   [ "$status" = 0 ] || exit "$status"
 fi
 if has aho && [ -n "$AHO" ]; then
-  [ -n "$TRAIN_RUN" ] || { echo "the aho stage reads TRAIN_RUN's BEST" >&2; exit 2; }
   mkdir -p "$OUT/aho"
   mounts=() slices=()
   IFS=, read -r -a specs <<< "$AHO"
@@ -101,9 +106,15 @@ if has score; then
   else
     SELECT_PROBS=$OUT/cal/select.probs.jsonl
   fi
-  python3 -m v2.eval.dev_readout --run-dir "$OUT" --select "$SELECT_PROBS" --label "$LABEL" \
-    --output "$OUT/READOUT.json"
-  python3 -m v2.27b.kernel_readout cal-summary --rows "$CAL_FILE" --cal-sha256 "$CAL_SHA256" \
-    --probabilities "$OUT/cal/cal.probs.jsonl" --output "$OUT/cal698.summary.json"
+  score=(python3 -m v2.eval.dev_readout --run-dir "$OUT" --select "$SELECT_PROBS" --label "$LABEL"
+    --output "$OUT/READOUT.json")
+  summary=(python3 -m v2.27b.kernel_readout cal-summary --rows "$CAL_FILE" --cal-sha256 "$CAL_SHA256"
+    --probabilities "$OUT/cal/cal.probs.jsonl" --output "$OUT/cal698.summary.json")
+  dry "${score[@]}"
+  dry "${summary[@]}"
+  if [ "$DRY_RUN" = 1 ]; then
+    argcheck "${score[@]:2}"
+    argcheck "${summary[@]:2}"
+  fi
 fi
 echo "kernel dev readout $RUN stages $STAGES complete"

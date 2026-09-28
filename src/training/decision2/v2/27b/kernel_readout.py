@@ -20,6 +20,18 @@ completed run's BEST, in ``v2.eval.dev_readout`` rows aligned with the options.
 
 ``exec`` (GPU, container): run a module (``v2.27b.aho_eval``) on the verified
 kernel path and write the runtime identity.
+
+``t1-calibration`` (host): the T = 1 package calibration of a checkpoint whose
+CAL698 fit was rejected. The kernel adapter always passes ``--calibration``;
+this report keeps the rejected fit's binding (model, checkpoint and CAL hashes,
+inference limit) with every temperature 1.0, so collected answers equal those of
+a package without ``calibration.json`` (softmax(z / 1.0) is softmax(z) exactly).
+It records the rejected temperatures and the adoption receipt.
+
+``argcheck`` (dry runs, CPU): run a module up to its ``parse_args`` and stop,
+so a script's command line is checked against the target's argparse. It follows
+``kernel_readout exec`` into its module, and ``same_panel collect`` into the
+adapter command (the kernel adapter's options are ``training.model.infer``'s).
 """
 
 from __future__ import annotations
@@ -32,14 +44,34 @@ import os
 import re
 import runpy
 import sys
+import warnings
 from pathlib import Path
 from typing import Any
 
-from training.model.calibration import CALIBRATION_VERSION, fit_report, probabilities
+from training.model.calibration import (
+    CALIBRATION_VERSION,
+    fit_report,
+    load_calibration,
+    probabilities,
+)
 from training.model.data import canonical, file_sha256, load_partition
 
 kernel = importlib.import_module("v2.27b.typed_collect_kernel")
 MODEL_DIR = Path(importlib.import_module("training.model.data").__file__).parent
+BINDING_KEYS = (
+    "calibration_version",
+    "fit_split",
+    "selection_policy",
+    "model_sha256",
+    "checkpoint_sha256",
+    "cal_sha256",
+    "best_sha256",
+    "complete_sha256",
+    "provenance_sha256",
+    "logits_sha256",
+    "inference",
+)
+FORWARD = {"v2.27b.typed_collect_kernel": "training.model.infer"}
 
 
 def _digest(value: Any) -> str:
@@ -268,6 +300,95 @@ def run_module(args: argparse.Namespace) -> None:
     )
 
 
+def t1_report(
+    rejected: dict[str, Any],
+    rejected_sha256: str,
+    adoption: dict[str, Any],
+    adoption_sha256: str,
+) -> dict[str, Any]:
+    if adoption.get("adopt") is not False:
+        raise SystemExit("the adoption receipt did not reject the CAL698 fit")
+    if adoption.get("candidate_sha256") != rejected_sha256:
+        raise SystemExit("the adoption receipt judged a different calibration file")
+    return {
+        **{key: rejected[key] for key in BINDING_KEYS if key in rejected},
+        "temperature_by_type": {k: 1.0 for k in rejected["temperature_by_type"]},
+        "package_temperature": "T = 1 (CAL698 fit rejected on the development panels)",
+        "rejected_calibration_sha256": rejected_sha256,
+        "rejected_temperature_by_type": rejected["temperature_by_type"],
+        "adoption_receipt_sha256": adoption_sha256,
+        "adoption_worsened": adoption.get("worsened"),
+    }
+
+
+def t1_calibration(args: argparse.Namespace) -> None:
+    if args.output.exists():
+        raise FileExistsError(args.output)
+    report = t1_report(
+        json.loads(args.rejected.read_text(encoding="utf-8")),
+        file_sha256(args.rejected),
+        json.loads(args.adoption.read_text(encoding="utf-8")),
+        file_sha256(args.adoption),
+    )
+    write_json(args.output, report)
+    temperatures, _ = load_calibration(args.output, report["model_sha256"])
+    print(json.dumps({"output": str(args.output), "temperature_by_type": temperatures}))
+
+
+class _Parsed(Exception):
+    def __init__(self, namespace: argparse.Namespace) -> None:
+        super().__init__(namespace)
+        self.namespace = namespace
+
+
+def parsed_args(command: list[str]) -> argparse.Namespace:
+    """The namespace ``command``'s module parses; nothing after parse_args runs."""
+    original, argv = argparse.ArgumentParser.parse_args, sys.argv
+
+    def stop(self, args=None, namespace=None):
+        raise _Parsed(original(self, args, namespace))
+
+    argparse.ArgumentParser.parse_args = stop
+    try:
+        sys.argv = list(command)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            runpy.run_module(command[0], run_name="__main__", alter_sys=True)
+    except _Parsed as parsed:
+        return parsed.namespace
+    finally:
+        argparse.ArgumentParser.parse_args, sys.argv = original, argv
+    raise SystemExit(f"{command[0]} returned before parsing its arguments")
+
+
+def check_command(command: list[str]) -> list[str]:
+    namespace = parsed_args(command)
+    checked = [command[0]]
+    if command[0] == "v2.27b.kernel_readout" and namespace.mode == "exec":
+        inner = namespace.command
+        checked += check_command(inner[1:] if inner[:1] == ["--"] else inner)
+    if command[0] == "v2.eval.same_panel" and namespace.command == "collect":
+        adapters = importlib.import_module("v2.eval.adapters")
+        adapter = adapters.load(namespace.adapter, namespace.adapter_spec)
+        values = {
+            "model": str(namespace.model_path),
+            "revision": namespace.revision,
+            "device": namespace.device,
+            "model_id": namespace.model_id or adapter.model_id or "",
+            **dict(entry.partition("=")[::2] for entry in namespace.extra),
+        }
+        argv = adapter.command({**values, "input": "in.jsonl", "output": "out.jsonl"})
+        checked += check_command([FORWARD.get(argv[2], argv[2]), *argv[3:]])
+    return checked
+
+
+def argcheck(args: argparse.Namespace) -> None:
+    command = args.command[1:] if args.command[:1] == ["--"] else args.command
+    if not command:
+        raise SystemExit("argcheck needs a module after --")
+    print(json.dumps({"argcheck": check_command(command), "ok": True}), flush=True)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -294,12 +415,22 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("exec")
     p.add_argument("--runtime", type=Path, required=True)
     p.add_argument("command", nargs=argparse.REMAINDER)
+    p = sub.add_parser("t1-calibration")
+    p.add_argument("--rejected", type=Path, required=True, help="rejected CAL698 fit")
+    p.add_argument(
+        "--adoption", type=Path, required=True, help="dev_calibration receipt"
+    )
+    p.add_argument("--output", type=Path, required=True)
+    p = sub.add_parser("argcheck")
+    p.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     {
         "fit": fit,
         "select-from-trainer": select_from_trainer,
         "cal-summary": cal_summary,
         "exec": run_module,
+        "t1-calibration": t1_calibration,
+        "argcheck": argcheck,
     }[args.mode](args)
 
 
