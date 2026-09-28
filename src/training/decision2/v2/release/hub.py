@@ -165,6 +165,7 @@ def download(args: argparse.Namespace) -> dict[str, Any]:
         "files": len(files),
         "bytes": sum((args.dest / n).stat().st_size for n in files),
         "hub_added": sorted(n for n in layout.HUB_ADDED if (args.dest / n).is_file()),
+        "passed": bool(files),
     }
 
 

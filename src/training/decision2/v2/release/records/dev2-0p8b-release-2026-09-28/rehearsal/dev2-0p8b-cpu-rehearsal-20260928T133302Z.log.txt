@@ -1,0 +1,15 @@
+13:33:02Z build llm-semantic-router/DEV2.0-0.8B from 08d5977785c88621d45f567569ac3641d530ef7e-src_training_decision2
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/data/dev2/src/08d5977785c88621d45f567569ac3641d530ef7e-src_training_decision2/src/training/decision2/v2/release/build.py", line 768, in <module>
+    main()
+  File "/data/dev2/src/08d5977785c88621d45f567569ac3641d530ef7e-src_training_decision2/src/training/decision2/v2/release/build.py", line 755, in main
+    receipt = build(args.spec, args.output)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/dev2/src/08d5977785c88621d45f567569ac3641d530ef7e-src_training_decision2/src/training/decision2/v2/release/build.py", line 641, in build
+    screened = screen(stage)
+               ^^^^^^^^^^^^^
+  File "/data/dev2/src/08d5977785c88621d45f567569ac3641d530ef7e-src_training_decision2/src/training/decision2/v2/release/build.py", line 483, in screen
+    raise ValueError(f"Unexpected file type in a public package: {relative}")
+ValueError: Unexpected file type in a public package: LICENSES/Qwen3.5-0.8B-LICENSE

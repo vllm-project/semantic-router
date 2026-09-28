@@ -9,6 +9,8 @@
 #   <start-path>  model path inside the container (/hf/...)
 # The trainer args must include --train; --model-path/--select/--cal/--output/--arm
 # are supplied here. A failed stage stops the arm (it is recorded, not rerun).
+# DEC_DATA_DIR (optional) replaces the node's default SELECT/CAL directory
+# (mounted as /data; it must hold select.jsonl and cal.jsonl).
 set -uo pipefail
 
 arm=$1 gpu=$2 src=$3 rel=$4 start=$5
@@ -19,14 +21,14 @@ case ${DEC_NODE:?set DEC_NODE=a or b} in
   a)
     RENDER=([5]=/dev/dri/renderD169)
     export DEC_IMAGE=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
-    export DEC_DATA=/data/decision20-20260926/data/hf-private-decision20-clean-v2
+    export DEC_DATA=${DEC_DATA_DIR:-/data/decision20-20260926/data/hf-private-decision20-clean-v2}
     ;;
   b)
     # GPU3-4 moved to the decoder track at 2026-09-28 16:30 UTC+8.
     RENDER=([0]=/dev/dri/renderD129 [1]=/dev/dri/renderD137 [2]=/dev/dri/renderD145
       [3]=/dev/dri/renderD153 [4]=/dev/dri/renderD161)
     export DEC_IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
-    export DEC_DATA=/data/dev2/runs/dec/data-cleanv2
+    export DEC_DATA=${DEC_DATA_DIR:-/data/dev2/runs/dec/data-cleanv2}
     ;;
   *) echo "unknown node $DEC_NODE" >&2; exit 2 ;;
 esac

@@ -39,8 +39,8 @@ recommended decision itself and records it. Governing rules for that autonomy:
   at least 90% of the best measured open-weight peer's v3 in that tier (card-eligible or not), with human transfer not
   significantly below it and no decision type collapsed. Current numbers: 0.6B beat Kai1 35.94 and reach ≥ 38.3
   (GLiNER2.5-Decide 42.52); 0.8B beat Eos1 42.55; 2B beat Sol1 45.58 (≥ 44.5 vs Decider 2B 49.50 is then implied);
-  4B beat Nox1 56.47 (≥ 55.7 vs Decider 4B 61.88 implied); 9B beat Lux1 65.81; ~27B (no 1.0) reach ≥ 65.1 vs
-  AutoJev-27B 72.31. Update when the eval track measures stronger peers. After first release, keep optimizing toward
+  4B beat Nox1 56.47 (≥ 55.7 vs Decider 4B 61.88 implied); 9B beat Lux1 65.81; ~27B (no 1.0) reach ≥ 64.9 vs
+  AutoJev-27B 72.13 (node B, kernel image `dbe5f32b`, eval 22:45 UTC+8; was 72.31 on the kernel-less image). Update when the eval track measures stronger peers. After first release, keep optimizing toward
   beating the tier leader.
 
 **Allocation update 2026-09-28 10:40 UTC+8:** node B was freed. The 0.8B–4B decoder track gains node B GPU0–2, the
@@ -144,7 +144,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
-| node A GPU0 | DEV2.0-0.6B release verification (lent by the 0.6B track, 2026-09-28 21:30 UTC+8); back to 0.6B afterwards |
+| node A GPU0 | 0.6B track (owner) — SHARED from 2026-09-28 22:30 UTC+8 with the DEV2.0-0.6B release worker for short CAL698-calibration / re-score jobs (≤ 30 min; own lease owner entry `owner.release`) |
 | node A GPU1 | 0.6B track (post-release optimization) |
 | node A GPU2–4 | 9B track (returned 2026-09-28 21:31 UTC+8 after AutoJev target production). **9B track: read the 21:00 cross-track note (A7 is mostly NEW data for Lux) and the 21:35 AutoJev note before planning work on these GPUs.** |
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
@@ -152,7 +152,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
 | node B GPU5–6 | ~27B |
-| node B GPU7 | research & data (owner); A7 may run short jobs (≤ 30 min, e.g. its embedding scan) under its own lease owner file when the GPU is idle/released |
+| node B GPU7 | research & data (owner) — SHARED from 2026-09-28 21:55 UTC+8 with the eval track's node-B comparator re-validation (~1.5 h, inference only; each writes its own lease owner entry, e.g. `owner.eval`) |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
 stop rule BEFORE launch (commit a prereg); run preflights (load/parity, zero-step, one-step + reload). If a preflight
@@ -184,6 +184,57 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 23:15 — **CALIBRATION RULE AMENDED (supersedes the 22:30 rule).** For DEV2.0-0.6B the CAL698 per-type
+  temperatures (Choice 0.592 / Noul 0.588 / Score 0.345) improved CAL698 itself (ECE .079 → .031) but worsened every
+  evaluation panel (typed ECE .118 → .191, human-transfer median ECE .070 → .120, public 231 ECE .116 → .144) with zero
+  answer changes: CAL698 is in-distribution to training, where the model is under-confident, while the panels are out of
+  distribution. New rule for every size: fit CAL698 temperatures, but ADOPT them only if they do not worsen aggregate
+  calibration (ECE and Brier) on the development panels (typed DEV and CSS pilot) — decided on development panels, never
+  on formal ones; otherwise ship T = 1 (uncalibrated) and disclose the evaluated-and-rejected temperatures on the card.
+  The frozen package (with its adopted calibration) is fixed before any C1 event or collection add. The released
+  DEV2.0-0.8B gets the same retroactive check; a calibration-only revision (weights and answers unchanged) is allowed if
+  its CAL698 temperatures fail the rule.
+
+- 2026-09-28 22:35 — **DEV2.0-0.8B RELEASED (private).** `llm-semantic-router/DEV2.0-0.8B@0b631a85c19fb573aee34fc68bb413271ebe89f4`
+  (manifest `0af27b1c…`; only README changed from the verified `2667d883`), the only item in the private "Decision 2.0"
+  collection. Final decision `b2338c45…` sealed to this revision (gate `fb989b53…`, six checks pass); readback: real
+  download re-hash 31/31, 8,378-prompt answer parity, repo private, anonymous access refused. Records: integration
+  `8b7349b97`, gist `07-decision-2-release.md`. Post-release, a successor replaces it only if it clearly beats it (see 21:30).
+
+- 2026-09-28 22:30 — DEV2.0-0.6B release engineering done up to the collection step (gist `07b-decision-2-release-06b.md`;
+  integration `33b9e366a`; private `llm-semantic-router/DEV2.0-0.6B@7b5d3ff2…`, draft decision `72bc767e…`). It shipped
+  the raw scored probabilities without CAL698. **Coordinator decision: calibrate before release** — fit per-type
+  temperatures on CAL698, confirm argmax is unchanged on every scored prompt (v3 composite unchanged), recompute/re-score
+  the calibration metrics, upload the calibrated package as a new private revision, then C1 event 2 scores THAT frozen
+  package, then finalize. Rule for every size: the frozen release package includes its CAL698 calibration before any C1
+  event or collection add.
+
+- 2026-09-28 22:20 — DEV2.0-0.8B package verified (release record `v2/release/records/dev2-0p8b-release-2026-09-28/`;
+  integration `2aad3f96f`): private `llm-semantic-router/DEV2.0-0.8B@2667d883…`, 753,446,208 loaded parameters, manifest
+  `d10bd95c…`, real-download re-hash 31/31, parity 0 changed answers on all 8,378 scored prompts. Finalization (C1 line,
+  final decision, `--collect`) is running. **Card licence policy (applies to every size):** peers whose model card
+  declares a permissive licence may appear even without a LICENSE file (note it); mlx-diag parts built from
+  non-commercial sources (e.g., its XNLI-based Score part) are left off cards; a model is labelled `apache-2.0` when its
+  whole weight / tokenizer / code lineage is Apache-2.0, with training-data licences (e.g., CC BY-SA) credited on the card.
+  Release examples must load the scored kernels (the pipeline now fails if they are missing); cards state the tested
+  hardware and don't claim CPU support unless verified.
+
+- 2026-09-28 21:55 — **DEV2.0-0.8B APPROVED for private release** (eval gate checks + C1 event 1; integration `bf3ff2e6e`).
+  - Gate (a): human transfer not below the tier leaders (vs Intern-Decision +0.058 [−0.043, +0.119]; vs Kev +0.050
+    [−0.041, +0.122]); v3 vs Intern-Decision +6.70 [+0.63, +10.35], vs Kev +7.02 [+1.33, +11.25]. Gate (b): no type
+    collapsed (Choice .661 vs chance .267; Noul .764 vs .50; Score .268 [.226, .313] vs .20 — uses four of five levels,
+    never level 0, slightly below Eos 1.0 .300: disclose). Eos 1.0's own typed Noul is collapsed (97% "false").
+  - **C1 event 1 (sealed, independent):** DEV2.0-0.8B 40.24 vs Eos 1.0 37.94 (+2.31 [+0.29, +4.30]); vs Intern-Decision
+    +5.66 [+3.49, +7.78]; vs Kev +1.18 [−0.99, +3.37] (level). Disclose C1 regressions vs Eos 1.0: Russian star ratings,
+    tutoring-rapport Noul, Arabic multiple choice, long inputs (.577 vs .620), non-English (.422 vs .440).
+  - The card adds a C1 line (independent sealed confirmation, 2,874 human-labelled items) and these regressions; the
+    coordinator finalizes the release decision when the release worker's verification returns.
+  - **Node-B image gap:** `decision20-lux-runtime` (`ce895822`) lacks `causal_conv1d`; every eval node-B collection (Lux1
+    check, AutoJev-27B, Eikos, Jebadiah) used it, while the 27B track's formal runs used the kernel-equipped `dbe5f32b`.
+    The eval track re-collects those comparators on `dbe5f32b` now (node B GPU7, shared). **~27B track: do not finalize a
+    27B formal comparison until the re-validated AutoJev node-B comparator is published; if one already ran, re-pair it
+    against the new comparator.** If AutoJev's v3 moves, the 27B release threshold is recomputed.
 
 - 2026-09-28 21:35 — **AutoJev-27B TEACHER TARGETS AVAILABLE** (research & data M3a; gist 02; integration `5794726fe`).
   Re-qualification v2 passed every gate (warm-up covering every 512-token bucket to 8,096; frozen autotune cache; 910/910
@@ -749,3 +800,32 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
   `0b29686f…`, gold `c0277771…`). v1.1 seal `e3f411a8…` is logged. Record: `v2/eval/records/m3-sealed-c1-v1_1-2026-09-28.md`.
   The check is repeated before every scoring event against newly landed data; the key stays only on the coordinator
   workstation (a node sees it only transiently during a logged event).
+- **DEV2.0-0.8B gate checks + C1 event 1 (2026-09-28 ~21:50 UTC+8; record `v2/eval/records/m4-dev2-08b-gates-and-c1-event1-2026-09-28.md`).**
+  - Gates (post-key v3, stored predictions):
+    - Human transfer vs Intern-Decision is +0.058 [−0.043, +0.119] and vs Kev +0.050 [−0.041, +0.122]: not below the
+      leader.
+    - v3 composite is +6.70 [+0.63, +10.35] vs Intern and +7.02 [+1.33, +11.25] vs Kev.
+    - No candidate type collapsed (Choice .661, Noul .764, Score .268 vs chance .267/.50/.20). Score never predicts
+      level 0; disclose.
+    - Eos 1.0's typed Noul IS collapsed (97% false).
+  - **C1 v1.1 event 1 (sealed independent set; 1 of 3 used).** The recheck found no new C1 source in training (no
+    v1.2). C1 scores: candidate 40.24, Eos 1.0 37.94, Kev 39.06, Intern 34.58, JPT-0.8B 39.01 (internal only).
+    - Paired differences for the candidate: vs Eos **+2.31 [+0.29, +4.30]**, vs Intern **+5.66 [+3.49, +7.78]**, vs
+      Kev +1.18 [−0.99, +3.37].
+    - Disclosed regressions vs Eos 1.0: Russian star ratings, tutoring rapport, long inputs (.577 vs .620) and
+      non-English accuracy.
+  - **Gate check tool:** `python3 -m v2.eval.gates paired|types …` (stored predictions only). Future C1 events reuse the
+    event script pattern in the record (logged decryption, seal before gold).
+- **Node-B image gap (plan, not run):** the `decision20-lux-runtime` image (`ce895822`) lacks `causal_conv1d`. Every
+  eval node-B collection used it: Lux1 check, AutoJev, Eikos, Jebadiah. The 27B track's formal runs used the kernel image
+  `dbe5f32b`. Plan: re-collect the three 27B comparators plus Lux1 once on `dbe5f32b`, about 1.3 GPU-h. **Request node
+  B GPU5 or GPU6 from the ~27B track before the next 27B formal comparison**
+  (`v2/eval/records/m4-nodeB-revalidation-plan-2026-09-28.md`).
+- **Node-B re-validation on the kernel image `dbe5f32b` (2026-09-28 22:45 UTC+8, node B GPU7 shared with the data
+  track; interim, AutoJev first).** **New 27B comparator: AutoJev-27B node-B run `m4/nodeB-kernel/autojev27`, v3
+  72.133 (T .8869, H .5867), public 201** (disclosed replacement for `m2/n2-autojev27-nodeB` 72.310/200 on the
+  kernel-less image `ce895822`). Paired new vs old −0.18 [−0.69, +0.48], vs node A −0.18 [−0.49, +0.40]: a tie.
+  With the kernel, typed FINAL is **identical to node A** (0/2,000 answers differ; old image 11); CSS still differs in
+  27/6,547 slots (old 37), public 2/231. 27B threshold: **≥ 64.9** (90% of 72.13; line above updated). Predictions:
+  node A `/data/dev2/runs/eval/m4/nodeB-kernel/autojev27` and private eval-artifacts `m4/nodeB-kernel/autojev27`
+  (commit `742bdf50`). Eikos, Jebadiah and the Lux1 check follow; the final record follows with them.
