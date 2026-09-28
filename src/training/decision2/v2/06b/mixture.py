@@ -7,15 +7,28 @@ in proportion to their tokens and filled with whole groups in a fixed hash
 order. Tokens are Qwen3-0.6B-Base native tokens of the segmented option prompt
 (the data registry's unit), so every testbed trains on the same rows whatever
 its own tokenizer.
+
+Template S2 (Milestone 4) adds base-row filters (excluded families, positional
+renumbering of construction-order option keys), components with a fixed token
+budget, a view-then-equal-shares policy for large corpora (every admissible
+member of a named view, then equal token shares per sub-arm, water-filled,
+whole groups in hash order), and a matched-token control that resamples the
+base (whole copies, then a stratified partial copy). Rows repeating any base
+input (before or after renumbering) or an earlier row, and groups with a row
+over `max_row_tokens`, are dropped and counted. S2 mixtures are built once
+(`python3 -m v2.06b.mixture`) and trained from the hash-pinned materialized file.
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
+import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .common import digest, file_sha256
+from .common import digest, file_sha256, write_json
 
 UNIT = "qwen3-0.6b-base-native-segmented"
 
@@ -88,12 +101,13 @@ def resample_groups(
     return sorted(chosen)
 
 
-def duplicate(row: dict[str, Any]) -> dict[str, Any]:
+def duplicate(row: dict[str, Any], copy: int | None = None) -> dict[str, Any]:
     """A resampled copy: new id and group, same content; teacher targets follow the original."""
+    suffix = "#resample" if copy is None else f"#resample{copy}"
     return {
         **row,
-        "id": row["id"] + "#resample",
-        "group_id": row["group_id"] + "#resample",
+        "id": row["id"] + suffix,
+        "group_id": row["group_id"] + suffix,
         "teacher_source_id": row["id"],
     }
 
@@ -174,3 +188,392 @@ def build(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         if report[key] != value:
             raise ValueError(f"Mixture {key} is {report[key]}, frozen as {value}")
     return train, report
+
+
+def profile(rows: list[dict[str, Any]], tokens: list[int]) -> dict[str, Any]:
+    """Counts only: rows, tokens, groups, types, languages, Score levels, top families."""
+    levels = Counter(str(len(r["options"])) for r in rows if r["task_type"] == "score")
+    return {
+        "rows": len(rows),
+        "tokens": sum(tokens),
+        "max_row_tokens": max(tokens) if tokens else 0,
+        "groups": len({r["group_id"] for r in rows}),
+        "task_types": dict(sorted(Counter(r["task_type"] for r in rows).items())),
+        "languages": dict(sorted(Counter(r["language"] for r in rows).items())),
+        "score_level_counts": dict(sorted(levels.items(), key=lambda kv: int(kv[0]))),
+        "families_top12": dict(Counter(r["family"] for r in rows).most_common(12)),
+    }
+
+
+def filtered_base(
+    entry: dict[str, Any], count: Any, cap: int
+) -> tuple[list[dict[str, Any]], list[int], set[str], dict[str, Any]]:
+    """Base rows minus excluded families, optionally with positional option keys."""
+    from v2.common.option_keys import renumber_rows
+
+    rows = arm_rows(entry)
+    seen = {row["input_sha256"] for row in rows}
+    excluded = set(entry.get("exclude_families", []))
+    kept = [row for row in rows if row["family"] not in excluded]
+    renumbered = 0
+    if entry.get("renumber_option_keys"):
+        kept, summary = renumber_rows(kept)
+        renumbered = summary["renumbered"]
+        seen |= {row["input_sha256"] for row in kept}
+    tokens = [count(row) for row in kept]
+    if any(t > cap for t in tokens):
+        raise ValueError(f"{entry['arm']}: a base row exceeds {cap} tokens")
+    return (
+        kept,
+        tokens,
+        seen,
+        {
+            "role": "base",
+            "rows_in_file": len(rows),
+            "excluded_family_rows": len(rows) - len(kept),
+            "renumbered_rows": renumbered,
+            **profile(kept, tokens),
+        },
+    )
+
+
+def budget_component(
+    comp: dict[str, Any], count: Any, cap: int, seen: set[str]
+) -> tuple[list[dict[str, Any]], list[int], dict[str, Any]]:
+    """A fixed token budget split over the arms by their tokens (template S slices)."""
+    counted = []
+    for entry in comp["arms"]:
+        rows = arm_rows(entry)
+        counted.append((entry["arm"], rows, [count(row) for row in rows]))
+    available = sum(sum(tokens) for _, _, tokens in counted)
+    budget = min(comp["tokens"], available)
+    picked: list[dict[str, Any]] = []
+    picked_tokens: list[int] = []
+    arms = {}
+    for arm, rows, tokens in counted:
+        share = budget * sum(tokens) // available
+        chosen = select_groups(rows, tokens, share, comp["seed"], arm)
+        if any(rows[i]["input_sha256"] in seen for i in chosen):
+            raise ValueError(f"{arm}: budget slice repeats a base input")
+        if any(tokens[i] > cap for i in chosen):
+            raise ValueError(f"{arm}: budget slice has a row over {cap} tokens")
+        picked.extend(rows[i] for i in chosen)
+        picked_tokens.extend(tokens[i] for i in chosen)
+        arms[arm] = {
+            "rows_available": len(rows),
+            "tokens_available": sum(tokens),
+            "share_tokens": share,
+            "rows": len(chosen),
+            "tokens": sum(tokens[i] for i in chosen),
+        }
+    return (
+        picked,
+        picked_tokens,
+        {
+            "role": "treatment",
+            "policy": "token_budget",
+            "budget_tokens": budget,
+            "arms": arms,
+            **profile(picked, picked_tokens),
+        },
+    )
+
+
+def view_component(
+    comp: dict[str, Any], count: Any, cap: int, seen: set[str], target: int, seed: str
+) -> tuple[list[dict[str, Any]], list[int], dict[str, Any]]:
+    """Every admissible view member, then equal token shares per arm (water-filled)."""
+    excluded = set(comp.get("exclude_families", []))
+    drops: Counter[str] = Counter()
+    pools: dict[str, list[dict[str, Any]]] = {}
+    for entry in comp["arms"]:
+        rows = arm_rows(entry)
+        pools[entry["arm"]] = [row for row in rows if row["family"] not in excluded]
+        drops[f"{entry['arm']}:excluded_family"] += len(rows) - len(pools[entry["arm"]])
+    view_path = Path(comp["view"]["path"])
+    if file_sha256(view_path) != comp["view"]["sha256"]:
+        raise ValueError("View file differs from its frozen hash")
+    members = [
+        m["id"]
+        for m in json.loads(view_path.read_text())["members"]
+        if m["part"] == "train"
+    ]
+    by_id = {row["id"]: (arm, row) for arm, rows in pools.items() for row in rows}
+    used = set(seen)
+    taken: set[str] = set()
+    picked: list[dict[str, Any]] = []
+    picked_tokens: list[int] = []
+    per_arm: Counter[str] = Counter()
+    per_arm_tokens: Counter[str] = Counter()
+
+    cache: dict[str, int] = {}
+
+    def tokens_of(row: dict[str, Any]) -> int:
+        if row["id"] not in cache:
+            cache[row["id"]] = count(row)
+        return cache[row["id"]]
+
+    def admit(arm: str, row: dict[str, Any]) -> int | None:
+        if row["input_sha256"] in used:
+            drops[f"{arm}:repeats_earlier_input"] += 1
+            return None
+        tokens = tokens_of(row)
+        if tokens > cap:
+            drops[f"{arm}:over_cap"] += 1
+            return None
+        return tokens
+
+    def take(arm: str, row: dict[str, Any], tokens: int, phase: str) -> None:
+        used.add(row["input_sha256"])
+        taken.add(row["id"])
+        picked.append(row)
+        picked_tokens.append(tokens)
+        per_arm[f"{arm}:{phase}"] += 1
+        per_arm_tokens[f"{arm}:{phase}"] += tokens
+
+    resolved: set[str] = set()
+    for member in members:
+        if member not in by_id:
+            drops["view:excluded_or_absent"] += 1
+            continue
+        resolved.add(member)
+        arm, row = by_id[member]
+        tokens = admit(arm, row)
+        if tokens is not None:
+            take(arm, row, tokens, "view")
+    view_tokens = sum(picked_tokens)
+    orders: dict[str, list[list[dict[str, Any]]]] = {}
+    for arm, rows in pools.items():
+        groups: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            if row["id"] not in resolved:
+                groups.setdefault(row["group_id"], []).append(row)
+        orders[arm] = [
+            groups[g]
+            for g in sorted(
+                groups,
+                key=lambda g: (
+                    hashlib.sha256(f"{seed}\0{arm}\0{g}".encode()).hexdigest(),
+                    g,
+                ),
+            )
+        ]
+    pointer = dict.fromkeys(orders, 0)
+    remaining = max(0, target - view_tokens)
+    active = [arm for arm in pools if orders[arm]]
+    rounds = 0
+    while remaining > 0 and active:
+        share = remaining // len(active)
+        if share == 0:
+            break
+        rounds += 1
+        progress = False
+        for arm in list(active):
+            budget = share
+            order = orders[arm]
+            while pointer[arm] < len(order):
+                group = order[pointer[arm]]
+                fresh: list[dict[str, Any]] = []
+                inputs: set[str] = set()
+                for row in group:
+                    if (
+                        row["input_sha256"] not in used
+                        and row["input_sha256"] not in inputs
+                    ):
+                        inputs.add(row["input_sha256"])
+                        fresh.append(row)
+                sizes = [tokens_of(row) for row in fresh]
+                if not fresh or max(sizes) > cap:
+                    drops[f"{arm}:repeats_earlier_input"] += len(group) - len(fresh)
+                    drops[f"{arm}:over_cap_group_rows"] += len(fresh)
+                    pointer[arm] += 1
+                    continue
+                if sum(sizes) > budget:
+                    break
+                drops[f"{arm}:repeats_earlier_input"] += len(group) - len(fresh)
+                for row, tokens in zip(fresh, sizes):
+                    take(arm, row, tokens, "fill")
+                budget -= sum(sizes)
+                pointer[arm] += 1
+                progress = True
+            remaining -= share - budget
+            if pointer[arm] >= len(order):
+                active.remove(arm)
+        if not progress:
+            break
+    return (
+        picked,
+        picked_tokens,
+        {
+            "role": "treatment",
+            "policy": "view_then_equal_shares",
+            "target_tokens": target,
+            "view_tokens": view_tokens,
+            "fill_rounds": rounds,
+            "rows_by_arm_phase": dict(sorted(per_arm.items())),
+            "tokens_by_arm_phase": dict(sorted(per_arm_tokens.items())),
+            "dropped": {k: v for k, v in sorted(drops.items()) if v},
+            **profile(picked, picked_tokens),
+        },
+    )
+
+
+def resample_component(
+    comp: dict[str, Any],
+    base_rows: list[dict[str, Any]],
+    base_tokens: list[int],
+    seed: str,
+) -> tuple[list[dict[str, Any]], list[int], dict[str, Any]]:
+    """Matched-token control: whole copies of the base, then a stratified partial copy."""
+    total = sum(base_tokens)
+    copies = comp["tokens"] // total
+    rows: list[dict[str, Any]] = []
+    tokens: list[int] = []
+    for copy in range(1, copies + 1):
+        rows.extend(duplicate(row, copy) for row in base_rows)
+        tokens.extend(base_tokens)
+    rest = comp["tokens"] - copies * total
+    chosen = resample_groups(
+        base_rows, base_tokens, rest, f"{seed}\0resample{copies + 1}"
+    )
+    rows.extend(duplicate(base_rows[i], copies + 1) for i in chosen)
+    tokens.extend(base_tokens[i] for i in chosen)
+    return (
+        rows,
+        tokens,
+        {
+            "role": "resample",
+            "policy": "resample_base",
+            "target_tokens": comp["tokens"],
+            "whole_copies": copies,
+            "partial_copy_rows": len(chosen),
+            **profile(rows, tokens),
+        },
+    )
+
+
+def build_s2(
+    spec: dict[str, Any], count: Any = None
+) -> tuple[list[dict[str, Any]], list[int], dict[str, Any]]:
+    if spec["template"] != "S2" or spec["unit"] != UNIT:
+        raise ValueError("Template S2 in the Qwen3 native unit expected")
+    count = count or token_counter(spec["tokenizer"])
+    cap = spec["max_row_tokens"]
+    report: dict[str, Any] = {
+        "template": "S2",
+        "unit": UNIT,
+        "seed": spec["seed"],
+        "max_row_tokens": cap,
+        "components": {},
+    }
+    train: list[dict[str, Any]] = []
+    tokens: list[int] = []
+    seen: set[str] = set()
+    base_rows: list[dict[str, Any]] = []
+    base_tokens: list[int] = []
+    for entry in spec["base"]:
+        rows, counts, inputs, part = filtered_base(entry, count, cap)
+        base_rows.extend(rows)
+        base_tokens.extend(counts)
+        seen |= inputs
+        report["components"][entry["arm"]] = part
+    train.extend(base_rows)
+    tokens.extend(base_tokens)
+    for comp in spec["components"]:
+        if comp["policy"] == "token_budget":
+            rows, counts, part = budget_component(comp, count, cap, seen)
+        elif comp["policy"] == "view_then_equal_shares":
+            target = comp.get(
+                "tokens", comp.get("fill_to_total_tokens", 0) - sum(tokens)
+            )
+            rows, counts, part = view_component(
+                comp, count, cap, seen, target, spec["seed"]
+            )
+        elif comp["policy"] == "resample_base":
+            rows, counts, part = resample_component(
+                comp, base_rows, base_tokens, spec["seed"]
+            )
+        else:
+            raise ValueError(f"Unknown component policy {comp['policy']}")
+        seen |= {row["input_sha256"] for row in rows}
+        train.extend(rows)
+        tokens.extend(counts)
+        report["components"][comp["name"]] = part
+    ids = [row["id"] for row in train]
+    if len(set(ids)) != len(ids):
+        raise ValueError("Mixture rows repeat an id")
+    report.update(
+        {
+            "train_rows": len(train),
+            "train_tokens": sum(tokens),
+            "train_ids_sha256": digest(sorted(ids)),
+            "profile": profile(train, tokens),
+        }
+    )
+    for key, value in spec.get("expected", {}).items():
+        if report[key] != value:
+            raise ValueError(f"Mixture {key} is {report[key]}, frozen as {value}")
+    return train, tokens, report
+
+
+def load_materialized(
+    entry: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Rows of a hash-pinned materialized S2 mixture, checked against its frozen identity."""
+    from training.model.data import load_partition
+
+    path = Path(entry["path"])
+    if file_sha256(path) != entry["sha256"]:
+        raise ValueError("Materialized mixture differs from its frozen hash")
+    rows = load_partition(path, "train")
+    report = {
+        "template": "materialized",
+        "sha256": entry["sha256"],
+        "build_spec": entry["build_spec"],
+        "build_report_sha256": entry["build_report_sha256"],
+        "train_rows": len(rows),
+        "train_ids_sha256": digest(sorted(row["id"] for row in rows)),
+    }
+    for key, value in entry.get("expected", {}).items():
+        if report[key] != value:
+            raise ValueError(f"Mixture {key} is {report[key]}, frozen as {value}")
+    return rows, report
+
+
+def main() -> None:
+    from training.model.data import canonical
+
+    parser = argparse.ArgumentParser(description="Materialize one template-S2 mixture")
+    parser.add_argument("--spec", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--report", type=Path, required=True)
+    args = parser.parse_args()
+    if args.output.exists() or args.report.exists():
+        raise FileExistsError("refusing to overwrite a materialized mixture")
+    spec = json.loads(args.spec.read_text())
+    rows, _, report = build_s2(spec)
+    pending = args.output.with_name(args.output.name + ".pending")
+    with pending.open("x", encoding="utf-8") as stream:
+        for row in rows:
+            stream.write(canonical(row) + "\n")
+    pending.replace(args.output)
+    report["spec_sha256"] = file_sha256(args.spec)
+    report["rows_file_sha256"] = file_sha256(args.output)
+    write_json(args.report, report, exclusive=True)
+    print(
+        json.dumps(
+            {
+                k: report[k]
+                for k in (
+                    "train_rows",
+                    "train_tokens",
+                    "train_ids_sha256",
+                    "rows_file_sha256",
+                )
+            }
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()
