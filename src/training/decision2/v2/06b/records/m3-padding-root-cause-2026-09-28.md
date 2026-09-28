@@ -86,8 +86,15 @@ only, none on A6 rows) would have crashed arm (a) at its preflight. Fixed in `a4
 - Preflight gate (`train.py --preflight`, `PADDING_PARITY.json`) on the real model, on
   two eight-row micro-batches of the first logical batch: FP32 loss ≤ 1e-5 and gradient
   relative error ≤ 1e-3; BF16 loss ≤ 1e-2 and padded-vs-FP32 gradient cosine ≥ 0.95.
-  Every Milestone 3 preflight passed it (FP32 loss ≤ 7e-7, gradient ≤ 5e-5; BF16
-  padded-vs-FP32 cosine .981–.999).
+  Every Milestone 3 preflight passed it (FP32 loss ≤ 1e-6, gradient ≤ 3e-4; BF16
+  padded-vs-FP32 cosine .957–.999).
+- The gate zeroes every dropout rate while it measures (training flags untouched):
+  the Kai/Lex bundle runs `head_dropout 0.1` in training mode, and the first Kai-lineage
+  preflight failed the gate only because the two passes drew different dropout masks
+  (FP32 loss 1–4% apart). With dropout zeroed the Kai-native path is exact too (FP32
+  loss ≤ 1e-6, gradient ≤ 2.6e-4 on 24 zeroed modules), so all three trainer families —
+  causal endpoints, bidirectional markers and the Kai/Lex native paths — are
+  padding-invariant, and the Milestone 1–2 Kai/Lex continuations were not affected.
 
 ## 6. Classification of earlier runs
 
