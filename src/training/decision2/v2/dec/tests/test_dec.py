@@ -422,6 +422,18 @@ class PaddingEquivalenceTest(unittest.TestCase):
                 patcher = mock.patch.object(modeling_qwen3_5, name, reference)
                 patcher.start()
                 self.addCleanup(patcher.stop)
+        try:
+            torch.linalg.solve_triangular(
+                torch.eye(2), torch.ones(2, 1), upper=False, unitriangular=True
+            )
+        except RuntimeError:
+            # ROCm builds without CPU BLAS: use the reference's own
+            # forward-substitution branch (plain matmuls, same math).
+            patcher = mock.patch.object(
+                modeling_qwen3_5, "is_torchdynamo_exporting", lambda: True
+            )
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
         from training.model.decision_model import (
             ARCHITECTURE,
