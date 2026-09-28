@@ -185,6 +185,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 02:15 — **DEV2.0-0.6B RELEASED (private)**: `llm-semantic-router/DEV2.0-0.6B@99c4e799392afa73241915aeb16fefa5ef3518d7`
+  (card-only revision of `e61b2b44`; manifest `0affd1b1…`; weights `5b30b7e2…`; T = 1; final decision `e22fe181…`, gate
+  `787c31c9…`; integration `313dafe98`). The private "Decision 2.0" collection holds exactly DEV2.0-0.8B and DEV2.0-0.6B.
+  The 0.6B card adds the C1 event 2 line, C1 weak spots vs Kai 1.0 and vs Bosun, and three typed-panel limits (accuracy
+  below Bosun −0.038 [−0.068, −0.010]; Noul only narrowly above chance; Score leaning on extreme levels).
+
 - 2026-09-29 02:05 — **C1 event 2 done (2 of 3 used)**; DEV2.0-0.6B APPROVED for private release (eval record
   `m4-dev2-06b-c1-event2-2026-09-29.md`; integration `f422d2ce8`).
   - C1: DEV2.0-0.6B 33.21 vs Kai1 17.77 (+15.44 [+13.51, +17.21]; every type interval excludes 0), vs Lex 20.82
