@@ -287,6 +287,81 @@ class ExamplesTest(unittest.TestCase):
         state = examples.over_budget_example(100)["state"]
         self.assertGreater(len(state.split()), 200)
 
+    def test_kernel_gate_uses_the_decoder_runtime_check(self):
+        self.assertTrue(examples.RUNTIME_CHECK.is_file())
+        self.assertIsNone(examples.kernel_runtime(False))
+        original = examples.RUNTIME_CHECK
+        with tempfile.TemporaryDirectory() as scratch:
+            stub = Path(scratch) / "runtime_check.py"
+            try:
+                examples.RUNTIME_CHECK = stub
+                stub.write_text(
+                    "def runtime_identity():\n    return {'kernel_bindings': {'f': 'fla.x'}}\n"
+                    "def violations(identity):\n    return []\n"
+                )
+                result = examples.kernel_runtime(True)
+                self.assertEqual(result["kernel_bindings"], {"f": "fla.x"})
+                self.assertEqual(result["runtime_check_sha256"], layout.sha_file(stub))
+                stub.write_text(
+                    "def runtime_identity():\n    return {}\n"
+                    "def violations(identity):\n    return ['reference path']\n"
+                )
+                with self.assertRaises(RuntimeError):
+                    examples.kernel_runtime(True)
+            finally:
+                examples.RUNTIME_CHECK = original
+
+    def test_card_example_imports_only_named_sites(self):
+        import argparse
+
+        answers = {"route": {"type": "noul", "noul": 0.25}}
+        with tempfile.TemporaryDirectory() as scratch:
+            scratch = Path(scratch)
+            site, package = scratch / "site", scratch / "pkg"
+            site.mkdir()
+            package.mkdir()
+            (site / "sitemod.py").write_text(f"ANSWERS = {answers!r}\n")
+            (package / "README.md").write_text(
+                '```python\nimport json\nfrom sitemod import ANSWERS\nNAME = "pkg"\n'
+                "print(json.dumps(ANSWERS))\n```\n"
+            )
+            reference = scratch / "reference.json"
+            reference.write_text(
+                json.dumps(
+                    {
+                        "outputs": [
+                            {
+                                "id": examples.EXAMPLES[0]["id"],
+                                "response": {"answers": answers},
+                            }
+                        ]
+                    }
+                )
+            )
+            args = argparse.Namespace(
+                package=package, reference=reference, tolerance=0.0, site=[]
+            )
+            self.assertFalse(examples.card(args)["passed"])
+            args.site = [str(site)]
+            result = examples.card(args)
+            self.assertTrue(result["passed"])
+            self.assertEqual(result["interpreter_flags"], ["-s", "-B"])
+
+    def test_launcher_refuses_secret_like_env(self):
+        import subprocess
+
+        script = ROOT / "v2/release/release.sh"
+        common = ["bash", str(script), "--spec", "s", "--src", "x", "--work", "/tmp/w"]
+        refused = subprocess.run(
+            [*common, "--env", "HF_TOKEN=abc"], capture_output=True, text=True
+        )
+        self.assertEqual(refused.returncode, 2)
+        self.assertIn("non-secret", refused.stderr)
+        accepted = subprocess.run(
+            [*common, "--env", "TRITON_CACHE_DIR=/c"], capture_output=True, text=True
+        )
+        self.assertIn("work dir must be under", accepted.stderr)
+
 
 class GateTest(unittest.TestCase):
     def test_decision_must_name_this_candidate(self):

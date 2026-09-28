@@ -72,6 +72,11 @@ $S/v2/release/release.sh --spec <spec.json> --src $SRC --work /data/dev2/runs/re
   --cpu [--python <interpreter in the image>] [--mount <ro path>]... \
   [--parity typed-final:<goldfree prompts>:<sealed predictions>:<N>]... --upload \
   [--collect <gate.json>]
+# Qwen3.5-family packages on a GPU: reproduce the scored kernel runtime (the image exposes FLA
+# only through PYTHONPATH, which the isolated interpreter drops) with a copy of the scored run's
+# persisted Triton autotune cache
+$S/v2/release/release.sh ... --gpu <N> --track release --site /opt/decision-fla --require-kernels \
+  --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=<cache copy> --mount-rw <cache copy> ...
 ```
 
 Individual steps (all write one receipt; the orchestrator calls them in order):
