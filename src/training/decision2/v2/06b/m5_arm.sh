@@ -2,11 +2,14 @@
 # One Milestone 5 arm on one leased GPU: the preflight of seed 1, then the three seeds
 # trained concurrently on that GPU, the typed DEV + CSS pilot readout of every BEST export,
 # and the uniform soup of the three same-init seeds with its readout.
-# Usage (node A): m5_arm.sh <gpu> <mirror-dir-name> <arm>   (specs records/arms/<arm>-s1..s3.json)
+# Usage (node A): m5_arm.sh <gpu> <mirror-dir-name> <arm> [<gpu-s1> <gpu-s2> <gpu-s3>]
+# (specs records/arms/<arm>-s1..s3.json). With per-seed GPUs each seed trains on its own leased GPU;
+# the preflight, readouts and soup run on <gpu>.
 set -uo pipefail
 gpu="$1"
 sha="$2"
 arm="$3"
+declare -A seed_gpu=([s1]="${4:-$gpu}" [s2]="${5:-$gpu}" [s3]="${6:-$gpu}")
 D=/data/dev2/src/$sha/src/training/decision2/v2/06b
 A=/data/dev2/runs/06b/m1/arms
 specs=/data/dev2/runs/06b/m5/specs
@@ -20,7 +23,7 @@ bash "$D/m1_arm.sh" "$gpu" "$sha" "$arm-s1" preflight || {
 }
 pids=()
 for s in s1 s2 s3; do
-  bash "$D/m1_arm.sh" "$gpu" "$sha" "$arm-$s" full > "$logs/$arm-$s.driver.log" 2>&1 &
+  bash "$D/m1_arm.sh" "${seed_gpu[$s]}" "$sha" "$arm-$s" full > "$logs/$arm-$s.driver.log" 2>&1 &
   pids+=("$!")
 done
 for pid in "${pids[@]}"; do wait "$pid" || true; done
