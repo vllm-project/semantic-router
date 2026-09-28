@@ -284,6 +284,48 @@ class ExamplesTest(unittest.TestCase):
         self.assertGreater(len(state.split()), 200)
 
 
+class GateTest(unittest.TestCase):
+    def test_decision_must_name_this_candidate(self):
+        from v2.release import gate
+
+        with tempfile.TemporaryDirectory() as scratch:
+            paired = Path(scratch) / "paired.json"
+            paired.write_text(
+                json.dumps(
+                    {
+                        "point": {"delta": {"score": 3.0}},
+                        "ci95": {"low": 1.0, "high": 5.0},
+                    }
+                )
+            )
+            spec = {
+                "model_name": "DEV2.0-4B",
+                "repo_id": "llm-semantic-router/DEV2.0-4B",
+                "expected_identity": {"model_sha256": "a" * 64},
+                "scored": {"report_sha256": "b" * 64},
+                "card": {"paired": str(paired)},
+            }
+            decision = {
+                "schema": gate.DECISION_SCHEMA,
+                "decision": "release",
+                "model_name": "DEV2.0-4B",
+                "repo_id": "llm-semantic-router/DEV2.0-4B",
+                "identity": {"model_sha256": "a" * 64},
+                "report_sha256": "b" * 64,
+                "paired_sha256": layout.sha_file(paired),
+                "decided_by": "coordinator",
+                "rationale": "paired interval excludes zero",
+            }
+            path = Path(scratch) / "decision.json"
+            path.write_text(json.dumps(decision))
+            self.assertEqual(gate.check(spec, path)["decision"], "release")
+            path.write_text(
+                json.dumps({**decision, "identity": {"model_sha256": "c" * 64}})
+            )
+            with self.assertRaises(ValueError):
+                gate.check(spec, path)
+
+
 class BuildTest(unittest.TestCase):
     def test_screen_refuses_private_text(self):
         with tempfile.TemporaryDirectory() as scratch:

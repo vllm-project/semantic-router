@@ -86,6 +86,19 @@ Individual steps (all write one receipt; the orchestrator calls them in order):
 | hub | `<hf-cli python> -m v2.release.hub <ensure, upload, download, readback or collect> ...` and `python3 -m v2.release.hub tree ...` |
 | banners | `python v2/release/banner.py --sources <1.0 headers> --fonts <dir> --output-dir brand/` (needs Pillow) |
 
+### Release gate and collection
+
+The coordinator records the judgement part of the per-size gate in a decision
+file (`dev2-release-decision/1`: model name, repository, checkpoint identity,
+same-panel report SHA-256, paired-comparison SHA-256, `decided_by`, `rationale`)
+and names it as `gate_receipt` in a `kind: release` spec; the builder refuses a
+release spec whose decision names anything else. `release.sh ... --upload
+--collect` then runs the whole chain and, only if every receipt passed,
+`python3 -m v2.release.gate seal` writes `receipts/gate.json` binding the
+decision to the uploaded revision and manifest (`gate evaluate --work W` prints
+the six gate items with their evidence), and `hub collect` adds the repository
+to the private "Decision 2.0" collection and reads it back.
+
 `hub download` is the real `hf download <repo> --revision <sha> --local-dir <fresh
 dir>` with a fresh cache. `readback` checks the private flag, the exact revision,
 each remote file's LFS SHA-256 or git blob id against the package, the Hub-parsed

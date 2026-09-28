@@ -125,8 +125,12 @@ def load_spec(path: Path) -> dict[str, Any]:
     layout.check_repo(
         spec["repo_id"], spec["model_name"], staging=spec["kind"] == "staging"
     )
-    if spec["kind"] == "release" and not spec.get("gate_receipt"):
-        raise ValueError("A release build needs the coordinator's release-gate receipt")
+    if spec["kind"] == "release":
+        from v2.release.gate import check
+
+        if not spec.get("gate_receipt"):
+            raise ValueError("A release build needs the coordinator's release decision")
+        check(spec, Path(spec["gate_receipt"]))
     origin = spec["origin"]
     if not layout.REVISION.fullmatch(
         origin.get("revision", "")

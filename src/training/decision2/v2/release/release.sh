@@ -5,7 +5,7 @@
 #   release.sh --spec SPEC.json --src SRC --work /data/dev2/runs/release/<id> \
 #       [--cpu | --gpu N --track TRACK] [--image IMAGE] [--python PY] [--mount PATH]... \
 #       [--threads N] [--base-path DIR] [--parity NAME:PROMPTS:PREDICTIONS:COUNT]... \
-#       [--parity-tolerance X] [--upload] [--collect GATE.json]
+#       [--parity-tolerance X] [--upload] [--collect]
 #
 # Steps (each writes <work>/receipts/<step>.json; any failure stops the run):
 #   build        v2.release.build: exact scored bytes + runtime + card -> <work>/package/<repo-name>
@@ -16,7 +16,8 @@
 #   --upload:    ensure (private) -> upload -> real `hf download` into <work>/download/<repo-name>
 #                -> tree (re-hash) -> post (examples on the download) -> repeat-post (vs pre-a)
 #                -> card-post -> parity-post -> readback (private, hashes, Hub card, collection)
-#   --collect:   collect (Decision 2.0 collection; gated release only) -> readback-collected
+#   --collect:   gate seal (the spec's coordinator decision + every verification receipt, bound to the
+#                uploaded revision) -> collect (private Decision 2.0 collection) -> readback-collected
 # The container never mounts gold. --cpu exposes no GPU; --gpu takes a leased GPU like the eval runner.
 set -euo pipefail
 
@@ -40,7 +41,7 @@ while [[ $# -gt 0 ]]; do
     --parity) parity+=("$2"); shift 2 ;;
     --parity-tolerance) parity_tolerance="$2"; shift 2 ;;
     --upload) upload=1; shift ;;
-    --collect) gate="$2"; shift 2 ;;
+    --collect) gate=1; shift ;;
     *) usage ;;
   esac
 done
@@ -142,9 +143,10 @@ if [[ "$upload" == 1 ]]; then
   "$hf_python" -m v2.release.hub readback --repo "$repo" --revision "$revision" --package "$pkg" \
     --output "$work/receipts/readback.json"
   if [[ -n "$gate" ]]; then
-    log "collection add (gated)"
-    "$hf_python" -m v2.release.hub collect --repo "$repo" --revision "$revision" --package "$pkg" --gate "$gate" \
-      --output "$work/receipts/collect.json"
+    log "gate seal and collection add"
+    python3 -m v2.release.gate seal --work "$work"
+    "$hf_python" -m v2.release.hub collect --repo "$repo" --revision "$revision" --package "$pkg" \
+      --gate "$work/receipts/gate.json" --output "$work/receipts/collect.json"
     "$hf_python" -m v2.release.hub readback --repo "$repo" --revision "$revision" --package "$pkg" \
       --expect-collected --output "$work/receipts/readback-collected.json"
   fi
