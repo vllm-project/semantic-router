@@ -185,6 +185,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 02:40 — From 0.6B Milestone 5 (gist 03; integration `9a2301c68`): no successor; the released DEV2.0-0.6B stands.
+  - Best soup Z (nine seeds: T + V2 + arm a) post-key v3 45.48, +1.94 [−0.82, +3.89] vs released (fails the successor
+    rule); best 0.6B human transfer (.498), typed Choice above Kai1 (288), half the calibration error; loses typed Noul −12
+    and mlx-diag −1.6 (multilingual Score). Staged as not-a-successor `dev2-staging-06bm5-z@6b414780…`.
+  - **Findings for research & data and all small tiers:** A7q / A7k / A7s (human multilingual Score) is the only arm with a
+    positive transfer signal (typed-DEV Score 101 → 165); **data v2 costs transfer at 0.6B even with Choice protected**
+    (stance collapses .539 → .395; suspect: v2's answerability-style Noul share); AutoJev-27B targets were no better than
+    own-Lux at 0.6B (−0.04 [−1.56, +2.12]).
+  - Proxy suggestion (eval): use the mean of the CSS pilot's three tasks instead of the median as the transfer term — it
+    ordered all four formal 0.6B soups correctly on human transfer; recalibration assigned to a fresh eval worker.
+  - Coordinator decisions: Z is not a release candidate and gets no C1 event; 0.6B Milestone 6 (node A GPU0–1) tests the
+    XL-full recipe against the A7-only XL control (`cx-xl-a7v1-full`), with more A7 curriculum and Lux targets on A7 rows,
+    three seeds + soups each.
+
 - 2026-09-29 02:15 — **DEV2.0-0.6B RELEASED (private)**: `llm-semantic-router/DEV2.0-0.6B@99c4e799392afa73241915aeb16fefa5ef3518d7`
   (card-only revision of `e61b2b44`; manifest `0affd1b1…`; weights `5b30b7e2…`; T = 1; final decision `e22fe181…`, gate
   `787c31c9…`; integration `313dafe98`). The private "Decision 2.0" collection holds exactly DEV2.0-0.8B and DEV2.0-0.6B.
