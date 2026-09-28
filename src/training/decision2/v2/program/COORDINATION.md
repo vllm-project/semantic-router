@@ -144,7 +144,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
 | node A GPU0–1 | 0.6B encoder |
-| node A GPU2–4 | research & data (Lux teacher targets, embedding scans) until mixture v2 / teacher targets land; then back to the 9B track (2026-09-28 17:55 UTC+8) |
+| node A GPU2–4 | research & data M3a: AutoJev-27B teacher targets (all shards on node A), then back to the 9B track (2026-09-28 18:45 UTC+8) |
 | node A GPU5 | 0.8B–4B decoder |
 | node A GPU6–7 | eval & peers |
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
@@ -181,6 +181,35 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 18:45 — **DATA v2 AVAILABLE** (research & data Milestone 2; gist `02-decision-2-research-data.md`; integration
+  `66ee420b5`; private HF dataset revision `ed87a03ab80ca5b9560780bba51a83a77ff47d14`, new `m2/` tree with its own
+  `registry.json`; recipes at revision `5c602c5a…` under `m2/mixtures/`).
+  - Nine arms, 313,178 TRAIN rows / 141.5M tokens: H1 cross-domain human (65,432), H3 long / multi-hop evidence Noul
+    (36,376; 45.3M tokens), H5 multilingual, 16 languages (94,449), H6 human Score (36,110), E11 evidence-removal twins
+    (24,770), G2 generated rules (27,050), G6 generated Score (25,192), G4h / G4r paired hard / random distractors (3,799
+    each). 21 languages (42.8% non-English); Score at every level count 2..10 (>= 2,730 rows each); permissive licences
+    (`license-registry-v2.json`); lexical + embedding overlap vs 56 protected roles, isolation across 47 partitions and
+    byte-identical rebuilds passed. A 2% sealed slice per arm stays private on node A for the eval track.
+  - **Recipes to adopt now** (nested S ⊂ M ⊂ L; whole groups; source cap 8% of tokens; English cap 60%): mx-v2-full-S
+    7.99M, -M 19.69M, -L 37.80M; mx-v2-short-S 7.67M, -M 18.70M (0.6B at a 1,024-token cap). Recommended: 0.6B short-M
+    (full-M if your model runs at 8K); 0.8B / 2B / 4B full-M; 9B full-M then full-L; 27B full-M / full-L. Matched controls:
+    A0s repeated to the same tokens; A0s + v1 arms (S only); the same recipe without teacher targets. The recipes are
+    Noul-heavy (~50% of tokens; Choice 18–23%): watch Choice retention and add A7 / A0s Choice as replay if it drops.
+  - **Clean CAL = CAL698** (`19cc1a8c…`): every release candidate fits its final calibration on CAL698.
+  - **Lux teacher files:** canonical for A0 rows = `dd160420…` (data-track designation; native run). The decoder file
+    `752b7c8f…` agrees >= 99.4% argmax — runs already started with it stay valid; new runs use `dd160420…`. Scaled Lux
+    targets: wave 1 (S) `47049a6b…` at revision `7885baf6…`, wave 2 (M) `2c6ab38d…` at revision
+    `6bd8eb4d4fe0bc2c47f517c1017f7422510b09f0`; wave 3 (L remainder) pending.
+  - **Teacher screen** (6,429 never-trained rows, per-type temperatures on CAL698; Brier Choice / Noul / Score, Score MAE):
+    AutoJev-27B .280 / .261 / .539 / 0.49; own Lux1 .347 / .352 / .600 / 0.59; Decider 4B .414 / .381 / .590 / 0.87;
+    own Nox1 .455 / .405 / .599 / 0.85.
+  - **COORDINATOR DECISION: AutoJev-27B targets are allowed for release candidates** once its ROCm runtime passes a
+    repeat-run determinism check. Its weights are Apache-2.0 and no contract restricts us; its own training reportedly used
+    closed-model-generated data, which every AutoJev-distilled card and record discloses as teacher provenance. Lux targets
+    stay the clean default, and every AutoJev-distilled candidate needs a matched Lux-target control.
+  - GPUs: AutoJev targets are generated on node A GPU2–4 (research & data M3a; all shards on node A), then GPU2–4 return to
+    the 9B track. Node B GPU3–4 stay with the decoder. Node B GPU7 sharing with A7 for short jobs is confirmed.
 
 - 2026-09-28 17:55 — 9B L2 formal result (gist `05-decision-2-9b-clm.md`; integration `9decc9921`):
   - L2 (Lux + own-Lux soft replay, trained on A0) vs a same-limit 8K Lux1 control: post-key v3 65.361 vs 65.231,
