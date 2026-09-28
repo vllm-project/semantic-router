@@ -43,3 +43,10 @@ eight rows (masked attention kernel; step-0 gradient cosine .991 for Qwen versus
 `max_micro_rows = 1` and nothing else changed, keeping the collapse stop. If both
 seeds pass it they are QC candidates under the unchanged finalist rule; s2 runs
 only if s1 passes.
+
+## M2f (frozen before its run)
+
+QCMB1 s1 passed the collapse stop (372 at update 175, versus 311 for the padded
+QC s1 on the same order and head seed) and QC s2 hit it (315). **QCLMB1 s1/s2**
+are QCL with `max_micro_rows = 1`, nothing else changed. QCMB1 s2 runs now
+(s1 passed the stop). These are the last Milestone 2 training arms.
