@@ -58,7 +58,7 @@ const configResponse = {
     ],
   },
   global: {
-    router: { strategy: 'priority' },
+    router: { strategy: 'priority', handoff: { enabled: true } },
     services: {
       response_api: { enabled: true },
     },
@@ -470,6 +470,26 @@ test.describe('Config surface layout regressions', () => {
     }
 
     await expect(page.getByRole('heading', { name: 'Classifier Catalog' })).toHaveCount(0);
+  });
+
+  test('shows the handoff envelope control in the router core editor', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1200 });
+    await mockConfigSurface(page);
+
+    await page.goto('/config/global-config');
+    const routerCoreCard = page.locator('article').filter({
+      has: page.getByRole('heading', { name: 'Router Core' }),
+    }).first();
+    await routerCoreCard.getByRole('button', { name: 'Edit' }).click();
+
+    const modal = page.getByRole('dialog', { name: 'Edit Router Core' });
+    await expect(modal.getByText('Handoff Envelope', { exact: true })).toBeVisible();
+    await expect(modal.getByText('Admit trusted handoff envelopes')).toBeVisible();
+    const handoffGroup = modal.getByRole('group', { name: 'Handoff Envelope' });
+    const enabled = handoffGroup.getByRole('checkbox', { name: 'Enabled' });
+    await handoffGroup.scrollIntoViewIfNeeded();
+    await expect(enabled).toBeVisible();
+    await expect(enabled).toBeChecked();
   });
 
   test('redirects the retired classifier route to the canonical knowledge base manager', async ({ page }) => {
