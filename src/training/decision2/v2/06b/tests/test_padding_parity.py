@@ -193,6 +193,41 @@ class PaddingParityTest(unittest.TestCase):
             parity.micro_batch_parity(family, records, [None, None], "cpu", bf16=False)
         )
 
+    def test_dropout_is_zeroed_for_the_check_and_restored(self):
+        cfg = ModernBertConfig(
+            vocab_size=len(encoder_tests.WORDS),
+            hidden_size=32,
+            intermediate_size=48,
+            num_hidden_layers=2,
+            num_attention_heads=2,
+            pad_token_id=0,
+            bos_token_id=1,
+            eos_token_id=2,
+            cls_token_id=1,
+            sep_token_id=2,
+            max_position_embeddings=256,
+            global_attn_every_n_layers=1,
+            embedding_dropout=0.3,
+            mlp_dropout=0.3,
+            attention_dropout=0.3,
+        )
+        torch.manual_seed(0)
+        family = encoder_family(
+            ModernBertModel._from_config(cfg, attn_implementation="sdpa"),
+            bidirectional=False,
+        )
+        rates = [m.p for m in family.model.modules() if isinstance(m, torch.nn.Dropout)]
+        report = parity.micro_batch_parity(
+            family, encoder_records()[:2], [None, None], "cpu", bf16=False
+        )
+        self.assert_parity(report)
+        self.assertGreater(report["dropout_modules_zeroed"], 0)
+        self.assertEqual(
+            rates,
+            [m.p for m in family.model.modules() if isinstance(m, torch.nn.Dropout)],
+        )
+        self.assertTrue(family.model.training)
+
     def test_ignored_key_padding_mask_is_caught(self):
         family = encoder_family(qwen3(len(encoder_tests.WORDS)), bidirectional=True)
         collate = family.packer.collate

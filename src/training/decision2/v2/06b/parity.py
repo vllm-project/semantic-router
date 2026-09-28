@@ -27,6 +27,28 @@ def module_of(family: Any) -> Any:
 
 
 @contextlib.contextmanager
+def without_dropout(model: Any) -> Any:
+    """Zero every dropout rate (training flags untouched); padding parity is deterministic."""
+    import torch
+
+    saved = []
+    for module in model.modules():
+        if isinstance(module, torch.nn.modules.dropout._DropoutNd):
+            saved.append((module, "p", module.p))
+        elif isinstance(module, torch.nn.MultiheadAttention):
+            saved.append((module, "dropout", module.dropout))
+        if isinstance(getattr(module, "attention_dropout", None), float):
+            saved.append((module, "attention_dropout", module.attention_dropout))
+    for module, name, _ in saved:
+        setattr(module, name, 0.0)
+    try:
+        yield sum(value > 0 for _, _, value in saved)
+    finally:
+        for module, name, value in saved:
+            setattr(module, name, value)
+
+
+@contextlib.contextmanager
 def fp32_compute() -> Any:
     """Disable the families' BF16 autocast; their heads already compute in FP32."""
     import torch
@@ -110,6 +132,20 @@ def micro_batch_parity(
     """FP32 padded vs one-row (exact), then BF16 paths against the FP32 one-row reference."""
     if len(records) < 2:
         raise ValueError("Parity needs a micro-batch of at least two rows")
+    with without_dropout(module_of(family)) as zeroed:
+        report = _parity(family, records, teacher, device, bf16=bf16)
+    report["dropout_modules_zeroed"] = zeroed
+    return report
+
+
+def _parity(
+    family: Any,
+    records: list[dict[str, Any]],
+    teacher: list[Any],
+    device: str,
+    *,
+    bf16: bool,
+) -> dict[str, Any]:
     with fp32_compute():
         loss_pad, g_pad = gradients(family, records, teacher, device, padded=True)
         loss_one, reference = gradients(family, records, teacher, device, padded=False)
