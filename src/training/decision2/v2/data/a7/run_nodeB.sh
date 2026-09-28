@@ -3,6 +3,8 @@
 #
 # Usage: run_nodeB.sh <stage> [workers]
 #   build     pre-admission sub-arms, views and build manifest (host python)
+#   recover   pre-admission A7r (rule 7e) from the spec sources, deduplicated and
+#             isolated against the frozen files in A7_FROZEN_FINAL (host python)
 #   lengths   per-row token lengths in the pinned runtime image (no GPU devices)
 #   screens   overlap vs PI-v2 and shortcut receipts per sub-arm (host python)
 #   rescreen  overlap of the admitted files vs A7_RESCREEN_PI into A7_RESCREEN_DIR
@@ -27,10 +29,9 @@ A7="$S/v2/data/a7"
 SPEC="${A7_SPEC:-$A7/specs/a7-dec10-v2.nodeB.json}"
 version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$SPEC")"
 W="${A7_RUN_DIR:-/data/dev2/private/a7/runs/$version/${commit:0:12}}"
-PI=/data/dev2/private/data/pi-v2/manifest.json
+PI="${A7_PI:-/data/dev2/private/data/pi-v2/manifest.json}"
 IMAGE="${A7_IMAGE:-decision20-lux-runtime:latest}"
-SUBS=(A7h A7m A7g A7i A7p A7o)
-GENERATED=(A7g A7p A7o)
+read -r -a SUBS <<< "${A7_SUBS:-A7h A7m A7g A7i A7p A7o}"
 export PYTHONPATH="$S"
 cd "$S"
 umask 077
@@ -48,6 +49,11 @@ case "$stage" in
     log "build commit=$commit"
     python3 -m v2.data.a7.build_a7 --spec "$SPEC" \
       --out-dir "$W/build" --commit "$commit" | tee -a "$W/logs/build.out"
+    ;;
+  recover)
+    log "recover commit=$commit frozen=${A7_FROZEN_FINAL:?A7_FROZEN_FINAL}"
+    python3 -m v2.data.a7.recover --spec "$SPEC" --frozen-final "$A7_FROZEN_FINAL" \
+      --out-dir "$W/build" --commit "$commit" | tee -a "$W/logs/recover.out"
     ;;
   lengths)
     log "lengths image=$(docker image inspect --format '{{.Id}}' "$IMAGE")"
@@ -166,6 +172,12 @@ case "$stage" in
     for file in "$W"/final/*.jsonl; do
       name="$(basename "$file" .jsonl)"
       parts+=(--partition "${name##*.}/${name%%.*}=$file")
+    done
+    for extra in ${A7_ISOLATION_WITH:-}; do
+      for file in "$extra"/*.jsonl; do
+        name="$(basename "$file" .jsonl)"
+        parts+=(--partition "${name##*.}/frozen-${name%%.*}=$file")
+      done
     done
     python3 -m v2.data.freeze isolation "${parts[@]}" --report "$W/isolation.json" | tee -a "$W/logs/isolation.out"
     ;;

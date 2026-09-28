@@ -13,7 +13,7 @@ import argparse
 import json
 from pathlib import Path
 
-from v2.data.a7.build_a7 import SUB_ARMS
+from v2.data.a7.build_a7 import ALL_SUB_ARMS
 
 
 def spec_for(
@@ -29,7 +29,7 @@ def spec_for(
         {"src": str(run_dir / "final" / "admission.json"), "dst": "a7/admission.json"},
         {"src": str(run_dir / "isolation.json"), "dst": "a7/audits/isolation.json"},
     ]
-    for name in SUB_ARMS:
+    for name in ALL_SUB_ARMS:
         for part in ("train", "aho"):
             rows = run_dir / "final" / f"{name}.{part}.jsonl"
             manifest = run_dir / "manifests" / f"{name}.{part}.freeze.json"
