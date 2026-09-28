@@ -288,6 +288,29 @@ class MixtureSelectionTest(unittest.TestCase):
             chosen, mixture.select_groups(rows, tokens, 120, "other", "A6g")
         )
 
+    def test_stratified_resample_is_proportional_and_copies_are_distinct(self):
+        rows = [
+            {
+                "id": f"x{i}",
+                "group_id": f"g{i // 2}",
+                "source": "s1" if i < 40 else "s2",
+                "task_type": "choice",
+                "language": "en",
+            }
+            for i in range(60)
+        ]
+        tokens = [10] * 60
+        chosen = mixture.resample_groups(rows, tokens, 300, "seed")
+        self.assertEqual(chosen, mixture.resample_groups(rows, tokens, 300, "seed"))
+        by_source = {
+            s: sum(rows[i]["source"] == s for i in chosen) for s in ("s1", "s2")
+        }
+        self.assertEqual(by_source, {"s1": 20, "s2": 10})
+        copy = mixture.duplicate(rows[chosen[0]])
+        self.assertNotEqual(copy["id"], rows[chosen[0]]["id"])
+        self.assertNotEqual(copy["group_id"], rows[chosen[0]]["group_id"])
+        self.assertEqual(copy["teacher_source_id"], rows[chosen[0]]["id"])
+
 
 if __name__ == "__main__":
     unittest.main()

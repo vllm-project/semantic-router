@@ -674,10 +674,13 @@ def run(
         if file_sha256(path) != spec["teacher"]["sha256"]:
             raise ValueError("Teacher file differs from its frozen hash")
         by_id = {row["source_row_id"]: row["probabilities"] for row in read_jsonl(path)}
+        keys = [
+            r.get("teacher_source_id", r["source_row_id"]) for r in records["train"]
+        ]
         if spec["teacher"].get("coverage") == "subset":
-            teacher = [by_id.get(r["source_row_id"]) for r in records["train"]]
+            teacher = [by_id.get(key) for key in keys]
         else:
-            teacher = [by_id[r["source_row_id"]] for r in records["train"]]
+            teacher = [by_id[key] for key in keys]
         for record, q in zip(records["train"], teacher):
             if q is None:
                 continue

@@ -63,6 +63,41 @@ def select_groups(
     return sorted(chosen)
 
 
+def resample_groups(
+    rows: list[dict[str, Any]], tokens: list[int], rho: int, seed: str
+) -> list[int]:
+    """Template-S control: whole groups of the base, stratified by source x type x language."""
+    strata: dict[tuple[str, str, str], list[int]] = {}
+    for index, row in enumerate(rows):
+        strata.setdefault(
+            (row["source"], row["task_type"], row["language"]), []
+        ).append(index)
+    total = sum(tokens)
+    chosen: list[int] = []
+    for key in sorted(strata):
+        members = strata[key]
+        share = rho * sum(tokens[i] for i in members) // total
+        picked = select_groups(
+            [rows[i] for i in members],
+            [tokens[i] for i in members],
+            share,
+            seed,
+            "|".join(key),
+        )
+        chosen.extend(members[i] for i in picked)
+    return sorted(chosen)
+
+
+def duplicate(row: dict[str, Any]) -> dict[str, Any]:
+    """A resampled copy: new id and group, same content; teacher targets follow the original."""
+    return {
+        **row,
+        "id": row["id"] + "#resample",
+        "group_id": row["group_id"] + "#resample",
+        "teacher_source_id": row["id"],
+    }
+
+
 def build(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if spec["template"] != "S" or spec["unit"] != UNIT:
         raise ValueError("Only template S in the Qwen3 native unit is implemented")
@@ -74,27 +109,36 @@ def build(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         "arms": {},
     }
     train: list[dict[str, Any]] = []
-    base_tokens = 0
+    base_counts: list[int] = []
     for entry in spec["base"]:
         rows = arm_rows(entry)
-        tokens = sum(count(row) for row in rows)
-        base_tokens += tokens
+        counts = [count(row) for row in rows]
+        base_counts.extend(counts)
         train.extend(rows)
         report["arms"][entry["arm"]] = {
             "role": "base",
             "rows": len(rows),
-            "tokens": tokens,
+            "tokens": sum(counts),
         }
+    base_rows = list(train)
+    base_tokens = sum(base_counts)
     treatment = []
     for entry in spec["treatment"]:
+        if entry.get("resample_of") == "base":
+            treatment.append((entry["arm"], base_rows, base_counts, True))
+            continue
         rows = arm_rows(entry)
-        treatment.append((entry["arm"], rows, [count(row) for row in rows]))
-    available = sum(sum(tokens) for _, _, tokens in treatment)
+        treatment.append((entry["arm"], rows, [count(row) for row in rows], False))
+    available = sum(sum(tokens) for _, _, tokens, _ in treatment)
     rho = min(int(spec["fraction_of_base"] * base_tokens), available)
-    for arm, rows, tokens in treatment:
+    for arm, rows, tokens, resample in treatment:
         share = rho * sum(tokens) // available
-        chosen = select_groups(rows, tokens, share, spec["seed"], arm)
-        picked = [rows[i] for i in chosen]
+        if resample:
+            chosen = resample_groups(rows, tokens, share, f"{spec['seed']}\0{arm}")
+            picked = [duplicate(rows[i]) for i in chosen]
+        else:
+            chosen = select_groups(rows, tokens, share, spec["seed"], arm)
+            picked = [rows[i] for i in chosen]
         train.extend(picked)
         levels: dict[str, int] = {}
         for row in picked:
@@ -102,7 +146,7 @@ def build(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 key = str(len(row["options"]))
                 levels[key] = levels.get(key, 0) + 1
         report["arms"][arm] = {
-            "role": "treatment",
+            "role": "resample" if resample else "treatment",
             "rows_available": len(rows),
             "tokens_available": sum(tokens),
             "share_tokens": share,
@@ -122,9 +166,7 @@ def build(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
             "rho_tokens": rho,
             "train_rows": len(train),
             "train_tokens": base_tokens
-            + sum(
-                a["tokens"] for a in report["arms"].values() if a["role"] == "treatment"
-            ),
+            + sum(a["tokens"] for a in report["arms"].values() if a["role"] != "base"),
             "train_ids_sha256": digest(sorted(ids)),
         }
     )
