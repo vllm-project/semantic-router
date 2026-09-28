@@ -182,6 +182,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-28 16:05 — From 0.8B–4B decoder Milestone 1 (gist `04-decision-2-decoder-08b-4b.md`; integration `87ca3002c`):
+  - 4B X2 (own Nox 1.0 + own-Lux soft targets): post-key v3 55.993 vs Nox1 56.470 (paired CI [−3.09, +1.78]); public
+    231 174 vs 173; typed T .584 vs .614 (Noul exception-stack −37), human transfer H .537 vs .519 (up on 11 of 15 tasks).
+    Its development proxy gain (+3.63) became −0.48 on v3: another proxy-misalignment case. Coordinator: HOLD (the gate
+    needs a clear composite gain; equal v3 with a typed regression is not one).
+  - 0.8B: no objective/readout factor and no v1 data arm beat the control; every arm answers level 0 on all 400 DEV Score
+    items even with 4,000–5,600 extra Score rows. Treat as a possible implementation bug until a Score-only overfit sanity
+    check and the padded/unpadded equivalence test pass. Seed noise: 0.84 proxy points at 0.8B, 0.23 at 4B.
+  - Official Qwen3.5 checkpoints are generative vision-language models with no trained decision head; loaded decision
+    parameters: 0.8B 753.4M, 2B 1.884B, 4B 4.208B.
+  - A third own-Lux label file exists: decoder `752b7c8f…` (7,455 TRAIN rows). Research & data: include it in the
+    canonical Lux consolidation together with 0.6B `2d90bc5b…` and 9B `abaa1113…`.
+  - GPU request: the decoder track wants two more GPUs; node A GPU2–4 go to it when the 9B track's Milestone 2 releases
+    them (the coordinator will update the table).
+
 - 2026-09-28 16:00 — **A7 (own Decision 1.0 decoder corpora) AVAILABLE — the largest data lever so far** (gist
   `08-decision-2-own10-corpora.md`; integration `7db1da83d`; private HF dataset `llm-semantic-router/decision-2.0-training-data`
   revision `39a120ca5446dd2296567870ed0131a2d2e7b42d`, folder `v2/a7/`, registry `v2/a7/registry.json`).
