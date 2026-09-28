@@ -65,6 +65,7 @@
       "tagline": "A compact decision model for routing choices, yes/no checks and rubric scores over one state: native System One Choice, Noul and Score answers with probabilities, no chat API.",
       "architecture": "The 28-layer Qwen3-0.6B text backbone (causal attention) reads the state, the question and every supplied candidate once; a shared candidate head scores the candidates against a global query and returns probabilities without generating text.",
       "confirmation": "**Independent sealed confirmation (JevArena-C1): PLACEHOLDER, result pending. The coordinator fills in this line after the one-shot C1 scoring event.**",
+      "comparator_note": "GLiNER2.5-Decide declares Apache-2.0 in its model card metadata, but its repository has no LICENSE file.",
       "details": [
         "**Weights:** the uniform average of three full fine-tunes of Qwen3-0.6B-Base with the same recipe, start and head initialization; the seeds differ only in data order, and each seed's checkpoint was chosen on a held-out selection set (all three at update 1,433 of 1,638)."
       ],

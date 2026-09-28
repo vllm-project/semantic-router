@@ -115,6 +115,13 @@ Choices made here:
   The card tells users it can be ignored; a pipeline-level fix is optional.
 - **Collection link.** The card links the private "Decision 2.0" collection it will join after the
   coordinator's final decision; the repository is not in it now.
+- **Peer without a LICENSE file (coordinator card policy, 22:20, after this upload).** GLiNER2.5-Decide
+  declares Apache-2.0 in its model card metadata but ships no LICENSE file (pinned roster). The
+  uploaded revision `7b5d3ff2…` does not say so yet; the spec now carries `comparator_note` (a small,
+  tested card-renderer addition), so the finalization rerun prints it after the rank scope and on the
+  evaluation page. The rest of that policy already holds here: the mlx-diag Score part (XNLI) is not
+  shown, the label is `apache-2.0` with training-data licences credited, and CPU support is claimed
+  only because it was verified.
 
 ## 5. Hub readback: PASS
 
@@ -166,11 +173,10 @@ $S/v2/release/release.sh --spec $S/v2/release/specs/dev2-0p6b-release.json --src
   (typed Brier 0.309 / ECE 0.118, both better than Kai 1.0's 0.390 / 0.209). A CAL698 fit would
   change probabilities (not the argmax) relative to the scored run and would need a new scored run
   to keep the card honest; a card-and-calibration revision can follow if wanted.
-- **Licence label.** `apache-2.0` follows the 15:30 policy: every shipped upstream part
-  (Qwen3-0.6B-Base weights and tokenizer) is Apache-2.0. Training data under share-alike terms
-  (SNLI, KLUE STS, JGLUE JSTS: CC BY-SA 4.0; IBM ArgQ-30k: CC BY-SA 3.0) and MultiNLI (OANC
-  terms) are disclosed as data attributions, not weight-lineage components, as for the 0.8B
-  package and Decision 1.0.
+- **Licence label (settled by the 22:20 card licence policy).** `apache-2.0`: every shipped
+  upstream part (Qwen3-0.6B-Base weights and tokenizer) is Apache-2.0. Training data under
+  share-alike terms (SNLI, KLUE STS, JGLUE JSTS: CC BY-SA 4.0; IBM ArgQ-30k: CC BY-SA 3.0) and
+  MultiNLI (OANC terms) are credited on the card and in ATTRIBUTIONS.md, as for the 0.8B package.
 - **Tool overlap.** `v2/release/hub_links.py` (this worker) and `v2/release/tests/hub_card_http_check.py`
   (0.8B worker) were written in parallel and check nearly the same things; both ran here.
   Consolidating them into one module is a small follow-up for the release track.
