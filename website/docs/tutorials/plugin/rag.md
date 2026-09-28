@@ -37,6 +37,8 @@ Choose one backend:
 | `vectorstore` | The Router-managed vector-store service | `vector_store_id` |
 | `hybrid` | A primary backend with an optional fallback | `primary`, plus backend-specific nested configuration |
 
+`hybrid.strategy` defaults to `sequential`: the fallback runs only after the primary fails or returns no context. `parallel` starts both lookups and returns as soon as the primary has context. It does not rank the two results. The fallback is used only when the primary fails or is empty.
+
 For `external_api`, `max_response_bytes` caps each response body; omitted or
 `0` uses 4 MiB.
 

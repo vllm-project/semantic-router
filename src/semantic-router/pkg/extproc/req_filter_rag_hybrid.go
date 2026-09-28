@@ -3,7 +3,6 @@ package extproc
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -86,37 +85,43 @@ func (r *OpenAIRouter) retrieveSequential(traceCtx context.Context, ctx *Request
 	return fallbackContext, nil
 }
 
-// retrieveParallel tries both backends in parallel and uses the best result
-// Uses channels for proper synchronization to avoid race conditions when
-// multiple goroutines write results. The WaitGroup ensures all goroutines
-// complete before we read from channels, and buffered channels (size 1) allow
-// goroutines to send without blocking.
-func (r *OpenAIRouter) retrieveParallel(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig, hybridConfig *config.HybridRAGConfig) (string, error) {
-	type result struct {
-		context string
-		err     error
-	}
+// parallelRAGResult is one backend's retrieval outcome.
+// Score and latency are copied off a private RequestContext so the lookup
+// goroutine never writes the caller's request.
+type parallelRAGResult struct {
+	context string
+	err     error
+	score   float32
+	latency float64
+}
 
-	var wg sync.WaitGroup
-	// Buffered channels (size 1) allow goroutines to send results without blocking
-	// and provide proper synchronization according to Go's memory model
-	primaryChan := make(chan result, 1)
-	fallbackChan := make(chan result, 1)
+// retrieveParallel starts both backends and returns as soon as the primary
+// produces context. It does not rank backends: they do not share a score.
+// A fallback is used only when the primary fails or returns empty context.
+func (r *OpenAIRouter) retrieveParallel(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig, hybridConfig *config.HybridRAGConfig) (string, error) {
+	// Buffered so a late backend can send after the caller has returned.
+	primaryChan := make(chan parallelRAGResult, 1)
+	fallbackChan := make(chan parallelRAGResult, 1)
+	childCtx, cancel := context.WithCancel(traceCtx)
+	defer cancel()
+
+	// Each lookup gets its own RequestContext. Backends write similarity and
+	// latency onto that copy; the caller applies the winner after selection.
+	primaryCtx := *ctx
+	fallbackCtx := *ctx
 
 	// Try primary backend
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				primaryChan <- result{"", fmt.Errorf("panic in primary backend: %v", r)}
+				primaryChan <- parallelRAGResult{err: fmt.Errorf("panic in primary backend: %v", r)}
 			}
 		}()
 
 		// Check context cancellation
 		select {
-		case <-traceCtx.Done():
-			primaryChan <- result{"", traceCtx.Err()}
+		case <-childCtx.Done():
+			primaryChan <- parallelRAGResult{err: childCtx.Err()}
 			return
 		default:
 		}
@@ -133,25 +138,28 @@ func (r *OpenAIRouter) retrieveParallel(traceCtx context.Context, ctx *RequestCo
 			CacheResults:        ragConfig.CacheResults,
 			CacheTTLSeconds:     ragConfig.CacheTTLSeconds,
 		}
-		context, err := r.retrieveFromBackend(traceCtx, ctx, primaryConfig)
-		primaryChan <- result{context, err}
+		retrieved, err := r.retrieveFromBackend(childCtx, &primaryCtx, primaryConfig)
+		primaryChan <- parallelRAGResult{
+			context: retrieved,
+			err:     err,
+			score:   primaryCtx.RAGSimilarityScore,
+			latency: primaryCtx.RAGRetrievalLatency,
+		}
 	}()
 
 	// Try fallback backend
 	if hybridConfig.Fallback != "" {
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
 			defer func() {
 				if r := recover(); r != nil {
-					fallbackChan <- result{"", fmt.Errorf("panic in fallback backend: %v", r)}
+					fallbackChan <- parallelRAGResult{err: fmt.Errorf("panic in fallback backend: %v", r)}
 				}
 			}()
 
 			// Check context cancellation
 			select {
-			case <-traceCtx.Done():
-				fallbackChan <- result{"", traceCtx.Err()}
+			case <-childCtx.Done():
+				fallbackChan <- parallelRAGResult{err: childCtx.Err()}
 				return
 			default:
 			}
@@ -168,45 +176,72 @@ func (r *OpenAIRouter) retrieveParallel(traceCtx context.Context, ctx *RequestCo
 				CacheResults:        ragConfig.CacheResults,
 				CacheTTLSeconds:     ragConfig.CacheTTLSeconds,
 			}
-			context, err := r.retrieveFromBackend(traceCtx, ctx, fallbackConfig)
-			fallbackChan <- result{context, err}
+			retrieved, err := r.retrieveFromBackend(childCtx, &fallbackCtx, fallbackConfig)
+			fallbackChan <- parallelRAGResult{
+				context: retrieved,
+				err:     err,
+				score:   fallbackCtx.RAGSimilarityScore,
+				latency: fallbackCtx.RAGRetrievalLatency,
+			}
 		}()
 	}
 
-	// Wait for goroutines and collect results
-	wg.Wait()
-	close(primaryChan)
-	if hybridConfig.Fallback != "" {
-		close(fallbackChan)
+	// Primary with context returns immediately. A slow fallback is cancelled.
+	// Backends do not publish a comparable score, so this does not rank them.
+	chosen, err := selectParallelRAG(primaryChan, hybridConfig.Fallback != "", fallbackChan)
+	if err != nil {
+		return "", err
 	}
+	ctx.RAGSimilarityScore = chosen.score
+	ctx.RAGRetrievalLatency = chosen.latency
+	return chosen.context, nil
+}
 
-	primaryRes := <-primaryChan
-	primaryContext, primaryErr := primaryRes.context, primaryRes.err
-	var fallbackContext string
-	var fallbackErr error
-	if hybridConfig.Fallback != "" {
-		fallbackRes := <-fallbackChan
-		fallbackContext, fallbackErr = fallbackRes.context, fallbackRes.err
-	}
-
-	// Use the result with highest similarity score or first successful result
-	if primaryErr == nil && primaryContext != "" {
-		if fallbackErr == nil && fallbackContext != "" {
-			// Both succeeded, use the one with better similarity (if available)
-			// For now, prefer primary
-			logging.Infof("Hybrid RAG: both backends succeeded, using primary (%s)", hybridConfig.Primary)
-			return primaryContext, nil
+// selectParallelRAG prefers a non-empty primary result and does not wait for
+// the fallback once that result is available. The fallback is used when the
+// primary fails or is empty.
+func selectParallelRAG(primary <-chan parallelRAGResult, haveFallback bool, fallback <-chan parallelRAGResult) (parallelRAGResult, error) {
+	if !haveFallback {
+		res := <-primary
+		if res.err == nil && res.context != "" {
+			return res, nil
 		}
-		logging.Infof("Hybrid RAG: primary backend (%s) succeeded", hybridConfig.Primary)
-		return primaryContext, nil
+		if res.err != nil {
+			return parallelRAGResult{}, res.err
+		}
+		return parallelRAGResult{}, fmt.Errorf("primary backend returned empty context")
 	}
 
-	if fallbackErr == nil && fallbackContext != "" {
-		logging.Infof("Hybrid RAG: fallback backend (%s) succeeded", hybridConfig.Fallback)
-		return fallbackContext, nil
+	var fallbackRes parallelRAGResult
+	fallbackReady := false
+	for {
+		select {
+		case res := <-primary:
+			if res.err == nil && res.context != "" {
+				return res, nil
+			}
+			if !fallbackReady {
+				fallbackRes = <-fallback
+			}
+			if fallbackRes.err == nil && fallbackRes.context != "" {
+				return fallbackRes, nil
+			}
+			primaryErr := res.err
+			if primaryErr == nil {
+				primaryErr = fmt.Errorf("primary backend returned empty context")
+			}
+			fallbackErr := fallbackRes.err
+			if fallbackErr == nil {
+				fallbackErr = fmt.Errorf("fallback backend returned empty context")
+			}
+			return parallelRAGResult{}, fmt.Errorf("both backends failed: primary=%w, fallback=%w", primaryErr, fallbackErr)
+		case res := <-fallback:
+			if !fallbackReady {
+				fallbackRes = res
+				fallbackReady = true
+			}
+		}
 	}
-
-	return "", fmt.Errorf("both backends failed: primary=%w, fallback=%w", primaryErr, fallbackErr)
 }
 
 // retrieveFromBackend is a helper to retrieve from a specific backend
