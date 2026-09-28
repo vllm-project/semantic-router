@@ -205,3 +205,28 @@ class SummarizeTest(unittest.TestCase):
         self.assertFalse(
             summarize.decide(control, drop, None)["checks"]["no_type_drop_over_3"]
         )
+
+
+class SharedLeaseTest(unittest.TestCase):
+    def test_shared_job_does_not_replace_primary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "gpu6.lock").mkdir()
+            owner = root / "gpu6.lock" / "owner"
+            owner.write_text(json.dumps({"track": "27b", "status": "reserved-idle"}))
+            launch.write_lease(6, {"status": "running", "container": "probe"}, root)
+            launch.write_lease(
+                6, {"status": "running", "container": "heads"}, root, shared="heads"
+            )
+            state = json.loads(owner.read_text())
+            self.assertEqual(
+                (state["container"], state["shared_containers"]), ("probe", ["heads"])
+            )
+            launch.write_lease(
+                6, {"status": "reserved-idle", "container": None}, root, shared="heads"
+            )
+            state = json.loads(owner.read_text())
+            self.assertEqual(
+                (state["status"], state["container"], state["shared_containers"]),
+                ("running", "probe", []),
+            )
