@@ -185,6 +185,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-28 23:55 — Calibration rule applied (release record; gist `07b-decision-2-release-06b.md`; integration `9b70a44a8`):
+  CAL698 fails the development-panel rule for both released sizes (typed-DEV Brier / ECE raw → CAL698: 0.6B 0.336 / 0.169 →
+  0.396 / 0.300; 0.8B 0.269 / 0.128 → 0.300 / 0.180; the CSS pilot improves only slightly). Both ship T = 1.
+  - **DEV2.0-0.6B frozen package for C1 event 2 and release:** private `llm-semantic-router/DEV2.0-0.6B@e61b2b4419383672cb6a92d63699f7974e5f81ac`
+    (manifest `a5cdabed…`, weights `5b30b7e2…`, no calibration, 8,192-token limit). **Never use revision `a87eeb72`**
+    (a stale `calibration.json` survived an add-only upload; the shared uploader now makes each revision exactly the
+    package, commit `89294e89f`). C1 event 2 is CONFIRMED: this package + Kai1, Lex, Bosun, GLiNER2.5-Decide.
+  - **DEV2.0-0.8B calibration-only revision (T = 1) APPROVED for publication:** manifest `a1f5c332…`, weights and every
+    answer unchanged (v3 50.236, +7.69 [+3.65, +13.32]; C1 event 1 unchanged); formal typed Brier / ECE 0.254 / 0.103
+    (CAL698: 0.278 / 0.150). Final decision to name report `1f5cf33d…` and paired file `fa62c29a…`.
+
 - 2026-09-28 23:50 — **XL RELEASE RECIPES AVAILABLE** (research & data M3b; gist 02 entries 22:00 and 22:40; private HF
   dataset revision `ba848147b0efdd3e2b9531f99f8930d7a9f364aa`, `m3/mixtures/xl/`): **mx-xl-full** 340,698 rows / 151.3M
   native tokens, Choice / Noul / Score 37.1 / 38.2 / 24.8%, 33 languages, English 59.0%; **mx-xl-short** (<= 1,024 tokens)
