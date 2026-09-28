@@ -225,6 +225,66 @@ class LeakAuditTest(unittest.TestCase):
         self.assertTrue(leak_audit.public_gold("noul", "yes"))
         self.assertFalse(leak_audit.public_gold("noul", "no"))
 
+    def test_htdev_files_before_registration(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            prompts, gold = [], []
+            for i in range(40):
+                question = {
+                    "type": "noul",
+                    "instructions": "?",
+                    "criteria": {"true": "Yes: so.", "false": "No: not so."},
+                }
+                prompts.append(
+                    {
+                        "id": f"h{i}",
+                        "state": {"t": i},
+                        "questions": {"decision": question},
+                    }
+                )
+                gold.append(
+                    {
+                        "id": f"h{i}",
+                        "task": "a/x",
+                        "group_id": f"g{i}",
+                        "cluster_id": f"c{i // 4}",
+                        "questions": {"decision": question},
+                        "gold": {"decision": {"type": "noul", "value": i % 2 == 0}},
+                    }
+                )
+            for name, rows in (("p.jsonl", prompts), ("g.jsonl", gold)):
+                (tmp / name).write_text("".join(json.dumps(r) + "\n" for r in rows))
+            questions = leak_audit.load_panel(
+                tmp, "ht-dev", (tmp / "p.jsonl", tmp / "g.jsonl")
+            )
+            self.assertEqual(len(questions), 40)
+            self.assertEqual(questions[0].cluster, "c0")
+            self.assertEqual(questions[1].gold, 1)
+            out = tmp / "audit.json"
+            code = leak_audit.main(
+                [
+                    "audit",
+                    "--panel-root",
+                    str(tmp / "none"),
+                    "--panel",
+                    "ht-dev",
+                    "--files",
+                    f"ht-dev={tmp / 'p.jsonl'}:{tmp / 'g.jsonl'}",
+                    "--replicates",
+                    "50",
+                    "--output",
+                    str(out),
+                ]
+            )
+            self.assertEqual(code, 0)
+            result = json.loads(out.read_text())
+            self.assertEqual(result["panels"]["ht-dev"]["questions"], 40)
+            self.assertIn(str(tmp / "g.jsonl"), result["panel_sha256"])
+
     def test_markdown_renders(self):
         report = leak_audit.audit_panel(construction_order_panel(60, False), 50)
         report["role"] = "development"
