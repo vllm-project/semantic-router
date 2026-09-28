@@ -1,0 +1,19 @@
+{
+  "created_private": true,
+  "decision_2_0": {
+    "contains_repo": false,
+    "items": 0,
+    "private": true
+  },
+  "deleted": true,
+  "passed": true,
+  "readback": {
+    "items": [
+      "llm-semantic-router/dev2-release-staging"
+    ],
+    "private": true
+  },
+  "schema": "dev2-hub-collection-smoke/1",
+  "slug": "llm-semantic-router/dev2-release-staging-collection-smoke-6aba15184edba2b438d07251",
+  "utc": "2026-09-28T07:19:52.845233+00:00"
+}
