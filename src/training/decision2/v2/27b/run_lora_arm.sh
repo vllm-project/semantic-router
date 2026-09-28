@@ -14,6 +14,8 @@ BENCH=/data/decision20-20260926/runs
 IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
 MODEL=/source/$MODEL_SUBPATH
 STAGES=${STAGES:-admit,onestep,reload,full,readout}
+# Training-stage import path; amendment 3 appends the image FLA overlay (/opt/decision-fla).
+TRAIN_PYTHONPATH=${TRAIN_PYTHONPATH:-/pipeline:/code}
 
 [ -d "$CODE/v2/27b" ] || { echo "missing mirror $SHA" >&2; exit 2; }
 mkdir -p "$RUN/receipts"
@@ -54,13 +56,13 @@ CONTRACT_ARGS=(
 TRAIN_ARGS=(python3 -m training.model.train --model-path "$MODEL" "${CONTRACT_ARGS[@]}")
 RESUME_ARGS=(python3 -m training.model.train --source-path "$MODEL" "${CONTRACT_ARGS[@]}")
 exit_of() { python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['exit_code'])" "$1"; }
-launch() {  # name cap purpose out_dir -- argv...
+launch() {  # name cap purpose out_dir -- argv...  (PYPATH selects the import path)
   local name=$1 cap=$2 purpose=$3 out=$4
   shift 5
   mkdir -p "$out"
   python3 -m v2.27b.launch --name "d2-27b-$ARM-$name" --gpu "$GPU" --cap-hours "$cap" \
     --purpose "$ARM $purpose" --receipt "$RUN/receipts/$name.json" "${COMMON_MOUNTS[@]}" \
-    --mount "$out:/out:rw" --env PYTHONPATH=/pipeline:/code -- "$@"
+    --mount "$out:/out:rw" --env "PYTHONPATH=${PYPATH:-/pipeline:/code}" -- "$@"
 }
 
 if has admit; then
@@ -74,12 +76,16 @@ if has admit; then
     --partition cal=/datasrc/rights_clean_goemotions_v2/cal.jsonl --output /out/admission.json
   python3 -c "import json,sys; r=json.load(open('$RUN/admit/admission.json')); sys.exit(0 if r['all_admitted'] else 3)"
 fi
+if has tech24; then
+  PYPATH=$TRAIN_PYTHONPATH launch tech24 0.4 "24-update runtime technical probe" "$RUN/tech24" -- \
+    "${TRAIN_ARGS[@]}" --max-steps 24 --save-every 24 --output /out/run
+fi
 if has onestep; then
-  launch onestep 0.5 "one-step preflight" "$RUN/onestep" -- "${TRAIN_ARGS[@]}" \
+  PYPATH=$TRAIN_PYTHONPATH launch onestep 0.5 "one-step preflight" "$RUN/onestep" -- "${TRAIN_ARGS[@]}" \
     --max-steps 1 --save-every 1 --output /out/run
 fi
 if has reload; then
-  launch reload 0.5 "reload parity" "$RUN/onestep" -- python3 -m v2.27b.preflight_reload \
+  PYPATH=$TRAIN_PYTHONPATH launch reload 0.5 "reload parity" "$RUN/onestep" -- python3 -m v2.27b.preflight_reload \
     --run-dir /out/run --step 1 --source-path "$MODEL" --select /data/select.jsonl \
     --rows 32 --max-length 4096 --output /out/reload-parity.json
 fi
@@ -99,10 +105,10 @@ if has full; then
     [ "$attempt" -gt 1 ] && name=full-r$attempt
     latest=$(find "$RUN/full/$run" -maxdepth 1 -type d -name 'checkpoint-*' ! -name '*.pending' 2>/dev/null | sort | tail -1 || true)
     if [ -n "$latest" ]; then
-      launch "$name" 3.0 "exact resume from $(basename "$latest")" "$RUN/full" -- "${RESUME_ARGS[@]}" \
+      PYPATH=$TRAIN_PYTHONPATH launch "$name" 3.0 "exact resume from $(basename "$latest")" "$RUN/full" -- "${RESUME_ARGS[@]}" \
         --save-every 92 --resume "/out/$run/$(basename "$latest")" --output "/out/$run" || true
     else
-      launch "$name" 3.0 "full 458-update arm" "$RUN/full" -- "${TRAIN_ARGS[@]}" \
+      PYPATH=$TRAIN_PYTHONPATH launch "$name" 3.0 "full 458-update arm" "$RUN/full" -- "${TRAIN_ARGS[@]}" \
         --save-every 92 --output "/out/$run" || true
     fi
     [ -f "$RUN/full/$run/COMPLETE.json" ] && break
