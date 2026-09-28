@@ -141,6 +141,11 @@ Inspect actual per-signal timing in Preview's `metrics`. For retrieval, inspect
 the real chat trace's candidate counts, reranker identity, scores and latency.
 Measure cold startup, warm latency and memory on the intended hardware.
 
+The [98x routing paper](https://arxiv.org/abs/2603.12646) reports latency and
+memory for a different classifier and prompt-compression setup.
+[AMD installation](https://vllm-sr.ai/docs/installation/amd-rocm#compare-with-the-98x-paper-setup)
+compares its settings with this recipe.
+
 ## Limitations
 
 All-signals Preview is bounded by the 8K classifier deployments even though the

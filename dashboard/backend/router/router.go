@@ -74,7 +74,7 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	SetupMCP(mux, cfg, wf, openClawHandler)
 	registerMLPipelineRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
-	registerProxyRoutes(mux, cfg, authSvc, recipeStore)
+	registerProxyRoutes(mux, cfg, authSvc, setupResolver, recipeStore)
 
 	// Static frontend must be registered last.
 	mux.HandleFallback("/", handlers.StaticFileServer(cfg.StaticDir))

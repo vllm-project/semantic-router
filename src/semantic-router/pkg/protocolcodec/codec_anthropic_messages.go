@@ -3,7 +3,6 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -53,8 +52,9 @@ type anthropicRequestWire struct {
 }
 
 type anthropicMessageWire struct {
-	Role    string          `json:"role"`
-	Content json.RawMessage `json:"content"`
+	Role         string                     `json:"role"`
+	Content      json.RawMessage            `json:"content"`
+	OutputConfig *anthropicOutputConfigWire `json:"output_config,omitempty"`
 }
 
 type anthropicContentWire struct {
@@ -349,8 +349,8 @@ func decodeAnthropicSystem(raw json.RawMessage, request *llmprotocol.Request, po
 }
 
 func decodeAnthropicMessages(messages []anthropicMessageWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
-	for index, messageWire := range messages {
-		message, err := decodeAnthropicMessage(messageWire, index, policy)
+	for _, messageWire := range messages {
+		message, err := decodeAnthropicMessage(messageWire, policy)
 		if err != nil {
 			return err
 		}
@@ -454,10 +454,17 @@ func invalidAnthropicToolChoiceVariant(field string) error {
 	)
 }
 
-func decodeAnthropicMessage(wire anthropicMessageWire, messageIndex int, policy llmprotocol.Policy) ([]llmprotocol.Message, error) {
+func decodeAnthropicMessage(wire anthropicMessageWire, policy llmprotocol.Policy) ([]llmprotocol.Message, error) {
 	role, err := canonicalRole(wire.Role)
 	if err != nil || role != llmprotocol.RoleSystem && role != llmprotocol.RoleUser && role != llmprotocol.RoleAssistant {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_anthropic_role", "Anthropic message role must be system, user, or assistant", err)
+	}
+	effort := ""
+	if wire.OutputConfig != nil {
+		if role != llmprotocol.RoleSystem || wire.OutputConfig.Effort == "" || wire.OutputConfig.Format != nil {
+			return nil, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_message_output_config", "per-message output_config requires system role and effort only", nil)
+		}
+		effort = wire.OutputConfig.Effort
 	}
 	contents, err := decodeAnthropicRequestContent(wire.Content, policy)
 	if err != nil {
@@ -472,15 +479,24 @@ func decodeAnthropicMessage(wire anthropicMessageWire, messageIndex int, policy 
 		result = append(result, llmprotocol.Message{Role: role, Content: ordinary})
 		ordinary = nil
 	}
-	for blockIndex, content := range contents {
+	for _, content := range contents {
 		if content.Kind == llmprotocol.ContentToolResult {
 			flush()
-			result = append(result, llmprotocol.Message{ID: llmprotocol.StableID("anthropic-message", fmt.Sprint(messageIndex), fmt.Sprint(blockIndex)), Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{content}})
+			result = append(result, llmprotocol.Message{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{content}})
 			continue
 		}
 		ordinary = append(ordinary, content)
 	}
 	flush()
+	if effort != "" {
+		if len(result) == 0 {
+			result = append(result, llmprotocol.Message{Role: role})
+		}
+		result[0].ReasoningEffort = effort
+	}
+	if len(result) == 0 {
+		return nil, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "empty_message", "messages must contain at least one content block", nil)
+	}
 	return result, nil
 }
 
