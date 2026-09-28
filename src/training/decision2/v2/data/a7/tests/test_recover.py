@@ -153,6 +153,21 @@ class RecoverTest(unittest.TestCase):
                 ),
                 _noul(3, ["x", "y"], ["Yes", "No"], 0),
                 _noul(
+                    5,
+                    ["result_1", "result_0"],
+                    ["The action is valid.", "The action is not valid."],
+                    1,
+                ),
+                _noul(
+                    6,
+                    ["oak", "elm"],
+                    ["The action is valid.", "The action is not valid."],
+                    1,
+                    state=shared_state,
+                    group="auth-shared-2",
+                    instructions="Only members of team green are authorized.",
+                ),
+                _noul(
                     4,
                     ["false", "true"],
                     ["The action is not valid.", "The action is valid."],
@@ -167,7 +182,7 @@ class RecoverTest(unittest.TestCase):
                         "name": "stage1",
                         "path": str(root / "stage1.jsonl"),
                         "sha256": hashlib.sha256(data).hexdigest(),
-                        "rows": 4,
+                        "rows": 6,
                     }
                 ]
             }
@@ -194,11 +209,13 @@ class RecoverTest(unittest.TestCase):
                 part: sorted(r["audit_metadata"]["a7"]["original_id"] for r in rows)
                 for part, rows in parts.items()
             }
-            self.assertEqual(ids["aho"], ["n2"])
-            self.assertEqual(ids["train"] + ids["aho"], sorted(ids["train"] + ["n2"]))
-            self.assertNotIn("n4", ids["train"] + ids["aho"])
-            self.assertNotIn("n3", ids["train"] + ids["aho"])
-            recovered = parts["aho"][0]
+            self.assertEqual(ids["aho"], ["n2", "n6"])
+            self.assertEqual(ids["train"], ["n1", "n5"])
+            recovered = next(
+                r
+                for r in parts["aho"]
+                if r["audit_metadata"]["a7"]["original_id"] == "n2"
+            )
             self.assertEqual(recovered["audit_metadata"]["a7"]["sub_arm"], "A7r")
             self.assertEqual(
                 recovered["audit_metadata"]["a7"]["rule_7e"]["original_keys"],
