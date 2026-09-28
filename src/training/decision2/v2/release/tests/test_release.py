@@ -363,6 +363,15 @@ class CardTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             card.select_reports(entries, ROSTER)
 
+    def test_http_check_anchors_follow_hub_headings(self):
+        from v2.release.tests.hub_card_http_check import anchor
+
+        self.assertEqual(anchor("Download and decide"), "download-and-decide")
+        self.assertEqual(
+            anchor("Tradeoffs versus Decision 1.0 Eos"),
+            "tradeoffs-versus-decision-10-eos",
+        )
+
     def test_lint(self):
         self.assertTrue(card.lint("A Pareto frontier"))
         self.assertTrue(card.lint("ran on node A"))
