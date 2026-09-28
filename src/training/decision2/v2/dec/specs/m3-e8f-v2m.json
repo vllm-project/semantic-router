@@ -1,0 +1,43 @@
+{
+  "name": "m3-e8f-v2m-v1",
+  "seed": "dec-m3-e8f-v2m-v1",
+  "exclude_families": ["natural_cosmos_qa", "natural_squad2_answerability"],
+  "dedupe_original_hashes": true,
+  "components": [
+    {"name": "A0s", "files": ["pk1:m3/pk1/A0s/train.jsonl"]},
+    {"name": "A1", "files": ["v1:v2/arms/A1/train.jsonl"]},
+    {"name": "A2", "files": ["v1:v2/arms/A2/train.jsonl"]},
+    {"name": "A3", "files": ["v1:v2/arms/A3/train.jsonl"]},
+    {"name": "A4v2h", "files": ["v1:v2/arms/A4v2h/train.jsonl"]},
+    {"name": "A5", "files": ["v1:v2/arms/A5/train.jsonl"]},
+    {"name": "A6g", "files": ["v1:v2/arms/A6g/train.jsonl"]},
+    {"name": "A6h", "files": ["v1:v2/arms/A6h/train.jsonl"]},
+    {
+      "name": "A7",
+      "files": [
+        "a7:v2/a7/arms/A7g/train.jsonl",
+        "a7:v2/a7/arms/A7p/train.jsonl",
+        "a7:v2/a7/arms/A7m/train.jsonl",
+        "a7:v2/a7/arms/A7o/train.jsonl",
+        "a7:v2/a7/arms/A7i/train.jsonl",
+        "a7:v2/a7/arms/A7h/train.jsonl"
+      ]
+    },
+    {"name": "H5", "files": ["v2:m2/arms/H5/train.jsonl"],
+     "ids": {"file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl", "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f", "pool": "H5"}},
+    {"name": "H1", "files": ["v2:m2/arms/H1/train.jsonl"],
+     "ids": {"file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl", "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f", "pool": "H1"}},
+    {"name": "H6", "files": ["v2:m2/arms/H6/train.jsonl"],
+     "ids": {"file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl", "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f", "pool": "H6"}},
+    {"name": "H3", "files": ["v2:m2/arms/H3/train.jsonl"],
+     "ids": {"file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl", "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f", "pool": "H3"}},
+    {"name": "E11", "files": ["v2:m2/arms/E11/train.jsonl"],
+     "ids": {"file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl", "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f", "pool": "E11"}},
+    {"name": "G2", "files": ["v2:m2/arms/G2/train.jsonl"],
+     "ids": {"file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl", "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f", "pool": "G2"}},
+    {"name": "G6", "files": ["v2:m2/arms/G6/train.jsonl"],
+     "ids": {"file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl", "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f", "pool": "G6"}},
+    {"name": "G4h", "files": ["v2:m2/arms/G4h/train.jsonl"],
+     "ids": {"file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl", "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f", "pool": "G4h"}}
+  ]
+}
