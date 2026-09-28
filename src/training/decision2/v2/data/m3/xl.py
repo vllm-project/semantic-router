@@ -6,7 +6,9 @@
 ``pools.json`` maps pool names to ``{"rows": [...], "tokens": [...], "kind": "human" |
 "generated" | "anchor"}`` in dedup priority order (first pool wins an ``input_sha256``).
 Rows of the excluded shortcut families are dropped everywhere. Each recipe takes all anchor
-rows, then whole groups of each pool in ``sha256("mx-xl:<variant>:" + group)`` order up to the
+rows, then whole groups of each pool — groups holding a row with ``--prefer`` teacher targets
+(and, for the short variant and the controls, a row of XL-full) first, each part in
+``sha256("mx-xl:<variant>:<pool>:" + group)`` order — up to the
 pool's target tokens, under a cap of 8% of the recipe budget per human source and per
 generated (source, family); the short variant only takes groups whose rows are all within
 1,024 native tokens. Controls at the recipe's own token total: ``cx-xl-a7v1`` (anchor + A7 + v1
@@ -34,10 +36,10 @@ ENGLISH_CAP = 0.60
 SHORT_MAX_NATIVE = 1024
 FULL_BUDGET = 150_000_000
 TARGETS = {
-    "H1": 10.5,
+    "H1": 9.0,
     "A7m": 2.2,
     "A7h": 0.3,
-    "A7i": 7.9,
+    "A7i": 7.0,
     "V1:A1": 1.5,
     "V1:A5": 0.5,
     "A7g": 30.0,
@@ -47,16 +49,16 @@ TARGETS = {
     "G4h": 1.6,
     "V1:A2": 2.3,
     "V1:A4v2h": 0.8,
-    "H3": 14.0,
-    "H5": 14.0,
-    "E11": 6.0,
+    "H3": 11.0,
+    "H5": 17.5,
+    "E11": 4.5,
     "V1:A3": 2.0,
     "A7r": 1.1,
     "H6": 12.0,
     "G6": 6.0,
     "V1:A6g": 2.4,
     "V1:A6h": 1.4,
-    "A7q": 8.0,
+    "A7q": 10.0,
     "A7k": 0.6,
     "A7s": 2.2,
 }
@@ -167,7 +169,11 @@ def write(out: Path, name: str, rows: list[dict]) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def build(pools, variant: str, include: set[str] | None, budget: int) -> list[dict]:
+def build(
+    pools, variant: str, include: set[str] | None, budget: int, prefer: set[str]
+) -> list[dict]:
+    """Groups holding a preferred id (rows that already have teacher targets, or rows of the
+    full recipe) come first in each pool, each part in its own hash order."""
     short = variant == "short"
     anchor = [
         m
@@ -187,7 +193,10 @@ def build(pools, variant: str, include: set[str] | None, budget: int) -> list[di
     for pool in names:
         rows += take(
             pools[pool],
-            lambda g, v=variant, p=pool: sha(f"mx-xl:{v}:{p}:{g}"),
+            lambda g, v=variant, p=pool, groups=pools[pool]: (
+                not any(m["id"] in prefer for m in groups[g]),
+                sha(f"mx-xl:{v}:{p}:{g}"),
+            ),
             TARGETS[pool] * 1e6 * scale,
             used,
             SOURCE_CAP * budget,
@@ -201,6 +210,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pools", type=Path, required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--targets", action="append", default=[])
+    parser.add_argument(
+        "--prefer", default="lux1", help="teacher whose covered rows go first"
+    )
     args = parser.parse_args(argv)
     specs = json.loads(args.pools.read_text())
     pools, dropped = load(specs)
@@ -223,16 +235,25 @@ def main(argv: list[str] | None = None) -> int:
         "recipes": {},
     }
     v1 = {p for p in TARGETS if p.startswith("V1:")}
+    full_ids: set[str] = set()
     for variant in ("full", "short"):
         name = f"mx-xl-{variant}"
-        rows = build(pools, variant, None, FULL_BUDGET)
+        prefer = set(teachers.get(args.prefer, set()))
+        if variant == "short":
+            prefer |= full_ids
+        rows = build(pools, variant, None, FULL_BUDGET, prefer)
+        if variant == "full":
+            full_ids = {r["id"] for r in rows}
+            prefer |= full_ids
         total = sum(r["native"] for r in rows)
         recipes = {name: rows}
         for control, include in (
             ("cx-xl-a7v1", A7_POOLS | v1),
             ("cx-xl-v2v1", V2_POOLS | v1),
         ):
-            recipes[f"{control}-{variant}"] = build(pools, variant, include, total)
+            recipes[f"{control}-{variant}"] = build(
+                pools, variant, include, total, prefer
+            )
         for rname, rrows in recipes.items():
             s = summary(rrows)
             s["sha256"] = write(args.out_dir, rname, rrows)
