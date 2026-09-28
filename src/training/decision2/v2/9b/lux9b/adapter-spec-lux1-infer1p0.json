@@ -1,6 +1,6 @@
 {
   "name": "decision1-lux-shared-renderer",
-  "module": "v2.dec.infer_1p0",
+  "module": "v2.9b.lux9b.infer_lux1",
   "args": [
     "--package", "{model}",
     "--model-id", "{model_id}",
