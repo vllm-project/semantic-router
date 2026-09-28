@@ -111,56 +111,58 @@ providers:
           api_key_env: OPENROUTER_API_KEY
           weight: 1
 
+evaluation:
+  records:
+    - model: glm52-breadth-a
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.91
+    - model: glm52-breadth-b
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.91
+    - model: gpt55-verifier
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
+    - model: opus48-verifier
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.95
+    - model: gemini31-finalizer
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
 routing:
   modelCards:
     - name: glm52-breadth-a
       context_window_size: 1048576
       description: GLM 5.2 breadth sample for HLE hybrid exploration.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:breadth, base:glm52]
     - name: glm52-breadth-b
       context_window_size: 1048576
       description: GLM 5.2 alternate breadth sample for HLE hybrid exploration.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:breadth, base:glm52]
     - name: gpt55-verifier
       context_window_size: 1048576
       description: Closed verifier for HLE exact-answer and reasoning-risk checks.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.94
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:verifier, pool:closed]
     - name: opus48-verifier
       context_window_size: 1000000
       description: Closed verifier for long-horizon HLE reasoning disagreements.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.95
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:verifier, pool:closed]
     - name: gemini31-finalizer
       context_window_size: 1000000
       description: Closed finalizer for HLE hybrid synthesis.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.94
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:finalizer, pool:closed]
 

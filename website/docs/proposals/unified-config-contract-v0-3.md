@@ -16,12 +16,13 @@ deployment endpoints and credentials.
 
 ## Implemented contract
 
-The public configuration has seven top-level sections:
+The public configuration has eight top-level sections:
 
 ```yaml
 version:
 listeners:
 providers:
+evaluation:
 routing:
 entrypoints:
 recipes:
@@ -33,6 +34,7 @@ global:
 | `version` | Selects the configuration contract. |
 | `listeners` | Defines request-facing and management listeners. |
 | `providers` | Binds logical model names to provider identifiers and endpoints. |
+| `evaluation` | Optionally defines operator-owned benchmarks, index DAGs, and model-linked records. |
 | `routing` | Defines the default model cards, signals, projections, decisions, algorithms, and plugins. |
 | `entrypoints` | Maps request-facing model names to the default profile or a named recipe. |
 | `recipes` | Defines additional isolated routing profiles that share providers and global infrastructure. |
@@ -55,6 +57,11 @@ gateway integration rather than converted into a standalone Envoy data plane.
 `providers.models[].pricing` owns optional deployment cost metadata used by
 cost-aware selection and accounting. Pricing does not belong to routing model cards.
 
+`evaluation` owns optional operator benchmark definitions, index DAGs, and
+measurement records. Each `evaluation.records[].model` references one canonical
+Model Card identity, so reusable scoring semantics and model evidence have one
+top-level owner without being embedded in routing metadata.
+
 `routing.modelCards` describes routing-facing model identity. Optional
 `routing.modelCards[].loras` declare LoRA adapters that decisions may select with
 `lora_name`. Signals and decisions reference logical model names, not endpoints or
@@ -74,6 +81,13 @@ Model-free assets can carry the declaration with empty `modelRefs`; a concrete
 Entrypoint binding must satisfy it, and request-time eligibility filters must
 preserve it before selection or multi-model execution begins.
 
+A plugin's configuration surface stays generic even when the plugin only
+targets one provider wire format. `prompt_cache`, for example, is disabled by
+default and declares `on_unsupported: skip|reject` rather than assuming every
+route resolves to an Anthropic-shaped backend; a route with no eligible target
+either leaves the request unchanged or fails with a typed error, per that
+setting.
+
 Structured request controls remain facts at the signal boundary. For example,
 conversation signals expose whether the protocol requires or forbids tool
 execution, projections reconcile those facts with text-derived observations,
@@ -83,9 +97,9 @@ Top-level `entrypoints` select the default routing profile or a named item from
 top-level `recipes`; they are not nested inside `routing`.
 
 The DSL is an authoring view of routing semantics. It does not own provider
-credentials, listeners, stores, or global runtime services. Import and export must
-preserve the same canonical routing document rather than invent another steady-state
-schema.
+credentials, listeners, evaluation definitions or records, stores, or global
+runtime services. Import and export preserve the same canonical routing
+document rather than inventing another steady-state schema.
 
 Classifier backend failures enter decision evaluation as `Unknown`. `NOT` preserves
 that state, while `AND` and `OR` use CEL-style short-circuit semantics. A decision
@@ -116,6 +130,16 @@ exact external-catalog name. The category consumer currently accepts
 `http_classify` plus `label_distribution.v1`, preserving the full label-score
 distribution. Prompt guard remains on its existing configuration surface until
 its separately scoped migration.
+
+Complexity is the second consumer and keeps its runtime policy in
+`global.model_catalog.modules.complexity`, so a backend survives the per-recipe
+replacement of `routing.signals`. It accepts `http_classify` with either
+`score.v1`, a continuous score the signal converts into a verdict through
+per-rule boundaries, or `label_distribution.v1`, where the winning label is the
+verdict. A consumer that reads more than one contract cannot default the field:
+omitting it would leave the runtime guessing which response shape to expect,
+and guessing wrong surfaces per request rather than at config load. Consumers
+reading exactly one contract keep it as the default, so category is unchanged.
 Connector byte ceilings belong to the connector configuration. External LLM
 classifier entries and the MCP classifier module use `max_response_bytes`.
 The dashboard, Helm chart, and operator may help users author or transport config, but

@@ -62,11 +62,11 @@ func testLooperLatencyTokenHeaders(ctx context.Context, client *kubernetes.Clien
 	}
 
 	// The floor is a strict "> 0", not merely "parses as an integer": the
-	// decision's two model refs guarantee a real multi-call looper execution
-	// against the base-model simulator, so a genuine measurement can never be
-	// exactly zero. A ">= 0" floor would let a regression that always emits
-	// "0" (aggregation silently broken, or ExecuteWithLatency wired to the
-	// wrong response) pass this test vacuously.
+	// decision's two model refs exercise a real multi-call looper execution.
+	// The baseline mock explicitly delays each call by 5 ms so the measured
+	// duration cannot round down to zero milliseconds. A ">= 0" floor would
+	// let a regression that always emits "0" (aggregation silently broken, or
+	// ExecuteWithLatency wired to the wrong response) pass this test vacuously.
 	values, err := parsePositiveIntHeaders(response.Headers, opts.Verbose,
 		"x-vsr-looper-latency-ms",
 		"x-vsr-looper-prompt-tokens",

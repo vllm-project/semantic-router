@@ -177,3 +177,79 @@
   - open_weights
   - multimodal
   released_at: '2026-04-02'
+- id: google/gemma-3-27b-it
+  display_name: Gemma 3 27B IT
+  description: Largest Gemma 3 instruction-tuned checkpoint for multimodal and long-context use.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-3-27b-it
+    license: Gemma
+  family: gemma-3
+  parameter_size: 27B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/google/gemma-3-27b-it
+  tags:
+  - open_weights
+  - multimodal
+  - dense
+  released_at: '2025-03-12'
+- id: google/gemma-3-12b-it
+  display_name: Gemma 3 12B IT
+  description: Mid-size Gemma 3 instruction-tuned checkpoint for multimodal local serving.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-3-12b-it
+    license: Gemma
+  family: gemma-3
+  parameter_size: 12B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/google/gemma-3-12b-it
+  tags:
+  - open_weights
+  - multimodal
+  - dense
+  released_at: '2025-03-12'

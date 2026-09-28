@@ -11,7 +11,7 @@ func TestValidateEmbeddingRuleModalities_AcceptsTextOnlyRulesWithAnyModelType(t 
 		{Name: "topic_text_explicit", Candidates: []string{"world"}, QueryModality: QueryModalityText},
 	}
 	for _, modelType := range []string{"qwen3", "gemma", "multimodal", ""} {
-		if err := validateEmbeddingRuleModalities(rules, modelType); err != nil {
+		if err := validateEmbeddingRuleModalities(rules, modelType, false); err != nil {
 			t.Errorf("text-only rules should pass under model_type=%q, got: %v", modelType, err)
 		}
 	}
@@ -21,7 +21,7 @@ func TestValidateEmbeddingRuleModalities_RejectsImageRuleWithoutMultimodal(t *te
 	rules := []EmbeddingRule{
 		{Name: "chip_fab_imagery", Candidates: []string{"wafer"}, QueryModality: QueryModalityImage},
 	}
-	err := validateEmbeddingRuleModalities(rules, "qwen3")
+	err := validateEmbeddingRuleModalities(rules, "qwen3", false)
 	if err == nil {
 		t.Fatal("expected error for image rule paired with non-multimodal model_type, got nil")
 	}
@@ -37,23 +37,19 @@ func TestValidateEmbeddingRuleModalities_AcceptsImageRuleUnderMultimodal(t *test
 	rules := []EmbeddingRule{
 		{Name: "chip_fab_imagery", Candidates: []string{"wafer"}, QueryModality: QueryModalityImage},
 	}
-	if err := validateEmbeddingRuleModalities(rules, "multimodal"); err != nil {
+	if err := validateEmbeddingRuleModalities(rules, "multimodal", false); err != nil {
 		t.Errorf("image rule should pass under model_type=multimodal, got: %v", err)
 	}
 }
 
-func TestValidateEmbeddingRuleModalities_RejectsAudioWithComingLaterMessage(t *testing.T) {
-	rules := []EmbeddingRule{
-		{Name: "rig_walkie_talkie_audio", Candidates: []string{"radio call"}, QueryModality: QueryModalityAudio},
-	}
-	err := validateEmbeddingRuleModalities(rules, "multimodal")
-	if err == nil {
-		t.Fatal("expected error for audio rule (FFI not yet wired), got nil")
-	}
-	msg := err.Error()
-	for _, want := range []string{"rig_walkie_talkie_audio", "audio FFI", "planned"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("error should contain %q, got: %s", want, msg)
+func TestValidateEmbeddingRuleModalities_AudioRequiresCapableModel(t *testing.T) {
+	rules := []EmbeddingRule{{Name: "audio", Candidates: []string{"radio call"}, QueryModality: QueryModalityAudio}}
+	for _, tc := range []struct {
+		model        string
+		bound, valid bool
+	}{{"multimodal", false, true}, {"mmbert", false, false}, {"mmbert", true, true}} {
+		if err := validateEmbeddingRuleModalities(rules, tc.model, tc.bound); (err == nil) != tc.valid {
+			t.Fatalf("%+v: %v", tc, err)
 		}
 	}
 }
@@ -62,7 +58,7 @@ func TestValidateEmbeddingRuleModalities_RejectsUnknownModality(t *testing.T) {
 	rules := []EmbeddingRule{
 		{Name: "typo_rule", Candidates: []string{"x"}, QueryModality: QueryModality("imag")},
 	}
-	err := validateEmbeddingRuleModalities(rules, "multimodal")
+	err := validateEmbeddingRuleModalities(rules, "multimodal", false)
 	if err == nil {
 		t.Fatal("expected error for unknown query_modality, got nil")
 	}
@@ -80,7 +76,7 @@ func TestValidateEmbeddingRuleModalities_AggregatesAllProblems(t *testing.T) {
 		{Name: "audio_rule", Candidates: []string{"y"}, QueryModality: QueryModalityAudio},
 		{Name: "typo_rule", Candidates: []string{"z"}, QueryModality: QueryModality("vidoe")},
 	}
-	err := validateEmbeddingRuleModalities(rules, "qwen3")
+	err := validateEmbeddingRuleModalities(rules, "qwen3", false)
 	if err == nil {
 		t.Fatal("expected aggregated error, got nil")
 	}
@@ -96,7 +92,7 @@ func TestValidateEmbeddingRuleModalities_NormalizesCaseAndWhitespace(t *testing.
 	rules := []EmbeddingRule{
 		{Name: "image_uppercase", Candidates: []string{"x"}, QueryModality: QueryModality("  IMAGE  ")},
 	}
-	if err := validateEmbeddingRuleModalities(rules, "multimodal"); err != nil {
+	if err := validateEmbeddingRuleModalities(rules, "multimodal", false); err != nil {
 		t.Errorf("case-insensitive whitespace-trimmed image modality should pass, got: %v", err)
 	}
 }

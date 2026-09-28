@@ -125,6 +125,16 @@ config:
             modelRefs:
               - model: base-model
                 use_reasoning: false
+  evaluation:
+    records:
+      - model: premium-model
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.9
+      - model: economy-model
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.1
   routing:
     decisions:
       - name: quality_policy_decision
@@ -385,15 +395,7 @@ config:
     modelCards:
       - name: base-model
       - name: premium-model
-        evaluations:
-          - benchmark: vllm-sr/operator-rating@1.0.0
-            metrics:
-              score: 0.9
       - name: economy-model
-        evaluations:
-          - benchmark: vllm-sr/operator-rating@1.0.0
-            metrics:
-              score: 0.1
   global:
     model_catalog:
       kbs: []

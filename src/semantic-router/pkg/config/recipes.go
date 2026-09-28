@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 // RecipeName identifies an isolated routing namespace.
@@ -38,10 +40,14 @@ func (s RoutingStrategy) Validate() error {
 // a recipe. Shared provider bindings, model assets, and runtime services stay
 // on RouterConfig.
 type RoutingProfile struct {
-	Signals     Signals
-	Projections Projections
-	Decisions   []Decision
-	Strategy    RoutingStrategy
+	CandidateRequirements *CandidateRequirements
+	DataPolicy            *RoutingDataPolicy
+	ModelBindings         map[string]ModelBinding
+	Signals               Signals
+	Projections           Projections
+	Decisions             []Decision
+	Strategy              RoutingStrategy
+	Fallback              *fallback.FallbackPolicy
 }
 
 // RoutingRecipe gives an isolated routing profile a stable name and optional
@@ -151,10 +157,14 @@ func (c *RouterConfig) DefaultRecipe() *RoutingRecipe {
 	return &RoutingRecipe{
 		Name: DefaultRecipeName,
 		Profile: RoutingProfile{
-			Signals:     c.Signals,
-			Projections: c.Projections,
-			Decisions:   c.Decisions,
-			Strategy:    c.Strategy,
+			ModelBindings:         cloneModelMap(c.ModelBindings),
+			CandidateRequirements: c.CandidateRequirements.Clone(),
+			DataPolicy:            c.DataPolicy.Clone(),
+			Signals:               c.Signals,
+			Projections:           c.Projections,
+			Decisions:             c.Decisions,
+			Strategy:              c.Strategy,
+			Fallback:              c.Fallback.Clone(),
 		},
 	}
 }
@@ -272,12 +282,16 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 	scoped := *c
 	scoped.RoutingScope = recipe.Name
 	scoped.IntelligentRouting = IntelligentRouting{
-		Signals:         recipe.Profile.Signals,
-		Projections:     recipe.Profile.Projections,
-		Decisions:       recipe.Profile.Decisions,
-		Strategy:        recipe.Profile.Strategy,
-		ModelSelection:  c.ModelSelection,
-		ReasoningConfig: c.ReasoningConfig,
+		ModelBindings:         c.EffectiveModelBindings(recipe.Profile.Signals, recipe.Profile.ModelBindings),
+		CandidateRequirements: recipe.Profile.CandidateRequirements.Clone(),
+		DataPolicy:            recipe.Profile.DataPolicy.Clone(),
+		Signals:               recipe.Profile.Signals,
+		Projections:           recipe.Profile.Projections,
+		Decisions:             recipe.Profile.Decisions,
+		Strategy:              recipe.Profile.Strategy,
+		Fallback:              recipe.Profile.Fallback.Clone(),
+		ModelSelection:        c.ModelSelection,
+		ReasoningConfig:       c.ReasoningConfig,
 	}
 	scoped.KnowledgeBases = knowledgeBasesForRoutingProfile(c.KnowledgeBases, recipe.Profile)
 	// A scoped config represents exactly one routing profile. Keeping the full

@@ -38,7 +38,7 @@ func TestWriteJSONResponseReturnsErrorPayloadOnEncodeFailure(t *testing.T) {
 }
 
 func TestReadJSONRequestBodyRejectsOversizedPayload(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/classify/intent", strings.NewReader(`{"text":"too large"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/classify/intent", strings.NewReader(`{"text":"too large"}`))
 
 	_, err := readJSONRequestBody(req, 8)
 	if err == nil {
@@ -53,7 +53,7 @@ func TestReadJSONRequestBodyRejectsOversizedPayload(t *testing.T) {
 }
 
 func TestWriteJSONRequestErrorMapsOversizedPayloadTo413(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/classify/intent", strings.NewReader(`{"text":"too large"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/classify/intent", strings.NewReader(`{"text":"too large"}`))
 	_, err := readJSONRequestBody(req, 8)
 	if err == nil {
 		t.Fatal("expected oversized request body error")

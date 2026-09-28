@@ -6,8 +6,8 @@ import { normalizeModelLoras } from './configPageModelFormSupport'
 import {
   ModelBackendRefsEditor,
   ModelCapabilitiesEditor,
+  EvaluationRecordsEditor,
   ModelExternalIdsEditor,
-  ModelEvaluationsEditor,
   ModelLorasEditor,
   ModelPricingEditor,
   ModelTagsEditor,
@@ -89,9 +89,10 @@ describe('model structured editors', () => {
 
   it('renders benchmark and metric evidence as structured fields', () => {
     const markup = renderToStaticMarkup(
-      createElement(ModelEvaluationsEditor, {
+      createElement(EvaluationRecordsEditor, {
         value: [
           {
+            model: 'private-reasoner',
             benchmark: 'idavidrein/gpqa-diamond@1.0.0',
             benchmark_profile: 'published-standard',
             reasoning_effort: 'high',
@@ -102,6 +103,7 @@ describe('model structured editors', () => {
       }),
     )
 
+    expect(markup).toContain('private-reasoner')
     expect(markup).toContain('idavidrein/gpqa-diamond@1.0.0')
     expect(markup).toContain('published-standard')
     expect(markup).toContain('high')

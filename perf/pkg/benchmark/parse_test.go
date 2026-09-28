@@ -53,3 +53,65 @@ func TestParseBenchOutput(t *testing.T) {
 		t.Errorf("BenchmarkNoMem = %+v, want NsPerOp=1234 BytesPerOp=0", noMem)
 	}
 }
+
+func TestParseBenchOutputWithProgressBetweenNameAndResult(t *testing.T) {
+	// Captured shape from the cache benchmarks: Go prints the name before its
+	// calibration iterations, whose setup emits multiple progress messages.
+	input := `BenchmarkCacheSearch_1000Entries-4
+
+=== Benchmark Scenario ===
+Cache Size: 1000, Concurrency: 1, HNSW: true, Model: mmbert
+  Populated 1000/1000 entries
+Running 6759 requests with concurrency 1...
+    6759 457599 ns/op 90.13 hit_rate_% 0.08100 p95_ms 16288 qps 22665 B/op 80 allocs/op
+BenchmarkOrdinary-4 1 12 ns/op 0 B/op 0 allocs/op
+BenchmarkCacheSearch_Linear
+=== Benchmark Scenario ===
+Running 2886 requests with concurrency 1...
+    2886 1059609 ns/op 0.001000 embedding_p95_ms 0.1820 search_p95_ms 2868 B/op 14 allocs/op
+BenchmarkHeaderProgress-4 Populating cache...
+Running 7 requests with concurrency 1...
+    7 105 ns/op 128 B/op 3 allocs/op
+PASS
+ok package 1.2s
+`
+	parsed, err := ParseBenchOutput(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]BenchmarkMetric{
+		"BenchmarkCacheSearch_1000Entries": {NsPerOp: 457599, BytesPerOp: 22665, AllocsPerOp: 80},
+		"BenchmarkCacheSearch_Linear":      {NsPerOp: 1059609, BytesPerOp: 2868, AllocsPerOp: 14},
+		"BenchmarkOrdinary":                {NsPerOp: 12},
+		"BenchmarkHeaderProgress":          {NsPerOp: 105, BytesPerOp: 128, AllocsPerOp: 3},
+	}
+	if len(parsed.Benchmarks) != len(want) {
+		t.Fatalf("got %d measurements, want %d", len(parsed.Benchmarks), len(want))
+	}
+	for name, metric := range want {
+		if got := parsed.Benchmarks[name]; got != metric {
+			t.Errorf("%s: got %+v, want %+v", name, got, metric)
+		}
+	}
+}
+
+func TestParseBenchOutputRejectsIncompleteOrAmbiguousSplitResults(t *testing.T) {
+	for name, input := range map[string]string{
+		"missing result":       "BenchmarkA-4\nprogress\n",
+		"next benchmark":       "BenchmarkA-4\nBenchmarkB-4 1 12 ns/op\n",
+		"package boundary":     "BenchmarkA-4\nPASS\n1 12 ns/op\n",
+		"failure boundary":     "BenchmarkA-4\n--- FAIL: BenchmarkA\n1 12 ns/op\n",
+		"result without name":  "1 12 ns/op 0 B/op 0 allocs/op\n",
+		"duplicate result":     "BenchmarkA-4\n1 12 ns/op\n1 13 ns/op\n",
+		"duplicate benchmark":  "BenchmarkA-4\n1 12 ns/op\nBenchmarkA-4\n1 13 ns/op\n",
+		"zero iteration count": "BenchmarkA-4\n0 12 ns/op\n1 13 ns/op\n",
+		"inline zero count":    "BenchmarkA-4 0 12 ns/op\n",
+		"invalid inline count": "BenchmarkA-4 nope 12 ns/op\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := ParseBenchOutput(strings.NewReader(input)); err == nil {
+				t.Fatal("accepted incomplete or ambiguous benchmark output")
+			}
+		})
+	}
+}

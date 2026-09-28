@@ -55,7 +55,7 @@
 - id: independent/nova-pro-humanitys-last-exam@1.0.0
   model: amazon/nova-pro-v1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: default
   subject:
     source_model: Amazon Nova Pro
@@ -163,7 +163,7 @@
 - id: independent/nova-2-0-lite-reasoning-humanitys-last-exam@1.0.0
   model: amazon/nova-2-lite
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Nova 2.0 Lite (high)
@@ -271,7 +271,7 @@
 - id: independent/nova-2-0-lite-reasoning-low-humanitys-last-exam@1.0.0
   model: amazon/nova-2-lite
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Nova 2.0 Lite (low)
@@ -361,7 +361,7 @@
 - id: independent/nova-2-0-lite-reasoning-medium-humanitys-last-exam@1.0.0
   model: amazon/nova-2-lite
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Nova 2.0 Lite (medium)
@@ -451,7 +451,7 @@
 - id: independent/nova-2-0-lite-humanitys-last-exam@1.0.0
   model: amazon/nova-2-lite
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: Nova 2.0 Lite (Non-reasoning)
@@ -541,7 +541,7 @@
 - id: independent/nova-premier-humanitys-last-exam@1.0.0
   model: amazon/nova-premier-v1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Nova Premier

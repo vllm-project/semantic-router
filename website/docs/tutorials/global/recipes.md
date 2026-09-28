@@ -99,16 +99,16 @@ rest of the document:
 
 | Method and path | Purpose |
 | --- | --- |
-| `GET /config/router/recipes` | List recipes and their entrypoints; retain the response `ETag`. |
-| `POST /config/router/recipes/validate` | Validate a proposed recipe without writing or reloading. |
-| `PUT /config/router/recipes/{name}` | Create or replace a recipe and its entrypoints. |
-| `DELETE /config/router/recipes/{name}` | Delete an unreferenced named recipe. |
+| `GET /api/v1/config/recipes` | List recipes and their entrypoints; retain the response `ETag`. |
+| `POST /api/v1/config/recipes/validate` | Validate a proposed recipe without writing or reloading. |
+| `PUT /api/v1/config/recipes/{name}` | Create or replace a recipe and its entrypoints. |
+| `DELETE /api/v1/config/recipes/{name}` | Delete an unreferenced named recipe. |
 
 Mutations require the current `ETag` in `If-Match`. A missing precondition
 returns `428`; a stale value returns `412`. An accepted mutation validates the
 complete configuration, writes it atomically with a backup, triggers Router
 runtime activation, and returns a new `ETag`. Activation may continue after a
-`202` response; poll `/config/hash` before treating the new policy as active.
+`202` response; poll `/api/v1/config/hash` before treating the new policy as active.
 
 The `default` recipe cannot be deleted. Before deleting another recipe, remove
 or move every entrypoint that refers to it. See the

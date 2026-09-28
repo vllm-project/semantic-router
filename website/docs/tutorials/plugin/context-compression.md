@@ -2,84 +2,91 @@
 
 ## Overview
 
-`context_compression` is a route-local request plugin that reduces large
-tool/function outputs before the selected provider receives the request. It is
-separate from router signal compression: routing evaluates the original
-request, then this plugin performs the upstream body mutation.
-
-Compression is local, extractive, query-aware, and fail-open. It uses
-bounded BM25-style ranking, keeps leading and trailing context, and never
-changes system, user, or assistant text.
-
-## Key Advantages
-
-- Reduces provider input tokens on tool-heavy routes.
-- Keeps routing and safety signals on the original request.
-- Applies per decision instead of changing every request.
-- Fails open when the request cannot be parsed or rewritten.
-- Preserves valid JSON structure and non-text multimodal blocks.
-- Supports OpenAI tool/function messages and Anthropic `tool_result` blocks.
+Use `context_compression` on a decision when old conversation text or large tool
+outputs cost more tokens than the answer needs. It changes the conversation sent
+to the answer model; routing signals still evaluate the original request.
+Compression is lossy, so test representative questions before enabling it.
 
 ## What Problem Does It Solve?
 
-Agent and retrieval workloads often carry tool outputs that are much larger
-than the user question. Forwarding every low-relevance line increases latency
-and cost without improving the answer.
+Long histories and tool outputs can fill the model's context window with text
+that is less relevant to the current question.
 
 ## When to Use
 
-Use it on decisions dominated by large text tool outputs. Do not enable it on
-routes that require byte-identical tool payloads.
+Enable compression when shorter context is acceptable. Preserve content that
+must reach the model unchanged, and test answer quality with your own requests.
 
 ## Configuration
 
-Add the plugin under `routing.decisions[].plugins`:
+### Reduce large tool outputs
+
+Add this fragment to the decision's `plugins`. It reduces tool outputs above
+2,000 estimated tokens toward 1,000 tokens, keeping text relevant to the task:
 
 ```yaml
 plugins:
   - type: context_compression
     configuration:
       enabled: true
-      mode: auto
-      budget:
-        trigger_tokens: auto
-        target_tokens: auto
-        reserve_output_tokens: auto
       targets:
         tool_outputs:
           mode: extractive
           min_tokens: 2000
           target_tokens: 1000
-        history:
-          mode: preserve
-        rag:
-          mode: preserve
-        memory:
-          mode: preserve
-      scoring:
-        method: bm25
-      recovery:
-        enabled: false
-        ttl_seconds: 900
-        max_bytes_per_request: 10485760
-        max_total_bytes: 268435456
-        max_retrievals: 8
-      request_controls:
-        enabled: false
-        header: x-vsr-compression-control
-        allowed: [bypass, target]
-        max_target_tokens: 16000
-      failure_mode: fail_open
 ```
 
-`targets.tool_outputs.target_tokens` must be lower than `min_tokens`.
-`budget` applies to the complete selected-model request; tool-output targets
-retain their own per-item threshold and ceiling. `auto` derives the request
-budget from the selected model context window and requested output reserve.
+`target_tokens` must be lower than `min_tokens`. Omitted settings use the
+plugin's defaults: automatic request budgeting, BM25 relevance scoring, and
+`fail_open` if an ordinary tool-output rewrite cannot be completed safely.
+Use `mode: preserve` for content that must remain unchanged. History, RAG,
+memory, and current-user text are preserved unless their target is enabled.
 
-RAG and memory evidence are protected by typed provenance by default. Set the
-corresponding target mode to `extractive` only when the route explicitly
-accepts evidence compression.
+## Requests beyond the model context window
+
+Encoder input truncation only bounds the router's classification view. It does
+not shorten the conversation sent to the generation model. To accept oversized
+plain-text user messages, opt into the existing plugin on the affected decision:
+
+```yaml
+plugins:
+  - type: context_compression
+    configuration:
+      enabled: true
+      targets:
+        current_user:
+          mode: truncate
+        history:
+          mode: extractive
+          min_tokens: 2000
+          target_tokens: 1000
+        tool_outputs:
+          mode: preserve
+```
+
+`current_user.mode` defaults to `preserve`. With `truncate`, older history can
+be reduced first; the latest plain-text user message then keeps its beginning
+and end, separated by `[... context omitted by route compression ...]`.
+**The middle is omitted, not summarized.** Do not use this policy when every
+part of the user's message must reach the model.
+
+Configure accurate context and maximum-output limits for the candidate models.
+The budget reserves the requested output as well as chat and tool formatting.
+It uses a conservative UTF-8 byte estimate, so it can shorten a request even
+when that model's tokenizer counts fewer than 32K tokens. It is not an exact
+tokenizer count or a guarantee for arbitrary media or custom chat templates.
+`budget.reserve_output_tokens` can increase the reserve, but cannot reduce the
+actual requested output allowance.
+
+System/developer instructions, protected authorization and safety text, tool
+calls, schemas, media, citations, and JSON user payloads are not eligible for
+current-user truncation. Tool call/result IDs stay paired. Tool-result text
+changes only if its own target policy permits it; the example preserves it.
+
+The Router checks the prepared request before choosing a model and again before
+sending it to the backend. If protected content or the remaining conversation
+cannot fit, it returns HTTP 400 with `context_length_exceeded`. `fail_open`
+does not bypass that budget check, and no partially rewritten request is sent.
 
 ## Content handling
 
@@ -93,8 +100,8 @@ accepts evidence compression.
 - Large single-line, minified, CJK, emoji, and whitespace-free payloads use a
   conservative byte-aware token estimate.
 
-If a payload cannot be reduced safely within the configured budget, it is sent
-unchanged under `fail_open`, or the route fails under explicit `fail_closed`.
+For an ordinary rewrite failure, `fail_open` keeps the payload unchanged and
+`fail_closed` fails the route. Neither option bypasses model budget admission.
 
 History compression protects every system message, the live user turn, the
 latest assistant turn, and complete tool exchanges. Optional `recoverable`
@@ -115,17 +122,16 @@ Request controls are ignored unless the matched route enables them.
 The default header is `x-vsr-compression-control`. Caller-provided namespaces,
 recovery keys, and unbounded budgets are never accepted.
 
-`scoring.method` supports `bm25`, `embedding`, and `hybrid`. Embedding work is
-batched and held in a bounded memo cache; hybrid scoring falls back to BM25 when
-the configured embedding runtime is unavailable.
+`scoring.method` supports `bm25`, `embedding`, and `hybrid`. Hybrid scoring uses
+BM25 if its embedding service is unavailable.
 
 ## Management and preview
 
-- `GET /api/v1/context-compression/capabilities`
-- `GET /api/v1/context-compression/health`
-- `GET /api/v1/context-compression/stats`
-- `POST /api/v1/context-compression/preview`
-- `POST /api/v1/context-compression/recovery/invalidate`
+- `GET /api/v1/plugins/context_compression/capabilities`
+- `GET /api/v1/plugins/context_compression/health`
+- `GET /api/v1/observability/plugins/context_compression/stats`
+- `POST /api/v1/plugins/context_compression/preview`
+- `POST /api/v1/storage/context-recovery/invalidate`
 
 Preview returns only plans, target indexes, token counts, scores, warnings, and
 skip reasons. It never returns source or omitted content and requires
@@ -133,24 +139,19 @@ skip reasons. It never returns source or omitted content and requires
 `compression.manage`; it accepts trusted recipe, decision, user, and request
 coordinates and never returns the derived scope or recovery keys.
 
-## Runtime Order
+## Verify the result
 
-The response cache checks an immutable canonical request first. On a miss, RAG
-and memory may enrich a separate provider-bound working body, then
-`context_compression` runs before provider request translation and provider
-prompt-cache marker injection. The final Envoy body mutation always uses that
-working body, including auto, specified-model, Response API, Anthropic, streamed
-request, and Looper paths.
+Use the plugin preview to inspect the plan, then send a real request through
+the affected decision. Check that the answer still uses the facts your task
+requires. Preview alone does not test backend generation.
 
-Compression diagnostics are recorded in metrics and Router Replay: selected
-model, strategy, request/item budget, token-counter source, trigger reason,
-tokens before/after/saved, content format, compressed message count, omitted
-chunk count, recovery count, and fail-open or skip reason. Raw omitted content
-and recovery keys are not recorded.
+Metrics and Router Replay report whether compression ran, its strategy and
+counting source, before/after counts, and omissions. These counts describe
+compression estimates; they are not measured billing-token savings. Raw omitted
+content and recovery keys are not included in those diagnostics.
 
-See a complete example:
-[`config/fragments/plugin/context-compression/tool-output.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/context-compression/tool-output.yaml).
-Compression changes provider-bound context and can remove details needed for a
-correct answer. Keep fail-open behavior until the route has task-specific
-quality tests; enable recoverable mode only with an authenticated shared store
-and trusted user identity.
+For all available options, see the
+[configuration reference](../../api/configuration-schema.mdx) and the
+[complete tool-output example](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/context-compression/tool-output.yaml).
+Enable recoverable mode only with an authenticated shared store and trusted
+user identity.

@@ -14,13 +14,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// StorageIntegration: redis
 func TestRedisExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T) {
-	if os.Getenv("SKIP_REDIS_TESTS") == "true" {
-		t.Skip("Redis integration tests disabled")
-	}
+	storagetest.Require(t, "redis")
 	host := os.Getenv("REDIS_HOST")
 	if host == "" {
 		host = "localhost"
@@ -38,7 +38,7 @@ func TestRedisExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
-		t.Skipf("Redis unavailable: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis unavailable: %v", err))
 	}
 	cache := &RedisCache{
 		client:     client,
@@ -68,10 +68,9 @@ func TestRedisExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T) 
 	assert.False(t, miss.Found)
 }
 
+// StorageIntegration: redis
 func TestRedisExactCacheIntegration_MaxAge(t *testing.T) {
-	if os.Getenv("SKIP_REDIS_TESTS") == "true" {
-		t.Skip("Redis integration tests disabled")
-	}
+	storagetest.Require(t, "redis")
 	host := os.Getenv("REDIS_HOST")
 	if host == "" {
 		host = "localhost"
@@ -89,7 +88,7 @@ func TestRedisExactCacheIntegration_MaxAge(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
-		t.Skipf("Redis unavailable: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis unavailable: %v", err))
 	}
 	backend := &RedisCache{
 		client:     client,
@@ -143,10 +142,9 @@ func TestRedisExactCacheIntegration_MaxAge(t *testing.T) {
 	assert.Equal(t, HitKindMiss, staleResult.HitKind)
 }
 
+// StorageIntegration: redis
 func TestRedisExactCacheIntegration_LegacyStringOverwrite(t *testing.T) {
-	if os.Getenv("SKIP_REDIS_TESTS") == "true" {
-		t.Skip("Redis integration tests disabled")
-	}
+	storagetest.Require(t, "redis")
 	host := os.Getenv("REDIS_HOST")
 	if host == "" {
 		host = "localhost"
@@ -164,7 +162,7 @@ func TestRedisExactCacheIntegration_LegacyStringOverwrite(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
-		t.Skipf("Redis unavailable: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis unavailable: %v", err))
 	}
 	cache := &RedisCache{
 		client:     client,

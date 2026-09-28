@@ -57,7 +57,8 @@ func validCatalogReasoningBindingContract(
 		return true
 	}
 	if model.ReasoningFamily == "" {
-		return len(binding.ReasoningModes) == 0 && len(binding.ReasoningEfforts) == 0
+		return len(binding.ReasoningModes) == 0 && len(binding.ReasoningEfforts) == 0 &&
+			len(binding.ReasoningEffortsByProtocol) == 0
 	}
 	family, exists := reasoning[model.ReasoningFamily]
 	if !exists {
@@ -79,9 +80,18 @@ func validCatalogReasoningBindingContract(
 			!catalogContains(binding.ReasoningModes, family.DefaultMode)) {
 		return false
 	}
-	return len(binding.ReasoningEfforts) == 0 ||
-		(catalogStringSubset(binding.ReasoningEfforts, family.Levels) &&
-			(family.Default == "" || catalogContains(binding.ReasoningEfforts, family.Default)))
+	if len(binding.ReasoningEfforts) > 0 &&
+		(!catalogStringSubset(binding.ReasoningEfforts, family.Levels) ||
+			(family.Default != "" && !catalogContains(binding.ReasoningEfforts, family.Default))) {
+		return false
+	}
+	for _, efforts := range binding.ReasoningEffortsByProtocol {
+		if !catalogStringSubset(efforts, family.Levels) ||
+			(family.Default != "" && !catalogContains(efforts, family.Default)) {
+			return false
+		}
+	}
+	return true
 }
 
 func catalogStringSubset(values, allowed []string) bool {
@@ -100,10 +110,27 @@ func validCatalogReasoningBindingValues(binding modelcatalog.CatalogModelBinding
 	) {
 		return false
 	}
-	return len(binding.ReasoningEfforts) == 0 || validCatalogStringSet(
+	if len(binding.ReasoningEfforts) > 0 && !validCatalogStringSet(
 		binding.ReasoningEfforts,
 		func(value string) bool { return strings.TrimSpace(value) != "" },
-	)
+	) {
+		return false
+	}
+	if binding.ReasoningEffortsByProtocol == nil {
+		return true
+	}
+	if len(binding.ReasoningEffortsByProtocol) == 0 || len(binding.ReasoningEfforts) == 0 {
+		return false
+	}
+	for protocol, efforts := range binding.ReasoningEffortsByProtocol {
+		if !catalogContains(binding.Protocols, protocol) || len(efforts) == 0 ||
+			!validCatalogStringSet(efforts, func(value string) bool {
+				return strings.TrimSpace(value) != "" && catalogContains(binding.ReasoningEfforts, value)
+			}) {
+			return false
+		}
+	}
+	return true
 }
 
 func validCatalogStringSet(values []string, allowed func(string) bool) bool {

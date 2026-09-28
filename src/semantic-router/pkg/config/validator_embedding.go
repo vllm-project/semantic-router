@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"strings"
 )
@@ -34,7 +35,8 @@ func validateEmbeddingSignalContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	return validateEmbeddingRuleModalities(cfg.EmbeddingRules, cfg.EmbeddingModels.EmbeddingConfig.ModelType)
+	bound := cfg.ModelBindings["embedding"].Deployment != "" || cfg.GlobalModelBindings["embedding"].Deployment != ""
+	return validateEmbeddingRuleModalities(cfg.EmbeddingRules, cfg.EmbeddingModels.EmbeddingConfig.ModelType, bound)
 }
 
 func validateRemoteEmbeddingProviderConfig(models EmbeddingModels) error {
@@ -139,36 +141,49 @@ func ValidateEmbeddingContracts(cfg *RouterConfig) error {
 // model. Returns a non-nil error listing every misconfigured rule, or nil
 // when all rules pass.
 //
-// Rules:
-//   - unset or "text": always allowed.
-//   - "image": requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal.
-//     Rejected otherwise so the candidates and queries cannot end up embedded
-//     in mismatched spaces.
-//   - "audio": rejected at config-load with a clear "planned" message. The
-//     schema accepts the value so future configs do not need to migrate, but
-//     the audio FFI is not yet exposed by candle-binding, so any rule
-//     declaring audio cannot be served and is loud-failed early.
-//   - any other value: rejected as an unknown modality so a typo like "imag"
-//     cannot silently drop a rule out of every classification path.
-func validateEmbeddingRuleModalities(rules []EmbeddingRule, modelType string) error {
+// Media queries require a multimodal default or an explicit binding. Prepared
+// capability validation verifies that binding's actual encoders before startup.
+func validateEmbeddingRuleModalities(rules []EmbeddingRule, modelType string, explicitBinding bool) error {
 	normalizedModelType := strings.ToLower(strings.TrimSpace(modelType))
 	var problems []string
 	for _, rule := range rules {
+		if rule.HasImageCandidates() && normalizedModelType != "multimodal" && !explicitBinding {
+			problems = append(problems, fmt.Sprintf("embedding rule %q image candidates require model_type=multimodal or an explicit embedding binding with image capability", rule.Name))
+		}
+		// Every score needs a positive bank; negative-only or empty rules cannot match.
+		if len(rule.Candidates)+len(rule.ImageCandidates) == 0 {
+			problems = append(problems, fmt.Sprintf("embedding rule %q requires positive candidates or image_candidates", rule.Name))
+		}
+		switch rule.AggregationMethodConfiged {
+		case "", AggregationMethodMax, AggregationMethodMean, AggregationMethodAny:
+		default:
+			problems = append(problems, fmt.Sprintf("embedding rule %q aggregation_method must be max, mean, or any", rule.Name))
+		}
+		bound := float32(1)
+		if rule.HasNegativeCandidates() {
+			bound = 2
+		}
+		if math.IsNaN(float64(rule.SimilarityThreshold)) || math.IsInf(float64(rule.SimilarityThreshold), 0) || rule.SimilarityThreshold < -bound || rule.SimilarityThreshold > bound {
+			problems = append(problems, fmt.Sprintf("embedding rule %q threshold must be finite and within [%g, %g]", rule.Name, -bound, bound))
+		}
+		for _, values := range [][]string{rule.Candidates, rule.ImageCandidates, rule.NegativeCandidates, rule.NegativeImageCandidates} {
+			for _, value := range values {
+				if strings.TrimSpace(value) == "" {
+					problems = append(problems, fmt.Sprintf("embedding rule %q has an empty candidate", rule.Name))
+				}
+			}
+		}
 		raw := QueryModality(strings.ToLower(strings.TrimSpace(string(rule.QueryModality))))
 		switch raw {
 		case "", QueryModalityText:
 			// Text is always allowed; preserves existing behavior for rules
 			// that omit query_modality entirely.
-		case QueryModalityImage:
-			if normalizedModelType != "multimodal" {
+		case QueryModalityImage, QueryModalityAudio:
+			if normalizedModelType != "multimodal" && !explicitBinding {
 				problems = append(problems, fmt.Sprintf(
-					"embedding rule %q declares query_modality=image, which requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=%q)",
-					rule.Name, modelType))
+					"embedding rule %q declares query_modality=%s, which requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal or an explicit embedding binding with that capability. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=%q)",
+					rule.Name, raw, modelType))
 			}
-		case QueryModalityAudio:
-			problems = append(problems, fmt.Sprintf(
-				"embedding rule %q declares query_modality=audio, but the audio FFI is not yet exposed by candle-binding. Audio query support is planned; remove the rule or set query_modality to text/image until the FFI lands",
-				rule.Name))
 		default:
 			problems = append(problems, fmt.Sprintf(
 				"embedding rule %q declares unknown query_modality=%q (allowed values: text, image, audio)",

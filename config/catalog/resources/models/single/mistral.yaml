@@ -123,3 +123,44 @@
   - moe
   - frontier
   released_at: '2025-12-02'
+- id: mistral/mistral-small-3.2-24b-instruct
+  display_name: Mistral Small 3.2 24B Instruct
+  description: Compact multimodal Mistral instruction checkpoint for local and edge deployment.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506
+    license: Apache-2.0
+  family: mistral-small-3
+  parameter_size: 24B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506
+  tags:
+  - open_weights
+  - multimodal
+  - dense
+  - efficient
+  released_at: '2025-06-19'

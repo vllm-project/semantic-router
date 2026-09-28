@@ -7,6 +7,9 @@ func (c *RAGPluginConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
+	if err := c.validateReranker(); err != nil {
+		return err
+	}
 	if c.Backend == "" {
 		return fmt.Errorf("RAG backend is required when enabled")
 	}

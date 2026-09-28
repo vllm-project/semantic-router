@@ -3,22 +3,8 @@ package catalog
 func cloneEffectiveCard(value EffectiveModelCard) EffectiveModelCard {
 	value.Card = cloneModel(value.Card)
 	value.LoRAs = append([]LoRAAdapter(nil), value.LoRAs...)
-	value.Evaluations = cloneUserEvaluations(value.Evaluations)
 	value.Provenance = cloneMap(value.Provenance)
 	return value
-}
-
-func cloneUserEvaluations(values []UserEvaluation) []UserEvaluation {
-	if len(values) == 0 {
-		return nil
-	}
-	result := make([]UserEvaluation, len(values))
-	for index, value := range values {
-		result[index] = value
-		result[index].Metrics = cloneMap(value.Metrics)
-		result[index].Metadata = cloneMap(value.Metadata)
-	}
-	return result
 }
 
 func (registry *EffectiveRegistry) Defaults() Defaults { return registry.defaults }

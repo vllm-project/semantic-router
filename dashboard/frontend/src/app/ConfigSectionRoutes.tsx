@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import type { KnowledgeBaseView } from '../pages/TaxonomyPage'
 import AppShellLayout from './AppShellLayout'
@@ -7,11 +7,9 @@ import RecoverableLazyRoute from './RecoverableLazyRoute'
 import { loadConfigPage, loadTaxonomyPage } from './routeLoaders'
 import { useAuth } from '../contexts/AuthContext'
 import { canAccessDashboardPath } from '../utils/accessControl'
+import { normalizeConfigSection } from '../components/LayoutNavSupport'
 
-export const ConfigSectionRoute: React.FC<{
-  configSection: ConfigSection
-  setConfigSection: (section: ConfigSection) => void
-}> = ({ configSection, setConfigSection }) => {
+export const ConfigSectionRoute: React.FC = () => {
   const { user } = useAuth()
   const { section } = useParams<{ section: string }>()
   const normalized = section?.toLowerCase() ?? ''
@@ -21,36 +19,6 @@ export const ConfigSectionRoute: React.FC<{
     normalized === 'knowledge-bases' ||
     normalized === 'kbs'
 
-  useEffect(() => {
-    if (!section) {
-      if (configSection !== 'global-config') {
-        setConfigSection('global-config')
-      }
-      return
-    }
-
-    const sectionMap: Record<string, ConfigSection> = {
-      global: 'global-config',
-      'global-config': 'global-config',
-      'router-config': 'global-config',
-      signals: 'signals',
-      projections: 'projections',
-      routes: 'decisions',
-      decisions: 'decisions',
-      endpoints: 'models',
-      models: 'models',
-      entrypoints: 'entrypoints-recipes',
-      recipes: 'entrypoints-recipes',
-      'entrypoints-recipes': 'entrypoints-recipes',
-      mcp: 'mcp',
-    }
-
-    const mapped = sectionMap[normalized]
-    if (mapped && mapped !== configSection) {
-      setConfigSection(mapped)
-    }
-  }, [section, normalized, configSection, setConfigSection])
-
   if (redirectToKnowledgeBases) {
     return <Navigate to="/knowledge-bases/bases" replace />
   }
@@ -59,21 +27,28 @@ export const ConfigSectionRoute: React.FC<{
     return <Navigate to="/dashboard" replace />
   }
 
+  const activeSection: ConfigSection | undefined = section
+    ? normalizeConfigSection(normalized)
+    : 'global-config'
+  if (!activeSection) {
+    return <Navigate to="/config/global-config" replace />
+  }
+  if (!section || normalized !== activeSection) {
+    return <Navigate to={`/config/${activeSection}`} replace />
+  }
+
   return (
-    <AppShellLayout configSection={configSection} setConfigSection={setConfigSection}>
+    <AppShellLayout>
       <RecoverableLazyRoute
         loader={loadConfigPage}
         routeLabel="Configuration"
-        componentProps={{ activeSection: configSection }}
+        componentProps={{ activeSection }}
       />
     </AppShellLayout>
   )
 }
 
-export const KnowledgeBaseRoute: React.FC<{
-  configSection: ConfigSection
-  setConfigSection: (section: ConfigSection) => void
-}> = ({ configSection, setConfigSection }) => {
+export const KnowledgeBaseRoute: React.FC = () => {
   const { user } = useAuth()
   const { view } = useParams<{ view: string }>()
   const normalized = (view?.toLowerCase() ?? 'bases') as KnowledgeBaseView
@@ -90,7 +65,7 @@ export const KnowledgeBaseRoute: React.FC<{
   }
 
   return (
-    <AppShellLayout configSection={configSection} setConfigSection={setConfigSection}>
+    <AppShellLayout>
       <RecoverableLazyRoute
         loader={loadTaxonomyPage}
         routeLabel="Knowledge bases"

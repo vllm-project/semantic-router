@@ -74,7 +74,8 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 }
 
 func semanticCacheWriteAllowed(ctx *RequestContext) bool {
-	return ctx != nil && (ctx.CacheSemanticSafe || ctx.CacheExactFingerprint == "")
+	return ctx != nil && semanticLookupEnabledForRequest(ctx) &&
+		(ctx.CacheSemanticSafe || ctx.CacheExactFingerprint == "")
 }
 
 // cacheWriteContext detaches a completed cache fill from client cancellation

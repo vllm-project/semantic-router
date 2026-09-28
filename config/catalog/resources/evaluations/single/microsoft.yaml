@@ -381,7 +381,7 @@
 - id: microsoft/mai-thinking-1-report-livecodebench-v6@1.0.0
   model: microsoft/mai-thinking-1
   benchmark: livecodebench/livecodebench@6.0.0
-  benchmark_profile: code-generation-pass-at-1
+  benchmark_profile: published-code-generation
   reasoning_effort: unspecified
   subject:
     variant: MAI-Thinking-1

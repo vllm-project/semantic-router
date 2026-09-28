@@ -17,7 +17,7 @@ import (
 func TestHandleRouterReplayAPIListTrimsQueryAndReturnsRecords(t *testing.T) {
 	router, recordID := newReplayAPITestRouter(t)
 
-	body := mustReplayListBody(t, router, "/v1/router_replay?limit=10")
+	body := mustReplayListBody(t, router, "/api/v1/observability/replays?limit=10")
 	assertReplayPage(t, body, 1, 1, 10, 0)
 
 	record := mustSingleReplayRecord(t, body)
@@ -63,7 +63,7 @@ func TestHandleRouterReplayAPIListDoesNotDuplicateSharedStorageRecords(t *testin
 		},
 	}
 
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=10")
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?limit=10")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate replay list response")
 	}
@@ -77,7 +77,7 @@ func TestHandleRouterReplayAPIListDoesNotDuplicateSharedStorageRecords(t *testin
 func TestHandleRouterReplayAPIListDefaultsToBoundedPage(t *testing.T) {
 	router := newReplayAPITestRouterWithRecords(t, 25, "")
 
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay")
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate replay list response")
 	}
@@ -111,7 +111,7 @@ func TestHandleRouterReplayAPIListDefaultsToBoundedPage(t *testing.T) {
 func TestHandleRouterReplayAPIListRespectsOffset(t *testing.T) {
 	router := newReplayAPITestRouterWithRecords(t, 6, "")
 
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=2&offset=2")
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?limit=2&offset=2")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate replay list response")
 	}
@@ -150,7 +150,7 @@ func TestHandleRouterReplayAPIListFiltersBySessionID(t *testing.T) {
 		},
 	}
 
-	body := mustReplayListBody(t, router, "/v1/router_replay?session_id=sess-alpha&limit=10")
+	body := mustReplayListBody(t, router, "/api/v1/observability/replays?session_id=sess-alpha&limit=10")
 	assertReplayPage(t, body, 2, 2, 10, 0)
 	data := mustReplayData(t, body["data"])
 	for _, row := range data {
@@ -163,7 +163,7 @@ func TestHandleRouterReplayAPIListFiltersBySessionID(t *testing.T) {
 func TestHandleRouterReplayAPIListRejectsInvalidQuery(t *testing.T) {
 	router, _ := newReplayAPITestRouter(t)
 
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=abc")
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?limit=abc")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate error response")
 	}
@@ -185,7 +185,7 @@ func TestHandleRouterReplayAPIListSummarySkipsLargeBodies(t *testing.T) {
 	oversizedBody := strings.Repeat("x", 5*1024*1024)
 	router := newReplayAPITestRouterWithRecords(t, 1, oversizedBody)
 
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=1")
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?limit=1")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate replay list response")
 	}
@@ -204,7 +204,7 @@ func TestHandleRouterReplayAPIListShowDetailsTrueReturnsFullBodies(t *testing.T)
 	oversizedBody := strings.Repeat("x", 1024)
 	router := newReplayAPITestRouterWithRecords(t, 1, oversizedBody)
 
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=1&showDetails=true")
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?limit=1&showDetails=true")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate replay list response")
 	}
@@ -222,7 +222,7 @@ func TestHandleRouterReplayAPIListShowDetailsTrueReturnsFullBodies(t *testing.T)
 func TestHandleRouterReplayAPIListRejectsInvalidShowDetails(t *testing.T) {
 	router, _ := newReplayAPITestRouter(t)
 
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=10&showDetails=maybe")
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?limit=10&showDetails=maybe")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate error response")
 	}
@@ -243,7 +243,7 @@ func TestHandleRouterReplayAPIListReturnsPayloadTooLargeWhenShowDetailsTrue(t *t
 	oversizedBody := strings.Repeat("x", 5*1024*1024)
 	router := newReplayAPITestRouterWithRecords(t, 1, oversizedBody)
 
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=1&showDetails=true")
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?limit=1&showDetails=true")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate error response")
 	}
@@ -273,11 +273,11 @@ func TestHandleRouterReplayAPIReturnsErrorsForInvalidRequests(t *testing.T) {
 	}{
 		{
 			name: "method not allowed on list",
-			resp: router.handleRouterReplayAPI("POST", "/v1/router_replay"),
+			resp: router.handleRouterReplayAPI("POST", "/api/v1/observability/replays"),
 		},
 		{
 			name: "missing replay record returns 404",
-			resp: router.handleRouterReplayAPI("GET", "/v1/router_replay/missing"),
+			resp: router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/missing"),
 		},
 	}
 
@@ -376,7 +376,7 @@ func mustReplayListBody(t *testing.T, router *OpenAIRouter, path string) map[str
 
 func mustReplayLookupBody(t *testing.T, router *OpenAIRouter, recordID string) map[string]interface{} {
 	t.Helper()
-	return mustReplayResponseBody(t, router.handleRouterReplayAPI("GET", "/v1/router_replay/"+recordID), "expected immediate replay lookup response")
+	return mustReplayResponseBody(t, router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/"+recordID), "expected immediate replay lookup response")
 }
 
 func mustReplayResponseBody(

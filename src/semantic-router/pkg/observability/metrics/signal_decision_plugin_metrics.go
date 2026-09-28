@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"math"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
@@ -62,11 +64,20 @@ var (
 		[]string{"decision_name"},
 	)
 
+	// DecisionUnknownTotal tracks decisions resolved by an on_unknown policy
+	DecisionUnknownTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_decision_unknown_total",
+			Help: "Total number of decisions resolved by an on_unknown policy, by decision name and policy",
+		},
+		[]string{"decision", "policy"},
+	)
+
 	// DecisionConfidence tracks the distribution of decision confidence scores
 	DecisionConfidence = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "llm_decision_confidence",
-			Help:    "Distribution of decision confidence scores by decision name",
+			Help:    "Distribution of explicitly scored, finite decision confidence values by decision name; unscored matches are excluded",
 			Buckets: []float64{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 		},
 		[]string{"decision_name"},
@@ -130,13 +141,27 @@ func RecordDecisionEvaluation(latencySeconds float64) {
 	DecisionEvaluationLatency.Observe(latencySeconds)
 }
 
-// RecordDecisionMatch records a decision match event with confidence
-func RecordDecisionMatch(decisionName string, confidence float64) {
+// RecordDecisionMatch counts every match, but only observes reported confidence.
+// A scored zero is valid; structural constants from unscored rules are not scores.
+func RecordDecisionMatch(decisionName string, confidence float64, confidenceScored bool) {
 	if decisionName == "" {
 		decisionName = consts.UnknownLabel
 	}
 	DecisionMatchTotal.WithLabelValues(decisionName).Inc()
-	DecisionConfidence.WithLabelValues(decisionName).Observe(confidence)
+	if confidenceScored && !math.IsNaN(confidence) && !math.IsInf(confidence, 0) {
+		DecisionConfidence.WithLabelValues(decisionName).Observe(confidence)
+	}
+}
+
+// RecordDecisionUnknown records a decision resolved by its on_unknown policy
+func RecordDecisionUnknown(decisionName, policy string) {
+	if decisionName == "" {
+		decisionName = consts.UnknownLabel
+	}
+	if policy == "" {
+		policy = consts.UnknownLabel
+	}
+	DecisionUnknownTotal.WithLabelValues(decisionName, policy).Inc()
 }
 
 // RecordPluginExecution records a plugin execution event

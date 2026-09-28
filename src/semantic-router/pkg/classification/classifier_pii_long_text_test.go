@@ -1,12 +1,13 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // truncatingPIIInference stands in for the real classifier: it scores only the
@@ -18,7 +19,7 @@ type truncatingPIIInference struct {
 	seen        []string
 }
 
-func (t *truncatingPIIInference) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
+func (t *truncatingPIIInference) ClassifyTokens(_ context.Context, text string) (tasks.TokenClassificationResult, error) {
 	t.seen = append(t.seen, text)
 
 	runes := []rune(text)
@@ -27,14 +28,14 @@ func (t *truncatingPIIInference) ClassifyTokens(text string) (candle_binding.Tok
 	}
 	scored := string(runes)
 
-	var entities []candle_binding.TokenEntity
+	var entities []tasks.TokenEntity
 	for from := 0; ; {
 		index := strings.Index(scored[from:], t.entityText)
 		if index < 0 {
 			break
 		}
 		start := from + index
-		entities = append(entities, candle_binding.TokenEntity{
+		entities = append(entities, tasks.TokenEntity{
 			EntityType: "EMAIL",
 			Text:       t.entityText,
 			Start:      start,
@@ -43,7 +44,8 @@ func (t *truncatingPIIInference) ClassifyTokens(text string) (candle_binding.Tok
 		})
 		from = start + len(t.entityText)
 	}
-	return candle_binding.TokenClassificationResult{Entities: entities}, nil
+	available := true
+	return tasks.TokenClassificationResult{Entities: entities, ScoresAvailable: &available}, nil
 }
 
 func newLongTextPIIClassifier(entityText string) (*Classifier, *truncatingPIIInference) {
@@ -82,7 +84,7 @@ func TestClassifyPIIWithDetails_DetectsEntityPastTheModelWindow(t *testing.T) {
 
 	classifier, model := newLongTextPIIClassifier(entity)
 
-	detections, err := classifier.ClassifyPIIWithDetails(text)
+	detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyPIIWithDetails: %v", err)
 	}
@@ -118,7 +120,7 @@ func TestClassifyPIIWithDetails_OffsetsAreCorrectInMultibyteText(t *testing.T) {
 
 	classifier, _ := newLongTextPIIClassifier(entity)
 
-	detections, err := classifier.ClassifyPIIWithDetails(text)
+	detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyPIIWithDetails: %v", err)
 	}
@@ -152,7 +154,7 @@ func TestClassifyPIIWithDetails_ReportsAnOverlappedEntityOnce(t *testing.T) {
 
 	classifier, _ := newLongTextPIIClassifier(entity)
 
-	detections, err := classifier.ClassifyPIIWithDetails(text)
+	detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyPIIWithDetails: %v", err)
 	}
@@ -183,7 +185,7 @@ func TestClassifyPIIWithDetails_ShortTextTakesASingleCall(t *testing.T) {
 
 	classifier, model := newLongTextPIIClassifier(entity)
 
-	detections, err := classifier.ClassifyPIIWithDetails(text)
+	detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyPIIWithDetails: %v", err)
 	}

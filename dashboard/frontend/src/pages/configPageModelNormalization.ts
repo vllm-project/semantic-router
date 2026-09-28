@@ -1,5 +1,6 @@
+import { effectiveModelAPIFormat, protocolForModelAPIFormat } from './configPageModelCatalogSupport'
 import type { Endpoint } from '../components/EndpointsEditor'
-import bundledCatalog from '../generated/modelCatalog.json'
+import bundledCatalog from '../modelCatalogDocument'
 import type { BuiltInModelCatalog, BuiltInModelMetadata } from '../types/modelCatalog'
 import {
   normalizeEndpoint,
@@ -39,8 +40,12 @@ const catalogReasoningConstraints = (
   for (const backend of model.backend_refs ?? []) {
     const provider = catalog.providers.find((candidate) => candidate.id === backend.provider)
     const binding = provider?.models?.find((candidate) => candidate.catalog === model.catalog)
+    const protocol = protocolForModelAPIFormat(effectiveModelAPIFormat(model, catalog).format)
+    const bindingEfforts = protocol
+      ? (binding?.reasoning_efforts_by_protocol?.[protocol] ?? binding?.reasoning_efforts)
+      : binding?.reasoning_efforts
     reasoningModes = intersectValues(reasoningModes, binding?.reasoning_modes)
-    reasoningEfforts = intersectValues(reasoningEfforts, binding?.reasoning_efforts)
+    reasoningEfforts = intersectValues(reasoningEfforts, bindingEfforts)
   }
   return { reasoning_modes: reasoningModes, reasoning_efforts: reasoningEfforts }
 }
@@ -62,7 +67,8 @@ const normalizedProviderModel = (
     reasoning_family: model.reasoning?.family || builtIn?.reasoning_family,
     ...reasoningConstraints,
     provider_model_id: model.provider_model_id,
-    api_format: model.api_format,
+    api_format: effectiveModelAPIFormat(model, catalog).format,
+    api_format_override: model.api_format,
     external_model_ids: model.external_model_ids,
     backend_refs: model.backend_refs,
     endpoints: normalizeProviderModelEndpoints(model),
@@ -72,7 +78,6 @@ const normalizedProviderModel = (
     capabilities: override?.capabilities ?? builtIn?.capabilities,
     loras: override?.loras,
     tags: override?.tags ?? builtIn?.tags,
-    evaluations: override?.evaluations,
     modality: override?.modality ?? catalogRuntimeModality(builtIn),
     card_override: override,
     pricing: model.pricing,
@@ -90,7 +95,6 @@ const normalizedUnboundCard = (card: RoutingModelCard): NormalizedModel => ({
   capabilities: card.capabilities,
   loras: card.loras,
   tags: card.tags,
-  evaluations: card.evaluations,
   modality: card.modality,
 })
 
@@ -135,6 +139,12 @@ const legacyModels = (config: ConfigData): NormalizedModel[] =>
     ([name, model]) => ({
       name,
       reasoning_family: model.reasoning_family,
+      reasoning: model.reasoning_family ? { family: model.reasoning_family } : undefined,
+      provider_model_id: model.model_id,
+      api_format: model.api_format,
+      api_format_override: model.api_format,
+      external_model_ids: model.external_model_ids,
+      backend_refs: model.preferred_endpoints?.map((name) => ({ name })),
       endpoints: legacyEndpoints(config, model),
       access_key: undefined,
       pricing: model.pricing,

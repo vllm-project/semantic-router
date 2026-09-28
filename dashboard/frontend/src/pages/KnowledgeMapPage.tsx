@@ -21,8 +21,8 @@ function buildKnowledgeMapURL(name: string): string {
   const params = new URLSearchParams({
     // Plain same-origin paths: WizMap fetches these from inside the iframe and the browser
     // attaches the session cookie. Before #2465 this one URL carried the token three times.
-    metadataURL: `/api/router/config/kbs/${encodedName}/map/metadata`,
-    dataURL: `/api/router/config/kbs/${encodedName}/map/data.ndjson`,
+    metadataURL: `/api/router/api/v1/storage/knowledge-bases/${encodedName}/map/metadata`,
+    dataURL: `/api/router/api/v1/storage/knowledge-bases/${encodedName}/map/data.ndjson`,
     title: name,
   })
   return `/embedded/wizmap/?${params.toString()}`
@@ -40,7 +40,7 @@ export default function KnowledgeMapPage() {
     setError(null)
     setIframeReady(false)
 
-    fetch(`/api/router/config/kbs/${encodeURIComponent(name)}/map/metadata`)
+    fetch(`/api/router/api/v1/storage/knowledge-bases/${encodeURIComponent(name)}/map/metadata`)
       .then(async (response) => {
         if (!response.ok) {
           const message = await response.text()

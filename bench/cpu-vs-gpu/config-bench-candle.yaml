@@ -2561,6 +2561,16 @@ providers:
           endpoint: 127.0.0.1:8200
           weight: 1
           provider: vllm
+evaluation:
+  records:
+    - model: qwen14b-admin
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.9
+    - model: qwen14b-free
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.7
 routing:
   decisions:
     - name: admin_to_admin_tier
@@ -2622,20 +2632,12 @@ routing:
         - code
         - reasoning
         - math
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.9
     - name: qwen14b-free
       param_size: 14b
       description: Qwen2.5 14B — free tier (port 8200)
       capabilities:
         - chat
         - code
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.7
 global:
   router:
     strategy: priority
@@ -2678,6 +2680,16 @@ providers:
           endpoint: 127.0.0.1:8001
           weight: 1
           provider: vllm
+evaluation:
+  records:
+    - model: Qwen/Qwen2.5-14B-Instruct
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.9
+    - model: Qwen/Qwen2.5-7B-Instruct
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.7
 routing:
   decisions:
     - name: admin_unrestricted
@@ -2789,20 +2801,12 @@ routing:
         - code
         - reasoning
         - math
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.9
     - name: Qwen/Qwen2.5-7B-Instruct
       param_size: 7b
       description: Qwen2.5 7B — efficient model for free tier and simple queries
       capabilities:
         - chat
         - code
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.7
 global:
   router:
     strategy: priority
@@ -3437,6 +3441,16 @@ providers:
           endpoint: 127.0.0.1:8200
           weight: 1
           provider: vllm
+evaluation:
+  records:
+    - model: qwen14b-dev
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.85
+    - model: qwen14b-prod
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.85
 routing:
   decisions:
     - name: code_to_dev
@@ -3514,10 +3528,6 @@ routing:
         - code
         - reasoning
         - math
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.85
     - name: qwen14b-prod
       param_size: 14b
       description: Qwen2.5 14B — Prod environment (user-facing)
@@ -3526,10 +3536,6 @@ routing:
         - code
         - reasoning
         - math
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.85
 global:
   router:
     strategy: priority
@@ -6756,6 +6762,16 @@ providers:
           endpoint: 127.0.0.1:8200
           weight: 1
           provider: vllm
+evaluation:
+  records:
+    - model: qwen14b-admin
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.9
+    - model: qwen14b-free
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.7
 routing:
   decisions:
     - name: admin_to_admin_tier
@@ -6817,20 +6833,12 @@ routing:
         - code
         - reasoning
         - math
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.9
     - name: qwen14b-free
       param_size: 14b
       description: Qwen2.5 14B — free tier (port 8200)
       capabilities:
         - chat
         - code
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.7
 global:
   router:
     strategy: priority
@@ -6873,6 +6881,16 @@ providers:
           endpoint: 127.0.0.1:8001
           weight: 1
           provider: vllm
+evaluation:
+  records:
+    - model: Qwen/Qwen2.5-14B-Instruct
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.9
+    - model: Qwen/Qwen2.5-7B-Instruct
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.7
 routing:
   decisions:
     - name: admin_unrestricted
@@ -6984,20 +7002,12 @@ routing:
         - code
         - reasoning
         - math
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.9
     - name: Qwen/Qwen2.5-7B-Instruct
       param_size: 7b
       description: Qwen2.5 7B — efficient model for free tier and simple queries
       capabilities:
         - chat
         - code
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.7
 global:
   router:
     strategy: priority
@@ -7632,6 +7642,16 @@ providers:
           endpoint: 127.0.0.1:8200
           weight: 1
           provider: vllm
+evaluation:
+  records:
+    - model: qwen14b-dev
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.85
+    - model: qwen14b-prod
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.85
 routing:
   decisions:
     - name: code_to_dev
@@ -7709,10 +7729,6 @@ routing:
         - code
         - reasoning
         - math
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.85
     - name: qwen14b-prod
       param_size: 14b
       description: Qwen2.5 14B — Prod environment (user-facing)
@@ -7721,10 +7737,6 @@ routing:
         - code
         - reasoning
         - math
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.85
 global:
   router:
     strategy: priority

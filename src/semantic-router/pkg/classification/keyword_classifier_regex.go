@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -17,6 +18,7 @@ type preppedKeywordRule struct {
 	OriginalKeywords  []string         // For logging/returning original case
 	CompiledRegexpsCS []*regexp.Regexp // Compiled regex for case-sensitive
 	CompiledRegexpsCI []*regexp.Regexp // Compiled regex for case-insensitive
+	LiteralBoundaries []bool           // Check neighboring runes for literal non-CJK words
 
 	FuzzyMatch        bool     // Enable approximate matching with Levenshtein distance
 	FuzzyThreshold    int      // Maximum edit distance for fuzzy matching (default: 2)
@@ -48,9 +50,11 @@ func prepRegexRule(rule config.KeywordRule) (preppedKeywordRule, error) {
 	preppedRule.CompiledRegexpsCS = make([]*regexp.Regexp, len(rule.Keywords))
 	preppedRule.CompiledRegexpsCI = make([]*regexp.Regexp, len(rule.Keywords))
 	useExplicitRegex := strings.EqualFold(rule.Method, "regex")
+	preppedRule.LiteralBoundaries = make([]bool, len(rule.Keywords))
 
 	for j, keyword := range rule.Keywords {
 		patternCS, patternCI := regexPatterns(keyword, useExplicitRegex)
+		preppedRule.LiteralBoundaries[j] = !useExplicitRegex && literalKeywordNeedsBoundary(keyword)
 
 		var err error
 		preppedRule.CompiledRegexpsCS[j], err = regexp.Compile(patternCS)
@@ -74,26 +78,40 @@ func regexPatterns(keyword string, useExplicitRegex bool) (string, string) {
 		return keyword, "(?i)" + keyword
 	}
 
-	quotedKeyword := regexp.QuoteMeta(keyword)
-	hasWordChar := false
-	hasChinese := false
-	for _, r := range keyword {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
-			hasWordChar = true
-		}
-		if unicode.Is(unicode.Han, r) {
-			hasChinese = true
-		}
-		if hasWordChar && hasChinese {
-			break
-		}
-	}
+	pattern := regexp.QuoteMeta(keyword)
+	return pattern, "(?i)" + pattern
+}
 
-	patternCS := quotedKeyword
-	patternCI := "(?i)" + quotedKeyword
-	if hasWordChar && !hasChinese {
-		patternCS = "\\b" + patternCS + "\\b"
-		patternCI = "(?i)\\b" + quotedKeyword + "\\b"
+// Keep the legacy substring contract for punctuation-only literals. Word-like
+// literals need neighboring-rune boundaries, except for continuous CJK text.
+func literalKeywordNeedsBoundary(keyword string) bool {
+	return !containsCJK(keyword) && strings.ContainsFunc(keyword, func(r rune) bool {
+		return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+	})
+}
+
+// Literal boundaries belong to the neighboring runes, not to the keyword's
+// first/last character. Reuse the structure keyword contract, retaining CJK
+// substring matching and the regex engine's Unicode case folding. Explicit
+// regex patterns remain untouched. Unlike structure features, literal routing
+// also keeps its existing underscore word boundary. Advance one rune after a rejected match so
+// an overlapping or later valid occurrence is still considered.
+func matchesKeywordPattern(text string, rule preppedKeywordRule, index int, pattern *regexp.Regexp) bool {
+	if !rule.LiteralBoundaries[index] {
+		return pattern.MatchString(text)
 	}
-	return patternCS, patternCI
+	for offset := 0; offset < len(text); {
+		match := pattern.FindStringIndex(text[offset:])
+		if match == nil {
+			return false
+		}
+		start, end := offset+match[0], offset+match[1]
+		if keywordBoundaryMatch(text, start, end) &&
+			(start == 0 || text[start-1] != '_') && (end == len(text) || text[end] != '_') {
+			return true
+		}
+		_, size := utf8.DecodeRuneInString(text[start:])
+		offset = start + size
+	}
+	return false
 }

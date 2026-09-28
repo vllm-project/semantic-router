@@ -1,28 +1,57 @@
 import type {
   DecisionConfig,
+  DecisionCondition,
   DecisionFormState,
   DecisionPluginConfiguration,
 } from './configPageSupport'
 
-export const decisionConditionsForSave = (
-  values: DecisionFormState['conditions'],
-): NonNullable<DecisionConfig['rules']>['conditions'] =>
-  (values || [])
-    .filter((condition) => (condition?.type || '').trim() || (condition?.name || '').trim())
-    .map((condition, index) => {
-      const type = (condition?.type || '').trim()
-      const name = (condition?.name || '').trim()
-      if (!type || !name) {
-        throw new Error(`Condition #${index + 1} needs both type and name.`)
-      }
-      return {
-        type,
-        name,
-        ...(condition.label ? { label: condition.label } : {}),
-        ...(condition.predicate ? { predicate: condition.predicate } : {}),
-        ...(condition.on_error ? { on_error: condition.on_error } : {}),
-      }
-    })
+function validateCondition(condition: DecisionCondition, path: string): void {
+  const hasChildren = Boolean(condition.operator || condition.conditions?.length)
+  if (hasChildren) {
+    if (!condition.operator || !['AND', 'OR', 'NOT'].includes(condition.operator)) {
+      throw new Error(`${path} needs an AND, OR, or NOT operator.`)
+    }
+    const children = condition.conditions || []
+    if (condition.operator === 'NOT' && children.length !== 1) {
+      throw new Error(`${path} NOT group needs exactly one condition.`)
+    }
+    if (children.length === 0) throw new Error(`${path} needs at least one condition.`)
+    children.forEach((child, index) => validateCondition(child, `${path}.${index + 1}`))
+    return
+  }
+
+  if (!condition.type?.trim() || !condition.name?.trim()) {
+    throw new Error(`${path} needs both type and name.`)
+  }
+}
+
+function conditionUsesOnError(condition: DecisionCondition): boolean {
+  return Boolean(
+    condition.on_error || condition.conditions?.some((child) => conditionUsesOnError(child)),
+  )
+}
+
+export const decisionRulesForSave = (
+  value: DecisionFormState['rules'],
+): DecisionConfig['rules'] => {
+  const rules = JSON.parse(JSON.stringify(value || {})) as DecisionConfig['rules']
+  const conditions = rules.conditions || []
+  if (!rules.operator && conditions.length === 0) return {}
+  if (!rules.operator || !['AND', 'OR', 'NOT'].includes(rules.operator)) {
+    throw new Error('Rules need an AND, OR, or NOT root operator.')
+  }
+  if (rules.operator === 'NOT' && conditions.length !== 1) {
+    throw new Error('The root NOT group needs exactly one condition.')
+  }
+  if (rules.operator !== 'AND' && conditions.length === 0) {
+    throw new Error(`The root ${rules.operator} group needs at least one condition.`)
+  }
+  conditions.forEach((condition, index) => validateCondition(condition, `Condition #${index + 1}`))
+  if (rules.on_unknown && conditions.some((condition) => conditionUsesOnError(condition))) {
+    throw new Error('Rules on_unknown cannot be combined with condition on_error.')
+  }
+  return rules
+}
 
 export const decisionModelRefsForSave = (
   values: DecisionFormState['modelRefs'],

@@ -133,10 +133,13 @@ func parseYAMLBytesWithOptions(
 		return nil, fmt.Errorf("failed to marshal normalized config input: %w", marshalErr)
 	}
 
-	// Warn about unknown YAML fields (typos) before parsing into typed structs.
-	WarnUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
-
-	cfg, err := parseRouterConfigPayload(expandedData, raw)
+	if !isCanonicalConfig(raw) {
+		return nil, canonicalConfigRequiredError(raw)
+	}
+	if validationErr := validateKnownFields(raw, reflect.TypeOf(CanonicalConfig{})); validationErr != nil {
+		return nil, validationErr
+	}
+	cfg, err := parseCanonicalConfigPayload(expandedData, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -159,6 +162,7 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 	validators := []func(map[string]interface{}) error{
 		normalizeResponseCacheAliases,
 		rejectDeprecatedUserConfigFields,
+		rejectRemovedEvaluationFields,
 		rejectRemovedStructureFields,
 		rejectRemovedTaxonomyLegacyFields,
 		rejectRemovedDecisionToolFields,
@@ -171,6 +175,28 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 		}
 	}
 	return nil
+}
+
+func rejectRemovedEvaluationFields(raw map[string]interface{}) error {
+	removed := make([]string, 0)
+	if _, ok := raw["evaluation_catalog"]; ok {
+		removed = append(removed, "evaluation_catalog")
+	}
+	routing := nestedStringMap(raw["routing"])
+	if cards, ok := routing["modelCards"].([]interface{}); ok {
+		for index, rawCard := range cards {
+			if _, ok := nestedStringMap(rawCard)["evaluations"]; ok {
+				removed = append(removed, fmt.Sprintf("routing.modelCards[%d].evaluations", index))
+			}
+		}
+	}
+	if len(removed) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"removed config fields are no longer supported: %s; move benchmark definitions, indices, and model-linked records under evaluation",
+		strings.Join(removed, ", "),
+	)
 }
 
 func parseRawConfigMap(data []byte) (map[string]interface{}, error) {
@@ -452,13 +478,35 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 		}
 	}
 	if tuning, ok := raw["tuning"]; ok {
-		if err := rejectUnknownMapFields(prefix+".tuning", nestedStringMap(tuning), []string{
+		tuningMap := nestedStringMap(tuning)
+		if err := rejectUnknownMapFields(prefix+".tuning", tuningMap, []string{
 			"idle_timeout_seconds",
 			"min_turns_before_switch",
 			"switch_margin",
 			"stability_weight",
+			"progress_gate",
 		}); err != nil {
 			return err
+		}
+		if gate, ok := tuningMap["progress_gate"]; ok {
+			if err := rejectUnknownMapFields(
+				prefix+".tuning.progress_gate",
+				nestedStringMap(gate),
+				[]string{
+					"enabled",
+					"mode",
+					"calibration_id",
+					"window_size",
+					"window_ttl_seconds",
+					"min_window_outcomes",
+					"min_consecutive_regressions",
+					"min_consecutive_recoveries",
+					"cooldown_seconds",
+					"max_switches_per_window",
+				},
+			); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -480,13 +528,6 @@ func rejectUnknownMapFields(prefix string, raw map[string]interface{}, allowed [
 	}
 	sort.Strings(unknown)
 	return fmt.Errorf("unsupported Router Learning config fields: %s", strings.Join(unknown, ", "))
-}
-
-func parseRouterConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {
-	if !isCanonicalConfig(raw) {
-		return nil, canonicalConfigRequiredError(raw)
-	}
-	return parseCanonicalConfigPayload(data, raw)
 }
 
 func parseCanonicalConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {
@@ -532,7 +573,7 @@ func canonicalConfigRequiredError(raw map[string]interface{}) error {
 		detail = fmt.Sprintf("unexpected top-level keys: %s", strings.Join(unsupported, ", "))
 	}
 	return fmt.Errorf(
-		"config file must use canonical v0.3 version/listeners/providers/routing/global; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3 providers/routing/global",
+		"config file must use the canonical v0.3 hierarchy; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3",
 		detail,
 	)
 }
@@ -548,6 +589,7 @@ func finalizeParsedConfig(cfg *RouterConfig) error {
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
 	}
+	applyBatchConcurrencyMigration(cfg)
 	if err := validateConfigStructure(cfg); err != nil {
 		logging.ComponentDebugEvent("config", "config_validation_failed", map[string]interface{}{
 			"error": err.Error(),
@@ -717,11 +759,14 @@ func removedStructureFields(raw map[string]interface{}) []string {
 
 func unsupportedTopLevelConfigFields(raw map[string]interface{}) []string {
 	allowed := map[string]bool{
-		"version":   true,
-		"listeners": true,
-		"providers": true,
-		"routing":   true,
-		"global":    true,
+		"version":     true,
+		"listeners":   true,
+		"providers":   true,
+		"evaluation":  true,
+		"routing":     true,
+		"entrypoints": true,
+		"recipes":     true,
+		"global":      true,
 	}
 
 	fields := make([]string, 0)

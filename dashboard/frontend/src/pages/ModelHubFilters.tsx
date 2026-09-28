@@ -46,13 +46,6 @@ const ViewIcon: React.FC<{ view: ModelHubView }> = ({ view }) => {
       </svg>
     )
   }
-  if (view === 'benchmarks') {
-    return (
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M2 13V8m4 5V3m4 10V6m4 7V1" />
-      </svg>
-    )
-  }
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
       <path d="M2 3h12M2 8h12M2 13h12" />
@@ -111,7 +104,7 @@ const HubFilterTopline: React.FC<{
       ) : null}
     </label>
     <div className={styles.viewSwitch} role="group" aria-label="Catalog view">
-      {(['list', 'table', 'benchmarks'] as ModelHubView[]).map((candidate) => (
+      {(['list', 'table'] as ModelHubView[]).map((candidate) => (
         <button
           key={candidate}
           type="button"

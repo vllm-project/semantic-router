@@ -1,4 +1,4 @@
-import catalog from '../generated/modelCatalog.json'
+import catalog from '../modelCatalogDocument'
 import type { CatalogProvider } from '../types/modelCatalog'
 import { resolveModelCatalogIcon } from './modelProviderIcons'
 

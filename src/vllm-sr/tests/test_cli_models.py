@@ -104,3 +104,104 @@ def test_decision_route_action_rejects_unknown_type():
                 ]
             },
         )
+
+
+def test_custom_evaluation_and_model_evidence_round_trip():
+    config = UserConfig.model_validate(
+        {
+            "version": "0.3",
+            "evaluation": {
+                "benchmarks": [
+                    {
+                        "id": "acme/legal-reasoning@1.0.0",
+                        "display_name": "Acme Legal Reasoning",
+                        "domain": "reasoning",
+                        "default_profile": "default",
+                        "profiles": [
+                            {
+                                "id": "default",
+                                "display_name": "Default",
+                                "description": "Frozen public test split.",
+                            }
+                        ],
+                        "metrics": [
+                            {
+                                "id": "accuracy",
+                                "unit": "percent",
+                                "direction": "higher_is_better",
+                                "range": [0, 100],
+                            }
+                        ],
+                    }
+                ],
+                "indices": [
+                    {
+                        "id": "acme/legal@1.0.0",
+                        "display_name": "Acme Legal",
+                        "aggregation": "weighted_mean",
+                        "scale": [0, 100],
+                        "missing": {"policy": "require_all"},
+                        "components": [
+                            {
+                                "benchmark": "acme/legal-reasoning@1.0.0",
+                                "metric": "accuracy",
+                                "weight": 1,
+                                "normalization": {
+                                    "type": "linear_clamp",
+                                    "min": 0,
+                                    "max": 100,
+                                },
+                            }
+                        ],
+                    }
+                ],
+                "records": [
+                    {
+                        "model": "acme-model",
+                        "benchmark": "acme/legal-reasoning@1.0.0",
+                        "metrics": {"accuracy": 82},
+                    }
+                ],
+            },
+            "routing": {"modelCards": [{"name": "acme-model"}]},
+        }
+    )
+
+    dumped = config.model_dump(by_alias=True, exclude_none=True)
+    assert dumped["evaluation"]["indices"][0]["id"] == "acme/legal@1.0.0"
+    assert dumped["evaluation"]["records"][0]["model"] == "acme-model"
+    assert dumped["evaluation"]["records"][0]["metrics"]["accuracy"] == 82
+
+
+def test_custom_evaluation_requires_versioned_namespace():
+    with pytest.raises(ValueError):
+        UserConfig.model_validate(
+            {
+                "version": "0.3",
+                "evaluation": {
+                    "benchmarks": [
+                        {
+                            "id": "legal-reasoning",
+                            "display_name": "Legal Reasoning",
+                            "domain": "reasoning",
+                            "default_profile": "default",
+                            "profiles": [
+                                {
+                                    "id": "default",
+                                    "display_name": "Default",
+                                    "description": "Frozen split.",
+                                }
+                            ],
+                            "metrics": [
+                                {
+                                    "id": "accuracy",
+                                    "unit": "percent",
+                                    "direction": "higher_is_better",
+                                    "range": [0, 100],
+                                }
+                            ],
+                        }
+                    ]
+                },
+            }
+        )

@@ -568,6 +568,8 @@ func TestDeployHandler_SuccessfulDeploy(t *testing.T) {
 	if string(dslData) != body.DSL {
 		t.Errorf("Archived DSL content mismatch: %s", dslData)
 	}
+	assertSnapshotPermissions(t, tempDir)
+	assertSnapshotMode(t, dslFile, 0o600)
 }
 
 func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
@@ -1187,6 +1189,7 @@ routing:
 	if len(entries) < 2 {
 		t.Error("Pre-rollback backup should have been created")
 	}
+	assertSnapshotPermissions(t, tempDir)
 }
 
 // ============================================================

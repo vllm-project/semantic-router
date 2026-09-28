@@ -5,6 +5,7 @@ import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageModelEndpoints from './ConfigPageModelEndpoints'
 import ConfigPageModelInventoryPanel from './ConfigPageModelInventoryPanel'
 import styles from './ConfigPage.module.css'
+import { evaluationModelColumns } from './configPageEvaluationRecordsSupport'
 import { reasoningFamilyColumns } from './configPageReasoningFamilySupport'
 import type { ConfigPageModelsSectionController } from './useConfigPageModelsSectionController'
 import type { ConfigPageModelsSectionProps } from './configPageModelsSectionTypes'
@@ -88,11 +89,36 @@ function ReasoningFamiliesBlock({ controller }: ModelsSectionViewProps) {
         className={styles.managerTable}
         readonly
         pagination={{
-          pageSize: 25,
-          pageSizeOptions: [25, 50, 100],
+          pageSize: 5,
+          pageSizeOptions: [5, 10, 25, 50],
           itemLabel: 'families',
           resetKey: reasoning.search,
         }}
+      />
+    </div>
+  )
+}
+
+function EvaluationRecordsBlock({ props, controller }: ModelsSectionViewProps) {
+  const groups = controller.evaluations.groups
+  return (
+    <div className={styles.sectionTableBlock}>
+      <TableHeader
+        title="Evaluation Evidence"
+        count={groups.length}
+        onAdd={props.isReadonly ? undefined : controller.evaluations.manage}
+        addButtonText="Manage records"
+        variant="embedded"
+      />
+      <DataTable
+        columns={evaluationModelColumns}
+        data={groups}
+        keyExtractor={(group) => group.modelName}
+        onView={controller.evaluations.view}
+        emptyMessage="No provider models configured."
+        className={styles.managerTable}
+        readonly
+        pagination={{ pageSize: 5, pageSizeOptions: [5, 10, 25, 50], itemLabel: 'models' }}
       />
     </div>
   )
@@ -121,10 +147,11 @@ export default function ConfigPageModelsSectionView(viewProps: ModelsSectionView
     <>
       <ConfigPageManagerLayout
         title="Models"
-        description="Manage provider models, reasoning families, and the endpoint inventory available to routing decisions."
+        description="Manage provider models, model-linked evaluation evidence, reasoning families, and endpoints available to routing decisions."
       >
         <div className={styles.sectionPanel}>
           <ModelInventoryBlock {...viewProps} />
+          <EvaluationRecordsBlock {...viewProps} />
           <ReasoningFamiliesBlock {...viewProps} />
         </div>
       </ConfigPageManagerLayout>

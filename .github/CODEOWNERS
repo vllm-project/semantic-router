@@ -7,7 +7,7 @@
 # GitHub Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # Root fallback.
-*  @rootfs @Xunzhuo @WUKUNTAI-0211 @AayushSaini101
+*  @rootfs @Xunzhuo @WUKUNTAI-0211 @AayushSaini101 @FAUST-BENCHOU
 
 # Domain mappings generated from the nearest OWNER files.
 /bench/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren

@@ -9,9 +9,15 @@ unnoticed. These tests assert both canonical entrypoints stay wired.
 
 from __future__ import annotations
 
+import os
 import re
+import shlex
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
+
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DASHBOARD_MK = REPO_ROOT / "tools" / "make" / "dashboard.mk"
@@ -116,15 +122,16 @@ class DashboardGateTest(unittest.TestCase):
             f"{check.prereqs}.",
         )
 
-    def test_dashboard_check_requires_fresh_evaluation_catalog_mirrors(self) -> None:
+    def test_sr_bench_uses_the_service_catalog_without_generated_mirrors(self) -> None:
         check = TARGETS.get("dashboard-check")
         self.assertIsNotNone(check)
-        self.assertIn("dashboard-evaluation-catalog-check", check.prereqs)
-
-        catalog_check = TARGETS.get("dashboard-evaluation-catalog-check")
-        self.assertIsNotNone(catalog_check)
-        recipe = _expand(" ".join(catalog_check.recipe), VARIABLES)
-        self.assertIn("tools/ci/sync_evaluation_catalogs.py --check", recipe)
+        self.assertNotIn("dashboard-evaluation-catalog-check", check.prereqs)
+        self.assertFalse((REPO_ROOT / "tools/ci/sync_evaluation_catalogs.py").exists())
+        api = (
+            REPO_ROOT / "dashboard/frontend/src/components/sr-bench/api.ts"
+        ).read_text()
+        self.assertIn("/api/sr-bench/v1", api)
+        self.assertIn("'/catalog'", api)
 
     def test_dashboard_test_backend_runs_go_test_in_the_backend_directory(self) -> None:
         backend = TARGETS.get("dashboard-test-backend")
@@ -181,9 +188,100 @@ class DashboardGateTest(unittest.TestCase):
         self.assertIn("playwright install --with-deps chromium", recipe)
         self.assertIn("npm run test:e2e:evaluation", recipe)
 
+    def test_wizmap_compilation_is_shared_with_the_embedded_build(self) -> None:
+        build = TARGETS["dashboard-build-wizmap"]
+        self.assertIn("dashboard-wizmap-deps", build.prereqs)
+        self.assertIn("npm run build", " ".join(build.recipe))
+        self.assertIn("dashboard-build-wizmap", TARGETS["dashboard-type-check"].prereqs)
+        frontend = TARGETS["dashboard-build-frontend"]
+        self.assertIn("dashboard-build-wizmap", frontend.prereqs)
+        recipe = _expand(" ".join(frontend.recipe), VARIABLES)
+        self.assertIn(
+            "cp -R dashboard/wizmap/dist/. dashboard/frontend/dist/embedded/wizmap/",
+            recipe,
+        )
+        self.assertLess(recipe.index("npm run build"), recipe.index("cp -R"))
+        self.assertNotIn("build:embedded", recipe)
+        self.assertNotIn("npx tsc", " ".join(build.recipe))
+
+    def test_parallel_dashboard_targets_reuse_compiled_wizmap_and_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for path in ("bin", "dashboard/frontend", "dashboard/wizmap"):
+                (root / path).mkdir(parents=True)
+            npm = root / "bin" / "npm"
+            npm.write_text(
+                "#!/bin/sh\nset -eu\n"
+                'if [ "$*" != "run build" ]; then exit 0; fi\n'
+                'if [ "${PWD##*/}" = wizmap ]; then\n'
+                '  echo wizmap >> "$BUILD_CALLS"\n'
+                '  test "${FAIL_WIZMAP:-0}" = 0\n'
+                "  mkdir -p dist\n"
+                "  echo compiled-map > dist/index.html\n"
+                "else\n"
+                "  rm -rf dist\n"
+                "  mkdir -p dist\n"
+                "  echo frontend > dist/index.html\n"
+                "fi\n"
+            )
+            npm.chmod(0o755)
+            makefile = root / "Makefile"
+            makefile.write_text(
+                f"include {DASHBOARD_MK}\n"
+                "dashboard-install dashboard-build-wasm:\n\t@true\n"
+            )
+            env = {
+                key: value
+                for key, value in os.environ.items()
+                if key not in {"MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES", "MAKEFILES"}
+            }
+            env.update(
+                PATH=f"{root / 'bin'}:{env['PATH']}",
+                BUILD_CALLS=str(root / "build-calls.txt"),
+            )
+            for fail in (False, True):
+                with self.subTest(build_failure=fail):
+                    (root / "build-calls.txt").write_text("")
+                    result = subprocess.run(
+                        [
+                            "make",
+                            "-j4",
+                            "dashboard-type-check",
+                            "dashboard-build-frontend",
+                        ],
+                        cwd=root,
+                        env=dict(env, FAIL_WIZMAP=str(int(fail))),
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=15,
+                    )
+                    self.assertEqual((root / "build-calls.txt").read_text(), "wizmap\n")
+                    if fail:
+                        self.assertNotEqual(result.returncode, 0)
+                    else:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(
+                            (
+                                root
+                                / "dashboard/frontend/dist/embedded/wizmap/index.html"
+                            ).read_text(),
+                            "compiled-map\n",
+                        )
+
     def test_dashboard_workflow_reuses_the_browser_make_target(self) -> None:
         workflow = DASHBOARD_WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("run: make dashboard-test-e2e-evaluation", workflow)
+        jobs = yaml.safe_load(workflow)["jobs"]
+        commands = [
+            shlex.split(line)
+            for job in jobs.values()
+            for step in job.get("steps", [])
+            for line in step.get("run", "").splitlines()
+            if line.strip().startswith("make ")
+        ]
+        self.assertEqual(
+            sum("dashboard-test-e2e-evaluation" in command for command in commands), 1
+        )
         self.assertNotIn("run: npm run test:e2e:evaluation", workflow)
         self.assertNotIn("run: npx playwright install", workflow)
 

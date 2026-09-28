@@ -112,6 +112,12 @@ export interface FactCheckSignal {
   description: string
 }
 
+export interface HallucinationSignal {
+  name: string
+  use_nli?: boolean // Ask the detector for span-level NLI explanations
+  description?: string
+}
+
 export interface UserFeedbackSignal {
   name: string
   description: string
@@ -204,6 +210,7 @@ export interface ClassifierSignal {
   model_path?: string
   labels: string[]
   instructions?: string
+  disable_rationale?: boolean
   use_cpu?: boolean
 }
 
@@ -262,6 +269,21 @@ export interface JailbreakSignal {
   description?: string
 }
 
+export interface SafetySignal {
+  name: string
+  description?: string
+  model?: string
+  labels?: string[]
+  unsafe_labels?: string[]
+  threshold: number
+  hazard?: {
+    model?: string
+    labels: string[]
+    categories: string[]
+    threshold: number
+  }
+}
+
 export interface PIISignal {
   name: string
   threshold: number
@@ -285,6 +307,8 @@ export interface Signals {
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
+  safety?: SafetySignal[]
+  hallucination?: HallucinationSignal[]
   pii?: PIISignal[]
   conversation?: ConversationSignal[]
   metadata?: MetadataSignal[]
@@ -311,6 +335,7 @@ export type DecisionConditionType =
   | 'modality'
   | 'authz'
   | 'jailbreak'
+  | 'safety'
   | 'pii'
   | 'kb'
   | 'conversation'
@@ -357,6 +382,8 @@ export interface PluginConfig {
     | 'request_params'
     | 'response_jailbreak'
     | 'context_compression'
+    | 'prompt_cache'
+    | 'shadow_dispatch'
   configuration: Record<string, unknown>
 }
 
@@ -590,6 +617,7 @@ export function hasFlatSignals(config: unknown): boolean {
     (Array.isArray(root?.structure_rules) && root.structure_rules.length > 0) ||
     (Array.isArray(root?.complexity_rules) && root.complexity_rules.length > 0) ||
     (Array.isArray(root?.jailbreak) && root.jailbreak.length > 0) ||
+    (Array.isArray(root?.hallucination) && root.hallucination.length > 0) ||
     (Array.isArray(root?.pii) && root.pii.length > 0)
   )
 }

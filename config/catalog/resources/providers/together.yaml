@@ -21,3 +21,57 @@ presentation:
   featured: true
 conformance:
   status: unverified
+models:
+- catalog: minimax/minimax-m3
+  relationship: managed_cloud
+  id: MiniMaxAI/MiniMax-M3
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.30
+    cached_input_per_1m: 0.06
+    completion_per_1m: 1.20
+  restrictions:
+    context_window_size: 524288
+    quantization: FP4
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-16
+    source: https://docs.together.ai/docs/serverless/models
+- catalog: moonshot/kimi-k3
+  relationship: managed_cloud
+  id: moonshotai/Kimi-K3
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 3.00
+    cached_input_per_1m: 0.30
+    completion_per_1m: 15.00
+  restrictions:
+    context_window_size: 1048576
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-16
+    source: https://docs.together.ai/docs/serverless/models
+- catalog: zai/glm-5.2
+  relationship: managed_cloud
+  id: zai-org/GLM-5.2
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 1.40
+    cached_input_per_1m: 0.26
+    completion_per_1m: 4.40
+  restrictions:
+    context_window_size: 1048575
+    quantization: FP4
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-16
+    source: https://docs.together.ai/docs/serverless/models

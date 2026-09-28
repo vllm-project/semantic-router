@@ -543,6 +543,17 @@ impl GemmaEmbeddingModel {
         Ok(normalized)
     }
 
+    /// Advertised output views use this instance's loaded bottleneck width.
+    pub fn available_dimensions(&self) -> Vec<usize> {
+        let full = self.dense_bottleneck.compression_layer().out_features();
+        let mut dimensions = vec![128, 256, 512, 768];
+        dimensions.retain(|dimension| *dimension <= full);
+        dimensions.push(full);
+        dimensions.sort_unstable();
+        dimensions.dedup();
+        dimensions
+    }
+
     /// Forward pass with Matryoshka Representation support
     ///
     /// Matryoshka Representation allows truncating the embedding dimension
@@ -570,8 +581,7 @@ impl GemmaEmbeddingModel {
         embedding_dim: usize,
     ) -> UnifiedResult<Tensor> {
         // Validate embedding dimension
-        const SUPPORTED_DIMS: &[usize] = &[768, 512, 256, 128];
-        if !SUPPORTED_DIMS.contains(&embedding_dim) {
+        if !self.available_dimensions().contains(&embedding_dim) {
             return Err(UnifiedError::Validation {
                 field: "embedding_dim".to_string(),
                 expected: "768, 512, 256, or 128".to_string(),

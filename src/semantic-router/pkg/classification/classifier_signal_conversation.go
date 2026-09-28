@@ -51,9 +51,10 @@ func (c *Classifier) evaluateConversationSignal(
 		) {
 			continue
 		}
+		ruleStart := time.Now()
 		value := resolveConversationValue(rule.Feature, facts)
 		matched := conversationPredicateMatches(rule, value)
-		elapsed := time.Since(start)
+		elapsed := time.Since(ruleStart)
 		mu.Lock()
 		key := signalConfidenceKey(config.SignalTypeConversation, rule.Name)
 		results.SignalValues[key] = value

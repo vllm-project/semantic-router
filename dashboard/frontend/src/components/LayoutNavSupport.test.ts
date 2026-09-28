@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest'
 import {
   BUILD_MENU_CATEGORIES,
   findActiveLayoutMenuCategory,
+  getConfigSectionFromPathname,
   isLayoutMenuItemActive,
+  OPERATE_MENU_CATEGORIES,
 } from './LayoutNavSupport'
 
 describe('layout navigation route matching', () => {
@@ -56,5 +58,38 @@ describe('layout navigation route matching', () => {
       configSection: 'entrypoints-recipes',
     })
     expect(models?.items.indexOf(entrypoints!)).toBe(2)
+  })
+
+  it('derives config selection from the URL, including legacy aliases', () => {
+    expect(getConfigSectionFromPathname('/config/signals')).toBe('signals')
+    expect(getConfigSectionFromPathname('/config/routes')).toBe('decisions')
+    expect(getConfigSectionFromPathname('/config')).toBe('global-config')
+    expect(getConfigSectionFromPathname('/config/not-a-section')).toBeUndefined()
+    expect(getConfigSectionFromPathname('/dashboard')).toBeUndefined()
+  })
+
+  it('exposes the deployed configuration schema reference under platform operations', () => {
+    const schemaReference = OPERATE_MENU_CATEGORIES.find(
+      (category) => category.key === 'platform-access',
+    )
+      ?.sections.flatMap((section) => section.items)
+      .find((item) => item.kind === 'route' && item.to === '/config/reference')
+
+    expect(schemaReference).toMatchObject({ label: 'Schema Reference', icon: 'code' })
+    expect(isLayoutMenuItemActive(schemaReference!, '/config/reference', true)).toBe(true)
+  })
+
+  it('links directly to the running Router OpenAPI UI without making Dashboard the contract owner', () => {
+    const routerAPI = OPERATE_MENU_CATEGORIES.find(
+      (category) => category.key === 'platform-access',
+    )
+      ?.sections.flatMap((section) => section.items)
+      .find((item) => item.kind === 'route' && item.to === '/api/router/docs')
+
+    expect(routerAPI).toMatchObject({
+      label: 'Router API Docs',
+      reloadDocument: true,
+      target: '_blank',
+    })
   })
 })

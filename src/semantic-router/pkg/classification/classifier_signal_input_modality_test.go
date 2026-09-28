@@ -1,10 +1,12 @@
 package classification
 
 import (
+	"encoding/json"
 	"sync"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
 func inputModalityTestClassifier(rules ...config.InputModalityRule) *Classifier {
@@ -63,11 +65,11 @@ func TestInputModalitySignalMatchesPresentModalities(t *testing.T) {
 	if results.SignalValues["input_modality:audio_input"] != 0 {
 		t.Fatalf("signal values = %v, want published zero for audio", results.SignalValues)
 	}
-	if results.SignalConfidences["input_modality:image_input"] != 1.0 {
-		t.Fatalf("signal confidences = %v, want 1.0 for image", results.SignalConfidences)
+	if len(results.SignalConfidences) != 0 {
+		t.Fatalf("deterministic presence fabricated model scores: %v", results.SignalConfidences)
 	}
-	if results.Metrics.InputModality.Confidence != 1.0 {
-		t.Fatalf("input-modality confidence = %v, want 1.0", results.Metrics.InputModality.Confidence)
+	if results.Metrics.InputModality.ConfidenceAvailable == nil || *results.Metrics.InputModality.ConfidenceAvailable {
+		t.Fatal("structural presence must have unavailable confidence")
 	}
 }
 
@@ -111,5 +113,45 @@ func TestInputModalitySignalRespectsRuleScope(t *testing.T) {
 	}
 	if _, published := results.SignalValues["input_modality:image_input"]; published {
 		t.Fatalf("signal values = %v, out-of-scope rule must not publish", results.SignalValues)
+	}
+}
+
+// Counts remain usable routing evidence, while a deterministic match does not
+// publish a probability through the selected decision or signal metrics.
+func TestInputModalityDecisionKeepsStructuralEvidenceUnscored(t *testing.T) {
+	classifier := inputModalityTestClassifier(config.InputModalityRule{Name: "image_input", Modality: config.InputModalityImage})
+	results := newInputModalityTestResults()
+	classifier.evaluateInputModalitySignal(results, &sync.Mutex{}, RequestFacts{InputModality: InputModalityFacts{ImageContentCount: 2}}, map[string]bool{"input_modality:image_input": true})
+	minimum := 2.0
+	for _, test := range []struct {
+		name      string
+		predicate *config.NumericPredicate
+	}{
+		{name: "presence"}, {name: "count", predicate: &config.NumericPredicate{GTE: &minimum}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			engine := decision.NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "image_route", Rules: config.RuleNode{Type: "input_modality", Name: "image_input", Predicate: test.predicate}}}, config.RoutingStrategyPriority)
+			out, err := engine.EvaluateDecisionsWithSignals(&decision.SignalMatches{InputModalityRules: results.MatchedInputModalityRules, SignalConfidences: results.SignalConfidences, SignalValues: results.SignalValues})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out == nil || out.Decision == nil || out.Decision.Name != "image_route" {
+				t.Fatalf("structural route lost: %+v", out)
+			}
+			if out.ConfidenceScored {
+				t.Fatal("structural evidence reported as model probability")
+			}
+		})
+	}
+	body, err := json.Marshal(results.Metrics.InputModality)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var metrics map[string]any
+	if err = json.Unmarshal(body, &metrics); err != nil {
+		t.Fatal(err)
+	}
+	if metrics["confidence"] != nil || metrics["confidence_available"] != false || metrics["method"] != "structural_presence" {
+		t.Fatalf("incorrect structural evidence: %s", body)
 	}
 }

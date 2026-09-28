@@ -29,9 +29,10 @@ import (
 // It deliberately excludes ModelResponse and response bodies so transporting
 // the error through extproc cannot disclose candidate or verifier text.
 type ConfidenceExecutionEvidence struct {
-	ModelsUsed []string
-	Iterations int
-	Usage      TokenUsage
+	ModelsUsed     []string
+	Iterations     int
+	Usage          TokenUsage
+	ExecutionTrace ExecutionTrace
 }
 
 // ConfidencePartialExecutionError preserves paid execution evidence while
@@ -62,6 +63,7 @@ func (e *ConfidencePartialExecutionError) Evidence() ConfidenceExecutionEvidence
 	}
 	evidence := e.evidence
 	evidence.ModelsUsed = append([]string(nil), evidence.ModelsUsed...)
+	evidence.ExecutionTrace.Attempts = append([]AttemptTrace(nil), evidence.ExecutionTrace.Attempts...)
 	return evidence
 }
 
@@ -80,13 +82,15 @@ func newConfidencePartialExecutionError(
 	responses []*ModelResponse,
 	modelsUsed []string,
 	iterations int,
+	trace ExecutionTrace,
 ) error {
 	return &ConfidencePartialExecutionError{
 		cause: cause,
 		evidence: ConfidenceExecutionEvidence{
-			ModelsUsed: append([]string(nil), modelsUsed...),
-			Iterations: iterations,
-			Usage:      SumUsage(responses...),
+			ModelsUsed:     append([]string(nil), modelsUsed...),
+			Iterations:     iterations,
+			Usage:          SumUsage(responses...),
+			ExecutionTrace: trace,
 		},
 	}
 }

@@ -1,0 +1,165 @@
+package config
+
+import (
+	"fmt"
+	"math"
+)
+
+// The three verdicts a complexity rule can reach. They are matched downstream
+// as "<rule>:<verdict>", so the vocabulary is part of the routing contract and
+// not a local implementation detail.
+const (
+	ComplexityDifficultyHard   = "hard"
+	ComplexityDifficultyEasy   = "easy"
+	ComplexityDifficultyMedium = "medium"
+)
+
+// ComplexityBoundaries are the two scores that separate a rule's three
+// verdicts. They are resolved from a rule rather than read directly, because a
+// rule may state them as an explicit pair or as the symmetric `threshold`
+// shorthand.
+//
+// HardAt and EasyAt are in whatever units the score arrives in: the signed
+// margin for local prototype scoring, the model's own units for a score.v1
+// backend. HigherIsHarder records which way difficulty runs, so the same
+// comparison serves both directions.
+type ComplexityBoundaries struct {
+	HardAt         float64
+	EasyAt         float64
+	HigherIsHarder bool
+}
+
+// Verdict classifies a score against the boundaries, returning the same
+// hard/easy/medium vocabulary the local path has always produced. The band
+// between the boundaries is medium: the score is not far enough either way to
+// commit.
+func (b ComplexityBoundaries) Verdict(score float64) string {
+	if b.HigherIsHarder {
+		switch {
+		case score > b.HardAt:
+			return ComplexityDifficultyHard
+		case score < b.EasyAt:
+			return ComplexityDifficultyEasy
+		}
+		return ComplexityDifficultyMedium
+	}
+	switch {
+	case score < b.HardAt:
+		return ComplexityDifficultyHard
+	case score > b.EasyAt:
+		return ComplexityDifficultyEasy
+	}
+	return ComplexityDifficultyMedium
+}
+
+// EffectiveBoundaries resolves a rule's declared boundaries.
+//
+// `threshold: X` remains the symmetric shorthand it has always been, because
+// the local margin is signed and centred on zero. An explicit pair names its
+// own direction: hard_above/easy_below where a higher score is harder,
+// hard_below/easy_above where a lower one is. Encoding direction in the field
+// names keeps a separate `direction` setting out of the schema and makes an
+// overlapping band impossible to write by accident.
+func (r ComplexityRule) EffectiveBoundaries() (ComplexityBoundaries, error) {
+	// Checked in a fixed order, field by field: this runs once per rule before
+	// every remote scoring request, so it must not allocate, and a rule with
+	// two bad cut points has to name the same one every time it is loaded.
+	if err := r.rejectNonFiniteBoundary("hard_above", r.HardAbove); err != nil {
+		return ComplexityBoundaries{}, err
+	}
+	if err := r.rejectNonFiniteBoundary("easy_below", r.EasyBelow); err != nil {
+		return ComplexityBoundaries{}, err
+	}
+	if err := r.rejectNonFiniteBoundary("hard_below", r.HardBelow); err != nil {
+		return ComplexityBoundaries{}, err
+	}
+	if err := r.rejectNonFiniteBoundary("easy_above", r.EasyAbove); err != nil {
+		return ComplexityBoundaries{}, err
+	}
+
+	higher := r.HardAbove != nil || r.EasyBelow != nil
+	lower := r.HardBelow != nil || r.EasyAbove != nil
+
+	switch {
+	case higher && lower:
+		return ComplexityBoundaries{}, fmt.Errorf(
+			"complexity rule %q states two directions at once: use hard_above with easy_below, or hard_below with easy_above",
+			r.Name)
+	case higher:
+		if r.Threshold != 0 {
+			return ComplexityBoundaries{}, fmt.Errorf(
+				"complexity rule %q sets both threshold and an explicit boundary pair; keep one", r.Name)
+		}
+		if r.HardAbove == nil || r.EasyBelow == nil {
+			return ComplexityBoundaries{}, fmt.Errorf(
+				"complexity rule %q declares half a boundary pair; hard_above and easy_below are both required",
+				r.Name)
+		}
+		if *r.EasyBelow >= *r.HardAbove {
+			return ComplexityBoundaries{}, fmt.Errorf(
+				"complexity rule %q has overlapping bands: easy_below (%v) must be below hard_above (%v)",
+				r.Name, *r.EasyBelow, *r.HardAbove)
+		}
+		return ComplexityBoundaries{HardAt: *r.HardAbove, EasyAt: *r.EasyBelow, HigherIsHarder: true}, nil
+	case lower:
+		if r.Threshold != 0 {
+			return ComplexityBoundaries{}, fmt.Errorf(
+				"complexity rule %q sets both threshold and an explicit boundary pair; keep one", r.Name)
+		}
+		if r.HardBelow == nil || r.EasyAbove == nil {
+			return ComplexityBoundaries{}, fmt.Errorf(
+				"complexity rule %q declares half a boundary pair; hard_below and easy_above are both required",
+				r.Name)
+		}
+		if *r.HardBelow >= *r.EasyAbove {
+			return ComplexityBoundaries{}, fmt.Errorf(
+				"complexity rule %q has overlapping bands: hard_below (%v) must be below easy_above (%v)",
+				r.Name, *r.HardBelow, *r.EasyAbove)
+		}
+		return ComplexityBoundaries{HardAt: *r.HardBelow, EasyAt: *r.EasyAbove, HigherIsHarder: false}, nil
+	}
+
+	threshold := float64(r.Threshold)
+	// The same two guards the explicit pair gets, because threshold expands
+	// into a pair and a bad value fails just as quietly.
+	//
+	// Non-finite: every comparison against NaN is false, so the rule answers
+	// medium for every score.
+	//
+	// Negative: the pair becomes hard at a negative cut and easy at a positive
+	// one, so Verdict's hard test - score above HardAt - is true for nearly
+	// every score and the easy band is unreachable. The rule reads as
+	// "escalate a little" and behaves as "escalate everything".
+	if math.IsNaN(threshold) || math.IsInf(threshold, 0) {
+		return ComplexityBoundaries{}, fmt.Errorf(
+			"complexity rule %q has a non-finite threshold (%v); a threshold must be a finite number",
+			r.Name, threshold)
+	}
+	if threshold < 0 {
+		return ComplexityBoundaries{}, fmt.Errorf(
+			"complexity rule %q has a negative threshold (%v): threshold is a distance from zero, "+
+				"applied symmetrically as hard above +threshold and easy below -threshold, so a "+
+				"negative value overlaps the two bands and makes easy unreachable. Use a positive "+
+				"value, or state hard_below with easy_above if a lower score should mean harder",
+			r.Name, threshold)
+	}
+	return ComplexityBoundaries{HardAt: threshold, EasyAt: -threshold, HigherIsHarder: true}, nil
+}
+
+// rejectNonFiniteBoundary refuses a cut point that cannot separate anything:
+// every comparison against NaN is false, so the rule would answer medium for
+// every score, and an infinity makes one verdict unreachable.
+func (r ComplexityRule) rejectNonFiniteBoundary(name string, value *float64) error {
+	if value == nil || (!math.IsNaN(*value) && !math.IsInf(*value, 0)) {
+		return nil
+	}
+	return fmt.Errorf(
+		"complexity rule %q has a non-finite %s (%v); a boundary must be a finite number",
+		r.Name, name, *value)
+}
+
+// declaresBoundaryPair reports whether a rule states its cut points
+// explicitly, rather than relying on the symmetric threshold shorthand.
+func (r ComplexityRule) declaresBoundaryPair() bool {
+	return r.HardAbove != nil || r.EasyBelow != nil || r.HardBelow != nil || r.EasyAbove != nil
+}

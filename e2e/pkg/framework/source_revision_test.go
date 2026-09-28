@@ -31,7 +31,7 @@ func TestDashboardLocalImageRejectsMutableSourceRevision(t *testing.T) {
 
 func TestNonDashboardLocalImageDoesNotReceiveEvaluationRevision(t *testing.T) {
 	t.Setenv("VLLM_SR_SOURCE_REVISION", "invalid-for-dashboard")
-	args, err := localImageDockerBuildArgs(LocalImageBuild{Dockerfile: "tools/mock-vllm/Dockerfile"})
+	args, err := localImageDockerBuildArgs(LocalImageBuild{Dockerfile: "tools/test/services/provider-mocker/Dockerfile"})
 	if err != nil {
 		t.Fatalf("localImageDockerBuildArgs: %v", err)
 	}

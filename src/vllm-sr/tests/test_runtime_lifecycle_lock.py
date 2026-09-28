@@ -2,6 +2,7 @@ import os
 import stat
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -13,10 +14,20 @@ from cli.runtime_lifecycle_lock import (
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX file lock contract")
 
 
+@pytest.fixture
+def private_tmp_path():
+    # Lifecycle locks reject writable ancestors, including Linux /tmp. Keep
+    # this fixture under the user-owned home so the tests reach the lock itself.
+    with tempfile.TemporaryDirectory(
+        prefix=".vllm-sr-lock-test-", dir=Path.home().resolve()
+    ) as directory:
+        yield Path(directory)
+
+
 def test_runtime_lifecycle_lock_is_private_noninheritable_and_reusable(
-    tmp_path: Path,
+    private_tmp_path: Path,
 ):
-    lock_root = tmp_path / "locks"
+    lock_root = private_tmp_path / "locks"
     with acquire_runtime_lifecycle_lock(
         runtime="docker",
         stack_name="audit-a",
@@ -37,10 +48,10 @@ def test_runtime_lifecycle_lock_is_private_noninheritable_and_reusable(
 
 
 def test_runtime_lifecycle_lock_contends_across_working_directories(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    private_tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    lock_root = tmp_path / "locks"
-    other_workspace = tmp_path / "other-workspace"
+    lock_root = private_tmp_path / "locks"
+    other_workspace = private_tmp_path / "other-workspace"
     other_workspace.mkdir()
 
     with acquire_runtime_lifecycle_lock(
@@ -76,8 +87,10 @@ def test_runtime_lifecycle_lock_contends_across_working_directories(
     assert "another lifecycle operation in progress" in contender.stderr
 
 
-def test_runtime_lifecycle_lock_separates_runtime_and_stack_keys(tmp_path: Path):
-    lock_root = tmp_path / "locks"
+def test_runtime_lifecycle_lock_separates_runtime_and_stack_keys(
+    private_tmp_path: Path,
+):
+    lock_root = private_tmp_path / "locks"
     with (
         acquire_runtime_lifecycle_lock(
             runtime="docker", stack_name="audit-a", lock_root=lock_root
@@ -92,8 +105,8 @@ def test_runtime_lifecycle_lock_separates_runtime_and_stack_keys(tmp_path: Path)
         pass
 
 
-def test_runtime_lifecycle_lock_releases_after_exception(tmp_path: Path):
-    lock_root = tmp_path / "locks"
+def test_runtime_lifecycle_lock_releases_after_exception(private_tmp_path: Path):
+    lock_root = private_tmp_path / "locks"
     with (
         pytest.raises(RuntimeError, match="deployment failed"),
         acquire_runtime_lifecycle_lock(
@@ -109,15 +122,15 @@ def test_runtime_lifecycle_lock_releases_after_exception(tmp_path: Path):
 
 
 def test_runtime_lifecycle_lock_rejects_symlinked_or_linked_lock_file(
-    tmp_path: Path,
+    private_tmp_path: Path,
 ):
-    lock_root = tmp_path / "locks"
+    lock_root = private_tmp_path / "locks"
     with acquire_runtime_lifecycle_lock(
         runtime="docker", stack_name="audit-a", lock_root=lock_root
     ) as lock:
         lock_path = lock.lock_path
 
-    outside = tmp_path / "outside-lock"
+    outside = private_tmp_path / "outside-lock"
     outside.write_text("", encoding="utf-8")
     lock_path.unlink()
     lock_path.symlink_to(outside)
@@ -134,10 +147,10 @@ def test_runtime_lifecycle_lock_rejects_symlinked_or_linked_lock_file(
         )
 
 
-def test_runtime_lifecycle_lock_rejects_symlinked_directory(tmp_path: Path):
-    real_root = tmp_path / "real-locks"
+def test_runtime_lifecycle_lock_rejects_symlinked_directory(private_tmp_path: Path):
+    real_root = private_tmp_path / "real-locks"
     real_root.mkdir()
-    symlink_root = tmp_path / "linked-locks"
+    symlink_root = private_tmp_path / "linked-locks"
     symlink_root.symlink_to(real_root, target_is_directory=True)
 
     with pytest.raises(RuntimeLifecycleLockError, match="path cannot be opened safely"):

@@ -30,13 +30,8 @@ func Replace(newCfg *RouterConfig) {
 	configMu.Unlock()
 
 	configUpdateMu.Lock()
-	subscribers := make(map[uint64]chan *RouterConfig, len(configUpdateSubscribers))
-	for id, channel := range configUpdateSubscribers {
-		subscribers[id] = channel
-	}
+	notifyConfigUpdateSubscribers(newCfg, configUpdateSubscribers)
 	configUpdateMu.Unlock()
-
-	notifyConfigUpdateSubscribers(newCfg, subscribers)
 }
 
 func notifyConfigUpdateSubscribers(newCfg *RouterConfig, subscribers map[uint64]chan *RouterConfig) {

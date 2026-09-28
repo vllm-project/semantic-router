@@ -57,8 +57,6 @@ func buildFusionStreamingToolCallSSE(
 	created int64,
 	model string,
 	raw []byte,
-	cfg fusionExecutionConfig,
-	trace *FusionTrace,
 ) ([]byte, error) {
 	toolCalls, err := fusionToolCallDeltasFromRaw(raw)
 	if err != nil {
@@ -71,11 +69,7 @@ func buildFusionStreamingToolCallSSE(
 		"delta":         map[string]interface{}{"role": "assistant"},
 		"finish_reason": nil,
 	}
-	var extra map[string]interface{}
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		extra = map[string]interface{}{"fusion": trace}
-	}
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, extra))
+	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, nil))
 
 	toolChoice := map[string]interface{}{
 		"index":         0,

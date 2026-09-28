@@ -2,12 +2,19 @@ package extproc
 
 import (
 	"context"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/openai/openai-go"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
@@ -50,10 +57,52 @@ func TestOpenAIRouterCloseClosesOwnedResources(t *testing.T) {
 	}
 }
 
-func TestOpenAIRouterCloseDrainsManagementLeasesBeforeRecoveryStore(t *testing.T) {
+func TestOpenAIRouterOwnsOneLooperConnectorPerGeneration(t *testing.T) {
+	connectionClosed := make(chan struct{}, 1)
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateClosed {
+			select {
+			case connectionClosed <- struct{}{}:
+			default:
+			}
+		}
+	}
+	server.Start()
+	defer server.Close()
+
+	components, err := buildRouterComponents(&config.RouterConfig{
+		Looper: config.LooperConfig{Endpoint: server.URL},
+	})
+	require.NoError(t, err)
+	router := components.buildRouter()
+	client := router.looperModelClient()
+	require.Same(t, components.looperClient, client)
+	require.Same(t, client, router.looperModelClient())
+
+	_, err = client.CallModelWithOptions(
+		context.Background(),
+		openai.ChatCompletionNewParams{},
+		looper.ModelTarget{Name: "model-a"},
+		looper.CallOptions{Iteration: 1},
+	)
+	require.NoError(t, err)
+	require.NoError(t, router.Close())
+
+	select {
+	case <-connectionClosed:
+	case <-time.After(time.Second):
+		t.Fatal("router close did not close the Looper connector's idle connection")
+	}
+}
+
+func TestRouterServiceCloseDrainsManagementLeasesBeforeRecoveryStore(t *testing.T) {
 	recovery := &closeTrackingRecoveryStore{closed: make(chan struct{})}
 	router := (&routerComponents{resources: newResourceScope()}).buildRouter()
 	router.CompressionRecovery = recovery
+	service := NewRouterService(router)
 	release, acquired := router.routerLearningRuntimeState().AcquireLease()
 	if !acquired {
 		t.Fatal("AcquireLease() rejected an active router learning runtime")
@@ -61,7 +110,7 @@ func TestOpenAIRouterCloseDrainsManagementLeasesBeforeRecoveryStore(t *testing.T
 
 	closed := make(chan struct{})
 	go func() {
-		_ = router.Close()
+		_ = service.Close()
 		close(closed)
 	}()
 

@@ -121,10 +121,11 @@ func (r *SemanticRouterReconciler) ensureInitialProgressingStatus(
 	}
 
 	meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
-		Type:    typeProgressingSemanticRouter,
-		Status:  metav1.ConditionTrue,
-		Reason:  "Reconciling",
-		Message: "Starting reconciliation",
+		ObservedGeneration: semanticrouter.Generation,
+		Type:               typeProgressingSemanticRouter,
+		Status:             metav1.ConditionTrue,
+		Reason:             "Reconciling",
+		Message:            "Starting reconciliation",
 	})
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -133,10 +134,11 @@ func (r *SemanticRouterReconciler) ensureInitialProgressingStatus(
 			return err
 		}
 		meta.SetStatusCondition(&current.Status.Conditions, metav1.Condition{
-			Type:    typeProgressingSemanticRouter,
-			Status:  metav1.ConditionTrue,
-			Reason:  "Reconciling",
-			Message: "Starting reconciliation",
+			ObservedGeneration: current.Generation,
+			Type:               typeProgressingSemanticRouter,
+			Status:             metav1.ConditionTrue,
+			Reason:             "Reconciling",
+			Message:            "Starting reconciliation",
 		})
 		return r.Status().Update(ctx, current)
 	})
@@ -166,7 +168,7 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 		return err
 	}
 
-	gatewayMode, err := reconcileGatewayIntegration(ctx, r.Client, r.Scheme, semanticrouter)
+	gatewayMode, err := reconcileGatewayIntegration(ctx, r.Client, semanticrouter)
 	if err != nil {
 		logger.Error(err, "Gateway integration failed")
 		return err

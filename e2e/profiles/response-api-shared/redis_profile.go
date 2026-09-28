@@ -8,7 +8,7 @@ import (
 )
 
 var sharedResourceManifests = []string{
-	"deploy/kubernetes/response-api/mock-vllm.yaml",
+	"deploy/kubernetes/response-api/provider-mocker.yaml",
 	"deploy/kubernetes/response-api/gwapi-resources.yaml",
 }
 

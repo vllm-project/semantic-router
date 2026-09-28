@@ -66,3 +66,90 @@ func TestEvaluateDecisionsWithSignals_EmitsMetricsExactlyOnce(t *testing.T) {
 		t.Fatalf("DecisionMatchTotal{decision_name=\"catch-all\"} delta = %v, want 1 (double-counting bug?)", got)
 	}
 }
+
+func TestEvaluateDecisionsRecordsUnknownPolicy(t *testing.T) {
+	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "guarded", Rules: config.RuleNode{
+		Type:      config.SignalTypeClassifier,
+		Name:      "risk",
+		Label:     "RISKY",
+		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
+		OnUnknown: config.RuleOnUnknownNoMatch,
+	}}}, config.RoutingStrategyPriority)
+	counter := metrics.DecisionUnknownTotal.WithLabelValues("guarded", string(config.RuleOnUnknownNoMatch))
+	before := testutil.ToFloat64(counter)
+
+	if _, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
+		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := testutil.ToFloat64(counter) - before; got != 1 {
+		t.Fatalf("DecisionUnknownTotal delta = %v, want 1", got)
+	}
+}
+
+func TestDecisionConfidenceMetricsRespectScoredStatus(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		rule    config.RuleNode
+		signals *SignalMatches
+		scored  bool
+	}{
+		{
+			name:    "keyword",
+			rule:    config.RuleNode{Type: "keyword", Name: "marker"},
+			signals: &SignalMatches{KeywordRules: []string{"marker"}},
+		},
+		{
+			name: "on_unknown_match",
+			rule: config.RuleNode{
+				Type: config.SignalTypeClassifier, Name: "risk", Label: "RISKY",
+				Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)}, OnUnknown: config.RuleOnUnknownMatch,
+			},
+			signals: &SignalMatches{SignalErrors: map[string]string{"classifier:risk": "unavailable"}},
+		},
+		{
+			name:    "catch_all",
+			rule:    config.RuleNode{Operator: "AND"},
+			signals: &SignalMatches{},
+			scored:  true,
+		},
+		{
+			name:    "predicate",
+			rule:    config.RuleNode{Type: "structure", Name: "size", Predicate: &config.NumericPredicate{GTE: float64Ptr(1)}},
+			signals: &SignalMatches{SignalValues: map[string]float64{"structure:size": 2}},
+		},
+		{
+			name: "reported_zero",
+			rule: config.RuleNode{Type: "domain", Name: "example"},
+			signals: &SignalMatches{
+				DomainRules:       []string{"example"},
+				SignalConfidences: map[string]float64{"domain:example": 0},
+			},
+			scored: true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			name := t.Name()
+			engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: name, Rules: test.rule}}, config.RoutingStrategyPriority)
+			histogram := metrics.DecisionConfidence.WithLabelValues(name).(prometheus.Histogram)
+			before := histogramSampleCount(t, histogram)
+			matchesBefore := testutil.ToFloat64(metrics.DecisionMatchTotal.WithLabelValues(name))
+			result, err := engine.EvaluateDecisionsWithSignals(test.signals)
+			if err != nil || result == nil || result.ConfidenceScored != test.scored {
+				t.Fatalf("decision = %#v, error = %v; scored = %v", result, err, test.scored)
+			}
+			want := uint64(0)
+			if test.scored && !result.CatchAll {
+				want = 1
+			}
+			if got := histogramSampleCount(t, histogram) - before; got != want {
+				t.Fatalf("confidence observations = %d, want %d", got, want)
+			}
+			if got := testutil.ToFloat64(metrics.DecisionMatchTotal.WithLabelValues(name)) - matchesBefore; got != 1 {
+				t.Fatalf("match counter = %g, want 1", got)
+			}
+		})
+	}
+}

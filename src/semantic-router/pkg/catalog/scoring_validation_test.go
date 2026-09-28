@@ -46,3 +46,44 @@ func TestValidateBenchmarkAcceptsTagsAndMetricNormalization(t *testing.T) {
 		t.Fatalf("non-finite normalization accepted: %v", err)
 	}
 }
+
+func TestIndexComponentProfilesRequiresOneUniqueProfileForm(t *testing.T) {
+	component := IndexComponent{BenchmarkProfiles: []string{"independent", "published"}}
+	profiles, err := indexComponentProfiles(component, "indices[0].components[0]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profiles) != 2 || profiles[0] != "independent" || profiles[1] != "published" {
+		t.Fatalf("profiles = %v", profiles)
+	}
+
+	component.BenchmarkProfile = "published"
+	if _, err := indexComponentProfiles(component, "indices[0].components[0]"); err == nil ||
+		!strings.Contains(err.Error(), "exactly one") {
+		t.Fatalf("mixed profile forms accepted: %v", err)
+	}
+
+	component.BenchmarkProfile = ""
+	component.BenchmarkProfiles = []string{"published", "published"}
+	if _, err := indexComponentProfiles(component, "indices[0].components[0]"); err == nil ||
+		!strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("duplicate profiles accepted: %v", err)
+	}
+}
+
+func TestNestedIndexComponentRejectsBenchmarkFields(t *testing.T) {
+	component := IndexComponent{
+		Index:            "example/base@1.0.0",
+		BenchmarkProfile: "published",
+	}
+	err := validateIndexComponentReference(
+		component,
+		"indices[0].components[0]",
+		map[string]IndexDefinition{"example/base@1.0.0": {}},
+		nil,
+		&indexValidationSummary{directDomainWeights: map[string]float64{}},
+	)
+	if err == nil || !strings.Contains(err.Error(), "nested index") {
+		t.Fatalf("nested benchmark fields accepted: %v", err)
+	}
+}

@@ -41,6 +41,36 @@
   cursor: pointer;
 }
 
+.definitionEditor {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.definitionType {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.definitionType select {
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text);
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  color-scheme: dark;
+}
+
+.definitionType select option {
+  background: #111216;
+  color: #f5f5f7;
+}
+
 .deleteButton {
   border-color: color-mix(in srgb, var(--color-danger) 55%, var(--color-border));
   color: var(--color-danger);

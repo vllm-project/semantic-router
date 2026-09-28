@@ -1,61 +1,20 @@
-export const SIGNAL_TYPES = [
-  'keyword',
-  'embedding',
-  'domain',
-  'fact_check',
-  'user_feedback',
-  'reask',
-  'preference',
-  'language',
-  'context',
-  'structure',
-  'complexity',
-  'modality',
-  'authz',
-  'jailbreak',
-  'pii',
-  'kb',
-  'conversation',
-  'event',
-  'metadata',
-  'classifier',
-  'input_modality',
-] as const
+import {
+  PLUGIN_TYPES,
+  ROUTER_CONFIG_EXTENSION,
+  SIGNAL_TYPES,
+  type SignalType,
+} from '../generated/routerConfigContract'
 
-export type SignalType = (typeof SIGNAL_TYPES)[number]
+export { PLUGIN_TYPES, SIGNAL_TYPES }
+export type { SignalType }
 
-export const PLUGIN_TYPES = [
-  'response_cache',
-  'memory',
-  'system_prompt',
-  'header_mutation',
-  'hallucination',
-  'router_replay',
-  'rag',
-  'fast_response',
-  'tools',
-  'tool_selection',
-  'request_params',
-  'response_jailbreak',
-  'context_compression',
-] as const
+export const PLUGIN_DESCRIPTIONS: Record<string, string> = Object.fromEntries(
+  ROUTER_CONFIG_EXTENSION.plugins.map((surface) => [surface.type, surface.description]),
+)
 
-export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
-  response_cache: 'Reuse exact or semantically compatible responses to reduce latency and cost',
-  memory: 'Persistent conversation memory with vector retrieval',
-  system_prompt: 'Inject or replace system prompts for the model',
-  header_mutation: 'Add, update, or remove HTTP headers on requests/responses',
-  hallucination: 'Detect hallucinated content using NLI or other methods',
-  router_replay: 'Record request/response pairs for replay and debugging',
-  rag: 'Retrieval-Augmented Generation — inject retrieved context into prompts',
-  fast_response: 'Short-circuit and return a fixed response without calling upstream models',
-  tools: 'Route-local tool filtering and semantic tool selection',
-  tool_selection: 'Semantic tool add/filter plugin for route-local tool catalogs',
-  request_params: 'Mutate request parameters before forwarding to the model',
-  response_jailbreak: 'Screen generated responses for jailbreak-like output before returning',
-  context_compression: 'Compress large tool outputs before provider dispatch',
-}
-
+// Backend entities are Dashboard topology concepts rather than Router routing
+// DSL discriminators. They remain local until the backend surface has its own
+// generated registry.
 export const BACKEND_TYPES = [
   'vllm_endpoint',
   'provider_profile',

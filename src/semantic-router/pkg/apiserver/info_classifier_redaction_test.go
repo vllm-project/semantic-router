@@ -11,7 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// GET /info/classifier dumps the live runtime config. Resolved upstream
+// GET /api/v1/inventory/classifier dumps the live runtime config. Resolved upstream
 // credentials (api_key_env expanded into VLLMEndpoint.APIKey /
 // ModelParams.AccessKey) must never appear in that JSON response.
 func TestClassifierInfoRedactsResolvedSecrets(t *testing.T) {
@@ -31,7 +31,7 @@ func TestClassifierInfoRedactsResolvedSecrets(t *testing.T) {
 	}
 	s := &ClassificationAPIServer{config: cfg}
 
-	req := httptest.NewRequest(http.MethodGet, "/info/classifier", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/inventory/classifier", nil)
 	rr := httptest.NewRecorder()
 	s.handleClassifierInfo(rr, req)
 
@@ -39,6 +39,6 @@ func TestClassifierInfoRedactsResolvedSecrets(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
 	if strings.Contains(rr.Body.String(), canary) {
-		t.Fatalf("/info/classifier leaked a resolved credential value in its response body")
+		t.Fatalf("/api/v1/inventory/classifier leaked a resolved credential value in its response body")
 	}
 }

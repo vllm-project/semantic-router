@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 )
 
 func newLimitedVLLMClient(server *httptest.Server, maxResponseBytes int64) *VLLMClient {
@@ -15,7 +16,7 @@ func newLimitedVLLMClient(server *httptest.Server, maxResponseBytes int64) *VLLM
 		ModelEndpoint:    config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1},
 		MaxResponseBytes: maxResponseBytes,
 	})
-	client.baseURL = server.URL
+	setTestVLLMClientURL(client, server.URL)
 	return client
 }
 
@@ -54,4 +55,9 @@ func TestVLLMClientErrorBodyIsTruncated(t *testing.T) {
 	if len(err.Error()) > int(maxClassifyErrorBodyBytes)+256 {
 		t.Fatalf("error length = %d, want bounded error", len(err.Error()))
 	}
+}
+
+func setTestVLLMClientURL(client *VLLMClient, url string) {
+	_ = client.Close()
+	client.connector, client.initErr = connector.New(url, bearerAuthorizer(client.accessKey), client.transportOptions)
 }

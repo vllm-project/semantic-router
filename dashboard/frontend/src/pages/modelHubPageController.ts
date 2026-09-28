@@ -105,7 +105,7 @@ function useMobileDetailDialog(
   }, [closeDetail, compact, detailCloseRef, detailLayerRef, detailOpen, detailTriggerRef])
 }
 
-function useBenchmarkModelFocus(view: ModelHubView, visibleRows: ModelHubRow[]) {
+function useArenaModelFocus(view: ModelHubView, visibleRows: ModelHubRow[]) {
   const [targetID, setTargetID] = useState<string | null>(null)
 
   useEffect(() => {
@@ -143,11 +143,8 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
     () => paginateModelHubRows(rows, page, pageSize),
     [page, pageSize, rows],
   )
-  const selected = resolveModelHubSelection(
-    view === 'benchmarks' ? rows : pagination.items,
-    selectedID,
-  )
-  const focusBenchmarkModel = useBenchmarkModelFocus(view, pagination.items)
+  const selected = resolveModelHubSelection(pagination.items, selectedID)
+  const focusArenaModel = useArenaModelFocus(view, pagination.items)
 
   useEffect(() => {
     setPage(1)
@@ -187,12 +184,12 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
       document.activeElement instanceof HTMLElement ? document.activeElement : null
     setDetailOpen(true)
   }
-  const openModelFromBenchmark = (id: string): void => {
+  const openModelFromArena = (id: string): void => {
     setSelectedID(id)
     setPage(modelHubPageForModel(rows, id, pageSize))
     setView('list')
     setDetailOpen(false)
-    focusBenchmarkModel(id)
+    focusArenaModel(id)
   }
 
   return {
@@ -218,6 +215,6 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
     resetFilters,
     updatePageSize,
     selectModel,
-    openModelFromBenchmark,
+    openModelFromArena,
   }
 }

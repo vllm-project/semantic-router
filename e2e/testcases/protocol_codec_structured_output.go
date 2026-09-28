@@ -332,7 +332,7 @@ func verifyProtocolStructuredOutputEcho(text string) error {
 	if err := json.Unmarshal([]byte(text), &echo); err != nil {
 		return fmt.Errorf("backend echo is not JSON: %w (text=%q)", err, truncateString(text, 500))
 	}
-	if echo.Mock != "mock-vllm" || echo.StructuredOutput["type"] != "json_schema" {
+	if echo.Mock != "provider-mocker" || echo.StructuredOutput["type"] != "json_schema" {
 		return fmt.Errorf("backend did not receive a JSON Schema output contract: %s", truncateString(text, 500))
 	}
 	schema := echo.StructuredOutput["schema"]

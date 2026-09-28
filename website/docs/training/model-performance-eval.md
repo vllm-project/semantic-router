@@ -187,7 +187,7 @@ configuration. Add decisions that explain when each category affects routing,
 then validate the result:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 Do not replace a production configuration wholesale. Preserve its listeners,

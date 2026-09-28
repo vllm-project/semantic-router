@@ -60,7 +60,7 @@ class ModelCatalogAuditTests(unittest.TestCase):
             ],
             "indices": [
                 {
-                    "id": "test/index@1.0.0",
+                    "id": "test/capability@1.0.0",
                     "components": [
                         {
                             "benchmark": "bench/a@1.0.0",
@@ -73,7 +73,11 @@ class ModelCatalogAuditTests(unittest.TestCase):
                             "metric": "resolved",
                         },
                     ],
-                }
+                },
+                {
+                    "id": "test/index@1.0.0",
+                    "components": [{"index": "test/capability@1.0.0"}],
+                },
             ],
             "evaluations": [
                 {
@@ -141,7 +145,7 @@ class ModelCatalogAuditTests(unittest.TestCase):
             [
                 {
                     "benchmark": "bench/a@1.0.0",
-                    "benchmark_profile": "standard",
+                    "benchmark_profiles": ["standard"],
                     "metric": "accuracy",
                 }
             ],
@@ -151,7 +155,7 @@ class ModelCatalogAuditTests(unittest.TestCase):
             [
                 {
                     "benchmark": "bench/b@1.0.0",
-                    "benchmark_profile": "agent",
+                    "benchmark_profiles": ["agent"],
                     "metric": "resolved",
                 }
             ],

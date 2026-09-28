@@ -1,32 +1,14 @@
 import { normalizeStringList } from '../components/structuredFieldEditorSupport'
+import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
 import type {
   ProjectionMappingCalibration,
   ProjectionMappingOutput,
   ProjectionScoreInput,
 } from './configPageSupport'
 
-const supportedProjectionInputTypes = new Set([
-  'keyword',
-  'embedding',
-  'domain',
-  'fact_check',
-  'user_feedback',
-  'reask',
-  'preference',
-  'language',
-  'context',
-  'structure',
-  'complexity',
-  'modality',
-  'authz',
-  'jailbreak',
-  'pii',
-  'kb',
-  'conversation',
-  'event',
-  'kb_metric',
-  'projection',
-])
+export const PROJECTION_INPUT_TYPES = ROUTER_CONFIG_EXTENSION.projection_input_types
+
+const supportedProjectionInputTypes = new Set<string>(PROJECTION_INPUT_TYPES)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)

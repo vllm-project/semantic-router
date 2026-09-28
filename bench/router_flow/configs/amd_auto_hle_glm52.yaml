@@ -111,56 +111,58 @@ providers:
           api_key_env: OPENROUTER_API_KEY
           weight: 1
 
+evaluation:
+  records:
+    - model: glm52-solver-a
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.91
+    - model: glm52-solver-b
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.91
+    - model: glm52-solver-c
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.91
+    - model: glm52-finalizer
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.91
+    - model: gpt55-judge
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
 routing:
   modelCards:
     - name: glm52-solver-a
       context_window_size: 1048576
       description: GLM 5.2 HLE solver alias for independent high-reasoning samples.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:worker, base:glm52]
     - name: glm52-solver-b
       context_window_size: 1048576
       description: GLM 5.2 HLE solver alias for independent high-reasoning samples.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:worker, base:glm52]
     - name: glm52-solver-c
       context_window_size: 1048576
       description: GLM 5.2 HLE solver alias for independent high-reasoning samples.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:worker, base:glm52]
     - name: glm52-finalizer
       context_window_size: 1048576
       description: GLM 5.2 final synthesis alias for HLE answer-contract enforcement.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:synthesis, base:glm52]
     - name: gpt55-judge
       context_window_size: 1048576
       description: External GPT-5.5 judge endpoint for EvalScope HLE scoring only.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.94
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:judge, pool:closed]
 

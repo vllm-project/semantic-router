@@ -70,7 +70,7 @@ SIGNAL keyword clarification_feedback_markers {
 
 SIGNAL keyword verification_markers {
   operator: "OR"
-  keywords: ["verify this", "verify the claim", "verify with a source", "verify with sources", "verify with a source whether", "cite the source", "cite a reliable source", "cite sources", "with sources", "with a source", "with citations", "answer with citations", "with reliable sources", "with reputable sources", "cite reliable historical sources", "reliable historical sources", "reputable historical sources", "reliable medical sources", "is this true", "fact check this", "verify with evidence", "核实一下", "给出处", "请给出处", "这是真的吗", "请核验", "请给来源", "请核实并给出处", "请核实并给来源", "请核验并给来源"]
+  keywords: ["verify", "citations", "cite", "sources", "verify this", "verify the claim", "verify with a source", "verify with sources", "verify with a source whether", "cite the source", "cite a reliable source", "cite sources", "with sources", "with a source", "with citations", "answer with citations", "with reliable sources", "with reputable sources", "cite reliable historical sources", "reliable historical sources", "reputable historical sources", "reliable medical sources", "is this true", "fact check this", "verify with evidence", "核实一下", "给出处", "请给出处", "这是真的吗", "请核验", "请给来源", "请核实并给出处", "请核实并给来源", "请核验并给来源"]
 }
 
 SIGNAL keyword reference_heavy_markers {
@@ -85,7 +85,7 @@ SIGNAL keyword legal_risk_markers {
 
 SIGNAL keyword simple_request_markers {
   operator: "OR"
-  keywords: ["quick answer", "answer briefly", "keep it short", "one sentence", "simple explanation", "tl;dr", "briefly explain", "concise answer", "简短回答", "简单解释", "用一句话", "直接回答"]
+  keywords: ["quick answer", "answer briefly", "keep it short", "one sentence", "simple explanation", "tl;dr", "briefly explain", "concise answer", "简短回答", "简单解释", "用一句话", "直接回答", "只写答案", "只需答案", "只要答案", "仅给答案", "只输出答案", "仅输出答案"]
 }
 
 SIGNAL keyword creative_request_markers {
@@ -136,6 +136,47 @@ SIGNAL keyword reasoning_request_markers {
 SIGNAL keyword urgency_markers {
   operator: "OR"
   keywords: ["urgent", "urgently", "asap", "right now", "immediately", "as soon as possible", "马上", "立刻", "立即", "尽快", "赶紧", "现在就"]
+}
+
+SIGNAL keyword argument_request_markers {
+  operator: "OR"
+  keywords: ["argue", "argument", "defend", "justify", "reasoning", "论证", "辩护", "反驳", "推理"]
+}
+
+SIGNAL keyword normative_topic_markers {
+  operator: "OR"
+  keywords: ["ethics", "ethical", "moral", "deontology", "utilitarianism", "consequentialism", "道德", "伦理", "义务"]
+}
+
+SIGNAL keyword explanation_request_markers {
+  operator: "OR"
+  keywords: ["explain", "compare", "analyze", "analyse", "summarize", "why", "how", "解释", "分析", "比较", "总结", "原因", "机制"]
+}
+
+SIGNAL keyword scientific_inquiry_markers {
+  operator: "OR"
+  keywords: ["experiment", "experiments", "experimental", "simulation", "simulations", "hypothesis", "hypotheses", "modeling", "modelling", "实验", "模拟", "假设", "建模"]
+}
+
+SIGNAL keyword creative_form_markers {
+  operator: "OR"
+  keywords: ["poem", "poetry", "story", "fiction", "fictional", "slogan", "tagline", "诗", "诗歌", "故事", "小说", "虚构", "标语"]
+}
+
+SIGNAL keyword drafting_action_markers {
+  operator: "OR"
+  keywords: ["write", "draft", "compose", "rewrite", "写", "起草", "措辞"]
+}
+
+SIGNAL keyword personal_tone_markers {
+  operator: "OR"
+  keywords: ["calm", "supportive", "polite", "tactful", "warm", "sincere", "friendly", "温和", "礼貌", "真诚", "友善"]
+}
+
+SIGNAL embedding interpersonal_drafting {
+  threshold: 0.55
+  candidates: ["Draft a polite personal message that sets a boundary while preserving a friendly relationship.", "Help me phrase a scheduling request as a considerate note.", "Compose a personal apology that sounds sincere rather than defensive."]
+  aggregation_method: "max"
 }
 
 SIGNAL embedding fast_qa_en {
@@ -235,7 +276,7 @@ SIGNAL embedding premium_legal_analysis {
 }
 
 SIGNAL fact_check needs_fact_check {
-  description: "Narrow factual-verification route for requests that explicitly ask for evidence or source checking."
+  description: "Requests that depend on external factual knowledge; verification routing combines this evidence with task and source requirements."
 }
 
 SIGNAL user_feedback wrong_answer {
@@ -376,7 +417,7 @@ PROJECTION partition balance_domain_partition {
 PROJECTION partition balance_intent_partition {
   semantics: "softmax_exclusive"
   temperature: 0.18
-  members: ["agentic_workflows", "architecture_design", "business_analysis", "code_general", "complex_stem", "creative_tasks", "fast_qa_en", "fast_qa_zh", "general_chat_fallback", "health_guidance", "history_explainer", "premium_legal_analysis", "psychology_support", "reasoning_general_en", "reasoning_general_zh", "research_synthesis"]
+  members: ["agentic_workflows", "architecture_design", "business_analysis", "code_general", "complex_stem", "creative_tasks", "fast_qa_en", "fast_qa_zh", "general_chat_fallback", "health_guidance", "history_explainer", "interpersonal_drafting", "premium_legal_analysis", "psychology_support", "reasoning_general_en", "reasoning_general_zh", "research_synthesis"]
   default: "general_chat_fallback"
 }
 
@@ -449,7 +490,6 @@ MODEL anthropic/claude-opus-4.6 {
   description: "PREMIUM tier alias reserved for legal and high-risk analysis."
   capabilities: ["legal_analysis", "policy_review", "high_risk_review"]
   tags: ["tier:premium", "cost:highest", "specialty:legal"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.94 } }]
   modality: "text"
 }
 
@@ -458,7 +498,6 @@ MODEL google/gemini-2.5-flash-lite {
   description: "MEDIUM tier alias for low-cost verified explanation and correction tasks."
   capabilities: ["verified_explanation", "source_backed_correction", "nuanced_explanation"]
   tags: ["tier:medium", "cost:low", "specialty:verified"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.68 } }]
   modality: "text"
 }
 
@@ -467,7 +506,6 @@ MODEL google/gemini-3.1-pro {
   description: "COMPLEX tier alias for systems design, hard STEM, health guidance, and deep general reasoning."
   capabilities: ["architecture", "stem_analysis", "long_context", "general_reasoning"]
   tags: ["tier:complex", "cost:upper_mid", "specialty:complex_generalist"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.82 } }]
   modality: "text"
 }
 
@@ -481,7 +519,6 @@ MODEL openai/gpt5.4 {
   description: "REASONING tier alias for narrow formal math proofs and derivations."
   capabilities: ["reasoning", "proofs", "formal_derivation"]
   tags: ["tier:reasoning", "cost:high", "specialty:formal_proof"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.9 } }]
   modality: "text"
 }
 
@@ -490,7 +527,6 @@ MODEL qwen/qwen3.5-rocm {
   description: "SIMPLE tier alias and free self-hosted default for fast QA, broad fallback, creative drafting, and most low-cost traffic."
   capabilities: ["fast_qa", "self_hosted", "concise_answers", "general_chat", "creative_drafting"]
   tags: ["tier:simple", "cost:free", "deployment:self_hosted", "traffic:default"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.58 } }]
   modality: "text"
 }
 
@@ -515,7 +551,7 @@ ROUTE omni (description = "Understand image-bearing requests with the dedicated 
 ROUTE premium_legal (description = "Premium-only route for high-value legal and compliance analysis.") {
   PRIORITY 260
   TIER 2
-  WHEN (domain("law") OR keyword("legal_risk_markers") OR embedding("premium_legal_analysis")) AND (embedding("premium_legal_analysis") OR projection("verification_required") OR complexity("legal_risk:medium") OR complexity("legal_risk:hard"))
+  WHEN (domain("law") OR keyword("legal_risk_markers")) AND (embedding("premium_legal_analysis") OR projection("verification_required") OR complexity("legal_risk:medium") OR complexity("legal_risk:hard")) AND NOT (keyword("normative_topic_markers") AND keyword("argument_request_markers") AND NOT (keyword("legal_risk_markers") OR complexity("legal_risk:hard")))
   MODEL "anthropic/claude-opus-4.6" (reasoning = true, effort = "high"),
         "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN router_replay {
@@ -530,7 +566,7 @@ ROUTE premium_legal (description = "Premium-only route for high-value legal and 
 ROUTE formal_math_proof (description = "Narrow premium reasoning lane for formal math proofs and derivations.") {
   PRIORITY 252
   TIER 3
-  WHEN domain("math") AND keyword("reasoning_request_markers") AND NOT (projection("verification_required") OR user_feedback("wrong_answer") OR keyword("correction_feedback_markers") OR reask("likely_dissatisfied") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR fact_check("needs_fact_check") OR keyword("architecture_markers") OR keyword("agentic_request_markers") OR keyword("code_request_markers") OR keyword("implementation_markers"))
+  WHEN domain("math") AND keyword("reasoning_request_markers") AND NOT (projection("verification_required") OR user_feedback("wrong_answer") OR keyword("correction_feedback_markers") OR reask("likely_dissatisfied") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR keyword("architecture_markers") OR keyword("agentic_request_markers") OR keyword("code_request_markers") OR keyword("implementation_markers"))
   MODEL "openai/gpt5.4" (reasoning = true, effort = "high"),
         "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
   PLUGIN router_replay {
@@ -545,7 +581,7 @@ ROUTE formal_math_proof (description = "Narrow premium reasoning lane for formal
 ROUTE reasoning_deep (description = "Deep philosophy and first-principles reasoning outside the narrow formal-math overlay.") {
   PRIORITY 250
   TIER 4
-  WHEN (domain("math") AND NOT keyword("reasoning_request_markers") AND (projection("balance_reasoning") OR complexity("math_task:medium")) OR domain("philosophy") AND (embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR embedding("research_synthesis")) OR (embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR embedding("research_synthesis") OR keyword("research_request_markers") OR keyword("reasoning_request_markers")) AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_reasoning"))) AND NOT (domain("law") OR domain("health") OR projection("verification_required") OR user_feedback("wrong_answer") OR keyword("correction_feedback_markers") OR reask("likely_dissatisfied") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR fact_check("needs_fact_check") OR keyword("architecture_markers") OR keyword("agentic_request_markers") OR keyword("code_request_markers") OR keyword("implementation_markers") OR domain("math") AND keyword("reasoning_request_markers"))
+  WHEN ((domain("math") AND NOT keyword("reasoning_request_markers") AND (projection("balance_reasoning") OR complexity("math_task:medium") AND (projection("balance_medium") OR projection("balance_complex"))) OR domain("philosophy") AND (embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR embedding("research_synthesis")) OR (embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR embedding("research_synthesis") OR keyword("research_request_markers") OR keyword("reasoning_request_markers")) AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_reasoning"))) AND NOT (domain("law") OR domain("health") OR projection("verification_required") OR user_feedback("wrong_answer") OR keyword("correction_feedback_markers") OR reask("likely_dissatisfied") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR keyword("architecture_markers") OR keyword("agentic_request_markers") OR keyword("code_request_markers") OR keyword("implementation_markers") OR domain("math") AND keyword("reasoning_request_markers")) OR keyword("normative_topic_markers") AND keyword("argument_request_markers") AND NOT (keyword("legal_risk_markers") OR complexity("legal_risk:hard")) AND NOT (projection("verification_required") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR user_feedback("wrong_answer") OR keyword("correction_feedback_markers")))
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
         "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN router_replay {
@@ -560,7 +596,7 @@ ROUTE reasoning_deep (description = "Deep philosophy and first-principles reason
 ROUTE complex_specialist (description = "High-structure execution plans, systems design, and specialist STEM synthesis.") {
   PRIORITY 242
   TIER 5
-  WHEN ((embedding("agentic_workflows") OR keyword("agentic_request_markers")) AND (keyword("multi_step_markers") OR structure("ordered_workflow") OR structure("numbered_steps") OR structure("first_then_flow") OR structure("constraint_dense") OR structure("format_directive_dense")) OR domain("computer science") AND (embedding("architecture_design") OR keyword("architecture_markers")) OR (domain("physics") OR domain("chemistry") OR domain("biology") OR domain("engineering") OR domain("computer science")) AND embedding("complex_stem")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR keyword("simple_request_markers") OR keyword("creative_request_markers") OR embedding("creative_tasks"))
+  WHEN ((embedding("agentic_workflows") OR keyword("agentic_request_markers")) AND (keyword("multi_step_markers") OR structure("ordered_workflow") OR structure("numbered_steps") OR structure("first_then_flow") OR structure("constraint_dense") OR structure("format_directive_dense")) OR domain("computer science") AND (embedding("architecture_design") OR keyword("architecture_markers")) OR embedding("architecture_design") AND keyword("architecture_markers") OR (domain("physics") OR domain("chemistry") OR domain("biology") OR domain("engineering") OR domain("computer science")) AND (embedding("complex_stem") OR keyword("scientific_inquiry_markers") AND keyword("explanation_request_markers"))) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR keyword("simple_request_markers") OR keyword("creative_request_markers") OR embedding("creative_tasks"))
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
         "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN router_replay {
@@ -605,7 +641,7 @@ ROUTE medium_code_general (description = "Low-medium cost coding, debugging, ref
 ROUTE verified_health (description = "Conservative route for evidence-sensitive health and medical guidance.") {
   PRIORITY 218
   TIER 8
-  WHEN domain("health") AND (projection("verification_required") OR keyword("verification_markers") OR fact_check("needs_fact_check") OR keyword("reference_heavy_markers") OR complexity("evidence_synthesis:hard")) AND (embedding("health_guidance") OR projection("balance_medium") OR projection("balance_complex") OR projection("balance_reasoning")) AND NOT (user_feedback("wrong_answer") OR keyword("correction_feedback_markers") OR reask("likely_dissatisfied"))
+  WHEN domain("health") AND (projection("verification_required") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR complexity("evidence_synthesis:hard")) AND NOT (user_feedback("wrong_answer") OR keyword("correction_feedback_markers") OR reask("likely_dissatisfied"))
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "medium"),
         "anthropic/claude-opus-4.6" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
@@ -620,7 +656,7 @@ ROUTE verified_health (description = "Conservative route for evidence-sensitive 
 ROUTE verified_explainer (description = "Evidence-sensitive business, economics, history, and psychology explanation.") {
   PRIORITY 214
   TIER 9
-  WHEN (domain("business") OR domain("economics") OR domain("history") OR domain("psychology") OR embedding("business_analysis") OR embedding("history_explainer") OR embedding("psychology_support") OR keyword("history_topic_markers")) AND (projection("verification_required") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR fact_check("needs_fact_check")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR keyword("simple_request_markers") OR domain("health") OR domain("law") OR user_feedback("wrong_answer") OR keyword("correction_feedback_markers") OR reask("likely_dissatisfied"))
+  WHEN (domain("business") OR domain("economics") OR domain("history") OR domain("psychology") OR embedding("business_analysis") OR embedding("history_explainer") OR embedding("psychology_support") OR keyword("history_topic_markers") OR embedding("research_synthesis") OR keyword("explanation_request_markers")) AND (projection("verification_required") OR keyword("verification_markers") OR keyword("reference_heavy_markers")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR keyword("simple_request_markers") OR domain("health") OR domain("law") OR user_feedback("wrong_answer") OR keyword("correction_feedback_markers") OR reask("likely_dissatisfied")) AND (NOT (domain("physics") OR domain("chemistry") OR domain("biology") OR domain("engineering") OR domain("computer science")) OR NOT keyword("scientific_inquiry_markers") OR NOT keyword("explanation_request_markers"))
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false),
         "google/gemini-3.1-pro" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
@@ -635,7 +671,7 @@ ROUTE verified_explainer (description = "Evidence-sensitive business, economics,
 ROUTE feedback_need_clarification (description = "Cheap clarification lane for explicit restatements and single-turn re-asks.") {
   PRIORITY 212
   TIER 10
-  WHEN projection("feedback_clarification_overlay") AND NOT (projection("feedback_correction_verified") OR projection("verification_required") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR fact_check("needs_fact_check") OR keyword("code_request_markers"))
+  WHEN projection("feedback_clarification_overlay") AND NOT (projection("feedback_correction_verified") OR projection("verification_required") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR keyword("code_request_markers"))
   MODEL "qwen/qwen3.5-rocm" (reasoning = false),
         "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
@@ -650,7 +686,7 @@ ROUTE feedback_need_clarification (description = "Cheap clarification lane for e
 ROUTE medium_explainer (description = "Low-cost business, history, and psychology explanation when verification pressure is absent.") {
   PRIORITY 208
   TIER 11
-  WHEN (domain("business") OR domain("economics") OR domain("history") OR domain("psychology") OR embedding("business_analysis") OR embedding("history_explainer") OR embedding("psychology_support") OR keyword("history_topic_markers")) AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_simple") AND (context("medium_context") OR keyword("history_topic_markers") OR complexity("evidence_synthesis:medium"))) AND NOT (projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR domain("health") OR domain("law") OR embedding("fast_qa_en") OR embedding("fast_qa_zh") OR keyword("simple_request_markers") OR keyword("reasoning_request_markers") OR keyword("research_request_markers") OR keyword("creative_request_markers"))
+  WHEN (domain("business") OR domain("economics") OR domain("history") OR domain("psychology") OR embedding("business_analysis") OR embedding("history_explainer") OR embedding("psychology_support") OR keyword("history_topic_markers")) AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_simple") AND (context("medium_context") OR keyword("history_topic_markers") OR keyword("explanation_request_markers") OR complexity("evidence_synthesis:medium") AND (embedding("business_analysis") OR embedding("history_explainer") OR embedding("psychology_support")))) AND NOT (projection("verification_required") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR domain("health") OR domain("law") OR embedding("fast_qa_en") OR embedding("fast_qa_zh") OR keyword("simple_request_markers") OR keyword("reasoning_request_markers") OR keyword("research_request_markers") OR keyword("creative_request_markers")) AND (NOT (domain("physics") OR domain("chemistry") OR domain("biology") OR domain("engineering") OR domain("computer science")) OR NOT keyword("scientific_inquiry_markers") OR NOT keyword("explanation_request_markers"))
   MODEL "qwen/qwen3.5-rocm" (reasoning = true, mode = "enabled"),
         "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
@@ -665,7 +701,7 @@ ROUTE medium_explainer (description = "Low-cost business, history, and psycholog
 ROUTE medium_creative (description = "Low-cost creative writing, copywriting, and interpersonal drafting.") {
   PRIORITY 200
   TIER 12
-  WHEN (keyword("creative_request_markers") OR embedding("creative_tasks")) AND (projection("balance_simple") OR projection("balance_medium")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR embedding("health_guidance") OR embedding("code_general") OR embedding("architecture_design") OR embedding("agentic_workflows") OR embedding("premium_legal_analysis") OR projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers"))
+  WHEN (keyword("creative_request_markers") OR embedding("creative_tasks") OR (keyword("drafting_action_markers") OR embedding("interpersonal_drafting")) AND (keyword("personal_tone_markers") OR keyword("creative_form_markers"))) AND (projection("balance_simple") OR projection("balance_medium")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR embedding("health_guidance") OR embedding("code_general") OR embedding("architecture_design") OR embedding("agentic_workflows") OR embedding("premium_legal_analysis") OR projection("verification_required") OR keyword("verification_markers") OR keyword("reference_heavy_markers"))
   MODEL "qwen/qwen3.5-rocm" (reasoning = false),
         "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
@@ -680,7 +716,7 @@ ROUTE medium_creative (description = "Low-cost creative writing, copywriting, an
 ROUTE fast_qa (description = "Short English or Chinese factual questions, including explicit verification asks, that should stay on the cheap lane.") {
   PRIORITY 184
   TIER 13
-  WHEN (embedding("fast_qa_en") AND language("en") OR embedding("fast_qa_zh") AND language("zh") OR keyword("simple_request_markers")) AND (keyword("simple_request_markers") OR keyword("verification_markers") OR NOT structure("low_question_density")) AND context("short_context") AND ((projection("balance_simple") OR projection("balance_medium")) AND (projection("verification_required") OR keyword("verification_markers") OR keyword("reference_heavy_markers")) AND NOT (domain("health") OR domain("law") OR keyword("code_request_markers") OR keyword("implementation_markers") OR projection("urgency_elevated") OR user_feedback("wrong_answer") OR keyword("correction_feedback_markers") OR reask("likely_dissatisfied")) OR projection("balance_simple") AND NOT (projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR keyword("code_request_markers") OR keyword("implementation_markers") OR projection("urgency_elevated") OR user_feedback("wrong_answer") OR keyword("correction_feedback_markers") OR reask("likely_dissatisfied") OR projection("feedback_clarification_overlay")))
+  WHEN (embedding("fast_qa_en") AND language("en") OR embedding("fast_qa_zh") AND language("zh") OR keyword("simple_request_markers") OR keyword("verification_markers") AND NOT keyword("explanation_request_markers")) AND (keyword("simple_request_markers") OR keyword("verification_markers") OR NOT structure("low_question_density")) AND context("short_context") AND ((projection("balance_simple") OR projection("balance_medium")) AND (projection("verification_required") OR keyword("verification_markers") OR keyword("reference_heavy_markers")) AND NOT (domain("health") OR domain("law") OR keyword("code_request_markers") OR keyword("implementation_markers") OR projection("urgency_elevated") OR user_feedback("wrong_answer") OR keyword("correction_feedback_markers") OR reask("likely_dissatisfied")) OR projection("balance_simple") AND NOT (projection("verification_required") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR keyword("code_request_markers") OR keyword("implementation_markers") OR projection("urgency_elevated") OR user_feedback("wrong_answer") OR keyword("correction_feedback_markers") OR reask("likely_dissatisfied") OR projection("feedback_clarification_overlay"))) AND (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR keyword("simple_request_markers") OR NOT (domain("business") OR domain("economics") OR domain("history") OR domain("psychology") OR embedding("business_analysis") OR embedding("history_explainer") OR embedding("psychology_support") OR keyword("history_topic_markers") OR embedding("research_synthesis") OR keyword("explanation_request_markers")))
   MODEL "qwen/qwen3.5-rocm" (reasoning = false),
         "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {

@@ -18,6 +18,7 @@ const version = "v1.0.0"
 func main() {
 	// Parse command line flags
 	var (
+		baselineSuite      = flag.String("baseline-suite", baselineSuiteFromEnv(), "Baseline scope: standard (non-stress) or full")
 		profile            = flag.String("profile", "envoy-ai-gateway", fmt.Sprintf("Test profile to run (%s)", strings.Join(framework.RegisteredProfileNames(), ", ")))
 		clusterName        = flag.String("cluster", "semantic-router-e2e", "Kind cluster name")
 		imageTag           = flag.String("image-tag", "e2e-test", "Docker image tag")
@@ -67,6 +68,7 @@ func main() {
 	// Create test options
 	opts := &framework.TestOptions{
 		Profile:            *profile,
+		BaselineSuite:      *baselineSuite,
 		ClusterName:        *clusterName,
 		ImageTag:           *imageTag,
 		KeepCluster:        *keepCluster,
@@ -122,4 +124,11 @@ func boolEnv(key string, fallback bool) bool {
 	}
 
 	return parsed
+}
+
+func baselineSuiteFromEnv() string {
+	if value := os.Getenv("E2E_BASELINE_SUITE"); value != "" {
+		return value
+	}
+	return "standard"
 }

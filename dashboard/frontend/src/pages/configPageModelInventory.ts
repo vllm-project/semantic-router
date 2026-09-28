@@ -185,7 +185,6 @@ export function validateModelStructuredFields(data: Record<string, unknown>): vo
   validateModelCollectionShapes(data)
   validateModelLoras(data.loras)
   validateModelBackends(data.backend_refs)
-  validateModelEvaluations(data.evaluations)
   validateModelObjectShapes(data)
   validateExternalModelIDs(data.external_model_ids)
   validateModelPricing(data.pricing)
@@ -225,7 +224,6 @@ function validateModelCollectionShapes(data: Record<string, unknown>): void {
   const arrayFields = [
     ['backend_refs', 'Backend Refs'],
     ['loras', 'LoRAs'],
-    ['evaluations', 'Evaluations'],
   ] as const
   for (const [field, label] of arrayFields) {
     const value = data[field]
@@ -314,18 +312,24 @@ function validateModelBackends(value: unknown): void {
   }
 }
 
-function validateModelEvaluations(value: unknown): void {
+export function validateEvaluationRecords(value: unknown): void {
+  if (value !== undefined && !Array.isArray(value)) {
+    throw new Error('Evaluation records must be a JSON array.')
+  }
   if (Array.isArray(value)) {
     value.forEach((item, index) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) {
         throw new Error(`Evaluation ${index + 1} must be a structured object.`)
       }
-      validateModelEvaluation(item as Record<string, unknown>, index)
+      validateEvaluationRecord(item as Record<string, unknown>, index)
     })
   }
 }
 
-function validateModelEvaluation(evaluation: Record<string, unknown>, index: number): void {
+function validateEvaluationRecord(evaluation: Record<string, unknown>, index: number): void {
+  if (typeof evaluation.model !== 'string' || !evaluation.model.trim()) {
+    throw new Error(`Evaluation ${index + 1} requires a Model Card identity.`)
+  }
   if (
     typeof evaluation.benchmark !== 'string' ||
     !benchmarkIdentityPattern.test(evaluation.benchmark.trim())

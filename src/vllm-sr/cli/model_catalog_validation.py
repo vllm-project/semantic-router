@@ -63,7 +63,6 @@ _ROOT_KEYS = frozenset(
         "models",
         "benchmarks",
         "evaluations",
-        "evaluation_coverage",
         "indices",
         "index_results",
     }
@@ -399,14 +398,12 @@ def _parse_roles(value: Any, model_id: str) -> tuple[dict[str, Any], ...]:
         seen.add(name)
         minimum = _required_positive_int(item, "minimum_candidates")
         traits = _unique_slugs(item.get("traits"), f"{model_id}.{name}.traits")
-        recommended = _unique_model_references(
-            item.get("recommended_pool"), f"{model_id}.{name}.recommended_pool"
+        pool = item.get("recommended_pool", [])
+        recommended = (
+            ()
+            if pool == []
+            else _unique_model_references(pool, f"{model_id}.{name}.recommended_pool")
         )
-        if minimum > len(recommended):
-            raise ModelCatalogError(
-                f"catalog model {model_id} role {name} minimum_candidates "
-                "exceeds its recommended pool"
-            )
         roles.append(
             {
                 "name": name,

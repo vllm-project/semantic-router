@@ -178,3 +178,56 @@ func TestValidateJailbreakContractsDirection(t *testing.T) {
 		t.Fatalf("valid directions rejected: %v", err)
 	}
 }
+
+// A hallucination rule checks the model's answer, so it is response-stage by
+// type: a decision reading one, directly or behind a projection, is rejected
+// the way a response-direction jailbreak rule is.
+func TestValidateRejectsDecisionReadingHallucinationRule(t *testing.T) {
+	cfg := stagedConfig()
+	cfg.HallucinationRules = []HallucinationRule{{Name: "ungrounded_claims"}}
+	if got := cfg.SignalStageOf(SignalTypeHallucination, "ungrounded_claims"); got != SignalStageResponse {
+		t.Fatalf("SignalStageOf(hallucination) = %q, want %q", got, SignalStageResponse)
+	}
+
+	cfg.Decisions = []Decision{{Name: "guard", Rules: RuleCombination{
+		Operator: "AND",
+		Conditions: []RuleCondition{
+			{Type: SignalTypeKeyword, Name: "probe"},
+			{Type: SignalTypeHallucination, Name: "ungrounded_claims"},
+		},
+	}}}
+	err := validateSignalStageContracts(cfg)
+	if err == nil || !strings.Contains(err.Error(), `decision "guard"`) || !strings.Contains(err.Error(), `hallucination rule "ungrounded_claims"`) {
+		t.Fatalf("expected the hallucination reference to be rejected, got %v", err)
+	}
+
+	cfg.Projections = Projections{
+		Scores: []ProjectionScore{{Name: "grounding", Method: "weighted_sum", Inputs: []ProjectionScoreInput{
+			{Type: SignalTypeHallucination, Name: "ungrounded_claims", Weight: 1},
+		}}},
+		Mappings: []ProjectionMapping{{Name: "grounding_band", Source: "grounding", Method: "threshold_bands", Outputs: []ProjectionMappingOutput{
+			{Name: "ungrounded", GTE: float64PtrForRoutingSignalUsageTest(0.5)},
+		}}},
+	}
+	cfg.Decisions = []Decision{{Name: "guard", Rules: RuleCombination{Type: SignalTypeProjection, Name: "ungrounded"}}}
+	err = validateSignalStageContracts(cfg)
+	if err == nil || !strings.Contains(err.Error(), `through projection "ungrounded"`) {
+		t.Fatalf("expected the hallucination rule behind the projection to be rejected, got %v", err)
+	}
+}
+
+func TestValidateHallucinationSignalContracts(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.HallucinationRules = []HallucinationRule{{Name: " "}}
+	if err := validateHallucinationSignalContracts(cfg); err == nil || !strings.Contains(err.Error(), "needs a name") {
+		t.Fatalf("expected the unnamed rule to be rejected, got %v", err)
+	}
+	cfg.HallucinationRules = []HallucinationRule{{Name: "ungrounded_claims"}, {Name: "ungrounded_claims"}}
+	if err := validateHallucinationSignalContracts(cfg); err == nil || !strings.Contains(err.Error(), "duplicate rule name") {
+		t.Fatalf("expected the duplicate rule to be rejected, got %v", err)
+	}
+	cfg.HallucinationRules = []HallucinationRule{{Name: "ungrounded_claims", UseNLI: true}}
+	if err := validateHallucinationSignalContracts(cfg); err != nil {
+		t.Fatalf("a named rule is valid, got %v", err)
+	}
+}

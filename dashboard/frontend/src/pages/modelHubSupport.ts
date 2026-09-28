@@ -1,18 +1,16 @@
 import type {
   BuiltInModelCatalog,
   BuiltInModelMetadata,
-  CatalogBenchmarkMetric,
   CatalogModelBinding,
   CatalogIndexResult,
   CatalogProvider,
 } from '../types/modelCatalog'
-import { modelHubBenchmarkNormalizedValue } from './modelHubBenchmarkNormalization'
 
 export type ModelHubKindFilter = 'all' | 'physical' | 'virtual'
 export type ModelHubDistributionFilter = 'all' | BuiltInModelMetadata['distribution']['type']
 export type ModelHubLifecycleFilter = 'supported' | 'all' | BuiltInModelMetadata['lifecycle']
 export type ModelHubSort = 'name' | 'released' | 'context' | 'providers'
-export type ModelHubView = 'list' | 'table' | 'benchmarks'
+export type ModelHubView = 'list' | 'table'
 
 export interface ModelHubFilters {
   query: string
@@ -43,29 +41,16 @@ export interface ModelHubStats {
   evaluations: number
 }
 
-export interface ModelHubBenchmarkSelection {
+interface ModelHubBenchmarkSelection {
   benchmark: string
   profile: string
   metric: string
 }
 
-export interface ModelHubBenchmarkPoint {
-  model: BuiltInModelMetadata
-  reasoningEffort: string
-  value: number
-  evaluation: string
-}
-
-export const MODEL_HUB_MIN_BENCHMARK_MODELS = 10
+const MODEL_HUB_MIN_BENCHMARK_MODELS = 10
 
 const benchmarkSelectionKey = (benchmark: string, profile: string, metric: string): string =>
   `${benchmark}\u0000${profile}\u0000${metric}`
-
-export interface ModelHubChartColor {
-  lightness: number
-  chroma: number
-  hue: number
-}
 
 export interface ModelHubPagination<T> {
   items: T[]
@@ -322,126 +307,7 @@ export function paginateModelHubRows<T>(
   }
 }
 
-const stableModelHubHash = (value: string): number => {
-  let hash = 2166136261
-  for (const character of value) {
-    hash ^= character.charCodeAt(0)
-    hash = Math.imul(hash, 16777619)
-  }
-  return hash >>> 0
-}
-
-const modelHubPalette = (): ModelHubChartColor[] =>
-  [0.52, 0.62, 0.72].flatMap((lightness) =>
-    [0.12, 0.18].flatMap((chroma) =>
-      Array.from({ length: 24 }, (_, index) => ({
-        lightness,
-        chroma,
-        hue: index * 15,
-      })),
-    ),
-  )
-
-export const modelHubChartColorDistance = (
-  left: ModelHubChartColor,
-  right: ModelHubChartColor,
-): number => {
-  const radians = (degrees: number) => (degrees * Math.PI) / 180
-  const leftA = left.chroma * Math.cos(radians(left.hue))
-  const leftB = left.chroma * Math.sin(radians(left.hue))
-  const rightA = right.chroma * Math.cos(radians(right.hue))
-  const rightB = right.chroma * Math.sin(radians(right.hue))
-  return Math.hypot(left.lightness - right.lightness, leftA - rightA, leftB - rightB)
-}
-
-const fallbackModelHubColor = (id: string): ModelHubChartColor => {
-  const hash = stableModelHubHash(id)
-  return {
-    lightness: 0.52 + ((hash >>> 24) % 20) / 100,
-    chroma: 0.12 + ((hash >>> 16) % 7) / 100,
-    hue: (hash / 0x1_0000_0000) * 360,
-  }
-}
-
-/**
- * Allocates colors against the complete catalog so filtering and pagination never recolor a model.
- * The fixed OKLCH candidates are consumed farthest-first to keep neighboring bars distinguishable.
- */
-export function modelHubChartColors(
-  modelIDs: string[],
-  catalogModelIDs: string[] = modelIDs,
-): Map<string, ModelHubChartColor> {
-  const requested = new Set(modelIDs)
-  const universe = [...new Set([...catalogModelIDs, ...modelIDs])].sort((left, right) =>
-    left.localeCompare(right),
-  )
-  const candidates = modelHubPalette()
-  const assigned: ModelHubChartColor[] = []
-  const allocation = new Map<string, ModelHubChartColor>()
-
-  universe.forEach((id) => {
-    if (!candidates.length) {
-      allocation.set(id, fallbackModelHubColor(id))
-      return
-    }
-    let bestIndex = 0
-    let bestDistance = -1
-    candidates.forEach((candidate, index) => {
-      const distance = assigned.length
-        ? Math.min(...assigned.map((color) => modelHubChartColorDistance(candidate, color)))
-        : Number.POSITIVE_INFINITY
-      if (distance > bestDistance) {
-        bestDistance = distance
-        bestIndex = index
-      }
-    })
-    const [color] = candidates.splice(bestIndex, 1)
-    allocation.set(id, color)
-    assigned.push(color)
-  })
-
-  return new Map([...allocation].filter(([id]) => requested.has(id)))
-}
-
-export const modelHubChartColorToken = (color: ModelHubChartColor): string =>
-  `oklch(${(color.lightness * 100).toFixed(0)}% ${color.chroma.toFixed(2)} ${color.hue})`
-
-export function modelHubBenchmarkDomain(
-  values: number[],
-  metric: CatalogBenchmarkMetric,
-): [number, number] {
-  const finiteValues = values
-    .filter(Number.isFinite)
-    .map((value) => modelHubBenchmarkNormalizedValue(value, metric))
-    .filter(Number.isFinite)
-  if (!finiteValues.length) return metric.range
-  const minimum = Math.min(...finiteValues)
-  const maximum = Math.max(...finiteValues)
-
-  if (metric.direction === 'higher_is_better' && maximum > 0) {
-    return [Math.min(0, minimum), maximum]
-  }
-  if (minimum === maximum) {
-    return metric.direction === 'lower_is_better'
-      ? [minimum, minimum + Math.max(Math.abs(minimum), 1)]
-      : [Math.min(0, minimum), maximum || 1]
-  }
-  return [minimum, maximum]
-}
-
-export function modelHubBenchmarkBarHeight(
-  value: number,
-  minimum: number,
-  maximum: number,
-  direction: 'higher_is_better' | 'lower_is_better',
-): number {
-  const span = maximum - minimum || 1
-  const position = (value - minimum) / span
-  const performance = direction === 'lower_is_better' ? 1 - position : position
-  return Math.max(4, Math.min(100, performance * 100))
-}
-
-export function modelHubBenchmarkSelections(
+function modelHubBenchmarkSelections(
   catalog: BuiltInModelCatalog,
   minimumModels = MODEL_HUB_MIN_BENCHMARK_MODELS,
 ): Array<ModelHubBenchmarkSelection & { modelCount: number }> {
@@ -467,67 +333,6 @@ export function modelHubBenchmarkSelections(
         `${left.benchmark}\u0000${left.profile}\u0000${left.metric}`.localeCompare(
           `${right.benchmark}\u0000${right.profile}\u0000${right.metric}`,
         ),
-    )
-}
-
-/** Selects the broadest published profile/metric for each benchmark card. */
-export function modelHubBenchmarkOverviewSelections(
-  catalog: BuiltInModelCatalog,
-  minimumModels = MODEL_HUB_MIN_BENCHMARK_MODELS,
-): Array<ModelHubBenchmarkSelection & { modelCount: number }> {
-  const seen = new Set<string>()
-  return modelHubBenchmarkSelections(catalog, minimumModels).filter((selection) => {
-    if (seen.has(selection.benchmark)) return false
-    seen.add(selection.benchmark)
-    return true
-  })
-}
-
-export function modelHubDefaultBenchmark(
-  catalog: BuiltInModelCatalog,
-): ModelHubBenchmarkSelection | null {
-  const best = modelHubBenchmarkSelections(catalog)[0]
-  return best ? { benchmark: best.benchmark, profile: best.profile, metric: best.metric } : null
-}
-
-export function modelHubBenchmarkPoints(
-  catalog: BuiltInModelCatalog,
-  selection: ModelHubBenchmarkSelection,
-  modelIDs?: Set<string>,
-): ModelHubBenchmarkPoint[] {
-  const models = new Map(catalog.models.map((model) => [model.id, model]))
-  const direction = catalog.benchmarks
-    .find((benchmark) => benchmark.id === selection.benchmark)
-    ?.metrics.find((metric) => metric.id === selection.metric)?.direction
-  const compareValues =
-    direction === 'lower_is_better'
-      ? (left: number, right: number) => left - right
-      : (left: number, right: number) => right - left
-  return catalog.evaluations
-    .filter(
-      (evaluation) =>
-        evaluation.status === 'available' &&
-        evaluation.benchmark === selection.benchmark &&
-        evaluation.benchmark_profile === selection.profile &&
-        typeof evaluation.metrics[selection.metric] === 'number' &&
-        (!modelIDs || modelIDs.has(evaluation.model)),
-    )
-    .flatMap((evaluation) => {
-      const model = models.get(evaluation.model)
-      if (!model) return []
-      return [
-        {
-          model,
-          reasoningEffort: evaluation.reasoning_effort,
-          value: evaluation.metrics[selection.metric],
-          evaluation: evaluation.id,
-        },
-      ]
-    })
-    .sort(
-      (left, right) =>
-        compareValues(left.value, right.value) ||
-        left.model.display_name.localeCompare(right.model.display_name),
     )
 }
 

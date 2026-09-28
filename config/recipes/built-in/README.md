@@ -14,12 +14,12 @@ engines. Start or bind the required provider services before serving a model.
 
 | Family | Description | Model Card |
 | --- | --- | --- |
-| MoM V1 | Five balanced, cost, speed, accuracy, and privacy profiles over a shared local model pool. | [MoM V1](latest/mom-v1/README.md) |
+| MoM V1 | Five routing policies for balance, cost, speed, accuracy, and privacy using your connected models. | [MoM V1](latest/mom-v1/README.md) |
 
 ## Build a Mixture-of-Model
 
 Run `vllm-sr serve` and open **Build → Mixture-of-Models → Recipes** in
-Dashboard. Select a built-in Recipe, assign connected Models to each decision,
+Dashboard. Select a built-in Recipe, assign connected Models to its backend decisions,
 and choose the public names that clients will send through the OpenAI-compatible
 API. Dashboard keeps connection credentials on Models and routing policy in the
 Recipe.
@@ -30,7 +30,7 @@ For a reviewed YAML workflow, copy a built-in bundle before changing provider
 bindings, replicas, routing rules, or entrypoints:
 
 ```bash
-vllm-sr validate --config mom-custom.yaml
+vllm-sr config validate --config mom-custom.yaml
 vllm-sr serve --config mom-custom.yaml
 ```
 
@@ -54,8 +54,8 @@ model name. Release snapshots remain immutable for reproducible deployments.
 - Serving a catalog model does not prove that its provider backends can
   generate; verify those endpoints separately.
 - Virtual model selection does not provide an implicit physical fallback.
-- A Model Card describes the reference pool. Fork the config when deployment
-  capabilities or data-handling requirements differ.
+- A Model Card describes each policy and its assignment requirements. Validate
+  the actual capabilities and data-handling boundaries of your deployment.
 - Dashboard builds user-owned Mixture-of-Models; production topology remains an
   operator responsibility.
 

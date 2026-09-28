@@ -221,7 +221,6 @@ func startDashboardServer(t *testing.T) string {
 		OpenClawDataDir:        filepath.Join(tempDir, "openclaw"),
 		WorkflowDBPath:         filepath.Join(tempDir, "workflow.sqlite"),
 		ConfigProjectionDBPath: filepath.Join(tempDir, "config-projection.sqlite"),
-		EvaluationEnabled:      false,
 		MLPipelineEnabled:      false,
 	}
 

@@ -39,6 +39,9 @@ func (c *RouterConfig) EffectiveRouterReplayConfigForDecision(decisionName strin
 // decision. Request-time callers should prefer this form because decision names
 // are recipe-local and therefore cannot identify a decision globally.
 func (c *RouterConfig) EffectiveRouterReplayConfig(decision *Decision) *RouterReplayPluginConfig {
+	if c != nil && !c.DataPolicy.ReplayAllowed() {
+		return nil
+	}
 	base := DefaultRouterReplayPluginConfig()
 	if c == nil {
 		return &base

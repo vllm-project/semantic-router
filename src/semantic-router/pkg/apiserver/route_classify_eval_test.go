@@ -24,19 +24,20 @@ import (
 
 type evalCaptureClassificationService struct {
 	lastEvalReq services.IntentRequest
+	lastPIICtx  context.Context
 	evalResp    *services.EvalResponse
 	evalErr     error
 	intentErr   error
 }
 
-func (s *evalCaptureClassificationService) ClassifyIntent(req services.IntentRequest) (*services.IntentResponse, error) {
+func (s *evalCaptureClassificationService) ClassifyIntent(_ context.Context, req services.IntentRequest) (*services.IntentResponse, error) {
 	if s.intentErr != nil {
 		return nil, s.intentErr
 	}
 	return &services.IntentResponse{}, nil
 }
 
-func (s *evalCaptureClassificationService) ClassifyIntentForEval(req services.IntentRequest) (*services.EvalResponse, error) {
+func (s *evalCaptureClassificationService) ClassifyIntentForEval(_ context.Context, req services.IntentRequest) (*services.EvalResponse, error) {
 	s.lastEvalReq = req
 	if s.evalResp != nil {
 		return s.evalResp, s.evalErr
@@ -44,7 +45,8 @@ func (s *evalCaptureClassificationService) ClassifyIntentForEval(req services.In
 	return &services.EvalResponse{OriginalText: "captured"}, nil
 }
 
-func (s *evalCaptureClassificationService) DetectPII(req services.PIIRequest) (*services.PIIResponse, error) {
+func (s *evalCaptureClassificationService) DetectPII(ctx context.Context, req services.PIIRequest) (*services.PIIResponse, error) {
+	s.lastPIICtx = ctx
 	return &services.PIIResponse{}, nil
 }
 
@@ -56,15 +58,15 @@ func (s *evalCaptureClassificationService) ClassifyBatchUnifiedWithOptions(_ []s
 	return &services.UnifiedBatchResponse{}, nil
 }
 
-func (s *evalCaptureClassificationService) ClassifyFactCheck(req services.FactCheckRequest) (*services.FactCheckResponse, error) {
+func (s *evalCaptureClassificationService) ClassifyFactCheck(_ context.Context, req services.FactCheckRequest) (*services.FactCheckResponse, error) {
 	return &services.FactCheckResponse{}, nil
 }
 
-func (s *evalCaptureClassificationService) ClassifyUserFeedback(req services.UserFeedbackRequest) (*services.UserFeedbackResponse, error) {
+func (s *evalCaptureClassificationService) ClassifyUserFeedback(_ context.Context, req services.UserFeedbackRequest) (*services.UserFeedbackResponse, error) {
 	return &services.UserFeedbackResponse{}, nil
 }
 
-func (s *evalCaptureClassificationService) ClassifyNLI(_ services.NLIRequest) (*services.NLIResponse, error) {
+func (s *evalCaptureClassificationService) ClassifyNLI(_ context.Context, _ services.NLIRequest) (*services.NLIResponse, error) {
 	return nil, fmt.Errorf("NLI not available in eval stub")
 }
 
@@ -89,7 +91,7 @@ func TestHandleIntentClassification_Returns503OnDecisionUnresolved(t *testing.T)
 	apiServer := &ClassificationAPIServer{classificationSvc: fakeSvc}
 
 	body, _ := json.Marshal(map[string]string{"text": "hello"})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/classify/intent", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/classify/intent", bytes.NewReader(body))
 	recorder := httptest.NewRecorder()
 	apiServer.handleIntentClassification(recorder, req)
 
@@ -113,7 +115,7 @@ func TestHandleEvalClassification_ReturnsTracesWith503OnDecisionError(t *testing
 	apiServer := &ClassificationAPIServer{classificationSvc: fakeSvc}
 
 	body, _ := json.Marshal(map[string]string{"text": "hello"})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval?trace=true", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/routing/preview?trace=true", bytes.NewReader(body))
 	recorder := httptest.NewRecorder()
 	apiServer.handleEvalClassification(recorder, req)
 
@@ -126,6 +128,22 @@ func TestHandleEvalClassification_ReturnsTracesWith503OnDecisionError(t *testing
 	}
 	if len(response.EvalTrace) != 1 || response.DecisionError == "" {
 		t.Fatalf("response = %+v, want eval_trace and decision_error", response)
+	}
+}
+
+func TestHandleEvalClassification_RejectsRemovedRequestFields(t *testing.T) {
+	apiServer := &ClassificationAPIServer{classificationSvc: &evalCaptureClassificationService{}}
+	body := []byte(`{"text":"hello","evaluate_all_signals":true}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/routing/preview", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+
+	apiServer.handleEvalClassification(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "unknown field") {
+		t.Fatalf("body = %s, want unknown-field validation error", recorder.Body.String())
 	}
 }
 
@@ -163,7 +181,7 @@ func TestHandleEvalClassification_AcceptsMessagesArray(t *testing.T) {
 	}
 	body := mustMarshalEvalRequest(t, reqBody)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/routing/preview", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -217,8 +235,8 @@ func assertForwardedEvalControls(t *testing.T, request services.IntentRequest) {
 	if string(request.MaxTokens) != "8192" || string(request.MaxCompletionTokens) != "4096" {
 		t.Fatalf("expected exact output token controls, got max_tokens=%s max_completion_tokens=%s", request.MaxTokens, request.MaxCompletionTokens)
 	}
-	if request.Options == nil || !request.Options.EvaluateAllSignals {
-		t.Fatalf("expected evaluate_all_signals=true, got %#v", request.Options)
+	if request.Options != nil {
+		t.Fatalf("routing preview must not inject client-visible options, got %#v", request.Options)
 	}
 }
 
@@ -261,7 +279,7 @@ func TestHandleEvalClassification_UsesFullRequestContextWithoutEchoingPrivatePay
 		t.Fatalf("test request did not cross the 10K context boundary: %+v", estimate)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval?trace=true", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/routing/preview?trace=true", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	apiServer.handleEvalClassification(rr, req)

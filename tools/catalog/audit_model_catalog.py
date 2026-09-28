@@ -15,6 +15,7 @@ CATALOG_TOOL_ROOT = Path(__file__).resolve().parent
 if str(CATALOG_TOOL_ROOT) not in sys.path:
     sys.path.insert(0, str(CATALOG_TOOL_ROOT))
 
+from catalog_evaluations import index_leaf_components  # noqa: E402
 from generate_model_catalog import (  # noqa: E402
     CatalogBuildError,
     load_and_validate,
@@ -58,18 +59,29 @@ def _declared_efforts(
 
 def _default_slots(
     manifest: dict[str, Any], resources: dict[str, list[dict[str, Any]]]
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     index_id = str(manifest["defaults"]["intelligence_index"])
-    definition = next(item for item in resources["indices"] if item["id"] == index_id)
     return [
         {
             "benchmark": str(component["benchmark"]),
-            "benchmark_profile": str(component["benchmark_profile"]),
+            "benchmark_profiles": [
+                str(profile)
+                for profile in component.get("benchmark_profiles")
+                or [component["benchmark_profile"]]
+            ],
             "metric": str(component["metric"]),
         }
-        for component in definition["components"]
-        if component.get("benchmark")
+        for component in index_leaf_components(resources["indices"], index_id)
     ]
+
+
+def _slot_is_available(slot: dict[str, Any], evaluations: list[dict[str, Any]]) -> bool:
+    return any(
+        str(item["benchmark"]) == slot["benchmark"]
+        and str(item["benchmark_profile"]) in slot["benchmark_profiles"]
+        and slot["metric"] in item["metrics"]
+        for item in evaluations
+    )
 
 
 def _matches_filters(
@@ -148,7 +160,7 @@ def _model_effort_rows(
     selected_models: list[dict[str, Any]],
     selected_evaluations: list[dict[str, Any]],
     available: list[dict[str, Any]],
-) -> tuple[list[dict[str, str]], dict[str, dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], list[dict[str, Any]]]:
     observed_efforts: dict[str, set[str]] = defaultdict(set)
     available_by_effort: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for item in selected_evaluations:
@@ -158,10 +170,6 @@ def _model_effort_rows(
         available_by_effort[key].append(item)
 
     slots = _default_slots(manifest, resources)
-    slot_keys = {
-        (slot["benchmark"], slot["benchmark_profile"], slot["metric"]): slot
-        for slot in slots
-    }
     reasoning_families = {
         str(item["id"]): item for item in resources["reasoning_families"]
     }
@@ -180,16 +188,11 @@ def _model_effort_rows(
         for effort in efforts:
             evaluations = available_by_effort.get((model_id, effort), [])
             benchmarks = sorted({str(item["benchmark"]) for item in evaluations})
-            present_slot_keys = {
-                (str(item["benchmark"]), str(item["benchmark_profile"]), str(metric))
-                for item in evaluations
-                for metric in item["metrics"]
-            }.intersection(slot_keys)
             available_slots = [
-                slot for key, slot in slot_keys.items() if key in present_slot_keys
+                slot for slot in slots if _slot_is_available(slot, evaluations)
             ]
             missing_slots = [
-                slot for key, slot in slot_keys.items() if key not in present_slot_keys
+                slot for slot in slots if not _slot_is_available(slot, evaluations)
             ]
             rows.append(
                 {
@@ -521,8 +524,9 @@ def gate_failures(
     raise ValueError(f"unsupported gate scope: {scope}")
 
 
-def _format_slot(slot: dict[str, str]) -> str:
-    return f"{slot['benchmark']}[{slot['benchmark_profile']}]#{slot['metric']}"
+def _format_slot(slot: dict[str, Any]) -> str:
+    profiles = "|".join(slot["benchmark_profiles"])
+    return f"{slot['benchmark']}[{profiles}]#{slot['metric']}"
 
 
 def _format_evidence_bucket(bucket: dict[str, str] | None) -> str:

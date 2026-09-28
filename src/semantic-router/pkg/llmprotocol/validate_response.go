@@ -289,12 +289,12 @@ func usageSumStatus(total TokenCount, parts ...TokenCount) [2]bool {
 
 func countEqualsSum(total TokenCount, parts ...TokenCount) (bool, bool) {
 	var sum int64
-	found := false
+	complete := true
 	for _, part := range parts {
 		if part.Value == nil {
+			complete = false
 			continue
 		}
-		found = true
 		if *part.Value > math.MaxInt64-sum {
 			return false, true
 		}
@@ -303,7 +303,12 @@ func countEqualsSum(total TokenCount, parts ...TokenCount) (bool, bool) {
 	if total.Value == nil {
 		return true, false
 	}
-	return !found || *total.Value == sum, false
+	// Optional usage buckets may be unknown. Known parts are a lower bound,
+	// while a complete breakdown must add up exactly to its declared total.
+	if complete {
+		return sum == *total.Value, false
+	}
+	return sum <= *total.Value, false
 }
 
 func exceeds(value string, limit int) bool { return limit > 0 && len(value) > limit }

@@ -1,7 +1,8 @@
-//go:build windows || !cgo
+//go:build windows || !cgo || (!amd64 && !arm64)
 
 // Package nlp_binding provides Go bindings for BM25 and N-gram keyword
-// classification. This is the mock implementation for platforms without CGo.
+// classification. This is the mock implementation for platforms without CGo
+// or without a native nlp-binding library.
 package nlp_binding
 
 import "fmt"

@@ -33,6 +33,7 @@ func main() {
 		quietGap       = flag.Duration("quiet-gap", 7*time.Minute, "Idle gap between rounds; sampling continues")
 		sampleInterval = flag.Duration("sample-interval", 5*time.Second, "Metrics scrape interval")
 		highCardIDs    = flag.Int("high-card-ids", 60000, "Unique session/user IDs used by the high-cardinality round")
+		streaming      = flag.Bool("stream", false, "Request SSE streaming responses and consume every frame")
 	)
 	flag.Parse()
 
@@ -68,6 +69,7 @@ func main() {
 		QuietGap:       *quietGap,
 		SampleInterval: *sampleInterval,
 		HighCardIDs:    *highCardIDs,
+		Streaming:      *streaming,
 	})
 
 	runner, err := soak.NewRunner(plan)
@@ -78,8 +80,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	fmt.Printf("soak: writing results to %s (mode=%s, rounds=%d, concurrency=%d)\n",
-		outDir, modeLabel(plan.Quick), plan.Rounds, plan.Concurrency)
+	fmt.Printf("soak: writing results to %s (mode=%s, response=%s, rounds=%d, concurrency=%d)\n",
+		outDir, modeLabel(plan.Quick), responseMode(plan.Streaming), plan.Rounds, plan.Concurrency)
 
 	if err := runner.Run(ctx); err != nil {
 		fatal("%v", err)
@@ -94,6 +96,13 @@ func modeLabel(quick bool) string {
 		return "quick"
 	}
 	return "full"
+}
+
+func responseMode(streaming bool) string {
+	if streaming {
+		return "streaming"
+	}
+	return "buffered"
 }
 
 func fatal(format string, args ...any) {

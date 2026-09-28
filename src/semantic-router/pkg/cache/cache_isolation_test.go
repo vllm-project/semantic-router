@@ -20,6 +20,7 @@ var _ = Describe("Cache lookup isolation (regression #2473)", func() {
 		It("returns per-request similarity via LookupResult with no cross-request leak", func() {
 			const threshold = float32(0.75)
 			backend, err := NewCacheBackend(CacheConfig{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				BackendType:         InMemoryCacheType,
 				Enabled:             true,
 				SimilarityThreshold: threshold,

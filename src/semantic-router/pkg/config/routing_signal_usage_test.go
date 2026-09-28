@@ -489,3 +489,44 @@ func TestNeedsJailbreakMappingForResponseStageConsumersFollowsRecipeReachability
 		}
 	}
 }
+
+// A declared hallucination rule is a consumer of the detector on its own: the
+// plugin only enforces on it, so the model has to be provisioned even when no
+// decision enables the plugin. use_nli on the rule provisions the explainer.
+func TestNeedsHallucinationDetectorForDeclaredRule(t *testing.T) {
+	cfg := newRoutingSignalUsageTestConfig()
+	cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/halugate-detector"
+	cfg.HallucinationMitigation.NLIModel.ModelID = "models/halugate-explainer"
+	cfg.Decisions = keywordDecisionsForRoutingSignalUsageTest()
+
+	if cfg.NeedsHallucinationDetectorForRouting() {
+		t.Fatal("no rule and no plugin must not provision the hallucination detector")
+	}
+	cfg.HallucinationRules = []HallucinationRule{{Name: "ungrounded_claims"}}
+	if !cfg.NeedsHallucinationDetectorForRouting() {
+		t.Fatal("a declared hallucination rule must provision the detector")
+	}
+	if cfg.NeedsLocalHallucinationNLIForRouting() {
+		t.Fatal("a rule without use_nli must not provision the explainer")
+	}
+	cfg.HallucinationRules[0].UseNLI = true
+	if !cfg.NeedsLocalHallucinationNLIForRouting() {
+		t.Fatal("a rule with use_nli must provision the explainer")
+	}
+
+	cfg.HallucinationRules = nil
+	cfg.Recipes = []RoutingRecipe{
+		{Name: DefaultRecipeName, Profile: RoutingProfile{Decisions: keywordDecisionsForRoutingSignalUsageTest()}},
+		{Name: "grounded", Profile: RoutingProfile{
+			Signals:   Signals{HallucinationRules: []HallucinationRule{{Name: "ungrounded_claims"}}},
+			Decisions: keywordDecisionsForRoutingSignalUsageTest(),
+		}},
+	}
+	if cfg.NeedsHallucinationDetectorForRouting() {
+		t.Fatal("a rule in a recipe without an entrypoint must not provision the detector")
+	}
+	cfg.Entrypoints = []EntrypointMapping{{ModelNames: []string{"vllm-sr/grounded"}, Recipe: "grounded"}}
+	if !cfg.NeedsHallucinationDetectorForRouting() {
+		t.Fatal("a rule in a reachable recipe must provision the detector")
+	}
+}
