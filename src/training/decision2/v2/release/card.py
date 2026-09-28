@@ -344,7 +344,7 @@ def code_example(local: str) -> str:
         "import sys\n\n"
         f'sys.path.insert(0, os.path.abspath("{local}"))\n'
         "from decision2 import Decision2\n\n"
-        f'model = Decision2.from_pretrained("{local}")  # CPU, or one CUDA/ROCm GPU if present\n'
+        f'model = Decision2.from_pretrained("{local}")  # cuda:0 if a GPU is visible, else CPU\n'
         "result = model.system_one(\n"
         f"    state={state},\n"
         f"    questions={questions},\n"
@@ -533,8 +533,12 @@ def render_readme(ctx: dict[str, Any]) -> str:
         code_example(local).rstrip("\n"),
         "```",
         "",
-        "The download includes a small local runtime (`decision2/`); it runs on CPU or one CUDA/ROCm GPU "
-        f"and does not start a hosted endpoint. {requirements}",
+        (
+            text.get("runtime_note")
+            or "The download includes a small local runtime (`decision2/`); it runs on CPU or one "
+            "CUDA/ROCm GPU and does not start a hosted endpoint."
+        )
+        + f" {requirements}",
         "",
         "## Model details",
         "",

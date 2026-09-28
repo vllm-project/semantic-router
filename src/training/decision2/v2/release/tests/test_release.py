@@ -264,6 +264,7 @@ class CardTest(unittest.TestCase):
         ]
         text = {
             "tagline": "A decision model.",
+            "runtime_note": "The runtime targets one GPU.",
             "confirmation": "Independent confirmation: PLACEHOLDER for the coordinator.",
             "training": ["Hard labels only; no teacher targets."],
             "details": ["Seed soup of three runs."],
@@ -312,6 +313,8 @@ class CardTest(unittest.TestCase):
                 "### Training\n\n- Hard labels only; no teacher targets.", readme
             )
             self.assertIn("- Seed soup of three runs.", readme)
+            self.assertIn("The runtime targets one GPU. Tested with", readme)
+            self.assertNotIn("runs on CPU or one", readme)
             self.assertIn(
                 "| **DEV2.0-0.8B** | 0.75B | **43.22** | 0.479 | 0.390 |", readme
             )
