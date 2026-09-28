@@ -73,7 +73,7 @@ type routerConfigErrorResponse struct {
 	} `json:"error"`
 }
 
-// testRouterConfigVersionGate posts to /config/router/validate, which shares the serve and
+// testRouterConfigVersionGate posts to /api/v1/config/validate, which shares the serve and
 // hot-reload parse but writes nothing (#2469).
 func testRouterConfigVersionGate(
 	ctx context.Context,
@@ -87,7 +87,7 @@ func testRouterConfigVersionGate(
 	defer session.Close()
 
 	httpClient := session.HTTPClient(30 * time.Second)
-	url := session.URL("/config/router/validate")
+	url := session.URL("/api/v1/config/validate")
 
 	supportedVersion, err := validateVersionedDocument(ctx, httpClient, url, "v0.3", opts.Verbose)
 	if err != nil {
@@ -138,7 +138,7 @@ func validateVersionedDocument(
 	}
 
 	if verbose {
-		fmt.Printf("[ConfigVersion] version %s accepted by /config/router/validate\n", version)
+		fmt.Printf("[ConfigVersion] version %s accepted by /api/v1/config/validate\n", version)
 	}
 	return version, nil
 }
