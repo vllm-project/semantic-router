@@ -294,6 +294,95 @@ or stripping the header on trust grounds. Background on the AI Gateway
 interop pattern that motivates this gate lives in
 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808).
 
+### Handoff Envelope
+
+An external agent runtime can attach a bounded handoff envelope when it moves
+delegated work across a Router-selected model boundary
+([issue #3380](https://github.com/vllm-project/semantic-router/issues/3380)).
+The Router validates the envelope, records its identity for idempotent retries
+and cancellation, and returns a content-free receipt. It does not orchestrate
+the work, store task state, or change model selection. The gate is disabled
+by default:
+
+```yaml
+global:
+  router:
+    handoff:
+      enabled: false
+```
+
+Enable it only behind an authenticated gateway that strips caller-supplied
+`x-vsr-handoff-envelope` headers and injects or forwards authenticated ones.
+The Router validates the envelope but does not authenticate it. It always
+removes the header before signal evaluation and before forwarding to the
+model, whether the gate is on or off.
+
+Envelopes are accepted on `POST /v1/chat/completions`, `/v1/responses`, and
+`/v1/messages`. The header value is unpadded base64url over a JSON object:
+
+```json
+{
+  "version": "1",
+  "handoff_id": "h-7f3a",
+  "root_invocation_id": "inv-root",
+  "parent_invocation_id": "inv-parent",
+  "state": "active",
+  "expires_at": "2026-09-04T12:10:00Z",
+  "selection": {
+    "delegated_role": "researcher",
+    "required_capabilities": ["tools"],
+    "remaining_tokens": 4096
+  },
+  "runtime": {
+    "task_summary": "Summarize the findings.",
+    "result_summary": "Draft ready for review.",
+    "tool_state_refs": ["tool-state:1"]
+  }
+}
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `version` | Yes | Must be `"1"`. Any other version is rejected as `unsupported_version` before field checks. |
+| `handoff_id` | Yes | Idempotency key and receipt identity. |
+| `root_invocation_id`, `parent_invocation_id` | Root only | Invocation lineage. |
+| `state` | No | `active` (default) or `cancelled`. |
+| `expires_at` | Yes | RFC 3339 time, at most 15 minutes in the future. |
+| `selection` | No | Router-readable facts. Version 1 validates but does not consume them; projection into model selection belongs to [#3379](https://github.com/vllm-project/semantic-router/issues/3379). |
+| `runtime` | No | Opaque external-runtime state. It is bounded but never interpreted, logged, stored, or forwarded. |
+
+The decoded JSON is limited to 4 KiB and the encoded header to 6 KiB. IDs and
+tool-state references are at most 128 characters from `A-Z a-z 0-9 . _ : / @ -`
+and start with a letter or digit. Role and capability names are at most 64
+characters from `a-z 0-9 . _ -`. Lists hold at most 16 unique values, summaries
+at most 1024 bytes, and `remaining_tokens` is 0 through 10,000,000. Unknown
+fields, duplicate keys, and trailing JSON are rejected.
+
+Every request that carries the header receives a receipt in the response
+headers `x-vsr-handoff-version`, `x-vsr-handoff-id`, `x-vsr-handoff-status`,
+and `x-vsr-handoff-reason`. Version and ID appear only after the envelope
+parsed.
+
+| Status | HTTP | Reason | Meaning |
+| --- | --- | --- | --- |
+| `accepted` | routed | `admitted` | First use of this handoff ID. |
+| `partial` | routed | `selection_unconsumed` | Accepted, but the `selection` facts were not applied. |
+| `duplicate` | routed | `idempotent_retry` | Same ID and contents seen before; routed again unchanged. |
+| `rejected` | 409 | `handoff_id_conflict` | Same ID reused with different contents. |
+| `cancelled` | 409 | `cancel_recorded` | A `cancelled` envelope was recorded; the request is not routed. |
+| `cancelled` | 409 | `handoff_cancelled` | An active retry arrived after cancellation. |
+| `expired` | 422 | `expired` | `expires_at` has passed. |
+| `rejected` | 400 / 413 | contract code | Malformed, oversized, unknown-field, or unsupported envelope. |
+| `ignored` | routed | `feature_disabled`, `unsupported_endpoint`, `skip_processing` | Header stripped and the request routed normally. |
+
+Requests without the header are unchanged and receive no receipt. Handoff
+records live in a bounded in-memory ledger in each Router process until the
+latest `expires_at` seen for the ID. Records survive config hot reload but
+not restarts, are not shared across replicas, and the oldest record is
+evicted first when the ledger is full. Deployments that need cross-replica
+idempotency should keep a handoff on one replica, for example with
+session-affine load balancing.
+
 ### Router Replay
 
 ```yaml

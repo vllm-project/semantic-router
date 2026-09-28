@@ -292,6 +292,12 @@ Requests using an automatic model alias enter the default `routing` profile.
 A concrete provider model name is a direct pass-through request and bypasses
 recipe signals, decisions, route plugins, cache, learning, and session routing.
 
+Trusted gateways can attach an external agent runtime's handoff envelope
+after enabling `global.router.handoff.enabled`. It is disabled by default,
+returns idempotency and cancellation receipts, and does not change model
+selection. See
+[Handoff Envelope](../tutorials/global/api-and-observability#handoff-envelope).
+
 ## Validate and serve
 
 ```bash
