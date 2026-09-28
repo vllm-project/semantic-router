@@ -33,10 +33,16 @@ technical evidence rather than spending another GPU probe on the same control.
 | Runtime | Previously qualified offline ROCm image `sha256:ce895822fc48bb6864911d4488a3946f3a18fd3dd2ec90c8a0a49b259145f2fb`; one live-confirmed idle GPU. Native output must report `runtime_matches_validated=true` and no runtime differences. |
 | Typed FINAL | 1,600 original items, 2,000 answer slots; gold-free input SHA-256 `e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd`. |
 | CSS15 | 6,547 original items and answer slots; gold-free input SHA-256 `7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6`. |
-| Prediction seal | Existing `jev_arena/seal_lux9b_peer.py` SHA-256 `ddc526425b6377f15ea37117c95a9315c7cb5b27a80eedeed5c8571ef2753`, plus a joint pre-score hash of both full prediction files and both seals. This sealer checks IDs, question counts, package revision and runtime. |
+| Prediction seal | Existing `jev_arena/seal_lux9b_peer.py` SHA-256 `ddc526425b6377f15ea37117c95a9315c7bc7cb5b27a80eedeed5c8571ef2753`, plus a joint pre-score hash of both full prediction files and both seals. This sealer checks IDs, question counts, package revision and runtime. |
 | Scoring | Fixed typed scorer SHA-256 `d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc`; CSS scorer SHA-256 `cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca`. Four-family typed macro accuracy `T`, median of 15 task macro-F1 scores `H`, total `100 × sqrt(T × H)`. All type/task scores and invalid slots are reported. |
 | Optional same-panel peer | Already sealed JPT-9B v3, score 60.994, only if its exact frozen predictions are locally accessible with matching panel and scorer identities. Paired bootstrap: 5,000 draws, seed `20260927`, unchanged `jev_arena/compare_v3.py`. Otherwise report no paired interval. |
 | Cost cap | One GPU, at most 0.5 GPU-hour / 30 minutes elapsed including model load and both collectors; no retrial, alternate checkpoint, input, image, adapter, threshold or calibration. |
+
+The first CPU-only preflight stopped before GPU use because this note
+transcribed one character of the existing sealer digest incorrectly. The
+verified local and remote sealer bytes both have the corrected digest above;
+the sealer itself, model, prompts and scoring rule did not change. The failed
+preflight and correction are retained here before any formal prediction.
 
 ## Stop and disclosure rules
 
