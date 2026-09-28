@@ -1,5 +1,31 @@
 # DEV2.0-0.8B: private release build, upload and verification (2026-09-28)
 
+## Card-only revision (overlap and A7 v3 quarantine disclosures), 2026-09-29 ≈04:45 UTC+8 — current revision `f458c34c`
+
+The coordinator ordered this card-only revision after the eval track's overlap-effect check
+(`v2/eval/records/m5-overlap-effects-2026-09-29.md`, integration `cae64f4e8`). It was run by the DEV2.0-2B release
+worker. Weights, calibration (T = 1) and every answer and score are unchanged.
+
+- **Revision `f458c34ccfb4a5d4d32babeda1570919adb1a3c8`** (now `main`). Manifest `15e67dda…`. Against `7d08d0e1`, only
+  `README.md` and `MODEL_MANIFEST.json` differ; both safetensors files are identical.
+- **Final decision** [`DEV2.0-0.8B.decision.card2.json`](dev2-0p8b-release-2026-09-28/DEV2.0-0.8B.decision.card2.json)
+  `dd397e041e0d0063782a1d8289b6b81297bd6a5199063a9568b863b4563e5c0c`. It is final, decided by the coordinator under the
+  full-autonomy mandate, and supersedes `fedb18fa…`. `gate.json` `ebbad1d5…` binds it to `f458c34c…`.
+- **Card.** Two new limits, inserted before the CPU limit (spec [`dev2-0p8b-card2.json`](../specs/dev2-0p8b-card2.json)):
+  - Evaluation familiarity: 33 training groups, 11 evaluation items (9 media_ideology, 1 wiki_corpus, 1 multilingual
+    diagnostic); rescored without them or counting them all as errors, v3 moves by at most 0.06 and no comparison changes.
+  - Training-data quarantine: 19 training rows were later quarantined in A7 v3 against development held-out slices; at
+    most one could match a multilingual-diagnostic item.
+- **Verification.** `release.sh --upload --collect --already-collected` passed all 17 steps from mirror `33de83cea` on
+  node A GPU5 (shared lease), with a fresh copy of the frozen E8F autotune cache.
+  - Examples bit-identical across three processes (`f0a72416…`, as before); card example reproduced.
+  - Parity on 600 prompts before and after upload: 0 category changes.
+  - Re-hash passed; readback private.
+  - HTTP 12/12 with anonymous 401; links 14/14.
+  - Collection "Decision 2.0" (private): DEV2.0-0.6B, DEV2.0-0.8B, DEV2.0-2B.
+  - Receipts: [card2/](dev2-0p8b-release-2026-09-28/card2/).
+- **GPU:** 0.047 GPU-hours.
+
 ## Calibration-only revision (T = 1), 2026-09-29 ≈00:12 UTC+8 — current revision `7d08d0e1`
 
 The coordinator approved a calibration-only revision (23:55 UTC+8, full-autonomy mandate). Under the

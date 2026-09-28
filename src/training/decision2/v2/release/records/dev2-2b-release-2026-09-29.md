@@ -1,4 +1,51 @@
-# DEV2.0-2B: release engineering up to the collection add (2026-09-29)
+# DEV2.0-2B: private release (2026-09-29)
+
+## Released, 2026-09-29 ≈04:45 UTC+8 — revision `5ad3e9a3`, in the private "Decision 2.0" collection
+
+The coordinator finalized the release after the eval track's overlap-effect check (`v2/eval/records/m5-overlap-effects-2026-09-29.md`,
+integration `cae64f4e8`). Removing the 84 flagged items moves v3 by at most 0.05 for every model, and there is no
+contamination signature.
+
+- **Revision `5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38`** of private `llm-semantic-router/DEV2.0-2B` (now `main`).
+  Manifest `6c4e1885…`. Against the verified `b2c5d7ea`, only `README.md` and `MODEL_MANIFEST.json` differ; all three
+  safetensors files are identical ([readback](dev2-2b-release-2026-09-29/final/extra/final-readback.json)).
+- **Final decision** [`DEV2.0-2B.decision.json`](dev2-2b-release-2026-09-29/DEV2.0-2B.decision.json)
+  `de59a6c71e35b7cbdf32be18d72436a6b76aebc3e1adee84e068645bdd7cc85c`.
+  - It is `status: final`, decided by the coordinator under the full-autonomy mandate.
+  - It names report `08745acf…` and paired file `bca44e5f…`, and supersedes the drafts `31ae8a98…` and `fde8c87e…`.
+  - Gate evidence: +7.66 [+3.26, +10.81] vs the Sol 1.0 16K control; human transfer not below Decider 2B or This-That
+    1.2; no type collapsed; T = 1; Apache-2.0; the overlap result.
+  - `gate.json` `8dbf4c87…` binds it to `5ad3e9a3…`.
+- **Card.** The evaluation-familiarity item now ends: "Those rows touch 19 of the panel's items (18 media_ideology, 1
+  tropes); rescored without them, or counting all 19 as errors, post-key v3 stays 53.44 and none of this card's
+  comparisons change." The five eval-gate disclosures were already on the card, and the C1 placeholder stays until event 3.
+- **Verification.** `release.sh --upload --collect` passed all 17 steps from mirror `33de83cea` on node A GPU5 (shared
+  lease), with a fresh copy of the frozen scored cache (digest equal). [Receipts](dev2-2b-release-2026-09-29/final/)
+  - Examples `1425b445…`, bit-identical across three processes and as before; card example reproduced.
+  - Parity on 600 prompts before and after upload: 0 category changes.
+  - Re-hash passed; readback private.
+  - HTTP 12/12 with anonymous 401; links 15/15.
+  - Collection private, holding exactly DEV2.0-0.6B, DEV2.0-0.8B and DEV2.0-2B.
+- **GPU:** 0.063 GPU-hours. The DEV2.0-0.8B card-only revision followed in the same lease (0.047; see its record).
+- **Storage cleanup** ([receipt](dev2-2b-release-2026-09-29/storage/free-duplicates-20260928T204746Z.receipt.json),
+  [script](dev2-2b-release-2026-09-29/ops/free-released-duplicates.py.txt)), run after both publications. LFS objects
+  were deleted with `permanently_delete_lfs_files`, so commit history is unchanged. An object was deleted only if its
+  Hub OID equalled a fresh re-hash of the node copy, a file at the released repository's `main` had the same SHA-256,
+  and no path outside the folder used it.
+
+  | Staging copy | Released duplicate | Objects deleted | Bytes |
+  | --- | --- | ---: | ---: |
+  | `dev2-dec-staging` `m2/E8F-soup/` | DEV2.0-0.8B | 2 | 3,013,820,512 |
+  | `dev2-dec-staging` `m3/S2T-soup/` | DEV2.0-2B | 3 | 7,535,759,320 |
+  | `dev2-release-staging-06bm4` | DEV2.0-0.6B | 3 | 2,399,869,346 |
+  | `dev2-release-staging` (Kai1 dry run) | Decision-1.0-Kai-0.6B | 5 (kept `assets/DEV2.0-0.6B-owl-banner.png`, not in Kai 1.0) | 2,322,051,120 |
+
+  - **Total:** 15,271,500,298 bytes.
+  - **Org private storage:** 99.17 GB before the cleanup (other tracks' uploads since 04:10; `dev2-9b-staging` alone is
+    31.78 GB) and 83.90 GB after, under the 100 GB cap.
+  - **Still served:** every released repository serves all its weight files (DEV2.0-2B 3/3, 0.8B 2/2, 0.6B 2/2,
+    Kai 1.0 4/4).
+  - **Not touched:** HOLD staging (4B N4LKr, 9B DW, 27B, 0.6B Z), the 0.8B seeds, datasets and eval artifacts.
 
 **Status: verified private revision, stopped before `--collect`.** Private
 `llm-semantic-router/DEV2.0-2B@b2c5d7eac4ef24648cbf9c23c26421f0960ca542` (manifest

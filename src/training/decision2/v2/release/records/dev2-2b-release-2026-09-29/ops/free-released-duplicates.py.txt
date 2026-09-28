@@ -1,0 +1,85 @@
+"""Delete Hub LFS objects of staging copies that exactly duplicate released weights (no history rewrite).
+
+An LFS object is deleted only if (1) its Hub oid equals the SHA-256 of a freshly re-hashed node copy and
+(2) a file with that SHA-256 exists in the released repository at main. Everything else is kept and listed.
+usage: free_released_duplicates.py plan|apply <receipt.json>
+"""
+import hashlib
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+from huggingface_hub import HfApi
+
+ORG = "llm-semantic-router/"
+TARGETS = [  # staging repo, folder prefix, released repo, node copy root (repo-relative paths below it)
+    (ORG + "dev2-dec-staging", "m2/E8F-soup/", ORG + "DEV2.0-0.8B",
+     "/data/dev2/runs/dec/m2/formal-candidates/staging-16c0929a"),
+    (ORG + "dev2-dec-staging", "m3/S2T-soup/", ORG + "DEV2.0-2B",
+     "/data/dev2/runs/dec/m3/formal-candidates/staging-545a6784"),
+    (ORG + "dev2-release-staging-06bm4", "", ORG + "DEV2.0-0.6B",
+     "/data/dev2/runs/release/inputs/dev2-0p6b/staging-06bm4-62c61c10"),
+    (ORG + "dev2-release-staging", "", ORG + "Decision-1.0-Kai-0.6B", None),
+]
+KAI_COPIES = sorted(Path("/data/dev2/runs/release").glob("dryrun-kai1-staging-*/download/*"))
+
+mode, receipt_path = sys.argv[1], Path(sys.argv[2])
+api = HfApi()
+
+
+def sha(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for block in iter(lambda: fh.read(8 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def released_shas(repo: str) -> set[str]:
+    info = api.model_info(repo, files_metadata=True)
+    return {s.lfs.sha256 for s in info.siblings if s.lfs} | {s.blob_id for s in info.siblings}
+
+
+def repo_bytes(repo: str) -> int:
+    return int(getattr(api.model_info(repo, expand=["usedStorage"]), "used_storage", 0) or 0)
+
+
+receipt = {"schema": "dev2-release-free-duplicates/1", "mode": mode,
+           "utc": datetime.now(timezone.utc).isoformat(), "targets": []}
+plan = {}
+paths_by_oid = {}
+for repo in {t[0] for t in TARGETS}:
+    for s in api.model_info(repo, files_metadata=True).siblings:
+        if s.lfs:
+            paths_by_oid.setdefault((repo, s.lfs.sha256), set()).add(s.rfilename)
+for repo, prefix, released, root in TARGETS:
+    rel = released_shas(released)
+    objs = [f for f in api.list_lfs_files(repo) if f.filename.startswith(prefix)]
+    kept, chosen = [], []
+    for f in objs:
+        candidates = [Path(root) / f.filename] if root else [c / f.filename for c in KAI_COPIES]
+        local = next((c for c in candidates if c.is_file()), None)
+        local_sha = sha(local) if local else None
+        outside = sorted(p for p in paths_by_oid.get((repo, f.file_oid), ()) if not p.startswith(prefix))
+        why = ("no node copy" if not local else "node copy differs" if local_sha != f.file_oid
+               else "not in the released repo" if f.file_oid not in rel
+               else f"shared with {outside[:2]}" if outside else None)
+        entry = {"file": f.filename, "sha256": f.file_oid, "size": f.size, "node_copy": str(local) if local else None}
+        (kept if why else chosen).append({**entry, **({"kept_because": why} if why else {})})
+    plan.setdefault(repo, []).extend(chosen)
+    receipt["targets"].append({"repo": repo, "folder": prefix or "(whole repo)", "released": released,
+                               "delete": chosen, "keep": kept,
+                               "delete_bytes": sum(e["size"] for e in chosen)})
+    print(f"{repo} {prefix or '*'}: delete {len(chosen)} ({sum(e['size'] for e in chosen) / 1e9:.2f} GB), "
+          f"keep {len(kept)} {[k['kept_because'] for k in kept][:5]}")
+receipt["used_storage_before"] = {r: repo_bytes(r) for r in plan}
+if mode == "apply":
+    lfs_by_repo = {r: {f.file_oid: f for f in api.list_lfs_files(r)} for r in plan}
+    for repo, entries in plan.items():
+        if entries:
+            api.permanently_delete_lfs_files(repo, [lfs_by_repo[repo][e["sha256"]] for e in entries])
+    receipt["remaining_lfs_bytes"] = {r: sum(f.size for f in api.list_lfs_files(r)) for r in plan}
+receipt["deleted_bytes"] = sum(t["delete_bytes"] for t in receipt["targets"]) if mode == "apply" else 0
+json.dump(receipt, receipt_path.open("x"), indent=1)
+print(json.dumps({k: receipt[k] for k in ("mode", "deleted_bytes")} | {"remaining": receipt.get("remaining_lfs_bytes")}))
