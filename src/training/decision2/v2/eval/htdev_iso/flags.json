@@ -1,0 +1,29 @@
+{
+ "schema": "htdev-iso-flags/1",
+ "sni": {
+  "list": "allenai/natural-instructions@55a365637381ce7f3748fa2eac7aef1a113bbb82 tasks/README.md (1,613 task names; sha256 6fd323d2...), confirmed by each task's Source field",
+  "tasks": {
+   "circa": ["task565_circa_answer_generation", "task566_circa_classification", "task567_circa_text_generation", "task568_circa_question_generation"],
+   "pubhealth": ["task1366_healthfact_classification", "task1368_healthfact_sentence_generation", "task1369_healthfact_sentence_generation"],
+   "diplomacy": ["task1590_diplomacy_text_generation"],
+   "scruples": ["task106_scruples_ethical_judgment", "task224_scruples_anecdotes_ethical_judgment", "task282_scruples_event_time", "task498_scruples_anecdotes_whoiswrong_classification", "task500_scruples_anecdotes_title_generation", "task501_scruples_anecdotes_post_type_verification", "task502_scruples_anecdotes_whoiswrong_verification", "task503_scruples_anecdotes_isanswerable", "task508_scruples_dilemmas_more_ethical_isidentifiable"],
+   "casino": ["task353_casino_classification_negotiation_elicit_pref", "task354_casino_classification_negotiation_no_need", "task355_casino_classification_negotiation_other_need", "task356_casino_classification_negotiation_self_need", "task357_casino_classification_negotiation_small_talk", "task358_casino_classification_negotiation_uv_part", "task359_casino_classification_negotiation_vouch_fair"],
+   "hatexplain": ["task1502_hatexplain_classification", "task1503_hatexplain_classification", "task1504_hatexplain_answer_generation"]
+  }
+ },
+ "aggregators": {
+  "list": "devpanel-H exclusions peer_aggregator_sources (8 aggregators); disclosure only",
+  "hits": {
+   "circa": ["tasksource/tasksource-jev-typed-decisions@7470ed9e"],
+   "figqa": ["tasksource/tasksource-jev-typed-decisions@7470ed9e"],
+   "pubhealth": ["tasksource/tasksource-jev-typed-decisions@7470ed9e"],
+   "hyperpartisan": ["tasksource/tasksource-jev-typed-decisions@7470ed9e"],
+   "scruples": ["tasksource/tasksource-jev-typed-decisions@7470ed9e"],
+   "mhs": ["Praveenrajus/jev-bench@18f88da8", "tasksource/tasksource-jev-typed-decisions@7470ed9e (card mention only)"],
+   "rumoureval": ["tasksource/tasksource-jev-typed-decisions@7470ed9e"],
+   "emobank": ["tasksource/tasksource-jev-typed-decisions@7470ed9e"],
+   "moralstories": ["tasksource/tasksource-jev-typed-decisions@7470ed9e"]
+  }
+ },
+ "reverse_check": "HF ids, parent corpora and papers of all 24 keys vs exclusions hard_exclude_terms (481), hf_ids, sibling_corpora (23): 0 hard hits (one substring 'Empathy-Mental-Health' is a different dataset, Sharma et al. 2020)"
+}

@@ -4,7 +4,7 @@
   "nycc": {"task": "humor/nycc_pairs", "role": "primary", "origin": "hf", "repo": "jmhessel/newyorker_caption_contest", "revision": "d81cbab7d0392708d5371d3a4960e69261824db4"},
   "circa": {"task": "implicature/circa", "role": "primary", "origin": "hf", "repo": "google-research-datasets/circa", "revision": "faa1b5a78dd926a899bcd4da289c2e3abe8061a9"},
   "figqa": {"task": "figurative/figqa", "role": "primary", "origin": "hf", "repo": "nightingal3/fig-qa", "revision": "b29ec2faf6ef73d634db9757f8741dee68f6c874"},
-  "ukpconvarg": {"task": "persuasion/ukpconvarg", "role": "primary", "origin": "github", "repo": "UKPLab/acl2016-convincing-arguments", "revision": "ca9d24e41b8805ff2e1d3585d552b49bb64a65f7", "paths": ["data/UKPConvArg1Strict-CSV/"], "convert": "tsv_header"},
+  "ukpconvarg": {"task": "persuasion/ukpconvarg", "role": "primary", "origin": "github", "repo": "UKPLab/acl2016-convincing-arguments", "revision": "ca9d24e41b8805ff2e1d3585d552b49bb64a65f7", "paths": ["data/"], "convert": "tsv_header"},
   "pubhealth": {"task": "misinfo/pubhealth", "role": "primary", "origin": "hf", "repo": "ImperialCollegeLondon/health_fact", "revision": "7f898a16838e708a4597986e3fab8af05b710ba4", "note": "refs/convert/parquet of the loader @57995242 (the loader downloads the authors' archive)"},
   "brighter": {"task": "emotion/brighter", "role": "primary", "origin": "hf", "repo": "brighter-dataset/BRIGHTER-emotion-categories", "revision": "419566ac8f46f951b51584be36c13e5363008144", "include": ["eng/*"]},
   "claimstance": {"task": "stance/claim_stance", "role": "primary", "origin": "hf", "repo": "ibm-research/claim_stance", "revision": "ec4e2c2ec3e0c70087c67a28a7bce58b682b8109"},
