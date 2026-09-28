@@ -183,7 +183,7 @@ class DeploymentResultsTests(unittest.TestCase):
         self.assertEqual(
             jobs["result"]["needs"], ["checks", "bundle-validate", "integration-test"]
         )
-        self.assertEqual(jobs["integration-test"]["strategy"]["max-parallel"], 2)
+        self.assertNotIn("max-parallel", jobs["integration-test"]["strategy"])
         steps = jobs["checks"]["steps"]
         self.assertEqual(
             sum(step.get("uses") == "actions/setup-go@v5" for step in steps), 1
