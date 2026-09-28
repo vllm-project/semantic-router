@@ -121,6 +121,124 @@ class AnswersDiffTest(unittest.TestCase):
             self.assertNotIn("i2", buffer.getvalue())
 
 
+def stage_fixture(tmp: Path, verdict: object) -> tuple[Path, Path, Path]:
+    full = tmp / "arms" / "m6-x-soup" / "full"
+    export = full / "best-export"
+    (export / "backbone").mkdir(parents=True)
+    (export / "backbone" / "model.safetensors").write_bytes(b"w" * 10)
+    files = {
+        "backbone/model.safetensors": {
+            "bytes": 10,
+            "sha256": hashlib.sha256(b"w" * 10).hexdigest(),
+        }
+    }
+    (full / "best-export.MANIFEST.json").write_text(json.dumps({"files": files}))
+    manifest_sha = hashlib.sha256(
+        (full / "best-export.MANIFEST.json").read_bytes()
+    ).hexdigest()
+    (full / "SOUP.json").write_text(
+        json.dumps(
+            {
+                "best_export_manifest_sha256": manifest_sha,
+                "ingredients": [{"arm": "m6-cx-s1"}],
+            }
+        )
+    )
+    formal = tmp / "formal" / "m6-x-soup"
+    formal.mkdir(parents=True)
+    (formal / "M6-SUMMARY.json").write_text(
+        json.dumps({"v3": 48.0, "successor": {"verdict": verdict}})
+    )
+    numbers = tmp / "numbers.json"
+    numbers.write_text(
+        json.dumps({"development": {"Q": 48.5}, "post_key_same_panel": {"v3": 48.0}})
+    )
+    return full, formal, numbers
+
+
+class NotSuccessorStageTest(unittest.TestCase):
+    reason = "typed FINAL Score collapsed (94.75% one answer)"
+
+    def test_not_successor_is_written_prominently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            full, formal, numbers = stage_fixture(tmp, False)
+            dest = tmp / "stage"
+            info = stage.build(
+                full, dest, formal, numbers, "m6-x-soup", "abc123", "x", self.reason
+            )
+            self.assertEqual(info["repo"], "llm-semantic-router/dev2-staging-06bm6-x")
+            self.assertTrue(stage.validate(dest, full)["ok"])
+            staging = json.loads((dest / "dev2-staging" / "STAGING.json").read_text())
+            self.assertIs(staging["successor"], False)
+            self.assertEqual(staging["not_successor_reason"], self.reason)
+            self.assertIn("NOT a successor", staging["status"])
+            readme = (dest / "README.md").read_text()
+            head = readme.split("## Development")[0]
+            self.assertIn("NOT a successor", head.splitlines()[4])
+            self.assertIn(f"**NOT a successor.** {self.reason}.", head)
+
+    def test_not_successor_refused_unless_verdict_false(self):
+        for verdict in (True, None):
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp = Path(tmp)
+                full, formal, numbers = stage_fixture(tmp, verdict)
+                with self.assertRaises(ValueError):
+                    stage.build(
+                        full,
+                        tmp / "stage",
+                        formal,
+                        numbers,
+                        "m6-x-soup",
+                        "abc123",
+                        None,
+                        self.reason,
+                    )
+                self.assertFalse((tmp / "stage").exists())
+                args = [
+                    "m6-x-soup",
+                    "--full",
+                    str(full),
+                    "--dest",
+                    str(tmp / "stage"),
+                    "--formal-run",
+                    str(formal),
+                    "--numbers",
+                    str(numbers),
+                    "--source-commit",
+                    "abc123",
+                    "--not-successor",
+                    self.reason,
+                    "--upload",
+                ]
+                with redirect_stdout(io.StringIO()):
+                    self.assertEqual(stage.main(args), 2)
+                self.assertFalse((tmp / "stage").exists())
+
+    def test_upload_of_non_successor_needs_the_option(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            full, formal, numbers = stage_fixture(tmp, False)
+            args = [
+                "m6-x-soup",
+                "--full",
+                str(full),
+                "--dest",
+                str(tmp / "stage"),
+                "--formal-run",
+                str(formal),
+                "--numbers",
+                str(numbers),
+                "--source-commit",
+                "abc123",
+                "--upload",
+                "--hf",
+                "/nonexistent/hf",
+            ]
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(stage.main(args), 2)
+
+
 class StageTest(unittest.TestCase):
     def test_build_and_validate(self):
         with tempfile.TemporaryDirectory() as tmp:

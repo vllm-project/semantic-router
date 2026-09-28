@@ -1,7 +1,8 @@
 """Private staging of an M6 soup package (dry run by default; stdlib only).
 
     python3 -m v2.06b.m6_stage NAME --formal-run DIR --numbers NUMBERS.json --source-commit SHA \
-        [--full DIR] [--dest DIR] [--upload [--allow-non-successor]] [--hf hf] [--hf-python PY]
+        [--full DIR] [--dest DIR] [--repo-suffix SUFFIX] [--not-successor REASON] [--upload] \
+        [--hf hf] [--hf-python PY]
 
 Builds DEST (default /data/dev2/runs/06b/m6/staging/NAME) from the soup run's `full/`
 directory (default /data/dev2/runs/06b/m1/arms/NAME/full): the `best-export` contents,
@@ -10,12 +11,17 @@ directory (default /data/dev2/runs/06b/m1/arms/NAME/full): the `best-export` con
 a short README.md (private staging checkpoint, not a release). NUMBERS.json holds only scalar
 development and post-key same-panel numbers: {"development": {...}, "post_key_same_panel": {...}}.
 The export is verified against its manifest before copying and DEST is validated after.
+The repo is llm-semantic-router/dev2-staging-06bm6-SUFFIX (SUFFIX defaults to NAME).
 
-Only with --upload (and only for a successor per M6-SUMMARY.json unless
---allow-non-successor): `hf repos create llm-semantic-router/dev2-staging-06bm6-NAME --type
-model --private`, `hf upload REPO DEST . --repo-type model --commit-message ...`, then every file
-is checked against HfApi().model_info(REPO, files_metadata=True) (size, and LFS sha256 or git
-blob id) and the revision is printed.
+--not-successor REASON is accepted only when the formal run's M6-SUMMARY.json successor verdict
+is false; it writes "NOT a successor" and REASON at the top of README.md and into STAGING.json
+(`successor: false`, `not_successor_reason`, `status`).
+
+Only with --upload (for a successor per M6-SUMMARY.json, or a non-successor staged with
+--not-successor): `hf repos create REPO --type model --private`, `hf upload REPO DEST .
+--repo-type model --commit-message ...`, then every file is checked against
+HfApi().model_info(REPO, files_metadata=True) (size, and LFS sha256 or git blob id) and the
+revision is printed.
 """
 
 from __future__ import annotations
@@ -96,14 +102,39 @@ def render_numbers(section: dict[str, Any]) -> str:
     return "\n".join(f"- {key}: {show(value)}" for key, value in section.items())
 
 
-def readme(name: str, repo: str, soup: dict[str, Any], numbers: dict[str, Any]) -> str:
+def successor_verdict(formal: Path) -> Any:
+    summary = formal / "M6-SUMMARY.json"
+    if not summary.is_file():
+        return None
+    return (
+        json.loads(summary.read_text(encoding="utf-8"))
+        .get("successor", {})
+        .get("verdict")
+    )
+
+
+def readme(
+    name: str,
+    repo: str,
+    soup: dict[str, Any],
+    numbers: dict[str, Any],
+    not_successor: str | None = None,
+) -> str:
     arms = ", ".join(i["arm"] for i in soup.get("ingredients", []))
+    title = f"# DEV2.0-0.6B M6 staging checkpoint `{name}` (private; not a release)"
+    verdict = ""
+    if not_successor:
+        title = title.replace("(private;", "(private; NOT a successor;")
+        verdict = f"""
+**NOT a successor.** {not_successor}. The released DEV2.0-0.6B stands; this checkpoint is kept
+for reference only.
+"""
     text = f"""---
 license: other
 private: true
 ---
-# DEV2.0-0.6B M6 staging checkpoint `{name}` (private; not a release)
-
+{title}
+{verdict}
 Private staging checkpoint `{repo}` of the Decision 2.0 0.6B track. It is **not a release** and
 does not replace the released DEV2.0-0.6B unless the coordinator decides so.
 
@@ -134,16 +165,28 @@ def build(
     numbers_path: Path,
     name: str,
     source_commit: str,
+    repo_suffix: str | None = None,
+    not_successor: str | None = None,
 ) -> dict[str, Any]:
     if dest.exists():
         raise FileExistsError(f"{dest} exists")
+    if not_successor is not None:
+        not_successor = not_successor.strip().rstrip(".")
+        if not not_successor or len(not_successor) > 300 or "\n" in not_successor:
+            raise ValueError(
+                "--not-successor needs a one-line reason of at most 300 characters"
+            )
+        if successor_verdict(formal) is not False:
+            raise ValueError(
+                "--not-successor needs an M6-SUMMARY.json successor verdict of false"
+            )
     soup, _, manifest_sha = verify_export(full)
     numbers = json.loads(numbers_path.read_text(encoding="utf-8"))
     numbers = {
         k: scalars(numbers.get(k), k) for k in ("development", "post_key_same_panel")
     }
     summary = formal / "M6-SUMMARY.json"
-    repo = f"{ORG}/{PREFIX}{name}"
+    repo = f"{ORG}/{PREFIX}{repo_suffix or name}"
     shutil.copytree(full / "best-export", dest)
     meta = dest / "dev2-staging"
     meta.mkdir()
@@ -153,7 +196,13 @@ def build(
         "schema": "dev2-06b-m6-staging/1",
         "candidate": name,
         "repo": repo,
-        "status": "private staging checkpoint (not a release)",
+        "status": (
+            f"private staging checkpoint, NOT a successor: {not_successor} (not a release)"
+            if not_successor
+            else "private staging checkpoint (not a release)"
+        ),
+        "successor": successor_verdict(formal),
+        "not_successor_reason": not_successor,
         "packaging_profile": "qwen-full",
         "weight_origin": "official Qwen/Qwen3-0.6B-Base fine-tuned by the Decision 2.0 0.6B track; "
         "uniform same-init weight soup",
@@ -171,7 +220,9 @@ def build(
     (meta / "STAGING.json").write_text(
         json.dumps(staging, indent=2, sort_keys=True) + "\n"
     )
-    (dest / "README.md").write_text(readme(name, repo, soup, numbers), encoding="utf-8")
+    (dest / "README.md").write_text(
+        readme(name, repo, soup, numbers, not_successor), encoding="utf-8"
+    )
     return staging
 
 
@@ -279,17 +330,35 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--full", type=Path)
     parser.add_argument("--dest", type=Path)
+    parser.add_argument("--repo-suffix")
+    parser.add_argument("--not-successor", metavar="REASON")
     parser.add_argument("--upload", action="store_true")
-    parser.add_argument("--allow-non-successor", action="store_true")
     parser.add_argument("--hf", default="hf")
     parser.add_argument("--hf-python", default=HF_PYTHON)
     args = parser.parse_args(argv)
-    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", args.name):
-        parser.error("name must be lowercase letters, digits and dashes")
+    for value in (args.name, args.repo_suffix):
+        if value is not None and not re.fullmatch(r"[a-z0-9][a-z0-9-]*", value):
+            parser.error(
+                "name and repo suffix must be lowercase letters, digits and dashes"
+            )
+    successor = successor_verdict(args.formal_run)
+    if args.not_successor is not None and successor is not False:
+        print(
+            f"refusing --not-successor: M6-SUMMARY successor verdict is {successor!r}",
+            file=sys.stderr,
+        )
+        return 2
     full = args.full or ARMS / args.name / "full"
     dest = args.dest or STAGING_ROOT / args.name
     info = build(
-        full, dest, args.formal_run, args.numbers, args.name, args.source_commit
+        full,
+        dest,
+        args.formal_run,
+        args.numbers,
+        args.name,
+        args.source_commit,
+        args.repo_suffix,
+        args.not_successor,
     )
     report = validate(dest, full)
     print(
@@ -301,6 +370,7 @@ def main(argv: list[str] | None = None) -> int:
                 "export_manifest_sha256": info["export_manifest_sha256"],
                 "state_sha256": info["state_sha256"],
                 "formal_summary_sha256": info["formal_summary_sha256"],
+                "status": info["status"],
             },
             sort_keys=True,
         )
@@ -310,26 +380,20 @@ def main(argv: list[str] | None = None) -> int:
     if not args.upload:
         print("dry run: nothing uploaded")
         return 0
-    summary_path = args.formal_run / "M6-SUMMARY.json"
-    successor = (
-        json.loads(summary_path.read_text(encoding="utf-8"))
-        .get("successor", {})
-        .get("verdict")
-        if summary_path.is_file()
-        else None
-    )
-    if successor is not True and not args.allow_non_successor:
+    if successor is not True and args.not_successor is None:
         print(
-            f"refusing upload: M6-SUMMARY successor verdict is {successor!r}",
+            f"refusing upload: M6-SUMMARY successor verdict is {successor!r} "
+            "(stage a non-successor with --not-successor REASON)",
             file=sys.stderr,
         )
         return 2
+    kind = "NOT a successor, " if args.not_successor is not None else ""
     result = upload(
         dest,
         info["repo"],
         args.hf,
         args.hf_python,
-        f"DEV2.0-0.6B M6 private staging checkpoint {args.name} (not a release)",
+        f"DEV2.0-0.6B M6 private staging checkpoint {args.name} ({kind}not a release)",
     )
     print(json.dumps(result, sort_keys=True))
     return 0 if result["ok"] else 1
