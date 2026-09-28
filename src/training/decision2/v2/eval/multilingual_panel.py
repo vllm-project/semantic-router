@@ -118,7 +118,7 @@ def massive_passes(record: dict[str, Any]) -> bool:
     return intent_ok and bool(grammar) and statistics.median(grammar) >= 3 and language
 
 
-def build_massive(root: Path) -> list[dict[str, Any]]:
+def build_massive(root: Path, exclude: set[str] = frozenset()) -> list[dict[str, Any]]:
     data = {
         loc: {
             r["id"]: r
@@ -138,6 +138,7 @@ def build_massive(root: Path) -> list[dict[str, Any]]:
             for loc in MASSIVE_LOCALES
         )
     }
+    ids -= set(exclude)
     by_scenario: dict[str, list[str]] = defaultdict(list)
     for i in sorted(ids, key=lambda i: key("massive", i)):
         by_scenario[data["en-US"][i]["scenario"]].append(i)
@@ -160,7 +161,7 @@ def build_massive(root: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def build_pawsx(root: Path) -> list[dict[str, Any]]:
+def build_pawsx(root: Path, exclude: set[str] = frozenset()) -> list[dict[str, Any]]:
     import pyarrow.parquet as pq
 
     tables = {
@@ -182,6 +183,7 @@ def build_pawsx(root: Path) -> list[dict[str, Any]]:
     ids = {
         i for i in ids if len({tables[lang][i]["label"] for lang in PAWSX_LANGS}) == 1
     }
+    ids = {i for i in ids if str(i) not in exclude}
     by_label: dict[int, list] = defaultdict(list)
     for i in sorted(ids, key=lambda i: key("pawsx", str(i))):
         by_label[tables["en"][i]["label"]].append(i)
@@ -204,7 +206,7 @@ def build_pawsx(root: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def build_xnli(root: Path) -> list[dict[str, Any]]:
+def build_xnli(root: Path, exclude: set[str] = frozenset()) -> list[dict[str, Any]]:
     import pyarrow.parquet as pq
 
     table = pq.read_table(
@@ -217,6 +219,7 @@ def build_xnli(root: Path) -> list[dict[str, Any]]:
         min(members, key=lambda m: key("xnli-row", str(m)))
         for members in by_premise.values()
     ]
+    candidates = [c for c in candidates if str(c) not in exclude]
     level = {2: 0, 1: 1, 0: 2}  # contradiction, neutral, entailment -> ordered support
     by_level: dict[int, list[int]] = defaultdict(list)
     for index in sorted(candidates, key=lambda m: key("xnli", str(m))):
@@ -243,7 +246,10 @@ def build_xnli(root: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def build(sources: Path, output: Path) -> dict[str, Any]:
+def build(
+    sources: Path, output: Path, exclude: dict[str, set[str]] | None = None
+) -> dict[str, Any]:
+    exclude = exclude or {}
     observed = {}
     for relative, expected in SOURCE_SHA256.items():
         path = sources / relative
@@ -252,9 +258,9 @@ def build(sources: Path, output: Path) -> dict[str, Any]:
             raise ValueError(f"{relative}: {digest} differs from pinned {expected}")
         observed[relative] = digest
     rows = (
-        build_massive(sources / "massive")
-        + build_pawsx(sources / "paws-x")
-        + build_xnli(sources / "xnli")
+        build_massive(sources / "massive", exclude.get("massive", set()))
+        + build_pawsx(sources / "paws-x", exclude.get("pawsx", set()))
+        + build_xnli(sources / "xnli", exclude.get("xnli", set()))
     )
     rows.sort(key=lambda r: key("order", r["source"], r["source_id"], r["language"]))
     prompts, gold = [], []
@@ -286,6 +292,7 @@ def build(sources: Path, output: Path) -> dict[str, Any]:
         "created_utc": utc_now(),
         "sources": observed,
         "revisions": REVISIONS,
+        "excluded_source_items": {k: sorted(v) for k, v in exclude.items()},
         "items": len(prompts),
         "counts": {
             f"{t}/{lang}": n
@@ -473,6 +480,11 @@ def main() -> None:
     b = commands.add_parser("build")
     b.add_argument("--sources", type=Path, required=True)
     b.add_argument("--output", type=Path, required=True)
+    b.add_argument(
+        "--exclude",
+        type=Path,
+        help="JSON {source: [source_id, ...]} from a prior isolation audit",
+    )
     a = commands.add_parser("audit")
     a.add_argument("--panel", type=Path, required=True)
     a.add_argument("--against", type=Path, action="append", required=True)
@@ -483,7 +495,15 @@ def main() -> None:
     s.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "build":
-        print(json.dumps(build(args.sources, args.output), indent=2))
+        exclude = (
+            {
+                k: set(map(str, v))
+                for k, v in json.loads(args.exclude.read_text()).items()
+            }
+            if args.exclude
+            else None
+        )
+        print(json.dumps(build(args.sources, args.output, exclude), indent=2))
     elif args.command == "audit":
         result = audit(args.panel, args.against)
         write_json(args.output, result, exclusive=False)
