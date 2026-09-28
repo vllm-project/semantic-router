@@ -47,6 +47,7 @@ collect() {  # stage-name -- NAME=PATH...
     mounts+=(--mount "${spec#*=}:/prompts/${spec%%=*}.jsonl")
   done
   mkdir -p "$OUT/$stage"
+  chmod 700 "$OUT/$stage"
   python3 -m v2.27b.launch --name "d2-27b-$RUN-$stage" --gpu "$GPU" --cap-hours 1.5 \
     --purpose "$RUN $stage package-native collection" --receipt "$OUT/$stage.launch.json" \
     --mount "$CODE:/code" --mount "$PACKAGE:/package" --mount "$SOURCE:/source" \
