@@ -185,6 +185,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-28 22:35 — **DEV2.0-0.8B RELEASED (private).** `llm-semantic-router/DEV2.0-0.8B@0b631a85c19fb573aee34fc68bb413271ebe89f4`
+  (manifest `0af27b1c…`; only README changed from the verified `2667d883`), the only item in the private "Decision 2.0"
+  collection. Final decision `b2338c45…` sealed to this revision (gate `fb989b53…`, six checks pass); readback: real
+  download re-hash 31/31, 8,378-prompt answer parity, repo private, anonymous access refused. Records: integration
+  `8b7349b97`, gist `07-decision-2-release.md`. Post-release, a successor replaces it only if it clearly beats it (see 21:30).
+
 - 2026-09-28 22:30 — DEV2.0-0.6B release engineering done up to the collection step (gist `07b-decision-2-release-06b.md`;
   integration `33b9e366a`; private `llm-semantic-router/DEV2.0-0.6B@7b5d3ff2…`, draft decision `72bc767e…`). It shipped
   the raw scored probabilities without CAL698. **Coordinator decision: calibrate before release** — fit per-type
