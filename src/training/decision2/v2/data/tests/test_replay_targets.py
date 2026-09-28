@@ -43,7 +43,7 @@ class ReplayTargetsTest(unittest.TestCase):
                 "probabilities": {"k0": 0.1, "k1": 0.6, "k2": 0.2, "k3": 0.1},
             },
             self.noul["id"]: {"type": "noul", "noul": 0.25},
-            self.score["id"]: None,
+            self.score["id"]: {"type": "score", "error": "context_overflow"},
         }
 
     def _receipts(self, **overrides):
@@ -65,6 +65,7 @@ class ReplayTargetsTest(unittest.TestCase):
         )
         self.assertEqual(replay[1]["teacher_probs"], {"false": 0.75, "true": 0.25})
         self.assertEqual(report["score"]["no_native_answer"], 1)
+        self.assertEqual(report["score"]["no_answer_reasons"], {"context_overflow": 1})
         self.assertEqual(report["choice"]["argmax_accuracy_vs_gold"], 1.0)
 
     def test_rejects_identity_prompt_or_runtime_mismatch(self) -> None:
