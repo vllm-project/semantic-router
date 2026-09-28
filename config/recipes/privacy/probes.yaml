@@ -53,6 +53,18 @@ decisions:
         expected_signals:
           conversation: [privacy_has_images]
         tags: [language:en, privacy, multimodal, image, shape:messages]
+      - id: local_handling_with_image
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Summarize this internal runbook, keep all processing on-prem, and read the attached screenshot.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [privacy_has_images]
+        notes: The image decision and the local-handling route share tier 2, so the declared priority selects omni.
+        tags: [language:en, privacy, collision, image, shape:messages]
 
   - id: local_security_containment
     expected_decision: local_security_containment

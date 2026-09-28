@@ -108,8 +108,7 @@ def _register_projection_names(
                 ValidationError(
                     field=f"recipes.{profile_name}.routing.projections.{kind}",
                     message=(
-                        f'duplicate projection name "{name}" in recipe '
-                        f'"{profile_name}"'
+                        f'duplicate projection name "{name}" in recipe "{profile_name}"'
                     ),
                 )
             )
@@ -204,90 +203,57 @@ def validate_projection_score_dependencies(
 def validate_embedding_modality_compatibility(
     config: UserConfig,
 ) -> list[ValidationError]:
-    """
-    Validate that image/audio query_modality embedding rules are paired with a
-    multimodal embedding model. Mirrors the Go-side ``validateEmbeddingContracts``
-    so the CLI catches the same misconfiguration the router would reject at load.
+    """Require a shared multimodal encoder or an explicit recipe binding.
 
-    Rules:
-      - ``text`` (or unset): always allowed.
-      - ``image``: requires
-        ``global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal``.
-      - ``audio``: rejected with a "planned" message — the audio FFI is not
-        yet exposed by candle-binding.
-      - any other value: rejected as unknown (defense-in-depth; Pydantic's
-        ``Literal`` type enforces the same constraint at parse time).
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors
+    The Router validates the loaded binding's actual image/original-audio
+    capabilities before publishing a runtime. CLI validation never loads models.
     """
     errors: list[ValidationError] = []
-    embeddings = [
-        embedding
-        for _, routing in iter_routing_profiles(config)
-        for embedding in routing.signals.embeddings or []
-    ]
-    if not embeddings:
-        return errors
-
-    # Resolve embedding model_type from the canonical v0.3 path
-    # (global.model_catalog.embeddings.semantic.embedding_config.model_type).
-    # Falls back to "" if the path is absent; the Go side defaults to "qwen3"
-    # for an empty value, which keeps image/audio rules from being accepted
-    # without an explicit multimodal opt-in.
-    model_type = ""
-    if isinstance(config.global_, dict):
-        try:
-            model_type = (
-                config.global_.get("model_catalog", {})
-                .get("embeddings", {})
-                .get("semantic", {})
-                .get("embedding_config", {})
-                .get("model_type", "")
-            ) or ""
-        except (AttributeError, TypeError):
-            model_type = ""
-
+    catalog = (config.global_ or {}).get("model_catalog", {})
+    if not isinstance(catalog, dict):
+        catalog = {}
+    semantic = catalog
+    for key in ("embeddings", "semantic", "embedding_config"):
+        semantic = semantic.get(key, {}) if isinstance(semantic, dict) else {}
+    model_type = semantic.get("model_type", "") if isinstance(semantic, dict) else ""
     normalized = model_type.strip().lower() if isinstance(model_type, str) else ""
+    global_bindings = catalog.get("bindings") or {}
 
-    for rule in embeddings:
-        raw = (rule.query_modality or "").strip().lower() if rule.query_modality else ""
-        if raw in ("", "text"):
-            continue
-        if raw == "image":
-            if normalized != "multimodal":
+    for profile_name, routing in iter_routing_profiles(config):
+        bound = "embedding" in routing.model_bindings or "embedding" in global_bindings
+        for rule in routing.signals.embeddings or []:
+            raw = (rule.query_modality or "").strip().lower()
+            if (
+                (rule.image_candidates or rule.negative_image_candidates)
+                and normalized != "multimodal"
+                and not bound
+            ):
                 errors.append(
                     ValidationError(
-                        f"Embedding rule '{rule.name}' declares query_modality=image, "
-                        f"which requires global.model_catalog.embeddings.semantic."
-                        f"embedding_config.model_type=multimodal (current: "
-                        f"'{model_type}'). Remove the rule, set query_modality to "
-                        f"text, or change the embedding model_type to multimodal.",
-                        field=f"signals.embeddings.{rule.name}",
+                        f"Embedding rule '{rule.name}' image candidates require model_type=multimodal or an explicit embedding binding with image capability.",
+                        field=f"{profile_name}.signals.embeddings.{rule.name}",
                     )
                 )
-        elif raw == "audio":
-            errors.append(
-                ValidationError(
-                    f"Embedding rule '{rule.name}' declares query_modality=audio, "
-                    f"but the audio FFI (MultiModalEncodeAudioFromBase64) is not "
-                    f"yet exposed by candle-binding. Audio query support is "
-                    f"planned; remove the rule or set query_modality to "
-                    f"text/image until the FFI lands.",
-                    field=f"signals.embeddings.{rule.name}",
+            if raw in ("", "text"):
+                continue
+            if raw in ("image", "audio"):
+                if normalized == "multimodal" or bound:
+                    continue
+                message = (
+                    f"Embedding rule '{rule.name}' declares query_modality={raw}, "
+                    "which requires global.model_catalog.embeddings.semantic."
+                    "embedding_config.model_type=multimodal or an explicit embedding "
+                    f"binding with that capability (current: '{model_type}')."
                 )
-            )
-        else:
-            errors.append(
-                ValidationError(
+            else:
+                message = (
                     f"Embedding rule '{rule.name}' declares unknown "
                     f"query_modality='{rule.query_modality}' "
-                    f"(allowed values: text, image, audio).",
-                    field=f"signals.embeddings.{rule.name}",
+                    "(allowed values: text, image, audio)."
+                )
+            errors.append(
+                ValidationError(
+                    message, field=f"{profile_name}.signals.embeddings.{rule.name}"
                 )
             )
-
     return errors

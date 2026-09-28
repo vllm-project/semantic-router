@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
@@ -15,6 +16,7 @@ const (
 	learningOutcomeIdempotencyHeader = "Idempotency-Key"
 	learningOutcomeRateLimit         = 60
 	learningOutcomeRateWindow        = time.Minute
+	dashboardOutcomeDelegateRole     = "dashboard_control_plane"
 )
 
 type learningOutcomePolicyError struct {
@@ -72,14 +74,18 @@ func (p *learningOutcomeIngestPolicy) enforce(
 			Message: "Idempotency-Key must be at most 256 characters",
 		}
 	}
-	if !p.allow(principalKey(principal)) {
+	bucket, source, provenanceErr := outcomeProvenance(r, principal)
+	if provenanceErr != nil {
+		return "", "", provenanceErr
+	}
+	if !p.allow(bucket) {
 		return "", "", &learningOutcomePolicyError{
 			Status:  http.StatusTooManyRequests,
 			Code:    "RATE_LIMITED",
 			Message: "learning outcome ingestion rate limit exceeded",
 		}
 	}
-	return key, sourceFromManagementPrincipal(principal), nil
+	return key, source, nil
 }
 
 func (p *learningOutcomeIngestPolicy) allow(bucket string) bool {
@@ -111,6 +117,33 @@ func principalKey(principal managementPrincipal) string {
 		return "auth:" + role
 	}
 	return "local:" + role
+}
+
+func outcomeProvenance(
+	r *http.Request,
+	principal managementPrincipal,
+) (string, routerruntime.RouterOutcomeSource, *learningOutcomePolicyError) {
+	defaultBucket := principalKey(principal)
+	defaultSource := sourceFromManagementPrincipal(principal)
+	if r == nil || !principal.AuthEnabled {
+		return defaultBucket, defaultSource, nil
+	}
+	source := strings.TrimSpace(r.Header.Get(headers.VSROutcomeSource))
+	delegatedPrincipal := strings.TrimSpace(r.Header.Get(headers.VSROutcomePrincipal))
+	if source == "" && delegatedPrincipal == "" {
+		return defaultBucket, defaultSource, nil
+	}
+	if strings.TrimSpace(principal.Role) != dashboardOutcomeDelegateRole ||
+		source != string(routerruntime.RouterOutcomeSourceUser) ||
+		delegatedPrincipal == "" ||
+		len(delegatedPrincipal) > 256 {
+		return "", "", &learningOutcomePolicyError{
+			Status:  http.StatusBadRequest,
+			Code:    "INVALID_OUTCOME_PROVENANCE",
+			Message: "authenticated outcome provenance is invalid",
+		}
+	}
+	return "delegated:user:" + delegatedPrincipal, routerruntime.RouterOutcomeSourceUser, nil
 }
 
 // sourceFromManagementPrincipal derives learning provenance from auth credentials.

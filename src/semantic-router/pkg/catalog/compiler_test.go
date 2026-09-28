@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -102,6 +103,25 @@ func TestRegistryRejectsInvalidIndexResultStates(t *testing.T) {
 	}
 }
 
+func TestRegistryRejectsConflictingOperationOverrides(t *testing.T) {
+	var document snapshot
+	if err := json.Unmarshal([]byte(builtInCatalogJSON), &document); err != nil {
+		t.Fatal(err)
+	}
+	for index := range document.Providers {
+		if document.Providers[index].ID != "azure-openai" {
+			continue
+		}
+		document.Providers[index].PathOverrides["openai/responses@1#create"] = "/responses"
+		_, err := registryFromSnapshot(document, "sha256:test")
+		if err == nil || !strings.Contains(err.Error(), "both path_overrides and operation_overrides") {
+			t.Fatalf("ambiguous provider operation was accepted: %v", err)
+		}
+		return
+	}
+	t.Fatal("azure-openai provider is missing")
+}
+
 func TestProviderLookupReturnsDefensiveDefaultHeaders(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {
@@ -158,6 +178,29 @@ func TestSnowflakeCortexProviderContractFixture(t *testing.T) {
 	// must not claim live_verified.
 	if provider.Conformance.Status != "fixture_verified" {
 		t.Fatalf("conformance = %+v, want fixture_verified until accepted-wire conformance exists", provider.Conformance)
+	}
+}
+
+func TestProviderLookupReturnsDefensiveOperationOverrides(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const operation = "openai/responses@1#create"
+	provider, ok := registry.Provider("azure-openai")
+	if !ok {
+		t.Fatal("azure-openai provider is missing")
+	}
+	original, ok := provider.OperationOverrides[operation]
+	if !ok || original.Path != "/openai/v1/responses" {
+		t.Fatalf("unexpected operation override: %+v", provider.OperationOverrides)
+	}
+
+	provider.OperationOverrides[operation] = OperationOverride{Path: "/mutated"}
+
+	reloaded, _ := registry.Provider("azure-openai")
+	if got := reloaded.OperationOverrides[operation]; got != original {
+		t.Fatalf("registry operation overrides were mutated: %+v", got)
 	}
 }
 
@@ -265,20 +308,59 @@ func TestBuiltInProviderBindingsDeclareRelationships(t *testing.T) {
 	}
 	assertProviderBindingRelationshipsValid(t, registry)
 	assertProviderBindingRelationships(t, registry, map[string]map[string]CatalogModelRelationship{
-		"bedrock": {
-			"amazon/nova-2-lite": CatalogModelRelationshipFirstParty,
-		},
 		"baidu-qianfan": {
 			"baidu/ernie-5.0":        CatalogModelRelationshipFirstParty,
 			"deepseek/deepseek-v3.2": CatalogModelRelationshipManagedCloud,
 		},
 		"openrouter": {
+			"amazon/nova-2-lite":        CatalogModelRelationshipGateway,
 			"anthropic/claude-sonnet-5": CatalogModelRelationshipGateway,
 		},
 		"vllm": {
 			"baidu/ernie-4.5-300b-a47b": CatalogModelRelationshipSelfHosted,
 		},
 	})
+}
+
+func TestBuiltInCatalogDoesNotOfferUnsupportedOrRetiredProviderMappings(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bedrock, ok := registry.Provider("bedrock")
+	if !ok || len(bedrock.Models) != 0 || bedrock.Presentation.Featured {
+		t.Fatalf("Bedrock must be custom-only until the catalog supports its Nova APIs: %+v", bedrock)
+	}
+	moonshot, ok := registry.Provider("moonshot")
+	if !ok || providerBindsModel(moonshot, "moonshot/kimi-k2.5") {
+		t.Fatalf("retired first-party Kimi K2.5 mapping is still offered: %+v", moonshot)
+	}
+	vllm, ok := registry.Provider("vllm")
+	if !ok || !providerBindsModel(vllm, "moonshot/kimi-k2.5") {
+		t.Fatal("open-weight Kimi K2.5 lost its self-hosted mapping")
+	}
+	for _, test := range []struct {
+		provider string
+		model    string
+	}{
+		{provider: "bedrock", model: "amazon/nova-pro-v1"},
+		{provider: "bedrock", model: "amazon/nova-premier-v1"},
+		{provider: "bedrock", model: "amazon/nova-2-lite"},
+		{provider: "moonshot", model: "moonshot/kimi-k2.5"},
+	} {
+		t.Run(test.provider+"/"+test.model, func(t *testing.T) {
+			_, err := registry.Compile(CompileInput{
+				Providers: []ProviderInstance{{Name: "primary", Catalog: test.provider, BaseURL: "https://example.test/v1"}},
+				Models: []ModelAlias{{
+					Name: "unavailable", Catalog: test.model,
+					Providers: []ModelProviderBinding{{Name: "primary"}},
+				}},
+			})
+			if err == nil || !strings.Contains(err.Error(), "no catalog binding") {
+				t.Fatalf("unsupported provider mapping should fail during compilation: %v", err)
+			}
+		})
+	}
 }
 
 func assertProviderBindingRelationshipsValid(t *testing.T, registry *Registry) {

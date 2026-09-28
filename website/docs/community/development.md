@@ -26,12 +26,16 @@ package metadata beside the component you are changing.
 
 ```bash
 make vllm-sr-dev
-vllm-sr serve --image-pull-policy never
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  vllm-sr serve --image-pull-policy never
 ```
 
-The build installs the editable `vllm-sr` CLI and creates local Router,
-Dashboard, and Envoy images. `--image-pull-policy never` ensures the
-run uses those local images.
+The build installs the editable `vllm-sr` CLI, builds Router and Dashboard
+images tagged `latest`, and ensures the official Envoy image is available.
+Set `VLLM_SR_IMAGE` explicitly because an editable CLI installation with a
+stable package version defaults to that release's image tag. The CLI derives
+the official Dashboard image with the same tag; `--image-pull-policy never`
+prevents pulling missing images.
 
 Useful lifecycle commands:
 
@@ -47,8 +51,14 @@ For ROCm-specific work:
 
 ```bash
 make vllm-sr-dev VLLM_SR_PLATFORM=amd
-vllm-sr serve --image-pull-policy never --platform amd
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest \
+  vllm-sr serve --image-pull-policy never --platform amd
 ```
+
+If you customize `DOCKER_TAG`, `DOCKER_REGISTRY`, or the Make image variables,
+pass the actual built images to `serve` through `VLLM_SR_IMAGE` and, when needed,
+`VLLM_SR_DASHBOARD_IMAGE`. The build's completion message prints a startup
+command with the selected images.
 
 ## Select the right tests
 
@@ -85,6 +95,43 @@ routing, an API, a deployment profile, or another live path:
 make verify DOMAIN=<domain>
 make verify PROFILE=<profile>
 ```
+
+## Test backends
+
+Running the provider mocker from source requires Python 3.11 or newer.
+
+Use the shared provider mocker for deterministic protocol, routing and fault
+checks. It serves OpenAI Chat Completions, Responses, Anthropic Messages and
+image fixtures from one lightweight service:
+
+```bash
+make test-provider-mocker
+make docker-run-provider-mocker
+# Or run the service directly in its isolated Python environment:
+make start-provider-mocker
+```
+
+`PROVIDER_MOCKER_IMAGE` selects an existing image for reuse. Without that setting,
+the Docker target builds the local service. The mocker is maintained separately
+from product releases. Its image tag identifies a content hash of the runtime
+package, dependency lock, Dockerfile and `.dockerignore`; changing docs or tests
+alone reuses the image. CI resolves that tag to an image digest and passes the
+same artifact to all consumers. Only changes to those runtime inputs publish a
+new helper image.
+
+For a test that needs actual generation, the optional tiny-model runner uses
+`Qwen/Qwen3-0.6B` and the upstream llama.cpp CPU server. It pins the image digest,
+model revision and checksum; downloads the Q8_0 weights into an ignored cache;
+and disables thinking. It does not build another inference image:
+
+```bash
+make tiny-model-smoke  # health, real text, SSE termination and stop sequences
+make tiny-model-serve # foreground real backend on localhost:8000
+```
+
+The model smoke has bounded CPU, memory, context and output limits. Use a separate
+terminal for the running backend and route requests through `vllm-sr serve` when
+validating Router behavior. Protocol edge cases stay in the deterministic suite.
 
 ## Validate a local stack
 

@@ -115,8 +115,10 @@ macro_rules! loader {
 loader!(ort_instance_load_sequence, instances::load_sequence);
 loader!(ort_instance_load_label_scores, instances::load_label_scores);
 loader!(ort_instance_load_token, instances::load_token);
+loader!(ort_instance_load_grounded, instances::load_grounded);
 loader!(ort_instance_load_embedding, instances::load_embedding);
 loader!(ort_instance_load_multimodal, instances::load_multimodal);
+loader!(ort_instance_load_omni, instances::load_omni);
 
 #[no_mangle]
 pub extern "C" fn ort_instance_clone(handle: u64) -> InstanceResult {
@@ -282,6 +284,28 @@ pub unsafe extern "C" fn ort_instance_encode_audio(
 }
 
 /// # Safety
+/// `pcm` must point to `length` readable f32 values in channels-first order.
+#[no_mangle]
+pub unsafe extern "C" fn ort_instance_encode_audio_pcm(
+    handle: u64,
+    pcm: *const f32,
+    length: usize,
+    sample_rate: usize,
+    channels: usize,
+    dimension: usize,
+) -> InstanceResult {
+    result(|| {
+        instances::encode_audio_pcm(
+            handle,
+            slice(pcm, length)?,
+            sample_rate,
+            channels,
+            (dimension != 0).then_some(dimension),
+        )
+    })
+}
+
+/// # Safety
 /// The result must have been returned by this ABI and not previously freed.
 #[no_mangle]
 pub unsafe extern "C" fn ort_instance_result_free(output: InstanceResult) {
@@ -372,4 +396,16 @@ pub unsafe extern "C" fn ort_instance_token_windows(
     overlap: usize,
 ) -> InstanceResult {
     result(|| instances::detect_token_windows(handle, text(input)?, size, overlap))
+}
+
+/// # Safety
+/// All inputs must point to live NUL-terminated UTF-8 strings.
+#[no_mangle]
+pub unsafe extern "C" fn ort_instance_grounded(
+    handle: u64,
+    context: *const c_char,
+    question: *const c_char,
+    answer: *const c_char,
+) -> InstanceResult {
+    result(|| instances::grounded(handle, text(context)?, text(question)?, text(answer)?))
 }

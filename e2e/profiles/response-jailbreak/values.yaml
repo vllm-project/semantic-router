@@ -12,9 +12,9 @@ config:
     models:
       - name: openai/mock-model
         backend_refs:
-          - name: mock-vllm
+          - name: provider-mocker
             provider: vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
   routing:
     # Both response_jailbreak decisions are selected by a deterministic
@@ -123,7 +123,7 @@ config:
     model_catalog:
       kbs: []
       external:
-        # The same mock-vllm that serves the chat backend also serves the
+        # The same provider-mocker that serves the chat backend also serves the
         # http_classify contract on /classify. It scores only the first
         # CLASSIFY_WINDOW_CHARS of whatever it is sent, the way a real
         # sequence classifier only ever sees its own sequence window - which
@@ -134,7 +134,7 @@ config:
           model_role: guardrail
           llm_model_name: mock-guardrail
           llm_endpoint:
-            address: mock-vllm.default.svc.cluster.local
+            address: provider-mocker.default.svc.cluster.local
             port: 8000
             protocol: http
           llm_timeout_seconds: 10

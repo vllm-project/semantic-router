@@ -50,11 +50,19 @@ func NewQdrantStore(opts QdrantStoreOptions) (*QdrantStore, error) {
 		embCfg = *opts.EmbeddingConfig
 	}
 
+	dimension, err := StorageDimension(opts.QdrantConfig.Dimension, embCfg)
+	if err != nil {
+		return nil, err
+	}
+	copied := *opts.QdrantConfig
+	copied.Dimension = dimension
+	embCfg.Dimension = dimension
+
 	s := &QdrantStore{
 		client:          opts.Client,
 		collectionName:  collectionName,
 		config:          opts.Config,
-		qdrantConfig:    opts.QdrantConfig,
+		qdrantConfig:    &copied,
 		enabled:         true,
 		embeddingConfig: embCfg,
 	}
@@ -82,9 +90,6 @@ func (s *QdrantStore) ensureCollection(ctx context.Context) error {
 	}
 
 	dim := s.qdrantConfig.Dimension
-	if dim <= 0 {
-		dim = 384
-	}
 
 	if err := s.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: s.collectionName,

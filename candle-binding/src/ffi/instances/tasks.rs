@@ -13,11 +13,11 @@ pub(super) struct InputMetadata {
 
 #[derive(Serialize)]
 pub(super) struct Span {
-    text: String,
-    start: usize,
-    end: usize,
-    confidence: f32,
-    label: String,
+    pub(super) text: String,
+    pub(super) start: usize,
+    pub(super) end: usize,
+    pub(super) confidence: f32,
+    pub(super) label: String,
 }
 
 #[derive(Serialize)]
@@ -37,11 +37,11 @@ pub(super) struct TokenWindowsOutput {
 
 #[derive(Serialize)]
 pub(super) struct HallucinationOutput {
-    has_hallucination: bool,
-    confidence: f32,
-    spans: Vec<Span>,
-    input: InputMetadata,
-    offset_unit: &'static str,
+    pub(super) has_hallucination: bool,
+    pub(super) confidence: f32,
+    pub(super) spans: Vec<Span>,
+    pub(super) input: InputMetadata,
+    pub(super) offset_unit: &'static str,
 }
 
 #[derive(Serialize)]
@@ -301,6 +301,9 @@ impl Instance {
         let Model::Token(model) = &self.model else {
             bail!("capability: hallucination requires token classifier")
         };
+        if self.info.model_type == "vela_halu" {
+            return grounding::detect(self, model, context, question, answer);
+        }
         let tail = if question.is_empty() {
             format!(" [SEP] {answer}")
         } else {

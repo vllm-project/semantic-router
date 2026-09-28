@@ -335,3 +335,17 @@ func TestRedisValkeySemanticPolarityCancellationAfterSearch(t *testing.T) {
 		})
 	}
 }
+
+func TestRedisValkeyHitReportsNegationGuard(t *testing.T) {
+	for _, backend := range []string{"redis", "valkey"} {
+		for _, tc := range negationGuardServedPairs {
+			t.Run(backend+"/"+tc.name, func(t *testing.T) {
+				cache := remotePolarityFixture(t, backend, []remotePolarityDocument{{tc.cached, "ANSWER", "0.02"}}, nil)
+				result, err := cache.LookupSimilarWithThreshold(context.Background(), "recipe::model", tc.incoming, .8)
+				require.NoError(t, err)
+				require.True(t, result.Found)
+				require.Equal(t, tc.want, result.NegationGuard)
+			})
+		}
+	}
+}

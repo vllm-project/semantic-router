@@ -32,15 +32,15 @@ func (r *Runtime) candleEmbedding(ctx context.Context, spec config.ResolvedModel
 		if loadErr != nil {
 			return nil, nativeError(loadErr)
 		}
-		return &embeddingEngine{candle: model}, nil
+		return &candleEmbeddingEngine{EmbeddingModel: model}, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	prepared := &preparedEmbedding{resource: resource, identity: id}
 	err = resource.Use(ctx, func(value io.Closer) error {
-		engine := value.(*embeddingEngine)
-		info, infoErr := engine.candle.Info()
+		engine := value.(*candleEmbeddingEngine)
+		info, infoErr := engine.Info()
 		if infoErr != nil {
 			return infoErr
 		}
@@ -50,6 +50,7 @@ func (r *Runtime) candleEmbedding(ctx context.Context, spec config.ResolvedModel
 			Embedding: candleEmbeddingSemantics(info.ModelType, view.Layer),
 		}
 		capability.Embedding.Modalities = append([]string(nil), info.Modalities...)
+		capability.Embedding.AvailableDimensions = append([]int(nil), info.AvailableDimensions...)
 		if info.ModelType == "mmbert" || info.ModelType == "mmbert_embedding" {
 			prepared.layers = candleEmbeddingLayers(options.ModelPath)
 			prepared.contentIdentity = true

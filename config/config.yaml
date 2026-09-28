@@ -284,6 +284,11 @@ routing:
       # multimodal example.
       - name: clinical_query_intent
         query_modality: text
+        # Positive image references can complement or replace text candidates.
+        # Negative candidates subtract their aggregated cosine score.
+        image_candidates: []
+        negative_candidates: []
+        negative_image_candidates: []
         threshold: 0.72
         aggregation_method: max
         candidates:
@@ -826,8 +831,9 @@ routing:
         - type: response_cache
           configuration:
             enabled: true
-            mode: exact_then_semantic
+            mode: exact
             scope: user
+            # Reference-only setting for operators who explicitly opt into semantic mode.
             semantic:
               similarity_threshold: 0.82
             ttl_seconds: 7200
@@ -970,6 +976,15 @@ routing:
             mode: filter
             relevance_threshold: 0.25
             preserve_count: 2
+        # Disabled sample: field coverage only (reference config union coverage
+        # for PromptCachePluginConfig). qwen3-32b speaks the Anthropic Messages
+        # wire format this plugin targets; see tutorials/plugin/prompt-cache.
+        - type: prompt_cache
+          configuration:
+            enabled: false
+            ttl: 1h
+            targets: [instructions, tools]
+            on_unsupported: skip
 
     - name: health_ratings_route
       description: Ratings-based route for health requests that need fact verification.
@@ -1072,13 +1087,13 @@ routing:
           configuration:
             enabled: true
             retrieval_limit: 6
-            similarity_threshold: 0.72
+            similarity_threshold: 0.40
             auto_store: true
             hybrid_search: true
-            hybrid_mode: rerank
+            hybrid_mode: weighted
             reflection:
               enabled: true
-              algorithm: recency_semantic
+              algorithm: heuristic
               max_inject_tokens: 384
               recency_decay_days: 14
               dedup_threshold: 0.9
@@ -1756,6 +1771,20 @@ recipes:
               use_reasoning: false
           algorithm:
             type: static
+      fallback:
+        version: 1
+        enabled: false
+        max_attempts: 3
+        total_timeout: 30s
+        per_attempt_timeout: 10s
+        retryable_status_codes:
+          - 502
+          - 503
+          - 504
+        circuit_breaker:
+          consecutive_failures: 3
+          cooldown_period: 30s
+          half_open_probes: 1
 
 global:
   router:
@@ -1768,6 +1797,20 @@ global:
       - exhaustive-reference
     include_config_models_in_list: true
     clear_route_cache: true
+    fallback:
+      version: 1
+      enabled: false
+      max_attempts: 3
+      total_timeout: 30s
+      per_attempt_timeout: 10s
+      retryable_status_codes:
+        - 502
+        - 503
+        - 504
+      circuit_breaker:
+        consecutive_failures: 3
+        cooldown_period: 30s
+        half_open_probes: 1
     streamed_body:
       enabled: true
       max_bytes: 1048576
@@ -2142,13 +2185,14 @@ global:
         password: ""
       embedding_model: bert
       default_retrieval_limit: 10
-      default_similarity_threshold: 0.74
+      # Calibrated for mom-embedding-light with weighted hybrid scoring.
+      default_similarity_threshold: 0.40
       hybrid_search: true
-      hybrid_mode: rerank
+      hybrid_mode: weighted
       adaptive_threshold: true
       reflection:
         enabled: true
-        algorithm: recency_semantic
+        algorithm: heuristic
         max_inject_tokens: 512
         recency_decay_days: 14
         dedup_threshold: 0.9
@@ -2333,7 +2377,7 @@ global:
         qwen3_model_path: models/mom-embedding-pro
         gemma_model_path: models/mom-embedding-flash
         mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        multimodal_model_path: models/mom-embedding-multimodal
+        multimodal_model_path: models/vela-1.0-omni-nano
         bert_model_path: models/mom-embedding-light
         use_cpu: true
         embedding_config:
@@ -2341,7 +2385,7 @@ global:
           backend: candle
           model_type: mmbert
           preload_embeddings: true
-          target_dimension: 768
+          target_dimension: 0
           target_layer: 22
           enable_soft_matching: false
           top_k: 0
@@ -2368,7 +2412,7 @@ global:
       domain_classifier: models/Vela-1.0-Encoder-307M-Domain
       pii_classifier: models/Vela-1.0-Encoder-307M-PII
       fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
-      hallucination_detector: models/mom-halugate-detector
+      hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
       hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     # admission bounds concurrent inference per system model deployment.
@@ -2669,13 +2713,13 @@ global:
           endpoint: ""
           include_explanation: false
           model_ref: hallucination_detector
-          model_id: models/mom-halugate-detector
-          threshold: 0.82
+          model_id: models/Vela-1.0-Encoder-307M-Halu
+          threshold: 0.5
           use_cpu: true
-          min_span_length: 2
-          min_span_confidence: 0.6
+          min_span_length: 1
+          min_span_confidence: 0.0
           context_window_size: 50
-          enable_nli_filtering: true
+          enable_nli_filtering: false
           nli_entailment_threshold: 0.75
         explainer:
           model_ref: hallucination_explainer

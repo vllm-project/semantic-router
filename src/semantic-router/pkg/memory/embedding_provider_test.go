@@ -38,7 +38,7 @@ func TestOwnedMemoryProviderPreservesModelOptionsAndRawVector(t *testing.T) {
 	}{
 		{EmbeddingConfig{Model: EmbeddingModelMMBERT}, embedding.Options{Dimension: 256}},
 		{EmbeddingConfig{Model: EmbeddingModelMMBERT, Dimension: 128, Layer: 6}, embedding.Options{Dimension: 128, Layer: 6}},
-		{EmbeddingConfig{Model: EmbeddingModelMulti}, embedding.Options{Dimension: 384}},
+		{EmbeddingConfig{Model: EmbeddingModelMulti}, embedding.Options{Dimension: 2}},
 		{EmbeddingConfig{Model: EmbeddingModelBERT, Dimension: 10}, embedding.Options{}},
 		{EmbeddingConfig{Model: EmbeddingModelQwen3, Dimension: 10}, embedding.Options{}},
 		{EmbeddingConfig{Model: EmbeddingModelGemma, Dimension: 10}, embedding.Options{}},
@@ -71,5 +71,27 @@ func TestOwnedMemoryProviderDoesNotUseNativeGlobalFallback(t *testing.T) {
 	vector, err := GenerateEmbedding("text", EmbeddingConfig{Model: EmbeddingModelBERT, Provider: p})
 	if err != nil || !reflect.DeepEqual(vector, []float32{3, 4}) || p.calls != 1 {
 		t.Fatal("test environment replaced explicitly prepared provider")
+	}
+}
+
+func TestOmniMemoryUsesPreparedDimensionWithoutSlicing(t *testing.T) {
+	for _, size := range []int{384, 768} {
+		calls := 0
+		provider, _ := embedding.NewFuncProvider("test", size, func(context.Context, string) ([]float32, error) { calls++; return make([]float32, size), nil })
+		cfg := EmbeddingConfig{Model: EmbeddingModelMulti, Provider: provider}
+		vector, err := GenerateEmbedding("text", cfg)
+		if err != nil || len(vector) != size {
+			t.Fatalf("dimension=%d vector=%d err=%v", size, len(vector), err)
+		}
+		if got, err := StorageDimension(0, cfg); err != nil || got != size {
+			t.Fatalf("storage=%d err=%v", got, err)
+		}
+		cfg.Dimension = 128
+		if _, err := GenerateEmbedding("text", cfg); err == nil || calls != 1 {
+			t.Fatal("unsupported reduced dimension reached inference")
+		}
+		if _, err := StorageDimension(128, cfg); err == nil {
+			t.Fatal("unsupported storage width accepted")
+		}
 	}
 }

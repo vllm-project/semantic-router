@@ -15,6 +15,16 @@ type preparedBindingInventory interface {
 }
 
 func preparedModelsInfo(service classificationService) ([]ModelInfo, bool) {
+	return preparedModelsInfoMatching(service, nil)
+}
+
+func preparedEmbeddingModelsInfo(service classificationService) ([]ModelInfo, bool) {
+	return preparedModelsInfoMatching(service, func(capability binding.Capability) bool {
+		return capability.Embedding != nil
+	})
+}
+
+func preparedModelsInfoMatching(service classificationService, include func(binding.Capability) bool) ([]ModelInfo, bool) {
 	inventory, ok := service.(preparedBindingInventory)
 	if !ok {
 		return nil, false
@@ -26,6 +36,9 @@ func preparedModelsInfo(service classificationService) ([]ModelInfo, bool) {
 	models := make([]ModelInfo, 0, len(entries))
 	for _, entry := range entries {
 		id, capability := entry.Identity, entry.Capability
+		if include != nil && !include(capability) {
+			continue
+		}
 		name, modelType := preparedModelNameAndType(id)
 		model := ModelInfo{
 			Name: name, Recipe: id.Recipe, Type: modelType, Loaded: true,

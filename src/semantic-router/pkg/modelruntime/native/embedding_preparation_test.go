@@ -30,7 +30,7 @@ func TestORTEmbeddingPreparesEveryAdvertisedLayerBeforePublication(t *testing.T)
 		t.Fatalf("prepared capabilities do not match loaded graphs: %+v", prepared.info)
 	}
 	if err := prepared.resource.Use(ctx, func(value io.Closer) error {
-		info, err := value.(*embeddingEngine).ort.Info()
+		info, err := value.(*ortTextEmbeddingEngine).Info()
 		if err != nil {
 			return err
 		}

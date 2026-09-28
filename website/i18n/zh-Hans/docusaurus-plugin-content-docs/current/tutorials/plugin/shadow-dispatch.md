@@ -108,3 +108,18 @@ plugins:
 
 回放脱敏对 shadow 结果的应用方式与记录其余部分相同：没有内容权限的查看者可以看到路由和时序字段，但看不到 `target_ref`、`reason` 或 `metadata`。除非回放存储及其读取者已获准处理提示词级内容，否则请关闭 `capture_response_body`。片段见：
 [`config/fragments/plugin/shadow-dispatch/sampled.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/shadow-dispatch/sampled.yaml)。
+
+### 导出对比数据集 {#export-a-comparison-dataset}
+
+采集到的结果可通过 `GET /api/v1/observability/replays/dataset` 导出为对比数据集。该接口读取常规回放过滤条件选中的记录，返回一份带版本的清单，其中包含每条输入的主模型与影子模型分支。
+
+清单以自身摘要作为标识，因此导出请求需要携带拆分方案：`seed` 固定拆分分配，每个可重复的 `split` 写作 `name:weight`，例如 `?seed=2026-q3&split=train:8&split=eval:2`。相同记录在相同 seed 与拆分下会重建出相同的清单，包括每条样本所属的拆分，因此后续新增的观测不会移动已经放置好的样本。
+
+```bash
+curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
+  "$ROUTER_MANAGEMENT_URL/api/v1/observability/replays/dataset?recipe=vault&seed=2026-q3&split=train:8&split=eval:2"
+```
+
+清单只携带标识、输出摘要与来源信息，不含提示词或响应文本，因此可以与它支撑的数据一同发布。一条观测要么整条进入，要么完全不进入：失败的请求、未结束的请求、输入被截断的请求，以及从未记录摘要的请求都会被排除并按原因计数，`counts` 会报告保留了什么、丢弃了什么。由于清单描述的是构建它的整个选择集，超过 5000 条记录的选择会被拒绝，而不是按页导出。请缩小过滤条件后重新导出。
+
+导出需要 `replay.read` 权限，读取的记录与列表 API 相同。被比较的决策必须开启正文采集，否则未采集到请求的观测会以 `request_body_missing` 被排除。

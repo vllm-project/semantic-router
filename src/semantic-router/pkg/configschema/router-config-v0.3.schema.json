@@ -1117,6 +1117,9 @@
             "priority",
             "confidence"
           ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1161,6 +1164,9 @@
         },
         "learning": {
           "$ref": "#/$defs/RouterLearningConfig"
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1204,6 +1210,9 @@
             "priority",
             "confidence"
           ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1465,6 +1474,28 @@
             "$ref": "#/$defs/ModelScore"
           },
           "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CircuitBreakerConfig": {
+      "properties": {
+        "consecutive_failures": {
+          "type": "integer"
+        },
+        "cooldown_period": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "half_open_probes": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -2272,6 +2303,25 @@
           "if": {
             "properties": {
               "type": {
+                "const": "prompt_cache"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/PromptCachePluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "shadow_dispatch"
               }
             },
@@ -2297,6 +2347,7 @@
             "hallucination",
             "header_mutation",
             "memory",
+            "prompt_cache",
             "rag",
             "request_params",
             "response_cache",
@@ -2442,6 +2493,24 @@
           },
           "type": "array"
         },
+        "image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "aggregation_method": {
           "type": "string"
         },
@@ -2574,6 +2643,50 @@
         },
         "description": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FallbackPolicy": {
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_attempts": {
+          "type": "integer"
+        },
+        "total_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "per_attempt_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "retryable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "circuit_breaker": {
+          "$ref": "#/$defs/CircuitBreakerConfig"
         }
       },
       "additionalProperties": false,
@@ -4803,6 +4916,27 @@
         },
         "miss": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PromptCachePluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "ttl": {
+          "type": "string"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "on_unsupported": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -7552,6 +7686,12 @@
         "display_name": "Context Compression",
         "description": "Compress selected context before provider dispatch.",
         "schema_ref": "#/$defs/ContextCompressionPluginConfig"
+      },
+      {
+        "type": "prompt_cache",
+        "display_name": "Prompt Cache",
+        "description": "Add bounded Anthropic prompt-cache markers after route selection.",
+        "schema_ref": "#/$defs/PromptCachePluginConfig"
       },
       {
         "type": "shadow_dispatch",

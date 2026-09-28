@@ -24,7 +24,7 @@ func (s *ClassificationAPIServer) handleModelsInfo(w http.ResponseWriter, _ *htt
 // handleEmbeddingModelsInfo handles GET /api/v1/inventory/embedding-models
 // Returns ONLY embedding models information
 func (s *ClassificationAPIServer) handleEmbeddingModelsInfo(w http.ResponseWriter, r *http.Request) {
-	embeddingModels := s.getEmbeddingModelsInfo(s.loadModelsRuntimeState())
+	embeddingModels := s.getEmbeddingModelsInfo()
 
 	response := embeddingModelsResponse{
 		Models: embeddingModels,
@@ -68,7 +68,6 @@ func (s *ClassificationAPIServer) buildModelsInfoResponse() ModelsInfoResponse {
 	models, prepared := preparedModelsInfo(service)
 	if !prepared {
 		models = s.getClassifierModelsInfo(cfg, classificationAvailabilityForService(service), runtimeState)
-		models = append(models, s.getEmbeddingModelsInfo(runtimeState)...)
 	}
 	systemInfo := s.getSystemInfo()
 	systemInfo.GPUAvailable = modelsUseGPU(models)

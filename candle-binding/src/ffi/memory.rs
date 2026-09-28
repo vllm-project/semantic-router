@@ -43,9 +43,10 @@ pub extern "C" fn free_tokenization_result(result: TokenizationResult) {
 /// Free C string
 ///
 /// # Safety
-/// - `s` must be a valid pointer allocated by this library
+/// - `s` must be null or an unmodified pointer returned by this library.
+/// - A non-null allocation must still be live, uniquely owned, and freed only once.
 #[no_mangle]
-pub extern "C" fn free_cstring(s: *mut c_char) {
+pub unsafe extern "C" fn free_cstring(s: *mut c_char) {
     // Migrated from lib.rs:746-752
     unsafe {
         if !s.is_null() {
@@ -57,10 +58,11 @@ pub extern "C" fn free_cstring(s: *mut c_char) {
 /// Free embedding data
 ///
 /// # Safety
-/// - `data` must be a valid pointer allocated by this library
+/// - `data` must be null or a live, uniquely owned pointer allocated by this library.
+/// - The allocation must not have been freed before this call.
 /// - `length` must match the original allocation size
 #[no_mangle]
-pub extern "C" fn free_embedding(data: *mut f32, length: i32) {
+pub unsafe extern "C" fn free_embedding(data: *mut f32, length: i32) {
     // Migrated from lib.rs:756-763
     if !data.is_null() && length > 0 {
         unsafe {
@@ -74,14 +76,15 @@ pub extern "C" fn free_embedding(data: *mut f32, length: i32) {
 /// Free probabilities array
 ///
 /// # Safety
-/// - `probabilities` must be a valid pointer allocated by this library
+/// - `probabilities` must be null or a live, uniquely owned boxed array from this library.
+/// - The allocation must not have been freed before this call.
 /// - `num_classes` must match the original allocation size
 #[no_mangle]
-pub extern "C" fn free_probabilities(probabilities: *mut f32, num_classes: i32) {
+pub unsafe extern "C" fn free_probabilities(probabilities: *mut f32, num_classes: i32) {
     // Migrated from lib.rs:966-978
     if !probabilities.is_null() && num_classes > 0 {
         unsafe {
-            let _: Box<[f32]> = Box::from_raw(std::slice::from_raw_parts_mut(
+            let _: Box<[f32]> = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
                 probabilities,
                 num_classes as usize,
             ));
@@ -278,14 +281,15 @@ pub extern "C" fn free_lora_batch_result(result: LoRABatchResult) {
 /// Free ModernBERT probabilities array
 ///
 /// # Safety
-/// - `probabilities` must be a valid pointer allocated by this library
+/// - `probabilities` must be null or a live, uniquely owned boxed array from this library.
+/// - The allocation must not have been freed before this call.
 /// - `num_classes` must match the original allocation size
 #[no_mangle]
-pub extern "C" fn free_modernbert_probabilities(probabilities: *mut f32, num_classes: i32) {
+pub unsafe extern "C" fn free_modernbert_probabilities(probabilities: *mut f32, num_classes: i32) {
     // Migrated from modernbert.rs:1006-1015
     if !probabilities.is_null() && num_classes > 0 {
         unsafe {
-            let _: Box<[f32]> = Box::from_raw(std::slice::from_raw_parts_mut(
+            let _: Box<[f32]> = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
                 probabilities,
                 num_classes as usize,
             ));
@@ -399,10 +403,11 @@ pub unsafe fn allocate_c_float_array(values: &[f32]) -> *mut f32 {
 /// Free C string array
 ///
 /// # Safety
-/// - `array` must be allocated by allocate_c_string_array
+/// - `array` must be null or a live, uniquely owned allocation from `allocate_c_string_array`.
+/// - The array and its owned elements must not have been freed before this call.
 /// - `length` must match the original array size
 #[no_mangle]
-pub extern "C" fn free_c_string_array(array: *mut *mut c_char, length: i32) {
+pub unsafe extern "C" fn free_c_string_array(array: *mut *mut c_char, length: i32) {
     if !array.is_null() && length > 0 {
         unsafe {
             let strings_slice = std::slice::from_raw_parts_mut(array, length as usize);
@@ -419,10 +424,11 @@ pub extern "C" fn free_c_string_array(array: *mut *mut c_char, length: i32) {
 /// Free C int array
 ///
 /// # Safety
-/// - `array` must be allocated by allocate_c_int_array
+/// - `array` must be null or a live, uniquely owned allocation from `allocate_c_int_array`.
+/// - The array and its owned elements must not have been freed before this call.
 /// - `length` must match the original array size
 #[no_mangle]
-pub extern "C" fn free_c_int_array(array: *mut i32, length: i32) {
+pub unsafe extern "C" fn free_c_int_array(array: *mut i32, length: i32) {
     if !array.is_null() && length > 0 {
         unsafe {
             let _ = Vec::from_raw_parts(array, length as usize, length as usize);
@@ -433,10 +439,11 @@ pub extern "C" fn free_c_int_array(array: *mut i32, length: i32) {
 /// Free C float array
 ///
 /// # Safety
-/// - `array` must be allocated by allocate_c_float_array
+/// - `array` must be null or a live, uniquely owned allocation from `allocate_c_float_array`.
+/// - The array and its owned elements must not have been freed before this call.
 /// - `length` must match the original array size
 #[no_mangle]
-pub extern "C" fn free_c_float_array(array: *mut f32, length: i32) {
+pub unsafe extern "C" fn free_c_float_array(array: *mut f32, length: i32) {
     if !array.is_null() && length > 0 {
         unsafe {
             let _ = Vec::from_raw_parts(array, length as usize, length as usize);
@@ -539,7 +546,7 @@ pub unsafe fn convert_intent_to_lora_intent(
     intent: &crate::classifiers::lora::intent_lora::IntentResult,
 ) -> crate::ffi::types::LoRAIntentResult {
     // Create probabilities array
-    let _probabilities = vec![intent.confidence, 1.0 - intent.confidence];
+    let _probabilities = [intent.confidence, 1.0 - intent.confidence];
 
     crate::ffi::types::LoRAIntentResult {
         category: allocate_c_string(&intent.intent),

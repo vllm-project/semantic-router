@@ -32,8 +32,8 @@ import (
 )
 
 // newUsageBackend returns an httptest server that mimics an OpenAI-compatible
-// backend reporting a fixed usage block per call (like mock-vllm-simple.py and
-// llm-katan do in the e2e suite). It counts how many calls it received.
+// backend reporting a fixed usage block per call (like provider-mocker in the
+// e2e suite). It counts how many calls it received.
 func newUsageBackend(t *testing.T, prompt, completion, total int64) (*httptest.Server, *int64) {
 	t.Helper()
 	var calls int64

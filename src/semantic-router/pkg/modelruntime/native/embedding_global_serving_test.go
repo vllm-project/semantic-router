@@ -17,7 +17,17 @@ func TestORTGlobalServingSharesEngineAcrossConsumerViews(t *testing.T) {
 	if os.Getenv("ORT_DYLIB_PATH") == "" {
 		t.Skip("requires real ONNX Runtime")
 	}
+	for _, adapter := range []string{"bert", "qwen3", "gemma", "gemma3", "mmbert", "mmbert_embedding", "modernbert"} {
+		t.Run(adapter, func(t *testing.T) {
+			testORTGlobalServingAdapter(t, adapter)
+		})
+	}
+}
+
+func testORTGlobalServingAdapter(t *testing.T, adapter string) {
+	t.Helper()
 	fixture := embeddingPreparationFixture(t, false)
+	fixture.Binding.Adapter = adapter
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"shared": fixture.Deployment}
 	decl := fixture.Binding
@@ -69,7 +79,7 @@ func TestORTGlobalServingSharesEngineAcrossConsumerViews(t *testing.T) {
 		if engine != serviceEngine {
 			t.Fatal("dimension/reload view loaded another native engine")
 		}
-		info, infoErr := engine.(*embeddingEngine).ort.Info()
+		info, infoErr := engine.(*ortTextEmbeddingEngine).Info()
 		if infoErr != nil {
 			return infoErr
 		}

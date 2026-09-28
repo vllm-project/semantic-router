@@ -1,0 +1,329 @@
+{
+  "mini": {
+    "files": {
+      "components/audio/config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "fb1f74bef6d4ab59e5f2bd26ad129ab0e455fc71",
+        "size": 1947
+      },
+      "components/audio/preprocessor_config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "c2048dfa9fd94a052e62e908d2c4dfb18534b4d2",
+        "size": 184990
+      },
+      "components/audio_clap/config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "70624c940dc3d35b36bc9de57ee5a958c86e032a",
+        "size": 5390
+      },
+      "components/audio_clap/preprocessor_config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "e8636819eeb1b19f1e5b6f572eca1a101144062e",
+        "size": 541
+      },
+      "components/image/config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "7c1e0ed1759922fc4eb362d3b405958e829f364d",
+        "size": 559
+      },
+      "components/image/preprocessor_config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "e9e084ab5a0d74573432f1dcf11c1bdd8d9b3655",
+        "size": 394
+      },
+      "components/text/1_Pooling/config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "b6291baabbc39f9792d6759883a47d7d5bd0fbcf",
+        "size": 313
+      },
+      "components/text/config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "cef2749ee93607b8f9a58ec72f4f6bfaf874e71d",
+        "size": 727
+      },
+      "components/text/config_sentence_transformers.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "76aef3ade63553ebb698fe3c2a3264040ed093f8",
+        "size": 215
+      },
+      "components/text/generation_config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "d46f1983345269c582611bbedb3ca0a13f8e5f7b",
+        "size": 117
+      },
+      "components/text/merges.txt": {
+        "algorithm": "git-blob-sha1",
+        "digest": "31349551d90c7606f325fe0f11bbb8bd5fa0d7c7",
+        "size": 1671853
+      },
+      "components/text/modules.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "952a9b81c0bfd99800fabf352f69c7ccd46c5e43",
+        "size": 349
+      },
+      "components/text/tokenizer.json": {
+        "algorithm": "sha256",
+        "digest": "def76fb086971c7867b829c23a26261e38d9d74e02139253b38aeb9df8b4b50a",
+        "size": 11423705
+      },
+      "components/text/tokenizer_config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "7345216a0785dc7086e8c245b2a9d3896ce2b756",
+        "size": 9706
+      },
+      "components/text/vocab.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "4783fe10ac3adce15ac8f358ef5462739852c569",
+        "size": 2776833
+      },
+      "config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "0b6bab1d67cfd901ad61790cace5e22cad49864f",
+        "size": 697
+      },
+      "model.safetensors": {
+        "algorithm": "sha256",
+        "digest": "e8d8a5672405f7013138a411bf57bd402c59bafa9583fa91d1e15f70e0bf1117",
+        "size": 4254927488
+      },
+      "omni_components/__init__.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "2283aad80c04568f9d52ca8505e4ed75fb7b3e6e",
+        "size": 41
+      },
+      "omni_components/audio_encoder.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "e325f47b87d2e49131e17799ae70f167e7b6de52",
+        "size": 8492
+      },
+      "omni_components/audio_io.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "abd13deaa3a9faa480234a9599de9d11fef5b1f4",
+        "size": 426
+      },
+      "omni_components/embedder.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "a9c6462afab9be8dd406c0628ce1165a37dce5d8",
+        "size": 13648
+      },
+      "omni_components/fusion.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "f5b4729f0bdb62460ecb4c424b4ef4b5bf4e1ce3",
+        "size": 11098
+      },
+      "omni_components/image_encoder.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "7aa7bd57d9a3f0654ee95e2249a78da02ee6dc4b",
+        "size": 8195
+      },
+      "omni_components/medium_clap_residual.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "418fe17ba01bc4cf017d54dfc4386484ece6f4e9",
+        "size": 4325
+      },
+      "omni_components/mini.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "a7162cf87c554b54ad8e40e7c39b38c7a3c34e66",
+        "size": 13840
+      },
+      "omni_components/qwen_text_backbone.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "ea28e2e13141880a3ef0193b84bece70d4a38d5e",
+        "size": 2905
+      },
+      "omni_components/records.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "80dfcacc8e69f73ce8f6beea3fce07f7411f1019",
+        "size": 118
+      },
+      "omni_components/residual_projection.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "3f0b1017f74f03c6d2abfb7f859496e4f062ee88",
+        "size": 1668
+      },
+      "omni_components/text_backbone.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "993f2707f7660ffa9f9dbf14ffccaac61882d51f",
+        "size": 3244
+      },
+      "omni_components/text_encoder.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "addab360187c432745b847dafa3bdb28036464d1",
+        "size": 9184
+      },
+      "omni_components/text_instructions.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "8c68e484570fbbbf361a35adc2306de253f331db",
+        "size": 2151
+      },
+      "vela_omni.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "b46033b6000dcfaafc493fe39ff660f2d63c14a3",
+        "size": 11478
+      }
+    },
+    "repo_id": "llm-semantic-router/Vela-1.0-Omni-Mini",
+    "revision": "801bae3ad28df6891408f0e0441c676b30e132e3"
+  },
+  "nano": {
+    "files": {
+      "components/audio/config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "102e2a2eb8b3e48bc0e60784c7fd1f0a239c9ce6",
+        "size": 1941
+      },
+      "components/audio/preprocessor_config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "c2048dfa9fd94a052e62e908d2c4dfb18534b4d2",
+        "size": 184990
+      },
+      "components/audio_clap/config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "70624c940dc3d35b36bc9de57ee5a958c86e032a",
+        "size": 5390
+      },
+      "components/audio_clap/preprocessor_config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "e8636819eeb1b19f1e5b6f572eca1a101144062e",
+        "size": 541
+      },
+      "components/image/config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "2b6dedcc795dd03ba8f1fff0e7e41a2e6ce431d5",
+        "size": 322
+      },
+      "components/image/preprocessor_config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "74c6082d579e0151e0016b7a43c5a2c26d6016eb",
+        "size": 368
+      },
+      "components/text/1_Pooling/config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "1da070f0993788c8851a652170ff013aa54dd519",
+        "size": 190
+      },
+      "components/text/config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "cff4a41431238dfa64d43a8266eddc90fd0f2ded",
+        "size": 719
+      },
+      "components/text/config_sentence_transformers.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "dcb0c0d97d09b930d13600b1a773ddb27e441aab",
+        "size": 124
+      },
+      "components/text/modules.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "952a9b81c0bfd99800fabf352f69c7ccd46c5e43",
+        "size": 349
+      },
+      "components/text/sentence_bert_config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "ea85692bff64b0d1917833c31ddbca8ab10f5455",
+        "size": 52
+      },
+      "components/text/special_tokens_map.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "9bbecc17cabbcbd3112c14d6982b51403b264bfa",
+        "size": 695
+      },
+      "components/text/tokenizer.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "688882a79f44442ddc1f60d70334a7ff5df0fb47",
+        "size": 711396
+      },
+      "components/text/tokenizer_config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "75305659f7795d4549f0e23688b52fa20a32f925",
+        "size": 1242
+      },
+      "components/text/vocab.txt": {
+        "algorithm": "git-blob-sha1",
+        "digest": "fb140275c155a9c7c5a3b3e0e77a9e839594a938",
+        "size": 231508
+      },
+      "config.json": {
+        "algorithm": "git-blob-sha1",
+        "digest": "9a6ff4c4f950d3cca3d416e48f9ca86dfae2322f",
+        "size": 561
+      },
+      "model.safetensors": {
+        "algorithm": "sha256",
+        "digest": "d5aa7f00e217bd4fd5314140a3603b9a873636320c8d09732a14f79f4cb0667e",
+        "size": 655583800
+      },
+      "omni_components/__init__.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "2283aad80c04568f9d52ca8505e4ed75fb7b3e6e",
+        "size": 41
+      },
+      "omni_components/audio_encoder.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "e325f47b87d2e49131e17799ae70f167e7b6de52",
+        "size": 8492
+      },
+      "omni_components/audio_io.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "abd13deaa3a9faa480234a9599de9d11fef5b1f4",
+        "size": 426
+      },
+      "omni_components/embedder.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "e6608ccecf0a36cf8c5d972d7420027d46523135",
+        "size": 14049
+      },
+      "omni_components/fusion.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "f5b4729f0bdb62460ecb4c424b4ef4b5bf4e1ce3",
+        "size": 11098
+      },
+      "omni_components/image_encoder.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "7aa7bd57d9a3f0654ee95e2249a78da02ee6dc4b",
+        "size": 8195
+      },
+      "omni_components/mini.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "8a63fedac62c798504e31b859ddf047ff1d0e551",
+        "size": 10075
+      },
+      "omni_components/records.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "80dfcacc8e69f73ce8f6beea3fce07f7411f1019",
+        "size": 118
+      },
+      "omni_components/residual_projection.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "3f0b1017f74f03c6d2abfb7f859496e4f062ee88",
+        "size": 1668
+      },
+      "omni_components/single_modality.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "59150acb7bf158a434ed022768b3c1d8190b725a",
+        "size": 4218
+      },
+      "omni_components/text_backbone.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "993f2707f7660ffa9f9dbf14ffccaac61882d51f",
+        "size": 3244
+      },
+      "omni_components/text_encoder.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "f486dfb51c31d1c7c791495e7a1e781d2e47a560",
+        "size": 9409
+      },
+      "omni_components/tiny_clap_residual.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "7dee1a426849402d2a69fa3038324c53ce2abcc6",
+        "size": 4315
+      },
+      "vela_omni.py": {
+        "algorithm": "git-blob-sha1",
+        "digest": "31fd31e2f0582d629bd44f9eb0d045923eef2e9c",
+        "size": 10436
+      }
+    },
+    "repo_id": "llm-semantic-router/Vela-1.0-Omni-Nano",
+    "revision": "2ff2d66385dbdd661a560ec3e8bcb45a0527d92e"
+  }
+}

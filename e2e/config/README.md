@@ -18,7 +18,7 @@ The endpoint-backed detector
 is exercised by the Kubernetes E2E `hallucination` profile
 (`e2e/profiles/hallucination/values.yaml`). That profile deploys an
 OpenAI-compatible mock detector (`deploy/kubernetes/hallucination/mock-hallucination-detector.yaml`,
-served by the shared `tools/test/services/mock-vllm` image) and asserts the
+served by the shared `tools/test/services/provider-mocker` image) and asserts the
 `x-vsr-response-warnings: hallucination` header. Run it with
 `make e2e-test E2E_PROFILE=hallucination`.
 `config.remote-embedding-smoke.yaml` is a manual local smoke config for validating
@@ -35,7 +35,8 @@ Run it against the current local image with:
 
 ```bash
 make vllm-sr-dev
-OPENAI_API_KEY="<provider-key>" vllm-sr serve \
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  OPENAI_API_KEY="<provider-key>" vllm-sr serve \
   --config e2e/config/config.remote-embedding-smoke.yaml \
   --image-pull-policy never \
   --minimal

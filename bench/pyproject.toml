@@ -68,7 +68,7 @@ plotting = [
 ]
 real_eval = [
     "PyYAML>=6.0",
-    "evalscope[sandbox]>=1.8.1",
+    "evalscope[sandbox]==1.8.1",
 ]
 
 [project.urls]

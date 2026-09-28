@@ -282,6 +282,7 @@ def prepare_dataset(
     exclusion_snapshot=None,
     source_partition=None,
     evaluation_role=None,
+    progress=None,
 ):
     if benchmark not in COUNTS:
         if (
@@ -312,11 +313,15 @@ def prepare_dataset(
     if profile not in {"smoke", "quick", "standard"}:
         raise ValueError("Unknown benchmark or profile")
     root = Path(store).expanduser().resolve()
+    if progress:
+        progress("downloading")
     rows, source = (
         _local_source(benchmark, source_path, revision)
         if source_path
         else _acquire(benchmark, root)
     )
+    if progress:
+        progress("freezing")
     task_source = (
         source_identity(source, source_partition)
         if source_partition is not None

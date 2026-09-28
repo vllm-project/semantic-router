@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
@@ -30,40 +31,43 @@ import (
 )
 
 type routerComponents struct {
-	embeddings            *embedding.Set
-	serviceEmbeddings     *embedding.Set
-	cacheEmbeddings       *embedding.Set
-	modelRuntime          *native.Runtime
-	rerankers             map[config.RecipeName]modelruntime.PairScorer
-	cfg                   *config.RouterConfig
-	categoryDescriptions  []string
-	classifier            *classification.Classifier
-	recipeClassifiers     *classification.RecipeClassifiers
-	classificationSvc     *services.ClassificationService
-	semanticCache         cache.CacheBackend
-	responseCache         *cache.ResponseCacheService
-	semanticCacheIdentity string
-	toolsDatabase         *tools.ToolsDatabase
-	toolEmbedder          *cachedToolEmbedder
-	responseAPIFilter     *ResponseAPIFilter
-	replayRecorder        *routerreplay.Recorder
-	replayStoreShared     bool
-	replayRecorders       map[string]*routerreplay.Recorder
-	shadowDispatcher      *shadowDispatcher
-	modelSelector         *selection.Registry
-	recipeModelSelectors  map[config.RecipeName]*selection.Registry
-	lookupTable           lookuptable.LookupTable
-	memoryStore           memory.Store
-	memoryExtractor       *memory.MemoryExtractor
-	memoryPersistence     *memory.PersistenceRunner
-	protocolCodecs        *protocolcodec.Registry
-	looperClient          *looper.Client
-	credentialResolver    *authz.CredentialResolver
-	rateLimiter           *ratelimit.RateLimitResolver
-	lookupTableCancel     func()
-	routerSessionStore    *sessiontelemetry.RouterSessionStateStoreSlot
-	workflowStateService  *looper.WorkflowStateService
-	resources             *resourceScope
+	embeddings                  *embedding.Set
+	serviceEmbeddings           *embedding.Set
+	cacheEmbeddings             *embedding.Set
+	modelRuntime                *native.Runtime
+	rerankers                   map[config.RecipeName]modelruntime.PairScorer
+	cfg                         *config.RouterConfig
+	categoryDescriptions        []string
+	classifier                  *classification.Classifier
+	recipeClassifiers           *classification.RecipeClassifiers
+	classificationSvc           *services.ClassificationService
+	semanticCache               cache.CacheBackend
+	responseCache               *cache.ResponseCacheService
+	semanticCacheIdentity       string
+	toolsDatabase               *tools.ToolsDatabase
+	toolEmbedder                *cachedToolEmbedder
+	responseAPIFilter           *ResponseAPIFilter
+	replayRecorder              *routerreplay.Recorder
+	replayStoreShared           bool
+	replayRecorders             map[string]*routerreplay.Recorder
+	shadowDispatcher            *shadowDispatcher
+	modelSelector               *selection.Registry
+	recipeModelSelectors        map[config.RecipeName]*selection.Registry
+	lookupTable                 lookuptable.LookupTable
+	memoryStore                 memory.Store
+	memoryExtractor             *memory.MemoryExtractor
+	memoryPersistence           *memory.PersistenceRunner
+	protocolCodecs              *protocolcodec.Registry
+	looperClient                *looper.Client
+	credentialResolver          *authz.CredentialResolver
+	rateLimiter                 *ratelimit.RateLimitResolver
+	lookupTableCancel           func()
+	routerSessionStore          *sessiontelemetry.RouterSessionStateStoreSlot
+	workflowStateService        *looper.WorkflowStateService
+	fallbackOrchestrator        *fallback.Orchestrator
+	recipeFallbackOrchestrators map[config.RecipeName]*fallback.Orchestrator
+	fallbackCircuitBreaker      *fallback.BackendCircuitBreaker
+	resources                   *resourceScope
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
@@ -261,6 +265,30 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 	})
 	components.shadowDispatcher = newShadowDispatcher()
 	components.resources.add(components.shadowDispatcher.Close)
+	fallbackPolicy := fallback.DefaultPolicy()
+	if cfg.Fallback != nil {
+		fallbackPolicy = cfg.Fallback.WithDefaults()
+	}
+	components.fallbackCircuitBreaker = fallback.NewBackendCircuitBreaker(fallbackPolicy.CircuitBreaker)
+	components.fallbackOrchestrator = fallback.NewOrchestrator(fallbackPolicy, components.fallbackCircuitBreaker)
+
+	breakersByPolicy := map[fallback.CircuitBreakerConfig]*fallback.BackendCircuitBreaker{
+		fallbackPolicy.CircuitBreaker: components.fallbackCircuitBreaker,
+	}
+
+	components.recipeFallbackOrchestrators = make(map[config.RecipeName]*fallback.Orchestrator, len(cfg.Recipes))
+	for _, recipe := range cfg.Recipes {
+		recipePolicy := fallbackPolicy
+		if recipe.Profile.Fallback != nil {
+			recipePolicy = recipe.Profile.Fallback.Inherit(fallbackPolicy).WithDefaults()
+		}
+		breaker, ok := breakersByPolicy[recipePolicy.CircuitBreaker]
+		if !ok {
+			breaker = fallback.NewBackendCircuitBreaker(recipePolicy.CircuitBreaker)
+			breakersByPolicy[recipePolicy.CircuitBreaker] = breaker
+		}
+		components.recipeFallbackOrchestrators[recipe.Name] = fallback.NewOrchestrator(recipePolicy, breaker)
+	}
 	var replayReaderForLookup store.Reader
 	if components.replayRecorder != nil {
 		replayReaderForLookup = components.replayRecorder.Reader()
@@ -433,36 +461,40 @@ func buildToolsRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (*tools
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
 	router := &OpenAIRouter{
-		Config:                  components.cfg,
-		Embeddings:              components.embeddings,
-		rerankers:               components.rerankers,
-		CategoryDescriptions:    components.categoryDescriptions,
-		Classifier:              components.classifier,
-		RecipeClassifiers:       components.recipeClassifiers,
-		ClassificationService:   components.classificationSvc,
-		Cache:                   components.semanticCache,
-		ResponseCache:           components.responseCache,
-		ToolsDatabase:           components.toolsDatabase,
-		toolEmbedder:            components.toolEmbedder,
-		ResponseAPIFilter:       components.responseAPIFilter,
-		ReplayRecorder:          components.replayRecorder,
-		ReplayStoreShared:       components.replayStoreShared,
-		ModelSelector:           components.modelSelector,
-		RecipeModelSelectors:    components.recipeModelSelectors,
-		LookupTable:             components.lookupTable,
-		ReplayRecorders:         components.replayRecorders,
-		ShadowDispatcher:        components.shadowDispatcher,
-		MemoryStore:             components.memoryStore,
-		MemoryExtractor:         components.memoryExtractor,
-		memoryPersistence:       components.memoryPersistence,
-		ProtocolCodecs:          components.protocolCodecs,
-		looperClient:            components.looperClient,
-		CredentialResolver:      components.credentialResolver,
-		RateLimiter:             components.rateLimiter,
-		lookupTableCancel:       components.lookupTableCancel,
-		routerSessionStateStore: components.routerSessionStore,
-		WorkflowStateService:    components.workflowStateService,
-		resources:               components.resources,
+		Config:                      components.cfg,
+		Embeddings:                  components.embeddings,
+		serviceEmbeddings:           components.serviceEmbeddings,
+		cacheEmbeddings:             components.cacheEmbeddings,
+		rerankers:                   components.rerankers,
+		CategoryDescriptions:        components.categoryDescriptions,
+		Classifier:                  components.classifier,
+		RecipeClassifiers:           components.recipeClassifiers,
+		ClassificationService:       components.classificationSvc,
+		Cache:                       components.semanticCache,
+		ResponseCache:               components.responseCache,
+		ToolsDatabase:               components.toolsDatabase,
+		toolEmbedder:                components.toolEmbedder,
+		ResponseAPIFilter:           components.responseAPIFilter,
+		ReplayRecorder:              components.replayRecorder,
+		ReplayStoreShared:           components.replayStoreShared,
+		ModelSelector:               components.modelSelector,
+		RecipeModelSelectors:        components.recipeModelSelectors,
+		LookupTable:                 components.lookupTable,
+		ReplayRecorders:             components.replayRecorders,
+		ShadowDispatcher:            components.shadowDispatcher,
+		MemoryStore:                 components.memoryStore,
+		MemoryExtractor:             components.memoryExtractor,
+		memoryPersistence:           components.memoryPersistence,
+		ProtocolCodecs:              components.protocolCodecs,
+		looperClient:                components.looperClient,
+		CredentialResolver:          components.credentialResolver,
+		RateLimiter:                 components.rateLimiter,
+		lookupTableCancel:           components.lookupTableCancel,
+		routerSessionStateStore:     components.routerSessionStore,
+		WorkflowStateService:        components.workflowStateService,
+		FallbackOrchestrator:        components.fallbackOrchestrator,
+		RecipeFallbackOrchestrators: components.recipeFallbackOrchestrators,
+		resources:                   components.resources,
 	}
 	if components.classificationSvc != nil {
 		components.classificationSvc.SetEvalModelSelector(router)

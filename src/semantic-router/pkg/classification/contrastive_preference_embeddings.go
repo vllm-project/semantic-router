@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -99,14 +100,7 @@ func (c *ContrastivePreferenceClassifier) embedRuleExamples(
 }
 
 func (c *ContrastivePreferenceClassifier) embedText(text string) ([]float32, error) {
-	if c.provider != nil {
-		return c.provider.Embed(context.Background(), text)
-	}
-	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	return embedding.Embed(context.Background(), c.provider, text, embedding.Options{})
 }
 
 func (c *ContrastivePreferenceClassifier) collectEmbeddedResults(

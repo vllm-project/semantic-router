@@ -47,6 +47,7 @@ type (
 	LearningRescueDiagnostics     = store.LearningRescueDiagnostics
 	LearningSamplingDiagnostics   = store.LearningSamplingDiagnostics
 	Outcome                       = store.Outcome
+	PreparedDispatchReceipt       = store.PreparedDispatchReceipt
 	RequestDemandSnapshot         = store.RequestDemandSnapshot
 	FusionPanelAttemptDiagnostics = store.FusionPanelAttemptDiagnostics
 	FusionQuorumDiagnostics       = store.FusionQuorumDiagnostics

@@ -15,11 +15,13 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
-  const { user } = useAuth()
+  const { user, refreshSession } = useAuth()
   const {
     isLoading: settingsLoading,
     srBenchAvailable,
     srBenchUnavailableReason,
+    settingsError,
+    refreshSettings,
   } = useReadonly()
   const canUseMLSetup = canAccessMLSetup(user)
 
@@ -68,6 +70,11 @@ const AppRouter: React.FC = () => {
               settingsLoading,
               srBenchAvailable,
               srBenchUnavailableReason,
+              settingsError,
+              onRefreshAccess: () => {
+                refreshSettings()
+                void refreshSession()
+              },
             })}
           </Route>
         </Route>

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
 )
 
 type openWebFetchedContent struct {
@@ -36,7 +38,10 @@ func fetchWebWithJina(targetURL string, timeout time.Duration, outputFormat stri
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := (&http.Client{Timeout: timeout}).Do(req)
+	// Explicit proxy mode: the shared policy validates the connection to the
+	// fixed Jina reader host. Jina resolves and fetches the caller's URL from
+	// its own network; our address policy cannot enforce Jina's DNS decisions.
+	resp, err := outboundPolicy(timeout).NewClient().Do(req)
 	if err != nil {
 		return nil, wrapOpenWebRequestError(err)
 	}
@@ -45,7 +50,7 @@ func fetchWebWithJina(targetURL string, timeout time.Duration, outputFormat stri
 	log.Printf("[OpenWeb:Jina] Response status: %d, elapsed: %v", resp.StatusCode, time.Since(startTime))
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := safefetch.ReadBounded(resp.Body, openWebMaxResponseBytes)
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -88,10 +93,13 @@ func newJinaRequest(targetURL string, timeout time.Duration, outputFormat string
 }
 
 func parseJinaResponse(body io.Reader, outputFormat string, targetURL string) (openWebFetchedContent, error) {
+	// Bound before parsing. The reader is a third party, so its response size
+	// is not ours to trust in either format.
+	bounded := io.LimitReader(body, openWebMaxResponseBytes)
 	if outputFormat == "json" {
-		return parseJinaJSONResponse(body, targetURL)
+		return parseJinaJSONResponse(bounded, targetURL)
 	}
-	return parseJinaMarkdownResponse(body, targetURL)
+	return parseJinaMarkdownResponse(bounded, targetURL)
 }
 
 func parseJinaJSONResponse(body io.Reader, targetURL string) (openWebFetchedContent, error) {
@@ -165,6 +173,12 @@ func buildOpenWebResponse(content openWebFetchedContent, maxLength int, method s
 func wrapOpenWebRequestError(err error) error {
 	if err == nil {
 		return nil
+	}
+	// A resolver can fail with a timeout while the outbound policy is refusing
+	// the destination. Preserve the refusal without exposing the wrapped URL or
+	// resolver detail in the response, and never retry through Jina.
+	if isForbiddenFetchTarget(err) {
+		return errOpenWebForbiddenTarget
 	}
 	if containsOpenWebTimeout(err) {
 		return fmt.Errorf("request timeout")

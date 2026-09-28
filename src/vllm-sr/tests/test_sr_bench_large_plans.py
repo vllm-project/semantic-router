@@ -270,7 +270,12 @@ def test_plan_rejects_tampered_source_and_changed_digest_before_policy(
         for index, line in enumerate(lines(*args, **kwargs)):
             yield line
             if index == 0:
-                path.write_bytes(original.replace(b'"answer":"A"', b'"answer":"B"'))
+                # Buffered reads can retain the original bytes, and some
+                # filesystems coalesce timestamps for same-size writes. Append
+                # JSONL whitespace to change size without shifting row boundaries.
+                path.write_bytes(
+                    original.replace(b'"answer":"A"', b'"answer":"B"') + b"\n"
+                )
 
     monkeypatch.setattr(contracts, "verified_lines", change_during_scan)
     with pytest.raises(ValueError, match=r"changed|digest"):

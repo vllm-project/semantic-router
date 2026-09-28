@@ -83,7 +83,7 @@ spec:
         type: PathPrefix
         value: /
     backendRefs:
-    - name: mock-vllm
+    - name: provider-mocker
       namespace: default
       port: 8000
       weight: 1

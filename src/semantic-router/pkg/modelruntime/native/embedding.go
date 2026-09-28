@@ -68,18 +68,7 @@ func (r *Runtime) embeddingTask() (*binding.Task[embedding.TextRequest, tasks.Em
 func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBinding, dimension, layer int) (prepared *EmbeddingProvider, resultErr error) {
 	defer func() { observePreparationFailure(spec, resultErr) }()
 	view := embedding.Options{Dimension: dimension, Layer: layer}
-	var model *preparedEmbedding
-	var err error
-	switch spec.Deployment.Provider {
-	case "candle":
-		model, err = r.candleEmbedding(ctx, spec, view)
-	case "ort":
-		model, err = r.ortEmbedding(ctx, spec, view)
-	case "openvino":
-		model, err = r.openvinoEmbedding(ctx, spec, view)
-	default:
-		err = fmt.Errorf("%w: native embedding provider %q", binding.ErrCapability, spec.Deployment.Provider)
-	}
+	model, err := r.prepareEmbedding(ctx, spec, view)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +80,7 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 		return nil, err
 	}
 	text, err := task.Resolve(taskIdentity(spec), capability, resource, func(_ context.Context, value io.Closer, input embedding.TextRequest) (tasks.EmbeddingResult, error) {
-		return value.(*embeddingEngine).embed(input.Text, input.Options)
+		return value.(embeddingEngine).embed(input.Text, input.Options)
 	})
 	if err != nil {
 		_ = resource.Close()
@@ -119,7 +108,7 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 	}
 	provider.text.Ready()
 	provider.dimension = capability.Embedding.Dimension
-	provider.info = embedding.ModelInfo{Layers: layers, Artifact: id.Artifact, Backend: provider.backend, Dimension: provider.dimension, MaxTokens: capability.Limits.EffectiveTokens(), Pooling: capability.Embedding.Pooling, Normalization: capability.Embedding.Normalization, Modalities: append([]string(nil), capability.Embedding.Modalities...)}
+	provider.info = embedding.ModelInfo{Audio: capability.Embedding.Audio, Dimensions: append([]int(nil), capability.Embedding.AvailableDimensions...), Layers: layers, Artifact: id.Artifact, Backend: provider.backend, Dimension: provider.dimension, MaxTokens: capability.Limits.EffectiveTokens(), Pooling: capability.Embedding.Pooling, Normalization: capability.Embedding.Normalization, Modalities: append([]string(nil), capability.Embedding.Modalities...)}
 	return provider, nil
 }
 func (p *EmbeddingProvider) Close() error    { return p.text.Close() }
@@ -148,8 +137,14 @@ func (p *EmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) ([][
 
 func (p *EmbeddingProvider) EmbeddingInfo() embedding.ModelInfo {
 	info := p.info
+	if info.Audio != nil {
+		a := *info.Audio
+		a.SampleRates = append([]int(nil), a.SampleRates...)
+		info.Audio = &a
+	}
 	info.Modalities = append([]string(nil), p.info.Modalities...)
 	info.Layers = append([]int(nil), p.info.Layers...)
+	info.Dimensions = append([]int(nil), p.info.Dimensions...)
 	return info
 }
 
@@ -165,7 +160,7 @@ type preparedEmbedding struct {
 
 // ORT exits own separate graphs. Every advertised graph must execute before
 // publication, while a Candle backbone only needs its selected view warmed.
-func warmEmbeddingModel(engine *embeddingEngine, view embedding.Options, exits []int) (int, error) {
+func warmEmbeddingModel(engine embeddingEngine, view embedding.Options, exits []int) (int, error) {
 	request := embedding.TextRequest{Text: "warmup", Options: view}
 	warm, err := engine.embed(request.Text, request.Options)
 	if err != nil {

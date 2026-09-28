@@ -144,32 +144,51 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		}
 		explicitPaths[config.ResolveModelPath(head.ModelID)] = true
 	}
-	if defaultProvider == "ort" || embeddingProvider == "openvino" {
-		// Resolve implicit embeddings with the same provider artifact contract
-		// as explicit bindings. In particular, ROCm requires ONNX graphs and
-		// their external tensors rather than Candle safetensors.
-		for model, path := range paths {
-			provider := defaultProvider
-			if model == primary {
-				provider = embeddingProvider
+	// The Halu release ships native weights and a mandatory task policy. Use
+	// its declared provider even when the build's generic default is ORT.
+	if active["hallucination_detector"] {
+		path := config.ResolveModelPath(cfg.HallucinationMitigation.HallucinationModel.ModelID)
+		if model := config.GetModelByPath(path); model != nil && model.DefaultAdapter == "vela_halu" {
+			if _, explicit := plan.Lookup(cfg.RoutingScope, "hallucination_detector"); !explicit {
+				spec := config.ResolvedModelBinding{
+					Recipe: cfg.RoutingScope, Name: "hallucination_detector",
+					Binding:    config.ModelBinding{Adapter: model.DefaultAdapter, Contract: config.RemoteClassifierContractTokenSpans},
+					Deployment: config.ModelDeployment{Provider: model.DefaultProvider, Device: model.DefaultDevice, Artifact: path},
+				}
+				if err := i.addDefaultDeployment(cfg, spec); err != nil {
+					return err
+				}
+				explicitPaths[path] = true
 			}
-			if provider == "candle" {
-				continue
-			}
-			if *path == "" {
-				continue
-			}
-			spec := config.ResolvedModelBinding{
-				Recipe: cfg.RoutingScope, Name: "embedding",
-				Binding:    config.ModelBinding{Adapter: model, Contract: "embedding.v1"},
-				Deployment: config.ModelDeployment{Provider: provider, Artifact: *path},
-			}
-			if err := i.addDefaultDeployment(cfg, spec); err != nil {
-				return err
-			}
-			explicitPaths[config.ResolveModelPath(*path)] = true
 		}
 	}
+	// Catalog adapters may require a different execution format from the build
+	// default. Resolve them identically for inventory and runtime ownership.
+	for model, path := range paths {
+		if *path == "" {
+			continue
+		}
+		provider, adapter := defaultProvider, model
+		if model == primary {
+			provider = embeddingProvider
+		}
+		if catalog := config.GetModelByPath(*path); catalog != nil && catalog.DefaultAdapter != "" {
+			provider, adapter = catalog.DefaultProvider, catalog.DefaultAdapter
+		}
+		if provider == "candle" {
+			continue
+		}
+		spec := config.ResolvedModelBinding{
+			Recipe: cfg.RoutingScope, Name: "embedding",
+			Binding:    config.ModelBinding{Adapter: adapter, Contract: "embedding.v1"},
+			Deployment: config.ModelDeployment{Provider: provider, Artifact: *path},
+		}
+		if err := i.addDefaultDeployment(cfg, spec); err != nil {
+			return err
+		}
+		explicitPaths[config.ResolveModelPath(*path)] = true
+	}
+
 	if provider, device := config.DefaultCategoryExecution(cfg.CategoryModel.UseCPU); provider == "openvino" && active["domain_classifier"] {
 		if _, explicit := plan.Lookup(cfg.RoutingScope, "domain_classifier"); !explicit {
 			spec := config.ResolvedModelBinding{Recipe: cfg.RoutingScope, Name: "domain_classifier", Binding: config.ModelBinding{Contract: config.RemoteClassifierContractLabelDistribution, Adapter: "auto"}, Deployment: config.ModelDeployment{Provider: provider, Device: device, Artifact: cfg.CategoryModel.ModelID}}
@@ -229,7 +248,20 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 
 func (i *modelInventory) addDeployment(cfg *config.RouterConfig, spec config.ResolvedModelBinding) error {
 	path := config.ResolveModelPath(spec.Deployment.Artifact)
+	if spec.Binding.Adapter == "vela_omni" {
+		if spec.Deployment.Provider != "ort" || spec.Binding.Head != "" {
+			return fmt.Errorf("vela_omni requires a complete prepared ORT artifact without a head override")
+		}
+		bundle := ""
+		if catalog := config.GetModelByPath(path); catalog != nil {
+			bundle = catalog.ArtifactBundle
+		}
+		return i.add(ModelSpec{LocalPath: path, Revision: spec.Deployment.Revision, PreparedArtifact: "vela_omni", ArtifactBundle: bundle, Strict: true})
+	}
 	files := []string{"config.json", "tokenizer.json"}
+	if spec.Binding.Adapter == "vela_halu" {
+		files = append(files, "operating_point.json")
+	}
 	if spec.Binding.Contract == config.RelevanceScoresContract {
 		files = append(files, "matryoshka_config.json")
 	}
@@ -407,6 +439,9 @@ func (i *modelInventory) add(next ModelSpec) error {
 		}
 		if next.Revision == "" {
 			next.Revision = previous.Revision
+		}
+		if previous.PreparedArtifact != next.PreparedArtifact || previous.ArtifactBundle != next.ArtifactBundle {
+			return fmt.Errorf("artifact %q is required in conflicting prepared/native formats", next.LocalPath)
 		}
 		next.RequiredFiles = append(previous.RequiredFiles, next.RequiredFiles...)
 		next.RequiredFileGroups = append(previous.RequiredFileGroups, next.RequiredFileGroups...)

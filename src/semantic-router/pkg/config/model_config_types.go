@@ -117,9 +117,8 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 			result.ModelType = EmbeddingModelTypeQwen3
 		}
 	}
-	if result.TargetDimension <= 0 {
-		result.TargetDimension = 768
-	}
+	// Zero selects the prepared model's native dimension. The provider validates
+	// explicit dimensions; a shared default must not resize another model.
 	if result.EnableSoftMatching == nil {
 		defaultEnabled := false
 		result.EnableSoftMatching = &defaultEnabled

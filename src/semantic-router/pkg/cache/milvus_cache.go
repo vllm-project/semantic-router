@@ -78,9 +78,15 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		logging.Warnf("MilvusCache: unrecognized metric_type %q; scores will be compared as similarities without conversion", m)
 	}
 	warnUnrecognizedMilvusConsistencyLevel(milvusConfig.Search.ConsistencyLevel)
+	copiedConfig := *milvusConfig
+	milvusConfig = &copiedConfig
+	milvusConfig.Collection.VectorField.Dimension, err = resolveCacheDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingProvider)
+	if err != nil {
+		return nil, err
+	}
 	logging.Debugf("MilvusCache: config loaded - host=%s:%d, collection=%s, dimension=%d",
 		milvusConfig.Connection.Host, milvusConfig.Connection.Port, milvusConfig.Collection.Name,
-		semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingModel))
+		semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingProvider))
 
 	// Establish connection to Milvus server
 	connectionString := fmt.Sprintf("%s:%d", milvusConfig.Connection.Host, milvusConfig.Connection.Port)
@@ -110,7 +116,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
 		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, embeddingModel), 0)),
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingProvider), 0)),
 	}
 
 	// Test connection using the new CheckConnection method
@@ -265,9 +271,9 @@ func (c *MilvusCache) getEmbedding(ctx context.Context, text string) ([]float32,
 
 func (c *MilvusCache) embeddingDimension() int {
 	if c == nil || c.config == nil {
-		return semanticCacheEmbeddingDimension(0, "")
+		return 0
 	}
-	return semanticCacheEmbeddingDimension(c.config.Collection.VectorField.Dimension, c.embeddingModel)
+	return semanticCacheEmbeddingDimension(c.config.Collection.VectorField.Dimension, c.embeddingProvider)
 }
 
 // createCollection builds the Milvus collection with the appropriate schema

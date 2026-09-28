@@ -485,6 +485,41 @@ class ModelCatalogValidationTests(unittest.TestCase):
         ):
             catalog._validate_providers([provider], self.protocols)
 
+    def test_provider_operation_override_keys_are_disjoint(self) -> None:
+        operation = "openai/chat-completions@1#create"
+        provider = {
+            "id": "example",
+            "category": "model_api",
+            "support_tier": "compatible",
+            "protocols": ["openai/chat-completions@1"],
+            "default_protocol": "openai/chat-completions@1",
+            "supported_operations": [
+                operation,
+                "openai/chat-completions@1#list_models",
+            ],
+            "path_overrides": {operation: "/chat/completions"},
+            "operation_overrides": {
+                "openai/chat-completions@1#list_models": {"path": "/models"}
+            },
+            "auth": {
+                "strategy": "bearer",
+                "header": "Authorization",
+                "prefix": "Bearer",
+            },
+            "presentation": {"logo": "monogram", "monogram": "E", "monochrome": True},
+            "conformance": {"status": "unverified"},
+        }
+        catalog._validate_providers([provider], self.protocols)
+
+        for path in ("/chat/completions", "/different"):
+            with self.subTest(path=path):
+                provider["operation_overrides"][operation] = {"path": path}
+                with self.assertRaisesRegex(
+                    catalog.CatalogBuildError,
+                    "both path_overrides and operation_overrides",
+                ):
+                    catalog._validate_providers([provider], self.protocols)
+
     def test_provider_catalog_model_protocol_must_be_supported(self) -> None:
         providers = {
             "example": {

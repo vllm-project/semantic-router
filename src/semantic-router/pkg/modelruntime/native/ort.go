@@ -125,6 +125,10 @@ func (r *Runtime) ortResource(ctx context.Context, spec config.ResolvedModelBind
 }
 
 func (r *Runtime) ortResourceWithExecutionLimit(ctx context.Context, spec config.ResolvedModelBinding, task string, executionLimit int, load func(ort.Options) (io.Closer, error)) (*binding.Resource, error) {
+	return r.ortResourcePrepared(ctx, spec, task, executionLimit, nil, load)
+}
+
+func (r *Runtime) ortResourcePrepared(ctx context.Context, spec config.ResolvedModelBinding, task string, executionLimit int, prepare func(ort.Options) (ort.Options, error), load func(ort.Options) (io.Closer, error)) (*binding.Resource, error) {
 	options, err := ortOptions(spec)
 	if err != nil {
 		return nil, err
@@ -139,6 +143,12 @@ func (r *Runtime) ortResourceWithExecutionLimit(ctx context.Context, spec config
 	}
 	// Include both budgets in the existing resource pool identity.
 	options.ExecutionMaxInputTokens = executionLimit
+	if prepare != nil {
+		options, err = prepare(options)
+		if err != nil {
+			return nil, err
+		}
+	}
 	revision, err := r.artifactRevision(ctx, options.ModelPath)
 	if err != nil {
 		return nil, err
