@@ -75,6 +75,26 @@ is still in repair at the data track and is deferred until it is admitted.
   is reported to the coordinator before any formal run. The eval track's
   calibrated proxy replaces the scalar one if it is published first.
 
+## Preflight r1 and runtime amendment (before any full run)
+
+Three jobs ran concurrently on GPU2–4 (Lux 1.0 zero-step readout, L0 and L1
+preflights), code `00b105bdf`. Lux 1.0 SELECT baseline: 545/700, family macro
+.7559. **L0 preflight PASS** (every gate; zero-step cross-process drift
+8.8e-8). **L1 preflight r1 FAIL** on one gate only: its zero-step trainer SELECT
+drifted up to 0.0528 from the source recomputed in another process (tolerance
+0.05; 698/700 same argmax, within the 693 floor). The in-process zero-step
+reload was exact, so the zero-gated residual reproduces Lux; the drift is
+cross-process Triton autotuning under concurrent jobs, which L0's identical
+zero-step model did not hit.
+
+Amendment (runtime only, thresholds unchanged): every Milestone 2 job sets
+`TRITON_CACHE_AUTOTUNING=1` with one persisted, shared Triton cache seeded from
+a copy of the eval track's frozen node-A Lux1 cache (44 entries, tree digest
+`e215f8bd…`), so candidates, Lux 1.0 and the eval comparator use the same
+kernel configurations. L1 repeats its preflight once under this runtime (r2);
+a second failure stops L1. The Lux 1.0 zero-step readout is repeated under the
+same runtime before pairing.
+
 ## Stop rules and budget
 
 Preflight failure, nonfinite loss or gradient, identity drift, or a native
