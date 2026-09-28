@@ -329,7 +329,7 @@ func (h *MCPHandler) GetServerStatusHandler() http.HandlerFunc {
 	}
 }
 
-// TestConnectionHandler POST /api/mcp/servers/:id/test - Test connection
+// TestConnectionHandler POST /api/mcp/servers/:id/test and POST /api/mcp/servers/test - Test connection
 func (h *MCPHandler) TestConnectionHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
