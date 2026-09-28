@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from inference.run import OVER_BUDGET_ADAPTER_VERSION, digest, file_digest
+
 from jev_arena import seal_lux9b_r4 as seal_module
 
 
