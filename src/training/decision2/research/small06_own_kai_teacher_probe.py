@@ -87,8 +87,10 @@ def load_train(
     native_ids = [
         json.loads(line)["id"] for line in (native_dir / "train.jsonl").open()
     ]
-    if len(eligible) != 6262 or [row["id"] for row in eligible] != native_ids:
-        raise ValueError("Eligible original IDs differ from the Kai-native TRAIN")
+    # The published converter assigns new native row IDs. Its exact manifest
+    # attests the conversion; source IDs are retained in the original split.
+    if len(eligible) != 6262 or len(native_ids) != 6262 or len(set(native_ids)) != 6262:
+        raise ValueError("Eligible original/native TRAIN counts differ")
     return eligible, excluded
 
 
