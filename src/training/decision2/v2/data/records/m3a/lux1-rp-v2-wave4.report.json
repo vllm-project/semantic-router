@@ -1,0 +1,29 @@
+{
+ "content_sha256": "084adacd5c6f37714971fd90e9a35b9fdd68ba6602f3561c1f68eba0d73dde6a",
+ "model_id": "llm-semantic-router/Decision-1.0-Lux-9B",
+ "model_revision": "bd45a30aee8c84032791c245c70f86dee5389cc8",
+ "noul": {
+  "argmax_accuracy_vs_gold": 0.75,
+  "mean_brier": 0.3315,
+  "mean_gold_probability": 0.7549,
+  "mean_normalized_entropy": 0.3956,
+  "no_answer_reasons": {},
+  "no_native_answer": 0,
+  "rows": 20,
+  "targets": 20
+ },
+ "prompts": 281,
+ "rows": 281,
+ "score": {
+  "argmax_accuracy_vs_gold": 0.5441,
+  "mean_brier": 0.5345,
+  "mean_gold_probability": 0.4977,
+  "mean_normalized_entropy": 0.5579,
+  "no_answer_reasons": {},
+  "no_native_answer": 0,
+  "rows": 261,
+  "targets": 261
+ },
+ "teacher": "lux",
+ "teacher_output_sha256": "94e47e4529025289528b28ff79c1753eea31e9dd784b65653c447bf1e3d10295"
+}

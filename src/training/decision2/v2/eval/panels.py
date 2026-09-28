@@ -89,7 +89,19 @@ DEVELOPMENT: dict[str, dict[str, Any]] = {
     },
 }
 
-ALL = {**FORMAL, **DEVELOPMENT}
+SEALED: dict[str, dict[str, Any]] = {
+    # JevArena-C1: encrypted at rest; its files exist under the panel root only during a
+    # logged one-shot scoring event (v2/eval/records/m3-sealed-c1-seal-2026-09-28.md).
+    "sealed-c1": {
+        "prompts": "goldfree/sealed-c1.prompts.jsonl",
+        "prompts_sha256": "0b29686f60c980f3fbc8a03b88537fc0bf90ee967afa67d4fe0c958b1bfde16a",
+        "gold": "gold/sealed-c1.gold.jsonl",
+        "gold_sha256": "c02777713c0e58b40cf602947433420744b2765465252ce22d692eb676ca4fe1",
+        "originals": 2874,
+    },
+}
+
+ALL = {**FORMAL, **DEVELOPMENT, **SEALED}
 
 
 def sha_file(path: Path) -> str:
@@ -101,10 +113,12 @@ def sha_file(path: Path) -> str:
 
 
 def expected_files(names: list[str] | None = None) -> dict[str, str]:
-    """Relative path -> SHA-256 for the selected panels (all when None)."""
+    """Relative path -> SHA-256 for the selected panels (all unsealed when None)."""
     files: dict[str, str] = {}
     for name, spec in ALL.items():
         if names is not None and name not in names:
+            continue
+        if names is None and name in SEALED:
             continue
         for kind in ("prompts", "gold", "manifest"):
             if kind in spec:

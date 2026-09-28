@@ -1,0 +1,14 @@
+{
+  "arm": "m4-probe-a2-s2",
+  "family": "qwen-causal",
+  "recipe": "/src/src/training/decision2/v2/06b/records/arms/m3-a2-causal-s2.json",
+  "ingredients": [
+    {
+      "arm": "m3-a2-causal-s2",
+      "run": "/runs/m1/arms/m3-a2-causal-s2/full",
+      "state_sha256": "724c58ec18c1209f45fc285832978ac3b4e52c92f155e7c60b87d0574e2dfa6f"
+    }
+  ],
+  "allowed_differences": [],
+  "export": false
+}

@@ -4,8 +4,17 @@
 # Usage (SRC is a mirror directory name under /data/dev2/src: <sha> or <sha>-src_training_decision2):
 #   release.sh --spec SPEC.json --src SRC --work /data/dev2/runs/release/<id> \
 #       [--cpu | --gpu N --track TRACK] [--image IMAGE] [--python PY] [--mount PATH]... \
+#       [--mount-rw PATH]... [--env KEY=VALUE]... [--site DIR]... [--require-kernels] \
 #       [--threads N] [--base-path DIR] [--parity NAME:PROMPTS:PREDICTIONS:COUNT]... \
-#       [--parity-tolerance X] [--upload] [--collect]
+#       [--parity-tolerance X] [--shared-lease NAME] [--upload] [--collect [--already-collected]]
+# --env takes non-secret runtime settings only (e.g. TRITON_CACHE_DIR of a persisted autotune
+# cache mounted with --mount-rw); --site names an image directory of kernel packages that the
+# isolated interpreter must import (e.g. /opt/decision-fla); --require-kernels makes the example
+# and parity processes fail unless the Qwen3.5 kernels and the persisted cache are in use.
+# --shared-lease NAME (a GPU the allocation table marks as shared) writes only
+# /data/dev2/leases/gpuN.lock/owner.NAME and never reads or rewrites the owner's entry.
+# --already-collected (with --collect): a new revision of a release repository that an earlier
+# final decision already added; the pre-collect readback then expects its collection item.
 #
 # Steps (each writes <work>/receipts/<step>.json; any failure stops the run):
 #   build        v2.release.build: exact scored bytes + runtime + card -> <work>/package/<repo-name>
@@ -21,10 +30,11 @@
 # The container never mounts gold. --cpu exposes no GPU; --gpu takes a leased GPU like the eval runner.
 set -euo pipefail
 
-usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 spec="" sha="" work="" device="cpu" gpu="" track="" image="decision20-train-fast:host2" python_bin="python3"
 threads="4" base_path="" upload=0 gate="" parity_tolerance="1e-4" mounts=() parity=()
+rw_mounts=() envs=() site_args=() kernel_args=() shared="" readback_args=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --spec) spec="$2"; shift 2 ;;
@@ -36,18 +46,28 @@ while [[ $# -gt 0 ]]; do
     --image) image="$2"; shift 2 ;;
     --python) python_bin="$2"; shift 2 ;;
     --mount) mounts+=("$2"); shift 2 ;;
+    --mount-rw) rw_mounts+=("$2"); shift 2 ;;
+    --env)
+      [[ "$2" =~ ^[A-Z][A-Z0-9_]*=.*$ && ! "${2%%=*}" =~ (TOKEN|SECRET|PASSWORD|_KEY$) ]] \
+        || { echo "--env takes a non-secret KEY=VALUE setting" >&2; exit 2; }
+      envs+=(-e "$2"); shift 2 ;;
+    --site) site_args+=(--site "$2"); shift 2 ;;
+    --require-kernels) kernel_args=(--require-kernels); shift ;;
+    --shared-lease) shared="$2"; shift 2 ;;
     --threads) threads="$2"; shift 2 ;;
     --base-path) base_path="$2"; mounts+=("$2"); shift 2 ;;
     --parity) parity+=("$2"); shift 2 ;;
     --parity-tolerance) parity_tolerance="$2"; shift 2 ;;
     --upload) upload=1; shift ;;
     --collect) gate=1; shift ;;
+    --already-collected) readback_args=(--already-collected); shift ;;
     *) usage ;;
   esac
 done
 [[ -n "$spec" && -n "$sha" && -n "$work" ]] || usage
 [[ "$work" == /data/dev2/runs/release/* ]] || { echo "work dir must be under /data/dev2/runs/release/" >&2; exit 2; }
 [[ -z "$gate" || "$upload" == 1 ]] || { echo "--collect needs --upload" >&2; exit 2; }
+[[ ${#readback_args[@]} -eq 0 || -n "$gate" ]] || { echo "--already-collected needs --collect" >&2; exit 2; }
 src="/data/dev2/src/$sha"
 S="$src/src/training/decision2"
 [[ -f "$src/.dev2-mirror.json" ]] || { echo "no verified mirror at $src" >&2; exit 1; }
@@ -58,6 +78,15 @@ name="${repo#*/}"
 mkdir -p "$work/receipts" "$work/package" "$work/logs"
 cp "$spec" "$work/receipts/spec.json"
 spec="$work/receipts/spec.json"
+python3 - "$work/receipts/launcher.json" "$image" "$(docker image inspect --format '{{.Id}}' "$image")" \
+  "$device" "$gpu" "$track" "${envs[*]:-}" "${rw_mounts[*]:-}" "${site_args[*]:-}" "${kernel_args[*]:-}" <<'EOF'
+import json, sys
+path, image, image_id, device, gpu, track, envs, rw, sites, kernels = sys.argv[1:]
+json.dump({"schema": "dev2-release-launcher/1", "image": image, "image_id": image_id, "device": device,
+           "gpu": gpu or None, "track": track or None, "env": [e for e in envs.split() if e != "-e"],
+           "rw_mounts": rw.split(), "sites": [s for s in sites.split() if s != "--site"],
+           "require_kernels": bool(kernels)}, open(path, "x"), indent=2, sort_keys=True)
+EOF
 export PYTHONPATH="$S"
 log() { printf '%s %s\n' "$(date -u +%H:%M:%SZ)" "$*" | tee -a "$work/logs/release.log"; }
 
@@ -65,12 +94,16 @@ gpu_flags=()
 if [[ "$device" != "cpu" ]]; then
   [[ "$gpu" =~ ^[0-7]$ && -n "$track" ]] || { echo "--gpu N needs --track" >&2; exit 2; }
   lease="/data/dev2/leases/gpu$gpu.lock"
-  if [[ -f "$lease/owner" ]] && ! grep -qx "track=$track" "$lease/owner"; then
+  lease_file="$lease/owner"
+  if [[ -n "$shared" ]]; then
+    [[ "$shared" =~ ^[a-z0-9-]+$ ]] || { echo "--shared-lease takes a short lowercase name" >&2; exit 2; }
+    lease_file="$lease/owner.$shared"
+  elif [[ -f "$lease/owner" ]] && ! grep -qx "track=$track" "$lease/owner"; then
     echo "gpu$gpu is leased by another track" >&2; exit 1
   fi
   mkdir -p "$lease"
   printf 'track=%s\npurpose=%s\nstart_utc=%s\nexpected_end_utc=unknown\nrun_dir=%s\n' \
-    "$track" "release verification $repo" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$work" > "$lease/owner"
+    "$track" "release verification $repo" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$work" > "$lease_file"
   gpu_flags=(--device /dev/kfd --device /dev/dri --group-add video --security-opt seccomp=unconfined
              -e ROCR_VISIBLE_DEVICES="$gpu")
 else
@@ -83,11 +116,12 @@ examples() {
   [[ -d "$work/download" ]] && volumes+=(-v "$work/download:$work/download:ro")
   local m
   for m in "${mounts[@]}"; do volumes+=(-v "$m:$m:ro"); done
+  for m in "${rw_mounts[@]}"; do volumes+=(-v "$m:$m"); done
   docker run --rm --network none --ipc host "${gpu_flags[@]}" -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
-    -e TOKENIZERS_PARALLELISM=false "${volumes[@]}" --entrypoint "$python_bin" "$image" \
+    -e TOKENIZERS_PARALLELISM=false "${envs[@]}" "${volumes[@]}" --entrypoint "$python_bin" "$image" \
     -I -B "$S/v2/release/examples.py" "$@"
 }
-device_args=(--threads "$threads")
+device_args=(--threads "$threads" "${site_args[@]}" "${kernel_args[@]}")
 [[ "$device" == "cpu" ]] && device_args+=(--device cpu) || device_args+=(--device cuda:0)
 [[ -n "$base_path" ]] && device_args+=(--base-path "$base_path")
 parity_args=()
@@ -106,7 +140,7 @@ python3 "$S/v2/release/examples.py" compare "$work/receipts/pre-a.json" "$work/r
   --output "$work/receipts/repeat-pre.json"
 log "card example (pre-upload)"
 examples card --package "$pkg" --reference "$work/receipts/pre-a.json" --output "$work/receipts/card-pre.json" \
-  > "$work/logs/card-pre.log" 2>&1
+  "${site_args[@]}" > "$work/logs/card-pre.log" 2>&1
 if [[ ${#parity_args[@]} -gt 0 ]]; then
   log "scored-panel parity (pre-upload)"
   examples parity --package "$pkg" --output "$work/receipts/parity-pre.json" --tolerance "$parity_tolerance" \
@@ -134,14 +168,14 @@ if [[ "$upload" == 1 ]]; then
   python3 "$S/v2/release/examples.py" compare "$work/receipts/pre-a.json" "$work/receipts/post.json" \
     --output "$work/receipts/repeat-post.json"
   examples card --package "$work/download/$name" --reference "$work/receipts/pre-a.json" \
-    --output "$work/receipts/card-post.json" > "$work/logs/card-post.log" 2>&1
+    --output "$work/receipts/card-post.json" "${site_args[@]}" > "$work/logs/card-post.log" 2>&1
   if [[ ${#parity_args[@]} -gt 0 ]]; then
     examples parity --package "$work/download/$name" --output "$work/receipts/parity-post.json" \
       --tolerance "$parity_tolerance" "${device_args[@]}" "${parity_args[@]}" > "$work/logs/parity-post.log" 2>&1
   fi
   log "readback"
   "$hf_python" -m v2.release.hub readback --repo "$repo" --revision "$revision" --package "$pkg" \
-    --output "$work/receipts/readback.json"
+    "${readback_args[@]}" --output "$work/receipts/readback.json"
   if [[ -n "$gate" ]]; then
     log "gate seal and collection add"
     python3 -m v2.release.gate seal --work "$work"

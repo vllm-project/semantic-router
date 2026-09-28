@@ -50,23 +50,20 @@ def selected_rows(
 
 
 def acos_review_f1(rows: list[dict], results: dict) -> dict:
-    """Review-level set F1; failed/incomplete reviews contribute zero."""
+    """Mean review-level set F1 over complete reviews, times answered/requests."""
     groups = collections.defaultdict(list)
     for row in rows:
         groups[row["_evaluation"]["group_id"]].append(row)
     if not groups:
         raise ValueError("ACOS rows are missing")
     values = []
-    complete = 0
     for group in groups.values():
         ok = all(
             results.get(r["_evaluation"]["run_id"], {}).get("status") == "ok"
             for r in group
         )
         if not ok:
-            values.append(0.0)
             continue
-        complete += 1
         gold, pred = set(), set()
         for row in group:
             answers = results[row["_evaluation"]["run_id"]]["response"]["answers"]
@@ -83,16 +80,21 @@ def acos_review_f1(rows: list[dict], results: dict) -> dict:
         values.append(
             2 * len(gold & pred) / (len(gold) + len(pred)) if gold or pred else 1.0
         )
-    raw = sum(values) / len(values)
+    answered = sum(
+        results.get(r["_evaluation"]["run_id"], {}).get("status") == "ok" for r in rows
+    )
+    coverage = answered / len(rows)
+    # Upstream parity requires rounding the native score before the coverage product.
+    raw = round(sum(values) / len(values), 4) * coverage if values else 0.0
     chance = spec()["chance"]["38"]
     return {
         "raw": raw,
         "skill": chance_skill(raw, chance),
-        "coverage": complete / len(groups),
+        "coverage": coverage,
         "random": chance,
         "rule": "per-review F1",
         "review_count": len(groups),
-        "complete_reviews": complete,
+        "complete_reviews": len(values),
     }
 
 
@@ -162,7 +164,13 @@ def score_rows(
         complete=completed == len(rows) and counts["error"] == 0,
         counts=dict(counts),
         selection=(selection.__dict__ | {"keep_run_ids": None}) if selection else None,
-        claim="independent provisional 0.2.1 reproduction; Home row-copy identity is unverified",
+        claim=(
+            "independent provisional 0.2.1 reproduction; selected ToolRet, BRIGHT "
+            "and Home run IDs match the upstream kit 0.2.1 lists"
+            if selection and selection.status == "upstream_021_row_ids_matched"
+            else "independent provisional 0.2.1 reproduction; row identity is not "
+            "the upstream 0.2.1 selection"
+        ),
     )
     # A row-selection keep list alone does not attest upstream equivalence.
     result["official_equivalent"] = False

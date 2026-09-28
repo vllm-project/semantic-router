@@ -1,0 +1,72 @@
+{
+  "device": "cuda:0",
+  "load_seconds": 14.670316566014662,
+  "mode": "parity",
+  "package_manifest_sha256": "71c44582c21f17e49eca9657f0d284a8be845c4a6467b0f343f66bea6ff78601",
+  "panels": {
+    "css15": {
+      "category_changes": 0,
+      "ids_sha256": "6d154148761f3bd96b483a06a7525fbe097909fe1dbc48fc4e67e0e7f7d1dd67",
+      "input_mismatch": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "predictions_sha256": "7b1b07f24572785294cc69bec39d934a28e9da865a122440d71e38241ff90c5f",
+      "prompts": 200,
+      "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+      "seconds": 32.56536153098568,
+      "slots": 200
+    },
+    "mlx-diag": {
+      "category_changes": 0,
+      "ids_sha256": "2d5ce74a12c8672527a444692eeb9e4fc3ef1f7a1045c49ff4f66983dcc5dc19",
+      "input_mismatch": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "predictions_sha256": "3cf5b5e00d53e07f93028a13f3060aef6f0bb2b3d871f825c636f8a34ab92163",
+      "prompts": 150,
+      "prompts_sha256": "25fde28f4b227a9cc8588da79a597ce816ba4a8f979139f99f69aeb595580a5f",
+      "seconds": 18.457250614184886,
+      "slots": 150
+    },
+    "public231": {
+      "category_changes": 0,
+      "ids_sha256": "2e46038b89dae0c13a1cd3896542177e865422fac9894b95604153138e6abe3d",
+      "input_mismatch": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "predictions_sha256": "7c1e9c6139ced2a21b4c0c7c44b0a55770d754a39669e2da8a5fae0fbbe12884",
+      "prompts": 100,
+      "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+      "seconds": 9.690601617097855,
+      "slots": 100
+    },
+    "typed-final": {
+      "category_changes": 0,
+      "ids_sha256": "e0dea4107c24fde09533de26006a977ef78e3589bc0d02b11e012cec9ab3034e",
+      "input_mismatch": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "predictions_sha256": "16f01c21e1cc7e777fdae96eb6b518be9f85be4d392a749aed8c0fe11912a2ef",
+      "prompts": 150,
+      "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+      "seconds": 53.41004740586504,
+      "slots": 150
+    }
+  },
+  "passed": true,
+  "runtime": {
+    "hip": "7.2.53211",
+    "kernels": null,
+    "numpy": "2.3.5",
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "sites": [],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1",
+  "tolerance": 0.0
+}

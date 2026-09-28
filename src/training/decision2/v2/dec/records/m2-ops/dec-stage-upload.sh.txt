@@ -1,0 +1,12 @@
+set -eu
+F=/data/dev2/runs/dec/m2/arms/full; U=/data/dev2/runs/dec/m2/hf-staging/batch1; mkdir -p $U/m2
+for spec in "m2-B8F-s1 B8F-s1 checkpoint-0002030" "m2-E8F-s1 E8F-s1 checkpoint-0001776" "m2-X4K-s1 X4K-s1 checkpoint-0000315" "m2-X4K-s2 X4K-s2 checkpoint-0000266"; do
+  set -- $spec; arm=$1 short=$2 ck=$3
+  mkdir -p $U/m2/$short/cal
+  [ -d $U/m2/$short/$ck ] || cp -al $F/$arm/$ck $U/m2/$short/$ck
+  cp $F/$arm-post/cal/calibration.json $U/m2/$short/cal/calibration.json
+done
+cd $U && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > ../batch1.sha256
+wc -l ../batch1.sha256
+/data/dev2/tools/hf-cli/bin/hf upload llm-semantic-router/dev2-dec-staging $U . --repo-type model --commit-message "M2 decoder finalists batch 1 (B8F-s1, E8F-s1, X4K-s1, X4K-s2): checkpoints + CAL calibration" > ../batch1.upload.log 2>&1
+echo "upload exit $?" >> ../batch1.upload.log

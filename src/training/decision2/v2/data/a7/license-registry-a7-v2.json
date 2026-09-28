@@ -1,0 +1,86 @@
+{
+ "a7:afrisenti_sw_train": {
+  "attribution": "Muhammad et al., AfriSenti: A Twitter Sentiment Analysis Benchmark for African Languages (EMNLP 2023) and SemEval-2023 Task 12; afrisenti-semeval/afrisent-semeval-2023@5aec3cfcf87b59f885e98641f72e52182776429d SubtaskA sw train",
+  "evidence": "https://github.com/afrisenti-semeval/afrisent-semeval-2023/blob/5aec3cfcf87b59f885e98641f72e52182776429d/README.md, section License (CC BY 4.0)",
+  "license": "CC-BY-4.0",
+  "redistribution": "permitted with attribution; tweet text and labels unchanged"
+ },
+ "a7:jglue_jsts_v1.3_train": {
+  "attribution": "Kurihara, Kawahara and Shibata, JGLUE: Japanese General Language Understanding Evaluation (LREC 2022); yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c datasets/jsts-v1.3 train",
+  "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE (CC BY-SA 4.0)",
+  "license": "CC-BY-SA-4.0",
+  "redistribution": "permitted with attribution under the same licence; similarity means unchanged, levels derived as documented"
+ },
+ "a7:klue_sts_v1.1_train": {
+  "attribution": "Park et al., KLUE: Korean Language Understanding Evaluation (NeurIPS 2021 Datasets and Benchmarks); KLUE-benchmark/KLUE@3efd98708a40ff49251fddde35453f8fbb11f536 klue-sts-v1.1 train",
+  "evidence": "https://github.com/KLUE-benchmark/KLUE/blob/3efd98708a40ff49251fddde35453f8fbb11f536/License.md (CC BY-SA 4.0)",
+  "license": "CC-BY-SA-4.0",
+  "redistribution": "permitted with attribution under the same licence; similarity means unchanged, levels derived as documented"
+ },
+ "a7:massive_1.1_train": {
+  "attribution": "FitzGerald et al., MASSIVE: A 1M-Example Multilingual Natural Language Understanding Dataset (ACL 2023); amazon-massive-dataset-1.1 archive (SHA-256 4cba5faa…c0491577) train partition",
+  "evidence": "MASSIVE 1.1 release licence: CC BY 4.0 (LICENSE in the archive and the dataset card)",
+  "license": "CC-BY-4.0",
+  "redistribution": "permitted with attribution; utterances and intent labels unchanged; ablation-only in A7 (same source as the mlx-diag MASSIVE section)"
+ },
+ "a7:oasst1_train": {
+  "attribution": "Köpf et al., OpenAssistant Conversations — Democratizing Large Language Model Alignment (NeurIPS 2023 Datasets and Benchmarks); OpenAssistant/oasst1@fdf72ae0827c1cda404aff25b6603abec9e3399b train split",
+  "evidence": "https://huggingface.co/datasets/OpenAssistant/oasst1/blob/fdf72ae0827c1cda404aff25b6603abec9e3399b/LICENSE (Apache License 2.0, SHA-256 c71d239d…35d0ab4 as pinned on node A)",
+  "license": "Apache-2.0",
+  "redistribution": "permitted with the licence notice; messages and human rating means unchanged, levels derived as documented"
+ },
+ "a7:sentimix_hinglish_train": {
+  "attribution": "Patwa et al., SemEval-2020 Task 9: Overview of Sentiment Analysis of Code-Mixed Tweets (SemEval 2020); Zenodo 10.5281/zenodo.3974927 Semeval_2020_task9_data.zip, Hinglish train split",
+  "evidence": "https://zenodo.org/records/3974927 (record licence cc-by-4.0)",
+  "license": "CC-BY-4.0",
+  "redistribution": "permitted with attribution; tweets rebuilt by joining the released tokens with single spaces; labels unchanged"
+ },
+ "dec10:banking77_train": {
+  "attribution": "Casanueva et al., Efficient Intent Detection with Dual Sentence Encoders (2020); PolyAI-LDN/task-specific-datasets@57ec275d8078af65b7731c2a98be812d844a6d6b banking_data train",
+  "evidence": "https://github.com/PolyAI-LDN/task-specific-datasets/tree/57ec275d8078af65b7731c2a98be812d844a6d6b/banking_data; Decision 1.0 Sol/Nox/Lux ATTRIBUTIONS.md",
+  "license": "CC-BY-4.0",
+  "redistribution": "permitted with attribution; original intent labels converted to runtime-defined choices"
+ },
+ "dec10:clinc150_train": {
+  "attribution": "Larson et al., An Evaluation Dataset for Intent Classification and Out-of-Scope Prediction (EMNLP-IJCNLP 2019); clinc/oos-eval@828f8093932c8fe6ca7936c3d2e52903b1c523de train",
+  "evidence": "https://github.com/clinc/oos-eval/tree/828f8093932c8fe6ca7936c3d2e52903b1c523de; Decision 1.0 Sol/Nox/Lux ATTRIBUTIONS.md",
+  "license": "CC-BY-3.0",
+  "redistribution": "permitted with attribution; three reserved domains were withheld by the 1.0 builders"
+ },
+ "dec10:cosmos_qa_train": {
+  "attribution": "Huang, Le Bras, Bhagavatula and Choi, Cosmos QA (EMNLP-IJCNLP 2019); wilburOne/cosmosqa@b6eb99cca4e2a51dd28a9a6f562534872d851639 train",
+  "evidence": "https://huggingface.co/datasets/allenai/cosmos_qa/blob/28d9d5e2aae025e73e11177891a88dba51190013/README.md records the author-confirmed CC BY 4.0 licence",
+  "license": "CC-BY-4.0",
+  "redistribution": "permitted with attribution"
+ },
+ "dec10:generated_stage1_3": {
+  "attribution": "Decision 1.0 decoder project generators, stages 1-3 (objective rules, reference binding, scoped sources, transitions, logic/evidence, binding/membership, arithmetic)",
+  "evidence": "node B training-v1/data build_training.py, build_stage2.py, build_stage3.py, stage3-src/*.py; labels recomputed from rendered inputs by the 1.0 builders",
+  "license": "project-generated (no third-party text)",
+  "redistribution": "unrestricted within the project"
+ },
+ "dec10:generated_stage4_v2": {
+  "attribution": "Decision 1.0 decoder project generator stage4-general-composition-v2",
+  "evidence": "node B training-v1/data/stage4-prepared/V2_DATA_AUDIT.md: all 66,400 new labels recomputed by a separate evaluator; candidate-pool-first numeric construction",
+  "license": "project-generated (no third-party text)",
+  "redistribution": "unrestricted within the project"
+ },
+ "dec10:multinli_nonfiction_train": {
+  "attribution": "Williams, Nangia and Bowman, A Broad-Coverage Challenge Corpus for Sentence Understanding through Inference (NAACL 2018); nyu-mll/multi_nli@da70db2af9d09693783c3320c4249840212ee221 train, genres government, slate, telephone, travel",
+  "evidence": "https://huggingface.co/datasets/nyu-mll/multi_nli/blob/da70db2af9d09693783c3320c4249840212ee221/README.md (majority of the corpus under the Open American National Corpus permissive terms; fiction not used)",
+  "license": "OANC permissive terms (non-fiction genres)",
+  "redistribution": "permitted with attribution per the pinned dataset card"
+ },
+ "dec10:snli_train": {
+  "attribution": "Bowman, Angeli, Potts and Manning, A Large Annotated Corpus for Learning Natural Language Inference (EMNLP 2015); SNLI 1.0 train",
+  "evidence": "https://nlp.stanford.edu/projects/snli/ (CC BY-SA 4.0)",
+  "license": "CC-BY-SA-4.0",
+  "redistribution": "permitted with attribution; share-alike"
+ },
+ "dec10:squad2_train": {
+  "attribution": "Rajpurkar, Jia and Liang, Know What You Don't Know: Unanswerable Questions for SQuAD (ACL 2018); SQuAD 2.0 train, answerability projection",
+  "evidence": "https://rajpurkar.github.io/SQuAD-explorer/ (CC BY-SA 4.0; Wikipedia passages)",
+  "license": "CC-BY-SA-4.0",
+  "redistribution": "permitted with attribution; share-alike"
+ }
+}

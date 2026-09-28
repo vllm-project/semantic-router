@@ -173,21 +173,25 @@ SAF_ITEMS = {
     "de": (
         (
             "Frage 1: Was müssen Sie fotografieren, bevor Sie den Laden betreten?",
-            "Es muss ein Foto des Eingangsbereichs mit dem Ladenschild angefertigt werden (0.5 P). "
-            "Das Foto muss bei Tageslicht aufgenommen werden (0.5 P).",
+            "Es muss ein Foto des Eingangsbereichs mit dem Ladenschild angefertigt werden (0.5 P). "  # codespell:ignore foto
+            "Das Foto muss bei Tageslicht aufgenommen werden (0.5 P).",  # codespell:ignore foto
             (
                 (
                     "Ich fotografiere den Eingang mit dem Schild, solange es hell ist.",
                     "Correct",
                     1.0,
                 ),
-                ("Ich mache ein Foto vom Eingang.", "Partially correct", 0.5),
+                (
+                    "Ich mache ein Foto vom Eingang.",  # codespell:ignore foto
+                    "Partially correct",
+                    0.5,
+                ),  # codespell:ignore foto
                 ("Ich fotografiere die Kasse.", "Incorrect", 0.0),
             ),
         ),
         (
             "Frage 2: Was tun Sie, wenn das Geschäft geschlossen ist?",
-            "Ein Foto der geschlossenen Tür mit den Öffnungszeiten anfertigen (0.5 P) und den "
+            "Ein Foto der geschlossenen Tür mit den Öffnungszeiten anfertigen (0.5 P) und den "  # codespell:ignore foto
             "Auftrag im Fragebogen als nicht durchführbar markieren (0.5 P).",
             (
                 (
@@ -195,7 +199,11 @@ SAF_ITEMS = {
                     "Correct",
                     1.0,
                 ),
-                ("Ich mache ein Foto von der Tür.", "Partially correct", 0.5),
+                (
+                    "Ich mache ein Foto von der Tür.",  # codespell:ignore foto
+                    "Partially correct",
+                    0.5,
+                ),  # codespell:ignore foto
                 ("Ich warte, bis jemand aufmacht.", "Incorrect", 0.0),
             ),
         ),

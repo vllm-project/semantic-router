@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import unittest
 
-from external_index021.protocol import aggregate, replay_published, spec
+from external_index021.protocol import aggregate, area_weights, replay_published, spec
 
 
 class ProtocolTests(unittest.TestCase):
     def test_published_all_68_rows_are_display_compatible(self) -> None:
         report = replay_published()
         self.assertEqual(report["rows"], 68)
-        self.assertLess(report["max_display_delta"], 0.01)
+        self.assertLess(report["max_display_delta"], 0.0055)
         names = {m["name"].lower() for m in report["models"]}
         self.assertTrue(any(name == "jev" for name in names))
         for family in ("kai", "lex", "eos", "sol", "nox", "lux"):
@@ -29,6 +29,29 @@ class ProtocolTests(unittest.TestCase):
             s["suite"]["base_scoreable"] + s["suite"]["added_requests"], 150317
         )
         self.assertEqual(sum(s["expected_drops"].values()), 717)
+
+    def test_area_weights_follow_published_sqrt_rule(self) -> None:
+        weights = area_weights()
+        # Must equal the Space's six-decimal suite.area_weights.
+        self.assertEqual(
+            {key: round(value, 6) for key, value in weights.items()},
+            {
+                "knowledge": 0.258494,
+                "language": 0.258494,
+                "retrieval": 0.200229,
+                "tools": 0.182783,
+                "arts": 0.1,
+            },
+        )
+        self.assertAlmostEqual(sum(weights.values()), 1.0, places=12)
+        result = aggregate(
+            {
+                n: {"raw": 1.0, "skill": 1.0, "coverage": 1.0}
+                for area in spec()["areas"]
+                for n in area["benchmarks"]
+            }
+        )
+        self.assertAlmostEqual(result["scores"]["balanced_skill"], 100.0, places=9)
 
     def test_gold_weight_uses_one_point_two_within_area(self) -> None:
         s = spec()

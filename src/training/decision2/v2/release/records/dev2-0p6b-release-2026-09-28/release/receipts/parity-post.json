@@ -1,0 +1,72 @@
+{
+  "device": "cuda:0",
+  "load_seconds": 7.647087328834459,
+  "mode": "parity",
+  "package_manifest_sha256": "ce81f9b809d21b6cde22d8d4ce7835154926fd5aacb9b0411575d199fcefdb66",
+  "panels": {
+    "css15": {
+      "category_changes": 0,
+      "ids_sha256": "1fe4e47bc733558252d84f27fbfcfdfac170242f67d34147bb90a08eb13d1e12",
+      "input_mismatch": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "predictions_sha256": "7b1b07f24572785294cc69bec39d934a28e9da865a122440d71e38241ff90c5f",
+      "prompts": 6547,
+      "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+      "seconds": 132.5623523411341,
+      "slots": 6547
+    },
+    "mlx-diag": {
+      "category_changes": 0,
+      "ids_sha256": "8db2c13b74553334a8331717e63ac859befa4f08e6addf49cdc444a0c21deb32",
+      "input_mismatch": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "predictions_sha256": "3cf5b5e00d53e07f93028a13f3060aef6f0bb2b3d871f825c636f8a34ab92163",
+      "prompts": 2275,
+      "prompts_sha256": "25fde28f4b227a9cc8588da79a597ce816ba4a8f979139f99f69aeb595580a5f",
+      "seconds": 38.94363222387619,
+      "slots": 2275
+    },
+    "public231": {
+      "category_changes": 0,
+      "ids_sha256": "3cac6d401ca18059628f0f48c8d7f974cbbea020f39f28109eaf84bd1a0f22e1",
+      "input_mismatch": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "predictions_sha256": "7c1e9c6139ced2a21b4c0c7c44b0a55770d754a39669e2da8a5fae0fbbe12884",
+      "prompts": 231,
+      "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+      "seconds": 4.775111309019849,
+      "slots": 231
+    },
+    "typed-final": {
+      "category_changes": 0,
+      "ids_sha256": "e0ca7afa2ceed4b1096b3cdc56a0a9acb2fce8ca57940a9fd287331de74bada9",
+      "input_mismatch": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "predictions_sha256": "16f01c21e1cc7e777fdae96eb6b518be9f85be4d392a749aed8c0fe11912a2ef",
+      "prompts": 1600,
+      "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+      "seconds": 32.847877647029236,
+      "slots": 2000
+    }
+  },
+  "passed": true,
+  "runtime": {
+    "hip": "7.2.53211",
+    "kernels": null,
+    "numpy": "2.3.5",
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "sites": [],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1",
+  "tolerance": 0.0001
+}

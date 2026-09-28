@@ -1,0 +1,53 @@
+{
+  "template": "S2",
+  "unit": "qwen3-0.6b-base-native-segmented",
+  "tokenizer": "/work/models/Qwen3-0.6B-Base",
+  "seed": "decision2-06b-m4-a7",
+  "max_row_tokens": 8192,
+  "hf_dataset": "llm-semantic-router/decision-2.0-training-data",
+  "base": [
+    {
+      "arm": "A0s",
+      "hf_revision": "5c0255ed6a05d08b2fcb863e8045289eedd996cd",
+      "path": "/runs/m3/data/v2-5c0255ed/A0s.train.jsonl",
+      "sha256": "df90cb7f20236fa41ada83d020fb47cbee8d8367cf74d9a67e240ff920994c68",
+      "rows": 7299,
+      "exclude_families": [
+        "natural_cosmos_qa",
+        "natural_squad2_answerability"
+      ],
+      "renumber_option_keys": true
+    }
+  ],
+  "components": [
+    {
+      "name": "A6",
+      "policy": "token_budget",
+      "tokens": 2033987,
+      "seed": "decision2-06b-m3-a6-rho",
+      "note": "identical budget, seed and arms as the Milestone 3 (a2) slice",
+      "arms": [
+        {
+          "arm": "A6g",
+          "hf_revision": "5c0255ed6a05d08b2fcb863e8045289eedd996cd",
+          "path": "/runs/m3/data/v2-5c0255ed/A6g.train.jsonl",
+          "sha256": "ac94b7f4f1e7d8b73ddbffebe15035aa3b47cca9c825f622d0ec8d04bd7fc02f",
+          "rows": 4905
+        },
+        {
+          "arm": "A6h",
+          "hf_revision": "5c0255ed6a05d08b2fcb863e8045289eedd996cd",
+          "path": "/runs/m3/data/v2-5c0255ed/A6h.train.jsonl",
+          "sha256": "23440f0c5561077780973259777fca4aa80400f5b30e9df6e1376f6d9aa31927",
+          "rows": 5622
+        }
+      ]
+    },
+    {
+      "name": "A0s-resample",
+      "policy": "resample_base",
+      "tokens": 14076911,
+      "note": "matched-token control: A0s-r copies with the treatment's exact A7 token count"
+    }
+  ]
+}

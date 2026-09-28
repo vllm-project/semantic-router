@@ -3,8 +3,14 @@
 #
 # Usage: run_nodeB.sh <stage> [workers]
 #   build     pre-admission sub-arms, views and build manifest (host python)
+#   build-enc pre-admission encoder-family sub-arms (a7-enc10) in the runtime image,
+#             after running their unit tests there (pyarrow)
+#   recover   pre-admission A7r (rule 7e) from the spec sources, deduplicated and
+#             isolated against the frozen files in A7_FROZEN_FINAL (host python)
 #   lengths   per-row token lengths in the pinned runtime image (no GPU devices)
 #   screens   overlap vs PI-v2 and shortcut receipts per sub-arm (host python)
+#   rescreen  overlap of the admitted files vs A7_RESCREEN_PI into A7_RESCREEN_DIR
+#   requarantine  new version A7_VERSION = A7_FROM_RUN minus rescreen/embedding hits
 #   admit     apply overlap/budget/shortcut rules, resolve views
 #   post      post-admission shortcut and TRAIN<->AHO self-scan diagnostics
 #   freeze    content hash + manifest (+tokens) per final file (runtime image)
@@ -25,10 +31,11 @@ A7="$S/v2/data/a7"
 SPEC="${A7_SPEC:-$A7/specs/a7-dec10-v2.nodeB.json}"
 version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$SPEC")"
 W="${A7_RUN_DIR:-/data/dev2/private/a7/runs/$version/${commit:0:12}}"
-PI=/data/dev2/private/data/pi-v2/manifest.json
+PI="${A7_PI:-/data/dev2/private/data/pi-v2/manifest.json}"
 IMAGE="${A7_IMAGE:-decision20-lux-runtime:latest}"
-SUBS=(A7h A7m A7g A7i A7p A7o)
-GENERATED=(A7g A7p A7o)
+LICENSES="${A7_LICENSE_REGISTRY:-$A7/license-registry-a7-v1.json}"
+OUT="${A7_ASSEMBLE_DIR:-$W}"
+read -r -a SUBS <<< "${A7_SUBS:-A7h A7m A7g A7i A7p A7o}"
 export PYTHONPATH="$S"
 cd "$S"
 umask 077
@@ -46,6 +53,20 @@ case "$stage" in
     log "build commit=$commit"
     python3 -m v2.data.a7.build_a7 --spec "$SPEC" \
       --out-dir "$W/build" --commit "$commit" | tee -a "$W/logs/build.out"
+    ;;
+  build-enc)
+    log "build-enc commit=$commit"
+    in_image -m unittest v2.data.a7.tests.test_build_enc 2>&1 | tail -3 | tee -a "$W/logs/build.out"
+    args=()
+    while read -r file; do args+=(--data-track-file "$file"); done < <(
+      python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1])).get("data_track_files", [])))' "$SPEC")
+    in_image -m v2.data.a7.build_enc --spec "$SPEC" "${args[@]}" --out-dir "$W/build" \
+      --commit "$commit" | tee -a "$W/logs/build.out"
+    ;;
+  recover)
+    log "recover commit=$commit frozen=${A7_FROZEN_FINAL:?A7_FROZEN_FINAL}"
+    python3 -m v2.data.a7.recover --spec "$SPEC" --frozen-final "$A7_FROZEN_FINAL" \
+      --out-dir "$W/build" --commit "$commit" | tee -a "$W/logs/recover.out"
     ;;
   lengths)
     log "lengths image=$(docker image inspect --format '{{.Id}}' "$IMAGE")"
@@ -76,6 +97,44 @@ case "$stage" in
       log "$sub shortcut rc=$? wall=$(( $(date +%s) - start ))"
       set -e
     done
+    ;;
+  rescreen)
+    # Lexical overlap of the admitted files against another protected manifest
+    # (A7_RESCREEN_PI, e.g. PI-v3 without TRAIN roles) into $W/$A7_RESCREEN_DIR.
+    pi="${A7_RESCREEN_PI:?A7_RESCREEN_PI}"
+    dir="$W/${A7_RESCREEN_DIR:?A7_RESCREEN_DIR}"
+    mkdir -p "$dir"
+    log "rescreen manifest=$(sha256sum "$pi" | cut -c1-64) dir=$dir"
+    for sub in "${SUBS[@]}"; do
+      files=()
+      for part in train aho; do
+        [[ -f "$W/final/$sub.$part.jsonl" ]] && files+=(--candidates "$W/final/$sub.$part.jsonl")
+      done
+      [[ ${#files[@]} -gt 0 ]] || continue
+      set +e
+      start=$(date +%s)
+      python3 -m v2.data.overlap "${files[@]}" --protected-inventory "$pi" \
+        --private-receipt "$dir/$sub.overlap.private.json" \
+        --public-receipt "$dir/$sub.overlap.public.json" --workers "$workers" \
+        > "$dir/$sub.overlap.stdout" 2> "$dir/$sub.overlap.stderr"
+      log "$sub rescreen overlap rc=$? wall=$(( $(date +%s) - start ))"
+      set -e
+    done
+    ;;
+  requarantine)
+    # New version (A7_VERSION) in $W from the admitted run A7_FROM_RUN minus the groups
+    # flagged by its A7_RESCREEN_DIR lexical and A7_EMBED_DIR embedding receipts.
+    from="${A7_FROM_RUN:?A7_FROM_RUN}"
+    args=()
+    for file in "$from/${A7_RESCREEN_DIR:?A7_RESCREEN_DIR}"/*.overlap.private.json; do
+      args+=(--overlap-receipt "$file")
+    done
+    args+=(--embed-receipt "$from/${A7_EMBED_DIR:?A7_EMBED_DIR}/embed.private.json")
+    python3 -m v2.data.a7.requarantine --from-run "$from" "${args[@]}" \
+      --version "${A7_VERSION:?A7_VERSION}" --out-run "$W" | tee -a "$W/logs/requarantine.out"
+    mkdir -p "$W/rescreen" "$W/embed"
+    cp "$from/$A7_RESCREEN_DIR"/*.overlap.public.json "$W/rescreen/"
+    cp "$from/$A7_EMBED_DIR/embed.public.json" "$from/$A7_EMBED_DIR/run.json" "$W/embed/"
     ;;
   admit)
     args=()
@@ -110,7 +169,7 @@ case "$stage" in
       role="${name##*.}"
       [[ "$role" == "train" || "$role" == "aho" ]] || continue
       in_image -m v2.data.freeze freeze --rows "$file" --arm-id "${name/./-}" --role "$role" \
-        --license-registry "$A7/license-registry-a7-v1.json" --tokenizers "$A7/specs/tokenizers.nodeB.json" \
+        --license-registry "$LICENSES" --tokenizers "$A7/specs/tokenizers.nodeB.json" \
         --out-manifest "$W/manifests/$name.freeze.json" | tee -a "$W/logs/freeze.out"
     done
     ;;
@@ -127,12 +186,25 @@ case "$stage" in
       name="$(basename "$file" .jsonl)"
       parts+=(--partition "${name##*.}/${name%%.*}=$file")
     done
+    for extra in ${A7_ISOLATION_WITH:-}; do
+      for file in "$extra"/*.jsonl; do
+        name="$(basename "$file" .jsonl)"
+        parts+=(--partition "${name##*.}/frozen-${name%%.*}=$file")
+      done
+    done
     python3 -m v2.data.freeze isolation "${parts[@]}" --report "$W/isolation.json" | tee -a "$W/logs/isolation.out"
     ;;
   assemble)
+    # A7_EXTRA_LICENSES: more licence registries; A7_EXTRA_RUNS: "NAME=DIR ..." runs whose
+    # sub-arms join this upload (records under versions/NAME/).
+    lic=(--license-registry "$LICENSES")
+    for extra in ${A7_EXTRA_LICENSES:-}; do lic+=(--license-registry "$extra"); done
+    ext=()
+    for item in ${A7_EXTRA_RUNS:-}; do ext+=(--extra-run "$item"); done
+    mkdir -p "$OUT"
     python3 -m v2.data.a7.hf_spec --run-dir "$W" --readme "$A7/records/hf-dataset-a7-readme.md" \
-      --license-registry "$A7/license-registry-a7-v1.json" --out "$W/hf-spec.json"
-    python3 -m v2.data.assemble_hf_upload --spec "$W/hf-spec.json" --out-dir "$W/hf-upload"
+      "${lic[@]}" "${ext[@]}" --out "$OUT/hf-spec.json"
+    python3 -m v2.data.assemble_hf_upload --spec "$OUT/hf-spec.json" --out-dir "$OUT/hf-upload"
     ;;
   upload)
     export HF_HUB_CACHE=/data/dev2/hf-cache
@@ -143,13 +215,13 @@ case "$stage" in
     read -r before parent < <(private)
     [[ "$before" == "True" ]] || { echo "dataset is not private; refusing to upload" >&2; exit 1; }
     log "upload parent=$parent"
-    hf upload "$repo" "$W/hf-upload/a7" v2/a7 --repo-type dataset \
-      --commit-message "A7 $version: own Decision 1.0 corpora sub-arms (${commit:0:12})" | tee -a "$W/logs/upload.out"
+    hf upload "$repo" "$OUT/hf-upload/a7" v2/a7 --repo-type dataset \
+      --commit-message "A7 ${A7_VERSION:-$version}: own Decision 1.0 corpora sub-arms (${commit:0:12})" | tee -a "$W/logs/upload.out"
     read -r after revision < <(private)
     [[ "$after" == "True" ]] || { echo "dataset private flag changed" >&2; exit 1; }
-    mkdir -p "$W/readback"
-    hf download "$repo" v2/a7/registry.json --repo-type dataset --revision "$revision" --local-dir "$W/readback" >/dev/null
-    cmp "$W/readback/v2/a7/registry.json" "$W/hf-upload/a7/registry.json"
+    mkdir -p "$OUT/readback"
+    hf download "$repo" v2/a7/registry.json --repo-type dataset --revision "$revision" --local-dir "$OUT/readback" >/dev/null
+    cmp "$OUT/readback/v2/a7/registry.json" "$OUT/hf-upload/a7/registry.json"
     log "upload revision=$revision private=$after registry readback identical"
     ;;
   inventory)

@@ -1,0 +1,27 @@
+{
+  "name": "m2-half-a7-v1-v1",
+  "seed": "dec-m2-half-v1",
+  "exclude_families": ["natural_cosmos_qa", "natural_squad2_answerability"],
+  "components": [
+    {"name": "A0s", "files": ["v1:v2/arms/A0s/train.jsonl"], "rekey": true},
+    {"name": "A1", "files": ["v1:v2/arms/A1/train.jsonl"], "budget_fraction": 0.5},
+    {"name": "A2", "files": ["v1:v2/arms/A2/train.jsonl"], "budget_fraction": 0.5},
+    {"name": "A3", "files": ["v1:v2/arms/A3/train.jsonl"], "budget_fraction": 0.5},
+    {"name": "A4v2h", "files": ["v1:v2/arms/A4v2h/train.jsonl"], "budget_fraction": 0.5},
+    {"name": "A5", "files": ["v1:v2/arms/A5/train.jsonl"], "budget_fraction": 0.5},
+    {"name": "A6g", "files": ["v1:v2/arms/A6g/train.jsonl"], "budget_fraction": 0.5},
+    {"name": "A6h", "files": ["v1:v2/arms/A6h/train.jsonl"], "budget_fraction": 0.5},
+    {
+      "name": "A7",
+      "files": [
+        "a7:v2/a7/arms/A7g/train.jsonl",
+        "a7:v2/a7/arms/A7p/train.jsonl",
+        "a7:v2/a7/arms/A7m/train.jsonl",
+        "a7:v2/a7/arms/A7o/train.jsonl",
+        "a7:v2/a7/arms/A7i/train.jsonl",
+        "a7:v2/a7/arms/A7h/train.jsonl"
+      ],
+      "budget_fraction": 0.5
+    }
+  ]
+}

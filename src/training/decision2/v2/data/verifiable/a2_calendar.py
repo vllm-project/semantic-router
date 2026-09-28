@@ -832,7 +832,8 @@ def _recompute(text: str, lang: str) -> date | None:
     if lang == "en":
         cal = re.search(r"no later than (\d+) calendar days after", text)
         bus = re.search(
-            r"no later than the (\d+)(?:st|nd|rd|th) business day after", text
+            r"no later than the (\d+)(?:st|nd|rd|th) business day after",  # codespell:ignore nd
+            text,  # codespell:ignore nd
         )
         week = re.search(r"no later than (\d+) weeks? after", text)
         eom = "no later than the last day of the month following" in text

@@ -1,0 +1,26 @@
+{
+  "by_type_slots": {
+    "choice": 6547
+  },
+  "calibrated_sha256": "2faa03848b0c68792805f34442456546ef9a38a45b2cac0b7110115e675a93d6",
+  "calibration_sha256": "e1f7c909f59d9e98334cf22e6623cb3da398b4456fb02df78cf81373a3fb94d9",
+  "category_changes": 0,
+  "input_mismatch": 0,
+  "missing": 0,
+  "offline_category_changes": 0,
+  "offline_max_abs_drift": 2.220446049250313e-16,
+  "panel": "css15",
+  "passed": true,
+  "prompts": 6547,
+  "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+  "raw_sha256": "7b1b07f24572785294cc69bec39d934a28e9da865a122440d71e38241ff90c5f",
+  "raw_vs_calibrated_max_abs_change": 0.3788848010091641,
+  "schema": "dev2-release-temperature-parity/1",
+  "slots": 6547,
+  "temperature_by_type": {
+    "choice": 0.5916643539840587,
+    "noul": 0.5879912481019818,
+    "score": 0.3452065212634886
+  },
+  "tolerance": 1e-06
+}

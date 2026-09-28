@@ -238,6 +238,78 @@ REGISTRY: dict[str, Adapter] = {
             requires=("source",),
         ),
         Adapter(
+            name="jet-v6.2",
+            module="v2.eval.native_jet",
+            args=(
+                "--model-path",
+                "{model}",
+                "--model-revision",
+                "{revision}",
+                *IO_ARGS,
+                "--device",
+                "{device}",
+            ),
+            model_id="michaljach/jet",
+            batch_policy="bundled Jet().decide, questions scored separately; 16,384-token limit, rejection invalid",
+        ),
+        Adapter(
+            name="nimble-v2",
+            module="v2.eval.native_nimble",
+            args=(
+                "--model-path",
+                "{model}",
+                "--model-revision",
+                "{revision}",
+                *IO_ARGS,
+                "--device",
+                "{device}",
+            ),
+            model_id="bespokelabs/Bespoke-Nimble-9B-v2",
+            batch_policy=(
+                "bundled ParallelScorer.score, one native schema per item, T=2.179;"
+                " 8,192-token limit, rejected item invalid"
+            ),
+        ),
+        Adapter(
+            name="jebadiah-27b",
+            module="v2.eval.native_jebadiah",
+            args=(
+                "--model-path",
+                "{model}",
+                "--model-revision",
+                "{revision}",
+                *IO_ARGS,
+                "--device",
+                "{device}",
+            ),
+            model_id="frontier-infra/jebadiah-27b",
+            batch_policy=(
+                "bundled scripts/ Scorer, fp32 candidate logits, shipped per-type T;"
+                " 2,048-token render budget, cut prompts invalid (never scored)"
+            ),
+        ),
+        Adapter(
+            name="hopper-g",
+            module="v2.eval.native_hopper",
+            args=(
+                "--model-path",
+                "{model}",
+                "--model-revision",
+                "{revision}",
+                "--source-path",
+                "{source}",
+                *IO_ARGS,
+                "--device",
+                "{device}",
+            ),
+            model_id="HopitAI/hopper-g",
+            requires=("source",),
+            batch_policy=(
+                "hopper_decisions.Decider (g-1.2.0), one question per request, packaged"
+                " calibration map, default long-menu shortlist; PyTorch conv fallback on ROCm"
+            ),
+        ),
+        Adapter(
             name="eikos-27b",
             module="inference.eikos",
             args=(

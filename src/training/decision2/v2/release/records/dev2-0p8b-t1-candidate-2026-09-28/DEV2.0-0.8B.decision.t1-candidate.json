@@ -1,0 +1,19 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-0.8B",
+  "repo_id": "llm-semantic-router/DEV2.0-0.8B",
+  "identity": {
+    "model_sha256": "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b"
+  },
+  "calibration": "none (temperature 1); CAL698 temperatures 9f76867d evaluated and rejected under the 23:15 rule",
+  "report_sha256": "1f5cf33d85be3f4c8c8dea29654275e1e9939848a9d8d4d6d381c1152a8f0a11",
+  "paired_sha256": "fa62c29a1920dc8824b13ba5ccf1d8e9c4acaf68d8dad4e137cd1b6c84bc50bc",
+  "prepared_by": "Decision 2.0 release engineering, DEV2.0-0.6B worker (local build of a calibration-only DEV2.0-0.8B candidate; not uploaded)",
+  "decided_by": null,
+  "rationale": "Build binding for a calibration-only T = 1 candidate of the released DEV2.0-0.8B (0b631a85). Its CAL698 temperatures fail the coordinator's 23:15 development rule: typed-DEV Brier 0.269 -> 0.300, ECE-10 0.128 -> 0.180 (CSS pilot Brier 0.834 -> 0.821, ECE-15 0.127 -> 0.109). Same weights (identity 60356482) and answers; the report is the sealed adoption of T = 1 predictions derived exactly from the CAL698 formal run (v3 50.236, paired vs adopted Eos 1.0 +7.69 [+3.65, +13.32], public 231 156, all unchanged). Publishing is the coordinator's decision.",
+  "pending": [
+    "coordinator decision on publishing a calibration-only revision"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "m2-retention-v1",
+  "seed": "dec-m2-retention-v1",
+  "exclude_families": ["natural_cosmos_qa", "natural_squad2_answerability"],
+  "components": [
+    {"name": "A0s", "files": ["v1:v2/arms/A0s/train.jsonl"], "rekey": true},
+    {"name": "A2", "files": ["v1:v2/arms/A2/train.jsonl"]},
+    {
+      "name": "A7-stage4v2",
+      "files": [
+        "a7:v2/a7/arms/A7g/train.jsonl",
+        "a7:v2/a7/arms/A7p/train.jsonl",
+        "a7:v2/a7/arms/A7m/train.jsonl",
+        "a7:v2/a7/arms/A7o/train.jsonl",
+        "a7:v2/a7/arms/A7i/train.jsonl",
+        "a7:v2/a7/arms/A7h/train.jsonl"
+      ],
+      "view": "a7:v2/a7/views/dec10-stage4v2.json",
+      "budget_ratio": {"of": "A0s", "ratio": 2.0}
+    }
+  ]
+}

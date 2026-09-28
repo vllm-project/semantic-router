@@ -1,0 +1,51 @@
+{
+ "content_sha256": "9ca626a8c275be51607529083769a2315d8fbc9c11c60caaa1bd2a76bd5ad6b6",
+ "control": {
+  "argmax_agree": 42,
+  "identical": 42,
+  "max_abs_diff": 0.0,
+  "rows": 42
+ },
+ "previous_sha256": "c6e232d2a27c94df4c7afbac81c22ca930ee758471499246cc77bfd0b3c0d823",
+ "rederive_missing": 0,
+ "rederive_report": {
+  "choice": {
+   "argmax_accuracy_vs_gold": 0.8205,
+   "mean_brier": 0.3836,
+   "mean_gold_probability": 0.7119,
+   "mean_normalized_entropy": 0.2373,
+   "no_answer_reasons": {},
+   "no_native_answer": 0,
+   "rows": 39,
+   "targets": 39
+  },
+  "model_id": "llm-semantic-router/Decision-1.0-Sol-2B",
+  "model_revision": "0665a41108e8f0b33a9515c98311c45947b99399",
+  "noul": {
+   "argmax_accuracy_vs_gold": 0.9231,
+   "mean_brier": 0.0847,
+   "mean_gold_probability": 0.8618,
+   "mean_normalized_entropy": 0.4484,
+   "no_answer_reasons": {},
+   "no_native_answer": 0,
+   "rows": 13,
+   "targets": 13
+  },
+  "score": {
+   "argmax_accuracy_vs_gold": 0.75,
+   "mean_brier": 0.2791,
+   "mean_gold_probability": 0.7025,
+   "mean_normalized_entropy": 0.403,
+   "no_answer_reasons": {},
+   "no_native_answer": 0,
+   "rows": 12,
+   "targets": 12
+  },
+  "teacher": "sol",
+  "teacher_output_sha256": "ea8919f96badbd1a5e3305a8809fd1e02fee8b3ab0223c4860818a38ca8e6051"
+ },
+ "rederived": 22,
+ "rows": 1517,
+ "schema": "decision2-m3a-pk1-r2/1",
+ "tier": "sol"
+}

@@ -1,0 +1,86 @@
+{
+  "name": "JevArena-C1",
+  "version": 3,
+  "sources": [
+    "delichess",
+    "gapa",
+    "hallutruthqa",
+    "implicaturex",
+    "innoduel",
+    "legal_case_law",
+    "narrative_gold",
+    "tutormoments",
+    "wb_reviews"
+  ],
+  "licence_flags": {
+    "hallutruthqa": "NC-ND",
+    "innoduel": "NC",
+    "wb_reviews": "NC-SA"
+  },
+  "tasks": {
+    "delichess/communicative_function": {
+      "cap": 270,
+      "group_cap": 4
+    },
+    "delichess/epistemic_stance": {
+      "cap": 240,
+      "group_cap": 4
+    },
+    "gapa/association": {
+      "cap": 150,
+      "group_cap": 3
+    },
+    "hallutruthqa/find_truth": {
+      "cap": 300,
+      "group_cap": 1
+    },
+    "hallutruthqa/hallucination": {
+      "cap": 300,
+      "group_cap": 1
+    },
+    "implicaturex/likelihood": {
+      "cap": 280,
+      "group_cap": 1
+    },
+    "innoduel/preferred_idea": {
+      "cap": 86,
+      "group_cap": 1
+    },
+    "legal_case_law/argument_function": {
+      "cap": 250,
+      "group_cap": 8
+    },
+    "narrative_gold/event_causality": {
+      "cap": 150,
+      "group_cap": 1
+    },
+    "narrative_gold/setting_concreteness": {
+      "cap": 250,
+      "group_cap": 1
+    },
+    "narrative_gold/setting_temporal_grounding": {
+      "cap": 250,
+      "group_cap": 1
+    },
+    "narrative_gold/span_is_event": {
+      "cap": 240,
+      "group_cap": 1
+    },
+    "tutormoments/is_rapport": {
+      "cap": 200,
+      "group_cap": 2
+    },
+    "tutormoments/moment_type": {
+      "cap": 200,
+      "group_cap": 2
+    },
+    "wb_reviews/star_rating": {
+      "cap": 300,
+      "group_cap": 1
+    }
+  },
+  "excluded_after_review": {
+    "stance_it/stance": "review round 1: 4/16 items quality-flagged by >= 2 reviewers (missing post context, garbled comments); 13 source groups, single annotator",
+    "mcjudgebench/constraint": "review round 2 after one template fix: 6/16 items quality-flagged by >= 2 reviewers (rubric ambiguity for each/all and permission-style requirements, truncated responses); second failure is final"
+  }
+}

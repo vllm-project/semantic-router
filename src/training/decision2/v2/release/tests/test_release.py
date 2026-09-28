@@ -230,10 +230,147 @@ class CardTest(unittest.TestCase):
             compile(code, "card", "exec")
             self.assertIn('Decision2.from_pretrained("dev2-release-staging")', code)
 
+    def test_card_score_table_mlx_calibration_and_disclosures(self):
+        m2 = ROOT / "v2/eval/records/m2-reports"
+        entries = [
+            {
+                "key": "cand",
+                "role": "candidate",
+                "report": str(m2 / "kev08b.json"),
+                "mlx": str(m2 / "mlx-kev08b.json"),
+                "label": "DEV2.0-0.8B",
+            },
+            {
+                "key": "eos1",
+                "role": "own-1.0",
+                "report": str(REPORTS / "eos1.json"),
+                "mlx": str(m2 / "mlx-eos1.json"),
+                "repo_id": "llm-semantic-router/Decision-1.0-Eos-0.8B",
+                "label": "Decision 1.0 Eos",
+            },
+            {
+                "key": "intern",
+                "role": "peer",
+                "report": str(m2 / "intern08b.json"),
+                "mlx": str(m2 / "mlx-intern08b.json"),
+                "repo_id": "internlm/Intern-Decision-0.8B",
+            },
+            {
+                "key": "jpt",
+                "role": "peer",
+                "report": str(REPORTS / "jpt08b.json"),
+                "repo_id": "kirp/jpt-0.8b",
+            },
+        ]
+        text = {
+            "tagline": "A decision model.",
+            "runtime_note": "The runtime targets one GPU.",
+            "confirmation": "Independent confirmation: PLACEHOLDER for the coordinator.",
+            "training": ["Hard labels only; no teacher targets."],
+            "details": ["Seed soup of three runs."],
+            "limitations": [],
+        }
+        values = {
+            **facts(),
+            "model_name": "DEV2.0-0.8B",
+            "repo_id": "llm-semantic-router/DEV2.0-0.8B",
+            "profile": "qwen-full",
+            "parameters": {
+                "loaded": 753_446_208,
+                "components_text": "backbone 752,393,024; decision head 1,053,184",
+            },
+            "banner": "DEV2.0-0.8B-owl-banner.png",
+        }
+        with tempfile.TemporaryDirectory() as scratch:
+            out, banner = Path(scratch) / "pkg", Path(scratch) / "banner.png"
+            banner.write_bytes(b"\x89PNG\r\n\x1a\n")
+            result = card.build_card(
+                entries=entries,
+                roster=ROSTER,
+                paired=None,
+                facts=values,
+                text=text,
+                banner=banner,
+                work=Path(scratch) / "work",
+                output=out,
+            )
+            readme = (out / "README.md").read_text()
+            evaluation = (out / "evaluation/EVALUATION.md").read_text()
+            manifest = json.loads((out / "evaluation/manifest.json").read_text())
+            files = {
+                p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()
+            }
+            files |= {"LICENSE", "NOTICE", "ATTRIBUTIONS.md"}
+            self.assertEqual(card.check_rendered(readme, files), [])
+            self.assertEqual({e["key"] for e in result["excluded"]}, {"jpt"})
+            self.assertIn("Post-key same-panel results.", readme)
+            self.assertIn("it is not the official sealed JevBench rank", readme)
+            self.assertIn("| T | H |", readme)
+            self.assertIn("mlx-diag non-English Choice / Noul", readme)
+            self.assertIn("Typed Brier / ECE", readme)
+            self.assertIn(f"> {text['confirmation']}", readme)
+            self.assertIn(
+                "### Training\n\n- Hard labels only; no teacher targets.", readme
+            )
+            self.assertIn("- Seed soup of three runs.", readme)
+            self.assertIn("The runtime targets one GPU. Tested with", readme)
+            self.assertNotIn("runs on CPU or one", readme)
+            self.assertIn(
+                "| **DEV2.0-0.8B** | 0.75B | **43.22** | 0.479 | 0.390 |", readme
+            )
+            self.assertIn("147/231 (48 / 58 / 41)", readme)
+            self.assertIn(
+                "Human transfer H (median task macro-F1): 0.390 versus 0.461",
+                result["tradeoffs"],
+            )
+            self.assertIn(
+                "mlx-diag non-English Choice (accuracy): 61.5% versus 68.5%",
+                result["tradeoffs"],
+            )
+            self.assertIn(
+                "mlx-diag non-English Noul (accuracy): 58.7% versus 59.2%",
+                result["tradeoffs"],
+            )
+            self.assertFalse(any("Score (accuracy)" in t for t in result["tradeoffs"]))
+            self.assertIn("| 61.5 / 58.7 |", readme)
+            self.assertIn(
+                "753,446,208 parameters its packaged runtime loads", evaluation
+            )
+            self.assertIn("752,917,824 from the backbone safetensors only", evaluation)
+            self.assertIn("XNLI (CC BY-NC 4.0) and is not shown", evaluation)
+            model = next(m for m in manifest["models"] if m["role"] == "candidate")
+            self.assertEqual(model["loaded_parameters"], 753_446_208)
+            self.assertEqual(model["report_loaded_parameters"], 752_917_824)
+            self.assertEqual(
+                model["mlx_diag_sha256"], layout.sha_file(m2 / "mlx-kev08b.json")
+            )
+            other = Path(scratch) / "mlx-other.json"
+            other.write_text(
+                json.dumps(
+                    {
+                        **json.loads((m2 / "mlx-eos1.json").read_text()),
+                        "gold_sha256": "0" * 64,
+                    }
+                )
+            )
+            with self.assertRaises(ValueError):
+                card.select_reports(
+                    [entries[0], {**entries[1], "mlx": str(other)}], ROSTER
+                )
+
     def test_card_needs_own_comparator(self):
         entries = [e for e in card_entries() if e["role"] != "own-1.0"]
         with self.assertRaises(ValueError):
             card.select_reports(entries, ROSTER)
+
+    def test_http_check_anchors_follow_hub_headings(self):
+        from v2.release.tests.hub_card_http_check import anchor
+
+        self.assertEqual(anchor("Download and decide"), "download-and-decide")
+        self.assertEqual(
+            anchor("Tradeoffs versus Decision 1.0 Eos"),
+            "tradeoffs-versus-decision-10-eos",
+        )
 
     def test_lint(self):
         self.assertTrue(card.lint("A Pareto frontier"))
@@ -287,6 +424,81 @@ class ExamplesTest(unittest.TestCase):
         state = examples.over_budget_example(100)["state"]
         self.assertGreater(len(state.split()), 200)
 
+    def test_kernel_gate_uses_the_decoder_runtime_check(self):
+        self.assertTrue(examples.RUNTIME_CHECK.is_file())
+        self.assertIsNone(examples.kernel_runtime(False))
+        original = examples.RUNTIME_CHECK
+        with tempfile.TemporaryDirectory() as scratch:
+            stub = Path(scratch) / "runtime_check.py"
+            try:
+                examples.RUNTIME_CHECK = stub
+                stub.write_text(
+                    "def runtime_identity():\n    return {'kernel_bindings': {'f': 'fla.x'}}\n"
+                    "def violations(identity):\n    return []\n"
+                )
+                result = examples.kernel_runtime(True)
+                self.assertEqual(result["kernel_bindings"], {"f": "fla.x"})
+                self.assertEqual(result["runtime_check_sha256"], layout.sha_file(stub))
+                stub.write_text(
+                    "def runtime_identity():\n    return {}\n"
+                    "def violations(identity):\n    return ['reference path']\n"
+                )
+                with self.assertRaises(RuntimeError):
+                    examples.kernel_runtime(True)
+            finally:
+                examples.RUNTIME_CHECK = original
+
+    def test_card_example_imports_only_named_sites(self):
+        import argparse
+
+        answers = {"route": {"type": "noul", "noul": 0.25}}
+        with tempfile.TemporaryDirectory() as scratch:
+            scratch = Path(scratch)
+            site, package = scratch / "site", scratch / "pkg"
+            site.mkdir()
+            package.mkdir()
+            (site / "sitemod.py").write_text(f"ANSWERS = {answers!r}\n")
+            (package / "README.md").write_text(
+                '```python\nimport json\nfrom sitemod import ANSWERS\nNAME = "pkg"\n'
+                "print(json.dumps(ANSWERS))\n```\n"
+            )
+            reference = scratch / "reference.json"
+            reference.write_text(
+                json.dumps(
+                    {
+                        "outputs": [
+                            {
+                                "id": examples.EXAMPLES[0]["id"],
+                                "response": {"answers": answers},
+                            }
+                        ]
+                    }
+                )
+            )
+            args = argparse.Namespace(
+                package=package, reference=reference, tolerance=0.0, site=[]
+            )
+            self.assertFalse(examples.card(args)["passed"])
+            args.site = [str(site)]
+            result = examples.card(args)
+            self.assertTrue(result["passed"])
+            self.assertEqual(result["interpreter_flags"], ["-s", "-B"])
+
+    def test_launcher_refuses_secret_like_env(self):
+        import subprocess
+
+        script = ROOT / "v2/release/release.sh"
+        common = ["bash", str(script), "--spec", "s", "--src", "x", "--work", "/tmp/w"]
+        refused = subprocess.run(
+            [*common, "--env", "HF_TOKEN=abc"], capture_output=True, text=True
+        )
+        self.assertEqual(refused.returncode, 2)
+        self.assertIn("non-secret", refused.stderr)
+        accepted = subprocess.run(
+            [*common, "--env", "TRITON_CACHE_DIR=/c"], capture_output=True, text=True
+        )
+        self.assertIn("work dir must be under", accepted.stderr)
+
 
 class GateTest(unittest.TestCase):
     def test_decision_must_name_this_candidate(self):
@@ -328,6 +540,74 @@ class GateTest(unittest.TestCase):
             )
             with self.assertRaises(ValueError):
                 gate.check(spec, path)
+
+            draft = {
+                **{k: v for k, v in decision.items() if k != "decided_by"},
+                "status": "draft",
+                "prepared_by": "release engineering",
+            }
+            path.write_text(json.dumps(draft))
+            self.assertEqual(gate.check(spec, path)["status"], "draft")
+            with self.assertRaises(ValueError):
+                gate.check(spec, path, final=True)
+            for bad in (
+                {**draft, "decided_by": "coordinator"},
+                {k: v for k, v in draft.items() if k != "prepared_by"},
+                {**draft, "status": "pending"},
+                {k: v for k, v in decision.items() if k != "decided_by"},
+            ):
+                path.write_text(json.dumps(bad))
+                with self.assertRaises(ValueError):
+                    gate.check(spec, path)
+            path.write_text(json.dumps({**decision, "status": "final"}))
+            self.assertEqual(gate.check(spec, path, final=True)["status"], "final")
+
+    def test_evaluate_items_and_legacy_download_receipt(self):
+        from v2.release import gate
+
+        with tempfile.TemporaryDirectory() as scratch:
+            work = Path(scratch)
+            receipts = work / "receipts"
+            receipts.mkdir()
+            paired = work / "paired.json"
+            paired.write_text(json.dumps({"ci95": {"low": 3.6, "high": 13.3}}))
+            decision = work / "decision.json"
+            decision.write_text(json.dumps({"status": "draft"}))
+            spec = {
+                "kind": "release",
+                "model_name": "DEV2.0-4B",
+                "repo_id": "llm-semantic-router/DEV2.0-4B",
+                "expected_identity": {"model_sha256": "c" * 64},
+                "scored": {"report_sha256": "d" * 64},
+                "card": {"paired": str(paired)},
+                "gate_receipt": str(decision),
+            }
+            revision = "a" * 40
+            files = {
+                "spec": spec,
+                "build": {"parameters": {"loaded": 7}, "card": {"tradeoffs": []}},
+                "repeat-pre": {"passed": True},
+                "card-pre": {"passed": True},
+                "upload": {"revision": revision},
+                "download": {"revision": revision, "files": 3},
+                "tree": {"passed": True, "files": 3},
+                "post": {"passed": True, "loaded_parameters": 7},
+                "repeat-post": {"passed": True},
+                "card-post": {"passed": True},
+                "readback": {"passed": True, "card_problems": [], "card_data": {}},
+            }
+            for name, value in files.items():
+                (receipts / f"{name}.json").write_text(json.dumps(value))
+            result = gate.evaluate(work)
+            self.assertTrue(result["passed"], result["items"])
+            self.assertEqual(result["decision"]["status"], "draft")
+            (receipts / "download.json").write_text(
+                json.dumps({"revision": "b" * 40, "files": 3})
+            )
+            result = gate.evaluate(work)
+            self.assertFalse(result["items"]["3_download_hash_parameters"]["passed"])
+            with self.assertRaises(ValueError):
+                gate.seal(work)
 
 
 class BuildTest(unittest.TestCase):
@@ -473,6 +753,16 @@ class BuildTest(unittest.TestCase):
                 api.verify_bundle(pkg)
             self.assertEqual(canonical({}), "{}")
             self.assertEqual(len(hashlib.sha256(b"").hexdigest()), 64)
+
+            spec["scored"] = {"label": "scored run /data/dev2/runs/x"}  # manifest only
+            spec_path.write_text(json.dumps(spec))
+            build.BRAND_DIR = banner_dir
+            try:
+                with self.assertRaises(ValueError):
+                    build.build(spec_path, scratch / "out2" / "dev2-release-staging")
+            finally:
+                build.BRAND_DIR = original
+            self.assertFalse((scratch / "out2" / "dev2-release-staging").exists())
 
 
 if __name__ == "__main__":
