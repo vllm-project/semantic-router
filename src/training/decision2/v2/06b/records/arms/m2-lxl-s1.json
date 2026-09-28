@@ -1,0 +1,43 @@
+{
+  "arm": "m2-lxl-s1",
+  "family": "kai-native",
+  "start": {
+    "backend": "lex",
+    "bundle": "/work/models/Decision-1.0-Lex-0.6B",
+    "repo": "llm-semantic-router/Decision-1.0-Lex-0.6B",
+    "revision": "ee8e74d912fca8328a353c11d174b44da3f91781",
+    "native_manifest_sha256": "f288d873999832a3f37c6a7c4268c2ab309691e621794dbf7acab891acbbb7e6"
+  },
+  "data": {
+    "parent": "/work/data/hf-private-decision20-clean-v2",
+    "converter_bundle": "/work/models/Decision-1.0-Lex-0.6B"
+  },
+  "logical_batch": 64,
+  "max_micro_rows": 8,
+  "micro_token_budget": 32768,
+  "seed": "20260928-06b-m1",
+  "optimizer": {
+    "encoder_lr": 1e-05,
+    "head_lr": 4e-05,
+    "lr_min": 1e-06,
+    "warmup_ratio": 0.05,
+    "weight_decay": 0.01,
+    "clip": 1.0
+  },
+  "loss": {
+    "ce": 1.0,
+    "brier": 0.0,
+    "score_rps": 0.1,
+    "teacher_kl": 1.0
+  },
+  "teacher": {
+    "path": "/runs/m2/teacher/lux1-train.teacher.jsonl",
+    "sha256": "2d90bc5b24756122735be6baf901c489cbd8a3c7f825b4b540976a6aaf9b976f",
+    "source": "own Decision-1.0-Lux-9B bd45a30a, eval-track frozen node-A autotune cache (private copy e215f8bd -> c94e66c5), TRAIN prompts only; predictions 813b06aa",
+    "screen": "SCREEN_PASS (choice .835, noul .893, score .866, three-level 102/102, half-Brier <= .119)"
+  },
+  "milestones": "eighths",
+  "include_step0_in_best": true,
+  "gpu_hour_cap": 1.0,
+  "max_reserved_gib": 200
+}

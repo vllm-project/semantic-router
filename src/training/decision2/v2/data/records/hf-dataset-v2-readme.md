@@ -44,6 +44,7 @@ SHA-256.
 | `arms/A2/` | Project-generated verifiable counterfactual families (dates, counting, multi-hop lookup, injection-robust reading, ordering, units), English and Chinese |
 | `arms/A3/` | Long multi-paragraph evidence: MuSiQue-Full answerable/unanswerable twins (CC BY 4.0; Wikipedia CC BY-SA) |
 | `arms/A6g/` | Project-generated Score at level counts 2–10 with exact grade balance (band rubric, checklist, interpolation, rank position, evidence status), English and Chinese |
+| `arms/A4v2h/`, `arms/A4v2r/` | Paired hard-negative contrast: identical states, gold text and gold positions; near-miss (h) vs random (r) distractors; Noul as true/false pairs on one state. A4 v1 failed its shortcut gates and is not published |
 | `arms/A5/` | Natively authored Korean and Japanese decisions: KLUE YNAT topics, JGLUE JCommonsenseQA and JNLI (CC BY-SA 4.0), class-balanced; KLUE-NLI and KLUE-MRC were dropped by the shortcut gates |
 | `arms/A6h/` | Human ordinal Score: KLUE-STS (ko), JSTS (ja), IBM ArgQ-30k (en) and SAF (en, de), train-only quantile cuts with guard bands and level balance |
 | `replay/RP-v1q/` | Frozen replay prompt set (training-row form, gold labels) |

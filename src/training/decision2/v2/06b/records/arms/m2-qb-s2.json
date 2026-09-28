@@ -1,0 +1,40 @@
+{
+  "arm": "m2-qb-s2",
+  "family": "encoder",
+  "start": {
+    "source": "qwen3-0.6b-base",
+    "path": "/work/models/Qwen3-0.6B-Base",
+    "repo": "Qwen/Qwen3-0.6B-Base",
+    "revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+    "head_seed": 20260929,
+    "attention": "bidirectional",
+    "ordinal_score": false
+  },
+  "data": {
+    "parent": "/work/data/hf-private-decision20-clean-v2",
+    "converter_bundle": "/work/models/Decision-1.0-Kai-0.6B"
+  },
+  "logical_batch": 16,
+  "max_micro_rows": 8,
+  "micro_token_budget": 32768,
+  "seed": "20260928-06b-m2-s2",
+  "optimizer": {
+    "encoder_lr": 2e-05,
+    "head_lr": 0.0002,
+    "lr_min": 1e-06,
+    "warmup_ratio": 0.05,
+    "weight_decay": 0.01,
+    "clip": 1.0
+  },
+  "loss": {
+    "ce": 1.0,
+    "brier": 0.5,
+    "score_rps": 0.0,
+    "teacher_kl": 0.0
+  },
+  "teacher": null,
+  "milestones": "eighths",
+  "include_step0_in_best": false,
+  "gpu_hour_cap": 1.0,
+  "max_reserved_gib": 200
+}

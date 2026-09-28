@@ -70,6 +70,13 @@ DEVELOPMENT: dict[str, dict[str, Any]] = {
         "gold_sha256": "9a7274760dc4ced5ce5219b300974a1cf54c7d5e7e0c7de05d78bb33f2959391",
         "originals": 1430,
     },
+    "mlx-diag": {
+        "prompts": "goldfree/mlx-diag.prompts.jsonl",
+        "prompts_sha256": "25fde28f4b227a9cc8588da79a597ce816ba4a8f979139f99f69aeb595580a5f",
+        "gold": "gold/mlx-diag.gold.jsonl",
+        "gold_sha256": "71515a41583e7c4792c7058d45e6b12980f033bc9de2847b15dd3fb7b940b484",
+        "originals": 2275,
+    },
     "select": {
         "gold": "gold/select.jsonl",
         "gold_sha256": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6",
