@@ -46,9 +46,14 @@ def main() -> None:
 
     runtime = require_runtime()
     temperature: float | dict[str, float] = 1.0
+    temperature_source = "none requested (1.0)"
     if args.package_temperatures:
-        report = json.loads((args.package / "temperature.json").read_text())
-        temperature = {k: float(v) for k, v in report["temperatures"].items()}
+        if (args.package / "temperature.json").is_file():
+            report = json.loads((args.package / "temperature.json").read_text())
+            temperature = {k: float(v) for k, v in report["temperatures"].items()}
+            temperature_source = "package temperature.json"
+        else:
+            temperature_source = "package ships no temperature.json (1.0)"
     source = source_fingerprint(args.package)
     model_sha = hashlib.sha256(
         canonical(source["files_sha256"]).encode("utf-8")
@@ -109,6 +114,7 @@ def main() -> None:
         "input_items": len(rows),
         "max_length": args.max_length,
         "temperature": temperature,
+        "temperature_source": temperature_source,
         "execution": "one benchmark item at a time; BF16 backbone, FP32 head",
         "truncation_policy": "none; over-budget questions produce an invalid answer",
         "counts": counts,
