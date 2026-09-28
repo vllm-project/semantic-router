@@ -798,12 +798,19 @@ def check(args: argparse.Namespace) -> dict[str, Any]:
     for path in sorted(args.rows_dir.glob("*.jsonl")):
         for row in read_jsonl(path):
             info[row["id"]] = {k: row[k] for k in fields}
+    seen = {v["input_sha256"] for v in info.values()}
     gap_rows: dict[str, dict] = {}
     gap_tokens: dict[str, int] = {}
-    for pool, spec in gap_specs.items():
+    gap_dropped: collections.Counter[str] = collections.Counter()
+    for pool in GAP_TARGETS:
+        spec = gap_specs[pool]
         for row in read_jsonl(Path(spec["rows"][0])):
-            gap_rows[row["id"]] = dict(row, pool=pool)
             info[row["id"]] = {k: row[k] for k in fields}
+            if row["family"] in xl.EXCLUDED or row["input_sha256"] in seen:
+                gap_dropped[f"{pool}|{row['family']}"] += 1
+                continue
+            seen.add(row["input_sha256"])
+            gap_rows[row["id"]] = dict(row, pool=pool)
         for row in read_jsonl(Path(spec["tokens"][0])):
             gap_tokens[row["id"]] = row["native"]
 
@@ -820,6 +827,14 @@ def check(args: argparse.Namespace) -> dict[str, Any]:
     def ok(name: str, passed: bool, **detail: Any) -> None:
         results[name] = {"pass": bool(passed), **detail}
 
+    load_dropped = sum(
+        n for k, n in manifest["dropped"].items() if k.split("|")[0] in GAP_TARGETS
+    )
+    ok(
+        "gap_rows_dropped_as_in_the_build",
+        sum(gap_dropped.values()) == load_dropped,
+        by_pool_family=dict(sorted(gap_dropped.items())),
+    )
     recipes = {}
     for name, s in manifest["recipes"].items():
         path = args.out_dir / f"{name}.ids.jsonl"

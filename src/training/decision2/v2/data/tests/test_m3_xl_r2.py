@@ -327,15 +327,20 @@ class BuildCheckTest(unittest.TestCase):
                 "H7": ("human", [("n1", "gn", "nq", "en", 2400)]),
                 "H8": (
                     "human",
-                    [("t1", "gt", "ty", "ja", 700), ("t2", "gt", "ty", "ja", 800)],
+                    [
+                        ("t1", "gt", "ty", "ja", 700),
+                        ("t2", "gt", "ty", "ja", 800),
+                        ("t3", "gt", "ty", "ja", 600),
+                    ],
                 ),
             }
             specs, gap_args, native = {}, [], {}
             for pool, (kind, data) in pools.items():
-                rows = _jsonl(
-                    root / f"{pool}.rows.jsonl",
-                    [_row(i, g, s, lang) for i, g, s, lang, _ in data],
-                )
+                made = [_row(i, g, s, lang) for i, g, s, lang, _ in data]
+                for row in made:
+                    if row["id"] == "t3":
+                        row["input_sha256"] = sha("in:t1")
+                rows = _jsonl(root / f"{pool}.rows.jsonl", made)
                 tokens = _jsonl(
                     root / f"{pool}.tokens.jsonl",
                     [{"id": i, "native": n} for i, *_, n in data],
@@ -437,9 +442,14 @@ class BuildCheckTest(unittest.TestCase):
             self.assertEqual(short["gap"]["H7"]["rows"], 0)
             self.assertEqual(short["gap"]["H8"]["rows"], 2)
             self.assertEqual(result["recipes"]["cx-xl-r2-nogap-short"]["rows"], 1)
+            self.assertEqual(result["dropped"], {"H8|duplicate_of:H8": 1})
             checks = json.loads(report.read_text())
             self.assertEqual(
                 [k for k, v in checks["checks"].items() if not v["pass"]], []
+            )
+            self.assertEqual(
+                checks["checks"]["gap_rows_dropped_as_in_the_build"]["by_pool_family"],
+                {"H8|f": 1},
             )
             self.assertEqual(code, 0)
 

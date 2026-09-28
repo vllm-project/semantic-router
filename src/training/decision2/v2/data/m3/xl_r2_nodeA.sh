@@ -1,7 +1,7 @@
 #!/bin/bash
 # M3b XL recipe revision r2 on node A (CPU only): rescreen of the r1 rows, then the r2 build.
 #
-#   xl_r2_nodeA.sh CODE RUN rows|scan|scan-union|rescreen|targets|build|check
+#   xl_r2_nodeA.sh CODE RUN rows|scan|scan-union|rescreen|targets|build|check|upload|readback
 #
 # CODE = src/training/decision2 of an exact mirror; RUN = output root (rescreen/, targets/,
 # build/). Rules: records/m3b-prereg-amendment-3-2026-09-28.md §2-§3 and amendment 2 §4.
@@ -130,6 +130,36 @@ check)
   nice -n 10 python3 -m v2.data.m3.xl_r2 check --pools "$POOLS" --out-dir "$RUN/build" "${R1_ARGS[@]}" \
     --rescreen "$RUN/rescreen/rescreen.private.json" --rows-dir "$RUN/rescreen/rows" "${GAP[@]}" \
     --report "$RUN/build/check.json"
+  ;;
+upload)
+  # m3/mixtures/xl-r2/: ids, missing lists, manifest, checks, public receipts and README.
+  [ ! -e "$RUN/upload" ] || {
+    echo "upload folder exists" >&2
+    exit 1
+  }
+  X=$RUN/upload/m3/mixtures/xl-r2
+  mkdir -p "$X/rescreen" && chmod -R 700 "$RUN/upload"
+  cp "$RUN"/build/*.jsonl "$RUN/build/mx-xl-r2.manifest.json" "$RUN/build/check.json" \
+    "$RUN/rescreen/rescreen.public.json" "$X/"
+  for P in "$S"/*.public.json; do cp "$P" "$X/rescreen/$(basename "$P" .public.json).overlap.public.json"; done
+  cp "$RUN/rescreen/scan-union/union.public.json" "$X/rescreen/union.overlap.public.json"
+  cp "$CODE/v2/data/records/hf-xl-r2-readme.md" "$X/README.md"
+  if grep -rlE '/data/|/home/' "$X"; then
+    echo "path leak" >&2
+    exit 1
+  fi
+  (cd "$RUN/upload" && find m3 -type f | LC_ALL=C sort | xargs sha256sum) > "$RUN/upload.sha256"
+  HF_HUB_CACHE=/data/dev2/hf-cache hf upload "$REPO" "$X" m3/mixtures/xl-r2 --repo-type dataset \
+    --commit-message "M3b XL recipe revision r2: rescreened r1 + gap arms H7/H8" > "$RUN/upload.log" 2>&1
+  grep -oE 'commit/[0-9a-f]{40}' "$RUN/upload.log" | head -1 | cut -d/ -f2 > "$RUN/upload.revision"
+  ;;
+readback)
+  REV=$(cat "$RUN/upload.revision")
+  HF_HUB_CACHE=/data/dev2/hf-cache hf download "$REPO" --repo-type dataset --revision "$REV" \
+    --include 'm3/mixtures/xl-r2/*' --local-dir "$RUN/readback" > "$RUN/readback.log" 2>&1
+  (cd "$RUN/readback" && find m3 -type f | LC_ALL=C sort | xargs sha256sum) > "$RUN/readback.sha256"
+  diff "$RUN/upload.sha256" "$RUN/readback.sha256"
+  echo "readback equal at $REV: $(wc -l < "$RUN/readback.sha256") files"
   ;;
 *)
   echo "unknown step $STEP" >&2
