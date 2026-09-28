@@ -407,6 +407,8 @@ def mlqepe_items(
     if not lines:
         raise ValueError(f"{where}: empty file")
     header = lines[0].removesuffix("\r").split("\t")
+    if "index" not in header and "segid" in header:
+        header[header.index("segid")] = "index"
     missing = [name for name in MLQEPE_COLUMNS if name not in header]
     if missing:
         raise ValueError(f"{where}: missing columns {missing}")

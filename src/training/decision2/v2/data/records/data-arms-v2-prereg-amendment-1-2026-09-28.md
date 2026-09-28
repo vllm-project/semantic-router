@@ -24,7 +24,7 @@ Rules of `data-arms-v2-prereg-2026-09-28.md` apply except where stated.
    Questions with a minimal answer go to removal or relevance by
    `sha256("tydi-alloc:" + question) % 2`; passage-only answers go to relevance.
 2. **C1 extra guard:** a pair is also dropped when the removed twin's title contains the answer or
-   the answer survives by plain containment for zh/zh-hant/ja/ko/th/ar/bn/te (word-boundary
+   the answer survives by plain containment for zh, zh-hant, ja, ko, th, ar, bn and Telugu (word-boundary
    matching misses answers glued to CJK/Hangul text). GermanQuAD title/section lines, JSQuAD
    `title [SEP]` prefixes and SQAC file-name titles are moved into (or dropped from) the title
    slot so they cannot be removed as units; DRCD rows carry no title.
