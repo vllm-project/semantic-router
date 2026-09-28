@@ -507,7 +507,8 @@ def a4v2_plan(rng: random.Random, lang: str, turn: int) -> core.A4v2Plan:
             state, facts, hop, f"{hop}_v2", ask, lambda v: prop.format(p=target, v=v)
         )
 
-    present = sorted(set(value_of.values()), key=lambda v: rng.random())
+    present = sorted(set(value_of.values()))
+    rng.shuffle(present)
     alternatives = []
     for gold in present:
         team = rng.choice([tm for tm in teams if value_of[tm] == gold])
