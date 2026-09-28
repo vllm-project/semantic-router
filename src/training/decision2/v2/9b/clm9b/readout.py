@@ -202,6 +202,7 @@ def predict(args) -> None:
         entry = {
             "tag": tag,
             "run": str(run.name),
+            "run_path": str(run),
             "config": config,
             "head_sha256": best["head_sha256"],
             "calibration_sha256": best["calibration_sha256"],
