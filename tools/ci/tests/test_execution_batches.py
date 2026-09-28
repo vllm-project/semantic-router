@@ -79,7 +79,7 @@ class ExecutionBatchTests(unittest.TestCase):
             self.assertTrue(run_batch(batch, Path(directory), run=process))
         self.assertEqual(budgets, [7190, 7180, 7170])
 
-    def test_native_reuses_runtime_worker_without_merging_receipts(self):
+    def test_native_contracts_get_independent_runtime_workers(self):
         plan = make_plan(
             [],
             source_sha="a" * 40,
@@ -89,31 +89,28 @@ class ExecutionBatchTests(unittest.TestCase):
                 "native.candle-riscv64-qemu",
             ),
         )
-        self.assertEqual(len(plan["native_batches"]), 2)
+        self.assertEqual(len(plan["native_batches"]), 3)
         for batch in plan["native_batches"]:
             validate_execution_batch(batch, "native")
-        ort = next(row for row in plan["native_batches"] if row["runtime"] == "ort")
+        ort = [row for row in plan["native_batches"] if row["runtime"] == "ort"]
         self.assertEqual(
-            {row["category"] for row in ort["verifications"]},
+            {row["verifications"][0]["category"] for row in ort},
             {"runtime", "conformance"},
         )
-        self.assertEqual(ort["timeout_minutes"], 240)
+        self.assertEqual([row["timeout_minutes"] for row in ort], [120, 120])
         qemu = next(row for row in plan["native_batches"] if row["runtime"] == "candle")
         self.assertEqual(qemu["dispatch_job"], "native-independent")
         self.assertFalse(qemu["native"])
 
-    def test_e2e_shards_preserve_all_profiles_once_with_bounded_cost(self):
+    def test_e2e_profiles_preserve_all_contracts_once_with_bounded_cost(self):
         plan = make_plan([], source_sha="a" * 40, full=True)
         records = [row for row in plan["verifications"] if row["executor"] == "e2e"]
-        self.assertLess(len(plan["e2e_batches"]), len(records))
+        self.assertEqual(len(plan["e2e_batches"]), len(records))
         seen = []
         for batch in plan["e2e_batches"]:
             validate_execution_batch(batch, "e2e")
             self.assertLessEqual(batch["timeout_minutes"] + 30, 360)
-            self.assertLessEqual(
-                len(batch["verifications"]),
-                2 if batch["resource_class"] == "model" else 3,
-            )
+            self.assertEqual(len(batch["verifications"]), 1)
             for record in batch["verifications"]:
                 self.assertEqual(sorted(record["images"]), batch["images"])
                 self.assertEqual(record["runtime"], batch["runtime"])
@@ -123,7 +120,7 @@ class ExecutionBatchTests(unittest.TestCase):
             {"e2e.vela-omni", "e2e.vela-halu", "e2e.multimodal-routing"} <= set(seen)
         )
 
-    def test_large_resource_class_batches_profiles_instead_of_naming_models(self):
+    def test_large_resource_class_profiles_get_separate_workers(self):
         plan = make_plan([], source_sha="a" * 40, requested=("e2e.vela-omni",))
         record = plan["verifications"][0]
         records = []
@@ -138,7 +135,7 @@ class ExecutionBatchTests(unittest.TestCase):
             )
             records.append(candidate)
         batches = e2e_batches(records)
-        self.assertEqual([len(row["verifications"]) for row in batches], [2, 1])
+        self.assertEqual([len(row["verifications"]) for row in batches], [1, 1, 1])
         self.assertTrue(all("model-" not in row["display_name"] for row in batches))
 
     def test_tampered_duplicate_or_mixed_worker_contracts_are_rejected(self):
@@ -153,7 +150,7 @@ class ExecutionBatchTests(unittest.TestCase):
         changed["images"] = ["extproc"]
         variants.append(changed)
         changed = copy.deepcopy(original)
-        changed["verifications"][1] = changed["verifications"][0]
+        changed["verifications"] *= 2
         variants.append(changed)
         changed = copy.deepcopy(original)
         changed["verifications"][0]["target"] = "other"
@@ -165,14 +162,14 @@ class ExecutionBatchTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_execution_batch(batch, "native")
 
-    def test_native_failure_does_not_hide_later_contract_and_reports_stay_isolated(
+    def test_native_failure_does_not_hide_independent_contract_and_reports_stay_isolated(
         self,
     ):
-        batch = make_plan(
+        batches = make_plan(
             [],
             source_sha="a" * 40,
             requested=("native.ort-cpu", "native.image-calibration-cpu"),
-        )["native_batches"][0]
+        )["native_batches"]
         calls = []
 
         def process(command, **kwargs):
@@ -185,8 +182,12 @@ class ExecutionBatchTests(unittest.TestCase):
             return SimpleNamespace(returncode=0)
 
         with tempfile.TemporaryDirectory() as directory:
-            self.assertFalse(run_batch(batch, Path(directory), run=process))
-            results = list((Path(directory) / "results").glob("*.json"))
+            outcomes = [
+                run_batch(batch, Path(directory) / batch["id"], run=process)
+                for batch in batches
+            ]
+            self.assertEqual(outcomes, [False, True])
+            results = list(Path(directory).glob("*/results/*.json"))
             self.assertEqual([path.stem for path in results], ["native.ort-cpu"])
             make_envs = [env for command, env in calls if command[0] == "make"]
             self.assertEqual(len(make_envs), 2)

@@ -843,7 +843,7 @@ recipes:
       - type: response_cache
         configuration:
           enabled: true
-          similarity_threshold: 0.9
+          mode: exact
           ttl_seconds: 900
     strategy: priority
 - name: cost-first
@@ -986,7 +986,7 @@ recipes:
       - type: response_cache
         configuration:
           enabled: true
-          similarity_threshold: 0.88
+          mode: exact
           ttl_seconds: 3600
     strategy: priority
 - name: accuracy-first

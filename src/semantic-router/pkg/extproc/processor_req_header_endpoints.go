@@ -33,7 +33,7 @@ func (r *OpenAIRouter) handleResponseAPIRequestHeaders(
 	path string,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	if !strings.HasPrefix(path, "/v1/responses") {
+	if !strings.HasPrefix(path, "/v1/responses") && !isAzureResponsesCollection(path) {
 		return nil, nil
 	}
 
@@ -153,6 +153,8 @@ func detectSourceFormat(path string, ctx *RequestContext) {
 		ctx.SourceFormat = llmprotocol.AnthropicMessagesV1
 		logging.Debugf("Detected Anthropic client protocol from path: %s", path)
 	case strings.HasPrefix(path, "/v1/responses"):
+		ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
+	case isAzureResponsesCollection(path):
 		ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
 	default:
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1
