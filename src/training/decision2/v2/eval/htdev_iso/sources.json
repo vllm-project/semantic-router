@@ -1,0 +1,29 @@
+{
+ "schema": "htdev-iso-sources/1",
+ "sources": {
+  "nycc": {"task": "humor/nycc_pairs", "role": "primary", "origin": "hf", "repo": "jmhessel/newyorker_caption_contest", "revision": "d81cbab7d0392708d5371d3a4960e69261824db4"},
+  "circa": {"task": "implicature/circa", "role": "primary", "origin": "hf", "repo": "google-research-datasets/circa", "revision": "faa1b5a78dd926a899bcd4da289c2e3abe8061a9"},
+  "figqa": {"task": "figurative/figqa", "role": "primary", "origin": "hf", "repo": "nightingal3/fig-qa", "revision": "b29ec2faf6ef73d634db9757f8741dee68f6c874"},
+  "ukpconvarg": {"task": "persuasion/ukpconvarg", "role": "primary", "origin": "github", "repo": "UKPLab/acl2016-convincing-arguments", "revision": "ca9d24e41b8805ff2e1d3585d552b49bb64a65f7", "paths": ["data/UKPConvArg1Strict-CSV/"], "convert": "tsv_header"},
+  "pubhealth": {"task": "misinfo/pubhealth", "role": "primary", "origin": "hf", "repo": "ImperialCollegeLondon/health_fact", "revision": "7f898a16838e708a4597986e3fab8af05b710ba4", "note": "refs/convert/parquet of the loader @57995242 (the loader downloads the authors' archive)"},
+  "brighter": {"task": "emotion/brighter", "role": "primary", "origin": "hf", "repo": "brighter-dataset/BRIGHTER-emotion-categories", "revision": "419566ac8f46f951b51584be36c13e5363008144", "include": ["eng/*"]},
+  "claimstance": {"task": "stance/claim_stance", "role": "primary", "origin": "hf", "repo": "ibm-research/claim_stance", "revision": "ec4e2c2ec3e0c70087c67a28a7bce58b682b8109"},
+  "hyperpartisan": {"task": "ideology/hyperpartisan", "role": "primary", "origin": "zenodo", "record": "5776081", "revision": "zenodo:5776081", "files": ["articles-training-byarticle-20181122.zip", "ground-truth-training-byarticle-20181122.zip", "articles-test-byarticle-20181207.zip", "ground-truth-test-byarticle-20181207.zip"], "convert": "hyperpartisan_xml"},
+  "diplomacy": {"task": "deception/diplomacy", "role": "primary", "origin": "github", "repo": "DenisPeskov/2020_acl_diplomacy", "revision": "c28c0870a639f6f388c87d4f8eaf685e64bfb1a6", "paths": ["data/"], "convert": "diplomacy_messages"},
+  "scruples": {"task": "moral/scruples", "role": "primary", "origin": "url", "revision": "github:allenai/scruples@c79697e97d24f5b43b5ff030a9b16011a32e4a5f (readme link)", "urls": ["https://storage.googleapis.com/ai2-mosaic-public/projects/scruples/v1.0/data/anecdotes.tar.gz"], "convert": "untar_data"},
+  "pavlick": {"task": "formality/pavlick", "role": "primary", "origin": "hf", "repo": "osyvokon/pavlick-formality-scores", "revision": "904009d6f19d0d4eabb8f1471a92d49c839920d5"},
+  "empathic": {"task": "empathy/empathic_reactions", "role": "primary", "origin": "github", "repo": "wwbp/empathic_reactions", "revision": "3ddbf6b35c789f99c930a349f3fc26b4b2d9ae2e", "paths": ["data/"], "convert": "copy"},
+  "mhs": {"task": "hate/mhs", "role": "primary", "origin": "hf", "repo": "ucberkeley-dlab/measuring-hate-speech", "revision": "5468f6e118396646b02a2f691e771f6b6d9502ea"},
+  "wictsv": {"task": "wordsense/wic_tsv", "role": "primary", "origin": "github", "repo": "semantic-web-company/wic-tsv", "revision": "7bddf326add99eb40a2b85a331deffafead2a73f", "paths": ["data/en/"], "convert": "wictsv"},
+  "magpie": {"task": "figurative/magpie", "role": "backup", "origin": "hf", "repo": "gsarti/magpie", "revision": "fa6ae9d93b03e6403e82696496dfbd2cf5c3d3d5"},
+  "ibm_argq_pairs": {"task": "persuasion/ibm_argq_pairs", "role": "backup", "origin": "unavailable", "revision": null, "note": "no reachable pinned archive of IBM-ArgQ-9.1kPairs (IBM download URLs return 404; no HF mirror)"},
+  "rumoureval": {"task": "misinfo+stance/rumoureval", "role": "backup", "origin": "hf", "repo": "strombergnlp/rumoureval_2019", "revision": "c9c0c7279d591d2fa4d692501d85f4e46d4b0572"},
+  "xed": {"task": "emotion/xed_en", "role": "backup", "origin": "github", "repo": "Helsinki-NLP/XED", "revision": "76666d251f147cf518071bef4f8415dab6b96115", "paths": ["AnnotatedData/en-annotated.tsv"], "convert": "tsv_noheader"},
+  "emobank": {"task": "emotion/emobank", "role": "backup", "origin": "github", "repo": "JULIELab/EmoBank", "revision": "248ce2a43e165a66d31aeaed83cff9641d6654e0", "paths": ["corpus/"], "convert": "copy"},
+  "casino": {"task": "outcome/casino", "role": "backup", "origin": "hf", "repo": "kchawla123/casino", "revision": "290898d2d08b6591db17005504e40ce00ac1028e"},
+  "mfrc": {"task": "moral/mfrc", "role": "backup", "origin": "hf", "repo": "USC-MOLA-Lab/MFRC", "revision": "ddc21d2f03e156732fd1ba95a51c4c29f07975be"},
+  "moralstories": {"task": "moral/moral_stories", "role": "backup", "origin": "hf", "repo": "demelin/moral_stories", "revision": "b830cf56eb00bc4edd1860dd544a192216eb3587", "include": ["data/moral_stories_full.jsonl"]},
+  "hatexplain": {"task": "hate/hatexplain", "role": "backup", "origin": "github", "repo": "punyajoy/HateXplain", "revision": "01d742279dac941981f53806154481c0e15ee686", "paths": ["Data/dataset.json"], "convert": "hatexplain"},
+  "swords": {"task": "wordsense/swords", "role": "backup", "origin": "github", "repo": "p-lambda/swords", "revision": "04ca75370d0ce098a7f4db68240fc8e79a4f7b3b", "paths": ["assets/parsed/"], "convert": "swords"}
+ }
+}
