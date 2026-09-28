@@ -1,0 +1,26 @@
+"""Decoder M3 development summary: per group, each seed's BEST / SELECT and the soup readout."""
+import json
+import os
+
+M = "/data/dev2/runs/dec/m3"
+for g in ("N4T", "N4J", "N4L", "N4LKr", "S2T", "S2J", "S2L", "E8V"):
+    path = f"{M}/soup/{g}/readout.json"
+    if not os.path.exists(path):
+        print(g, "no readout yet")
+        continue
+    r = json.load(open(path))["arms"]
+    seeds = []
+    for s in ("s1", "s2", "s3"):
+        b = json.load(open(f"{M}/arms/full/m3-{g}-{s}/BEST.json"))["checkpoint"]
+        sel = json.load(open(f"{M}/arms/full/m3-{g}-{s}/{b}/checkpoint.json"))["dev_metrics"]["correct"]
+        a = r[s]
+        seeds.append(f"{s} {b[-4:]} sel {sel} P {a['proxy']:.2f}")
+    soup = r["soup"]
+    t = soup["by_type"]
+    build = open(f"{M}/soup/{g}/build.stdout.log").read().strip().splitlines()[-1]
+    sha = json.loads(build)["model_sha256"]
+    mean = sum(r[s]["proxy"] for s in ("s1", "s2", "s3")) / 3
+    print(
+        g, "|", "; ".join(seeds), f"| mean {mean:.2f} | soup P {soup['proxy']:.2f} T {soup['T']:.4f} H {soup['H']:.4f}",
+        f"C/N/S {t['choice']['correct']}/{t['noul']['correct']}/{t['score']['correct']}", "| soup", sha[:12],
+    )

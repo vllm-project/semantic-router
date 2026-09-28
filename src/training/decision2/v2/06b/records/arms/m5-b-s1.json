@@ -1,0 +1,60 @@
+{
+  "arm": "m5-b-s1",
+  "family": "qwen-causal",
+  "start": {
+    "path": "/work/models/Qwen3-0.6B-Base",
+    "repo": "Qwen/Qwen3-0.6B-Base",
+    "revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+    "head_seed": 20260928,
+    "architecture": "official causal endpoint + global query shared head (training.model.decision_model)",
+    "collapse_stop": {
+      "step": 787,
+      "min_select": 350
+    }
+  },
+  "data": {
+    "parent": "/work/data/hf-private-decision20-clean-v2",
+    "converter_bundle": "/work/models/Decision-1.0-Kai-0.6B",
+    "mixture": {
+      "template": "materialized",
+      "path": "/runs/m5/data/m5-mix-b.train.jsonl",
+      "sha256": "57eedf6b76b4761d9054b2cd35e8e11024bcb1e87e0e28efa37efc9ccf2160be",
+      "build_spec": "src/training/decision2/v2/06b/records/mixtures/m5-mix-b.json",
+      "build_report_sha256": "6aaa8d95315ad9950c00cbcfdf172833e7cbb836ce36fe3d90dbec47be839fb0",
+      "expected": {
+        "train_rows": 33583,
+        "train_ids_sha256": "1359f4212d9eccda64facb5c07e0775a52e88fa93fc7cc3e8aba2b55b7506560"
+      }
+    }
+  },
+  "logical_batch": 16,
+  "max_micro_rows": 8,
+  "micro_token_budget": 32768,
+  "seed": "20260928-06b-m5-s1",
+  "optimizer": {
+    "encoder_lr": 1e-05,
+    "head_lr": 0.0002,
+    "lr_min": 1e-06,
+    "warmup_ratio": 0.1,
+    "weight_decay": 0.01,
+    "clip": 1.0
+  },
+  "loss": {
+    "ce": 1.0,
+    "brier": 0.5,
+    "score_rps": 0.0,
+    "teacher_kl": 1.0
+  },
+  "teacher": {
+    "path": "/runs/m5/teacher/aligned-b/lux1.aligned.jsonl",
+    "sha256": "7955980ca7ce41b9650cd0f5050a97dd23dbfd7620487d8f4b5a6515db36b927",
+    "format": "option-key",
+    "source": "own Lux1 targets: canonical pk1 A0 file 56627939 + RP-v2 waves 1 (47049a6b), 2 (2c6ab38d), 4 (084adacd), merged (a7bc7a45) and aligned by v2.06b.teacher_align on m5-mix-b to the rows AutoJev also covers (23,498 rows)",
+    "screen": "RP-v2 argmax vs gold Choice .79, Noul .78-.79, Score .55-.56; A0 file TRAIN agreement .835/.894/.866",
+    "coverage": "subset"
+  },
+  "milestones": "eighths",
+  "include_step0_in_best": false,
+  "gpu_hour_cap": 3.0,
+  "max_reserved_gib": 72
+}

@@ -119,7 +119,7 @@ def prediction_path(run_dir: Path, panel: str) -> Path:
 def runtime_probe(python: str, env: dict[str, str]) -> dict[str, Any]:
     code = (
         "import json,sys\nout={'python':sys.version.split()[0]}\n"
-        "for m in ('torch','transformers','tokenizers','safetensors','numpy','fla','triton'):\n"
+        "for m in ('torch','transformers','tokenizers','safetensors','numpy','fla','triton','causal_conv1d'):\n"
         "    try:\n        mod=__import__(m); out[m]=getattr(mod,'__version__','?')\n"
         "    except Exception: out[m]=None\n"
         "try:\n    import torch; out['hip']=torch.version.hip; out['devices']=torch.cuda.device_count()\n"

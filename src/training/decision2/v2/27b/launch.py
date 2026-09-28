@@ -48,6 +48,16 @@ def render_node(gpu: int, sysfs: Path = Path("/sys/class/drm")) -> Path:
     return Path("/dev/dri") / node
 
 
+def read_lease(owner: Path) -> dict:
+    """Parse this launcher's JSON owner file or the eval runner's KEY=VALUE lines."""
+    text = owner.read_text(encoding="utf-8")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        lines = [line.split("=", 1) for line in text.splitlines() if "=" in line]
+        return {key.strip(): value.strip() for key, value in lines}
+
+
 def write_lease(
     gpu: int, fields: dict, root: Path = LEASE_ROOT, shared: str | None = None
 ) -> None:
@@ -56,7 +66,7 @@ def write_lease(
     owner = lease / "owner"
     if not owner.is_file():
         raise ValueError(f"GPU{gpu} lease is missing; create it before launching")
-    current = json.loads(owner.read_text(encoding="utf-8"))
+    current = read_lease(owner)
     if current.get("track") != TRACK:
         raise ValueError(f"GPU{gpu} lease belongs to {current.get('track')}")
     if shared is not None:
@@ -69,6 +79,30 @@ def write_lease(
     pending = owner.with_name("owner.pending")
     pending.write_text(json.dumps(current, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(pending, owner)
+
+
+def vram_percent(gpu: int) -> str:
+    output = subprocess.run(
+        ["rocm-smi", "-d", str(gpu), "--showmemuse"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    ).stdout
+    values = [
+        line.rsplit(":", 1)[-1].strip()
+        for line in output.splitlines()
+        if "VRAM%" in line
+    ]
+    return values[-1] if values else "unknown"
+
+
+def wait_until_idle(gpu: int, timeout: float = 300, poll: float = 10) -> None:
+    """VRAM stays allocated for a short while after a container exits."""
+    deadline = time.monotonic() + timeout
+    while (usage := vram_percent(gpu)) != "0":
+        if time.monotonic() > deadline:
+            raise ValueError(f"GPU{gpu} is not idle (VRAM% {usage})")
+        time.sleep(poll)
 
 
 def docker(*args: str, timeout: int = 300) -> str:
@@ -156,6 +190,8 @@ def main() -> None:
         raise ValueError("Pinned runtime image is absent or changed")
     if docker("ps", "-a", "--filter", f"name=^{args.name}$", "--format", "{{.Names}}"):
         raise FileExistsError("Container name already exists")
+    if not args.shared:
+        wait_until_idle(args.gpu)
     argv = create_argv(args, device)
     args.receipt.parent.mkdir(parents=True, exist_ok=True)
     cap = int(args.cap_hours * 3600)

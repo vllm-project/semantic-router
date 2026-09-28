@@ -1,0 +1,4 @@
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/causal_conv1d/cpp_functions.py", line 22, in _causal_conv1d_fwd_cpp
+    causal_conv1d_cuda.causal_conv1d_fwd(
+RuntimeError: Expected x.is_cuda() to be true, but got false.  (Could this error message be improved?  If so, please report an enhancement request to PyTorch.)

@@ -1,0 +1,15 @@
+set -u
+# Decoder M3 amendment 1 (271502d8f): one E8V seed on one node B GPU after that GPU's
+# preregistered chain has finished its last arm (postrun complete or a recorded failure).
+# usage: m3-e8v.sh <mirror-dir> <gpu> <seed-name> <seed> <last arm of the GPU's chain>
+SRC=$1 GPU=$2 NAME=$3 SEED=$4 AFTER=$5
+M=/data/dev2/runs/dec/m3; A=$M/arms
+D=/data/dev2/src/$SRC/src/training/decision2/v2/dec/drive_arm.sh
+EOS=/hf/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab
+until grep -qE "$AFTER (postrun complete|zero-step FAILED|one-step FAILED|gate job FAILED|full run FAILED|preflight FAIL)" $A/OPERATIONS.log 2>/dev/null; do sleep 60; done
+# the chain's postrun readouts end with the css-pilot job; leave a short gap for the process to exit
+sleep 30
+printf 'track=dec\nstatus=busy\npurpose=M3 0.8B follow-up %s (amendment 1, 271502d8f)\nstart_utc=%s\nexpected_end_utc=2026-09-28T17:30:00Z\n' $NAME $(date -u +%FT%TZ) > /data/dev2/leases/gpu$GPU.lock/owner
+DEC_NODE=b DEC_DATA_DIR=$M/data-sel700-cal698 bash $D $NAME $GPU $SRC m3/arms $EOS -- \
+  --train /runs/m3/data/m3-e8f-v2m/train.jsonl --train-mode full --backbone-lr 1e-5 --head-lr 1e-4 \
+  --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64 --seed $SEED

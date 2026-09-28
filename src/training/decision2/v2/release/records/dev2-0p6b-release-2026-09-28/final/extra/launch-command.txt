@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SRC=61d22cd30891b60c41d7b1a602d53d131ac3a3bf-src_training_decision2; S=/data/dev2/src/$SRC/src/training/decision2
+G=/data/dev2/private/panels/goldfree; R=/data/dev2/runs/06b/m4/formal/m4-t-a7-soup
+$S/v2/release/release.sh --spec $S/v2/release/specs/dev2-0p6b-release.json --src $SRC --work /data/dev2/runs/release/dev2-0p6b-final-20260928T180824Z \
+  --gpu 5 --track release --shared-lease release --threads 4 --env HIP_FORCE_DEV_KERNARG=1 \
+  --mount $G --mount $R/output --mount $R-mlx/output --parity-tolerance 0 \
+  --parity typed-final:$G/typed-final.prompts.jsonl:$R/output/typed-final.predictions.jsonl:150 \
+  --parity css15:$G/css15.prompts.jsonl:$R/output/css15.predictions.jsonl:200 \
+  --parity public231:$G/public231.prompts.jsonl:$R/output/public231.predictions.jsonl:100 \
+  --parity mlx-diag:$G/mlx-diag.prompts.jsonl:$R-mlx/output/mlx-diag.predictions.jsonl:150 \
+  --upload --collect

@@ -1,0 +1,102 @@
+{
+  "template": "S2",
+  "unit": "qwen3-0.6b-base-native-segmented",
+  "tokenizer": "/work/models/Qwen3-0.6B-Base",
+  "max_row_tokens": 8192,
+  "hf_dataset": "llm-semantic-router/decision-2.0-training-data",
+  "seed": "decision2-06b-m5-a",
+  "base": [
+    {
+      "arm": "A0s-pk1",
+      "hf_revision": "d8eae3e4fb5b91871c5aa7c13f0d94ea96e86ea7",
+      "path": "/runs/m5/data/pk1-d8eae3e4/m3/pk1/A0s/train.jsonl",
+      "sha256": "35c1f98ff0f406feef8bfd1c7ed8f254c096b4f7b3a6e0858bcc92ef43ddc20b",
+      "rows": 7299,
+      "exclude_families": [
+        "natural_cosmos_qa",
+        "natural_squad2_answerability"
+      ],
+      "renumber_option_keys": false,
+      "note": "published pk1 A0s (positional option keys); minus the two excluded families it equals the M4 A0s-r base row for row"
+    }
+  ],
+  "components": [
+    {
+      "name": "T-A6",
+      "policy": "from_materialized",
+      "mixture": {
+        "path": "/runs/m4/data/m4-mix-t.train.jsonl",
+        "sha256": "98e4e85906a5076cce20b98c132fc1ba0d7fcf6949b41d15231bdfeecc5d549a",
+        "rows": 26203
+      },
+      "id_prefixes": [
+        "a6-",
+        "a6h-"
+      ],
+      "note": "the A6 slice of mixture T (released candidate), byte-identical"
+    },
+    {
+      "name": "T-A7",
+      "policy": "from_materialized",
+      "mixture": {
+        "path": "/runs/m4/data/m4-mix-t.train.jsonl",
+        "sha256": "98e4e85906a5076cce20b98c132fc1ba0d7fcf6949b41d15231bdfeecc5d549a",
+        "rows": 26203
+      },
+      "id_prefixes": [
+        "a7:"
+      ],
+      "subsample_tokens": 10076911,
+      "seed": "decision2-06b-m5-a-t7",
+      "note": "mixture T's A7 rows minus 4.0M tokens (whole groups in hash order), all task types"
+    },
+    {
+      "name": "A7k",
+      "policy": "token_budget",
+      "tokens": 600000,
+      "seed": "decision2-06b-m5-a-k",
+      "note": "a7-enc10-v4 KLUE-STS + JSTS (ko/ja, Score L6): every row",
+      "arms": [
+        {
+          "arm": "A7k",
+          "hf_revision": "0b47239ed36ce539b2350e35af88a26140d867f7",
+          "path": "/runs/m5/data/a7-0b47239e/v2/a7/arms/A7k/train.jsonl",
+          "sha256": "8aab25e53e6f3c52e91f0bb45647ec448ba7b408491098285162abddb42577b9",
+          "rows": 2190
+        }
+      ]
+    },
+    {
+      "name": "A7s",
+      "policy": "token_budget",
+      "tokens": 1500000,
+      "seed": "decision2-06b-m5-a-s",
+      "note": "a7-enc10-v4 SentiMix Hinglish + AfriSenti Swahili (Score L3)",
+      "arms": [
+        {
+          "arm": "A7s",
+          "hf_revision": "0b47239ed36ce539b2350e35af88a26140d867f7",
+          "path": "/runs/m5/data/a7-0b47239e/v2/a7/arms/A7s/train.jsonl",
+          "sha256": "f7eef149493d83e93cca1d5128132477412bbd99239832939fd77a80fb43e6ec",
+          "rows": 12860
+        }
+      ]
+    },
+    {
+      "name": "A7q",
+      "policy": "token_budget",
+      "tokens": 1924079,
+      "seed": "decision2-06b-m5-a-q",
+      "note": "a7-enc10-v4 OASST1 reply ratings (23 languages, Score L5); whole message trees",
+      "arms": [
+        {
+          "arm": "A7q",
+          "hf_revision": "0b47239ed36ce539b2350e35af88a26140d867f7",
+          "path": "/runs/m5/data/a7-0b47239e/v2/a7/arms/A7q/train.jsonl",
+          "sha256": "c65aac85a7399ebde36039d9de7b8945d8570909e61a3f4a69a7ad5001ac7bfd",
+          "rows": 23537
+        }
+      ]
+    }
+  ]
+}

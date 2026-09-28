@@ -1,0 +1,18 @@
+set -u
+# Decoder M3: development readout of one tier's T and J groups together (paired seeds, soups, 1.0 control).
+# usage: m3-contrast.sh <mirror-dir> <tier tag 4B|2B> <T group> <J group> <control nox1|sol1>
+SRC=$1 TAG=$2 TG=$3 JG=$4 CTL=$5
+M=/data/dev2/runs/dec/m3; A=$M/arms/full; C=/data/dev2/runs/dec/m2/controls
+S=/data/dev2/src/$SRC/src/training/decision2
+args=(--arm $CTL=$C/$CTL-dev/$CTL.dev.predictions.jsonl,$C/$CTL-css-pilot/$CTL.css-pilot.predictions.jsonl)
+for g in $TG $JG; do
+  for s in s1 s2 s3; do
+    [ -f $A/m3-$g-$s-post/css-pilot/css-pilot.predictions.jsonl ] && args+=(--arm $g-$s=$A/m3-$g-$s-post/dev/dev.predictions.jsonl,$A/m3-$g-$s-post/css-pilot/css-pilot.predictions.jsonl)
+  done
+  [ -f $M/soup/$g/css-pilot/css-pilot.predictions.jsonl ] && args+=(--arm $g-soup=$M/soup/$g/dev/dev.predictions.jsonl,$M/soup/$g/css-pilot/css-pilot.predictions.jsonl)
+done
+for s in s1 s2 s3 soup; do
+  [[ " ${args[*]} " == *" --arm $TG-$s="* && " ${args[*]} " == *" --arm $JG-$s="* ]] && args+=(--compare $TG-$s:$JG-$s)
+done
+(cd $S && PYTHONPATH=$S python3 -m v2.dec.dev_readout --typed-gold /data/dev2/private/panels/gold/typed-dev.gold.jsonl \
+  --css-gold /data/dev2/private/panels/gold/css-pilot.gold.jsonl "${args[@]}" --output $M/soup/contrast-$TAG.json)

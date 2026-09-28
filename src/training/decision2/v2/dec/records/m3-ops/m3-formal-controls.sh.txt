@@ -1,0 +1,15 @@
+set -u
+# Decoder M3 prereg rule 3 (5c8bbc569): 16,384-token same-limit 1.0 controls through the shared
+# renderer with package temperatures, node A GPU5 (waits for the lease), scored vs the adopted runs.
+SRC=$1
+. /data/dev2/runs/dec/formal/m3-ops/m3-formal-lib.sh
+S=/data/dev2/src/$SRC/src/training/decision2; spec=$S/v2/dec/adapter-spec-infer-1p0.json
+E=/data/dev2/runs/eval/m1-adopt
+for spec_line in "nox1-16k Nox-4B cde2a68dbaa557ea65dc458104d410a0802ee259 4B nox1" "sol1-16k Sol-2B ce0c018a28de16d6639b1cd203b761bf643b89e6 2B sol1"; do
+  set -- $spec_line; name=$1 repo=$2 rev=$3 tier=$4 adopted=$5
+  pkg=$H/models--llm-semantic-router--Decision-1.0-$repo/snapshots/$rev
+  [ -f $F/$name/COLLECT.json ] || collect $SRC $name $pkg $rev $spec "M3 same-limit 1.0 control $name (16,384 tokens, shared renderer)" \
+    --extra model_id=llm-semantic-router/Decision-1.0-$repo --extra max_length=16384 || continue
+  score $SRC $name "$name same-limit control (shared renderer, 16,384 tokens)" $tier decision1 $pkg $E/$adopted adopted-$adopted
+done
+flog "controls chain done"

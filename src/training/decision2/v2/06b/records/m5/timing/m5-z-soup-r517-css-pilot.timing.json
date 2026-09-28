@@ -1,0 +1,1 @@
+{"run":"m5-z-soup-r517-css-pilot","gpu":1,"render":"/dev/dri/renderD137","commit":"62a4be02fd41eda57cd4363d10dc2688468365dc-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T18:25:14Z","end_utc":"2026-09-28T18:25:50Z","wall_seconds":36,"gpu_hours":0.01000,"exit":0}

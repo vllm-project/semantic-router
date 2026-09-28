@@ -1,0 +1,173 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "DEV2.0-0.6B",
+  "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+  "identity": {
+    "model_sha256": "5b30b7e2e612cbf4a45dcab1cbe2bd05b2b6d25cfe91c376031cb22d5ce303a8"
+  },
+  "report_sha256": "72cf01def4ac987919cd4f13b144652da5fd37a9cdf2c92487bd9c76736bbaa9",
+  "paired_sha256": "bd4ad6c72fa432b7970991a363b87d3017eb8e7895a2355a38326106566db614",
+  "calibration": "none: raw model probabilities (temperature 1, as scored), no calibration.json; the CAL698 temperatures (calibration.json e1f7c909: Choice 0.592, Noul 0.588, Score 0.345) were evaluated and rejected under the coordinator's 2026-09-28 23:15 UTC+8 rule",
+  "decided_by": "coordinator (Decision 2.0 program), under the user's full-autonomy mandate of 2026-09-28",
+  "prepared_by": "Decision 2.0 release engineering",
+  "decided_utc": "2026-09-28T18:05:00Z",
+  "action": "Release privately: add llm-semantic-router/DEV2.0-0.6B to the private 'Decision 2.0' collection, which then holds exactly DEV2.0-0.8B and DEV2.0-0.6B. The repository and the collection stay private.",
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect run binds this file's SHA-256 to the Hub revision and package manifest it verified. That revision is the frozen T = 1 package e61b2b44 with only the card changed (C1 line and limits): the model and runtime files must equal e61b2b44's.",
+  "supersedes": [
+    "bc59b2afbd7d837d33d15c001bb91087056771bf1598b247f4edaabb41c94d8a (verified draft for e61b2b44)",
+    "4946f66658fcf3e838b475cb79ac5aff81aaf47df1462f15479ba467f8aa6b61 (build-time draft, T = 1)"
+  ],
+  "rationale": "DEV2.0-0.6B (m4-t-a7-soup: official Qwen3-0.6B-Base fully fine-tuned, three-seed uniform soup) clearly beats its own Decision 1.0 (Kai) on post-key same-panel JevArena v3 (43.54 vs 35.94, +7.60 [+4.70, +10.76]) and clears the tier threshold (>= 38.3, 90% of GLiNER2.5-Decide 42.52). It is level with the tier leader GLiNER2.5-Decide (+1.02 [-1.77, +7.80]), with human transfer not below it (+0.039 [-0.013, +0.167]) and significantly above Bosun v3.1 0.6B (+0.137 [+0.010, +0.192]); no decision type collapsed. The sealed, independent JevArena-C1 event 2 confirms the gain over Kai 1.0 (33.21 vs 17.77, +15.44 [+13.51, +17.21]; every type interval above 0), with the caveat that Kai runs at its published 1,024-token limit and 525 of 2,874 items it cannot take count as wrong (on the 11 tasks that fit, 29.4 vs 20.3, point estimate). It is level with Bosun on C1 (-1.82 [-4.05, +0.35]). Calibration ships T = 1 under the 23:15 rule. The package is the frozen scored checkpoint, verified end to end, and every regression is disclosed on the card.",
+  "candidate": {
+    "recipe": "0.6B Milestone 4 m4-t-a7-soup: official Qwen3-0.6B-Base @da87bfb6, (a2) recipe (backbone LR 1e-5, 10% warm-up), A0s-r + A6 + A7 Eos/Lux natural pool (26,203 rows, 20.0M tokens), KL toward own Decision 1.0 Lux-9B soft targets on 6,430 rows, three same-init seeds, uniform weight soup, no calibration, 8,192-token package",
+    "checkpoint": {
+      "repo_id": "llm-semantic-router/dev2-release-staging-06bm4",
+      "revision": "62c61c10",
+      "profile": "qwen-full"
+    },
+    "frozen_package": {
+      "revision": "e61b2b4419383672cb6a92d63699f7974e5f81ac",
+      "manifest_sha256": "a5cdabedf93835f028b871d0dc64ad8595e5369128f994d07bdee44dc1e999a9",
+      "do_not_use": "a87eeb725b4edd5e7612342be662c4d11d470487 (stale calibration.json)"
+    },
+    "calibration_sha256": null,
+    "max_input_tokens": 8192,
+    "loaded_parameters": 597103104,
+    "packaged_parameters": {
+      "backbone": 596049920,
+      "head": 1053184,
+      "residual": 0
+    },
+    "tier": "0.6B"
+  },
+  "gate_evidence": {
+    "post_key_v3": {
+      "candidate": 43.541,
+      "kai1_adopted": 35.938,
+      "delta": 7.6,
+      "ci95": [
+        4.7,
+        10.76
+      ],
+      "paired_sha256": "bd4ad6c72fa432b7970991a363b87d3017eb8e7895a2355a38326106566db614"
+    },
+    "vs_kai1_same_limit_8k": {
+      "right_v3": 35.969,
+      "delta": 7.57,
+      "ci95": [
+        4.43,
+        10.59
+      ]
+    },
+    "tier_threshold": "43.54 >= 38.3 (90% of GLiNER2.5-Decide 42.52)",
+    "vs_gliner25_decide": {
+      "delta_v3": 1.02,
+      "ci95": [
+        -1.77,
+        7.8
+      ],
+      "delta_H": 0.039,
+      "ci95_H": [
+        -0.013,
+        0.167
+      ],
+      "delta_T": -0.015,
+      "ci95_T": [
+        -0.046,
+        0.016
+      ]
+    },
+    "vs_bosun_v3_1_0p6b": {
+      "delta_v3": 5.02,
+      "ci95": [
+        -1.35,
+        7.8
+      ],
+      "delta_H": 0.137,
+      "ci95_H": [
+        0.01,
+        0.192
+      ],
+      "delta_T": -0.038,
+      "ci95_T": [
+        -0.068,
+        -0.01
+      ]
+    },
+    "no_type_collapsed": "typed FINAL Choice .319 (chance .267), Noul .552 [.518, .587] (chance .50; 78% on one side), Score .333 (chance .20; uses all five levels, leans on 0 and 4); none collapsed (eval record m4-nodeB-kernel-06b-gates-c1e2prep)",
+    "jevarena_c1_event2": {
+      "candidate": 33.21,
+      "kai1": 17.77,
+      "delta_vs_kai1": 15.44,
+      "ci95_vs_kai1": [
+        13.51,
+        17.21
+      ],
+      "lex1": 20.82,
+      "delta_vs_lex1": 12.39,
+      "ci95_vs_lex1": [
+        10.3,
+        14.29
+      ],
+      "bosun_v3_1_0p6b": 35.03,
+      "delta_vs_bosun": -1.82,
+      "ci95_vs_bosun": [
+        -4.05,
+        0.35
+      ],
+      "gliner25_decide": 22.82,
+      "delta_vs_gliner25": 10.39,
+      "ci95_vs_gliner25": [
+        8.2,
+        12.55
+      ],
+      "items": 2874,
+      "input_limit_caveat": "Kai and Lex run at their published 1,024-token limit (525 of 2,874 items invalid) and GLiNER2.5-Decide at its own (935 invalid); invalid items count as wrong. On the 11 tasks whose inputs fit Kai's limit: 29.4 vs 20.3 (point estimate, no interval). A same-limit Kai1 8K run joins C1 event 3.",
+      "candidate_seal_sha256_prefix": "f9e1279c",
+      "record": "v2/eval/records/m4-dev2-06b-c1-event2-2026-09-29.md (integration f422d2ce8)"
+    },
+    "public231": {
+      "candidate": 142,
+      "kai1": 114
+    },
+    "scored_run": {
+      "run": "m4-t-a7-soup (frozen runner, 8,192 tokens, raw probabilities, node A)",
+      "report_sha256": "72cf01def4ac987919cd4f13b144652da5fd37a9cdf2c92487bd9c76736bbaa9",
+      "seal_sha256": "4e02a0b0cbba60445e4780029cfd488e9af5e04a84433f89bd7401f3b3613bfc",
+      "paired_vs_adopted_kai1_sha256": "bd4ad6c72fa432b7970991a363b87d3017eb8e7895a2355a38326106566db614"
+    },
+    "pk1_rows_receipt_sha256": "5e79927c1b7268cba81ddbf516fbbf386235a97eeceb30efd5b629641e61ba21"
+  },
+  "development_panel_calibration_check": {
+    "receipt": "v2/release/records/dev2-0p6b-release-2026-09-28/devcal/dev2-0p6b.json",
+    "receipt_sha256": "851aff907bf1a8e11180fa492cfaf52f63eed8302e37fd8260930c91f9520389",
+    "typed_dev_brier_ece10": "raw 0.336 / 0.169 vs CAL698 0.396 / 0.300",
+    "css_pilot_brier_ece15": "raw 0.790 / 0.072 vs CAL698 0.790 / 0.058",
+    "verdict": "reject CAL698; ship T = 1"
+  },
+  "package_verification": {
+    "frozen_revision": "e61b2b4419383672cb6a92d63699f7974e5f81ac",
+    "manifest_sha256": "a5cdabedf93835f028b871d0dc64ad8595e5369128f994d07bdee44dc1e999a9",
+    "real_download_rehash": "31/31 files equal the manifest and the pre-upload package",
+    "parity": "exact (tolerance 0) against the raw scored predictions on 600 prompts before and after the real download; full-panel exact parity (10,653 prompts) for the same model and runtime bytes at 7b5d3ff2; C1 event 2 preflight reproduced the scored typed FINAL 2,000 of 2,000 from the e61b2b44 snapshot",
+    "repeatability": "native examples bit-identical across three processes (a7da72d4...)",
+    "loaded_parameters": 597103104,
+    "final_run": "the --upload --collect run rebuilds with the C1 line and limits; its receipts and gate.json are recorded next to this file"
+  },
+  "licence_decision": "apache-2.0: every weight-lineage component is Apache-2.0 (own weights and head; Qwen3-0.6B-Base @da87bfb6 weights and tokenizer). No Decision 1.0 Kai or Lex weights are included; own Decision 1.0 Lux-9B supplied soft targets only. CC BY / CC BY-SA / OANC training data are credited in ATTRIBUTIONS.md. Named comparators (card licence policy of 22:20): Decision 1.0 Kai and Lex (own, published licences), Bosun v3.1 0.6B (Apache-2.0) and GLiNER2.5-Decide (Apache-2.0 in its card metadata, no LICENSE file; noted on the card).",
+  "disclosures": [
+    "post-key same-panel label; public 231 is not the official sealed JevBench rank",
+    "typed Choice 255 vs Kai 1.0 277 of 800",
+    "same-limit Kai 1.0 at 8,192 tokens: 35.97, paired +7.57 [+4.43, +10.59]",
+    "not clearly ahead of GLiNER2.5-Decide (+1.02 [-1.77, +7.80])",
+    "typed accuracy significantly below Bosun v3.1 0.6B (-0.038 [-0.068, -0.010])",
+    "typed Noul only narrowly above chance; typed Score leans on levels 0 and 4",
+    "C1: below Kai 1.0 on Arabic HalluTruthQA (hallucination, find-the-truth), narrative event causality and Arabic overall; Noul the weakest type; vs Bosun weaker on Choice and Noul, stronger on Score; Kai/Lex/GLiNER input-limit caveat",
+    "mlx-diag non-English Noul 51.8% (below Bosun 61.2%)",
+    "seed dependence; released artifact is the three-seed soup",
+    "calibration: raw probabilities (temperature 1); CAL698 temperatures evaluated and not adopted",
+    "direct weight origin: official Qwen3-0.6B-Base, not Kai; own Lux-9B soft targets on 6,430 rows"
+  ]
+}

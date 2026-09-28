@@ -1,0 +1,22 @@
+set -u
+# Decoder M3 amendment 3 (00ffa2791): N4LK seeds (N4L with KL weight 1.0) on node B GPU1, GPU2 and,
+# after E8V-s2's postrun, GPU4.
+SRC=$1
+M=/data/dev2/runs/dec/m3; A=$M/arms; C=$M/chains
+D=/data/dev2/src/$SRC/src/training/decision2/v2/dec/drive_arm.sh
+NOX=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
+FULL="--train /runs/m3/data/m3-v2m-ret/train.jsonl --train-mode full --backbone-lr 5e-6 --head-lr 5e-5 --teacher /runs/m3/teacher/nox-lux/nox-lux-teacher.jsonl --teacher-kl-weight 1.0 --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64"
+run() {  # gpu seedname seed [wait-for-arm]
+  local gpu=$1 name=$2 seed=$3 after=${4:-}
+  {
+    echo "set -u"
+    [ -n "$after" ] && echo "until grep -qE '$after (postrun complete|zero-step FAILED|one-step FAILED|gate job FAILED|full run FAILED|preflight FAIL)' $A/OPERATIONS.log 2>/dev/null; do sleep 60; done; sleep 30"
+    echo "printf 'track=dec\nstatus=busy\npurpose=M3 amendment 3: $name\nstart_utc=%s\n' \$(date -u +%FT%TZ) > /data/dev2/leases/gpu$gpu.lock/owner"
+    echo "DEC_NODE=b DEC_DATA_DIR=$M/data-sel700-cal698 bash $D $name $gpu $SRC m3/arms $NOX -- $FULL --seed $seed"
+  } > $C/n4lk-$gpu.sh
+  setsid nohup bash $C/n4lk-$gpu.sh > $C/n4lk-$gpu.log 2>&1 < /dev/null &
+}
+run 1 m3-N4LK-s1 20260926
+run 2 m3-N4LK-s2 20260927
+run 4 m3-N4LK-s3 20260928 m3-E8V-s2
+echo "$(date -u +%FT%TZ) amendment 3 N4LK chains launched" >> $M/OPERATIONS.log

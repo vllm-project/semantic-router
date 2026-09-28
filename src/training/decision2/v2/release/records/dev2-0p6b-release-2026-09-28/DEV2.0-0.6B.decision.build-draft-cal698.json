@@ -1,0 +1,21 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-0.6B",
+  "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+  "identity": {
+    "model_sha256": "5b30b7e2e612cbf4a45dcab1cbe2bd05b2b6d25cfe91c376031cb22d5ce303a8"
+  },
+  "calibration_sha256": "e1f7c909f59d9e98334cf22e6623cb3da398b4456fb02df78cf81373a3fb94d9",
+  "report_sha256": "ffbb32a4e55f2df952c2cbcc5a3f0e43d4eff15d49f505a5790bce87d68f820d",
+  "paired_sha256": "53df7087d48c8e68710309da4c9304d95c4b837d36fe84c44c0296b29e16b180",
+  "supersedes": "72bc767e708364bc517ec6c331a05859924a651ddb0a72af59eaf34e23e1d1d0",
+  "prepared_by": "Decision 2.0 release engineering, DEV2.0-0.6B worker (build-time binding draft, CAL698 package)",
+  "decided_by": null,
+  "rationale": "Binding draft for the private build, upload and verification of the CAL698-calibrated DEV2.0-0.6B package (coordinator 22:30: the frozen release package includes its CAL698 calibration before any C1 event or collection add). Same frozen weights as the uncalibrated draft (identity 5b30b7e2, staging 62c61c10) with per-type temperatures fitted on CAL698 19cc1a8c (Choice 0.592, Noul 0.588, Score 0.345; calibration.json e1f7c909). The report and paired comparison are the frozen runner's calibrated re-score on node A: every answer equals the uncalibrated scored run (0 changes on typed 2,000 / transfer 6,547 / public 231 slots; offline softmax(log p / T) equals the re-score within 1.3e-15), so v3 43.541 vs Kai 1.0 35.938, +7.60 [+4.70, +10.76], and public 231 142 are unchanged. Disclosed tradeoff: CAL698 temperatures sharpen the probabilities and worsen panel calibration (typed ECE 0.118 to 0.191, Brier 0.309 to 0.332; transfer median task ECE 0.070 to 0.120). The pk1 row-for-row check (receipt 5e79927c) still applies. It approves nothing: the coordinator writes the final decision after JevArena-C1 scoring event 2 on this calibrated package.",
+  "pending": [
+    "JevArena-C1 scoring event 2 result for the calibrated package (card confirmation line)",
+    "coordinator decision (status final, decided_by)"
+  ]
+}

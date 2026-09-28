@@ -39,8 +39,8 @@ recommended decision itself and records it. Governing rules for that autonomy:
   at least 90% of the best measured open-weight peer's v3 in that tier (card-eligible or not), with human transfer not
   significantly below it and no decision type collapsed. Current numbers: 0.6B beat Kai1 35.94 and reach ≥ 38.3
   (GLiNER2.5-Decide 42.52); 0.8B beat Eos1 42.55; 2B beat Sol1 45.58 (≥ 44.5 vs Decider 2B 49.50 is then implied);
-  4B beat Nox1 56.47 (≥ 55.7 vs Decider 4B 61.88 implied); 9B beat Lux1 65.81; ~27B (no 1.0) reach ≥ 65.1 vs
-  AutoJev-27B 72.31. Update when the eval track measures stronger peers. After first release, keep optimizing toward
+  4B beat Nox1 56.47 (≥ 55.7 vs Decider 4B 61.88 implied); 9B beat Lux1 65.81; ~27B (no 1.0) reach ≥ 64.9 vs
+  AutoJev-27B 72.13 (node B, kernel image `dbe5f32b`, eval 22:45 UTC+8; was 72.31 on the kernel-less image). Update when the eval track measures stronger peers. After first release, keep optimizing toward
   beating the tier leader.
 
 **Allocation update 2026-09-28 10:40 UTC+8:** node B was freed. The 0.8B–4B decoder track gains node B GPU0–2, the
@@ -85,6 +85,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | release engineering | `/home/xunliu/code/vllm-sr-dev2-release` | `xunzhuo/decision-2-training-release` |
 | A7 own-1.0 corpora | `/home/xunliu/code/vllm-sr-dev2-a7` | `xunzhuo/decision-2-training-a7` |
 | release engineering (DEV2.0-0.6B) | `/home/xunliu/code/vllm-sr-dev2-release-06b` | `xunzhuo/decision-2-training-release-06b` |
+| release engineering (DEV2.0-2B) | `/home/xunliu/code/vllm-sr-dev2-release-2b` | `xunzhuo/decision-2-training-release-2b` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -144,15 +145,15 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
-| node A GPU0 | DEV2.0-0.6B release verification (lent by the 0.6B track, 2026-09-28 21:30 UTC+8); back to 0.6B afterwards |
+| node A GPU0 | 0.6B track (owner) — SHARED from 2026-09-28 22:30 UTC+8 with the DEV2.0-0.6B release worker for short CAL698-calibration / re-score jobs (≤ 30 min; own lease owner entry `owner.release`) |
 | node A GPU1 | 0.6B track (post-release optimization) |
-| node A GPU2–4 | research & data: AutoJev-27B re-qualification + target production (~1.5 h), then back to the 9B track (2026-09-28 20:15 UTC+8). **9B track: read the 21:00 cross-track note (A7 is mostly NEW data for Lux) before planning work on these GPUs.** |
+| node A GPU2–4 | 9B track (returned 2026-09-28 21:31 UTC+8 after AutoJev target production). **9B track: read the 21:00 cross-track note (A7 is mostly NEW data for Lux) and the 21:35 AutoJev note before planning work on these GPUs.** |
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
 | node A GPU6–7 | 9B track Milestone 3 (lent by eval at 2026-09-28 20:30 UTC+8; eval borrows one back for a formal run or a C1 scoring event) |
 | node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
 | node B GPU5–6 | ~27B |
-| node B GPU7 | research & data (owner); A7 may run short jobs (≤ 30 min, e.g. its embedding scan) under its own lease owner file when the GPU is idle/released |
+| node B GPU7 | research & data (owner) — SHARED from 2026-09-28 21:55 UTC+8 with the eval track's node-B comparator re-validation (~1.5 h, inference only; each writes its own lease owner entry, e.g. `owner.eval`) |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
 stop rule BEFORE launch (commit a prereg); run preflights (load/parity, zero-step, one-step + reload). If a preflight
@@ -176,6 +177,7 @@ exactly one gist file and updates it in place:
 | `07-decision-2-release.md` | release engineering |
 | `08-decision-2-own10-corpora.md` | A7 own-1.0 corpora |
 | `07b-decision-2-release-06b.md` | release engineering for DEV2.0-0.6B |
+| `07c-decision-2-release-2b.md` | release engineering for DEV2.0-2B |
 
 - Create: write the file locally with exactly that name, then `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -a <local-path>`.
   Update: `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -f <file-name> <local-path>`. Never modify or delete other files.
@@ -184,6 +186,185 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 02:50 — **DEV2.0-2B APPROVED for private release** (eval record `m4-dev2-2b-gates-2026-09-29.md`; integration
+  `c149dca51`). Gates: human transfer vs Decider 2B +0.105 [−0.008, +0.132], vs This-That 1.2 +0.120 [−0.050, +0.223]; v3 vs
+  Decider 2B +3.94 [−2.48, +5.67], vs This-That +7.33 [−2.00, +13.60], vs Sol 1.0 16K +7.66 [+3.26, +10.81]; no type
+  collapsed (Choice .556, Noul .709, Score .438 vs chance .267 / .50 / .20). **Card disclosures to add (release worker):**
+  typed accuracy significantly below Decider 2B (−0.040 [−0.070, −0.009]) and Choice the weakest type vs peers (.556 vs .681
+  / .661); the margin over Decider 2B is not significant; the gain over Sol 1.0 is typed reasoning only (human transfer
+  level, +0.033 [−0.044, +0.092]); Score almost never predicts level 0 (6 of 400, recall .03); plus the decoder track's CSS15
+  losses (mrf, wiki_corpus, flute) and mlx-diag Korean .59 vs .63. Decider 2B (Apache-2.0) and This-That 1.2 (MIT) are
+  card-eligible with a note that their licences come from card metadata only (no LICENSE file). The C1 line is added after
+  C1 event 3 (card-only revision).
+
+- 2026-09-29 02:45 — From decoder Milestone 3 (gist 04; integration `7c331e1b7`):
+  - **THIRD RELEASE CANDIDATE: DEV2.0-2B** = S2T (Sol full fine-tuning, own-Sol soft targets as a trust region, three-seed
+    soup): post-key v3 53.437 vs the stricter Sol 1.0 16K control 45.781 (+7.66 [+3.26, +10.81]); vs adopted Sol1 45.580
+    +7.86; vs Decider 2B +3.94 [−2.48, +5.67]; public 231 171 vs 160; all four typed families up; no type collapsed.
+    Staged `dev2-dec-staging@545a6784`, folder `m3/S2T-soup/`, `qwen-full`, 16,384 tokens; scored run
+    `/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA`. Teacher: own Sol 1.0 only. Disclose: CSS15 mrf −.094, wiki_corpus
+    −.045, flute −.032; mlx-diag level overall but Korean .59 vs .63. Release engineering + eval gate checks start now; C1
+    does not block it (the card gets its C1 line at event 3).
+  - **4B HOLD:** best soup N4LKr (own-Lux targets, KL 1.0) 59.539, +3.07 [−4.90, +5.00] vs Nox1 — fails the lower-bound
+    rule; staged `dev2-dec-staging@784a894f`. The 4B paired interval is about ±5, so 4B needs roughly +5 v3. Only own-Lux
+    lifted CSS15 transfer at 4B (more at KL 1.0); AutoJev lowered it most; v2-M costs 4B 2–3 points of mlx-diag; at 4B the
+    proxy's transfer term is dominated by one pilot task (`discourse`) that v2 inflates.
+  - 0.8B follow-up E8V (E8F data + v2-M) 48.585 < released E8F soup → DEV2.0-0.8B stays. New disclosure for its next
+    card-only revision: 19 of its training rows were later quarantined in A7 v3 against development held-out slices (at most
+    one could match an mlx-diag item).
+  - **HF PRIVATE STORAGE POLICY (the org hit its private storage limit at 18:08 UTC):** keep released model repos, the
+    current release candidate's staging copy until it is released, datasets (training data, teacher targets) and eval
+    artifacts. For everything else in staging model repos (HOLD candidates, individual seeds, superseded soups): record
+    hashes, keep a re-hashed copy on the nodes, then delete the stored LFS files from the Hub without rewriting commit
+    history, and log each deletion in your records. Upload only soups and finalists, never individual seeds. Check storage
+    headroom before any large upload.
+
+- 2026-09-29 02:40 — From 0.6B Milestone 5 (gist 03; integration `9a2301c68`): no successor; the released DEV2.0-0.6B stands.
+  - Best soup Z (nine seeds: T + V2 + arm a) post-key v3 45.48, +1.94 [−0.82, +3.89] vs released (fails the successor
+    rule); best 0.6B human transfer (.498), typed Choice above Kai1 (288), half the calibration error; loses typed Noul −12
+    and mlx-diag −1.6 (multilingual Score). Staged as not-a-successor `dev2-staging-06bm5-z@6b414780…`.
+  - **Findings for research & data and all small tiers:** A7q / A7k / A7s (human multilingual Score) is the only arm with a
+    positive transfer signal (typed-DEV Score 101 → 165); **data v2 costs transfer at 0.6B even with Choice protected**
+    (stance collapses .539 → .395; suspect: v2's answerability-style Noul share); AutoJev-27B targets were no better than
+    own-Lux at 0.6B (−0.04 [−1.56, +2.12]).
+  - Proxy suggestion (eval): use the mean of the CSS pilot's three tasks instead of the median as the transfer term — it
+    ordered all four formal 0.6B soups correctly on human transfer; recalibration assigned to a fresh eval worker.
+  - Coordinator decisions: Z is not a release candidate and gets no C1 event; 0.6B Milestone 6 (node A GPU0–1) tests the
+    XL-full recipe against the A7-only XL control (`cx-xl-a7v1-full`), with more A7 curriculum and Lux targets on A7 rows,
+    three seeds + soups each.
+
+- 2026-09-29 02:15 — **DEV2.0-0.6B RELEASED (private)**: `llm-semantic-router/DEV2.0-0.6B@99c4e799392afa73241915aeb16fefa5ef3518d7`
+  (card-only revision of `e61b2b44`; manifest `0affd1b1…`; weights `5b30b7e2…`; T = 1; final decision `e22fe181…`, gate
+  `787c31c9…`; integration `313dafe98`). The private "Decision 2.0" collection holds exactly DEV2.0-0.8B and DEV2.0-0.6B.
+  The 0.6B card adds the C1 event 2 line, C1 weak spots vs Kai 1.0 and vs Bosun, and three typed-panel limits (accuracy
+  below Bosun −0.038 [−0.068, −0.010]; Noul only narrowly above chance; Score leaning on extreme levels).
+
+- 2026-09-29 02:05 — **C1 event 2 done (2 of 3 used)**; DEV2.0-0.6B APPROVED for private release (eval record
+  `m4-dev2-06b-c1-event2-2026-09-29.md`; integration `f422d2ce8`).
+  - C1: DEV2.0-0.6B 33.21 vs Kai1 17.77 (+15.44 [+13.51, +17.21]; every type interval excludes 0), vs Lex 20.82
+    (+12.39 [+10.30, +14.29]), vs GLiNER2.5-Decide 22.82 (+10.39 [+8.20, +12.55]), vs Bosun 35.03 (−1.82 [−4.05, +0.35],
+    level; Bosun better on Choice −3.73 and Noul −11.77, we are better on Score +8.97). Kai / Lex run at their published
+    1,024-token limit (525 of 2,874 items invalid; on tasks that fit, 29.4 vs 20.3 point estimate); GLiNER could not take 935.
+    Disclose vs Kai1: Arabic HalluTruthQA (hallucination 44.6 vs 54.2, find-the-truth 22.0 vs 25.2), narrative event
+    causality 14.9 vs 21.1, Arabic accuracy .339 vs .396; Noul is the weakest type (47.6).
+  - No C1 v1.2 (recheck over 19.46M rows clean). Before event 3, recheck Lux-XL waves 3–5, H7 / H8 gap arms and XL recipe r2.
+  - Coordinator decision: no extra C1 access for a same-limit Kai1 run now; Kai1 at 8K joins event 3 (the final family
+    event) as a comparator so the 0.6B card can later add a same-limit line (card-only revision).
+  - The 0.6B release finalizes on the frozen T = 1 package `e61b2b44` (card-only README revision, `--already-collected` not
+    applicable because it is not yet collected).
+
+- 2026-09-29 00:20 — **DEV2.0-0.8B current release revision = `7d08d0e12082ee6810a4221063342cefe45b6ac3`** (T = 1,
+  calibration-only; manifest `2a19a65a…`; final decision `fedb18fa…` supersedes `b2338c45…`; gate `13398d42…`; weights
+  identical to `0b631a85`; integration `b0c3341cd`). Collection items point at the repo, so the private "Decision 2.0"
+  collection shows this revision. Accepted deviations: the new `--already-collected` pipeline flag (`bf9717167`) changes only
+  `builder.source_commit` in the manifest; the card keeps the verified wording "worsened calibration on out-of-distribution
+  development data". Every later calibration-only or card-only revision uses `--already-collected`.
+
+- 2026-09-28 23:55 — Calibration rule applied (release record; gist `07b-decision-2-release-06b.md`; integration `9b70a44a8`):
+  CAL698 fails the development-panel rule for both released sizes (typed-DEV Brier / ECE raw → CAL698: 0.6B 0.336 / 0.169 →
+  0.396 / 0.300; 0.8B 0.269 / 0.128 → 0.300 / 0.180; the CSS pilot improves only slightly). Both ship T = 1.
+  - **DEV2.0-0.6B frozen package for C1 event 2 and release:** private `llm-semantic-router/DEV2.0-0.6B@e61b2b4419383672cb6a92d63699f7974e5f81ac`
+    (manifest `a5cdabed…`, weights `5b30b7e2…`, no calibration, 8,192-token limit). **Never use revision `a87eeb72`**
+    (a stale `calibration.json` survived an add-only upload; the shared uploader now makes each revision exactly the
+    package, commit `89294e89f`). C1 event 2 is CONFIRMED: this package + Kai1, Lex, Bosun, GLiNER2.5-Decide.
+  - **DEV2.0-0.8B calibration-only revision (T = 1) APPROVED for publication:** manifest `a1f5c332…`, weights and every
+    answer unchanged (v3 50.236, +7.69 [+3.65, +13.32]; C1 event 1 unchanged); formal typed Brier / ECE 0.254 / 0.103
+    (CAL698: 0.278 / 0.150). Final decision to name report `1f5cf33d…` and paired file `fa62c29a…`.
+
+- 2026-09-28 23:50 — **XL RELEASE RECIPES AVAILABLE** (research & data M3b; gist 02 entries 22:00 and 22:40; private HF
+  dataset revision `ba848147b0efdd3e2b9531f99f8930d7a9f364aa`, `m3/mixtures/xl/`): **mx-xl-full** 340,698 rows / 151.3M
+  native tokens, Choice / Noul / Score 37.1 / 38.2 / 24.8%, 33 languages, English 59.0%; **mx-xl-short** (<= 1,024 tokens)
+  355,855 rows / 123.8M tokens. Pools: A0s-strict + data v2 + v1 arms + A7 `a7-dec10-v3` + A7q / A7k / A7s / A7r (never
+  A7x); shortcut families dropped; deduplicated; whole groups; per-source 8% cap; English <= 60%. Controls:
+  cx-xl-a7v1-* (A0s-strict + A7 + v1) and cx-xl-v2v1-* (A0s-strict + v2 + v1), trained to the same token budget by
+  repetition. **A0s-strict** (pk1 A0s minus the 752 shortcut-family rows) is published for new runs (gist 02, 22:00).
+  Teacher coverage now: 128,144 XL-full rows have Lux and AutoJev targets; own-Lux targets for the remaining 252,215 XL
+  prompts are being produced on node B GPU7 (five waves, ~02:30 UTC+8). **Coordinator decision: AutoJev targets for the
+  remaining XL rows are deferred** until a size track's AutoJev-distillation arm shows a clear gain; rows without teacher
+  targets train on gold labels. Size tracks: use the XL recipes for release-candidate training (full, or short for
+  1,024-token models). The research & data worker was restarted (fresh session) to finish M3b.
+- Coordinator process note: a worker is resumed at most once for a short follow-up; every new milestone gets a fresh
+  worker (a data worker resumed across four milestones ran out of context at 23:40; its uncommitted files are being
+  recovered).
+
+- 2026-09-28 23:40 — From eval (integration `b99032a66`):
+  - **Node-B comparators re-collected on the kernel-equipped image `dbe5f32b`** (replacements, disclosed; old runs kept as
+    records): AutoJev-27B 72.133 / public 201 (was 72.310 / 200; −0.18 [−0.69, +0.48]); Eikos-27B 69.290 / 212; Jebadiah
+    65.472 / 176; Lux1 node B now identical to node A (0 of 8,778 answers differ; the old image differed in 43).
+    **27B release threshold is now >= 64.9** (90% of AutoJev-27B's 72.13).
+  - **Comparability rule (supersedes every earlier "same-node" rule):** a candidate and its comparator must run on the SAME
+    IMAGE (kernel-equipped, `dbe5f32b` or an attested equivalent with FLA + causal-conv1d) with the SAME FROZEN, persisted
+    autotune cache. With that, nodes A and B give identical answers, so formal runs may use either node.
+  - DEV2.0-0.6B gates pass: human transfer vs GLiNER2.5-Decide +0.039 [−0.013, +0.167], vs Bosun +0.137 [+0.010, +0.192];
+    v3 vs Bosun +5.02 [−1.35, +7.80], vs Lex +12.52 [+3.47, +18.12]; no type collapsed (Choice .319, Noul .552, Score .333).
+    Disclose: typed accuracy significantly below Bosun (−0.038); Noul only narrowly above chance; Score leans on levels 0
+    and 4.
+  - C1 event 2 is prepared (independence recheck over 9.9M rows found no C1 source; smoke-before-decrypt script
+    `v2/eval/sealed/event2.sh`); batch DEV2.0-0.6B + Kai1, Lex, Bosun, GLiNER2.5-Decide. The coordinator confirms it
+    once the 0.6B calibration decision fixes the final package identity.
+
+- 2026-09-28 23:15 — **CALIBRATION RULE AMENDED (supersedes the 22:30 rule).** For DEV2.0-0.6B the CAL698 per-type
+  temperatures (Choice 0.592 / Noul 0.588 / Score 0.345) improved CAL698 itself (ECE .079 → .031) but worsened every
+  evaluation panel (typed ECE .118 → .191, human-transfer median ECE .070 → .120, public 231 ECE .116 → .144) with zero
+  answer changes: CAL698 is in-distribution to training, where the model is under-confident, while the panels are out of
+  distribution. New rule for every size: fit CAL698 temperatures, but ADOPT them only if they do not worsen aggregate
+  calibration (ECE and Brier) on the development panels (typed DEV and CSS pilot) — decided on development panels, never
+  on formal ones; otherwise ship T = 1 (uncalibrated) and disclose the evaluated-and-rejected temperatures on the card.
+  The frozen package (with its adopted calibration) is fixed before any C1 event or collection add. The released
+  DEV2.0-0.8B gets the same retroactive check; a calibration-only revision (weights and answers unchanged) is allowed if
+  its CAL698 temperatures fail the rule.
+
+- 2026-09-28 22:35 — **DEV2.0-0.8B RELEASED (private).** `llm-semantic-router/DEV2.0-0.8B@0b631a85c19fb573aee34fc68bb413271ebe89f4`
+  (manifest `0af27b1c…`; only README changed from the verified `2667d883`), the only item in the private "Decision 2.0"
+  collection. Final decision `b2338c45…` sealed to this revision (gate `fb989b53…`, six checks pass); readback: real
+  download re-hash 31/31, 8,378-prompt answer parity, repo private, anonymous access refused. Records: integration
+  `8b7349b97`, gist `07-decision-2-release.md`. Post-release, a successor replaces it only if it clearly beats it (see 21:30).
+
+- 2026-09-28 22:30 — DEV2.0-0.6B release engineering done up to the collection step (gist `07b-decision-2-release-06b.md`;
+  integration `33b9e366a`; private `llm-semantic-router/DEV2.0-0.6B@7b5d3ff2…`, draft decision `72bc767e…`). It shipped
+  the raw scored probabilities without CAL698. **Coordinator decision: calibrate before release** — fit per-type
+  temperatures on CAL698, confirm argmax is unchanged on every scored prompt (v3 composite unchanged), recompute/re-score
+  the calibration metrics, upload the calibrated package as a new private revision, then C1 event 2 scores THAT frozen
+  package, then finalize. Rule for every size: the frozen release package includes its CAL698 calibration before any C1
+  event or collection add.
+
+- 2026-09-28 22:20 — DEV2.0-0.8B package verified (release record `v2/release/records/dev2-0p8b-release-2026-09-28/`;
+  integration `2aad3f96f`): private `llm-semantic-router/DEV2.0-0.8B@2667d883…`, 753,446,208 loaded parameters, manifest
+  `d10bd95c…`, real-download re-hash 31/31, parity 0 changed answers on all 8,378 scored prompts. Finalization (C1 line,
+  final decision, `--collect`) is running. **Card licence policy (applies to every size):** peers whose model card
+  declares a permissive licence may appear even without a LICENSE file (note it); mlx-diag parts built from
+  non-commercial sources (e.g., its XNLI-based Score part) are left off cards; a model is labelled `apache-2.0` when its
+  whole weight / tokenizer / code lineage is Apache-2.0, with training-data licences (e.g., CC BY-SA) credited on the card.
+  Release examples must load the scored kernels (the pipeline now fails if they are missing); cards state the tested
+  hardware and don't claim CPU support unless verified.
+
+- 2026-09-28 21:55 — **DEV2.0-0.8B APPROVED for private release** (eval gate checks + C1 event 1; integration `bf3ff2e6e`).
+  - Gate (a): human transfer not below the tier leaders (vs Intern-Decision +0.058 [−0.043, +0.119]; vs Kev +0.050
+    [−0.041, +0.122]); v3 vs Intern-Decision +6.70 [+0.63, +10.35], vs Kev +7.02 [+1.33, +11.25]. Gate (b): no type
+    collapsed (Choice .661 vs chance .267; Noul .764 vs .50; Score .268 [.226, .313] vs .20 — uses four of five levels,
+    never level 0, slightly below Eos 1.0 .300: disclose). Eos 1.0's own typed Noul is collapsed (97% "false").
+  - **C1 event 1 (sealed, independent):** DEV2.0-0.8B 40.24 vs Eos 1.0 37.94 (+2.31 [+0.29, +4.30]); vs Intern-Decision
+    +5.66 [+3.49, +7.78]; vs Kev +1.18 [−0.99, +3.37] (level). Disclose C1 regressions vs Eos 1.0: Russian star ratings,
+    tutoring-rapport Noul, Arabic multiple choice, long inputs (.577 vs .620), non-English (.422 vs .440).
+  - The card adds a C1 line (independent sealed confirmation, 2,874 human-labelled items) and these regressions; the
+    coordinator finalizes the release decision when the release worker's verification returns.
+  - **Node-B image gap:** `decision20-lux-runtime` (`ce895822`) lacks `causal_conv1d`; every eval node-B collection (Lux1
+    check, AutoJev-27B, Eikos, Jebadiah) used it, while the 27B track's formal runs used the kernel-equipped `dbe5f32b`.
+    The eval track re-collects those comparators on `dbe5f32b` now (node B GPU7, shared). **~27B track: do not finalize a
+    27B formal comparison until the re-validated AutoJev node-B comparator is published; if one already ran, re-pair it
+    against the new comparator.** If AutoJev's v3 moves, the 27B release threshold is recomputed.
+
+- 2026-09-28 21:35 — **AutoJev-27B TEACHER TARGETS AVAILABLE** (research & data M3a; gist 02; integration `5794726fe`).
+  Re-qualification v2 passed every gate (warm-up covering every 512-token bucket to 8,096; frozen autotune cache; 910/910
+  bitwise identical across four processes / three GPUs; 99.61% argmax vs the eval track's predictions). All files produced
+  on node A, under `m3/teachers/autojev27/`, each with per-row attestation and a `PROVENANCE.md` carrying the caveat:
+  - AJ-M (M recipes) 84,523 targets `ba52dd86…` at private revision `3a99bf1c26ac7924ec1216cdf1f703e1a5f21ae6`;
+  - AJ-A0s (pk1 A0s rows) 7,299 `97a071af…` at `9bb9790b014d17d7dad50677b4f057f20e50460c`;
+  - AJ-SL (S and L recipes minus M) 37,219 `1254cb47…` at `780d27439c5a07650a37b9a0ce3369dae3359baf`.
+  Agreement with gold (Choice / Noul / Score): AutoJev ≈ .84 / .83 / .61 vs own-Lux ≈ .79 / .79 / .55 on the same rows.
+  Every size track may adopt them now; every AutoJev-distilled candidate needs a matched Lux-target control, and its
+  card and records disclose the teacher provenance caveat. Node A GPU2–4 are back with the 9B track.
 
 - 2026-09-28 21:30 — **SECOND RELEASE CANDIDATE: DEV2.0-0.6B** (0.6B Milestone 4; gist `03-decision-2-06b-encoder.md`;
   integration `2747b817a`).
@@ -207,6 +388,7 @@ exactly one gist file and updates it in place:
   - **Proxy mis-ranking at 0.6B:** P favoured the mixture-v2 soup by +6.94 but v3 put the A7 soup ahead by 4.4 (v2 soup:
     39.13, +3.19 [−0.33, +8.11] vs Kai1); CSS pilot rose for v2 while CSS15 fell (.397 vs .480). Eval: check whether data v2
     contains same-source datasets for the CSS-pilot tasks that rose (dataset-level, not only lexical/embedding overlap).
+    (Reassigned at 21:35 to research & data Milestone 3b, which owns the v2 source registry; eval need not duplicate it.)
     Research & data: mixture v2 gave the best public 231 (151) at 0.6B but lower transfer and mlx-diag — revisit the
     recipe's Choice share and why its multilingual arms didn't lift mlx-diag.
   - Post-release updates: a new candidate replaces a released size only if it clearly beats the released model (paired
@@ -737,3 +919,50 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
   `0b29686f…`, gold `c0277771…`). v1.1 seal `e3f411a8…` is logged. Record: `v2/eval/records/m3-sealed-c1-v1_1-2026-09-28.md`.
   The check is repeated before every scoring event against newly landed data; the key stays only on the coordinator
   workstation (a node sees it only transiently during a logged event).
+- **DEV2.0-0.8B gate checks + C1 event 1 (2026-09-28 ~21:50 UTC+8; record `v2/eval/records/m4-dev2-08b-gates-and-c1-event1-2026-09-28.md`).**
+  - Gates (post-key v3, stored predictions):
+    - Human transfer vs Intern-Decision is +0.058 [−0.043, +0.119] and vs Kev +0.050 [−0.041, +0.122]: not below the
+      leader.
+    - v3 composite is +6.70 [+0.63, +10.35] vs Intern and +7.02 [+1.33, +11.25] vs Kev.
+    - No candidate type collapsed (Choice .661, Noul .764, Score .268 vs chance .267/.50/.20). Score never predicts
+      level 0; disclose.
+    - Eos 1.0's typed Noul IS collapsed (97% false).
+  - **C1 v1.1 event 1 (sealed independent set; 1 of 3 used).** The recheck found no new C1 source in training (no
+    v1.2). C1 scores: candidate 40.24, Eos 1.0 37.94, Kev 39.06, Intern 34.58, JPT-0.8B 39.01 (internal only).
+    - Paired differences for the candidate: vs Eos **+2.31 [+0.29, +4.30]**, vs Intern **+5.66 [+3.49, +7.78]**, vs
+      Kev +1.18 [−0.99, +3.37].
+    - Disclosed regressions vs Eos 1.0: Russian star ratings, tutoring rapport, long inputs (.577 vs .620) and
+      non-English accuracy.
+  - **Gate check tool:** `python3 -m v2.eval.gates paired|types …` (stored predictions only). Future C1 events reuse the
+    event script pattern in the record (logged decryption, seal before gold).
+- **Node-B image gap (plan, not run):** the `decision20-lux-runtime` image (`ce895822`) lacks `causal_conv1d`. Every
+  eval node-B collection used it: Lux1 check, AutoJev, Eikos, Jebadiah. The 27B track's formal runs used the kernel image
+  `dbe5f32b`. Plan: re-collect the three 27B comparators plus Lux1 once on `dbe5f32b`, about 1.3 GPU-h. **Request node
+  B GPU5 or GPU6 from the ~27B track before the next 27B formal comparison**
+  (`v2/eval/records/m4-nodeB-revalidation-plan-2026-09-28.md`).
+- **Node-B re-validation on the kernel image `dbe5f32b` (2026-09-28 23:30 UTC+8; node B GPU7 shared with the data
+  track; record `v2/eval/records/m4-nodeB-kernel-06b-gates-c1e2prep-2026-09-28.md`).** One smoke run and one run each,
+  1.33 GPU-h.
+  - **New node-B 27B comparators (disclosed replacements; old runs kept as records):** AutoJev-27B
+    `m4/nodeB-kernel/autojev27` **72.133** / public 201 (was 72.310 / 200); Eikos-27B `…/eikos27b` 69.290 / 212 (was
+    69.201); Jebadiah-27B `…/jebadiah27b` 65.472 / 176 (was 65.472 / 177). New vs old are ties (AutoJev −0.18
+    [−0.69, +0.48]). **27B threshold: ≥ 64.9** (90% of 72.13; line above updated; node A's 72.31 is a tie).
+  - **The kernel explains the node A/B differences.** Lux1 on `dbe5f32b` with node A's frozen autotune cache is
+    **bit-identical to node A** (0/8,778 answers, drift 0.0; the old image differed in 43). AutoJev's typed FINAL now
+    matches node A exactly (old 11 differences); the remaining 27 CSS + 2 public slots fit fresh autotuning. The
+    "same-node" rule can become a **same-image + same frozen autotune cache** rule (the earlier hardware attribution was
+    wrong).
+  - Runner (`e9cd637b1`, merged with the other track's `--shared-lease`): end-of-job lines now go to the named lease
+    entry (a bug had appended two lines to the data track's GPU7 `owner`, since overwritten by them); `--shared` /
+    `--shared-lease NAME` skip the idle check and record the co-tenancy in `GPU-TIME.json`.
+- **DEV2.0-0.6B gate checks (`m4-t-a7-soup`, v3 43.54).** Human transfer vs GLiNER2.5-Decide +0.039 [−0.013, +0.167],
+  vs Bosun **+0.137 [+0.010, +0.192]**: not below either. v3 vs GLiNER2.5 +1.02 [−1.77, +7.80], vs Bosun +5.02
+  [−1.35, +7.80], vs Kai1 **+7.60 [+4.70, +10.76]**, vs Lex **+12.52 [+3.47, +18.12]**. **No candidate type collapsed**
+  (Choice .319, Noul .552, Score .333). Disclose: typed accuracy below Bosun (−0.038 [−0.068, −0.010]); Noul is
+  narrow (lower bound .518, 78% one side); Score leans on levels 0 and 4. Peers: Kai1 Noul, GLiNER2.5 Score, Bosun
+  Score and Lex Choice/Noul are collapsed.
+- **C1 event 2: prepared, not run.** Recheck vs `9bb9790b` / `780d2743` (**`aj-sl`**) / `12912429` and local pools
+  (`m3a2`, new `m3b`): no C1 source in 9.92M rows; 0 OVERLAP, 9 weak REVIEW (3 new, Lux-XL prompt pools, containment
+  ≤ 0.21, no exact 8-token span): **no v1.2**. Script `v2/eval/sealed/event2.sh <gpu> <mirror> [lease-name]` (a
+  pre-decryption smoke for every model); batch DEV2.0-0.6B + Kai1, Lex, Bosun, GLiNER2.5-Decide, verified on node
+  A mirror `b99032a66`. **Waiting on: batch confirmation and a node-A GPU (~0.1 GPU-h).**

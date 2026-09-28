@@ -1,0 +1,48 @@
+{
+  "decided_by": "coordinator (Decision 2.0 program), under the user's full-autonomy mandate of 2026-09-28",
+  "decision": "release",
+  "decision_sha256": "e22fe181f6c245a15a1c341d136141ef529768c0b8fecb92d65ee909722b15b0",
+  "items": {
+    "1_beats_own_1_0": {
+      "evidence": "paired v3 95% interval low +4.705 (sha bd4ad6c72fa4)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "2 results below own 1.0 listed in the card tradeoffs table",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 31 files re-hashed; loaded 597103104",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "0affd1b13fd41446011f97cb723ce0d48ef1ed01e72d2837123518b34ccc2282",
+  "model_name": "DEV2.0-0.6B",
+  "receipts_sha256": {
+    "card-post": "731412d2eded5d8b90e9f98db5f428850a9e0aa6d5a2c6fe936ebeac0e7a9bc3",
+    "card-pre": "1fb88daf0fd9f0f87538f6fc332538bd0389afb267451b862c952ce27a526dee",
+    "download": "2296c9442481fa5e0e16b613c5ef25a71d2fde5c92406e1570bc998975730190",
+    "post": "991bd464234451b740d78b7df3352110bb8c478e9f09dcf3ef2519d4c2b5b867",
+    "readback": "1e194b4828774d4360fd09330012ab36a37c120286a7302039c245a2c02d09e4",
+    "repeat-post": "b76b49fbaa8647c3f7cb1ab16bc0c0348f870207c8fb4a59e01d6c451018d546",
+    "repeat-pre": "21bd9159e1b203209ed9ae330b5178749bef33733fbf6e2f5069c7da4e196d4c",
+    "tree": "32ba3d297f136583bdc2e8caee30abbb1e278cacb50263f863db21b6d4331821",
+    "upload": "4457ef8f0b06179bb010b0dbee7112c66ba86cb6196decd8a3c48d6c28a13766"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+  "revision": "99c4e799392afa73241915aeb16fefa5ef3518d7",
+  "schema": "dev2-release-gate/1",
+  "utc": "2026-09-28T18:10:53.738961+00:00"
+}

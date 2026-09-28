@@ -1,0 +1,103 @@
+{
+  "candidate": "m5-z-soup",
+  "export_manifest_sha256": "765cd8e484486ad5b5e50952351c3928bc2927fa2e6c8863516eaeda65fcb636",
+  "export_runtime": {
+    "equivalent_transformers_5_17_reexport": {
+      "export_manifest_sha256": "7c6e79e4a17ea46043e7cd6acd80f3d69341822e6408d09ecb5b28569f238d89",
+      "parity": "soup state bit-identical; typed DEV 1,600 + CSS pilot 1,430 readout answers, usage and input hashes identical to the scored package (only the package fingerprint differs)",
+      "soup_state_sha256": "0b027c4c36ce248a357324bf3038ac117019f240aeb0e17aed0f1b0d1de80c6a"
+    },
+    "scored_package": "exported by soup.py under the image venv with Transformers 4.57.6 (the M5 soup driver omitted DEV2_PYTHON=python3); scored and read out under Transformers 5.17.0"
+  },
+  "formal_run_dir": "/data/dev2/runs/06b/m5/formal/m5-z-soup",
+  "hf_revision": "6b414780805d350cc88035e8fcd3998a285c3c9b",
+  "hf_staging_repo": "llm-semantic-router/dev2-staging-06bm5-z",
+  "hf_verification": "private; 15/15 files match local bytes (LFS SHA-256 for weights and tokenizer.json, size for small files)",
+  "ingredients": [
+    {
+      "arm": "m4-t-a7-s1",
+      "best_select": 552,
+      "best_step": 1433,
+      "state_sha256": "5fb870dae26059b4609ae7ec6bc923b5854812eb6079ba146b34a135e2770bb4"
+    },
+    {
+      "arm": "m4-t-a7-s2",
+      "best_select": 564,
+      "best_step": 1433,
+      "state_sha256": "4c6b1570c4af12916905d22e853b65fcf9271e08d31bb79f4fd033b4c3049858"
+    },
+    {
+      "arm": "m4-t-a7-s3",
+      "best_select": 575,
+      "best_step": 1433,
+      "state_sha256": "dfec5bac53a3e3d26f2e77846f94eb803d794d5d29f0a0dfbe730ffc1b498a9c"
+    },
+    {
+      "arm": "m4-v2-s1",
+      "best_select": 561,
+      "best_step": 2996,
+      "state_sha256": "93a3b7db37c39252a8f3e801f66d576b629572fd21332ce58b2dff8e7bf59905"
+    },
+    {
+      "arm": "m4-v2-s2",
+      "best_select": 567,
+      "best_step": 2247,
+      "state_sha256": "908586ca36a462be0292ca1adfc8fad31f6d1b5f660100b55e23d6117ffe0613"
+    },
+    {
+      "arm": "m4-v2-s3",
+      "best_select": 565,
+      "best_step": 2622,
+      "state_sha256": "c4cb6a6f1b68e54810f737f0e8a5e434b2256d168a4311e04e88e7437ba47e7b"
+    },
+    {
+      "arm": "m5-a-s1",
+      "best_select": 564,
+      "best_step": 2384,
+      "state_sha256": "d4a1892a5000153ebf30b2d565f27b2dec0a4a151b849b43ca9d63b3e4e82b8f"
+    },
+    {
+      "arm": "m5-a-s2",
+      "best_select": 560,
+      "best_step": 2086,
+      "state_sha256": "b7b482563319923e1a51b7efef0c94cebb6f00d2e9581fbd473c52abd4ff4dfe"
+    },
+    {
+      "arm": "m5-a-s3",
+      "best_select": 562,
+      "best_step": 1788,
+      "state_sha256": "94bd26292d2c3ab2a2d5eb3938378391f5eb115855cf6c98d7a9512a04a90b9b"
+    }
+  ],
+  "loaded_parameters": 597103104,
+  "packaging_profile": "qwen-full",
+  "paired_vs_gliner25": {
+    "ci95": [
+      -0.05968374858775585,
+      9.446807466208988
+    ],
+    "delta": 2.952796856769787
+  },
+  "paired_vs_kai1": {
+    "ci95": [
+      5.997969750933008,
+      12.169240362796
+    ],
+    "delta": 9.538654905537541
+  },
+  "paired_vs_released_m4_t_a7_soup": {
+    "ci95": [
+      -0.8197966026624952,
+      3.8914645104824044
+    ],
+    "delta": 1.9354362720668306
+  },
+  "post_key_same_panel_v3": 45.476915623408914,
+  "public231_correct": 146,
+  "recipe": "uniform weight soup of nine same-init seeds (official Qwen3-0.6B-Base da87bfb6, (a2) recipe): M4 T s1-s3 (A0s-r + A6 + A7 natural pool), M4 V2 s1-s3 (A0s-r + mx-v2-full-M, own-Lux targets), M5 arm (a) s1-s3 (T with 4.0M A7 tokens replaced by A7k + A7s + A7q human multilingual Score)",
+  "runtime": "training.model.infer (causal endpoints + global query head), 8,192-token native cap",
+  "schema": "dev2-06b-staging/1",
+  "soup_state_sha256": "0b027c4c36ce248a357324bf3038ac117019f240aeb0e17aed0f1b0d1de80c6a",
+  "source_commit": "62a4be02fd41eda57cd4363d10dc2688468365dc",
+  "status": "private staging finalist, NOT a successor: its paired post-key v3 95% CI lower bound against the released m4-t-a7-soup is below 0, so the released DEV2.0-0.6B stands"
+}

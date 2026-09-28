@@ -1,0 +1,41 @@
+"""Free private HF storage held by decoder-track HOLD artifacts in the staging repo.
+
+Deletes the LFS objects (not git history) of the given folders of
+llm-semantic-router/dev2-dec-staging, after checking every object's SHA-256 against the node B
+copy listed in that folder's staging hash list. Commit SHAs stay valid; the deleted files become
+unavailable from the Hub; node B keeps the bytes. Writes a JSON receipt.
+usage: m3-free-lfs.py <receipt.json> <folder>=<node-B sha256 list> ...
+"""
+import json
+import sys
+from datetime import datetime, timezone
+
+from huggingface_hub import HfApi
+
+REPO = "llm-semantic-router/dev2-dec-staging"
+receipt_path, specs = sys.argv[1], sys.argv[2:]
+api = HfApi()
+lfs = list(api.list_lfs_files(REPO))
+chosen, receipt = [], {"repo": REPO, "utc": datetime.now(timezone.utc).isoformat(), "folders": {}}
+for spec in specs:
+    folder, listing = spec.split("=", 1)
+    local = {}
+    for line in open(listing):
+        sha, path = line.split(maxsplit=1)
+        local[path.strip().removeprefix("./")] = sha
+    objs = [f for f in lfs if f.filename.startswith(folder + "/")]
+    if not objs:
+        raise SystemExit(f"{folder}: no LFS objects")
+    for f in objs:
+        if local.get(f.filename) != f.file_oid:
+            raise SystemExit(f"{f.filename}: hub oid {f.file_oid} != node B {local.get(f.filename)}")
+    chosen.extend(objs)
+    receipt["folders"][folder] = {
+        "objects": [{"file": f.filename, "sha256": f.file_oid, "size": f.size} for f in objs],
+        "bytes": sum(f.size for f in objs),
+    }
+api.permanently_delete_lfs_files(REPO, chosen)
+receipt["deleted_bytes"] = sum(f.size for f in chosen)
+receipt["remaining_bytes"] = sum(f.size for f in api.list_lfs_files(REPO))
+json.dump(receipt, open(receipt_path, "x"), indent=2)
+print(json.dumps({k: receipt[k] for k in ("deleted_bytes", "remaining_bytes")}))

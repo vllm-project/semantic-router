@@ -1,0 +1,25 @@
+set -u
+# Decoder M3 prereg rule 3 (5c8bbc569): stage one finalist artifact from node B into the private
+# staging repo: CAL698 temperatures at 16,384 tokens, checkpoint + calibrations, per-file SHA-256 list.
+# usage: m3-stage.sh <mirror-dir> <name e.g. N4T-soup> <gpu> <checkpoint dir relative to /data/dev2/runs/dec> <dev calibration.json (host path)>
+SRC=$1 NAME=$2 GPU=$3 CKREL=$4 DEVCAL=$5
+M=/data/dev2/runs/dec/m3; U=$M/hf-staging/$NAME; mkdir -p $U/m3/$NAME
+L=/data/dev2/src/$SRC/src/training/decision2/v2/dec/launch.sh
+log() { echo "$(date -u +%FT%TZ) stage $NAME $*" >> $M/soup/OPERATIONS.log; }
+declare -A RENDER=([0]=/dev/dri/renderD129 [1]=/dev/dri/renderD137 [2]=/dev/dri/renderD145 [3]=/dev/dri/renderD153 [4]=/dev/dri/renderD161)
+export DEC_IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1 DEC_DATA=$M/data-sel700-cal698
+export DEC_RENDER=${RENDER[$GPU]} DEC_GPU_LABEL="node B GPU$GPU"
+C16=$M/stage-cal/$NAME-cal698-16k; mkdir -p $M/stage-cal
+[ -f $C16/calibration.json ] || bash $L m3-$NAME-cal698-16k $SRC $C16 -- -m v2.dec.calibrate_ckpt --checkpoint /runs/$CKREL \
+  --cal /data/cal.jsonl --max-length 16384 --output /out/calibration.json || { log "16K calibration FAILED"; exit 1; }
+[ -d $U/m3/$NAME/checkpoint ] || cp -al /data/dev2/runs/dec/$CKREL $U/m3/$NAME/checkpoint
+mkdir -p $U/m3/$NAME/cal698-16k $U/m3/$NAME/cal698-8k-dev
+cp $C16/calibration.json $U/m3/$NAME/cal698-16k/calibration.json
+cp $DEVCAL $U/m3/$NAME/cal698-8k-dev/calibration.json
+(cd $U && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > ../$NAME.sha256)
+/data/dev2/tools/hf-cli/bin/hf upload llm-semantic-router/dev2-dec-staging $U . --repo-type model \
+  --commit-message "M3 decoder finalist $NAME: checkpoint + CAL698 calibrations (16K release, 8K development)" > $M/hf-staging/$NAME.upload.log 2>&1
+rc=$?
+commit=$(/data/dev2/tools/hf-cli/bin/python -c "from huggingface_hub import HfApi; print(HfApi().list_repo_commits('llm-semantic-router/dev2-dec-staging')[0].commit_id)")
+log "upload exit $rc, staging head $commit, files $(wc -l < $M/hf-staging/$NAME.sha256)"
+echo $commit > $M/hf-staging/$NAME.commit

@@ -1,0 +1,38 @@
+{
+  "differing_fields": {},
+  "excluded_families": [
+    "natural_cosmos_qa",
+    "natural_squad2_answerability"
+  ],
+  "excluded_family_rows": {
+    "natural_cosmos_qa": 448,
+    "natural_squad2_answerability": 304
+  },
+  "excluded_ids_in_mixture": 0,
+  "kept_ids_sha256": "97fd4ec4707c6921e5aa9337f39864b6f8b97b662fcc93e6615b11c773fe53b0",
+  "kept_lines_sha256": "df5c76888e4397068ada2444815b50baa7eb6e36fe6c9a1c991ef069b01a7853",
+  "kept_rows_form_mixture_prefix_in_order": true,
+  "line_identical_rows": 6547,
+  "missing_from_mixture": 0,
+  "mixture_prefix_lines_sha256": "df5c76888e4397068ada2444815b50baa7eb6e36fe6c9a1c991ef069b01a7853",
+  "mixture_rows": 26203,
+  "mixture_rows_with_kept_ids": 6547,
+  "mixture_sha256": "98e4e85906a5076cce20b98c132fc1ba0d7fcf6949b41d15231bdfeecc5d549a",
+  "module_sha256": "bf699dca2834123b61e908dfcaf22d2eeefa74546e9e8fc4ea746cf3f3b0a3b2",
+  "original": {
+    "ids_absent_from_original": 0,
+    "kept_rows_changed_by_renumbering": 117,
+    "mixture_rows_still_in_original_form": 0,
+    "rows": 7299
+  },
+  "original_sha256": "df90cb7f20236fa41ada83d020fb47cbee8d8367cf74d9a67e240ff920994c68",
+  "other_mixture_rows_repeating_a_kept_input": 0,
+  "passed": true,
+  "published_kept_rows": 6547,
+  "published_rows": 7299,
+  "published_sha256": "35c1f98ff0f406feef8bfd1c7ed8f254c096b4f7b3a6e0858bcc92ef43ddc20b",
+  "published_source": "llm-semantic-router/decision-2.0-training-data@d8eae3e4fb5b91871c5aa7c13f0d94ea96e86ea7:m3/pk1/A0s/train.jsonl",
+  "row_equal_rows": 6547,
+  "schema": "dev2-release-pk1-rows/1",
+  "utc": "2026-09-28T13:51:06.829958+00:00"
+}

@@ -1,0 +1,42 @@
+set -u
+# Decoder M3 soup pipeline for one arm group (prereg 5c8bbc569, rule 1): wait for the three seeds'
+# postrun, uniform FP32 soup of their BEST checkpoints, CAL698 temperatures, typed DEV + CSS pilot +
+# SELECT readouts, then the development readout against the same-image 1.0 control (node B).
+# usage: m3-soup.sh <mirror-dir> <group e.g. N4T> <gpu> <start path in container> <control: nox1|sol1|eos1>
+SRC=$1 G=$2 GPU=$3 START=$4 CTL=$5
+M=/data/dev2/runs/dec/m3; A=$M/arms; O=$M/soup/$G; mkdir -p $O
+S=/data/dev2/src/$SRC/src/training/decision2; L=$S/v2/dec/launch.sh
+log() { echo "$(date -u +%FT%TZ) $G $*" >> $M/soup/OPERATIONS.log; }
+for s in s1 s2 s3; do
+  until grep -q "m3-$G-$s postrun complete" $A/OPERATIONS.log 2>/dev/null; do
+    if grep -qE "m3-$G-$s (zero-step FAILED|one-step FAILED|gate job FAILED|full run FAILED|preflight FAIL)" $A/OPERATIONS.log 2>/dev/null; then
+      log "seed $s failed; soup not built (median-seed rule needs all seeds)"; exit 1; fi
+    sleep 60
+  done
+done
+declare -A RENDER=([0]=/dev/dri/renderD129 [1]=/dev/dri/renderD137 [2]=/dev/dri/renderD145 [3]=/dev/dri/renderD153 [4]=/dev/dri/renderD161)
+export DEC_IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1 DEC_DATA=$M/data-sel700-cal698
+export DEC_RENDER=${RENDER[$GPU]} DEC_GPU_LABEL="node B GPU$GPU"
+members=()
+: > $O/members.txt
+for s in s1 s2 s3; do
+  b=$(python3 -c "import json;print(json.load(open('$A/full/m3-$G-$s/BEST.json'))['checkpoint'])")
+  members+=(--member /runs/m3/arms/full/m3-$G-$s/$b); echo "$s $b" >> $O/members.txt
+done
+bash $L m3-$G-soup-build $SRC $O/build --cpu -- -m v2.dec.soup "${members[@]}" --output /out/$G-soup || { log "soup build FAILED"; exit 1; }
+log "soup built: $(tail -1 $O/build.stdout.log)"
+CK=/runs/m3/soup/$G/build/$G-soup
+bash $L m3-$G-soup-cal698 $SRC $O/cal698 -- -m v2.dec.calibrate_ckpt --checkpoint $CK --cal /data/cal.jsonl --output /out/calibration.json || { log "cal FAILED"; exit 1; }
+for panel in dev css-pilot; do
+  bash $L m3-$G-soup-$panel $SRC $O/$panel -- -m v2.dec.infer_dec --checkpoint $CK --source-path $START \
+    --calibration /runs/m3/soup/$G/cal698/calibration.json --input /panels/$panel.prompts.jsonl \
+    --output /out/$panel.predictions.jsonl --model-id decision2-dec-m3-$G-soup --model-revision $G-soup || { log "$panel FAILED"; exit 1; }
+done
+bash $L m3-$G-soup-select $SRC $O/select -- -m v2.dec.eval_rows --checkpoint $CK --rows /data/select.jsonl --tag select --output /out || log "select FAILED"
+C=/data/dev2/runs/dec/m2/controls
+args=(--arm $CTL=$C/$CTL-dev/$CTL.dev.predictions.jsonl,$C/$CTL-css-pilot/$CTL.css-pilot.predictions.jsonl)
+for s in s1 s2 s3; do args+=(--arm $s=$A/full/m3-$G-$s-post/dev/dev.predictions.jsonl,$A/full/m3-$G-$s-post/css-pilot/css-pilot.predictions.jsonl --compare $CTL:$s); done
+args+=(--arm soup=$O/dev/dev.predictions.jsonl,$O/css-pilot/css-pilot.predictions.jsonl --compare $CTL:soup)
+(cd $S && PYTHONPATH=$S python3 -m v2.dec.dev_readout --typed-gold /data/dev2/private/panels/gold/typed-dev.gold.jsonl \
+  --css-gold /data/dev2/private/panels/gold/css-pilot.gold.jsonl "${args[@]}" --output $O/readout.json > $O/readout.log 2>&1) \
+  && log "readout done" || log "readout FAILED"
