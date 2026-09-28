@@ -97,12 +97,6 @@ def metrics(pairs: list[tuple[list[float], int]]) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--readout", type=Path, required=True)
-    parser.add_argument(
-        "--runs-root",
-        type=Path,
-        required=True,
-        help="directory holding the sealed run folders",
-    )
     parser.add_argument("--dev-gold", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -122,7 +116,7 @@ def main() -> None:
             != entry["files"]["dev.logits.jsonl"]
         ):
             raise SystemExit(f"{entry['tag']}: sealed logits changed")
-        run = args.runs_root / entry["run"]
+        run = Path(entry["run_path"])
         temperatures = json.loads(
             (run / "calibration.json").read_text(encoding="utf-8")
         )["temperature_by_readout"]
