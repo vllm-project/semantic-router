@@ -123,7 +123,7 @@ def arm_loss(model: ArmModel, batch, table, teacher=None) -> dict[str, torch.Ten
                 )
                 relative = relative + BUDGET["replay_weight"] * kl
                 terms["replay_kl"] = kl.detach()
-    terms["relative"] = relative.detach()
+    terms["relative_value"] = relative.detach()
     score_rows = batch["task_type"] == TASK_TYPES.index("score")
     score = torch.zeros((), device=labels.device)
     if torch.any(score_rows):
@@ -151,8 +151,8 @@ def arm_loss(model: ArmModel, batch, table, teacher=None) -> dict[str, torch.Ten
             score_nll=ordinal["nll"].detach(),
             score_replay_kl=ordinal["replay_kl"].detach(),
         )
-    terms["score"] = score.detach()
-    return {"relative": relative, "score": score, **terms}
+    terms["score_value"] = score.detach()
+    return {**terms, "relative": relative, "score": score}
 
 
 @torch.no_grad()
@@ -503,13 +503,28 @@ def train(args) -> None:
             )
             raise SystemExit(f"Nonfinite loss at step {step}")
         optimizer.zero_grad(set_to_none=True)
-        if loss.requires_grad:
-            loss.backward()
+        if not loss.requires_grad:
+            write_json(
+                args.output / "FAILED.json",
+                {"step": step, "reason": "loss is not differentiable"},
+            )
+            raise SystemExit(f"Loss has no gradient at step {step}")
+        loss.backward()
         norms = {}
         for group in groups:
             norms[group["name"]] = float(
                 torch.nn.utils.clip_grad_norm_(group["params"], BUDGET["clip_norm"])
             )
+        if step == 1 and not all(value > 0 for value in norms.values()):
+            write_json(
+                args.output / "FAILED.json",
+                {
+                    "step": step,
+                    "reason": "a trainable group received no gradient",
+                    "grad_norm": norms,
+                },
+            )
+            raise SystemExit(f"Zero gradient in {norms} at step 1")
         if not all(math.isfinite(v) for v in norms.values()):
             write_json(
                 args.output / "FAILED.json",
@@ -521,7 +536,7 @@ def train(args) -> None:
         event = {
             "step": step,
             "loss": float(loss),
-            **{k: float(v) for k, v in terms.items() if k not in ("relative_tensor",)},
+            **{k: float(v) for k, v in terms.items()},
             "grad_norm": norms,
         }
         if step % BUDGET["select_every"] == 0 or step == updates:
