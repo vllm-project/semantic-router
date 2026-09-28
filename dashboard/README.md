@@ -123,7 +123,7 @@ Feature controls:
 | `DASHBOARD_READONLY` | Hard-disable all config mutation. |
 | `DASHBOARD_RUNTIME_CONFIG_WRITABLE` | Allow mutation of the mounted runtime config surface. |
 | `DASHBOARD_RECIPE_STORE_WRITABLE` | Allow Recipe package import. |
-| `DASHBOARD_SETUP_MODE` | Enable the trusted first-run setup flow. |
+| `DASHBOARD_SETUP_MODE` | Deprecated; still read only to report disagreement on `/api/setup/state`. Setup mode is declared by `setup.mode` in the router config. |
 | `SR_BENCH_URL` | Server-owned sr-bench service origin; default `http://127.0.0.1:8090`. |
 | `SR_BENCH_TOKEN_ENV` | Environment variable containing the service token; default `SR_BENCH_TOKEN`. The browser never receives this token. |
 | `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. Defaults to `false`. |
