@@ -167,6 +167,10 @@ intersected with the flagged groups ([script](dev2-2b-release-2026-09-29/ops/s2t
 - **Card:** the limits state the CSS15 familiarity. **Coordinator / eval:** the H axis of every S2T comparison includes
   these 18 CSS15 groups. This check was not run for DEV2.0-0.8B or DEV2.0-0.6B; their v1-arm data (V1:A3) also has CSS15
   hits in the rescreen.
+- **Draft wording:** the coordinator's 03:10 decision (after this check) has the eval track quantify the effect from
+  stored predictions before the card wording is decided. The rescreen's excluded groups touch 82 CSS15 items, 73 of
+  them `media_ideology`, through shared topical phrases. The card's familiarity sentence is therefore a draft; any
+  change is a card-only edit to `card.text.limitations` before the collection add.
 
 ## 7. Hugging Face storage (step 0)
 
