@@ -408,6 +408,136 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(report["long_evidence_share"], 1.0)
 
 
+def _row(**overrides):
+    fields = dict(
+        source="s",
+        family="f",
+        task_type="score",
+        language="ko",
+        namespace="ns",
+        group_key="k",
+        local_id="1",
+        state="x",
+        instructions="How similar are the two sentences?",
+        options=common.score_options(["low", "mid", "high"]),
+        label=1,
+        template="t",
+    )
+    fields.update(overrides)
+    return common.make_row(**fields)
+
+
+class ProtectedTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+        protected = self.tmp / "p.jsonl"
+        protected.write_text(json.dumps({"id": "p1", "state": "held"}) + "\n")
+        self.base = self.tmp / "manifest.json"
+        self.base.write_text(
+            json.dumps([{"role": "old", "path": str(protected), "sha256": "0" * 64}])
+        )
+        self.extra = self.tmp / "extra.jsonl"
+        self.extra.write_text(json.dumps(_row()) + "\n")
+
+    def tearDown(self) -> None:
+        import shutil
+
+        shutil.rmtree(self.tmp)
+
+    def test_verified_manifest_and_flags(self) -> None:
+        digest = g.file_sha256(self.extra)
+        report = g.project_protected(
+            self.base,
+            [("new", self.extra)],
+            self.tmp / "pi",
+            base_sha256=g.file_sha256(self.base),
+            expected={"new": digest},
+            report_only=["old"],
+        )
+        self.assertTrue(report["base_verified"])
+        self.assertEqual(report["added"][0]["origin_sha256"], digest)
+        self.assertTrue(report["added"][0]["origin_verified"])
+        self.assertEqual(report["report_only_roles"], ["old"])
+        manifest = json.loads((self.tmp / "pi/manifest.json").read_text())
+        self.assertEqual([entry["role"] for entry in manifest], ["old", "new"])
+        projected = json.loads((self.tmp / "pi/new.jsonl").read_text())
+        self.assertNotIn("label", projected)
+
+    def test_hash_mismatch_writes_nothing(self) -> None:
+        cases = [
+            {"expected": {"new": "1" * 64}},
+            {"base_sha256": "2" * 64},
+            {"expected": {"other": "3" * 64}},
+            {"report_only": ["missing"]},
+        ]
+        for kwargs in cases:
+            with self.subTest(kwargs=kwargs):
+                with self.assertRaises(ValueError):
+                    g.project_protected(
+                        self.base, [("new", self.extra)], self.tmp / "pi", **kwargs
+                    )
+                self.assertFalse((self.tmp / "pi").exists())
+
+
+class PairCheckTest(unittest.TestCase):
+    def test_pairs_found_by_hash_pair_and_sentence(self) -> None:
+        a7k = [
+            _row(local_id=str(i), state=f"Sentence 1: {first}\nSentence 2: {second}")
+            for i, (first, second) in enumerate(
+                [("Rain  today.", "It rains."), ("A cat.", "A dog."), ("Sun.", "Moon.")]
+            )
+        ]
+        a6h2 = [
+            _row(
+                local_id="a",
+                state={"sentence_1": "it rains.", "sentence_2": "Rain today."},
+            ),
+            _row(local_id="b", state={"sentence_1": "A cat.", "sentence_2": "A bird."}),
+            _row(local_id="c", state={"passage": "Sun."}),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            pairs, against = Path(tmp, "a7k.jsonl"), Path(tmp, "h6.jsonl")
+            pairs.write_text("".join(json.dumps(r) + "\n" for r in a7k))
+            against.write_text("".join(json.dumps(r) + "\n" for r in a6h2 + [a7k[2]]))
+            report = g.pair_check([pairs], [against])
+        found = report["pairs"][0]
+        self.assertEqual(
+            {key: found[key] for key in ("rows", "not_a_pair", "input_sha256", "pair")},
+            {"rows": 3, "not_a_pair": 0, "input_sha256": 1, "pair": 2},
+        )
+        self.assertEqual(found["sentence_shared"], 3)
+        self.assertEqual(report["against_pairs"], 3)
+        self.assertIsNone(g.pair_texts({"state": "Sentence 1: only one line"}))
+
+
+class StatsTest(unittest.TestCase):
+    def test_slice_stats(self) -> None:
+        rows = [
+            _row(local_id="1", group_key="a", label=0),
+            _row(local_id="2", group_key="a", label=2),
+            _row(
+                local_id="3",
+                group_key="b",
+                task_type="noul",
+                options=common.noul_options("en"),
+                label=1,
+            ),
+        ]
+        tokens = {
+            rows[0]["id"]: {"native": 2500, "kai": 1100},
+            rows[1]["id"]: {"native": 1500, "kai": 900},
+            rows[2]["id"]: {"native": 100, "kai": 90},
+        }
+        stats = g.slice_stats(rows, tokens)
+        self.assertEqual((stats["rows"], stats["groups"]), (3, 2))
+        self.assertEqual(
+            (stats["native_tokens"], stats["long_evidence_tokens"]), (4100, 2500)
+        )
+        self.assertEqual((stats["rows_ge_2000"], stats["kai_over_1024"]), (1, 1))
+        self.assertEqual(stats["score_levels"], {"L3": {"0": 1, "1": 0, "2": 1}})
+        self.assertEqual(stats["noul_labels"], {"1": 1})
+
+
 class NormalizationTest(unittest.TestCase):
     def test_group_keys_are_normalized_questions(self) -> None:
         rows, _ = g.window_twins(

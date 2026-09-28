@@ -7,12 +7,16 @@ Spanglish), built with the data-arms v2 framework.
     python3 -m v2.data.m3.src_gap build --arm h7 --sources ROOT --tokenizer SNAPSHOT \\
         --existing existing.json [--v1-rows v1-rows.json] --out-dir OUT [--workers 16]
     python3 -m v2.data.m3.src_gap protected --base pi-v3/manifest.json \\
-        --add ROLE=PATH [--add ...] --out-dir PI
+        [--base-sha256 HEX] --add ROLE=PATH [--expect ROLE=HEX] [--add ...] \\
+        [--report-only ROLE ...] --out-dir PI
     python3 -m v2.data.m3.src_gap budget --rows A.jsonl --tokens A.tokens.jsonl \\
         --out B.jsonl --report B.budget.json
     python3 -m v2.data.m3.src_gap length-baseline --cells DIR --out lengths.json
+    python3 -m v2.data.m3.src_gap pair-check --pairs A7k.aho.jsonl [--pairs ...] \\
+        --against H6.aho.jsonl [--against ...] --out pairs.json
 
-Rules: records/m3b-gap-sources-2026-09-28.md. Rows are ``m2.common`` rows; group
+Rules: records/m3b-gap-sources-2026-09-28.md and m3b-prereg-amendment-2-2026-09-28.md
+(PI-v4). Rows are ``m2.common`` rows; group
 namespaces are shared where items are: HoVer claims join the v2 ``multihop``
 groups through their HotpotQA parent question, TyDi QA and MIRACL use
 ``tydi-miracl``. Every family returns rows before its whole-group cap; the build
@@ -70,7 +74,7 @@ Dirs = Mapping[str, Path]
 Paragraph = tuple[str, str]
 
 SCHEMA = "decision2-m3b-gap-build/v1"
-RULES = "m3b-gap-sources-2026-09-28.md (draft)"
+RULES = "m3b-gap-sources-2026-09-28.md; m3b-prereg-amendment-2-2026-09-28.md"
 ARMS = ("h7", "h8")
 LONG_TARGETS = (2300, 3200, 4400, 6000)
 STATE_CAP = 7400
@@ -1535,7 +1539,7 @@ def build(
         "families": reports,
         "slices": "AHO sha256(group_id)%10==0; SHO sha256('sho-v2:'+group_id)%50==0 "
         "among the rest (m2.common.slice_of)",
-        "status": "draft (uncommitted code)",
+        "status": "M3b amendment 2 build",
     }
 
 
@@ -1543,17 +1547,40 @@ def build(
 
 
 def project_protected(
-    base: Path, extra: Sequence[tuple[str, Path]], out_dir: Path
+    base: Path,
+    extra: Sequence[tuple[str, Path]],
+    out_dir: Path,
+    *,
+    base_sha256: str | None = None,
+    expected: Mapping[str, str] | None = None,
+    report_only: Sequence[str] = (),
 ) -> Report:
     """PI-v3 manifest entries plus input-only projections of ``extra`` row files
-    (``build_protected_inventory.project_row``), written as a new manifest."""
+    (``build_protected_inventory.project_row``), written as a new manifest.
+    ``base_sha256`` and ``expected`` (role -> SHA-256 of the origin file) are
+    checked before anything is written; ``report_only`` roles must be in the
+    manifest and are listed in the receipt."""
     from v2.data.build_protected_inventory import project_row
 
+    expected = dict(expected or {})
+    unknown = sorted(set(expected) - {role for role, _ in extra})
+    if unknown:
+        raise ValueError(f"expected hashes for roles not added: {unknown}")
+    if base_sha256 is not None and file_sha256(base) != base_sha256:
+        raise ValueError(f"{base}: SHA-256 differs from {base_sha256}")
+    origins = {}
+    for role, path in extra:
+        origins[role] = file_sha256(path)
+        if role in expected and origins[role] != expected[role]:
+            raise ValueError(f"{role}: {path} SHA-256 differs from {expected[role]}")
     entries = [
         dict(entry, path=str((base.parent / entry["path"]).resolve()))
         for entry in json.loads(base.read_text(encoding="utf-8"))
     ]
     roles = {entry["role"] for entry in entries}
+    missing = sorted(set(report_only) - roles - set(origins))
+    if missing:
+        raise ValueError(f"report-only roles not in the manifest: {missing}")
     out_dir.mkdir(parents=True, mode=0o700)
     added = []
     for role, path in extra:
@@ -1573,7 +1600,8 @@ def project_protected(
             {
                 "role": role,
                 "origin": str(path),
-                "origin_sha256": file_sha256(path),
+                "origin_sha256": origins[role],
+                "origin_verified": role in expected,
                 "rows": len(rows),
                 "sha256": digest,
             }
@@ -1582,9 +1610,11 @@ def project_protected(
     report = {
         "schema": "decision2-m3b-protected/v1",
         "base_manifest_sha256": file_sha256(base),
+        "base_verified": base_sha256 is not None,
         "added": added,
         "manifest_sha256": common._write_new(out_dir / "manifest.json", manifest),
         "roles": len(entries),
+        "report_only_roles": sorted(set(report_only)),
     }
     common._write_new(
         out_dir / "receipt.json",
@@ -1708,6 +1738,219 @@ def length_baseline(
     return out
 
 
+def slice_stats(rows: Sequence[Mapping[str, Any]], tokens: Mapping[str, Any]) -> Report:
+    """Counts and native-token totals of one final slice ("long" = rows of at
+    least 2,000 native tokens)."""
+    native = [tokens[row["id"]]["native"] for row in rows]
+    long_tokens = sum(value for value in native if value >= 2000)
+    families: dict[str, dict[str, Any]] = {}
+    for row, value in zip(rows, native):
+        item = families.setdefault(
+            row["family"],
+            {"rows": 0, "native": 0, "long": 0, "groups": set(), "languages": set()},
+        )
+        item["rows"] += 1
+        item["native"] += value
+        item["long"] += value if value >= 2000 else 0
+        item["groups"].add(row["group_id"])
+        item["languages"].add(row["language"])
+        item["type"] = row["task_type"]
+    score = collections.Counter(
+        (len(row["options"]), row["label"])
+        for row in rows
+        if row["task_type"] == "score"
+    )
+
+    def by(field: str, task_type: str | None = None) -> dict[str, int]:
+        return _sorted(
+            collections.Counter(
+                str(row[field])
+                for row in rows
+                if task_type is None or row["task_type"] == task_type
+            )
+        )
+
+    return {
+        "rows": len(rows),
+        "groups": len({row["group_id"] for row in rows}),
+        "native_tokens": sum(native),
+        "native_max": max(native, default=0),
+        "long_evidence_tokens": long_tokens,
+        "long_evidence_share": round(long_tokens / max(1, sum(native)), 4),
+        "rows_ge_2000": sum(1 for value in native if value >= 2000),
+        "kai_over_1024": sum(1 for row in rows if tokens[row["id"]]["kai"] > 1024),
+        "task_type": by("task_type"),
+        "language": by("language"),
+        "source": by("source"),
+        "families": {
+            name: {
+                "rows": item["rows"],
+                "groups": len(item["groups"]),
+                "native": item["native"],
+                "long_share": round(item["long"] / max(1, item["native"]), 4),
+                "type": item["type"],
+                "language": sorted(item["languages"]),
+            }
+            for name, item in sorted(families.items())
+        },
+        "noul_labels": by("label", "noul"),
+        "choice_gold_positions": by("label", "choice"),
+        "score_levels": {
+            f"L{levels}": {
+                str(grade): score[(levels, grade)] for grade in range(levels)
+            }
+            for levels in sorted({levels for levels, _ in score})
+        },
+    }
+
+
+GATE_FIELDS = ("task_type", "view", "n", "accuracy", "majority", "delta", "pass")
+
+
+def gap_stats(
+    arm: str, final: Path, audits: Path, embed_public: Path | None = None
+) -> Report:
+    """Per-slice statistics and aggregate gate results of a finalized arm; the
+    SHO slice is reported by rows, groups and SHA-256 only."""
+    tokens = {line["id"]: line for line in read_jsonl(final / f"{arm}.tokens.jsonl")}
+    out: dict[str, Any] = {"schema": "decision2-m3b-gap-stats/v1", "arm": arm}
+    for part in common.SLICES:
+        path = final / f"{arm}.{part}.jsonl"
+        rows = list(read_jsonl(path))
+        stats = slice_stats(rows, tokens)
+        if part == "sho":
+            stats = {key: stats[key] for key in ("rows", "groups")}
+        out[part] = {**stats, "sha256": file_sha256(path)}
+    gates = {}
+    for path in sorted(audits.glob("cells/*.jsonl.shortcut.json")):
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+        gates[path.name.replace(".jsonl.shortcut.json", "")] = {
+            "verdict": receipt["verdict"],
+            "gates": [
+                {key: gate[key] for key in GATE_FIELDS} for gate in receipt["gates"]
+            ],
+        }
+    out["gates"] = gates
+    out["length_baseline"] = json.loads(
+        (audits / "length-baseline.json").read_text(encoding="utf-8")
+    )
+
+    def load(path: Path) -> Any:
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    out["budget"] = {
+        part: {
+            key: value
+            for key, value in load(audits / f"{arm}.{part}.budget.json").items()
+            if key in ("rows_in", "groups_over_limit", "rows_kept", "native_max")
+        }
+        for part in common.SLICES
+    }
+    out["quarantine"] = {
+        part: load(audits / f"{arm}.{part}.quarantine.json") for part in common.SLICES
+    }
+    out["gate_drops"] = {
+        part: load(final / f"{arm}.{part}.gates.json") for part in common.SLICES
+    }
+    out["dedup"] = {
+        part: load(final / f"{arm}.{part}.dedup.json") for part in ("aho", "sho")
+    }
+    isolation = load(final / f"{arm}.isolation.json")
+    out["isolation"] = {
+        "verdict": isolation["verdict"],
+        "failures": len(isolation["failures"]),
+        "partitions": len(isolation["partitions"]),
+    }
+    overlap = load(audits / "overlap.public.json")
+    out["overlap"] = {
+        "protected_inventory_sha256": overlap["protected_inventory_sha256"],
+        "by_method": overlap["flagged"]["by_method"],
+        "quarantine": overlap["flagged"]["quarantine"],
+        "by_role_any": {
+            role: value["any"]
+            for role, value in overlap["flagged"]["by_role"].items()
+            if value["any"]["groups"]
+        },
+    }
+    if embed_public is not None:
+        embed = load(embed_public)
+        out["embedding"] = {
+            key: embed[key]
+            for key in ("protected_manifest_sha256", "thresholds", "by_file")
+        }
+    return out
+
+
+PAIR_PREFIXES = ("Sentence 1: ", "Sentence 2: ")
+
+
+def pair_texts(row: Mapping[str, Any]) -> tuple[str, str] | None:
+    """The two sentences of a sentence-pair row: A6h2 states are
+    ``{sentence_1, sentence_2}``, A7k states ``Sentence 1: …`` / ``Sentence 2: …``
+    lines; any other row is not a pair."""
+    state = row["state"]
+    if isinstance(state, Mapping):
+        if set(state) == {"sentence_1", "sentence_2"}:
+            return str(state["sentence_1"]), str(state["sentence_2"])
+        return None
+    lines = str(state).split("\n")
+    if len(lines) == 2 and all(
+        line.startswith(prefix) for line, prefix in zip(lines, PAIR_PREFIXES)
+    ):
+        return lines[0][len(PAIR_PREFIXES[0]) :], lines[1][len(PAIR_PREFIXES[1]) :]
+    return None
+
+
+def pair_check(pairs: Sequence[Path], against: Sequence[Path]) -> Report:
+    """Counts of ``pairs`` rows whose input hash, or normalized sentence pair
+    (in either order), occurs in the ``against`` files; rows sharing one
+    normalized sentence with an ``against`` pair are counted separately."""
+    inputs: set[str] = set()
+    known: set[tuple[str, str]] = set()
+    sentences: set[str] = set()
+    against_files = []
+    for path in against:
+        rows = list(read_jsonl(path))
+        for row in rows:
+            inputs.add(row["input_sha256"])
+            texts = pair_texts(row)
+            if texts is not None:
+                first, second = (normalize(text) for text in texts)
+                known.add((first, second))
+                sentences.update((first, second))
+        against_files.append(
+            {"name": path.name, "sha256": file_sha256(path), "rows": len(rows)}
+        )
+    fields = ("rows", "not_a_pair", "input_sha256", "pair", "sentence_shared")
+    checked = []
+    for path in pairs:
+        found: collections.Counter[str] = collections.Counter()
+        for row in read_jsonl(path):
+            found["rows"] += 1
+            found["input_sha256"] += row["input_sha256"] in inputs
+            texts = pair_texts(row)
+            if texts is None:
+                found["not_a_pair"] += 1
+                continue
+            first, second = (normalize(text) for text in texts)
+            found["pair"] += (first, second) in known or (second, first) in known
+            found["sentence_shared"] += first in sentences or second in sentences
+        checked.append(
+            {
+                "name": path.name,
+                "sha256": file_sha256(path),
+                **{field: found[field] for field in fields},
+            }
+        )
+    return {
+        "schema": "decision2-m3b-pair-check/v1",
+        "against": against_files,
+        "against_pairs": len(known),
+        "pairs": checked,
+        "key": "textnorm.normalize of both sentences, either order",
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -1726,8 +1969,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     run.add_argument("--workers", type=int, default=16)
     protected = commands.add_parser("protected")
     protected.add_argument("--base", type=Path, required=True)
+    protected.add_argument("--base-sha256")
     protected.add_argument("--add", action="append", default=[])
+    protected.add_argument("--expect", action="append", default=[])
+    protected.add_argument("--report-only", action="append", default=[])
     protected.add_argument("--out-dir", type=Path, required=True)
+    pairs = commands.add_parser("pair-check")
+    pairs.add_argument("--pairs", type=Path, action="append", required=True)
+    pairs.add_argument("--against", type=Path, action="append", required=True)
+    pairs.add_argument("--out", type=Path, required=True)
+    stats = commands.add_parser("stats")
+    stats.add_argument("--arm", required=True, choices=ARMS)
+    stats.add_argument("--final", type=Path, required=True)
+    stats.add_argument("--audits", type=Path, required=True)
+    stats.add_argument("--embed-public", type=Path)
+    stats.add_argument("--out", type=Path, required=True)
     budget = commands.add_parser("budget")
     budget.add_argument("--rows", type=Path, required=True)
     budget.add_argument("--tokens", type=Path, required=True)
@@ -1800,16 +2056,54 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
     if args.command == "protected":
-        extra = []
+        extra, expected = [], {}
         for item in args.add:
             role, _, path = item.partition("=")
             if not role or not path:
                 parser.error("--add expects ROLE=PATH")
             extra.append((role, Path(path)))
-        report = project_protected(args.base, extra, args.out_dir)
+        for item in args.expect:
+            role, _, digest = item.partition("=")
+            if not role or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                parser.error("--expect expects ROLE=SHA256")
+            expected[role] = digest
+        report = project_protected(
+            args.base,
+            extra,
+            args.out_dir,
+            base_sha256=args.base_sha256,
+            expected=expected,
+            report_only=args.report_only,
+        )
         print(
             json.dumps(
                 {"manifest_sha256": report["manifest_sha256"], "roles": report["roles"]}
+            )
+        )
+        return 0
+    if args.command == "pair-check":
+        report = pair_check(args.pairs, args.against)
+        common._write_new(
+            args.out, (json.dumps(report, indent=1, sort_keys=True) + "\n").encode()
+        )
+        print(json.dumps(report["pairs"], sort_keys=True))
+        return 0
+    if args.command == "stats":
+        report = gap_stats(args.arm, args.final, args.audits, args.embed_public)
+        common._write_new(
+            args.out, (json.dumps(report, indent=1, sort_keys=True) + "\n").encode()
+        )
+        print(
+            json.dumps(
+                {
+                    part: {
+                        key: report[part][key]
+                        for key in ("rows", "groups", "sha256")
+                        + (("native_tokens",) if part != "sho" else ())
+                    }
+                    for part in common.SLICES
+                },
+                sort_keys=True,
             )
         )
         return 0
