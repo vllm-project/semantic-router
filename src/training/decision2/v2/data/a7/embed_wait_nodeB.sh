@@ -11,7 +11,7 @@ deadline="$(date -u -d "${1:?deadline}" +%s)"
 shift
 here="$(cd "$(dirname "$0")" && pwd)"
 while true; do
-  if grep -q -E '"status" *: *"(released|idle)"|^status=(released|idle)' /data/dev2/leases/gpu7.lock/owner &&
+  if grep -q -E '"status" *: *"[^"]*(released|idle)[^"]*"|^status=[^ ]*(released|idle)' /data/dev2/leases/gpu7.lock/owner &&
     [[ "$(rocm-smi -d 7 --showuse --showmemuse --json | python3 -c '
 import json, sys
 card = next(iter(json.load(sys.stdin).values()))
