@@ -137,6 +137,11 @@ a parity-checked ROCm path.
 registered in `sys.modules`. Fixed in the adapter with a regression test; Q2 is
 relaunched once as Q2b with no other change.
 
+**A4.2 (Q4, before launch).** `flock-io/this-that-model-1.2@c4d1c30b` (weights LFS
+`585295…`, config/tokenizer unchanged from 1.0), source `f57c9f0a…` ("Release 1.2"), 2B /
+node A, adapter `this-that-1.2` (native Choice; Noul/Score are option projections;
+1,536-token state overflow invalid); formal + dev + mlx-diag; same rules.
+
 ## Reused results (identity verified, no new GPU time)
 
 Recorded predictions were located by SHA-256, adopted, sealed and re-scored with
