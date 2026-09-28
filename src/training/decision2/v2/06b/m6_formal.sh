@@ -15,7 +15,9 @@
 # into <run>.gates/, and M6-SUMMARY.json. Names starting with m6-control skip the successor verdict
 # and diff their answers against the released run. M6_RELEASED_RUN overrides the released run
 # (e.g. the control run, if the control's answers differ from the M4 run). M6_CHECK_ONLY=1 runs the
-# identity, comparator and snapshot checks and exits before any GPU step.
+# identity, comparator and snapshot checks and exits before any GPU step. M6_LEASE_ARGS is passed to
+# run_same_panel.sh as extra lease flags, e.g. "--lease-name owner.m6-formal --shared" for a recorded
+# co-tenancy when another track's shared-lease job occupies the GPU (GPU-TIME.json records it).
 set -euo pipefail
 gpu="$1"
 sha="$2"
@@ -60,12 +62,14 @@ if [[ "${M6_CHECK_ONLY:-0}" == 1 ]]; then
   exit 0
 fi
 end=$(date -u -d '+45 minutes' +%FT%TZ)
+lease_args=()
+[[ -z "${M6_LEASE_ARGS:-}" ]] || read -r -a lease_args <<<"$M6_LEASE_ARGS"
 collect() {
   local dir="$1" cache="$1.triton-cache"
   python3 -m v2.06b.m6_cache seed --snapshot "$snapshot" --manifest "$snapshot_manifest" --dest "$cache"
   set +e
   "$S/v2/eval/run_same_panel.sh" --gpu "$gpu" --track 06b-encoder --src "$sha" --run-dir "$dir" \
-    --model-dir "$pkg" --purpose "0.6B M6 formal run: $name" --expected-end "$end" \
+    --model-dir "$pkg" --purpose "0.6B M6 formal run: $name" --expected-end "$end" "${lease_args[@]}" \
     --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR="$cache" --mount-rw "$cache" \
     -- --adapter-spec "$adapter" --model-path "$pkg" --revision "$rev" --extra "model_id=dev2-06b/$arm" "${@:2}"
   local code=$?
