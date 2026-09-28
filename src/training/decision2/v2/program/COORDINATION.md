@@ -189,6 +189,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 04:35 — Overlap-effect check done (eval record `m5-overlap-effects-2026-09-29.md`; integration `cae64f4e8`): removing
+  the 84 flagged items in reported panels (82 human transfer, 73 of them `media_ideology`; 1 public 231; 1 mlx-diag; no typed
+  item) moves v3 by <= 0.05 for all 16 models; every release gate and threshold holds; no contamination signature (flagged-vs-
+  unflagged accuracy differences all include 0; the 0.6B never saw any; the 0.8B's rows touch 11 scored items, the 2B's 19).
+  Card wording: a one-line disclosure on DEV2.0-0.8B (card-only revision), one appended sentence on the 2B's
+  evaluation-familiarity item, nothing for 0.6B. DEV2.0-2B finalization, the 0.8B card-only revision and the staging
+  cleanup of released models' duplicate copies are running (release worker for 2B).
+
 - 2026-09-29 04:30 — From 9B Milestone 3 (gist 05; integration `850522e49`): 9B stays on Lux 1.0.
   - Best: **DW** = ½ × (full-fine-tune three-seed soup on A7 + v1 + v2-M, 116M tokens) + ½ × Lux 1.0 (weight interpolation):
     post-key v3 68.571 vs Lux1 65.808, +2.763 [−2.085, +6.202] — HOLD (lower bound < 0). Typed reasoning gain is
