@@ -38,6 +38,16 @@ if [ "${TRITON_AUTOTUNE_CACHE:-0}" = 1 ]; then
   TRAIN_EXTRA=(--mount "/data/dev2/runs/27b/$ARM/triton-cache:/triton-cache:rw"
     --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=/triton-cache)
 fi
+# Milestone 3: READOUT_MODE=kernel replaces the readout stage with run_dev_readout.sh (CAL698 fit,
+# typed DEV + CSS pilot through the eval runner, AHO, dev_readout) on the kernel path at
+# READOUT_LIMIT, each GPU stage on a fresh copy of READOUT_CACHE (tree hash READOUT_CACHE_SHA);
+# CAL_FILE / CAL_SHA256 override CAL698 and READOUT_STAGES its stages. Unset keeps Milestone 2's.
+READOUT_MODE=${READOUT_MODE:-reference}
+if [ "$READOUT_MODE" = kernel ] && [[ ",$STAGES," == *",readout,"* ]]; then
+  : "${READOUT_LIMIT:?READOUT_MODE=kernel needs READOUT_LIMIT}"
+  : "${READOUT_CACHE:?READOUT_MODE=kernel needs READOUT_CACHE}"
+  : "${READOUT_CACHE_SHA:?READOUT_MODE=kernel needs READOUT_CACHE_SHA}"
+fi
 
 [ -d "$CODE/v2/27b" ] || { echo "missing mirror $SHA" >&2; exit 2; }
 mkdir -p "$RUN/receipts"
@@ -171,7 +181,13 @@ if has full; then
   done
   echo "$run" > "$RUN/full/RUN_DIR"
 fi
-if has readout; then
+if has readout && [ "$READOUT_MODE" = kernel ]; then
+  run=$(cat "$RUN/full/RUN_DIR")
+  best=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['checkpoint'])" "$RUN/full/$run/BEST.json")
+  TRAIN_RUN="$RUN/full/$run" AHO="$AHO" BASE="$(cd "$SOURCE_MOUNT/$MODEL_SUBPATH" && pwd -P)" \
+    "$CODE/v2/27b/run_dev_readout.sh" "$ARM/readout-kernel-$READOUT_LIMIT" "$GPU" "$SHA" \
+    "$RUN/full/$run/$best" "$READOUT_LIMIT" "$READOUT_CACHE" "$READOUT_CACHE_SHA" "$ARM-$best"
+elif has readout; then
   run=$(cat "$RUN/full/RUN_DIR")
   launch readout 1.0 "CAL fit and one DEV/CSS-pilot readout" "$RUN/full" -- \
     python3 -m v2.27b.readout --run-dir "/out/$run" --source-path "$MODEL" --cal /data/cal.jsonl \

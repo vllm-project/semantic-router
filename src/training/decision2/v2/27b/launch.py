@@ -1,6 +1,6 @@
 """Single-GPU container launcher for the ~27B track (host side, stdlib only).
 
-Only node B GPU5/GPU6 are accepted. The launcher checks the render node's PCI
+Only node B GPU5-7 are accepted. The launcher checks the render node's PCI
 address, updates the track's lease file, runs one network-less container with
 exactly that device, enforces a wall-clock cap and writes a GPU-hour receipt.
 """
@@ -22,6 +22,7 @@ IMAGE_ID = "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d44
 ALLOWED_GPUS = {
     5: ("0000:ab:00.0", "renderD169"),
     6: ("0000:b3:00.0", "renderD177"),
+    7: ("0000:bb:00.0", "renderD185"),
 }
 LEASE_ROOT = Path("/data/dev2/leases")
 
@@ -40,7 +41,7 @@ def sha_file(path: Path) -> str:
 
 def render_node(gpu: int, sysfs: Path = Path("/sys/class/drm")) -> Path:
     if gpu not in ALLOWED_GPUS:
-        raise ValueError(f"GPU{gpu} is outside the ~27B allocation (node B GPU5-6)")
+        raise ValueError(f"GPU{gpu} is outside the ~27B allocation (node B GPU5-7)")
     pci, node = ALLOWED_GPUS[gpu]
     actual = (sysfs / node / "device").resolve().name.lower()
     if actual != pci:
