@@ -23,9 +23,9 @@ has() { case ",$STAGES," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 
 if [ ! -d "$RUN/pipeline" ]; then
   mkdir "$RUN/pipeline"
-  tar -x -C "$RUN/pipeline" -f v2/27b/vendor/best368-pipeline-2026-09-26.tar
+  tar -x -C "$RUN/pipeline" -f v2/27b/pinned/best368-pipeline-2026-09-26.tar
 fi
-python3 - "$RUN/pipeline" v2/27b/vendor/best368-pipeline-2026-09-26.manifest.json <<'EOF'
+python3 - "$RUN/pipeline" v2/27b/pinned/best368-pipeline-2026-09-26.manifest.json <<'EOF'
 import hashlib, json, pathlib, sys
 root, manifest = pathlib.Path(sys.argv[1]), json.load(open(sys.argv[2]))
 actual = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.rglob("*.py"))}
