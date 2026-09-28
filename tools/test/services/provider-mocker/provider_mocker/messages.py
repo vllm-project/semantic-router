@@ -18,7 +18,9 @@ async def messages(request: Request):
     if error is not None:
         return error
     session = request.headers.get(SESSION_HEADER) or "__global__"
-    request.app.state.request_store.record(session, body, request.headers, raw_body)
+    request.app.state.request_store.record(
+        session, body, request.headers, raw_body, request.url.path
+    )
     await apply_fixture_delay()
     if contains_text(body["messages"], "__mock_provider_error__"):
         return JSONResponse(
