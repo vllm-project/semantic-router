@@ -192,8 +192,12 @@ global:
         dimension: 384               # Must match your embedding model
       embedding_model: bert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.70
+      default_similarity_threshold: 0.30
 ```
+
+This is a starting point for `bert` (`mom-embedding-light`) with plain cosine
+retrieval. Calibrate it against answered, unrelated, and corrected-fact queries
+for your data; other embedding models have different score ranges.
 
 ### Uploaded document vector store
 

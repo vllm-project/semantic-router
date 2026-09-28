@@ -20,6 +20,7 @@ EXPECTED_HEALTH = {
     "service": "semantic-router-dashboard",
 }
 IMAGE_BY_DIGEST = re.compile(r"^\S+@sha256:[0-9a-f]{64}$")
+MANIFEST_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 class VerificationError(RuntimeError):
@@ -37,8 +38,8 @@ def run_command(
     return result
 
 
-def manifest_platforms(raw_manifest: str) -> set[str]:
-    """Extract runnable OS/architecture pairs from an OCI image index."""
+def manifest_platforms(raw_manifest: str) -> dict[str, str]:
+    """Map supported platforms to child digests in the published OCI index."""
     try:
         document = json.loads(raw_manifest)
     except json.JSONDecodeError as error:
@@ -52,26 +53,50 @@ def manifest_platforms(raw_manifest: str) -> set[str]:
     if not isinstance(manifests, list):
         raise VerificationError("published image is not a multi-platform image index")
 
-    platforms: set[str] = set()
+    platforms: dict[str, str] = {}
     for manifest in manifests:
-        platform = manifest.get("platform", {}) if isinstance(manifest, dict) else {}
+        if not isinstance(manifest, dict):
+            raise VerificationError("published image index has an invalid descriptor")
+        platform = manifest.get("platform", {})
+        if not isinstance(platform, dict):
+            raise VerificationError("published image index has an invalid platform")
         operating_system = platform.get("os")
         architecture = platform.get("architecture")
         if isinstance(operating_system, str) and isinstance(architecture, str):
-            platforms.add(f"{operating_system}/{architecture}")
+            name = f"{operating_system}/{architecture}"
+            if name not in EXPECTED_PLATFORMS:
+                continue
+            child_digest = manifest.get("digest")
+            if (
+                not isinstance(child_digest, str)
+                or MANIFEST_DIGEST.fullmatch(child_digest) is None
+            ):
+                raise VerificationError(
+                    f"published {name} manifest has no valid digest"
+                )
+            if name in platforms:
+                raise VerificationError(
+                    f"published image has duplicate {name} manifests"
+                )
+            if child_digest in platforms.values():
+                raise VerificationError(
+                    "published platforms cannot share one child manifest digest"
+                )
+            platforms[name] = child_digest
     return platforms
 
 
-def verify_manifest(image: str) -> None:
-    """Assert that the digest resolves to both supported Dashboard platforms."""
+def verify_manifest(image: str) -> dict[str, str]:
+    """Bind each supported platform to a child of the published index digest."""
     result = run_command(["docker", "buildx", "imagetools", "inspect", "--raw", image])
     platforms = manifest_platforms(result.stdout)
-    missing = EXPECTED_PLATFORMS - platforms
+    missing = EXPECTED_PLATFORMS - platforms.keys()
     if missing:
         raise VerificationError(
             "published manifest is missing platforms: " + ", ".join(sorted(missing))
         )
     print("Published Dashboard manifest: " + ", ".join(sorted(platforms)))
+    return platforms
 
 
 def published_port(container: str) -> int:
@@ -202,9 +227,13 @@ def main() -> int:
         return 2
 
     try:
-        verify_manifest(args.image)
+        platforms = verify_manifest(args.image)
+        repository = args.image.rsplit("@", 1)[0]
         for platform in sorted(EXPECTED_PLATFORMS):
-            verify_runtime(args.image, platform)
+            # Docker's classic image store cannot pull a second architecture
+            # through the same multi-platform digest after the first one.
+            # Each child digest is immutable and was verified in that index.
+            verify_runtime(f"{repository}@{platforms[platform]}", platform)
     except VerificationError as error:
         print(f"Published Dashboard verification failed: {error}", file=sys.stderr)
         return 1

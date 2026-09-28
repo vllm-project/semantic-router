@@ -25,7 +25,7 @@ spec:
         sidecar.istio.io/inject: "true"  # Enable Istio injection for service mesh integration with KServe
         proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'  # Ensure proxy is ready
     spec:
-      serviceAccountName: semantic-router  # Create ServiceAccount if RBAC required
+      serviceAccountName: semantic-router  # see serviceaccount.yaml and rbac.yaml
       # OpenShift security context - let OpenShift assign UID/GID
       securityContext:
         runAsNonRoot: true
@@ -170,6 +170,16 @@ spec:
         env:
         - name: LD_LIBRARY_PATH
           value: "/app/lib"
+        # Lets the config write API patch this ConfigMap through the
+        # Kubernetes API instead of the read-only mounted file (#3688).
+        - name: VLLM_SR_K8S_CONFIGMAP_NAME
+          value: "semantic-router-kserve-config"
+        - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: VLLM_SR_CONFIG_BACKUP_DIR
+          value: "/app/models/.vllm-sr/config-backups"
         - name: HF_HOME
           value: "/app/cache/hf"
         - name: TRANSFORMERS_CACHE
