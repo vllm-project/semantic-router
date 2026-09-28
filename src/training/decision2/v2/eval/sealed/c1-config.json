@@ -1,6 +1,6 @@
 {
   "name": "JevArena-C1",
-  "version": 2,
+  "version": 3,
   "sources": [
     "delichess",
     "gapa",
@@ -8,7 +8,6 @@
     "implicaturex",
     "innoduel",
     "legal_case_law",
-    "mcjudgebench",
     "narrative_gold",
     "tutormoments",
     "wb_reviews"
@@ -51,10 +50,6 @@
       "cap": 250,
       "group_cap": 8
     },
-    "mcjudgebench/constraint": {
-      "cap": 210,
-      "group_cap": 3
-    },
     "narrative_gold/event_causality": {
       "cap": 150,
       "group_cap": 1
@@ -85,6 +80,7 @@
     }
   },
   "excluded_after_review": {
-    "stance_it/stance": "review round 1: 4/16 items quality-flagged by >= 2 reviewers (missing post context, garbled comments); 13 source groups, single annotator"
+    "stance_it/stance": "review round 1: 4/16 items quality-flagged by >= 2 reviewers (missing post context, garbled comments); 13 source groups, single annotator",
+    "mcjudgebench/constraint": "review round 2 after one template fix: 6/16 items quality-flagged by >= 2 reviewers (rubric ambiguity for each/all and permission-style requirements, truncated responses); second failure is final"
   }
 }
