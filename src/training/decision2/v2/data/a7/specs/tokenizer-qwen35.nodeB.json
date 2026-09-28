@@ -1,0 +1,8 @@
+[
+ {
+  "name": "qwen3.5-0.8b-base@dc7cdfe2",
+  "path": "/data/dev2/hf-cache/models--Qwen--Qwen3.5-0.8B-Base/snapshots/dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+  "revision": null,
+  "kind": "native_decoder"
+ }
+]
