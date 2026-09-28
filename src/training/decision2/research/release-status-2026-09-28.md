@@ -49,6 +49,14 @@ contrast, not a causal explanation for the observed 0.6B regression. No
 replacement source currently passes its answer-blind quality gate, so the
 new 0.6B GPU arm remains HOLD.
 
+An independent [own-Kai TRAIN-only teacher screen](small06-own-kai-teacher-train96-result-2026-09-28.md)
+found 6,262/7,455 rows but only **31.8% of official-Qwen native TRAIN tokens**
+fit Kai's input cap; only 86 eligible rows are three-level Score. Its pinned
+96-row native probability check was valid for every row but failed all three
+frozen teacher-evidence gates: Choice **18/32**, Noul **16/32**, Score
+**8/32**. No student KL run is justified on this roster; the bounded screen
+cost **0.00770 GPU-hour**, with no student update or protected evaluation.
+
 A pure-CPU [independent-option prototype](small06-option-isolation-cpu-prototype-2026-09-28.md)
 passes permutation and Choice/Noul/Score shape tests, but the pinned official
 0.6B tokenizer shows a large naive cost at 512 synthetic state words
@@ -209,6 +217,13 @@ The v1 failure arose because every tree contains multiple question strings;
 v2 does not change that result. These are only potential source groups:
 answer-blind semantic review, shortcuts, overlap, native budget and matched
 training parity remain pending. **Zero rows admitted, zero GPU-hours.**
+
+The [ShARC v4 answer-blind packet](sol2b-sharc-blind-packet-v4-result-2026-09-28.md)
+contains 24 distinct source-rule pairs after excluding 4,017 publisher-marked
+negative TRAIN IDs. A prior v3 packet was invalidated because its public item
+ordering leaked hidden label order; it was never reviewed. V4 corrects that
+ordering and is under separate independent blind semantic review. It does not
+admit ShARC data or authorize Sol2B training; GPU-hours remain zero.
 
 The separately frozen [Eos 0.8B FEVEROUS TRAIN metadata audit](eos08-feverous-source-screen-v2-metadata-result-2026-09-28.md)
 read the publisher's 71,292 annotation records and quarantined one malformed
