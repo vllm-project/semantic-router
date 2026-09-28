@@ -32,3 +32,14 @@ screen only permits designing a separately preregistered, source-reviewed
 student/control comparison. The observed Kev v3 peer result 59.226 and
 public231 175 do not substitute for a TRAIN signal measurement, and neither
 is a Decision 2.0 score.
+
+## Pre-GPU CPU lock
+
+After signing the v2 protocol, an exact code mirror in the pinned CPU image
+verified the TRAIN and pilot-script SHA-256 values above. The `--dry-run`
+selected **96 rows from 96 distinct groups**, 32 per type, with ordered
+roster SHA-256
+`cbf6b8e3292428508cf8cbb6a9721232df74ffcdcefbdb34e354cb6b3b685692`.
+This digest is now fixed before any teacher inference. The CPU dry-run used no
+GPU and read no protected evaluation set. Any GPU result with a different
+roster digest is invalid for this protocol.
