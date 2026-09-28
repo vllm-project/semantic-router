@@ -1,0 +1,107 @@
+{
+  "best_state_sha256": "c3595695fe9d03b560c577ecd7ed20bef46bbfdbf4193b9f81ab7ec750b575ae",
+  "complete": {
+    "best": {
+      "metrics": {
+        "by_family": {
+          "human_goemotions_choice": {
+            "accuracy": 0.795,
+            "brier": 0.1559038372459226,
+            "correct": 159,
+            "n": 200,
+            "nll": 0.5837003462464456
+          },
+          "human_goemotions_noul": {
+            "accuracy": 0.885,
+            "brier": 0.08832042940464013,
+            "correct": 177,
+            "n": 200,
+            "nll": 0.3011196606901335
+          },
+          "pilot_narrative_reading": {
+            "accuracy": 1.0,
+            "brier": 0.0009836554494696502,
+            "correct": 130,
+            "n": 130,
+            "nll": 0.026569232491156846
+          },
+          "pilot_open_world_abstention": {
+            "accuracy": 1.0,
+            "brier": 0.00013367731827786594,
+            "correct": 40,
+            "n": 40,
+            "nll": 0.00887388428771457
+          },
+          "pilot_string_composition": {
+            "accuracy": 0.65,
+            "brier": 0.25714595083103303,
+            "correct": 26,
+            "n": 40,
+            "nll": 0.9014677020558517
+          },
+          "targeted_quantized_median": {
+            "accuracy": 0.43333333333333335,
+            "brier": 0.34861243266884323,
+            "correct": 39,
+            "n": 90,
+            "nll": 1.3524218869667837
+          }
+        },
+        "by_type": {
+          "choice": {
+            "accuracy": 0.828125,
+            "brier": 0.12961096030999916,
+            "correct": 265,
+            "n": 320,
+            "nll": 0.47974552942327015
+          },
+          "noul": {
+            "accuracy": 0.9206896551724137,
+            "brier": 0.06133933229419416,
+            "correct": 267,
+            "n": 290,
+            "nll": 0.2183210194809049
+          },
+          "score": {
+            "accuracy": 0.43333333333333335,
+            "brier": 0.34861243266884323,
+            "correct": 39,
+            "n": 90,
+            "nll": 1.3524218869667837
+          }
+        },
+        "correct": 571,
+        "family_macro_accuracy": 0.793888888888889,
+        "family_macro_brier": 0.1418499971530311,
+        "micro_accuracy": 0.8157142857142857,
+        "n": 700,
+        "score_levels_predicted": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "step": 1574
+    },
+    "best_export_manifest_sha256": "2a143693fbad9c17df1e885041dd692e78a04da10e7059fac037f0d913a7b144",
+    "curve_steps": [
+      0,
+      262,
+      525,
+      787,
+      1050,
+      1312,
+      1574,
+      1837,
+      2099
+    ],
+    "elapsed_seconds": 2902.6220707721077,
+    "peak_reserved_bytes": 27439136768,
+    "reload_category_changes": 0,
+    "reload_max_abs_drift": 0.0,
+    "reload_parity_rows": 700,
+    "status": "COMPLETE"
+  }
+}

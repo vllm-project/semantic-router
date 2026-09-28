@@ -66,7 +66,7 @@ with open(out, "x") as stream:
     json.dump(spec, stream, indent=2)
     stream.write("\n")
 PY
-bash "$D/run_container.sh" "$gpu" "$sha" "$arm-soup" -- -m v2.06b.soup \
+DEV2_PYTHON=python3 bash "$D/run_container.sh" "$gpu" "$sha" "$arm-soup" -- -m v2.06b.soup \
   --spec "/runs/m5/specs/$arm-soup.json" --output "/runs/m1/arms/$arm-soup/full"
 [ "$(status "$A/$arm-soup/full/COMPLETE.json")" = COMPLETE ] || {
   echo "$arm-soup: export or reload parity failed"

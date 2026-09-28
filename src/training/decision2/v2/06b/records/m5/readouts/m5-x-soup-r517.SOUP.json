@@ -1,0 +1,49 @@
+{
+  "best_export_manifest_sha256": "2cdad9dfbddf75168f4dca84d8755fe351138c7465c55854517a49851c4836ab",
+  "elapsed_seconds": 52.871692571090534,
+  "ingredients": [
+    {
+      "arm": "m4-t-a7-s1",
+      "best_select": 552,
+      "best_step": 1433,
+      "state_sha256": "5fb870dae26059b4609ae7ec6bc923b5854812eb6079ba146b34a135e2770bb4"
+    },
+    {
+      "arm": "m4-t-a7-s2",
+      "best_select": 564,
+      "best_step": 1433,
+      "state_sha256": "4c6b1570c4af12916905d22e853b65fcf9271e08d31bb79f4fd033b4c3049858"
+    },
+    {
+      "arm": "m4-t-a7-s3",
+      "best_select": 575,
+      "best_step": 1433,
+      "state_sha256": "dfec5bac53a3e3d26f2e77846f94eb803d794d5d29f0a0dfbe730ffc1b498a9c"
+    },
+    {
+      "arm": "m4-v2-s1",
+      "best_select": 561,
+      "best_step": 2996,
+      "state_sha256": "93a3b7db37c39252a8f3e801f66d576b629572fd21332ce58b2dff8e7bf59905"
+    },
+    {
+      "arm": "m4-v2-s2",
+      "best_select": 567,
+      "best_step": 2247,
+      "state_sha256": "908586ca36a462be0292ca1adfc8fad31f6d1b5f660100b55e23d6117ffe0613"
+    },
+    {
+      "arm": "m4-v2-s3",
+      "best_select": 565,
+      "best_step": 2622,
+      "state_sha256": "c4cb6a6f1b68e54810f737f0e8a5e434b2256d168a4311e04e88e7437ba47e7b"
+    }
+  ],
+  "recipe_spec_sha256": "2c406b97b1057692952c4f1695fe0c8b3c45c3dc6b811d781bc5c43e0e469168",
+  "reload_category_changes": 0,
+  "reload_max_abs_drift": 0.0,
+  "soup_spec_sha256": "954891931bd6a2cbbdbf67a6a88ddbe0c19e4eac20201f26cbf99dc3926c4eb6",
+  "state_sha256": "5fecd67eed14159a8ac767809c32fd7d8a687cd910bb603981f43ea5d65bbb94",
+  "status": "COMPLETE",
+  "weights": "uniform"
+}

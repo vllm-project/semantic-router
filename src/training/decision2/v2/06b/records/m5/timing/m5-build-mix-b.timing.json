@@ -1,0 +1,1 @@
+{"run":"m5-build-mix-b","gpu":1,"render":"/dev/dri/renderD137","commit":"e848d0bab720020e60b4199febf934fe47d4ce26-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T14:08:08Z","end_utc":"2026-09-28T14:08:57Z","wall_seconds":49,"gpu_hours":0.01361,"exit":0}
