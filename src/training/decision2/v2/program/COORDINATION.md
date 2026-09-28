@@ -188,6 +188,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 04:10 — DEV2.0-2B package verified (gist `07c-decision-2-release-2b.md`; integration `e2918d988`): private
+  `llm-semantic-router/DEV2.0-2B@b2c5d7eac4ef24648cbf9c23c26421f0960ca542`, manifest `63c61883…`, 1,883,930,944 loaded
+  parameters, T = 1 (CAL698 worsened typed-DEV Brier / ECE and CSS-pilot Brier), parity 0 changes on 10,653 prompts,
+  re-hash 33/33, Apache-2.0 lineage (Sol 1.0 `ce0c018a` ← Qwen/Qwen3.5-2B@15852e8c); draft decision `31ae8a98…`. The
+  release worker found 45 training rows (18 groups) sharing long word sequences with human-transfer items (no typed, public
+  231 or mlx-diag matches); the card sentence is draft until the eval overlap-impact check (running) returns. Final decision
+  and `--collect` follow that check.
+  - **HF private storage is capped at 100 GB** (the org has no paid plan); usage 67.37 GB after the 2B upload. Storage
+    plan: after each release, delete the stored LFS files of that model's staging copies (0.8B E8F soup in
+    `dev2-dec-staging`, 0.6B `dev2-release-staging-06bm4`, the Kai1 dry-run `dev2-release-staging`, and 2B S2T once
+    released), keeping re-hashed node copies; 9B / 27B releases use `qwen-adapter` packages bound to their public Apache-2.0
+    bases (no base redistribution). Every track checks headroom before uploading; datasets and eval artifacts stay.
+
 - 2026-09-29 04:05 — From ~27B Milestone 2 (gist 06; integration `76267432d`): HOLD. Best = Score arm (A6g + A6h) seed 1,
   post-key v3 62.72 vs the >= 64.9 bar (AutoJev-27B re-measured 72.13; −9.42 [−10.65, −4.78]). Score data is the only
   lever that beat its matched control post-key (+2.63 [+0.65, +6.85]; its Score family beats AutoJev .728 vs .705; human
