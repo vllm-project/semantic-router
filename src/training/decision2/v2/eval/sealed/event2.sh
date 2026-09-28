@@ -2,7 +2,8 @@
 # JevArena-C1 v1.1 scoring event 2 (DEV2.0-0.6B + comparators), node A.
 # Usage: event2.sh <gpu> <mirror-dir-name> [lease-name, default owner.eval]   (the key arrives once on stdin)
 # The GPU is shared with its owner track: every job writes only the named lease entry and skips the idle check.
-# Every model first passes a 20-item typed-final smoke; only then are the prompts decrypted.
+# Every model first passes a typed-final smoke (20 items, or the whole panel where its runtime has no
+# --max-items); only then are the prompts decrypted.
 # Predictions are sealed before the gold is decrypted; plaintext is removed on any exit.
 set -uo pipefail
 umask 077
@@ -56,6 +57,8 @@ decrypt() {
 MODELS="cand kai1 lex bosun06 gliner25"
 declare -A LABEL=([cand]="DEV2.0-0.6B" [kai1]="Decision 1.0 Kai" [lex]="Decision 1.0 Lex"
   [bosun06]="Bosun v3.1 0.6B" [gliner25]="GLiNER2.5-Decide")
+# training.model.infer (cand) and inference.bosun06 take no --max-items.
+declare -A SMOKE_ITEMS=([cand]="" [kai1]=20 [lex]=20 [bosun06]="" [gliner25]=20)
 # Runner options, then "--", then collect options (without --panels).
 args() {
   case $1 in
@@ -81,14 +84,14 @@ run() {
 log "start: C1 v1.1 event 2 (GPU$GPU shared, entry $LEASE_NAME, source $SRC); candidate DEV2.0-0.6B@$PKG_REV (manifest a5cdabed, identity 5b30b7e2, T=1, 8192 tokens); independence recheck2 vs ba848147/38c2db3c/b1df84c4/30e0a1f7 + local pools m3a2/m3b + node-B lux-xl-w2 + derived files: no source name, 0 OVERLAP, the same 9 weak REVIEW (names 41fe708e, overlap c0f92ce9), no v1.2"
 printf 'track=eval\npurpose=C1 scoring event 2 (DEV2.0-0.6B + comparators)\nstart_utc=%s\n' "$(date -u +%FT%TZ)" >"$LEASE"
 for m in $MODELS; do
-  run "$m" "$E/smoke-$m" "C1 event 2 preflight: $m" typed-final 20
-  n=$(cat "$E/smoke-$m"/smoke/typed-final.predictions.jsonl 2>/dev/null | wc -l)
+  run "$m" "$E/smoke-$m" "C1 event 2 preflight: $m" typed-final "${SMOKE_ITEMS[$m]}"
+  n=$(cat "$E/smoke-$m"/smoke/typed-final.predictions.jsonl "$E/smoke-$m"/output/typed-final.predictions.jsonl 2>/dev/null | wc -l)
   if [ "$n" -lt 1 ]; then
     log "ABORT before decryption: preflight failed for $m (no C1 access used)"
     exit 1
   fi
 done
-log "preflight passed for all models (typed-final 20 items)"
+log "preflight passed for all models (typed-final: 20 items; whole panel for cand and bosun06)"
 
 decrypt v1/build-5/prompts.jsonl >"$PANEL"
 chmod 644 "$PANEL"
