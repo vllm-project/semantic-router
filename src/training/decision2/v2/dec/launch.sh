@@ -40,6 +40,13 @@ argv=(docker run --name "dec-$name" --rm --network none --shm-size 16g
 if [[ $cpu == 0 ]]; then
   argv+=(--device /dev/kfd --device "$render" -e ROCR_VISIBLE_DEVICES=0 -e HIP_VISIBLE_DEVICES=0)
 fi
+# DEC_TRITON_CACHE persists Triton kernels and autotune choices across jobs, so
+# concurrent or repeated runs reuse one configuration instead of re-tuning.
+if [[ -n ${DEC_TRITON_CACHE:-} ]]; then
+  mkdir -p "$DEC_TRITON_CACHE"
+  argv+=(--mount "type=bind,src=$DEC_TRITON_CACHE,dst=/triton-cache"
+    -e TRITON_CACHE_DIR=/triton-cache -e TRITON_CACHE_AUTOTUNING=1)
+fi
 argv+=(-w /code "$image" python3 "$@")
 
 start=$(date -u +%FT%TZ)

@@ -14,6 +14,11 @@ out="/runs/m1/arms/$arm"
 mkdir -p "$host"
 spec_json="/data/dev2/src/$sha/src/training/decision2/v2/06b/records/arms/$arm.json"
 field() { python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2], {}, {'d': d}))" "$1" "$2"; }
+family=$(field "$spec_json" "d['family']")
+if [ "$family" = qwen-causal ]; then
+  # The causal Qwen control's runtime is the image's own Python (Transformers 5.17).
+  export DEV2_PYTHON=python3
+fi
 
 if [ "$stage" = preflight ] || [ "$stage" = all ]; then
   bash "$run" "$gpu" "$sha" "$arm-preflight" -- -m v2.06b.train --spec "$spec" --output "$out/preflight" --preflight
@@ -41,6 +46,12 @@ if [ "$stage" = readout ] || [ "$stage" = all ]; then
   for panel in dev css-pilot; do
     input=/work/runs/dev.prompts.jsonl
     [ "$panel" = css-pilot ] && input=/work/runs/css-transfer-v1/css-pilot.prompts.jsonl
+    if [ "$family" = qwen-causal ]; then
+      bash "$run" "$gpu" "$sha" "$arm-$panel" -- -m training.model.infer --checkpoint "$out/full/best-export" \
+        --input "$input" --output "$out/readout/$panel.predictions.jsonl" --model-id "dev2-06b/$arm" \
+        --model-revision "$manifest" --max-length 8192
+      continue
+    fi
     bash "$run" "$gpu" "$sha" "$arm-$panel" -- -m v2.06b.predict benchmark --family "$family" --bundle "$bundle" \
       --backend "$backend" --native-dir "$out/full/best-export" --manifest-sha256 "$manifest" --input "$input" \
       --output "$out/readout/$panel.predictions.jsonl" --model-id "dev2-06b/$arm" --model-revision "$manifest" \

@@ -181,6 +181,28 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         model, packer, padded_rows, device="cuda:0", batch_size=8
     )[0]
     padding_drift = max(abs(a - b) for a, b in zip(alone, batched))
+    # Candidate markers precede the state, so only a bidirectional encoder can let
+    # the state change a candidate's score.
+    question = {
+        "q": {
+            "type": "choice",
+            "instructions": "Which colour is named?",
+            "criteria": {"r": "red", "b": "blue"},
+        }
+    }
+    left = enc.probabilities(
+        model,
+        packer,
+        kai8k.request_rows("The colour is red.", question),
+        device="cuda:0",
+    )[0]
+    right = enc.probabilities(
+        model,
+        packer,
+        kai8k.request_rows("The colour is blue.", question),
+        device="cuda:0",
+    )[0]
+    state_sensitivity = max(abs(a - b) for a, b in zip(left, right))
     result = {
         "status": (
             "PASS"
@@ -189,6 +211,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 for c in cases
             )
             and padding_drift < 1e-4
+            and state_sensitivity > 1e-6
             else "FAIL"
         ),
         "source": metadata["source"],
@@ -199,6 +222,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "token_ids": metadata["token_ids"],
         "cases": cases,
         "padding_max_abs_drift": padding_drift,
+        "state_sensitivity_max_abs": state_sensitivity,
+        "attention": metadata["attention"],
         "peak_allocated_gib": torch.cuda.max_memory_allocated() / 2**30,
         "elapsed_seconds": time.monotonic() - started,
     }

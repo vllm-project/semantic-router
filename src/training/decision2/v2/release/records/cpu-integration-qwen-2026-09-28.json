@@ -1,0 +1,162 @@
+{
+  "adapter_changes_outputs": true,
+  "config_sha256": "4542c76c97a9026c51390c8501cc7069c1ae59d84e29b2b0e97898df26d4888c",
+  "passed": true,
+  "qwen-adapter": {
+    "checks": {
+      "multilingual": {
+        "passed": true,
+        "problems": []
+      },
+      "null-description": {
+        "passed": true,
+        "problems": []
+      },
+      "over-budget": {
+        "passed": true,
+        "problems": []
+      },
+      "policy-check": {
+        "passed": true,
+        "problems": []
+      },
+      "structured-state": {
+        "passed": true,
+        "problems": []
+      },
+      "support-routing": {
+        "passed": true,
+        "problems": []
+      }
+    },
+    "compare": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "{\"mode\": \"compare\", \"passed\": true}\n"
+    },
+    "loaded_parameters": 9810592,
+    "passed": true,
+    "run_a": {
+      "exit": 0,
+      "stderr": "\nLoading weights:   0%|          | 0/24 [00:00<?, ?it/s]\nLoading weights: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 24/24 [00:00<00:00, 19192.24it/s]\n[transformers] The tokenizer you are loading from '/data/dev2/runs/release/itest-20260928T063740Z/work/pkg-lora/dev2-release-staging' with an incorrect regex pattern: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503/discussions/84#69121093e8b480e709447d5e. This will lead to incorrect tokenization. You should set the `fix_mistral_regex=True` flag when loading this tokenizer to fix this issue.\n",
+      "stdout": "{\"mode\": \"run\", \"passed\": true}\n"
+    },
+    "run_b": {
+      "exit": 0,
+      "stderr": "\nLoading weights:   0%|          | 0/24 [00:00<?, ?it/s]\nLoading weights: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 24/24 [00:00<00:00, 16641.31it/s]\n[transformers] The tokenizer you are loading from '/data/dev2/runs/release/itest-20260928T063740Z/work/pkg-lora/dev2-release-staging' with an incorrect regex pattern: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503/discussions/84#69121093e8b480e709447d5e. This will lead to incorrect tokenization. You should set the `fix_mistral_regex=True` flag when loading this tokenizer to fix this issue.\n",
+      "stdout": "{\"mode\": \"run\", \"passed\": true}\n"
+    },
+    "sample": {
+      "receipt": {
+        "noul": 0.49462181956323154,
+        "type": "noul"
+      },
+      "route": {
+        "choice": "technical",
+        "confidence": 0.0018037736767330115,
+        "probabilities": {
+          "billing": 0.34348865926981637,
+          "returns": 0.30429352427642725,
+          "technical": 0.3522178164537565
+        },
+        "type": "choice"
+      },
+      "urgency": {
+        "confidence": 0.0006861004515948954,
+        "legend": {
+          "0": "Routine",
+          "1": "Soon",
+          "2": "Today"
+        },
+        "probabilities": {
+          "0": 0.31785454303025773,
+          "1": 0.3326028767700298,
+          "2": 0.34954258019971257
+        },
+        "score": 1.031688037169455,
+        "type": "score"
+      }
+    }
+  },
+  "qwen-full": {
+    "card": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "{\"mode\": \"card\", \"passed\": true}\n"
+    },
+    "checks": {
+      "multilingual": {
+        "passed": true,
+        "problems": []
+      },
+      "null-description": {
+        "passed": true,
+        "problems": []
+      },
+      "over-budget": {
+        "passed": true,
+        "problems": []
+      },
+      "policy-check": {
+        "passed": true,
+        "problems": []
+      },
+      "structured-state": {
+        "passed": true,
+        "problems": []
+      },
+      "support-routing": {
+        "passed": true,
+        "problems": []
+      }
+    },
+    "compare": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "{\"mode\": \"compare\", \"passed\": true}\n"
+    },
+    "loaded_parameters": 9802400,
+    "passed": true,
+    "run_a": {
+      "exit": 0,
+      "stderr": "\nLoading weights:   0%|          | 0/24 [00:00<?, ?it/s]\nLoading weights: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 24/24 [00:00<00:00, 12009.46it/s]\n[transformers] The tokenizer you are loading from '/data/dev2/runs/release/itest-20260928T063740Z/work/pkg-full/dev2-release-staging' with an incorrect regex pattern: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503/discussions/84#69121093e8b480e709447d5e. This will lead to incorrect tokenization. You should set the `fix_mistral_regex=True` flag when loading this tokenizer to fix this issue.\n",
+      "stdout": "{\"mode\": \"run\", \"passed\": true}\n"
+    },
+    "run_b": {
+      "exit": 0,
+      "stderr": "\nLoading weights:   0%|          | 0/24 [00:00<?, ?it/s]\nLoading weights: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 24/24 [00:00<00:00, 30012.91it/s]\n[transformers] The tokenizer you are loading from '/data/dev2/runs/release/itest-20260928T063740Z/work/pkg-full/dev2-release-staging' with an incorrect regex pattern: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503/discussions/84#69121093e8b480e709447d5e. This will lead to incorrect tokenization. You should set the `fix_mistral_regex=True` flag when loading this tokenizer to fix this issue.\n",
+      "stdout": "{\"mode\": \"run\", \"passed\": true}\n"
+    },
+    "sample": {
+      "receipt": {
+        "noul": 0.5118560002087443,
+        "type": "noul"
+      },
+      "route": {
+        "choice": "technical",
+        "confidence": 0.00019081679366239612,
+        "probabilities": {
+          "billing": 0.3250344673929544,
+          "returns": 0.33321313122195406,
+          "technical": 0.3417524013850915
+        },
+        "type": "choice"
+      },
+      "urgency": {
+        "confidence": 0.00011552182712770698,
+        "legend": {
+          "0": "Routine",
+          "1": "Soon",
+          "2": "Today"
+        },
+        "probabilities": {
+          "0": 0.3267097450025387,
+          "1": 0.3335820924954495,
+          "2": 0.3397081625020117
+        },
+        "score": 1.0129984174994728,
+        "type": "score"
+      }
+    }
+  }
+}

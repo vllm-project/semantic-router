@@ -44,3 +44,19 @@ class EikosCollectorTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EikosVariantTest(unittest.TestCase):
+    def test_use_variant_switches_release_and_pass_limit(self) -> None:
+        from inference import eikos
+
+        try:
+            eikos.use_variant("27b")
+            self.assertEqual(
+                (eikos.MODEL_ID, eikos.MAX_ONE_PASS), ("caiovicentino1/Eikos-27B", 160)
+            )
+            with self.assertRaisesRegex(ValueError, "Unknown Eikos size"):
+                eikos.use_variant("9b")
+        finally:
+            eikos.use_variant("4b")
+        self.assertEqual(eikos.MAX_ONE_PASS, 100)

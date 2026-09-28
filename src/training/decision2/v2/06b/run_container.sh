@@ -29,13 +29,14 @@ mkdir -p "$logs" "$root/runs/06b"
 start=$(date -u +%FT%TZ)
 t0=$(date +%s)
 set +e
+# shellcheck disable=SC2086 # DEV2_DOCKER_EXTRA is an intentionally word-split argument list
 docker run --rm --name "dev2-06b-$name" --network none --ipc=host --shm-size 32g \
   --device /dev/kfd --device "$render" --group-add video --security-opt seccomp=unconfined \
   -e ROCR_VISIBLE_DEVICES=0 -e HIP_VISIBLE_DEVICES=0 \
-  -e PYTHONPATH=/src/src/training/decision2 -e PYTHONDONTWRITEBYTECODE=1 \
+  -e PYTHONPATH=/src/src/training/decision2:/opt/decision-fla -e PYTHONDONTWRITEBYTECODE=1 \
   -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e TOKENIZERS_PARALLELISM=false \
   -v /data/decision20-20260926:/work:ro -v "$src":/src:ro -v "$root/runs/06b":/runs \
-  -w /src/src/training/decision2 "$image" /work/envs/kai-lex/bin/python "$@" \
+  ${DEV2_DOCKER_EXTRA:-} -w /src/src/training/decision2 "$image" "${DEV2_PYTHON:-/work/envs/kai-lex/bin/python}" "$@" \
   > "$logs/$name.log" 2>&1
 status=$?
 set -e

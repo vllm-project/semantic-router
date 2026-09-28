@@ -143,3 +143,20 @@ class ThisThatAdapterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ThisThatVariantTest(unittest.TestCase):
+    def test_use_variant_switches_release(self) -> None:
+        from inference import this_that
+
+        try:
+            this_that.use_variant("1.2")
+            self.assertEqual(this_that.MODEL_ID, "flock-io/this-that-model-1.2")
+            self.assertTrue(this_that.SOURCE_REVISION.startswith("f57c9f0"))
+            with self.assertRaisesRegex(ValueError, "Unknown This-That version"):
+                this_that.use_variant("2.0")
+        finally:
+            this_that.use_variant("1.0")
+        self.assertEqual(
+            this_that.MODEL_REVISION, "3d927195c4f9845efe66c5715883a7a0f42b1239"
+        )

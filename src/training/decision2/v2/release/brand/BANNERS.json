@@ -1,0 +1,63 @@
+{
+  "banners": {
+    "0.6B": {
+      "accent": "#63d2f0",
+      "file": "DEV2.0-0.6B-owl-banner.png",
+      "owl": {
+        "sha256": "6e1ed4119bd1554a997aa89c60529e8b1fc1d147a393799b9ca0f3f32ae7605d",
+        "source": "llm-semantic-router/Decision-1.0-Kai-0.6B@9d6872cde6950c2c2b5786d182ec9a06ca1bdd66:assets/decision-kai-header.png"
+      },
+      "sha256": "d731c3f12a896ef423361d9084cb4c947bad4138145ef5bb64e5f7885b7e7c46"
+    },
+    "0.8B": {
+      "accent": "#ffb574",
+      "file": "DEV2.0-0.8B-owl-banner.png",
+      "owl": {
+        "sha256": "02673d96602b3328b59a12831cebfb32e4553d4ac8a417528e17b2c55409a6ca",
+        "source": "llm-semantic-router/Decision-1.0-Eos-0.8B@363c4a5e56afc115b1c78c837633956d0bbb63ab:assets/decision-eos-header.png"
+      },
+      "sha256": "ddf3c7b9696d1e05873b494a00f018a980485a7c142327f756a722346c246c6b"
+    },
+    "27B": {
+      "accent": "#6fdcb4",
+      "file": "DEV2.0-27B-owl-banner.png",
+      "owl": {
+        "sha256": "1c16e7f3c65dd2129b56b080a6d44456a755d046deefaff09f0f05147570b316",
+        "source": "brand/sources/DEV2.0-27B-owl-sticker.png"
+      },
+      "sha256": "d79ea73acba508e250101bfec09b06d69b93fbd80a3758a0e5da03618f2321a8"
+    },
+    "2B": {
+      "accent": "#ffd84e",
+      "file": "DEV2.0-2B-owl-banner.png",
+      "owl": {
+        "sha256": "fe6b65ab04dc2044c38d383091a03cbc0f176fbb04a13948c12d5ae50d1de710",
+        "source": "llm-semantic-router/Decision-1.0-Sol-2B@ce0c018a28de16d6639b1cd203b761bf643b89e6:assets/decision-sol-2b-header.png"
+      },
+      "sha256": "94008fafd629e5b8412e9c7b92d9dec07ff18a30e2cb973d4a2e43a8f927515a"
+    },
+    "4B": {
+      "accent": "#b4a0f6",
+      "file": "DEV2.0-4B-owl-banner.png",
+      "owl": {
+        "sha256": "58dbd7cf5ff49b760a162c32366bd5312a2acfded1273b79b937afcd31ca6ee4",
+        "source": "llm-semantic-router/Decision-1.0-Nox-4B@cde2a68dbaa557ea65dc458104d410a0802ee259:assets/decision-nox-4b-header.png"
+      },
+      "sha256": "20d60396cd5f024f2bf5b9551ca70bead484848d2dfac7d97af4b89d8772d140"
+    },
+    "9B": {
+      "accent": "#f8ca69",
+      "file": "DEV2.0-9B-owl-banner.png",
+      "owl": {
+        "sha256": "64e55deb635334185a01e1e9787de95503b8f49d11c44a2be5dd1b925d5e8ce1",
+        "source": "llm-semantic-router/Decision-1.0-Lux-9B@cdf4d3ef2dda21518e599fe99ebbe468486b197c:assets/decision-lux-9b-header.png"
+      },
+      "sha256": "d318952d49f5bbfbd84ffd62ff6527baa44ca719c0119c62e00b17fbe0f90c92"
+    }
+  },
+  "fonts": {
+    "DejaVuSans-Bold.ttf": "e1d733afbbfce842a1b43dced0c9885a76a4e67290dc7e690c4e9b76ebfc7d23",
+    "Poppins-Black.ttf": "d82aaaf98a9283f9a8edd24e51173337d8eaf09e25cd3d98831f8ec8461748a1"
+  },
+  "schema": "dev2-banners/1"
+}

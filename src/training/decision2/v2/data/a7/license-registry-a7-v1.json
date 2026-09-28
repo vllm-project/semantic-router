@@ -1,0 +1,50 @@
+{
+ "dec10:banking77_train": {
+  "attribution": "Casanueva et al., Efficient Intent Detection with Dual Sentence Encoders (2020); PolyAI-LDN/task-specific-datasets@57ec275d8078af65b7731c2a98be812d844a6d6b banking_data train",
+  "evidence": "https://github.com/PolyAI-LDN/task-specific-datasets/tree/57ec275d8078af65b7731c2a98be812d844a6d6b/banking_data; Decision 1.0 Sol/Nox/Lux ATTRIBUTIONS.md",
+  "license": "CC-BY-4.0",
+  "redistribution": "permitted with attribution; original intent labels converted to runtime-defined choices"
+ },
+ "dec10:clinc150_train": {
+  "attribution": "Larson et al., An Evaluation Dataset for Intent Classification and Out-of-Scope Prediction (EMNLP-IJCNLP 2019); clinc/oos-eval@828f8093932c8fe6ca7936c3d2e52903b1c523de train",
+  "evidence": "https://github.com/clinc/oos-eval/tree/828f8093932c8fe6ca7936c3d2e52903b1c523de; Decision 1.0 Sol/Nox/Lux ATTRIBUTIONS.md",
+  "license": "CC-BY-3.0",
+  "redistribution": "permitted with attribution; three reserved domains were withheld by the 1.0 builders"
+ },
+ "dec10:cosmos_qa_train": {
+  "attribution": "Huang, Le Bras, Bhagavatula and Choi, Cosmos QA (EMNLP-IJCNLP 2019); wilburOne/cosmosqa@b6eb99cca4e2a51dd28a9a6f562534872d851639 train",
+  "evidence": "https://huggingface.co/datasets/allenai/cosmos_qa/blob/28d9d5e2aae025e73e11177891a88dba51190013/README.md records the author-confirmed CC BY 4.0 licence",
+  "license": "CC-BY-4.0",
+  "redistribution": "permitted with attribution"
+ },
+ "dec10:generated_stage1_3": {
+  "attribution": "Decision 1.0 decoder project generators, stages 1-3 (objective rules, reference binding, scoped sources, transitions, logic/evidence, binding/membership, arithmetic)",
+  "evidence": "node B training-v1/data build_training.py, build_stage2.py, build_stage3.py, stage3-src/*.py; labels recomputed from rendered inputs by the 1.0 builders",
+  "license": "project-generated (no third-party text)",
+  "redistribution": "unrestricted within the project"
+ },
+ "dec10:generated_stage4_v2": {
+  "attribution": "Decision 1.0 decoder project generator stage4-general-composition-v2",
+  "evidence": "node B training-v1/data/stage4-prepared/V2_DATA_AUDIT.md: all 66,400 new labels recomputed by a separate evaluator; candidate-pool-first numeric construction",
+  "license": "project-generated (no third-party text)",
+  "redistribution": "unrestricted within the project"
+ },
+ "dec10:multinli_nonfiction_train": {
+  "attribution": "Williams, Nangia and Bowman, A Broad-Coverage Challenge Corpus for Sentence Understanding through Inference (NAACL 2018); nyu-mll/multi_nli@da70db2af9d09693783c3320c4249840212ee221 train, genres government, slate, telephone, travel",
+  "evidence": "https://huggingface.co/datasets/nyu-mll/multi_nli/blob/da70db2af9d09693783c3320c4249840212ee221/README.md (majority of the corpus under the Open American National Corpus permissive terms; fiction not used)",
+  "license": "OANC permissive terms (non-fiction genres)",
+  "redistribution": "permitted with attribution per the pinned dataset card"
+ },
+ "dec10:snli_train": {
+  "attribution": "Bowman, Angeli, Potts and Manning, A Large Annotated Corpus for Learning Natural Language Inference (EMNLP 2015); SNLI 1.0 train",
+  "evidence": "https://nlp.stanford.edu/projects/snli/ (CC BY-SA 4.0)",
+  "license": "CC-BY-SA-4.0",
+  "redistribution": "permitted with attribution; share-alike"
+ },
+ "dec10:squad2_train": {
+  "attribution": "Rajpurkar, Jia and Liang, Know What You Don't Know: Unanswerable Questions for SQuAD (ACL 2018); SQuAD 2.0 train, answerability projection",
+  "evidence": "https://rajpurkar.github.io/SQuAD-explorer/ (CC BY-SA 4.0; Wikipedia passages)",
+  "license": "CC-BY-SA-4.0",
+  "redistribution": "permitted with attribution; share-alike"
+ }
+}

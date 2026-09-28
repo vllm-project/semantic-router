@@ -161,7 +161,9 @@ dev proxy · stop rule · testbed · scale-up. Defaults from §1 apply unless ov
   (see synthesis); [A] Kev policy minimal pairs.
 - **Contrast (cleanest in the matrix):** `A0 ∪ A4h` vs `A0 ∪ A4r`. A4h and A4r share
   every state, gold option text, option count and gold position; only the distractor
-  selection differs (mined near vs uniform random from the same label space).
+  selection differs (mined near vs uniform random from the same label space). Use the
+  frozen **A4v2h / A4v2r** (A4 v1 failed its gates); native tokens match within 0.01%.
+  Report per family and with counting excluded (disclosed residue in A4v2r).
 - **Metric:** typed DEV Choice; `AHO-A4`; option-order flip rate; Choice Brier.
 - **Stop:** Choice effect rule fails in both T1 testbeds.
 - **Testbed:** T1a, T1b → T2; T3 reuses A4 pools for M3.
