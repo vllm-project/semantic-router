@@ -42,7 +42,9 @@ def main() -> None:
     from training.model.decision_model import collate, encode
 
     from .dec_model import dec_fingerprint, load_dec_checkpoint
+    from .runtime_check import require_runtime
 
+    runtime = require_runtime()
     identity = dec_fingerprint(selected["checkpoint"], args.source_path)
     loaded_source = {
         name.removeprefix("source/"): sha
@@ -117,6 +119,7 @@ def main() -> None:
             "max_length": max_length,
             "batch_size": args.batch_size,
             "device": "cuda:0",
+            "runtime": runtime,
         },
         **fit_report(records),
     }

@@ -17,6 +17,7 @@ from training.model.decision_model import encode
 from training.model.train import evaluate
 
 from .dec_model import dec_fingerprint, load_dec_checkpoint
+from .runtime_check import require_runtime
 
 
 def main() -> None:
@@ -29,6 +30,7 @@ def main() -> None:
     parser.add_argument("--max-length", type=int, default=8192)
     parser.add_argument("--batch-size", type=int, default=2)
     args = parser.parse_args()
+    runtime = require_runtime()
     rows = load_partition(args.rows, "select")
     model, tokenizer = load_dec_checkpoint(args.checkpoint, args.source_path)
     model = model.float().to(torch.device("cuda:0"))
@@ -57,6 +59,7 @@ def main() -> None:
         "correct": metrics["correct"],
         "n": metrics["n"],
         "family_macro_accuracy": metrics["family_macro_accuracy"],
+        "runtime": runtime,
     }
     (args.output / f"{args.tag}-receipt.json").write_text(
         json.dumps(receipt, indent=2, sort_keys=True) + "\n"

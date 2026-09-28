@@ -39,6 +39,7 @@ from training.model.source import source_fingerprint
 from training.model.train import atomic_json, evaluate, fsync_tree, learning_factor
 
 from .dec_model import RESIDUALS, DecModel
+from .runtime_check import require_runtime
 
 TRAINER_VERSION = "dec-factor-trainer/1"
 TASK_TYPES = ("choice", "noul", "score")
@@ -52,7 +53,7 @@ SHARED_FILES = (
     "train.py",
     "infer.py",
 )
-OWN_FILES = ("train_dec.py", "dec_model.py")
+OWN_FILES = ("train_dec.py", "dec_model.py", "runtime_check.py")
 
 
 def utc_now() -> str:
@@ -205,6 +206,7 @@ def main() -> None:
     args = parse_args()
     if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
         raise RuntimeError("A ROCm/CUDA BF16 device is required")
+    runtime = require_runtime()
     output = args.output
     if output.exists() and any(output.iterdir()):
         raise ValueError("Fresh run requires a new or empty output directory")
@@ -370,6 +372,7 @@ def main() -> None:
                 "peft": version("peft"),
             },
             "device_name": torch.cuda.get_device_name(device),
+            "runtime": runtime,
             "precision": "FP32 frozen backbone; FP32 LoRA/head/residual and Adam; BF16 autocast backbone; FP32 head/loss",
             "calibration_policy": "CAL rows are never fed to this trainer or checkpoint selector",
         },

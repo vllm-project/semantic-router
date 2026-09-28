@@ -28,12 +28,16 @@ from training.model.decision_model import DecisionModel, collate, encode
 from training.model.train import atomic_json
 
 from .dec_model import RESIDUAL_FILE, dec_fingerprint, load_dec_checkpoint
+from .runtime_check import require_runtime
 
 EXACT_TOLERANCE = 1e-6
-# Concurrent zero-step runs of one model measured max drift .027 with 5/700
-# argmax flips (Triton autotuning under contention); in-process runs were exact.
+# Without a persisted autotune cache, concurrent zero-step runs of one model
+# measured max drift .027 with 5/700 argmax flips; in-process runs were exact.
 CROSS_PROCESS_DRIFT = 0.05
 CROSS_PROCESS_MIN_SAME = 693
+# With one shared, persisted autotune cache every process reuses the trainer's
+# kernel configurations, so cross-process reload must reproduce.
+PERSISTED_DRIFT = 1e-4
 
 
 def select_probabilities(
@@ -125,7 +129,29 @@ def tensors_match_files(model: Any, checkpoint: Path) -> dict[str, Any]:
     }
 
 
-def cross_ok(result: dict[str, Any]) -> bool:
+def persisted_cache(provenances: list[dict[str, Any]], runtime: dict[str, Any]) -> bool:
+    """All processes used the same persisted autotune cache."""
+    caches = {
+        (p.get("runtime") or {}).get("triton_cache_dir")
+        for p in provenances
+        if (p.get("runtime") or {}).get("triton_cache_autotuning") == "1"
+    }
+    return (
+        len(caches) == 1
+        and all(
+            (p.get("runtime") or {}).get("triton_cache_autotuning") == "1"
+            for p in provenances
+        )
+        and runtime["triton_cache_dir"] in caches
+    )
+
+
+def cross_ok(result: dict[str, Any], persisted: bool) -> bool:
+    if persisted:
+        return (
+            result["same_argmax"] == result["n"]
+            and result["max_probability_drift"] <= PERSISTED_DRIFT
+        )
     return (
         result["same_argmax"] >= CROSS_PROCESS_MIN_SAME
         and result["max_probability_drift"] <= CROSS_PROCESS_DRIFT
@@ -140,6 +166,7 @@ def main() -> None:
     parser.add_argument("--one-run", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    runtime = require_runtime()
     rows = load_partition(args.select, "select")
     ignored = (
         "zero_step_only",
@@ -148,10 +175,10 @@ def main() -> None:
         "checkpoint_steps",
         "smoke_window_type",
     )
-    contract = json.loads((args.zero_run / "provenance.json").read_text())["contract"]
-    one_contract = json.loads((args.one_run / "provenance.json").read_text())[
-        "contract"
-    ]
+    zero_provenance = json.loads((args.zero_run / "provenance.json").read_text())
+    one_provenance = json.loads((args.one_run / "provenance.json").read_text())
+    contract, one_contract = zero_provenance["contract"], one_provenance["contract"]
+    persisted = persisted_cache([zero_provenance, one_provenance], runtime)
     if {k: v for k, v in contract.items() if k not in ignored} != {
         k: v for k, v in one_contract.items() if k not in ignored
     }:
@@ -227,11 +254,12 @@ def main() -> None:
         "zero_reload_exact_in_process": exact["same_argmax"] == len(rows)
         and exact["max_probability_drift"] <= EXACT_TOLERANCE,
         "zero_trainer_cross_process": cross_ok(
-            checks["zero_source_vs_trainer_cross_process"]
+            checks["zero_source_vs_trainer_cross_process"], persisted
         ),
         "one_step_reload_cross_process": cross_ok(
-            checks["one_step_trainer_vs_reload_cross_process"]
+            checks["one_step_trainer_vs_reload_cross_process"], persisted
         ),
+        "persisted_autotune_cache": persisted,
         "one_step_active_in_process": checks["one_step_source_vs_reload_in_process"][
             "max_probability_drift"
         ]
@@ -246,18 +274,28 @@ def main() -> None:
         and all(math.isfinite(events[0][k]) for k in ("loss", "gradient_norm")),
     }
     receipt = {
-        "schema_version": "dec-arm-preflight/2",
+        "schema_version": "dec-arm-preflight/3",
         "status": "PASS" if all(gates.values()) else "FAIL",
         "gates": gates,
         "tolerances": {
             "exact_in_process": EXACT_TOLERANCE,
-            "cross_process_drift": CROSS_PROCESS_DRIFT,
-            "cross_process_min_same_argmax": CROSS_PROCESS_MIN_SAME,
+            "cross_process_drift": (
+                PERSISTED_DRIFT if persisted else CROSS_PROCESS_DRIFT
+            ),
+            "cross_process_min_same_argmax": (
+                len(rows) if persisted else CROSS_PROCESS_MIN_SAME
+            ),
         },
         "checks": checks,
+        "runtime": runtime,
         "code_sha256": {
             name: file_sha256(Path(__file__).with_name(name))
-            for name in ("preflight_dec.py", "dec_model.py", "train_dec.py")
+            for name in (
+                "preflight_dec.py",
+                "dec_model.py",
+                "train_dec.py",
+                "runtime_check.py",
+            )
         },
     }
     atomic_json(args.output, receipt)

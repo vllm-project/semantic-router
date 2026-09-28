@@ -5,8 +5,9 @@
 #
 # The exact source mirror /data/dev2/src/<sha> is mounted read-only as /code,
 # the HF cache as /hf, rights-clean partitions as /data and gold-free prompt
-# panels as /panels. Only <output-dir> is writable. A receipt with start/end
-# UTC, exit status and the full docker argv is written beside the output.
+# panels as /panels. Only <output-dir> and the shared Triton cache are writable.
+# A receipt with start/end UTC, exit status and the full docker argv is written
+# beside the output.
 set -euo pipefail
 
 name=$1 sha=$2 out=$3
@@ -39,12 +40,13 @@ argv=(docker run --name "dec-$name" --rm --network none --shm-size 16g
   --mount "type=bind,src=$out,dst=/out")
 if [[ $cpu == 0 ]]; then
   argv+=(--device /dev/kfd --device "$render" -e ROCR_VISIBLE_DEVICES=0 -e HIP_VISIBLE_DEVICES=0)
-fi
-# DEC_TRITON_CACHE persists Triton kernels and autotune choices across jobs, so
-# concurrent or repeated runs reuse one configuration instead of re-tuning.
-if [[ -n ${DEC_TRITON_CACHE:-} ]]; then
-  mkdir -p "$DEC_TRITON_CACHE"
-  argv+=(--mount "type=bind,src=$DEC_TRITON_CACHE,dst=/triton-cache"
+  # Every GPU job shares one persisted Triton kernel + autotune cache per node
+  # and image, so training, reload and readout processes pick the same kernel
+  # configurations (FLA does not reproduce across processes without it).
+  image_hex=${image#sha256:}
+  triton_cache=${DEC_TRITON_CACHE:-/data/dev2/runs/dec/triton-cache/${image_hex:0:12}}
+  mkdir -p "$triton_cache"
+  argv+=(--mount "type=bind,src=$triton_cache,dst=/triton-cache"
     -e TRITON_CACHE_DIR=/triton-cache -e TRITON_CACHE_AUTOTUNING=1)
 fi
 argv+=(-w /code "$image" python3 "$@")
