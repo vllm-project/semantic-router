@@ -309,12 +309,15 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 			"model":      model,
 		})
 		metrics.RecordCacheOperation("memory", "find_similar", "hit", time.Since(start).Seconds())
-		return lookupResultFromTimestamps(
+		result := lookupResultFromTimestamps(
 			search.bestEntry.ResponseBody,
 			search.bestSimilarity,
 			search.bestEntry.Timestamp,
 			search.bestEntry.ExpiresAt,
-		), nil
+		)
+		var queryBuffer [32]string
+		result.NegationGuard = negationGuardOutcomeFor(tokenizeForPolarity(query, queryBuffer[:0]), search.bestEntry.Query)
+		return result, nil
 	}
 
 	atomic.AddInt64(&c.missCount, 1)

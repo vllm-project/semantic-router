@@ -263,6 +263,7 @@ domains:
       - tools/models/classifier-operating-point/**
       - tools/calibration/image-routing/**
       - bench/grounded_fusion/fusioneval/**
+      - bench/memory_coldstart/**
       - tools/make/go-tools.mk
     checks: [make go-tools-test]
     verifications: [core]
@@ -1096,6 +1097,7 @@ profiles:
       - e2e/testcases/sticky_tool_selection.go
       - e2e/testcases/sticky_tool_selection_provider_prefix.go
       - e2e/pkg/testmatrix/testcases.go
+      - e2e/testcases/testdata/agent_clients/**
       - deploy/kubernetes/provider-mocker/**
       - src/semantic-router/pkg/llmprotocol/**
       - src/semantic-router/pkg/protocolcodec/**
@@ -1140,6 +1142,7 @@ profiles:
       - e2e/profiles/response-api/**
       - e2e/testcases/anthropic_response_api_streaming.go
       - e2e/testcases/protocol_codec_*.go
+      - e2e/testcases/testdata/agent_clients/**
       - deploy/kubernetes/response-api/gwapi-resources.yaml
       - deploy/kubernetes/response-api/provider-mocker.yaml
       - tools/test/services/provider-mocker/**

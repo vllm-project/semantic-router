@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -121,6 +122,9 @@ func TopologyTestQueryHandler(configPath, routerAPIURL string, credentialProvide
 		case routerAPIURL == "":
 			result = failedTestQueryResult(req, "Router API is not configured.", http.StatusServiceUnavailable)
 		default:
+			if dashboardauth.RejectRevokedMutation(w, r) {
+				return
+			}
 			result = callRouterAPI(r.Context(), req, routerAPIURL, configPath, credentialProvider...)
 		}
 

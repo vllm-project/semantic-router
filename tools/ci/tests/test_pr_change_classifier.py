@@ -10,7 +10,18 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
-from ci_plan import github_outputs, make_plan, previous_release  # noqa: E402
+from ci_plan import (  # noqa: E402
+    github_outputs,
+    make_plan,
+    performance_base,
+    previous_release,
+)
+from classify_pr_changes import (  # noqa: E402
+    NIGHTLY_IMAGES,
+    PRODUCTION_RELEASE_IMAGES,
+    classify,
+    full_e2e_profiles,
+)
 from classify_pr_changes import (  # noqa: E402
     NIGHTLY_IMAGES,
     PRODUCTION_RELEASE_IMAGES,
@@ -586,6 +597,12 @@ class SelectionTests(unittest.TestCase):
             result.profiles,
             ("envoy-ai-gateway", "sticky-tool-selection-redis"),
         )
+    def test_release_performance_base_uses_a_compatible_vela_anchor(self):
+        self.assertEqual(
+            performance_base("0.4.0", ["v0.3.0"]),
+            "12597be5ffae2319d856f230d61ca26248eb9b3b",
+        )
+        self.assertEqual(performance_base("0.5.0", ["v0.4.0"]), "v0.4.0")
 
     def test_shared_artifact_loaders_select_their_runtime_consumers(self):
         for path in (

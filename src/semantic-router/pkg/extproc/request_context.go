@@ -239,7 +239,11 @@ type RequestContext struct {
 	VSRCacheSource                      string
 	VSRCacheEntryAgeSeconds             float64
 	VSRCacheTTLSeconds                  int
-	VSRInjectedSystemPrompt             bool             // Whether a system prompt was injected into the request
+	VSRInjectedSystemPrompt             bool // Whether a system prompt was injected into the request
+	PromptCacheAction                   string
+	PromptCacheReason                   string
+	PromptCacheInserted                 int
+	PromptCachePreserved                int
 	VSRSelectedDecision                 *config.Decision // The decision object selected by DecisionEngine (for plugins)
 	// VSREligibleModelRefs is the selected decision's model set after applying
 	// request contracts. Loopers consume this exact set; broader Router Learning
@@ -416,6 +420,7 @@ type RequestContext struct {
 	PrimaryOutputChars       int
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
+	ResponseBodyNeedsRewrite bool // The decoded client wire differs from the provider body.
 	ProtocolDiagnostics      llmprotocol.Diagnostics
 	ResponseVendor           llmprotocol.ResponseVendor
 	ResponseVendorExtensions bool // Upstream response carried vendor decorations that were dropped on decode

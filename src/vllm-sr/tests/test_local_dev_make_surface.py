@@ -28,9 +28,20 @@ def test_environment_docs_use_the_supported_local_image_serve_flow() -> None:
     content = ENVIRONMENTS_DOC_PATH.read_text(encoding="utf-8")
 
     assert "`make vllm-sr-dev`" in content
-    assert "`vllm-sr serve --image-pull-policy never`" in content
+    assert (
+        "`VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest "
+        "vllm-sr serve --image-pull-policy never`" in content
+    )
     assert "make vllm-sr-dev VLLM_SR_PLATFORM=amd" in content
-    assert "vllm-sr serve --image-pull-policy never --platform amd" in content
+    assert (
+        "`VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest "
+        "vllm-sr serve --image-pull-policy never --platform amd`" in content
+    )
+    assert (
+        "`VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest "
+        "vllm-sr serve --platform nvidia --config <recipe> "
+        "--image-pull-policy ifnotpresent`" in content
+    )
     assert "VLLM_SR_TOPOLOGY=legacy" not in content
 
 
