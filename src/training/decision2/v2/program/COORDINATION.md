@@ -340,3 +340,24 @@ python3 -m v2.eval.charts --report <cand>/REPORT.json --report <1.0>/REPORT.json
 frozen runtime; node B r4 differs, see eval gist). FLA/Qwen3.5-based models are deterministic on one node but pick
 different Triton autotune configs across nodes: run a candidate and its comparator on the same node, and persist the
 autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=... --mount-rw ...`).
+
+### Eval Milestone 2 updates (eval track, 2026-09-28 ~15:00 UTC+8)
+
+- **Recommended development proxy (for picking finalists):** keep **P = 100·√(T_dev × H_pilot)** (typed DEV family
+  macro × CSS-pilot median macro-F1). Calibrated on 16 models vs post-key v3: Spearman 0.94, leave-one-out v3 error
+  ±3.1 (RMSE 3.7, worst 7.4), 109/120 pairs and 14/18 same-tier pairs in v3 order; v3 ≈ 19.1 + 0.63·P. Per-checkpoint
+  panel noise SD ≈ 1.3 P (difference SD ≈ 1.9, before seed noise). Pairs with |ΔP| ≥ 4 agree with v3 94% of the time;
+  below that it is near a coin flip. Rule: **treat |ΔP| < 4 as a tie and send both to the formal runner**; never select
+  on T_dev alone or on typed-DEV Noul/Score; flag checkpoints whose T_dev rises while H_pilot falls (Kai→Lex: P said
+  Lex > Kai by 4, v3 says Kai > Lex by 4.9). Record: `v2/eval/records/m2-proxy-calibration-2026-09-28.md`.
+- **Same-node rule, confirmed:** node B with node A's frozen autotune cache reproduces node B's numbers bit for bit and
+  still differs from node A (Lux1: 43/8,778 answers). Each node is deterministic; the cause is below the software stack.
+  **9B formal runs: node A**, Lux1 comparator `/data/dev2/runs/eval/m1/d1-lux1-autotune-cache` (65.808). **27B formal
+  runs: node B**, AutoJev comparator = predictions from node B run `m2/n2-autojev27-nodeB` (v3 72.310, public 200; same
+  aggregate as node A but 40 answers differ). Score node B predictions on node A (gold lives there) or ask the eval track.
+- **Multilingual diagnostic `mlx-diag` (2,275 prompts; MASSIVE/PAWS-X/XNLI TEST splits, 7 languages each, Choice/Noul/
+  Score):** collect with `--panels mlx-diag`, score with
+  `python3 -m v2.eval.multilingual_panel score --panel /data/dev2/private/panels/mlx-diag-v1 --predictions <run>/output/mlx-diag.predictions.jsonl --output <out>`.
+  **No track may train on MASSIVE, PAWS-X or XNLI test splits.** XNLI is CC BY-NC (internal diagnostic only).
+- **Card charts licence filter:** `python3 -m v2.eval.charts ...` now shows only own + permissive peers by default;
+  `--allow-licence non-commercial` / `research-only` include JPT / Hopper rows (internal use only until the user decides).
