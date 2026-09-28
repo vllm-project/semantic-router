@@ -3,7 +3,7 @@
     python3 -m v2.06b.m6_summary --run RUN --mlx-run RUN-mlx --gates DIR --released NAME \
         --comparator NAME=DIR ... [--control] [--answers-diff FILE]
 
-Reads REPORT.json, PAIRED-vs-<NAME>.json, GPU-TIME.json and M6-CACHE.json of RUN and RUN-mlx,
+Reads COLLECT.json, REPORT.json, PAIRED-vs-<NAME>.json, GPU-TIME.json and M6-CACHE.json of RUN and RUN-mlx,
 `mlx-diag.score.json`, and the gate outputs in DIR (`paired-vs-<released>.json`, `types.json`).
 Successor rule (M6 prereg section 4; skipped with --control): the paired post-key v3 95% CI
 lower bound vs the released model is > 0, the upper bound of the paired H interval is >= 0,
@@ -47,6 +47,7 @@ def paired(run: Path, name: str) -> dict[str, Any]:
 
 def summarize(args: argparse.Namespace) -> dict[str, Any]:
     report = load(args.run / "REPORT.json")
+    collect = load(args.run / "COLLECT.json")
     typed = report["panels"]["typed-final"]["by_type"]
     public = report["panels"]["public231"]
     mlx = load(args.mlx_run / "mlx-diag.score.json")
@@ -64,11 +65,10 @@ def summarize(args: argparse.Namespace) -> dict[str, Any]:
         "name": args.name,
         "run_dir": str(args.run),
         "mlx_run_dir": str(args.mlx_run),
-        "model_path": (
-            report["model"].get("path")
-            if isinstance(report.get("model"), dict)
-            else None
-        ),
+        "model_path": collect.get("model_path"),
+        "model_revision": collect.get("model_revision"),
+        "runtime": collect.get("runtime"),
+        "runtime_env": collect.get("runtime_env"),
         "seal_sha256": report.get("seal_sha256"),
         "v3": report["v3"]["score"],
         "T": report["v3"]["T"],

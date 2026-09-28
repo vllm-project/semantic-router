@@ -91,7 +91,7 @@ def scalars(section: Any, where: str) -> dict[str, Any]:
 
 def render_numbers(section: dict[str, Any]) -> str:
     def show(value: Any) -> str:
-        return f"{value:.4g}" if isinstance(value, float) else str(value)
+        return f"{value:.6g}" if isinstance(value, float) else str(value)
 
     return "\n".join(f"- {key}: {show(value)}" for key, value in section.items())
 
