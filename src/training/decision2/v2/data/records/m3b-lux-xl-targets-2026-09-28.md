@@ -24,8 +24,8 @@ of the r2 recipes train on gold labels.
 | w3 | 60,000 | 60,000 | 0 / 0 | 23,971 / 23,334 / 12,695 | 0.767 / 0.774 / 0.644 | 2,919 s | 0.811 | `530b0bce352b2edbe32436c2a0acf3561640a990` |
 | w4 | 60,000 | 60,000 | 0 / 0 | 19,955 / 30,283 / 9,762 | 0.870 / 0.788 / 0.673 | 2,643 s | 0.734 | `2abc15484ee3152d8b3364b6d34e9deb7275a11a` |
 | w5 | 12,215 | 12,215 | 0 / 0 | 36 / 8,417 / 3,762 | 0.694 / 0.820 / 0.506 | 476 s | 0.132 | `0ce4ca604cff506edbb69117f62df975e6dc0e6a` |
-| c-w1 | 60,000 | pending | pending | pending | pending | pending (≈ 2,940 s) | pending | pending |
-| c-w2 | 40,957 | pending | pending | pending | pending | pending (≈ 1,790 s) | pending | pending |
+| c-w1 | 60,000 | 60,000 | 0 / 0 | 21,631 / 20,419 / 17,950 | 0.804 / 0.805 / 0.580 | 2,905 s | 0.807 | `0736a4cebe07e424716cac106a05c378a8b551b0` |
+| c-w2 | 40,957 | 40,957 | 0 / 0 | 3,507 / 35,050 / 2,400 | 0.895 / 0.792 / 0.443 | 1,555 s | 0.432 | `d251e032b2a2e4514536021d37eb02c7bc4bd7a6` |
 
 | Wave | Targets SHA-256 | Attestation SHA-256 | Report SHA-256 | Teacher output SHA-256 |
 | --- | --- | --- | --- | --- |
@@ -34,6 +34,12 @@ of the r2 recipes train on gold labels.
 | w3 | `6d141c96b54a9548b4572c04c4fbd30e413b168a43d583f3086000413a207c73` | `68f11e6ccd51ad697d16595239047d38f5c4e0bbf3a07fe30e862707765fbb03` | `564ed94522ec16ad456e99ab757e7e45ebc784ed0a82e03fa860a644f4a936d2` | `711adb23e1aa36fc466c7e30b4a75f0342e68ab0c1b90077da97805fd2b9265d` |
 | w4 | `b8ae13749243a7e59c191bf1e6f81d3fff0ea5667a507b086426ae6568343a22` | `bb8e31bfca426d58798896e27b22c9dfa9fc3e3daa4f377d3ec5ef4f46dddbd1` | `c3e2ee9882f4aba83376c647f22de3c35c49afb1a273b6dadfc95a09659b2f11` | `ff264f50bc7aaa40e30495d2a97ceb9d7471c063fa1e447b8db934c4cd0e2348` |
 | w5 | `0da12210143c5b46b3684e8230def4d0cf1ad490f1c49a2f423e0938528ebbe8` | `7fdd8380802b9b28c6e093f18d4b2fed4c54628e5202c2c87a9ea5fe99203a41` | `a5da6d66b4d9650cf9b66a4885753f297ad8b572ce8db93ae4af5f3b3f489e5f` | `c0d8dac34ebe74b8cedd119a178d087293de0216d8e15e38c8ec2e507ec9f055` |
+| c-w1 | `1a6b5a809132dde10d7717cedcf537138950da4422dc835fb6e2cceb24235e35` | `477a3dd3829d88140ee80687411c5ca4f8cd60b1a5fd9bb1cd57e6937a4ae596` | `6771f62a7d20fffc4921fe75556edefb7ec473510e4e3ed8abc750b2fb41562e` | (in the report) |
+| c-w2 | `786d25add878be7c859339100f0c6ac273a5cfac169ddf3835839dee22f55a22` | `1d127ad72151152ce0873936f10be052ee3e99c568ea4ce1ce97cff8ef6f1808` | `e19619006a03e75db8d06e205bc07ecc1173f668d37188955315758e6ae90d03` | (in the report) |
+
+Readback: every c-w1 / c-w2 file's SHA-256 at its revision equals node A's copy. Both reports have an empty
+`no_target`, and the same Triton cache digest `299151ab…` and image as w1–w5. c-w1 refreshed `README.md` `c892646c…`
+and `coverage.json` `552720a1…`.
 
 `README.md` `fd2379c2…` and `coverage.json` `cc54efde…` were uploaded with w1.
 
@@ -107,7 +113,7 @@ per-wave gains are these:
   v2v1-short +30,712 / +24,909. Once both control waves are published, no row of any of the six recipes lacks an
   own-Lux target.
 
-## Control-row waves (amendment 3 §4; running)
+## Control-row waves (amendment 3 §4; done, published 18:33 and 19:00 UTC)
 
 - **The gap:** w1–w5 were cut from the XL-full and XL-short missing lists only. The 100,957 control-only rows (64.9M
   native tokens) got no wave: H5 27,814, G6 11,439, A7g 10,524, E11 10,158, A7o 9,761, H1 9,347, H6 8,037, H3 7,264,
@@ -128,10 +134,9 @@ per-wave gains are these:
 - **Run:** `v2/data/m3/luxxl_control_queue.sh`, from the node-B mirror of `3a4bfb21f`, runs detached on node B. It
   starts after `LUX_XL_DONE`, SHA-gates each file and uses the same `teach.sh lux` launcher and runtime, one wave at a
   time. It appends `LUX_XL_C_W<k>_DONE` and then `LUX_XL_C_DONE`.
-- **Timing:** c-w1 started at 17:42 UTC. The expected ends are about 18:31 UTC for c-w1 and 19:01 UTC for c-w2, and
-  publication about 10 minutes after each. The estimate is a fit to w1–w5 of 0.036 s per prompt + 1.66e-5 s per native
-  token, which reproduces w4 within 1%. It comes to about 1.3 GPU-h.
-- **Lease:** GPU7 lease `expected_end_utc` is 19:15 UTC.
+- **Timing:** c-w1 ran 17:42–18:30 UTC and c-w2 18:30–18:56 UTC; they were published at 18:33 and 19:00 UTC. The
+  predicted 1.3 GPU-h (0.036 s per prompt + 1.66e-5 s per native token, fitted to w1–w5) compares with 1.24 measured.
+- **Lease:** the GPU7 lease was released at 19:00 UTC.
 - **Flagged rows:** targets for rows the amendment 3 rescreen flags are published but not referenced by any r2 recipe.
 
 ## Automation (w2–w5)
@@ -177,7 +182,14 @@ No other file of that commit remains. **The tree `m3/teachers/lux1/xl/` at the n
 
 ## GPU-hours (node B GPU7)
 
-- **Finished:** w1 0.708, w2 0.638, w3 0.811, w4 0.734 and w5 0.132, **3.023 GPU-h for w1–w5**.
-- **Pending:** c-w1 and c-w2, about 1.3 GPU-h expected.
+- **XL waves:** w1 0.708, w2 0.638, w3 0.811, w4 0.734 and w5 0.132, **3.023 GPU-h for w1–w5**.
+- **Control waves:** c-w1 0.807 and c-w2 0.432, **1.239 GPU-h**.
+- **Total: 4.262 GPU-h** of teacher processes.
+  - The lease was held 14:27–19:00 UTC (4.55 h). The rest of that time was the gaps between waves, spent waiting for
+    prompt files.
+  - The GPU was shared with the eval track's node-B re-validation until 15:29 UTC, and with the H7 / H8 embedding scan
+    (0.21 GPU-h, `m3b-gap-sources-2026-09-28.md`) at 17:01–17:13 UTC.
 
-Conversion, upload and readback run on node A and the local machine, CPU only.
+Conversion, upload and readback run on node A and the local machine, CPU only. Four scratch copies of uncommitted
+working trees exist on node A from pre-commit dry runs (`/data/dev2/runs/data/m3b/tmp-code/t1`–`t4`, 16:29–16:50
+UTC). Every published file was converted and uploaded from the exact mirrors named above.

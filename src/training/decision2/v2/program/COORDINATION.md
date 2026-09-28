@@ -187,6 +187,40 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 03:30 — **Development proxy v2** (eval; "Eval runners" → "Development proxy v2"; integration `c3da006b8`): P stays
+  100·√(T_dev·H_pilot), recalibrated on 51 models (v3 ≈ 22.4 + 0.58·P); **tie band is now |ΔP| < 8** (supersedes 4). No
+  preregistered alternative (incl. the CSS-pilot three-task mean) beats P on within-tier ordering; 67 of 70 same-track
+  candidate pairs fall inside the band (P's order matches v3 only ~69% there). Rules for every size track:
+  - P may only DROP candidates at least 8 behind the best; siblings inside the band go to the formal runner, **at most three
+    finalists per tier per milestone** (limits selection on the post-key panel; C1 event 3 confirms the final picks).
+  - Read development panels at the candidate's formal input limit and on the kernel-equipped image (12 of 27 candidates
+    were not). P over-predicts JPT peers and 27B LoRA arms by ~4–5 v3 points; treat those readouts with that bias in mind.
+- 2026-09-29 03:30 — **Worktree rule:** one active worker per git worktree. When two workers of the same track run at the
+  same time, the coordinator gives the second its own worktree (e.g. `/home/xunliu/code/vllm-sr-dev2-eval-<suffix>` on a
+  branch `xunzhuo/decision-2-training-eval-<suffix>`); never share an index.
+
+- 2026-09-29 03:10 — Research & data M3b complete (gist 02, 03:10 entry; integration `189c6b39c`):
+  - **XL r2 release recipes** (private revision `100536133e…`): mx-xl-full-r2 365,970 rows / 179.2M tokens, Choice / Noul /
+    Score 31.9 / 45.6 / 22.6%, long-evidence share 29.0% (clears the 20% floor); mx-xl-short-r2 373,577 / 127.4M; a `nogap`
+    control keeps r1's balance. New arms H7 (English long evidence: HoVer, Natural Questions; 4,292 rows / 16.1M tokens)
+    and H8 (17 languages: TyDi QA, MIRACL, JCommonsenseQA, SentiMix Spanglish; 21,378 / 12.4M) at `09f73967` passed every
+    gate. Own-Lux targets cover every XL r1 row and control and all r2 rows except H7 / H8 (gold labels). PI-v4 manifest
+    `24b060da…` (87 roles; A7 held-out protected, A7 TRAIN report-only). Prefer XL r2 (or r1 if a tier needs its higher
+    Choice share) for new release-candidate training; the older M2 recipes are superseded.
+  - Same-source check: NO training source (nor Lux 1.0's pool) shares an origin with any CSS-pilot task; the v2 soup's proxy
+    lead came from typed DEV (82% of the gap). Nothing quarantined; FLUTE stays excluded.
+  - **Coordinator decisions:** (1) amendment 4 (post-results narrowing of the rescreen) is ACCEPTED as disclosed: exclude
+    hits against evaluation panels — formal (v3 typed + human transfer, public 231, C1, mlx-diag) and development readout
+    panels (typed DEV, CSS pilot); template sharing with our own SELECT / CAL splits (same generators by construction) is
+    tolerated and disclosed; the strict build `9f83ce9b` stays on record. (2) The rescreen's 305 excluded groups touch 82
+    CSS15 items (73 `media_ideology`, shared topical phrases, no exact duplicates), 33 Decision Bench v4, 1 mlx-diag and
+    1 public-231 item; models trained on r1 / v2 / v1 / A7 data (incl. the released DEV2.0-0.8B / 0.6B and the 2B
+    candidate) may have seen them — the eval track quantifies the effect from stored predictions before the card wording is
+    decided. (3) An own-Lux wave for the 25,664 H7 / H8 rows (~1 GPU-hour, new preregistration) is approved on node B GPU7.
+  - **Node B root filesystem is 99% full** because of `/root/jev-research-20260921` (1.9 TB of research data from a
+    2026-09-21 session; not ours; do NOT move or delete it). Docker's root is `/data/docker`. Every track: on node B write
+    only under `/data` — set `TMPDIR=/data/dev2/tmp`, keep HF / pip / uv / Triton caches under `/data/dev2`.
+
 - 2026-09-29 02:50 — **DEV2.0-2B APPROVED for private release** (eval record `m4-dev2-2b-gates-2026-09-29.md`; integration
   `c149dca51`). Gates: human transfer vs Decider 2B +0.105 [−0.008, +0.132], vs This-That 1.2 +0.120 [−0.050, +0.223]; v3 vs
   Decider 2B +3.94 [−2.48, +5.67], vs This-That +7.33 [−2.00, +13.60], vs Sol 1.0 16K +7.66 [+3.26, +10.81]; no type
@@ -837,8 +871,9 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
 
 ### Eval Milestone 2 updates (eval track, 2026-09-28 ~15:00 UTC+8)
 
-- **Recommended development proxy (for picking finalists):** keep **P = 100·√(T_dev × H_pilot)** (typed DEV family
-  macro × CSS-pilot median macro-F1). Calibrated on 16 models vs post-key v3: Spearman 0.94, leave-one-out v3 error
+- **(Tie band and linear map SUPERSEDED by "Development proxy v2" at the end of this section: within a tier |ΔP| < 8
+  is a tie; v3 ≈ 22.4 + 0.58·P.)** **Recommended development proxy (for picking finalists):** keep
+  **P = 100·√(T_dev × H_pilot)** (typed DEV family macro × CSS-pilot median macro-F1). Calibrated on 16 models vs post-key v3: Spearman 0.94, leave-one-out v3 error
   ±3.1 (RMSE 3.7, worst 7.4), 109/120 pairs and 14/18 same-tier pairs in v3 order; v3 ≈ 19.1 + 0.63·P. Per-checkpoint
   panel noise SD ≈ 1.3 P (difference SD ≈ 1.9, before seed noise). Pairs with |ΔP| ≥ 4 agree with v3 94% of the time;
   below that it is near a coin flip. Rule: **treat |ΔP| < 4 as a tie and send both to the formal runner**; never select
@@ -966,3 +1001,45 @@ autotune cache with the run (`--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE
   ≤ 0.21, no exact 8-token span): **no v1.2**. Script `v2/eval/sealed/event2.sh <gpu> <mirror> [lease-name]` (a
   pre-decryption smoke for every model); batch DEV2.0-0.6B + Kai1, Lex, Bosun, GLiNER2.5-Decide, verified on node
   A mirror `b99032a66`. **Waiting on: batch confirmation and a node-A GPU (~0.1 GPU-h).**
+
+### Development proxy v2 (eval track, 2026-09-29 ~03:30 UTC+8; code at `c3da006b8` or later; supersedes the M2 tie band)
+
+Record `v2/eval/records/m5-proxy-v2-calibration-2026-09-29.md` (prereg `79482d863`, pushed before any proxy was computed).
+
+- **Scope.** 51 models, each with a post-key v3 run and a typed-DEV + CSS-pilot readout of the same weights: the
+  24-model matrix plus 27 formally run 2.0 candidates (0.6B T/V2/X/Z soups; 0.8B E8F s1–s3 + soup, B8F s1–s2, E8V
+  soup; 2B S2T soup; 4B X2, X4R/X4K s1–s2, N4T/N4J/N4L/N4LKr soups; 9B L2, M3 B-s1; 27B C0, M2-C1/S1/K1).
+  - Features were recomputed with one scorer on node A (CPU only). Development readouts are the only inputs; v3
+    composites are only the target; no v3 items and no C1.
+  - The v1 numbers reproduce exactly.
+- **Proxy v2 = P, unchanged: P = 100·√(T_dev·H_pilot).** Recalibrated **v3 ≈ 22.4 + 0.58·P** (LOO MAE 2.6 / RMSE 3.1
+  / worst 6.6; Spearman 0.94).
+  - None of the preregistered alternatives beats P: the CSS-pilot three-task mean (P_mean3), per-type typed-DEV terms,
+    arithmetic means and a fitted two-term model. The best reaches only a 0.38 bootstrap probability of ordering more
+    of the 129 within-tier decision pairs correctly.
+  - P gets 106/129. The alternatives get 98–105.
+- **Three-task mean (02:40 suggestion).** It fixes 0.6B (19/20 vs 16/20 pairs) but not other tiers (9B 2/4 vs 4/4).
+  Without the four 0.6B soups that motivated it, it is worse (86/109 vs 90/109). Not adopted.
+- **NEW TIE BAND: within a tier, |ΔP| < 8 is a tie** (was 4). Send every candidate within 8 P points of the best to
+  the formal runner and decide on the paired v3 CI. How often P's order matches v3 across within-tier pairs:
+
+  | \|ΔP\| | Pairs | P order = v3 | Reversed by ≥ 2 v3 points |
+  | --- | ---: | ---: | ---: |
+  | ≥ 8 | 43 | 91% | 2% |
+  | 4–8 | 67 | 76% | 10% |
+  | < 4 | 75 | 63% | 20% |
+
+  The old "94% at |ΔP| ≥ 4" was mostly cross-tier pairs. A normal-residual check puts the 10%-risk gap at ≈ 11, so
+  treat 8 as the minimum.
+- **No proxy separates close within-tier candidates reliably; ties go to the formal runner.**
+  - 67 of the 70 same-track candidate pairs (seeds, soups, sibling arms) lie inside |ΔP| < 8. There P matches v3
+    only 69% of the time and reverses 16% by ≥ 2 points.
+  - Use P to drop candidates ≥ 8 behind the best, never to pick among siblings.
+  - Never select on T_dev, H_pilot or a single typed-DEV type.
+- **Lineage offsets.** P over-predicts JPT peers and the 27B LoRA arms by about 4–5 v3 points and under-predicts
+  decoder candidates by about 1.5: across lineages it is a shortlist only.
+- **Readout hygiene.** 12 of the 27 candidates were read at a lower limit than their formal package (8K vs 16K,
+  4K vs 8K) or on the kernel-less node-B image. Read development panels at the formal limit and image.
+- **Re-run the calibration** when new formal candidates land:
+  `python3 -m v2.eval.proxy_calibration extract --spec <spec.json> --output <features.json>` (node A, CPU), then
+  `... analyze --features <features.json> --output <analysis.json>`.
