@@ -197,7 +197,7 @@ helm install vsr ./deploy/helm/semantic-router \
   --set router.skipProcessing.enabled=true
 ```
 
-仅当由已认证的上游过滤器（Envoy AI Gateway、ext_authz、路由级过滤器等）负责按信任依据设置或剥离该请求头时，才应启用此开关。促成该开关的 AI Gateway 互操作模式背景见 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808)。
+仅当由已认证的上游过滤器（Agent Router（原 Envoy AI Gateway）、ext_authz、路由级过滤器等）负责按信任依据设置或剥离该请求头时，才应启用此开关。促成该开关的 AI Gateway 互操作模式背景见 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808)。
 
 ### 路由回放
 

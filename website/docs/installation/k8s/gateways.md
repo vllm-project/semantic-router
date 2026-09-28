@@ -14,12 +14,12 @@ component owns authentication or traffic policy.
 
 | Existing data plane | Start with | What it owns |
 | --- | --- | --- |
-| Envoy AI Gateway | [Envoy AI Gateway](ai-gateway) | Provider translation, provider credentials, rate limits, and Gateway API traffic policy. |
+| Agent Router (formerly Envoy AI Gateway) | [Agent Router](ai-gateway) | Provider translation, provider credentials, rate limits, and Gateway API traffic policy. |
 | agentgateway | [agentgateway](agentgateway) | Gateway API proxy, backend resources, and ExtProc phase policy. |
 | Istio | [Istio Gateway](istio) | Ingress, `HTTPRoute` processing, and the Envoy filter that calls Semantic Router. |
 | Gateway API Inference Extension | [GIE](gateway-api-inference-extension) | `InferencePool` endpoint selection after Semantic Router chooses a model pool. |
 
-Envoy AI Gateway and agentgateway are the
+Agent Router and agentgateway are the
 [AI Gateway](../../overview/semantic-router-overview#protocol-and-deployment-boundaries)
 examples in this table. LiteLLM is also an AI Gateway, but this project does not
 have a LiteLLM guide.
