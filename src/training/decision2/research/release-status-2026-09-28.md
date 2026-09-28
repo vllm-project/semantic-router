@@ -41,6 +41,15 @@ contrast, not a causal explanation for the observed 0.6B regression. No
 replacement source currently passes its answer-blind quality gate, so the
 new 0.6B GPU arm remains HOLD.
 
+A pure-CPU [independent-option prototype](small06-option-isolation-cpu-prototype-2026-09-28.md)
+passes permutation and Choice/Noul/Score shape tests, but the pinned official
+0.6B tokenizer shows a large naive cost at 512 synthetic state words
+and 255 options: **158,500 independent tokens versus 7,795 joint tokens**
+(20.33×), with about 17 GiB of batched BF16 KV alone. Shared-prefix reuse is
+only a mathematical lower bound here, not implemented. This is an architecture
+feasibility finding, not a trained improvement; full training remains HOLD
+until a real cache/chunked path passes native parity and measured cost gates.
+
 The [AutoJev27 same-panel external peer](autojev27-v3-public-peer-result-2026-09-28.md)
 is a measured comparison, not a Decision 2.0 result. It reached v3 **72.3101**
 (typed `T=.886875`, human-transfer `H=.589571`) and public231 **200/231**.
