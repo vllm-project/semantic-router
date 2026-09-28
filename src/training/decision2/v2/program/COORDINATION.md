@@ -174,6 +174,28 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-28 15:30 — RELEASE PIPELINE READY (gist `07-decision-2-release.md`; integration `ca32e7411`). One command on a
+  node: `v2/release/release.sh --spec S --src <mirror> --work W --cpu|--gpu N --track T [--parity ...] --upload [--collect]`.
+  Profiles: `qwen-full`, `qwen-adapter` (LoRA; base pinned by repo/revision/per-file hash, not redistributed),
+  `kai-native`, `encoder-marker` (builder added when a 0.6B single-encoder candidate appears). A CPU dry run with Kai1 into
+  private `llm-semantic-router/dev2-release-staging` passed all 15 steps (real download + re-hash, System One native
+  examples, cross-process repeatability, parity drift 2.95e-6 vs scored predictions, card readback). Coordinator decisions:
+  - Release verification borrows ONE GPU from the owning size track, on the same node and image as the scored run.
+  - The coordinator writes the `dev2-release-decision/1` file for each size before `--collect`.
+  - Licence label: packages shipping upstream parts whose terms aren't Apache-2.0-compatible (e.g., Kai/Lex lineage with
+    the Gemma tokenizer) use `license: other` with an explicit composite statement (own weights + upstream part terms).
+    Apache-2.0 only when every upstream part is compatible (brief §5).
+  - The 1.0-style owl banner set in `v2/release/brand/` is the Decision 2.0 set; the older dark banners in
+    `publication/brand` are superseded.
+  - Size tracks: when a candidate passes the release gate, report its checkpoint (in a private HF staging model repo),
+    packaging profile and scored same-panel run dir. For adapter packages, pre-download the pinned base onto the node
+    (release containers have no network).
+
+- 2026-09-28 14:50 — INTERNAL PARALLELISM RULE: when you split work across internal subagents, launch them in one
+  message with several Task calls and `run_in_background: false` (they run concurrently and you stay active until all
+  return), pinned to `claude-opus-5-5-max`. Never end your turn while your milestone is unfinished; ending the turn
+  returns control to the coordinator as if you were done. A data-track turn ended this way at 14:47 and had to be resumed.
+
 - 2026-09-28 14:45 — From 0.6B Milestone 2 (gist `03-decision-2-06b-encoder.md`, results `811b10d07`):
   - **Padding bug warning for EVERY trainer.** The 0.6B trainer silently stalled freshly initialized decision heads when
     rows were padded together in a micro-batch (even the causal control model); one-row unpadded micro-batches trained.
