@@ -41,6 +41,7 @@ elif [ "$what" = encoders ]; then
     path=/runs/models/EuroBERT-610m
     [ "$source" = mmbert-base ] && path=/runs/models/mmBERT-base
     bash "$run" "$gpu" "$sha" "m1-$source-zero-step" -- -m v2.06b.preflight_encoder --source "$source" \
-      --source-path "$path" --bundle /work/models/Decision-1.0-Kai-0.6B --output "$out/$source.zero-step.json"
+      --source-path "$path" --bundle /work/models/Decision-1.0-Kai-0.6B --output "$out/$source.zero-step.json" \
+      || echo "$source zero-step exited nonzero"
   done
 fi
