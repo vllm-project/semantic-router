@@ -97,7 +97,7 @@ if has full; then
     fi
     name=full
     [ "$attempt" -gt 1 ] && name=full-r$attempt
-    latest=$(find "$RUN/full/$run" -maxdepth 1 -type d -name 'checkpoint-*' ! -name '*.pending' 2>/dev/null | sort | tail -1)
+    latest=$(find "$RUN/full/$run" -maxdepth 1 -type d -name 'checkpoint-*' ! -name '*.pending' 2>/dev/null | sort | tail -1 || true)
     if [ -n "$latest" ]; then
       launch "$name" 3.0 "exact resume from $(basename "$latest")" "$RUN/full" -- "${RESUME_ARGS[@]}" \
         --save-every 92 --resume "/out/$run/$(basename "$latest")" --output "/out/$run" || true
@@ -111,7 +111,7 @@ if has full; then
       echo "arm $ARM stopped: exit $code on attempt $attempt" >&2
       exit 1
     fi
-    if [ -z "$(find "$RUN/full/$run" -maxdepth 1 -type d -name 'checkpoint-*' ! -name '*.pending' 2>/dev/null)" ]; then
+    if [ -z "$(find "$RUN/full/$run" -maxdepth 1 -type d -name 'checkpoint-*' ! -name '*.pending' 2>/dev/null || true)" ]; then
       run=run-r$((attempt + 1))
     fi
     attempt=$((attempt + 1))
