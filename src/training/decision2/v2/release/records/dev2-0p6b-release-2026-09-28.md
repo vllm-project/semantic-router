@@ -1,5 +1,48 @@
 # DEV2.0-0.6B: private build, upload and verification (2026-09-28)
 
+## Update 23:50 UTC+8: CAL698 rejected on development panels; T = 1 revision `e61b2b44` is current
+
+Coordinator rule 23:15 (supersedes 22:30): CAL698 temperatures are adopted only if they do not worsen
+aggregate calibration on the development panels. `v2/release/dev_calibration.py` re-tempered the stored
+development predictions of the same weights (`m4-t-a7-soup` readout, identity `5b30b7e2…`, T = 1, 8,192
+tokens; 0 answer changes) and scored them with the development scorers
+([receipt](dev2-0p6b-release-2026-09-28/devcal/dev2-0p6b.json)):
+
+| Development metric | Raw | CAL698 |
+| --- | ---: | ---: |
+| Typed DEV Brier / ECE-10 | 0.336 / 0.169 | **0.396 / 0.300** (worse) |
+| CSS pilot median task Brier-sum / ECE-15 | 0.790 / 0.072 | 0.790 / 0.058 |
+
+Typed-DEV Brier and ECE worsen, so **CAL698 is rejected and the package ships T = 1**.
+
+- **Current private revision `e61b2b4419383672cb6a92d63699f7974e5f81ac`, manifest
+  `a5cdabedf93835f028b871d0dc64ad8595e5369128f994d07bdee44dc1e999a9`** (31 files, no `calibration.json`).
+  Model files and identity equal `7b5d3ff2`; only `README.md` and `evaluation/EVALUATION.md` differ (the
+  card's calibration line now says the CAL698 temperatures were evaluated and not adopted because they
+  worsened out-of-distribution calibration; the GLiNER2.5-Decide LICENSE note; score table back to the raw
+  0.309 / 0.118). All 15 release steps pass ([receipts](dev2-0p6b-release-2026-09-28/t1/release/)):
+  examples bit-identical in three processes (answers `a7da72d4…`, as for `7b5d3ff2`), card example,
+  **exact parity (tolerance 0) against the raw scored predictions** on 600 prompts before and after the
+  real download (full-panel exact parity was shown for the same model and runtime bytes at `7b5d3ff2`),
+  re-hash 31/31, readback, `hub_links` 14/14, HTTP check 12/12 with anonymous 401, six gate items.
+- **Do not use `a87eeb725b4edd5e7612342be662c4d11d470487`.** The first T = 1 upload kept the previous
+  revision's `calibration.json` because `upload_folder` never deletes; the re-hash step failed and the
+  chain stopped ([receipts](dev2-0p6b-release-2026-09-28/t1/failed-a87eeb72/)). Fixed in `89294e89f`
+  (`hub upload` passes `delete_patterns=['*']`; the Hub keeps `.gitattributes`), then re-uploaded.
+- **Draft decision:** build-time [`…build-draft-t1.json`](dev2-0p6b-release-2026-09-28/DEV2.0-0.6B.decision.build-draft-t1.json)
+  (`4946f666…`); verified draft for the coordinator [`DEV2.0-0.6B.decision.draft.json`](dev2-0p6b-release-2026-09-28/DEV2.0-0.6B.decision.draft.json)
+  (`bc59b2af…`, names `e61b2b44`, supersedes `f52e7873…`, `f752dad2…` and `72bc767e…`). Report `72cf01de…`,
+  paired `bd4ad6c7…` (v3 43.541, +7.60 [+4.70, +10.76]).
+- **Scored identity for C1 event 2:** `llm-semantic-router/DEV2.0-0.6B` at
+  `e61b2b4419383672cb6a92d63699f7974e5f81ac` (manifest `a5cdabed…`), weights `model_sha256` `5b30b7e2…`,
+  **no calibration (T = 1)**, 8,192-token limit, over-budget inputs invalid. Run the package runtime, or
+  `training.model.infer` with the eval adapter spec `v2/06b/records/adapters/dev2-06b-causal-8k.json`
+  (`--model-path <package or staging 62c61c10 checkpoint> --extra model_id=…`) on node A; this is exactly the
+  configuration of the scored run `m4-t-a7-soup`.
+- The CAL698 revision `cb2bfd76` (section below) is superseded.
+- **GPU-hours this round:** 0.193 on shared node A GPU0 (0.6B failed upload 195 s, 0.6B re-upload 358 s,
+  0.8B local verification 142 s); lease entry `owner.release` set back to idle.
+
 ## Update 23:15 UTC+8: CAL698-calibrated package, revision `cb2bfd76`, supersedes `7b5d3ff2`
 
 Coordinator decision 22:30: the frozen release package includes its CAL698 calibration before any
