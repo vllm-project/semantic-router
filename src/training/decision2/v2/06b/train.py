@@ -9,8 +9,11 @@ rule. `--preflight` runs step-0 SELECT, the padded-versus-one-row micro-batch
 parity gate (`parity.py`), one update, export and a fresh reload parity
 check, then stops. `data.mixture` replaces the rights-clean TRAIN with a
 template-S mixture of hash-pinned arms (`mixture.py`); SELECT and CAL stay
-the rights-clean ones. `optimizer.backbone_freeze_updates` trains only the
-fresh head for that many updates, then starts the backbone schedule.
+the rights-clean ones; a `materialized` mixture is a hash-pinned S2 build.
+A teacher in `option-key` format (the canonical own-Lux file) applies only
+where it saw the row's exact input. `optimizer.backbone_freeze_updates`
+trains only the fresh head for that many updates, then starts the backbone
+schedule.
 """
 
 from __future__ import annotations
@@ -360,6 +363,37 @@ def native_from_original(
     return [probabilities[keys.index("false")], probabilities[keys.index("true")]]
 
 
+def option_key_teacher(
+    rows: list[dict[str, Any]], path: Path
+) -> tuple[list[list[float] | None], dict[str, int]]:
+    """Option-key teacher rows (`id`, `input_sha256`, `teacher_probs`) -> native vectors.
+
+    A row gets its teacher only if the teacher saw exactly its input (same
+    `input_sha256`); renumbered option keys therefore drop the teacher term.
+    """
+    entries = {entry["id"]: entry for entry in read_jsonl(path)}
+    out: list[list[float] | None] = []
+    counts = {"covered": 0, "no_entry": 0, "input_changed": 0}
+    for row in rows:
+        entry = entries.get(row.get("teacher_source_id", row["id"]))
+        if entry is None:
+            counts["no_entry"] += 1
+            out.append(None)
+            continue
+        if entry["input_sha256"] != row["input_sha256"]:
+            counts["input_changed"] += 1
+            out.append(None)
+            continue
+        keys = [option["key"] for option in row["options"]]
+        if set(entry["teacher_probs"]) != set(keys):
+            raise ValueError(f"{row['id']}: teacher keys differ from option keys")
+        counts["covered"] += 1
+        out.append(
+            native_from_original(row, [float(entry["teacher_probs"][k]) for k in keys])
+        )
+    return out, counts
+
+
 class CausalQwenFamily:
     """The official-Qwen causal endpoint/global-query model of the archived control.
 
@@ -629,7 +663,12 @@ def run(
     if "mixture" in spec["data"]:
         from training.model.data import check_partition_isolation
 
-        splits["train"], mixture_report = mix.build(spec["data"]["mixture"])
+        if spec["data"]["mixture"]["template"] == "materialized":
+            splits["train"], mixture_report = mix.load_materialized(
+                spec["data"]["mixture"]
+            )
+        else:
+            splits["train"], mixture_report = mix.build(spec["data"]["mixture"])
         check_partition_isolation(splits)
         write_json(output / "MIXTURE.json", mixture_report, exclusive=True)
     records = {
@@ -669,18 +708,28 @@ def run(
             records["train"][i]["_loss_weight"] = len(bins) / (len(counts) * counts[b])
 
     teacher: list[list[float] | None] = [None] * len(records["train"])
+    teacher_coverage = None
     if spec["teacher"] is not None:
         path = Path(spec["teacher"]["path"])
         if file_sha256(path) != spec["teacher"]["sha256"]:
             raise ValueError("Teacher file differs from its frozen hash")
-        by_id = {row["source_row_id"]: row["probabilities"] for row in read_jsonl(path)}
-        keys = [
-            r.get("teacher_source_id", r["source_row_id"]) for r in records["train"]
-        ]
-        if spec["teacher"].get("coverage") == "subset":
-            teacher = [by_id.get(key) for key in keys]
+        if spec["teacher"].get("format", "native") == "option-key":
+            teacher, teacher_coverage = option_key_teacher(splits["train"], path)
+            if spec["teacher"].get("coverage") != "subset" and teacher_coverage[
+                "covered"
+            ] != len(teacher):
+                raise ValueError("Teacher does not cover every TRAIN row")
         else:
-            teacher = [by_id[key] for key in keys]
+            by_id = {
+                row["source_row_id"]: row["probabilities"] for row in read_jsonl(path)
+            }
+            keys = [
+                r.get("teacher_source_id", r["source_row_id"]) for r in records["train"]
+            ]
+            if spec["teacher"].get("coverage") == "subset":
+                teacher = [by_id.get(key) for key in keys]
+            else:
+                teacher = [by_id[key] for key in keys]
         for record, q in zip(records["train"], teacher):
             if q is None:
                 continue
@@ -734,6 +783,7 @@ def run(
         "backbone_freeze_updates": freeze,
         "backbone_warmup_updates": backbone_warmup if freeze else None,
         "teacher_rows": sum(q is not None for q in teacher),
+        "teacher_coverage": teacher_coverage,
         "mixture": mixture_report,
         "milestones": steps,
         "environment": environment(),

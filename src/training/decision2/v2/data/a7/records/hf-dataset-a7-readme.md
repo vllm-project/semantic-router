@@ -58,7 +58,7 @@ only (rule 7e), balanced to a 45–55% true share per family and language, and
 screened like the other generated sub-arms (the rubric Score rows failed the
 option-only gate and are not included).
 
-**Encoder-family sub-arms (version `a7-enc10-v3`; records under
+**Encoder-family sub-arms (version `a7-enc10-v4`; records under
 `versions/enc10/`)**, rebuilt from the pinned upstream files of the sources the
 Kai/Lex rosters used, with human labels only and fixed English templates written
 in this repository (no 1.0 question, rubric or translated schema text):
@@ -71,9 +71,10 @@ in this repository (no 1.0 question, rubric or translated schema text):
 | `A7x` | MASSIVE intents, 12 locales (Choice among same-scenario intents) — **ablation-only**: same source as the multilingual diagnostic `mlx-diag`; never part of a default mixture | publisher human labels |
 
 `license-registry-a7-v2.json` covers these sources (Apache-2.0, CC BY-SA 4.0,
-CC BY 4.0). Status of the GPU embedding scan for `A7r` and the encoder sub-arms
-is recorded in `a7-arms-m2-2026-09-28.md` on the branch; until it is recorded
-there as passed, `A7r` and the encoder sub-arms are for development runs only.
+CC BY 4.0). `A7r` and the encoder sub-arms passed the same gates as the other
+sub-arms, including the GPU embedding scan against PI-v3
+(`versions/*/embed.public.json`; 8 groups removed, none against an evaluation or
+development panel).
 
 Rules and results: branch `xunzhuo/decision-2-training-a7`,
 `src/training/decision2/v2/data/a7/records/` (`a7-prereg-2026-09-28.md`,

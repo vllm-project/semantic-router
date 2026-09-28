@@ -1,0 +1,10 @@
+set -u
+SRC=$1
+C=/data/dev2/runs/dec/m2/chains
+D=/data/dev2/src/$SRC/src/training/decision2/v2/dec/drive_arm.sh
+EOS=/hf/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab
+BASE08=/hf/models--Qwen--Qwen3.5-0.8B-Base/snapshots/dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68
+FULL="--train /runs/m2/data/m2-full-a7-v1/train.jsonl --train-mode full --backbone-lr 1e-5 --head-lr 1e-4 --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64 --seed 20260927"
+(DEC_NODE=b bash $D m2-E8F-s2 0 $SRC m2/arms $EOS -- $FULL) > $C/gpu0-s2.log 2>&1 &
+(DEC_NODE=b bash $D m2-B8F-s2 1 $SRC m2/arms $BASE08 -- $FULL --init base --revision dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68) > $C/gpu1-s2.log 2>&1 &
+echo launched-s2

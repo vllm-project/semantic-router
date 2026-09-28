@@ -1,0 +1,9 @@
+set -u
+SRC=$1; OUT=$2; shift 2
+S=/data/dev2/src/$SRC/src/training/decision2; cd $S; export PYTHONPATH=$S
+A=/data/dev2/runs/dec/m2/readouts
+args=()
+for name in "$@"; do
+  case $name in *:*) args+=(--compare $name) ;; *) d=$A/$name; css=$(ls $d/css*.predictions.jsonl | head -1); args+=(--arm "$name=$d/dev.predictions.jsonl,$css") ;; esac
+done
+python3 -m v2.dec.dev_readout --typed-gold /data/dev2/private/panels/gold/typed-dev.gold.jsonl --css-gold /data/dev2/private/panels/gold/css-pilot.gold.jsonl "${args[@]}" --output $A/$OUT

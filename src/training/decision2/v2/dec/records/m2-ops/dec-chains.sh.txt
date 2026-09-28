@@ -1,0 +1,35 @@
+set -e
+SRC=$1
+now=$(date -u +%FT%TZ)
+for g in 0 1 2 3 4; do mkdir -p /data/dev2/leases/gpu$g.lock; printf 'track=dec\nstatus=busy\npurpose=M2 preregistered arms (prereg 143cfc214)\nstart_utc=%s\nexpected_end_utc=2026-09-28T14:30:00Z\n' $now > /data/dev2/leases/gpu$g.lock/owner; done
+C=/data/dev2/runs/dec/m2/chains; mkdir -p $C /data/dev2/runs/dec/m2/arms
+D=/data/dev2/src/$SRC/src/training/decision2/v2/dec/drive_arm.sh
+NOX=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
+SOL=/hf/models--llm-semantic-router--Decision-1.0-Sol-2B/snapshots/ce0c018a28de16d6639b1cd203b761bf643b89e6
+EOS=/hf/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab
+BASE08=/hf/models--Qwen--Qwen3.5-0.8B-Base/snapshots/dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68
+LORA="--teacher /runs/c1/teacher/lux/lux-train-teacher.jsonl --teacher-kl-weight 0.5 --teacher-partial --batching tokens --max-batch-tokens 16384 --max-batch-rows 16 --update-rows 16"
+FULL="--train /runs/m2/data/m2-full-a7-v1/train.jsonl --train-mode full --backbone-lr 1e-5 --head-lr 1e-4 --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64 --seed 20260926"
+RET=/runs/m2/data/m2-retention/train.jsonl; CTL=/runs/m2/data/m2-control-a0sr/train.jsonl
+arm() { echo "DEC_NODE=b bash $D $1 $2 $SRC m2/arms $3 -- ${@:4}"; }
+{
+ echo "set -u"
+ arm m2-X4R-s1 0 $NOX --train $RET $LORA --seed 20260926
+ arm m2-S4R-s1 0 $SOL --train $RET $LORA --seed 20260926
+} > $C/gpu0.sh
+{
+ echo "set -u"
+ arm m2-X4R-s2 1 $NOX --train $RET $LORA --seed 20260927
+ arm m2-S4R-s2 1 $SOL --train $RET $LORA --seed 20260927
+} > $C/gpu1.sh
+{
+ echo "set -u"
+ arm m2-X4C-s1 2 $NOX --train $CTL $LORA --seed 20260926
+ arm m2-X4C-s2 2 $NOX --train $CTL $LORA --seed 20260927
+ arm m2-S4C-s1 2 $SOL --train $CTL $LORA --seed 20260926
+ arm m2-S4C-s2 2 $SOL --train $CTL $LORA --seed 20260927
+} > $C/gpu2.sh
+{ echo "set -u"; arm m2-E8F-s1 3 $EOS $FULL; } > $C/gpu3.sh
+{ echo "set -u"; arm m2-B8F-s1 4 $BASE08 $FULL --init base --revision dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68; } > $C/gpu4.sh
+for g in 0 1 2 3 4; do nohup bash $C/gpu$g.sh > $C/gpu$g.log 2>&1 & done
+sleep 2; cat $C/gpu2.sh | head -3 | cut -c1-400; echo launched

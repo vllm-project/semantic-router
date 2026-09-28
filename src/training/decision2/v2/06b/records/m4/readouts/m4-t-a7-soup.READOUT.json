@@ -1,0 +1,43 @@
+{
+  "H_pilot": 0.3188362618567685,
+  "T_dev": 0.33625,
+  "css_pilot_correct": 575,
+  "css_pilot_invalid": 0,
+  "css_pilot_tasks": {
+    "discourse": 0.2984678131410807,
+    "implicit_hate": 0.3188362618567685,
+    "semeval_stance": 0.5391962354941482
+  },
+  "css_report_predictions_sha256": "e9de505a7ffe189c1084040b844170bd551727dc9153ecfe552779d85bcdf001",
+  "proxy": 32.74273859183718,
+  "score_levels_predicted": {
+    "0": 384,
+    "2": 16
+  },
+  "typed_by_family": {
+    "attribute_gate": 0.3425,
+    "rule_precedence": 0.455,
+    "set_reconciliation": 0.2525,
+    "transition_table": 0.295
+  },
+  "typed_by_type": {
+    "choice": {
+      "correct": 255,
+      "invalid": 0,
+      "n": 800
+    },
+    "noul": {
+      "correct": 182,
+      "invalid": 0,
+      "n": 400
+    },
+    "score": {
+      "correct": 101,
+      "invalid": 0,
+      "n": 400
+    }
+  },
+  "typed_correct": 538,
+  "typed_invalid": 0,
+  "typed_report_predictions_sha256": "2605a187bb870c725bfb706dd88f06f673076d5f290b4c9e0a811b4ebf240027"
+}

@@ -1,0 +1,17 @@
+set -u
+SRC=$1
+R=/data/dev2/runs/dec/m2; A=$R/arms; O=$R/soup; mkdir -p $O
+for s in s1 s2 s3; do until grep -q "m2-E8F-$s postrun complete" $A/OPERATIONS.log 2>/dev/null; do sleep 30; done; done
+S=/data/dev2/src/$SRC/src/training/decision2/v2/dec; L=$S/launch.sh
+export DEC_IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1 DEC_DATA=/data/dev2/runs/dec/data-cleanv2 DEC_RENDER=/dev/dri/renderD145 DEC_GPU_LABEL="node B GPU2"
+members=()
+for s in s1 s2 s3; do b=$(python3 -c "import json;print(json.load(open('$A/full/m2-E8F-$s/BEST.json'))['checkpoint'])"); members+=(--member /runs/m2/arms/full/m2-E8F-$s/$b); echo "$s $b" >> $O/members.txt; done
+bash $L m2-E8F-soup-build $SRC $O/build --cpu -- -m v2.dec.soup "${members[@]}" --output /out/E8F-soup || { echo "$(date -u +%FT%TZ) soup build FAILED" >> $O/OPERATIONS.log; exit 1; }
+echo "$(date -u +%FT%TZ) soup built" >> $O/OPERATIONS.log
+CK=/runs/m2/soup/build/E8F-soup
+bash $L m2-E8F-soup-cal700 $SRC $O/cal700 -- -m v2.dec.calibrate_ckpt --checkpoint $CK --cal /data/cal.jsonl --output /out/calibration.json
+for panel in dev css-pilot; do
+  bash $L m2-E8F-soup-$panel $SRC $O/$panel -- -m v2.dec.infer_dec --checkpoint $CK --source-path /hf/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab --calibration /runs/m2/soup/cal700/calibration.json --input /panels/$panel.prompts.jsonl --output /out/$panel.predictions.jsonl --model-id decision2-dec-m2-E8F-soup --model-revision E8F-soup
+done
+bash $L m2-E8F-soup-select $SRC $O/select -- -m v2.dec.eval_rows --checkpoint $CK --rows /data/select.jsonl --tag select --output /out
+echo "$(date -u +%FT%TZ) soup dev readouts done" >> $O/OPERATIONS.log
