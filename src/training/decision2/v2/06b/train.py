@@ -234,6 +234,7 @@ class EncoderFamily:
             self.source_path,
             spec["start"]["source"],
             seed=int(spec["start"]["head_seed"]),
+            ordinal_score=bool(spec["start"].get("ordinal_score", False)),
         )
         self.model.to(device)
         if hasattr(self.model.backbone, "gradient_checkpointing_enable"):
@@ -257,7 +258,12 @@ class EncoderFamily:
             },
             {
                 "name": "shared.head",
-                "params": list(self.model.head.parameters()),
+                "params": list(self.model.head.parameters())
+                + (
+                    list(self.model.ordinal.parameters())
+                    if self.model.ordinal is not None
+                    else []
+                ),
                 "lr": o["head_lr"],
             },
         ]
@@ -292,14 +298,20 @@ class EncoderFamily:
             raise ValueError("Score RPS is not part of the encoder recipe")
         q = None
         if any(t is not None for t in teacher):
-            raise ValueError("Teacher KL is not part of the encoder recipe")
+            q = torch.zeros_like(targets)
+            for i, t in enumerate(teacher):
+                if t is not None:
+                    q[i, : len(t)] = torch.tensor(t, device=device)
         extra, brier, kl = extra_terms(
             logits, targets, valid, q, loss_cfg["brier"], loss_cfg["teacher_kl"]
         )
-        return (loss_cfg["ce"] * ce + extra).sum(), {
+        weights = torch.tensor(
+            [r.get("_loss_weight", 1.0) for r in records], device=device
+        )
+        return ((loss_cfg["ce"] * ce + extra) * weights).sum(), {
             "ce": float(ce.detach().sum()),
             "brier": float(brier.detach().sum()),
-            "kl": 0.0,
+            "kl": float(kl.detach().sum()),
         }
 
     def probabilities(self, records: list[dict[str, Any]]) -> list[list[float]]:
@@ -412,6 +424,19 @@ def run(
             f"Rows exceed the complete-input cap; freeze a quarantine first: {over}"
         )
     kinds = [r["question"]["type"].lower() for r in records["train"]]
+    if spec["loss"].get("score_class_balance"):
+        if spec["family"] != "encoder":
+            raise ValueError(
+                "Score class balance is implemented for the encoder family"
+            )
+        # Bin each Score gold by its relative level (low/middle/high) across level counts.
+        bins = {}
+        for i, (row, kind) in enumerate(zip(splits["train"], kinds)):
+            if kind == "score":
+                bins[i] = round(2 * row["label"] / (len(row["options"]) - 1))
+        counts = {b: list(bins.values()).count(b) for b in set(bins.values())}
+        for i, b in bins.items():
+            records["train"][i]["_loss_weight"] = len(bins) / (len(counts) * counts[b])
 
     teacher: list[list[float] | None] = [None] * len(records["train"])
     if spec["teacher"] is not None:

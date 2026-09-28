@@ -64,6 +64,29 @@ SOURCES: dict[str, dict[str, Any]] = {
         },
         "tokens": {"bos": "<bos>", "sep": "<eos>", "marker": "<mask>", "pad": "<pad>"},
     },
+    "qwen3-0.6b-base": {
+        "repo": "Qwen/Qwen3-0.6B-Base",
+        "revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+        "license": "apache-2.0",
+        "trust_remote_code": False,
+        "weights": "model.safetensors",
+        "code": [],
+        "files": {
+            "LICENSE": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+            "config.json": "504a6b58c4271583724e66584b6b7698aea18450209df6b2f7582df0e89cee59",
+            "model.safetensors": "cd2a512003e2f9f3cd3c32a9c3573f820bb28c940f73c57b1ddaa983d9223eba",
+            "tokenizer.json": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+            "tokenizer_config.json": "3c04ed3ca964ea2f6b2b5faf0dc4d31aec1cb1e8b4bcf63f402d295046b422b5",
+        },
+        "tokenizer_files": ["tokenizer.json", "tokenizer_config.json"],
+        "tokens": {
+            "bos": "<|im_start|>",
+            "sep": "<|im_end|>",
+            "marker": "<|box_start|>",
+            "pad": "<|endoftext|>",
+        },
+        "bidirectional": True,
+    },
 }
 
 
@@ -199,24 +222,68 @@ def _torch_module() -> Any:
 
     from training.model.decision_model import CandidateHead
 
+    class OrdinalScore(nn.Module):
+        """One latent position shared by every Score level count.
+
+        Level k of K sits at c_k = k/(K-1) on [0, 1]; the request's position z
+        comes from the global state. The Score logit adds -beta*(z - c_k)^2, with
+        beta starting at zero so the zero-step output equals the plain head.
+        """
+
+        def __init__(self, hidden_size: int):
+            super().__init__()
+            self.norm = nn.LayerNorm(hidden_size)
+            self.position = nn.Linear(hidden_size, 1)
+            self.beta = nn.Parameter(torch.zeros(()))
+
+        def forward(self, query: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
+            with torch.autocast(device_type=query.device.type, enabled=False):
+                z = torch.sigmoid(self.position(self.norm(query.float()))).squeeze(-1)
+                count = valid.sum(-1).clamp(min=2).float()
+                index = torch.arange(valid.shape[1], device=valid.device).float()
+                centre = index[None, :] / (count[:, None] - 1)
+                return -self.beta * (z[:, None] - centre).square()
+
     class EncoderDecision(nn.Module):
-        def __init__(self, backbone: nn.Module, head_dim: int = 256):
+        def __init__(
+            self,
+            backbone: nn.Module,
+            head_dim: int = 256,
+            *,
+            bidirectional: bool = False,
+            ordinal_score: bool = False,
+        ):
             super().__init__()
             self.backbone = backbone
             self.head = CandidateHead(backbone.config.hidden_size, head_dim)
+            self.bidirectional = bidirectional
+            self.ordinal = (
+                OrdinalScore(backbone.config.hidden_size) if ordinal_score else None
+            )
+            if bidirectional:
+                for module in backbone.modules():
+                    if hasattr(module, "is_causal"):
+                        module.is_causal = False
 
         def forward(self, batch: dict[str, Any]) -> torch.Tensor:
+            mask = batch["attention_mask"]
+            if self.bidirectional:
+                # A prepared 4D key-padding mask replaces the decoder's causal mask.
+                length = mask.shape[1]
+                mask = mask.bool()[:, None, None, :].expand(-1, 1, length, length)
             hidden = self.backbone(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                return_dict=True,
+                input_ids=batch["input_ids"], attention_mask=mask, return_dict=True
             ).last_hidden_state
             positions = batch["marker_positions"]
             markers = torch.gather(
                 hidden, 1, positions[:, :, None].expand(-1, -1, hidden.shape[-1])
             )
-            logits = self.head(markers, hidden[:, 0])
-            return logits.float().masked_fill(
+            logits = self.head(markers, hidden[:, 0]).float()
+            if self.ordinal is not None:
+                is_score = (batch["kind_ids"] == 2).float()[:, None]
+                ordinal = self.ordinal(hidden[:, 0], batch["valid_candidates"])
+                logits = logits + is_score * ordinal
+            return logits.masked_fill(
                 ~batch["valid_candidates"], torch.finfo(torch.float32).min
             )
 
@@ -269,7 +336,12 @@ def tokenizer_and_ids(
 
 
 def from_official(
-    path: str | Path, source: str, *, head_dim: int = 256, seed: int = 20260928
+    path: str | Path,
+    source: str,
+    *,
+    head_dim: int = 256,
+    seed: int = 20260928,
+    ordinal_score: bool = False,
 ) -> tuple[Any, MarkerPacker, dict[str, Any]]:
     import torch
     from transformers import AutoModel
@@ -293,7 +365,10 @@ def from_official(
     if info.get("missing_keys") or info.get("mismatched_keys") or unexpected:
         raise RuntimeError(f"Incomplete official encoder load: {info}")
     torch.manual_seed(seed)
-    model = _torch_module()(backbone, head_dim)
+    bidirectional = bool(spec.get("bidirectional", False))
+    model = _torch_module()(
+        backbone, head_dim, bidirectional=bidirectional, ordinal_score=ordinal_score
+    )
     packer = MarkerPacker(tokenizer, ids)
     metadata = {
         "architecture": ARCHITECTURE,
@@ -304,8 +379,15 @@ def from_official(
         "tokens": spec["tokens"],
         "max_input_tokens": packer.max_length,
         "backbone_parameters": sum(p.numel() for p in backbone.parameters()),
-        "head_parameters": sum(p.numel() for p in model.head.parameters()),
+        "head_parameters": sum(p.numel() for p in model.head.parameters())
+        + (sum(p.numel() for p in model.ordinal.parameters()) if ordinal_score else 0),
         "discarded_pretraining_head_keys": sorted(info.get("unexpected_keys", [])),
+        "attention": (
+            "bidirectional (4D key-padding mask, causal flag cleared)"
+            if bidirectional
+            else "native bidirectional encoder"
+        ),
+        "score_readout": "latent-ordinal-v1" if ordinal_score else "candidate-head",
     }
     metadata["loaded_parameters"] = (
         metadata["backbone_parameters"] + metadata["head_parameters"]
@@ -337,8 +419,17 @@ def save(
         k: v.detach().cpu().contiguous() for k, v in model.head.state_dict().items()
     }
     save_file(head, str(stage / "head.safetensors"))
+    if model.ordinal is not None:
+        ordinal = {
+            k: v.detach().cpu().contiguous()
+            for k, v in model.ordinal.state_dict().items()
+        }
+        save_file(ordinal, str(stage / "ordinal.safetensors"))
     (stage / "tokenizer").mkdir()
-    for name in ("tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"):
+    for name in spec.get(
+        "tokenizer_files",
+        ["tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"],
+    ):
         shutil.copyfile(Path(source_path) / name, stage / "tokenizer" / name)
     write_json(stage / "decision_config.json", {**metadata, "provenance": provenance})
     files = {
@@ -388,8 +479,17 @@ def load(
         dtype=torch.float32,
         attn_implementation="sdpa",
     )
-    model = _torch_module()(backbone, metadata["head_dim"])
+    model = _torch_module()(
+        backbone,
+        metadata["head_dim"],
+        bidirectional=bool(spec.get("bidirectional", False)),
+        ordinal_score=metadata.get("score_readout") == "latent-ordinal-v1",
+    )
     model.head.load_state_dict(load_file(str(root / "head.safetensors")), strict=True)
+    if model.ordinal is not None:
+        model.ordinal.load_state_dict(
+            load_file(str(root / "ordinal.safetensors")), strict=True
+        )
     tokenizer, ids = tokenizer_and_ids(root / "tokenizer", metadata["tokens"])
     if ids != metadata["token_ids"]:
         raise ValueError("Tokenizer special IDs changed")

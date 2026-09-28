@@ -8,7 +8,13 @@ from pathlib import Path
 try:
     import torch
     from tokenizers import Tokenizer, models, pre_tokenizers
-    from transformers import ModernBertConfig, ModernBertModel, PreTrainedTokenizerFast
+    from transformers import (
+        ModernBertConfig,
+        ModernBertModel,
+        PreTrainedTokenizerFast,
+        Qwen3Config,
+        Qwen3Model,
+    )
 except ImportError:  # pragma: no cover - local environments without torch
     torch = None
 
@@ -166,6 +172,54 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(train.target_vector(noul, ["no", "yes"]), [0.0, 1.0])
         choice = {"question": {"type": "Choice"}, "target": {"choice_id": "b"}}
         self.assertEqual(train.target_vector(choice, ["a", "b"]), [0.0, 1.0])
+
+
+@unittest.skipIf(torch is None, "torch unavailable")
+class BidirectionalAndOrdinalTest(unittest.TestCase):
+    def qwen(self, bidirectional, ordinal=False):
+        cfg = Qwen3Config(
+            vocab_size=len(WORDS),
+            hidden_size=32,
+            intermediate_size=48,
+            num_hidden_layers=2,
+            num_attention_heads=2,
+            num_key_value_heads=1,
+            head_dim=16,
+            max_position_embeddings=128,
+        )
+        torch.manual_seed(0)
+        backbone = Qwen3Model._from_config(cfg, attn_implementation="sdpa")
+        torch.manual_seed(1)
+        return enc._torch_module()(
+            backbone, head_dim=8, bidirectional=bidirectional, ordinal_score=ordinal
+        ).eval()
+
+    def batches(self):
+        tok, ids = tokenizer()
+        packer = enc.MarkerPacker(tok, ids)
+        a = record("choice")
+        b = record("choice")
+        b["state_text"] = "the sky is green"
+        return packer.collate([packer.encode(a)]), packer.collate([packer.encode(b)])
+
+    def test_state_after_markers_reaches_candidates_only_when_bidirectional(self):
+        a, b = self.batches()
+        with torch.no_grad():
+            causal = self.qwen(False)
+            self.assertTrue(torch.allclose(causal(a), causal(b)))
+            bidi = self.qwen(True)
+            self.assertFalse(torch.allclose(bidi(a), bidi(b)))
+
+    def test_ordinal_readout_starts_as_the_plain_head(self):
+        tok, ids = tokenizer()
+        packer = enc.MarkerPacker(tok, ids)
+        batch = packer.collate([packer.encode(record("score"))])
+        with torch.no_grad():
+            self.assertTrue(
+                torch.equal(
+                    self.qwen(True)(batch), self.qwen(True, ordinal=True)(batch)
+                )
+            )
 
 
 if __name__ == "__main__":
