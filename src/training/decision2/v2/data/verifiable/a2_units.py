@@ -487,6 +487,66 @@ def a4_scenario(rng: random.Random, lang: str) -> A4Scenario:
     )
 
 
+def a4v2_plan(rng: random.Random, lang: str, turn: int) -> core.A4v2Plan:
+    """Any of seven items may become the extreme one; near misses are its three runner-ups."""
+    n = 7
+    sheet = _Sheet(rng, lang, n)
+    labels = sheet.labels
+    ask = sheet.t["is_best"]
+
+    def render(best: int, near: list[int]) -> core.A4v2Render | None:
+        for _ in range(100):
+            close = iter(sorted(rng.uniform(1.03, 1.12) for _ in near))
+            spread = [
+                next(close) if i in near else rng.uniform(1.18, 1.8)
+                for i in range(n)
+                if i != best
+            ]
+            numbers = _draw_values(rng, sheet, best, spread)
+            if numbers is not None:
+                break
+        else:
+            return None
+        pad = core.filler(
+            rng,
+            lang,
+            core.words(sheet.state(numbers, None, ([], [])), lang),
+            [*sheet.full, sheet.co],
+        )
+        facts = {
+            "domain": sheet.domain,
+            "labels": labels,
+            "units": sheet.units,
+            "numbers": numbers,
+        }
+        return core.A4v2Render(
+            sheet.state(numbers, None, pad),
+            facts,
+            sheet.domain,
+            f"{sheet.domain}_v2",
+            sheet.t["q"],
+            lambda v: ask.format(x=v),
+        )
+
+    alternatives = []
+    for best in rng.sample(range(n), n):
+        others = [i for i in range(n) if i != best]
+        near = rng.sample(others, 3)
+        rand = rng.sample(others, 3)
+        while set(rand) == set(near):
+            rand = rng.sample(others, 3)
+        alternatives.append(
+            core.A4v2Alternative(
+                best,
+                labels[best],
+                [labels[i] for i in near],
+                [labels[i] for i in rand],
+                lambda b=best, s=near: render(b, s),
+            )
+        )
+    return core.A4v2Plan(False, alternatives)
+
+
 # ---------------------------------------------------------------- oracle 2
 
 _UNIT_EN = r"kg|g|lb|oz|km|mi|ft|m|hours?|minutes?|seconds?|mL|L|gal"

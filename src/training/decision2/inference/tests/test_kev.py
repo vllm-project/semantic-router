@@ -117,3 +117,20 @@ class KevCollectorTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KevVariantTest(unittest.TestCase):
+    def test_use_variant_switches_and_rejects_unknown(self) -> None:
+        from inference import kev
+
+        try:
+            kev.use_variant("0.8b")
+            self.assertEqual(kev.KEV_MODEL_ID, "jaredpalmer/kev-0.8b")
+            self.assertEqual(kev.KEV_BASE_ID, "Qwen/Qwen3.5-0.8B-Base")
+            with self.assertRaisesRegex(ValueError, "Unknown Kev size"):
+                kev.use_variant("9b")
+        finally:
+            kev.use_variant("4b")
+        self.assertEqual(
+            kev.KEV_MODEL_REVISION, "139fdd94f1b6a6ad80cc15e08fcb99cac885a101"
+        )

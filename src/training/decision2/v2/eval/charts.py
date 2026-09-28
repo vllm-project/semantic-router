@@ -22,11 +22,52 @@ GROUPS = {
     "peer": "open",
     "hosted": "hosted",
 }
+# Licence class of each peer's weights; own models are "own". Cards include only the
+# allowed classes (default: own and permissive); unknown peers are refused.
+LICENCE_CLASS = {
+    "Hanno-Labs/bosun-v3.1-0.6b": "permissive",
+    "Hanno-Labs/bosun-v3.1-1.7b": "permissive",
+    "fastino/GLiNER2.5-Decide": "permissive",
+    "Mapika/decider-2b": "permissive",
+    "Mapika/decider-4b": "permissive",
+    "denis-pplx/autojev-27b": "permissive",
+    "jaredpalmer/kev-0.8b": "permissive",
+    "internlm/Intern-Decision-0.8B": "permissive",
+    "flock-io/this-that-model-1.2": "permissive",
+    "michaljach/jet": "permissive",
+    "bespokelabs/Bespoke-Nimble-9B-v2": "permissive",
+    "frontier-infra/jebadiah-27b": "permissive",
+    "caiovicentino1/Eikos-27B-FP8": "permissive",
+    "caiovicentino1/Eikos-27B": "permissive",
+    "kirp/jpt-0.8b": "non-commercial",
+    "kirp/jpt-4b": "non-commercial",
+    "kirp/jpt-9b": "non-commercial",
+    "HopitAI/hopper-g": "research-only",
+}
+DEFAULT_LICENCES = ("own", "permissive")
 SCORER_KEYS = (
     "benchmark/score.py",
     "transfer/score.py",
     "jev_arena/jevbench_public.py",
 )
+
+
+def licence_class(report: dict[str, Any]) -> str:
+    if report["model"].get("family") in ("decision1", "decision2"):
+        return "own"
+    model_id = report["model"].get("model_id")
+    if model_id not in LICENCE_CLASS:
+        raise ValueError(f"{report['model']['label']}: no licence class for {model_id}")
+    return LICENCE_CLASS[model_id]
+
+
+def filter_licences(
+    reports: list[dict[str, Any]], allowed: tuple[str, ...] = DEFAULT_LICENCES
+) -> tuple[list[dict[str, Any]], list[str]]:
+    kept, excluded = [], []
+    for report in reports:
+        (kept if licence_class(report) in allowed else excluded).append(report)
+    return kept, [f"{r['model']['label']} ({licence_class(r)})" for r in excluded]
 
 
 def load_reports(paths: list[Path]) -> list[dict[str, Any]]:
@@ -104,11 +145,17 @@ def public_ranking(reports: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def render(paths: list[Path], output_dir: Path) -> dict[str, Any]:
+def render(
+    paths: list[Path],
+    output_dir: Path,
+    allowed_licences: tuple[str, ...] = DEFAULT_LICENCES,
+) -> dict[str, Any]:
     from jev_arena.render import ranking_svg as public_ranking_svg
     from publication.render_arena_v3 import ranking_svg, task_matrix_svg
 
-    reports = load_reports(paths)
+    reports, excluded = filter_licences(load_reports(paths), allowed_licences)
+    if len(reports) < 2:
+        raise ValueError("fewer than two reports remain after the licence filter")
     output_dir.mkdir(parents=True, exist_ok=True)
     v3 = v3_ranking(reports)
     public = public_ranking(reports)
@@ -125,6 +172,8 @@ def render(paths: list[Path], output_dir: Path) -> dict[str, Any]:
         "label": "post-key same-panel",
         "created_utc": utc_now(),
         "reports": {str(path): sha_file(path) for path in paths},
+        "allowed_licences": list(allowed_licences),
+        "excluded_by_licence": excluded,
         "figures": {name: sha_file(output_dir / name) for name in figures},
         "v3_ranking": v3,
         "public_ranking": public,
@@ -139,9 +188,21 @@ def main() -> None:
     )
     parser.add_argument("--report", type=Path, action="append", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--allow-licence",
+        action="append",
+        choices=("own", "permissive", "non-commercial", "research-only"),
+        help="licence classes shown on the card (default: own and permissive)",
+    )
     args = parser.parse_args()
-    receipt = render(args.report, args.output_dir)
-    print(json.dumps(receipt["figures"], indent=2))
+    allowed = tuple(args.allow_licence) if args.allow_licence else DEFAULT_LICENCES
+    receipt = render(args.report, args.output_dir, allowed)
+    print(
+        json.dumps(
+            {"figures": receipt["figures"], "excluded": receipt["excluded_by_licence"]},
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":
