@@ -189,7 +189,13 @@ func reportServedContextWindow(target servedContextWindowTarget, body []byte) {
 		if served.ID != target.upstreamModel {
 			continue
 		}
-		if served.MaxModelLen > 0 && served.MaxModelLen < target.declared {
+		if served.MaxModelLen <= 0 {
+			logServedContextWindowUnverified(target.model, target.endpoint, fmt.Errorf(
+				"vLLM at %s lists %s but reports no max_model_len, so the served context window could not be compared against the %d-token context window routing uses",
+				target.baseURL, target.upstreamModel, target.declared))
+			return
+		}
+		if served.MaxModelLen < target.declared {
 			logging.ComponentWarnEvent("extproc", "served_context_window_below_model_card", map[string]interface{}{
 				"model":                 target.model,
 				"model_card":            target.card,

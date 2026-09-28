@@ -82,18 +82,20 @@ func TestServedContextWindowWarnsOnlyWhenTheBackendServesLess(t *testing.T) {
 		wantWindow    int
 		wantSource    string
 		wantNotServed bool
+		wantUnread    string
 	}{
 		{name: "built-in card above served", servedID: "Qwen/Qwen3.6-27B", served: intPtr(32_768), wantCalls: 1, wantWindow: 262_144, wantSource: "builtin"},
 		{name: "operator override above served", servedID: "Qwen/Qwen3.6-27B", served: intPtr(32_768), cardOverride: 65_536, wantCalls: 1, wantWindow: 65_536, wantSource: "operator"},
 		{name: "retried until the backend loads", servedID: "Qwen/Qwen3.6-27B", served: intPtr(32_768), statuses: []int{http.StatusServiceUnavailable, http.StatusBadGateway}, wantCalls: 3, wantWindow: 262_144, wantSource: "builtin"},
 		{name: "aligned override", servedID: "Qwen/Qwen3.6-27B", served: intPtr(32_768), cardOverride: 32_768, wantCalls: 1},
 		{name: "served above card", servedID: "Qwen/Qwen3.6-27B", served: intPtr(1_048_576), wantCalls: 1},
-		{name: "served length unset", servedID: "Qwen/Qwen3.6-27B", wantCalls: 1},
+		{name: "served length unset", servedID: "Qwen/Qwen3.6-27B", wantCalls: 1, wantUnread: "reports no max_model_len"},
 		{name: "model not listed", servedID: "Qwen/Qwen3.6-35B-A3B", served: intPtr(32_768), wantCalls: 1, wantNotServed: true},
-		{name: "unauthorized is not retried", servedID: "Qwen/Qwen3.6-27B", served: intPtr(32_768), statuses: []int{http.StatusUnauthorized}, wantCalls: 1},
+		{name: "unauthorized is not retried", servedID: "Qwen/Qwen3.6-27B", served: intPtr(32_768), statuses: []int{http.StatusUnauthorized}, wantCalls: 1, wantUnread: "HTTP status 401"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			logs := newObservedEventLogger(t)
+			core, logs := observer.New(zapcore.DebugLevel)
+			t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
 			interval := servedContextWindowRetryInterval
 			servedContextWindowRetryInterval = time.Millisecond
 			t.Cleanup(func() { servedContextWindowRetryInterval = interval })
@@ -107,6 +109,15 @@ func TestServedContextWindowWarnsOnlyWhenTheBackendServesLess(t *testing.T) {
 			(&OpenAIRouter{Config: cfg}).checkServedContextWindow(context.Background(), targets[0])
 
 			assert.Equal(t, tt.wantCalls, calls.Load())
+			unread := logs.FilterMessage(servedContextWindowUnverifiedEvent).All()
+			if tt.wantUnread != "" {
+				require.Len(t, unread, 1)
+				fields := unread[0].ContextMap()
+				assert.Equal(t, "qwen-long", fields["model"])
+				assert.Contains(t, fields["error"], tt.wantUnread)
+			} else {
+				assert.Empty(t, unread)
+			}
 			notServed := logs.FilterMessage(servedContextWindowNotServedEvent).All()
 			if tt.wantNotServed {
 				require.Len(t, notServed, 1)
