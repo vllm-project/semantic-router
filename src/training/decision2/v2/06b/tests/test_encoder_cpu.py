@@ -139,6 +139,18 @@ class ModelTest(unittest.TestCase):
             torch.allclose(both[0, :2].softmax(-1), alone[0].softmax(-1), atol=1e-5)
         )
 
+    def test_span_mean_pools_marker_and_description_only(self):
+        _, packer = self.build()
+        e = packer.encode(record("choice"))
+        batch = packer.collate([e])
+        hidden = torch.randn(1, len(e["ids"]), 4)
+        pooled = enc.pool_candidates(hidden, batch, "span-mean")
+        start, end = e["spans"][1]
+        self.assertEqual(e["ids"][start], 3)
+        self.assertTrue(torch.allclose(pooled[0, 1], hidden[0, start:end].mean(0)))
+        marker = enc.pool_candidates(hidden, batch, "marker")
+        self.assertTrue(torch.equal(marker[0, 1], hidden[0, e["positions"][1]]))
+
     def test_loss_terms(self):
         logits = torch.tensor([[2.0, 0.0, torch.finfo(torch.float32).min]])
         targets = torch.tensor([[1.0, 0.0, 0.0]])

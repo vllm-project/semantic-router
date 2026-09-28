@@ -160,7 +160,7 @@ class MarkerPacker:
             + self.tokens(f"{kind} question: {record['question']['text']}")
             + [self.ids["sep"]]
         )
-        positions = []
+        positions, spans = [], []
         for index, option in enumerate(options):
             text = (
                 f"level {index}: {option['text']}"
@@ -169,7 +169,9 @@ class MarkerPacker:
             )
             positions.append(len(ids))
             ids.append(self.ids["marker"])
-            ids.extend(self.tokens(text) + [self.ids["sep"]])
+            ids.extend(self.tokens(text))
+            spans.append((positions[-1], len(ids)))
+            ids.append(self.ids["sep"])
         state = self.tokens(record["state_text"])
         if len(ids) + len(state) + 1 > self.max_length:
             raise ValueError(
@@ -179,6 +181,7 @@ class MarkerPacker:
         return {
             "ids": ids,
             "positions": positions,
+            "spans": spans,
             "kind": kind,
             "values": values,
             "candidate_ids": [o["id"] for o in options],
@@ -207,13 +210,32 @@ class MarkerPacker:
         kinds = torch.tensor(
             [KINDS.index(e["kind"]) for e in encoded], dtype=torch.long
         )
+        span_mask = torch.zeros((len(encoded), width, length), dtype=torch.bool)
+        for i, e in enumerate(encoded):
+            for j, (start, end) in enumerate(e["spans"]):
+                span_mask[i, j, start:end] = True
         return {
+            "span_mask": span_mask.to(device),
             "input_ids": ids.to(device),
             "attention_mask": mask.to(device),
             "marker_positions": positions.to(device),
             "valid_candidates": valid.to(device),
             "kind_ids": kinds.to(device),
         }
+
+
+def pool_candidates(hidden: Any, batch: dict[str, Any], mode: str) -> Any:
+    """Candidate vectors: the marker state, or the mean over marker and description."""
+    import torch
+
+    if mode == "span-mean":
+        span = batch["span_mask"].to(hidden.dtype)
+        total = torch.einsum("bkl,bld->bkd", span, hidden)
+        return total / span.sum(-1, keepdim=True).clamp(min=1)
+    positions = batch["marker_positions"]
+    return torch.gather(
+        hidden, 1, positions[:, :, None].expand(-1, -1, hidden.shape[-1])
+    )
 
 
 def _torch_module() -> Any:
@@ -252,8 +274,12 @@ def _torch_module() -> Any:
             *,
             bidirectional: bool = False,
             ordinal_score: bool = False,
+            candidate_pool: str = "marker",
         ):
             super().__init__()
+            if candidate_pool not in ("marker", "span-mean"):
+                raise ValueError("candidate_pool must be marker or span-mean")
+            self.candidate_pool = candidate_pool
             self.backbone = backbone
             self.head = CandidateHead(backbone.config.hidden_size, head_dim)
             self.bidirectional = bidirectional
@@ -274,10 +300,7 @@ def _torch_module() -> Any:
             hidden = self.backbone(
                 input_ids=batch["input_ids"], attention_mask=mask, return_dict=True
             ).last_hidden_state
-            positions = batch["marker_positions"]
-            markers = torch.gather(
-                hidden, 1, positions[:, :, None].expand(-1, -1, hidden.shape[-1])
-            )
+            markers = self.candidates(hidden, batch)
             logits = self.head(markers, hidden[:, 0]).float()
             if self.ordinal is not None:
                 is_score = (batch["kind_ids"] == 2).float()[:, None]
@@ -287,6 +310,12 @@ def _torch_module() -> Any:
                 ~batch["valid_candidates"], torch.finfo(torch.float32).min
             )
 
+    def candidates(
+        self: Any, hidden: torch.Tensor, batch: dict[str, Any]
+    ) -> torch.Tensor:
+        return pool_candidates(hidden, batch, self.candidate_pool)
+
+    EncoderDecision.candidates = candidates
     return EncoderDecision
 
 
@@ -342,6 +371,7 @@ def from_official(
     head_dim: int = 256,
     seed: int = 20260928,
     ordinal_score: bool = False,
+    candidate_pool: str = "marker",
 ) -> tuple[Any, MarkerPacker, dict[str, Any]]:
     import torch
     from transformers import AutoModel
@@ -367,7 +397,11 @@ def from_official(
     torch.manual_seed(seed)
     bidirectional = bool(spec.get("bidirectional", False))
     model = _torch_module()(
-        backbone, head_dim, bidirectional=bidirectional, ordinal_score=ordinal_score
+        backbone,
+        head_dim,
+        bidirectional=bidirectional,
+        ordinal_score=ordinal_score,
+        candidate_pool=candidate_pool,
     )
     packer = MarkerPacker(tokenizer, ids)
     metadata = {
@@ -388,6 +422,7 @@ def from_official(
             else "native bidirectional encoder"
         ),
         "score_readout": "latent-ordinal-v1" if ordinal_score else "candidate-head",
+        "candidate_pool": candidate_pool,
     }
     metadata["loaded_parameters"] = (
         metadata["backbone_parameters"] + metadata["head_parameters"]
@@ -484,6 +519,7 @@ def load(
         metadata["head_dim"],
         bidirectional=bool(spec.get("bidirectional", False)),
         ordinal_score=metadata.get("score_readout") == "latent-ordinal-v1",
+        candidate_pool=metadata.get("candidate_pool", "marker"),
     )
     model.head.load_state_dict(load_file(str(root / "head.safetensors")), strict=True)
     if model.ordinal is not None:

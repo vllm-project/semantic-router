@@ -235,6 +235,7 @@ class EncoderFamily:
             spec["start"]["source"],
             seed=int(spec["start"]["head_seed"]),
             ordinal_score=bool(spec["start"].get("ordinal_score", False)),
+            candidate_pool=spec["start"].get("candidate_pool", "marker"),
         )
         self.model.to(device)
         if hasattr(self.model.backbone, "gradient_checkpointing_enable"):
