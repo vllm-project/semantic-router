@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import gzip
 import hashlib
 import json
 import os
@@ -40,6 +41,43 @@ def _lineage(source: Any) -> str:
         return "unrecognized"
 
 
+def native_view(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Project a Kai-native encoder row (state_text/question/target) onto the
+    census fields; other rows pass through unchanged."""
+    question = row.get("question")
+    if "state_text" not in row or not isinstance(question, Mapping):
+        return dict(row)
+    candidates = (
+        question.get("levels")
+        or question.get("options")
+        or question.get("candidates")
+        or ([{}, {}] if str(question.get("type")).lower() == "noul" else [])
+    )
+    target = row.get("target") if isinstance(row.get("target"), Mapping) else {}
+    probabilities = target.get("probabilities")
+    soft = (
+        isinstance(probabilities, list)
+        and bool(probabilities)
+        and max(probabilities) < 1
+    )
+    if "probability" in target:
+        soft = 0 < float(target["probability"]) < 1
+    provenance = (
+        row.get("provenance") if isinstance(row.get("provenance"), Mapping) else {}
+    )
+    return {
+        "id": row.get("id"),
+        "task_type": str(question.get("type", "")).lower(),
+        "language": row.get("language"),
+        "family": row.get("source_family") or row.get("domain") or row.get("schema_id"),
+        "source": row.get("source_id"),
+        "group_id": row.get("component_id"),
+        "options": [{"key": str(index)} for index in range(len(candidates))],
+        "soft_target": soft,
+        "label_origin": provenance.get("label_origin"),
+    }
+
+
 def census(
     rows: Sequence[Mapping[str, Any]], lengths: Mapping[str, Mapping[str, int]] | None
 ) -> tuple[dict[str, Any], set[str]]:
@@ -49,13 +87,19 @@ def census(
     family_types: collections.Counter[str] = collections.Counter()
     lineages: collections.Counter[str] = collections.Counter()
     soft: collections.Counter[str] = collections.Counter()
+    origins: collections.Counter[str] = collections.Counter()
     tokens: dict[str, collections.Counter[str]] = collections.defaultdict(
         collections.Counter
     )
     hashes: set[str] = set()
     duplicates = 0
     groups = set()
-    for row in rows:
+    for original in rows:
+        row = native_view(original)
+        if row.get("soft_target"):
+            soft["soft_target"] += 1
+        if row.get("label_origin"):
+            origins[str(row["label_origin"])[:120]] += 1
         task_type = str(row.get("task_type"))
         types[task_type] += 1
         languages[str(row.get("language"))] += 1
@@ -87,6 +131,7 @@ def census(
         "family_types": dict(sorted(family_types.items())),
         "lineages": dict(sorted(lineages.items())),
         "soft_label_fields": dict(sorted(soft.items())),
+        "label_origins": dict(origins.most_common(20)),
     }
     if lengths is not None:
         report["tokens"] = {
@@ -124,7 +169,8 @@ def main(argv: list[str] | None = None) -> int:
     for value in args.file:
         name, path_text = value.split("=", 1)
         path = Path(path_text)
-        with path.open(encoding="utf-8") as stream:
+        opener = gzip.open if path.suffix == ".gz" else open
+        with opener(path, "rt", encoding="utf-8") as stream:
             rows = [json.loads(line) for line in stream if line.strip()]
         scoped = None
         if lengths is not None:

@@ -334,6 +334,28 @@ class LengthsAndInventoryTest(unittest.TestCase):
         self.assertEqual(report["tokens"]["tok"]["type:score"], 5)
         self.assertEqual(len(hashes), 3)
 
+    def test_census_reads_kai_native_rows(self) -> None:
+        row = {
+            "id": "n1",
+            "state_text": "text",
+            "language": "en",
+            "source_id": "snli",
+            "domain": "caption_inference",
+            "component_id": "c1",
+            "question": {"type": "Score", "levels": [{}, {}, {}]},
+            "target": {"probabilities": [0.0, 0.4, 0.6]},
+            "provenance": {"label_origin": "original human label"},
+        }
+        noul = dict(
+            row, id="n2", question={"type": "Noul"}, target={"probability": 1.0}
+        )
+        report, _ = inventory.census([row, noul], None)
+        self.assertEqual(report["types"], {"noul": 1, "score": 1})
+        self.assertEqual(report["score_levels"], {"3": 1})
+        self.assertEqual(report["soft_label_fields"], {"soft_target": 1})
+        self.assertEqual(report["label_origins"], {"original human label": 2})
+        self.assertEqual(report["lineages"], {"snli": 2})
+
 
 if __name__ == "__main__":
     unittest.main()
