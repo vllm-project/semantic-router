@@ -129,6 +129,8 @@ class ScoreTest(unittest.TestCase):
             paired = json.loads((root / "paired.json").read_text())
             self.assertGreater(paired["delta"], 0)
             self.assertGreater(paired["ci95"][0], 0)
+            self.assertEqual(sorted(paired["by_type"]), ["choice", "noul", "score"])
+            self.assertEqual(sorted(report["languages"]), ["ar", "en"])
             (root / "perfect.jsonl").write_text(perfect.read_text() + "\n")
             with self.assertRaises(ValueError):
                 score.score(
