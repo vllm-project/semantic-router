@@ -47,6 +47,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		detectStreamingExpectation(ctx)
 		mutation := buildLooperInternalHeaderRemovalMutation()
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, headers.SelectedModel)
+		if isAzureOpenAIPath(path) {
+			mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
+		}
 		response := newContinueRequestHeadersResponse(mutation)
 		if headerValueCI(ctx, headers.SelectedModel) != "" {
 			// A caller-supplied selected-model header may have selected a provider
@@ -68,7 +71,12 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if validationResp := r.validateRequestHeaders(method, path); validationResp != nil {
 		return validationResp, nil
 	}
-	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()), nil
+	mutation := buildIdentityEncodingRequestMutation()
+	if isAzureOpenAIPath(path) {
+		// The Azure client key authenticates to the Router, never to a provider.
+		mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
+	}
+	return newContinueRequestHeadersResponse(mutation), nil
 }
 
 func startRequestHeaderSpan(

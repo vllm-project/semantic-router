@@ -159,11 +159,17 @@ global:
         index_ef_construction: 256
       embedding_model: bert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.70
+      default_similarity_threshold: 0.40
       hybrid_search: true
-      hybrid_mode: rerank
+      hybrid_mode: weighted
       adaptive_threshold: true
 ```
+
+The threshold in this example is calibrated for `bert` (`mom-embedding-light`)
+with weighted hybrid scoring. Other embedding models and search modes need
+their own recall and unrelated-query checks before choosing a threshold.
+Lower thresholds can also retrieve superseded facts alongside corrections;
+check updated facts before relying on the example in production.
 
 ### Configuration Reference
 

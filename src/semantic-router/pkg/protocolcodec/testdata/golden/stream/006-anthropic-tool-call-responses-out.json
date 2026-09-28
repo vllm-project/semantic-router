@@ -52,7 +52,7 @@
       "event": "response.output_item.added",
       "data": {
         "item": {
-          "arguments": "{}",
+          "arguments": "",
           "call_id": "call_1",
           "id": "call_1",
           "name": "lookup",
