@@ -8190,7 +8190,6 @@ models:
   - open_weights
   - instruct
   - hybrid
-  - multilingual
   - efficient
   released_at: '2025-05-21'
 - id: tii/falcon-h1-34b-instruct

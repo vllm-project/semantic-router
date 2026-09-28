@@ -94209,7 +94209,6 @@ const builtInCatalogJSON = `{
         "open_weights",
         "instruct",
         "hybrid",
-        "multilingual",
         "efficient"
       ],
       "verification": {
