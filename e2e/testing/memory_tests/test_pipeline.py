@@ -4,7 +4,12 @@ Tests the core store-then-retrieve contract, content fidelity,
 similarity thresholds, and contradictory memory behavior.
 """
 
-from memory_tests.base import MIN_CONTENT_MATCHES, PREVIEW_LENGTH, MemoryFeaturesTest
+from memory_tests.base import (
+    MIN_CONTENT_MATCHES,
+    PREVIEW_LENGTH,
+    MSG_PREVIEW_LENGTH,
+    MemoryFeaturesTest,
+)
 
 
 class MemoryInjectionPipelineTest(MemoryFeaturesTest):
@@ -327,3 +332,115 @@ class StaleMemoryTest(MemoryFeaturesTest):
                 f"Content: {combined[:PREVIEW_LENGTH]}...",
             )
             self.fail("Memory storage produced unexpected state")
+
+
+class SupersededMemoryTest(MemoryFeaturesTest):
+    """A correction hides only the fact it replaces.
+
+    The reflection gate drops a retrieved turn when a newer retrieved turn
+    reports the user's own change to the same property. A turn that also
+    states a second, uncorrected fact has to survive, or the prompt loses a
+    memory the user never withdrew. A change that only reaffirms what is
+    already true is not a correction at all.
+
+    Assertions read the prompt the echo backend received, so each one covers
+    storage, retrieval, the gate and injection on the live path. Every expected
+    keyword has to reach the prompt, so a memory that retrieval never returned
+    fails the test instead of passing it.
+    """
+
+    def _prompt_containing(
+        self, message: str, expected: list[str], max_attempts: int = 3
+    ) -> str:
+        """Return the prompt the provider received, retrying until it holds every keyword.
+
+        Retrieval runs against Milvus, whose sealed segments need a flush and an
+        index pass before a vector search sees them.
+        """
+        output = ""
+        for attempt in range(max_attempts):
+            result = self.send_memory_request(
+                message=message, auto_store=False, verbose=(attempt == 0)
+            )
+            if not result:
+                continue
+            output = result.get("_output_text", "").lower()
+            missing = [kw for kw in expected if kw not in output]
+            if not missing:
+                return output
+            if attempt < max_attempts - 1:
+                print(
+                    f"   ⏳ Retry {attempt + 1}/{max_attempts}: {missing} not in "
+                    f"prompt, flushing..."
+                )
+                self.flush_and_wait(5)
+
+        missing = [kw for kw in expected if kw not in output]
+        self.print_test_result(
+            False,
+            f"Prompt is missing {missing}. Query: '{message[:MSG_PREVIEW_LENGTH]}'. "
+            f"Prompt: {output[:PREVIEW_LENGTH]}...",
+        )
+        self.fail(f"Memory context never reached the prompt: {missing}")
+        return output
+
+    def test_01_a_second_fact_in_the_turn_survives_a_later_move(self):
+        """A move correction keeps the unrelated fact stated in the same turn."""
+        self.print_test_header(
+            "Correction Keeps A Second Fact",
+            "Store a turn holding two facts, store a move, verify both reach the prompt",
+        )
+
+        first = self.send_memory_request(
+            message="I live in Boston, I'm married.", auto_store=True
+        )
+        self.assertIsNotNone(first, "Failed to store the two-fact turn")
+
+        second = self.send_memory_request(
+            message="I just moved to Denver, and I live there now.", auto_store=True
+        )
+        self.assertIsNotNone(second, "Failed to store the correction")
+
+        self.wait_for_storage()
+        self.flush_and_wait(8)
+
+        prompt = self._prompt_containing(
+            "Where do I live now, and what is my home life like?",
+            ["denver", "married"],
+        )
+        self.print_test_result(
+            True,
+            f"The move reached the prompt and the marriage fact stayed with it: "
+            f"{prompt[:PREVIEW_LENGTH]}...",
+        )
+
+    def test_02_a_reaffirming_change_does_not_correct_an_unrelated_fact(self):
+        """Saying a fact still holds after a move must not retire that fact."""
+        self.print_test_header(
+            "Reaffirmation Is Not A Correction",
+            "Store a job fact, store a move that reaffirms it, verify the job stays",
+        )
+
+        first = self.send_memory_request(
+            message="I work as a nurse at the Riverside Hospital.", auto_store=True
+        )
+        self.assertIsNotNone(first, "Failed to store the job fact")
+
+        second = self.send_memory_request(
+            message="I moved apartments, and I still work as a nurse now.",
+            auto_store=True,
+        )
+        self.assertIsNotNone(second, "Failed to store the reaffirming move")
+
+        self.wait_for_storage()
+        self.flush_and_wait(8)
+
+        prompt = self._prompt_containing(
+            "What do I do for work these days?",
+            ["riverside", "apartments"],
+        )
+        self.print_test_result(
+            True,
+            f"Both turns reached the prompt, so the move did not retire the job: "
+            f"{prompt[:PREVIEW_LENGTH]}...",
+        )

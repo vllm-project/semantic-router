@@ -313,20 +313,32 @@ func correctionPairs(clauses [][]string) ([]wordPair, []bool) {
 	inCorrection := make([]bool, len(clauses))
 	changed := false
 	for ci, clause := range clauses {
-		if reportsOwnChange(clause) || (changed && slices.Contains(clause, "now") && describesUser(clause)) {
-			changed = true
-			inCorrection[ci] = true
-			pairs = append(pairs, anchorPairs(withoutNewValue(clause))...)
+		reports := reportsOwnChange(clause) ||
+			(changed && slices.Contains(clause, "now") && describesUser(clause) && !reaffirms(clause))
+		if !reports {
+			continue
 		}
+		changed = true
+		inCorrection[ci] = true
+		pairs = append(pairs, anchorPairs(withoutNewValue(clause))...)
 	}
 	return pairs, inCorrection
 }
 
+// reaffirms reports that a clause keeps a fact as it was, as in "I moved
+// apartments, and I still work as a nurse now". Saying a fact still holds
+// reports no change, so the clause neither anchors a correction nor rides out
+// with the turn that reports one.
+func reaffirms(clause []string) bool {
+	return slices.Contains(clause, "still")
+}
+
 // statesAnotherFact treats a comma clause as its own fact, as in "my dog is
-// Biscuit", unless it is too short to state one ("Massachusetts") or it
-// qualifies the clause before it ("near the Charles River", "which I love").
+// Biscuit" or "I'm married", unless it is the single word that can't state one
+// ("Massachusetts") or it qualifies the clause before it ("near the Charles
+// River", "which I love").
 func statesAnotherFact(clause []string) bool {
-	return len(clause) >= 3 && !qualifierLeads[clause[0]]
+	return len(clause) >= 2 && !qualifierLeads[clause[0]]
 }
 
 // withoutNewValue cuts a change clause at its destination. "Moved to Denver"

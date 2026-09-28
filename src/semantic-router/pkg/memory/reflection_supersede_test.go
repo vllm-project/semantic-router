@@ -213,6 +213,8 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 	groceryBudget := formatTurnChunk("I raised my budget for groceries to $500.", "Updated, $500 for groceries.")
 	cityAndDog := formatTurnChunk("I live in Boston, my dog is Biscuit.", "Noted.")
 	cityAndDogName := formatTurnChunk("I live in Boston, Biscuit is my dog.", "Noted.")
+	married := formatTurnChunk("I live in Boston, I'm married.", "Congratulations!")
+	stillNurse := formatTurnChunk("I moved apartments, and I still work as a nurse now.", "Congrats on the new place.")
 
 	cases := []struct {
 		name      string
@@ -252,6 +254,8 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 		{name: "a budget for something else", retrieved: []datedContent{{content: budget4kTurn, daysAgo: 30}, {content: groceryBudget, daysAgo: 9}}},
 		{name: "a comma clause with its own fact", retrieved: []datedContent{{content: cityAndDog, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
 		{name: "a comma clause led by a name", retrieved: []datedContent{{content: cityAndDogName, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "a comma clause of two words", retrieved: []datedContent{{content: married, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "a correction that reaffirms an older fact", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: stillNurse, daysAgo: 9}}},
 		{name: "a turn quoted in an assistant reply", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: quotedTurn, daysAgo: 9}}},
 		{name: "a turn quoted in a session chunk's reply", retrieved: []datedContent{{content: sessionChunkOf(bostonTurn, quotedTurn), daysAgo: 9}}},
 	}
