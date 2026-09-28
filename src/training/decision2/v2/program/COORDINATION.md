@@ -183,6 +183,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-28 17:15 — From 0.6B Milestone 3 (gist `03-decision-2-06b-encoder.md`; integration `f53dce48f`):
+  - **Correction of the 14:45 padding warning:** no padding bug in any 0.6B trainer family. Padded and one-row passes match
+    in FP32 (loss within 1e-6, gradients within 3e-4); BF16 alone puts either path 5–26% (relative L2) off the FP32
+    gradient. Equivalence tests must compare each path against FP32 with dropout off. The stall was the **learning-rate
+    schedule**: a 2e-5 backbone peak after 5% warmup collapsed 4 of 10 fresh-head runs; 1e-5 with 10% warmup trained all
+    seeds. Tracks training new heads: watch gradient norms around the end of warmup.
+  - A real latent bug the tests caught: micro-batches mixing rows with and without teacher targets crashed. Check your
+    trainer if you mix teacher and non-teacher rows.
+  - EuroBERT-610m and bidirectional Qwen3-0.6B collapse even without padding, in FP32 and at 4× lower LR: recorded as
+    negative architecture evidence under the tried recipes.
+  - **Seed variance rule (small tiers):** σ_seed(P) ≈ 3.6 at 0.6B (0.84 at 0.8B), comparable to the tie band. For 0.6B and
+    0.8B, candidates need >= 3 seeds; choose recipes by the seed mean; the candidate artifact should be a uniform weight
+    average ("soup") of same-recipe, same-init seeds if it is >= the seed mean on development panels (avoids best-seed
+    selection bias and reduces variance); otherwise the median seed. Larger tiers keep >= 2 seeds.
+  - A6 at 0.6B: typed Score moves from one constant level to 2–3 levels, but the accuracy gain fails the matrix rule and
+    one seed drops transfer past the retention floor, so A6 does not pass at 0.6B. Every causal 0.6B checkpoint also
+    answers typed-DEV Noul with one constant answer (192/400): check your Noul answer distribution.
+
 - 2026-09-28 16:45 — From 9B Milestone 2 (gist `05-decision-2-9b-clm.md`; integration `72cc17eed`) + GPU changes:
   - Own-Lux soft replay (L2, KL 0.5) is the only arm beating plain Lux continuation: 3-seed mean proxy 71.42 vs control
     70.19 and Lux 1.0 70.82; Score +18/+12/+9 over its control, CSS pilot above Lux 1.0 on all seeds. A tie with Lux 1.0
@@ -297,7 +315,8 @@ exactly one gist file and updates it in place:
   returns control to the coordinator as if you were done. A data-track turn ended this way at 14:47 and had to be resumed.
 
 - 2026-09-28 14:45 — From 0.6B Milestone 2 (gist `03-decision-2-06b-encoder.md`, results `811b10d07`):
-  - **Padding bug warning for EVERY trainer.** The 0.6B trainer silently stalled freshly initialized decision heads when
+  - (CORRECTED at 17:15 — there was no padding bug; the stall was the learning-rate schedule. See the 17:15 note.)
+    **Padding bug warning for EVERY trainer.** The 0.6B trainer silently stalled freshly initialized decision heads when
     rows were padded together in a micro-batch (even the causal control model); one-row unpadded micro-batches trained.
     The EuroBERT and bidirectional-Qwen "collapses" happened under that path and are treated as invalid runs, not
     negative results. Every track: add a regression test that padded and unpadded micro-batches give the same loss and

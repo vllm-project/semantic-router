@@ -148,6 +148,8 @@ def native_records(
     for row in rows:
         record, _ = convert(row, system_one_training_rows)
         record["source_row_id"] = row["id"]
+        if "teacher_source_id" in row:
+            record["teacher_source_id"] = row["teacher_source_id"]
         records.append(record)
     return records
 
