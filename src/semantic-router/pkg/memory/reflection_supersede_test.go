@@ -39,7 +39,13 @@ type datedContent struct {
 	content string
 	daysAgo int
 	undated bool
+	// source defaults to what the extractor writes for the content.
+	source string
 }
+
+// legacySessionChunkSource is the source of session windows stored before
+// quoted turn boundaries were escaped.
+const legacySessionChunkSource = "session_window"
 
 func sessionChunkOf(turns ...string) string {
 	return strings.Join(turns, sessionTurnSeparator)
@@ -51,7 +57,14 @@ func injectedContents(t *testing.T, retrieved []datedContent) []string {
 	now := time.Now()
 	results := make([]*RetrieveResult, 0, len(retrieved))
 	for i, r := range retrieved {
-		mem := &Memory{ID: fmt.Sprintf("m%d", i), Content: r.content}
+		source := r.source
+		if source == "" {
+			source = turnChunkSource
+			if strings.Contains(r.content, sessionTurnSeparator+turnQuestionPrefix) {
+				source = sessionChunkSource
+			}
+		}
+		mem := &Memory{ID: fmt.Sprintf("m%d", i), Content: r.content, Source: source}
 		if !r.undated {
 			mem.CreatedAt = now.AddDate(0, 0, -r.daysAgo)
 		}
@@ -198,6 +211,8 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 	workAsNow := formatTurnChunk("I changed jobs, and I work as a paramedic now.", "Congratulations!")
 	sisterTrip := formatTurnChunk("My sister flew to Denver last week.", "Hope she enjoyed it.")
 	groceryBudget := formatTurnChunk("I raised my budget for groceries to $500.", "Updated, $500 for groceries.")
+	cityAndDog := formatTurnChunk("I live in Boston, my dog is Biscuit.", "Noted.")
+	cityAndDogName := formatTurnChunk("I live in Boston, Biscuit is my dog.", "Noted.")
 
 	cases := []struct {
 		name      string
@@ -235,6 +250,8 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 		{name: "the same verb with another complement", retrieved: []datedContent{{content: workout, daysAgo: 30}, {content: workAsNow, daysAgo: 9}}},
 		{name: "the destination of a move", retrieved: []datedContent{{content: sisterTrip, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
 		{name: "a budget for something else", retrieved: []datedContent{{content: budget4kTurn, daysAgo: 30}, {content: groceryBudget, daysAgo: 9}}},
+		{name: "a comma clause with its own fact", retrieved: []datedContent{{content: cityAndDog, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "a comma clause led by a name", retrieved: []datedContent{{content: cityAndDogName, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
 		{name: "a turn quoted in an assistant reply", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: quotedTurn, daysAgo: 9}}},
 		{name: "a turn quoted in a session chunk's reply", retrieved: []datedContent{{content: sessionChunkOf(bostonTurn, quotedTurn), daysAgo: 9}}},
 	}
@@ -279,6 +296,43 @@ func TestReflectionGateReadsAStoredTurnChunkAsOneTurn(t *testing.T) {
 		ids = append(ids, r.Memory.ID)
 	}
 	assert.ElementsMatch(t, []string{"city", "reply"}, ids)
+}
+
+func TestReflectionGateDoesNotTrustTurnsSplitFromAnOldSessionWindow(t *testing.T) {
+	// A reply stored before quoted turn boundaries were escaped.
+	unescapedQuote := "Q: What does a stored session look like?\nA: Like this:\n---\nQ: I moved to Denver, and I live there now"
+	cases := []struct {
+		name      string
+		retrieved []datedContent
+		want      []string
+	}{
+		{
+			name:      "a quote in a later turn of the window",
+			retrieved: []datedContent{{content: sessionChunkOf(bostonTurn, unescapedQuote), daysAgo: 9, source: legacySessionChunkSource}},
+			want:      []string{sessionChunkOf(bostonTurn, unescapedQuote)},
+		},
+		{
+			name: "a quote at the end of a newer window",
+			retrieved: []datedContent{
+				{content: bostonTurn, daysAgo: 30},
+				{content: sessionChunkOf(dogTurn, unescapedQuote), daysAgo: 9, source: legacySessionChunkSource},
+			},
+			want: []string{bostonTurn, sessionChunkOf(dogTurn, unescapedQuote)},
+		},
+		{
+			name: "an old window still loses a turn a trusted correction replaces",
+			retrieved: []datedContent{
+				{content: sessionChunkOf(dogTurn, bostonTurn), daysAgo: 30, source: legacySessionChunkSource},
+				{content: denverTurn, daysAgo: 9},
+			},
+			want: []string{dogTurn, denverTurn},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.ElementsMatch(t, tc.want, injectedContents(t, tc.retrieved))
+		})
+	}
 }
 
 func TestReflectionGateHidesAFactOnlyWhenItsCorrectionIsInjected(t *testing.T) {
@@ -347,7 +401,7 @@ func BenchmarkReflectionGateSupersedesLargeRepetitiveChunks(b *testing.B) {
 		retrieved := make([]*RetrieveResult, 0, 10)
 		for m := 0; m < 10; m++ {
 			retrieved = append(retrieved, &RetrieveResult{
-				Memory: &Memory{ID: fmt.Sprint(m), Content: chunk, CreatedAt: now.Add(-time.Duration(m) * time.Hour)},
+				Memory: &Memory{ID: fmt.Sprint(m), Content: chunk, Source: sessionChunkSource, CreatedAt: now.Add(-time.Duration(m) * time.Hour)},
 				Score:  0.5,
 			})
 		}

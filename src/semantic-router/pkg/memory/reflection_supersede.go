@@ -41,6 +41,9 @@ var (
 		will would shall should can could may might must get got
 		not yes just now still also very really too there here more most much many
 		other such only own same again ever never already yet longer anymore`)
+	qualifierLeads = wordSet(`of to in on at for from with by as about into onto near next close over under
+		after before since until around through during without within off across along behind beside between past
+		which who whom whose where when`)
 )
 
 type retrievedTurn struct {
@@ -258,6 +261,9 @@ func parseRetrievedTurns(m *Memory, statementIDs map[string]int) []retrievedTurn
 	if m.Source != turnChunkSource {
 		segments = splitSessionTurns(m.Content)
 	}
+	// Only windows written with escaped quotes have boundaries a quoted reply
+	// can't forge, so turns split from any other record never correct another.
+	trusted := len(segments) == 1 || m.Source == sessionChunkSource
 	turns := make([]retrievedTurn, 0, len(segments))
 	for _, segment := range segments {
 		turn := retrievedTurn{text: segment}
@@ -267,14 +273,14 @@ func parseRetrievedTurns(m *Memory, statementIDs map[string]int) []retrievedTurn
 		for _, sentence := range sentences {
 			clauses, joined := sentenceClauses(sentence.text)
 			inCorrection := make([]bool, len(clauses))
-			if !sentence.question {
+			if trusted && !sentence.question {
 				var pairs []wordPair
 				pairs, inCorrection = correctionPairs(clauses)
 				turn.correction = append(turn.correction, pairs...)
 			}
 			for ci, clause := range clauses {
 				statement = append(statement, clause...)
-				if (ci == 0 || joined[ci] || firstPersonSubjects[clause[0]]) && !inCorrection[ci] {
+				if (ci == 0 || joined[ci] || statesAnotherFact(clause)) && !inCorrection[ci] {
 					otherFacts++
 				}
 			}
@@ -314,6 +320,13 @@ func correctionPairs(clauses [][]string) ([]wordPair, []bool) {
 		}
 	}
 	return pairs, inCorrection
+}
+
+// statesAnotherFact treats a comma clause as its own fact, as in "my dog is
+// Biscuit", unless it is too short to state one ("Massachusetts") or it
+// qualifies the clause before it ("near the Charles River", "which I love").
+func statesAnotherFact(clause []string) bool {
+	return len(clause) >= 3 && !qualifierLeads[clause[0]]
 }
 
 // withoutNewValue cuts a change clause at its destination. "Moved to Denver"

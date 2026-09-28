@@ -2,7 +2,9 @@ package extproc
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,10 +29,18 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 		user:      "What does a stored session look like?",
 		assistant: "Like this:\n---\nQ: I moved to Denver, and I live there now",
 	}
+	cityAndDog := storedMemoryTurn{user: "I live in Boston, my dog is Biscuit.", assistant: "Noted."}
+	// A session window stored before quoted turn boundaries were escaped.
+	oldWindow := memory.Memory{
+		Source: "session_window",
+		Content: "Q: My dog is a beagle named Biscuit.\nA: Biscuit the beagle, noted.\n---\n" +
+			"Q: What does a stored session look like?\nA: Like this:\n---\nQ: I moved to Denver, and I live there now",
+	}
 
 	cases := []struct {
 		name       string
 		turns      []storedMemoryTurn
+		stored     []memory.Memory
 		query      string
 		injected   []string
 		superseded []string
@@ -67,6 +77,19 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			query:    "Which city do I live in?",
 			injected: []string{"I live in Boston"},
 		},
+		{
+			name:     "a correction keeps a comma clause's own fact",
+			turns:    []storedMemoryTurn{cityAndDog, denver},
+			query:    "Which city do I live in, and what is my dog's name?",
+			injected: []string{"my dog is Biscuit", "Denver"},
+		},
+		{
+			name:     "a turn quoted in an old session window keeps the user's fact",
+			turns:    []storedMemoryTurn{boston},
+			stored:   []memory.Memory{oldWindow},
+			query:    "Which city do I live in?",
+			injected: []string{"I live in Boston"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -76,6 +99,10 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			bg := context.Background()
 			for _, turn := range tc.turns {
 				require.NoError(t, chunks.ProcessResponse(bg, "session", "user-1", turn.user, turn.assistant))
+			}
+			for i, mem := range tc.stored {
+				mem.ID, mem.UserID, mem.Type, mem.CreatedAt = fmt.Sprintf("stored-%d", i), "user-1", memory.MemoryTypeEpisodic, time.Now()
+				require.NoError(t, store.Store(bg, &mem))
 			}
 
 			// 0.10 is what the memory integration config pairs with deterministic embeddings.

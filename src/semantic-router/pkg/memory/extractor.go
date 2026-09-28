@@ -143,6 +143,8 @@ const (
 	turnAnswerPrefix     = "A: "
 	sessionTurnSeparator = "\n---\n"
 	turnChunkSource      = "conversation"
+	// Windows stored as "session_window" predate escaped turn boundaries.
+	sessionChunkSource = "session_window_v2"
 )
 
 // MemoryExtractor stores conversation turns directly in the vector store.
@@ -381,7 +383,7 @@ func (e *MemoryExtractor) maybeStoreSessionChunk(
 		Type:       MemoryTypeEpisodic,
 		Content:    sanitized,
 		UserID:     userID,
-		Source:     "session_window",
+		Source:     sessionChunkSource,
 		CreatedAt:  time.Now(),
 		Importance: 0.7,
 	}
