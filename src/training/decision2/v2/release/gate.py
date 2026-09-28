@@ -104,6 +104,13 @@ def evaluate(work: Path) -> dict[str, Any]:
     ci = paired["ci95"]
     low = ci["low"] if isinstance(ci, dict) else ci[0]
     readback = steps.get("readback", {})
+    download = steps.get("download", {})
+    # Download receipts written before they carried "passed" count only if they name the upload.
+    downloaded = download.get(
+        "passed",
+        bool(download)
+        and download.get("revision") == steps.get("upload", {}).get("revision"),
+    )
     items = {
         "1_beats_own_1_0": {
             "passed": low > 0,
@@ -115,9 +122,8 @@ def evaluate(work: Path) -> dict[str, Any]:
             "evidence": f"{len(build['card']['tradeoffs'])} results below own 1.0 listed in the card tradeoffs table",
         },
         "3_download_hash_parameters": {
-            "passed": all(
-                steps.get(s, {}).get("passed") for s in ("download", "tree", "post")
-            )
+            "passed": bool(downloaded)
+            and all(steps.get(s, {}).get("passed") for s in ("tree", "post"))
             and steps.get("post", {}).get("loaded_parameters")
             == build["parameters"]["loaded"],
             "evidence": f"tree {steps.get('tree', {}).get('files')} files re-hashed; loaded {steps.get('post', {}).get('loaded_parameters')}",
