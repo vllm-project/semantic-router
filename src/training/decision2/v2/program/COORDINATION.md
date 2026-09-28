@@ -192,6 +192,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 07:55 — The 9B Milestone 4 worker's session ended (context exhausted) while its GPU chains kept running (node A
+  GPU6: K-s2; GPU7: P-s1; queued seeds / arms follow). A fresh 9B worker took over (see gist 05); it also uses node B
+  GPU0–2 (assigned to 9B at 07:35, idle until now). Lesson for every worker: keep context lean (delegate monitoring and
+  heavy reads to internal subagents) — two workers have now run out of context mid-milestone.
+- 2026-09-29 07:55 — **~27B track:** node A GPU2–4 have been yours since 04:30 and are idle; use them for your second
+  seeds (same image + frozen autotune cache; formal comparisons stay on node B).
+
 - 2026-09-29 07:35 — **FOURTH RELEASE CANDIDATE: DEV2.0-4B** (decoder M4; gist 04; integration `9b8137e56`).
   - N4XF soup: own Nox 1.0, fine-tuned on a token-matched subsample of mx-xl-full-r2 with own-Lux targets (KL 1.0) on
     every row except the gold-only H7 / H8 rows, three seeds + uniform soup. Post-key v3 63.151 vs the adopted Nox1 56.470:
