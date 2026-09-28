@@ -69,6 +69,10 @@ outputs to their run, task, attempt, snapshot and trainer; its optional
 Before publishing classifier qualification evidence,
 [validate_classifier_provenance](control_plane/provenance.py) validates that bundle
 and binds its label mapping and base model to the profile and frozen run spec.
+It also requires the variant's complete file names, digests and sizes to match an
+evaluated artifact manifest, then verifies the actual bytes through a worker-owned
+handle resolver. The resolver supplies immutable files for the variant being
+qualified; local paths remain private to the adapter.
 Structural acceptance of a worker result alone does not qualify an artifact.
 
 ### Worker lifecycle

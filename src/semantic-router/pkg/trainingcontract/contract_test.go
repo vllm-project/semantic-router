@@ -125,6 +125,9 @@ func TestSharedInvalidInputs(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			var validationErr error
 			switch tc.Definition {
+			case "DataSnapshot":
+				var snapshot DataSnapshot
+				validationErr = json.Unmarshal(tc.Value, &snapshot)
 			case "Profile":
 				var p Profile
 				if unmarshalErr := json.Unmarshal(tc.Value, &p); unmarshalErr != nil {

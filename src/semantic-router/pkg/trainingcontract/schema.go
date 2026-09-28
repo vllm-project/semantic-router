@@ -96,6 +96,12 @@ func (SpanProfile) JSONSchemaExtend(schema *jsonschema.Schema) {
 	labels.Items.MinLength = &one
 }
 
+func (ClassifierProfile) JSONSchemaExtend(schema *jsonschema.Schema) {
+	one := uint64(1)
+	labels, _ := schema.Properties.Get("label_mapping")
+	labels.MinProperties = &one
+}
+
 func (RunOutputs) JSONSchemaExtend(schema *jsonschema.Schema) {
 	for _, name := range []string{"artifact_ids", "evaluation_ids", "qualification_ids"} {
 		field, _ := schema.Properties.Get(name)

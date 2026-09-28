@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, FormatChecker
 
 CONTRACT_ROOT = (
     Path(__file__).resolve().parents[2] / "semantic-router/pkg/trainingcontract"
@@ -18,4 +18,4 @@ def validate(message: dict, definition: str) -> None:
     classifier bundle semantics remain in the existing provenance validator.
     """
     schema = {**SCHEMA, "$ref": f"#/$defs/{definition}"}
-    Draft202012Validator(schema).validate(message)
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(message)
