@@ -44,18 +44,17 @@ class TaskSpec:
     label_field: str
     split_rule: str = "predefined"
     compatible_artifact_repos: tuple[str, ...] = ()
+    # Why other artifacts are refused, completed with {repo}.
+    restriction: str = ""
 
     def validate_artifact(self, repo: str) -> None:
-        """Refuse source labels that describe a different classification task."""
+        """Refuse source labels that cannot rank this artifact."""
         if (
             self.compatible_artifact_repos
             and repo not in self.compatible_artifact_repos
         ):
             raise BaselineError(
-                f"{self.dataset_repo} is a legacy toxicity/jailbreak diagnostic, "
-                f"not an instruction-attack benchmark for {repo}. Use "
-                "mom_collection_eval.py --custom_dataset with attack-reviewed "
-                "benign/jailbreak gold for Guard."
+                f"{self.dataset_repo} {self.restriction.format(repo=repo)}"
             )
 
 
@@ -74,12 +73,25 @@ TASK_SPECS: dict[str, TaskSpec] = {
             "llm-semantic-router/mmbert-jailbreak-detector-merged",
             "llm-semantic-router/mmbert-jailbreak-detector-lora",
         ),
+        restriction=(
+            "is a legacy toxicity/jailbreak diagnostic, not an instruction-attack "
+            "benchmark for {repo}. Use mom_collection_eval.py --custom_dataset with "
+            "attack-reviewed benign/jailbreak gold for Guard."
+        ),
     ),
     "fact-check": TaskSpec(
         dataset_repo="llm-semantic-router/fact-check-classification-dataset",
         split="test",
         text_field="text",
         label_field="label_id",
+        compatible_artifact_repos=(
+            LEGACY_MODEL_REGISTRY["fact-check"]["id"],
+            LEGACY_MODEL_REGISTRY["fact-check"]["lora_id"],
+        ),
+        restriction=(
+            "gives each source corpus one label, so the corpus alone predicts the "
+            "test label. It only scores the checkpoint trained on it, not {repo}."
+        ),
     ),
     "feedback": TaskSpec(
         dataset_repo="llm-semantic-router/feedback-detector-dataset",
@@ -89,6 +101,14 @@ TASK_SPECS: dict[str, TaskSpec] = {
         # registry declares "label" and only works through a silent auto-detect
         # fallback, so the field is pinned here instead.
         label_field="label_name",
+        compatible_artifact_repos=(
+            LEGACY_MODEL_REGISTRY["feedback"]["id"],
+            LEGACY_MODEL_REGISTRY["feedback"]["lora_id"],
+        ),
+        restriction=(
+            "repeats a few SAT templates, each with '!', in train and validation. "
+            "It only scores the checkpoint trained on it, not {repo}."
+        ),
     ),
     "domain": TaskSpec(
         dataset_repo="TIGER-Lab/MMLU-Pro",

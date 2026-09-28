@@ -113,12 +113,12 @@ the result.
 
 ```
 python src/training/model_eval/quality_baseline.py \
-    --task fact-check --device cuda --output-dir baseline/fact-check
+    --task domain --device cuda --output-dir baseline/domain
 
 # From src/training/model_eval. The served artifacts predate the training-run
 # manifests, so this reports one missing run_ref per artifact until a run
 # publishes one. Everything else has to pass.
-python -m provenance.cli validate baseline/fact-check/manifests
+python -m provenance.cli validate baseline/domain/manifests
 
 python src/training/model_eval/gap_report.py \
     --baseline baseline/*/*_baseline.json --output baseline/gap-report.md
@@ -133,6 +133,12 @@ The baseline runner's historical `jailbreak` dataset is restricted to the
 explicit original mmBERT merged/adapter artifacts. It rejects current Guard
 before accessing that dataset. Use the custom-data collection evaluator above
 for reviewed instruction-attack annotations.
+
+The `fact-check` and `feedback` datasets are restricted the same way, to the
+mmBERT checkpoints trained on them. Their labels can be read without the text:
+each fact-check source corpus carries one label, and the feedback SAT class is a
+few templates, each with `!`, that appear in both train and validation. Vela
+FactCheck and Vela Feedback need held-out sets from other corpora.
 
 A referenced manifest supplies the identity every number is published under, so
 it also selects the bytes: the run downloads the repository and revision the

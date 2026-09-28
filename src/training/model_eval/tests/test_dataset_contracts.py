@@ -91,6 +91,23 @@ class DatasetContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unrecognized"):
             load("jailbreak", args)
 
+    def test_fact_check_and_feedback_splits_only_score_their_legacy_checkpoints(self):
+        namespace = load_definitions(
+            "baseline_tasks.py",
+            {"TaskSpec", "TASK_SPECS"},
+            {
+                "dataclass": dataclass,
+                "LEGACY_MODEL_REGISTRY": LEGACY_MODEL_REGISTRY,
+                "BaselineError": ValueError,
+            },
+        )
+        specs = namespace["TASK_SPECS"]
+        for task in ("fact-check", "feedback"):
+            for key in ("id", "lora_id"):
+                specs[task].validate_artifact(LEGACY_MODEL_REGISTRY[task][key])
+            with self.assertRaisesRegex(ValueError, "only scores the checkpoint"):
+                specs[task].validate_artifact(MODEL_REGISTRY[task]["id"])
+
     def test_baseline_blocks_incompatible_gold_before_dataset_resolution(self):
         namespace = load_definitions(
             "baseline_tasks.py",
