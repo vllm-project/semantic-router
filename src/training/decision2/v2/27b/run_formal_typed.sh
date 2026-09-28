@@ -46,6 +46,7 @@ EOF
 collect() {  # run-dir [--max-items N]
   local dir=$1
   shift
+  python3 -c "import importlib, sys; importlib.import_module('v2.27b.launch').wait_until_idle(int(sys.argv[1]))" "$GPU"
   take_lease "27b formal same-panel collection $RUN"
   local status=0
   "$S/v2/eval/run_same_panel.sh" --gpu "$GPU" --track 27b --src "$SRC" --run-dir "$dir" \

@@ -96,6 +96,15 @@ def vram_percent(gpu: int) -> str:
     return values[-1] if values else "unknown"
 
 
+def wait_until_idle(gpu: int, timeout: float = 300, poll: float = 10) -> None:
+    """VRAM stays allocated for a short while after a container exits."""
+    deadline = time.monotonic() + timeout
+    while (usage := vram_percent(gpu)) != "0":
+        if time.monotonic() > deadline:
+            raise ValueError(f"GPU{gpu} is not idle (VRAM% {usage})")
+        time.sleep(poll)
+
+
 def docker(*args: str, timeout: int = 300) -> str:
     return subprocess.check_output(
         ["docker", *args], text=True, timeout=timeout, stderr=subprocess.STDOUT
@@ -181,8 +190,8 @@ def main() -> None:
         raise ValueError("Pinned runtime image is absent or changed")
     if docker("ps", "-a", "--filter", f"name=^{args.name}$", "--format", "{{.Names}}"):
         raise FileExistsError("Container name already exists")
-    if not args.shared and vram_percent(args.gpu) != "0":
-        raise ValueError(f"GPU{args.gpu} is not idle (VRAM% {vram_percent(args.gpu)})")
+    if not args.shared:
+        wait_until_idle(args.gpu)
     argv = create_argv(args, device)
     args.receipt.parent.mkdir(parents=True, exist_ok=True)
     cap = int(args.cap_hours * 3600)

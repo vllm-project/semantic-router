@@ -187,6 +187,18 @@ class CollectAndLeaseTest(unittest.TestCase):
 
         self.assertFalse(any(typed_collect.FLA_OVERLAY in p for p in sys.path))
 
+    def test_wait_until_idle(self):
+        readings = iter(["31", "12", "0"])
+        original = launch.vram_percent
+        try:
+            launch.vram_percent = lambda gpu: next(readings)
+            launch.wait_until_idle(5, timeout=5, poll=0)
+            launch.vram_percent = lambda gpu: "31"
+            with self.assertRaises(ValueError):
+                launch.wait_until_idle(5, timeout=0, poll=0)
+        finally:
+            launch.vram_percent = original
+
     def test_read_lease_both_formats(self):
         with tempfile.TemporaryDirectory() as tmp:
             owner = Path(tmp) / "owner"
