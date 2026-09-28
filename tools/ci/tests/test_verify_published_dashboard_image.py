@@ -241,7 +241,9 @@ class PublishedDashboardImageTests(unittest.TestCase):
 
         self.assertLess(steps.index(promote), steps.index(verify))
         self.assertIn("image_artifacts.py promote", promote["run"])
-        self.assertEqual(verify["if"], "matrix.image == 'dashboard'")
+        self.assertEqual(
+            verify["if"], "matrix.image == 'dashboard' && inputs.mode != 'release'"
+        )
         self.assertIn(
             "cat .agent-harness/image-input/published-digest.txt", verify["run"]
         )
@@ -255,7 +257,10 @@ class PublishedDashboardImageTests(unittest.TestCase):
                 for step in steps
                 if step.get("uses") == f"docker/{action}-action@v3"
             )
-            self.assertEqual(setup["if"], "matrix.image == 'dashboard'")
+            self.assertEqual(
+                setup["if"],
+                "matrix.image == 'dashboard' && inputs.mode != 'release'",
+            )
             self.assertLess(steps.index(setup), steps.index(verify))
 
 
