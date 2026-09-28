@@ -244,8 +244,28 @@ func newAnthropicUsageWire() *anthropicUsageWire {
 }
 
 func usageUnavailable(usage llmprotocol.Usage) bool {
-	return usage.State == llmprotocol.UsageUnavailable ||
-		usage.InputTotal.Value == nil && usage.OutputTotal.Value == nil
+	if usage.State == llmprotocol.UsageUnavailable {
+		return true
+	}
+	// Missing totals decide the unavailable projection only when no component
+	// count is known either: a known component still carries information the
+	// exact projection emits, so that case must not be zeroed.
+	return usage.InputTotal.Value == nil && usage.OutputTotal.Value == nil && !usageHasKnownComponent(usage)
+}
+
+func usageHasKnownComponent(usage llmprotocol.Usage) bool {
+	for _, count := range []llmprotocol.TokenCount{
+		usage.InputUncached,
+		usage.InputCacheRead,
+		usage.InputCacheWrite,
+		usage.OutputReasoning,
+		usage.OutputOther,
+	} {
+		if count.Value != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func decodeAnthropicStop(reason string) llmprotocol.StopReason {

@@ -92,3 +92,38 @@ func TestAnthropicMessagesKeepsAvailableUsageProjection(t *testing.T) {
 		}
 	}
 }
+
+// A known component count with both totals absent keeps its count: the
+// unavailable zero projection applies only when nothing is known, because a
+// known component is information the exact projection can still emit.
+func TestAnthropicMessagesKeepsKnownComponentWhenTotalsAreAbsent(t *testing.T) {
+	input := int64(7)
+	response := llmprotocol.Response{
+		Generation: 1, ID: "response_1", Model: "public-model",
+		Output: []llmprotocol.OutputItem{{
+			ID: "item_1", Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "done"}},
+		}},
+		Usage: llmprotocol.Usage{
+			State:         llmprotocol.UsageAvailable,
+			InputUncached: llmprotocol.TokenCount{Value: &input, Provenance: llmprotocol.UsageAuthoritative},
+		},
+	}
+	body, _, err := (AnthropicMessagesCodec{}).EncodeResponse(
+		response, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy(),
+	)
+	if err != nil {
+		t.Fatalf("EncodeResponse failed: %v", err)
+	}
+	var wire struct {
+		Usage *struct {
+			InputTokens int64 `json:"input_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatalf("decode encoded Messages body: %v\n%s", err, body)
+	}
+	if wire.Usage.InputTokens != input {
+		t.Fatalf("known component must survive the projection, got input_tokens=%d: %s", wire.Usage.InputTokens, body)
+	}
+}
