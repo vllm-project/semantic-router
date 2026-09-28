@@ -42,7 +42,12 @@
     },
     "Sol1": {"run": "/data/dev2/runs/eval/m1-adopt/sol1", "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-sol1"},
     "Decider 2B": {"run": "/data/dev2/runs/eval/m1-adopt/decider2b", "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-decider2b"},
-    "This-That 1.2": {"run": "/data/dev2/runs/eval/m2/q4-thisthat12", "mlx_run": "/data/dev2/runs/eval/m2/q4-thisthat12"}
+    "This-That 1.2": {"run": "/data/dev2/runs/eval/m2/q4-thisthat12", "mlx_run": "/data/dev2/runs/eval/m2/q4-thisthat12"},
+    "Bosun 1.7B": {
+      "run": "/data/dev2/runs/eval/m1/p3-bosun17b",
+      "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-bosun17b",
+      "note": "fifth model on the DEV2.0-2B card (release spec dev2-2b-release.json); added after the preregistered run"
+    }
   },
   "tiers": {
     "0.8B": {
@@ -61,8 +66,8 @@
     "2B": {
       "candidate": "DEV2.0-2B (S2T)",
       "own_1_0": ["Sol1-16K", "Sol1"],
-      "peers": ["Decider 2B", "This-That 1.2"],
-      "threshold_pool": ["Decider 2B", "This-That 1.2"]
+      "peers": ["Decider 2B", "This-That 1.2", "Bosun 1.7B"],
+      "threshold_pool": ["Decider 2B", "This-That 1.2", "Bosun 1.7B"]
     }
   },
   "reproduce": [
