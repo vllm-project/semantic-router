@@ -84,6 +84,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | ~27B | `/home/xunliu/code/vllm-sr-dev2-27b` | `xunzhuo/decision-2-training-27b` |
 | release engineering | `/home/xunliu/code/vllm-sr-dev2-release` | `xunzhuo/decision-2-training-release` |
 | A7 own-1.0 corpora | `/home/xunliu/code/vllm-sr-dev2-a7` | `xunzhuo/decision-2-training-a7` |
+| release engineering (DEV2.0-0.6B) | `/home/xunliu/code/vllm-sr-dev2-release-06b` | `xunzhuo/decision-2-training-release-06b` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -143,7 +144,8 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
-| node A GPU0–1 | 0.6B encoder |
+| node A GPU0 | DEV2.0-0.6B release verification (lent by the 0.6B track, 2026-09-28 21:30 UTC+8); back to 0.6B afterwards |
+| node A GPU1 | 0.6B track (post-release optimization) |
 | node A GPU2–4 | research & data: AutoJev-27B re-qualification + target production (~1.5 h), then back to the 9B track (2026-09-28 20:15 UTC+8). **9B track: read the 21:00 cross-track note (A7 is mostly NEW data for Lux) before planning work on these GPUs.** |
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
 | node A GPU6–7 | 9B track Milestone 3 (lent by eval at 2026-09-28 20:30 UTC+8; eval borrows one back for a formal run or a C1 scoring event) |
@@ -173,6 +175,7 @@ exactly one gist file and updates it in place:
 | `06-decision-2-27b.md` | ~27B |
 | `07-decision-2-release.md` | release engineering |
 | `08-decision-2-own10-corpora.md` | A7 own-1.0 corpora |
+| `07b-decision-2-release-06b.md` | release engineering for DEV2.0-0.6B |
 
 - Create: write the file locally with exactly that name, then `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -a <local-path>`.
   Update: `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -f <file-name> <local-path>`. Never modify or delete other files.
@@ -181,6 +184,33 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-28 21:30 — **SECOND RELEASE CANDIDATE: DEV2.0-0.6B** (0.6B Milestone 4; gist `03-decision-2-06b-encoder.md`;
+  integration `2747b817a`).
+  - `m4-t-a7-soup`: official Qwen3-0.6B-Base, (a2) recipe (backbone LR 1e-5, 10% warmup), trained on A0s-r + A6 + the A7
+    Eos/Lux natural pool, three same-init seeds, uniform weight soup. Post-key v3 43.54 vs Kai1 35.94: +7.60
+    [+4.71, +10.76]; vs Kai1 at 8K +7.57; vs GLiNER2.5-Decide (tier leader) +1.02 [−1.77, +7.80]; public 231 142; mlx-diag
+    61.5. Disclose: typed FINAL Choice 255 vs Kai1 277 (−22). Checkpoint: private
+    `llm-semantic-router/dev2-release-staging-06bm4@62c61c10…`, profile `qwen-full`; scored runs
+    `/data/dev2/runs/06b/m4/formal/m4-t-a7-soup` (+ `-mlx`). The brief's primary 0.6B routes (Kai / Lex continuation,
+    EuroBERT, mmBERT, bidirectional Qwen) were all tested in M1–M4 and none beat Kai1 or trained stably; the official-Qwen
+    backup route won on evidence — state the weight origin plainly on the card.
+  - Coordinator decisions: (1) release engineering for DEV2.0-0.6B starts now, in parallel with 0.8B (separate worktree,
+    node A GPU0); (2) its A0s renumbering inside the mixture builder counts as "renumbered data" if release engineering
+    verifies it matches the published pk1 A0s row for row; (3) canonical Lux A0 file going forward is the pk1 `56627939…`
+    (`752b7c8f…`, used by this candidate, agrees 99.5% — disclosed); (4) the replacement of the typed-DEV Noul floor by an
+    in-distribution Noul check is accepted with disclosure (written before any formal run; that floor measured one family,
+    `rule_precedence`, where no model up to 4B has signal) — the eval track still checks "no type collapsed" on v3.
+  - **C1 scheduling:** event 1 = DEV2.0-0.8B (running); event 2 = DEV2.0-0.6B plus any other candidate frozen by then;
+    event 3 = the final family confirmation. C1 confirms, it does not block later-tier releases; cards get a C1 line when
+    available (a card-only revision).
+  - **Proxy mis-ranking at 0.6B:** P favoured the mixture-v2 soup by +6.94 but v3 put the A7 soup ahead by 4.4 (v2 soup:
+    39.13, +3.19 [−0.33, +8.11] vs Kai1); CSS pilot rose for v2 while CSS15 fell (.397 vs .480). Eval: check whether data v2
+    contains same-source datasets for the CSS-pilot tasks that rose (dataset-level, not only lexical/embedding overlap).
+    Research & data: mixture v2 gave the best public 231 (151) at 0.6B but lower transfer and mlx-diag — revisit the
+    recipe's Choice share and why its multilingual arms didn't lift mlx-diag.
+  - Post-release updates: a new candidate replaces a released size only if it clearly beats the released model (paired
+    post-key CI lower bound > 0), as a new private revision with a card update.
 
 - 2026-09-28 21:05 — **A7 Milestone 2 complete** (gist `08-decision-2-own10-corpora.md`; integration `f344f1aec`; private HF
   dataset revision `0b47239ed36ce539b2350e35af88a26140d867f7`). The A7 track is finished; remaining source ideas move to
