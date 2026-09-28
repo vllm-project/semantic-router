@@ -9,7 +9,7 @@ Run modules from `src/training/decision2` with this directory on the path:
 ```bash
 cd src/training/decision2
 PYTHONPATH=.:v2/9b python -m clm9b.extract --help
-python -m unittest discover -s v2/9b/tests -t v2/9b
+python -m unittest discover -s v2/9b/tests -p 'test_*.py'
 ```
 
 Remote nodes run only exact mirrors of pushed commits inside the pinned
