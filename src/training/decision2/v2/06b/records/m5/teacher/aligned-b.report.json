@@ -1,0 +1,57 @@
+{
+  "aligned_rows": 23498,
+  "aligned_task_types": {
+    "choice": 6688,
+    "noul": 11620,
+    "score": 5190
+  },
+  "covered_by_teacher": {
+    "aj27": {
+      "rows": 23498,
+      "task_types": {
+        "choice": 6688,
+        "noul": 11620,
+        "score": 5190
+      }
+    },
+    "lux1": {
+      "rows": 23498,
+      "task_types": {
+        "choice": 6688,
+        "noul": 11620,
+        "score": 5190
+      }
+    }
+  },
+  "entries_written": {
+    "aj27": 23498,
+    "lux1": 23498
+  },
+  "mixture_rows": 33583,
+  "mixture_sha256": "57eedf6b76b4761d9054b2cd35e8e11024bcb1e87e0e28efa37efc9ccf2160be",
+  "mixture_task_types": {
+    "choice": 16773,
+    "noul": 11620,
+    "score": 5190
+  },
+  "outputs": {
+    "aj27": {
+      "path": "aj27.aligned.jsonl",
+      "sha256": "6cfad282195d6937f263a12ba5fbd927786647ec51d638d628aee7348ea678a7"
+    },
+    "lux1": {
+      "path": "lux1.aligned.jsonl",
+      "sha256": "7955980ca7ce41b9650cd0f5050a97dd23dbfd7620487d8f4b5a6515db36b927"
+    }
+  },
+  "teachers": {
+    "aj27": {
+      "entries": 91822,
+      "sha256": "a606dee410644b179c3426bf776e2a1e39771732a0bed9fbccf99e9ebf0e4fd6"
+    },
+    "lux1": {
+      "entries": 92213,
+      "sha256": "a7bc7a4598055e6c33b9b4b06b2c7edf014e6aa7c157055ea36055f189e9f1fa"
+    }
+  }
+}
