@@ -11,6 +11,11 @@ spot-check set S from the eval track's gold-free panel prompts, and writes
 ``warm.prompts.jsonl`` (W), ``qual.prompts.jsonl`` (R, then S) and ``sets.json``.
 ``compare`` applies gates G1-G4 of the preregistration and writes a count-only report
 (no prompt text, answers or ids). Outputs on S are never converted into targets.
+
+Preregistration v2 adds ``ladder`` (the warm-up W plus a synthetic length ladder that reaches
+the native 8,192-token limit, so every sequence-length autotune bucket is tuned before any
+repeat process), gate G0 (warm-up token coverage) and ``prodrepeat`` (per-wave production
+repeat checks). Ladder prompts exist only to tune kernels; their outputs are discarded.
 """
 
 from __future__ import annotations
@@ -51,6 +56,12 @@ IDENTITY = {
 }
 RUN_CONSTANT = ("native_model_sha256", "runtime_source_sha256")
 PENDING = "pytorch_bf16_rocm_pending_repeatability"
+
+LADDER_CHARS = tuple(range(1200, 45001, 1200))
+LADDER_TYPES = ("noul", "choice")
+COVERAGE_BIN = 512
+COVERAGE_TOP = 7680
+PRODREPEAT = 128
 
 
 def ranked(ids: Iterable[str], salt: str) -> list[str]:
@@ -280,12 +291,97 @@ def identity_check(
     }
 
 
+def ladder_command(args: argparse.Namespace) -> int:
+    from v2.data.build_a0_variants import native_prompt
+
+    rows = {r["id"]: r for r in read_jsonl(args.rows)}
+    lines = [args.warm.read_bytes()]
+    count = 0
+    for kind in LADDER_TYPES:
+        base = rows[
+            next(i for i in ranked(rows, "m3a-ladder:") if rows[i]["task_type"] == kind)
+        ]
+        prompt = native_prompt(base)
+        text = json.dumps(base["state"], ensure_ascii=False) + " "
+        text = text * (max(LADDER_CHARS) // len(text) + 1)
+        for size in LADDER_CHARS:
+            ladder = dict(
+                prompt, id=f"m3a-ladder-{kind}-{size:05d}", state={"notes": text[:size]}
+            )
+            lines.append(
+                (json.dumps(ladder, ensure_ascii=False) + "\n").encode("utf-8")
+            )
+            count += 1
+    digest = _write(args.out, b"".join(lines))
+    print(json.dumps({"ladder_prompts": count, "sha256": digest}))
+    return 0
+
+
+def coverage(receipts: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    """G0: answered warm-up prompts cover every token bin up to COVERAGE_TOP."""
+    tokens = []
+    for record in receipts:
+        answers = record["answers"].values()
+        if all(vector(a) is not None for a in answers):
+            tokens.append(int(record["usage"]["input_tokens"]))
+    bins = {t // COVERAGE_BIN for t in tokens if t < COVERAGE_TOP}
+    missing = [b for b in range(COVERAGE_TOP // COVERAGE_BIN) if b not in bins]
+    return {
+        "answered": len(tokens),
+        "max_input_tokens": max(tokens, default=0),
+        "missing_bins": missing,
+        "pass": not missing and max(tokens, default=0) >= COVERAGE_TOP,
+    }
+
+
+def prodrepeat_select(args: argparse.Namespace) -> int:
+    from v2.data.m3.shards import shard_of
+
+    lines = {
+        json.loads(line)["id"]: line
+        for line in args.prompts.read_bytes().splitlines(keepends=True)
+    }
+    pool = [i for i in lines if shard_of(i, args.shards) != args.exclude_shard]
+    chosen = sorted(ranked(pool, "m3a-prodrepeat:")[:PRODREPEAT])
+    digest = _write(args.out, b"".join(lines[i] for i in chosen))
+    print(json.dumps({"prompts": len(chosen), "sha256": digest}))
+    return 0
+
+
+def prodrepeat_check(args: argparse.Namespace) -> int:
+    qualification = json.loads(args.qualification.read_text(encoding="utf-8"))
+    frozen = qualification["autotune_frozen"]
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    repeat = {r["id"]: r["answers"] for r in read_jsonl(args.repeat)}
+    produced = load_answers(args.shard_output)
+    stats = compare(repeat, produced, sorted(repeat))
+    stats["autotune_unchanged"] = (
+        manifest.get("autotune_before") == frozen
+        and manifest.get("autotune_after") == frozen
+    )
+    stats["exit_code"] = manifest.get("exit_code")
+    stats["pass"] = (
+        stats["exit_code"] == 0
+        and stats["autotune_unchanged"]
+        and stats["missing_prompts"] == 0
+        and stats["validity_mismatches"] == 0
+        and stats["argmax_mismatches"] == 0
+        and stats["max_drift"] <= REPEAT_MAX_DRIFT
+    )
+    _write(
+        args.out, (json.dumps(stats, indent=1, sort_keys=True) + "\n").encode("utf-8")
+    )
+    print(json.dumps({"pass": stats["pass"], "max_drift": stats["max_drift"]}))
+    return 0 if stats["pass"] else 3
+
+
 def compare_command(args: argparse.Namespace) -> int:
     manifest = json.loads(args.sets.read_text(encoding="utf-8"))
     repeat_ids, spot_ids = manifest["repeat_ids"], manifest["spot_ids"]
     all_ids = repeat_ids + spot_ids
     warm = json.loads(args.warm_manifest.read_text(encoding="utf-8"))
     frozen = warm["autotune_after"]
+    g0 = coverage(read_jsonl(Path(warm["output"]))) if args.require_coverage else None
     runs: dict[str, dict[str, Any]] = {}
     g1: dict[str, Any] = {}
     g3: dict[str, Any] = {}
@@ -328,7 +424,8 @@ def compare_command(args: argparse.Namespace) -> int:
             and stats["p99_drift"] <= SPOT_MAX_P99_DRIFT
         )
         spot[f"{run}:{name}"] = stats
-    gates = {
+    gates = {} if g0 is None else {"G0_warmup_coverage": g0["pass"]}
+    gates |= {
         "G1_identity": all(v["pass"] for v in g1.values())
         and all(len(v) == 1 for v in hashes.values()),
         "G2_repeat": bool(pairs) and all(v["pass"] for v in pairs.values()),
@@ -347,6 +444,7 @@ def compare_command(args: argparse.Namespace) -> int:
         "image_id": IMAGE_ID,
         "package_hashes": {k: sorted(v) for k, v in hashes.items()},
         "autotune_frozen": frozen,
+        "g0": g0,
         "g1": g1,
         "g3": g3,
         "pairs": pairs,
@@ -377,9 +475,32 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--pair", action="append", required=True)
     c.add_argument("--reference", required=True)
     c.add_argument("--spot-run", action="append", required=True)
+    c.add_argument("--require-coverage", action="store_true")
     c.add_argument("--out", type=Path, required=True)
+    lad = sub.add_parser("ladder")
+    lad.add_argument("--rows", type=Path, required=True)
+    lad.add_argument("--warm", type=Path, required=True)
+    lad.add_argument("--out", type=Path, required=True)
+    ps = sub.add_parser("prodrepeat-select")
+    ps.add_argument("--prompts", type=Path, required=True)
+    ps.add_argument("--shards", type=int, required=True)
+    ps.add_argument("--exclude-shard", type=int, required=True)
+    ps.add_argument("--out", type=Path, required=True)
+    pc = sub.add_parser("prodrepeat-check")
+    pc.add_argument("--qualification", type=Path, required=True)
+    pc.add_argument("--repeat", type=Path, required=True)
+    pc.add_argument("--manifest", type=Path, required=True)
+    pc.add_argument("--shard-output", type=Path, action="append", required=True)
+    pc.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
-    return sets(args) if args.command == "sets" else compare_command(args)
+    commands = {
+        "sets": sets,
+        "compare": compare_command,
+        "ladder": ladder_command,
+        "prodrepeat-select": prodrepeat_select,
+        "prodrepeat-check": prodrepeat_check,
+    }
+    return commands[args.command](args)
 
 
 if __name__ == "__main__":
