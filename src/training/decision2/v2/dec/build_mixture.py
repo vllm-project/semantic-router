@@ -13,8 +13,9 @@ source × task type × language in a seed-keyed hash order. Tokens are native
 Spec: {"name", "seed", "exclude_families": [...], "components": [{"name",
 "files": ["<source>:<path under the snapshot root>", ...], "view"?:
 "<source>:<path>", "rekey"?: bool, "budget_tokens"?: int, "budget_ratio"?:
-{"of": <component>, "ratio": float}}]}; sources map to snapshot roots and
-registries on the command line.
+{"of": <component>, "ratio": float}, "budget_fraction"?: float of the
+component's own pool}]}; sources map to snapshot roots and registries on the
+command line.
 """
 
 from __future__ import annotations
@@ -157,6 +158,8 @@ def build(
         if "budget_ratio" in component:
             ratio = component["budget_ratio"]
             budget = round(components[ratio["of"]]["tokens"] * ratio["ratio"])
+        if "budget_fraction" in component:
+            budget = round(pool_tokens * component["budget_fraction"])
         if budget is not None and budget < pool_tokens:
             groups = group_rows(kept)
             group_tokens = {
