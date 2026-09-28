@@ -62,6 +62,46 @@ func TestResponseContract(t *testing.T) {
 	}
 }
 
+func TestResponseContractRejectsMissingLabelWithUnitSum(t *testing.T) {
+	labels := map[string]string{"coding": "Code", "writing": "Prose", "other": "Other"}
+	complete := `{"model":"jev-1.13.0","answers":{"intent":{"type":"choice","choice":"coding","confidence":0.6,"probabilities":{"coding":0.7,"writing":0.3,"other":0}}}}`
+	if _, err := validateResponse([]byte(complete), "jev-1.13.0", labels); err != nil {
+		t.Fatalf("explicit zero probability should be accepted: %v", err)
+	}
+
+	// Removing a zero leaves the sum unchanged, but breaks the label contract.
+	missing := strings.Replace(complete, `,"other":0`, "", 1)
+	out, err := validateResponse([]byte(missing), "jev-1.13.0", labels)
+	if err == nil || !strings.Contains(err.Error(), "label set mismatch") {
+		t.Fatalf("expected label mismatch despite unit sum, got %v", err)
+	}
+	if out != nil {
+		t.Fatal("incomplete distribution must not produce a usable response")
+	}
+}
+
+func TestCollaboratorSampleRejectsProbabilitySum(t *testing.T) {
+	// SDK-parsed sample mmlu-pro-93, not HTTP wire bytes:
+	// github.com/lyy26299/semantic-router/blob/53526a3edfa7afaae6760670a68033692cc112cc/tools/eval/category-comparison/jev-rerun-20260925/jev-failures-sample.jsonl
+	raw := `{"model":"jev-1.13.0","usage":{"input_tokens":442,"output_tokens":123},"answers":{"domain":{"type":"choice","choice":"business","confidence":0.53,"probabilities":{"philosophy":0,"physics":0,"history":0,"law":0,"biology":0,"computer science":0,"chemistry":0,"math":0.26,"engineering":0,"business":0.56,"psychology":0,"health":0,"other":0,"economics":0.17}}}}`
+	labels := make(map[string]string)
+	for _, label := range []string{"biology", "business", "chemistry", "computer science", "economics", "engineering", "health", "history", "law", "math", "other", "philosophy", "physics", "psychology"} {
+		labels[label] = label
+	}
+	if _, err := validateResponse([]byte(raw), "jev-1.13.0", labels); err == nil || err.Error() != "expected exactly one intent Choice answer" {
+		t.Fatalf("expected question-name mismatch before adaptation, got %v", err)
+	}
+	// Test-only question-name adaptation; preserve every probability and confidence.
+	adapted := strings.Replace(raw, `"answers":{"domain":`, `"answers":{"intent":`, 1)
+	out, err := validateResponse([]byte(adapted), "jev-1.13.0", labels)
+	if err == nil || err.Error() != "label probabilities do not sum to one" {
+		t.Fatalf("expected probability-sum rejection, got %v", err)
+	}
+	if out != nil {
+		t.Fatal("contract-invalid sample must not produce a usable response")
+	}
+}
+
 func TestAdapterRequestAndResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" || r.URL.Path != "/v1/systemone" || r.Header.Get("Authorization") != "Bearer test-key" {
@@ -110,12 +150,14 @@ func TestConnectorFailureRecords(t *testing.T) {
 				t.Fatalf("must stop after first failed call, calls=%d err=%v", calls.Load(), err)
 			}
 			var got record
-			if err := json.Unmarshal(output.Bytes(), &got); err != nil {
+			decoder := json.NewDecoder(bytes.NewReader(output.Bytes()))
+			if err := decoder.Decode(&got); err != nil {
 				t.Fatal(err)
 			}
 			if got.Valid || got.Correct != nil || got.Status != status || got.ErrorKind != "status" || got.Attempts != 1 || got.RawResponse == "" {
 				t.Fatalf("failure was not preserved: %+v", got)
 			}
+			assertUnexecuted(t, decoder, "second", "stopped_after_failure:first")
 			if strings.Contains(output.String(), "test-key") || strings.Contains(output.String(), "Authorization") {
 				t.Fatal("credential leaked")
 			}

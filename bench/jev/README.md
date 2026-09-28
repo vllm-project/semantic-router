@@ -32,6 +32,14 @@ flowchart TD
 Adoption is not the required outcome. Do not open a production follow-up before
 the comparative evidence exists and maintainers agree.
 
+## Start here: shared pilot v0.1
+
+The [pilot workspace](pilot-v0.1/README.md) contains the six-case fixture,
+question configuration, pinned models, Jev's saved live records and collaborator
+handoff instructions. Kai/Vela records and the paired report are still pending.
+This is a Draft research increment, not a completed evaluation or production adapter.
+Review the Go sources in this directory directly; no source archive is required.
+
 ## Current increment
 
 - A research-only protocol adapter uses `pkg/modelruntime/connector` for
@@ -59,6 +67,9 @@ shared group IDs so they cannot later be split across development/test sets.
 The response constants in Go tests are synthetic, not captured Jev measurements.
 
 ## Offline checks (no key, model download, or paid API)
+
+See [reproduction notes and the run-manifest template](REPRODUCING.md) for what
+to preserve and share. The template is manual and does not authorize live calls.
 
 Run from the repository root:
 
@@ -103,7 +114,7 @@ rather than silently truncating it. Output is created exclusively with mode
 `0600`, and an existing output path is never overwritten. The parent directory
 must already exist. Ctrl-C cancels the current call.
 
-Each JSONL record contains the source revision, dataset/question SHA-256,
+Each attempted-case JSONL record (`jev-research-record.v1`) contains the source revision, dataset/question SHA-256,
 coarse location, timestamp, exact request, raw response string, contract check,
 elapsed milliseconds, timeout, attempt count, status, and error category. Model
 and token usage remain in the raw response. Headers and keys are not recorded.
@@ -112,7 +123,15 @@ body is unavailable; retain its typed error rather than pretending it is a
 complete response. Review all raw provider bodies before sharing: they can echo
 input or provider diagnostics. Local results are ignored by Git.
 
-## Comparative evaluation protocol (not implemented or run yet)
+After a recorded failure or cancellation between cases, remaining cases use
+`jev-research-not-executed.v1` with `execution_status: not_executed`, zero
+attempts, a reason, case identity and source metadata. They omit request,
+response, latency, HTTP status, contract validity and correctness: no measurement
+was made. Readers must distinguish the schemas rather than interpret missing
+fields as failures or zero latency. Output-write failures can leave a partial
+file; record completeness is not guaranteed when writing itself fails.
+
+## Larger comparative evaluation (not completed)
 
 Before collecting headline numbers, agree in #3970 on the existing baseline,
 dataset, code location, acceptable quality/error trade-offs, and call budget.
@@ -147,13 +166,16 @@ dataset, code location, acceptable quality/error trade-offs, and call budget.
 
 ## Evidence status and next steps
 
-No live API calls or comparative results are shipped in this increment. The
-earlier issue comment's 12/12 contract and 10/10 scored smoke-test results were
-reported from a separate Python script; they are not reproduced or claimed as
-results of this adapter. Original raw records have not been imported.
+Six saved live Jev records are in `pilot-v0.1/jev-results.jsonl`: six valid
+contracts, five matching scored references and one unscored diagnostic case.
+They came from a user-executed rc1 run; input/question bytes match this pilot.
+`TestPilotV01CapturedEvidence` rechecks the saved responses offline, not the
+current remote service. The earlier standalone Python smoke test and other
+exploratory datasets remain separate; no three-arm result is claimed.
 
-- [ ] Maintainer confirms baseline, dataset and research code location.
-- [ ] Run and review a versioned live compatibility probe.
+- [x] Confirm baseline versions and pilot task definitions in the issue.
+- [x] Run and review a versioned Jev compatibility probe.
+- [ ] Publish pilot files and collect Kai/Vela records; review the paired results.
 - [ ] Freeze held-out protocol and implement the baseline/reporting path.
 - [ ] Publish comparative evidence and an adopt/defer/reject recommendation.
 

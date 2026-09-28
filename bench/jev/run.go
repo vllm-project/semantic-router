@@ -136,9 +136,9 @@ func run(ctx context.Context, opts runOptions) error {
 }
 
 func collect(ctx context.Context, a *adapter, cases []testCase, opts runOptions, datasetDigest, questionDigest string, encoder *json.Encoder) error {
-	for _, c := range cases {
+	for i, c := range cases {
 		if err := ctx.Err(); err != nil {
-			return err
+			return errors.Join(err, recordUnexecuted(cases[i:], opts, datasetDigest, questionDigest, "context_stopped", encoder))
 		}
 		r := record{
 			Schema: "jev-research-record.v1", Contract: contract, ID: c.ID, Group: c.Group, Expected: c.Expected,
@@ -170,7 +170,26 @@ func collect(ctx context.Context, a *adapter, cases []testCase, opts runOptions,
 		// Preserve the failure record and stop: never spend through failures or
 		// silently drop invalid cases from a later comparison.
 		if err != nil {
-			return fmt.Errorf("probe stopped after recorded failure for case %s", c.ID)
+			stopErr := fmt.Errorf("probe stopped after recorded failure for case %s", c.ID)
+			return errors.Join(stopErr, recordUnexecuted(cases[i+1:], opts, datasetDigest, questionDigest, "stopped_after_failure:"+c.ID, encoder))
+		}
+	}
+	return nil
+}
+
+// A distinct schema prevents absent measurements from becoming zero-valued
+// latency or failed contract checks. These records never invoke the adapter.
+func recordUnexecuted(cases []testCase, opts runOptions, datasetDigest, questionDigest, reason string, encoder *json.Encoder) error {
+	for _, c := range cases {
+		if err := encoder.Encode(map[string]any{
+			"schema": "jev-research-not-executed.v1", "execution_status": "not_executed",
+			"id": c.ID, "group": c.Group, "expected": c.Expected,
+			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
+			"location":  opts.Location, "revision": opts.Revision,
+			"dataset_sha256": datasetDigest, "question_sha256": questionDigest,
+			"attempts": 0, "reason": reason,
+		}); err != nil {
+			return err
 		}
 	}
 	return nil
