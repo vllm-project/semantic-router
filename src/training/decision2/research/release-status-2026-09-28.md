@@ -172,6 +172,27 @@ revision `b81b78e5477ed712418efda4db26a631ebd2bd2d` with the existing
 still private and absent from the collection. This was a read-only inventory
 check; it did not repeat model inference or change any quality conclusion.
 
+The prospective [0.6B cache v1 preflight](small06-option-cache-technical-preflight-result-2026-09-28.md)
+stopped before model load because its container mounted a virtual display
+node, so `torch` saw zero GPUs. The separately frozen
+[v2 corrected-device probe](small06-option-cache-technical-v2-result-2026-09-28.md)
+passed exact source and device checks. Its 255-option cached path took
+**0.641 seconds / 4.742 GiB**, but all seven hidden-vector absolute parity
+errors were **0.218–0.480**, above the frozen **0.01** limit; 10-option
+reorder error was **0.323**. The technical architecture remains **HOLD**;
+no option-isolated model training or decision score followed. The v1 container
+window was at most **0.01442 reserved GPU-hour**, v2 at most **0.02568**;
+both were removed and released.
+
+A distinct [human-authored ShARC rule-source screen](sol2b-sharc-human-policy-source-v1-hold-2026-09-28.md)
+tested the publisher's TRAIN-only metadata for opposite Yes/No states within
+one exact original rule/question/source tuple. Across 21,890 unique utterances
+and 628 tree IDs, every tree had tuple variation, so the frozen exact filter
+yielded **zero eligible pairs** against its 100-pair feasibility floor. This
+version is **HOLD**, with no admitted Sol2B rows and zero GPU-hours. Its
+private receipt contains raw follow-up answer classes and is not a gist or
+card artifact.
+
 The [ConTRoL CPU screen](qwen35-4b-context-nli-source-screen-2026-09-28.md),
 [0.6B gradient preflight](small06-gradient-conflict-preflight-result-2026-09-28.md),
 [0.6B one-update parity](small06-gradient-projection-parity-preflight-2026-09-28.md),
