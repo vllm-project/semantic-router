@@ -146,20 +146,23 @@ def render_charts(
 
     relabeled = work / "relabeled-reports"
     relabeled.mkdir(parents=True, exist_ok=False)
-    paths = []
+    paths, model_ids = [], {}
     for entry in shown:
         data = json.loads(json.dumps(entry["data"]))
         data["model"]["label"] = entry.get("label") or data["model"]["label"]
         if entry["role"] == "candidate":
             # The packaged model is always drawn in the Decision 2.0 colour.
             data["model"]["family"] = "decision2"
+        elif entry.get("repo_id") and not data["model"].get("model_id"):
+            # Some adopted reports name no model id; the chart licence lookup needs one.
+            model_ids[data["model"]["label"]] = entry["repo_id"]
         path = relabeled / f"{entry['key']}.json"
         path.write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         paths.append(path)
     output = work / "charts"
-    receipt = render(paths, output)
+    receipt = render(paths, output, model_ids=model_ids or None)
     shutil.move(str(output / "charts.json"), str(work / "charts-receipt.json"))
     assets.mkdir(parents=True, exist_ok=True)
     figures = {}

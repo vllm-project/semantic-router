@@ -1,0 +1,20 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-2B",
+  "repo_id": "llm-semantic-router/DEV2.0-2B",
+  "identity": {
+    "model_sha256": "073bd1f2fe62e39fe993f57006bab17ece50a7e6fc7c5ee72107fefddeb81da4"
+  },
+  "calibration": "none (temperature 1); CAL698 temperatures d73e9ce4 (Choice 0.742, Noul 0.816, Score 0.154) evaluated on the development panels and rejected under the 23:15 rule (receipt 56de813b)",
+  "report_sha256": "08745acf9fc753bc1d3b0335dc3e341c697a657a9e6c7c26d85eebfebf4d160c",
+  "paired_sha256": "bca44e5f286312f2e96ac69b590347ddf37d81899dd762f5ce48475365c824ab",
+  "prepared_by": "Decision 2.0 release engineering, DEV2.0-2B worker (build-time binding draft, T = 1 package)",
+  "decided_by": null,
+  "rationale": "Binding draft for the private build, upload and verification of the uncalibrated (T = 1) DEV2.0-2B package (decoder S2T soup, staging dev2-dec-staging@545a6784 m3/S2T-soup, identity 073bd1f2, qwen-full, 16,384 tokens). The CAL698 temperatures were evaluated on the development panels from the stored development predictions of the same weights and rejected: typed-DEV Brier 0.267 -> 0.289 and ECE-10 0.095 -> 0.135, CSS-pilot Brier-sum 0.748 -> 0.757 (ECE-15 0.080 -> 0.079), 0 answer changes. It names the T = 1 report derived from the sealed CAL698 run m3-S2T-soup-nodeA (0 answer changes on all four panels; v3 53.437, public 231 171) and its paired comparison with the stricter Decision 1.0 Sol same-renderer 16K control: +7.66 [+3.26, +10.81]. It approves nothing: the coordinator writes the final decision.",
+  "pending": [
+    "coordinator decision (status final, decided_by)",
+    "JevArena-C1 line (event 3; card-only revision)"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-2B",
+  "repo_id": "llm-semantic-router/DEV2.0-2B",
+  "identity": {
+    "model_sha256": "073bd1f2fe62e39fe993f57006bab17ece50a7e6fc7c5ee72107fefddeb81da4"
+  },
+  "calibration": "none (temperature 1); CAL698 temperatures d73e9ce4 (Choice 0.742, Noul 0.816, Score 0.154) evaluated on the development panels and rejected under the 23:15 rule (receipt 56de813b: typed-DEV Brier 0.267 -> 0.289, ECE-10 0.095 -> 0.135, CSS-pilot Brier-sum 0.748 -> 0.757, ECE-15 0.080 -> 0.079; 0 answer changes)",
+  "report_sha256": "08745acf9fc753bc1d3b0335dc3e341c697a657a9e6c7c26d85eebfebf4d160c",
+  "paired_sha256": "bca44e5f286312f2e96ac69b590347ddf37d81899dd762f5ce48475365c824ab",
+  "prepared_by": "Decision 2.0 release engineering, DEV2.0-2B worker (verified draft for the coordinator's final decision, T = 1 package)",
+  "decided_by": null,
+  "rationale": "Verified draft for the private release of DEV2.0-2B: decoder S2T (full fine-tuning of Decision 1.0 Sol ce0c018a with own-Sol soft targets as a trust region; uniform soup of three seeds), staging dev2-dec-staging@545a6784 m3/S2T-soup, identity 073bd1f2, qwen-full, 16,384 tokens, T = 1. Scored bindings: the T = 1 report 08745acf derived offline from the sealed CAL698 run m3-S2T-soup-nodeA (0 answer changes on all four panels) and its paired comparison with the stricter Decision 1.0 Sol same-renderer 16K control: v3 53.437 vs 45.781, +7.66 [+3.26, +10.81]; vs adopted Sol1 +7.86 [+3.36, +10.80]; vs Decider 2B +3.94 [-2.48, +5.67]; public 231 171 vs 160. The eval track's gates pass (record m4-dev2-2b-gates-2026-09-29, integration c149dca51; coordinator approval 02:50). Package verified on node A GPU5 (shared lease) and uploaded private as revision b2c5d7ea: every release.sh step passed (examples bit-identical in three processes, card example reproduced, parity on all 10,653 scored prompts before and after upload with 0 category changes and drift <= 8.9e-16, real download and re-hash 33/33, readback private with no card problems, HTTP 12/12 with anonymous 401, links 15/15). It approves nothing: the coordinator writes the final decision and runs the collection add.",
+  "pending": [
+    "coordinator decision (status final, decided_by) written to /data/dev2/runs/release/decisions/DEV2.0-2B.decision.json with this identity, report and paired file",
+    "spec gate_receipt pointed at the final decision (commit, push, mirror), then the same release.sh command with --upload --collect (not --already-collected: the repository is not in the collection); only builder.source_commit in MODEL_MANIFEST.json changes",
+    "JevArena-C1 line after C1 event 3 (card-only revision with --upload --collect --already-collected)"
+  ],
+  "verified_package": {
+    "revision": "b2c5d7eac4ef24648cbf9c23c26421f0960ca542",
+    "manifest_sha256": "63c61883ba52acc61b3782a9eed3fadde2d69fa4d1dd7078bcb46b8dd26f019d",
+    "files": 33,
+    "bytes": 7556619709,
+    "loaded_parameters": 1883930944,
+    "build_time_draft_sha256": "fde8c87ea45162a1cbecf85be579eb22c8d19c6d5a3635dd1b238f81adcdaa6c",
+    "builder_commit": "336ac2a5a2adf661aeb40d946004159ea8d8c9a9",
+    "work_dir": "/data/dev2/runs/release/dev2-2b-release-20260928T193603Z"
+  },
+  "disclosures": [
+    "gain over Decision 1.0 Sol is typed reasoning; human transfer level (+0.033 [-0.044, +0.092])",
+    "transfer tasks below Sol 1.0: mrf -0.094, wiki_corpus -0.045, flute -0.032 (full list in the card's tradeoffs table)",
+    "vs Decider 2B: v3 margin not significant (+3.94 [-2.48, +5.67]); typed accuracy significantly lower (-0.040 [-0.070, -0.009]); Choice the weakest type vs peers (0.556 vs 0.681 / 0.661); public hard tier 57 vs 63",
+    "typed Score almost never predicts level 0 (6 of 400, recall 0.03)",
+    "mlx-diag: non-English Choice level, non-English Noul -2.2 points, Korean Noul 0.59 vs 0.63",
+    "evaluation familiarity: 45 training rows (18 reading-passage groups) share long word sequences with CSS15 items under the M3b XL r2 rescreen; none match typed panels, public 231 or mlx-diag",
+    "peer licences from card metadata only (Decider 2B Apache-2.0, This-That 1.2 MIT)",
+    "CPU inference not verified",
+    "C1 line pending (event 3)"
+  ]
+}
