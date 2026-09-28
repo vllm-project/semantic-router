@@ -22,7 +22,9 @@ case ${DEC_NODE:?set DEC_NODE=a or b} in
     export DEC_DATA=/data/decision20-20260926/data/hf-private-decision20-clean-v2
     ;;
   b)
-    RENDER=([0]=/dev/dri/renderD129 [1]=/dev/dri/renderD137 [2]=/dev/dri/renderD145)
+    # GPU3-4 moved to the decoder track at 2026-09-28 16:30 UTC+8.
+    RENDER=([0]=/dev/dri/renderD129 [1]=/dev/dri/renderD137 [2]=/dev/dri/renderD145
+      [3]=/dev/dri/renderD153 [4]=/dev/dri/renderD161)
     export DEC_IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
     export DEC_DATA=/data/dev2/runs/dec/data-cleanv2
     ;;
