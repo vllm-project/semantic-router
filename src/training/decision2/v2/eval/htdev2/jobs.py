@@ -117,14 +117,14 @@ def from_formal(entry: dict, src: str, ops: Path) -> str:
     ]
     if collect.get("image_id") and collect["image_id"] != DEFAULT_IMAGE_ID:
         args.append(f"--image {q(collect['image_id'])}")
-    args += [f"--mount {q(m)}" for m in mounts]
+    args += [f"--mount {q(m)}" for m in [*mounts, str(spec_path.parent)]]
     if env.get("HIP_FORCE_DEV_KERNARG"):
         args.append(f"--env HIP_FORCE_DEV_KERNARG={q(env['HIP_FORCE_DEV_KERNARG'])}")
-    if env.get("TRITON_CACHE_DIR"):
-        lines += [
-            f"mkdir -p {triton}",
-            f"cp -a {q(env['TRITON_CACHE_DIR'])}/. {triton}/",
-        ]
+    cache = env.get("TRITON_CACHE_DIR")
+    if cache:
+        lines.append(f"mkdir -p {triton}")
+        if Path(cache).is_dir():
+            lines.append(f"cp -a {q(cache)}/. {triton}/")
         args += [
             "--env TRITON_CACHE_AUTOTUNING=1",
             f"--env TRITON_CACHE_DIR={triton}",
@@ -144,6 +144,20 @@ def from_formal(entry: dict, src: str, ops: Path) -> str:
     args.append(f'--panels {panels_for(entry)} "${{SMOKE[@]}}"')
     lines.append("bash $S/v2/eval/run_same_panel.sh \\\n  " + " \\\n  ".join(args))
     return "\n".join(lines) + "\n"
+
+
+def cache_state(entry: dict, v1: bool) -> str:
+    if v1:
+        return "as the v1 job"
+    collect = json.loads(
+        (Path(entry["formal_run"]) / "COLLECT.json").read_text(encoding="utf-8")
+    )
+    cache = (collect.get("runtime_env") or {}).get("TRITON_CACHE_DIR")
+    if not cache:
+        return "none"
+    if Path(cache).is_dir():
+        return "copy of the formal cache"
+    return "fresh (formal cache not on node A)"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -168,6 +182,7 @@ def main(argv: list[str] | None = None) -> int:
                 "tier": entry["tier"],
                 "from": "v1-job" if v1 else "formal-COLLECT",
                 "panels": panels_for(entry),
+                "autotune_cache": cache_state(entry, v1),
             }
         )
     (args.ops / "jobs.json").write_text(
