@@ -1,0 +1,4558 @@
+{
+ "schema": "dev2-release-credits/1",
+ "date": "2026-09-29",
+ "release": "DEV2.0-0.6B successor m8-s5-b05 (weights byte-identical to m6-mxcx-soup = six-seed soup of m6-cx and m6-mx)",
+ "scope": "union of the six M6 seed train files m6-{cx,mx}-s{1,2,3}.train.jsonl (node A, /data/dev2/runs/06b/m6/data)",
+ "row_basis": "distinct rows, keyed by id (id and input_sha256 are 1:1 in the union); rows_per_file_sum counts a row once per seed file that holds it",
+ "union": {
+  "distinct_rows": 232754,
+  "distinct_inputs": 232754,
+  "distinct_groups": 157506,
+  "rows_per_file_sum": 356331,
+  "family_union_rows": {
+   "m6-cx": 141261,
+   "m6-mx": 188882
+  },
+  "rows_in_both_families": 97389,
+  "task_types": {
+   "choice": 88676,
+   "noul": 75701,
+   "score": 68377
+  },
+  "languages": {
+   "en": 130105,
+   "zh": 44737,
+   "hi-en": 12269,
+   "es": 8791,
+   "ja": 6537,
+   "ko": 5884,
+   "ru": 3689,
+   "de": 3229,
+   "fr": 2506,
+   "zh-hant": 1962,
+   "th": 1882,
+   "sw": 1346,
+   "ar": 1189,
+   "id": 1113,
+   "fi": 1099,
+   "te": 1066,
+   "ne": 872,
+   "si": 821,
+   "bn": 718,
+   "et": 717,
+   "ro": 697,
+   "ca": 349,
+   "pt": 299,
+   "hi": 295,
+   "it": 156,
+   "uk": 138,
+   "eu": 89,
+   "pl": 87,
+   "vi": 53,
+   "hu": 21,
+   "tr": 17,
+   "da": 16,
+   "cs": 5
+  }
+ },
+ "summary": {
+  "upstream_datasets": 37,
+  "third_party_rows": 142983,
+  "project_generated_rows": 89771,
+  "non_commercial": [],
+  "research_only": [],
+  "unknown_licence": [],
+  "restricted_redistribution": [],
+  "informational_flags": {
+   "non-spdx-terms": {
+    "MultiNLI non-fiction genres": 7168
+   },
+   "licence-metadata-discrepancy": {
+    "QuAC": 2244
+   },
+   "social-media-text": {
+    "SentiMix Hinglish": 12269,
+    "AfriSenti Swahili": 591
+   },
+   "wikipedia-text-cc-by-sa": {
+    "TyDi QA": 9959,
+    "MLQE-PE": 4410,
+    "2WikiMultihopQA": 4173,
+    "MuSiQue": 2747
+   },
+   "share-alike": {
+    "JGLUE JSTS, JSQuAD, JCommonsenseQA and JNLI": 5322,
+    "KLUE STS, MRC and YNAT": 5312,
+    "HotpotQA": 3531,
+    "SQuAD 2.0": 3362,
+    "QuAC": 2244,
+    "DRCD": 1962,
+    "SQAC": 1954,
+    "CMRC 2018": 1952,
+    "IBM ArgQ-30k": 1553,
+    "DBpedia-14": 1528,
+    "MTOP": 1513,
+    "SNLI": 1301,
+    "Schema-Guided Dialogue": 1201,
+    "OneStopEnglish": 132
+   }
+  },
+  "absent_source_keys": [
+   "a7:massive_1.1_train",
+   "css_flute_official_train",
+   "dec10:cosmos_qa_train",
+   "dec10:squad2_train",
+   "legacy:cosmos_qa",
+   "legacy:squad2_answerability"
+  ]
+ },
+ "teacher": {
+  "model": "llm-semantic-router/Decision-1.0-Lux-9B (own; Apache-2.0)",
+  "files": {
+   "m6-cx": {
+    "file": "m6-cx.lux1.jsonl",
+    "sha256": "4be17f3874e0b80e5e7d1680b465241864e2b0f350b612b4277878984629ec74",
+    "entries": 141261,
+    "distinct_ids": 141261,
+    "ids_equal_family_union": true
+   },
+   "m6-mx": {
+    "file": "m6-mx.lux1.jsonl",
+    "sha256": "6b5d8ffa055dcd36db21164a4bf7d41285e7ed5ea7803c76b3c541d2cbfc48f2",
+    "entries": 188882,
+    "distinct_ids": 188882,
+    "ids_equal_family_union": true
+   }
+  },
+  "entries_total": 330143,
+  "distinct_rows_with_target": 232754,
+  "shared_ids_identical_input_and_probs": 97389
+ },
+ "package_licence": {
+  "rule": "v2/release/licence.py package_licence over the direct weight-lineage components; training data are attributions, not lineage components",
+  "components": [
+   {
+    "component": "DEV2.0-0.6B weights, decision head, package runtime, card and artwork",
+    "licence": "apache-2.0",
+    "source": "llm-semantic-router/DEV2.0-0.6B"
+   },
+   {
+    "component": "Qwen3-0.6B-Base weights and tokenizer (direct weight origin, fully fine-tuned)",
+    "licence": "apache-2.0",
+    "source": "Qwen/Qwen3-0.6B-Base@da87bfb6"
+   }
+  ],
+  "result": {
+   "spdx": "apache-2.0",
+   "license_name": null,
+   "apache_compatible": true
+  },
+  "components_change_needed": false
+ },
+ "sources": [
+  {
+   "upstream": "oasst1",
+   "name": "OpenAssistant OASST1",
+   "kind": "third-party",
+   "citation": "Köpf et al., NeurIPS 2023 Datasets and Benchmarks",
+   "licence": "apache-2.0",
+   "licence_card": "Apache-2.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "OpenAssistant OASST1 (Köpf et al., NeurIPS 2023 Datasets and Benchmarks; Apache-2.0)",
+   "rows_union_distinct": 22394,
+   "rows_per_file_sum": 44788,
+   "rows_by_family_union": {
+    "m6-cx": 22394,
+    "m6-mx": 22394
+   },
+   "arms": {
+    "A7q": 22394
+   },
+   "task_types": {
+    "score": 22394
+   },
+   "languages": {
+    "en": 9323,
+    "es": 6538,
+    "ru": 2065,
+    "zh": 1155,
+    "de": 745,
+    "fr": 660,
+    "th": 520,
+    "ca": 349,
+    "pt": 299,
+    "it": 156,
+    "uk": 138,
+    "ja": 109,
+    "eu": 89,
+    "pl": 87,
+    "vi": 53,
+    "ar": 27,
+    "hu": 21,
+    "tr": 17,
+    "da": 16,
+    "id": 11,
+    "ko": 6,
+    "cs": 5,
+    "fi": 5
+   },
+   "source_keys": {
+    "a7:oasst1_train": 22394
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/a7/license-registry-a7-v2.json",
+     "key": "a7:oasst1_train",
+     "attribution": "Köpf et al., OpenAssistant Conversations — Democratizing Large Language Model Alignment (NeurIPS 2023 Datasets and Benchmarks); OpenAssistant/oasst1@fdf72ae0827c1cda404aff25b6603abec9e3399b train split",
+     "evidence": "https://huggingface.co/datasets/OpenAssistant/oasst1/blob/fdf72ae0827c1cda404aff25b6603abec9e3399b/LICENSE (Apache License 2.0, SHA-256 c71d239d…35d0ab4 as pinned on node A)",
+     "license": "Apache-2.0",
+     "redistribution": "permitted with the licence notice; messages and human rating means unchanged, levels derived as documented"
+    }
+   ]
+  },
+  {
+   "upstream": "sentimix-hinglish",
+   "name": "SentiMix Hinglish",
+   "kind": "third-party",
+   "citation": "Patwa et al., SemEval 2020",
+   "licence": "cc-by-4.0",
+   "licence_card": "CC BY 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "social-media-text"
+    ]
+   },
+   "card_item": "SentiMix Hinglish (Patwa et al., SemEval 2020; CC BY 4.0)",
+   "rows_union_distinct": 12269,
+   "rows_per_file_sum": 24538,
+   "rows_by_family_union": {
+    "m6-cx": 12269,
+    "m6-mx": 12269
+   },
+   "arms": {
+    "A7s": 12269
+   },
+   "task_types": {
+    "score": 12269
+   },
+   "languages": {
+    "hi-en": 12269
+   },
+   "source_keys": {
+    "a7:sentimix_hinglish_train": 12269
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/a7/license-registry-a7-v2.json",
+     "key": "a7:sentimix_hinglish_train",
+     "attribution": "Patwa et al., SemEval-2020 Task 9: Overview of Sentiment Analysis of Code-Mixed Tweets (SemEval 2020); Zenodo 10.5281/zenodo.3974927 Semeval_2020_task9_data.zip, Hinglish train split",
+     "evidence": "https://zenodo.org/records/3974927 (record licence cc-by-4.0)",
+     "license": "CC-BY-4.0",
+     "redistribution": "permitted with attribution; tweets rebuilt by joining the released tokens with single spaces; labels unchanged"
+    }
+   ]
+  },
+  {
+   "upstream": "tydiqa",
+   "name": "TyDi QA",
+   "kind": "third-party",
+   "citation": "Clark et al., TACL 2020",
+   "licence": "apache-2.0",
+   "licence_card": "Apache-2.0, Wikipedia text CC BY-SA",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "wikipedia-text-cc-by-sa"
+    ]
+   },
+   "card_item": "TyDi QA (Clark et al., TACL 2020; Apache-2.0, Wikipedia text CC BY-SA)",
+   "rows_union_distinct": 9959,
+   "rows_per_file_sum": 9959,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 9959
+   },
+   "arms": {
+    "H5": 9733,
+    "E11": 226
+   },
+   "task_types": {
+    "noul": 9959
+   },
+   "languages": {
+    "ar": 1162,
+    "ja": 1106,
+    "id": 1102,
+    "ru": 1102,
+    "fi": 1094,
+    "te": 1066,
+    "th": 1062,
+    "sw": 755,
+    "bn": 718,
+    "ko": 566,
+    "en": 226
+   },
+   "source_keys": {
+    "tydiqa_primary_train": 9959
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "tydiqa_primary_train",
+     "attribution": "Clark et al., TyDi QA (TACL 2020); google-research-datasets/tydiqa@da78f23f9119363459acbaf46bf89426ff26c259",
+     "evidence": "https://huggingface.co/datasets/google-research-datasets/tydiqa",
+     "license": "Apache-2.0 (dataset); Wikipedia text CC-BY-SA",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "clinc150",
+   "name": "CLINC150",
+   "kind": "third-party",
+   "citation": "Larson et al., EMNLP-IJCNLP 2019",
+   "licence": "cc-by-3.0",
+   "licence_card": "CC BY 3.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "CLINC150 (Larson et al., EMNLP-IJCNLP 2019; CC BY 3.0)",
+   "rows_union_distinct": 7429,
+   "rows_per_file_sum": 12869,
+   "rows_by_family_union": {
+    "m6-cx": 7429,
+    "m6-mx": 4928
+   },
+   "arms": {
+    "A7i": 7301,
+    "A0s-strict": 128
+   },
+   "task_types": {
+    "choice": 7429
+   },
+   "languages": {
+    "en": 7429
+   },
+   "source_keys": {
+    "dec10:clinc150_train": 7301,
+    "legacy:stage3_replay#clinc150": 128
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/a7/license-registry-a7-v2.json",
+     "key": "dec10:clinc150_train",
+     "attribution": "Larson et al., An Evaluation Dataset for Intent Classification and Out-of-Scope Prediction (EMNLP-IJCNLP 2019); clinc/oos-eval@828f8093932c8fe6ca7936c3d2e52903b1c523de train",
+     "evidence": "https://github.com/clinc/oos-eval/tree/828f8093932c8fe6ca7936c3d2e52903b1c523de; Decision 1.0 Sol/Nox/Lux ATTRIBUTIONS.md",
+     "license": "CC-BY-3.0",
+     "redistribution": "permitted with attribution; three reserved domains were withheld by the 1.0 builders"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "legacy:stage3_replay",
+     "attribution": "Larson et al., CLINC150 (EMNLP 2019); Casanueva et al., BANKING77 (2020); Decision 1.0 stage-3 replay generators",
+     "evidence": "https://github.com/clinc/oos-eval/blob/master/LICENSE ; https://huggingface.co/datasets/PolyAI/banking77",
+     "license": "mixed: project-generated (435 rows); CLINC150 CC-BY-3.0; BANKING77 CC-BY-4.0",
+     "redistribution": "permitted with attribution"
+    }
+   ]
+  },
+  {
+   "upstream": "winogrande",
+   "name": "WinoGrande",
+   "kind": "third-party",
+   "citation": "Sakaguchi et al., AAAI 2020",
+   "licence": "apache-2.0",
+   "licence_card": "Apache-2.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "WinoGrande (Sakaguchi et al., AAAI 2020; Apache-2.0)",
+   "rows_union_distinct": 7250,
+   "rows_per_file_sum": 7250,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 7250
+   },
+   "arms": {
+    "H1": 7250
+   },
+   "task_types": {
+    "choice": 7250
+   },
+   "languages": {
+    "en": 7250
+   },
+   "source_keys": {
+    "winogrande_xl_train": 7250
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "winogrande_xl_train",
+     "attribution": "Sakaguchi et al., WinoGrande (AAAI 2020); allenai/winogrande@01e74176c63542e6b0bcb004dcdea22d94fb67b5",
+     "evidence": "https://github.com/allenai/winogrande/blob/master/LICENSE",
+     "license": "Apache-2.0",
+     "redistribution": "permitted with the Apache-2.0 notice"
+    }
+   ]
+  },
+  {
+   "upstream": "multinli-nonfiction",
+   "name": "MultiNLI non-fiction genres",
+   "kind": "third-party",
+   "citation": "Williams, Nangia and Bowman, NAACL 2018",
+   "licence": "LicenseRef-OANC",
+   "licence_card": "OANC terms",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "non-spdx-terms"
+    ]
+   },
+   "card_item": "MultiNLI non-fiction genres (Williams, Nangia and Bowman, NAACL 2018; OANC terms)",
+   "rows_union_distinct": 7168,
+   "rows_per_file_sum": 12434,
+   "rows_by_family_union": {
+    "m6-cx": 7168,
+    "m6-mx": 5266
+   },
+   "arms": {
+    "A7m": 7168
+   },
+   "task_types": {
+    "choice": 7168
+   },
+   "languages": {
+    "en": 7168
+   },
+   "source_keys": {
+    "dec10:multinli_nonfiction_train": 7168
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/a7/license-registry-a7-v2.json",
+     "key": "dec10:multinli_nonfiction_train",
+     "attribution": "Williams, Nangia and Bowman, A Broad-Coverage Challenge Corpus for Sentence Understanding through Inference (NAACL 2018); nyu-mll/multi_nli@da70db2af9d09693783c3320c4249840212ee221 train, genres government, slate, telephone, travel",
+     "evidence": "https://huggingface.co/datasets/nyu-mll/multi_nli/blob/da70db2af9d09693783c3320c4249840212ee221/README.md (majority of the corpus under the Open American National Corpus permissive terms; fiction not used)",
+     "license": "OANC permissive terms (non-fiction genres)",
+     "redistribution": "permitted with attribution per the pinned dataset card"
+    }
+   ]
+  },
+  {
+   "upstream": "gsm8k",
+   "name": "GSM8K",
+   "kind": "third-party",
+   "citation": "Cobbe et al., 2021",
+   "licence": "mit",
+   "licence_card": "MIT",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "GSM8K (Cobbe et al., 2021; MIT)",
+   "rows_union_distinct": 5550,
+   "rows_per_file_sum": 5550,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 5550
+   },
+   "arms": {
+    "H1": 5550
+   },
+   "task_types": {
+    "noul": 5550
+   },
+   "languages": {
+    "en": 5550
+   },
+   "source_keys": {
+    "gsm8k_train": 5550
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "gsm8k_train",
+     "attribution": "Cobbe et al., GSM8K (2021), human-written problems; openai/gsm8k@740312add88f781978c0658806c59bc2815b9866",
+     "evidence": "https://huggingface.co/datasets/openai/gsm8k",
+     "license": "MIT",
+     "redistribution": "permitted with the MIT notice"
+    }
+   ]
+  },
+  {
+   "upstream": "jglue",
+   "name": "JGLUE JSTS, JSQuAD, JCommonsenseQA and JNLI",
+   "kind": "third-party",
+   "citation": "Kurihara et al., LREC 2022",
+   "licence": "cc-by-sa-4.0",
+   "licence_card": "CC BY-SA 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "JGLUE JSTS, JSQuAD, JCommonsenseQA and JNLI (Kurihara et al., LREC 2022; CC BY-SA 4.0)",
+   "rows_union_distinct": 5322,
+   "rows_per_file_sum": 7682,
+   "rows_by_family_union": {
+    "m6-cx": 2883,
+    "m6-mx": 4799
+   },
+   "arms": {
+    "H5": 1946,
+    "V1:A6h": 1073,
+    "A7k": 945,
+    "V1:A5": 865,
+    "H6": 493
+   },
+   "task_types": {
+    "score": 2511,
+    "noul": 1946,
+    "choice": 865
+   },
+   "languages": {
+    "ja": 5322
+   },
+   "source_keys": {
+    "jglue_jsts_v1.3_train": 1566,
+    "a7:jglue_jsts_v1.3_train": 945,
+    "jsquad_v1.3_train": 1946,
+    "jglue_jcommonsenseqa_v1.3_train": 601,
+    "jglue_jnli_v1.3_train": 264
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "jglue_jsts_v1.3_train",
+     "attribution": "Kurihara et al., JGLUE, JSTS v1.3; yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c",
+     "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    },
+    {
+     "file": "src/training/decision2/v2/data/a7/license-registry-a7-v2.json",
+     "key": "a7:jglue_jsts_v1.3_train",
+     "attribution": "Kurihara, Kawahara and Shibata, JGLUE: Japanese General Language Understanding Evaluation (LREC 2022); yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c datasets/jsts-v1.3 train",
+     "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE (CC BY-SA 4.0)",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution under the same licence; similarity means unchanged, levels derived as documented"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "jsquad_v1.3_train",
+     "attribution": "Kurihara et al., JGLUE, JSQuAD v1.3; yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c",
+     "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "jglue_jcommonsenseqa_v1.3_train",
+     "attribution": "Kurihara et al., JGLUE (LREC 2022), JCommonsenseQA v1.3; yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c",
+     "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "jglue_jnli_v1.3_train",
+     "attribution": "Kurihara et al., JGLUE, JNLI v1.3; yahoojapan/JGLUE@6f071c09316baae89c3d083a90985b4b1cb9968c",
+     "evidence": "https://github.com/yahoojapan/JGLUE/blob/6f071c09316baae89c3d083a90985b4b1cb9968c/LICENSE",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "klue",
+   "name": "KLUE STS, MRC and YNAT",
+   "kind": "third-party",
+   "citation": "Park et al., NeurIPS 2021 Datasets and Benchmarks",
+   "licence": "cc-by-sa-4.0",
+   "licence_card": "CC BY-SA 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "KLUE STS, MRC and YNAT (Park et al., NeurIPS 2021 Datasets and Benchmarks; CC BY-SA 4.0)",
+   "rows_union_distinct": 5312,
+   "rows_per_file_sum": 7820,
+   "rows_by_family_union": {
+    "m6-cx": 3005,
+    "m6-mx": 4815
+   },
+   "arms": {
+    "H5": 1800,
+    "A7k": 1245,
+    "V1:A6h": 1100,
+    "V1:A5": 660,
+    "H6": 507
+   },
+   "task_types": {
+    "score": 2852,
+    "noul": 1800,
+    "choice": 660
+   },
+   "languages": {
+    "ko": 5312
+   },
+   "source_keys": {
+    "klue_sts_train": 1607,
+    "a7:klue_sts_v1.1_train": 1245,
+    "klue_mrc_train": 1800,
+    "klue_ynat_train": 660
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "klue_sts_train",
+     "attribution": "Park et al., KLUE, STS; klue/klue@349481ec73fff722f88e0453ca05c77a447d967c",
+     "evidence": "https://github.com/KLUE-benchmark/KLUE#license",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    },
+    {
+     "file": "src/training/decision2/v2/data/a7/license-registry-a7-v2.json",
+     "key": "a7:klue_sts_v1.1_train",
+     "attribution": "Park et al., KLUE: Korean Language Understanding Evaluation (NeurIPS 2021 Datasets and Benchmarks); KLUE-benchmark/KLUE@3efd98708a40ff49251fddde35453f8fbb11f536 klue-sts-v1.1 train",
+     "evidence": "https://github.com/KLUE-benchmark/KLUE/blob/3efd98708a40ff49251fddde35453f8fbb11f536/License.md (CC BY-SA 4.0)",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution under the same licence; similarity means unchanged, levels derived as documented"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "klue_mrc_train",
+     "attribution": "Park et al., KLUE, MRC; klue/klue@349481ec73fff722f88e0453ca05c77a447d967c",
+     "evidence": "https://github.com/KLUE-benchmark/KLUE#license",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "klue_ynat_train",
+     "attribution": "Park et al., KLUE (NeurIPS Datasets 2021), YNAT; klue/klue@349481ec73fff722f88e0453ca05c77a447d967c",
+     "evidence": "https://github.com/KLUE-benchmark/KLUE#license",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "banking77",
+   "name": "BANKING77",
+   "kind": "third-party",
+   "citation": "Casanueva et al., 2020",
+   "licence": "cc-by-4.0",
+   "licence_card": "CC BY 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "BANKING77 (Casanueva et al., 2020; CC BY 4.0)",
+   "rows_union_distinct": 5035,
+   "rows_per_file_sum": 8814,
+   "rows_by_family_union": {
+    "m6-cx": 5035,
+    "m6-mx": 3455
+   },
+   "arms": {
+    "A7i": 4954,
+    "A0s-strict": 81
+   },
+   "task_types": {
+    "choice": 5035
+   },
+   "languages": {
+    "en": 5035
+   },
+   "source_keys": {
+    "dec10:banking77_train": 4954,
+    "legacy:stage3_replay#banking77": 81
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/a7/license-registry-a7-v2.json",
+     "key": "dec10:banking77_train",
+     "attribution": "Casanueva et al., Efficient Intent Detection with Dual Sentence Encoders (2020); PolyAI-LDN/task-specific-datasets@57ec275d8078af65b7731c2a98be812d844a6d6b banking_data train",
+     "evidence": "https://github.com/PolyAI-LDN/task-specific-datasets/tree/57ec275d8078af65b7731c2a98be812d844a6d6b/banking_data; Decision 1.0 Sol/Nox/Lux ATTRIBUTIONS.md",
+     "license": "CC-BY-4.0",
+     "redistribution": "permitted with attribution; original intent labels converted to runtime-defined choices"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "legacy:stage3_replay",
+     "attribution": "Larson et al., CLINC150 (EMNLP 2019); Casanueva et al., BANKING77 (2020); Decision 1.0 stage-3 replay generators",
+     "evidence": "https://github.com/clinc/oos-eval/blob/master/LICENSE ; https://huggingface.co/datasets/PolyAI/banking77",
+     "license": "mixed: project-generated (435 rows); CLINC150 CC-BY-3.0; BANKING77 CC-BY-4.0",
+     "redistribution": "permitted with attribution"
+    }
+   ]
+  },
+  {
+   "upstream": "mlqe-pe",
+   "name": "MLQE-PE",
+   "kind": "third-party",
+   "citation": "Fomicheva et al., LREC 2022",
+   "licence": "cc0-1.0",
+   "licence_card": "CC0 1.0, Wikipedia text CC BY-SA",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "wikipedia-text-cc-by-sa"
+    ]
+   },
+   "card_item": "MLQE-PE (Fomicheva et al., LREC 2022; CC0 1.0, Wikipedia text CC BY-SA)",
+   "rows_union_distinct": 4410,
+   "rows_per_file_sum": 4410,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 4410
+   },
+   "arms": {
+    "H6": 4410
+   },
+   "task_types": {
+    "score": 4410
+   },
+   "languages": {
+    "ne": 872,
+    "si": 821,
+    "et": 717,
+    "ro": 697,
+    "zh": 564,
+    "ru": 522,
+    "de": 217
+   },
+   "source_keys": {
+    "mlqepe_train": 4410
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "mlqepe_train",
+     "attribution": "Fomicheva et al., MLQE-PE (LREC 2022); sheffieldnlp/mlqe-pe@2a670a1140416cf80507b5a829659383c878feb8",
+     "evidence": "https://github.com/sheffieldnlp/mlqe-pe/blob/master/LICENSE",
+     "license": "CC0-1.0 (annotations); Wikipedia source text CC-BY-SA",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "2wikimultihopqa",
+   "name": "2WikiMultihopQA",
+   "kind": "third-party",
+   "citation": "Ho et al., COLING 2020",
+   "licence": "apache-2.0",
+   "licence_card": "Apache-2.0, Wikipedia text CC BY-SA",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "wikipedia-text-cc-by-sa"
+    ]
+   },
+   "card_item": "2WikiMultihopQA (Ho et al., COLING 2020; Apache-2.0, Wikipedia text CC BY-SA)",
+   "rows_union_distinct": 4173,
+   "rows_per_file_sum": 4173,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 4173
+   },
+   "arms": {
+    "H6": 2489,
+    "H3": 1684
+   },
+   "task_types": {
+    "score": 2489,
+    "noul": 1684
+   },
+   "languages": {
+    "en": 4173
+   },
+   "source_keys": {
+    "twowiki_train": 4173
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "twowiki_train",
+     "attribution": "Ho et al., 2WikiMultihopQA (COLING 2020); data xanhho/2WikiMultihopQA@612bc5039a457880d9e7d84c3b0a4cf154b70e4f",
+     "evidence": "https://github.com/Alab-NII/2wikimultihop/blob/main/LICENSE",
+     "license": "Apache-2.0 (dataset); Wikipedia text CC-BY-SA",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "hotpotqa",
+   "name": "HotpotQA",
+   "kind": "third-party",
+   "citation": "Yang et al., EMNLP 2018",
+   "licence": "cc-by-sa-4.0",
+   "licence_card": "CC BY-SA 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "HotpotQA (Yang et al., EMNLP 2018; CC BY-SA 4.0)",
+   "rows_union_distinct": 3531,
+   "rows_per_file_sum": 3531,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 3531
+   },
+   "arms": {
+    "H6": 2007,
+    "H3": 1524
+   },
+   "task_types": {
+    "score": 2007,
+    "noul": 1524
+   },
+   "languages": {
+    "en": 3531
+   },
+   "source_keys": {
+    "hotpotqa_distractor_train": 3531
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "hotpotqa_distractor_train",
+     "attribution": "Yang et al., HotpotQA (EMNLP 2018); hotpotqa/hotpot_qa@1908d6afbbead072334abe2965f91bd2709910ab",
+     "evidence": "https://huggingface.co/datasets/hotpotqa/hotpot_qa",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "commonsenseqa",
+   "name": "CommonsenseQA",
+   "kind": "third-party",
+   "citation": "Talmor et al., NAACL 2019",
+   "licence": "mit",
+   "licence_card": "MIT",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "CommonsenseQA (Talmor et al., NAACL 2019; MIT)",
+   "rows_union_distinct": 3371,
+   "rows_per_file_sum": 3371,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 3371
+   },
+   "arms": {
+    "H1": 3371
+   },
+   "task_types": {
+    "choice": 3371
+   },
+   "languages": {
+    "en": 3371
+   },
+   "source_keys": {
+    "csqa_train": 3371
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "csqa_train",
+     "attribution": "Talmor et al., CommonsenseQA (NAACL 2019); tau/commonsense_qa@94630fe30dad47192a8546eb75f094926d47e155",
+     "evidence": "https://huggingface.co/datasets/tau/commonsense_qa",
+     "license": "MIT",
+     "redistribution": "permitted with the MIT notice"
+    }
+   ]
+  },
+  {
+   "upstream": "squad2",
+   "name": "SQuAD 2.0",
+   "kind": "third-party",
+   "citation": "Rajpurkar, Jia and Liang, ACL 2018",
+   "licence": "cc-by-sa-4.0",
+   "licence_card": "CC BY-SA 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "SQuAD 2.0 (Rajpurkar, Jia and Liang, ACL 2018; CC BY-SA 4.0)",
+   "rows_union_distinct": 3362,
+   "rows_per_file_sum": 3362,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 3362
+   },
+   "arms": {
+    "E11": 3362
+   },
+   "task_types": {
+    "noul": 3362
+   },
+   "languages": {
+    "en": 3362
+   },
+   "source_keys": {
+    "squad2_train": 3362
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "squad2_train",
+     "attribution": "Rajpurkar et al., SQuAD 2.0 (ACL 2018); rajpurkar/squad_v2@3ffb306f725f7d2ce8394bc1873b24868140c412",
+     "evidence": "https://huggingface.co/datasets/rajpurkar/squad_v2",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "multiwoz22",
+   "name": "MultiWOZ 2.2",
+   "kind": "third-party",
+   "citation": "Zang et al., 2020",
+   "licence": "mit",
+   "licence_card": "MIT",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "MultiWOZ 2.2 (Zang et al., 2020; MIT)",
+   "rows_union_distinct": 2878,
+   "rows_per_file_sum": 2878,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 2878
+   },
+   "arms": {
+    "H1": 2878
+   },
+   "task_types": {
+    "choice": 1453,
+    "noul": 1425
+   },
+   "languages": {
+    "en": 2878
+   },
+   "source_keys": {
+    "multiwoz22_train": 2878
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "multiwoz22_train",
+     "attribution": "Zang et al., MultiWOZ 2.2 (2020); budzianowski/multiwoz@fe0c8e65cfcd8462bd33c86e35f21addc84ca82b",
+     "evidence": "https://github.com/budzianowski/multiwoz/blob/master/LICENSE",
+     "license": "MIT",
+     "redistribution": "permitted with the MIT notice"
+    }
+   ]
+  },
+  {
+   "upstream": "goemotions",
+   "name": "GoEmotions",
+   "kind": "third-party",
+   "citation": "Demszky et al., ACL 2020",
+   "licence": "cc-by-4.0",
+   "licence_card": "CC BY 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "GoEmotions (Demszky et al., ACL 2020; CC BY 4.0)",
+   "rows_union_distinct": 2794,
+   "rows_per_file_sum": 16764,
+   "rows_by_family_union": {
+    "m6-cx": 2794,
+    "m6-mx": 2794
+   },
+   "arms": {
+    "A0s-strict": 2794
+   },
+   "task_types": {
+    "choice": 1397,
+    "noul": 1397
+   },
+   "languages": {
+    "en": 2794
+   },
+   "source_keys": {
+    "google_goemotions_official_train": 2794
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "google_goemotions_official_train",
+     "attribution": "Demszky et al., GoEmotions (ACL 2020); google-research@2adf640a14f11025ae5a9d0ec493b78530d276d3 official train split",
+     "evidence": "https://github.com/google-research/google-research/tree/master/goemotions",
+     "license": "CC-BY-4.0",
+     "redistribution": "permitted with attribution"
+    }
+   ]
+  },
+  {
+   "upstream": "scitail",
+   "name": "SciTail",
+   "kind": "third-party",
+   "citation": "Khot et al., AAAI 2018",
+   "licence": "apache-2.0",
+   "licence_card": "Apache-2.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "SciTail (Khot et al., AAAI 2018; Apache-2.0)",
+   "rows_union_distinct": 2790,
+   "rows_per_file_sum": 2790,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 2790
+   },
+   "arms": {
+    "H1": 2790
+   },
+   "task_types": {
+    "noul": 2790
+   },
+   "languages": {
+    "en": 2790
+   },
+   "source_keys": {
+    "scitail_train": 2790
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "scitail_train",
+     "attribution": "Khot et al., SciTail (AAAI 2018); allenai/scitail@0cc4353235b289165dfde1c7c5d1be983f99ce44",
+     "evidence": "https://github.com/allenai/scitail/blob/main/LICENSE",
+     "license": "Apache-2.0",
+     "redistribution": "permitted with the Apache-2.0 notice"
+    }
+   ]
+  },
+  {
+   "upstream": "musique",
+   "name": "MuSiQue",
+   "kind": "third-party",
+   "citation": "Trivedi et al., TACL 2022",
+   "licence": "cc-by-4.0",
+   "licence_card": "CC BY 4.0, Wikipedia text CC BY-SA",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "wikipedia-text-cc-by-sa"
+    ]
+   },
+   "card_item": "MuSiQue (Trivedi et al., TACL 2022; CC BY 4.0, Wikipedia text CC BY-SA)",
+   "rows_union_distinct": 2747,
+   "rows_per_file_sum": 3113,
+   "rows_by_family_union": {
+    "m6-cx": 940,
+    "m6-mx": 2173
+   },
+   "arms": {
+    "H3": 1030,
+    "V1:A3": 940,
+    "H6": 777
+   },
+   "task_types": {
+    "noul": 1970,
+    "score": 777
+   },
+   "languages": {
+    "en": 2747
+   },
+   "source_keys": {
+    "musique_full_v1.0_train": 2747
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "musique_full_v1.0_train",
+     "attribution": "Trivedi et al., MuSiQue (TACL 2022); StonyBrookNLP/musique@922ac98f19a201998dbdae6d7f2887a5258dbdeb; data file from bdsaglam/musique@22873a405dd809893b22ada0b499299fb612d2df",
+     "evidence": "https://github.com/StonyBrookNLP/musique/blob/922ac98f19a201998dbdae6d7f2887a5258dbdeb/LICENSE",
+     "license": "CC-BY-4.0 (dataset); Wikipedia text CC-BY-SA",
+     "redistribution": "permitted with attribution; share-alike applies to Wikipedia-derived text"
+    }
+   ]
+  },
+  {
+   "upstream": "quac",
+   "name": "QuAC",
+   "kind": "third-party",
+   "citation": "Choi et al., EMNLP 2018",
+   "licence": "cc-by-sa-4.0",
+   "licence_card": "CC BY-SA 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike",
+     "licence-metadata-discrepancy"
+    ]
+   },
+   "card_item": "QuAC (Choi et al., EMNLP 2018; CC BY-SA 4.0)",
+   "rows_union_distinct": 2244,
+   "rows_per_file_sum": 2244,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 2244
+   },
+   "arms": {
+    "E11": 2244
+   },
+   "task_types": {
+    "noul": 2244
+   },
+   "languages": {
+    "en": 2244
+   },
+   "source_keys": {
+    "quac_train_v0.2": 2244
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "quac_train_v0.2",
+     "attribution": "Choi et al., QuAC (EMNLP 2018); official train_v0.2.json sha256 ff5cca5a2e4b4d1cb5b5ced68b9fce88394ef6d93117426d6d4baafbcc05c56a",
+     "evidence": "https://quac.ai ; https://huggingface.co/datasets/allenai/quac",
+     "license": "CC-BY-SA-4.0 (dataset card: MIT)",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "drcd",
+   "name": "DRCD",
+   "kind": "third-party",
+   "citation": "Shao et al., 2018",
+   "licence": "cc-by-sa-3.0",
+   "licence_card": "CC BY-SA 3.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "DRCD (Shao et al., 2018; CC BY-SA 3.0)",
+   "rows_union_distinct": 1962,
+   "rows_per_file_sum": 1962,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1962
+   },
+   "arms": {
+    "H5": 1962
+   },
+   "task_types": {
+    "noul": 1962
+   },
+   "languages": {
+    "zh-hant": 1962
+   },
+   "source_keys": {
+    "drcd_train": 1962
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "drcd_train",
+     "attribution": "Shao et al., DRCD (2018); DRCKnowledgeTeam/DRCD@b944790de5af02c5fbb7cd9cb1473d27d169eebf",
+     "evidence": "https://github.com/DRCKnowledgeTeam/DRCD (README licence section)",
+     "license": "CC-BY-SA-3.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "sqac",
+   "name": "SQAC",
+   "kind": "third-party",
+   "citation": "Gutiérrez-Fandiño et al., 2022",
+   "licence": "cc-by-sa-4.0",
+   "licence_card": "CC BY-SA 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "SQAC (Gutiérrez-Fandiño et al., 2022; CC BY-SA 4.0)",
+   "rows_union_distinct": 1954,
+   "rows_per_file_sum": 1954,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1954
+   },
+   "arms": {
+    "H5": 1954
+   },
+   "task_types": {
+    "noul": 1954
+   },
+   "languages": {
+    "es": 1954
+   },
+   "source_keys": {
+    "sqac_train": 1954
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "sqac_train",
+     "attribution": "Gutiérrez-Fandiño et al., SQAC (MarIA, 2022); PlanTL-GOB-ES/SQAC@f9928e8819596a601b8887cc5f8598b15d589a82",
+     "evidence": "https://huggingface.co/datasets/PlanTL-GOB-ES/SQAC",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "cmrc2018",
+   "name": "CMRC 2018",
+   "kind": "third-party",
+   "citation": "Cui et al., EMNLP 2019",
+   "licence": "cc-by-sa-4.0",
+   "licence_card": "CC BY-SA 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "CMRC 2018 (Cui et al., EMNLP 2019; CC BY-SA 4.0)",
+   "rows_union_distinct": 1952,
+   "rows_per_file_sum": 1952,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1952
+   },
+   "arms": {
+    "H5": 1952
+   },
+   "task_types": {
+    "noul": 1952
+   },
+   "languages": {
+    "zh": 1952
+   },
+   "source_keys": {
+    "cmrc2018_train": 1952
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "cmrc2018_train",
+     "attribution": "Cui et al., CMRC 2018 (EMNLP 2019); hfl/cmrc2018@137f2c45a24275fb68f6961c4d357f46288886aa",
+     "evidence": "https://github.com/ymcui/cmrc2018/blob/master/LICENCE",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "abcd",
+   "name": "ABCD",
+   "kind": "third-party",
+   "citation": "Chen et al., NAACL 2021",
+   "licence": "mit",
+   "licence_card": "MIT",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "ABCD (Chen et al., NAACL 2021; MIT)",
+   "rows_union_distinct": 1768,
+   "rows_per_file_sum": 3084,
+   "rows_by_family_union": {
+    "m6-cx": 1768,
+    "m6-mx": 1316
+   },
+   "arms": {
+    "V1:A1": 1768
+   },
+   "task_types": {
+    "choice": 884,
+    "noul": 884
+   },
+   "languages": {
+    "en": 1768
+   },
+   "source_keys": {
+    "abcd_v1.1_train": 1768
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "abcd_v1.1_train",
+     "attribution": "Chen et al., Action-Based Conversations Dataset (NAACL 2021); asappresearch/abcd@6b8700ce67c6b37b062dd7a60abc76d7ef832a97",
+     "evidence": "https://github.com/asappresearch/abcd/blob/6b8700ce67c6b37b062dd7a60abc76d7ef832a97/LICENSE",
+     "license": "MIT",
+     "redistribution": "permitted with the MIT notice"
+    }
+   ]
+  },
+  {
+   "upstream": "germanquad",
+   "name": "GermanQuAD",
+   "kind": "third-party",
+   "citation": "Möller et al., 2021",
+   "licence": "cc-by-4.0",
+   "licence_card": "CC BY 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "GermanQuAD (Möller et al., 2021; CC BY 4.0)",
+   "rows_union_distinct": 1604,
+   "rows_per_file_sum": 1604,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1604
+   },
+   "arms": {
+    "H5": 1604
+   },
+   "task_types": {
+    "noul": 1604
+   },
+   "languages": {
+    "de": 1604
+   },
+   "source_keys": {
+    "germanquad_train": 1604
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "germanquad_train",
+     "attribution": "Möller et al., GermanQuAD (2021); deepset/germanquad@a2f3a59f0be843fc305d0417d7292ef0b1a66884 (refs/convert/parquet)",
+     "evidence": "https://huggingface.co/datasets/deepset/germanquad",
+     "license": "CC-BY-4.0",
+     "redistribution": "permitted with attribution"
+    }
+   ]
+  },
+  {
+   "upstream": "argq30k",
+   "name": "IBM ArgQ-30k",
+   "kind": "third-party",
+   "citation": "Gretz et al., AAAI 2020",
+   "licence": "cc-by-sa-3.0",
+   "licence_card": "CC BY-SA 3.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "IBM ArgQ-30k (Gretz et al., AAAI 2020; CC BY-SA 3.0)",
+   "rows_union_distinct": 1553,
+   "rows_per_file_sum": 2328,
+   "rows_by_family_union": {
+    "m6-cx": 1070,
+    "m6-mx": 1258
+   },
+   "arms": {
+    "V1:A6h": 1070,
+    "H6": 483
+   },
+   "task_types": {
+    "score": 1553
+   },
+   "languages": {
+    "en": 1553
+   },
+   "source_keys": {
+    "argq30k_train": 1553
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "argq30k_train",
+     "attribution": "Gretz et al., A Large-scale Dataset for Argument Quality Ranking (AAAI 2020); ibm-research/argument_quality_ranking_30k@590726b3765b1b90c5e53a17e3b1f77d92d3aa8a",
+     "evidence": "https://huggingface.co/datasets/ibm-research/argument_quality_ranking_30k",
+     "license": "CC-BY-SA-3.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "piaf",
+   "name": "PIAF",
+   "kind": "third-party",
+   "citation": "Keraron et al., LREC 2020",
+   "licence": "mit",
+   "licence_card": "MIT",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "PIAF (Keraron et al., LREC 2020; MIT)",
+   "rows_union_distinct": 1552,
+   "rows_per_file_sum": 1552,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1552
+   },
+   "arms": {
+    "H5": 1552
+   },
+   "task_types": {
+    "noul": 1552
+   },
+   "languages": {
+    "fr": 1552
+   },
+   "source_keys": {
+    "piaf_train": 1552
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "piaf_train",
+     "attribution": "Keraron et al., PIAF (LREC 2020); etalab-ia/piaf@bda8c063bc7297180796cd835d1974c0bc71c521",
+     "evidence": "https://huggingface.co/datasets/etalab-ia/piaf",
+     "license": "MIT",
+     "redistribution": "permitted with the MIT notice"
+    }
+   ]
+  },
+  {
+   "upstream": "dbpedia14",
+   "name": "DBpedia-14",
+   "kind": "third-party",
+   "citation": "Zhang et al., NeurIPS 2015",
+   "licence": "cc-by-sa-3.0",
+   "licence_card": "CC BY-SA 3.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "DBpedia-14 (Zhang et al., NeurIPS 2015; CC BY-SA 3.0)",
+   "rows_union_distinct": 1528,
+   "rows_per_file_sum": 1528,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1528
+   },
+   "arms": {
+    "H1": 1528
+   },
+   "task_types": {
+    "choice": 1528
+   },
+   "languages": {
+    "en": 1528
+   },
+   "source_keys": {
+    "dbpedia14_train": 1528
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "dbpedia14_train",
+     "attribution": "Zhang et al., DBpedia-14 (NeurIPS 2015); fancyzhx/dbpedia_14@9abd46cf7fc8b4c64290f26993c540b92aa145ac",
+     "evidence": "https://huggingface.co/datasets/fancyzhx/dbpedia_14",
+     "license": "CC-BY-SA-3.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "mtop",
+   "name": "MTOP",
+   "kind": "third-party",
+   "citation": "Li et al., EACL 2021",
+   "licence": "cc-by-sa-4.0",
+   "licence_card": "CC BY-SA 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "MTOP (Li et al., EACL 2021; CC BY-SA 4.0)",
+   "rows_union_distinct": 1513,
+   "rows_per_file_sum": 1513,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1513
+   },
+   "arms": {
+    "H5": 1513
+   },
+   "task_types": {
+    "choice": 1513
+   },
+   "languages": {
+    "de": 325,
+    "th": 300,
+    "es": 299,
+    "hi": 295,
+    "fr": 294
+   },
+   "source_keys": {
+    "mtop_train": 1513
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "mtop_train",
+     "attribution": "Li et al., MTOP (EACL 2021); official mtop.zip sha256 0c086500aed2ed48d3df383c91664b152e4a46e2adef6a635fa16d508ebaec0b (bundled LICENSE.txt)",
+     "evidence": "https://dl.fbaipublicfiles.com/mtop/mtop.zip",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "taskmaster2",
+   "name": "Taskmaster-2",
+   "kind": "third-party",
+   "citation": "Byrne et al., Google 2020",
+   "licence": "cc-by-4.0",
+   "licence_card": "CC BY 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "Taskmaster-2 (Byrne et al., Google 2020; CC BY 4.0)",
+   "rows_union_distinct": 1468,
+   "rows_per_file_sum": 1468,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1468
+   },
+   "arms": {
+    "H1": 1468
+   },
+   "task_types": {
+    "noul": 1468
+   },
+   "languages": {
+    "en": 1468
+   },
+   "source_keys": {
+    "taskmaster2_train": 1468
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "taskmaster2_train",
+     "attribution": "Byrne et al., Taskmaster-2 (Google 2020); google-research-datasets/Taskmaster@d92cb6af3005f1dc09c39e75e7daf4a04905e00b",
+     "evidence": "https://github.com/google-research-datasets/Taskmaster/blob/master/TM-2-2020/README.md",
+     "license": "CC-BY-4.0",
+     "redistribution": "permitted with attribution"
+    }
+   ]
+  },
+  {
+   "upstream": "ropes",
+   "name": "ROPES",
+   "kind": "third-party",
+   "citation": "Lin et al., MRQA 2019",
+   "licence": "cc-by-4.0",
+   "licence_card": "CC BY 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "ROPES (Lin et al., MRQA 2019; CC BY 4.0)",
+   "rows_union_distinct": 1404,
+   "rows_per_file_sum": 1404,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1404
+   },
+   "arms": {
+    "H1": 1404
+   },
+   "task_types": {
+    "choice": 1404
+   },
+   "languages": {
+    "en": 1404
+   },
+   "source_keys": {
+    "ropes_train": 1404
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "ropes_train",
+     "attribution": "Lin et al., ROPES (MRQA 2019); allenai/ropes@d59f1e2ee2b423d7c6ba71edd47fceb4158b07dd",
+     "evidence": "https://huggingface.co/datasets/allenai/ropes",
+     "license": "CC-BY-4.0",
+     "redistribution": "permitted with attribution"
+    }
+   ]
+  },
+  {
+   "upstream": "snli",
+   "name": "SNLI",
+   "kind": "third-party",
+   "citation": "Bowman et al., EMNLP 2015",
+   "licence": "cc-by-sa-4.0",
+   "licence_card": "CC BY-SA 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "SNLI (Bowman et al., EMNLP 2015; CC BY-SA 4.0)",
+   "rows_union_distinct": 1301,
+   "rows_per_file_sum": 3417,
+   "rows_by_family_union": {
+    "m6-cx": 1301,
+    "m6-mx": 1028
+   },
+   "arms": {
+    "A7h": 1029,
+    "A0s-strict": 272
+   },
+   "task_types": {
+    "choice": 1301
+   },
+   "languages": {
+    "en": 1301
+   },
+   "source_keys": {
+    "dec10:snli_train": 1029,
+    "legacy:snli": 272
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/a7/license-registry-a7-v2.json",
+     "key": "dec10:snli_train",
+     "attribution": "Bowman, Angeli, Potts and Manning, A Large Annotated Corpus for Learning Natural Language Inference (EMNLP 2015); SNLI 1.0 train",
+     "evidence": "https://nlp.stanford.edu/projects/snli/ (CC BY-SA 4.0)",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "legacy:snli",
+     "attribution": "Bowman et al., SNLI (EMNLP 2015)",
+     "evidence": "https://nlp.stanford.edu/projects/snli/",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "sgd",
+   "name": "Schema-Guided Dialogue",
+   "kind": "third-party",
+   "citation": "Rastogi et al., AAAI 2020",
+   "licence": "cc-by-sa-4.0",
+   "licence_card": "CC BY-SA 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "Schema-Guided Dialogue (Rastogi et al., AAAI 2020; CC BY-SA 4.0)",
+   "rows_union_distinct": 1201,
+   "rows_per_file_sum": 2065,
+   "rows_by_family_union": {
+    "m6-cx": 1201,
+    "m6-mx": 864
+   },
+   "arms": {
+    "V1:A1": 1201
+   },
+   "task_types": {
+    "noul": 606,
+    "choice": 595
+   },
+   "languages": {
+    "en": 1201
+   },
+   "source_keys": {
+    "sgd_dstc8_train": 1201
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "sgd_dstc8_train",
+     "attribution": "Rastogi et al., Schema-Guided Dialogue (AAAI 2020); google-research-datasets/dstc8-schema-guided-dialogue@e852981ae34990f4358979625854259302feaa78",
+     "evidence": "https://github.com/google-research-datasets/dstc8-schema-guided-dialogue/blob/e852981ae34990f4358979625854259302feaa78/LICENSE.txt",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "quartz",
+   "name": "QuaRTz",
+   "kind": "third-party",
+   "citation": "Tafjord et al., EMNLP 2019",
+   "licence": "cc-by-4.0",
+   "licence_card": "CC BY 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "QuaRTz (Tafjord et al., EMNLP 2019; CC BY 4.0)",
+   "rows_union_distinct": 1017,
+   "rows_per_file_sum": 1017,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1017
+   },
+   "arms": {
+    "H1": 1017
+   },
+   "task_types": {
+    "choice": 1017
+   },
+   "languages": {
+    "en": 1017
+   },
+   "source_keys": {
+    "quartz_train": 1017
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "quartz_train",
+     "attribution": "Tafjord et al., QuaRTz (EMNLP 2019); allenai/quartz@28c1dbb56caf81799296cb17892fa73402e23464",
+     "evidence": "https://huggingface.co/datasets/allenai/quartz",
+     "license": "CC-BY-4.0",
+     "redistribution": "permitted with attribution"
+    }
+   ]
+  },
+  {
+   "upstream": "afrisenti-sw",
+   "name": "AfriSenti Swahili",
+   "kind": "third-party",
+   "citation": "Muhammad et al., EMNLP 2023",
+   "licence": "cc-by-4.0",
+   "licence_card": "CC BY 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "social-media-text"
+    ]
+   },
+   "card_item": "AfriSenti Swahili (Muhammad et al., EMNLP 2023; CC BY 4.0)",
+   "rows_union_distinct": 591,
+   "rows_per_file_sum": 1182,
+   "rows_by_family_union": {
+    "m6-cx": 591,
+    "m6-mx": 591
+   },
+   "arms": {
+    "A7s": 591
+   },
+   "task_types": {
+    "score": 591
+   },
+   "languages": {
+    "sw": 591
+   },
+   "source_keys": {
+    "a7:afrisenti_sw_train": 591
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/a7/license-registry-a7-v2.json",
+     "key": "a7:afrisenti_sw_train",
+     "attribution": "Muhammad et al., AfriSenti: A Twitter Sentiment Analysis Benchmark for African Languages (EMNLP 2023) and SemEval-2023 Task 12; afrisenti-semeval/afrisent-semeval-2023@5aec3cfcf87b59f885e98641f72e52182776429d SubtaskA sw train",
+     "evidence": "https://github.com/afrisenti-semeval/afrisent-semeval-2023/blob/5aec3cfcf87b59f885e98641f72e52182776429d/README.md, section License (CC BY 4.0)",
+     "license": "CC-BY-4.0",
+     "redistribution": "permitted with attribution; tweet text and labels unchanged"
+    }
+   ]
+  },
+  {
+   "upstream": "saf",
+   "name": "SAF",
+   "kind": "third-party",
+   "citation": "Filighera et al., ACL 2022",
+   "licence": "cc-by-4.0",
+   "licence_card": "CC BY 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "SAF (Filighera et al., ACL 2022; CC BY 4.0)",
+   "rows_union_distinct": 495,
+   "rows_per_file_sum": 846,
+   "rows_by_family_union": {
+    "m6-cx": 495,
+    "m6-mx": 351
+   },
+   "arms": {
+    "V1:A6h": 495
+   },
+   "task_types": {
+    "score": 495
+   },
+   "languages": {
+    "de": 338,
+    "en": 157
+   },
+   "source_keys": {
+    "saf_en_train": 157,
+    "saf_de_train": 338
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "saf_en_train",
+     "attribution": "Filighera et al., Short Answer Feedback (ACL 2022), communication networks (EN); Short-Answer-Feedback/saf_communication_networks_english@9358d6f0f87371c0a5f150502b14cb16e382195f",
+     "evidence": "https://huggingface.co/datasets/Short-Answer-Feedback/saf_communication_networks_english",
+     "license": "CC-BY-4.0",
+     "redistribution": "permitted with attribution"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "saf_de_train",
+     "attribution": "Filighera et al., Short Answer Feedback, micro-job (DE); Short-Answer-Feedback/saf_micro_job_german@30db3effcfc07b638291cfcff248b84dbd8013db",
+     "evidence": "https://huggingface.co/datasets/Short-Answer-Feedback/saf_micro_job_german",
+     "license": "CC-BY-4.0",
+     "redistribution": "permitted with attribution"
+    }
+   ]
+  },
+  {
+   "upstream": "onestopenglish",
+   "name": "OneStopEnglish",
+   "kind": "third-party",
+   "citation": "Vajjala and Lučić, BEA 2018",
+   "licence": "cc-by-sa-4.0",
+   "licence_card": "CC BY-SA 4.0",
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": [
+     "share-alike"
+    ]
+   },
+   "card_item": "OneStopEnglish (Vajjala and Lučić, BEA 2018; CC BY-SA 4.0)",
+   "rows_union_distinct": 132,
+   "rows_per_file_sum": 132,
+   "rows_by_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 132
+   },
+   "arms": {
+    "H6": 132
+   },
+   "task_types": {
+    "score": 132
+   },
+   "languages": {
+    "en": 132
+   },
+   "source_keys": {
+    "onestop_english": 132
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "onestop_english",
+     "attribution": "Vajjala and Lučić, OneStopEnglish (BEA 2018); nishkalavallabhi/OneStopEnglishCorpus@37f8db3945cd2f3cc0caafe45674147b224349be",
+     "evidence": "https://github.com/nishkalavallabhi/OneStopEnglishCorpus",
+     "license": "CC-BY-SA-4.0",
+     "redistribution": "permitted with attribution; share-alike applies to derived rows"
+    }
+   ]
+  },
+  {
+   "upstream": "project-generated",
+   "name": "project-generated decision tasks",
+   "kind": "project-generated",
+   "citation": null,
+   "licence": "project-generated (no third-party text)",
+   "licence_card": null,
+   "flags": {
+    "non_commercial": false,
+    "research_only": false,
+    "unknown_licence": false,
+    "restricted_redistribution": false,
+    "informational": []
+   },
+   "card_item": "project-generated decision tasks",
+   "rows_union_distinct": 89771,
+   "rows_per_file_sum": 138983,
+   "rows_by_family_union": {
+    "m6-cx": 70918,
+    "m6-mx": 54977
+   },
+   "arms": {
+    "A7g": 25512,
+    "A7o": 22922,
+    "G2": 10564,
+    "G6": 6415,
+    "A7p": 6367,
+    "A7r": 4706,
+    "V1:A2": 3619,
+    "V1:A6g": 3317,
+    "A0s-strict": 3272,
+    "G4h": 1874,
+    "V1:A4v2h": 1203
+   },
+   "task_types": {
+    "choice": 45806,
+    "noul": 28068,
+    "score": 15897
+   },
+   "languages": {
+    "en": 48705,
+    "zh": 41066
+   },
+   "source_keys": {
+    "dec10:generated_stage1_3": 33995,
+    "dec10:generated_stage4_v2": 25512,
+    "legacy:stage4-general-composition-v2": 1987,
+    "legacy:stage3_replay#project-generated": 435,
+    "decision2_verifiable_v2_a2": 14183,
+    "decision2_verifiable_v2_a6": 9732,
+    "decision2_verifiable_v2_a4v2h": 3077,
+    "decision2_targeted_programmatic_v1": 600,
+    "decision2_programmatic_original_v1": 250
+   },
+   "registry": [
+    {
+     "file": "src/training/decision2/v2/data/a7/license-registry-a7-v2.json",
+     "key": "dec10:generated_stage1_3",
+     "attribution": "Decision 1.0 decoder project generators, stages 1-3 (objective rules, reference binding, scoped sources, transitions, logic/evidence, binding/membership, arithmetic)",
+     "evidence": "node B training-v1/data build_training.py, build_stage2.py, build_stage3.py, stage3-src/*.py; labels recomputed from rendered inputs by the 1.0 builders",
+     "license": "project-generated (no third-party text)",
+     "redistribution": "unrestricted within the project"
+    },
+    {
+     "file": "src/training/decision2/v2/data/a7/license-registry-a7-v2.json",
+     "key": "dec10:generated_stage4_v2",
+     "attribution": "Decision 1.0 decoder project generator stage4-general-composition-v2",
+     "evidence": "node B training-v1/data/stage4-prepared/V2_DATA_AUDIT.md: all 66,400 new labels recomputed by a separate evaluator; candidate-pool-first numeric construction",
+     "license": "project-generated (no third-party text)",
+     "redistribution": "unrestricted within the project"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "legacy:stage4-general-composition-v2",
+     "attribution": "Decision 1.0 stage-4 general composition generators",
+     "evidence": "rights-clean v2 manifest 61aa8830 source_rights: internally generated",
+     "license": "project-generated (no third-party text)",
+     "redistribution": "unrestricted within the project"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "legacy:stage3_replay",
+     "attribution": "Larson et al., CLINC150 (EMNLP 2019); Casanueva et al., BANKING77 (2020); Decision 1.0 stage-3 replay generators",
+     "evidence": "https://github.com/clinc/oos-eval/blob/master/LICENSE ; https://huggingface.co/datasets/PolyAI/banking77",
+     "license": "mixed: project-generated (435 rows); CLINC150 CC-BY-3.0; BANKING77 CC-BY-4.0",
+     "redistribution": "permitted with attribution"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "decision2_verifiable_v2_a2",
+     "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A2",
+     "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+     "license": "project-generated (no third-party text)",
+     "redistribution": "unrestricted within the project"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "decision2_verifiable_v2_a6",
+     "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A6",
+     "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+     "license": "project-generated (no third-party text)",
+     "redistribution": "unrestricted within the project"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "decision2_verifiable_v2_a4v2h",
+     "attribution": "Decision 2.0 v2 verifiable counterfactual generator, arm A4 v2 hard distractors",
+     "evidence": "generator source under src/training/decision2/v2/data/verifiable at the build commit",
+     "license": "project-generated (no third-party text)",
+     "redistribution": "unrestricted within the project"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "decision2_targeted_programmatic_v1",
+     "attribution": "Decision 2.0 targeted programmatic generators (interval conjunction, quantized median)",
+     "evidence": "rights-clean v2 manifest 61aa8830 source_rights: internally generated",
+     "license": "project-generated (no third-party text)",
+     "redistribution": "unrestricted within the project"
+    },
+    {
+     "file": "src/training/decision2/v2/data/records/license-registry-v2.json",
+     "key": "decision2_programmatic_original_v1",
+     "attribution": "Decision 2.0 rights-clean v1 programmatic generators",
+     "evidence": "rights-clean v2 manifest 61aa8830 source_rights: internally generated, pinned generators and objective oracle audits",
+     "license": "project-generated (no third-party text)",
+     "redistribution": "unrestricted within the project"
+    }
+   ]
+  }
+ ],
+ "pools": {
+  "A0s-strict": {
+   "union": 6547,
+   "m6-cx": 6547,
+   "m6-mx": 6547
+  },
+  "A7g": {
+   "union": 25512,
+   "m6-cx": 25512,
+   "m6-mx": 8942
+  },
+  "A7h": {
+   "union": 1029,
+   "m6-cx": 1029,
+   "m6-mx": 756
+  },
+  "A7i": {
+   "union": 12255,
+   "m6-cx": 12255,
+   "m6-mx": 8174
+  },
+  "A7k": {
+   "union": 2190,
+   "m6-cx": 2190,
+   "m6-mx": 2190
+  },
+  "A7m": {
+   "union": 7168,
+   "m6-cx": 7168,
+   "m6-mx": 5266
+  },
+  "A7o": {
+   "union": 22922,
+   "m6-cx": 22922,
+   "m6-mx": 9961
+  },
+  "A7p": {
+   "union": 6367,
+   "m6-cx": 6367,
+   "m6-mx": 4714
+  },
+  "A7q": {
+   "union": 22394,
+   "m6-cx": 22394,
+   "m6-mx": 22394
+  },
+  "A7r": {
+   "union": 4706,
+   "m6-cx": 4706,
+   "m6-mx": 3337
+  },
+  "A7s": {
+   "union": 12860,
+   "m6-cx": 12860,
+   "m6-mx": 12860
+  },
+  "E11": {
+   "union": 5832,
+   "m6-cx": 0,
+   "m6-mx": 5832
+  },
+  "G2": {
+   "union": 10564,
+   "m6-cx": 0,
+   "m6-mx": 10564
+  },
+  "G4h": {
+   "union": 1874,
+   "m6-cx": 0,
+   "m6-mx": 1874
+  },
+  "G6": {
+   "union": 6415,
+   "m6-cx": 0,
+   "m6-mx": 6415
+  },
+  "H1": {
+   "union": 27256,
+   "m6-cx": 0,
+   "m6-mx": 27256
+  },
+  "H3": {
+   "union": 4238,
+   "m6-cx": 0,
+   "m6-mx": 4238
+  },
+  "H5": {
+   "union": 24016,
+   "m6-cx": 0,
+   "m6-mx": 24016
+  },
+  "H6": {
+   "union": 11298,
+   "m6-cx": 0,
+   "m6-mx": 11298
+  },
+  "V1:A1": {
+   "union": 2969,
+   "m6-cx": 2969,
+   "m6-mx": 2180
+  },
+  "V1:A2": {
+   "union": 3619,
+   "m6-cx": 3619,
+   "m6-mx": 2653
+  },
+  "V1:A3": {
+   "union": 940,
+   "m6-cx": 940,
+   "m6-mx": 366
+  },
+  "V1:A4v2h": {
+   "union": 1203,
+   "m6-cx": 1203,
+   "m6-mx": 830
+  },
+  "V1:A5": {
+   "union": 1525,
+   "m6-cx": 1525,
+   "m6-mx": 1114
+  },
+  "V1:A6g": {
+   "union": 3317,
+   "m6-cx": 3317,
+   "m6-mx": 2415
+  },
+  "V1:A6h": {
+   "union": 3738,
+   "m6-cx": 3738,
+   "m6-mx": 2690
+  }
+ },
+ "source_key_parts": {
+  "a7:afrisenti_sw_train": {
+   "rows_union": 591,
+   "rows_family_union": {
+    "m6-cx": 591,
+    "m6-mx": 591
+   },
+   "pools": {
+    "A7s": 591
+   },
+   "task_types": {
+    "score": 591
+   },
+   "languages": {
+    "sw": 591
+   },
+   "row_families": {
+    "afrisenti_sw": 591
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 196,
+    "m6-cx-s2.train.jsonl": 194,
+    "m6-cx-s3.train.jsonl": 201,
+    "m6-mx-s1.train.jsonl": 196,
+    "m6-mx-s2.train.jsonl": 194,
+    "m6-mx-s3.train.jsonl": 201
+   },
+   "rows_per_file_sum": 1182
+  },
+  "a7:jglue_jsts_v1.3_train": {
+   "rows_union": 945,
+   "rows_family_union": {
+    "m6-cx": 945,
+    "m6-mx": 945
+   },
+   "pools": {
+    "A7k": 945
+   },
+   "task_types": {
+    "score": 945
+   },
+   "languages": {
+    "ja": 945
+   },
+   "row_families": {
+    "jglue_jsts": 945
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 326,
+    "m6-cx-s2.train.jsonl": 314,
+    "m6-cx-s3.train.jsonl": 305,
+    "m6-mx-s1.train.jsonl": 326,
+    "m6-mx-s2.train.jsonl": 314,
+    "m6-mx-s3.train.jsonl": 305
+   },
+   "rows_per_file_sum": 1890
+  },
+  "a7:klue_sts_v1.1_train": {
+   "rows_union": 1245,
+   "rows_family_union": {
+    "m6-cx": 1245,
+    "m6-mx": 1245
+   },
+   "pools": {
+    "A7k": 1245
+   },
+   "task_types": {
+    "score": 1245
+   },
+   "languages": {
+    "ko": 1245
+   },
+   "row_families": {
+    "klue_sts": 1245
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 406,
+    "m6-cx-s2.train.jsonl": 415,
+    "m6-cx-s3.train.jsonl": 424,
+    "m6-mx-s1.train.jsonl": 406,
+    "m6-mx-s2.train.jsonl": 415,
+    "m6-mx-s3.train.jsonl": 424
+   },
+   "rows_per_file_sum": 2490
+  },
+  "a7:oasst1_train": {
+   "rows_union": 22394,
+   "rows_family_union": {
+    "m6-cx": 22394,
+    "m6-mx": 22394
+   },
+   "pools": {
+    "A7q": 22394
+   },
+   "task_types": {
+    "score": 22394
+   },
+   "languages": {
+    "ar": 27,
+    "ca": 349,
+    "cs": 5,
+    "da": 16,
+    "de": 745,
+    "en": 9323,
+    "es": 6538,
+    "eu": 89,
+    "fi": 5,
+    "fr": 660,
+    "hu": 21,
+    "id": 11,
+    "it": 156,
+    "ja": 109,
+    "ko": 6,
+    "pl": 87,
+    "pt": 299,
+    "ru": 2065,
+    "th": 520,
+    "tr": 17,
+    "uk": 138,
+    "vi": 53,
+    "zh": 1155
+   },
+   "row_families": {
+    "oasst1_creativity": 6472,
+    "oasst1_helpfulness": 8891,
+    "oasst1_humor": 2045,
+    "oasst1_quality": 4986
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 7491,
+    "m6-cx-s2.train.jsonl": 7393,
+    "m6-cx-s3.train.jsonl": 7510,
+    "m6-mx-s1.train.jsonl": 7491,
+    "m6-mx-s2.train.jsonl": 7393,
+    "m6-mx-s3.train.jsonl": 7510
+   },
+   "rows_per_file_sum": 44788
+  },
+  "a7:sentimix_hinglish_train": {
+   "rows_union": 12269,
+   "rows_family_union": {
+    "m6-cx": 12269,
+    "m6-mx": 12269
+   },
+   "pools": {
+    "A7s": 12269
+   },
+   "task_types": {
+    "score": 12269
+   },
+   "languages": {
+    "hi-en": 12269
+   },
+   "row_families": {
+    "sentimix_hinglish": 12269
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 4098,
+    "m6-cx-s2.train.jsonl": 4091,
+    "m6-cx-s3.train.jsonl": 4080,
+    "m6-mx-s1.train.jsonl": 4098,
+    "m6-mx-s2.train.jsonl": 4091,
+    "m6-mx-s3.train.jsonl": 4080
+   },
+   "rows_per_file_sum": 24538
+  },
+  "abcd_v1.1_train": {
+   "rows_union": 1768,
+   "rows_family_union": {
+    "m6-cx": 1768,
+    "m6-mx": 1316
+   },
+   "pools": {
+    "V1:A1": 1768
+   },
+   "task_types": {
+    "choice": 884,
+    "noul": 884
+   },
+   "languages": {
+    "en": 1768
+   },
+   "row_families": {
+    "abcd_flow": 884,
+    "abcd_subflow": 884
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 598,
+    "m6-cx-s2.train.jsonl": 602,
+    "m6-cx-s3.train.jsonl": 568,
+    "m6-mx-s1.train.jsonl": 452,
+    "m6-mx-s2.train.jsonl": 418,
+    "m6-mx-s3.train.jsonl": 446
+   },
+   "rows_per_file_sum": 3084
+  },
+  "argq30k_train": {
+   "rows_union": 1553,
+   "rows_family_union": {
+    "m6-cx": 1070,
+    "m6-mx": 1258
+   },
+   "pools": {
+    "H6": 483,
+    "V1:A6h": 1070
+   },
+   "task_types": {
+    "score": 1553
+   },
+   "languages": {
+    "en": 1553
+   },
+   "row_families": {
+    "a6h2_argq": 483,
+    "argq30k": 1070
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 359,
+    "m6-cx-s2.train.jsonl": 368,
+    "m6-cx-s3.train.jsonl": 343,
+    "m6-mx-s1.train.jsonl": 439,
+    "m6-mx-s2.train.jsonl": 417,
+    "m6-mx-s3.train.jsonl": 402
+   },
+   "rows_per_file_sum": 2328
+  },
+  "cmrc2018_train": {
+   "rows_union": 1952,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1952
+   },
+   "pools": {
+    "H5": 1952
+   },
+   "task_types": {
+    "noul": 1952
+   },
+   "languages": {
+    "zh": 1952
+   },
+   "row_families": {
+    "cmrc2018_removal": 1952
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 720,
+    "m6-mx-s2.train.jsonl": 488,
+    "m6-mx-s3.train.jsonl": 744
+   },
+   "rows_per_file_sum": 1952
+  },
+  "csqa_train": {
+   "rows_union": 3371,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 3371
+   },
+   "pools": {
+    "H1": 3371
+   },
+   "task_types": {
+    "choice": 3371
+   },
+   "languages": {
+    "en": 3371
+   },
+   "row_families": {
+    "csqa": 3371
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 1127,
+    "m6-mx-s2.train.jsonl": 1086,
+    "m6-mx-s3.train.jsonl": 1158
+   },
+   "rows_per_file_sum": 3371
+  },
+  "dbpedia14_train": {
+   "rows_union": 1528,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1528
+   },
+   "pools": {
+    "H1": 1528
+   },
+   "task_types": {
+    "choice": 1528
+   },
+   "languages": {
+    "en": 1528
+   },
+   "row_families": {
+    "dbpedia14": 1528
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 497,
+    "m6-mx-s2.train.jsonl": 496,
+    "m6-mx-s3.train.jsonl": 535
+   },
+   "rows_per_file_sum": 1528
+  },
+  "dec10:banking77_train": {
+   "rows_union": 4954,
+   "rows_family_union": {
+    "m6-cx": 4954,
+    "m6-mx": 3374
+   },
+   "pools": {
+    "A7i": 4954
+   },
+   "task_types": {
+    "choice": 4954
+   },
+   "languages": {
+    "en": 4954
+   },
+   "row_families": {
+    "banking_train": 2627,
+    "stage4_replay_banking_train": 2327
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 1657,
+    "m6-cx-s2.train.jsonl": 1632,
+    "m6-cx-s3.train.jsonl": 1665,
+    "m6-mx-s1.train.jsonl": 1101,
+    "m6-mx-s2.train.jsonl": 1126,
+    "m6-mx-s3.train.jsonl": 1147
+   },
+   "rows_per_file_sum": 8328
+  },
+  "dec10:clinc150_train": {
+   "rows_union": 7301,
+   "rows_family_union": {
+    "m6-cx": 7301,
+    "m6-mx": 4800
+   },
+   "pools": {
+    "A7i": 7301
+   },
+   "task_types": {
+    "choice": 7301
+   },
+   "languages": {
+    "en": 7301
+   },
+   "row_families": {
+    "clinc_train": 3759,
+    "stage4_replay_clinc_train": 2370,
+    "stage4_replay_natural_high_k": 1172
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 2362,
+    "m6-cx-s2.train.jsonl": 2463,
+    "m6-cx-s3.train.jsonl": 2476,
+    "m6-mx-s1.train.jsonl": 1545,
+    "m6-mx-s2.train.jsonl": 1573,
+    "m6-mx-s3.train.jsonl": 1682
+   },
+   "rows_per_file_sum": 12101
+  },
+  "dec10:generated_stage1_3": {
+   "rows_union": 33995,
+   "rows_family_union": {
+    "m6-cx": 33995,
+    "m6-mx": 18012
+   },
+   "pools": {
+    "A7o": 22922,
+    "A7p": 6367,
+    "A7r": 4706
+   },
+   "task_types": {
+    "choice": 22848,
+    "noul": 9602,
+    "score": 1545
+   },
+   "languages": {
+    "en": 16960,
+    "zh": 17035
+   },
+   "row_families": {
+    "authorization": 3174,
+    "evidence": 2360,
+    "high_k": 1839,
+    "mapping": 2422,
+    "policy": 884,
+    "scoped_sources": 4815,
+    "stage3_evidence_scope": 4108,
+    "stage3_logic_choice": 1022,
+    "stage3_logic_noul": 1005,
+    "stage3_logic_score": 1001,
+    "stage3_transition_set": 1759,
+    "stage4_replay_authorization": 520,
+    "stage4_replay_evidence": 539,
+    "stage4_replay_high_k": 551,
+    "stage4_replay_mapping": 526,
+    "stage4_replay_policy": 506,
+    "stage4_replay_stage3_arithmetic_difference": 229,
+    "stage4_replay_stage3_arithmetic_distance": 237,
+    "stage4_replay_stage3_arithmetic_net": 213,
+    "stage4_replay_stage3_arithmetic_product": 208,
+    "stage4_replay_stage3_arithmetic_sum": 208,
+    "stage4_replay_stage3_evidence_scope": 523,
+    "stage4_replay_stage3_logic_choice": 526,
+    "stage4_replay_stage3_logic_noul": 516,
+    "stage4_replay_stage3_logic_score": 544,
+    "stage4_replay_stage3_transition_set": 521,
+    "transition_assignment": 2353,
+    "transition_set": 886
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 11422,
+    "m6-cx-s2.train.jsonl": 11260,
+    "m6-cx-s3.train.jsonl": 11313,
+    "m6-mx-s1.train.jsonl": 5933,
+    "m6-mx-s2.train.jsonl": 6169,
+    "m6-mx-s3.train.jsonl": 5910
+   },
+   "rows_per_file_sum": 52007
+  },
+  "dec10:generated_stage4_v2": {
+   "rows_union": 25512,
+   "rows_family_union": {
+    "m6-cx": 25512,
+    "m6-mx": 8942
+   },
+   "pools": {
+    "A7g": 25512
+   },
+   "task_types": {
+    "choice": 13213,
+    "noul": 8195,
+    "score": 4104
+   },
+   "languages": {
+    "en": 12852,
+    "zh": 12660
+   },
+   "row_families": {
+    "stage4_arithmetic": 3247,
+    "stage4_automaton": 1775,
+    "stage4_boolean": 3627,
+    "stage4_dense_table": 2801,
+    "stage4_ordinal": 3528,
+    "stage4_registers": 3536,
+    "stage4_relations": 2440,
+    "stage4_scope": 4558
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 8494,
+    "m6-cx-s2.train.jsonl": 8522,
+    "m6-cx-s3.train.jsonl": 8496,
+    "m6-mx-s1.train.jsonl": 2963,
+    "m6-mx-s2.train.jsonl": 3004,
+    "m6-mx-s3.train.jsonl": 2975
+   },
+   "rows_per_file_sum": 34454
+  },
+  "dec10:multinli_nonfiction_train": {
+   "rows_union": 7168,
+   "rows_family_union": {
+    "m6-cx": 7168,
+    "m6-mx": 5266
+   },
+   "pools": {
+    "A7m": 7168
+   },
+   "task_types": {
+    "choice": 7168
+   },
+   "languages": {
+    "en": 7168
+   },
+   "row_families": {
+    "stage4_natural_nli": 7168
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 2382,
+    "m6-cx-s2.train.jsonl": 2395,
+    "m6-cx-s3.train.jsonl": 2391,
+    "m6-mx-s1.train.jsonl": 1752,
+    "m6-mx-s2.train.jsonl": 1753,
+    "m6-mx-s3.train.jsonl": 1761
+   },
+   "rows_per_file_sum": 12434
+  },
+  "dec10:snli_train": {
+   "rows_union": 1029,
+   "rows_family_union": {
+    "m6-cx": 1029,
+    "m6-mx": 756
+   },
+   "pools": {
+    "A7h": 1029
+   },
+   "task_types": {
+    "choice": 1029
+   },
+   "languages": {
+    "en": 1029
+   },
+   "row_families": {
+    "natural_snli": 1029
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 343,
+    "m6-cx-s2.train.jsonl": 343,
+    "m6-cx-s3.train.jsonl": 343,
+    "m6-mx-s1.train.jsonl": 253,
+    "m6-mx-s2.train.jsonl": 250,
+    "m6-mx-s3.train.jsonl": 253
+   },
+   "rows_per_file_sum": 1785
+  },
+  "decision2_programmatic_original_v1": {
+   "rows_union": 250,
+   "rows_family_union": {
+    "m6-cx": 250,
+    "m6-mx": 250
+   },
+   "pools": {
+    "A0s-strict": 250
+   },
+   "task_types": {
+    "choice": 200,
+    "noul": 50
+   },
+   "languages": {
+    "en": 199,
+    "zh": 51
+   },
+   "row_families": {
+    "pilot_narrative_reading": 100,
+    "pilot_open_world_abstention": 90,
+    "pilot_string_composition": 60
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 250,
+    "m6-cx-s2.train.jsonl": 250,
+    "m6-cx-s3.train.jsonl": 250,
+    "m6-mx-s1.train.jsonl": 250,
+    "m6-mx-s2.train.jsonl": 250,
+    "m6-mx-s3.train.jsonl": 250
+   },
+   "rows_per_file_sum": 1500
+  },
+  "decision2_targeted_programmatic_v1": {
+   "rows_union": 600,
+   "rows_family_union": {
+    "m6-cx": 600,
+    "m6-mx": 600
+   },
+   "pools": {
+    "A0s-strict": 600
+   },
+   "task_types": {
+    "noul": 450,
+    "score": 150
+   },
+   "languages": {
+    "en": 480,
+    "zh": 120
+   },
+   "row_families": {
+    "targeted_interval_conjunction": 450,
+    "targeted_quantized_median": 150
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 600,
+    "m6-cx-s2.train.jsonl": 600,
+    "m6-cx-s3.train.jsonl": 600,
+    "m6-mx-s1.train.jsonl": 600,
+    "m6-mx-s2.train.jsonl": 600,
+    "m6-mx-s3.train.jsonl": 600
+   },
+   "rows_per_file_sum": 3600
+  },
+  "decision2_verifiable_v2_a2": {
+   "rows_union": 14183,
+   "rows_family_union": {
+    "m6-cx": 3619,
+    "m6-mx": 13217
+   },
+   "pools": {
+    "G2": 10564,
+    "V1:A2": 3619
+   },
+   "task_types": {
+    "choice": 6735,
+    "noul": 7448
+   },
+   "languages": {
+    "en": 8933,
+    "zh": 5250
+   },
+   "row_families": {
+    "a2_calendar": 2374,
+    "a2_counting": 2046,
+    "a2_injection": 2343,
+    "a2_multihop": 2257,
+    "a2_ordering": 2549,
+    "a2_units": 2614
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 1201,
+    "m6-cx-s2.train.jsonl": 1221,
+    "m6-cx-s3.train.jsonl": 1197,
+    "m6-mx-s1.train.jsonl": 4377,
+    "m6-mx-s2.train.jsonl": 4391,
+    "m6-mx-s3.train.jsonl": 4449
+   },
+   "rows_per_file_sum": 16836
+  },
+  "decision2_verifiable_v2_a4v2h": {
+   "rows_union": 3077,
+   "rows_family_union": {
+    "m6-cx": 1203,
+    "m6-mx": 2704
+   },
+   "pools": {
+    "G4h": 1874,
+    "V1:A4v2h": 1203
+   },
+   "task_types": {
+    "choice": 1551,
+    "noul": 1526
+   },
+   "languages": {
+    "en": 1831,
+    "zh": 1246
+   },
+   "row_families": {
+    "a2_calendar": 198,
+    "a2_counting": 456,
+    "a2_injection": 609,
+    "a2_multihop": 558,
+    "a2_ordering": 597,
+    "a2_units": 659
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 397,
+    "m6-cx-s2.train.jsonl": 381,
+    "m6-cx-s3.train.jsonl": 425,
+    "m6-mx-s1.train.jsonl": 909,
+    "m6-mx-s2.train.jsonl": 895,
+    "m6-mx-s3.train.jsonl": 900
+   },
+   "rows_per_file_sum": 3907
+  },
+  "decision2_verifiable_v2_a6": {
+   "rows_union": 9732,
+   "rows_family_union": {
+    "m6-cx": 3317,
+    "m6-mx": 8830
+   },
+   "pools": {
+    "G6": 6415,
+    "V1:A6g": 3317
+   },
+   "task_types": {
+    "score": 9732
+   },
+   "languages": {
+    "en": 6227,
+    "zh": 3505
+   },
+   "row_families": {
+    "a6_band_rubric": 2312,
+    "a6_checklist": 2117,
+    "a6_evidence_status": 558,
+    "a6_interpolation": 2316,
+    "a6_rank_position": 2429
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 1092,
+    "m6-cx-s2.train.jsonl": 1113,
+    "m6-cx-s3.train.jsonl": 1112,
+    "m6-mx-s1.train.jsonl": 2948,
+    "m6-mx-s2.train.jsonl": 2977,
+    "m6-mx-s3.train.jsonl": 2905
+   },
+   "rows_per_file_sum": 12147
+  },
+  "drcd_train": {
+   "rows_union": 1962,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1962
+   },
+   "pools": {
+    "H5": 1962
+   },
+   "task_types": {
+    "noul": 1962
+   },
+   "languages": {
+    "zh-hant": 1962
+   },
+   "row_families": {
+    "drcd_removal": 1962
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 580,
+    "m6-mx-s2.train.jsonl": 766,
+    "m6-mx-s3.train.jsonl": 616
+   },
+   "rows_per_file_sum": 1962
+  },
+  "germanquad_train": {
+   "rows_union": 1604,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1604
+   },
+   "pools": {
+    "H5": 1604
+   },
+   "task_types": {
+    "noul": 1604
+   },
+   "languages": {
+    "de": 1604
+   },
+   "row_families": {
+    "germanquad_removal": 1604
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 586,
+    "m6-mx-s2.train.jsonl": 508,
+    "m6-mx-s3.train.jsonl": 510
+   },
+   "rows_per_file_sum": 1604
+  },
+  "google_goemotions_official_train": {
+   "rows_union": 2794,
+   "rows_family_union": {
+    "m6-cx": 2794,
+    "m6-mx": 2794
+   },
+   "pools": {
+    "A0s-strict": 2794
+   },
+   "task_types": {
+    "choice": 1397,
+    "noul": 1397
+   },
+   "languages": {
+    "en": 2794
+   },
+   "row_families": {
+    "human_goemotions_choice": 1397,
+    "human_goemotions_noul": 1397
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 2794,
+    "m6-cx-s2.train.jsonl": 2794,
+    "m6-cx-s3.train.jsonl": 2794,
+    "m6-mx-s1.train.jsonl": 2794,
+    "m6-mx-s2.train.jsonl": 2794,
+    "m6-mx-s3.train.jsonl": 2794
+   },
+   "rows_per_file_sum": 16764
+  },
+  "gsm8k_train": {
+   "rows_union": 5550,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 5550
+   },
+   "pools": {
+    "H1": 5550
+   },
+   "task_types": {
+    "noul": 5550
+   },
+   "languages": {
+    "en": 5550
+   },
+   "row_families": {
+    "gsm8k_twins": 5550
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 1854,
+    "m6-mx-s2.train.jsonl": 1882,
+    "m6-mx-s3.train.jsonl": 1814
+   },
+   "rows_per_file_sum": 5550
+  },
+  "hotpotqa_distractor_train": {
+   "rows_union": 3531,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 3531
+   },
+   "pools": {
+    "H3": 1524,
+    "H6": 2007
+   },
+   "task_types": {
+    "noul": 1524,
+    "score": 2007
+   },
+   "languages": {
+    "en": 3531
+   },
+   "row_families": {
+    "hotpotqa_answerable": 1524,
+    "hotpotqa_coverage": 2007
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 1121,
+    "m6-mx-s2.train.jsonl": 1183,
+    "m6-mx-s3.train.jsonl": 1227
+   },
+   "rows_per_file_sum": 3531
+  },
+  "jglue_jcommonsenseqa_v1.3_train": {
+   "rows_union": 601,
+   "rows_family_union": {
+    "m6-cx": 601,
+    "m6-mx": 431
+   },
+   "pools": {
+    "V1:A5": 601
+   },
+   "task_types": {
+    "choice": 601
+   },
+   "languages": {
+    "ja": 601
+   },
+   "row_families": {
+    "jglue_jcommonsenseqa": 601
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 181,
+    "m6-cx-s2.train.jsonl": 214,
+    "m6-cx-s3.train.jsonl": 206,
+    "m6-mx-s1.train.jsonl": 134,
+    "m6-mx-s2.train.jsonl": 151,
+    "m6-mx-s3.train.jsonl": 146
+   },
+   "rows_per_file_sum": 1032
+  },
+  "jglue_jnli_v1.3_train": {
+   "rows_union": 264,
+   "rows_family_union": {
+    "m6-cx": 264,
+    "m6-mx": 194
+   },
+   "pools": {
+    "V1:A5": 264
+   },
+   "task_types": {
+    "choice": 264
+   },
+   "languages": {
+    "ja": 264
+   },
+   "row_families": {
+    "jglue_jnli": 264
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 102,
+    "m6-cx-s2.train.jsonl": 70,
+    "m6-cx-s3.train.jsonl": 92,
+    "m6-mx-s1.train.jsonl": 77,
+    "m6-mx-s2.train.jsonl": 71,
+    "m6-mx-s3.train.jsonl": 46
+   },
+   "rows_per_file_sum": 458
+  },
+  "jglue_jsts_v1.3_train": {
+   "rows_union": 1566,
+   "rows_family_union": {
+    "m6-cx": 1073,
+    "m6-mx": 1283
+   },
+   "pools": {
+    "H6": 493,
+    "V1:A6h": 1073
+   },
+   "task_types": {
+    "score": 1566
+   },
+   "languages": {
+    "ja": 1566
+   },
+   "row_families": {
+    "a6h2_jsts": 493,
+    "jglue_jsts": 1073
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 375,
+    "m6-cx-s2.train.jsonl": 352,
+    "m6-cx-s3.train.jsonl": 346,
+    "m6-mx-s1.train.jsonl": 450,
+    "m6-mx-s2.train.jsonl": 390,
+    "m6-mx-s3.train.jsonl": 443
+   },
+   "rows_per_file_sum": 2356
+  },
+  "jsquad_v1.3_train": {
+   "rows_union": 1946,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1946
+   },
+   "pools": {
+    "H5": 1946
+   },
+   "task_types": {
+    "noul": 1946
+   },
+   "languages": {
+    "ja": 1946
+   },
+   "row_families": {
+    "jsquad_removal": 1946
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 698,
+    "m6-mx-s2.train.jsonl": 666,
+    "m6-mx-s3.train.jsonl": 582
+   },
+   "rows_per_file_sum": 1946
+  },
+  "klue_mrc_train": {
+   "rows_union": 1800,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1800
+   },
+   "pools": {
+    "H5": 1800
+   },
+   "task_types": {
+    "noul": 1800
+   },
+   "languages": {
+    "ko": 1800
+   },
+   "row_families": {
+    "klue_mrc_removal": 1800
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 598,
+    "m6-mx-s2.train.jsonl": 618,
+    "m6-mx-s3.train.jsonl": 584
+   },
+   "rows_per_file_sum": 1800
+  },
+  "klue_sts_train": {
+   "rows_union": 1607,
+   "rows_family_union": {
+    "m6-cx": 1100,
+    "m6-mx": 1281
+   },
+   "pools": {
+    "H6": 507,
+    "V1:A6h": 1100
+   },
+   "task_types": {
+    "score": 1607
+   },
+   "languages": {
+    "ko": 1607
+   },
+   "row_families": {
+    "a6h2_klue_sts": 507,
+    "klue_sts": 1100
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 360,
+    "m6-cx-s2.train.jsonl": 361,
+    "m6-cx-s3.train.jsonl": 379,
+    "m6-mx-s1.train.jsonl": 420,
+    "m6-mx-s2.train.jsonl": 433,
+    "m6-mx-s3.train.jsonl": 428
+   },
+   "rows_per_file_sum": 2381
+  },
+  "klue_ynat_train": {
+   "rows_union": 660,
+   "rows_family_union": {
+    "m6-cx": 660,
+    "m6-mx": 489
+   },
+   "pools": {
+    "V1:A5": 660
+   },
+   "task_types": {
+    "choice": 660
+   },
+   "languages": {
+    "ko": 660
+   },
+   "row_families": {
+    "klue_ynat": 660
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 221,
+    "m6-cx-s2.train.jsonl": 225,
+    "m6-cx-s3.train.jsonl": 214,
+    "m6-mx-s1.train.jsonl": 160,
+    "m6-mx-s2.train.jsonl": 156,
+    "m6-mx-s3.train.jsonl": 173
+   },
+   "rows_per_file_sum": 1149
+  },
+  "legacy:snli": {
+   "rows_union": 272,
+   "rows_family_union": {
+    "m6-cx": 272,
+    "m6-mx": 272
+   },
+   "pools": {
+    "A0s-strict": 272
+   },
+   "task_types": {
+    "choice": 272
+   },
+   "languages": {
+    "en": 272
+   },
+   "row_families": {
+    "natural_snli": 272
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 272,
+    "m6-cx-s2.train.jsonl": 272,
+    "m6-cx-s3.train.jsonl": 272,
+    "m6-mx-s1.train.jsonl": 272,
+    "m6-mx-s2.train.jsonl": 272,
+    "m6-mx-s3.train.jsonl": 272
+   },
+   "rows_per_file_sum": 1632
+  },
+  "legacy:stage3_replay#banking77": {
+   "rows_union": 81,
+   "rows_family_union": {
+    "m6-cx": 81,
+    "m6-mx": 81
+   },
+   "pools": {
+    "A0s-strict": 81
+   },
+   "task_types": {
+    "choice": 81
+   },
+   "languages": {
+    "en": 81
+   },
+   "row_families": {
+    "stage4_replay_banking_train": 81
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 81,
+    "m6-cx-s2.train.jsonl": 81,
+    "m6-cx-s3.train.jsonl": 81,
+    "m6-mx-s1.train.jsonl": 81,
+    "m6-mx-s2.train.jsonl": 81,
+    "m6-mx-s3.train.jsonl": 81
+   },
+   "rows_per_file_sum": 486
+  },
+  "legacy:stage3_replay#clinc150": {
+   "rows_union": 128,
+   "rows_family_union": {
+    "m6-cx": 128,
+    "m6-mx": 128
+   },
+   "pools": {
+    "A0s-strict": 128
+   },
+   "task_types": {
+    "choice": 128
+   },
+   "languages": {
+    "en": 128
+   },
+   "row_families": {
+    "stage4_replay_clinc_train": 74,
+    "stage4_replay_natural_high_k": 54
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 128,
+    "m6-cx-s2.train.jsonl": 128,
+    "m6-cx-s3.train.jsonl": 128,
+    "m6-mx-s1.train.jsonl": 128,
+    "m6-mx-s2.train.jsonl": 128,
+    "m6-mx-s3.train.jsonl": 128
+   },
+   "rows_per_file_sum": 768
+  },
+  "legacy:stage3_replay#project-generated": {
+   "rows_union": 435,
+   "rows_family_union": {
+    "m6-cx": 435,
+    "m6-mx": 435
+   },
+   "pools": {
+    "A0s-strict": 435
+   },
+   "task_types": {
+    "choice": 283,
+    "noul": 120,
+    "score": 32
+   },
+   "languages": {
+    "en": 215,
+    "zh": 220
+   },
+   "row_families": {
+    "stage4_replay_authorization": 31,
+    "stage4_replay_cross_candidate_evidence_binding": 25,
+    "stage4_replay_evidence": 37,
+    "stage4_replay_explicit_equality_membership": 32,
+    "stage4_replay_high_k": 12,
+    "stage4_replay_mapping": 21,
+    "stage4_replay_policy": 32,
+    "stage4_replay_rubric": 29,
+    "stage4_replay_stage3_arithmetic_difference": 12,
+    "stage4_replay_stage3_arithmetic_distance": 13,
+    "stage4_replay_stage3_arithmetic_net": 8,
+    "stage4_replay_stage3_arithmetic_product": 8,
+    "stage4_replay_stage3_arithmetic_sum": 11,
+    "stage4_replay_stage3_evidence_scope": 28,
+    "stage4_replay_stage3_logic_choice": 36,
+    "stage4_replay_stage3_logic_noul": 33,
+    "stage4_replay_stage3_logic_score": 32,
+    "stage4_replay_stage3_transition_set": 35
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 435,
+    "m6-cx-s2.train.jsonl": 435,
+    "m6-cx-s3.train.jsonl": 435,
+    "m6-mx-s1.train.jsonl": 435,
+    "m6-mx-s2.train.jsonl": 435,
+    "m6-mx-s3.train.jsonl": 435
+   },
+   "rows_per_file_sum": 2610
+  },
+  "legacy:stage4-general-composition-v2": {
+   "rows_union": 1987,
+   "rows_family_union": {
+    "m6-cx": 1987,
+    "m6-mx": 1987
+   },
+   "pools": {
+    "A0s-strict": 1987
+   },
+   "task_types": {
+    "choice": 976,
+    "noul": 677,
+    "score": 334
+   },
+   "languages": {
+    "en": 1008,
+    "zh": 979
+   },
+   "row_families": {
+    "stage4_arithmetic": 224,
+    "stage4_automaton": 137,
+    "stage4_boolean": 277,
+    "stage4_dense_table": 270,
+    "stage4_ordinal": 279,
+    "stage4_registers": 260,
+    "stage4_relations": 274,
+    "stage4_scope": 266
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 1987,
+    "m6-cx-s2.train.jsonl": 1987,
+    "m6-cx-s3.train.jsonl": 1987,
+    "m6-mx-s1.train.jsonl": 1987,
+    "m6-mx-s2.train.jsonl": 1987,
+    "m6-mx-s3.train.jsonl": 1987
+   },
+   "rows_per_file_sum": 11922
+  },
+  "mlqepe_train": {
+   "rows_union": 4410,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 4410
+   },
+   "pools": {
+    "H6": 4410
+   },
+   "task_types": {
+    "score": 4410
+   },
+   "languages": {
+    "de": 217,
+    "et": 717,
+    "ne": 872,
+    "ro": 697,
+    "ru": 522,
+    "si": 821,
+    "zh": 564
+   },
+   "row_families": {
+    "mlqepe_ende": 217,
+    "mlqepe_enzh": 564,
+    "mlqepe_eten": 717,
+    "mlqepe_neen": 872,
+    "mlqepe_roen": 697,
+    "mlqepe_ruen": 522,
+    "mlqepe_sien": 821
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 1476,
+    "m6-mx-s2.train.jsonl": 1466,
+    "m6-mx-s3.train.jsonl": 1468
+   },
+   "rows_per_file_sum": 4410
+  },
+  "mtop_train": {
+   "rows_union": 1513,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1513
+   },
+   "pools": {
+    "H5": 1513
+   },
+   "task_types": {
+    "choice": 1513
+   },
+   "languages": {
+    "de": 325,
+    "es": 299,
+    "fr": 294,
+    "hi": 295,
+    "th": 300
+   },
+   "row_families": {
+    "mtop_intent_de": 325,
+    "mtop_intent_es": 299,
+    "mtop_intent_fr": 294,
+    "mtop_intent_hi": 295,
+    "mtop_intent_th": 300
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 577,
+    "m6-mx-s2.train.jsonl": 495,
+    "m6-mx-s3.train.jsonl": 441
+   },
+   "rows_per_file_sum": 1513
+  },
+  "multiwoz22_train": {
+   "rows_union": 2878,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 2878
+   },
+   "pools": {
+    "H1": 2878
+   },
+   "task_types": {
+    "choice": 1453,
+    "noul": 1425
+   },
+   "languages": {
+    "en": 2878
+   },
+   "row_families": {
+    "multiwoz_intent": 1453,
+    "multiwoz_slot": 1425
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 978,
+    "m6-mx-s2.train.jsonl": 939,
+    "m6-mx-s3.train.jsonl": 961
+   },
+   "rows_per_file_sum": 2878
+  },
+  "musique_full_v1.0_train": {
+   "rows_union": 2747,
+   "rows_family_union": {
+    "m6-cx": 940,
+    "m6-mx": 2173
+   },
+   "pools": {
+    "H3": 1030,
+    "H6": 777,
+    "V1:A3": 940
+   },
+   "task_types": {
+    "noul": 1970,
+    "score": 777
+   },
+   "languages": {
+    "en": 2747
+   },
+   "row_families": {
+    "musique_answerable": 940,
+    "musique_answerable_v2": 1030,
+    "musique_coverage": 777
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 314,
+    "m6-cx-s2.train.jsonl": 314,
+    "m6-cx-s3.train.jsonl": 312,
+    "m6-mx-s1.train.jsonl": 711,
+    "m6-mx-s2.train.jsonl": 756,
+    "m6-mx-s3.train.jsonl": 706
+   },
+   "rows_per_file_sum": 3113
+  },
+  "onestop_english": {
+   "rows_union": 132,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 132
+   },
+   "pools": {
+    "H6": 132
+   },
+   "task_types": {
+    "score": 132
+   },
+   "languages": {
+    "en": 132
+   },
+   "row_families": {
+    "onestop_level": 132
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 45,
+    "m6-mx-s2.train.jsonl": 30,
+    "m6-mx-s3.train.jsonl": 57
+   },
+   "rows_per_file_sum": 132
+  },
+  "piaf_train": {
+   "rows_union": 1552,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1552
+   },
+   "pools": {
+    "H5": 1552
+   },
+   "task_types": {
+    "noul": 1552
+   },
+   "languages": {
+    "fr": 1552
+   },
+   "row_families": {
+    "piaf_removal": 1552
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 494,
+    "m6-mx-s2.train.jsonl": 554,
+    "m6-mx-s3.train.jsonl": 504
+   },
+   "rows_per_file_sum": 1552
+  },
+  "quac_train_v0.2": {
+   "rows_union": 2244,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 2244
+   },
+   "pools": {
+    "E11": 2244
+   },
+   "task_types": {
+    "noul": 2244
+   },
+   "languages": {
+    "en": 2244
+   },
+   "row_families": {
+    "quac_removal": 2244
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 748,
+    "m6-mx-s2.train.jsonl": 754,
+    "m6-mx-s3.train.jsonl": 742
+   },
+   "rows_per_file_sum": 2244
+  },
+  "quartz_train": {
+   "rows_union": 1017,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1017
+   },
+   "pools": {
+    "H1": 1017
+   },
+   "task_types": {
+    "choice": 1017
+   },
+   "languages": {
+    "en": 1017
+   },
+   "row_families": {
+    "quartz": 1017
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 369,
+    "m6-mx-s2.train.jsonl": 342,
+    "m6-mx-s3.train.jsonl": 306
+   },
+   "rows_per_file_sum": 1017
+  },
+  "ropes_train": {
+   "rows_union": 1404,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1404
+   },
+   "pools": {
+    "H1": 1404
+   },
+   "task_types": {
+    "choice": 1404
+   },
+   "languages": {
+    "en": 1404
+   },
+   "row_families": {
+    "ropes": 1404
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 421,
+    "m6-mx-s2.train.jsonl": 522,
+    "m6-mx-s3.train.jsonl": 461
+   },
+   "rows_per_file_sum": 1404
+  },
+  "saf_de_train": {
+   "rows_union": 338,
+   "rows_family_union": {
+    "m6-cx": 338,
+    "m6-mx": 241
+   },
+   "pools": {
+    "V1:A6h": 338
+   },
+   "task_types": {
+    "score": 338
+   },
+   "languages": {
+    "de": 338
+   },
+   "row_families": {
+    "saf": 338
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 102,
+    "m6-cx-s2.train.jsonl": 117,
+    "m6-cx-s3.train.jsonl": 119,
+    "m6-mx-s1.train.jsonl": 68,
+    "m6-mx-s2.train.jsonl": 83,
+    "m6-mx-s3.train.jsonl": 90
+   },
+   "rows_per_file_sum": 579
+  },
+  "saf_en_train": {
+   "rows_union": 157,
+   "rows_family_union": {
+    "m6-cx": 157,
+    "m6-mx": 110
+   },
+   "pools": {
+    "V1:A6h": 157
+   },
+   "task_types": {
+    "score": 157
+   },
+   "languages": {
+    "en": 157
+   },
+   "row_families": {
+    "saf": 157
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 51,
+    "m6-cx-s2.train.jsonl": 52,
+    "m6-cx-s3.train.jsonl": 54,
+    "m6-mx-s1.train.jsonl": 36,
+    "m6-mx-s2.train.jsonl": 33,
+    "m6-mx-s3.train.jsonl": 41
+   },
+   "rows_per_file_sum": 267
+  },
+  "scitail_train": {
+   "rows_union": 2790,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 2790
+   },
+   "pools": {
+    "H1": 2790
+   },
+   "task_types": {
+    "noul": 2790
+   },
+   "languages": {
+    "en": 2790
+   },
+   "row_families": {
+    "scitail": 2790
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 974,
+    "m6-mx-s2.train.jsonl": 888,
+    "m6-mx-s3.train.jsonl": 928
+   },
+   "rows_per_file_sum": 2790
+  },
+  "sgd_dstc8_train": {
+   "rows_union": 1201,
+   "rows_family_union": {
+    "m6-cx": 1201,
+    "m6-mx": 864
+   },
+   "pools": {
+    "V1:A1": 1201
+   },
+   "task_types": {
+    "choice": 595,
+    "noul": 606
+   },
+   "languages": {
+    "en": 1201
+   },
+   "row_families": {
+    "sgd_intent": 595,
+    "sgd_requested_slot": 606
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 385,
+    "m6-cx-s2.train.jsonl": 391,
+    "m6-cx-s3.train.jsonl": 425,
+    "m6-mx-s1.train.jsonl": 257,
+    "m6-mx-s2.train.jsonl": 320,
+    "m6-mx-s3.train.jsonl": 287
+   },
+   "rows_per_file_sum": 2065
+  },
+  "sqac_train": {
+   "rows_union": 1954,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1954
+   },
+   "pools": {
+    "H5": 1954
+   },
+   "task_types": {
+    "noul": 1954
+   },
+   "languages": {
+    "es": 1954
+   },
+   "row_families": {
+    "sqac_removal": 1954
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 692,
+    "m6-mx-s2.train.jsonl": 624,
+    "m6-mx-s3.train.jsonl": 638
+   },
+   "rows_per_file_sum": 1954
+  },
+  "squad2_train": {
+   "rows_union": 3362,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 3362
+   },
+   "pools": {
+    "E11": 3362
+   },
+   "task_types": {
+    "noul": 3362
+   },
+   "languages": {
+    "en": 3362
+   },
+   "row_families": {
+    "squad2_removal": 3362
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 1096,
+    "m6-mx-s2.train.jsonl": 1148,
+    "m6-mx-s3.train.jsonl": 1118
+   },
+   "rows_per_file_sum": 3362
+  },
+  "taskmaster2_train": {
+   "rows_union": 1468,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 1468
+   },
+   "pools": {
+    "H1": 1468
+   },
+   "task_types": {
+    "noul": 1468
+   },
+   "languages": {
+    "en": 1468
+   },
+   "row_families": {
+    "taskmaster2_slot": 1468
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 496,
+    "m6-mx-s2.train.jsonl": 478,
+    "m6-mx-s3.train.jsonl": 494
+   },
+   "rows_per_file_sum": 1468
+  },
+  "twowiki_train": {
+   "rows_union": 4173,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 4173
+   },
+   "pools": {
+    "H3": 1684,
+    "H6": 2489
+   },
+   "task_types": {
+    "noul": 1684,
+    "score": 2489
+   },
+   "languages": {
+    "en": 4173
+   },
+   "row_families": {
+    "twowiki_answerable": 1684,
+    "twowiki_coverage": 2489
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 1446,
+    "m6-mx-s2.train.jsonl": 1414,
+    "m6-mx-s3.train.jsonl": 1313
+   },
+   "rows_per_file_sum": 4173
+  },
+  "tydiqa_primary_train": {
+   "rows_union": 9959,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 9959
+   },
+   "pools": {
+    "E11": 226,
+    "H5": 9733
+   },
+   "task_types": {
+    "noul": 9959
+   },
+   "languages": {
+    "ar": 1162,
+    "bn": 718,
+    "en": 226,
+    "fi": 1094,
+    "id": 1102,
+    "ja": 1106,
+    "ko": 566,
+    "ru": 1102,
+    "sw": 755,
+    "te": 1066,
+    "th": 1062
+   },
+   "row_families": {
+    "tydi_relevance_noul_ar": 442,
+    "tydi_relevance_noul_bn": 424,
+    "tydi_relevance_noul_fi": 446,
+    "tydi_relevance_noul_id": 460,
+    "tydi_relevance_noul_ja": 444,
+    "tydi_relevance_noul_ko": 328,
+    "tydi_relevance_noul_ru": 476,
+    "tydi_relevance_noul_sw": 361,
+    "tydi_relevance_noul_te": 442,
+    "tydi_relevance_noul_th": 460,
+    "tydi_removal_ar": 720,
+    "tydi_removal_bn": 294,
+    "tydi_removal_en": 226,
+    "tydi_removal_fi": 648,
+    "tydi_removal_id": 642,
+    "tydi_removal_ja": 662,
+    "tydi_removal_ko": 238,
+    "tydi_removal_ru": 626,
+    "tydi_removal_sw": 394,
+    "tydi_removal_te": 624,
+    "tydi_removal_th": 602
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 3261,
+    "m6-mx-s2.train.jsonl": 3350,
+    "m6-mx-s3.train.jsonl": 3348
+   },
+   "rows_per_file_sum": 9959
+  },
+  "winogrande_xl_train": {
+   "rows_union": 7250,
+   "rows_family_union": {
+    "m6-cx": 0,
+    "m6-mx": 7250
+   },
+   "pools": {
+    "H1": 7250
+   },
+   "task_types": {
+    "choice": 7250
+   },
+   "languages": {
+    "en": 7250
+   },
+   "row_families": {
+    "winogrande_twins": 7250
+   },
+   "rows_per_file": {
+    "m6-cx-s1.train.jsonl": 0,
+    "m6-cx-s2.train.jsonl": 0,
+    "m6-cx-s3.train.jsonl": 0,
+    "m6-mx-s1.train.jsonl": 2508,
+    "m6-mx-s2.train.jsonl": 2356,
+    "m6-mx-s3.train.jsonl": 2386
+   },
+   "rows_per_file_sum": 7250
+  }
+ },
+ "origin_labels": {
+  "a7:afrisenti_sw_train": {
+   "<none>": 591
+  },
+  "a7:jglue_jsts_v1.3_train": {
+   "<none>": 945
+  },
+  "a7:klue_sts_v1.1_train": {
+   "<none>": 1245
+  },
+  "a7:oasst1_train": {
+   "<none>": 22394
+  },
+  "a7:sentimix_hinglish_train": {
+   "<none>": 12269
+  },
+  "abcd_v1.1_train": {
+   "<none>": 1768
+  },
+  "argq30k_train": {
+   "<none>": 1553
+  },
+  "cmrc2018_train": {
+   "<none>": 1952
+  },
+  "csqa_train": {
+   "<none>": 3371
+  },
+  "dbpedia14_train": {
+   "<none>": 1528
+  },
+  "dec10:banking77_train": {
+   "PolyAI-LDN/banking77 upstream train; CC-BY-4.0": 4954
+  },
+  "dec10:clinc150_train": {
+   "CLINC150 upstream train; CC-BY-3.0": 7301
+  },
+  "dec10:generated_stage1_3": {
+   "objective_generator": 18985,
+   "objective_generator_stage2": 2390,
+   "objective_generator_stage3_arithmetic": 1095,
+   "stage3-logic-evidence-v1": 9245,
+   "stage3-src/transitions.py": 2280
+  },
+  "dec10:generated_stage4_v2": {
+   "stage4-general-composition-v2": 25512
+  },
+  "dec10:multinli_nonfiction_train": {
+   "nyu-mll/multi_nli": 7168
+  },
+  "dec10:snli_train": {
+   "snli": 1029
+  },
+  "decision2_programmatic_original_v1": {
+   "<none>": 250
+  },
+  "decision2_targeted_programmatic_v1": {
+   "<none>": 600
+  },
+  "decision2_verifiable_v2_a2": {
+   "<none>": 14183
+  },
+  "decision2_verifiable_v2_a4v2h": {
+   "<none>": 3077
+  },
+  "decision2_verifiable_v2_a6": {
+   "<none>": 9732
+  },
+  "drcd_train": {
+   "<none>": 1962
+  },
+  "germanquad_train": {
+   "<none>": 1604
+  },
+  "google_goemotions_official_train": {
+   "google-research/goemotions": 2794
+  },
+  "gsm8k_train": {
+   "<none>": 5550
+  },
+  "hotpotqa_distractor_train": {
+   "<none>": 3531
+  },
+  "jglue_jcommonsenseqa_v1.3_train": {
+   "<none>": 601
+  },
+  "jglue_jnli_v1.3_train": {
+   "<none>": 264
+  },
+  "jglue_jsts_v1.3_train": {
+   "<none>": 1566
+  },
+  "jsquad_v1.3_train": {
+   "<none>": 1946
+  },
+  "klue_mrc_train": {
+   "<none>": 1800
+  },
+  "klue_sts_train": {
+   "<none>": 1607
+  },
+  "klue_ynat_train": {
+   "<none>": 660
+  },
+  "legacy:snli": {
+   "snli": 272
+  },
+  "legacy:stage3_replay": {
+   "CLINC150 upstream train; CC-BY-3.0": 128,
+   "PolyAI-LDN/banking77 upstream train; CC-BY-4.0": 81,
+   "objective_generator": 150,
+   "objective_generator_stage2": 12,
+   "objective_generator_stage3_arithmetic": 52,
+   "stage3-logic-evidence-v1": 129,
+   "stage3-src/transitions.py": 35,
+   "synthetic:stage3:binding_membership:v1": 57
+  },
+  "legacy:stage4-general-composition-v2": {
+   "stage4-general-composition-v2": 1987
+  },
+  "mlqepe_train": {
+   "<none>": 4410
+  },
+  "mtop_train": {
+   "<none>": 1513
+  },
+  "multiwoz22_train": {
+   "<none>": 2878
+  },
+  "musique_full_v1.0_train": {
+   "<none>": 2747
+  },
+  "onestop_english": {
+   "<none>": 132
+  },
+  "piaf_train": {
+   "<none>": 1552
+  },
+  "quac_train_v0.2": {
+   "<none>": 2244
+  },
+  "quartz_train": {
+   "<none>": 1017
+  },
+  "ropes_train": {
+   "<none>": 1404
+  },
+  "saf_de_train": {
+   "<none>": 338
+  },
+  "saf_en_train": {
+   "<none>": 157
+  },
+  "scitail_train": {
+   "<none>": 2790
+  },
+  "sgd_dstc8_train": {
+   "<none>": 1201
+  },
+  "sqac_train": {
+   "<none>": 1954
+  },
+  "squad2_train": {
+   "<none>": 3362
+  },
+  "taskmaster2_train": {
+   "<none>": 1468
+  },
+  "twowiki_train": {
+   "<none>": 4173
+  },
+  "tydiqa_primary_train": {
+   "<none>": 9959
+  },
+  "winogrande_xl_train": {
+   "<none>": 7250
+  }
+ },
+ "checks": {
+  "id_not_in_either_recipe": 0,
+  "recipe_pool_or_source_conflict": 0,
+  "same_id_differs_across_files": 0,
+  "source_differs_from_recipe": 0,
+  "teacher_ids_outside_train_union": 0,
+  "teacher_input_sha256_mismatch": 0,
+  "teacher_shared_id_differs": 0,
+  "train_union_rows_without_teacher": 0,
+  "teacher_ids_in_both_files": 97389
+ },
+ "card": {
+  "training_data_attribution": "Training data (not redistributed here; each keeps its own licence): OpenAssistant OASST1 (Köpf et al., NeurIPS 2023 Datasets and Benchmarks; Apache-2.0), SentiMix Hinglish (Patwa et al., SemEval 2020; CC BY 4.0), TyDi QA (Clark et al., TACL 2020; Apache-2.0, Wikipedia text CC BY-SA), CLINC150 (Larson et al., EMNLP-IJCNLP 2019; CC BY 3.0), WinoGrande (Sakaguchi et al., AAAI 2020; Apache-2.0), MultiNLI non-fiction genres (Williams, Nangia and Bowman, NAACL 2018; OANC terms), GSM8K (Cobbe et al., 2021; MIT), JGLUE JSTS, JSQuAD, JCommonsenseQA and JNLI (Kurihara et al., LREC 2022; CC BY-SA 4.0), KLUE STS, MRC and YNAT (Park et al., NeurIPS 2021 Datasets and Benchmarks; CC BY-SA 4.0), BANKING77 (Casanueva et al., 2020; CC BY 4.0), MLQE-PE (Fomicheva et al., LREC 2022; CC0 1.0, Wikipedia text CC BY-SA), 2WikiMultihopQA (Ho et al., COLING 2020; Apache-2.0, Wikipedia text CC BY-SA), HotpotQA (Yang et al., EMNLP 2018; CC BY-SA 4.0), CommonsenseQA (Talmor et al., NAACL 2019; MIT), SQuAD 2.0 (Rajpurkar, Jia and Liang, ACL 2018; CC BY-SA 4.0), MultiWOZ 2.2 (Zang et al., 2020; MIT), GoEmotions (Demszky et al., ACL 2020; CC BY 4.0), SciTail (Khot et al., AAAI 2018; Apache-2.0), MuSiQue (Trivedi et al., TACL 2022; CC BY 4.0, Wikipedia text CC BY-SA), QuAC (Choi et al., EMNLP 2018; CC BY-SA 4.0), DRCD (Shao et al., 2018; CC BY-SA 3.0), SQAC (Gutiérrez-Fandiño et al., 2022; CC BY-SA 4.0), CMRC 2018 (Cui et al., EMNLP 2019; CC BY-SA 4.0), ABCD (Chen et al., NAACL 2021; MIT), GermanQuAD (Möller et al., 2021; CC BY 4.0), IBM ArgQ-30k (Gretz et al., AAAI 2020; CC BY-SA 3.0), PIAF (Keraron et al., LREC 2020; MIT), DBpedia-14 (Zhang et al., NeurIPS 2015; CC BY-SA 3.0), MTOP (Li et al., EACL 2021; CC BY-SA 4.0), Taskmaster-2 (Byrne et al., Google 2020; CC BY 4.0), ROPES (Lin et al., MRQA 2019; CC BY 4.0), SNLI (Bowman et al., EMNLP 2015; CC BY-SA 4.0), Schema-Guided Dialogue (Rastogi et al., AAAI 2020; CC BY-SA 4.0), QuaRTz (Tafjord et al., EMNLP 2019; CC BY 4.0), AfriSenti Swahili (Muhammad et al., EMNLP 2023; CC BY 4.0), SAF (Filighera et al., ACL 2022; CC BY 4.0), OneStopEnglish (Vajjala and Lučić, BEA 2018; CC BY-SA 4.0), and project-generated decision tasks.",
+  "lux_attribution": "[Decision 1.0 Lux-9B](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B) (Apache-2.0), our own model: its probabilities on all 232,754 training prompts were soft training targets. None of its weights are included.",
+  "training_paragraph": "**Recipe and data:** the weights are the uniform average of six full fine-tunes of Qwen3-0.6B-Base, two data recipes (with and without the data v2 arms) times three seeds, each trained for one epoch on its own 30M-token mixture (batches of 16 rows; backbone learning rate 1e-5 with 10% warm-up and cosine decay, head 2e-4) with cross-entropy plus 0.5 × Brier and a KL term (weight 1.0) toward soft targets from our own [Decision 1.0 Lux-9B](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B) on every row; no other teacher, and no outputs of Jev or of any third-party decision model. Together the six mixtures hold 232,754 distinct decision rows: Choice 88,676, Noul 75,701 and Score 68,377; English 130,105, Chinese 46,699, Hinglish 12,269, Spanish 8,791, Japanese 6,537, Korean 5,884 and 26 other languages. Of these, 89,771 are program-generated tasks labeled by program oracles (Decision 1.0 stage 1–4 and Decision 2.0 programmatic and verifiable generators; no third-party text) and 142,983 come from 37 public datasets that keep their own licences ([attributions](ATTRIBUTIONS.md)). The recipes contain no MASSIVE, PAWS-X or XNLI rows (the sources of mlx-diag), and every group with an overlap hit on an evaluation panel was removed before training."
+ },
+ "vs_current_card": {
+  "current_training_data_attribution": "Training data (not redistributed here; each keeps its own licence): GoEmotions (Demszky et al., ACL 2020; CC BY 4.0), SNLI (Bowman et al., EMNLP 2015; CC BY-SA 4.0), MultiNLI non-fiction genres (Williams, Nangia and Bowman, NAACL 2018; OANC terms), CLINC150 (Larson et al., EMNLP-IJCNLP 2019; CC BY 3.0), BANKING77 (Casanueva et al., 2020; CC BY 4.0), KLUE STS (Park et al., 2021; CC BY-SA 4.0), JGLUE JSTS (Kurihara et al., LREC 2022; CC BY-SA 4.0), IBM ArgQ-30k (Gretz et al., AAAI 2020; CC BY-SA 3.0), SAF (Filighera et al., ACL 2022; CC BY 4.0), and project-generated decision tasks.",
+  "removed": [],
+  "added": [
+   {
+    "upstream": "oasst1",
+    "name": "OpenAssistant OASST1",
+    "rows": 22394,
+    "licence": "apache-2.0"
+   },
+   {
+    "upstream": "sentimix-hinglish",
+    "name": "SentiMix Hinglish",
+    "rows": 12269,
+    "licence": "cc-by-4.0"
+   },
+   {
+    "upstream": "tydiqa",
+    "name": "TyDi QA",
+    "rows": 9959,
+    "licence": "apache-2.0"
+   },
+   {
+    "upstream": "winogrande",
+    "name": "WinoGrande",
+    "rows": 7250,
+    "licence": "apache-2.0"
+   },
+   {
+    "upstream": "gsm8k",
+    "name": "GSM8K",
+    "rows": 5550,
+    "licence": "mit"
+   },
+   {
+    "upstream": "mlqe-pe",
+    "name": "MLQE-PE",
+    "rows": 4410,
+    "licence": "cc0-1.0"
+   },
+   {
+    "upstream": "2wikimultihopqa",
+    "name": "2WikiMultihopQA",
+    "rows": 4173,
+    "licence": "apache-2.0"
+   },
+   {
+    "upstream": "hotpotqa",
+    "name": "HotpotQA",
+    "rows": 3531,
+    "licence": "cc-by-sa-4.0"
+   },
+   {
+    "upstream": "commonsenseqa",
+    "name": "CommonsenseQA",
+    "rows": 3371,
+    "licence": "mit"
+   },
+   {
+    "upstream": "squad2",
+    "name": "SQuAD 2.0",
+    "rows": 3362,
+    "licence": "cc-by-sa-4.0"
+   },
+   {
+    "upstream": "multiwoz22",
+    "name": "MultiWOZ 2.2",
+    "rows": 2878,
+    "licence": "mit"
+   },
+   {
+    "upstream": "scitail",
+    "name": "SciTail",
+    "rows": 2790,
+    "licence": "apache-2.0"
+   },
+   {
+    "upstream": "musique",
+    "name": "MuSiQue",
+    "rows": 2747,
+    "licence": "cc-by-4.0"
+   },
+   {
+    "upstream": "quac",
+    "name": "QuAC",
+    "rows": 2244,
+    "licence": "cc-by-sa-4.0"
+   },
+   {
+    "upstream": "drcd",
+    "name": "DRCD",
+    "rows": 1962,
+    "licence": "cc-by-sa-3.0"
+   },
+   {
+    "upstream": "sqac",
+    "name": "SQAC",
+    "rows": 1954,
+    "licence": "cc-by-sa-4.0"
+   },
+   {
+    "upstream": "cmrc2018",
+    "name": "CMRC 2018",
+    "rows": 1952,
+    "licence": "cc-by-sa-4.0"
+   },
+   {
+    "upstream": "abcd",
+    "name": "ABCD",
+    "rows": 1768,
+    "licence": "mit"
+   },
+   {
+    "upstream": "germanquad",
+    "name": "GermanQuAD",
+    "rows": 1604,
+    "licence": "cc-by-4.0"
+   },
+   {
+    "upstream": "piaf",
+    "name": "PIAF",
+    "rows": 1552,
+    "licence": "mit"
+   },
+   {
+    "upstream": "dbpedia14",
+    "name": "DBpedia-14",
+    "rows": 1528,
+    "licence": "cc-by-sa-3.0"
+   },
+   {
+    "upstream": "mtop",
+    "name": "MTOP",
+    "rows": 1513,
+    "licence": "cc-by-sa-4.0"
+   },
+   {
+    "upstream": "taskmaster2",
+    "name": "Taskmaster-2",
+    "rows": 1468,
+    "licence": "cc-by-4.0"
+   },
+   {
+    "upstream": "ropes",
+    "name": "ROPES",
+    "rows": 1404,
+    "licence": "cc-by-4.0"
+   },
+   {
+    "upstream": "sgd",
+    "name": "Schema-Guided Dialogue",
+    "rows": 1201,
+    "licence": "cc-by-sa-4.0"
+   },
+   {
+    "upstream": "quartz",
+    "name": "QuaRTz",
+    "rows": 1017,
+    "licence": "cc-by-4.0"
+   },
+   {
+    "upstream": "afrisenti-sw",
+    "name": "AfriSenti Swahili",
+    "rows": 591,
+    "licence": "cc-by-4.0"
+   },
+   {
+    "upstream": "onestopenglish",
+    "name": "OneStopEnglish",
+    "rows": 132,
+    "licence": "cc-by-sa-4.0"
+   }
+  ],
+  "widened": [
+   {
+    "upstream": "klue",
+    "was": "KLUE STS",
+    "now": "KLUE STS, MRC and YNAT",
+    "rows": {
+     "klue_sts_train": 1607,
+     "a7:klue_sts_v1.1_train": 1245,
+     "klue_mrc_train": 1800,
+     "klue_ynat_train": 660
+    }
+   },
+   {
+    "upstream": "jglue",
+    "was": "JGLUE JSTS",
+    "now": "JGLUE JSTS, JSQuAD, JCommonsenseQA and JNLI",
+    "rows": {
+     "jglue_jsts_v1.3_train": 1566,
+     "a7:jglue_jsts_v1.3_train": 945,
+     "jsquad_v1.3_train": 1946,
+     "jglue_jcommonsenseqa_v1.3_train": 601,
+     "jglue_jnli_v1.3_train": 264
+    }
+   }
+  ],
+  "lux_prompts": {
+   "current": 6430,
+   "new": 232754
+  }
+ },
+ "inputs": {
+  "node_a": {
+   "train_files": [
+    {
+     "file": "m6-cx-s1.train.jsonl",
+     "sha256": "ad925c379fe4f1c658087d99e88dcd4ac3cfdab372e999b592eb2f6c4e6186fc",
+     "rows": 51462,
+     "distinct_ids": 51462
+    },
+    {
+     "file": "m6-cx-s2.train.jsonl",
+     "sha256": "420fd988f06c0fe5deb4aed72fcc71f3d2a2af414ccea2597d652679ad664489",
+     "rows": 51350,
+     "distinct_ids": 51350
+    },
+    {
+     "file": "m6-cx-s3.train.jsonl",
+     "sha256": "9131be73edce1e3ba79a9b91adcff7807035e12352545fbbfd3b5e0e44178aa5",
+     "rows": 51543,
+     "distinct_ids": 51543
+    },
+    {
+     "file": "m6-mx-s1.train.jsonl",
+     "sha256": "a277bd45a61662b8edbdc3472d0f74f605bc2a4d6e187605afc2bb3d4c998eae",
+     "rows": 67411,
+     "distinct_ids": 67411
+    },
+    {
+     "file": "m6-mx-s2.train.jsonl",
+     "sha256": "5fafa72d6199025e36cda7eb315a1faa341d1f5164ac1d06ccafd69f4e7ed8c0",
+     "rows": 67373,
+     "distinct_ids": 67373
+    },
+    {
+     "file": "m6-mx-s3.train.jsonl",
+     "sha256": "e484c99b1fe4ca5051a2f33ca032edda71f07ff601f6ace859f82c687e31f653",
+     "rows": 67192,
+     "distinct_ids": 67192
+    }
+   ],
+   "recipe_ids": {
+    "cx-xl-r2-a7v1-full": {
+     "file": "inputs/recipes/cx-xl-r2-a7v1-full.ids.jsonl",
+     "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+     "rows": 191536
+    },
+    "cx-xl-r2-nogap-full": {
+     "file": "inputs/recipes/cx-xl-r2-nogap-full.ids.jsonl",
+     "sha256": "4a74a06ebb4ad933485d2417f99f633ed02d7596f31a098ece29aad65b9f3bca",
+     "rows": 340306
+    }
+   },
+   "teachers": {
+    "m6-cx": {
+     "file": "m6-cx.lux1.jsonl",
+     "sha256": "4be17f3874e0b80e5e7d1680b465241864e2b0f350b612b4277878984629ec74"
+    },
+    "m6-mx": {
+     "file": "m6-mx.lux1.jsonl",
+     "sha256": "6b5d8ffa055dcd36db21164a4bf7d41285e7ed5ea7803c76b3c541d2cbfc48f2"
+    }
+   },
+   "other": {
+    "inputs/INPUTS.json": "df6302802549f32520b51bc9e3cc6bdd7c198bc12eb7f89f6735e8a5275b068f",
+    "m6-verify.json": "3bb733c5b55d19a8a00a2e461853534b98b3d9521f7985b561211aee24d3291c"
+   }
+  },
+  "local": {
+   "src/training/decision2/v2/release/records/dev2-0p6b-m8-release-2026-09-29/credits/m6-union-counts.json": "517183443984a45bd6e85c70204e4f697d5101bc345cc9ff44de9eac0eea1e92",
+   "src/training/decision2/v2/release/records/dev2-0p6b-m8-release-2026-09-29/credits/count_m6_sources.py": "4a6fd0b924783371afd0293b987f74681bfcbdb3d761c9d562f5ebca653d80e5",
+   "src/training/decision2/v2/release/records/dev2-0p6b-m8-release-2026-09-29/credits/build_m6_sources.py": "08c2363a57d263e967cca0bd506f52563a4223604ab65f72498238c428aafefd",
+   "src/training/decision2/v2/06b/records/m6/m6-verify.json": "3bb733c5b55d19a8a00a2e461853534b98b3d9521f7985b561211aee24d3291c",
+   "src/training/decision2/v2/release/specs/dev2-0p6b-release.json": "aba66d43e87c3989a6f9bbbadf0b16436d1984b7604284a8359aa9e57de6b58f",
+   "src/training/decision2/v2/release/licence.py": "39c94fe8b0841d145ef3b6816f47ec3f50c3076590815f38e8c9073a98d6f881",
+   "src/training/decision2/v2/data/a7/license-registry-a7-v2.json": "f32bb58b97c4f68324659541c52ec93f3fea69ab86a1dd13cd84b41df00a5bdb",
+   "src/training/decision2/v2/data/records/license-registry-v2.json": "5fc46a97a41dc8b552506486c7db5f81bd676cce0c3e8ff942fcd19842aa17bc",
+   "src/training/decision2/v2/data/records/license-registry-m3b.json": "5042aa32387a34dad3f9fbf795732e025cce647aeb73bb35fcfb8ff327342b75",
+   "src/training/decision2/v2/data/records/license-registry-v1.json": "c2f04a0f4ee8fda418652cadff449b55c8b4bf63ac1b522060684c12129dd39a",
+   "src/training/decision2/v2/data/a7/license-registry-a7-v1.json": "29bc7ea8e97afd540c1d3177d720150326f949d87211bcd1db574e7a80bf9d01",
+   "src/training/decision2/v2/06b/records/mixtures/m6-cx-s1.json": "f60d18517c4ba55eed313bb86173ce7c445969209fe3ff601d7c7c483059a675",
+   "src/training/decision2/v2/06b/records/mixtures/m6-cx-s1.report.json": "4531e2097ec333816d9e1e7d3290d714ba79df03aaf8e277569af795b515142a",
+   "src/training/decision2/v2/06b/records/mixtures/m6-cx-s2.json": "77a41a2a7dacac6978e057e09b5b7b1a14e25a1bd843b6bc95ad47b22cc1d562",
+   "src/training/decision2/v2/06b/records/mixtures/m6-cx-s2.report.json": "d244e517df124a37df335318c6c4561567dd0f6252834d3f5139dc9f0f125b9c",
+   "src/training/decision2/v2/06b/records/mixtures/m6-cx-s3.json": "fa99109e4777e686fcb8e7ab8cc157db3ae3530ddbcc4e69ecfcd4e62dc11cfb",
+   "src/training/decision2/v2/06b/records/mixtures/m6-cx-s3.report.json": "27459727778cb694acfa125e87aa695a01c7e8fdf10762ba642ac13394b39481",
+   "src/training/decision2/v2/06b/records/mixtures/m6-mx-s1.json": "908c06fc74bd8af36aab197c4df9afdbba4564a4c140ed6cac299ff61c25ed4a",
+   "src/training/decision2/v2/06b/records/mixtures/m6-mx-s1.report.json": "60f33560a750cd3e6d888f315663c108aad04164b991fe3b5bee52e7b7b6c29b",
+   "src/training/decision2/v2/06b/records/mixtures/m6-mx-s2.json": "2a0f27ea0095ba4be2534c37dcdec3f23b48a3478031fd656f64319989022636",
+   "src/training/decision2/v2/06b/records/mixtures/m6-mx-s2.report.json": "161e81f674692e58a0b73f9d1acb50f0593918a94aa8cc8e1e2061acc01aa573",
+   "src/training/decision2/v2/06b/records/mixtures/m6-mx-s3.json": "dac18183ed57be4a2db7d6f338cc94e5b75d4cc44b19fdadfb0733f53b9d0167",
+   "src/training/decision2/v2/06b/records/mixtures/m6-mx-s3.report.json": "d37da4edf6ec4f2608c7fa2a8a19d727c5ed4a06ed091fbce2278a8159fee018",
+   "src/training/decision2/v2/06b/records/m6-prereg-2026-09-29.md": "48bc09283c503f9f6368f91e568b872b12e8e1fb8f523c743fc28b11600fd6d1",
+   "src/training/decision2/v2/06b/records/m6-results-2026-09-29.md": "5b2c09bd9e018f3ab29a83e5446168f21e2da2737027a28eecdf600ee2959efe",
+   "src/training/decision2/v2/06b/records/m8-results-2026-09-29.md": "9827738a568574296422a7e3fa803e391e15ed354f3b7910c87782da29bc90fd"
+  }
+ },
+ "commands": [
+  "cd src/training/decision2/v2/release/records/dev2-0p6b-m8-release-2026-09-29/credits",
+  "B=$(base64 -w0 count_m6_sources.py) && ssh -o ConnectTimeout=20 -o BatchMode=yes root@<node A> \"python3 -c \\\"\\$(echo $B | base64 -d)\\\"\" > m6-union-counts.json",
+  "python3 build_m6_sources.py"
+ ]
+}

@@ -1,0 +1,153 @@
+{
+  "ci95": {
+    "high": 53.0,
+    "low": 23.0
+  },
+  "delta": 38,
+  "discordant": {
+    "left_only": 54,
+    "right_only": 16
+  },
+  "families": {
+    "adequacy": {
+      "items": 12,
+      "left": 7,
+      "right": 6
+    },
+    "adversarial": {
+      "items": 6,
+      "left": 4,
+      "right": 3
+    },
+    "ambiguous": {
+      "items": 7,
+      "left": 1,
+      "right": 4
+    },
+    "extraction": {
+      "items": 24,
+      "left": 22,
+      "right": 18
+    },
+    "fact": {
+      "items": 12,
+      "left": 12,
+      "right": 9
+    },
+    "intent": {
+      "items": 24,
+      "left": 22,
+      "right": 21
+    },
+    "judge_hard": {
+      "items": 17,
+      "left": 8,
+      "right": 7
+    },
+    "long_policy": {
+      "items": 19,
+      "left": 6,
+      "right": 0
+    },
+    "multi_hop": {
+      "items": 18,
+      "left": 6,
+      "right": 0
+    },
+    "ordinal": {
+      "items": 12,
+      "left": 11,
+      "right": 4
+    },
+    "policy": {
+      "items": 12,
+      "left": 10,
+      "right": 6
+    },
+    "probability": {
+      "items": 10,
+      "left": 3,
+      "right": 2
+    },
+    "routing": {
+      "items": 12,
+      "left": 12,
+      "right": 8
+    },
+    "routing_hard": {
+      "items": 5,
+      "left": 5,
+      "right": 2
+    },
+    "temporal_numeric": {
+      "items": 15,
+      "left": 3,
+      "right": 4
+    },
+    "tool_selection": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "tradeoff": {
+      "items": 6,
+      "left": 3,
+      "right": 3
+    },
+    "trap": {
+      "items": 8,
+      "left": 5,
+      "right": 5
+    }
+  },
+  "items": 231,
+  "label": "post-key same-panel",
+  "left_correct": 152,
+  "mcnemar_exact_p": 5.85395552938811e-06,
+  "names": {
+    "left": "DEV2.0-0.6B",
+    "right": "kai1"
+  },
+  "right_correct": 114,
+  "rule": "REGRESSION if left − right < 0 items and the exact two-sided McNemar p < 0.05",
+  "runs": {
+    "left": "/data/dev2/runs/06b/m8/formal/m8-s5-b05",
+    "right": "/data/dev2/runs/eval/m1-adopt/kai1"
+  },
+  "schema": "dev2-gate-public231/1",
+  "tiers": {
+    "easy": {
+      "items": 48,
+      "left": 47,
+      "right": 45
+    },
+    "hard": {
+      "items": 111,
+      "left": 44,
+      "right": 30
+    },
+    "standard": {
+      "items": 72,
+      "left": 61,
+      "right": 39
+    }
+  },
+  "types": {
+    "choice": {
+      "items": 139,
+      "left": 93,
+      "right": 72
+    },
+    "noul": {
+      "items": 74,
+      "left": 47,
+      "right": 37
+    },
+    "score": {
+      "items": 18,
+      "left": 12,
+      "right": 5
+    }
+  },
+  "verdict": "OK"
+}

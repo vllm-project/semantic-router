@@ -53,6 +53,15 @@ def _guard(repo: str, kind: str, model_name: str) -> None:
     layout.check_repo(repo, model_name, staging=kind == "staging")
 
 
+def _same_repository(repo: str, info: Any) -> None:
+    # The Hub answers a renamed repository's old ID with the new repository (HTTP 307).
+    resolved = getattr(info, "id", None) or repo
+    if resolved != repo:
+        raise RuntimeError(
+            f"{repo} resolves to {resolved} (renamed or moved); use {resolved}"
+        )
+
+
 def ensure(args: argparse.Namespace) -> dict[str, Any]:
     _guard(args.repo, args.kind, args.model_name)
     api = _api()
@@ -65,6 +74,7 @@ def ensure(args: argparse.Namespace) -> dict[str, Any]:
         api.create_repo(args.repo, repo_type="model", private=True, exist_ok=False)
         created = True
         info = api.model_info(args.repo)
+    _same_repository(args.repo, info)
     if info.private is not True:
         raise RuntimeError(f"{args.repo} is not private; refusing to use it")
     return {
@@ -94,7 +104,9 @@ def upload(args: argparse.Namespace) -> dict[str, Any]:
             "Package directory differs from its manifest; rebuild before upload"
         )
     api = _api()
-    if api.model_info(args.repo).private is not True:
+    target = api.model_info(args.repo)
+    _same_repository(args.repo, target)
+    if target.private is not True:
         raise RuntimeError("Target repository is not private")
     started = time.perf_counter()
     commit = api.upload_folder(
@@ -216,6 +228,7 @@ def readback(args: argparse.Namespace) -> dict[str, Any]:
 
     api = _api()
     info = api.model_info(args.repo, revision=args.revision, files_metadata=True)
+    _same_repository(args.repo, info)
     manifest = json.loads(
         (args.package / layout.MANIFEST_NAME).read_text(encoding="utf-8")
     )
@@ -326,6 +339,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("Gate receipt does not approve this exact package revision")
     api = _api()
     info = api.model_info(args.repo, revision=args.revision)
+    _same_repository(args.repo, info)
     collection, _ = _collection_items(api, args.collection)
     # The collection is identified by its pinned slug; its title is the user's to curate.
     if args.collection != COLLECTION or getattr(collection, "slug", None) != COLLECTION:
