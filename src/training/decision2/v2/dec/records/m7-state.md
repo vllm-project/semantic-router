@@ -5,6 +5,13 @@ GPU3–4. Preregistrations: [M6b](dec-m6b-prereg-2026-09-30.md) (`833ec0967`), [
 
 ## Now
 
+- 2026-09-30 ≈04:30 UTC+8 (20:30Z) — **First seeds done; every arm fits its cap.**
+  - `m7-N7H-s1` 1.351 and `m7-N7C-s1` 1.343 GPU-h (the preregistered 1.35 estimate); `m7-S7H-s1` ≈ 0.65 GPU-h.
+    The earlier ~1.65 reading was taken while a co-tenant readout shared the GPU. All seeds 2 are past preflight.
+  - Line watchers (`ops/m7/m7-watch.sh`, `ed568b34d`) run each arm's line readouts and diagnostics as its soup
+    lands, then the tier's finalists: node B GPU4 (4B), node A GPU5 (2B).
+  - Expected (UTC): S7H soup ≈21:20, N7H / N7C soups ≈23:10, S7C ≈23:30, S7P ≈01:40, N7P ≈01:55; finalists after
+    the last line of each tier. Projected total ≈ 21 GPU-h.
 - 2026-09-30 ≈03:25 UTC+8 (19:25Z) — **M7 training live on all three GPUs.**
   - Data lock `ea7540df4` (six files PASS; P arms on PN1-r2 per the revision rule; HS1 rows within the cleared
     revision). The new evaluation-only guard passes on every input and all 512,552 TRAIN rows (`404290ee7`).
