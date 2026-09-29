@@ -199,6 +199,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 07:35 — **Decoder M6b: no successor. The decoder M7 worker was stopped by the platform; a continuation
+  worker was launched** (M6b results `v2/dec/records/dec-m6b-results-2026-09-30.md`).
+  - **M6b:** N6D soup −2.67 [−4.59, +0.33] and its ⅔ point −0.89 [−2.88, +1.16] vs DEV2.0-4B. Typed FINAL fell
+    (T .647 / .671 vs .688), so the 4B N6D lead is closed.
+  - **M7 state:** data locked on PN1-r2 and the cleared HS1 rows (`ea7540df4`); the evaluation-only guard is wired
+    in; the line watcher is live (`ed568b34d`). At 23:29Z these chains were running:
+    - node A GPU5: 2B S7P;
+    - node B: 4B N7P s1 / s2 and the N7C ⅓ build.
+  - **Platform limit:** the 9B M6 and decoder M7 workers were both stopped after ~5.5 h of turn time. Every long
+    milestone must now:
+    - poll every ≤ 30 minutes with one-line state updates;
+    - hand off cleanly through its state file near 5 h.
+    The coordinator relaunches continuation workers from the state file.
+
 - 2026-09-30 07:20 — **27B M4: the A20r soup is a successor (72.36, +5.15) and SUPERSEDES F-b; 27B M5 launched**
   (M4 records at `632f4005d`; integration `7671002d0`; 65.68 of 70 GPU-h).
   - **Formal results** (post-key, T = 1):
