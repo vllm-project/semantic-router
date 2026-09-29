@@ -25,7 +25,8 @@ if has parity && [ ! -f "$P0/parity/parity.json" ]; then
     --purpose "P0 tiny-model FSDP2 parity" --receipt "$P0/receipts/parity.json" \
     --mount "$CODE:/code" --mount "$P0/parity:/out:rw" --mount "$TMPDIR:$TMPDIR:rw" \
     --env PYTHONPATH=/code:/opt/decision-fla --env "TMPDIR=$TMPDIR" --env HF_HUB_OFFLINE=1 \
-    -- python3 -m torch.distributed.run --standalone --nproc-per-node "${#n[@]}" \
+    -- python3 -m torch.distributed.run --nnodes 1 --master-addr 127.0.0.1 --master-port 29500 \
+    --nproc-per-node "${#n[@]}" \
     -m v2.27b.m4b.fsdp_parity --output /out
   python3 -m v2.27b.m4b.launch3 lease --gpus "$GPUS" --purpose "m4b P0 parity done" --status idle
 fi

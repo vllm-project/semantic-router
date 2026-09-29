@@ -22,7 +22,8 @@ section "Trainer"); only the execution is sharded:
 
 Run from ``src/training/decision2``::
 
-    python3 -m torch.distributed.run --standalone --nproc-per-node 3 \\
+    python3 -m torch.distributed.run --nnodes 1 --master-addr 127.0.0.1 --master-port 29500 \\
+        --nproc-per-node 3 \\
         -m v2.27b.m4b.train_ff --model-path ... --revision ... --train ... \\
         --select ... --output ... --arm A1 --seed 20260926
 """

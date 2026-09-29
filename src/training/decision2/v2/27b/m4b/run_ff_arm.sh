@@ -103,7 +103,8 @@ if [ -n "$TEACHER_FILE" ]; then
   TEACHER_ARGS=(--teacher /data/teacher.jsonl --teacher-partial --teacher-kl-weight "$TEACHER_KL")
 fi
 TRAIN_ARGS=(
-  python3 -m torch.distributed.run --standalone --nproc-per-node "$NGPU" -m v2.27b.m4b.train_ff
+  python3 -m torch.distributed.run --nnodes 1 --master-addr 127.0.0.1 --master-port 29500
+  --nproc-per-node "$NGPU" -m v2.27b.m4b.train_ff
   --model-path "$MODEL_DIR" --revision "$REVISION" --train /data/train.jsonl --select /data/select.jsonl
   --arm "$ARM" --seed "$SEED_VALUE" --precision "$PRECISION" --max-batch-tokens "$MAX_BATCH_TOKENS"
   --max-batch-rows 64 --update-rows 64 --max-length 4096 --head-dim 256 --backbone-lr 1e-5
