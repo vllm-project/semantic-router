@@ -1,0 +1,31 @@
+import collections
+import json
+import re
+
+base = "/data/dev2/runs/eval/m4/c1-hitgroups"
+REL = {
+    "DEV2.0-0.6B (0.6B M4 T = m4-mix-t)": r"/data/dev2/runs/06b/m4/data/.*mix-t",
+    "DEV2.0-0.8B (dec M2 E8F = m2-full-a7-v1)": r"/data/dev2/runs/dec/m2/data/m2-full-a7-v1/",
+    "DEV2.0-2B (dec M3 S2T = m3-v2m-ret)": r"/data/dev2/runs/dec/m3/data/m3-v2m-ret/",
+    "DEV2.0-4B (dec M4 N4XF = m4-xl-full-29m)": r"/data/dev2/runs/dec/m4/data/m4-xl-full-29m/",
+    "DEV2.0-8B/9B (9B M4 K = m4-k-xl-r2-60m)": r"/data/dev2/runs/9b/m4/data/m4-k-xl-r2-60m/",
+    "DEV2.0-26B/27B (27B M3-A = mixtures-m3-1)": r"/data/dev2/private/27b/m3-data/mixtures-m3-1/",
+}
+for node in ("nodeA", "nodeB"):
+    labels = json.load(open(f"{base}/perfile-{node}/perfile-manifest.json"))["labels"]
+    for name, pattern in REL.items():
+        files = [k.split("::", 1)[1] for k in labels if re.search(pattern, k.split("::", 1)[1])]
+        print(node, name, len(files), [f.rsplit("/", 2)[-2:] for f in files[:3]])
+rows = collections.defaultdict(dict)
+for node in ("nodeA", "nodeB"):
+    for line in open(f"{base}/perfile-{node}/overlap-hits.jsonl"):
+        hit = json.loads(line)
+        for label, cell in (hit.get("labels") or {}).items():
+            if cell["verdict"] != "CLEAN":
+                path = label.split("::", 1)[1]
+                rows[hit["id"]][path] = (cell["verdict"], cell["containment"], cell.get("exact"))
+print("----")
+for rid in sorted(rows):
+    rel = sorted({n for n, p in REL.items() for path in rows[rid] if re.search(p, path)})
+    best = max(rows[rid].values(), key=lambda v: v[1])
+    print(f"{rid:42s} files={len(rows[rid]):3d} maxc={best[1]:.3f} released={rel}")

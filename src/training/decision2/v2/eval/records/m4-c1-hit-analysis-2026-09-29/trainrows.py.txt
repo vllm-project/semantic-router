@@ -1,0 +1,22 @@
+import collections
+import json
+import re
+
+base = "/data/dev2/runs/eval/m4/c1-hitgroups"
+TRAIN = re.compile(r"^(training-data:|/data/dev2/runs/(?!eval)|/data/dev2/private/(data|27b|dec-arms|a7/runs|a7/base)|/data/dev2/tmp|hf-blobs)")
+rows = collections.defaultdict(lambda: collections.defaultdict(list))
+top = {}
+for node in ("nodeA", "nodeB"):
+    for line in open(f"{base}/{node}/overlap-hits.jsonl"):
+        hit = json.loads(line)
+        old = top.get(hit["id"])
+        if old is None or (hit["verdict"] == "OVERLAP", hit["containment"]) > (old["verdict"] == "OVERLAP", old["containment"]):
+            top[hit["id"]] = {k: hit.get(k) for k in ("verdict", "containment", "exact", "shingles")}
+        for group, cell in (hit.get("labels") or {}).items():
+            if cell["verdict"] != "CLEAN" and TRAIN.match(group):
+                rows[hit["id"]][group].append((node, cell["verdict"], cell["containment"], cell.get("exact"), (cell.get("file") or "None")))
+for rid in sorted(rows):
+    print(f"ROW {rid} overall={top[rid]}")
+    for group, cells in sorted(rows[rid].items()):
+        for node, verdict, cont, exact, path in cells:
+            print(f"    {verdict:7s} c={cont:.3f} exact={exact} {node} {path.replace('/data/dev2/runs/eval/m4/c1-rescan-v1_3/','WORK:')[-110:]}")
