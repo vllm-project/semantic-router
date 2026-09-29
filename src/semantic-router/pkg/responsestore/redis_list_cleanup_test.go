@@ -89,6 +89,7 @@ func (h *listWindowObserverHook) snapshot() []int64 {
 // supported cursor directions. Each case has at least two Limit-sized stale
 // windows before the live result, so a fixed one-refill implementation would
 // return an empty terminal page.
+// StorageIntegration: redis
 func TestListWalksPastMultipleGeneratedTombstoneWindows(t *testing.T) {
 	const limit = 2
 
@@ -172,6 +173,7 @@ func TestListWalksPastMultipleGeneratedTombstoneWindows(t *testing.T) {
 // candidate repeatedly changes generation. The full page can be retried once
 // the writer quiesces; returning the one visible member with nil error would
 // let an ordinary paginator hide everything behind the contended slot.
+// StorageIntegration: redis
 func TestListReturnsContentionErrorInsteadOfAmbiguousPartialPage(t *testing.T) {
 	store := newConversationIndexStore(t)
 	writer := newConcurrentRedisStore(t, store)
@@ -219,6 +221,7 @@ func TestListReturnsContentionErrorInsteadOfAmbiguousPartialPage(t *testing.T) {
 //
 // The traversal must step over them without removing them, so both halves are
 // asserted: the live response comes back, and every tombstone is still a member.
+// StorageIntegration: redis
 func TestListWalksPastBlockedLegacyTombstonesBeforeFinalization(t *testing.T) {
 	const limit = 3
 
@@ -259,6 +262,7 @@ func TestListWalksPastBlockedLegacyTombstonesBeforeFinalization(t *testing.T) {
 // retryable error rather than the empty page the traversal exists to prevent.
 // At Limit 1 the widening strides sum to 255 members over the budget, so a
 // longer blocked run cannot be crossed in one call.
+// StorageIntegration: redis
 func TestListReportsBlockedTraversalBudgetExhausted(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -288,6 +292,7 @@ func TestListReportsBlockedTraversalBudgetExhausted(t *testing.T) {
 //
 // Only a window that comes back shorter than the ranks it covered proves
 // exhaustion; a full one must widen instead.
+// StorageIntegration: redis
 func TestListFillsPageAcrossMixedBlockedWindow(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -334,6 +339,7 @@ func TestListFillsPageAcrossMixedBlockedWindow(t *testing.T) {
 // would begin after the live response, reporting an empty page while a
 // retained response sat in the index. A fixed anchor cannot be carried
 // anywhere, so widening simply re-reads both.
+// StorageIntegration: redis
 func TestListWideningSurvivesBlockedMemberRecreation(t *testing.T) {
 	store := newConversationIndexStore(t)
 	writer := newConcurrentRedisStore(t, store)
@@ -412,6 +418,7 @@ func (h *cursorRankObserverHook) ProcessHook(next redis.ProcessHook) redis.Proce
 // a two-command implementation that boundary is after the rank was already
 // taken, which is exactly the race; against the atomic one the mutation
 // simply precedes the snapshot and the page is correct either way.
+// StorageIntegration: redis
 func TestListCursorPageIsOneSnapshot(t *testing.T) {
 	const limit = 2
 
@@ -494,6 +501,7 @@ func TestListCursorPageIsOneSnapshot(t *testing.T) {
 // TestListCursorRankIsNeverAStandaloneCommand pins the property directly:
 // no cursor read, in either direction or with either cursor kind, resolves the
 // rank as a command of its own.
+// StorageIntegration: redis
 func TestListCursorRankIsNeverAStandaloneCommand(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -526,6 +534,7 @@ func TestListCursorRankIsNeverAStandaloneCommand(t *testing.T) {
 // The failure is persistent because a widening list re-reads the window each
 // round; a one-shot failure would be healed by the second read and show only
 // that retries work, not what a page returns past an unreadable member.
+// StorageIntegration: redis
 func TestListFailsClosedOnUnreadablePayload(t *testing.T) {
 	const limit = 2
 

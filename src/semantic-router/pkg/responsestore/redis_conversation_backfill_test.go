@@ -104,6 +104,7 @@ func (h *indexWriteObserverHook) maxBatch() int {
 // batching directly, at the wire command level: more than
 // redisBackfillBatchSize matching legacy responses must produce multiple
 // ZADD calls, none exceeding that cap, rather than one oversized command.
+// StorageIntegration: redis
 func TestLazyBackfillBoundedZaddBatches(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -135,6 +136,7 @@ func TestLazyBackfillBoundedZaddBatches(t *testing.T) {
 // not a client-side pre-sort — and ZADD's own argument order does not
 // affect that, since a ZSET's ordering is a property of the stored
 // (score, member) pairs, never of the order ZADD received them in.
+// StorageIntegration: redis
 func TestLazyBackfillEqualTimestampsUseRedisMemberOrdering(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -161,6 +163,7 @@ func TestLazyBackfillEqualTimestampsUseRedisMemberOrdering(t *testing.T) {
 // succeeded in the index, but must not mark the conversation migrated —
 // the next call is a safe, idempotent retry rather than one that trusts an
 // exhaustive-looking index that is actually incomplete.
+// StorageIntegration: redis
 func TestLazyBackfillPartialZaddFailureLeavesNoProof(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -196,6 +199,7 @@ func TestLazyBackfillPartialZaddFailureLeavesNoProof(t *testing.T) {
 // `go test -race`, this is the direct regression test for the removed
 // shared, unsynchronized accumulation slice: indexBackfillBatch has no
 // shared mutable state to race on, only independent, idempotent ZADD calls.
+// StorageIntegration: redis
 func TestIndexBackfillBatchConcurrentCallersRaceFree(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -223,6 +227,7 @@ func TestIndexBackfillBatchConcurrentCallersRaceFree(t *testing.T) {
 	assert.Len(t, conversationIndexMembers(t, store, "conv_concurrent_backfill"), goroutines*perGoroutine)
 }
 
+// StorageIntegration: redis
 func TestLazyBackfillDoesNotCertifyIncompleteScan(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()

@@ -37,6 +37,7 @@ func indexGenerationPTTL(t *testing.T, store *RedisStore, conversationID string)
 // carries a generation so finalization cannot recover another lifetime from
 // the legacy-promotion Lua script; accepting the failed PTTL would stamp its
 // index with the much shorter store TTL and then publish a permanent proof.
+// StorageIntegration: redis
 func TestFinalizationRefusesUnknownPayloadLifetime(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 300)
 	ctx := context.Background()
@@ -83,6 +84,7 @@ func TestFinalizationRefusesUnknownPayloadLifetime(t *testing.T) {
 	assert.Greater(t, indexPTTL(t, store, conversationID), store.ttl)
 }
 
+// StorageIntegration: redis
 func TestLazyBackfillRefusesUnknownPayloadLifetime(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 300)
 	ctx := context.Background()
@@ -106,6 +108,7 @@ func TestLazyBackfillRefusesUnknownPayloadLifetime(t *testing.T) {
 		"a scan with an unknown retained-payload lifetime must not publish a per-conversation proof")
 }
 
+// StorageIntegration: redis
 func TestAddResponseToConversationRefusesUnknownPayloadLifetime(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 300)
 	ctx := context.Background()
@@ -162,6 +165,7 @@ func TestDecodePayloadTTLDistinguishesGoneFromUnreadable(t *testing.T) {
 // through, it would PERSIST the conversation ZSET and its generation sidecar on
 // behalf of a payload about to vanish, and conversationIndexAddScript only ever
 // raises an expiry, so no later finite write could put one back.
+// StorageIntegration: redis
 func TestFinalizationClampsExpiringPayloadLifetime(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 300)
 	ctx := context.Background()
@@ -191,6 +195,7 @@ func TestFinalizationClampsExpiringPayloadLifetime(t *testing.T) {
 // through the explicit repair path rather than a sweep: AddResponseToConversation
 // indexes a payload it only read, so it takes its lifetime from the same
 // pipelined PTTL.
+// StorageIntegration: redis
 func TestWitnessRepairClampsExpiringPayloadLifetime(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 300)
 	ctx := context.Background()
@@ -218,6 +223,7 @@ func TestWitnessRepairClampsExpiringPayloadLifetime(t *testing.T) {
 // lifetime let repairResponseWitness persist a conversation index for a
 // payload Redis had already declared gone. The read must report the payload
 // as not found instead, and no index may be created for it.
+// StorageIntegration: redis
 func TestAddResponseToConversationRejectsPayloadGoneBeforeLifetimeRead(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 300)
 	ctx := context.Background()
@@ -246,6 +252,7 @@ func TestAddResponseToConversationRejectsPayloadGoneBeforeLifetimeRead(t *testin
 // leaves a finite index behind; the retry's witness repair, handed a -2
 // lifetime, would have persisted it. The duplicate contract is unchanged and
 // the index keeps the finite expiry it already had.
+// StorageIntegration: redis
 func TestDuplicateRepairRejectsPayloadGoneBeforeLifetimeRead(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 300)
 	ctx := context.Background()
@@ -276,6 +283,7 @@ func TestDuplicateRepairRejectsPayloadGoneBeforeLifetimeRead(t *testing.T) {
 // -2 is skipped exactly as one whose GET returned nil — the documented benign
 // expiry race, one command later — rather than indexed as a tombstone that
 // would only be pruned on a later read.
+// StorageIntegration: redis
 func TestLazyBackfillSkipsPayloadGoneBeforeLifetimeRead(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 300)
 	ctx := context.Background()
@@ -301,6 +309,7 @@ func TestLazyBackfillSkipsPayloadGoneBeforeLifetimeRead(t *testing.T) {
 // TestGeneratedIndexAndSidecarShareMonotonicTTL proves every generated index
 // write projects the longer lifetime onto both co-located keys. Neither the
 // membership nor the witness may expire first.
+// StorageIntegration: redis
 func TestGeneratedIndexAndSidecarShareMonotonicTTL(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 60)
 	ctx := context.Background()
@@ -335,6 +344,7 @@ func TestGeneratedIndexAndSidecarShareMonotonicTTL(t *testing.T) {
 	assert.EqualValues(t, -1, indexGenerationPTTL(t, store, conversationID))
 }
 
+// StorageIntegration: redis
 func TestConditionalUnindexDeletesOnlyOwnedSidecarField(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -364,6 +374,7 @@ func TestConditionalUnindexDeletesOnlyOwnedSidecarField(t *testing.T) {
 // completion key is set, an index that expires first is not a degraded read —
 // a missing index means "empty", nothing ever rescans, and the surviving
 // payloads are hidden permanently.
+// StorageIntegration: redis
 func TestFinalizedIndexOutlivesLongerLivedPayloads(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 60)
 	ctx := context.Background()
@@ -389,6 +400,7 @@ func TestFinalizedIndexOutlivesLongerLivedPayloads(t *testing.T) {
 // TestBackfilledIndexOutlivesLongerLivedPayloads is the same rule on the lazy
 // backfill path, which discovers exactly the same kind of legacy payload one
 // conversation at a time.
+// StorageIntegration: redis
 func TestBackfilledIndexOutlivesLongerLivedPayloads(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 60)
 	ctx := context.Background()
@@ -412,6 +424,7 @@ func TestBackfilledIndexOutlivesLongerLivedPayloads(t *testing.T) {
 // reach would otherwise be undone by the very next ordinary write, which knows
 // only the store's own TTL — leaving the long-lived payloads the backfill just
 // discovered facing exactly the expiry the backfill existed to prevent.
+// StorageIntegration: redis
 func TestIndexLifetimeNeverShortenedByOrdinaryWrite(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 60)
 	ctx := context.Background()
@@ -437,6 +450,7 @@ func TestIndexLifetimeNeverShortenedByOrdinaryWrite(t *testing.T) {
 // TestIndexLifetimeCoversPersistentPayload covers the other end of the range:
 // a payload with no expiry at all needs an index with no expiry, since any
 // finite one would eventually retire ahead of it.
+// StorageIntegration: redis
 func TestIndexLifetimeCoversPersistentPayload(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 60)
 	ctx := context.Background()
@@ -467,6 +481,7 @@ func TestIndexLifetimeCoversPersistentPayload(t *testing.T) {
 //
 // The one sleep in these tests is unavoidable — the failure is an expiry, and
 // only real elapsed time produces it.
+// StorageIntegration: redis
 func TestFinalizedStoreDoesNotHideSurvivingPayloads(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 1)
 	ctx := context.Background()

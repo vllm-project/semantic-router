@@ -20,6 +20,7 @@ import (
 // exactly one legacy scan, even when that scan runs long enough that the
 // superseded per-conversation lock's fixed backoff-then-scan-anyway
 // fallback would have let every one of them scan independently.
+// StorageIntegration: redis
 func TestConversationIndexScanLeaseSerializesConcurrentReadersSameConversation(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -59,6 +60,7 @@ func TestConversationIndexScanLeaseSerializesConcurrentReadersSameConversation(t
 // distinct, never-seen IDs must still never run more than one scan at a
 // time system-wide (they run sequentially, one scan per ID, rather than
 // each independently in parallel).
+// StorageIntegration: redis
 func TestConversationIndexScanLeaseSerializesConcurrentNovelConversations(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -102,6 +104,7 @@ func TestConversationIndexScanLeaseSerializesConcurrentNovelConversations(t *tes
 // elapses survives past that original deadline with the full TTL restored,
 // so a scan that runs longer than one lease TTL is not taken over by
 // another waiter partway through, as long as it keeps renewing.
+// StorageIntegration: redis
 func TestConversationIndexScanLeaseRenewalExtendsBeyondOriginalTTL(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -143,6 +146,7 @@ func TestConversationIndexScanLeaseRenewalExtendsBeyondOriginalTTL(t *testing.T)
 // report loss (ok=false, not an error) rather than silently succeeding —
 // this is exactly the signal withConversationIndexScanLease's background
 // renewer relies on to cancel an in-flight scan.
+// StorageIntegration: redis
 func TestConversationIndexScanLeaseRenewalDetectsLoss(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -168,6 +172,7 @@ func TestConversationIndexScanLeaseRenewalDetectsLoss(t *testing.T) {
 // blocked on an externally-held lease: cancelling its context must return
 // promptly (within the test's short deadline), never sit through the full
 // backoff schedule or wait for the external holder's lease to expire.
+// StorageIntegration: redis
 func TestConversationIndexScanLeaseWaiterRespectsCancellation(t *testing.T) {
 	store := newConversationIndexStore(t)
 
@@ -191,6 +196,7 @@ func TestConversationIndexScanLeaseWaiterRespectsCancellation(t *testing.T) {
 	assert.Lessf(t, elapsed, 2*time.Second, "a cancelled waiter must return promptly, not block for a much longer default")
 }
 
+// StorageIntegration: redis
 func TestConversationIndexScanLeaseWaiterReturnsWhenProofAppears(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -218,6 +224,7 @@ func TestConversationIndexScanLeaseWaiterReturnsWhenProofAppears(t *testing.T) {
 // a short natural TTL frees up on its own, and multiple waiters queued
 // behind it are each admitted in turn — never two at once — as it keeps
 // freeing and being retaken.
+// StorageIntegration: redis
 func TestConversationIndexScanLeaseSequentialWaitersEachGetATurn(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -337,6 +344,7 @@ func warmScanLeaseScripts(t *testing.T, store *RedisStore, token string) {
 // Deterministic by construction: fn cannot return until the gate proves a
 // renewal round-trip is open, and the gate cannot return until the wrapper's
 // shutdown cancels it.
+// StorageIntegration: redis
 func TestConversationIndexScanLeaseCompletionSurvivesRenewalCancellation(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -490,6 +498,7 @@ func (h *answeredRenewalGateHook) ProcessHook(next redis.ProcessHook) redis.Proc
 // renewal round-trip is open, the gate cannot let that round-trip reach Redis
 // until the wrapper's shutdown cancels it, and the lease is stolen before the
 // first renewal is ever sent, so the answer is always "not yours".
+// StorageIntegration: redis
 func TestConversationIndexScanLeaseReportsAuthoritativeLossAfterCompletion(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -529,6 +538,7 @@ func TestConversationIndexScanLeaseReportsAuthoritativeLossAfterCompletion(t *te
 // which is what keeps lazyBackfillConversationIndex and
 // FinalizeConversationIndex from publishing a proof built by a scan that was
 // not exclusive for its whole duration.
+// StorageIntegration: redis
 func TestConversationIndexScanLeaseStillFailsWhenLostDuringWork(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()

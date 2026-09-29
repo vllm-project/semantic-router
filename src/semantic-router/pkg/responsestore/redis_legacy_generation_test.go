@@ -71,6 +71,7 @@ func (h *promotionPipelineHook) matches(cmd redis.Cmder) bool {
 // routinely outlives the store's current TTL — re-stamping it with s.ttl would
 // silently retire data early — and the upgrade is conditional on the exact
 // bytes read, so a stale caller can never overwrite a payload that moved on.
+// StorageIntegration: redis
 func TestLegacyPayloadUpgradePreservesContentAndLifetime(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 30)
 	ctx := context.Background()
@@ -128,6 +129,7 @@ func TestLegacyPayloadUpgradePreservesContentAndLifetime(t *testing.T) {
 // any field this build does not know about — one written by a newer binary, or
 // one retired from the struct but still present in stored data — which would
 // make "non-destructive upgrade" false.
+// StorageIntegration: redis
 func TestLegacyPayloadUpgradePreservesUnknownFields(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -171,6 +173,7 @@ func TestLegacyPayloadUpgradePreservesUnknownFields(t *testing.T) {
 // queues all legacy upgrades into one Redis round trip. The old implementation
 // fetched a batch and then synchronously invoked one Lua script per payload,
 // turning a legacy scan into O(N) network round trips.
+// StorageIntegration: redis
 func TestFinalizationPromotionsArePipelined(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -209,6 +212,7 @@ func TestFinalizationPromotionsArePipelined(t *testing.T) {
 // request-path scans may index legacy records with a blank witness, but they
 // must not mint a generation which an index-unaware writer could later leave
 // stale. Only the operator-authorized finalization sweep promotes payloads.
+// StorageIntegration: redis
 func TestLazyBackfillPreservesLegacyPayloads(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -237,6 +241,7 @@ func TestLazyBackfillPreservesLegacyPayloads(t *testing.T) {
 // witness, and the scan's delayed index write must not stamp the generation it
 // read over the live one — after which a conditional prune would, quite
 // correctly, remove a membership whose payload is alive.
+// StorageIntegration: redis
 func TestScanUpgradeDoesNotClobberNewerWitness(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -277,6 +282,7 @@ func TestScanUpgradeDoesNotClobberNewerWitness(t *testing.T) {
 // no rescan left to repair them. The sweep now upgrades each legacy payload as
 // it indexes it, so finalization produces an index whose members are all
 // deletable.
+// StorageIntegration: redis
 func TestFinalizeThenCascadeDeletesLegacyResponses(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -320,6 +326,7 @@ func TestFinalizeThenCascadeDeletesLegacyResponses(t *testing.T) {
 // promotion from laundering a legacy record into a normal witness while old
 // writers may still exist. After completion is set, the same payload can be
 // safely promoted and deleted because no writer may turn it legacy again.
+// StorageIntegration: redis
 func TestCascadeDeleteRefusesLiveLegacyPayloadBeforeFinalization(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -373,6 +380,7 @@ func TestCascadeDeleteRefusesLiveLegacyPayloadBeforeFinalization(t *testing.T) {
 // migrated marker on top of a live, unindexed response that no later scan
 // would ever rediscover. Failing closed keeps the conversation as the retry
 // anchor instead.
+// StorageIntegration: redis
 func TestCascadeDeleteRefusesBlankTombstoneBeforeFinalization(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -401,6 +409,7 @@ func TestCascadeDeleteRefusesBlankTombstoneBeforeFinalization(t *testing.T) {
 // TestCascadeDeleteDropsBlankTombstoneAfterFinalization is the other side of
 // the gate: once every writer is generation-aware, a blank-expected removal
 // can no longer be defeated, and the tombstone must stop blocking the cascade.
+// StorageIntegration: redis
 func TestCascadeDeleteDropsBlankTombstoneAfterFinalization(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -426,6 +435,7 @@ func TestCascadeDeleteDropsBlankTombstoneAfterFinalization(t *testing.T) {
 // live payload this conversation still owns is never unindexed, whatever its
 // witness says. Removing the membership instead would leave a live response
 // indexed nowhere, which past finalization nothing rediscovers.
+// StorageIntegration: redis
 func TestCascadeDeleteRepairsStaleWitnessInsteadOfRemoving(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -458,6 +468,7 @@ func TestCascadeDeleteRepairsStaleWitnessInsteadOfRemoving(t *testing.T) {
 // accounting. Repairing a stale witness is useful, but it removes no index
 // member and a hot writer can invalidate it repeatedly; the outer loop must
 // therefore count such a batch as a race round rather than unbounded progress.
+// StorageIntegration: redis
 func TestCascadeWitnessRepairDoesNotCountAsDrainProgress(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -492,6 +503,7 @@ func TestCascadeWitnessRepairDoesNotCountAsDrainProgress(t *testing.T) {
 // windows precede the live response here: a fixed one-refill implementation
 // prunes both windows but still returns empty, conventionally terminating
 // pagination while live data remains hidden behind them.
+// StorageIntegration: redis
 func TestListPrunesExpiredLegacyMember(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -531,6 +543,7 @@ func TestListPrunesExpiredLegacyMember(t *testing.T) {
 // can still put a payload back under the same ID without touching the sidecar,
 // so a blank-expected prune could unindex it; a short page for the duration of
 // the migration window is the accepted price of never orphaning a record.
+// StorageIntegration: redis
 func TestListKeepsBlankTombstoneBeforeFinalization(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -554,6 +567,7 @@ func TestListKeepsBlankTombstoneBeforeFinalization(t *testing.T) {
 // prune; a complete StoreResponse then lands in the GET-to-prune window and
 // installs a real witness. The stale blank-expected cleanup must find the
 // mismatch and no-op, leaving the recreated response both present and indexed.
+// StorageIntegration: redis
 func TestListBlankWitnessPruneKeepsRecreatedGeneration(t *testing.T) {
 	store := newConversationIndexStore(t)
 	writer := newConcurrentRedisStore(t, store)
@@ -597,6 +611,7 @@ func TestListBlankWitnessPruneKeepsRecreatedGeneration(t *testing.T) {
 // The gate applies here too, and for the sharpest version of the reason:
 // DeleteResponse frees the payload key, so an index-unaware SETNX can win it
 // back between the take and the cleanup.
+// StorageIntegration: redis
 func TestDeleteResponseUnindexesLegacyMemberOnceFinalized(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -632,6 +647,7 @@ func TestDeleteResponseUnindexesLegacyMemberOnceFinalized(t *testing.T) {
 // blank-witness leak: moving a legacy response between conversations. The
 // displaced payload had no generation, so under the gate the old membership
 // survives during the migration window and is dropped once finalized.
+// StorageIntegration: redis
 func TestUpdateResponseUnindexesLegacyPreviousConversation(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()

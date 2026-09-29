@@ -20,6 +20,7 @@ import (
 // explicitly — the default order is "desc" (newest first, blueprint §3.6,
 // matching the ListOptions.Order contract in interface.go), which
 // TestRedisListDefaultOrderIsDescending covers directly.
+// StorageIntegration: redis
 func TestRedisConversationIndexListing(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -113,6 +114,7 @@ func TestRedisConversationIndexListing(t *testing.T) {
 // must still be discoverable on first read, get backfilled into the index,
 // and must not trigger a second O(N) scan on the next read of the same
 // conversation.
+// StorageIntegration: redis
 func TestRedisListResponsesByConversationLazyBackfill(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -153,6 +155,7 @@ func TestRedisListResponsesByConversationLazyBackfill(t *testing.T) {
 // a legitimately empty or unknown conversation must not force a full
 // keyspace scan on every read — only once, after which the migrated marker
 // short-circuits subsequent reads.
+// StorageIntegration: redis
 func TestRedisListResponsesByConversationEmptyMarker(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -189,6 +192,7 @@ func TestRedisListResponsesByConversationEmptyMarker(t *testing.T) {
 // is already indexed, so it discovers and idempotently re-adds the
 // concurrent write alongside the legacy one, and marks the conversation
 // migrated once both are captured.
+// StorageIntegration: redis
 func TestRedisLazyBackfillConcurrentWriteNotHidden(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -201,7 +205,7 @@ func TestRedisLazyBackfillConcurrentWriteNotHidden(t *testing.T) {
 	concurrent := &responseapi.StoredResponse{
 		ID: "resp_race_concurrent", ConversationID: "conv_race", Status: "completed", CreatedAt: time.Now().Unix() + 1,
 	}
-	writer := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+	writer := redis.NewClient(&redis.Options{Addr: store.config.Address, DB: store.config.DB})
 	t.Cleanup(func() { _ = writer.Close() })
 	store.client.AddHook(&beforeCommandHook{name: "scan", once: true, before: func() {
 		// Runs once, before the scan walks the keyspace: lands a normal
@@ -298,6 +302,7 @@ func TestNormalizeResponseListOptions(t *testing.T) {
 // Phase 4 default-order fix: an unspecified Order must return newest first,
 // per the ListOptions.Order contract in interface.go (blueprint §3.6),
 // which neither store honored before this issue.
+// StorageIntegration: redis
 func TestRedisListDefaultOrderIsDescending(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -312,6 +317,7 @@ func TestRedisListDefaultOrderIsDescending(t *testing.T) {
 
 // TestRedisListBoundedLimit covers blueprint §6.5: default and clamped
 // limits, without reading the full conversation.
+// StorageIntegration: redis
 func TestRedisListBoundedLimit(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -338,6 +344,7 @@ func TestRedisListBoundedLimit(t *testing.T) {
 // TestRedisListCursors covers blueprint §3.6/§6.5's After/Before rank-window
 // semantics in both directions, plus the invalid-input and unknown-cursor
 // edge cases.
+// StorageIntegration: redis
 func TestRedisListCursors(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -449,6 +456,7 @@ func TestRedisListCursors(t *testing.T) {
 // back to a plain int directly; the count assertion below additionally
 // proves the migration lock (Phase 3) meaningfully reduces duplicate scans
 // under real concurrency, not just in the serialized tests elsewhere.
+// StorageIntegration: redis
 func TestRedisListResponsesByConversationConcurrentMissingScansOnce(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -487,6 +495,7 @@ func TestRedisListResponsesByConversationConcurrentMissingScansOnce(t *testing.T
 // window — capping the marker independently bounds the blind spot to
 // conversationIndexProofMaxTTL regardless of how long data itself
 // lives.
+// StorageIntegration: redis
 func TestRedisConversationMigratedMarkerTTLBoundedWhenEmpty(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 24*60*60) // 24h data TTL
 	ctx := context.Background()
@@ -508,6 +517,7 @@ func TestRedisConversationMigratedMarkerTTLBoundedWhenEmpty(t *testing.T) {
 // written by an indexing-unaware writer while the marker was still valid
 // must be discovered on the next read once the marker is gone, rather than
 // stay permanently hidden behind it.
+// StorageIntegration: redis
 func TestRedisConversationMigratedMarkerExpiryRevealsLegacyWrite(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -542,6 +552,7 @@ func TestRedisConversationMigratedMarkerExpiryRevealsLegacyWrite(t *testing.T) {
 // migrated marker decoupled these two facts, every subsequent read trusted
 // that index as complete and never discovered resp_old, silently and
 // permanently.
+// StorageIntegration: redis
 func TestRedisListResponsesByConversationPartiallyMigrated(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()

@@ -16,6 +16,7 @@ import (
 // them indexed or even touched by a read yet, must all be discoverable in
 // their respective conversation indexes once the sweep completes, and the
 // global status key must record that completion.
+// StorageIntegration: redis
 func TestRedisFinalizeConversationIndex(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -59,6 +60,7 @@ func TestRedisFinalizeConversationIndex(t *testing.T) {
 	assert.Zero(t, stats)
 }
 
+// StorageIntegration: redis
 func TestRedisFinalizeConversationIndexAbortsOnMalformedPayload(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -72,6 +74,7 @@ func TestRedisFinalizeConversationIndexAbortsOnMalformedPayload(t *testing.T) {
 	assert.Zero(t, exists(t, store, store.conversationIndexCompletionKey()))
 }
 
+// StorageIntegration: redis
 func TestRedisFinalizeConversationIndexAbortsOnIndexFailure(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -89,6 +92,7 @@ func TestRedisFinalizeConversationIndexAbortsOnIndexFailure(t *testing.T) {
 	assert.Zero(t, exists(t, store, store.conversationIndexCompletionKey()))
 }
 
+// StorageIntegration: redis
 func TestRedisFinalizeConversationIndexRefreshesIndexTTL(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -106,6 +110,7 @@ func TestRedisFinalizeConversationIndexRefreshesIndexTTL(t *testing.T) {
 	assert.LessOrEqual(t, ttl, store.ttl)
 }
 
+// StorageIntegration: redis
 func TestRedisFinalizeConversationIndexRejectsUnknownCompletionValue(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -116,6 +121,7 @@ func TestRedisFinalizeConversationIndexRejectsUnknownCompletionValue(t *testing.
 	assert.False(t, complete)
 }
 
+// StorageIntegration: redis
 func TestRedisFinalizeConversationIndexMissingCompletionIsNotError(t *testing.T) {
 	store := newConversationIndexStore(t)
 	complete, err := store.conversationIndexFinalized(context.Background())
@@ -129,6 +135,7 @@ func TestRedisFinalizeConversationIndexMissingCompletionIsNotError(t *testing.T)
 // unknown or empty conversation — the one case that could still force a
 // per-conversation legacy scan under the Phase 8 design alone — must
 // consult the index only, never scanResponsePayloads.
+// StorageIntegration: redis
 func TestRedisSteadyStateNeverScansOnceMigrationComplete(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -169,6 +176,7 @@ func TestRedisSteadyStateNeverScansOnceMigrationComplete(t *testing.T) {
 // TestRedisSteadyStateReadsRealDataOnceMigrationComplete confirms the
 // finalized fast path still returns real indexed data, not just correctly
 // short-circuiting to empty.
+// StorageIntegration: redis
 func TestRedisSteadyStateReadsRealDataOnceMigrationComplete(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -185,6 +193,7 @@ func TestRedisSteadyStateReadsRealDataOnceMigrationComplete(t *testing.T) {
 	assert.Equal(t, int64(0), store.scanInvocations.Load())
 }
 
+// StorageIntegration: redis
 func TestRedisFirstReadAfterFinalizedWriteNeverScans(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()

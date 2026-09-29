@@ -53,6 +53,7 @@ func commandContainsArg(cmd redis.Cmder, target string) bool {
 // expired or was otherwise deleted out from under its index entry must not
 // block the rest of the cascade, and the conversation must still delete
 // cleanly.
+// StorageIntegration: redis
 func TestCascadeDeleteMissingPayloadPrunesIndexMember(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -80,6 +81,7 @@ func TestCascadeDeleteMissingPayloadPrunesIndexMember(t *testing.T) {
 // reason other than missing -> preserve payload+member, record error": a
 // transient Redis-level GET failure (not redis.Nil) must be reported and
 // leave both the payload and the index member untouched for a retry.
+// StorageIntegration: redis
 func TestCascadeDeleteGetFailurePreservesAndReports(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -115,6 +117,7 @@ func TestCascadeDeleteGetFailurePreservesAndReports(t *testing.T) {
 // TestCascadeDeleteUnindexFailureReported covers a failure of the atomic
 // conditional ZREM+HDEL after payload deletion. The stale witness remains a
 // retry anchor, so the failure is safe and recoverable.
+// StorageIntegration: redis
 func TestCascadeDeleteUnindexFailureReported(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -156,6 +159,7 @@ func TestCascadeDeleteUnindexFailureReported(t *testing.T) {
 // (e.g. because the old index's best-effort cleanup in UpdateResponse
 // hadn't run, or failed), must never be deleted by a cascade of the old
 // conversation — only the stale membership is pruned.
+// StorageIntegration: redis
 func TestCascadeDeleteStaleMovedMemberPreservesNewOwnerPayload(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -203,6 +207,7 @@ func TestCascadeDeleteStaleMovedMemberPreservesNewOwnerPayload(t *testing.T) {
 // ownership-verifying GET and its compare-delete must survive that first
 // cascade attempt (CAS conflict, reported, retryable) — and a subsequent
 // retry, with no further interference, must complete cleanly.
+// StorageIntegration: redis
 func TestCascadeDeleteConcurrentUpdatePreservesNewerPayload(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -259,6 +264,7 @@ func TestCascadeDeleteConcurrentUpdatePreservesNewerPayload(t *testing.T) {
 // between payload deletion and index cleanup. A writer that recreates and
 // indexes the response immediately after CAS deletion must not have that new
 // membership removed by a later ZREM from the old cascade attempt.
+// StorageIntegration: redis
 func TestCascadeDeleteDoesNotEraseRecreatedMembership(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -305,6 +311,7 @@ func TestCascadeDeleteDoesNotEraseRecreatedMembership(t *testing.T) {
 // compareDeleteResponsePayload's single-key Lua script, and ZREM against
 // one index key) — never a cross-slot command that a real cluster would
 // reject with CROSSSLOT.
+// StorageIntegration: redis_cluster
 func TestCascadeDeleteClusterCrossSlotSafe(t *testing.T) {
 	store := newConversationIndexClusterStore(t)
 	markStoreFinalized(t, store)
@@ -336,6 +343,7 @@ func TestCascadeDeleteClusterCrossSlotSafe(t *testing.T) {
 // TestCascadeDeleteCancellationKeepsRetryWitness cancels after payload CAS but
 // before conditional unindex. The stale witness must remain so a retry can
 // observe the missing payload and finish cleanup.
+// StorageIntegration: redis
 func TestCascadeDeleteCancellationKeepsRetryWitness(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -478,6 +486,7 @@ func newCascadeRaceHook(t *testing.T, store *RedisStore, conversationID, respons
 // Deterministic by construction: the racing write is injected in the instant
 // before the delete command reaches Redis, which is precisely the window that
 // cannot be hit reliably by timing.
+// StorageIntegration: redis
 func TestCascadeDeleteDrainsWriteCommittedAfterFinalEmptyRead(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -514,6 +523,7 @@ func TestCascadeDeleteDrainsWriteCommittedAfterFinalEmptyRead(t *testing.T) {
 // must be reported rather than either spun on forever or quietly reported as a
 // successful delete. What it must never do is leave a payload no index names —
 // the retry has to have something to find.
+// StorageIntegration: redis
 func TestCascadeDeleteReportsUnendingConcurrentWrites(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -576,6 +586,7 @@ func assertRefusedOrDrained(t *testing.T, store *RedisStore, conversationID, res
 // responses. Even those are unsafe to cascade while index-unaware writers may
 // exist, because such a writer can recreate or move a response into the
 // conversation without touching the index at any point during the drain.
+// StorageIntegration: redis
 func TestCascadeDeleteRefusesBeforeFinalization(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -613,6 +624,7 @@ func TestCascadeDeleteRefusesBeforeFinalization(t *testing.T) {
 // Against the ungated cascade the hook fires and the contract is violated —
 // the proof the race is real. Against the gate the cascade is refused before
 // the CAS runs, so the hook never fires and nothing is touched.
+// StorageIntegration: redis
 func TestCascadeDeleteOldWriterRecreationBeforeFinalization(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -652,6 +664,7 @@ func TestCascadeDeleteOldWriterRecreationBeforeFinalization(t *testing.T) {
 // conversation and drops only this conversation's membership; an index-unaware
 // pod moves the response back in between, again without touching the sidecar,
 // and the membership it needs is gone.
+// StorageIntegration: redis
 func TestCascadeDeleteOldWriterMoveBackBeforeFinalization(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -698,6 +711,7 @@ func TestCascadeDeleteOldWriterMoveBackBeforeFinalization(t *testing.T) {
 // unreachable through DeleteConversation. They remain the batch function's
 // own contract — defense in depth should the gate ever be bypassed — so they
 // are exercised directly.
+// StorageIntegration: redis
 func TestCascadeBatchRefusesLegacyCandidatesWithoutCleanupAuthority(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()

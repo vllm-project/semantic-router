@@ -18,6 +18,7 @@ import (
 // rollback sharing that context fails for the very same reason — leaving a
 // live payload no index entry names. Nothing lists it, and once
 // FinalizeConversationIndex has sealed the store nothing rescans to find it.
+// StorageIntegration: redis
 func TestStoreResponseRollsBackAfterContextCancellation(t *testing.T) {
 	store := newConversationIndexStore(t)
 	background := context.Background()
@@ -51,6 +52,7 @@ func TestStoreResponseRollsBackAfterContextCancellation(t *testing.T) {
 // and a rollback on the caller's context fails too — stranding the response
 // under its new conversation while both conversations' listings come back
 // empty.
+// StorageIntegration: redis
 func TestUpdateResponseRollsBackAfterContextCancellation(t *testing.T) {
 	store := newConversationIndexStore(t)
 	background := context.Background()
@@ -102,6 +104,7 @@ func TestUpdateResponseRollsBackAfterContextCancellation(t *testing.T) {
 // answers with the response in A, and listing A returns nothing — a state no
 // prune can repair, since pruning only ever removes entries, and no scan
 // repairs once the store is finalized.
+// StorageIntegration: redis
 func TestUpdateResponseKeepsMembershipRestoredByConcurrentUpdate(t *testing.T) {
 	store := newConversationIndexStore(t)
 	writer := newConcurrentRedisStore(t, store)
@@ -175,6 +178,7 @@ func assertResponseListedIn(t *testing.T, store *RedisStore, conversationID, res
 // single-key commands, and this proves it still is. Redis enforces slot
 // locality per command regardless of node count, so one node in cluster mode
 // is a faithful testbed.
+// StorageIntegration: redis_cluster
 func TestUpdateResponseClusterCrossSlotSafe(t *testing.T) {
 	store := newConversationIndexClusterStore(t)
 	ctx := context.Background()

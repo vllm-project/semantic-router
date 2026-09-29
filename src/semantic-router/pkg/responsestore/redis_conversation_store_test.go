@@ -14,6 +14,7 @@ import (
 
 // TestRedisDeleteConversationCascade uses more responses than one page: the
 // cascade reads the index directly, so it must not stop at DefaultListLimit.
+// StorageIntegration: redis
 func TestRedisDeleteConversationCascade(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -65,6 +66,7 @@ func TestRedisDeleteConversationCascade(t *testing.T) {
 // TestRedisAddResponseToConversation covers blueprint §3.7/§5 Phase 5: the
 // stored response's own ConversationID is the only source of truth for
 // whether it may be indexed under conversationID.
+// StorageIntegration: redis
 func TestRedisAddResponseToConversation(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -107,6 +109,7 @@ func TestRedisAddResponseToConversation(t *testing.T) {
 
 // TestRedisDeleteConversationCascadeBatched exceeds redisDeleteBatchSize so
 // the cascade must loop more than once (blueprint §5 Phase 5 / §6.6).
+// StorageIntegration: redis
 func TestRedisDeleteConversationCascadeBatched(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -151,6 +154,7 @@ func TestRedisDeleteConversationCascadeBatched(t *testing.T) {
 // otherwise-valid index member — deleteConversationResponseBatch must
 // preserve both the payload and the index member rather than guess at
 // ownership it cannot actually verify.
+// StorageIntegration: redis
 func TestRedisDeleteConversationCascadeFailureLeavesConversation(t *testing.T) {
 	store := newConversationIndexStore(t)
 	markStoreFinalized(t, store)
@@ -199,6 +203,7 @@ func TestRedisDeleteConversationCascadeFailureLeavesConversation(t *testing.T) {
 // The request fails closed while those old writers may still exist. After the
 // operator-authorized finalization sweep, the upgraded payload is deleted
 // through the same generation CAS as everything else.
+// StorageIntegration: redis
 func TestRedisDeleteConversationCascadeLegacyUnindexed(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -240,6 +245,7 @@ func TestRedisDeleteConversationCascadeLegacyUnindexed(t *testing.T) {
 // request-path backfill discovers the legacy response without promoting it,
 // so cascade fails closed until finalization drains old writers and upgrades
 // the payload. A retry then drains both records.
+// StorageIntegration: redis
 func TestRedisDeleteConversationCascadePartiallyMigrated(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()

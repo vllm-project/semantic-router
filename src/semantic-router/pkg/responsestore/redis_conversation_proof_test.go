@@ -18,6 +18,7 @@ import (
 // conversationIndexProofEmpty (not a generic "v1" marker), read back via GET
 // (conversationIndexProof), with a TTL capped at
 // conversationIndexProofMaxTTL.
+// StorageIntegration: redis
 func TestRedisConversationIndexProofEmptyValueAndTTL(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 24*60*60) // 24h data TTL
 	ctx := context.Background()
@@ -49,6 +50,7 @@ func TestRedisConversationIndexProofEmptyValueAndTTL(t *testing.T) {
 // response into an already-populated conversation, and on a conversation
 // written to more often than the store TTL that refresh made the proof
 // immortal, hiding the response for good.
+// StorageIntegration: redis
 func TestRedisConversationIndexProofPopulatedIsBoundedAndNeverExtended(t *testing.T) {
 	// A 24h data TTL, so "capped at conversationIndexProofMaxTTL" is
 	// distinguishable from "given the store's own TTL".
@@ -97,6 +99,7 @@ func TestRedisConversationIndexProofPopulatedIsBoundedAndNeverExtended(t *testin
 // after that conversation's backfill scan has passed is hidden only until
 // the bounded proof expires, and the next read revalidates by scanning
 // again rather than trusting the stale proof forever.
+// StorageIntegration: redis
 func TestRedisPopulatedProofExpiryRevealsLateUnindexedWrite(t *testing.T) {
 	// A 2s data TTL collapses conversationIndexProofMaxTTL's cap to 2s, so
 	// the bounded window is observable in a unit test rather than 5 minutes.
@@ -210,6 +213,7 @@ func startIndexedWriteTraffic(t *testing.T, store *RedisStore, conversationID st
 // lands. StoreResponse, duplicate repair (via a direct-set + retry), and
 // UpdateResponse are all exercised, since all three ultimately call
 // indexResponse.
+// StorageIntegration: redis
 func TestRedisConversationIndexProofEmptyNeverExtendedByIndexedWrite(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -275,6 +279,7 @@ func TestRedisConversationIndexProofEmptyNeverExtendedByIndexedWrite(t *testing.
 // fail-safe rule: an unrecognized marker value must not be treated as
 // resolved, so a read or cascade delete falls back to migration rather than
 // trusting a value this code doesn't understand.
+// StorageIntegration: redis
 func TestRedisConversationIndexProofUnknownValueNotTrusted(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()

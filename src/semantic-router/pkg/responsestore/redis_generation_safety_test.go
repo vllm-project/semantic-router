@@ -129,6 +129,7 @@ func indexedGeneration(t *testing.T, store *RedisStore, conversationID, response
 // complete StoreResponse after list's payload GET observed the old generation
 // missing but before its conditional ZREM+HDEL. The stale prune must not erase
 // the recreated generation's membership.
+// StorageIntegration: redis
 func TestListPruneDoesNotRemoveRecreatedGeneration(t *testing.T) {
 	store := newConversationIndexStore(t)
 	writer := newConcurrentRedisStore(t, store)
@@ -184,6 +185,7 @@ func TestListPruneDoesNotRemoveRecreatedGeneration(t *testing.T) {
 // predicate. The window observes a stale A/G1 witness and a payload in B/G2;
 // before prune, a complete B->A update installs G3. Conditional cleanup of G1
 // must not erase G3 after this move-away-and-back ABA.
+// StorageIntegration: redis
 func TestListPruneDoesNotRemoveMovedBackGeneration(t *testing.T) {
 	store := newConversationIndexStore(t)
 	writer := newConcurrentRedisStore(t, store)
@@ -250,6 +252,7 @@ func TestListPruneDoesNotRemoveMovedBackGeneration(t *testing.T) {
 // TestDeleteResponseDoesNotUnindexConcurrentStore deterministically recreates
 // the same response ID after atomic take deleted G1 but before DeleteResponse
 // conditionally unindexes G1. G2 must remain both present and indexed.
+// StorageIntegration: redis
 func TestDeleteResponseDoesNotUnindexConcurrentStore(t *testing.T) {
 	store := newConversationIndexStore(t)
 	writer := newConcurrentRedisStore(t, store)
@@ -293,6 +296,7 @@ func TestDeleteResponseDoesNotUnindexConcurrentStore(t *testing.T) {
 // TestRollbackGenerationCASRejectsByteIdenticalConcurrentWrite proves a
 // successful concurrent update with the same public JSON fields receives a
 // distinct generation and cannot be overwritten by a stale rollback.
+// StorageIntegration: redis
 func TestRollbackGenerationCASRejectsByteIdenticalConcurrentWrite(t *testing.T) {
 	store := newConversationIndexStore(t)
 	writer := newConcurrentRedisStore(t, store)

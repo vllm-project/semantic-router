@@ -17,6 +17,7 @@ import (
 
 // TestRedisStoreResponseRejectsDuplicate covers the SET NX path: it enforces the
 // no-duplicate contract and orders the payload write ahead of the index write.
+// StorageIntegration: redis
 func TestRedisStoreResponseRejectsDuplicate(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -71,6 +72,7 @@ func (h *indexWriteFailureHook) ProcessHook(next redis.ProcessHook) redis.Proces
 // payload back via compare-delete rather than leave an orphan that a retry
 // can never repair (SETNX would just see it exists and hit ErrAlreadyExists
 // with no index to fix).
+// StorageIntegration: redis
 func TestRedisStoreResponseRollsBackIndexFailure(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -109,6 +111,7 @@ func TestRedisStoreResponseRollsBackIndexFailure(t *testing.T) {
 // TestRedisCompareDeleteResponsePayload proves response CAS is generation
 // based. Business-payload byte equality cannot authorize deletion, and legacy
 // payloads without a generation fail closed.
+// StorageIntegration: redis
 func TestRedisCompareDeleteResponsePayload(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -167,6 +170,7 @@ func TestRedisCompareDeleteResponsePayload(t *testing.T) {
 // entry is missing (e.g. left behind by a prior partial failure, or never
 // indexed pre-upgrade) must repair the index from the stored payload before
 // returning the duplicate error.
+// StorageIntegration: redis
 func TestRedisStoreResponseDuplicateRepairsOrphanedIndex(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -191,6 +195,7 @@ func TestRedisStoreResponseDuplicateRepairsOrphanedIndex(t *testing.T) {
 // poisoning guard from blueprint §2.3/§3.5: a duplicate ID whose stored
 // payload belongs to a different conversation than the retry attempted must
 // not be indexed under the attempted conversation.
+// StorageIntegration: redis
 func TestRedisStoreResponseDuplicateDifferentConversationNotRepaired(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -217,6 +222,7 @@ func TestRedisStoreResponseDuplicateDifferentConversationNotRepaired(t *testing.
 // TestRedisStoreResponseDuplicateNoConversationNotRepaired covers the "no
 // index expected" branch of repairExistingResponseIndex: a stored response
 // with no ConversationID has nothing to repair.
+// StorageIntegration: redis
 func TestRedisStoreResponseDuplicateNoConversationNotRepaired(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -242,6 +248,7 @@ func TestRedisStoreResponseDuplicateNoConversationNotRepaired(t *testing.T) {
 // bytes must be restored and reindexed under the previous conversation,
 // rather than left pointing at a conversation whose index was never
 // actually written.
+// StorageIntegration: redis
 func TestRedisUpdateResponseRestoresOnIndexFailure(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -284,6 +291,7 @@ func TestRedisUpdateResponseRestoresOnIndexFailure(t *testing.T) {
 // rollback runs, the rollback's compare-and-swap must detect the mismatch,
 // leave the newer payload untouched, and must not reindex the stale
 // snapshot's previous conversation.
+// StorageIntegration: redis
 func TestRedisUpdateResponseRollbackConflictPreservesNewerWrite(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -343,6 +351,7 @@ func TestRedisUpdateResponseRollbackConflictPreservesNewerWrite(t *testing.T) {
 // original payload, the first replacement succeeds, and the second
 // replacement later fails its index write. The failed update must restore the
 // first update, not the value that existed before both calls began.
+// StorageIntegration: redis
 func TestRedisUpdateResponseRollbackRestoresImmediatePredecessor(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -395,6 +404,7 @@ func TestRedisUpdateResponseRollbackRestoresImmediatePredecessor(t *testing.T) {
 // TestRedisUpdateResponseRollbackPreservesRemainingTTL covers that a
 // rollback restores the snapshot's approximate remaining lifetime, not a
 // freshly reset full retention TTL.
+// StorageIntegration: redis
 func TestRedisUpdateResponseRollbackPreservesRemainingTTL(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -429,6 +439,7 @@ func TestRedisUpdateResponseRollbackPreservesRemainingTTL(t *testing.T) {
 // TestRedisUpdateResponseRollbackPreservesPersistentTTL covers the
 // persistent (no-expiry) case: a snapshot with pttlMillis == -1 must be
 // restored persistent, not given the store's default TTL.
+// StorageIntegration: redis
 func TestRedisUpdateResponseRollbackPreservesPersistentTTL(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -465,6 +476,7 @@ func TestRedisUpdateResponseRollbackPreservesPersistentTTL(t *testing.T) {
 // the time rollback runs, the failed update's payload is deleted rather
 // than resurrected with a value whose intended lifetime already ended, and
 // nothing is reindexed.
+// StorageIntegration: redis
 func TestRedisUpdateResponseRollbackDeletesWhenSnapshotTTLElapsed(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()

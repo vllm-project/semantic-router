@@ -12,6 +12,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
@@ -201,13 +202,20 @@ func newConversationIndexStore(tb testing.TB) *RedisStore {
 // empty-marker TTL cap).
 func newConversationIndexStoreWithTTLSeconds(tb testing.TB, ttlSeconds int) *RedisStore {
 	tb.Helper()
+	// Every test reaching this helper needs a live Redis, so the opt-in and
+	// fail-closed rules live here once: an ordinary unit run skips, and a
+	// required storage run (VLLM_SR_REQUIRE_STORAGE_TESTS=1) fails rather
+	// than skipping when Redis is unreachable. Each such test must also carry
+	// a "// StorageIntegration: redis" annotation, which is what places it in
+	// the storage contract and keeps it out of the unit contract.
+	storagetest.Require(tb, "redis")
 
 	cfg := StoreConfig{
 		Enabled:     true,
 		TTLSeconds:  ttlSeconds,
 		BackendType: RedisStoreType,
 		Redis: RedisStoreConfig{
-			Address:   "localhost:6379",
+			Address:   storageRedisAddress(),
 			DB:        0,
 			KeyPrefix: fmt.Sprintf("srtest:%d:", time.Now().UnixNano()),
 		},
@@ -215,7 +223,8 @@ func newConversationIndexStoreWithTTLSeconds(tb testing.TB, ttlSeconds int) *Red
 
 	store, err := NewRedisStore(cfg)
 	if err != nil {
-		tb.Skipf("Redis not available: %v", err)
+		storagetest.Unavailable(tb, "redis", fmt.Sprintf("Redis not available: %v", err))
+		return nil
 	}
 
 	tb.Cleanup(func() {
@@ -343,11 +352,14 @@ func seedPageResponsesAt(t *testing.T, store *RedisStore, convID string, count i
 const clusterTestAddr = "127.0.0.1:7000"
 
 // newConversationIndexClusterStore builds a RedisStore backed by a real
-// Redis Cluster client (see clusterTestAddr). Skips (not fails) if that
-// cluster isn't reachable, since most environments running this package's
-// tests only provide the standalone sr-test-redis container.
+// Redis Cluster client (see clusterTestAddr). A cluster is its own storage
+// backend, "redis_cluster", separate from the standalone "redis" the storage
+// contract provisions: tests using this carry that annotation and run only
+// when SKIP_REDIS_CLUSTER_TESTS=false, so an environment without a cluster
+// neither skips them inside the unit contract nor fails the Redis one.
 func newConversationIndexClusterStore(t *testing.T) *RedisStore {
 	t.Helper()
+	storagetest.Require(t, "redis_cluster")
 
 	cfg := StoreConfig{
 		Enabled:     true,
@@ -362,7 +374,8 @@ func newConversationIndexClusterStore(t *testing.T) *RedisStore {
 
 	store, err := NewRedisStore(cfg)
 	if err != nil {
-		t.Skipf("Redis Cluster not available at %s: %v", clusterTestAddr, err)
+		storagetest.Unavailable(t, "redis_cluster", fmt.Sprintf("Redis Cluster not available at %s: %v", clusterTestAddr, err))
+		return nil
 	}
 
 	t.Cleanup(func() {
