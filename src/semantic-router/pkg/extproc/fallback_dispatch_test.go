@@ -2709,6 +2709,64 @@ func TestFallbackCandidateReasoningControlsPreservedInRequestBody(t *testing.T) 
 	}
 }
 
+func TestFallbackLoRAReasoningEffortUsesCandidateRef(t *testing.T) {
+	policy := fallback.DefaultEnabledPolicy()
+	router, cfg := setupFallbackTestRouter(t, policy)
+
+	candidateModel := "model-fallback-1"
+	modelConfig := cfg.ModelConfig[candidateModel]
+	modelConfig.ReasoningFamily = "openai-reasoning"
+	cfg.ModelConfig[candidateModel] = modelConfig
+	cfg.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{
+		"openai-reasoning": {
+			Type:      config.ReasoningFamilyTypeTopLevelReasoningEffort,
+			Parameter: "reasoning_effort",
+			Levels:    []string{"low", "medium", "high"},
+		},
+	}
+
+	enabled := true
+	primaryRef := config.ModelRef{Model: "model-primary"}
+	adapterRef := config.ModelRef{
+		Model:    candidateModel,
+		LoRAName: "adapter",
+		ModelReasoningControl: config.ModelReasoningControl{
+			UseReasoning:    &enabled,
+			ReasoningEffort: "high",
+		},
+	}
+	ctx := testFallbackRequestContext("model-primary", nil)
+	ctx.VSREligibleModelRefs = []config.ModelRef{primaryRef, adapterRef}
+	ctx.VSRSelectedDecision = &config.Decision{
+		Name:      "chat_fallback_decision",
+		ModelRefs: ctx.VSREligibleModelRefs,
+	}
+	ctx.UpstreamStatusCode = 503
+
+	var dispatchedModel string
+	var dispatchedBody []byte
+	router.fallbackCaller = func(callCtx context.Context, model string, body []byte, headers map[string]string) ([]byte, int, error) {
+		dispatchedModel = model
+		dispatchedBody = append([]byte(nil), body...)
+		return []byte(`{
+			"id": "chatcmpl-lora-reasoning",
+			"object": "chat.completion",
+			"created": 1700000000,
+			"model": "adapter",
+			"choices": [{"index": 0, "message": {"role": "assistant", "content": "fallback"}, "finish_reason": "stop"}]
+		}`), http.StatusOK, nil
+	}
+
+	resp := router.handleUpstreamTransportError([]byte("upstream 503"), ctx)
+	require.NotNil(t, resp)
+	require.NotNil(t, resp.GetImmediateResponse())
+	require.Equal(t, "adapter", dispatchedModel)
+
+	var bodyMap map[string]interface{}
+	require.NoError(t, json.Unmarshal(dispatchedBody, &bodyMap))
+	require.Equal(t, "high", bodyMap["reasoning_effort"])
+}
+
 func TestFallbackCandidateStreamPreservesHallucinationBodyWarning(t *testing.T) {
 	policy := fallback.DefaultEnabledPolicy()
 	router, _ := setupFallbackTestRouter(t, policy)

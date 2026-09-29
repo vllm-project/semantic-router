@@ -326,15 +326,9 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	origPath := ctx.ResponsePath
 	wasStreaming := ctx.IsStreamingResponse
 	useReasoning := r.candidateReasoningChoice(ctx, candidateModel)
-	dispatch, err := r.resolveProviderDispatch(candidateModel, ctx.VSRSelectedDecisionName, useReasoning)
-	if err != nil && candidateRef.LoRAName != "" && candidateRef.Model != "" {
-		if baseDispatch, baseErr := r.resolveProviderDispatch(candidateRef.Model, ctx.VSRSelectedDecisionName, useReasoning); baseErr == nil {
-			dispatch = baseDispatch
-			dispatch.logicalModel = candidateModel
-			dispatch.upstreamModel = r.Config.ResolveExternalModelID(candidateModel, baseDispatch.backendName)
-			err = nil
-		}
-	}
+	dispatch, err := r.resolveProviderDispatchForCandidate(
+		candidateModel, ctx.VSRSelectedDecisionName, useReasoning, ctx,
+	)
 	if err != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, err
 	}
