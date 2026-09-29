@@ -198,6 +198,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 16:20 — **C1 event 3 NOT run: the custodian content scan FAILED; C1 v1.2 decided** (prep record §00;
+  integration `295b5fb0e`; 0 GPU-h; nothing decrypted; 2 of 3 events used).
+  - Scan: 67,596 CLEAN, **4 OVERLAP**, 17 REVIEW, and 13 IDs newly non-CLEAN since event 2.
+    - OVERLAP: one `narrative_gold` passage, in four annotation files, matches the raw NQ source extract behind H7
+      (containment 0.52; the extract isn't trained on directly).
+    - The new REVIEW items come from the same NQ extract, an NQ audit cell, and 3 `hallutruthqa` items from the 0.6B
+      M6 `H5.train` pool, which fed only unreleased arms.
+    - None of the flagged files trained any event candidate. The rule fails regardless, and it was not reinterpreted.
+  - **Coordinator decision, made from content only and before any decryption: C1 v1.2** retires the OVERLAP items, the
+    newly non-CLEAN IDs, all REVIEW items, and any item sharing their source passages. That is < 1% of 2,874.
+    - The retired-ID list stays private; only its hash and count are published.
+    - Every event-3 pairing uses v1.2.
+    - The rescan's coverage is widened to raw source extracts behind every trained arm, every trained pool (including
+      unreleased arms), and all data landed through scan time, including round-1 data.
+    - At most two amendment iterations. A fresh eval worker registers the amendment, rescans, and on PASS runs event 3
+      exactly as staged.
+  - **Lesson for every track:** C1 independence arguments must include raw source extracts and every trained pool,
+    released or not. Round-1 tracks: land new data arms in the private dataset promptly, so the scan sees them.
+
 - 2026-09-29 16:15 — **DEV2.0-8B released; C1 event 3 triggered; collection renamed by the user.**
   - **DEV2.0-8B** (to be renamed DEV2.0-9B): private `llm-semantic-router/DEV2.0-8B@53bac735be58def53673d0d290b9baa3f2af1cf9`
     (`main`), manifest `d5007cdb…`, final decision `7666fd7c…` sealed to that revision. Only `MODEL_MANIFEST.json`
