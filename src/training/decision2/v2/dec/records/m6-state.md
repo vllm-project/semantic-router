@@ -5,10 +5,18 @@ GPUs: node B GPU3–4 (after research & data's PN1 lend), node A GPU5.
 
 ## Now
 
-- 2026-09-29 ≈16:55 UTC+8 — Prereg written. Nothing has launched and 0 GPU-h are used.
-  - PN1 generation (research & data) has been running on node B GPU3–4 since 16:22; its lease entries are
-    `owner.data`.
-  - Next: M6 ops code, then CPU data builds and the data lock, then launches once node B frees.
+- 2026-09-29 ≈18:00 UTC+8 — All three training chains are live.
+  - The chains are b3 (N6D), b4 (Sol labels, then S6X → N6A → S6D) and a5 (Eos labels, then E6K). Their mirrors
+    are `8f5699bdf` on node B and `6fe568271` on node A. Logs: `m6/logs/chain-<ch>.log`.
+  - 16K reference readouts `refs` for 4b, 2b and 08b were launched at ≈09:56Z as co-tenants. PIDs are in
+    `m6/logs/refs-<tier>.pid`.
+  - Expected soups (UTC): S6X ≈11:15, E6K ≈13:40, N6A ≈14:15, N6D ≈15:20, S6D ≈17:15.
+  - Next steps:
+    - the no-training lines (4b N5BN / Nox, 2b Sol, 08b Eos);
+    - the node-B S2T formal reference;
+    - each arm's line as its soup lands.
+- 2026-09-29 ≈16:55 UTC+8 — Prereg written (`68d31c358`). Tooling is `afb0ea9fe`; data lock parts 1, 2a and 2b
+  are `8f5699bdf`, `54b18b6c3` and `4ee4f66b2`.
 
 ## Arms
 
@@ -46,4 +54,24 @@ cost counts against both S6X and S6D for their caps, and once in the total.
 
 ## Incidents / deviations
 
-None.
+1. **`m6-xl-full-59m` is 54.74M native tokens, not the prereg's "about 58.8M".** The recipe keeps the A0s rows
+   (3.98M) whole and doubles only the pooled share, so the target is 54.84M. The A7 dose, 19.34M, is as stated.
+2. **Shared-module fix `6fe568271`.** `v2.dec.teacher_label` now falls back to the single calibrated temperature in
+   a 1.0 package's `config.json`: Eos 1.0 ships no `temperature.json`. The first a5 attempt failed after 16 s, before
+   any training, and is kept under `m6/attempts/a5-1-eos-temperature/`. Own-Eos labels use the package temperature
+   1.0389, and Sol still resolves to 1.30036.
+3. **E6K's postrun calibration set is E8F's own CAL file** (`3e34f6cb`, node A default), not CAL698. SELECT700 is
+   identical on both nodes. The postrun is used for reporting only.
+4. **The lock check's C1 guard now matches on sources only**, as the 9B guard does. The family name
+   `pilot_narrative_reading` (100 project-generated A0s rows, also in N4XF) matched the C1 key "narrative". It is
+   reported, not failed.
+5. **Launch-line slip (no effect).** The first `refs` launch backgrounded a `cd && …` compound, so its PID file
+   missed and the 2b launch failed on its redirect before starting. The 4b job ran correctly under `setsid`. The 2b
+   and 08b jobs were relaunched with scoped redirects, and liveness was checked by PID and container.
+6. **Gist file 04 was briefly deleted (≈09:59–10:01Z).**
+   - Cause: my local working copy had disappeared from `/tmp`, so the splice produced an empty file, and a `;`
+     let `gh gist edit` run anyway. An empty update deletes the file.
+   - Restored byte-for-byte from gist revision `25ac3c64` (45,264 B), with the M6 entry added (47,253 B). No other
+     gist file was touched.
+   - Rule from now on: gist edits run under `set -euo pipefail` with a size check, from
+     `~/.cache/dec-m6/`, never `/tmp`.
