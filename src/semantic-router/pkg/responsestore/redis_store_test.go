@@ -534,3 +534,14 @@ func TestRedisConversationIndexMigrationKeyIsolation(t *testing.T) {
 		}
 	}
 }
+
+func storageRedisAddress() string {
+	host, port := os.Getenv("REDIS_HOST"), os.Getenv("REDIS_PORT")
+	if host == "" {
+		host = "localhost"
+	}
+	if port == "" {
+		port = "6379"
+	}
+	return net.JoinHostPort(host, port)
+}
