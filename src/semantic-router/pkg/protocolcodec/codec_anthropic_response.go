@@ -183,6 +183,16 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 			Reason: "Messages requires usage; emitted an explicit zero-valued usage object",
 		}}, policy.Limits.Diagnostics)
 	}
+	if !usageUnavailable(response.Usage) && anthropicOutputTotalIsLowerBound(response.Usage) {
+		// The output total is absent and at least one output bucket is unknown,
+		// so the sum of known components only states a lower bound. Messages
+		// carries one number, so the projection is approximate by construction.
+		diagnostics = appendDiagnostics(diagnostics, llmprotocol.Diagnostics{{
+			Source: envelope.Format, Target: llmprotocol.AnthropicMessagesV1, Field: "usage",
+			Action: llmprotocol.DiagnosticApproximated,
+			Reason: "output total is incomplete; the known output components project as a lower bound",
+		}}, policy.Limits.Diagnostics)
+	}
 	appendAnthropicPartialCacheOmission(&diagnostics, policy, envelope.Format, response.Usage)
 	if len(response.Alternatives) > 0 {
 		if err := appendLossy(&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1, "response.alternatives", "Messages has one output sequence"); err != nil {
@@ -248,6 +258,16 @@ func newAnthropicUsageWire() *anthropicUsageWire {
 		InferenceGeo: "global",
 		ServiceTier:  "standard",
 	}
+}
+
+// anthropicOutputTotalIsLowerBound reports whether the output projection can
+// only state a lower bound: the authoritative total is absent and at least one
+// output bucket is unknown, so the sum of the known buckets may understate it.
+func anthropicOutputTotalIsLowerBound(usage llmprotocol.Usage) bool {
+	if usage.OutputTotal.Value != nil {
+		return false
+	}
+	return usage.OutputReasoning.Value == nil || usage.OutputOther.Value == nil
 }
 
 func usageUnavailable(usage llmprotocol.Usage) bool {

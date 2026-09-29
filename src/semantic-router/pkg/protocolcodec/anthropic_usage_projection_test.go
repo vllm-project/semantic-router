@@ -135,13 +135,14 @@ func TestAnthropicMessagesDerivesOutputTotalFromKnownComponents(t *testing.T) {
 	three := int64(3)
 	four := int64(4)
 	tests := []struct {
-		name      string
-		reasoning *int64
-		other     *int64
-		want      int64
+		name             string
+		reasoning        *int64
+		other            *int64
+		want             int64
+		wantApproximated bool
 	}{
-		{name: "reasoning only", reasoning: &three, want: 3},
-		{name: "other only", other: &four, want: 4},
+		{name: "reasoning only", reasoning: &three, want: 3, wantApproximated: true},
+		{name: "other only", other: &four, want: 4, wantApproximated: true},
 		{name: "both components", reasoning: &three, other: &four, want: 7},
 	}
 	for _, tt := range tests {
@@ -179,10 +180,14 @@ func TestAnthropicMessagesDerivesOutputTotalFromKnownComponents(t *testing.T) {
 			if got != tt.want {
 				t.Fatalf("known output components must survive the projection, got output_tokens=%d: %s", got, body)
 			}
+			approximated := false
 			for _, diagnostic := range diagnostics {
-				if diagnostic.Field == "usage" {
-					t.Fatalf("known output components must not emit a usage diagnostic: %+v", diagnostics)
+				if diagnostic.Field == "usage" && diagnostic.Action == llmprotocol.DiagnosticApproximated {
+					approximated = true
 				}
+			}
+			if approximated != tt.wantApproximated {
+				t.Fatalf("usage approximated = %v, want %v: %+v", approximated, tt.wantApproximated, diagnostics)
 			}
 		})
 	}
