@@ -18,6 +18,16 @@
       },
       "sha256": "ddf3c7b9696d1e05873b494a00f018a980485a7c142327f756a722346c246c6b"
     },
+    "26B": {
+      "accent": "#6fdcb4",
+      "file": "DEV2.0-26B-owl-banner.png",
+      "owl": {
+        "sha256": "1c16e7f3c65dd2129b56b080a6d44456a755d046deefaff09f0f05147570b316",
+        "source": "brand/sources/DEV2.0-27B-owl-sticker.png"
+      },
+      "sha256": "fdef0634a8b4bf7a301e743a662fd54e3c0c0dac7f21d99a03a70b83540c0804",
+      "tier": "27B"
+    },
     "27B": {
       "accent": "#6fdcb4",
       "file": "DEV2.0-27B-owl-banner.png",
@@ -44,6 +54,16 @@
         "source": "llm-semantic-router/Decision-1.0-Nox-4B@cde2a68dbaa557ea65dc458104d410a0802ee259:assets/decision-nox-4b-header.png"
       },
       "sha256": "20d60396cd5f024f2bf5b9551ca70bead484848d2dfac7d97af4b89d8772d140"
+    },
+    "8B": {
+      "accent": "#f8ca69",
+      "file": "DEV2.0-8B-owl-banner.png",
+      "owl": {
+        "sha256": "64e55deb635334185a01e1e9787de95503b8f49d11c44a2be5dd1b925d5e8ce1",
+        "source": "llm-semantic-router/Decision-1.0-Lux-9B@cdf4d3ef2dda21518e599fe99ebbe468486b197c:assets/decision-lux-9b-header.png"
+      },
+      "sha256": "7263ca30a2a572b15566dc2e2ee8f27fd765051487eb505e4e7b24d6a39a666a",
+      "tier": "9B"
     },
     "9B": {
       "accent": "#f8ca69",

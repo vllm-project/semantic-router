@@ -1,5 +1,10 @@
 # Decoder track Milestone 2 results (0.8B / 2B / 4B), 2026-09-28
 
+> **Erratum (2026-09-29, per coordinator 05:25 note).** The staging revision cited below (`16c0929a`) is no longer in the
+> `dev2-dec-staging` history, because LFS cleanups rewrote it. E8F soup identity = its lines in hash list node B
+> `m2/hf-staging/batch2.sha256` (`ab0aa4bc…`), released as DEV2.0-0.8B `0b631a85c19fb573aee34fc68bb413271ebe89f4`; see
+> [dec-staging-citation-errata-2026-09-29.md](dec-staging-citation-errata-2026-09-29.md).
+
 Development readouts (SELECT, CAL, typed DEV1600, CSS pilot1430, A7 AHO) are
 never release scores. JevArena v3 and public JevBench 231 are **post-key
 same-panel** comparisons (node A, the eval track's frozen runner). Proxy
@@ -172,7 +177,8 @@ also seed-unstable (typed DEV Choice 723 vs 421). Soup `mlx-diag`
 
 1. **0.8B release:** the E8F soup qualifies (v3 50.236, +7.69 [+3.65, +13.32]
    vs Eos 1.0; public231 156 vs 142). Start release engineering on
-   `llm-semantic-router/dev2-dec-staging@16c0929a` `m2/E8F-soup/` (profile
+   `llm-semantic-router/dev2-dec-staging@16c0929a` `m2/E8F-soup/` [corrected 2026-09-29: revision no longer exists
+   in the repo history; identity by hash list `batch2.sha256` `ab0aa4bc…`, see errata record] (profile
    `qwen-full`, 16,384 tokens). Disclosures: typed Score −13, CSS15 H −.021,
    `mlx-diag` Noul −5.0, strong seed dependence (seed 3 alone is −1.46).
    The release pipeline must accept `frozen_checkpoint` calibration reports

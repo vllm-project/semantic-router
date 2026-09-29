@@ -1,5 +1,14 @@
 # Decoder Milestone 4 — results (4B own-Lux line; 2026-09-29)
 
+> **Erratum (2026-09-29, per coordinator 05:25 note).** The S2T and E8F soup staging objects were not removed by the
+> decoder's cleanup. The release worker's 20:47Z (04:47 UTC+8) cleanup deleted their weights and heads. The shared
+> tokenizer object had been deleted by the decoder's M3 cleanup at 18:32Z. S2T's re-upload `376c992c` lost its weights
+> again to the storage steward at 21:14:27Z (history kept). S2T is released as DEV2.0-2B@`5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38`
+> and must not be re-uploaded. The M2 / M3 staging revisions are no longer in the repo history. Identity rests on the
+> per-file SHA-256 lists: [dec-staging-citation-errata-2026-09-29.md](dec-staging-citation-errata-2026-09-29.md).
+> `e8656221` (N4XF) is live and downloadable (checked 2026-09-29 ≈00:15Z). Corrections below: `~~…~~` then
+> `[corrected 2026-09-29: …]`.
+
 **Outcome: a 4B release candidate qualifies — N4XF soup, post-key v3 63.151 vs the adopted Nox 1.0 run
 56.470 (+6.68 [+0.99, +9.64]).** Candidate record: [`dec-m4-4b-candidate-2026-09-29.md`](dec-m4-4b-candidate-2026-09-29.md).
 
@@ -63,8 +72,11 @@ Formal details:
 
 ## Failures and incidents
 
-- **Staging-repo LFS cleanups rewrote history, and one removed unrequested weights.** See the incident record.
-  - S2T was restored at `dev2-dec-staging@376c992c`.
+- **Staging-repo LFS cleanups rewrote history~~, and one removed unrequested weights~~.** See the incident record.
+  [corrected 2026-09-29: no decoder cleanup removed unrequested objects. The S2T / E8F soup weights were deleted by the
+  release worker's 20:47Z cleanup; see the errata record.]
+  - S2T was restored at `dev2-dec-staging@376c992c`. [corrected 2026-09-29: its weights were deleted again by the
+    storage steward at 21:14:27Z and return 403; cite DEV2.0-2B@`5ad3e9a3` or hash list `S2T-soup.sha256` `22e7fe86…`.]
   - The E8F soup's staging weights are gone; they are released in DEV2.0-0.8B.
   - A new tool with `rewrite_history=False` was used for the N4LX cleanup: 16.83 GB freed, nothing else lost, history
     intact.
@@ -80,7 +92,8 @@ Formal details:
 ## Items for the coordinator
 
 1. **DEV2.0-4B release candidate: N4XF soup.**
-   - Staged at `dev2-dec-staging@e8656221…`, `m4/N4XF-soup/`.
+   - Staged at `dev2-dec-staging@e8656221…`, `m4/N4XF-soup/`. [corrected 2026-09-29: revision live; identity =
+     hash list node B `m4/hf-staging/N4XF-soup.sha256` `cea4cc9a…`, see the errata record.]
    - Scored run `/data/dev2/runs/dec/formal/m4/m4-N4XF-soup-nodeA`.
    - It is also +1.27 above Decider 4B, the tier leader (interval spans 0).
    - Release engineering applies the 23:15 calibration rule. C1 event 3 needs the XL r2 / H7-H8 / Lux-XL w3–w5
@@ -89,7 +102,8 @@ Formal details:
    CSS15 hits. It trained N4T / N4J / N4L / N4LKr and **the 2B candidate S2T**. This is a disclosure item for S2T;
    the eval track's rescreen-overlap check (`e4976c5d2`) can quantify it.
 3. **Staging SHAs cited in M2 / M3 records no longer exist** (history rewritten by the cleanups). Use the node-B
-   SHA-256 lists or the new S2T commit `376c992c`. Other tracks should check their LFS cleanup tools for the
+   SHA-256 lists ~~or the new S2T commit `376c992c`~~ [corrected 2026-09-29: or, for S2T, DEV2.0-2B@`5ad3e9a3`; see the
+   errata record]. Other tracks should check their LFS cleanup tools for the
    `rewrite_history=True` default.
 4. **Proxy v2 vs the "not the pilot median" instruction** was resolved by amendment 1 (P_mean3, band 9). As proxy v2
    says, development panels did not separate the M4 finalists; the formal runner did.

@@ -1,0 +1,1 @@
+{"files": 31, "licence": "apache-2.0", "manifest_sha256": "243b4552314fe565fa7f5363cc383d14d1b884e4342b27a66b73d594483c1c7e", "parameters": {"external_base_text": 25624600064, "loaded": 25746591744, "packaged": {"adapter": 116727808, "head": 5263872, "residual": 0}}}

@@ -13,6 +13,15 @@ while an independent confirmation is pending). A draft binds the same identity,
 report and paired comparison, so it can drive a private build, upload and
 verification, but ``seal`` refuses it: nothing enters the collection on a draft.
 
+A size without a Decision 1.0 model (~27B) names ``gate_profile: {"name":
+"no-1.0", "reference": <card report key>, "v3_share": 0.9, "types": <path>}``
+in its spec (coordinator decision 2026-09-29 11:55). Item 1 then requires
+post-key v3 >= v3_share x the reference peer's v3, a human-transfer paired
+interval (``card.paired`` = candidate minus the reference) whose upper bound is
+not below 0, and every typed-FINAL type ``OK`` in the eval track's
+``dev2-gate-types/1`` check of the scored run; its decision must name the
+profile and the type check's SHA-256. Specs without the key keep the own-1.0 gate.
+
   evaluate  print the six gate items with evidence from a work directory
   seal      write <work>/receipts/gate.json if every item passes
 """
@@ -30,6 +39,9 @@ from v2.release.layout import sha_file, write_json
 
 DECISION_SCHEMA = "dev2-release-decision/1"
 GATE_SCHEMA = "dev2-release-gate/1"
+TYPES_SCHEMA = "dev2-gate-types/1"
+NO_OWN_1_0 = "no-1.0"
+DECISION_TYPES = ("choice", "noul", "score")
 VERIFY_STEPS = (
     "repeat-pre",
     "card-pre",
@@ -45,6 +57,81 @@ VERIFY_STEPS = (
 
 def _json(path: Path) -> dict[str, Any]:
     return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def gate_profile(spec: dict[str, Any]) -> dict[str, Any] | None:
+    """The spec's no-1.0 profile, or None for the own Decision 1.0 gate."""
+    value = spec.get("gate_profile")
+    if value is None:
+        return None
+    references = {
+        e["key"] for e in spec["card"]["reports"] if e.get("role") == "reference"
+    }
+    share = value.get("v3_share")
+    if (
+        value.get("name") != NO_OWN_1_0
+        or value.get("reference") not in references
+        or type(share) is not float
+        or not 0 < share <= 1
+        or not value.get("types")
+    ):
+        raise ValueError(
+            "gate_profile needs name no-1.0, reference (a card report with role "
+            "reference), v3_share in (0, 1] and the types check path"
+        )
+    return value
+
+
+def near_first_tier(
+    spec: dict[str, Any], profile: dict[str, Any], paired: dict[str, Any]
+) -> dict[str, Any]:
+    """Item 1 at a size without a Decision 1.0 model (coordinator 2026-09-29 11:55)."""
+    entries = spec["card"]["reports"]
+    mine = next(e for e in entries if e["role"] == "candidate")
+    peer = next(e for e in entries if e["key"] == profile["reference"])
+    candidate, reference = _json(Path(mine["report"])), _json(Path(peer["report"]))
+    label = peer.get("label") or reference["model"]["label"]
+    v3, peer_v3 = candidate["v3"]["score"], reference["v3"]["score"]
+    floor = profile["v3_share"] * peer_v3
+    h = paired["axis_ci95"]["H"]["delta"]
+    types = _json(Path(profile["types"]))
+    verdicts = {
+        kind: (types.get("types", {}).get(kind) or {}).get("verdict", "missing")
+        for kind in DECISION_TYPES
+    }
+    problems = []
+    if sha_file(Path(mine["report"])) != (spec.get("scored") or {}).get(
+        "report_sha256"
+    ):
+        problems.append("candidate report is not the scored report")
+    if (
+        abs(paired["point"]["left"]["score"] - v3) > 1e-9
+        or abs(paired["point"]["right"]["score"] - peer_v3) > 1e-9
+    ):
+        problems.append(f"paired comparison is not candidate minus {label}")
+    run_report = Path(types.get("run", "")) / "REPORT.json"
+    if (
+        types.get("schema") != TYPES_SCHEMA
+        or not run_report.is_file()
+        or sha_file(run_report) != (spec.get("scored") or {}).get("report_sha256")
+    ):
+        problems.append("type check is not on the scored run")
+    passed = (
+        not problems
+        and v3 >= floor
+        and h["high"] >= 0
+        and all(v == "OK" for v in verdicts.values())
+    )
+    return {
+        "passed": passed,
+        "evidence": (
+            f"no Decision 1.0 at this size; v3 {v3:.3f} vs {profile['v3_share']:.0%} of "
+            f"{label} {peer_v3:.3f} = {floor:.3f}; human transfer minus {label} 95% interval "
+            f"[{h['low']:+.3f}, {h['high']:+.3f}]; types "
+            + ", ".join(f"{k} {v}" for k, v in verdicts.items())
+            + (f"; problems: {'; '.join(problems)}" if problems else "")
+        ),
+    }
 
 
 def check(
@@ -84,6 +171,12 @@ def check(
         status == "final" and not decision.get("decided_by")
     ):
         problems.append("decision needs a rationale and, when final, decided_by")
+    profile = gate_profile(spec)
+    if profile and (
+        decision.get("gate_profile") != NO_OWN_1_0
+        or decision.get("types_sha256") != sha_file(Path(profile["types"]))
+    ):
+        problems.append("decision names a different gate profile or type check")
     if problems:
         raise ValueError(
             "Release decision does not approve this spec: " + "; ".join(problems)
@@ -111,15 +204,31 @@ def evaluate(work: Path) -> dict[str, Any]:
         bool(download)
         and download.get("revision") == steps.get("upload", {}).get("revision"),
     )
+    profile = gate_profile(spec)
+    if profile:
+        first = {"1_near_first_tier_no_1_0": near_first_tier(spec, profile, paired)}
+        below = (
+            next(
+                e.get("label") or e["key"]
+                for e in spec["card"]["reports"]
+                if e["key"] == profile["reference"]
+            )
+            + " (no Decision 1.0 at this size)"
+        )
+    else:
+        first = {
+            "1_beats_own_1_0": {
+                "passed": low > 0,
+                "evidence": f"paired v3 95% interval low {low:+.3f} (sha {sha_file(Path(spec['card']['paired']))[:12]})",
+            }
+        }
+        below = "own 1.0"
     items = {
-        "1_beats_own_1_0": {
-            "passed": low > 0,
-            "evidence": f"paired v3 95% interval low {low:+.3f} (sha {sha_file(Path(spec['card']['paired']))[:12]})",
-        },
+        **first,
         "2_regressions_disclosed": {
             "passed": readback.get("passed", False)
             and not readback.get("card_problems"),
-            "evidence": f"{len(build['card']['tradeoffs'])} results below own 1.0 listed in the card tradeoffs table",
+            "evidence": f"{len(build['card']['tradeoffs'])} results below {below} listed in the card tradeoffs table",
         },
         "3_download_hash_parameters": {
             "passed": bool(downloaded)

@@ -1,0 +1,23 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-26B",
+  "repo_id": "llm-semantic-router/DEV2.0-26B",
+  "identity": {
+    "model_sha256": "b7fd44e3ad73d24faa85c2ba06ba61d4494aa4be2a2025c580ba02bedae6e781"
+  },
+  "report_sha256": "f1641c1b9ad8f701ff00d54cb6bde6797c32ba211a788c8d9ee5fe92b202f1a1",
+  "paired_sha256": "02c3257c0897282be7d32aad52eca016a8dd3c7c1d4431236705885f7b18fbfc",
+  "gate_profile": "no-1.0",
+  "types_sha256": "d6f2d6bd6a1af47433fb1075612360699fe7d671ac47f9ba3c7a829692d28db8",
+  "calibration": "none (temperature 1); the CAL698 per-type temperatures (Choice 0.538, Noul 0.428, Score 0.567) were rejected under the 23:15 rule on the development panels (typed-DEV ECE .049 -> .096, Brier .089 -> .106; CSS-pilot ECE .063 -> .120; only CSS-pilot Brier improved, .504 -> .454)",
+  "prepared_by": "release engineering, DEV2.0-26B worker (build draft, written before any GPU run)",
+  "decided_by": null,
+  "rationale": "Build draft so the release build can run: it binds F1's checkpoint identity, its post-key same-panel report, the paired comparison with AutoJev-27B (the no-1.0 reference peer) and the eval track's typed-FINAL type check under the no-1.0 gate profile (coordinator 2026-09-29 11:55). It approves nothing: the coordinator writes the final decision and runs the collection add.",
+  "pending": [
+    "verified draft after the private upload and verification",
+    "eval track's 27B gate record (evaluation-familiarity wording for the A7 rescreen) and the C1 line",
+    "coordinator's final decision, then release.sh --upload --collect into a new work dir"
+  ]
+}

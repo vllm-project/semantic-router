@@ -70,12 +70,21 @@ def card_eligibility(
             "licence": OWN_MODELS[repo],
             "reason": "own Decision 1.0",
         }
-    peer = roster.get(repo or "")
+    board = entry.get("board_entry")
+    peer = roster.get(board or repo or "")
     if peer is None:
         return {
             "eligible": False,
             "licence": None,
             "reason": "licence unknown (not in the pinned roster)",
+        }
+    if board and peer.get("base_model_card") != repo:
+        # A sibling (e.g. the BF16 weights of an FP8 board entry) takes the board
+        # entry's licence only when that entry names it as its base model.
+        return {
+            "eligible": False,
+            "licence": None,
+            "reason": f"board entry {board} does not name {repo} as its base model",
         }
     card, name = peer_licence(peer)
     card = (card or "").lower()
@@ -93,7 +102,11 @@ def card_eligibility(
             "licence": card or None,
             "reason": "licence not on the card allowlist",
         }
-    return {"eligible": True, "licence": card, "reason": "roster licence"}
+    return {
+        "eligible": True,
+        "licence": card,
+        "reason": "roster licence" + (f" of its board entry {board}" if board else ""),
+    }
 
 
 def package_licence(components: list[dict[str, Any]]) -> dict[str, Any]:

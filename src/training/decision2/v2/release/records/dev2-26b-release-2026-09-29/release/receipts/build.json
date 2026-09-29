@@ -1,0 +1,125 @@
+{
+  "builder_commit": "b2c7c9448ff644488b7a6f194ea31aeb18fddf75",
+  "card": {
+    "excluded": [],
+    "figures_sha256": {
+      "assets/jevarena-v3-model-task.svg": "e21ff2ff2bc91ba551a983669f49a5bbc4e690c372a59b8faea962d953edf2fd",
+      "assets/jevarena-v3-rank.svg": "08305160dda55c028f7442531e2af21db6bd9ddeda1a2818083a23e9d35b78b8",
+      "assets/jevbench-public231-rank.svg": "b59dd120565ccfc9a03eae1e919b92ec404e5436271098ced2973d85b21ea9d0"
+    },
+    "paired": {
+      "ci95": [
+        -6.8216403868138045,
+        -0.4298024374056477
+      ],
+      "delta": -4.923649911396097,
+      "replicates": 5000,
+      "sha256": "02c3257c0897282be7d32aad52eca016a8dd3c7c1d4431236705885f7b18fbfc"
+    },
+    "readme_sha256": "13d8f4a10ed775448474031edc48536a13ef0ee58c6deab228f26d91d333b7fc",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "f1641c1b9ad8f701ff00d54cb6bde6797c32ba211a788c8d9ee5fe92b202f1a1"
+      },
+      {
+        "key": "autojev27",
+        "licence": "apache-2.0",
+        "report_sha256": "71dbd7fe3e1b73c6a3747d2d66aa151a9e7115e85c3b8adadaede6798547bc2c"
+      },
+      {
+        "key": "eikos27",
+        "licence": "mit",
+        "report_sha256": "a07e6b6bf7d1530c17af13ee4eb2e46e2ac3b32dabec61f071cfe5fd87bcfdf4"
+      },
+      {
+        "key": "jebadiah27",
+        "licence": "apache-2.0",
+        "report_sha256": "27ca2cb2340a202983bfe11e7119bc145fc84da5fe1e447c886badb8a42b2ab3"
+      }
+    ],
+    "tradeoffs": [
+      "Typed Choice (correct): 628/800 versus 800/800",
+      "Typed Noul (correct): 715/800 versus 737/800",
+      "Human transfer H (median task macro-F1): 0.574 versus 0.587",
+      "Transfer: wiki politeness (macro-F1): 44.8% versus 52.9%",
+      "Transfer: persuasion (macro-F1): 56.9% versus 61.1%",
+      "Transfer: tropes (macro-F1): 14.9% versus 18.7%",
+      "Transfer: flute (macro-F1): 86.0% versus 88.6%",
+      "Transfer: raop (macro-F1): 57.4% versus 59.4%",
+      "Transfer: media ideology (macro-F1): 62.8% versus 63.3%",
+      "JevBench public standard (correct): 71/72 versus 72/72",
+      "JevBench public hard (correct): 79/111 versus 81/111"
+    ]
+  },
+  "ended_utc": "2026-09-29T05:10:41.835949+00:00",
+  "files": 31,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "base": {
+      "files_sha256": {
+        "config.json": "191e0af232104ed8b65258cf3fb2b842e288008baca7633c11b82a1ac7203aab",
+        "crc32.txt": "b42dd291f5f98b05807e458f5b47849969a9b3326acbf0c97d28b05826740b83",
+        "generation_config.json": "e70c136c1b78ddc1fb0905bac8e733a4dc448d4f852a5dd75143fffc70be550e",
+        "merges.txt": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d",
+        "model-00001-of-00018.safetensors": "ba0ce20aae489ad196733da5064bcdf159a1fe84f53336648196e1ebb7751b1c",
+        "model-00002-of-00018.safetensors": "06a148c01bfbe3faa14a5f184a7ff29a706f7ae1c8b2705d2058e26d17a001fb",
+        "model-00003-of-00018.safetensors": "2e1bf62cbcd406eaa64b60d10353e1f0ef4039d0976e56f05cabe953454f9968",
+        "model-00004-of-00018.safetensors": "511e34063187882659753c4d93f3859f93c019fd438d8813071921c81d9a3f1a",
+        "model-00005-of-00018.safetensors": "635cb53446dc74f219740fc59e18b774f877b803b9722e289ca62575a6efa701",
+        "model-00006-of-00018.safetensors": "0bc5214fac607f0e6cc92eec3789d4b8559410ef9fce66621ba8158e8410dae0",
+        "model-00007-of-00018.safetensors": "80b0c49033e9a0d5762562aa12f4acdb7f54da586f3d0110f28c48d91cf07892",
+        "model-00008-of-00018.safetensors": "7192c5b66185d3592927daabee1cc19e6f6e0ce75988ee20e824b624765fda79",
+        "model-00009-of-00018.safetensors": "af3c48cc37af44f3db6ae0579baf019180d48d9c527caa0a1f03ff85813a56d8",
+        "model-00010-of-00018.safetensors": "163490a76f3bea3a40855b7efc04ce6d27afaf1a34f0bbde495b9491f76457c9",
+        "model-00011-of-00018.safetensors": "5f3ae1b948aeee39da77aec558e8236cd65fe4d7cb7686a76bb007acc563c6d8",
+        "model-00012-of-00018.safetensors": "a3de1c7114677a8f5ac5c4892c90e8238ea5c1e2038c80e757dfc87c3902ca55",
+        "model-00013-of-00018.safetensors": "06ab79a41f74c9c5cb734816feb0c7fc364104b227165ee7391231e1155aa02a",
+        "model-00014-of-00018.safetensors": "4138ed94603065ba884bbcadedb04d7718bb40117e85e6f5c6fc5b9c05b7a85b",
+        "model-00015-of-00018.safetensors": "69224e27b9de4e7dbf6fc936c6eaae08447bda3b80a6c31a871ab451173afd22",
+        "model-00016-of-00018.safetensors": "73cb9a1089fb6155cb648609478d6633be8a5c7d9ca5a05bc8925ce8a553cefe",
+        "model-00017-of-00018.safetensors": "beb51f01056142ac4984bd800507b0dd0fd18de57f8e9ef6ea41d1a3598983a8",
+        "model-00018-of-00018.safetensors": "1d3479509e21494658f9b64d317f5ea8e55c4025d28c702d6c4d0b356ce8ea06",
+        "model.safetensors.index.json": "77042094076611b69791a610065f28b7013b8c621795fa86ddccc8bac7d1b9df",
+        "preprocessor_config.json": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+        "tokenizer.json": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+        "tokenizer_config.json": "b11349aafa7cdc6a320767cf7ceb29ed82f7eda5d65e8e0819e76f0ce947bf27",
+        "video_preprocessor_config.json": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+        "vocab.json": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+      },
+      "licence": "apache-2.0",
+      "redistribution": "not redistributed: the package pins the base by repository revision and per-file SHA-256, and it is fetched or supplied at load time",
+      "repo_id": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+      "source_kind": "posttrained"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "b7fd44e3ad73d24faa85c2ba06ba61d4494aa4be2a2025c580ba02bedae6e781",
+    "temperature_by_type": null,
+    "text_parameter_count": 25624600064
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "ab07948eeff64d72b3dc179e72f6083a984b3fe8c481da3f9175480091a07cf5",
+  "package": "/data/dev2/runs/release/dev2-26b-release-20260929T051011Z/package/DEV2.0-26B",
+  "parameters": {
+    "external_base_text": 25624600064,
+    "loaded": 25746591744,
+    "packaged": {
+      "adapter": 116727808,
+      "head": 5263872,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "4bae27a42d87d7996944d3fad7db0cb2fc9ffa97f731df3d7cd614c8455b0323",
+    "status": "draft"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 30
+  },
+  "spec_sha256": "58d338006b260584a8eca0fa60449e5bcf9bac555f05068c25e7d5d1249486d7",
+  "started_utc": "2026-09-29T05:10:12.396785+00:00"
+}

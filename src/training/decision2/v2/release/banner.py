@@ -8,6 +8,10 @@ a ``DECISION 2.0`` pill and the size in the tier accent. Inputs are verified by
 SHA-256 and the output carries no PNG text chunks.
 
     python banner.py --sources DIR_WITH_1.0_HEADERS --fonts DIR --output-dir brand/
+    python banner.py ... --sizes 27B --label 27B=26B   # final name by loaded count
+
+``--label TIER=NAME`` draws NAME with the tier's owl and accent and writes
+``DEV2.0-<NAME>-owl-banner.png``; existing ``BANNERS.json`` entries are kept.
 """
 
 from __future__ import annotations
@@ -118,7 +122,13 @@ def _fit(font_path: Path, text: str, width: int, height: int, start: int):
     raise ValueError("Text does not fit")
 
 
-def render(size: str, sources: Path, own_sources: Path, fonts: Path):
+def render(
+    size: str,
+    sources: Path,
+    own_sources: Path,
+    fonts: Path,
+    size_label: str | None = None,
+):
     from PIL import Image, ImageDraw, ImageFont
 
     accent = SIZES[size]["accent"]
@@ -158,19 +168,20 @@ def render(size: str, sources: Path, own_sources: Path, fonts: Path):
         draw.text((cursor, baseline_y), ch, font=pill_font, fill=NAVY)
         cursor += w + tracking
 
-    size_font = _fit(black, size, 560, 215, 260)
-    left, top, right, bottom = size_font.getbbox(size, stroke_width=14)
+    text = size_label or size
+    size_font = _fit(black, text, 560, 215, 260)
+    left, top, right, bottom = size_font.getbbox(text, stroke_width=14)
     sx, sy = right_edge - right - 10, 690 - bottom - 10
     draw.text(
         (sx + 10, sy + 10),
-        size,
+        text,
         font=size_font,
         fill=NAVY,
         stroke_width=14,
         stroke_fill=NAVY,
     )
     draw.text(
-        (sx, sy), size, font=size_font, fill=accent, stroke_width=14, stroke_fill=NAVY
+        (sx, sy), text, font=size_font, fill=accent, stroke_width=14, stroke_fill=NAVY
     )
     return image, provenance
 
@@ -185,21 +196,39 @@ def main() -> None:
     parser.add_argument("--fonts", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--sizes", nargs="*", default=list(SIZES))
+    parser.add_argument(
+        "--label",
+        action="append",
+        default=[],
+        metavar="TIER=NAME",
+        help="draw NAME for TIER (final names follow the loaded parameter count)",
+    )
     args = parser.parse_args()
+    labels = dict(item.split("=", 1) for item in args.label)
     own_sources = Path(__file__).resolve().parent / "brand" / "sources"
     fonts = {name: sha_file(args.fonts / name) for name in FONTS}
     if fonts["Poppins-Black.ttf"] != FONTS["Poppins-Black.ttf"]:
         raise ValueError("Wordmark font differs from the pinned Poppins Black")
     receipt = {"schema": "dev2-banners/1", "fonts": fonts, "banners": {}}
+    existing = args.output_dir / "BANNERS.json"
+    if existing.is_file():
+        previous = json.loads(existing.read_text(encoding="utf-8"))
+        if previous["fonts"] != fonts:
+            raise ValueError("Fonts differ from the ones recorded in BANNERS.json")
+        receipt["banners"] = previous["banners"]
     for size in args.sizes:
-        image, provenance = render(size, args.sources, own_sources, args.fonts)
-        path = args.output_dir / f"DEV2.0-{size}-owl-banner.png"
+        name = labels.get(size, size)
+        image, provenance = render(
+            size, args.sources, own_sources, args.fonts, size_label=name
+        )
+        path = args.output_dir / f"DEV2.0-{name}-owl-banner.png"
         image.save(path, format="PNG", optimize=True)
-        receipt["banners"][size] = {
+        receipt["banners"][name] = {
             "file": path.name,
             "sha256": sha_file(path),
             "accent": SIZES[size]["accent"],
             "owl": provenance,
+            **({"tier": size} if name != size else {}),
         }
     (args.output_dir / "BANNERS.json").write_text(
         json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"

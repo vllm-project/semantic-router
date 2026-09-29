@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "decision": {
+    "sha256": "bea9795bbecc5afb4f6453a700b7c4dd63b4c3a89e55053b8ff30f1a642f542e",
+    "status": "final"
+  },
+  "items": {
+    "1_near_first_tier_no_1_0": {
+      "passed": true,
+      "evidence": "no Decision 1.0 at this size; v3 67.209 vs 90% of AutoJev-27B 72.133 = 64.919; human transfer minus AutoJev-27B 95% interval [-0.040, +0.056]; types choice OK, noul OK, score OK"
+    },
+    "2_regressions_disclosed": {
+      "passed": true,
+      "evidence": "11 results below AutoJev-27B (no Decision 1.0 at this size) listed in the card tradeoffs table"
+    },
+    "3_download_hash_parameters": {
+      "passed": true,
+      "evidence": "tree 31 files re-hashed; loaded 25746591744"
+    },
+    "4_native_examples": {
+      "passed": true,
+      "evidence": "examples and the card's Python block reproduced from the download"
+    },
+    "5_output_consistency": {
+      "passed": true,
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run"
+    },
+    "6_card_design": {
+      "passed": true,
+      "evidence": "Hub card apache-2.0 / problems []"
+    }
+  }
+}
