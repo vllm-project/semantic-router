@@ -24,7 +24,8 @@ import (
 
 // recordRetrievalBatch updates LastAccessed and AccessCount for each retrieved memory in the background.
 // Uses targeted HINCRBY + HSET instead of full read-modify-write for efficiency.
-// The user-facing behavior matches the Milvus backend (access_count incremented, timestamps updated).
+// Reads update access metadata only; they must not change UpdatedAt because that
+// timestamp is the write-version used by atomic consolidation.
 func (v *ValkeyStore) recordRetrievalBatch(ids []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -37,15 +38,16 @@ func (v *ValkeyStore) recordRetrievalBatch(ids []string) {
 
 // recordRetrieval updates LastAccessed and AccessCount for a single memory (reinforcement: S += 1, t = 0).
 //
-// The authoritative access_count and updated_at live as top-level HASH fields and are updated
-// atomically via HINCRBY / HSET. Do not rewrite duplicated values inside the metadata JSON blob
-// here: a separate read-modify-write of metadata can race with concurrent retrievals and move
-// access_count / last_accessed backwards. Callers should use the top-level HASH fields as the
-// source of truth for these mutable values.
+// The authoritative access_count and last_accessed live as top-level HASH
+// fields. HINCRBY and HSET update their respective fields atomically. Do not
+// rewrite duplicated values inside metadata JSON here: a separate
+// read-modify-write can race with retrievals and move access metadata
+// backwards. UpdatedAt changes only on Store and Update, so it remains a
+// write-version for atomic consolidation.
 func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 	key := v.hashKey(id)
 	now := time.Now()
-	nowUnix := strconv.FormatInt(now.UnixMilli(), 10)
+	nowUnixMilli := strconv.FormatInt(now.UnixMilli(), 10)
 
 	// Increment access_count atomically.
 	_, err := v.client.CustomCommand(ctx, []string{"HINCRBY", key, "access_count", "1"})
@@ -53,12 +55,12 @@ func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 		return fmt.Errorf("HINCRBY access_count failed: %w", err)
 	}
 
-	// Update timestamps.
+	// Record access time without changing the write-version.
 	_, err = v.client.HSet(ctx, key, map[string]string{
-		"updated_at": nowUnix,
+		"last_accessed": nowUnixMilli,
 	})
 	if err != nil {
-		return fmt.Errorf("HSET timestamps failed: %w", err)
+		return fmt.Errorf("HSET last_accessed failed: %w", err)
 	}
 
 	return nil
@@ -398,15 +400,14 @@ func valkeyParseScoreFromMap(fields map[string]interface{}, key string, metricTy
 
 // valkeyBuildHashFields builds the HSET field map for storing a memory in Valkey.
 func valkeyBuildHashFields(memory *Memory, embedding []float32) (map[string]string, error) {
-	// access_count is stored as a top-level HASH field only (updated atomically via HINCRBY).
-	// It is intentionally excluded from the metadata JSON blob to prevent concurrent
-	// recordRetrieval goroutines from overwriting each other's incremented counts.
+	// Access metadata is stored in top-level HASH fields. access_count is
+	// intentionally excluded from metadata JSON to prevent concurrent
+	// recordRetrieval goroutines from overwriting incremented counts.
 	metadata := map[string]interface{}{
-		"user_id":       memory.UserID,
-		"project_id":    memory.ProjectID,
-		"source":        memory.Source,
-		"importance":    memory.Importance,
-		"last_accessed": memory.LastAccessed.Unix(),
+		"user_id":    memory.UserID,
+		"project_id": memory.ProjectID,
+		"source":     memory.Source,
+		"importance": memory.Importance,
 	}
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
@@ -423,19 +424,33 @@ func valkeyBuildHashFields(memory *Memory, embedding []float32) (map[string]stri
 	}
 
 	return map[string]string{
-		"id":           memory.ID,
-		"user_id":      memory.UserID,
-		"project_id":   projectID,
-		"memory_type":  string(memory.Type),
-		"content":      memory.Content,
-		"source":       source,
-		"metadata":     string(metadataJSON),
-		"embedding":    string(valkeyFloat32ToBytes(embedding)),
-		"created_at":   strconv.FormatInt(memory.CreatedAt.UnixMilli(), 10),
-		"updated_at":   strconv.FormatInt(memory.UpdatedAt.UnixMilli(), 10),
-		"access_count": strconv.Itoa(memory.AccessCount),
-		"importance":   strconv.FormatFloat(float64(memory.Importance), 'f', -1, 32),
+		"id":            memory.ID,
+		"user_id":       memory.UserID,
+		"project_id":    projectID,
+		"memory_type":   string(memory.Type),
+		"content":       memory.Content,
+		"source":        source,
+		"metadata":      string(metadataJSON),
+		"embedding":     string(valkeyFloat32ToBytes(embedding)),
+		"created_at":    strconv.FormatInt(memory.CreatedAt.UnixMilli(), 10),
+		"updated_at":    strconv.FormatInt(memory.UpdatedAt.UnixMilli(), 10),
+		"last_accessed": strconv.FormatInt(memory.LastAccessed.UnixMilli(), 10),
+		"access_count":  strconv.Itoa(memory.AccessCount),
+		"importance":    strconv.FormatFloat(float64(memory.Importance), 'f', -1, 32),
 	}, nil
+}
+
+// valkeyBuildUpdateHashFields omits access metadata so a content update cannot
+// overwrite a retrieval that increments it concurrently. Store and atomic
+// consolidation use valkeyBuildHashFields to initialize those fields instead.
+func valkeyBuildUpdateHashFields(memory *Memory) (map[string]string, error) {
+	fields, err := valkeyBuildHashFields(memory, memory.Embedding)
+	if err != nil {
+		return nil, err
+	}
+	delete(fields, "access_count")
+	delete(fields, "last_accessed")
+	return fields, nil
 }
 
 // valkeyValidateRetrieveOpts checks required fields on RetrieveOptions.
@@ -521,11 +536,17 @@ func valkeyFieldsToMemory(fields map[string]string) *Memory {
 
 	valkeyParseMetadata(mem, fields["metadata"])
 
-	// access_count is authoritative in the top-level HASH field (updated atomically
-	// via HINCRBY). Override whatever valkeyParseMetadata may have set.
+	// access_count and last_accessed are authoritative in top-level HASH fields,
+	// so they can be updated without rewriting metadata JSON. Override the legacy
+	// metadata values when a top-level value exists.
 	if acStr := fields["access_count"]; acStr != "" {
 		if ac, err := strconv.Atoi(acStr); err == nil {
 			mem.AccessCount = ac
+		}
+	}
+	if lastAccessedStr := fields["last_accessed"]; lastAccessedStr != "" {
+		if ts, err := strconv.ParseInt(lastAccessedStr, 10, 64); err == nil {
+			mem.LastAccessed = time.UnixMilli(ts)
 		}
 	}
 
@@ -575,6 +596,16 @@ func valkeyFieldsMapToMemory(fields map[string]interface{}) *Memory {
 	if updatedAtStr, ok := fields["updated_at"].(string); ok && updatedAtStr != "" {
 		if ts, err := strconv.ParseInt(updatedAtStr, 10, 64); err == nil {
 			mem.UpdatedAt = time.UnixMilli(ts)
+		}
+	}
+	if lastAccessedStr, ok := fields["last_accessed"].(string); ok && lastAccessedStr != "" {
+		if ts, err := strconv.ParseInt(lastAccessedStr, 10, 64); err == nil {
+			mem.LastAccessed = time.UnixMilli(ts)
+		}
+	}
+	if accessCountStr, ok := fields["access_count"].(string); ok && accessCountStr != "" {
+		if accessCount, err := strconv.Atoi(accessCountStr); err == nil {
+			mem.AccessCount = accessCount
 		}
 	}
 

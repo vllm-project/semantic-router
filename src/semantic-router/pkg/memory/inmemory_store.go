@@ -283,25 +283,46 @@ func (s *InMemoryStore) Forget(ctx context.Context, id string) error {
 	return nil
 }
 
-// forgetIfCurrent deletes id only when the locked record still matches want.
-func (s *InMemoryStore) forgetIfCurrent(ctx context.Context, want memoryVersion) (bool, error) {
+func (s *InMemoryStore) supportsAtomicGroupReplacement() bool { return true }
+
+// replaceCurrentGroup creates the summary and removes all listed sources under
+// one lock. A changed or missing source leaves the whole group untouched.
+func (s *InMemoryStore) replaceCurrentGroup(ctx context.Context, versions []memoryVersion, summary *Memory) (bool, int, error) {
 	if err := ctx.Err(); err != nil {
-		return false, err
+		return false, 0, err
 	}
 	if !s.enabled {
-		return false, fmt.Errorf("store not enabled")
+		return false, 0, fmt.Errorf("store not enabled")
+	}
+	if summary == nil || len(versions) < 2 {
+		return false, 0, fmt.Errorf("at least two source memories and a summary are required")
+	}
+	if len(summary.Embedding) == 0 {
+		embedding, err := embedForWrite(ctx, summary.Content, s.embeddingConfig)
+		if err != nil {
+			return false, 0, fmt.Errorf("failed to generate summary embedding: %w", err)
+		}
+		summary.Embedding = embedding
+	}
+	if summary.CreatedAt.IsZero() {
+		summary.CreatedAt = time.Now()
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	mem, exists := s.memories[want.id]
-	if !exists || !sameVersion(want, mem) {
-		return false, nil
+	if _, exists := s.memories[summary.ID]; exists {
+		return false, 0, fmt.Errorf("memory with ID %s already exists", summary.ID)
 	}
-	delete(s.memories, want.id)
-	logging.Debugf("InMemoryStore: deleted memory id=%s at matching version", want.id)
-	return true, nil
+	for _, want := range versions {
+		if !sameVersion(want, s.memories[want.id]) {
+			return false, 0, nil
+		}
+	}
+	s.memories[summary.ID] = summary
+	for _, want := range versions {
+		delete(s.memories, want.id)
+	}
+	return true, len(versions), nil
 }
 
 // ForgetByScope deletes all memories matching the scope.

@@ -19,6 +19,57 @@ import (
 // Verify ValkeyStore satisfies the Store interface at compile time.
 var _ Store = (*ValkeyStore)(nil)
 
+func TestValkeyClusterInfoIndicatesMode(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, valkeyClusterInfoIndicatesMode("cluster_state:ok\ncluster_slots_assigned:16384"))
+	assert.True(t, valkeyClusterInfoIndicatesMode([]byte("cluster_state:fail")))
+	assert.False(t, valkeyClusterInfoIndicatesMode("role:master"))
+}
+
+func TestValkeyClusterModeDisablesAtomicConsolidation(t *testing.T) {
+	store := &ValkeyStore{enabled: true}
+	assert.True(t, store.supportsAtomicGroupReplacement())
+
+	store.clusterMode = true
+	assert.False(t, store.supportsAtomicGroupReplacement())
+}
+
+func TestValkeyReplaceCurrentGroupArgs(t *testing.T) {
+	createdAt := time.Unix(1_700_000_000, 0).UTC()
+	updatedAt := createdAt.Add(time.Second)
+	versions := []memoryVersion{{
+		id:         "a",
+		userID:     "user-1",
+		projectID:  "project-1",
+		typ:        MemoryTypeSemantic,
+		content:    "alpha beta",
+		createdAt:  createdAt,
+		updatedAt:  updatedAt,
+		importance: 0.5,
+	}}
+	args := valkeyReplaceCurrentGroupArgs(versions, map[string]string{
+		"content": "summary",
+		"id":      "summary-id",
+	})
+
+	require.Equal(t, "1", args[0])
+	require.Equal(t, valkeySourceVersionArgs(versions[0]), args[1:9])
+	require.Equal(t, "2", args[9])
+	require.Equal(t, []string{"content", "summary", "id", "summary-id"}, args[10:])
+}
+
+func TestValkeyUpdateIfExistsScript(t *testing.T) {
+	t.Parallel()
+
+	assert.Contains(t, valkeyUpdateIfExistsScriptSource, "redis.call('EXISTS', KEYS[1])")
+	assert.Contains(t, valkeyUpdateIfExistsScriptSource, "redis.call('HSET', KEYS[1], unpack(ARGV))")
+	assert.Equal(t, []string{"content", "summary", "id", "memory-id"}, valkeyHashFieldArgs(map[string]string{
+		"id":      "memory-id",
+		"content": "summary",
+	}))
+}
+
 // ---------------------------------------------------------------------------
 // TLS configuration (config struct tests — no live Valkey required)
 // ---------------------------------------------------------------------------
@@ -262,16 +313,17 @@ func TestValkeyFieldsToMemory(t *testing.T) {
 		t.Parallel()
 		embedding := []float32{0.1, 0.2, 0.3}
 		fields := map[string]string{
-			"id":           "mem_123",
-			"content":      "test content",
-			"user_id":      "user1",
-			"memory_type":  "semantic",
-			"metadata":     `{"project_id":"proj1","source":"conversation","importance":0.8,"access_count":3,"last_accessed":1700000000}`,
-			"created_at":   "1700000000",
-			"updated_at":   "1700000100",
-			"embedding":    string(valkeyFloat32ToBytes(embedding)),
-			"access_count": "3",
-			"importance":   "0.8",
+			"id":            "mem_123",
+			"content":       "test content",
+			"user_id":       "user1",
+			"memory_type":   "semantic",
+			"metadata":      `{"project_id":"proj1","source":"conversation","importance":0.8,"access_count":3,"last_accessed":1700000000}`,
+			"created_at":    "1700000000",
+			"updated_at":    "1700000100",
+			"last_accessed": "1700000200123",
+			"embedding":     string(valkeyFloat32ToBytes(embedding)),
+			"access_count":  "3",
+			"importance":    "0.8",
 		}
 
 		mem := valkeyFieldsToMemory(fields)
@@ -285,6 +337,7 @@ func TestValkeyFieldsToMemory(t *testing.T) {
 		assert.Equal(t, 3, mem.AccessCount)
 		assert.False(t, mem.CreatedAt.IsZero())
 		assert.False(t, mem.UpdatedAt.IsZero())
+		assert.Equal(t, time.UnixMilli(1700000200123), mem.LastAccessed)
 		require.Len(t, mem.Embedding, 3)
 		assert.InDelta(t, float32(0.1), mem.Embedding[0], 0.001)
 	})
@@ -331,13 +384,15 @@ func TestValkeyFieldsMapToMemory(t *testing.T) {
 	t.Run("full fields", func(t *testing.T) {
 		t.Parallel()
 		fields := map[string]interface{}{
-			"id":          "mem_100",
-			"content":     "search result content",
-			"user_id":     "user2",
-			"memory_type": "procedural",
-			"metadata":    `{"project_id":"proj2","source":"extraction","importance":0.5,"access_count":1}`,
-			"created_at":  "1700000000",
-			"updated_at":  "1700000200",
+			"id":            "mem_100",
+			"content":       "search result content",
+			"user_id":       "user2",
+			"memory_type":   "procedural",
+			"metadata":      `{"project_id":"proj2","source":"extraction","importance":0.5}`,
+			"created_at":    "1700000000",
+			"updated_at":    "1700000200",
+			"last_accessed": "1700000300123",
+			"access_count":  "4",
 		}
 
 		mem := valkeyFieldsMapToMemory(fields)
@@ -348,6 +403,8 @@ func TestValkeyFieldsMapToMemory(t *testing.T) {
 		assert.Equal(t, "proj2", mem.ProjectID)
 		assert.Equal(t, "extraction", mem.Source)
 		assert.InDelta(t, float32(0.5), mem.Importance, 0.01)
+		assert.Equal(t, 4, mem.AccessCount)
+		assert.Equal(t, time.UnixMilli(1700000300123), mem.LastAccessed)
 	})
 
 	t.Run("empty map", func(t *testing.T) {
@@ -682,22 +739,23 @@ func TestValkeyStore_ExtractTotalCount(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// recordRetrieval metadata sync — access_count must NOT appear in metadata JSON
+// Access metadata is stored in top-level fields, not metadata JSON.
 // ---------------------------------------------------------------------------
 
-// TestValkeyBuildHashFields_AccessCountNotInMetadata verifies that valkeyBuildHashFields
-// stores access_count as a top-level HASH field only, not inside the metadata JSON blob.
-// This is the invariant that prevents the recordRetrieval race where a slower goroutine
-// could overwrite a newer access_count value in the JSON.
-func TestValkeyBuildHashFields_AccessCountNotInMetadata(t *testing.T) {
+// TestValkeyBuildHashFields_AccessMetadataNotInMetadata verifies that
+// valkeyBuildHashFields stores access metadata in top-level HASH fields only.
+// This prevents a content update from overwriting newer access metadata through
+// a stale JSON blob.
+func TestValkeyBuildHashFields_AccessMetadataNotInMetadata(t *testing.T) {
 	t.Parallel()
 
 	mem := &Memory{
-		ID:          "mem_race_test",
-		Content:     "test content",
-		UserID:      "u1",
-		AccessCount: 5,
-		Importance:  0.8,
+		ID:           "mem_race_test",
+		Content:      "test content",
+		UserID:       "u1",
+		AccessCount:  5,
+		LastAccessed: time.UnixMilli(1700000200123),
+		Importance:   0.8,
 	}
 	embedding := []float32{0.1, 0.2, 0.3}
 
@@ -706,14 +764,34 @@ func TestValkeyBuildHashFields_AccessCountNotInMetadata(t *testing.T) {
 
 	// access_count must be a top-level HASH field
 	assert.Equal(t, "5", fields["access_count"], "access_count should be a top-level HASH field")
+	assert.Equal(t, "1700000200123", fields["last_accessed"], "last_accessed should be a top-level HASH field")
 
-	// access_count must NOT be in the metadata JSON (to avoid the concurrent write race)
+	// Access metadata must NOT be in metadata JSON (to avoid concurrent write races).
 	metadataStr, ok := fields["metadata"]
 	require.True(t, ok, "metadata field must exist")
 	var metadata map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(metadataStr), &metadata))
 	_, hasAccessCount := metadata["access_count"]
 	assert.False(t, hasAccessCount, "access_count must NOT be stored in metadata JSON to prevent concurrent write races")
+	_, hasLastAccessed := metadata["last_accessed"]
+	assert.False(t, hasLastAccessed, "last_accessed must NOT be stored in metadata JSON to prevent concurrent write races")
+}
+
+func TestValkeyBuildUpdateHashFieldsPreservesAccessMetadata(t *testing.T) {
+	mem := &Memory{
+		ID:           "mem_update_test",
+		Content:      "updated content",
+		UserID:       "u1",
+		Embedding:    []float32{0.1, 0.2, 0.3},
+		AccessCount:  12,
+		LastAccessed: time.UnixMilli(1700000200123),
+	}
+
+	fields, err := valkeyBuildUpdateHashFields(mem)
+	require.NoError(t, err)
+	assert.NotContains(t, fields, "access_count")
+	assert.NotContains(t, fields, "last_accessed")
+	assert.Equal(t, "updated content", fields["content"])
 }
 
 // ---------------------------------------------------------------------------
@@ -736,10 +814,10 @@ func TestErrValkeyMemoryAlreadyExists(t *testing.T) {
 	assert.ErrorIs(t, doubleWrapped, errValkeyMemoryAlreadyExists)
 }
 
-func TestValkeyConditionalDeleteArgsUseStoredVersion(t *testing.T) {
+func TestValkeySourceVersionArgsUseStoredVersion(t *testing.T) {
 	t.Parallel()
 
-	args := valkeyForgetIfCurrentArgs(memoryVersion{
+	args := valkeySourceVersionArgs(memoryVersion{
 		id:         "id-1",
 		userID:     "user-1",
 		projectID:  "",
@@ -759,7 +837,6 @@ func TestValkeyConditionalDeleteArgsUseStoredVersion(t *testing.T) {
 		"1700000000123",
 		"0.7",
 	}, args)
-	require.Contains(t, valkeyForgetIfCurrentScriptSource, "redis.call('DEL', KEYS[1])")
-	require.Contains(t, valkeyForgetIfCurrentScriptSource, "fields[5] ~= ARGV[5]")
-	require.Contains(t, valkeyForgetIfCurrentScriptSource, "fields[8] ~= ARGV[8]")
+	require.Contains(t, valkeyReplaceCurrentGroupScriptSource, "redis.call('DEL', KEYS[i])")
+	require.Contains(t, valkeyReplaceCurrentGroupScriptSource, "fields[j] ~= ARGV[arg + j - 1]")
 }

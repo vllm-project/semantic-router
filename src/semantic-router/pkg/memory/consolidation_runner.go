@@ -50,6 +50,8 @@ type ConsolidationRunner struct {
 	done       chan struct{}
 	retireOnce sync.Once
 	retireErr  error
+
+	atomicReplacement bool
 }
 
 // NewConsolidationRunner starts no workers. Each accepted user occupies one
@@ -66,15 +68,16 @@ func NewConsolidationRunner(store Store, opts ConsolidationOptions) *Consolidati
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	runner := &ConsolidationRunner{
-		store:        store,
-		cooldown:     opts.Cooldown,
-		timeout:      opts.Timeout,
-		slots:        make(chan struct{}, opts.Concurrency),
-		baseCtx:      ctx,
-		cancel:       cancel,
-		inflight:     make(map[string]struct{}),
-		lastAccepted: make(map[string]time.Time),
-		done:         make(chan struct{}),
+		store:             store,
+		cooldown:          opts.Cooldown,
+		timeout:           opts.Timeout,
+		slots:             make(chan struct{}, opts.Concurrency),
+		baseCtx:           ctx,
+		cancel:            cancel,
+		inflight:          make(map[string]struct{}),
+		lastAccepted:      make(map[string]time.Time),
+		done:              make(chan struct{}),
+		atomicReplacement: supportsAtomicGroupReplacement(store),
 	}
 	logging.ComponentEvent("memory", "consolidation_runner_started", map[string]interface{}{
 		"cooldown_seconds": opts.Cooldown.Seconds(),
@@ -89,6 +92,10 @@ func NewConsolidationRunner(store Store, opts ConsolidationOptions) *Consolidati
 // without blocking the caller.
 func (r *ConsolidationRunner) Enqueue(userID string) {
 	if r == nil || userID == "" || r.store == nil {
+		return
+	}
+	if !r.atomicReplacement {
+		recordConsolidation("skipped", "unsupported_backend", 0, 0)
 		return
 	}
 	r.mu.Lock()
@@ -120,6 +127,15 @@ func (r *ConsolidationRunner) Enqueue(userID string) {
 	r.wg.Add(1)
 	r.mu.Unlock()
 	go r.run(userID)
+}
+
+type atomicGroupReplacementSupport interface {
+	supportsAtomicGroupReplacement() bool
+}
+
+func supportsAtomicGroupReplacement(store Store) bool {
+	supported, ok := store.(atomicGroupReplacementSupport)
+	return ok && supported.supportsAtomicGroupReplacement()
 }
 
 // evictExpiredLastAcceptedLocked drops cooldown entries older than the cooldown

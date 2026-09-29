@@ -210,6 +210,15 @@ that user. The merge reuses the existing word-overlap grouping in
 at most once per cooldown, and a busy runner skips extra work instead of
 queueing it. Failures do not change the response already returned to the client.
 
+To avoid replacing current data with a summary made from an outdated snapshot,
+the merge must atomically validate every source, create the summary, and remove
+the sources. This is currently supported by the single-node Valkey memory
+backend, including when it is wrapped by the router's retrieval cache. The
+Valkey memory client does not support cluster mode. Milvus and Qdrant safely
+skip consolidation; monitor
+`llm_memory_consolidation_total{status="skipped",
+reason="unsupported_backend"}` if it is enabled for either backend.
+
 | Field | Meaning | Default when enabled |
 | --- | --- | --- |
 | `enabled` | Turn post-write consolidation on | `false` |

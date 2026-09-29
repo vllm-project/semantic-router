@@ -140,18 +140,20 @@ func (c *CachingStore) Forget(ctx context.Context, id string) error {
 	return err
 }
 
-// forgetIfCurrent delegates a version-conditional delete and invalidates the
-// hot cache only when the matching version was actually removed.
-func (c *CachingStore) forgetIfCurrent(ctx context.Context, want memoryVersion) (bool, error) {
-	replacer, ok := c.store.(sourceReplacer)
+func (c *CachingStore) supportsAtomicGroupReplacement() bool {
+	return supportsAtomicGroupReplacement(c.store)
+}
+
+func (c *CachingStore) replaceCurrentGroup(ctx context.Context, versions []memoryVersion, summary *Memory) (bool, int, error) {
+	replacer, ok := c.store.(atomicGroupReplacer)
 	if !ok {
-		return false, fmt.Errorf("memory store does not support version-conditional delete")
+		return false, 0, fmt.Errorf("memory store does not support atomic consolidation")
 	}
-	deleted, err := replacer.forgetIfCurrent(ctx, want)
-	if err == nil && deleted {
-		c.invalidate(ctx, want.userID)
+	replaced, deleted, err := replacer.replaceCurrentGroup(ctx, versions, summary)
+	if replaced {
+		c.invalidate(ctx, summary.UserID)
 	}
-	return deleted, err
+	return replaced, deleted, err
 }
 
 // ForgetByScope implements Store; delegates then invalidates cache for the scope's user.

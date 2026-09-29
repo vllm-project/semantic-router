@@ -18,7 +18,7 @@ type scriptMemoryStore struct {
 	listErr            error
 	afterList          func()
 	onGet              func(n int)
-	beforeSourceDelete func(id string)
+	beforeGroupReplace func()
 	gets               int
 	stores             int
 	forgets            int
@@ -102,31 +102,45 @@ func (s *scriptMemoryStore) Forget(_ context.Context, id string) error {
 	return nil
 }
 
-// forgetIfCurrent deletes id only when the locked record still matches want.
-// beforeSourceDelete runs first, without the lock, so a test can publish an
-// update that must not be removed.
-func (s *scriptMemoryStore) forgetIfCurrent(_ context.Context, want memoryVersion) (bool, error) {
+func (s *scriptMemoryStore) supportsAtomicGroupReplacement() bool { return true }
+
+// replaceCurrentGroup models a backend transaction. beforeGroupReplace runs
+// before its lock is acquired so tests can publish an update that must leave
+// the whole group untouched.
+func (s *scriptMemoryStore) replaceCurrentGroup(_ context.Context, versions []memoryVersion, summary *Memory) (bool, int, error) {
 	s.mu.Lock()
-	hook := s.beforeSourceDelete
+	hook := s.beforeGroupReplace
 	s.mu.Unlock()
 	if hook != nil {
-		hook(want.id)
+		hook()
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, memory := range s.memories {
-		if memory.ID != want.id {
-			continue
+	for _, want := range versions {
+		matched := false
+		for _, memory := range s.memories {
+			if memory.ID == want.id && sameVersion(want, memory) {
+				matched = true
+				break
+			}
 		}
-		if !sameVersion(want, memory) {
-			return false, nil
+		if !matched {
+			return false, 0, nil
 		}
-		s.forgets++
-		s.memories = withoutMemoryID(s.memories, want.id)
-		return true, nil
 	}
-	return false, nil
+	for _, memory := range s.memories {
+		if memory.ID == summary.ID {
+			return false, 0, errors.New("memory already exists: " + summary.ID)
+		}
+	}
+	s.stores++
+	s.memories = append(s.memories, summary)
+	for _, want := range versions {
+		s.memories = withoutMemoryID(s.memories, want.id)
+		s.forgets++
+	}
+	return true, len(versions), nil
 }
 
 func withoutMemoryID(memories []*Memory, id string) []*Memory {
@@ -193,6 +207,20 @@ func TestConsolidationRunnerRecordsStoreFailure(t *testing.T) {
 
 	runner.Enqueue("user-1")
 	waitConsolidation(t, "failed", "consolidate_error", before)
+}
+
+func TestConsolidationRunnerSkipsUnsupportedBackend(t *testing.T) {
+	before := consolidationCount("skipped", "unsupported_backend")
+	runner := NewConsolidationRunner(&ctxIgnoringStore{}, ConsolidationOptions{Concurrency: 1})
+	t.Cleanup(func() { _ = runner.RetireAndWait(time.Second) })
+
+	runner.Enqueue("user-1")
+	waitConsolidation(t, "skipped", "unsupported_backend", before)
+
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
+	require.Empty(t, runner.inflight)
+	require.Empty(t, runner.lastAccepted)
 }
 
 func TestConsolidationRunnerCooldownSkipsSecondEnqueue(t *testing.T) {

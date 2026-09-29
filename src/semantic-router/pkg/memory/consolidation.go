@@ -27,9 +27,9 @@ func ConsolidateUser(ctx context.Context, store Store, userID string) (merged in
 	if userID == "" {
 		return 0, 0, fmt.Errorf("user ID is required")
 	}
-	replacer, ok := store.(sourceReplacer)
+	replacer, ok := store.(atomicGroupReplacer)
 	if !ok {
-		return 0, 0, fmt.Errorf("memory store does not support version-conditional delete")
+		return 0, 0, fmt.Errorf("memory store does not support atomic consolidation")
 	}
 
 	result, err := store.List(ctx, ListOptions{
@@ -44,8 +44,9 @@ func ConsolidateUser(ctx context.Context, store Store, userID string) (merged in
 		return 0, 0, nil
 	}
 
-	// Copy source versions at list time. Later Get calls compare against this
-	// snapshot so a concurrent delete or update is not overwritten by the merge.
+	// Copy source versions at list time. The backend atomically compares this
+	// snapshot before replacing the group, so a concurrent delete or update is
+	// never overwritten by the merge.
 	listed := make(map[string]memoryVersion, len(result.Memories))
 	for _, mem := range result.Memories {
 		if mem == nil || mem.ID == "" {
@@ -77,15 +78,6 @@ func ConsolidateUser(ctx context.Context, store Store, userID string) (merged in
 				continue
 			}
 
-			current, checkErr := sourcesStillCurrent(ctx, store, versions)
-			if checkErr != nil {
-				return merged, deleted, checkErr
-			}
-			if !current {
-				logging.Warnf("ConsolidateUser: skipped stale group for user=%s", userID)
-				continue
-			}
-
 			summary := mergeGroup(group)
 			summaryMem := &Memory{
 				ID:         generateMemoryID(),
@@ -98,36 +90,16 @@ func ConsolidateUser(ctx context.Context, store Store, userID string) (merged in
 				Importance: maxImportance(group),
 			}
 
-			if storeErr := store.Store(ctx, summaryMem); storeErr != nil {
-				logging.Warnf("ConsolidateUser: failed to store merged memory: %v", storeErr)
-				continue
-			}
-
-			// Delete each source only while it still matches the listed version.
-			// The store compares and deletes in one operation. A separate Get
-			// plus Forget loses an update that lands between them.
-			removed, complete, replaceErr := forgetCurrentSources(ctx, replacer, versions)
-			deleted += len(removed)
-			if !complete && len(removed) == 0 {
-				if ferr := store.Forget(ctx, summaryMem.ID); ferr != nil {
-					return merged, deleted, fmt.Errorf("rolling back stale merged memory: %w", ferr)
-				}
-				if replaceErr != nil {
-					return merged, deleted, replaceErr
-				}
-				logging.Warnf("ConsolidateUser: rolled back stale group for user=%s", userID)
-				continue
-			}
-			merged++
+			replaced, removed, replaceErr := replacer.replaceCurrentGroup(ctx, versions, summaryMem)
 			if replaceErr != nil {
 				return merged, deleted, replaceErr
 			}
-			if !complete {
-				// Keep the summary if a concurrent write changed one source after
-				// earlier sources were deleted. Rolling it back and restoring those
-				// snapshots can overwrite a concurrent re-create in some stores.
-				logging.Warnf("ConsolidateUser: kept partial merge for stale group user=%s", userID)
+			if !replaced {
+				logging.Warnf("ConsolidateUser: skipped stale group for user=%s", userID)
+				continue
 			}
+			merged++
+			deleted += removed
 		}
 	}
 
@@ -175,61 +147,12 @@ func sameVersion(want memoryVersion, live *Memory) bool {
 		live.Importance == want.importance
 }
 
-// sourceReplacer deletes one memory only when the stored record still matches want.
-// deleted is false when that id is missing or now holds a different version.
-type sourceReplacer interface {
-	forgetIfCurrent(ctx context.Context, want memoryVersion) (deleted bool, err error)
-}
-
-// forgetCurrentSources deletes every listed source under its version predicate.
-// removed contains ids this call actually deleted. complete is false when a
-// source is missing or has a newer version.
-func forgetCurrentSources(ctx context.Context, replacer sourceReplacer, versions []memoryVersion) (removed []string, complete bool, err error) {
-	for _, want := range versions {
-		if err = ctx.Err(); err != nil {
-			return removed, false, err
-		}
-		deleted, ferr := replacer.forgetIfCurrent(ctx, want)
-		if ferr != nil {
-			return removed, false, ferr
-		}
-		if !deleted {
-			return removed, false, nil
-		}
-		removed = append(removed, want.id)
-	}
-	return removed, true, nil
-}
-
-// conditionalDeleteResult turns the required post-delete read for stores that
-// do not report a delete count into a completion signal. Safety does not rely
-// on this read: their server-side delete predicate performs the version check.
-func conditionalDeleteResult(getErr error) (deleted bool, err error) {
-	if getErr == nil {
-		return false, nil
-	}
-	if strings.Contains(getErr.Error(), "not found") {
-		return true, nil
-	}
-	return false, getErr
-}
-
-// sourcesStillCurrent reports whether every listed source is still unchanged.
-// A missing record or a Get error means the group is not safe to merge.
-func sourcesStillCurrent(ctx context.Context, store Store, versions []memoryVersion) (bool, error) {
-	if err := ctx.Err(); err != nil {
-		return false, err
-	}
-	for _, want := range versions {
-		live, err := store.Get(ctx, want.id)
-		if err != nil || !sameVersion(want, live) {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return false, ctxErr
-			}
-			return false, nil
-		}
-	}
-	return true, nil
+// atomicGroupReplacer replaces a group only if every listed source still
+// matches its version. Implementations must create the summary and delete all
+// originals in one atomic backend operation; partial consolidation can
+// resurrect stale content after a concurrent update or delete.
+type atomicGroupReplacer interface {
+	replaceCurrentGroup(ctx context.Context, versions []memoryVersion, summary *Memory) (replaced bool, deleted int, err error)
 }
 
 // partitionByProjectAndType keeps consolidation inside one (project_id, type) bucket.

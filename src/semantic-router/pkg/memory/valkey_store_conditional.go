@@ -5,6 +5,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -12,71 +13,191 @@ import (
 	glideoptions "github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-// valkeyForgetIfCurrentScript deletes the hash only when every compared field
-// still matches. HMGET and DEL run in one script, so an update that lands
-// after the last Get is not removed.
-const valkeyForgetIfCurrentScriptSource = `
-local fields = redis.call('HMGET', KEYS[1], 'id', 'user_id', 'project_id', 'memory_type', 'content', 'created_at', 'updated_at', 'importance')
-if fields[1] == false or fields[1] == nil then
+var (
+	valkeyReplaceCurrentGroupScriptOnce sync.Once
+	valkeyReplaceCurrentGroupScript     *glideoptions.Script
+	valkeyUpdateIfExistsScriptOnce      sync.Once
+	valkeyUpdateIfExistsCompiledScript  *glideoptions.Script
+)
+
+// valkeyReplaceCurrentGroupScriptSource validates every source snapshot,
+// creates the summary, and deletes the sources in a single Valkey script. A
+// failed comparison has no side effects, so a concurrent source update cannot
+// leave a summary containing stale content.
+const valkeyReplaceCurrentGroupScriptSource = `
+local source_count = tonumber(ARGV[1])
+local arg = 2
+
+for i = 1, source_count do
+  local fields = redis.call('HMGET', KEYS[i], 'id', 'user_id', 'project_id', 'memory_type', 'content', 'created_at', 'updated_at', 'importance')
+  if fields[1] == false or fields[1] == nil then
+    return 0
+  end
+  for j = 1, 8 do
+    if fields[j] ~= ARGV[arg + j - 1] then
+      return 0
+    end
+  end
+  arg = arg + 8
+end
+
+if redis.call('EXISTS', KEYS[source_count + 1]) == 1 then
+  return -1
+end
+
+local field_count = tonumber(ARGV[arg])
+arg = arg + 1
+local hset_args = { KEYS[source_count + 1] }
+for i = 1, field_count do
+  table.insert(hset_args, ARGV[arg])
+  table.insert(hset_args, ARGV[arg + 1])
+  arg = arg + 2
+end
+redis.call('HSET', unpack(hset_args))
+
+for i = 1, source_count do
+  redis.call('DEL', KEYS[i])
+end
+return source_count
+`
+
+func valkeyAtomicGroupReplacementScript() *glideoptions.Script {
+	valkeyReplaceCurrentGroupScriptOnce.Do(func() {
+		valkeyReplaceCurrentGroupScript = glideoptions.NewScript(valkeyReplaceCurrentGroupScriptSource)
+	})
+	return valkeyReplaceCurrentGroupScript
+}
+
+// valkeyUpdateIfExistsScriptSource prevents Update from recreating a source
+// deleted by atomic consolidation between Update's initial Get and its write.
+// EXISTS and HSET must run in the same script because HSET creates a missing
+// hash key.
+const valkeyUpdateIfExistsScriptSource = `
+if redis.call('EXISTS', KEYS[1]) == 0 then
   return 0
 end
-if fields[1] ~= ARGV[1] or fields[2] ~= ARGV[2] or fields[3] ~= ARGV[3] or fields[4] ~= ARGV[4] or fields[5] ~= ARGV[5] or fields[6] ~= ARGV[6] or fields[7] ~= ARGV[7] or fields[8] ~= ARGV[8] then
-  return 0
-end
-redis.call('DEL', KEYS[1])
+redis.call('HSET', KEYS[1], unpack(ARGV))
 return 1
 `
 
-var (
-	valkeyForgetIfCurrentScriptOnce sync.Once
-	valkeyForgetIfCurrentScript     *glideoptions.Script
-)
-
-func valkeyConditionalScript() *glideoptions.Script {
-	valkeyForgetIfCurrentScriptOnce.Do(func() {
-		valkeyForgetIfCurrentScript = glideoptions.NewScript(valkeyForgetIfCurrentScriptSource)
+func valkeyUpdateIfExistsScript() *glideoptions.Script {
+	valkeyUpdateIfExistsScriptOnce.Do(func() {
+		valkeyUpdateIfExistsCompiledScript = glideoptions.NewScript(valkeyUpdateIfExistsScriptSource)
 	})
-	return valkeyForgetIfCurrentScript
+	return valkeyUpdateIfExistsCompiledScript
 }
 
-func (v *ValkeyStore) forgetIfCurrent(ctx context.Context, want memoryVersion) (bool, error) {
-	startTime := time.Now()
-	status := "success"
-	defer func() {
-		RecordMemoryStoreOperation("valkey", "forget", status, time.Since(startTime).Seconds())
-	}()
-
-	if !v.enabled || v.client == nil {
-		status = "error"
-		return false, fmt.Errorf("valkey store is not enabled")
-	}
-	if err := ctx.Err(); err != nil {
-		status = "error"
-		return false, err
-	}
-	if want.id == "" {
-		status = "error"
-		return false, fmt.Errorf("memory ID is required")
-	}
-
+// updateHashIfExists updates an existing memory hash without allowing HSET to
+// recreate it after it has been removed by consolidation or Forget.
+func (v *ValkeyStore) updateHashIfExists(ctx context.Context, key string, fields map[string]string) (bool, error) {
 	scriptOptions := glideoptions.NewScriptOptions().
-		WithKeys([]string{v.hashKey(want.id)}).
-		WithArgs(valkeyForgetIfCurrentArgs(want))
+		WithKeys([]string{key}).
+		WithArgs(valkeyHashFieldArgs(fields))
 
 	var result any
 	err := v.retryWithBackoff(ctx, func() error {
 		var runErr error
-		result, runErr = v.client.InvokeScriptWithOptions(ctx, *valkeyConditionalScript(), *scriptOptions)
+		result, runErr = v.client.InvokeScriptWithOptions(ctx, *valkeyUpdateIfExistsScript(), *scriptOptions)
 		return runErr
 	})
 	if err != nil {
-		status = "error"
-		return false, fmt.Errorf("valkey conditional delete failed for memory id=%s: %w", want.id, err)
+		return false, err
 	}
 	return valkeyToInt64(result) == 1, nil
 }
 
-func valkeyForgetIfCurrentArgs(want memoryVersion) []string {
+func (v *ValkeyStore) supportsAtomicGroupReplacement() bool {
+	return v.enabled && !v.clusterMode
+}
+
+// replaceCurrentGroup atomically creates a summary and removes all source
+// memories only while each source still matches the snapshot from List.
+func (v *ValkeyStore) replaceCurrentGroup(ctx context.Context, versions []memoryVersion, summary *Memory) (bool, int, error) {
+	startTime := time.Now()
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("valkey", "consolidate", status, time.Since(startTime).Seconds())
+	}()
+
+	if !v.enabled || v.client == nil {
+		status = "error"
+		return false, 0, fmt.Errorf("valkey store is not enabled")
+	}
+	if err := ctx.Err(); err != nil {
+		status = "error"
+		return false, 0, err
+	}
+	if len(versions) < 2 {
+		status = "error"
+		return false, 0, fmt.Errorf("at least two source memories are required")
+	}
+	if err := valkeyValidateMemory(summary); err != nil {
+		status = "error"
+		return false, 0, err
+	}
+
+	embedding := summary.Embedding
+	if len(embedding) == 0 {
+		var err error
+		embedding, err = embedForWrite(ctx, summary.Content, v.embeddingConfig)
+		if err != nil {
+			status = "error"
+			return false, 0, fmt.Errorf("failed to generate summary embedding: %w", err)
+		}
+		summary.Embedding = embedding
+	}
+	now := time.Now()
+	if summary.CreatedAt.IsZero() {
+		summary.CreatedAt = now
+	}
+	summary.UpdatedAt = now
+	if summary.LastAccessed.IsZero() {
+		summary.LastAccessed = now
+	}
+	fields, err := valkeyBuildHashFields(summary, embedding)
+	if err != nil {
+		status = "error"
+		return false, 0, fmt.Errorf("failed to build summary fields: %w", err)
+	}
+
+	keys := make([]string, 0, len(versions)+1)
+	for _, want := range versions {
+		if want.id == "" {
+			status = "error"
+			return false, 0, fmt.Errorf("source memory ID is required")
+		}
+		keys = append(keys, v.hashKey(want.id))
+	}
+	keys = append(keys, v.hashKey(summary.ID))
+	scriptOptions := glideoptions.NewScriptOptions().
+		WithKeys(keys).
+		WithArgs(valkeyReplaceCurrentGroupArgs(versions, fields))
+
+	var result any
+	err = v.retryWithBackoff(ctx, func() error {
+		var runErr error
+		result, runErr = v.client.InvokeScriptWithOptions(ctx, *valkeyAtomicGroupReplacementScript(), *scriptOptions)
+		return runErr
+	})
+	if err != nil {
+		status = "error"
+		return false, 0, fmt.Errorf("valkey atomic consolidation failed: %w", err)
+	}
+	switch n := valkeyToInt64(result); {
+	case n == int64(len(versions)):
+		return true, len(versions), nil
+	case n == 0:
+		return false, 0, nil
+	case n == -1:
+		status = "error"
+		return false, 0, fmt.Errorf("valkey summary memory ID already exists: %s", summary.ID)
+	default:
+		status = "error"
+		return false, 0, fmt.Errorf("unexpected valkey atomic consolidation result: %d", n)
+	}
+}
+
+func valkeySourceVersionArgs(want memoryVersion) []string {
 	projectID, _ := normalizedMemoryScopeFields(&Memory{ProjectID: want.projectID})
 	return []string{
 		want.id,
@@ -88,4 +209,30 @@ func valkeyForgetIfCurrentArgs(want memoryVersion) []string {
 		strconv.FormatInt(want.updatedAt.UnixMilli(), 10),
 		strconv.FormatFloat(float64(want.importance), 'f', -1, 32),
 	}
+}
+
+func valkeyReplaceCurrentGroupArgs(versions []memoryVersion, fields map[string]string) []string {
+	args := make([]string, 0, 1+len(versions)*8+1+len(fields)*2)
+	args = append(args, strconv.Itoa(len(versions)))
+	for _, want := range versions {
+		args = append(args, valkeySourceVersionArgs(want)...)
+	}
+	fieldArgs := valkeyHashFieldArgs(fields)
+	args = append(args, strconv.Itoa(len(fieldArgs)/2))
+	args = append(args, fieldArgs...)
+	return args
+}
+
+func valkeyHashFieldArgs(fields map[string]string) []string {
+	names := make([]string, 0, len(fields))
+	for name := range fields {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	args := make([]string, 0, len(fields)*2)
+	for _, name := range names {
+		args = append(args, name, fields[name])
+	}
+	return args
 }
