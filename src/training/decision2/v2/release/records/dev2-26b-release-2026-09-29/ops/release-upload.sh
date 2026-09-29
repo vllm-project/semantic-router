@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
-# DEV2.0-26B private upload + verification (no --collect) on node B GPU6, shared lease owner.release.
-# Usage (node B): bash <mirror>/v2/release/records/dev2-26b-release-2026-09-29/ops/release-upload.sh <SRC>
+# DEV2.0-26B private upload + verification on node B GPU6, shared lease owner.release.
+# Usage (node B): bash <mirror>/v2/release/records/dev2-26b-release-2026-09-29/ops/release-upload.sh <SRC> [--collect] [--parity-n "T C P"]
 #   SRC = <commit>-src_training_decision2 under /data/dev2/src (the commit that holds the spec).
+#   --collect: coordinator finalization only (final decision named by the spec's gate_receipt).
+#   --parity-n: first N prompts of typed-final / css15 / public231 (default the full 1600 6547 231).
 set -euo pipefail
 SRC=$1
+shift
+collect=() parity_n=(1600 6547 231)
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --collect) collect=(--collect); shift ;;
+    --parity-n) read -r -a parity_n <<< "$2"; shift 2 ;;
+    *) echo "unknown argument $1" >&2; exit 2 ;;
+  esac
+done
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 S=/data/dev2/src/$SRC/src/training/decision2
 IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
@@ -44,10 +55,10 @@ status=0
   --env HIP_FORCE_DEV_KERNARG=1 --env TRITON_CACHE_AUTOTUNING=1 --env "TRITON_CACHE_DIR=$TC" --mount-rw "$TC" \
   --env "HF_HUB_CACHE=$HFC" --mount "$BASE_REPO" --mount "$HFC/blobs" \
   --mount "$G" --mount "$P" \
-  --parity "typed-final:$G/typed-final.prompts.jsonl:$P/typed-final.predictions.jsonl:1600" \
-  --parity "css15:$G/css15.prompts.jsonl:$P/css15.predictions.jsonl:6547" \
-  --parity "public231:$G/public231.prompts.jsonl:$P/public231.predictions.jsonl:231" \
-  --upload || status=$?
+  --parity "typed-final:$G/typed-final.prompts.jsonl:$P/typed-final.predictions.jsonl:${parity_n[0]}" \
+  --parity "css15:$G/css15.prompts.jsonl:$P/css15.predictions.jsonl:${parity_n[1]}" \
+  --parity "public231:$G/public231.prompts.jsonl:$P/public231.predictions.jsonl:${parity_n[2]}" \
+  --upload "${collect[@]}" || status=$?
 set +x
 python3 -m v2.27b.triton_cache finish --dest "$TC" || true
 [[ "$status" == 0 ]] || { echo "release.sh failed ($status); work=$W" >&2; exit "$status"; }
