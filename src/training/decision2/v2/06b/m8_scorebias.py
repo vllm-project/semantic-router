@@ -6,8 +6,16 @@
     python3 -m v2.06b.m8_scorebias select --checks CHECK.json ... --output SELECT.json
     python3 -m v2.06b.m8_scorebias replay --online score5t-dev.predictions.jsonl
         --score-bias score_bias.json [--check CHECK.json] --output D4.json
+    python3 -m v2.06b.m8_scorebias score-report --run RUN --gates RUN.gates --label NAME --output OUT
+    python3 -m v2.06b.m8_scorebias mlx-paired --candidate-run RUN-mlx --released-run REL-mlx --output OUT
+    python3 -m v2.06b.m8_scorebias xcheck --run RUN --mlx-run RUN-mlx --score-bias score_bias.json
+        [--reference-run M6RUN --reference-mlx-run M6RUN-mlx] --output OUT
+    python3 -m v2.06b.m8_scorebias successor --run RUN --gates RUN.gates --exposure EXPOSURE.json
+        --d4 D4.json --label NAME --output SUCCESSOR.json
+    python3 -m v2.06b.m8_scorebias choose --successor SUCCESSOR.json ... [--between PAIRED.json ...]
+        --output RELEASE-CHOICE.json
 
-M8 prereg sections 1-6. Every input defaults to its node path and is verified against the
+M8 prereg sections 1-8. Every input defaults to its node path and is verified against the
 preregistered SHA-256 (the combined panels through `v2.eval.panels.verify`).
 
 Fit (section 3): offsets b_0..b_4 on 5-level Score logits z = log max(p, 1e-12). Ledger rows
@@ -23,6 +31,19 @@ combined gold in file order (check block: neither COLLAPSE nor WARN), D2 the typ
 top share (<= .90), D3 on CHK_5 (paired delta upper bound >= 0, modal share <= .90,
 accuracy - always-majority lower bound > 0; M7's statistics). Selection follows section 5,
 replay is D4 (section 6).
+
+After a formal run (sections 7-8): `score-report` applies `v2.eval.score5t.summary` (the D1
+statistics: histogram, top share and accuracy with Wilson CIs, always-majority, accuracy -
+always-majority by paired bootstrap, 5,000 draws, seed 20260929, COLLAPSE / WARN / NO-GAIN) to
+the 400 typed FINAL Score slots, next to the R3 verdicts of `gates types`. `mlx-paired` (R4)
+scores every mlx-diag item as `v2.eval.multilingual_panel.score` does, reproduces both runs'
+stored per-type accuracies, and bootstraps candidate - released type-macro accuracy with items
+resampled within type (the same draws for both runs; 5,000, seed 20260929): Choice + Noul
+(gated, 95% upper bound >= 0) and all three types (reported). `xcheck` (report only) compares
+the finalist's answers with the frozen soup's formal answers: Choice / Noul and non-5-level
+Score identical, 5-level Score equal to the offline correction of the stored probabilities.
+`successor` combines R1-R7 into SUCCESSOR.json; `choose` applies the release-choice rule to
+finalists given in section 5 rank order.
 """
 
 from __future__ import annotations
@@ -31,6 +52,7 @@ import argparse
 import importlib
 import json
 import math
+import random
 import time
 from collections import Counter
 from pathlib import Path
@@ -808,6 +830,782 @@ def replay(args: argparse.Namespace) -> int:
     return 0
 
 
+# --------------------------------------------------------- score report
+
+
+def typed_final_score_rows(
+    gold: list[dict[str, Any]], predictions: dict[str, dict[str, Any]]
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Each typed FINAL Score slot as a one-question `score5t` row plus its answer."""
+    rows: list[dict[str, Any]] = []
+    answers_by_slot: dict[str, dict[str, Any]] = {}
+    for item in gold:
+        answers = (predictions.get(item["id"]) or {}).get("answers")
+        for key, question in item["questions"].items():
+            if question["type"] != "score":
+                continue
+            if len(question["criteria"]) != LEVELS:
+                raise ValueError(
+                    f"{item['id']}/{key}: typed FINAL Score is not 5-level"
+                )
+            slot = f"{item['id']}#{key}"
+            rows.append(
+                {
+                    "id": slot,
+                    "task": "typed-final/score",
+                    "group_id": slot,
+                    "source": "typed-final",
+                    "language": item.get("language", "en"),
+                    "long": False,
+                    "questions": {"decision": question},
+                    "gold": {"decision": item["gold"][key]},
+                }
+            )
+            if isinstance(answers, dict) and key in answers:
+                answers_by_slot[slot] = {"answers": {"decision": answers[key]}}
+    return rows, answers_by_slot
+
+
+def score_report_result(
+    gold: list[dict[str, Any]],
+    predictions: dict[str, dict[str, Any]],
+    replicates: int | None = None,
+) -> dict[str, Any]:
+    from v2.eval import score5t
+    from v2.eval.gates import type_summary
+    from v2.eval.sealed.score import outcomes
+
+    rows, answers = typed_final_score_rows(gold, predictions)
+    extra = {} if replicates is None else {"replicates": replicates}
+    score = score5t.summary(rows, answers, **extra)
+    pairs = [(o[5], o[6]) for o in outcomes(rows, answers)]
+    m7_stats = m7.summary([p for _, p in pairs], [g for g, _ in pairs], intervals=True)
+    types = type_summary(gold, predictions)
+    verdicts = {k: v["verdict"] for k, v in types.items()}
+    return {
+        "score": score,
+        "no_gain": "NO-GAIN" in score["flags"],
+        "m7_gate_statistics": {
+            k: m7_stats[k]
+            for k in (
+                "correct",
+                "accuracy",
+                "majority_level",
+                "majority_accuracy",
+                "delta_vs_majority",
+                "delta_vs_majority_ci95",
+                "top_value",
+                "top_share",
+                "kappa",
+                "recall_by_level",
+            )
+        },
+        "agreement": {
+            "correct_equals_gates_types": score["correct"]
+            == round(types["score"]["accuracy"] * types["score"]["slots"]),
+            "top_share_equals_gates_types": abs(
+                score["top_share"] - types["score"]["predicted_top_share"]
+            )
+            < 1e-12,
+            "correct_equals_m7_gate": score["correct"] == m7_stats["correct"],
+        },
+        "type_verdicts": verdicts,
+        "R3": {
+            "rule": "v2.eval.gates types marks no type COLLAPSED (top share < .90 and "
+            "accuracy Wilson lower bound above chance)",
+            "pass": all(v == "OK" for v in verdicts.values()),
+        },
+    }
+
+
+def score_report(args: argparse.Namespace) -> int:
+    from benchmark.score import load_jsonl
+    from v2.eval import panels
+    from v2.eval.gates import verified as sealed
+
+    refuse_existing(args.output)
+    gold_path = panels.path(args.panel_root, "typed-final", "gold")
+    if file_sha256(gold_path) != panels.ALL["typed-final"]["gold_sha256"]:
+        raise ValueError("typed FINAL gold differs from the frozen panel")
+    gold = list(load_jsonl(gold_path).values())
+    predictions_path = sealed(args.run, "typed-final")
+    predictions = {r["id"]: r for r in read_jsonl(predictions_path)}
+    result = score_report_result(gold, predictions)
+    stored = args.gates / "types.json"
+    if stored.is_file():
+        verdicts = {k: v["verdict"] for k, v in load_json(stored)["types"].items()}
+        result["types_json"] = {
+            "path": str(stored),
+            "sha256": file_sha256(stored),
+            "agrees": verdicts == result["type_verdicts"],
+        }
+    result = {
+        "schema": "dev2-06b-m8-score-report/1",
+        "prereg": f"{PREREG} section 8 (R3)",
+        "prereg_commit": PREREG_COMMIT,
+        "label": args.label,
+        "run": str(args.run),
+        "typed_final_predictions_sha256": file_sha256(predictions_path),
+        "typed_final_gold_sha256": file_sha256(gold_path),
+        **result,
+    }
+    m7.save(args.output, result)
+    s = result["score"]
+    print(
+        json.dumps(
+            {
+                "histogram": s["histogram"],
+                "top_share": [s["top_share"], s["top_share_wilson95"]],
+                "accuracy": [s["accuracy"], s["accuracy_wilson95"]],
+                "always_majority": s["always_majority_accuracy"],
+                "gain": [s["acc_minus_majority"], s["acc_minus_majority_boot95"]],
+                "flags": s["flags"],
+                "R3": result["R3"]["pass"],
+                "type_verdicts": result["type_verdicts"],
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+# ----------------------------------------------------------- mlx paired
+
+MLX_PANEL = PANEL_ROOT / "mlx-diag-v1"
+MLX_TYPES = ("choice", "noul", "score")
+CARD_TYPES = ("choice", "noul")
+
+
+def mlx_outcomes(
+    panel: Path, predictions_path: Path
+) -> dict[str, tuple[str, str, int]]:
+    """(type, language, correct) per item, exactly as `multilingual_panel.score` counts it."""
+    from benchmark.score import evaluate_answer
+
+    gold = {g["id"]: g for g in read_jsonl(panel / "gold.jsonl")}
+    prompts = {p["id"]: p for p in read_jsonl(panel / "prompts.jsonl")}
+    preds = {r["id"]: r for r in read_jsonl(predictions_path)}
+    if set(preds) - set(gold):
+        raise ValueError("predictions contain unknown ids")
+    out: dict[str, tuple[str, str, int]] = {}
+    for item_id, g in gold.items():
+        prompt, pred = prompts[item_id], preds.get(item_id)
+        question = prompt["questions"]["q"]
+        if pred is not None and pred.get("source_input_sha256") != g["input_sha256"]:
+            raise ValueError(f"{item_id}: prediction made from different input")
+        answer = ((pred or {}).get("answers") or {}).get("q")
+        if g["type"] == "choice":
+            target = {
+                "type": "choice",
+                "value": g["value"],
+                "label_to_semantic": {k: k for k in question["criteria"]},
+                "semantic_value": g["value"],
+            }
+        else:
+            target = {"type": g["type"], "value": g["value"]}
+        result = (
+            evaluate_answer(question, target, answer)
+            if answer is not None
+            else {"status": "missing"}
+        )
+        out[item_id] = (g["type"], g["language"], int(bool(result.get("correct"))))
+    return out
+
+
+def mlx_accuracies(outcomes: dict[str, tuple[str, str, int]]) -> dict[str, Any]:
+    cells: dict[tuple[str, str], list[int]] = {}
+    for kind, lang, correct in outcomes.values():
+        cell = cells.setdefault((kind, lang), [0, 0])
+        cell[0] += correct
+        cell[1] += 1
+    by_type = {}
+    for kind in MLX_TYPES:
+        langs = {
+            lang: {"correct": c, "n": n, "accuracy": c / n}
+            for (t, lang), (c, n) in sorted(cells.items())
+            if t == kind
+        }
+        if len({v["n"] for v in langs.values()}) != 1:
+            raise ValueError(f"mlx-diag {kind}: languages are not balanced")
+        by_type[kind] = {
+            "languages": langs,
+            "accuracy": sum(v["accuracy"] for v in langs.values()) / len(langs),
+        }
+    return {
+        "by_type": by_type,
+        "card_macro": sum(by_type[t]["accuracy"] for t in CARD_TYPES) / len(CARD_TYPES),
+        "type_macro": sum(by_type[t]["accuracy"] for t in MLX_TYPES) / len(MLX_TYPES),
+    }
+
+
+def mlx_matches_stored(accuracies: dict[str, Any], stored: dict[str, Any]) -> bool:
+    for kind in MLX_TYPES:
+        mine = accuracies["by_type"][kind]["languages"]
+        theirs = stored["by_type"][kind]["languages"]
+        if set(mine) != set(theirs):
+            return False
+        for lang, cell in mine.items():
+            if (cell["correct"], cell["n"]) != (
+                theirs[lang]["correct"],
+                theirs[lang]["n"],
+            ):
+                return False
+    return abs(accuracies["type_macro"] - stored["type_macro_accuracy"]) < 1e-12
+
+
+def mlx_bootstrap(
+    candidate: dict[str, tuple[str, str, int]],
+    released: dict[str, tuple[str, str, int]],
+    draws: int = m7.DRAWS,
+    seed: int = m7.SEED,
+) -> dict[str, Any]:
+    """Paired item bootstrap of candidate - released, items resampled within type."""
+    from .contrast import percentile
+
+    if set(candidate) != set(released):
+        raise ValueError("mlx-diag runs cover different items")
+    ids = {t: [k for k, v in candidate.items() if v[0] == t] for t in MLX_TYPES}
+    if any(released[k][0] != candidate[k][0] for k in candidate):
+        raise ValueError("mlx-diag item types differ between runs")
+    left = {t: [candidate[k][2] for k in ids[t]] for t in MLX_TYPES}
+    right = {t: [released[k][2] for k in ids[t]] for t in MLX_TYPES}
+    rng = random.Random(seed)
+    per_type: dict[str, list[float]] = {t: [] for t in MLX_TYPES}
+    card, overall = [], []
+    for _ in range(draws):
+        diff = {}
+        for t in MLX_TYPES:
+            a, b, n = left[t], right[t], len(left[t])
+            total = 0
+            for _ in range(n):
+                i = rng.randrange(n)
+                total += a[i] - b[i]
+            diff[t] = total / n
+            per_type[t].append(diff[t])
+        card.append(sum(diff[t] for t in CARD_TYPES) / len(CARD_TYPES))
+        overall.append(sum(diff.values()) / len(MLX_TYPES))
+
+    def ci(values: list[float]) -> list[float]:
+        return [percentile(values, 2.5), percentile(values, 97.5)]
+
+    return {
+        "draws": draws,
+        "seed": seed,
+        "items_by_type": {t: len(ids[t]) for t in MLX_TYPES},
+        "card_macro_ci95": ci(card),
+        "type_macro_ci95": ci(overall),
+        "per_type_ci95": {t: ci(v) for t, v in per_type.items()},
+    }
+
+
+def mlx_run(run: Path, panel: Path) -> tuple[dict, dict, dict]:
+    path = run / "output" / "mlx-diag.predictions.jsonl"
+    stored_path = run / "mlx-diag.score.json"
+    stored = load_json(stored_path)
+    digest = file_sha256(path)
+    if stored["predictions_sha256"] != digest:
+        raise ValueError(f"{path} differs from its mlx-diag.score.json")
+    if stored["gold_sha256"] != file_sha256(panel / "gold.jsonl"):
+        raise ValueError(f"{stored_path} scored another gold file")
+    outcomes = mlx_outcomes(panel, path)
+    accuracies = mlx_accuracies(outcomes)
+    provenance = {
+        "run": str(run),
+        "predictions_sha256": digest,
+        "score_json_sha256": file_sha256(stored_path),
+        "reproduces_score_json": mlx_matches_stored(accuracies, stored),
+    }
+    return outcomes, accuracies, provenance
+
+
+def mlx_paired_result(
+    candidate: dict, released: dict, draws: int = m7.DRAWS
+) -> dict[str, Any]:
+    acc_c, acc_r = mlx_accuracies(candidate), mlx_accuracies(released)
+    boot = mlx_bootstrap(candidate, released, draws)
+    return {
+        "candidate": acc_c,
+        "released": acc_r,
+        "delta": {
+            "card_macro": acc_c["card_macro"] - acc_r["card_macro"],
+            "type_macro": acc_c["type_macro"] - acc_r["type_macro"],
+            "per_type": {
+                t: acc_c["by_type"][t]["accuracy"] - acc_r["by_type"][t]["accuracy"]
+                for t in MLX_TYPES
+            },
+        },
+        "bootstrap": boot,
+        "R4": {
+            "rule": "Choice + Noul type-macro accuracy, candidate - released: paired "
+            "item-bootstrap 95% upper bound >= 0 (items resampled within type)",
+            "pass": boot["card_macro_ci95"][1] >= 0,
+        },
+    }
+
+
+def mlx_paired(args: argparse.Namespace) -> int:
+    refuse_existing(args.output)
+    cand, _, cand_prov = mlx_run(args.candidate_run, args.panel)
+    rel, _, rel_prov = mlx_run(args.released_run, args.panel)
+    if not (cand_prov["reproduces_score_json"] and rel_prov["reproduces_score_json"]):
+        raise ValueError("per-item outcomes do not reproduce mlx-diag.score.json")
+    result = {
+        "schema": "dev2-06b-m8-mlx-paired/1",
+        "prereg": f"{PREREG} section 8 (R4)",
+        "prereg_commit": PREREG_COMMIT,
+        "panel_gold_sha256": file_sha256(args.panel / "gold.jsonl"),
+        "runs": {"candidate": cand_prov, "released": rel_prov},
+        "scope": "Choice + Noul card-eligible (gated); XNLI-based Score is NC, reported",
+        **mlx_paired_result(cand, rel),
+    }
+    m7.save(args.output, result)
+    print(
+        json.dumps(
+            {
+                "card_macro": [
+                    result["candidate"]["card_macro"],
+                    result["released"]["card_macro"],
+                    result["delta"]["card_macro"],
+                    result["bootstrap"]["card_macro_ci95"],
+                ],
+                "type_macro": [
+                    result["candidate"]["type_macro"],
+                    result["released"]["type_macro"],
+                    result["delta"]["type_macro"],
+                    result["bootstrap"]["type_macro_ci95"],
+                ],
+                "R4": result["R4"]["pass"],
+            }
+        )
+    )
+    return 0
+
+
+# --------------------------------------------------------------- xcheck
+
+M6_FORMAL = Path("/data/dev2/runs/06b/m6/formal/m6-mxcx-soup")
+FORMAL_PANELS = ("typed-final", "css15", "public231")
+
+
+def probability_map(answer: dict[str, Any]) -> dict[str, float]:
+    if answer.get("type") == "noul":
+        return {"true": float(answer["noul"])}
+    return {k: float(v) for k, v in (answer.get("probabilities") or {}).items()}
+
+
+def max_abs_dp(a: dict[str, Any], b: dict[str, Any]) -> float:
+    pa, pb = probability_map(a), probability_map(b)
+    if set(pa) != set(pb):
+        return math.inf
+    return max((abs(pa[k] - pb[k]) for k in pa), default=0.0)
+
+
+def answer_point(answer: dict[str, Any]) -> Any:
+    kind = answer.get("type")
+    if kind == "choice":
+        return answer.get("choice")
+    if kind == "noul":
+        return m7.noul_point(answer["noul"])
+    return m7.predicted([p for _, p in sorted(probability_map(answer).items())])
+
+
+def xcheck_rows(
+    reference: dict[str, dict[str, Any]],
+    finalist: dict[str, dict[str, Any]],
+    row: list[float],
+) -> dict[str, Any]:
+    kinds = ("choice", "noul", "score5", "score_other", "invalid")
+    cells = {
+        k: {"slots": 0, "identical": 0, "same_answer": 0, "max_abs_dp": 0.0}
+        for k in kinds
+    }
+    cells["score5"]["equal_offline_argmax"] = 0
+    cells["score5"]["max_abs_dp_vs_offline"] = 0.0
+    cells["score5"]["max_abs_dscore_vs_offline"] = 0.0
+    cells["score5"]["changed_vs_reference"] = 0
+    missing_keys = 0
+    for key in sorted(reference):
+        ra = reference[key].get("answers") or {}
+        fa = (finalist.get(key) or {}).get("answers") or {}
+        missing_keys += set(ra) != set(fa)
+        for slot, ref in ra.items():
+            new = fa.get(slot)
+            if not isinstance(ref, dict) or not isinstance(new, dict):
+                cell = cells["invalid"]
+                cell["slots"] += 1
+                cell["identical"] += ref == new
+                cell["same_answer"] += ref == new
+                continue
+            kind = ref.get("type")
+            if kind == "score":
+                kind = "score5" if probabilities(ref) is not None else "score_other"
+            cell = cells[kind if kind in cells else "invalid"]
+            cell["slots"] += 1
+            cell["identical"] += ref == new
+            same = new.get("type") == ref.get("type")
+            dp = max_abs_dp(ref, new) if same else math.inf
+            cell["max_abs_dp"] = max(cell["max_abs_dp"], dp)
+            if kind == "score5":
+                expected = corrected_answer(ref, row)
+                observed = probabilities(new)
+                point = m7.predicted(observed) if observed is not None else None
+                cell["same_answer"] += point == m7.predicted(probabilities(ref))
+                cell["changed_vs_reference"] += point != m7.predicted(
+                    probabilities(ref)
+                )
+                if observed is None:
+                    cell["max_abs_dp_vs_offline"] = math.inf
+                    continue
+                target = probabilities(expected)
+                cell["equal_offline_argmax"] += m7.predicted(target) == point
+                cell["max_abs_dp_vs_offline"] = max(
+                    cell["max_abs_dp_vs_offline"],
+                    max(abs(a - b) for a, b in zip(target, observed)),
+                )
+                cell["max_abs_dscore_vs_offline"] = max(
+                    cell["max_abs_dscore_vs_offline"],
+                    abs(float(expected["score"]) - float(new["score"])),
+                )
+            else:
+                cell["same_answer"] += same and answer_point(ref) == answer_point(new)
+    checks = {
+        "same_ids": set(reference) == set(finalist),
+        "same_question_keys": missing_keys == 0,
+        "choice_noul_identical": all(
+            cells[k]["identical"] == cells[k]["slots"] for k in ("choice", "noul")
+        ),
+        "score_other_identical": cells["score_other"]["identical"]
+        == cells["score_other"]["slots"],
+        "score5_offline_argmax_all": cells["score5"]["equal_offline_argmax"]
+        == cells["score5"]["slots"],
+        "score5_max_abs_dp_le_1e-4": cells["score5"]["max_abs_dp_vs_offline"]
+        <= REPLAY_TOLERANCE,
+    }
+    return {"items": len(reference), "by_kind": cells, "checks": checks}
+
+
+def xcheck_bindings(
+    reference: dict[str, dict[str, Any]], finalist: dict[str, dict[str, Any]], bias_sha
+) -> dict[str, bool]:
+    return {
+        "reference_model_sha256": all(
+            r.get("model_sha256") == MODEL_SHA256 for r in reference.values()
+        ),
+        "finalist_model_sha256": all(
+            r.get("model_sha256") == MODEL_SHA256 for r in finalist.values()
+        ),
+        "finalist_score_bias_sha256": all(
+            r.get("score_bias_sha256") == bias_sha for r in finalist.values()
+        ),
+        "reference_without_score_bias": all(
+            "score_bias_sha256" not in r for r in reference.values()
+        ),
+    }
+
+
+def xcheck(args: argparse.Namespace) -> int:
+    from v2.eval.gates import verified as sealed
+
+    refuse_existing(args.output)
+    offsets, _ = load_score_bias(args.score_bias, MODEL_SHA256)
+    bias_sha = file_sha256(args.score_bias)
+    row = offsets[LEVELS]
+    sources = {
+        panel: (sealed(args.reference_run, panel), sealed(args.run, panel))
+        for panel in FORMAL_PANELS
+    }
+    sources["mlx-diag"] = tuple(
+        run / "output" / "mlx-diag.predictions.jsonl"
+        for run in (args.reference_mlx_run, args.mlx_run)
+    )
+    panels_out = {}
+    for panel, (ref_path, new_path) in sources.items():
+        reference = {r["id"]: r for r in read_jsonl(ref_path)}
+        finalist = {r["id"]: r for r in read_jsonl(new_path)}
+        result = xcheck_rows(reference, finalist, row)
+        result["bindings"] = xcheck_bindings(reference, finalist, bias_sha)
+        result["reference_sha256"] = file_sha256(ref_path)
+        result["finalist_sha256"] = file_sha256(new_path)
+        panels_out[panel] = result
+    result = {
+        "schema": "dev2-06b-m8-xcheck/1",
+        "prereg": f"{PREREG} section 7 (report only)",
+        "prereg_commit": PREREG_COMMIT,
+        "runs": {
+            "finalist": str(args.run),
+            "finalist_mlx": str(args.mlx_run),
+            "reference": str(args.reference_run),
+            "reference_mlx": str(args.reference_mlx_run),
+        },
+        "score_bias_sha256": bias_sha,
+        "panels": panels_out,
+        "all_checks": all(
+            all(p["checks"].values()) and all(p["bindings"].values())
+            for p in panels_out.values()
+        ),
+    }
+    m7.save(args.output, result)
+    print(
+        json.dumps(
+            {
+                panel: {
+                    "checks": p["checks"],
+                    "bindings": p["bindings"],
+                    "slots": {k: v["slots"] for k, v in p["by_kind"].items()},
+                    "score5_max_abs_dp_vs_offline": p["by_kind"]["score5"][
+                        "max_abs_dp_vs_offline"
+                    ],
+                    "score5_changed_vs_reference": p["by_kind"]["score5"][
+                        "changed_vs_reference"
+                    ],
+                }
+                for panel, p in panels_out.items()
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+# ------------------------------------------------------------ successor
+
+V3_TIER_FLOOR = 38.3
+EXCLUDED_GROUPS = Path(
+    "/data/dev2/runs/eval/m5/overlap-effects/final/excluded-groups.json"
+)
+EXCLUDED_GROUPS_SHA256 = (
+    "2194716a179b2e6c3ba529dee3952c5dd62c0f3281638b7236029d5d542f4914"
+)
+M6_MIXTURES = {
+    "/data/dev2/runs/06b/m6/data/m6-mx-s1.train.jsonl": "a277bd45a61662b8edbdc3472d0f74f605bc2a4d6e187605afc2bb3d4c998eae",
+    "/data/dev2/runs/06b/m6/data/m6-mx-s2.train.jsonl": "5fafa72d6199025e36cda7eb315a1faa341d1f5164ac1d06ccafd69f4e7ed8c0",
+    "/data/dev2/runs/06b/m6/data/m6-mx-s3.train.jsonl": "e484c99b1fe4ca5051a2f33ca032edda71f07ff601f6ace859f82c687e31f653",
+    "/data/dev2/runs/06b/m6/data/m6-cx-s1.train.jsonl": "ad925c379fe4f1c658087d99e88dcd4ac3cfdab372e999b592eb2f6c4e6186fc",
+    "/data/dev2/runs/06b/m6/data/m6-cx-s2.train.jsonl": "420fd988f06c0fe5deb4aed72fcc71f3d2a2af414ccea2597d652679ad664489",
+    "/data/dev2/runs/06b/m6/data/m6-cx-s3.train.jsonl": "9131be73edce1e3ba79a9b91adcff7807035e12352545fbbfd3b5e0e44178aa5",
+}
+
+
+def v3_interval(paired_doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "delta_v3": paired_doc["point"]["delta"]["score"],
+        "ci95_v3": [paired_doc["ci95"]["low"], paired_doc["ci95"]["high"]],
+        "delta_H": paired_doc["point"]["delta"]["H"],
+        "ci95_H": [
+            paired_doc["axis_ci95"]["H"]["delta"]["low"],
+            paired_doc["axis_ci95"]["H"]["delta"]["high"],
+        ],
+        "models": paired_doc.get("models"),
+    }
+
+
+def exposure_check(doc: dict[str, Any]) -> dict[str, Any]:
+    files = {f["path"]: f["sha256"] for f in doc["files"]}
+    checks = {
+        "payload_is_rescreen_excluded_groups": doc["payload_sha256"]
+        == EXCLUDED_GROUPS_SHA256,
+        "six_m6_mixtures": files == M6_MIXTURES,
+        "methods_agree": bool(doc["methods_agree"]),
+        "no_group_found": not doc["groups"] and not doc["matched_rows"],
+    }
+    return {
+        "files": len(files),
+        "rows": sum(f["rows"] for f in doc["files"]),
+        "groups": len(doc["groups"]),
+        "checks": checks,
+        "pass": all(checks.values()),
+    }
+
+
+def successor_result(
+    report: dict[str, Any],
+    paired: dict[str, dict[str, Any]],
+    types: dict[str, Any],
+    mlx: dict[str, Any],
+    exposure: dict[str, Any],
+    public: dict[str, Any],
+    d4: dict[str, Any],
+    score: dict[str, Any],
+) -> dict[str, Any]:
+    released = v3_interval(paired["released"])
+    kai1 = v3_interval(paired["kai1"])
+    gliner = v3_interval(paired["gliner25"])
+    verdicts = {k: v["verdict"] for k, v in types["types"].items()}
+    r3 = all(v == "OK" for v in verdicts.values())
+    v3 = report["v3"]["score"]
+    r5 = {
+        "v3_vs_kai1_lower_bound_gt_0": kai1["ci95_v3"][0] > 0,
+        f"v3_ge_{V3_TIER_FLOOR}": v3 >= V3_TIER_FLOOR,
+        "H_vs_gliner25_upper_bound_ge_0": gliner["ci95_H"][1] >= 0,
+        "no_type_collapsed": r3,
+    }
+    exposure_gate = exposure_check(exposure)
+    rules = {
+        "R1": {
+            "rule": "post-key v3 paired delta vs released: 95% CI lower bound > 0",
+            **released,
+            "pass": released["ci95_v3"][0] > 0,
+        },
+        "R2": {
+            "rule": "delta H vs released: 95% CI upper bound >= 0",
+            "delta_H": released["delta_H"],
+            "ci95_H": released["ci95_H"],
+            "pass": released["ci95_H"][1] >= 0,
+        },
+        "R3": {
+            "rule": "v2.eval.gates types: no type COLLAPSED",
+            "verdicts": verdicts,
+            "score_no_gain_disclosed": "NO-GAIN" in score["score"]["flags"],
+            "score_flags": score["score"]["flags"],
+            "pass": r3,
+        },
+        "R4": {
+            "rule": mlx["R4"]["rule"],
+            "card_macro_delta": mlx["delta"]["card_macro"],
+            "card_macro_ci95": mlx["bootstrap"]["card_macro_ci95"],
+            "type_macro_delta_reported": mlx["delta"]["type_macro"],
+            "type_macro_ci95_reported": mlx["bootstrap"]["type_macro_ci95"],
+            "pass": mlx["bootstrap"]["card_macro_ci95"][1] >= 0,
+        },
+        "R5": {
+            "rule": "paired v3 vs Kai1 lower bound > 0; v3 >= 38.3; delta H vs "
+            "GLiNER2.5-Decide upper bound >= 0; no type collapsed",
+            "v3": v3,
+            "vs_kai1": kai1,
+            "vs_gliner25": gliner,
+            "checks": r5,
+            "pass": all(r5.values()),
+        },
+        "R6": {
+            "rule": "overlap_effects exposure of the six M6 mixtures against the "
+            "rescreen's excluded groups finds none",
+            **exposure_gate,
+        },
+        "R7": {
+            "rule": "v2.eval.gates public231 vs the current revision is not REGRESSION",
+            "delta_items": public["delta"],
+            "left_correct": public["left_correct"],
+            "right_correct": public["right_correct"],
+            "mcnemar_exact_p": public["mcnemar_exact_p"],
+            "verdict": public["verdict"],
+            "pass": public["verdict"] != "REGRESSION",
+        },
+    }
+    d4_pass = bool(d4["D4"]["pass"])
+    return {
+        "D4_pass": d4_pass,
+        "rules": rules,
+        "verdict": d4_pass and all(r["pass"] for r in rules.values()),
+    }
+
+
+def successor(args: argparse.Namespace) -> int:
+    refuse_existing(args.output)
+    inputs = {
+        "report": args.run / "REPORT.json",
+        "released": args.gates / "paired-vs-released.json",
+        "kai1": args.run / "PAIRED-vs-kai1.json",
+        "gliner25": args.gates / "paired-vs-gliner25.json",
+        "types": args.gates / "types.json",
+        "mlx": args.gates / "mlx-paired.json",
+        "public231": args.gates / "public231-vs-released.json",
+        "score": args.gates / "score-report.json",
+        "exposure": args.exposure,
+        "d4": args.d4,
+    }
+    docs = {k: load_json(v) for k, v in inputs.items()}
+    stored = load_json(args.run / "PAIRED-vs-released.json")
+    result = successor_result(
+        docs["report"],
+        {k: docs[k] for k in ("released", "kai1", "gliner25")},
+        docs["types"],
+        docs["mlx"],
+        docs["exposure"],
+        docs["public231"],
+        docs["d4"],
+        docs["score"],
+    )
+    result = {
+        "schema": "dev2-06b-m8-successor/1",
+        "prereg": f"{PREREG} section 8",
+        "prereg_commit": PREREG_COMMIT,
+        "label": args.label,
+        "run": str(args.run),
+        "seal_sha256": docs["report"].get("seal_sha256"),
+        "inputs": {
+            k: {"path": str(v), "sha256": file_sha256(v)} for k, v in inputs.items()
+        },
+        "gates_paired_equals_same_panel_compare": v3_interval(stored)["ci95_v3"]
+        == v3_interval(docs["released"])["ci95_v3"],
+        **result,
+    }
+    m7.save(args.output, result)
+    print(
+        json.dumps(
+            {
+                "label": args.label,
+                "D4": result["D4_pass"],
+                **{k: r["pass"] for k, r in result["rules"].items()},
+                "verdict": result["verdict"],
+            }
+        )
+    )
+    return 0
+
+
+def choose_result(
+    successors: list[dict[str, Any]], between: list[dict[str, Any]]
+) -> dict[str, Any]:
+    ranked = [s["label"] for s in successors]
+    passers = [s["label"] for s in successors if s["verdict"]]
+    pairs = {(d["models"]["left"], d["models"]["right"]): d for d in between}
+    comparisons = []
+    chosen = passers[0] if passers else None
+    for later in passers[1:]:
+        doc = pairs.get((later, passers[0]))
+        if doc is None:
+            raise ValueError(f"no paired file {later} vs {passers[0]}")
+        interval = v3_interval(doc)
+        better = interval["ci95_v3"][0] > 0
+        comparisons.append(
+            {
+                "later": later,
+                "first": passers[0],
+                **interval,
+                "significantly_better": better,
+            }
+        )
+        if better and chosen == passers[0]:
+            chosen = later
+    return {
+        "rule": "the first passer in the section 5 ranking, unless a later passer is "
+        "significantly better on v3 (paired delta later - first, 95% lower bound > 0)",
+        "ranking": ranked,
+        "passers": passers,
+        "comparisons": comparisons,
+        "successor": chosen,
+    }
+
+
+def choose(args: argparse.Namespace) -> int:
+    refuse_existing(args.output)
+    successors = [load_json(p) for p in args.successor]
+    between = [load_json(p) for p in args.between]
+    result = {
+        "schema": "dev2-06b-m8-release-choice/1",
+        "prereg": f"{PREREG} section 8 (release choice)",
+        "prereg_commit": PREREG_COMMIT,
+        "inputs": [
+            {"path": str(p), "sha256": file_sha256(p)}
+            for p in [*args.successor, *args.between]
+        ],
+        **choose_result(successors, between),
+    }
+    m7.save(args.output, result)
+    print(json.dumps({k: result[k] for k in ("passers", "successor", "comparisons")}))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -847,10 +1645,49 @@ def main(argv: list[str] | None = None) -> int:
     four.add_argument("--check", type=Path)
     four.add_argument("--panel-root", type=Path, default=PANEL_ROOT)
     four.add_argument("--output", type=Path, required=True)
+    five = commands.add_parser("score-report")
+    five.add_argument("--run", type=Path, required=True)
+    five.add_argument("--gates", type=Path, required=True)
+    five.add_argument("--label", required=True)
+    five.add_argument("--panel-root", type=Path, default=PANEL_ROOT)
+    five.add_argument("--output", type=Path, required=True)
+    six = commands.add_parser("mlx-paired")
+    six.add_argument("--candidate-run", type=Path, required=True)
+    six.add_argument("--released-run", type=Path, required=True)
+    six.add_argument("--panel", type=Path, default=MLX_PANEL)
+    six.add_argument("--output", type=Path, required=True)
+    seven = commands.add_parser("xcheck")
+    seven.add_argument("--run", type=Path, required=True)
+    seven.add_argument("--mlx-run", type=Path, required=True)
+    seven.add_argument("--score-bias", type=Path, required=True)
+    seven.add_argument("--reference-run", type=Path, default=M6_FORMAL)
+    seven.add_argument(
+        "--reference-mlx-run", type=Path, default=Path(f"{M6_FORMAL}-mlx")
+    )
+    seven.add_argument("--output", type=Path, required=True)
+    eight = commands.add_parser("successor")
+    eight.add_argument("--run", type=Path, required=True)
+    eight.add_argument("--gates", type=Path, required=True)
+    eight.add_argument("--exposure", type=Path, required=True)
+    eight.add_argument("--d4", type=Path, required=True)
+    eight.add_argument("--label", required=True)
+    eight.add_argument("--output", type=Path, required=True)
+    nine = commands.add_parser("choose")
+    nine.add_argument("--successor", type=Path, action="append", required=True)
+    nine.add_argument("--between", type=Path, action="append", default=[])
+    nine.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
-    return {"fit": fit, "check": check, "select": select, "replay": replay}[
-        args.command
-    ](args)
+    return {
+        "fit": fit,
+        "check": check,
+        "select": select,
+        "replay": replay,
+        "score-report": score_report,
+        "mlx-paired": mlx_paired,
+        "xcheck": xcheck,
+        "successor": successor,
+        "choose": choose,
+    }[args.command](args)
 
 
 if __name__ == "__main__":
