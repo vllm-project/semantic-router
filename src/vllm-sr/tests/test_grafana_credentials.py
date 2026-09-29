@@ -3,7 +3,9 @@
 import configparser
 import os
 import stat
+import subprocess
 from pathlib import Path
+
 
 from cli import container_support_services, runtime_lifecycle
 from cli import grafana_credentials as gc
@@ -60,6 +62,14 @@ def _monkeypatch_grafana_container(monkeypatch, captured, *, render_templates=Fa
         container_support_services,
         "_run_service_start",
         lambda cmd, _label: captured.update(cmd=cmd) or (0, "", ""),
+    )
+    monkeypatch.setattr(
+        container_support_services,
+        "rekey_grafana_admin",
+        lambda container_name, runtime=None, **k: captured.update(
+            rekey_container=container_name
+        )
+        or (0, "", ""),
     )
 
 
@@ -250,3 +260,58 @@ def test_grafana_container_defaults_the_state_root_to_the_working_directory(
         f"{working_directory / '.vllm-sr' / 'grafana' / 'grafana.serve.ini'}:"
         f"{CONTAINER_GRAFANA_INI_PATH}:ro"
     ) in command
+    assert captured.get("rekey_container") == layout.grafana_container_name
+
+
+def test_rekey_grafana_admin_executes_cli_without_secrets_in_argv(monkeypatch):
+    executed = []
+
+    def fake_run(command, **kwargs):
+        executed.append(command)
+        return subprocess.CompletedProcess(
+            args=command, returncode=0, stdout="ok", stderr=""
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    rc, stdout, stderr = container_support_services.rekey_grafana_admin(
+        "my-grafana-container", "docker"
+    )
+
+    assert rc == 0
+    assert len(executed) == 1
+    command = executed[0]
+    assert command[:4] == ["docker", "exec", "my-grafana-container", "sh"]
+    assert command[4] == "-c"
+    # The shell string must read from the mounted password path and never interpolate
+    # a raw secret into process arguments.
+    shell_command = command[5]
+    assert gc.CONTAINER_GRAFANA_PASSWORD_PATH in shell_command
+    assert "admin reset-admin-password" in shell_command
+    assert "cat " in shell_command
+
+
+def test_rekey_grafana_admin_retries_until_success(monkeypatch):
+    attempts = 0
+
+    def fake_run(command, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            return subprocess.CompletedProcess(
+                args=command, returncode=1, stdout="", stderr="db locked"
+            )
+        return subprocess.CompletedProcess(
+            args=command, returncode=0, stdout="success", stderr=""
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        container_support_services, "GRAFANA_REKEY_POLL_INTERVAL_SECONDS", 0.001
+    )
+    rc, stdout, stderr = container_support_services.rekey_grafana_admin(
+        "my-grafana-container", "docker", timeout=5
+    )
+
+    assert rc == 0
+    assert attempts == 3
+    assert stdout == "success"

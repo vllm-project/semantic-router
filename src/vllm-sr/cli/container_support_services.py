@@ -12,6 +12,8 @@ lifecycle primitives; the dependency runs one way only.
 """
 
 import os
+import subprocess
+import time
 
 from cli.container_observability import (
     _ensure_hidden_config_dir,
@@ -29,6 +31,61 @@ from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
 
 log = get_logger(__name__)
+
+GRAFANA_REKEY_TIMEOUT_SECONDS = 15
+GRAFANA_REKEY_POLL_INTERVAL_SECONDS = 0.5
+
+
+def rekey_grafana_admin(
+    container_name: str,
+    runtime: str | None = None,
+    *,
+    timeout: int = GRAFANA_REKEY_TIMEOUT_SECONDS,
+) -> tuple[int, str, str]:
+    """Synchronize the persisted Grafana admin password with the mounted password file.
+
+    Grafana applies ``GF_SECURITY_ADMIN_PASSWORD__FILE`` (or ``admin_password``)
+    only during initial database creation. When the named ``/var/lib/grafana`` volume
+    persists across container replacements, recreating the container leaves the old
+    password in ``grafana.db``.
+
+    This invokes ``grafana cli admin reset-admin-password`` inside the container,
+    reading the secret directly from the container's mounted secret file, so the
+    credential never enters host process arguments or logs.
+    """
+    container_runtime = runtime or get_container_runtime()
+    command = [
+        container_runtime,
+        "exec",
+        container_name,
+        "sh",
+        "-c",
+        (
+            f"grafana cli --homepath /usr/share/grafana admin reset-admin-password "
+            f'"$(cat {CONTAINER_GRAFANA_PASSWORD_PATH})"'
+        ),
+    ]
+    deadline = time.time() + timeout
+    last_result = (1, "", "timeout waiting to rekey Grafana admin")
+    while time.time() < deadline:
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout,
+            )
+            if result.returncode == 0:
+                log.info(f"Synchronized Grafana admin credential in {container_name}")
+                return (0, result.stdout, result.stderr)
+            last_result = (result.returncode, result.stdout, result.stderr)
+        except subprocess.TimeoutExpired:
+            break
+        except Exception as exc:
+            last_result = (1, "", str(exc))
+        time.sleep(GRAFANA_REKEY_POLL_INTERVAL_SECONDS)
+    return last_result
 
 
 def _observability_host_bind_address() -> str:
@@ -221,4 +278,13 @@ def container_start_grafana(
         _published_observability_port(stack_layout.grafana_port, 3000),
         "docker.io/grafana/grafana:11.5.1",
     ]
-    return _run_service_start(cmd, "Grafana")
+    status = _run_service_start(cmd, "Grafana")
+    if status and isinstance(status, tuple) and status[0] == 0:
+        rekey_status = rekey_grafana_admin(container_name, runtime=runtime)
+
+        if rekey_status[0] != 0:
+            log.warning(
+                f"Failed to synchronize Grafana admin password for {container_name}: "
+                f"{rekey_status[2].strip() or f'exit code {rekey_status[0]}'}"
+            )
+    return status

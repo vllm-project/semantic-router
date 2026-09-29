@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
+from cli import container_support_services
 from cli import grafana_credentials as gc
 from cli.container_observability import render_observability_template
 from cli_test_base import (
@@ -56,6 +57,16 @@ class TestGrafanaPasswordFileContainer(CLITestBase):
     def tearDown(self):
         self._run_subprocess(
             [self.container_runtime, "rm", "-f", self.GRAFANA_CONTAINER_NAME],
+            timeout=30,
+        )
+        self._run_subprocess(
+            [
+                self.container_runtime,
+                "volume",
+                "rm",
+                "-f",
+                f"{self.GRAFANA_CONTAINER_NAME}-data",
+            ],
             timeout=30,
         )
         super().tearDown()
@@ -177,6 +188,177 @@ class TestGrafanaPasswordFileContainer(CLITestBase):
         self.print_test_result(
             True,
             "production ini denied unauthenticated admin; password-file admin worked",
+        )
+
+    @integration_only
+    def test_grafana_persisted_password_updates_with_existing_volume(self):
+        """Upgrade/restart must rotate the admin password even when the volume persists.
+
+        Grafana only applies the mounted admin password on first run when the
+        database is initialized. Recreating the container against an existing
+        named volume leaves the previous credentials in grafana.db unless
+        the persisted admin password is synchronized via rekey_grafana_admin.
+        """
+        self.print_test_header(
+            "grafana password update on existing volume",
+            "recreating Grafana with an existing volume rotates the admin password",
+        )
+        volume_name = f"{self.GRAFANA_CONTAINER_NAME}-data"
+        saved_override = os.environ.pop(gc.GRAFANA_ADMIN_PASSWORD_ENV, None)
+        try:
+            password_file = gc.ensure_grafana_admin_password_file(self.test_dir)
+            initial_password = password_file.read_text(encoding="utf-8")
+
+            grafana_ini = Path(self.test_dir) / "grafana.serve.ini"
+            grafana_ini.write_text(
+                render_observability_template(
+                    GRAFANA_SERVE_INI_TEMPLATE.read_text(encoding="utf-8"),
+                    self.runtime_stack,
+                ),
+                encoding="utf-8",
+            )
+
+            # Boot initial container with named volume
+            result = self._run_subprocess(
+                [
+                    self.container_runtime,
+                    "run",
+                    "-d",
+                    "--name",
+                    self.GRAFANA_CONTAINER_NAME,
+                    "-e",
+                    f"{gc.GRAFANA_ADMIN_PASSWORD_FILE_ENV}="
+                    f"{gc.CONTAINER_GRAFANA_PASSWORD_PATH}",
+                    "-v",
+                    (f"{password_file}:{gc.CONTAINER_GRAFANA_PASSWORD_PATH}:ro,z"),
+                    "-v",
+                    f"{grafana_ini}:{CONTAINER_GRAFANA_INI_PATH}:ro",
+                    "-v",
+                    f"{volume_name}:/var/lib/grafana",
+                    "-p",
+                    "127.0.0.1::3000",
+                    GRAFANA_IMAGE,
+                ],
+                timeout=GRAFANA_START_COMMAND_TIMEOUT,
+            )
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"the initial Grafana container failed to start: {result.stderr}",
+            )
+            self.assertTrue(
+                self.wait_for_container_running(
+                    timeout=120,
+                    container_name=self.GRAFANA_CONTAINER_NAME,
+                ),
+                "the initial Grafana container exited unexpectedly",
+            )
+            host_port_1 = self._published_host_port()
+            self.assertTrue(self._wait_until_grafana_ready(host_port_1))
+
+            self.assertEqual(
+                self._grafana_api_status(
+                    GRAFANA_ORG_ADMIN_API, host_port_1, initial_password
+                ),
+                HTTP_STATUS_OK,
+                "the initial admin password failed to authenticate",
+            )
+
+            # Stop and remove initial container, preserving the named volume
+            self._run_subprocess(
+                [self.container_runtime, "rm", "-f", self.GRAFANA_CONTAINER_NAME],
+                timeout=30,
+            )
+
+            # Materialize a rotated password into the credential file
+            rotated_password = "operator-rotated-secret-token-1234"
+            os.environ[gc.GRAFANA_ADMIN_PASSWORD_ENV] = rotated_password
+            rotated_file = gc.ensure_grafana_admin_password_file(self.test_dir)
+            self.assertEqual(rotated_file.read_text(encoding="utf-8"), rotated_password)
+
+            # Start upgraded container using the existing volume
+            result2 = self._run_subprocess(
+                [
+                    self.container_runtime,
+                    "run",
+                    "-d",
+                    "--name",
+                    self.GRAFANA_CONTAINER_NAME,
+                    "-e",
+                    f"{gc.GRAFANA_ADMIN_PASSWORD_FILE_ENV}="
+                    f"{gc.CONTAINER_GRAFANA_PASSWORD_PATH}",
+                    "-v",
+                    (f"{rotated_file}:{gc.CONTAINER_GRAFANA_PASSWORD_PATH}:ro,z"),
+                    "-v",
+                    f"{grafana_ini}:{CONTAINER_GRAFANA_INI_PATH}:ro",
+                    "-v",
+                    f"{volume_name}:/var/lib/grafana",
+                    "-p",
+                    "127.0.0.1::3000",
+                    GRAFANA_IMAGE,
+                ],
+                timeout=GRAFANA_START_COMMAND_TIMEOUT,
+            )
+            self.assertEqual(
+                result2.returncode,
+                0,
+                f"the upgraded Grafana container failed to start: {result2.stderr}",
+            )
+            self.assertTrue(
+                self.wait_for_container_running(
+                    timeout=120,
+                    container_name=self.GRAFANA_CONTAINER_NAME,
+                ),
+                "the upgraded Grafana container exited unexpectedly",
+            )
+            host_port_2 = self._published_host_port()
+            self.assertTrue(self._wait_until_grafana_ready(host_port_2))
+
+            # Synchronize the admin password in the persisted database
+            rc, stdout, stderr = container_support_services.rekey_grafana_admin(
+                self.GRAFANA_CONTAINER_NAME, runtime=self.container_runtime
+            )
+            self.assertEqual(
+                rc, 0, f"rekey_grafana_admin failed on upgraded volume: {stderr}"
+            )
+
+            # The initial password must now be rejected, and the rotated password accepted
+            self.assertIn(
+                self._grafana_api_status(
+                    GRAFANA_ORG_ADMIN_API, host_port_2, initial_password
+                ),
+                (HTTP_STATUS_UNAUTHORIZED, HTTP_STATUS_FORBIDDEN),
+                "the initial admin password must be rejected after rotation on existing volume",
+            )
+            self.assertEqual(
+                self._grafana_api_status(
+                    GRAFANA_ORG_ADMIN_API, host_port_2, rotated_password
+                ),
+                HTTP_STATUS_OK,
+                "the rotated admin password must authenticate on the existing volume",
+            )
+        finally:
+            if saved_override is not None:
+                os.environ[gc.GRAFANA_ADMIN_PASSWORD_ENV] = saved_override
+            else:
+                os.environ.pop(gc.GRAFANA_ADMIN_PASSWORD_ENV, None)
+            self._run_subprocess(
+                [self.container_runtime, "rm", "-f", self.GRAFANA_CONTAINER_NAME],
+                timeout=30,
+            )
+            self._run_subprocess(
+                [
+                    self.container_runtime,
+                    "volume",
+                    "rm",
+                    "-f",
+                    volume_name,
+                ],
+                timeout=30,
+            )
+        self.print_test_result(
+            True,
+            "existing volume upgraded successfully with rotated admin password",
         )
 
     def _published_host_port(self) -> str:
