@@ -18,7 +18,10 @@ v3 interval can decide (``v2/eval/records/m5-proxy-v2-calibration-2026-09-29.md`
 
 A run directory with ``output/score5-dev.predictions.jsonl`` also gets a ``score5`` block
 (5-level Score level usage, accuracy with CI, macro-F1, QWK and COLLAPSE / WARN /
-NO-SIGNAL flags; ``v2/eval/score5.py``). With ``output/ht-dev.predictions.jsonl`` it gets
+NO-SIGNAL flags; ``v2/eval/score5.py``). With ``output/score5t-dev.predictions.jsonl`` it
+gets a ``score5t`` block (Score5-typed-DEV: full / fit / check level usage, top share,
+accuracy against always-majority and the gate-equivalent COLLAPSE / WARN / NO-GAIN flags;
+``v2/eval/score5t.py``). With ``output/ht-dev.predictions.jsonl`` it gets
 ``htdev_empathy_levels``: gold-free level usage on HT-DEV's 5-level empathy task, context
 only (no flags).
 """
@@ -128,6 +131,23 @@ def score5_block(panel_root: Path, predictions_path: Path) -> dict[str, Any]:
     }
 
 
+def score5t_block(panel_root: Path, predictions_path: Path) -> dict[str, Any]:
+    from v2.eval import score5t
+
+    panels.verify(panel_root, [score5t.PANEL])
+    gold = read_jsonl(panels.path(panel_root, score5t.PANEL, "gold"))
+    predictions = {r["id"]: r for r in read_jsonl(predictions_path)}
+    return {
+        "panel": score5t.PANEL,
+        "scope": score5t.SCOPE,
+        "use": "flags predict the typed FINAL release-gate Score collapse; fit half "
+        "only for fitting post-hoc corrections, select on the check half; never "
+        "training data",
+        "predictions_sha256": sha_file(predictions_path),
+        **score5t.blocks(gold, predictions),
+    }
+
+
 def htdev_empathy_levels(panel_root: Path, predictions_path: Path) -> dict[str, Any]:
     """Level usage on HT-DEV's empathy task from prompts and predictions only."""
     from benchmark.score import evaluate_answer
@@ -220,6 +240,11 @@ def readout(args: argparse.Namespace) -> dict[str, Any]:
     )
     if score5_path and score5_path.is_file():
         out["score5"] = score5_block(args.panel_root, score5_path)
+    score5t_path = getattr(args, "score5t", None) or (
+        output_dir / "score5t-dev.predictions.jsonl" if output_dir else None
+    )
+    if score5t_path and score5t_path.is_file():
+        out["score5t"] = score5t_block(args.panel_root, score5t_path)
     htdev_path = output_dir / "ht-dev.predictions.jsonl" if output_dir else None
     if htdev_path and htdev_path.is_file():
         out["htdev_empathy_levels"] = htdev_empathy_levels(args.panel_root, htdev_path)
@@ -231,7 +256,7 @@ def readout(args: argparse.Namespace) -> dict[str, Any]:
     return out
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -244,11 +269,12 @@ def main() -> None:
     parser.add_argument("--typed-dev", type=Path)
     parser.add_argument("--css-pilot", type=Path)
     parser.add_argument("--score5", type=Path)
+    parser.add_argument("--score5t", type=Path)
     parser.add_argument("--select", type=Path)
     parser.add_argument("--cal", type=Path)
     parser.add_argument("--label", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     result = readout(args)
     write_json(args.output, result)
     summary = {k: result.get(k) for k in ("development_proxy",)}
@@ -263,6 +289,11 @@ def main() -> None:
     if "score5" in result:
         for field in ("accuracy", "modal_share", "rare_levels", "flags"):
             summary[f"score5.{field}"] = result["score5"][field]
+    if "score5t" in result:
+        for field in ("top_share", "top_category", "flags"):
+            summary[f"score5t.{field}"] = result["score5t"]["full"][field]
+        for field in ("top_share", "flags"):
+            summary[f"score5t.check.{field}"] = result["score5t"]["check"][field]
     print(json.dumps(summary))
 
 

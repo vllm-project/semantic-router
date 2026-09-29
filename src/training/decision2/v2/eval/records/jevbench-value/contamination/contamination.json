@@ -1,0 +1,7281 @@
+{
+ "schema": "jevbench-value/contamination/1",
+ "scope": "JevBench public 231 (@1bcc55eb); CPU only; aggregates only (no item text, ids or answers)",
+ "public231_prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+ "A": {
+  "training_files": {
+   "DEV2.0-0.6B": {
+    "recipe": "06b m4-t-a7-soup (A0s-r + A6 + A7 Eos/Lux natural pool)",
+    "file": "06b/m4/data/m4-mix-t.train.jsonl",
+    "sha256_prefix": "98e4e859",
+    "node": "A",
+    "prior_screens": "pool-level arms-v1 lexical + embedding screens; r2 rescreen (PI-v4 incl. jevbench_public231 and native roles); 0 of the 305 excluded groups (m5 exposure 63549469)"
+   },
+   "DEV2.0-0.8B": {
+    "recipe": "E8F (A7 + v1 mixture, three-seed soup)",
+    "file": "dec/m2/data/m2-full-a7-v1/train.jsonl",
+    "sha256_prefix": "d1dc33fc",
+    "node": "A",
+    "prior_screens": "arms-v1 quarantines (JevBench groups removed at arm build); rescreen: 33 excluded groups present, none touching public 231 (m5 exposure 5849d5a1)"
+   },
+   "DEV2.0-2B": {
+    "recipe": "S2T soup",
+    "file": "dec/m3/data/m3-v2m-ret/train.jsonl",
+    "sha256_prefix": "13804ac6",
+    "node": "B",
+    "prior_screens": "rescreen: 24 excluded groups (57 rows) present, none touching public 231 (m5 exposure 7cfa59bd; 4B record roles 1a9ea9d5)"
+   },
+   "DEV2.0-4B": {
+    "recipe": "N4XF soup",
+    "file": "dec/m4/data/m4-xl-full-29m/train.jsonl",
+    "sha256_prefix": "c7d51219",
+    "node": "B",
+    "prior_screens": "0 of 305 (receipt 52c7ccad); H7/H8 rows (6.4%) had a build-time union screen incl. public 231 (m3b-gap-sources: JevBench-231 1 group removed)"
+   },
+   "DEV2.0-8B": {
+    "recipe": "K-a13 soup (x60 m4-k-xl-r2-60m; teacher = own Lux 1.0 soft targets on the same rows)",
+    "file": "9b/m4/data/m4-k-xl-r2-60m/build/train.jsonl",
+    "sha256_prefix": "a66131b1",
+    "node": "A",
+    "prior_screens": "0 of 305 (receipt 85b41c8f); H7/H8 union screen"
+   },
+   "DEV2.0-27B": {
+    "recipe": "F1 = M3-A soup (s1 + s2)",
+    "file": "private/27b/m3-data/mixtures-m3-1/a7.train.jsonl",
+    "sha256_prefix": "de00df03",
+    "node": "B",
+    "prior_screens": "0 of 305 (receipt 6ae7fab0); 25,715 rows are rescreened rows, 6 hash-identical, 101 A7g rows screened at the A7 v3 build against PI-v3"
+   }
+  },
+  "fresh_screen": {
+   "DEV2.0-0.6B": {
+    "sha256": "98e4e85906a5076cce20b98c132fc1ba0d7fcf6949b41d15231bdfeecc5d549a",
+    "rows": 26203,
+    "groups": 22318,
+    "overlap_py": {
+     "by_method_groups": {
+      "E": 0,
+      "L": 0,
+      "N": 0,
+      "S": 0
+     },
+     "by_method_rows": {
+      "E": 0,
+      "L": 0,
+      "N": 0,
+      "S": 0
+     },
+     "quarantine": {
+      "groups": 0,
+      "rows": 0
+     },
+     "boilerplate_groups": {},
+     "distinct_public_items_hit": 0
+    },
+    "supplemental_ngram": {
+     "rows": 26203,
+     "items_exact_leaf": 0,
+     "items_any_13gram": 0,
+     "items_any_8gram": 0,
+     "items_cont8_ge_0.25": 0,
+     "items_cont8_ge_0.5": 0,
+     "max_cont8": 0.0,
+     "top5_cont8": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "rows_with_13gram_hit": 0,
+     "rows_with_ge3_13grams": 0,
+     "by_tier": {
+      "easy": {
+       "items": 48
+      },
+      "standard": {
+       "items": 72
+      },
+      "hard": {
+       "items": 111
+      }
+     },
+     "sources_of_13gram_rows": {}
+    }
+   },
+   "DEV2.0-0.8B": {
+    "sha256": "d1dc33fcb7a49fa9df9519545b1b0debeac38f86cbd760b481eb37334c9bd6f6",
+    "rows": 162777,
+    "groups": 149737,
+    "overlap_py": {
+     "by_method_groups": {
+      "E": 0,
+      "L": 0,
+      "N": 0,
+      "S": 0
+     },
+     "by_method_rows": {
+      "E": 0,
+      "L": 0,
+      "N": 0,
+      "S": 0
+     },
+     "quarantine": {
+      "groups": 0,
+      "rows": 0
+     },
+     "boilerplate_groups": {
+      "E_leaf": 97
+     },
+     "distinct_public_items_hit": 0
+    },
+    "supplemental_ngram": {
+     "rows": 162777,
+     "items_exact_leaf": 6,
+     "items_any_13gram": 0,
+     "items_any_8gram": 0,
+     "items_cont8_ge_0.25": 0,
+     "items_cont8_ge_0.5": 0,
+     "max_cont8": 0.0,
+     "top5_cont8": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "rows_with_13gram_hit": 0,
+     "rows_with_ge3_13grams": 0,
+     "by_tier": {
+      "easy": {
+       "items": 48,
+       "exact_leaf": 6
+      },
+      "standard": {
+       "items": 72
+      },
+      "hard": {
+       "items": 111
+      }
+     },
+     "sources_of_13gram_rows": {}
+    }
+   },
+   "DEV2.0-2B": {
+    "sha256": "13804ac6d6c4b3f55f4db35d3bebad8575a9604eca84cfb9fad6a1afd5cff79b",
+    "rows": 56198,
+    "groups": 32250,
+    "overlap_py": {
+     "by_method_groups": {
+      "E": 0,
+      "L": 0,
+      "N": 0,
+      "S": 0
+     },
+     "by_method_rows": {
+      "E": 0,
+      "L": 0,
+      "N": 0,
+      "S": 0
+     },
+     "quarantine": {
+      "groups": 0,
+      "rows": 0
+     },
+     "boilerplate_groups": {},
+     "distinct_public_items_hit": 0
+    },
+    "supplemental_ngram": {
+     "rows": 56198,
+     "items_exact_leaf": 0,
+     "items_any_13gram": 0,
+     "items_any_8gram": 0,
+     "items_cont8_ge_0.25": 0,
+     "items_cont8_ge_0.5": 0,
+     "max_cont8": 0.0,
+     "top5_cont8": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "rows_with_13gram_hit": 0,
+     "rows_with_ge3_13grams": 0,
+     "by_tier": {
+      "easy": {
+       "items": 48
+      },
+      "standard": {
+       "items": 72
+      },
+      "hard": {
+       "items": 111
+      }
+     },
+     "sources_of_13gram_rows": {}
+    }
+   },
+   "DEV2.0-4B": {
+    "sha256": "c7d51219e9f0fdd107b914df5c7e9f81f2b53496bb43a94796857b8ea3fcfa60",
+    "rows": 58742,
+    "groups": 37140,
+    "overlap_py": {
+     "by_method_groups": {
+      "E": 0,
+      "L": 0,
+      "N": 0,
+      "S": 1
+     },
+     "by_method_rows": {
+      "E": 0,
+      "L": 0,
+      "N": 0,
+      "S": 3
+     },
+     "quarantine": {
+      "groups": 1,
+      "rows": 3
+     },
+     "boilerplate_groups": {
+      "E_leaf": 16
+     },
+     "distinct_public_items_hit": 1
+    },
+    "supplemental_ngram": {
+     "rows": 58742,
+     "items_exact_leaf": 6,
+     "items_any_13gram": 0,
+     "items_any_8gram": 0,
+     "items_cont8_ge_0.25": 0,
+     "items_cont8_ge_0.5": 0,
+     "max_cont8": 0.0,
+     "top5_cont8": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "rows_with_13gram_hit": 0,
+     "rows_with_ge3_13grams": 0,
+     "by_tier": {
+      "easy": {
+       "items": 48,
+       "exact_leaf": 6
+      },
+      "standard": {
+       "items": 72
+      },
+      "hard": {
+       "items": 111
+      }
+     },
+     "sources_of_13gram_rows": {}
+    }
+   },
+   "DEV2.0-8B": {
+    "sha256": "a66131b1165513128e5a51af78587c4ddefcc836773e724c4514a592e33fc0e0",
+    "rows": 122651,
+    "groups": 76083,
+    "overlap_py": {
+     "by_method_groups": {
+      "E": 0,
+      "L": 0,
+      "N": 1,
+      "S": 0
+     },
+     "by_method_rows": {
+      "E": 0,
+      "L": 0,
+      "N": 2,
+      "S": 0
+     },
+     "quarantine": {
+      "groups": 1,
+      "rows": 2
+     },
+     "boilerplate_groups": {
+      "E_leaf": 25
+     },
+     "distinct_public_items_hit": 1
+    },
+    "supplemental_ngram": {
+     "rows": 122651,
+     "items_exact_leaf": 6,
+     "items_any_13gram": 0,
+     "items_any_8gram": 1,
+     "items_cont8_ge_0.25": 0,
+     "items_cont8_ge_0.5": 0,
+     "max_cont8": 0.0038,
+     "top5_cont8": [
+      0.0038,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "rows_with_13gram_hit": 0,
+     "rows_with_ge3_13grams": 0,
+     "by_tier": {
+      "easy": {
+       "items": 48,
+       "exact_leaf": 6
+      },
+      "standard": {
+       "items": 72
+      },
+      "hard": {
+       "items": 111
+      }
+     },
+     "sources_of_13gram_rows": {}
+    }
+   },
+   "DEV2.0-27B": {
+    "sha256": "de00df035439346e0da2bf77b594ce0c3f7d058b61040f149f0c75c61ce7f397",
+    "rows": 25822,
+    "groups": 22296,
+    "overlap_py": {
+     "by_method_groups": {
+      "E": 0,
+      "L": 0,
+      "N": 0,
+      "S": 0
+     },
+     "by_method_rows": {
+      "E": 0,
+      "L": 0,
+      "N": 0,
+      "S": 0
+     },
+     "quarantine": {
+      "groups": 0,
+      "rows": 0
+     },
+     "boilerplate_groups": {},
+     "distinct_public_items_hit": 0
+    },
+    "supplemental_ngram": {
+     "rows": 25822,
+     "items_exact_leaf": 0,
+     "items_any_13gram": 0,
+     "items_any_8gram": 0,
+     "items_cont8_ge_0.25": 0,
+     "items_cont8_ge_0.5": 0,
+     "max_cont8": 0.0,
+     "top5_cont8": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "rows_with_13gram_hit": 0,
+     "rows_with_ge3_13grams": 0,
+     "by_tier": {
+      "easy": {
+       "items": 48
+      },
+      "standard": {
+       "items": 72
+      },
+      "hard": {
+       "items": 111
+      }
+     },
+     "sources_of_13gram_rows": {}
+    }
+   }
+  },
+  "screen_hits": {
+   "DEV2.0-4B": {
+    "rule": "S (short-leaf rule: 6-gram Jaccard >= .72 or containment >= .90)",
+    "group_rows": 3,
+    "hit_rows": 1,
+    "training_source": "hotpotqa_distractor_train, family hotpotqa_coverage, Score, en",
+    "public_item": "1 hard multi_hop Choice item (not the rescreen-flagged item)",
+    "in_rescreen_305": false,
+    "exposed_model_correct": false,
+    "models_correct_of_29": 12,
+    "dev2_models_correct": [
+     "DEV2.0-27B"
+    ]
+   },
+   "DEV2.0-8B": {
+    "rule": "N (one sampled compact 30-char gram; no E/S/L)",
+    "group_rows": 2,
+    "hit_rows": 2,
+    "training_source": "decision2_verifiable_v2_a2, family a2_calendar, Noul, en (program generator)",
+    "public_item": "the rescreen-flagged hard tradeoff Choice item",
+    "supplemental_8gram_containment": 0.0038,
+    "exposed_model_correct": false,
+    "models_correct_of_29": 16,
+    "dev2_models_correct": [
+     "DEV2.0-27B"
+    ]
+   },
+   "boilerplate_E_leaf": {
+    "what": "one 6-word generic question wording shared by 6 easy public items and SGD (sgd_dstc8_train) Choice instructions; question text only (no state, no options, no answer); >= 5 candidate groups, so non-quarantining by rule",
+    "groups": {
+     "DEV2.0-0.8B": 97,
+     "DEV2.0-4B": 16,
+     "DEV2.0-8B": 25
+    }
+   }
+  },
+  "flagged_item": {
+   "item": "1 hard public-231 item (tradeoff, Choice); flagged by the r2 rescreen through 2 G6 groups (shared topical phrases)",
+   "released_training_sets_containing_those_groups": [],
+   "fresh_screen": "DEV2.0-8B training has 2 generated a2_calendar rows sharing one sampled 30-char gram with it",
+   "dev2_correct": {
+    "DEV2.0-0.6B": false,
+    "DEV2.0-0.8B": false,
+    "DEV2.0-2B": false,
+    "DEV2.0-4B": false,
+    "DEV2.0-8B": false,
+    "DEV2.0-27B": true
+   },
+   "others_correct": [
+    "Kai1",
+    "Lex1",
+    "Lux1",
+    "JPT-0.8B",
+    "Intern",
+    "Decider-2B",
+    "This-That",
+    "Decider-4B",
+    "JPT-4B",
+    "Hopper-G",
+    "JPT-9B",
+    "Nimble-v2",
+    "AutoJev-27B",
+    "Eikos-27B",
+    "Jebadiah-27B"
+   ],
+   "effect": "no released model trained on the flagged groups; the one DEV2 model that answers it (27B) has no overlap with it; removing it changes public totals by <= 1 item for every model (m5, 4B/9B/27B gate records)"
+  },
+  "mirrors": {
+   "node A": "28f05ace7",
+   "node B": "1bbebc2fe (v2/data/overlap.py, textnorm.py, training/model/data.py identical to 28f05ace7)"
+  },
+  "limitations": [
+   "base-model and Decision 1.0 training data are not screened (Lux 1.0 is 2/3 of the 8B soup weights; Nox/Sol/Eos start the 4B/2B/0.8B)",
+   "program generators (A2 verifiable, A7 Stage 1-4) are screened only through their emitted rows",
+   "screens are lexical; paraphrase-level reuse is not covered (embedding scans exist only for some pools)"
+  ]
+ },
+ "B": {
+  "fit_public_on_v3": {
+   "n": 29,
+   "fits": {
+    "public_total": {
+     "intercept": 60.71,
+     "slope": 2.008,
+     "sigma_items": 14.63,
+     "r2": 0.72,
+     "residuals": {
+      "GLiNER2.5-Decide": {
+       "items": -30.1,
+       "stud": -2.29,
+       "group": "peer"
+      },
+      "Bosun-0.6B": {
+       "items": -5.1,
+       "stud": -0.36,
+       "group": "peer"
+      },
+      "Kai1": {
+       "items": -18.9,
+       "stud": -1.39,
+       "group": "d1"
+      },
+      "Lex1": {
+       "items": -10.0,
+       "stud": -0.74,
+       "group": "d1"
+      },
+      "Eos1": {
+       "items": -4.2,
+       "stud": -0.29,
+       "group": "d1"
+      },
+      "JPT-0.8B": {
+       "items": 29.8,
+       "stud": 2.28,
+       "group": "peer"
+      },
+      "Intern": {
+       "items": 15.9,
+       "stud": 1.12,
+       "group": "peer"
+      },
+      "Kev": {
+       "items": -0.5,
+       "stud": -0.03,
+       "group": "peer"
+      },
+      "Decider-2B": {
+       "items": 14.9,
+       "stud": 1.04,
+       "group": "peer"
+      },
+      "Sol1": {
+       "items": 8.8,
+       "stud": 0.61,
+       "group": "d1"
+      },
+      "This-That": {
+       "items": -6.3,
+       "stud": -0.43,
+       "group": "peer"
+      },
+      "Bosun-1.7B": {
+       "items": 5.7,
+       "stud": 0.4,
+       "group": "peer"
+      },
+      "Decider-4B": {
+       "items": 7.0,
+       "stud": 0.49,
+       "group": "peer"
+      },
+      "Nox1": {
+       "items": -1.1,
+       "stud": -0.08,
+       "group": "d1"
+      },
+      "JPT-4B": {
+       "items": 32.7,
+       "stud": 2.49,
+       "group": "peer"
+      },
+      "Jet-v6.2": {
+       "items": -8.0,
+       "stud": -0.55,
+       "group": "peer"
+      },
+      "Hopper-G": {
+       "items": 16.0,
+       "stud": 1.12,
+       "group": "peer"
+      },
+      "Lux1": {
+       "items": -9.9,
+       "stud": -0.7,
+       "group": "d1"
+      },
+      "JPT-9B": {
+       "items": 13.8,
+       "stud": 0.97,
+       "group": "peer"
+      },
+      "Nimble-v2": {
+       "items": -0.3,
+       "stud": -0.02,
+       "group": "peer"
+      },
+      "AutoJev-27B": {
+       "items": -4.6,
+       "stud": -0.33,
+       "group": "peer"
+      },
+      "Eikos-27B": {
+       "items": 12.1,
+       "stud": 0.87,
+       "group": "peer"
+      },
+      "Jebadiah-27B": {
+       "items": -16.2,
+       "stud": -1.16,
+       "group": "peer"
+      },
+      "DEV2.0-0.6B": {
+       "items": -6.1,
+       "stud": -0.43,
+       "group": "ours"
+      },
+      "DEV2.0-0.8B": {
+       "items": -5.6,
+       "stud": -0.38,
+       "group": "ours"
+      },
+      "DEV2.0-2B": {
+       "items": 3.0,
+       "stud": 0.2,
+       "group": "ours"
+      },
+      "DEV2.0-4B": {
+       "items": -16.5,
+       "stud": -1.17,
+       "group": "ours"
+      },
+      "DEV2.0-8B": {
+       "items": -18.7,
+       "stud": -1.37,
+       "group": "ours"
+      },
+      "DEV2.0-27B": {
+       "items": 2.3,
+       "stud": 0.16,
+       "group": "ours"
+      }
+     }
+    },
+    "public_hard": {
+     "intercept": -10.75,
+     "slope": 1.28,
+     "sigma_items": 11.76,
+     "r2": 0.617,
+     "residuals": {
+      "GLiNER2.5-Decide": {
+       "items": -21.7,
+       "stud": -2.01,
+       "group": "peer"
+      },
+      "Bosun-0.6B": {
+       "items": -2.6,
+       "stud": -0.22,
+       "group": "peer"
+      },
+      "Kai1": {
+       "items": -5.3,
+       "stud": -0.47,
+       "group": "d1"
+      },
+      "Lex1": {
+       "items": 0.0,
+       "stud": 0.0,
+       "group": "d1"
+      },
+      "Eos1": {
+       "items": -4.7,
+       "stud": -0.41,
+       "group": "d1"
+      },
+      "JPT-0.8B": {
+       "items": 23.4,
+       "stud": 2.22,
+       "group": "peer"
+      },
+      "Intern": {
+       "items": 15.0,
+       "stud": 1.33,
+       "group": "peer"
+      },
+      "Kev": {
+       "items": -3.6,
+       "stud": -0.31,
+       "group": "peer"
+      },
+      "Decider-2B": {
+       "items": 10.4,
+       "stud": 0.9,
+       "group": "peer"
+      },
+      "Sol1": {
+       "items": -0.6,
+       "stud": -0.05,
+       "group": "d1"
+      },
+      "This-That": {
+       "items": -13.3,
+       "stud": -1.16,
+       "group": "peer"
+      },
+      "Bosun-1.7B": {
+       "items": -0.2,
+       "stud": -0.01,
+       "group": "peer"
+      },
+      "Decider-4B": {
+       "items": 4.5,
+       "stud": 0.39,
+       "group": "peer"
+      },
+      "Nox1": {
+       "items": -2.5,
+       "stud": -0.22,
+       "group": "d1"
+      },
+      "JPT-4B": {
+       "items": 27.9,
+       "stud": 2.68,
+       "group": "peer"
+      },
+      "Jet-v6.2": {
+       "items": -9.5,
+       "stud": -0.83,
+       "group": "peer"
+      },
+      "Hopper-G": {
+       "items": 12.0,
+       "stud": 1.04,
+       "group": "peer"
+      },
+      "Lux1": {
+       "items": -5.5,
+       "stud": -0.48,
+       "group": "d1"
+      },
+      "JPT-9B": {
+       "items": 13.7,
+       "stud": 1.21,
+       "group": "peer"
+      },
+      "Nimble-v2": {
+       "items": 0.3,
+       "stud": 0.03,
+       "group": "peer"
+      },
+      "AutoJev-27B": {
+       "items": -0.6,
+       "stud": -0.05,
+       "group": "peer"
+      },
+      "Eikos-27B": {
+       "items": 14.1,
+       "stud": 1.28,
+       "group": "peer"
+      },
+      "Jebadiah-27B": {
+       "items": -15.0,
+       "stud": -1.35,
+       "group": "peer"
+      },
+      "DEV2.0-0.6B": {
+       "items": -5.0,
+       "stud": -0.43,
+       "group": "ours"
+      },
+      "DEV2.0-0.8B": {
+       "items": -8.6,
+       "stud": -0.73,
+       "group": "ours"
+      },
+      "DEV2.0-2B": {
+       "items": -0.6,
+       "stud": -0.06,
+       "group": "ours"
+      },
+      "DEV2.0-4B": {
+       "items": -14.1,
+       "stud": -1.25,
+       "group": "ours"
+      },
+      "DEV2.0-8B": {
+       "items": -12.0,
+       "stud": -1.07,
+       "group": "ours"
+      },
+      "DEV2.0-27B": {
+       "items": 3.7,
+       "stud": 0.33,
+       "group": "ours"
+      }
+     }
+    }
+   },
+   "c1": {
+    "models": 10,
+    "c1_on_v3": {
+     "slope": 1.11,
+     "r2": 0.468,
+     "residuals": {
+      "GLiNER2.5-Decide": -10.78,
+      "Bosun-0.6B": 5.87,
+      "Kai1": -8.53,
+      "Lex1": -0.02,
+      "Eos1": 4.3,
+      "JPT-0.8B": 8.1,
+      "Intern": -0.16,
+      "Kev": 4.68,
+      "DEV2.0-0.6B": -1.53,
+      "DEV2.0-0.8B": -1.93
+     }
+    },
+    "c1_on_public": {
+     "slope": 0.347,
+     "r2": 0.74,
+     "residuals": {
+      "GLiNER2.5-Decide": -0.97,
+      "Bosun-0.6B": 5.34,
+      "Kai1": -5.33,
+      "Lex1": -1.93,
+      "Eos1": 5.13,
+      "JPT-0.8B": -3.86,
+      "Intern": -5.86,
+      "Kev": 4.51,
+      "DEV2.0-0.6B": 0.4,
+      "DEV2.0-0.8B": 2.57
+     }
+    }
+   }
+  },
+  "signatures": {
+   "per_model": [
+    {
+     "name": "DEV2.0-0.6B",
+     "theta": 0.848,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 54,
+      "hard": 40
+     },
+     "hard_everyone": {
+      "items": 19,
+      "observed": 2,
+      "rasch_expected": 0.52,
+      "z": 2.08
+     },
+     "hard_rasch_residual": 1.13,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.3604,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.2689
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.6147,
+      "share_correct_conf95": 0.2746,
+      "frac_conf95": 0.1732,
+      "acc_given_conf95": 0.975,
+      "mean_conf": 0.4403
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.415,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.4943
+     },
+     "typed_final_scored_accuracy_all": 0.415,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.4802,
+      "share_correct_conf95": 0.0223,
+      "frac_conf95": 0.015,
+      "acc_given_conf95": 0.7143,
+      "mean_conf": 0.5201
+     }
+    },
+    {
+     "name": "DEV2.0-0.8B",
+     "theta": 1.423,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 63,
+      "hard": 45
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 2,
+      "rasch_expected": 0.81,
+      "z": 1.37
+     },
+     "hard_rasch_residual": -2.9,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.4054,
+      "share_correct_conf95": 0.0889,
+      "frac_conf95": 0.036,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.3647
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.6753,
+      "share_correct_conf95": 0.4295,
+      "frac_conf95": 0.29,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.5127
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.6235,
+      "share_correct_conf95": 0.344,
+      "frac_conf95": 0.269,
+      "acc_given_conf95": 0.7974,
+      "mean_conf": 0.715
+     },
+     "typed_final_scored_accuracy_all": 0.6235,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.468,
+      "share_correct_conf95": 0.078,
+      "frac_conf95": 0.0492,
+      "acc_given_conf95": 0.7422,
+      "mean_conf": 0.6104
+     }
+    },
+    {
+     "name": "DEV2.0-2B",
+     "theta": 2.078,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 66,
+      "hard": 57
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 0,
+      "rasch_expected": 1.47,
+      "z": -1.28
+     },
+     "hard_rasch_residual": -1.79,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.5135,
+      "share_correct_conf95": 0.0526,
+      "frac_conf95": 0.036,
+      "acc_given_conf95": 0.75,
+      "mean_conf": 0.3898
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.7403,
+      "share_correct_conf95": 0.3392,
+      "frac_conf95": 0.2554,
+      "acc_given_conf95": 0.9831,
+      "mean_conf": 0.5224
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.5935,
+      "share_correct_conf95": 0.54,
+      "frac_conf95": 0.4775,
+      "acc_given_conf95": 0.6712,
+      "mean_conf": 0.767
+     },
+     "typed_final_scored_accuracy_all": 0.5935,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5166,
+      "share_correct_conf95": 0.092,
+      "frac_conf95": 0.0655,
+      "acc_given_conf95": 0.7249,
+      "mean_conf": 0.644
+     }
+    },
+    {
+     "name": "DEV2.0-4B",
+     "theta": 2.078,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 67,
+      "hard": 56
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 1,
+      "rasch_expected": 1.47,
+      "z": -0.41
+     },
+     "hard_rasch_residual": -2.79,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.5045,
+      "share_correct_conf95": 0.125,
+      "frac_conf95": 0.0721,
+      "acc_given_conf95": 0.875,
+      "mean_conf": 0.4108
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.7403,
+      "share_correct_conf95": 0.4503,
+      "frac_conf95": 0.3377,
+      "acc_given_conf95": 0.9872,
+      "mean_conf": 0.5471
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.7505,
+      "share_correct_conf95": 0.5643,
+      "frac_conf95": 0.4375,
+      "acc_given_conf95": 0.968,
+      "mean_conf": 0.7521
+     },
+     "typed_final_scored_accuracy_all": 0.7505,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5636,
+      "share_correct_conf95": 0.0694,
+      "frac_conf95": 0.0495,
+      "acc_given_conf95": 0.7901,
+      "mean_conf": 0.669
+     }
+    },
+    {
+     "name": "DEV2.0-8B",
+     "theta": 2.403,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 66,
+      "hard": 64
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 1,
+      "rasch_expected": 1.96,
+      "z": -0.74
+     },
+     "hard_rasch_residual": -0.24,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.5766,
+      "share_correct_conf95": 0.0781,
+      "frac_conf95": 0.045,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.3979
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.7706,
+      "share_correct_conf95": 0.3652,
+      "frac_conf95": 0.2814,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.5367
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.8485,
+      "share_correct_conf95": 0.5958,
+      "frac_conf95": 0.5135,
+      "acc_given_conf95": 0.9844,
+      "mean_conf": 0.8464
+     },
+     "typed_final_scored_accuracy_all": 0.8485,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5914,
+      "share_correct_conf95": 0.0287,
+      "frac_conf95": 0.0185,
+      "acc_given_conf95": 0.9174,
+      "mean_conf": 0.6446
+     }
+    },
+    {
+     "name": "DEV2.0-27B",
+     "theta": 3.451,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 71,
+      "hard": 79
+     },
+     "hard_everyone": {
+      "items": 19,
+      "observed": 3,
+      "rasch_expected": 4.91,
+      "z": -1.04
+     },
+     "hard_rasch_residual": -1.73,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.7117,
+      "share_correct_conf95": 0.2278,
+      "frac_conf95": 0.1622,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.4743
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.8571,
+      "share_correct_conf95": 0.3838,
+      "frac_conf95": 0.329,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.5715
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.83,
+      "share_correct_conf95": 0.6771,
+      "frac_conf95": 0.577,
+      "acc_given_conf95": 0.974,
+      "mean_conf": 0.8755
+     },
+     "typed_final_scored_accuracy_all": 0.83,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.6062,
+      "share_correct_conf95": 0.0151,
+      "frac_conf95": 0.0128,
+      "acc_given_conf95": 0.7143,
+      "mean_conf": 0.6418
+     }
+    },
+    {
+     "name": "Kai1",
+     "theta": -0.228,
+     "public_by_tier": {
+      "easy": 45,
+      "standard": 39,
+      "hard": 30
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 1,
+      "rasch_expected": 0.16,
+      "z": 2.09
+     },
+     "hard_rasch_residual": 5.37,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.2703,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.1491
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.4935,
+      "share_correct_conf95": 0.2544,
+      "frac_conf95": 0.1342,
+      "acc_given_conf95": 0.9355,
+      "mean_conf": 0.3419
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.3895,
+      "share_correct_conf95": 0.2092,
+      "frac_conf95": 0.147,
+      "acc_given_conf95": 0.5544,
+      "mean_conf": 0.5827
+     },
+     "typed_final_scored_accuracy_all": 0.3895,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.3999,
+      "share_correct_conf95": 0.0084,
+      "frac_conf95": 0.0044,
+      "acc_given_conf95": 0.7586,
+      "mean_conf": 0.5402
+     }
+    },
+    {
+     "name": "Lex1",
+     "theta": -0.265,
+     "public_by_tier": {
+      "easy": 42,
+      "standard": 42,
+      "hard": 29
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 1,
+      "rasch_expected": 0.16,
+      "z": 2.14
+     },
+     "hard_rasch_residual": 4.78,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.2613,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.1516
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.4892,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.2853
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.372,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.5277
+     },
+     "typed_final_scored_accuracy_all": 0.372,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.3796,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.4726
+     }
+    },
+    {
+     "name": "Eos1",
+     "theta": 0.848,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 55,
+      "hard": 39
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 1,
+      "rasch_expected": 0.47,
+      "z": 0.8
+     },
+     "hard_rasch_residual": 0.13,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.3514,
+      "share_correct_conf95": 0.0256,
+      "frac_conf95": 0.009,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.3278
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.6147,
+      "share_correct_conf95": 0.3732,
+      "frac_conf95": 0.2381,
+      "acc_given_conf95": 0.9636,
+      "mean_conf": 0.4867
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.4225,
+      "share_correct_conf95": 0.1432,
+      "frac_conf95": 0.0615,
+      "acc_given_conf95": 0.9837,
+      "mean_conf": 0.5812
+     },
+     "typed_final_scored_accuracy_all": 0.4225,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.4788,
+      "share_correct_conf95": 0.0638,
+      "frac_conf95": 0.0386,
+      "acc_given_conf95": 0.7905,
+      "mean_conf": 0.6345
+     }
+    },
+    {
+     "name": "Sol1",
+     "theta": 1.637,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 66,
+      "hard": 47
+     },
+     "hard_everyone": {
+      "items": 19,
+      "observed": 2,
+      "rasch_expected": 1.1,
+      "z": 0.89
+     },
+     "hard_rasch_residual": -4.4,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.4234,
+      "share_correct_conf95": 0.0851,
+      "frac_conf95": 0.0541,
+      "acc_given_conf95": 0.6667,
+      "mean_conf": 0.4144
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.697,
+      "share_correct_conf95": 0.3354,
+      "frac_conf95": 0.2424,
+      "acc_given_conf95": 0.9643,
+      "mean_conf": 0.5323
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.4805,
+      "share_correct_conf95": 0.6098,
+      "frac_conf95": 0.4095,
+      "acc_given_conf95": 0.7155,
+      "mean_conf": 0.7353
+     },
+     "typed_final_scored_accuracy_all": 0.4805,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5007,
+      "share_correct_conf95": 0.0708,
+      "frac_conf95": 0.0486,
+      "acc_given_conf95": 0.7296,
+      "mean_conf": 0.6427
+     }
+    },
+    {
+     "name": "Nox1",
+     "theta": 2.17,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 66,
+      "hard": 59
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 0,
+      "rasch_expected": 1.6,
+      "z": -1.34
+     },
+     "hard_rasch_residual": -1.33,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.5315,
+      "share_correct_conf95": 0.2373,
+      "frac_conf95": 0.1441,
+      "acc_given_conf95": 0.875,
+      "mean_conf": 0.4674
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.7489,
+      "share_correct_conf95": 0.5087,
+      "frac_conf95": 0.3896,
+      "acc_given_conf95": 0.9778,
+      "mean_conf": 0.5779
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.6915,
+      "share_correct_conf95": 0.6609,
+      "frac_conf95": 0.4855,
+      "acc_given_conf95": 0.9413,
+      "mean_conf": 0.7598
+     },
+     "typed_final_scored_accuracy_all": 0.6915,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5357,
+      "share_correct_conf95": 0.1594,
+      "frac_conf95": 0.1245,
+      "acc_given_conf95": 0.6859,
+      "mean_conf": 0.7105
+     }
+    },
+    {
+     "name": "Lux1",
+     "theta": 2.645,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 67,
+      "hard": 68
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 0,
+      "rasch_expected": 2.4,
+      "z": -1.7
+     },
+     "hard_rasch_residual": -0.24,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.6126,
+      "share_correct_conf95": 0.1765,
+      "frac_conf95": 0.1081,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.448
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.7922,
+      "share_correct_conf95": 0.4044,
+      "frac_conf95": 0.3203,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.5635
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.8225,
+      "share_correct_conf95": 0.5666,
+      "frac_conf95": 0.468,
+      "acc_given_conf95": 0.9957,
+      "mean_conf": 0.8287
+     },
+     "typed_final_scored_accuracy_all": 0.8225,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5771,
+      "share_correct_conf95": 0.1705,
+      "frac_conf95": 0.1234,
+      "acc_given_conf95": 0.797,
+      "mean_conf": 0.7283
+     }
+    },
+    {
+     "name": "GLiNER2.5-Decide",
+     "theta": -0.154,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 46,
+      "hard": 22
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 1,
+      "rasch_expected": 0.17,
+      "z": 1.99
+     },
+     "hard_rasch_residual": -3.48,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.1982,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.036,
+      "acc_given_conf95": 0.0,
+      "mean_conf": 0.1458
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.5022,
+      "share_correct_conf95": 0.1724,
+      "frac_conf95": 0.1039,
+      "acc_given_conf95": 0.8333,
+      "mean_conf": 0.3641
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.4515,
+      "share_correct_conf95": 0.1329,
+      "frac_conf95": 0.076,
+      "acc_given_conf95": 0.7895,
+      "mean_conf": 0.5386
+     },
+     "typed_final_scored_accuracy_all": 0.4515,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.4028,
+      "share_correct_conf95": 0.0322,
+      "frac_conf95": 0.015,
+      "acc_given_conf95": 0.8673,
+      "mean_conf": 0.4635
+     }
+    },
+    {
+     "name": "Bosun-0.6B",
+     "theta": 0.493,
+     "public_by_tier": {
+      "easy": 47,
+      "standard": 50,
+      "hard": 36
+     },
+     "hard_everyone": {
+      "items": 19,
+      "observed": 1,
+      "rasch_expected": 0.37,
+      "z": 1.04
+     },
+     "hard_rasch_residual": 2.27,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.3243,
+      "share_correct_conf95": 0.0278,
+      "frac_conf95": 0.036,
+      "acc_given_conf95": 0.25,
+      "mean_conf": 0.4028
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.5758,
+      "share_correct_conf95": 0.3233,
+      "frac_conf95": 0.2035,
+      "acc_given_conf95": 0.9149,
+      "mean_conf": 0.5069
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.4945,
+      "share_correct_conf95": 0.002,
+      "frac_conf95": 0.001,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.5848
+     },
+     "typed_final_scored_accuracy_all": 0.4945,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.4243,
+      "share_correct_conf95": 0.1339,
+      "frac_conf95": 0.097,
+      "acc_given_conf95": 0.5858,
+      "mean_conf": 0.641
+     }
+    },
+    {
+     "name": "JPT-0.8B",
+     "theta": 2.078,
+     "public_by_tier": {
+      "easy": 47,
+      "standard": 60,
+      "hard": 64
+     },
+     "hard_everyone": {
+      "items": 19,
+      "observed": 4,
+      "rasch_expected": 1.65,
+      "z": 1.95
+     },
+     "hard_rasch_residual": 5.21,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.5766,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.3909
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.7403,
+      "share_correct_conf95": 0.1579,
+      "frac_conf95": 0.1169,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.4927
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.481,
+      "share_correct_conf95": 0.0021,
+      "frac_conf95": 0.001,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.6094
+     },
+     "typed_final_scored_accuracy_all": 0.481,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.4894,
+      "share_correct_conf95": 0.0187,
+      "frac_conf95": 0.0113,
+      "acc_given_conf95": 0.8108,
+      "mean_conf": 0.6371
+     }
+    },
+    {
+     "name": "Intern",
+     "theta": 1.767,
+     "public_by_tier": {
+      "easy": 47,
+      "standard": 57,
+      "hard": 60
+     },
+     "hard_everyone": {
+      "items": 20,
+      "observed": 3,
+      "rasch_expected": 1.38,
+      "z": 1.45
+     },
+     "hard_rasch_residual": 6.43,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.5405,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.5443
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.71,
+      "share_correct_conf95": 0.0183,
+      "frac_conf95": 0.013,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.6413
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.507,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.4861
+     },
+     "typed_final_scored_accuracy_all": 0.507,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.4514,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.4911
+     }
+    },
+    {
+     "name": "Kev",
+     "theta": 1.05,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 58,
+      "hard": 41
+     },
+     "hard_everyone": {
+      "items": 20,
+      "observed": 3,
+      "rasch_expected": 0.71,
+      "z": 2.79
+     },
+     "hard_rasch_residual": -0.96,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.3694,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.2958
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.6364,
+      "share_correct_conf95": 0.1633,
+      "frac_conf95": 0.1039,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.42
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.489,
+      "share_correct_conf95": 0.0,
+      "frac_conf95": 0.0,
+      "acc_given_conf95": null,
+      "mean_conf": 0.5198
+     },
+     "typed_final_scored_accuracy_all": 0.489,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.4582,
+      "share_correct_conf95": 0.0027,
+      "frac_conf95": 0.0014,
+      "acc_given_conf95": 0.8889,
+      "mean_conf": 0.5675
+     }
+    },
+    {
+     "name": "Decider-2B",
+     "theta": 2.262,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 64,
+      "hard": 63
+     },
+     "hard_everyone": {
+      "items": 20,
+      "observed": 5,
+      "rasch_expected": 2.14,
+      "z": 2.11
+     },
+     "hard_rasch_residual": 1.12,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.5676,
+      "share_correct_conf95": 0.254,
+      "frac_conf95": 0.1441,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.4798
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.7576,
+      "share_correct_conf95": 0.3714,
+      "frac_conf95": 0.2814,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.5626
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.5875,
+      "share_correct_conf95": 0.0451,
+      "frac_conf95": 0.029,
+      "acc_given_conf95": 0.9138,
+      "mean_conf": 0.6193
+     },
+     "typed_final_scored_accuracy_all": 0.5875,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5277,
+      "share_correct_conf95": 0.1438,
+      "frac_conf95": 0.1152,
+      "acc_given_conf95": 0.6592,
+      "mean_conf": 0.6892
+     }
+    },
+    {
+     "name": "This-That",
+     "theta": 1.05,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 64,
+      "hard": 35
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 0,
+      "rasch_expected": 0.57,
+      "z": -0.77
+     },
+     "hard_rasch_residual": -6.96,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.3153,
+      "share_correct_conf95": 0.7714,
+      "frac_conf95": 0.4234,
+      "acc_given_conf95": 0.5745,
+      "mean_conf": 0.6002
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.6364,
+      "share_correct_conf95": 0.8707,
+      "frac_conf95": 0.658,
+      "acc_given_conf95": 0.8421,
+      "mean_conf": 0.7893
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.5195,
+      "share_correct_conf95": 0.4437,
+      "frac_conf95": 0.3195,
+      "acc_given_conf95": 0.7214,
+      "mean_conf": 0.78
+     },
+     "typed_final_scored_accuracy_all": 0.5195,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.4926,
+      "share_correct_conf95": 0.3718,
+      "frac_conf95": 0.2934,
+      "acc_given_conf95": 0.6242,
+      "mean_conf": 0.7748
+     }
+    },
+    {
+     "name": "Bosun-1.7B",
+     "theta": 1.215,
+     "public_by_tier": {
+      "easy": 46,
+      "standard": 62,
+      "hard": 43
+     },
+     "hard_everyone": {
+      "items": 19,
+      "observed": 1,
+      "rasch_expected": 0.74,
+      "z": 0.3
+     },
+     "hard_rasch_residual": -1.54,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.3874,
+      "share_correct_conf95": 0.2326,
+      "frac_conf95": 0.1081,
+      "acc_given_conf95": 0.8333,
+      "mean_conf": 0.4766
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.6537,
+      "share_correct_conf95": 0.4503,
+      "frac_conf95": 0.303,
+      "acc_given_conf95": 0.9714,
+      "mean_conf": 0.5609
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.5035,
+      "share_correct_conf95": 0.1082,
+      "frac_conf95": 0.066,
+      "acc_given_conf95": 0.8258,
+      "mean_conf": 0.6305
+     },
+     "typed_final_scored_accuracy_all": 0.5035,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.4678,
+      "share_correct_conf95": 0.1619,
+      "frac_conf95": 0.1165,
+      "acc_given_conf95": 0.6501,
+      "mean_conf": 0.6654
+     }
+    },
+    {
+     "name": "Decider-4B",
+     "theta": 3.111,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 71,
+      "hard": 73
+     },
+     "hard_everyone": {
+      "items": 19,
+      "observed": 3,
+      "rasch_expected": 3.85,
+      "z": -0.5
+     },
+     "hard_rasch_residual": -2.65,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.6577,
+      "share_correct_conf95": 0.3425,
+      "frac_conf95": 0.2523,
+      "acc_given_conf95": 0.8929,
+      "mean_conf": 0.5189
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.8312,
+      "share_correct_conf95": 0.4896,
+      "frac_conf95": 0.4199,
+      "acc_given_conf95": 0.9691,
+      "mean_conf": 0.598
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.7435,
+      "share_correct_conf95": 0.7075,
+      "frac_conf95": 0.529,
+      "acc_given_conf95": 0.9943,
+      "mean_conf": 0.7955
+     },
+     "typed_final_scored_accuracy_all": 0.7435,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5764,
+      "share_correct_conf95": 0.1224,
+      "frac_conf95": 0.0962,
+      "acc_given_conf95": 0.7333,
+      "mean_conf": 0.721
+     }
+    },
+    {
+     "name": "JPT-4B",
+     "theta": 3.763,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 68,
+      "hard": 87
+     },
+     "hard_everyone": {
+      "items": 20,
+      "observed": 9,
+      "rasch_expected": 6.55,
+      "z": 1.23
+     },
+     "hard_rasch_residual": 1.97,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.7838,
+      "share_correct_conf95": 0.1034,
+      "frac_conf95": 0.0901,
+      "acc_given_conf95": 0.9,
+      "mean_conf": 0.4834
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.8788,
+      "share_correct_conf95": 0.3153,
+      "frac_conf95": 0.2814,
+      "acc_given_conf95": 0.9846,
+      "mean_conf": 0.5743
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.698,
+      "share_correct_conf95": 0.5602,
+      "frac_conf95": 0.4065,
+      "acc_given_conf95": 0.9619,
+      "mean_conf": 0.7978
+     },
+     "typed_final_scored_accuracy_all": 0.698,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5398,
+      "share_correct_conf95": 0.1092,
+      "frac_conf95": 0.0849,
+      "acc_given_conf95": 0.6942,
+      "mean_conf": 0.7396
+     }
+    },
+    {
+     "name": "Jet-v6.2",
+     "theta": 2.216,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 69,
+      "hard": 57
+     },
+     "hard_everyone": {
+      "items": 19,
+      "observed": 3,
+      "rasch_expected": 1.86,
+      "z": 0.9
+     },
+     "hard_rasch_residual": -4.1,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.5135,
+      "share_correct_conf95": 0.0702,
+      "frac_conf95": 0.0721,
+      "acc_given_conf95": 0.5,
+      "mean_conf": 0.5085
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.7532,
+      "share_correct_conf95": 0.3161,
+      "frac_conf95": 0.2554,
+      "acc_given_conf95": 0.9322,
+      "mean_conf": 0.5857
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.7425,
+      "share_correct_conf95": 0.2391,
+      "frac_conf95": 0.1775,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.7849
+     },
+     "typed_final_scored_accuracy_all": 0.7425,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5719,
+      "share_correct_conf95": 0.0905,
+      "frac_conf95": 0.0794,
+      "acc_given_conf95": 0.6519,
+      "mean_conf": 0.7502
+     }
+    },
+    {
+     "name": "Hopper-G",
+     "theta": 3.221,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 70,
+      "hard": 76
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 3,
+      "rasch_expected": 3.78,
+      "z": -0.46
+     },
+     "hard_rasch_residual": -1.34,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.6847,
+      "share_correct_conf95": 0.1184,
+      "frac_conf95": 0.0811,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.4773
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.8398,
+      "share_correct_conf95": 0.2938,
+      "frac_conf95": 0.2468,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.5728
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.715,
+      "share_correct_conf95": 0.2413,
+      "frac_conf95": 0.1725,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.7534
+     },
+     "typed_final_scored_accuracy_all": 0.715,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5653,
+      "share_correct_conf95": 0.0651,
+      "frac_conf95": 0.0486,
+      "acc_given_conf95": 0.7579,
+      "mean_conf": 0.7475
+     }
+    },
+    {
+     "name": "JPT-9B",
+     "theta": 3.392,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 68,
+      "hard": 81
+     },
+     "hard_everyone": {
+      "items": 19,
+      "observed": 4,
+      "rasch_expected": 4.72,
+      "z": -0.4
+     },
+     "hard_rasch_residual": 1.12,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.7297,
+      "share_correct_conf95": 0.1358,
+      "frac_conf95": 0.0991,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.4931
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.8528,
+      "share_correct_conf95": 0.3452,
+      "frac_conf95": 0.2944,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.5781
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.799,
+      "share_correct_conf95": 0.592,
+      "frac_conf95": 0.491,
+      "acc_given_conf95": 0.9633,
+      "mean_conf": 0.8566
+     },
+     "typed_final_scored_accuracy_all": 0.799,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5742,
+      "share_correct_conf95": 0.1186,
+      "frac_conf95": 0.0996,
+      "acc_given_conf95": 0.684,
+      "mean_conf": 0.7338
+     }
+    },
+    {
+     "name": "Nimble-v2",
+     "theta": 2.745,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 68,
+      "hard": 69
+     },
+     "hard_everyone": {
+      "items": 18,
+      "observed": 1,
+      "rasch_expected": 2.61,
+      "z": -1.1
+     },
+     "hard_rasch_residual": -0.87,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.6216,
+      "share_correct_conf95": 0.087,
+      "frac_conf95": 0.0541,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.4092
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.8009,
+      "share_correct_conf95": 0.2541,
+      "frac_conf95": 0.2035,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.5256
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.7725,
+      "share_correct_conf95": 0.4246,
+      "frac_conf95": 0.328,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.8022
+     },
+     "typed_final_scored_accuracy_all": 0.7725,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.5607,
+      "share_correct_conf95": 0.0229,
+      "frac_conf95": 0.0267,
+      "acc_given_conf95": 0.48,
+      "mean_conf": 0.6481
+     }
+    },
+    {
+     "name": "AutoJev-27B",
+     "theta": 3.635,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 72,
+      "hard": 81
+     },
+     "hard_everyone": {
+      "items": 20,
+      "observed": 5,
+      "rasch_expected": 6.05,
+      "z": -0.54
+     },
+     "hard_rasch_residual": -2.3,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.7297,
+      "share_correct_conf95": 0.2469,
+      "frac_conf95": 0.1802,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.4612
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.8701,
+      "share_correct_conf95": 0.4975,
+      "frac_conf95": 0.4329,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.578
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.9095,
+      "share_correct_conf95": 0.3815,
+      "frac_conf95": 0.347,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.838
+     },
+     "typed_final_scored_accuracy_all": 0.9095,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.612,
+      "share_correct_conf95": 0.1325,
+      "frac_conf95": 0.122,
+      "acc_given_conf95": 0.6646,
+      "mean_conf": 0.7325
+     }
+    },
+    {
+     "name": "Eikos-27B",
+     "theta": 4.427,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 72,
+      "hard": 92
+     },
+     "hard_everyone": {
+      "items": 21,
+      "observed": 9,
+      "rasch_expected": 10.03,
+      "z": -0.48
+     },
+     "hard_rasch_residual": -0.93,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.8288,
+      "share_correct_conf95": 0.1957,
+      "frac_conf95": 0.1622,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.5429
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.9177,
+      "share_correct_conf95": 0.1934,
+      "frac_conf95": 0.1775,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.5947
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.854,
+      "share_correct_conf95": 0.3138,
+      "frac_conf95": 0.2685,
+      "acc_given_conf95": 0.9981,
+      "mean_conf": 0.8549
+     },
+     "typed_final_scored_accuracy_all": 0.854,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.6186,
+      "share_correct_conf95": 0.0017,
+      "frac_conf95": 0.0011,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.7014
+     }
+    },
+    {
+     "name": "Jebadiah-27B",
+     "theta": 2.309,
+     "public_by_tier": {
+      "easy": 48,
+      "standard": 70,
+      "hard": 58
+     },
+     "hard_everyone": {
+      "items": 20,
+      "observed": 6,
+      "rasch_expected": 2.23,
+      "z": 2.73
+     },
+     "hard_rasch_residual": -4.66,
+     "conf_public_hard": {
+      "n": 111,
+      "acc": 0.5225,
+      "share_correct_conf95": 0.0517,
+      "frac_conf95": 0.027,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.2588
+     },
+     "conf_public_all": {
+      "n": 231,
+      "acc": 0.7619,
+      "share_correct_conf95": 0.358,
+      "frac_conf95": 0.2727,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.472
+     },
+     "conf_typed_final": {
+      "n": 2000,
+      "acc": 0.7935,
+      "share_correct_conf95": 0.2527,
+      "frac_conf95": 0.2005,
+      "acc_given_conf95": 1.0,
+      "mean_conf": 0.788
+     },
+     "typed_final_scored_accuracy_all": 0.7935,
+     "conf_css15": {
+      "n": 6547,
+      "acc": 0.6032,
+      "share_correct_conf95": 0.0491,
+      "frac_conf95": 0.0351,
+      "acc_given_conf95": 0.8435,
+      "mean_conf": 0.7139
+     }
+    }
+   ],
+   "pairs": [
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "DEV2.0-0.8B",
+     "resid_corr": 0.2795,
+     "rare_shared": 3,
+     "rare_expected": 0.32,
+     "rare_ratio": 9.353,
+     "resid_corr_pctile": 97.5
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "DEV2.0-2B",
+     "resid_corr": -0.1484,
+     "rare_shared": 1,
+     "rare_expected": 0.54,
+     "rare_ratio": 1.843,
+     "resid_corr_pctile": 14.3
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "DEV2.0-4B",
+     "resid_corr": -0.1036,
+     "rare_shared": 0,
+     "rare_expected": 0.54,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 30.5
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "DEV2.0-8B",
+     "resid_corr": -0.0932,
+     "rare_shared": 0,
+     "rare_expected": 0.69,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 34.7
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "DEV2.0-27B",
+     "resid_corr": -0.1229,
+     "rare_shared": 1,
+     "rare_expected": 1.25,
+     "rare_ratio": 0.803,
+     "resid_corr_pctile": 23.6
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Kai1",
+     "resid_corr": 0.0465,
+     "rare_shared": 2,
+     "rare_expected": 0.07,
+     "rare_ratio": 28.517,
+     "resid_corr_pctile": 80.3
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Lex1",
+     "resid_corr": -0.0457,
+     "rare_shared": 2,
+     "rare_expected": 0.07,
+     "rare_ratio": 29.557,
+     "resid_corr_pctile": 50.7
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Eos1",
+     "resid_corr": 0.2318,
+     "rare_shared": 4,
+     "rare_expected": 0.19,
+     "rare_ratio": 20.7,
+     "resid_corr_pctile": 95.1
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Sol1",
+     "resid_corr": -0.0653,
+     "rare_shared": 2,
+     "rare_expected": 0.38,
+     "rare_ratio": 5.218,
+     "resid_corr_pctile": 44.1
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Nox1",
+     "resid_corr": -0.1135,
+     "rare_shared": 1,
+     "rare_expected": 0.58,
+     "rare_ratio": 1.723,
+     "resid_corr_pctile": 26.4
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Lux1",
+     "resid_corr": -0.174,
+     "rare_shared": 0,
+     "rare_expected": 0.8,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 7.6
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "GLiNER2.5-Decide",
+     "resid_corr": -0.0071,
+     "rare_shared": 1,
+     "rare_expected": 0.08,
+     "rare_ratio": 13.272,
+     "resid_corr_pctile": 65.0
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Bosun-0.6B",
+     "resid_corr": 0.1493,
+     "rare_shared": 1,
+     "rare_expected": 0.14,
+     "rare_ratio": 7.18,
+     "resid_corr_pctile": 91.9
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "JPT-0.8B",
+     "resid_corr": 0.0098,
+     "rare_shared": 3,
+     "rare_expected": 0.54,
+     "rare_ratio": 5.53,
+     "resid_corr_pctile": 70.7
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Intern",
+     "resid_corr": 0.0295,
+     "rare_shared": 2,
+     "rare_expected": 0.43,
+     "rare_ratio": 4.695,
+     "resid_corr_pctile": 77.6
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Kev",
+     "resid_corr": 0.15,
+     "rare_shared": 2,
+     "rare_expected": 0.23,
+     "rare_ratio": 8.63,
+     "resid_corr_pctile": 92.1
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Decider-2B",
+     "resid_corr": -0.1343,
+     "rare_shared": 1,
+     "rare_expected": 0.62,
+     "rare_ratio": 1.611,
+     "resid_corr_pctile": 19.5
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "This-That",
+     "resid_corr": -0.2423,
+     "rare_shared": 0,
+     "rare_expected": 0.23,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 1.5
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Bosun-1.7B",
+     "resid_corr": -0.1467,
+     "rare_shared": 2,
+     "rare_expected": 0.27,
+     "rare_ratio": 7.465,
+     "resid_corr_pctile": 15.8
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Decider-4B",
+     "resid_corr": -0.1992,
+     "rare_shared": 1,
+     "rare_expected": 1.05,
+     "rare_ratio": 0.948,
+     "resid_corr_pctile": 4.9
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "JPT-4B",
+     "resid_corr": -0.1121,
+     "rare_shared": 2,
+     "rare_expected": 1.42,
+     "rare_ratio": 1.41,
+     "resid_corr_pctile": 27.1
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.1049,
+     "rare_shared": 0,
+     "rare_expected": 0.6,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 30.3
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Hopper-G",
+     "resid_corr": -0.1101,
+     "rare_shared": 2,
+     "rare_expected": 1.12,
+     "rare_ratio": 1.792,
+     "resid_corr_pctile": 28.3
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "JPT-9B",
+     "resid_corr": -0.088,
+     "rare_shared": 1,
+     "rare_expected": 1.21,
+     "rare_ratio": 0.825,
+     "resid_corr_pctile": 36.9
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Nimble-v2",
+     "resid_corr": -0.1615,
+     "rare_shared": 0,
+     "rare_expected": 0.86,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 11.1
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "AutoJev-27B",
+     "resid_corr": 0.0303,
+     "rare_shared": 3,
+     "rare_expected": 1.35,
+     "rare_ratio": 2.226,
+     "resid_corr_pctile": 77.8
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Eikos-27B",
+     "resid_corr": -0.1283,
+     "rare_shared": 2,
+     "rare_expected": 1.75,
+     "rare_ratio": 1.145,
+     "resid_corr_pctile": 20.9
+    },
+    {
+     "a": "DEV2.0-0.6B",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.124,
+     "rare_shared": 0,
+     "rare_expected": 0.64,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 22.9
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "DEV2.0-2B",
+     "resid_corr": -0.0477,
+     "rare_shared": 1,
+     "rare_expected": 0.9,
+     "rare_ratio": 1.109,
+     "resid_corr_pctile": 50.0
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "DEV2.0-4B",
+     "resid_corr": 0.0007,
+     "rare_shared": 1,
+     "rare_expected": 0.9,
+     "rare_ratio": 1.109,
+     "resid_corr_pctile": 67.5
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "DEV2.0-8B",
+     "resid_corr": -0.0288,
+     "rare_shared": 0,
+     "rare_expected": 1.14,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 58.1
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "DEV2.0-27B",
+     "resid_corr": -0.0791,
+     "rare_shared": 1,
+     "rare_expected": 2.07,
+     "rare_ratio": 0.482,
+     "resid_corr_pctile": 39.9
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Kai1",
+     "resid_corr": -0.0492,
+     "rare_shared": 2,
+     "rare_expected": 0.12,
+     "rare_ratio": 17.186,
+     "resid_corr_pctile": 49.8
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Lex1",
+     "resid_corr": 0.0077,
+     "rare_shared": 2,
+     "rare_expected": 0.11,
+     "rare_ratio": 17.813,
+     "resid_corr_pctile": 70.2
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Eos1",
+     "resid_corr": 0.2759,
+     "rare_shared": 2,
+     "rare_expected": 0.32,
+     "rare_ratio": 6.235,
+     "resid_corr_pctile": 97.0
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Sol1",
+     "resid_corr": -0.0417,
+     "rare_shared": 1,
+     "rare_expected": 0.64,
+     "rare_ratio": 1.571,
+     "resid_corr_pctile": 52.2
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Nox1",
+     "resid_corr": -0.1275,
+     "rare_shared": 1,
+     "rare_expected": 0.96,
+     "rare_ratio": 1.037,
+     "resid_corr_pctile": 21.4
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Lux1",
+     "resid_corr": -0.0814,
+     "rare_shared": 1,
+     "rare_expected": 1.34,
+     "rare_ratio": 0.748,
+     "resid_corr_pctile": 38.9
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "GLiNER2.5-Decide",
+     "resid_corr": -0.0702,
+     "rare_shared": 1,
+     "rare_expected": 0.13,
+     "rare_ratio": 7.998,
+     "resid_corr_pctile": 42.6
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Bosun-0.6B",
+     "resid_corr": 0.0669,
+     "rare_shared": 1,
+     "rare_expected": 0.23,
+     "rare_ratio": 4.326,
+     "resid_corr_pctile": 85.2
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "JPT-0.8B",
+     "resid_corr": 0.0291,
+     "rare_shared": 2,
+     "rare_expected": 0.9,
+     "rare_ratio": 2.219,
+     "resid_corr_pctile": 77.1
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Intern",
+     "resid_corr": 0.108,
+     "rare_shared": 2,
+     "rare_expected": 0.71,
+     "rare_ratio": 2.827,
+     "resid_corr_pctile": 88.9
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Kev",
+     "resid_corr": -0.1738,
+     "rare_shared": 0,
+     "rare_expected": 0.38,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 7.9
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Decider-2B",
+     "resid_corr": -0.1805,
+     "rare_shared": 0,
+     "rare_expected": 1.03,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 7.1
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "This-That",
+     "resid_corr": -0.1525,
+     "rare_shared": 0,
+     "rare_expected": 0.38,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 13.1
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Bosun-1.7B",
+     "resid_corr": -0.1236,
+     "rare_shared": 1,
+     "rare_expected": 0.44,
+     "rare_ratio": 2.248,
+     "resid_corr_pctile": 23.4
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Decider-4B",
+     "resid_corr": -0.136,
+     "rare_shared": 3,
+     "rare_expected": 1.75,
+     "rare_ratio": 1.71,
+     "resid_corr_pctile": 18.7
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "JPT-4B",
+     "resid_corr": -0.1215,
+     "rare_shared": 1,
+     "rare_expected": 2.36,
+     "rare_ratio": 0.423,
+     "resid_corr_pctile": 24.4
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.207,
+     "rare_shared": 1,
+     "rare_expected": 1.0,
+     "rare_ratio": 1.003,
+     "resid_corr_pctile": 4.2
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Hopper-G",
+     "resid_corr": -0.1014,
+     "rare_shared": 3,
+     "rare_expected": 1.86,
+     "rare_ratio": 1.615,
+     "resid_corr_pctile": 32.0
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "JPT-9B",
+     "resid_corr": -0.0363,
+     "rare_shared": 1,
+     "rare_expected": 2.02,
+     "rare_ratio": 0.495,
+     "resid_corr_pctile": 53.9
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Nimble-v2",
+     "resid_corr": -0.0729,
+     "rare_shared": 1,
+     "rare_expected": 1.42,
+     "rare_ratio": 0.703,
+     "resid_corr_pctile": 41.4
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.0404,
+     "rare_shared": 3,
+     "rare_expected": 2.24,
+     "rare_ratio": 1.336,
+     "resid_corr_pctile": 52.7
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Eikos-27B",
+     "resid_corr": -0.1112,
+     "rare_shared": 2,
+     "rare_expected": 2.91,
+     "rare_ratio": 0.687,
+     "resid_corr_pctile": 27.8
+    },
+    {
+     "a": "DEV2.0-0.8B",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.1221,
+     "rare_shared": 0,
+     "rare_expected": 1.07,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 24.1
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "DEV2.0-4B",
+     "resid_corr": 0.1203,
+     "rare_shared": 0,
+     "rare_expected": 1.53,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 89.4
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "DEV2.0-8B",
+     "resid_corr": 0.0197,
+     "rare_shared": 0,
+     "rare_expected": 1.93,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 73.4
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "DEV2.0-27B",
+     "resid_corr": -0.0813,
+     "rare_shared": 0,
+     "rare_expected": 3.53,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 39.2
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Kai1",
+     "resid_corr": 0.0401,
+     "rare_shared": 1,
+     "rare_expected": 0.2,
+     "rare_ratio": 5.083,
+     "resid_corr_pctile": 79.3
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Lex1",
+     "resid_corr": -0.106,
+     "rare_shared": 1,
+     "rare_expected": 0.19,
+     "rare_ratio": 5.269,
+     "resid_corr_pctile": 30.0
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Eos1",
+     "resid_corr": -0.0164,
+     "rare_shared": 1,
+     "rare_expected": 0.54,
+     "rare_ratio": 1.843,
+     "resid_corr_pctile": 63.5
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Sol1",
+     "resid_corr": 0.3875,
+     "rare_shared": 1,
+     "rare_expected": 1.08,
+     "rare_ratio": 0.928,
+     "resid_corr_pctile": 99.0
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Nox1",
+     "resid_corr": 0.3313,
+     "rare_shared": 2,
+     "rare_expected": 1.63,
+     "rare_ratio": 1.224,
+     "resid_corr_pctile": 98.5
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Lux1",
+     "resid_corr": 0.0593,
+     "rare_shared": 0,
+     "rare_expected": 2.27,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 84.2
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "GLiNER2.5-Decide",
+     "resid_corr": -0.0423,
+     "rare_shared": 0,
+     "rare_expected": 0.21,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 52.0
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Bosun-0.6B",
+     "resid_corr": -0.0563,
+     "rare_shared": 1,
+     "rare_expected": 0.39,
+     "rare_ratio": 2.558,
+     "resid_corr_pctile": 47.8
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "JPT-0.8B",
+     "resid_corr": -0.0358,
+     "rare_shared": 1,
+     "rare_expected": 1.53,
+     "rare_ratio": 0.655,
+     "resid_corr_pctile": 54.2
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Intern",
+     "resid_corr": -0.2171,
+     "rare_shared": 0,
+     "rare_expected": 1.2,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 3.4
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Kev",
+     "resid_corr": -0.0514,
+     "rare_shared": 0,
+     "rare_expected": 0.65,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 49.5
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Decider-2B",
+     "resid_corr": 0.0122,
+     "rare_shared": 1,
+     "rare_expected": 1.75,
+     "rare_ratio": 0.572,
+     "resid_corr_pctile": 71.4
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "This-That",
+     "resid_corr": -0.173,
+     "rare_shared": 0,
+     "rare_expected": 0.65,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 8.4
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Bosun-1.7B",
+     "resid_corr": 0.0279,
+     "rare_shared": 1,
+     "rare_expected": 0.75,
+     "rare_ratio": 1.329,
+     "resid_corr_pctile": 76.6
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Decider-4B",
+     "resid_corr": -0.0555,
+     "rare_shared": 1,
+     "rare_expected": 2.98,
+     "rare_ratio": 0.336,
+     "resid_corr_pctile": 49.0
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "JPT-4B",
+     "resid_corr": 0.0665,
+     "rare_shared": 1,
+     "rare_expected": 4.02,
+     "rare_ratio": 0.249,
+     "resid_corr_pctile": 85.0
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Jet-v6.2",
+     "resid_corr": 0.0032,
+     "rare_shared": 0,
+     "rare_expected": 1.69,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 69.0
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Hopper-G",
+     "resid_corr": -0.1577,
+     "rare_shared": 1,
+     "rare_expected": 3.16,
+     "rare_ratio": 0.317,
+     "resid_corr_pctile": 12.1
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "JPT-9B",
+     "resid_corr": -0.0172,
+     "rare_shared": 1,
+     "rare_expected": 3.43,
+     "rare_ratio": 0.291,
+     "resid_corr_pctile": 63.3
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Nimble-v2",
+     "resid_corr": -0.2081,
+     "rare_shared": 1,
+     "rare_expected": 2.41,
+     "rare_ratio": 0.414,
+     "resid_corr_pctile": 3.9
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.0334,
+     "rare_shared": 0,
+     "rare_expected": 3.82,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 55.4
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Eikos-27B",
+     "resid_corr": -0.045,
+     "rare_shared": 1,
+     "rare_expected": 4.97,
+     "rare_ratio": 0.201,
+     "resid_corr_pctile": 51.0
+    },
+    {
+     "a": "DEV2.0-2B",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.1832,
+     "rare_shared": 0,
+     "rare_expected": 1.81,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 6.2
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "DEV2.0-8B",
+     "resid_corr": 0.0348,
+     "rare_shared": 0,
+     "rare_expected": 1.93,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 78.8
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "DEV2.0-27B",
+     "resid_corr": 0.0293,
+     "rare_shared": 2,
+     "rare_expected": 3.53,
+     "rare_ratio": 0.567,
+     "resid_corr_pctile": 77.3
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Kai1",
+     "resid_corr": -0.0978,
+     "rare_shared": 1,
+     "rare_expected": 0.2,
+     "rare_ratio": 5.083,
+     "resid_corr_pctile": 32.8
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Lex1",
+     "resid_corr": -0.0628,
+     "rare_shared": 1,
+     "rare_expected": 0.19,
+     "rare_ratio": 5.269,
+     "resid_corr_pctile": 45.1
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Eos1",
+     "resid_corr": -0.0236,
+     "rare_shared": 1,
+     "rare_expected": 0.54,
+     "rare_ratio": 1.843,
+     "resid_corr_pctile": 60.6
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Sol1",
+     "resid_corr": 0.0839,
+     "rare_shared": 1,
+     "rare_expected": 1.08,
+     "rare_ratio": 0.928,
+     "resid_corr_pctile": 87.2
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Nox1",
+     "resid_corr": 0.6036,
+     "rare_shared": 2,
+     "rare_expected": 1.63,
+     "rare_ratio": 1.224,
+     "resid_corr_pctile": 99.8
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Lux1",
+     "resid_corr": -0.0717,
+     "rare_shared": 0,
+     "rare_expected": 2.27,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 41.9
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "GLiNER2.5-Decide",
+     "resid_corr": -0.0459,
+     "rare_shared": 0,
+     "rare_expected": 0.21,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 50.5
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Bosun-0.6B",
+     "resid_corr": -0.0622,
+     "rare_shared": 1,
+     "rare_expected": 0.39,
+     "rare_ratio": 2.558,
+     "resid_corr_pctile": 45.6
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "JPT-0.8B",
+     "resid_corr": -0.1263,
+     "rare_shared": 1,
+     "rare_expected": 1.53,
+     "rare_ratio": 0.655,
+     "resid_corr_pctile": 22.4
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Intern",
+     "resid_corr": -0.171,
+     "rare_shared": 1,
+     "rare_expected": 1.2,
+     "rare_ratio": 0.835,
+     "resid_corr_pctile": 8.9
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Kev",
+     "resid_corr": -0.0581,
+     "rare_shared": 1,
+     "rare_expected": 0.65,
+     "rare_ratio": 1.536,
+     "resid_corr_pctile": 47.5
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Decider-2B",
+     "resid_corr": 0.0208,
+     "rare_shared": 2,
+     "rare_expected": 1.75,
+     "rare_ratio": 1.144,
+     "resid_corr_pctile": 73.6
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "This-That",
+     "resid_corr": 0.0035,
+     "rare_shared": 0,
+     "rare_expected": 0.65,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 69.2
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Bosun-1.7B",
+     "resid_corr": 0.0215,
+     "rare_shared": 1,
+     "rare_expected": 0.75,
+     "rare_ratio": 1.329,
+     "resid_corr_pctile": 74.1
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Decider-4B",
+     "resid_corr": 0.0427,
+     "rare_shared": 2,
+     "rare_expected": 2.98,
+     "rare_ratio": 0.671,
+     "resid_corr_pctile": 79.6
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "JPT-4B",
+     "resid_corr": -0.0967,
+     "rare_shared": 0,
+     "rare_expected": 4.02,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 33.5
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Jet-v6.2",
+     "resid_corr": 0.0116,
+     "rare_shared": 0,
+     "rare_expected": 1.69,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 71.2
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Hopper-G",
+     "resid_corr": -0.1271,
+     "rare_shared": 1,
+     "rare_expected": 3.16,
+     "rare_ratio": 0.317,
+     "resid_corr_pctile": 22.2
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "JPT-9B",
+     "resid_corr": -0.1955,
+     "rare_shared": 0,
+     "rare_expected": 3.43,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 5.4
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Nimble-v2",
+     "resid_corr": 0.0045,
+     "rare_shared": 2,
+     "rare_expected": 2.41,
+     "rare_ratio": 0.828,
+     "resid_corr_pctile": 70.0
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.1448,
+     "rare_shared": 1,
+     "rare_expected": 3.82,
+     "rare_ratio": 0.262,
+     "resid_corr_pctile": 16.5
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Eikos-27B",
+     "resid_corr": -0.1814,
+     "rare_shared": 1,
+     "rare_expected": 4.97,
+     "rare_ratio": 0.201,
+     "resid_corr_pctile": 6.7
+    },
+    {
+     "a": "DEV2.0-4B",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.0612,
+     "rare_shared": 0,
+     "rare_expected": 1.81,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 46.3
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "DEV2.0-27B",
+     "resid_corr": 0.0128,
+     "rare_shared": 0,
+     "rare_expected": 4.47,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 71.9
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Kai1",
+     "resid_corr": -0.1392,
+     "rare_shared": 0,
+     "rare_expected": 0.25,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 18.0
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Lex1",
+     "resid_corr": -0.2004,
+     "rare_shared": 0,
+     "rare_expected": 0.24,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 4.7
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Eos1",
+     "resid_corr": 0.0006,
+     "rare_shared": 0,
+     "rare_expected": 0.69,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 67.0
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Sol1",
+     "resid_corr": -0.0827,
+     "rare_shared": 0,
+     "rare_expected": 1.36,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 38.2
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Nox1",
+     "resid_corr": 0.0319,
+     "rare_shared": 0,
+     "rare_expected": 2.07,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 78.3
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Lux1",
+     "resid_corr": 0.6412,
+     "rare_shared": 0,
+     "rare_expected": 2.87,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 100.0
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "GLiNER2.5-Decide",
+     "resid_corr": -0.0651,
+     "rare_shared": 0,
+     "rare_expected": 0.27,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 44.3
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Bosun-0.6B",
+     "resid_corr": -0.0267,
+     "rare_shared": 0,
+     "rare_expected": 0.49,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 59.1
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "JPT-0.8B",
+     "resid_corr": -0.1297,
+     "rare_shared": 0,
+     "rare_expected": 1.93,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 20.4
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Intern",
+     "resid_corr": -0.1112,
+     "rare_shared": 0,
+     "rare_expected": 1.51,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 27.8
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Kev",
+     "resid_corr": -0.056,
+     "rare_shared": 0,
+     "rare_expected": 0.82,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 48.3
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Decider-2B",
+     "resid_corr": -0.0886,
+     "rare_shared": 0,
+     "rare_expected": 2.21,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 36.2
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "This-That",
+     "resid_corr": -0.1113,
+     "rare_shared": 0,
+     "rare_expected": 0.82,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 27.3
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Bosun-1.7B",
+     "resid_corr": -0.103,
+     "rare_shared": 0,
+     "rare_expected": 0.95,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 30.8
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Decider-4B",
+     "resid_corr": 0.1307,
+     "rare_shared": 0,
+     "rare_expected": 3.77,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 90.4
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "JPT-4B",
+     "resid_corr": -0.0582,
+     "rare_shared": 0,
+     "rare_expected": 5.1,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 47.3
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Jet-v6.2",
+     "resid_corr": 0.232,
+     "rare_shared": 0,
+     "rare_expected": 2.14,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 95.3
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Hopper-G",
+     "resid_corr": -0.0698,
+     "rare_shared": 0,
+     "rare_expected": 4.0,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 43.1
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "JPT-9B",
+     "resid_corr": 0.0825,
+     "rare_shared": 0,
+     "rare_expected": 4.35,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 86.7
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Nimble-v2",
+     "resid_corr": 0.0381,
+     "rare_shared": 0,
+     "rare_expected": 3.05,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 79.1
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "AutoJev-27B",
+     "resid_corr": 0.0566,
+     "rare_shared": 0,
+     "rare_expected": 4.84,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 83.0
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Eikos-27B",
+     "resid_corr": 0.0214,
+     "rare_shared": 0,
+     "rare_expected": 6.31,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 73.9
+    },
+    {
+     "a": "DEV2.0-8B",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.1731,
+     "rare_shared": 0,
+     "rare_expected": 2.28,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 8.1
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Kai1",
+     "resid_corr": -0.1085,
+     "rare_shared": 0,
+     "rare_expected": 0.45,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 29.1
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Lex1",
+     "resid_corr": -0.0337,
+     "rare_shared": 1,
+     "rare_expected": 0.43,
+     "rare_ratio": 2.299,
+     "resid_corr_pctile": 55.2
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Eos1",
+     "resid_corr": -0.239,
+     "rare_shared": 1,
+     "rare_expected": 1.25,
+     "rare_ratio": 0.803,
+     "resid_corr_pctile": 1.7
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Sol1",
+     "resid_corr": -0.1386,
+     "rare_shared": 0,
+     "rare_expected": 2.48,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 18.2
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Nox1",
+     "resid_corr": -0.0962,
+     "rare_shared": 1,
+     "rare_expected": 3.78,
+     "rare_ratio": 0.265,
+     "resid_corr_pctile": 34.0
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Lux1",
+     "resid_corr": 0.0776,
+     "rare_shared": 1,
+     "rare_expected": 5.26,
+     "rare_ratio": 0.19,
+     "resid_corr_pctile": 86.2
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "GLiNER2.5-Decide",
+     "resid_corr": 0.0007,
+     "rare_shared": 1,
+     "rare_expected": 0.48,
+     "rare_ratio": 2.064,
+     "resid_corr_pctile": 67.5
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Bosun-0.6B",
+     "resid_corr": -0.0181,
+     "rare_shared": 1,
+     "rare_expected": 0.9,
+     "rare_ratio": 1.115,
+     "resid_corr_pctile": 62.6
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "JPT-0.8B",
+     "resid_corr": -0.1497,
+     "rare_shared": 2,
+     "rare_expected": 3.53,
+     "rare_ratio": 0.567,
+     "resid_corr_pctile": 14.0
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Intern",
+     "resid_corr": -0.1428,
+     "rare_shared": 3,
+     "rare_expected": 2.76,
+     "rare_ratio": 1.086,
+     "resid_corr_pctile": 17.0
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Kev",
+     "resid_corr": -0.1483,
+     "rare_shared": 0,
+     "rare_expected": 1.5,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 14.5
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Decider-2B",
+     "resid_corr": -0.0824,
+     "rare_shared": 2,
+     "rare_expected": 4.04,
+     "rare_ratio": 0.495,
+     "resid_corr_pctile": 38.4
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "This-That",
+     "resid_corr": -0.0312,
+     "rare_shared": 0,
+     "rare_expected": 1.5,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 56.9
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Bosun-1.7B",
+     "resid_corr": -0.1255,
+     "rare_shared": 1,
+     "rare_expected": 1.73,
+     "rare_ratio": 0.578,
+     "resid_corr_pctile": 22.7
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Decider-4B",
+     "resid_corr": -0.0379,
+     "rare_shared": 5,
+     "rare_expected": 6.95,
+     "rare_ratio": 0.719,
+     "resid_corr_pctile": 53.2
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "JPT-4B",
+     "resid_corr": 0.0603,
+     "rare_shared": 7,
+     "rare_expected": 9.46,
+     "rare_ratio": 0.74,
+     "resid_corr_pctile": 84.5
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Jet-v6.2",
+     "resid_corr": 0.0331,
+     "rare_shared": 2,
+     "rare_expected": 3.91,
+     "rare_ratio": 0.512,
+     "resid_corr_pctile": 78.6
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Hopper-G",
+     "resid_corr": 0.2078,
+     "rare_shared": 7,
+     "rare_expected": 7.37,
+     "rare_ratio": 0.95,
+     "resid_corr_pctile": 93.8
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "JPT-9B",
+     "resid_corr": 0.0251,
+     "rare_shared": 6,
+     "rare_expected": 8.03,
+     "rare_ratio": 0.747,
+     "resid_corr_pctile": 76.1
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Nimble-v2",
+     "resid_corr": 0.0487,
+     "rare_shared": 5,
+     "rare_expected": 5.61,
+     "rare_ratio": 0.892,
+     "resid_corr_pctile": 80.5
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "AutoJev-27B",
+     "resid_corr": 0.3942,
+     "rare_shared": 9,
+     "rare_expected": 8.97,
+     "rare_ratio": 1.004,
+     "resid_corr_pctile": 99.3
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Eikos-27B",
+     "resid_corr": 0.3108,
+     "rare_shared": 11,
+     "rare_expected": 11.79,
+     "rare_ratio": 0.933,
+     "resid_corr_pctile": 98.3
+    },
+    {
+     "a": "DEV2.0-27B",
+     "b": "Jebadiah-27B",
+     "resid_corr": 0.1455,
+     "rare_shared": 5,
+     "rare_expected": 4.18,
+     "rare_ratio": 1.196,
+     "resid_corr_pctile": 91.1
+    },
+    {
+     "a": "Kai1",
+     "b": "Lex1",
+     "resid_corr": 0.2305,
+     "rare_shared": 3,
+     "rare_expected": 0.02,
+     "rare_ratio": 122.122,
+     "resid_corr_pctile": 94.8
+    },
+    {
+     "a": "Kai1",
+     "b": "Eos1",
+     "resid_corr": -0.0841,
+     "rare_shared": 1,
+     "rare_expected": 0.07,
+     "rare_ratio": 14.259,
+     "resid_corr_pctile": 37.7
+    },
+    {
+     "a": "Kai1",
+     "b": "Sol1",
+     "resid_corr": 0.0591,
+     "rare_shared": 2,
+     "rare_expected": 0.14,
+     "rare_ratio": 14.384,
+     "resid_corr_pctile": 84.0
+    },
+    {
+     "a": "Kai1",
+     "b": "Nox1",
+     "resid_corr": -0.0558,
+     "rare_shared": 1,
+     "rare_expected": 0.21,
+     "rare_ratio": 4.751,
+     "resid_corr_pctile": 48.5
+    },
+    {
+     "a": "Kai1",
+     "b": "Lux1",
+     "resid_corr": -0.1353,
+     "rare_shared": 0,
+     "rare_expected": 0.29,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 19.0
+    },
+    {
+     "a": "Kai1",
+     "b": "GLiNER2.5-Decide",
+     "resid_corr": -0.1081,
+     "rare_shared": 0,
+     "rare_expected": 0.03,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 29.8
+    },
+    {
+     "a": "Kai1",
+     "b": "Bosun-0.6B",
+     "resid_corr": -0.1286,
+     "rare_shared": 1,
+     "rare_expected": 0.05,
+     "rare_ratio": 19.781,
+     "resid_corr_pctile": 20.7
+    },
+    {
+     "a": "Kai1",
+     "b": "JPT-0.8B",
+     "resid_corr": -0.0932,
+     "rare_shared": 3,
+     "rare_expected": 0.2,
+     "rare_ratio": 15.249,
+     "resid_corr_pctile": 34.7
+    },
+    {
+     "a": "Kai1",
+     "b": "Intern",
+     "resid_corr": -0.0378,
+     "rare_shared": 1,
+     "rare_expected": 0.15,
+     "rare_ratio": 6.472,
+     "resid_corr_pctile": 53.4
+    },
+    {
+     "a": "Kai1",
+     "b": "Kev",
+     "resid_corr": -0.0077,
+     "rare_shared": 1,
+     "rare_expected": 0.08,
+     "rare_ratio": 11.89,
+     "resid_corr_pctile": 64.8
+    },
+    {
+     "a": "Kai1",
+     "b": "Decider-2B",
+     "resid_corr": -0.0777,
+     "rare_shared": 0,
+     "rare_expected": 0.22,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 40.4
+    },
+    {
+     "a": "Kai1",
+     "b": "This-That",
+     "resid_corr": 0.0021,
+     "rare_shared": 1,
+     "rare_expected": 0.08,
+     "rare_ratio": 11.89,
+     "resid_corr_pctile": 68.0
+    },
+    {
+     "a": "Kai1",
+     "b": "Bosun-1.7B",
+     "resid_corr": 0.0522,
+     "rare_shared": 2,
+     "rare_expected": 0.1,
+     "rare_ratio": 20.573,
+     "resid_corr_pctile": 81.8
+    },
+    {
+     "a": "Kai1",
+     "b": "Decider-4B",
+     "resid_corr": -0.1083,
+     "rare_shared": 0,
+     "rare_expected": 0.38,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 29.6
+    },
+    {
+     "a": "Kai1",
+     "b": "JPT-4B",
+     "resid_corr": -0.159,
+     "rare_shared": 1,
+     "rare_expected": 0.51,
+     "rare_ratio": 1.95,
+     "resid_corr_pctile": 11.6
+    },
+    {
+     "a": "Kai1",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.0682,
+     "rare_shared": 0,
+     "rare_expected": 0.22,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 43.3
+    },
+    {
+     "a": "Kai1",
+     "b": "Hopper-G",
+     "resid_corr": -0.1686,
+     "rare_shared": 0,
+     "rare_expected": 0.4,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 9.4
+    },
+    {
+     "a": "Kai1",
+     "b": "JPT-9B",
+     "resid_corr": -0.1362,
+     "rare_shared": 1,
+     "rare_expected": 0.44,
+     "rare_ratio": 2.278,
+     "resid_corr_pctile": 18.5
+    },
+    {
+     "a": "Kai1",
+     "b": "Nimble-v2",
+     "resid_corr": -0.1151,
+     "rare_shared": 0,
+     "rare_expected": 0.31,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 26.1
+    },
+    {
+     "a": "Kai1",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.1196,
+     "rare_shared": 0,
+     "rare_expected": 0.49,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 24.9
+    },
+    {
+     "a": "Kai1",
+     "b": "Eikos-27B",
+     "resid_corr": -0.0845,
+     "rare_shared": 1,
+     "rare_expected": 0.63,
+     "rare_ratio": 1.585,
+     "resid_corr_pctile": 37.2
+    },
+    {
+     "a": "Kai1",
+     "b": "Jebadiah-27B",
+     "resid_corr": 0.0444,
+     "rare_shared": 0,
+     "rare_expected": 0.23,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 79.8
+    },
+    {
+     "a": "Lex1",
+     "b": "Eos1",
+     "resid_corr": -0.1092,
+     "rare_shared": 1,
+     "rare_expected": 0.07,
+     "rare_ratio": 14.779,
+     "resid_corr_pctile": 28.8
+    },
+    {
+     "a": "Lex1",
+     "b": "Sol1",
+     "resid_corr": -0.0323,
+     "rare_shared": 2,
+     "rare_expected": 0.13,
+     "rare_ratio": 14.909,
+     "resid_corr_pctile": 56.4
+    },
+    {
+     "a": "Lex1",
+     "b": "Nox1",
+     "resid_corr": -0.0659,
+     "rare_shared": 2,
+     "rare_expected": 0.2,
+     "rare_ratio": 9.849,
+     "resid_corr_pctile": 43.8
+    },
+    {
+     "a": "Lex1",
+     "b": "Lux1",
+     "resid_corr": -0.2013,
+     "rare_shared": 0,
+     "rare_expected": 0.28,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 4.4
+    },
+    {
+     "a": "Lex1",
+     "b": "GLiNER2.5-Decide",
+     "resid_corr": -0.1662,
+     "rare_shared": 0,
+     "rare_expected": 0.03,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 9.9
+    },
+    {
+     "a": "Lex1",
+     "b": "Bosun-0.6B",
+     "resid_corr": -0.0272,
+     "rare_shared": 1,
+     "rare_expected": 0.05,
+     "rare_ratio": 20.502,
+     "resid_corr_pctile": 58.9
+    },
+    {
+     "a": "Lex1",
+     "b": "JPT-0.8B",
+     "resid_corr": -0.0713,
+     "rare_shared": 2,
+     "rare_expected": 0.19,
+     "rare_ratio": 10.537,
+     "resid_corr_pctile": 42.1
+    },
+    {
+     "a": "Lex1",
+     "b": "Intern",
+     "resid_corr": -0.0177,
+     "rare_shared": 2,
+     "rare_expected": 0.15,
+     "rare_ratio": 13.415,
+     "resid_corr_pctile": 63.1
+    },
+    {
+     "a": "Lex1",
+     "b": "Kev",
+     "resid_corr": -0.0626,
+     "rare_shared": 1,
+     "rare_expected": 0.08,
+     "rare_ratio": 12.323,
+     "resid_corr_pctile": 45.3
+    },
+    {
+     "a": "Lex1",
+     "b": "Decider-2B",
+     "resid_corr": -0.0128,
+     "rare_shared": 0,
+     "rare_expected": 0.22,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 64.0
+    },
+    {
+     "a": "Lex1",
+     "b": "This-That",
+     "resid_corr": -0.0607,
+     "rare_shared": 0,
+     "rare_expected": 0.08,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 46.6
+    },
+    {
+     "a": "Lex1",
+     "b": "Bosun-1.7B",
+     "resid_corr": 0.0713,
+     "rare_shared": 2,
+     "rare_expected": 0.09,
+     "rare_ratio": 21.324,
+     "resid_corr_pctile": 85.7
+    },
+    {
+     "a": "Lex1",
+     "b": "Decider-4B",
+     "resid_corr": -0.1272,
+     "rare_shared": 0,
+     "rare_expected": 0.37,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 21.7
+    },
+    {
+     "a": "Lex1",
+     "b": "JPT-4B",
+     "resid_corr": -0.1426,
+     "rare_shared": 1,
+     "rare_expected": 0.49,
+     "rare_ratio": 2.021,
+     "resid_corr_pctile": 17.2
+    },
+    {
+     "a": "Lex1",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.1595,
+     "rare_shared": 0,
+     "rare_expected": 0.21,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 11.3
+    },
+    {
+     "a": "Lex1",
+     "b": "Hopper-G",
+     "resid_corr": -0.0561,
+     "rare_shared": 2,
+     "rare_expected": 0.39,
+     "rare_ratio": 5.13,
+     "resid_corr_pctile": 48.0
+    },
+    {
+     "a": "Lex1",
+     "b": "JPT-9B",
+     "resid_corr": -0.1122,
+     "rare_shared": 2,
+     "rare_expected": 0.42,
+     "rare_ratio": 4.723,
+     "resid_corr_pctile": 26.8
+    },
+    {
+     "a": "Lex1",
+     "b": "Nimble-v2",
+     "resid_corr": -0.0012,
+     "rare_shared": 1,
+     "rare_expected": 0.3,
+     "rare_ratio": 3.344,
+     "resid_corr_pctile": 66.0
+    },
+    {
+     "a": "Lex1",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.1475,
+     "rare_shared": 1,
+     "rare_expected": 0.47,
+     "rare_ratio": 2.126,
+     "resid_corr_pctile": 15.5
+    },
+    {
+     "a": "Lex1",
+     "b": "Eikos-27B",
+     "resid_corr": -0.0702,
+     "rare_shared": 2,
+     "rare_expected": 0.61,
+     "rare_ratio": 3.286,
+     "resid_corr_pctile": 42.6
+    },
+    {
+     "a": "Lex1",
+     "b": "Jebadiah-27B",
+     "resid_corr": 0.1472,
+     "rare_shared": 1,
+     "rare_expected": 0.22,
+     "rare_ratio": 4.457,
+     "resid_corr_pctile": 91.4
+    },
+    {
+     "a": "Eos1",
+     "b": "Sol1",
+     "resid_corr": -0.0908,
+     "rare_shared": 2,
+     "rare_expected": 0.38,
+     "rare_ratio": 5.218,
+     "resid_corr_pctile": 35.2
+    },
+    {
+     "a": "Eos1",
+     "b": "Nox1",
+     "resid_corr": -0.0337,
+     "rare_shared": 2,
+     "rare_expected": 0.58,
+     "rare_ratio": 3.445,
+     "resid_corr_pctile": 55.2
+    },
+    {
+     "a": "Eos1",
+     "b": "Lux1",
+     "resid_corr": -0.0744,
+     "rare_shared": 0,
+     "rare_expected": 0.8,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 41.1
+    },
+    {
+     "a": "Eos1",
+     "b": "GLiNER2.5-Decide",
+     "resid_corr": 0.0027,
+     "rare_shared": 1,
+     "rare_expected": 0.08,
+     "rare_ratio": 13.272,
+     "resid_corr_pctile": 68.7
+    },
+    {
+     "a": "Eos1",
+     "b": "Bosun-0.6B",
+     "resid_corr": -0.0901,
+     "rare_shared": 0,
+     "rare_expected": 0.14,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 35.5
+    },
+    {
+     "a": "Eos1",
+     "b": "JPT-0.8B",
+     "resid_corr": -0.0049,
+     "rare_shared": 2,
+     "rare_expected": 0.54,
+     "rare_ratio": 3.686,
+     "resid_corr_pctile": 65.5
+    },
+    {
+     "a": "Eos1",
+     "b": "Intern",
+     "resid_corr": 0.159,
+     "rare_shared": 2,
+     "rare_expected": 0.43,
+     "rare_ratio": 4.695,
+     "resid_corr_pctile": 93.1
+    },
+    {
+     "a": "Eos1",
+     "b": "Kev",
+     "resid_corr": 0.0154,
+     "rare_shared": 2,
+     "rare_expected": 0.23,
+     "rare_ratio": 8.63,
+     "resid_corr_pctile": 72.4
+    },
+    {
+     "a": "Eos1",
+     "b": "Decider-2B",
+     "resid_corr": -0.0239,
+     "rare_shared": 2,
+     "rare_expected": 0.62,
+     "rare_ratio": 3.223,
+     "resid_corr_pctile": 60.1
+    },
+    {
+     "a": "Eos1",
+     "b": "This-That",
+     "resid_corr": -0.2744,
+     "rare_shared": 0,
+     "rare_expected": 0.23,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 0.5
+    },
+    {
+     "a": "Eos1",
+     "b": "Bosun-1.7B",
+     "resid_corr": -0.089,
+     "rare_shared": 2,
+     "rare_expected": 0.27,
+     "rare_ratio": 7.465,
+     "resid_corr_pctile": 36.0
+    },
+    {
+     "a": "Eos1",
+     "b": "Decider-4B",
+     "resid_corr": -0.0467,
+     "rare_shared": 2,
+     "rare_expected": 1.05,
+     "rare_ratio": 1.897,
+     "resid_corr_pctile": 50.2
+    },
+    {
+     "a": "Eos1",
+     "b": "JPT-4B",
+     "resid_corr": -0.1029,
+     "rare_shared": 2,
+     "rare_expected": 1.42,
+     "rare_ratio": 1.41,
+     "resid_corr_pctile": 31.0
+    },
+    {
+     "a": "Eos1",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.0801,
+     "rare_shared": 0,
+     "rare_expected": 0.6,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 39.7
+    },
+    {
+     "a": "Eos1",
+     "b": "Hopper-G",
+     "resid_corr": -0.0613,
+     "rare_shared": 3,
+     "rare_expected": 1.12,
+     "rare_ratio": 2.688,
+     "resid_corr_pctile": 46.1
+    },
+    {
+     "a": "Eos1",
+     "b": "JPT-9B",
+     "resid_corr": -0.0293,
+     "rare_shared": 2,
+     "rare_expected": 1.21,
+     "rare_ratio": 1.649,
+     "resid_corr_pctile": 57.9
+    },
+    {
+     "a": "Eos1",
+     "b": "Nimble-v2",
+     "resid_corr": -0.0779,
+     "rare_shared": 1,
+     "rare_expected": 0.86,
+     "rare_ratio": 1.169,
+     "resid_corr_pctile": 40.1
+    },
+    {
+     "a": "Eos1",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.1309,
+     "rare_shared": 3,
+     "rare_expected": 1.35,
+     "rare_ratio": 2.226,
+     "resid_corr_pctile": 20.0
+    },
+    {
+     "a": "Eos1",
+     "b": "Eikos-27B",
+     "resid_corr": -0.1659,
+     "rare_shared": 3,
+     "rare_expected": 1.75,
+     "rare_ratio": 1.718,
+     "resid_corr_pctile": 10.1
+    },
+    {
+     "a": "Eos1",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.1458,
+     "rare_shared": 0,
+     "rare_expected": 0.64,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 16.3
+    },
+    {
+     "a": "Sol1",
+     "b": "Nox1",
+     "resid_corr": 0.2295,
+     "rare_shared": 2,
+     "rare_expected": 1.15,
+     "rare_ratio": 1.734,
+     "resid_corr_pctile": 94.6
+    },
+    {
+     "a": "Sol1",
+     "b": "Lux1",
+     "resid_corr": -0.0817,
+     "rare_shared": 0,
+     "rare_expected": 1.6,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 38.7
+    },
+    {
+     "a": "Sol1",
+     "b": "GLiNER2.5-Decide",
+     "resid_corr": -0.0308,
+     "rare_shared": 0,
+     "rare_expected": 0.15,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 57.4
+    },
+    {
+     "a": "Sol1",
+     "b": "Bosun-0.6B",
+     "resid_corr": 0.0282,
+     "rare_shared": 1,
+     "rare_expected": 0.28,
+     "rare_ratio": 3.621,
+     "resid_corr_pctile": 76.8
+    },
+    {
+     "a": "Sol1",
+     "b": "JPT-0.8B",
+     "resid_corr": 0.0496,
+     "rare_shared": 3,
+     "rare_expected": 1.08,
+     "rare_ratio": 2.784,
+     "resid_corr_pctile": 80.8
+    },
+    {
+     "a": "Sol1",
+     "b": "Intern",
+     "resid_corr": -0.2193,
+     "rare_shared": 2,
+     "rare_expected": 0.85,
+     "rare_ratio": 2.365,
+     "resid_corr_pctile": 3.2
+    },
+    {
+     "a": "Sol1",
+     "b": "Kev",
+     "resid_corr": 0.0956,
+     "rare_shared": 3,
+     "rare_expected": 0.46,
+     "rare_ratio": 6.525,
+     "resid_corr_pctile": 87.7
+    },
+    {
+     "a": "Sol1",
+     "b": "Decider-2B",
+     "resid_corr": 0.0631,
+     "rare_shared": 3,
+     "rare_expected": 1.23,
+     "rare_ratio": 2.433,
+     "resid_corr_pctile": 84.7
+    },
+    {
+     "a": "Sol1",
+     "b": "This-That",
+     "resid_corr": 0.058,
+     "rare_shared": 0,
+     "rare_expected": 0.46,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 83.5
+    },
+    {
+     "a": "Sol1",
+     "b": "Bosun-1.7B",
+     "resid_corr": 0.1406,
+     "rare_shared": 3,
+     "rare_expected": 0.53,
+     "rare_ratio": 5.644,
+     "resid_corr_pctile": 90.6
+    },
+    {
+     "a": "Sol1",
+     "b": "Decider-4B",
+     "resid_corr": -0.0769,
+     "rare_shared": 1,
+     "rare_expected": 2.1,
+     "rare_ratio": 0.476,
+     "resid_corr_pctile": 40.6
+    },
+    {
+     "a": "Sol1",
+     "b": "JPT-4B",
+     "resid_corr": -0.2291,
+     "rare_shared": 0,
+     "rare_expected": 2.83,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 2.5
+    },
+    {
+     "a": "Sol1",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.0535,
+     "rare_shared": 0,
+     "rare_expected": 1.19,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 49.3
+    },
+    {
+     "a": "Sol1",
+     "b": "Hopper-G",
+     "resid_corr": -0.2737,
+     "rare_shared": 0,
+     "rare_expected": 2.22,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 1.0
+    },
+    {
+     "a": "Sol1",
+     "b": "JPT-9B",
+     "resid_corr": -0.2742,
+     "rare_shared": 0,
+     "rare_expected": 2.42,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 0.7
+    },
+    {
+     "a": "Sol1",
+     "b": "Nimble-v2",
+     "resid_corr": -0.2368,
+     "rare_shared": 0,
+     "rare_expected": 1.7,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 2.0
+    },
+    {
+     "a": "Sol1",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.0248,
+     "rare_shared": 2,
+     "rare_expected": 2.69,
+     "rare_ratio": 0.744,
+     "resid_corr_pctile": 59.4
+    },
+    {
+     "a": "Sol1",
+     "b": "Eikos-27B",
+     "resid_corr": -0.0893,
+     "rare_shared": 2,
+     "rare_expected": 3.49,
+     "rare_ratio": 0.573,
+     "resid_corr_pctile": 35.7
+    },
+    {
+     "a": "Sol1",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.164,
+     "rare_shared": 0,
+     "rare_expected": 1.27,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 10.6
+    },
+    {
+     "a": "Nox1",
+     "b": "Lux1",
+     "resid_corr": -0.088,
+     "rare_shared": 0,
+     "rare_expected": 2.43,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 36.9
+    },
+    {
+     "a": "Nox1",
+     "b": "GLiNER2.5-Decide",
+     "resid_corr": -0.0429,
+     "rare_shared": 0,
+     "rare_expected": 0.23,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 51.7
+    },
+    {
+     "a": "Nox1",
+     "b": "Bosun-0.6B",
+     "resid_corr": -0.1186,
+     "rare_shared": 1,
+     "rare_expected": 0.42,
+     "rare_ratio": 2.391,
+     "resid_corr_pctile": 25.4
+    },
+    {
+     "a": "Nox1",
+     "b": "JPT-0.8B",
+     "resid_corr": -0.1206,
+     "rare_shared": 2,
+     "rare_expected": 1.63,
+     "rare_ratio": 1.224,
+     "resid_corr_pctile": 24.6
+    },
+    {
+     "a": "Nox1",
+     "b": "Intern",
+     "resid_corr": -0.158,
+     "rare_shared": 2,
+     "rare_expected": 1.28,
+     "rare_ratio": 1.56,
+     "resid_corr_pctile": 11.8
+    },
+    {
+     "a": "Nox1",
+     "b": "Kev",
+     "resid_corr": -0.0196,
+     "rare_shared": 1,
+     "rare_expected": 0.7,
+     "rare_ratio": 1.436,
+     "resid_corr_pctile": 61.6
+    },
+    {
+     "a": "Nox1",
+     "b": "Decider-2B",
+     "resid_corr": 0.0786,
+     "rare_shared": 2,
+     "rare_expected": 1.87,
+     "rare_ratio": 1.069,
+     "resid_corr_pctile": 86.5
+    },
+    {
+     "a": "Nox1",
+     "b": "This-That",
+     "resid_corr": -0.0717,
+     "rare_shared": 0,
+     "rare_expected": 0.7,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 41.9
+    },
+    {
+     "a": "Nox1",
+     "b": "Bosun-1.7B",
+     "resid_corr": 0.0022,
+     "rare_shared": 2,
+     "rare_expected": 0.81,
+     "rare_ratio": 2.484,
+     "resid_corr_pctile": 68.5
+    },
+    {
+     "a": "Nox1",
+     "b": "Decider-4B",
+     "resid_corr": -0.0593,
+     "rare_shared": 2,
+     "rare_expected": 3.19,
+     "rare_ratio": 0.627,
+     "resid_corr_pctile": 47.0
+    },
+    {
+     "a": "Nox1",
+     "b": "JPT-4B",
+     "resid_corr": -0.019,
+     "rare_shared": 1,
+     "rare_expected": 4.31,
+     "rare_ratio": 0.232,
+     "resid_corr_pctile": 62.1
+    },
+    {
+     "a": "Nox1",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.1022,
+     "rare_shared": 0,
+     "rare_expected": 1.81,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 31.8
+    },
+    {
+     "a": "Nox1",
+     "b": "Hopper-G",
+     "resid_corr": -0.0331,
+     "rare_shared": 3,
+     "rare_expected": 3.38,
+     "rare_ratio": 0.888,
+     "resid_corr_pctile": 55.7
+    },
+    {
+     "a": "Nox1",
+     "b": "JPT-9B",
+     "resid_corr": -0.1,
+     "rare_shared": 2,
+     "rare_expected": 3.68,
+     "rare_ratio": 0.544,
+     "resid_corr_pctile": 32.3
+    },
+    {
+     "a": "Nox1",
+     "b": "Nimble-v2",
+     "resid_corr": -0.0761,
+     "rare_shared": 3,
+     "rare_expected": 2.58,
+     "rare_ratio": 1.161,
+     "resid_corr_pctile": 40.9
+    },
+    {
+     "a": "Nox1",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.1271,
+     "rare_shared": 1,
+     "rare_expected": 4.09,
+     "rare_ratio": 0.244,
+     "resid_corr_pctile": 22.2
+    },
+    {
+     "a": "Nox1",
+     "b": "Eikos-27B",
+     "resid_corr": -0.1805,
+     "rare_shared": 2,
+     "rare_expected": 5.33,
+     "rare_ratio": 0.376,
+     "resid_corr_pctile": 7.1
+    },
+    {
+     "a": "Nox1",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.1122,
+     "rare_shared": 0,
+     "rare_expected": 1.93,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 26.8
+    },
+    {
+     "a": "Lux1",
+     "b": "GLiNER2.5-Decide",
+     "resid_corr": -0.0349,
+     "rare_shared": 0,
+     "rare_expected": 0.31,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 54.4
+    },
+    {
+     "a": "Lux1",
+     "b": "Bosun-0.6B",
+     "resid_corr": -0.0328,
+     "rare_shared": 0,
+     "rare_expected": 0.58,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 55.9
+    },
+    {
+     "a": "Lux1",
+     "b": "JPT-0.8B",
+     "resid_corr": -0.0196,
+     "rare_shared": 1,
+     "rare_expected": 2.27,
+     "rare_ratio": 0.441,
+     "resid_corr_pctile": 61.6
+    },
+    {
+     "a": "Lux1",
+     "b": "Intern",
+     "resid_corr": -0.198,
+     "rare_shared": 0,
+     "rare_expected": 1.78,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 5.2
+    },
+    {
+     "a": "Lux1",
+     "b": "Kev",
+     "resid_corr": -0.0841,
+     "rare_shared": 0,
+     "rare_expected": 0.96,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 37.7
+    },
+    {
+     "a": "Lux1",
+     "b": "Decider-2B",
+     "resid_corr": -0.0177,
+     "rare_shared": 0,
+     "rare_expected": 2.6,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 63.1
+    },
+    {
+     "a": "Lux1",
+     "b": "This-That",
+     "resid_corr": -0.0662,
+     "rare_shared": 0,
+     "rare_expected": 0.96,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 43.6
+    },
+    {
+     "a": "Lux1",
+     "b": "Bosun-1.7B",
+     "resid_corr": -0.1475,
+     "rare_shared": 0,
+     "rare_expected": 1.12,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 15.5
+    },
+    {
+     "a": "Lux1",
+     "b": "Decider-4B",
+     "resid_corr": 0.1514,
+     "rare_shared": 1,
+     "rare_expected": 4.44,
+     "rare_ratio": 0.225,
+     "resid_corr_pctile": 92.4
+    },
+    {
+     "a": "Lux1",
+     "b": "JPT-4B",
+     "resid_corr": 0.0502,
+     "rare_shared": 2,
+     "rare_expected": 6.01,
+     "rare_ratio": 0.333,
+     "resid_corr_pctile": 81.0
+    },
+    {
+     "a": "Lux1",
+     "b": "Jet-v6.2",
+     "resid_corr": 0.1975,
+     "rare_shared": 0,
+     "rare_expected": 2.51,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 93.6
+    },
+    {
+     "a": "Lux1",
+     "b": "Hopper-G",
+     "resid_corr": 0.0012,
+     "rare_shared": 2,
+     "rare_expected": 4.7,
+     "rare_ratio": 0.425,
+     "resid_corr_pctile": 67.7
+    },
+    {
+     "a": "Lux1",
+     "b": "JPT-9B",
+     "resid_corr": 0.2338,
+     "rare_shared": 2,
+     "rare_expected": 5.12,
+     "rare_ratio": 0.391,
+     "resid_corr_pctile": 95.8
+    },
+    {
+     "a": "Lux1",
+     "b": "Nimble-v2",
+     "resid_corr": 0.154,
+     "rare_shared": 2,
+     "rare_expected": 3.59,
+     "rare_ratio": 0.557,
+     "resid_corr_pctile": 92.6
+    },
+    {
+     "a": "Lux1",
+     "b": "AutoJev-27B",
+     "resid_corr": 0.023,
+     "rare_shared": 1,
+     "rare_expected": 5.7,
+     "rare_ratio": 0.175,
+     "resid_corr_pctile": 74.9
+    },
+    {
+     "a": "Lux1",
+     "b": "Eikos-27B",
+     "resid_corr": 0.0184,
+     "rare_shared": 1,
+     "rare_expected": 7.45,
+     "rare_ratio": 0.134,
+     "resid_corr_pctile": 72.9
+    },
+    {
+     "a": "Lux1",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.2307,
+     "rare_shared": 0,
+     "rare_expected": 2.68,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 2.2
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "Bosun-0.6B",
+     "resid_corr": -0.098,
+     "rare_shared": 0,
+     "rare_expected": 0.05,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 32.5
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "JPT-0.8B",
+     "resid_corr": -0.0936,
+     "rare_shared": 0,
+     "rare_expected": 0.21,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 34.2
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "Intern",
+     "resid_corr": -0.0033,
+     "rare_shared": 1,
+     "rare_expected": 0.17,
+     "rare_ratio": 6.024,
+     "resid_corr_pctile": 65.8
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "Kev",
+     "resid_corr": 0.0107,
+     "rare_shared": 0,
+     "rare_expected": 0.09,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 70.9
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "Decider-2B",
+     "resid_corr": -0.0194,
+     "rare_shared": 0,
+     "rare_expected": 0.24,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 61.8
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "This-That",
+     "resid_corr": 0.0242,
+     "rare_shared": 0,
+     "rare_expected": 0.09,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 75.4
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "Bosun-1.7B",
+     "resid_corr": -0.1237,
+     "rare_shared": 0,
+     "rare_expected": 0.1,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 23.2
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "Decider-4B",
+     "resid_corr": 0.0217,
+     "rare_shared": 1,
+     "rare_expected": 0.41,
+     "rare_ratio": 2.438,
+     "resid_corr_pctile": 74.4
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "JPT-4B",
+     "resid_corr": -0.1083,
+     "rare_shared": 0,
+     "rare_expected": 0.55,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 29.6
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.0556,
+     "rare_shared": 0,
+     "rare_expected": 0.23,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 48.8
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "Hopper-G",
+     "resid_corr": 0.0584,
+     "rare_shared": 1,
+     "rare_expected": 0.43,
+     "rare_ratio": 2.303,
+     "resid_corr_pctile": 83.7
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "JPT-9B",
+     "resid_corr": -0.043,
+     "rare_shared": 0,
+     "rare_expected": 0.47,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 51.5
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "Nimble-v2",
+     "resid_corr": -0.0225,
+     "rare_shared": 0,
+     "rare_expected": 0.33,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 61.1
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "AutoJev-27B",
+     "resid_corr": 0.0004,
+     "rare_shared": 1,
+     "rare_expected": 0.52,
+     "rare_ratio": 1.908,
+     "resid_corr_pctile": 66.7
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "Eikos-27B",
+     "resid_corr": 0.0507,
+     "rare_shared": 2,
+     "rare_expected": 0.68,
+     "rare_ratio": 2.95,
+     "resid_corr_pctile": 81.3
+    },
+    {
+     "a": "GLiNER2.5-Decide",
+     "b": "Jebadiah-27B",
+     "resid_corr": 0.0857,
+     "rare_shared": 0,
+     "rare_expected": 0.25,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 87.4
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "JPT-0.8B",
+     "resid_corr": -0.0883,
+     "rare_shared": 1,
+     "rare_expected": 0.39,
+     "rare_ratio": 2.558,
+     "resid_corr_pctile": 36.5
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "Intern",
+     "resid_corr": -0.0406,
+     "rare_shared": 0,
+     "rare_expected": 0.31,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 52.5
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "Kev",
+     "resid_corr": -0.0325,
+     "rare_shared": 1,
+     "rare_expected": 0.17,
+     "rare_ratio": 5.987,
+     "resid_corr_pctile": 56.2
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "Decider-2B",
+     "resid_corr": 0.0178,
+     "rare_shared": 1,
+     "rare_expected": 0.45,
+     "rare_ratio": 2.237,
+     "resid_corr_pctile": 72.7
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "This-That",
+     "resid_corr": 0.1486,
+     "rare_shared": 0,
+     "rare_expected": 0.17,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 91.6
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "Bosun-1.7B",
+     "resid_corr": 0.3061,
+     "rare_shared": 2,
+     "rare_expected": 0.19,
+     "rare_ratio": 10.359,
+     "resid_corr_pctile": 98.0
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "Decider-4B",
+     "resid_corr": -0.1682,
+     "rare_shared": 1,
+     "rare_expected": 0.76,
+     "rare_ratio": 1.317,
+     "resid_corr_pctile": 9.6
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "JPT-4B",
+     "resid_corr": -0.1189,
+     "rare_shared": 0,
+     "rare_expected": 1.02,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 25.1
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.0241,
+     "rare_shared": 1,
+     "rare_expected": 0.43,
+     "rare_ratio": 2.312,
+     "resid_corr_pctile": 59.9
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "Hopper-G",
+     "resid_corr": -0.2284,
+     "rare_shared": 0,
+     "rare_expected": 0.8,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 3.0
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "JPT-9B",
+     "resid_corr": -0.153,
+     "rare_shared": 0,
+     "rare_expected": 0.87,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 12.8
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "Nimble-v2",
+     "resid_corr": -0.1499,
+     "rare_shared": 1,
+     "rare_expected": 0.62,
+     "rare_ratio": 1.623,
+     "resid_corr_pctile": 13.8
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.1404,
+     "rare_shared": 0,
+     "rare_expected": 0.97,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 17.5
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "Eikos-27B",
+     "resid_corr": -0.0396,
+     "rare_shared": 2,
+     "rare_expected": 1.26,
+     "rare_ratio": 1.592,
+     "resid_corr_pctile": 53.0
+    },
+    {
+     "a": "Bosun-0.6B",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.1819,
+     "rare_shared": 1,
+     "rare_expected": 0.46,
+     "rare_ratio": 2.164,
+     "resid_corr_pctile": 6.4
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "Intern",
+     "resid_corr": 0.2218,
+     "rare_shared": 5,
+     "rare_expected": 1.2,
+     "rare_ratio": 4.174,
+     "resid_corr_pctile": 94.1
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "Kev",
+     "resid_corr": 0.0541,
+     "rare_shared": 3,
+     "rare_expected": 0.65,
+     "rare_ratio": 4.609,
+     "resid_corr_pctile": 82.8
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "Decider-2B",
+     "resid_corr": 0.0241,
+     "rare_shared": 3,
+     "rare_expected": 1.75,
+     "rare_ratio": 1.716,
+     "resid_corr_pctile": 75.1
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "This-That",
+     "resid_corr": 0.026,
+     "rare_shared": 1,
+     "rare_expected": 0.65,
+     "rare_ratio": 1.536,
+     "resid_corr_pctile": 76.4
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "Bosun-1.7B",
+     "resid_corr": -0.0337,
+     "rare_shared": 3,
+     "rare_expected": 0.75,
+     "rare_ratio": 3.987,
+     "resid_corr_pctile": 55.2
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "Decider-4B",
+     "resid_corr": -0.1847,
+     "rare_shared": 1,
+     "rare_expected": 2.98,
+     "rare_ratio": 0.336,
+     "resid_corr_pctile": 5.9
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "JPT-4B",
+     "resid_corr": 0.0706,
+     "rare_shared": 7,
+     "rare_expected": 4.02,
+     "rare_ratio": 1.741,
+     "resid_corr_pctile": 85.5
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.0642,
+     "rare_shared": 1,
+     "rare_expected": 1.69,
+     "rare_ratio": 0.592,
+     "resid_corr_pctile": 44.6
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "Hopper-G",
+     "resid_corr": -0.1689,
+     "rare_shared": 2,
+     "rare_expected": 3.16,
+     "rare_ratio": 0.634,
+     "resid_corr_pctile": 9.1
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "JPT-9B",
+     "resid_corr": -0.0437,
+     "rare_shared": 4,
+     "rare_expected": 3.43,
+     "rare_ratio": 1.165,
+     "resid_corr_pctile": 51.2
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "Nimble-v2",
+     "resid_corr": -0.0699,
+     "rare_shared": 3,
+     "rare_expected": 2.41,
+     "rare_ratio": 1.243,
+     "resid_corr_pctile": 42.9
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.1899,
+     "rare_shared": 2,
+     "rare_expected": 3.82,
+     "rare_ratio": 0.524,
+     "resid_corr_pctile": 5.7
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "Eikos-27B",
+     "resid_corr": -0.2099,
+     "rare_shared": 4,
+     "rare_expected": 4.97,
+     "rare_ratio": 0.805,
+     "resid_corr_pctile": 3.7
+    },
+    {
+     "a": "JPT-0.8B",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.1544,
+     "rare_shared": 3,
+     "rare_expected": 1.81,
+     "rare_ratio": 1.66,
+     "resid_corr_pctile": 12.6
+    },
+    {
+     "a": "Intern",
+     "b": "Kev",
+     "resid_corr": 0.0096,
+     "rare_shared": 2,
+     "rare_expected": 0.51,
+     "rare_ratio": 3.914,
+     "resid_corr_pctile": 70.4
+    },
+    {
+     "a": "Intern",
+     "b": "Decider-2B",
+     "resid_corr": -0.1618,
+     "rare_shared": 3,
+     "rare_expected": 1.37,
+     "rare_ratio": 2.188,
+     "resid_corr_pctile": 10.8
+    },
+    {
+     "a": "Intern",
+     "b": "This-That",
+     "resid_corr": -0.1098,
+     "rare_shared": 1,
+     "rare_expected": 0.51,
+     "rare_ratio": 1.957,
+     "resid_corr_pctile": 28.6
+    },
+    {
+     "a": "Intern",
+     "b": "Bosun-1.7B",
+     "resid_corr": -0.0298,
+     "rare_shared": 1,
+     "rare_expected": 0.59,
+     "rare_ratio": 1.693,
+     "resid_corr_pctile": 57.6
+    },
+    {
+     "a": "Intern",
+     "b": "Decider-4B",
+     "resid_corr": -0.0965,
+     "rare_shared": 4,
+     "rare_expected": 2.33,
+     "rare_ratio": 1.713,
+     "resid_corr_pctile": 33.7
+    },
+    {
+     "a": "Intern",
+     "b": "JPT-4B",
+     "resid_corr": 0.0247,
+     "rare_shared": 6,
+     "rare_expected": 3.15,
+     "rare_ratio": 1.907,
+     "resid_corr_pctile": 75.6
+    },
+    {
+     "a": "Intern",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.0603,
+     "rare_shared": 1,
+     "rare_expected": 1.33,
+     "rare_ratio": 0.754,
+     "resid_corr_pctile": 46.8
+    },
+    {
+     "a": "Intern",
+     "b": "Hopper-G",
+     "resid_corr": -0.0802,
+     "rare_shared": 4,
+     "rare_expected": 2.47,
+     "rare_ratio": 1.618,
+     "resid_corr_pctile": 39.4
+    },
+    {
+     "a": "Intern",
+     "b": "JPT-9B",
+     "resid_corr": 0.0022,
+     "rare_shared": 6,
+     "rare_expected": 2.69,
+     "rare_ratio": 2.232,
+     "resid_corr_pctile": 68.5
+    },
+    {
+     "a": "Intern",
+     "b": "Nimble-v2",
+     "resid_corr": -0.1729,
+     "rare_shared": 2,
+     "rare_expected": 1.89,
+     "rare_ratio": 1.057,
+     "resid_corr_pctile": 8.6
+    },
+    {
+     "a": "Intern",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.0287,
+     "rare_shared": 6,
+     "rare_expected": 2.99,
+     "rare_ratio": 2.007,
+     "resid_corr_pctile": 58.4
+    },
+    {
+     "a": "Intern",
+     "b": "Eikos-27B",
+     "resid_corr": -0.0008,
+     "rare_shared": 8,
+     "rare_expected": 3.88,
+     "rare_ratio": 2.06,
+     "resid_corr_pctile": 66.3
+    },
+    {
+     "a": "Intern",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.148,
+     "rare_shared": 3,
+     "rare_expected": 1.42,
+     "rare_ratio": 2.117,
+     "resid_corr_pctile": 14.8
+    },
+    {
+     "a": "Kev",
+     "b": "Decider-2B",
+     "resid_corr": -0.0077,
+     "rare_shared": 3,
+     "rare_expected": 0.74,
+     "rare_ratio": 4.029,
+     "resid_corr_pctile": 64.8
+    },
+    {
+     "a": "Kev",
+     "b": "This-That",
+     "resid_corr": -0.1458,
+     "rare_shared": 0,
+     "rare_expected": 0.28,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 16.3
+    },
+    {
+     "a": "Kev",
+     "b": "Bosun-1.7B",
+     "resid_corr": 0.0131,
+     "rare_shared": 3,
+     "rare_expected": 0.32,
+     "rare_ratio": 9.336,
+     "resid_corr_pctile": 72.2
+    },
+    {
+     "a": "Kev",
+     "b": "Decider-4B",
+     "resid_corr": -0.1168,
+     "rare_shared": 0,
+     "rare_expected": 1.27,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 25.9
+    },
+    {
+     "a": "Kev",
+     "b": "JPT-4B",
+     "resid_corr": -0.1783,
+     "rare_shared": 1,
+     "rare_expected": 1.7,
+     "rare_ratio": 0.587,
+     "resid_corr_pctile": 7.4
+    },
+    {
+     "a": "Kev",
+     "b": "Jet-v6.2",
+     "resid_corr": 0.1259,
+     "rare_shared": 1,
+     "rare_expected": 0.72,
+     "rare_ratio": 1.389,
+     "resid_corr_pctile": 89.9
+    },
+    {
+     "a": "Kev",
+     "b": "Hopper-G",
+     "resid_corr": -0.1297,
+     "rare_shared": 0,
+     "rare_expected": 1.34,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 20.4
+    },
+    {
+     "a": "Kev",
+     "b": "JPT-9B",
+     "resid_corr": -0.1647,
+     "rare_shared": 0,
+     "rare_expected": 1.46,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 10.3
+    },
+    {
+     "a": "Kev",
+     "b": "Nimble-v2",
+     "resid_corr": -0.0309,
+     "rare_shared": 0,
+     "rare_expected": 1.03,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 57.1
+    },
+    {
+     "a": "Kev",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.1025,
+     "rare_shared": 1,
+     "rare_expected": 1.62,
+     "rare_ratio": 0.618,
+     "resid_corr_pctile": 31.5
+    },
+    {
+     "a": "Kev",
+     "b": "Eikos-27B",
+     "resid_corr": -0.1479,
+     "rare_shared": 2,
+     "rare_expected": 2.1,
+     "rare_ratio": 0.954,
+     "resid_corr_pctile": 15.0
+    },
+    {
+     "a": "Kev",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.0835,
+     "rare_shared": 1,
+     "rare_expected": 0.77,
+     "rare_ratio": 1.299,
+     "resid_corr_pctile": 37.9
+    },
+    {
+     "a": "Decider-2B",
+     "b": "This-That",
+     "resid_corr": 0.0536,
+     "rare_shared": 0,
+     "rare_expected": 0.74,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 82.5
+    },
+    {
+     "a": "Decider-2B",
+     "b": "Bosun-1.7B",
+     "resid_corr": -0.1177,
+     "rare_shared": 1,
+     "rare_expected": 0.86,
+     "rare_ratio": 1.161,
+     "resid_corr_pctile": 25.6
+    },
+    {
+     "a": "Decider-2B",
+     "b": "Decider-4B",
+     "resid_corr": 0.1442,
+     "rare_shared": 3,
+     "rare_expected": 3.41,
+     "rare_ratio": 0.879,
+     "resid_corr_pctile": 90.9
+    },
+    {
+     "a": "Decider-2B",
+     "b": "JPT-4B",
+     "resid_corr": -0.0917,
+     "rare_shared": 2,
+     "rare_expected": 4.61,
+     "rare_ratio": 0.434,
+     "resid_corr_pctile": 35.0
+    },
+    {
+     "a": "Decider-2B",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.0245,
+     "rare_shared": 0,
+     "rare_expected": 1.93,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 59.6
+    },
+    {
+     "a": "Decider-2B",
+     "b": "Hopper-G",
+     "resid_corr": -0.1226,
+     "rare_shared": 1,
+     "rare_expected": 3.62,
+     "rare_ratio": 0.276,
+     "resid_corr_pctile": 23.9
+    },
+    {
+     "a": "Decider-2B",
+     "b": "JPT-9B",
+     "resid_corr": -0.1393,
+     "rare_shared": 1,
+     "rare_expected": 3.93,
+     "rare_ratio": 0.254,
+     "resid_corr_pctile": 17.7
+    },
+    {
+     "a": "Decider-2B",
+     "b": "Nimble-v2",
+     "resid_corr": -0.1276,
+     "rare_shared": 2,
+     "rare_expected": 2.76,
+     "rare_ratio": 0.723,
+     "resid_corr_pctile": 21.2
+    },
+    {
+     "a": "Decider-2B",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.0613,
+     "rare_shared": 3,
+     "rare_expected": 4.38,
+     "rare_ratio": 0.685,
+     "resid_corr_pctile": 46.1
+    },
+    {
+     "a": "Decider-2B",
+     "b": "Eikos-27B",
+     "resid_corr": 0.0448,
+     "rare_shared": 6,
+     "rare_expected": 5.7,
+     "rare_ratio": 1.052,
+     "resid_corr_pctile": 80.0
+    },
+    {
+     "a": "Decider-2B",
+     "b": "Jebadiah-27B",
+     "resid_corr": 0.0529,
+     "rare_shared": 2,
+     "rare_expected": 2.07,
+     "rare_ratio": 0.967,
+     "resid_corr_pctile": 82.0
+    },
+    {
+     "a": "This-That",
+     "b": "Bosun-1.7B",
+     "resid_corr": 0.1576,
+     "rare_shared": 0,
+     "rare_expected": 0.32,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 92.9
+    },
+    {
+     "a": "This-That",
+     "b": "Decider-4B",
+     "resid_corr": -0.0238,
+     "rare_shared": 0,
+     "rare_expected": 1.27,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 60.3
+    },
+    {
+     "a": "This-That",
+     "b": "JPT-4B",
+     "resid_corr": 0.0508,
+     "rare_shared": 1,
+     "rare_expected": 1.7,
+     "rare_ratio": 0.587,
+     "resid_corr_pctile": 81.5
+    },
+    {
+     "a": "This-That",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.0631,
+     "rare_shared": 0,
+     "rare_expected": 0.72,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 44.8
+    },
+    {
+     "a": "This-That",
+     "b": "Hopper-G",
+     "resid_corr": -0.0973,
+     "rare_shared": 0,
+     "rare_expected": 1.34,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 33.0
+    },
+    {
+     "a": "This-That",
+     "b": "JPT-9B",
+     "resid_corr": 0.0041,
+     "rare_shared": 1,
+     "rare_expected": 1.46,
+     "rare_ratio": 0.687,
+     "resid_corr_pctile": 69.7
+    },
+    {
+     "a": "This-That",
+     "b": "Nimble-v2",
+     "resid_corr": -0.0062,
+     "rare_shared": 0,
+     "rare_expected": 1.03,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 65.3
+    },
+    {
+     "a": "This-That",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.1026,
+     "rare_shared": 0,
+     "rare_expected": 1.62,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 31.3
+    },
+    {
+     "a": "This-That",
+     "b": "Eikos-27B",
+     "resid_corr": 0.0579,
+     "rare_shared": 1,
+     "rare_expected": 2.1,
+     "rare_ratio": 0.477,
+     "resid_corr_pctile": 83.3
+    },
+    {
+     "a": "This-That",
+     "b": "Jebadiah-27B",
+     "resid_corr": 0.2706,
+     "rare_shared": 0,
+     "rare_expected": 0.77,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 96.8
+    },
+    {
+     "a": "Bosun-1.7B",
+     "b": "Decider-4B",
+     "resid_corr": -0.1351,
+     "rare_shared": 1,
+     "rare_expected": 1.46,
+     "rare_ratio": 0.683,
+     "resid_corr_pctile": 19.2
+    },
+    {
+     "a": "Bosun-1.7B",
+     "b": "JPT-4B",
+     "resid_corr": -0.111,
+     "rare_shared": 1,
+     "rare_expected": 1.97,
+     "rare_ratio": 0.508,
+     "resid_corr_pctile": 28.1
+    },
+    {
+     "a": "Bosun-1.7B",
+     "b": "Jet-v6.2",
+     "resid_corr": 0.0978,
+     "rare_shared": 1,
+     "rare_expected": 0.83,
+     "rare_ratio": 1.201,
+     "resid_corr_pctile": 87.9
+    },
+    {
+     "a": "Bosun-1.7B",
+     "b": "Hopper-G",
+     "resid_corr": -0.1503,
+     "rare_shared": 1,
+     "rare_expected": 1.55,
+     "rare_ratio": 0.645,
+     "resid_corr_pctile": 13.5
+    },
+    {
+     "a": "Bosun-1.7B",
+     "b": "JPT-9B",
+     "resid_corr": -0.3039,
+     "rare_shared": 1,
+     "rare_expected": 1.68,
+     "rare_ratio": 0.594,
+     "resid_corr_pctile": 0.2
+    },
+    {
+     "a": "Bosun-1.7B",
+     "b": "Nimble-v2",
+     "resid_corr": -0.1317,
+     "rare_shared": 1,
+     "rare_expected": 1.19,
+     "rare_ratio": 0.842,
+     "resid_corr_pctile": 19.7
+    },
+    {
+     "a": "Bosun-1.7B",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.2574,
+     "rare_shared": 1,
+     "rare_expected": 1.87,
+     "rare_ratio": 0.534,
+     "resid_corr_pctile": 1.2
+    },
+    {
+     "a": "Bosun-1.7B",
+     "b": "Eikos-27B",
+     "resid_corr": -0.1446,
+     "rare_shared": 2,
+     "rare_expected": 2.43,
+     "rare_ratio": 0.824,
+     "resid_corr_pctile": 16.7
+    },
+    {
+     "a": "Bosun-1.7B",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.0187,
+     "rare_shared": 1,
+     "rare_expected": 0.89,
+     "rare_ratio": 1.124,
+     "resid_corr_pctile": 62.3
+    },
+    {
+     "a": "Decider-4B",
+     "b": "JPT-4B",
+     "resid_corr": -0.0276,
+     "rare_shared": 5,
+     "rare_expected": 7.95,
+     "rare_ratio": 0.629,
+     "resid_corr_pctile": 58.6
+    },
+    {
+     "a": "Decider-4B",
+     "b": "Jet-v6.2",
+     "resid_corr": 0.1261,
+     "rare_shared": 2,
+     "rare_expected": 3.3,
+     "rare_ratio": 0.606,
+     "resid_corr_pctile": 90.1
+    },
+    {
+     "a": "Decider-4B",
+     "b": "Hopper-G",
+     "resid_corr": 0.2682,
+     "rare_shared": 7,
+     "rare_expected": 6.21,
+     "rare_ratio": 1.128,
+     "resid_corr_pctile": 96.3
+    },
+    {
+     "a": "Decider-4B",
+     "b": "JPT-9B",
+     "resid_corr": 0.1153,
+     "rare_shared": 5,
+     "rare_expected": 6.76,
+     "rare_ratio": 0.74,
+     "resid_corr_pctile": 89.2
+    },
+    {
+     "a": "Decider-4B",
+     "b": "Nimble-v2",
+     "resid_corr": 0.2684,
+     "rare_shared": 6,
+     "rare_expected": 4.73,
+     "rare_ratio": 1.268,
+     "resid_corr_pctile": 96.6
+    },
+    {
+     "a": "Decider-4B",
+     "b": "AutoJev-27B",
+     "resid_corr": 0.1061,
+     "rare_shared": 6,
+     "rare_expected": 7.54,
+     "rare_ratio": 0.796,
+     "resid_corr_pctile": 88.7
+    },
+    {
+     "a": "Decider-4B",
+     "b": "Eikos-27B",
+     "resid_corr": -0.0318,
+     "rare_shared": 7,
+     "rare_expected": 9.88,
+     "rare_ratio": 0.708,
+     "resid_corr_pctile": 56.7
+    },
+    {
+     "a": "Decider-4B",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.156,
+     "rare_shared": 1,
+     "rare_expected": 3.53,
+     "rare_ratio": 0.283,
+     "resid_corr_pctile": 12.3
+    },
+    {
+     "a": "JPT-4B",
+     "b": "Jet-v6.2",
+     "resid_corr": -0.1513,
+     "rare_shared": 1,
+     "rare_expected": 4.46,
+     "rare_ratio": 0.224,
+     "resid_corr_pctile": 13.3
+    },
+    {
+     "a": "JPT-4B",
+     "b": "Hopper-G",
+     "resid_corr": 0.2334,
+     "rare_shared": 10,
+     "rare_expected": 8.43,
+     "rare_ratio": 1.186,
+     "resid_corr_pctile": 95.6
+    },
+    {
+     "a": "JPT-4B",
+     "b": "JPT-9B",
+     "resid_corr": 0.4777,
+     "rare_shared": 13,
+     "rare_expected": 9.19,
+     "rare_ratio": 1.414,
+     "resid_corr_pctile": 99.5
+    },
+    {
+     "a": "JPT-4B",
+     "b": "Nimble-v2",
+     "resid_corr": 0.0037,
+     "rare_shared": 7,
+     "rare_expected": 6.4,
+     "rare_ratio": 1.093,
+     "resid_corr_pctile": 69.5
+    },
+    {
+     "a": "JPT-4B",
+     "b": "AutoJev-27B",
+     "resid_corr": 0.0834,
+     "rare_shared": 8,
+     "rare_expected": 10.27,
+     "rare_ratio": 0.779,
+     "resid_corr_pctile": 86.9
+    },
+    {
+     "a": "JPT-4B",
+     "b": "Eikos-27B",
+     "resid_corr": 0.0314,
+     "rare_shared": 12,
+     "rare_expected": 13.54,
+     "rare_ratio": 0.886,
+     "resid_corr_pctile": 78.1
+    },
+    {
+     "a": "JPT-4B",
+     "b": "Jebadiah-27B",
+     "resid_corr": 0.0536,
+     "rare_shared": 7,
+     "rare_expected": 4.77,
+     "rare_ratio": 1.468,
+     "resid_corr_pctile": 82.5
+    },
+    {
+     "a": "Jet-v6.2",
+     "b": "Hopper-G",
+     "resid_corr": -0.037,
+     "rare_shared": 2,
+     "rare_expected": 3.5,
+     "rare_ratio": 0.572,
+     "resid_corr_pctile": 53.7
+    },
+    {
+     "a": "Jet-v6.2",
+     "b": "JPT-9B",
+     "resid_corr": -0.2288,
+     "rare_shared": 0,
+     "rare_expected": 3.8,
+     "rare_ratio": 0.0,
+     "resid_corr_pctile": 2.7
+    },
+    {
+     "a": "Jet-v6.2",
+     "b": "Nimble-v2",
+     "resid_corr": -0.0116,
+     "rare_shared": 1,
+     "rare_expected": 2.67,
+     "rare_ratio": 0.374,
+     "resid_corr_pctile": 64.3
+    },
+    {
+     "a": "Jet-v6.2",
+     "b": "AutoJev-27B",
+     "resid_corr": 0.0004,
+     "rare_shared": 2,
+     "rare_expected": 4.23,
+     "rare_ratio": 0.472,
+     "resid_corr_pctile": 66.7
+    },
+    {
+     "a": "Jet-v6.2",
+     "b": "Eikos-27B",
+     "resid_corr": 0.0225,
+     "rare_shared": 3,
+     "rare_expected": 5.51,
+     "rare_ratio": 0.544,
+     "resid_corr_pctile": 74.6
+    },
+    {
+     "a": "Jet-v6.2",
+     "b": "Jebadiah-27B",
+     "resid_corr": -0.0968,
+     "rare_shared": 2,
+     "rare_expected": 2.0,
+     "rare_ratio": 1.0,
+     "resid_corr_pctile": 33.3
+    },
+    {
+     "a": "Hopper-G",
+     "b": "JPT-9B",
+     "resid_corr": 0.2767,
+     "rare_shared": 9,
+     "rare_expected": 7.17,
+     "rare_ratio": 1.255,
+     "resid_corr_pctile": 97.3
+    },
+    {
+     "a": "Hopper-G",
+     "b": "Nimble-v2",
+     "resid_corr": 0.3769,
+     "rare_shared": 8,
+     "rare_expected": 5.01,
+     "rare_ratio": 1.596,
+     "resid_corr_pctile": 98.8
+    },
+    {
+     "a": "Hopper-G",
+     "b": "AutoJev-27B",
+     "resid_corr": 0.1884,
+     "rare_shared": 8,
+     "rare_expected": 8.0,
+     "rare_ratio": 1.0,
+     "resid_corr_pctile": 93.3
+    },
+    {
+     "a": "Hopper-G",
+     "b": "Eikos-27B",
+     "resid_corr": 0.1058,
+     "rare_shared": 11,
+     "rare_expected": 10.49,
+     "rare_ratio": 1.049,
+     "resid_corr_pctile": 88.4
+    },
+    {
+     "a": "Hopper-G",
+     "b": "Jebadiah-27B",
+     "resid_corr": 0.025,
+     "rare_shared": 3,
+     "rare_expected": 3.74,
+     "rare_ratio": 0.802,
+     "resid_corr_pctile": 75.9
+    },
+    {
+     "a": "JPT-9B",
+     "b": "Nimble-v2",
+     "resid_corr": 0.2507,
+     "rare_shared": 7,
+     "rare_expected": 5.46,
+     "rare_ratio": 1.283,
+     "resid_corr_pctile": 96.1
+    },
+    {
+     "a": "JPT-9B",
+     "b": "AutoJev-27B",
+     "resid_corr": 0.0758,
+     "rare_shared": 7,
+     "rare_expected": 8.72,
+     "rare_ratio": 0.803,
+     "resid_corr_pctile": 86.0
+    },
+    {
+     "a": "JPT-9B",
+     "b": "Eikos-27B",
+     "resid_corr": 0.1259,
+     "rare_shared": 11,
+     "rare_expected": 11.45,
+     "rare_ratio": 0.96,
+     "resid_corr_pctile": 89.9
+    },
+    {
+     "a": "JPT-9B",
+     "b": "Jebadiah-27B",
+     "resid_corr": 0.0196,
+     "rare_shared": 5,
+     "rare_expected": 4.07,
+     "rare_ratio": 1.229,
+     "resid_corr_pctile": 73.2
+    },
+    {
+     "a": "Nimble-v2",
+     "b": "AutoJev-27B",
+     "resid_corr": -0.0135,
+     "rare_shared": 5,
+     "rare_expected": 6.08,
+     "rare_ratio": 0.822,
+     "resid_corr_pctile": 63.8
+    },
+    {
+     "a": "Nimble-v2",
+     "b": "Eikos-27B",
+     "resid_corr": -0.0233,
+     "rare_shared": 7,
+     "rare_expected": 7.94,
+     "rare_ratio": 0.881,
+     "resid_corr_pctile": 60.8
+    },
+    {
+     "a": "Nimble-v2",
+     "b": "Jebadiah-27B",
+     "resid_corr": 0.0123,
+     "rare_shared": 2,
+     "rare_expected": 2.86,
+     "rare_ratio": 0.7,
+     "resid_corr_pctile": 71.7
+    },
+    {
+     "a": "AutoJev-27B",
+     "b": "Eikos-27B",
+     "resid_corr": 0.2937,
+     "rare_shared": 13,
+     "rare_expected": 12.82,
+     "rare_ratio": 1.014,
+     "resid_corr_pctile": 97.8
+    },
+    {
+     "a": "AutoJev-27B",
+     "b": "Jebadiah-27B",
+     "resid_corr": 0.1042,
+     "rare_shared": 6,
+     "rare_expected": 4.53,
+     "rare_ratio": 1.325,
+     "resid_corr_pctile": 88.2
+    },
+    {
+     "a": "Eikos-27B",
+     "b": "Jebadiah-27B",
+     "resid_corr": 0.2294,
+     "rare_shared": 9,
+     "rare_expected": 5.9,
+     "rare_ratio": 1.525,
+     "resid_corr_pctile": 94.3
+    }
+   ],
+   "rare_items": 40,
+   "hard_items": 111,
+   "params": {
+    "hard_everyone": 0.2,
+    "rare": 0.35,
+    "conf": 0.95,
+    "ridge": 0.1
+   },
+   "resid_corr_all_pairs": {
+    "median": -0.0472,
+    "p90": 0.1261,
+    "p95": 0.2318,
+    "max": 0.6412
+   },
+   "models": [
+    {
+     "name": "DEV2.0-0.6B",
+     "group": "ours",
+     "correct": 142,
+     "expected": 142,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "DEV2.0-0.8B",
+     "group": "ours",
+     "correct": 156,
+     "expected": 156,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "DEV2.0-2B",
+     "group": "ours",
+     "correct": 171,
+     "expected": 171,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "DEV2.0-4B",
+     "group": "ours",
+     "correct": 171,
+     "expected": 171,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "DEV2.0-8B",
+     "group": "ours",
+     "correct": 178,
+     "expected": 178,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "DEV2.0-27B",
+     "group": "ours",
+     "correct": 198,
+     "expected": 198,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Kai1",
+     "group": "d1",
+     "correct": 114,
+     "expected": 114,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 44
+    },
+    {
+     "name": "Lex1",
+     "group": "d1",
+     "correct": 113,
+     "expected": 113,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 44
+    },
+    {
+     "name": "Eos1",
+     "group": "d1",
+     "correct": 142,
+     "expected": 142,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Sol1",
+     "group": "d1",
+     "correct": 161,
+     "expected": 161,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Nox1",
+     "group": "d1",
+     "correct": 173,
+     "expected": 173,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Lux1",
+     "group": "d1",
+     "correct": 183,
+     "expected": 183,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "GLiNER2.5-Decide",
+     "group": "peer",
+     "correct": 116,
+     "expected": 116,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 56
+    },
+    {
+     "name": "Bosun-0.6B",
+     "group": "peer",
+     "correct": 133,
+     "expected": 133,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "JPT-0.8B",
+     "group": "peer",
+     "correct": 171,
+     "expected": 171,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Intern",
+     "group": "peer",
+     "correct": 164,
+     "expected": 164,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Kev",
+     "group": "peer",
+     "correct": 147,
+     "expected": 147,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Decider-2B",
+     "group": "peer",
+     "correct": 175,
+     "expected": 175,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "This-That",
+     "group": "peer",
+     "correct": 147,
+     "expected": 147,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 37
+    },
+    {
+     "name": "Bosun-1.7B",
+     "group": "peer",
+     "correct": 151,
+     "expected": 151,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Decider-4B",
+     "group": "peer",
+     "correct": 192,
+     "expected": 192,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "JPT-4B",
+     "group": "peer",
+     "correct": 203,
+     "expected": 203,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Jet-v6.2",
+     "group": "peer",
+     "correct": 174,
+     "expected": 174,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Hopper-G",
+     "group": "peer",
+     "correct": 194,
+     "expected": 194,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "JPT-9B",
+     "group": "peer",
+     "correct": 197,
+     "expected": 197,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Nimble-v2",
+     "group": "peer",
+     "correct": 185,
+     "expected": 185,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "AutoJev-27B",
+     "group": "peer",
+     "correct": 201,
+     "expected": 201,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Eikos-27B",
+     "group": "peer",
+     "correct": 212,
+     "expected": 212,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 0
+    },
+    {
+     "name": "Jebadiah-27B",
+     "group": "peer",
+     "correct": 176,
+     "expected": 176,
+     "match": true,
+     "prompts_sha256": "642d3fac",
+     "invalid": 36
+    }
+   ]
+  },
+  "upstream": {
+   "commit": "1bcc55eb",
+   "hard_public_vs_heldout_v1_2": {
+    "n": 52,
+    "mean_diff": 0.0042,
+    "sd_diff": 0.0734,
+    "systems": {
+     "qwen3.8-27b": {
+      "hard_public": 0.423,
+      "hard_heldout": 0.0,
+      "diff": 0.423,
+      "z": 9.03
+     },
+     "needle-3": {
+      "hard_public": 0.153,
+      "hard_heldout": 0.0,
+      "diff": 0.153,
+      "z": 4.48
+     },
+     "zerank-2": {
+      "hard_public": 0.514,
+      "hard_heldout": 0.431,
+      "diff": 0.082,
+      "z": 1.23
+     },
+     "kev-0.6b": {
+      "hard_public": 0.432,
+      "hard_heldout": 0.367,
+      "diff": 0.065,
+      "z": 0.99
+     },
+     "decider-2b": {
+      "hard_public": 0.495,
+      "hard_heldout": 0.45,
+      "diff": 0.046,
+      "z": 0.68
+     },
+     "winnow-12b": {
+      "hard_public": 0.73,
+      "hard_heldout": 0.688,
+      "diff": 0.042,
+      "z": 0.68
+     },
+     "gpt-5.6-luna": {
+      "hard_public": 0.964,
+      "hard_heldout": 0.927,
+      "diff": 0.037,
+      "z": 1.22
+     },
+     "decision-machine-1": {
+      "hard_public": 0.486,
+      "hard_heldout": 0.45,
+      "diff": 0.037,
+      "z": 0.55
+     },
+     "semif-qwen3.5-4b": {
+      "hard_public": 0.613,
+      "hard_heldout": 0.578,
+      "diff": 0.035,
+      "z": 0.52
+     },
+     "openjev-sglang": {
+      "hard_public": 0.73,
+      "hard_heldout": 0.697,
+      "diff": 0.032,
+      "z": 0.53
+     },
+     "certo": {
+      "hard_public": 0.333,
+      "hard_heldout": 0.303,
+      "diff": 0.031,
+      "z": 0.49
+     },
+     "open-jev-deberta-v3-large": {
+      "hard_public": 0.378,
+      "hard_heldout": 0.349,
+      "diff": 0.03,
+      "z": 0.46
+     },
+     "smalljev": {
+      "hard_public": 0.396,
+      "hard_heldout": 0.367,
+      "diff": 0.029,
+      "z": 0.45
+     },
+     "deepseek-flash": {
+      "hard_public": 0.964,
+      "hard_heldout": 0.936,
+      "diff": 0.028,
+      "z": 0.96
+     },
+     "decider-35b-a3b": {
+      "hard_public": 0.667,
+      "hard_heldout": 0.642,
+      "diff": 0.024,
+      "z": 0.38
+     },
+     "opendecision": {
+      "hard_public": 0.342,
+      "hard_heldout": 0.321,
+      "diff": 0.021,
+      "z": 0.33
+     },
+     "laya": {
+      "hard_public": 0.351,
+      "hard_heldout": 0.33,
+      "diff": 0.021,
+      "z": 0.33
+     },
+     "bge-reranker-v2-m3": {
+      "hard_public": 0.378,
+      "hard_heldout": 0.358,
+      "diff": 0.021,
+      "z": 0.32
+     },
+     "jeff": {
+      "hard_public": 0.387,
+      "hard_heldout": 0.367,
+      "diff": 0.02,
+      "z": 0.31
+     },
+     "gliner2-large": {
+      "hard_public": 0.369,
+      "hard_heldout": 0.358,
+      "diff": 0.012,
+      "z": 0.18
+     },
+     "gliner2": {
+      "hard_public": 0.369,
+      "hard_heldout": 0.358,
+      "diff": 0.012,
+      "z": 0.18
+     },
+     "needle-3-tools": {
+      "hard_public": 0.0,
+      "hard_heldout": 0.0,
+      "diff": 0.0,
+      "z": 0.0
+     },
+     "open-alternative-jev": {
+      "hard_public": 0.568,
+      "hard_heldout": 0.569,
+      "diff": -0.001,
+      "z": -0.02
+     },
+     "classifier-dev-fast": {
+      "hard_public": 0.703,
+      "hard_heldout": 0.706,
+      "diff": -0.004,
+      "z": -0.06
+     },
+     "reflex-27b": {
+      "hard_public": 0.757,
+      "hard_heldout": 0.761,
+      "diff": -0.005,
+      "z": -0.08
+     },
+     "openjev-verdict": {
+      "hard_public": 0.378,
+      "hard_heldout": 0.385,
+      "diff": -0.007,
+      "z": -0.11
+     },
+     "system-one-open": {
+      "hard_public": 0.486,
+      "hard_heldout": 0.495,
+      "diff": -0.009,
+      "z": -0.13
+     },
+     "qwen3-reranker-4b": {
+      "hard_public": 0.495,
+      "hard_heldout": 0.505,
+      "diff": -0.009,
+      "z": -0.13
+     },
+     "jev-local": {
+      "hard_public": 0.586,
+      "hard_heldout": 0.596,
+      "diff": -0.011,
+      "z": -0.16
+     },
+     "simplejev-qwen3.6-35b-a3b": {
+      "hard_public": 0.658,
+      "hard_heldout": 0.67,
+      "diff": -0.012,
+      "z": -0.19
+     },
+     "openjev-verdict-1.4": {
+      "hard_public": 0.369,
+      "hard_heldout": 0.385,
+      "diff": -0.016,
+      "z": -0.24
+     },
+     "litjev": {
+      "hard_public": 0.721,
+      "hard_heldout": 0.743,
+      "diff": -0.022,
+      "z": -0.38
+     },
+     "jev-1.13.0": {
+      "hard_public": 0.73,
+      "hard_heldout": 0.752,
+      "diff": -0.023,
+      "z": -0.38
+     },
+     "gemini-3.1-flash-lite": {
+      "hard_public": 0.739,
+      "hard_heldout": 0.761,
+      "diff": -0.023,
+      "z": -0.39
+     },
+     "simplejev-qwen3.8-27b": {
+      "hard_public": 0.739,
+      "hard_heldout": 0.761,
+      "diff": -0.023,
+      "z": -0.39
+     },
+     "djev-thinking": {
+      "hard_public": 0.766,
+      "hard_heldout": 0.789,
+      "diff": -0.023,
+      "z": -0.41
+     },
+     "kev-0.5b": {
+      "hard_public": 0.297,
+      "hard_heldout": 0.321,
+      "diff": -0.024,
+      "z": -0.38
+     },
+     "open-jev-zefan-2b": {
+      "hard_public": 0.414,
+      "hard_heldout": 0.44,
+      "diff": -0.026,
+      "z": -0.39
+     },
+     "system-one-sg": {
+      "hard_public": 0.486,
+      "hard_heldout": 0.514,
+      "diff": -0.027,
+      "z": -0.4
+     },
+     "open-jev-zefan-9b": {
+      "hard_public": 0.595,
+      "hard_heldout": 0.624,
+      "diff": -0.029,
+      "z": -0.44
+     },
+     "openjev-razorback16": {
+      "hard_public": 0.64,
+      "hard_heldout": 0.67,
+      "diff": -0.03,
+      "z": -0.47
+     },
+     "openjev-thinking": {
+      "hard_public": 0.766,
+      "hard_heldout": 0.798,
+      "diff": -0.032,
+      "z": -0.58
+     },
+     "gliner2.5-small": {
+      "hard_public": 0.315,
+      "hard_heldout": 0.349,
+      "diff": -0.033,
+      "z": -0.52
+     },
+     "djev": {
+      "hard_public": 0.676,
+      "hard_heldout": 0.716,
+      "diff": -0.04,
+      "z": -0.64
+     },
+     "gte-reranker-modernbert-base": {
+      "hard_public": 0.315,
+      "hard_heldout": 0.358,
+      "diff": -0.042,
+      "z": -0.67
+     },
+     "kev-8b": {
+      "hard_public": 0.45,
+      "hard_heldout": 0.495,
+      "diff": -0.045,
+      "z": -0.67
+     },
+     "reflex-4b": {
+      "hard_public": 0.604,
+      "hard_heldout": 0.661,
+      "diff": -0.057,
+      "z": -0.88
+     },
+     "jqv": {
+      "hard_public": 0.613,
+      "hard_heldout": 0.679,
+      "diff": -0.066,
+      "z": -1.03
+     },
+     "nimble-9b": {
+      "hard_public": 0.622,
+      "hard_heldout": 0.688,
+      "diff": -0.066,
+      "z": -1.04
+     },
+     "mxbai-rerank-base-v2": {
+      "hard_public": 0.36,
+      "hard_heldout": 0.44,
+      "diff": -0.08,
+      "z": -1.21
+     },
+     "gliner2.5-multi": {
+      "hard_public": 0.333,
+      "hard_heldout": 0.422,
+      "diff": -0.089,
+      "z": -1.36
+     },
+     "kev-4b": {
+      "hard_public": 0.369,
+      "hard_heldout": 0.477,
+      "diff": -0.108,
+      "z": -1.63
+     }
+    },
+    "artifacts": [
+     "qwen3.8-27b",
+     "needle-3 (held-out hard not answered)"
+    ]
+   },
+   "v1_4_2_hard_public_vs_heldout": {
+    "decider-4b-v2": [
+     0.667,
+     0.679
+    ],
+    "swanone": [
+     0.802,
+     0.706
+    ],
+    "cygnet": [
+     0.766,
+     0.743
+    ],
+    "typecastlm": [
+     0.577,
+     0.587
+    ],
+    "malkuth-2b": [
+     0.423,
+     0.468
+    ],
+    "malkuth-4b": [
+     0.505,
+     0.55
+    ],
+    "standardone-8b": [
+     0.541,
+     0.596
+    ],
+    "clm-8b": [
+     0.324,
+     0.394
+    ]
+   },
+   "public_minus_sealed_gap_v1_4_2": {
+    "systems_with_sealed": 91,
+    "over_25pp": 74,
+    "median_pp": 46.3,
+    "raw_logit_controls_pp": [
+     22.4,
+     42.4
+    ],
+    "llm_baseline_median_pp": 7.4,
+    "peers_pp": {
+     "decider-4b-v2": 48.8,
+     "decider-2b": 46.3,
+     "hopper": 48.2,
+     "nimble-9b": 50.8,
+     "kev-0.6b": 42.6,
+     "kev-4b": 43.8,
+     "kev-8b": 49.7,
+     "jev-1.13.0": 49.9,
+     "gliner2": 28.8
+    },
+    "note": "the gap measures the shift to the 308 fresh sealed items (untrained raw-logit controls also exceed 25 pp); it does not identify training on public items"
+   },
+   "not_on_board": [
+    "JPT family",
+    "Intern",
+    "Eikos-27B",
+    "AutoJev-27B",
+    "Jet",
+    "Bosun",
+    "This-That",
+    "GLiNER2.5-Decide",
+    "Jebadiah-27B"
+   ]
+  },
+  "cards": {
+   "JPT-0.8B / JPT-4B / JPT-9B (kirp)": "Cards headline JevBench v1.4 public accuracy (JPT-4B: \"highest public accuracy of any system\"); training table: \"Held out: no item from JevBench, EnvBench held-out seeds, the Decision Index frozen suite or our typed test split\". No sealed score.",
+   "Kev (jaredpalmer)": "Datasets metadata lists public classification sets; \"On JevBench's public items, which no training or selection step saw\"; reports public 231 as report-only.",
+   "Decider 2B / 4B (Mapika)": "\"No JevBench item and no Decision Index item was used for training, for writing the generators or the document questions, for selecting the checkpoint, or for the temperatures\"; generators written from the family names JevBench publishes for its sealed set; public items \"read once ... after the rule decisions\". Cards still report version-over-version public hard-tier gains (+13 / +11 items).",
+   "Intern-Decision-0.8B": "Reports Jevbench-Easy / Original / Hard columns; no training-data declaration about JevBench.",
+   "Hopper (G)": "\"not tuned for JevBench; we make no claim there\"; official run requested (issue #112).",
+   "Eikos-27B": "Evaluation suites \"never used in training\"; public 231 run as a setup check (48/72/93); official run requested (#117). No explicit JevBench training statement.",
+   "AutoJev-27B": "No JevBench mention; exact curated training corpus not bundled (SFT data from a closed model per provenance record).",
+   "Jet v6.2": "\"Exact content/group exclusions do not establish semantic or pretraining decontamination. Benchmarks informed training focus.\" No JevBench mention.",
+   "Nimble v2 / Jebadiah-27B / Bosun / GLiNER2.5-Decide / This-That": "No JevBench training declaration; Jebadiah reports a public 231 self-run (200/231)."
+  }
+ },
+ "C": {
+  "prior_run_costs": {
+   "DEV2.0-0.6B": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 41.1,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 130.2,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 16.8,
+      "rows": 231
+     }
+    },
+    "model_path": "/data/dev2/runs/06b/m1/arms/m4-t-a7-soup/full/best-export",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 0,
+     "wall_seconds": 195.00024008750916,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "DEV2.0-0.8B": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 52.0,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 183.2,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 18.9,
+      "rows": 231
+     }
+    },
+    "model_path": "/data/dev2/runs/dec/m2/formal-candidates/staging-16c0929a/m2/E8F-soup/checkpoint",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 5,
+     "wall_seconds": 260.8445439338684,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "DEV2.0-2B": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 76.1,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 197.9,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 24.8,
+      "rows": 231
+     }
+    },
+    "model_path": "/data/dev2/runs/dec/m3/formal-candidates/staging-545a6784/m3/S2T-soup/checkpoint",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 5,
+     "wall_seconds": 306.13171553611755,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "DEV2.0-4B": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 70.9,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 267.4,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 30.9,
+      "rows": 231
+     }
+    },
+    "model_path": "/data/dev2/runs/dec/m4/formal-candidates/staging-e8656221/m4/N4XF-soup/checkpoint",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 5,
+     "wall_seconds": 375.66472125053406,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "DEV2.0-8B": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 90.9,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 287.7,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 45.7,
+      "rows": 231
+     }
+    },
+    "model_path": "/data/dev2/runs/9b/m4/K-a13-build/soup",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 6,
+     "wall_seconds": 430.8918790817261,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "Kai1": {
+    "collect": "missing",
+    "report_gpu_wall_s": null,
+    "reused": true,
+    "report_model_path": null
+   },
+   "Lex1": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 82.4,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 157.6,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 32.1,
+      "rows": 231
+     }
+    },
+    "model_path": "/data/decision20-20260926/models/Decision-1.0-Lex-0.6B",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 7,
+     "wall_seconds": 278.8260145187378,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "Eos1": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 81.7,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 196.1,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 20.7,
+      "rows": 231
+     }
+    },
+    "model_path": "/data/decision20-20260926/models/Decision-1.0-Eos-0.8B",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 6,
+     "wall_seconds": 306.51747965812683,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "Sol1": {
+    "collect": "missing",
+    "report_gpu_wall_s": null,
+    "reused": true,
+    "report_model_path": null
+   },
+   "Nox1": {
+    "collect": "missing",
+    "report_gpu_wall_s": null,
+    "reused": true,
+    "report_model_path": null
+   },
+   "Lux1": {
+    "collect": "missing",
+    "report_gpu_wall_s": null,
+    "reused": true,
+    "report_model_path": null
+   },
+   "GLiNER2.5-Decide": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 43.7,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 97.9,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 19.0,
+      "rows": 231
+     }
+    },
+    "model_path": "/data/decision20-20260926/models/GLiNER2.5-Decide",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 7,
+     "wall_seconds": 166.02754545211792,
+     "image_id": "sha256:6a0c206a5ddf443d0982d8561ad0c6f0dd2ae42f41e5c02b26216bd98c23d37c"
+    }
+   },
+   "Bosun-0.6B": {
+    "collect": "missing",
+    "report_gpu_wall_s": null,
+    "reused": true,
+    "report_model_path": null
+   },
+   "JPT-0.8B": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 81.5,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 186.1,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 18.4,
+      "rows": 231
+     }
+    },
+    "model_path": "/data/dev2/models/jpt-0.8b@1431c050",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 7,
+     "wall_seconds": 294.25844740867615,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "Intern": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 61.2,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 150.0,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 18.0,
+      "rows": 231
+     },
+     "typed-dev": {
+      "wall_s": 45.5,
+      "rows": 1600
+     },
+     "css-pilot": {
+      "wall_s": 44.3,
+      "rows": 1430
+     },
+     "mlx-diag": {
+      "wall_s": 60.9,
+      "rows": 2275
+     }
+    },
+    "model_path": "/data/dev2/models/Intern-Decision-0.8B@85a0cc5a",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 7,
+     "wall_seconds": 386.8221523761749,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "Kev": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 66.8,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 171.8,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 18.8,
+      "rows": 231
+     },
+     "typed-dev": {
+      "wall_s": 50.4,
+      "rows": 1600
+     },
+     "css-pilot": {
+      "wall_s": 46.5,
+      "rows": 1430
+     },
+     "mlx-diag": {
+      "wall_s": 65.0,
+      "rows": 2275
+     }
+    },
+    "model_path": "/data/dev2/models/kev-0.8b@9a45d25e",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 6,
+     "wall_seconds": 426.46018052101135,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "Decider-2B": {
+    "collect": "missing",
+    "report_gpu_wall_s": null,
+    "reused": true,
+    "report_model_path": null
+   },
+   "This-That": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 71.1,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 188.1,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 18.0,
+      "rows": 231
+     },
+     "typed-dev": {
+      "wall_s": 51.0,
+      "rows": 1600
+     },
+     "css-pilot": {
+      "wall_s": 49.1,
+      "rows": 1430
+     },
+     "mlx-diag": {
+      "wall_s": 68.9,
+      "rows": 2275
+     }
+    },
+    "model_path": "/data/dev2/models/this-that-model-1.2@c4d1c30b",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 6,
+     "wall_seconds": 453.1486818790436,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "Bosun-1.7B": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 69.0,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 206.5,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 23.8,
+      "rows": 231
+     }
+    },
+    "model_path": "/data/dev2/models/bosun-v3.1-1.7b@1d8dc82a",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 6,
+     "wall_seconds": 305.8911974430084,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "Decider-4B": {
+    "collect": "missing",
+    "report_gpu_wall_s": null,
+    "reused": true,
+    "report_model_path": null
+   },
+   "JPT-4B": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 97.4,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 275.9,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 26.3,
+      "rows": 231
+     }
+    },
+    "model_path": "/data/dev2/models/jpt-4b@78312f85",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 7,
+     "wall_seconds": 406.28953981399536,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "Jet-v6.2": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 100.6,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 256.9,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 25.0,
+      "rows": 231
+     },
+     "typed-dev": {
+      "wall_s": 59.6,
+      "rows": 1600
+     },
+     "css-pilot": {
+      "wall_s": 59.1,
+      "rows": 1430
+     },
+     "mlx-diag": {
+      "wall_s": 81.8,
+      "rows": 2275
+     }
+    },
+    "model_path": "/data/dev2/models/jet@fbc3d2da",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 6,
+     "wall_seconds": 590.014997959137,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "Hopper-G": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 108.1,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 303.8,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 28.5,
+      "rows": 231
+     },
+     "typed-dev": {
+      "wall_s": 75.8,
+      "rows": 1600
+     },
+     "css-pilot": {
+      "wall_s": 63.3,
+      "rows": 1430
+     },
+     "mlx-diag": {
+      "wall_s": 97.2,
+      "rows": 2275
+     }
+    },
+    "model_path": "/data/dev2/models/hopper-g@71d991f4",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 7,
+     "wall_seconds": 683.5607936382294,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "JPT-9B": {
+    "collect": "missing",
+    "report_gpu_wall_s": null,
+    "reused": true,
+    "report_model_path": null
+   },
+   "Nimble-v2": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 129.3,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 412.5,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 35.4,
+      "rows": 231
+     },
+     "typed-dev": {
+      "wall_s": 91.6,
+      "rows": 1600
+     },
+     "css-pilot": {
+      "wall_s": 99.9,
+      "rows": 1430
+     },
+     "mlx-diag": {
+      "wall_s": 140.8,
+      "rows": 2275
+     }
+    },
+    "model_path": "/data/dev2/models/nimble-v2@4b8c04d1",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 6,
+     "wall_seconds": 916.1972763538361,
+     "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    }
+   },
+   "AutoJev-27B": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 173.2,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 560.5,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 70.5,
+      "rows": 231
+     },
+     "typed-dev": {
+      "wall_s": 139.0,
+      "rows": 1600
+     },
+     "css-pilot": {
+      "wall_s": 134.6,
+      "rows": 1430
+     }
+    },
+    "model_path": "/data/dev2/models/autojev-27b@6f5b557e",
+    "model_path_exists": false,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 7,
+     "wall_seconds": 1084.9821062088013,
+     "image_id": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1"
+    }
+   },
+   "Eikos-27B": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 288.0,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 837.2,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 93.5,
+      "rows": 231
+     },
+     "typed-dev": {
+      "wall_s": 198.7,
+      "rows": 1600
+     },
+     "css-pilot": {
+      "wall_s": 189.6,
+      "rows": 1430
+     }
+    },
+    "model_path": "/data/dev2/models/Eikos-27B@103a5647",
+    "model_path_exists": true,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 7,
+     "wall_seconds": 1613.5832891464233,
+     "shared": true,
+     "image_id": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1"
+    }
+   },
+   "Jebadiah-27B": {
+    "panels": {
+     "typed-final": {
+      "wall_s": 164.4,
+      "rows": 1600
+     },
+     "css15": {
+      "wall_s": 556.2,
+      "rows": 6547
+     },
+     "public231": {
+      "wall_s": 41.4,
+      "rows": 231
+     },
+     "typed-dev": {
+      "wall_s": 140.9,
+      "rows": 1600
+     },
+     "css-pilot": {
+      "wall_s": 130.3,
+      "rows": 1430
+     }
+    },
+    "model_path": "/data/dev2/models/jebadiah-27b@c68db2b5",
+    "model_path_exists": false,
+    "adapter": null,
+    "revision": null,
+    "gpu_time": {
+     "gpu": 7,
+     "wall_seconds": 1040.753654241562,
+     "shared": true,
+     "image_id": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1"
+    }
+   }
+  },
+  "design": {
+   "panels": {
+    "probe-p231-noev": "public standard + hard (72 + 111 = 183 items); state replaced by a fixed placeholder (\"No evidence is provided.\"); questions, criteria and option order unchanged",
+    "probe-typed-noev": "183 typed FINAL items (seeded, stratified by family x type to match public type mix); state replaced the same way (dict states -> same keys, empty values)"
+   },
+   "models": {
+    "suspects": [
+     "JPT-0.8B",
+     "JPT-4B",
+     "JPT-9B",
+     "Intern",
+     "Decider-4B",
+     "Hopper-G",
+     "Eikos-27B"
+    ],
+    "references_unexposed": [
+     "DEV2.0-0.8B",
+     "DEV2.0-4B",
+     "DEV2.0-8B"
+    ],
+    "decision1": [
+     "Eos1",
+     "Nox1",
+     "Lux1"
+    ],
+    "declared_clean_control": [
+     "Kev"
+    ],
+    "not_local": [
+     "Decider-2B (weights not on node A; hf download needed)",
+     "AutoJev-27B / Jebadiah-27B (node B only)"
+    ]
+   },
+   "weights_node_A": {
+    "JPT-0.8B": "/data/dev2/models/jpt-0.8b@1431c050",
+    "JPT-4B": "/data/dev2/models/jpt-4b@78312f85",
+    "JPT-9B": "/data/decision20-20260926/competitors/jpt-9b-r7114b0c3",
+    "Intern": "/data/dev2/models/Intern-Decision-0.8B@85a0cc5a",
+    "Decider-4B": "/data/decision20-20260926/models/decider-4b",
+    "Hopper-G": "/data/dev2/models/hopper-g@71d991f4 (+ Qwen3.5 base in /data/dev2/hf-cache, offline)",
+    "Eikos-27B": "/data/dev2/models/Eikos-27B@103a5647",
+    "Kev": "/data/dev2/models/kev-0.8b@9a45d25e",
+    "Decision 1.0": "/data/decision20-20260926/models/Decision-1.0-{Eos-0.8B,Nox-4B,Lux-9B}",
+    "DEV2.0": "checkpoint paths in each formal run COLLECT.json"
+   },
+   "readout": "per model: evidence-free accuracy on each probe panel; retention = share of full-evidence-correct items still correct without evidence; memorization index = (public noev acc - typed noev acc) minus the same difference for the unexposed DEV2 references (paired item bootstrap, 5,000 draws); flag if the lower bound > +10 pp. Suggestive only; question-only answerable items are absorbed by the reference difference.",
+   "cost": {
+    "estimate_gpu_h": 0.3,
+    "cap_gpu_h": 0.5,
+    "basis": "prior COLLECT.json walls: public231 18-46 s per <=9B model, 94 s Eikos-27B; typed FINAL 52-129 s / 1,600 rows (288 s Eikos); probe rows are 183 + 183 with shorter inputs; + 8-item smokes"
+   },
+   "mechanism": "same_panel collect checks every panel against the frozen registry (panels.ALL prompts_sha256), and run_same_panel.sh only mounts the gold-free panel root; a custom probe panel therefore needs a registry change (two ALL entries + gold paths) committed, pushed and mirrored. Without code change the only route is invoking each adapter module directly in the image (no collector receipts)."
+  }
+ }
+}

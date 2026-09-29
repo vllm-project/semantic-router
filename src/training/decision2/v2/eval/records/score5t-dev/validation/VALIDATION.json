@@ -1,0 +1,1480 @@
+{
+  "code_commit": "1491092c30f731d35b4a5adc9c7ada93306feaef",
+  "created_utc": "2026-09-29T08:09:49.226200+00:00",
+  "criteria": {
+    "V1": true,
+    "V2": true,
+    "V3": true,
+    "collapse": {
+      "m4-t-a7-soup": false,
+      "m6-mxcx-soup": true,
+      "m6-mxcxa-soup": false,
+      "m7-mx-soup": true,
+      "m7-mxcx-soup": false
+    },
+    "missing": [],
+    "pass": true,
+    "top_share": {
+      "m4-t-a7-soup": 0.635,
+      "m6-mxcx-soup": 0.9475,
+      "m6-mxcxa-soup": 0.805,
+      "m7-mx-soup": 0.9875,
+      "m7-mxcx-soup": 0.87625
+    }
+  },
+  "final_top_share": {
+    "kai1": 0.5575,
+    "m4-t-a7-soup": 0.6425,
+    "m6-mxcx-soup": 0.9475,
+    "m6-mxcxa-soup": 0.7875,
+    "m7-mx-soup": 0.985,
+    "m7-mxcx-soup": 0.8275
+  },
+  "panel": "score5t-dev",
+  "panel_sha256": {
+    "gold/score5t-dev.gold.jsonl": "31abc1a5d7820e06961a903327c76dc4503b46987f0db58b645e0e6562e08aed",
+    "goldfree/score5t-dev.prompts.jsonl": "8e35bfffc2c3b8e4252d3c39ec1c65054250a3ddf80159d219a16b41bca1d93c"
+  },
+  "rule": "COLLAPSE: top share >= 0.9 or the accuracy Wilson 95% lower bound <= 0.2; WARN: not COLLAPSE and the top-share Wilson 95% upper bound >= 0.9; NO-GAIN: the paired-bootstrap 95% lower bound of accuracy - always-majority <= 0. PASS iff V1, V2 and V3 hold on the full panel.",
+  "runs": {
+    "kai1": {
+      "blocks": {
+        "check": {
+          "acc_minus_majority": 0.015,
+          "acc_minus_majority_boot95": [
+            -0.0275,
+            0.0575
+          ],
+          "accuracy": 0.2825,
+          "accuracy_boot95": [
+            0.24,
+            0.3275
+          ],
+          "accuracy_wilson95": [
+            0.24060954581038724,
+            0.3285284528504738
+          ],
+          "always_majority_accuracy": 0.2675,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 113,
+          "flags": [
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 51,
+            "1": 66,
+            "2": 87,
+            "3": 89,
+            "4": 107
+          },
+          "gold_l4_share": 0.2675,
+          "histogram": {
+            "0": 208,
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 192,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.48,
+          "macro_f1": 0.15943492465231596,
+          "modal_level": 0,
+          "n": 400,
+          "qwk_answered": 0.2232001992858923,
+          "rare_levels": [
+            1,
+            2,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "0",
+          "top_share": 0.52,
+          "top_share_wilson95": [
+            0.4710820210989227,
+            0.5685374732770901
+          ]
+        },
+        "fit": {
+          "acc_minus_majority": -0.06,
+          "acc_minus_majority_boot95": [
+            -0.11,
+            -0.01
+          ],
+          "accuracy": 0.2725,
+          "accuracy_boot95": [
+            0.23,
+            0.315
+          ],
+          "accuracy_wilson95": [
+            0.23118418800549204,
+            0.3181440634673627
+          ],
+          "always_majority_accuracy": 0.3325,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 109,
+          "flags": [
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 48,
+            "1": 77,
+            "2": 81,
+            "3": 61,
+            "4": 133
+          },
+          "gold_l4_share": 0.3325,
+          "histogram": {
+            "0": 245,
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 155,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.3875,
+          "macro_f1": 0.15044084186575654,
+          "modal_level": 0,
+          "n": 400,
+          "qwk_answered": 0.18864877335999397,
+          "rare_levels": [
+            1,
+            2,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "0",
+          "top_share": 0.6125,
+          "top_share_wilson95": [
+            0.5639018250228361,
+            0.6589578308422358
+          ]
+        },
+        "full": {
+          "acc_minus_majority": -0.0225,
+          "acc_minus_majority_boot95": [
+            -0.055,
+            0.01
+          ],
+          "accuracy": 0.2775,
+          "accuracy_boot95": [
+            0.2475,
+            0.30875
+          ],
+          "accuracy_wilson95": [
+            0.24759076153473447,
+            0.30953591615898035
+          ],
+          "always_majority_accuracy": 0.3,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 222,
+          "flags": [
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 99,
+            "1": 143,
+            "2": 168,
+            "3": 150,
+            "4": 240
+          },
+          "gold_l4_share": 0.3,
+          "histogram": {
+            "0": 453,
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 347,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.43375,
+          "macro_f1": 0.15473421721847763,
+          "modal_level": 0,
+          "n": 800,
+          "qwk_answered": 0.2041454008960112,
+          "rare_levels": [
+            1,
+            2,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "0",
+          "top_share": 0.56625,
+          "top_share_wilson95": [
+            0.5316713470828236,
+            0.600195428660059
+          ]
+        }
+      },
+      "predictions_sha256": "4d4a8b36d2837d88b97a91f707e990db9041d7cf97f0bc6573d49a51eb106855",
+      "run": "/data/dev2/runs/eval/score5t-dev/collect/kai1",
+      "seal_missing": 0,
+      "seal_sha256": "ff693be4f197fc3eda13a35589b02811f2224dc5b3d4cfdb531b7890c63d93f9"
+    },
+    "m4-t-a7-soup": {
+      "blocks": {
+        "check": {
+          "acc_minus_majority": 0.11,
+          "acc_minus_majority_boot95": [
+            0.0725,
+            0.15
+          ],
+          "accuracy": 0.3775,
+          "accuracy_boot95": [
+            0.33,
+            0.425
+          ],
+          "accuracy_wilson95": [
+            0.33137080611490544,
+            0.4259597908320163
+          ],
+          "always_majority_accuracy": 0.2675,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 151,
+          "flags": [],
+          "gold_histogram": {
+            "0": 51,
+            "1": 66,
+            "2": 87,
+            "3": 89,
+            "4": 107
+          },
+          "gold_l4_share": 0.2675,
+          "histogram": {
+            "0": 84,
+            "1": 6,
+            "2": 35,
+            "3": 7,
+            "4": 268,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.67,
+          "macro_f1": 0.28465258044930175,
+          "modal_level": 4,
+          "n": 400,
+          "qwk_answered": 0.4170271960386437,
+          "rare_levels": [
+            1,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.67,
+          "top_share_wilson95": [
+            0.6224932007707696,
+            0.7142725014253389
+          ]
+        },
+        "fit": {
+          "acc_minus_majority": 0.0375,
+          "acc_minus_majority_boot95": [
+            0.0,
+            0.0775
+          ],
+          "accuracy": 0.37,
+          "accuracy_boot95": [
+            0.3225,
+            0.4175
+          ],
+          "accuracy_wilson95": [
+            0.32413116790213314,
+            0.4183421186537838
+          ],
+          "always_majority_accuracy": 0.3325,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 148,
+          "flags": [
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 48,
+            "1": 77,
+            "2": 81,
+            "3": 61,
+            "4": 133
+          },
+          "gold_l4_share": 0.3325,
+          "histogram": {
+            "0": 96,
+            "1": 14,
+            "2": 35,
+            "3": 15,
+            "4": 240,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.6,
+          "macro_f1": 0.23458111485753164,
+          "modal_level": 4,
+          "n": 400,
+          "qwk_answered": 0.39129527396681685,
+          "rare_levels": [],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.6,
+          "top_share_wilson95": [
+            0.5512581652462732,
+            0.6468393066337906
+          ]
+        },
+        "full": {
+          "acc_minus_majority": 0.07375,
+          "acc_minus_majority_boot95": [
+            0.04625,
+            0.10125
+          ],
+          "accuracy": 0.37375,
+          "accuracy_boot95": [
+            0.34,
+            0.4075
+          ],
+          "accuracy_wilson95": [
+            0.3409025974357176,
+            0.40780411294105323
+          ],
+          "always_majority_accuracy": 0.3,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 299,
+          "flags": [],
+          "gold_histogram": {
+            "0": 99,
+            "1": 143,
+            "2": 168,
+            "3": 150,
+            "4": 240
+          },
+          "gold_l4_share": 0.3,
+          "histogram": {
+            "0": 180,
+            "1": 20,
+            "2": 70,
+            "3": 22,
+            "4": 508,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.635,
+          "macro_f1": 0.2593942356400113,
+          "modal_level": 4,
+          "n": 800,
+          "qwk_answered": 0.40341693141563084,
+          "rare_levels": [],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.635,
+          "top_share_wilson95": [
+            0.6010669806088854,
+            0.6676426756218944
+          ]
+        }
+      },
+      "predictions_sha256": "61292e483b0c8e714218b19dfafefe7fb67c0ba907ddbb052024a7580d04492f",
+      "run": "/data/dev2/runs/eval/score5t-dev/collect/m4-t-a7-soup",
+      "seal_missing": 0,
+      "seal_sha256": "29f531b18e025fddcf17060b7b8619af74b150cfd7c9195d7e91910f7adc5db7"
+    },
+    "m4-t-a7-soup-cache": {
+      "blocks": {
+        "check": {
+          "acc_minus_majority": 0.11,
+          "acc_minus_majority_boot95": [
+            0.0725,
+            0.15
+          ],
+          "accuracy": 0.3775,
+          "accuracy_boot95": [
+            0.33,
+            0.425
+          ],
+          "accuracy_wilson95": [
+            0.33137080611490544,
+            0.4259597908320163
+          ],
+          "always_majority_accuracy": 0.2675,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 151,
+          "flags": [],
+          "gold_histogram": {
+            "0": 51,
+            "1": 66,
+            "2": 87,
+            "3": 89,
+            "4": 107
+          },
+          "gold_l4_share": 0.2675,
+          "histogram": {
+            "0": 84,
+            "1": 6,
+            "2": 35,
+            "3": 7,
+            "4": 268,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.67,
+          "macro_f1": 0.28465258044930175,
+          "modal_level": 4,
+          "n": 400,
+          "qwk_answered": 0.4170271960386437,
+          "rare_levels": [
+            1,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.67,
+          "top_share_wilson95": [
+            0.6224932007707696,
+            0.7142725014253389
+          ]
+        },
+        "fit": {
+          "acc_minus_majority": 0.0375,
+          "acc_minus_majority_boot95": [
+            0.0,
+            0.0775
+          ],
+          "accuracy": 0.37,
+          "accuracy_boot95": [
+            0.3225,
+            0.4175
+          ],
+          "accuracy_wilson95": [
+            0.32413116790213314,
+            0.4183421186537838
+          ],
+          "always_majority_accuracy": 0.3325,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 148,
+          "flags": [
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 48,
+            "1": 77,
+            "2": 81,
+            "3": 61,
+            "4": 133
+          },
+          "gold_l4_share": 0.3325,
+          "histogram": {
+            "0": 96,
+            "1": 14,
+            "2": 35,
+            "3": 15,
+            "4": 240,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.6,
+          "macro_f1": 0.23458111485753164,
+          "modal_level": 4,
+          "n": 400,
+          "qwk_answered": 0.39129527396681685,
+          "rare_levels": [],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.6,
+          "top_share_wilson95": [
+            0.5512581652462732,
+            0.6468393066337906
+          ]
+        },
+        "full": {
+          "acc_minus_majority": 0.07375,
+          "acc_minus_majority_boot95": [
+            0.04625,
+            0.10125
+          ],
+          "accuracy": 0.37375,
+          "accuracy_boot95": [
+            0.34,
+            0.4075
+          ],
+          "accuracy_wilson95": [
+            0.3409025974357176,
+            0.40780411294105323
+          ],
+          "always_majority_accuracy": 0.3,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 299,
+          "flags": [],
+          "gold_histogram": {
+            "0": 99,
+            "1": 143,
+            "2": 168,
+            "3": 150,
+            "4": 240
+          },
+          "gold_l4_share": 0.3,
+          "histogram": {
+            "0": 180,
+            "1": 20,
+            "2": 70,
+            "3": 22,
+            "4": 508,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.635,
+          "macro_f1": 0.2593942356400113,
+          "modal_level": 4,
+          "n": 800,
+          "qwk_answered": 0.40341693141563084,
+          "rare_levels": [],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.635,
+          "top_share_wilson95": [
+            0.6010669806088854,
+            0.6676426756218944
+          ]
+        }
+      },
+      "predictions_sha256": "d422cd446327bb602973f5a053c354195268b030e77a1a3e91bfe068534a5a79",
+      "run": "/data/dev2/runs/eval/score5t-dev/collect/m4-t-a7-soup-cache",
+      "seal_missing": 0,
+      "seal_sha256": "0d6a1c6eea67a554a9f35b05a52526c5a727e839d6f23a2cca585f9731d2792f"
+    },
+    "m6-mxcx-soup": {
+      "blocks": {
+        "check": {
+          "acc_minus_majority": 0.025,
+          "acc_minus_majority_boot95": [
+            0.0125,
+            0.0425
+          ],
+          "accuracy": 0.2925,
+          "accuracy_boot95": [
+            0.2475,
+            0.3375
+          ],
+          "accuracy_wilson95": [
+            0.25006128808159916,
+            0.3388864577672683
+          ],
+          "always_majority_accuracy": 0.2675,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 117,
+          "flags": [
+            "COLLAPSE"
+          ],
+          "gold_histogram": {
+            "0": 51,
+            "1": 66,
+            "2": 87,
+            "3": 89,
+            "4": 107
+          },
+          "gold_l4_share": 0.2675,
+          "histogram": {
+            "0": 13,
+            "1": 1,
+            "2": 10,
+            "3": 0,
+            "4": 376,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.94,
+          "macro_f1": 0.14870669703286093,
+          "modal_level": 4,
+          "n": 400,
+          "qwk_answered": 0.11895935836085458,
+          "rare_levels": [
+            1,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.94,
+          "top_share_wilson95": [
+            0.9122765567969421,
+            0.9593523194753389
+          ]
+        },
+        "fit": {
+          "acc_minus_majority": -0.0075,
+          "acc_minus_majority_boot95": [
+            -0.02,
+            0.005
+          ],
+          "accuracy": 0.325,
+          "accuracy_boot95": [
+            0.28,
+            0.3725
+          ],
+          "accuracy_wilson95": [
+            0.28095249494205327,
+            0.372376929267835
+          ],
+          "always_majority_accuracy": 0.3325,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 130,
+          "flags": [
+            "COLLAPSE",
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 48,
+            "1": 77,
+            "2": 81,
+            "3": 61,
+            "4": 133
+          },
+          "gold_l4_share": 0.3325,
+          "histogram": {
+            "0": 5,
+            "1": 3,
+            "2": 10,
+            "3": 0,
+            "4": 382,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.955,
+          "macro_f1": 0.11451181535079684,
+          "modal_level": 4,
+          "n": 400,
+          "qwk_answered": 0.053266693191913794,
+          "rare_levels": [
+            0,
+            1,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.955,
+          "top_share_wilson95": [
+            0.929994720438381,
+            0.9713487766159096
+          ]
+        },
+        "full": {
+          "acc_minus_majority": 0.00875,
+          "acc_minus_majority_boot95": [
+            -0.00125,
+            0.01875
+          ],
+          "accuracy": 0.30875,
+          "accuracy_boot95": [
+            0.2775,
+            0.34125
+          ],
+          "accuracy_wilson95": [
+            0.2777140815171639,
+            0.34161390548923143
+          ],
+          "always_majority_accuracy": 0.3,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 247,
+          "flags": [
+            "COLLAPSE",
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 99,
+            "1": 143,
+            "2": 168,
+            "3": 150,
+            "4": 240
+          },
+          "gold_l4_share": 0.3,
+          "histogram": {
+            "0": 18,
+            "1": 4,
+            "2": 20,
+            "3": 0,
+            "4": 758,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.9475,
+          "macro_f1": 0.13322515895138345,
+          "modal_level": 4,
+          "n": 800,
+          "qwk_answered": 0.08659591013902945,
+          "rare_levels": [
+            1,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.9475,
+          "top_share_wilson95": [
+            0.929795333553892,
+            0.9609274158036929
+          ]
+        }
+      },
+      "predictions_sha256": "033148fc38ab2aadbffd26d09c8516e4b16f39d286f425e7d8f2dd50731f9642",
+      "run": "/data/dev2/runs/eval/score5t-dev/collect/m6-mxcx-soup",
+      "seal_missing": 0,
+      "seal_sha256": "e387159f3df487cd3205de437e0e2168a9ad7f705ff629a978cf9cdcebd04f2b"
+    },
+    "m6-mxcxa-soup": {
+      "blocks": {
+        "check": {
+          "acc_minus_majority": 0.0625,
+          "acc_minus_majority_boot95": [
+            0.03,
+            0.095
+          ],
+          "accuracy": 0.33,
+          "accuracy_boot95": [
+            0.285,
+            0.375
+          ],
+          "accuracy_wilson95": [
+            0.285727498574661,
+            0.3775067992292304
+          ],
+          "always_majority_accuracy": 0.2675,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 132,
+          "flags": [],
+          "gold_histogram": {
+            "0": 51,
+            "1": 66,
+            "2": 87,
+            "3": 89,
+            "4": 107
+          },
+          "gold_l4_share": 0.2675,
+          "histogram": {
+            "0": 29,
+            "1": 15,
+            "2": 34,
+            "3": 7,
+            "4": 315,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.7875,
+          "macro_f1": 0.24894828049754086,
+          "modal_level": 4,
+          "n": 400,
+          "qwk_answered": 0.2889209111566813,
+          "rare_levels": [
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.7875,
+          "top_share_wilson95": [
+            0.7447731098540312,
+            0.8247571218011523
+          ]
+        },
+        "fit": {
+          "acc_minus_majority": 0.0025,
+          "acc_minus_majority_boot95": [
+            -0.025,
+            0.03
+          ],
+          "accuracy": 0.335,
+          "accuracy_boot95": [
+            0.29,
+            0.3825
+          ],
+          "accuracy_wilson95": [
+            0.29050829925512117,
+            0.3826308721427734
+          ],
+          "always_majority_accuracy": 0.3325,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 134,
+          "flags": [
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 48,
+            "1": 77,
+            "2": 81,
+            "3": 61,
+            "4": 133
+          },
+          "gold_l4_share": 0.3325,
+          "histogram": {
+            "0": 18,
+            "1": 20,
+            "2": 26,
+            "3": 7,
+            "4": 329,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.8225,
+          "macro_f1": 0.1813266798718191,
+          "modal_level": 4,
+          "n": 400,
+          "qwk_answered": 0.20080527855669283,
+          "rare_levels": [
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.8225,
+          "top_share_wilson95": [
+            0.7820396924303856,
+            0.8568246543828204
+          ]
+        },
+        "full": {
+          "acc_minus_majority": 0.0325,
+          "acc_minus_majority_boot95": [
+            0.01125,
+            0.05375
+          ],
+          "accuracy": 0.3325,
+          "accuracy_boot95": [
+            0.29875,
+            0.365
+          ],
+          "accuracy_wilson95": [
+            0.3007225646861446,
+            0.3658784173978879
+          ],
+          "always_majority_accuracy": 0.3,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 266,
+          "flags": [],
+          "gold_histogram": {
+            "0": 99,
+            "1": 143,
+            "2": 168,
+            "3": 150,
+            "4": 240
+          },
+          "gold_l4_share": 0.3,
+          "histogram": {
+            "0": 47,
+            "1": 35,
+            "2": 60,
+            "3": 14,
+            "4": 644,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.805,
+          "macro_f1": 0.21837367932486082,
+          "modal_level": 4,
+          "n": 800,
+          "qwk_answered": 0.2452637046679249,
+          "rare_levels": [
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.805,
+          "top_share_wilson95": [
+            0.7761140070874714,
+            0.8309707718042906
+          ]
+        }
+      },
+      "predictions_sha256": "52c9460799db52c62382ffcbd66c68f781c2548325a8cbefac75fb9e839d2633",
+      "run": "/data/dev2/runs/eval/score5t-dev/collect/m6-mxcxa-soup",
+      "seal_missing": 0,
+      "seal_sha256": "3590bf447b79a80019835620bc6449511035618750de06c3a2d31bfe71455340"
+    },
+    "m7-mx-soup": {
+      "blocks": {
+        "check": {
+          "acc_minus_majority": 0.0025,
+          "acc_minus_majority_boot95": [
+            0.0,
+            0.0075
+          ],
+          "accuracy": 0.27,
+          "accuracy_boot95": [
+            0.2275,
+            0.315
+          ],
+          "accuracy_wilson95": [
+            0.22883207265888467,
+            0.3155437420169685
+          ],
+          "always_majority_accuracy": 0.2675,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 108,
+          "flags": [
+            "COLLAPSE",
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 51,
+            "1": 66,
+            "2": 87,
+            "3": 89,
+            "4": 107
+          },
+          "gold_l4_share": 0.2675,
+          "histogram": {
+            "0": 0,
+            "1": 0,
+            "2": 4,
+            "3": 0,
+            "4": 396,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.99,
+          "macro_f1": 0.08948506761628033,
+          "modal_level": 4,
+          "n": 400,
+          "qwk_answered": 0.007296885210193782,
+          "rare_levels": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.99,
+          "top_share_wilson95": [
+            0.9745730330055918,
+            0.9961045792067212
+          ]
+        },
+        "fit": {
+          "acc_minus_majority": -0.005,
+          "acc_minus_majority_boot95": [
+            -0.0125,
+            0.0
+          ],
+          "accuracy": 0.3275,
+          "accuracy_boot95": [
+            0.2825,
+            0.3725
+          ],
+          "accuracy_wilson95": [
+            0.2833392679681935,
+            0.3749425930386963
+          ],
+          "always_majority_accuracy": 0.3325,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 131,
+          "flags": [
+            "COLLAPSE",
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 48,
+            "1": 77,
+            "2": 81,
+            "3": 61,
+            "4": 133
+          },
+          "gold_l4_share": 0.3325,
+          "histogram": {
+            "0": 0,
+            "1": 0,
+            "2": 6,
+            "3": 0,
+            "4": 394,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.985,
+          "macro_f1": 0.09943074003795066,
+          "modal_level": 4,
+          "n": 400,
+          "qwk_answered": 0.009414385880605391,
+          "rare_levels": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.985,
+          "top_share_wilson95": [
+            0.9676649364884468,
+            0.993107802129863
+          ]
+        },
+        "full": {
+          "acc_minus_majority": -0.00125,
+          "acc_minus_majority_boot95": [
+            -0.00625,
+            0.0025
+          ],
+          "accuracy": 0.29875,
+          "accuracy_boot95": [
+            0.2675,
+            0.33
+          ],
+          "accuracy_wilson95": [
+            0.26805536688937315,
+            0.3313682011369644
+          ],
+          "always_majority_accuracy": 0.3,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 239,
+          "flags": [
+            "COLLAPSE",
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 99,
+            "1": 143,
+            "2": 168,
+            "3": 150,
+            "4": 240
+          },
+          "gold_l4_share": 0.3,
+          "histogram": {
+            "0": 0,
+            "1": 0,
+            "2": 10,
+            "3": 0,
+            "4": 790,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.9875,
+          "macro_f1": 0.09467437547725537,
+          "modal_level": 4,
+          "n": 800,
+          "qwk_answered": 0.008302771680595455,
+          "rare_levels": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.9875,
+          "top_share_wilson95": [
+            0.9771440479325552,
+            0.9931963773452609
+          ]
+        }
+      },
+      "predictions_sha256": "ed35377ac7a7d6821644363baafbda6c44d8802e19e126b9ffd7cba05ca35e72",
+      "run": "/data/dev2/runs/eval/score5t-dev/collect/m7-mx-soup",
+      "seal_missing": 0,
+      "seal_sha256": "ce85fcc7c0863e3301e7c9e78dd8b157129a0ac9754d92713b074a50fc38f695"
+    },
+    "m7-mxcx-soup": {
+      "blocks": {
+        "check": {
+          "acc_minus_majority": 0.005,
+          "acc_minus_majority_boot95": [
+            -0.0175,
+            0.0275
+          ],
+          "accuracy": 0.2725,
+          "accuracy_boot95": [
+            0.23,
+            0.3175
+          ],
+          "accuracy_wilson95": [
+            0.23118418800549204,
+            0.3181440634673627
+          ],
+          "always_majority_accuracy": 0.2675,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 109,
+          "flags": [
+            "WARN",
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 51,
+            "1": 66,
+            "2": 87,
+            "3": 89,
+            "4": 107
+          },
+          "gold_l4_share": 0.2675,
+          "histogram": {
+            "0": 2,
+            "1": 1,
+            "2": 43,
+            "3": 5,
+            "4": 349,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.8725,
+          "macro_f1": 0.12717453903806156,
+          "modal_level": 4,
+          "n": 400,
+          "qwk_answered": 0.04221108439319776,
+          "rare_levels": [
+            0,
+            1,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.8725,
+          "top_share_wilson95": [
+            0.8362337983417458,
+            0.9016792844114923
+          ]
+        },
+        "fit": {
+          "acc_minus_majority": -0.015,
+          "acc_minus_majority_boot95": [
+            -0.04,
+            0.01
+          ],
+          "accuracy": 0.3175,
+          "accuracy_boot95": [
+            0.2725,
+            0.3625
+          ],
+          "accuracy_wilson95": [
+            0.27380100813055436,
+            0.3646711056883291
+          ],
+          "always_majority_accuracy": 0.3325,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 127,
+          "flags": [
+            "WARN",
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 48,
+            "1": 77,
+            "2": 81,
+            "3": 61,
+            "4": 133
+          },
+          "gold_l4_share": 0.3325,
+          "histogram": {
+            "0": 0,
+            "1": 4,
+            "2": 38,
+            "3": 6,
+            "4": 352,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.88,
+          "macro_f1": 0.130108290738976,
+          "modal_level": 4,
+          "n": 400,
+          "qwk_answered": 0.04744353194577233,
+          "rare_levels": [
+            0,
+            1,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.88,
+          "top_share_wilson95": [
+            0.8444853274321313,
+            0.9082850657121113
+          ]
+        },
+        "full": {
+          "acc_minus_majority": -0.005,
+          "acc_minus_majority_boot95": [
+            -0.0225,
+            0.01125
+          ],
+          "accuracy": 0.295,
+          "accuracy_boot95": [
+            0.26375,
+            0.3275
+          ],
+          "accuracy_wilson95": [
+            0.26443794022318257,
+            0.3275214706856333
+          ],
+          "always_majority_accuracy": 0.3,
+          "always_majority_level": 4,
+          "bootstrap": {
+            "replicates": 5000,
+            "seed": 20260929
+          },
+          "correct": 236,
+          "flags": [
+            "NO-GAIN"
+          ],
+          "gold_histogram": {
+            "0": 99,
+            "1": 143,
+            "2": 168,
+            "3": 150,
+            "4": 240
+          },
+          "gold_l4_share": 0.3,
+          "histogram": {
+            "0": 2,
+            "1": 5,
+            "2": 81,
+            "3": 11,
+            "4": 701,
+            "invalid": 0
+          },
+          "invalid_or_missing": 0,
+          "l4_share": 0.87625,
+          "macro_f1": 0.1285773231212251,
+          "modal_level": 4,
+          "n": 800,
+          "qwk_answered": 0.04494008854592346,
+          "rare_levels": [
+            0,
+            1,
+            3
+          ],
+          "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+          "top_category": "4",
+          "top_share": 0.87625,
+          "top_share_wilson95": [
+            0.8516165124934008,
+            0.8972872516312724
+          ]
+        }
+      },
+      "predictions_sha256": "c27f31b53e33e8fa6054453d2068dbb22b11b7b23010c2b9ee5b0fb80581de23",
+      "run": "/data/dev2/runs/eval/score5t-dev/collect/m7-mxcx-soup",
+      "seal_missing": 0,
+      "seal_sha256": "cc3675a9bd1e4e2860ccb9b2fe0b6ad0b18cc7d0f27b07c0d992f04b31dd72ba"
+    }
+  },
+  "schema": "dev2-score5t-validate/1",
+  "scope": "development readout only; never a release score, v3, chart or card",
+  "secondary": {
+    "agreement": {
+      "check": {
+        "kendall_tau_b": 1.0,
+        "models": [
+          "m7-mx-soup",
+          "m6-mxcx-soup",
+          "m7-mxcx-soup",
+          "m6-mxcxa-soup",
+          "m4-t-a7-soup",
+          "kai1"
+        ],
+        "panel_minus_final_top_share": {
+          "kai1": -0.03749999999999998,
+          "m4-t-a7-soup": 0.02750000000000008,
+          "m6-mxcx-soup": -0.007500000000000062,
+          "m6-mxcxa-soup": 0.0,
+          "m7-mx-soup": 0.0050000000000000044,
+          "m7-mxcx-soup": 0.04500000000000004
+        },
+        "spearman_rho": 1.0
+      },
+      "fit": {
+        "kendall_tau_b": 0.8666666666666667,
+        "models": [
+          "m7-mx-soup",
+          "m6-mxcx-soup",
+          "m7-mxcx-soup",
+          "m6-mxcxa-soup",
+          "m4-t-a7-soup",
+          "kai1"
+        ],
+        "panel_minus_final_top_share": {
+          "kai1": 0.05500000000000005,
+          "m4-t-a7-soup": -0.04249999999999998,
+          "m6-mxcx-soup": 0.007499999999999951,
+          "m6-mxcxa-soup": 0.03500000000000003,
+          "m7-mx-soup": 0.0,
+          "m7-mxcx-soup": 0.05249999999999999
+        },
+        "spearman_rho": 0.9428571428571428
+      },
+      "full": {
+        "kendall_tau_b": 1.0,
+        "models": [
+          "m7-mx-soup",
+          "m6-mxcx-soup",
+          "m7-mxcx-soup",
+          "m6-mxcxa-soup",
+          "m4-t-a7-soup",
+          "kai1"
+        ],
+        "panel_minus_final_top_share": {
+          "kai1": 0.008750000000000036,
+          "m4-t-a7-soup": -0.007499999999999951,
+          "m6-mxcx-soup": 0.0,
+          "m6-mxcxa-soup": 0.01750000000000007,
+          "m7-mx-soup": 0.0025000000000000577,
+          "m7-mxcx-soup": 0.04874999999999996
+        },
+        "spearman_rho": 1.0
+      }
+    },
+    "extra_runs": [
+      "m4-t-a7-soup-cache"
+    ],
+    "kai1": {
+      "lowest": true,
+      "models": 6,
+      "rank": 6,
+      "top_share": 0.56625
+    },
+    "no_gain": {
+      "check": [
+        "m7-mx-soup",
+        "m7-mxcx-soup",
+        "kai1"
+      ],
+      "fit": [
+        "m7-mx-soup",
+        "m6-mxcx-soup",
+        "m7-mxcx-soup",
+        "m6-mxcxa-soup",
+        "m4-t-a7-soup",
+        "kai1",
+        "m4-t-a7-soup-cache"
+      ],
+      "full": [
+        "m7-mx-soup",
+        "m6-mxcx-soup",
+        "m7-mxcx-soup",
+        "kai1"
+      ]
+    },
+    "per_half": {
+      "check": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "collapse": {
+          "m4-t-a7-soup": false,
+          "m6-mxcx-soup": true,
+          "m6-mxcxa-soup": false,
+          "m7-mx-soup": true,
+          "m7-mxcx-soup": false
+        },
+        "missing": [],
+        "pass": true,
+        "top_share": {
+          "m4-t-a7-soup": 0.67,
+          "m6-mxcx-soup": 0.94,
+          "m6-mxcxa-soup": 0.7875,
+          "m7-mx-soup": 0.99,
+          "m7-mxcx-soup": 0.8725
+        }
+      },
+      "fit": {
+        "V1": true,
+        "V2": true,
+        "V3": true,
+        "collapse": {
+          "m4-t-a7-soup": false,
+          "m6-mxcx-soup": true,
+          "m6-mxcxa-soup": false,
+          "m7-mx-soup": true,
+          "m7-mxcx-soup": false
+        },
+        "missing": [],
+        "pass": true,
+        "top_share": {
+          "m4-t-a7-soup": 0.6,
+          "m6-mxcx-soup": 0.955,
+          "m6-mxcxa-soup": 0.8225,
+          "m7-mx-soup": 0.985,
+          "m7-mxcx-soup": 0.88
+        }
+      }
+    },
+    "warn": {
+      "check": [
+        "m7-mxcx-soup"
+      ],
+      "fit": [
+        "m7-mxcx-soup"
+      ],
+      "full": []
+    }
+  },
+  "verdict": "PASS"
+}

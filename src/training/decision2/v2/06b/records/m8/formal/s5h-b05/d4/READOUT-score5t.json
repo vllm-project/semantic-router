@@ -1,0 +1,195 @@
+{
+  "created_utc": "2026-09-29T09:35:52.694272+00:00",
+  "label": "m8-s5h-b05",
+  "schema": "dev2-development-readout/1",
+  "scope": "development readout for checkpoint selection; never a release or formal score",
+  "score5t": {
+    "check": {
+      "acc_minus_majority": 0.0425,
+      "acc_minus_majority_boot95": [
+        0.02,
+        0.0675
+      ],
+      "accuracy": 0.31,
+      "accuracy_boot95": [
+        0.265,
+        0.355
+      ],
+      "accuracy_wilson95": [
+        0.26666296102378073,
+        0.35695184240409794
+      ],
+      "always_majority_accuracy": 0.2675,
+      "always_majority_level": 4,
+      "bootstrap": {
+        "replicates": 5000,
+        "seed": 20260929
+      },
+      "correct": 124,
+      "flags": [],
+      "gold_histogram": {
+        "0": 51,
+        "1": 66,
+        "2": 87,
+        "3": 89,
+        "4": 107
+      },
+      "gold_l4_share": 0.2675,
+      "histogram": {
+        "0": 13,
+        "1": 22,
+        "2": 37,
+        "3": 0,
+        "4": 328,
+        "invalid": 0
+      },
+      "invalid_or_missing": 0,
+      "l4_share": 0.82,
+      "macro_f1": 0.1932463680183369,
+      "modal_level": 4,
+      "n": 400,
+      "qwk_answered": 0.21082491773516387,
+      "rare_levels": [
+        3
+      ],
+      "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+      "top_category": "4",
+      "top_share": 0.82,
+      "top_share_wilson95": [
+        0.7793616474280234,
+        0.8545502625881809
+      ]
+    },
+    "fit": {
+      "acc_minus_majority": 0.0025,
+      "acc_minus_majority_boot95": [
+        -0.0225,
+        0.0275
+      ],
+      "accuracy": 0.335,
+      "accuracy_boot95": [
+        0.29,
+        0.38
+      ],
+      "accuracy_wilson95": [
+        0.29050829925512117,
+        0.3826308721427734
+      ],
+      "always_majority_accuracy": 0.3325,
+      "always_majority_level": 4,
+      "bootstrap": {
+        "replicates": 5000,
+        "seed": 20260929
+      },
+      "correct": 134,
+      "flags": [
+        "NO-GAIN"
+      ],
+      "gold_histogram": {
+        "0": 48,
+        "1": 77,
+        "2": 81,
+        "3": 61,
+        "4": 133
+      },
+      "gold_l4_share": 0.3325,
+      "histogram": {
+        "0": 2,
+        "1": 28,
+        "2": 33,
+        "3": 0,
+        "4": 337,
+        "invalid": 0
+      },
+      "invalid_or_missing": 0,
+      "l4_share": 0.8425,
+      "macro_f1": 0.15009651789047085,
+      "modal_level": 4,
+      "n": 400,
+      "qwk_answered": 0.16650491533745126,
+      "rare_levels": [
+        0,
+        3
+      ],
+      "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+      "top_category": "4",
+      "top_share": 0.8425,
+      "top_share_wilson95": [
+        0.8035644342063322,
+        0.8749194069828867
+      ]
+    },
+    "full": {
+      "acc_minus_majority": 0.0225,
+      "acc_minus_majority_boot95": [
+        0.005,
+        0.04
+      ],
+      "accuracy": 0.3225,
+      "accuracy_boot95": [
+        0.29,
+        0.355
+      ],
+      "accuracy_wilson95": [
+        0.2910231774471024,
+        0.35567338565687234
+      ],
+      "always_majority_accuracy": 0.3,
+      "always_majority_level": 4,
+      "bootstrap": {
+        "replicates": 5000,
+        "seed": 20260929
+      },
+      "correct": 258,
+      "flags": [],
+      "gold_histogram": {
+        "0": 99,
+        "1": 143,
+        "2": 168,
+        "3": 150,
+        "4": 240
+      },
+      "gold_l4_share": 0.3,
+      "histogram": {
+        "0": 15,
+        "1": 50,
+        "2": 70,
+        "3": 0,
+        "4": 665,
+        "invalid": 0
+      },
+      "invalid_or_missing": 0,
+      "l4_share": 0.83125,
+      "macro_f1": 0.17469184520403222,
+      "modal_level": 4,
+      "n": 800,
+      "qwk_answered": 0.18910655242293883,
+      "rare_levels": [
+        0,
+        3
+      ],
+      "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+      "top_category": "4",
+      "top_share": 0.83125,
+      "top_share_wilson95": [
+        0.8037270088956298,
+        0.8556068698187836
+      ]
+    },
+    "panel": "score5t-dev",
+    "predictions_sha256": "8ff9d177c4e5016064891b1c7ac9900136d2a1ac09bad7f7bb12e336148f0d55",
+    "scope": "development readout only; never a release score, v3, chart or card",
+    "use": "flags predict the typed FINAL release-gate Score collapse; fit half only for fitting post-hoc corrections, select on the check half; never training data"
+  },
+  "sources": {
+    "benchmark/generate.py": "c6569d4c86c3b9ea2ebdda564d8ba4d3428cc807d41d39984379821cfbb9422c",
+    "benchmark/score.py": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "jev_arena/compare_v3.py": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "jev_arena/jevbench_public.py": "aec840b6497beeae8b63e9270670c22506265c086a84e889bc82f694146518cf",
+    "transfer/build.py": "717e31b62d1f9d09b30f1ae2365b2e59cdf0cf40209dda5e9e08b921a1fc184d",
+    "transfer/score.py": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca",
+    "v2/eval/adapters.py": "6717d108a1336efef8aded3fed8ec697d42dede7c125d3241387868d448c8f32",
+    "v2/eval/panels.py": "b05ec5888761d3b4254aeda8399360e9fbc80759455d93ff78003303c159fb70",
+    "v2/eval/same_panel.py": "936f083dea972cbfc1886710f4f14e3f01f1b3eec6d667e9912bf399772da704"
+  }
+}

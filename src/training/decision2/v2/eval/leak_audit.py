@@ -87,6 +87,7 @@ PANEL_ROLES = {
     "mlx-diag": "development diagnostic",
     "ht-dev": "development (human transfer)",
     "score5-dev": "development (5-level Score check)",
+    "score5t-dev": "development (5-level typed Score check)",
 }
 
 
@@ -192,7 +193,7 @@ def load_panel(
     """Questions of one frozen panel (the gold files carry everything needed)."""
     from v2.eval import panels as registry
 
-    if panel in ("ht-dev", "score5-dev"):
+    if panel in ("ht-dev", "score5-dev", "score5t-dev"):
         prompts_path, gold_path = files or (
             registry.path(root, panel, "prompts"),
             registry.path(root, panel, "gold"),

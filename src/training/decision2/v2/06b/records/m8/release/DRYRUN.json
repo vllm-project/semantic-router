@@ -1,0 +1,351 @@
+{
+  "build": {
+    "ended_utc": "2026-09-29T10:07:39.600265+00:00",
+    "receipt_sha256": "1c151a4ff6fabbf7ace65bc3f1f136ebf13645bbe1d3e4e5b2eaaa13cbaf532d",
+    "screen": {
+      "text_files_screened": 32
+    },
+    "spec_sha256": "66544bdeefa38b109bbb32e66244dd922acc3b5546be2447e1a0855275ead5cc",
+    "started_utc": "2026-09-29T10:07:35.512285+00:00"
+  },
+  "bundle_verify": {
+    "files": 33,
+    "manifest_sha256": "57557bc9cc106f70920af6f24f9b200d09cb7faff0bbe38e9fcce7cb2dfb6641",
+    "parameters": {
+      "backbone": 596049920,
+      "head": 1053184,
+      "residual": 0
+    },
+    "verified": true
+  },
+  "candidate": "m8-s5-b05",
+  "examples": {
+    "answers_sha256": "54e15fd6b5e685adebece4867e31fe3fee7da55944b609930f134d3c7ab95b83",
+    "card_example": {
+      "comparison": {
+        "category_changes": 0,
+        "max_abs_drift": 0.0,
+        "missing": 0,
+        "slots": 3
+      },
+      "exit_code": 0,
+      "passed": true
+    },
+    "device": "cuda:0",
+    "pre_a_passed": true,
+    "pre_b_passed": true,
+    "repeat": {
+      "bit_identical_answers": true,
+      "passed": true,
+      "totals": {
+        "category_changes": 0,
+        "max_abs_drift": 0.0,
+        "missing": 0,
+        "slots": 11
+      }
+    }
+  },
+  "gpu": {
+    "gpu": 0,
+    "gpu_seconds": 130.7,
+    "lease_window_utc": [
+      "2026-09-29T10:07:35Z",
+      "2026-09-29T10:09:51Z"
+    ],
+    "node": "node A",
+    "steps": {
+      "card-pre": {
+        "exit": 0,
+        "seconds": 15.54
+      },
+      "parity-negative": {
+        "exit": 1,
+        "seconds": 24.02
+      },
+      "parity-pre": {
+        "exit": 0,
+        "seconds": 61.89
+      },
+      "pre-a": {
+        "exit": 0,
+        "seconds": 15.59
+      },
+      "pre-b": {
+        "exit": 0,
+        "seconds": 13.67
+      }
+    },
+    "visible": "ROCR_VISIBLE_DEVICES=0"
+  },
+  "hugging_face": "none (no ensure, upload, download, readback, collection or Hub API call)",
+  "negative_control": {
+    "device": "cuda:0",
+    "exit": 1,
+    "expected": "exit 1; Choice and Noul identical, Score different",
+    "panels": {
+      "neg-choice": {
+        "category_changes": 0,
+        "ids_sha256": "4e2ce7164fbe2837a414f82e77b4dbc2a10e3fab1c6ea31dcd9d53f7868bf75f",
+        "input_mismatch": 0,
+        "max_abs_drift": 0.0,
+        "missing": 0,
+        "predictions_sha256": "b6ea401e318c2c53f79957a9b148bde7661c7af85b6fb454f49870b67e91fe7b",
+        "prompts": 50,
+        "prompts_sha256": "d2f18848fece7b1279523e331b5073d7ff73e4559cf8b2e156f9a6ed9f31f026",
+        "seconds": 9.3,
+        "slots": 50
+      },
+      "neg-noul": {
+        "category_changes": 0,
+        "ids_sha256": "d77aa01949408e5806c0eebaba0d78483f58ced5c815d2e1a61ce725701d8e6f",
+        "input_mismatch": 0,
+        "max_abs_drift": 0.0,
+        "missing": 0,
+        "predictions_sha256": "b6ea401e318c2c53f79957a9b148bde7661c7af85b6fb454f49870b67e91fe7b",
+        "prompts": 50,
+        "prompts_sha256": "964daa8b4c72de688af29da88f1ca022315d07890e2b47976af9d71b853cc61c",
+        "seconds": 1.2,
+        "slots": 50
+      },
+      "neg-score5": {
+        "category_changes": 42,
+        "ids_sha256": "1f079b01d79c86059b7789c66ad435197b99b3d1a64dd72876f10c6c2f5e5184",
+        "input_mismatch": 0,
+        "max_abs_drift": 0.18134315693040648,
+        "missing": 0,
+        "predictions_sha256": "b6ea401e318c2c53f79957a9b148bde7661c7af85b6fb454f49870b67e91fe7b",
+        "prompts": 100,
+        "prompts_sha256": "b3b23ca6baa985089c4bccc221ccb45227273d99b950c9fe7ffb822353692755",
+        "seconds": 2.2,
+        "slots": 100
+      }
+    },
+    "passed": true,
+    "reference": "uncorrected m6-mxcx-soup formal typed-final predictions (same weights, no Score offsets)",
+    "runtime": {
+      "hip": "7.2.53211",
+      "python": "3.12.13",
+      "safetensors": "0.8.0",
+      "tokenizers": "0.23.2",
+      "torch": "2.12.0+git6bbd260",
+      "transformers": "5.17.0"
+    },
+    "subsets": "first 50 Choice-only, 50 Noul-only and 100 five-level-Score typed FINAL items in file order",
+    "tolerance": 0.0
+  },
+  "package": {
+    "builder": {
+      "module_sha256": "7d4e4b71d13d2b84001e0a0254b48609f5b3cee43f2d968045d9b6d6d7ecc846",
+      "source_commit": "5e5e3afdf0a321af8fe91019db78c92597463474"
+    },
+    "calibration": null,
+    "config_sha256": "c9d6b9cccbfe361356c08daadf23f4bb5e0046f08bd2ccc1486a501581709c4c",
+    "files": 33,
+    "files_sha256_score_bias": {
+      "decision2/_vendor/dev2model/score_bias.py": "837974bb8abb8c51c907e4f025e2632bd59bc2875eb55a4343d7bd4274622646",
+      "score_bias.json": "725c16f9267a08b38992966d5d1b2adf0c03fbf0837039620e32c368993399cd"
+    },
+    "kind": "staging",
+    "licence": "apache-2.0",
+    "manifest_sha256": "57557bc9cc106f70920af6f24f9b200d09cb7faff0bbe38e9fcce7cb2dfb6641",
+    "max_input_tokens": 8192,
+    "model_name": "DEV2.0-0.6B",
+    "model_sha256": "01fae75098ce29314c5de2990321fcfd31457de7c02bb757bd8345662a823854",
+    "parameters": {
+      "loaded": 597103104,
+      "packaged": {
+        "backbone": 596049920,
+        "head": 1053184,
+        "residual": 0
+      },
+      "runtime_asserted_loaded": 597103104
+    },
+    "path": "/data/dev2/runs/06b/m8/release-dryrun/package/dev2-release-staging-06bm8",
+    "profile": "qwen-full",
+    "readme_sha256": "023c2c2c9b01da45c3539be59f9dd4144e64008aaf298bf05b7440e08974496f",
+    "repo_id": "llm-semantic-router/dev2-release-staging-06bm8",
+    "runtime_files": {
+      "decision2/__init__.py": {
+        "sha256": "10fea99a87686a8f5d99e9a8a91573ce1ddb7bc702f22b1fa21d3de258a4054a",
+        "source": "v2/release/runtime/__init__.py"
+      },
+      "decision2/_vendor/__init__.py": {
+        "sha256": "fe3babbdd871fa7c0cf919320a66efd1249253abe6bd7cdc5e33352dc46adeef",
+        "source": null
+      },
+      "decision2/_vendor/dev2model/__init__.py": {
+        "sha256": "4611a85789fae8f06395702a2975592e66e16a8632487c5f9255c0ce68c700d1",
+        "source": null
+      },
+      "decision2/_vendor/dev2model/calibration.py": {
+        "sha256": "71633a04533c7022e1606ed2734107f33839454c34c993fe16d80c8413d1c561",
+        "source": "training/model/calibration.py"
+      },
+      "decision2/_vendor/dev2model/data.py": {
+        "sha256": "632bd60555f63459ff08ffe82c8263ca6a96f75360bc8c06469fcb10f1e2e99c",
+        "source": "training/model/data.py"
+      },
+      "decision2/_vendor/dev2model/decision_model.py": {
+        "sha256": "1ab1e49bccc8b84632a32565ce666a6db94298372ee891dee5b68e54f80957fb",
+        "source": "training/model/decision_model.py"
+      },
+      "decision2/_vendor/dev2model/infer.py": {
+        "sha256": "7bb9f3cc88f04cd6e4ded62e69f41dd1c7a3d0154a76acdf44c0d73e4163ef58",
+        "source": "training/model/infer.py"
+      },
+      "decision2/_vendor/dev2model/lora.py": {
+        "sha256": "7049e35e2a7bf50dd5888902cd0b7030d9bbd448d7d7aba8875ceb89aebff231",
+        "source": "training/model/lora.py"
+      },
+      "decision2/_vendor/dev2model/score_bias.py": {
+        "sha256": "837974bb8abb8c51c907e4f025e2632bd59bc2875eb55a4343d7bd4274622646",
+        "source": "training/model/score_bias.py"
+      },
+      "decision2/_vendor/dev2model/source.py": {
+        "sha256": "ef7b30171c4befb26163ea4d3d6e5add9dc602228a476d6f0ead9d40b450c7e3",
+        "source": "training/model/source.py"
+      },
+      "decision2/api.py": {
+        "sha256": "80fffdd9587c10e90ab6114710d68d854ed504279031553cb938b5d2b70cc311",
+        "source": "v2/release/runtime/api.py"
+      },
+      "decision2/qwen.py": {
+        "sha256": "979f7e6e663d4df9ddbac0e0092a5890506fba50aa0f38ab0a189e04b3d7e24f",
+        "source": "v2/release/runtime/qwen.py"
+      }
+    },
+    "score_bias": {
+      "file": "score_bias.json",
+      "offsets": {
+        "5": [
+          0.039188,
+          0.203049,
+          0.079362,
+          -0.15162,
+          -0.169979
+        ]
+      },
+      "scored_sha256": "03f0c9c777de95f8ea56112c05a3c29521687609aa67c9c7ca466c14bf8dadae",
+      "sha256": "725c16f9267a08b38992966d5d1b2adf0c03fbf0837039620e32c368993399cd"
+    },
+    "scored": {
+      "label": "post-key same-panel run m8-s5-b05 (frozen runner, 8,192 tokens, raw probabilities with per-level Score offsets)",
+      "paired_sha256": "7b391cb2f5ab08b798e3ba6817dcf269ae0b9fb4843dabe4ac434b8177b77f98",
+      "predictions_sha256": {
+        "css15": "6788c1da8b6755baad1ab7d8f95207aada7b44e6791b830f5b7dd958d4875d38",
+        "mlx-diag": "b452f016921999af6f0bebe34465939937c4c5f20b904772549be345b8e60f11",
+        "public231": "0993d7239e8cccc3b471f5faf5cd08b50579276a12aa1730d32d6f7539953116",
+        "typed-final": "99c5a0147b69a7292cbbae0ffd31d5d874235c29eed8b6de130a78ea010e1c60"
+      },
+      "report_sha256": "b2083796ed0a03728edffb2aa8af5c9c60db38df3ad8182ea5c9e08d6bb6a2ed",
+      "seal_sha256": "0fe8b3f584b033e835d8a53f3062cf0d247481cc74498c8869c01e11131979b1"
+    },
+    "scored_runtime_check": {
+      "checked": {
+        "training/model/data.py": "632bd60555f63459ff08ffe82c8263ca6a96f75360bc8c06469fcb10f1e2e99c",
+        "training/model/decision_model.py": "1ab1e49bccc8b84632a32565ce666a6db94298372ee891dee5b68e54f80957fb",
+        "training/model/infer.py": "7bb9f3cc88f04cd6e4ded62e69f41dd1c7a3d0154a76acdf44c0d73e4163ef58",
+        "training/model/lora.py": "7049e35e2a7bf50dd5888902cd0b7030d9bbd448d7d7aba8875ceb89aebff231",
+        "training/model/score_bias.py": "837974bb8abb8c51c907e4f025e2632bd59bc2875eb55a4343d7bd4274622646",
+        "training/model/source.py": "ef7b30171c4befb26163ea4d3d6e5add9dc602228a476d6f0ead9d40b450c7e3"
+      },
+      "native_manifest_sha256": "51d52730b5401d9e0a0df573bfe2cfd4d0cf5efe5b81f3f128dfabd383509bac",
+      "score_bias_sha256": "03f0c9c777de95f8ea56112c05a3c29521687609aa67c9c7ca466c14bf8dadae"
+    },
+    "tier": "0.6B",
+    "vendor_source": null
+  },
+  "parity": {
+    "device": "cuda:0",
+    "panels": {
+      "css15": {
+        "category_changes": 0,
+        "ids_sha256": "2f3824e8d17602ed66e172a012edf5161efb6f627687cdc8b6f7d981395dc3d5",
+        "input_mismatch": 0,
+        "max_abs_drift": 0.0,
+        "missing": 0,
+        "predictions_sha256": "6788c1da8b6755baad1ab7d8f95207aada7b44e6791b830f5b7dd958d4875d38",
+        "prompts": 400,
+        "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+        "seconds": 6.9,
+        "slots": 400
+      },
+      "mlx-diag": {
+        "category_changes": 0,
+        "ids_sha256": "6c9b34dee11eb2788d21321d03483b03f8313d361146aa2437c3b5276e819305",
+        "input_mismatch": 0,
+        "max_abs_drift": 0.0,
+        "missing": 0,
+        "predictions_sha256": "b452f016921999af6f0bebe34465939937c4c5f20b904772549be345b8e60f11",
+        "prompts": 300,
+        "prompts_sha256": "25fde28f4b227a9cc8588da79a597ce816ba4a8f979139f99f69aeb595580a5f",
+        "seconds": 5.3,
+        "slots": 300
+      },
+      "public231": {
+        "category_changes": 0,
+        "ids_sha256": "3cac6d401ca18059628f0f48c8d7f974cbbea020f39f28109eaf84bd1a0f22e1",
+        "input_mismatch": 0,
+        "max_abs_drift": 0.0,
+        "missing": 0,
+        "predictions_sha256": "0993d7239e8cccc3b471f5faf5cd08b50579276a12aa1730d32d6f7539953116",
+        "prompts": 231,
+        "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+        "seconds": 5.5,
+        "slots": 231
+      },
+      "typed-final": {
+        "category_changes": 0,
+        "ids_sha256": "e0ca7afa2ceed4b1096b3cdc56a0a9acb2fce8ca57940a9fd287331de74bada9",
+        "input_mismatch": 0,
+        "max_abs_drift": 0.0,
+        "missing": 0,
+        "predictions_sha256": "99c5a0147b69a7292cbbae0ffd31d5d874235c29eed8b6de130a78ea010e1c60",
+        "prompts": 1600,
+        "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+        "seconds": 34.2,
+        "slots": 2000
+      }
+    },
+    "passed": true,
+    "runtime": {
+      "hip": "7.2.53211",
+      "python": "3.12.13",
+      "safetensors": "0.8.0",
+      "tokenizers": "0.23.2",
+      "torch": "2.12.0+git6bbd260",
+      "transformers": "5.17.0"
+    },
+    "tolerance": 0.0
+  },
+  "receipts_sha256": {
+    "build": "1c151a4ff6fabbf7ace65bc3f1f136ebf13645bbe1d3e4e5b2eaaa13cbaf532d",
+    "card-pre": "74d7e93e6dec3dac263ec5a8c93741e14a86335d8c462e515f9ae389edbe56c9",
+    "parity-negative": "b5d8f02c91c9ad2e252eb9405c5299c3ec10b13556521d1d1cedaaca61cf96a7",
+    "parity-pre": "09c55e671052e5a6c2fef6b6b254a967fe070e8fdb4ce4475af6a6b932be1ebe",
+    "pre-a": "a3ca44358a7cecbd75c925bf3e3dbb07e4140734130bbc465d71c2f4f5cb497e",
+    "pre-b": "3c2405a88b8f3aadc27b6e59468c6fd16e951f143cac37bb101e844f4381f7e4",
+    "repeat-pre": "3c68c0ceee1029e28b0d409be0983c037a0616cc6ba382206892c500d4da9163",
+    "spec": "66544bdeefa38b109bbb32e66244dd922acc3b5546be2447e1a0855275ead5cc",
+    "verify": "13f6cbbf193bcc3f71c330b9ef316d8340698f24e5ee590a658353d80899def4"
+  },
+  "schema": "dev2-06b-m8-staging-dryrun/1",
+  "source": {
+    "builder_and_driver_commit": "5e5e3afdf0a321af8fe91019db78c92597463474",
+    "builder_mirror": {
+      "content_manifest_sha256": "6b6a7e8239699580acece618537d776f903fff3db6eaed9846a66fb596244b61",
+      "dir": "/data/dev2/src/5e5e3afdf0a321af8fe91019db78c92597463474-src_training_decision2",
+      "tree": "850d73906c34311a24244678f941a9a240ef73c2"
+    },
+    "driver": "v2/06b/records/m8/release/dryrun.sh",
+    "image": "decision20-train-fast:host2 (python3 in the container for examples/parity; host python3 for build, verify and compare, as release.sh)",
+    "score_bias_file_mirror": {
+      "content_manifest_sha256": "38f0ac15d83adef8220288448e0e01a5e95ad086c48b9cc368cf126fd33f9459",
+      "dir": "/data/dev2/src/d2159697cd4694b4e9bf33e7928123bfa7c63aad-src_training_decision2",
+      "tree": "441b03ff9857ef49b0628416b960cba1ebfd7a5b"
+    },
+    "scored_source_mirror": "49e632bfc1664a47a514abc6736a1241b878d455-src_training_decision2 (training/model identical to the builder tree; no vendor_source needed)",
+    "spec": "v2/06b/records/m8/release/dev2-0p6b-m8-staging.json"
+  },
+  "work_dir": "/data/dev2/runs/06b/m8/release-dryrun"
+}

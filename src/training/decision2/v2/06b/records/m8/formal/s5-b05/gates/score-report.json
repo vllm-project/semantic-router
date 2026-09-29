@@ -1,0 +1,108 @@
+{
+  "R3": {
+    "pass": true,
+    "rule": "v2.eval.gates types marks no type COLLAPSED (top share < .90 and accuracy Wilson lower bound above chance)"
+  },
+  "agreement": {
+    "correct_equals_gates_types": true,
+    "correct_equals_m7_gate": true,
+    "top_share_equals_gates_types": true
+  },
+  "label": "m8-s5-b05",
+  "m7_gate_statistics": {
+    "accuracy": 0.3425,
+    "correct": 137,
+    "delta_vs_majority": 0.0225,
+    "delta_vs_majority_ci95": [
+      -0.015062500000000013,
+      0.0625
+    ],
+    "kappa": 0.10269532582736272,
+    "majority_accuracy": 0.32,
+    "majority_level": 4,
+    "recall_by_level": {
+      "0": 0.34285714285714286,
+      "1": 0.1518987341772152,
+      "2": 0.14457831325301204,
+      "3": 0.0,
+      "4": 0.7890625
+    },
+    "top_share": 0.62,
+    "top_value": "4"
+  },
+  "no_gain": true,
+  "prereg": "v2/06b/records/m8-prereg-2026-09-29.md section 8 (R3)",
+  "prereg_commit": "e6a5f4515b902f2760ff768d47bf50c9eafb3849",
+  "run": "/data/dev2/runs/06b/m8/formal/m8-s5-b05",
+  "schema": "dev2-06b-m8-score-report/1",
+  "score": {
+    "acc_minus_majority": 0.0225,
+    "acc_minus_majority_boot95": [
+      -0.015062500000000013,
+      0.0625
+    ],
+    "accuracy": 0.3425,
+    "accuracy_boot95": [
+      0.2975,
+      0.39
+    ],
+    "accuracy_wilson95": [
+      0.29769022933249495,
+      0.39030625245640455
+    ],
+    "always_majority_accuracy": 0.32,
+    "always_majority_level": 4,
+    "bootstrap": {
+      "replicates": 5000,
+      "seed": 20260929
+    },
+    "correct": 137,
+    "flags": [
+      "NO-GAIN"
+    ],
+    "gold_histogram": {
+      "0": 35,
+      "1": 79,
+      "2": 83,
+      "3": 75,
+      "4": 128
+    },
+    "gold_l4_share": 0.32,
+    "histogram": {
+      "0": 30,
+      "1": 40,
+      "2": 82,
+      "3": 0,
+      "4": 248,
+      "invalid": 0
+    },
+    "invalid_or_missing": 0,
+    "l4_share": 0.62,
+    "macro_f1": 0.2507200059014828,
+    "modal_level": 4,
+    "n": 400,
+    "qwk_answered": 0.37783230264640344,
+    "rare_levels": [
+      3
+    ],
+    "scope": "development readout only; never a release score, v3, chart or card (score5t-dev)",
+    "top_category": "4",
+    "top_share": 0.62,
+    "top_share_wilson95": [
+      0.5715036398060113,
+      0.6662133264500655
+    ]
+  },
+  "type_verdicts": {
+    "choice": "OK",
+    "noul": "OK",
+    "score": "OK"
+  },
+  "typed_final_gold_sha256": "707dd28dfbab10d124d437434023729f319501542e999e536fce9b7ff7f2361e",
+  "typed_final_predictions_sha256": "99c5a0147b69a7292cbbae0ffd31d5d874235c29eed8b6de130a78ea010e1c60",
+  "types_json": {
+    "agrees": true,
+    "path": "/data/dev2/runs/06b/m8/formal/m8-s5-b05.gates/types.json",
+    "sha256": "ce2ca8bc47ccd5e8147c7d5b25f905ab85a23126bb65f599b7f735a4e2a7440a"
+  }
+}

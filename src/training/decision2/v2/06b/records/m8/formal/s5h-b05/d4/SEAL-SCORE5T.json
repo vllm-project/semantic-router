@@ -1,0 +1,12 @@
+{
+ "gold_read": false,
+ "identity": {},
+ "items": 800,
+ "label": "development readout (HT-DEV v1)",
+ "missing": 0,
+ "null_answers": 0,
+ "predicted": 800,
+ "predictions_sha256": "8ff9d177c4e5016064891b1c7ac9900136d2a1ac09bad7f7bb12e336148f0d55",
+ "prompts_sha256": "8e35bfffc2c3b8e4252d3c39ec1c65054250a3ddf80159d219a16b41bca1d93c",
+ "schema": "dev2-htdev-score/1"
+}
