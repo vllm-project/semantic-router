@@ -64,6 +64,9 @@ class SuccessorTest(unittest.TestCase):
         red_v3=None,
         exposure_groups=(),
         h_bar_hi=0.02,
+        public_verdict="OK",
+        public_pair=None,
+        c1_verdict="PASS",
     ):
         run = self.root / name
         run.mkdir()
@@ -131,16 +134,57 @@ class SuccessorTest(unittest.TestCase):
         }
         exp = self.root / f"{name}-exposure.json"
         exp.write_text(json.dumps({"groups": list(exposure_groups)}))
+        left, right = public_pair or (str(run), "bar-t1")
+        public = {
+            "runs": {"left": left, "right": "/runs/bar"},
+            "names": {"left": name, "right": right},
+            "left_correct": 150 if public_verdict == "OK" else 138,
+            "right_correct": 150,
+            "delta": 0 if public_verdict == "OK" else -12,
+            "mcnemar_exact_p": 1.0 if public_verdict == "OK" else 0.01,
+            "ci95": [-5, 5],
+            "tiers": {"hard": {"items": 69, "left": 50, "right": 50}},
+            "verdict": public_verdict,
+        }
+        c1 = (
+            None
+            if c1_verdict is None
+            else {
+                "role": "successor",
+                "tier": cfg["label"],
+                "c1": 48.9,
+                "model": {"identity": "cd" * 32},
+                "item8": {
+                    "verdict": c1_verdict,
+                    "delta": 0.5 if c1_verdict == "PASS" else -2.5,
+                    "ci95": [-1.0, 2.0] if c1_verdict == "PASS" else [-4.0, -1.0],
+                    "p": 0.5 if c1_verdict == "PASS" else 0.001,
+                    "name": "DEV2.0-4B 452f1332 (current revision)",
+                },
+            }
+        )
         return suc.evaluate(
-            tier, run, types, mlx, overlap, [(str(exp), json.loads(exp.read_text()))]
+            tier,
+            run,
+            types,
+            mlx,
+            overlap,
+            [(str(exp), json.loads(exp.read_text()))],
+            public,
+            c1,
         )
 
     def test_pass(self):
         r = self.make("m6-4b-a")
         self.assertEqual(r["status"], "PASS", json.dumps(r["items"], indent=1))
+        self.assertEqual(r["status_1_7"], "PASS")
+        self.assertTrue(r["items"]["7_jevbench_public231"]["gating"])
         self.assertEqual(r["report_only"]["best_same_size_peer"], "decider4b")
         self.assertIn("none", r["report_only"]["inherited_exposure"])
-        self.assertIn("m6-4b-a", suc.render(r))
+        md = suc.render(r)
+        self.assertIn("m6-4b-a", md)
+        self.assertIn("150 vs 150, OK", md)
+        self.assertIn("48.90, +0.50", md)
 
     def test_each_item_can_fail(self):
         cases = {
@@ -151,11 +195,60 @@ class SuccessorTest(unittest.TestCase):
             "5_tier_gates": dict(v3=55.0),
             "6a_exposure_new_files": dict(exposure_groups=["g1"]),
             "6b_reduced_panels": dict(red_bar=-0.01),
+            "7_jevbench_public231": dict(public_verdict="REGRESSION"),
+            "8_c1_postkey": dict(c1_verdict="REGRESSION"),
         }
         for i, (key, kw) in enumerate(cases.items()):
             r = self.make(f"m6-4b-f{i}", **kw)
             self.assertEqual(r["status"], "FAIL", key)
             self.assertFalse(r["items"][key]["pass"], key)
+            self.assertEqual(
+                r["status_1_7"], "PASS" if key == "8_c1_postkey" else "FAIL", key
+            )
+
+    def test_public231_regression_gates_and_must_pair_with_the_bar(self):
+        r = self.make("m6-4b-p1", public_verdict="REGRESSION")
+        it = r["items"]["7_jevbench_public231"]
+        self.assertFalse(it["pass"])
+        self.assertEqual(
+            (it["correct"], it["bar_correct"], it["delta"]), (138, 150, -12)
+        )
+        self.assertIn("138 vs 150, REGRESSION", suc.render(r))
+        r = self.make("m6-4b-p2", public_pair=("/elsewhere/run", "bar-t1"))
+        self.assertIsNone(r["items"]["7_jevbench_public231"]["pass"])
+        self.assertEqual(r["status_1_7"], "INCOMPLETE")
+        r = self.make("m6-4b-p3", public_pair=(None, "adopted-1.0"))
+        r_run = self.root / "m6-4b-p3"
+        self.assertIsNone(r["items"]["7_jevbench_public231"]["pass"])
+        r = suc.evaluate("4b", r_run, None, None, None, [], None, None)
+        self.assertIn(
+            "no gates public231", r["items"]["7_jevbench_public231"]["reason"]
+        )
+
+    def test_c1_pending_then_choice(self):
+        a = self.make("m6-4b-c1a", c1_verdict=None)
+        self.assertEqual(a["status_1_7"], "PASS")
+        self.assertEqual(a["status"], "INCOMPLETE")
+        self.assertIn("custodian", a["items"]["8_c1_postkey"]["reason"])
+        out = suc.choose("4b", [a])
+        self.assertEqual(out["c1_candidate"], "m6-4b-c1a")
+        self.assertIsNone(out["successor"])
+        self.assertEqual(out["pending"], ["m6-4b-c1a"])
+        b = self.make("m6-4b-c1b", c1_verdict="REGRESSION")
+        out = suc.choose("4b", [a, b])
+        self.assertEqual(out["order"], ["m6-4b-c1a"])
+        c = self.make("m6-4b-c1c")
+        out = suc.choose("4b", [c])
+        self.assertEqual(
+            (out["c1_candidate"], out["successor"]), ("m6-4b-c1c", "m6-4b-c1c")
+        )
+        wrong = dict(role="current", tier="4B", item8={"verdict": "PASS"})
+        self.assertIsNone(suc.c1_guard(wrong, "4B")["pass"])
+        self.assertIsNone(
+            suc.c1_guard(
+                {"role": "successor", "tier": "2B", "item8": {"verdict": "PASS"}}, "4B"
+            )["pass"]
+        )
 
     def test_h_vs_peer_gate_and_08b_has_no_floor(self):
         r = self.make(
@@ -275,6 +368,41 @@ class SuccessorTest(unittest.TestCase):
         self.assertEqual(
             json.loads((self.root / "choice.json").read_text())["pending"], ["m6-2b-a"]
         )
+        pub = self.root / "pub.json"
+        pub.write_text(
+            json.dumps(
+                {
+                    "runs": {"left": str(run), "right": "/runs/bar"},
+                    "names": {"left": "m6-2b-a", "right": "bar-t1"},
+                    "left_correct": 171,
+                    "right_correct": 171,
+                    "delta": 0,
+                    "mcnemar_exact_p": 1.0,
+                    "ci95": [-4, 4],
+                    "verdict": "OK",
+                }
+            )
+        )
+        out2 = self.root / "res2"
+        suc.main(
+            [
+                "evaluate",
+                "--tier",
+                "2b",
+                "--run",
+                str(run),
+                "--types",
+                str(self.root / "types.json"),
+                "--public231",
+                str(pub),
+                "--output",
+                str(out2),
+            ]
+        )
+        doc = json.loads(Path(f"{out2}.json").read_text())
+        self.assertTrue(doc["items"]["7_jevbench_public231"]["pass"])
+        self.assertEqual(doc["inputs"]["public231_sha256"], suc.sha(pub))
+        self.assertIsNone(doc["inputs"]["c1_summary_sha256"])
 
 
 if __name__ == "__main__":

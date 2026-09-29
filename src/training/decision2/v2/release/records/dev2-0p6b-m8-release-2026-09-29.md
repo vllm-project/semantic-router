@@ -4,7 +4,18 @@ Coordinator approval 2026-09-29 18:25 UTC+8 (first progressive-update successor;
 `v2/06b/records/m8-handoff-2026-09-29.md`). The work was interrupted by the Cursor usage limit at ~19:04 and
 resumed at 20:45 (nothing had been uploaded or committed before the stop).
 
-## C1 card-only revision, 2026-09-30 ≈01:00 UTC+8 — revision `188eb4c8` (current)
+## Post-key C1 card-only revision, 2026-09-30 ≈01:46 UTC+8 — revision `476fe984` (current)
+
+- **Revision `476fe984a2316519f3e583b7f31b1670295b2477`** (`main`), manifest `5a3317a2034b…`. Final decision
+  [`DEV2.0-0.6B.decision.json`](dev2-0p6b-c1postkey-card-2026-09-30/DEV2.0-0.6B.decision.json) `54a0f25f…`
+  supersedes `453b4b7b…` (successor profile kept, 12 of 12 items); gate.json `9d67b209…`.
+- **Card:** the approved line "JevArena-C1 v1.2, post-key (not an independent validation): 36.92 on this revision vs
+  33.02 for the previous revision (+3.89, 95% CI [+2.16, +5.60]; …)" under the sealed-set line, plus a disclosure of
+  the post-key C1 declines (star_rating, moment_type, is_rapport, likelihood; Russian, Finnish).
+- **Weights:** byte-identical to `188eb4c8`; only `README.md` and `MODEL_MANIFEST.json` changed.
+- Record: [`dev2-0p6b-c1postkey-card-2026-09-30.md`](dev2-0p6b-c1postkey-card-2026-09-30.md).
+
+## C1 card-only revision, 2026-09-30 ≈01:00 UTC+8 — revision `188eb4c8` (superseded)
 
 - **Revision `188eb4c822e8643034f8ca87d865a16a86f69952`** (`main`), manifest `42c31b047a11…`. Final decision
   [`DEV2.0-0.6B.decision.json`](dev2-c1-card-pass-2026-09-29/DEV2.0-0.6B.decision.json) `453b4b7b…` supersedes

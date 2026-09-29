@@ -1,0 +1,40 @@
+{
+ "after": {
+  "P1": false,
+  "P2": true,
+  "P3": true,
+  "error": 0.048387,
+  "error_cp95_upper": 0.089864,
+  "errors": 9,
+  "failing_language_group_cells": [],
+  "n": 186,
+  "verdict": "FAIL",
+  "weighted_error": 0.017463
+ },
+ "before": {
+  "P1": false,
+  "P2": true,
+  "P3": true,
+  "error": 0.053571,
+  "error_cp95_upper": 0.091708,
+  "errors": 12,
+  "failing_language_group_cells": [],
+  "n": 224,
+  "verdict": "FAIL",
+  "weighted_error": 0.017875
+ },
+ "rows_sha256_after": "3ff72ada101bf6ca45fdcbb90db431767fb9b07c21ab0fe7b4e379dfa4578be4",
+ "rows_sha256_before": "f6f6a5315a0aebc9d83b656ff90d378a0e1f2083f95bbcafdc18399969a64616",
+ "schema": "dev2-dq-pn1-fix/1",
+ "steps": {
+  "F0_groups": 0,
+  "F1_error_rows": 12,
+  "F2_cells": [],
+  "F3_margin_applied": true,
+  "balance_rows": 334,
+  "reviewed_survivors": 186,
+  "rows_after": 3960,
+  "rows_before": 4888
+ },
+ "verdict": "FAIL"
+}

@@ -1,0 +1,21 @@
+{
+  "code_sha256": "7cbbf7781e0420e9ac386f46e240a4113cf8f885a5e4bec462e8a87831ff64de",
+  "comparison": {
+    "category_changes": 0,
+    "max_abs_drift": 0.0,
+    "missing": 0,
+    "slots": 3
+  },
+  "exit_code": 0,
+  "interpreter_flags": [
+    "-I",
+    "-B"
+  ],
+  "mode": "card",
+  "passed": true,
+  "readme_sha256": "b7558c7076470f39fa1ad05ea5bee3e6e28d0eb1489c5a28f39b68a7cf2a41a2",
+  "schema": "dev2-release-examples/1",
+  "seconds": 15.879983488004655,
+  "sites": [],
+  "stderr_tail": ""
+}

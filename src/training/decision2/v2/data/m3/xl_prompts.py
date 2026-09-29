@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 from training.model.data import canonical
+from v2.common import eval_only
 from v2.data.build_a0_variants import native_prompt
 from v2.data.m2.common import read_jsonl
 
@@ -39,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--wave-size", type=int, default=60000)
     parser.add_argument("--prefix", required=True)
     args = parser.parse_args(argv)
+    eval_only.guard(args, json.loads(args.pools.read_text()))
     order: list[str] = []
     seen: set[str] = set()
     for path in args.missing:

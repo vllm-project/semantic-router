@@ -1,9 +1,10 @@
 """Decoder M6 successor rule per finalist and the per-tier choice (prereg dec-m6-prereg-2026-09-29.md, "Successor
-rule", items 1-7, and "Choosing among passing finalists").
+rule", items 1-7, and "Choosing among passing finalists"; items 7 and 8 per COORDINATION 2026-09-29 17:15 and 23:40).
 
 evaluate: one finalist's node-A run directory (REPORT.json, PAIRED-vs-<name>.json from m6-score.sh, M6-RECEIPT.json),
-its types gate (TYPES.json), its mlx-diag paired file (MLX-PAIRED.json, v2.dec.mlx_paired), its overlap_effects run and
-the exposure receipts of the candidate's new training files:
+its types gate (TYPES.json), its mlx-diag paired file (MLX-PAIRED.json, v2.dec.mlx_paired), its overlap_effects run,
+the exposure receipts of the candidate's new training files, its public-231 guard (`v2.eval.gates public231 --left
+<run> --right <bar-t1 run>`) and, once the eval custodian has collected it, its C1 post-key SUMMARY.json:
 
 1. v3 paired 95% lower bound > 0 against the successor bar (PAIRED-vs-bar-t1: the current revision's T = 1 run).
 2. `axis_ci95.H.delta.high` >= 0 against the bar.
@@ -14,16 +15,25 @@ the exposure receipts of the candidate's new training files:
    Decider 2B (2B); no type collapsed.
 6. (a) every new-training-file exposure receipt lists no group; (b) rules 1 and 5 hold on the reduced panels
    (the 84 flagged items removed, `overlap_effects run`), with no overlap problem and every stored file reproduced.
-7. JevBench public 231: reported, never gating (unless an eval decision lands; see the note).
+7. JevBench public 231: the `gates public231` verdict of this run against the bar is not REGRESSION (left - right < 0
+   items with exact McNemar p < .05). The guard must pair this run (left) with bar-t1 (right).
+8. JevArena-C1 v1.2 post-key guard: the custodian's SUMMARY.json (`c1-postkey.sh collect`, role successor) has
+   `item8.verdict` PASS. Pending (None) until the custodian returns it; C1 is never collected here.
+
+`status_1_7` is the verdict over items 1-7 (what the custodian needs before collecting item 8); `status` covers items
+1-8, so a finalist whose C1 guard is pending is INCOMPLETE.
 
 Reported: v3 / T / H, paired CIs against every comparator, the best same-size peer (highest v3 among the listed
 peers) and public 231 by tier, the inherited exposure of a point that contains incumbent weights.
 
-choose: among passing finalists of a tier, the highest paired lower bound against the best same-size peer, then the
-higher lower bound against the bar (the incumbent's T = 1 run), then priority (the selection slot).
+choose: among finalists passing items 1-7 whose item 8 has not failed, the highest paired lower bound against the best
+same-size peer, then the higher lower bound against the bar (the incumbent's T = 1 run), then priority (the selection
+slot). The first of them is the C1 candidate (the ledger allows one successor per tier baseline); it is the successor
+once its item 8 passes.
 
     python3 m6_successor.py evaluate --tier 4b --run RUN --types TYPES.json --mlx-paired MLX-PAIRED.json \
-        --overlap overlap-effects.json [--exposure RECEIPT ...] --output PREFIX
+        --overlap overlap-effects.json [--exposure RECEIPT ...] --public231 GATE.json [--c1 SUMMARY.json] \
+        --output PREFIX
     python3 m6_successor.py choose --tier 4b --result PREFIX.json [--result ...] --output PREFIX
 """
 
@@ -65,9 +75,18 @@ TIERS: dict[str, dict[str, Any]] = {
     },
 }
 BAR = "bar-t1"
-JEVBENCH_NOTE = (
-    "public 231 reported without gating (prereg item 7); re-read the newest COORDINATION notes for an "
-    "eval decision before selection"
+RULE_1_7 = (
+    "1_v3_vs_bar",
+    "2_H_vs_bar",
+    "3_types",
+    "4_mlx_card_eligible",
+    "5_tier_gates",
+    "6a_exposure_new_files",
+    "6b_reduced_panels",
+    "7_jevbench_public231",
+)
+C1_PENDING = (
+    "pending: collected by the eval custodian (c1-postkey.sh collect, role successor)"
 )
 
 
@@ -97,6 +116,63 @@ def ci(p: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def public_guard(public: dict[str, Any] | None, run: Path) -> dict[str, Any]:
+    """Item 7 from a `v2.eval.gates public231` output: this run (left) against bar-t1 (right)."""
+    if public is None:
+        return item(None, gating=True, reason="no gates public231 output")
+    left = (public.get("runs") or {}).get("left")
+    right_name = (public.get("names") or {}).get("right")
+    if left is None or Path(left).resolve() != run.resolve() or right_name != BAR:
+        return item(
+            None,
+            gating=True,
+            reason=f"the public231 guard pairs {left} with {right_name}, not this run with {BAR}",
+        )
+    return item(
+        public["verdict"] != "REGRESSION",
+        gating=True,
+        verdict=public["verdict"],
+        delta=public.get("delta"),
+        mcnemar_exact_p=public.get("mcnemar_exact_p"),
+        ci95=public.get("ci95"),
+        correct=public.get("left_correct"),
+        bar_correct=public.get("right_correct"),
+        tiers=public.get("tiers"),
+    )
+
+
+def c1_guard(c1: dict[str, Any] | None, tier_label: str) -> dict[str, Any]:
+    """Item 8 from the custodian's C1 post-key SUMMARY.json (role successor, gated vs the tier baseline)."""
+    if c1 is None:
+        return item(None, gating=True, reason=C1_PENDING)
+    rule = c1.get("item8") or {}
+    if c1.get("role") != "successor" or c1.get("tier") != tier_label or not rule:
+        return item(
+            None,
+            gating=True,
+            reason=f"not a {tier_label} successor SUMMARY with an item8 block",
+        )
+    verdict = rule.get("verdict")
+    return item(
+        None if verdict not in ("PASS", "REGRESSION") else verdict == "PASS",
+        gating=True,
+        verdict=verdict,
+        delta=rule.get("delta"),
+        ci95=rule.get("ci95"),
+        p=rule.get("p"),
+        baseline=rule.get("name"),
+        c1=c1.get("c1"),
+        identity=(c1.get("model") or {}).get("identity"),
+        label="JevArena-C1 v1.2, post-key (not an independent validation)",
+    )
+
+
+def verdict(parts: list[bool | None]) -> str:
+    if all(r is True for r in parts):
+        return "PASS"
+    return "FAIL" if any(r is False for r in parts) else "INCOMPLETE"
+
+
 def evaluate(
     tier: str,
     run: Path,
@@ -104,6 +180,8 @@ def evaluate(
     mlx: dict[str, Any] | None,
     overlap: dict[str, Any] | None,
     exposures: list[tuple[str, dict[str, Any] | None]],
+    public: dict[str, Any] | None = None,
+    c1: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     cfg = TIERS[tier]
     report = load(run / "REPORT.json")
@@ -207,34 +285,13 @@ def evaluate(
         reason=None if exposures else "no receipt for the new training files given",
     )
     items["6b_reduced_panels"] = reduced(cfg, overlap, run.name)
-    public = report["panels"]["public231"] if report else None
-    items["7_jevbench_public231"] = item(
-        None,
-        gating=False,
-        note=JEVBENCH_NOTE,
-        correct=public.get("correct") if public else None,
-        tiers=public.get("tiers") if public else None,
-    )
+    items["7_jevbench_public231"] = public_guard(public, run)
+    items["8_c1_postkey"] = c1_guard(c1, cfg["label"])
     peers = {n: ci(paired[n]) for n in cfg["peers"] if n in paired}
     best = max(peers, key=lambda n: peers[n]["right_v3"]) if peers else None
     weights = (receipt.get("selection") or {}).get("effective_weights") or {}
-    rule = [
-        items[k]["pass"]
-        for k in (
-            "1_v3_vs_bar",
-            "2_H_vs_bar",
-            "3_types",
-            "4_mlx_card_eligible",
-            "5_tier_gates",
-            "6a_exposure_new_files",
-            "6b_reduced_panels",
-        )
-    ]
-    status = (
-        "PASS"
-        if all(r is True for r in rule)
-        else ("FAIL" if any(r is False for r in rule) else "INCOMPLETE")
-    )
+    status_1_7 = verdict([items[k]["pass"] for k in RULE_1_7])
+    status = verdict([items[k]["pass"] for k in (*RULE_1_7, "8_c1_postkey")])
     return {
         "schema": SCHEMA,
         "tier": tier,
@@ -249,6 +306,7 @@ def evaluate(
         "T": report["v3"]["T"] if report else None,
         "H": report["v3"]["H"] if report else None,
         "items": items,
+        "status_1_7": status_1_7,
         "status": status,
         "report_only": {
             "best_same_size_peer": best,
@@ -341,7 +399,8 @@ def render(r: dict[str, Any]) -> str:
     lines = [
         f"# M6 successor rule — {r['name']} ({TIERS[r['tier']]['label']})",
         "",
-        f"Status: **{r['status']}**. Point `{r['point']}`, revision `{(r['revision'] or '')[:12]}`, "
+        f"Status: **{r['status']}** (items 1–7: {r['status_1_7']}). Point `{r['point']}`, revision "
+        f"`{(r['revision'] or '')[:12]}`, "
         f"slot {r['priority']}. v3 {r['v3']}, T {r['T']}, H {r['H']}. Post-key same-panel evidence.",
         "",
         "| Item | Pass | Detail |",
@@ -378,7 +437,24 @@ def render(r: dict[str, Any]) -> str:
     )
     pub = it["7_jevbench_public231"]
     lines.append(
-        f"| 7 public 231 (report) | — | {pub['correct']} correct; {pub['note']} |"
+        f"| 7 public 231 (`gates public231` vs bar) | {pub['pass']} | "
+        + (
+            f"{pub['correct']} vs {pub['bar_correct']}, {pub['verdict']} (p {pub['mcnemar_exact_p']:.3g})"
+            if "verdict" in pub
+            else pub["reason"]
+        )
+        + " |"
+    )
+    c1 = it["8_c1_postkey"]
+    lines.append(
+        f"| 8 C1 v1.2 post-key (custodian) | {c1['pass']} | "
+        + (
+            f"{c1['c1']:.2f}, {c1['delta']:+.2f} {fmt_ci(dict(zip(('low', 'high'), c1['ci95'])))} "
+            f"vs {c1['baseline']}, {c1['verdict']}"
+            if "verdict" in c1 and c1["ci95"]
+            else c1.get("reason") or c1.get("verdict")
+        )
+        + " |"
     )
     ro = r["report_only"]
     lines += [
@@ -394,7 +470,11 @@ def render(r: dict[str, Any]) -> str:
 
 
 def choose(tier: str, results: list[dict[str, Any]]) -> dict[str, Any]:
-    passing = [r for r in results if r["status"] == "PASS"]
+    passing = [
+        r
+        for r in results
+        if r["status_1_7"] == "PASS" and r["items"]["8_c1_postkey"]["pass"] is not False
+    ]
 
     def key(r: dict[str, Any]) -> tuple:
         peer = (
@@ -406,14 +486,22 @@ def choose(tier: str, results: list[dict[str, Any]]) -> dict[str, Any]:
         return (-peer, -bar, r["priority"] if r["priority"] is not None else 99)
 
     ranked = sorted(passing, key=key)
+    top = ranked[0] if ranked else None
+    top_passed = top is not None and top["status"] == "PASS"
     return {
         "schema": CHOICE_SCHEMA,
         "tier": tier,
-        "rule": "highest paired lower bound vs the best same-size peer, then vs the bar (incumbent T = 1), then priority",
+        "rule": (
+            "among finalists passing items 1-7 whose item 8 has not failed: highest paired lower bound vs the best "
+            "same-size peer, then vs the bar (incumbent T = 1), then priority; the first is the C1 candidate and "
+            "the successor once item 8 passes"
+        ),
         "finalists": [
             {
                 "name": r["name"],
                 "point": r["point"],
+                "status_1_7": r["status_1_7"],
+                "item8": r["items"]["8_c1_postkey"]["pass"],
                 "status": r["status"],
                 "priority": r["priority"],
                 "lb_vs_best_peer": (r["report_only"]["vs_best_peer"] or {})
@@ -426,9 +514,10 @@ def choose(tier: str, results: list[dict[str, Any]]) -> dict[str, Any]:
             for r in results
         ],
         "order": [r["name"] for r in ranked],
-        "successor": ranked[0]["name"] if ranked else None,
-        "successor_run": ranked[0]["run"] if ranked else None,
-        "successor_revision": ranked[0]["revision"] if ranked else None,
+        "c1_candidate": top["name"] if top else None,
+        "successor": top["name"] if top_passed else None,
+        "successor_run": top["run"] if top_passed else None,
+        "successor_revision": top["revision"] if top_passed else None,
         "pending": [r["name"] for r in results if r["status"] == "INCOMPLETE"],
     }
 
@@ -445,6 +534,14 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--mlx-paired", type=Path)
     e.add_argument("--overlap", type=Path)
     e.add_argument("--exposure", action="append", default=[])
+    e.add_argument(
+        "--public231",
+        type=Path,
+        help="v2.eval.gates public231 output, this run (left) vs bar-t1 (right)",
+    )
+    e.add_argument(
+        "--c1", type=Path, help="the eval custodian's C1 post-key SUMMARY.json"
+    )
     e.add_argument(
         "--output",
         type=Path,
@@ -464,7 +561,16 @@ def main(argv: list[str] | None = None) -> int:
             load(args.mlx_paired),
             load(args.overlap),
             [(x, load(Path(x))) for x in args.exposure],
+            load(args.public231),
+            load(args.c1),
         )
+        for key, path in (
+            ("public231_sha256", args.public231),
+            ("c1_summary_sha256", args.c1),
+        ):
+            out["inputs"][key] = (
+                sha(path) if path is not None and path.is_file() else None
+            )
         Path(f"{args.output}.json").write_text(
             json.dumps(out, indent=1, sort_keys=True) + "\n"
         )
@@ -473,6 +579,7 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "name": out["name"],
+                    "status_1_7": out["status_1_7"],
                     "status": out["status"],
                     "items": {k: v["pass"] for k, v in out["items"].items()},
                 }
@@ -491,16 +598,17 @@ def main(argv: list[str] | None = None) -> int:
         "",
         f"Rule: {out['rule']}.",
         "",
-        "| Finalist | Status | Slot | LB vs best peer | LB vs bar |",
-        "| --- | --- | --- | ---: | ---: |",
+        "| Finalist | Items 1–7 | Item 8 | Status | Slot | LB vs best peer | LB vs bar |",
+        "| --- | --- | --- | --- | --- | ---: | ---: |",
     ]
     for f in out["finalists"]:
         md.append(
-            f"| {f['name']} | {f['status']} | {f['priority']} | {f['lb_vs_best_peer']} | {f['lb_vs_bar']} |"
+            f"| {f['name']} | {f['status_1_7']} | {f['item8']} | {f['status']} | {f['priority']} | "
+            f"{f['lb_vs_best_peer']} | {f['lb_vs_bar']} |"
         )
     md += [
         "",
-        f"Successor: **{out['successor']}**"
+        f"C1 candidate: **{out['c1_candidate']}**. Successor: **{out['successor']}**"
         + (f"; pending: {out['pending']}" if out["pending"] else ""),
         "",
     ]
@@ -508,6 +616,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         json.dumps(
             {
+                "c1_candidate": out["c1_candidate"],
                 "successor": out["successor"],
                 "order": out["order"],
                 "pending": out["pending"],
