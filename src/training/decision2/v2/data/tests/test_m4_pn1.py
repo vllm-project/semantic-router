@@ -1059,7 +1059,16 @@ class PipelineTest(unittest.TestCase):
                 for p in sorted((work / "judgeset3").glob("items.*.jsonl"))
                 for i in build.read_jsonl(p)
             ]
-            self.assertEqual(len({i["cid"] for i in rejudge}), len(pool))
+            judged3 = {i["cid"] for i in rejudge}
+            swap = {c for c, r in pool.items() if r["family"] in ("pn-name", "pn-twin")}
+            self.assertTrue(swap <= judged3)
+            pool3 = {
+                r["cid"]: r for r in build.read_jsonl(work / "judgeset3" / "pool.jsonl")
+            }
+            for cid in judged3 - swap:
+                self.assertLess(pool3[cid]["rank"], 1.3)
+            order = [pool3[i["cid"]]["tier"] for i in rejudge if i["kind"] == "label"]
+            self.assertEqual(order, sorted(order))
             self.assertTrue(
                 all(
                     "do not matter" in i["prompt"] or "native speaker" in i["prompt"]

@@ -5,8 +5,11 @@
 # Usage:
 #   pn1_node.sh download                     pin the Tatoeba export: host curl, bzip2 -t, source-manifest.json
 #   pn1_node.sh cpu <pn1_build args...>      one CPU step in the offline image (no GPU device)
-#   pn1_node.sh gpu <3|4> <job> <budget-s> -- <pn1_gpu args...>
-#                                            one GPU job in the offline image on GPU3 or GPU4
+#   pn1_node.sh gpu <3|4> <job> <budget-s> [--shared] -- <pn1_gpu args...>
+#                                            one GPU job in the offline image on GPU3 or GPU4;
+#                                            --shared: recorded co-tenant under the PN1 lend (waits out
+#                                            decoder formal runs, needs >= 100 GB free VRAM, never touches
+#                                            other jobs; co-tenancy lands in the GPU-TIME receipt)
 #   pn1_node.sh dry <pn1_gpu args...>        the same job with --dry-run in a CPU container (no GPU)
 #   pn1_node.sh warm <model-dir>             read the weight files once on the host (page cache; no GPU)
 #   pn1_node.sh seed-cache <triton-cache>    start the persisted Triton cache from a copy (before any job)
@@ -108,6 +111,8 @@ record = {"schema": "dev2-gpu-time/1" if kind == "gpu" else "dev2-cpu-time/1", "
           "source_commit": commit, "source_tree": tree, "image_id": image}
 if kind == "gpu":
     record.update(budget_seconds=float(extra[0]), gpu=int(extra[1]), gpus=1, gpu_hours=wall / 3600)
+    if len(extra) > 2 and extra[2]:
+        record["co_tenancy"] = json.loads(extra[2])
 json.dump(record, open(path, "x"), indent=1, sort_keys=True)
 EOF
 }
@@ -132,6 +137,7 @@ write_lease() {  # GPU STATUS NOTE [START EXPECTED_END JOB]
     [ -n "${4:-}" ] && echo "start_utc=$4"
     [ -n "${5:-}" ] && echo "expected_end_utc=$5"
     [ -n "${6:-}" ] && echo "job=$6"
+    echo "cumulative_pn1_gpu_hours=$(gpuh)"
     echo "updated_utc=$(now)"
     echo "source_commit=$COMMIT"
   } > "$tmp"
@@ -141,7 +147,8 @@ write_lease() {  # GPU STATUS NOTE [START EXPECTED_END JOB]
 cpu() {
   mkdir -p "$PRIV" "$RUNS"
   chmod 700 "$PRIV"
-  local name="cpu-$1-$(date -u +%Y%m%dT%H%M%SZ)" start status
+  local name start status
+  name="cpu-$1-$(date -u +%Y%m%dT%H%M%SZ)"
   start=$(now)
   set +e
   docker run --rm --name "dev2-data-pn1-$name" --network none \
@@ -155,16 +162,54 @@ cpu() {
   return "$status"
 }
 
+free_gb() {  # GPU -> free VRAM in whole GB
+  rocm-smi -d "$1" --showmeminfo vram 2>/dev/null \
+    | awk -F': ' '/Total Memory/ {t = $NF} /Total Used Memory/ {u = $NF} END {printf "%d\n", (t - u) / 1e9}'
+}
+
+formal_active() {  # GPU -> 0 if a decoder formal / reference collection is active on it
+  local g=$1 f
+  for f in "/data/dev2/leases/gpu$g.lock"/owner.dec-formal*; do
+    [ -f "$f" ] && grep -q '^status=\(running\|busy\)' "$f" && return 0
+  done
+  docker ps --format '{{.Names}}' | grep -q "^dev2-dec-gpu$g-" && return 0
+  return 1
+}
+
 gpu() {
-  local gpu=$1 job=$2 budget=$3 start status used vram lease run
+  local gpu=$1 job=$2 budget=$3 start status used vram lease run shared=0 cotenancy="" extra=() free
   shift 3
+  if [ "${1:-}" = --shared ]; then shared=1; shift; fi
   [ "${1:-}" = -- ] && shift
   [ -n "${RENDER[$gpu]:-}" ] || die "GPU $gpu is not lent to research & data"
   [[ "$job" =~ ^[a-z0-9-]+$ ]] || die "bad job name"
   lease=/data/dev2/leases/gpu$gpu.lock
-  if grep -q '^status=running' "$lease/owner" 2>/dev/null; then die "gpu$gpu owner entry is running"; fi
-  vram=$(rocm-smi -d "$gpu" --showmemuse 2>/dev/null | awk -F': ' '/VRAM%/ {v = $NF} END {print v}')
-  [ "$vram" = 0 ] || die "gpu$gpu is not idle (VRAM%=${vram:-unknown})"
+  if [ "$shared" = 0 ]; then
+    if grep -q '^status=running' "$lease/owner" 2>/dev/null; then die "gpu$gpu owner entry is running"; fi
+    vram=$(rocm-smi -d "$gpu" --showmemuse 2>/dev/null | awk -F': ' '/VRAM%/ {v = $NF} END {print v}')
+    [ "$vram" = 0 ] || die "gpu$gpu is not idle (VRAM%=${vram:-unknown})"
+  else
+    # Recorded co-tenant under the PN1 lend: never touches other jobs; waits out decoder formal runs.
+    for _ in $(seq 1 120); do formal_active "$gpu" || break; sleep 60; done
+    formal_active "$gpu" && die "a decoder formal / reference run is still active on gpu$gpu"
+    free=$(free_gb "$gpu")
+    [ "$free" -ge 100 ] || die "gpu$gpu has ${free} GB free VRAM (< 100)"
+    cotenancy=$(python3 - "$gpu" "$free" "$lease" <<'EOF'
+import glob, json, os, subprocess, sys
+gpu, free, lease = sys.argv[1:]
+owners = {}
+for path in sorted(glob.glob(os.path.join(lease, "owner*"))):
+    if os.path.basename(path) == "owner.data":
+        continue
+    fields = dict(line.split("=", 1) for line in open(path).read().splitlines() if "=" in line)
+    owners[os.path.basename(path)] = {k: fields.get(k) for k in ("track", "status", "purpose", "start_utc", "expected_end_utc")}
+names = subprocess.run(["docker", "ps", "--format", "{{.Names}}"], capture_output=True, text=True).stdout.split()
+print(json.dumps({"shared": True, "free_vram_gb_at_launch": int(free), "lease_entries": owners,
+                  "decoder_containers_on_node": sorted(n for n in names if n.startswith(("dec-", "dev2-dec-")))}))
+EOF
+)
+    extra=(--min-free-gb 100)
+  fi
   used=$(gpuh)
   python3 -c "import sys; sys.exit(float(sys.argv[1]) >= float(sys.argv[2]))" "$used" "$GPUH_STOP" \
     || die "recorded PN1 GPU time $used h reached the $GPUH_STOP h stop"
@@ -172,7 +217,11 @@ gpu() {
   [ ! -e "$run" ] || die "job $job already ran"
   mkdir -p "$run" "$TC" "$PRIV"
   start=$(now)
-  write_lease "$gpu" running "job $job" "$start" "$(date -u -d "+$budget seconds" +%FT%TZ)" "$job"
+  if [ "$shared" = 1 ]; then
+    write_lease "$gpu" busy "co-tenant under the PN1 lend; decoder jobs untouched; job $job" "$start" "$(date -u -d "+$budget seconds" +%FT%TZ)" "$job"
+  else
+    write_lease "$gpu" running "job $job" "$start" "$(date -u -d "+$budget seconds" +%FT%TZ)" "$job"
+  fi
   set +e
   docker run --rm --name "dev2-data-pn1-$job" --network none \
     --device /dev/kfd --device "${RENDER[$gpu]}" --group-add video --ipc host --shm-size 16g \
@@ -183,12 +232,16 @@ gpu() {
     -e TRITON_CACHE_DIR="$TC" -e TRITON_CACHE_AUTOTUNING=1 -e HIP_FORCE_DEV_KERNARG=1 \
     -v "$M:$M:ro" -v "$HF:$HF:ro" -v "$PRIV:$PRIV" -v "$TC:$TC" \
     -w "$S" --entrypoint python3 "$IMAGE" -m v2.data.m4.pn1_gpu "$@" \
-    --budget-seconds "$((budget - 60))" --expect-pci-bus "${BUS[$gpu]}" \
+    --budget-seconds "$((budget - 60))" --expect-pci-bus "${BUS[$gpu]}" "${extra[@]}" \
     > "$run/stdout.log" 2> "$run/stderr.log"
   status=$?
   set -e
-  record gpu "$job" "$start" "$(now)" "$status" "$budget" "$gpu"
-  write_lease "$gpu" idle "last job $job exit $status; more PN1 jobs may follow" "$start" "" "$job"
+  record gpu "$job" "$start" "$(now)" "$status" "$budget" "$gpu" "$cotenancy"
+  if [ "$shared" = 1 ]; then
+    write_lease "$gpu" busy "co-tenant under the PN1 lend between jobs; last job $job exit $status" "$start" "" "$job"
+  else
+    write_lease "$gpu" idle "last job $job exit $status; more PN1 jobs may follow" "$start" "" "$job"
+  fi
   return "$status"
 }
 

@@ -329,6 +329,13 @@ def prepare(args: argparse.Namespace, job: str) -> tuple[dict[str, Any], Any, An
 
     receipt["runtime"] = require_runtime()
     receipt["device"] = device_info(args.expect_pci_bus)
+    import torch
+
+    free, total = torch.cuda.mem_get_info()
+    receipt["device"]["free_bytes_at_start"] = free
+    receipt["device"]["total_bytes"] = total
+    if args.min_free_gb is not None and free < args.min_free_gb * 1e9:
+        raise SystemExit(f"only {free / 1e9:.0f} GB free VRAM (< {args.min_free_gb})")
     model, tokenizer, seconds = load(args.model_dir)
     receipt["timing"]["load_seconds"] = round(seconds, 1)
     receipt["timing"]["ready_after_seconds"] = round(elapsed(), 1)
@@ -647,6 +654,9 @@ def main(argv: list[str] | None = None) -> int:
         sub.add_argument("--budget-seconds", type=float, required=True)
         sub.add_argument("--batch-size", type=int, default=default_batch)
         sub.add_argument("--expect-pci-bus")
+        sub.add_argument(
+            "--min-free-gb", type=float, help="co-tenant: required free VRAM"
+        )
         sub.add_argument(
             "--dry-run",
             action="store_true",

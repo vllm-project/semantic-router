@@ -1661,11 +1661,37 @@ def cmd_judgeset_rejudge(args: argparse.Namespace) -> int:
         for (s, _), cell in cells_of(records, seed_key).items():
             for index, record in enumerate(cell):
                 record["rank"] = round(index / max(units.get(s, 0), 1), 6)
+
+    def tier(record: dict[str, Any]) -> int | None:
+        """0: swap rows (all twins; names up to --name-factor x need); 1: natural rows
+        up to --natural-factor x need; None: not judged."""
+        if record["group"] == "swap":
+            if record["family"] == "pn-name" and args.name_factor is not None:
+                return 0 if record["rank"] < args.name_factor else None
+            return 0
+        return 1 if record["rank"] < args.natural_factor else None
+
+    for record in pool:
+        record["tier"] = tier(record)
+        record["judged"] = record["tier"] is not None
     items = [
         item
-        for record in sorted(pool, key=lambda r: (r["rank"], r["cid"]))
+        for record in sorted(
+            (r for r in pool if r["judged"]),
+            key=lambda r: (r["tier"], r["rank"], r["cid"]),
+        )
         for item in judge_items(record, args.prompt_version)
     ]
+    tiers = dict(
+        sorted(
+            collections.Counter(
+                f"{r['language']}|{r['family']}|tier{r['tier']}" for r in pool
+            ).items()
+        )
+    )
+    if args.dry_run:
+        print(json.dumps({"items": len(items), "tiers": tiers}))
+        return 0
     out = work / args.out_name
     out.mkdir(mode=0o700)
     gpus = assign_gpus(
@@ -1708,10 +1734,16 @@ def cmd_judgeset_rejudge(args: argparse.Namespace) -> int:
         "prompt_version": args.prompt_version,
         "twin_status_file": "judgeset/twin-status.jsonl",
         "judge_factor": base["judge_factor"],
+        "order": "tier 0 swap rows (twins all; names below name_factor x need), then tier 1 natural rows below natural_factor x need; by need rank within a tier",
+        "natural_factor": args.natural_factor,
+        "name_factor": args.name_factor,
+        "tiers": tiers,
         "judged_rows": dict(
             sorted(
                 collections.Counter(
-                    f"{r['language']}|{r['family']}|{r['label']}" for r in pool
+                    f"{r['language']}|{r['family']}|{r['label']}"
+                    for r in pool
+                    if r["judged"]
                 ).items()
             )
         ),
@@ -1798,6 +1830,11 @@ def gpu_jobs(directory: Path | None) -> dict[str, Any]:
     return {
         "jobs": jobs,
         "total_gpu_hours": round(sum(j["gpu_hours"] for j in jobs), 6),
+        "co_tenancy": [
+            {"job": j["job"], "gpu": j["gpu"], **j["co_tenancy"]}
+            for j in jobs
+            if j.get("co_tenancy")
+        ],
     }
 
 
@@ -1994,6 +2031,10 @@ def cmd_finalize(args: argparse.Namespace) -> int:
     }
     check = self_check(train_rows, dev_rows)
     files["self-check.json"] = write_json(out / "self-check.json", check)
+    if args.addendum:
+        files["amendment-3-addendum.md"] = write_new(
+            out / "amendment-3-addendum.md", args.addendum.read_bytes()
+        )
     shortfalls = {}
     for lang in LANGS:
         train_n = len(selection[lang]["train"])
@@ -2155,6 +2196,9 @@ def main(argv: list[str] | None = None) -> int:
     rejudge.add_argument("--out-name", default="judgeset3")
     rejudge.add_argument("--prompt-version", default="v2", choices=sorted(PROMPTS))
     rejudge.add_argument("--gpus", default="gpu3,gpu4")
+    rejudge.add_argument("--natural-factor", type=float, default=1.3)
+    rejudge.add_argument("--name-factor", type=float)
+    rejudge.add_argument("--dry-run", action="store_true")
     fin = commands.add_parser("finalize")
     fin.add_argument("--work-dir", type=Path, required=True)
     fin.add_argument("--source-dir", type=Path, required=True)
@@ -2164,6 +2208,9 @@ def main(argv: list[str] | None = None) -> int:
     fin.add_argument("--drop-groups", type=Path)
     fin.add_argument("--expect-selection")
     fin.add_argument("--amendment", action="append")
+    fin.add_argument(
+        "--addendum", type=Path, help="note copied into the build receipts"
+    )
     fin.add_argument(
         "--judgeset", default="judgeset", help="judge-set directory in WORK"
     )
