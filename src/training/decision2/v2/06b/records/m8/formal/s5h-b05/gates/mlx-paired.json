@@ -1,0 +1,317 @@
+{
+  "R4": {
+    "pass": true,
+    "rule": "Choice + Noul type-macro accuracy, candidate - released: paired item-bootstrap 95% upper bound >= 0 (items resampled within type)"
+  },
+  "bootstrap": {
+    "card_macro_ci95": [
+      -0.005770975056689343,
+      0.014365079365079365
+    ],
+    "draws": 5000,
+    "items_by_type": {
+      "choice": 882,
+      "noul": 700,
+      "score": 693
+    },
+    "per_type_ci95": {
+      "choice": [
+        -0.018140589569160998,
+        0.01473922902494331
+      ],
+      "noul": [
+        -0.0014285714285714286,
+        0.02142857142857143
+      ],
+      "score": [
+        0.04329004329004329,
+        0.10533910533910534
+      ]
+    },
+    "seed": 20260929,
+    "type_macro_ci95": [
+      0.015554610733182163,
+      0.03985222978080119
+    ]
+  },
+  "candidate": {
+    "by_type": {
+      "choice": {
+        "accuracy": 0.7097505668934241,
+        "languages": {
+          "ar": {
+            "accuracy": 0.626984126984127,
+            "correct": 79,
+            "n": 126
+          },
+          "de": {
+            "accuracy": 0.6746031746031746,
+            "correct": 85,
+            "n": 126
+          },
+          "en": {
+            "accuracy": 0.753968253968254,
+            "correct": 95,
+            "n": 126
+          },
+          "es": {
+            "accuracy": 0.7222222222222222,
+            "correct": 91,
+            "n": 126
+          },
+          "fr": {
+            "accuracy": 0.7063492063492064,
+            "correct": 89,
+            "n": 126
+          },
+          "ja": {
+            "accuracy": 0.7301587301587301,
+            "correct": 92,
+            "n": 126
+          },
+          "zh": {
+            "accuracy": 0.753968253968254,
+            "correct": 95,
+            "n": 126
+          }
+        }
+      },
+      "noul": {
+        "accuracy": 0.5285714285714286,
+        "languages": {
+          "de": {
+            "accuracy": 0.55,
+            "correct": 55,
+            "n": 100
+          },
+          "en": {
+            "accuracy": 0.53,
+            "correct": 53,
+            "n": 100
+          },
+          "es": {
+            "accuracy": 0.5,
+            "correct": 50,
+            "n": 100
+          },
+          "fr": {
+            "accuracy": 0.51,
+            "correct": 51,
+            "n": 100
+          },
+          "ja": {
+            "accuracy": 0.53,
+            "correct": 53,
+            "n": 100
+          },
+          "ko": {
+            "accuracy": 0.52,
+            "correct": 52,
+            "n": 100
+          },
+          "zh": {
+            "accuracy": 0.56,
+            "correct": 56,
+            "n": 100
+          }
+        }
+      },
+      "score": {
+        "accuracy": 0.6883116883116883,
+        "languages": {
+          "ar": {
+            "accuracy": 0.6060606060606061,
+            "correct": 60,
+            "n": 99
+          },
+          "de": {
+            "accuracy": 0.6363636363636364,
+            "correct": 63,
+            "n": 99
+          },
+          "en": {
+            "accuracy": 0.7777777777777778,
+            "correct": 77,
+            "n": 99
+          },
+          "es": {
+            "accuracy": 0.7070707070707071,
+            "correct": 70,
+            "n": 99
+          },
+          "fr": {
+            "accuracy": 0.7272727272727273,
+            "correct": 72,
+            "n": 99
+          },
+          "ru": {
+            "accuracy": 0.6767676767676768,
+            "correct": 67,
+            "n": 99
+          },
+          "zh": {
+            "accuracy": 0.6868686868686869,
+            "correct": 68,
+            "n": 99
+          }
+        }
+      }
+    },
+    "card_macro": 0.6191609977324264,
+    "type_macro": 0.6422112279255137
+  },
+  "delta": {
+    "card_macro": 0.004433106575963741,
+    "per_type": {
+      "choice": -0.0011337868480725266,
+      "noul": 0.010000000000000009,
+      "score": 0.07359307359307365
+    },
+    "type_macro": 0.027486428915000416
+  },
+  "panel_gold_sha256": "71515a41583e7c4792c7058d45e6b12980f033bc9de2847b15dd3fb7b940b484",
+  "prereg": "v2/06b/records/m8-prereg-2026-09-29.md section 8 (R4)",
+  "prereg_commit": "e6a5f4515b902f2760ff768d47bf50c9eafb3849",
+  "released": {
+    "by_type": {
+      "choice": {
+        "accuracy": 0.7108843537414966,
+        "languages": {
+          "ar": {
+            "accuracy": 0.6190476190476191,
+            "correct": 78,
+            "n": 126
+          },
+          "de": {
+            "accuracy": 0.6825396825396826,
+            "correct": 86,
+            "n": 126
+          },
+          "en": {
+            "accuracy": 0.7619047619047619,
+            "correct": 96,
+            "n": 126
+          },
+          "es": {
+            "accuracy": 0.7301587301587301,
+            "correct": 92,
+            "n": 126
+          },
+          "fr": {
+            "accuracy": 0.6984126984126984,
+            "correct": 88,
+            "n": 126
+          },
+          "ja": {
+            "accuracy": 0.7222222222222222,
+            "correct": 91,
+            "n": 126
+          },
+          "zh": {
+            "accuracy": 0.7619047619047619,
+            "correct": 96,
+            "n": 126
+          }
+        }
+      },
+      "noul": {
+        "accuracy": 0.5185714285714286,
+        "languages": {
+          "de": {
+            "accuracy": 0.56,
+            "correct": 56,
+            "n": 100
+          },
+          "en": {
+            "accuracy": 0.52,
+            "correct": 52,
+            "n": 100
+          },
+          "es": {
+            "accuracy": 0.5,
+            "correct": 50,
+            "n": 100
+          },
+          "fr": {
+            "accuracy": 0.51,
+            "correct": 51,
+            "n": 100
+          },
+          "ja": {
+            "accuracy": 0.52,
+            "correct": 52,
+            "n": 100
+          },
+          "ko": {
+            "accuracy": 0.5,
+            "correct": 50,
+            "n": 100
+          },
+          "zh": {
+            "accuracy": 0.52,
+            "correct": 52,
+            "n": 100
+          }
+        }
+      },
+      "score": {
+        "accuracy": 0.6147186147186147,
+        "languages": {
+          "ar": {
+            "accuracy": 0.5757575757575758,
+            "correct": 57,
+            "n": 99
+          },
+          "de": {
+            "accuracy": 0.5656565656565656,
+            "correct": 56,
+            "n": 99
+          },
+          "en": {
+            "accuracy": 0.6767676767676768,
+            "correct": 67,
+            "n": 99
+          },
+          "es": {
+            "accuracy": 0.5858585858585859,
+            "correct": 58,
+            "n": 99
+          },
+          "fr": {
+            "accuracy": 0.6464646464646465,
+            "correct": 64,
+            "n": 99
+          },
+          "ru": {
+            "accuracy": 0.5959595959595959,
+            "correct": 59,
+            "n": 99
+          },
+          "zh": {
+            "accuracy": 0.6565656565656566,
+            "correct": 65,
+            "n": 99
+          }
+        }
+      }
+    },
+    "card_macro": 0.6147278911564626,
+    "type_macro": 0.6147247990105132
+  },
+  "runs": {
+    "candidate": {
+      "predictions_sha256": "7271175f3298a00e813b0aa32f73e0e509c14525f3654d054dae32162498af9d",
+      "reproduces_score_json": true,
+      "run": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05-mlx",
+      "score_json_sha256": "204777bb36e6f1650d3bfea12df28d0ce99883cdbc3304690d6918a7da09595c"
+    },
+    "released": {
+      "predictions_sha256": "3cf5b5e00d53e07f93028a13f3060aef6f0bb2b3d871f825c636f8a34ab92163",
+      "reproduces_score_json": true,
+      "run": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup-mlx",
+      "score_json_sha256": "64200d4bbb2cafbdd4486091eb39bbb4011e9380cb7e60fee2f9602924160abe"
+    }
+  },
+  "schema": "dev2-06b-m8-mlx-paired/1",
+  "scope": "Choice + Noul card-eligible (gated); XNLI-based Score is NC, reported"
+}
