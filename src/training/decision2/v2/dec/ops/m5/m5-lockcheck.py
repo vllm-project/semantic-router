@@ -4,7 +4,8 @@ Phase n5n: N4XF mixture identity, excluded groups, own-Nox label checks (whole-b
 M3 overlap argmax >= 0.97), label rows == N4XF block rows, N5N teacher coverage (all rows but H7; Nox on
 exactly the block rows). Phase block: N5B budget / quotas / outside-block identity / MLX-DEV disjointness
 (groups, ids and segments under the amended template threshold) for N4XF and N5B, the added-row label
-checks, N5B / N5BN teacher coverage. Writes /data/dev2/runs/dec/m5/lock-<phase>.json; exit 1 on a failure.
+checks, N5B / N5BN teacher coverage, and a per-arm status (N5B, N5BN, MLX-DEV). Writes
+/data/dev2/runs/dec/m5/lock-<phase>.json; exit 1 on any failure.
 
 usage: PYTHONPATH=<mirror>/src/training/decision2 python3 m5-lockcheck.py n5n
        PYTHONPATH=<mirror>/src/training/decision2 python3 m5-lockcheck.py block <template-max-groups>
@@ -243,21 +244,51 @@ else:
     ov = result["labels_added"]["m3_overlap"]
     if ov["overlap_rows"] and not ov["pass"]:
         fails.append("added-row M3 overlap")
-    result["teacher_n5b"] = coverage(n5b, M / "teacher/n5b/teacher.jsonl", None)
-    result["teacher_n5bn"] = coverage(n5b, M / "teacher/n5bn/teacher.jsonl", None)
-    # N5BN: Nox on every block row (the two label files are sources 0 and 1)
-    man = jload(M / "teacher/n5bn/teacher.jsonl.manifest.json")
-    used_nox = man["sources"][0].get("used", 0) + man["sources"][1].get("used", 0)
-    result["teacher_n5bn"]["nox_rows_used"] = used_nox
-    result["teacher_n5bn"]["nox_rows_expected"] = len(block_n5b)
-    if used_nox != len(block_n5b):
-        result["teacher_n5bn"]["ok"] = False
+    for key in ("n5b", "n5bn"):
+        teacher = M / f"teacher/{key}/teacher.jsonl"
+        if teacher.is_file():
+            result[f"teacher_{key}"] = coverage(n5b, teacher, None)
+        else:
+            receipt = M / f"teacher/{key}.stderr.log"
+            error = (
+                receipt.read_text().strip().splitlines()[-1:]
+                if receipt.is_file()
+                else []
+            )
+            result[f"teacher_{key}"] = {
+                "ok": False,
+                "missing_file": str(teacher),
+                "error": error,
+            }
+    missing = M / "teacher/missing-n5b/uncovered.jsonl.manifest.json"
+    if missing.is_file():
+        result["teacher_n5b"]["uncovered_rows"] = jload(missing)
+    if result["teacher_n5bn"].get("teacher_sha256"):
+        # N5BN: Nox on every block row (the two label files are sources 0 and 1)
+        man = jload(M / "teacher/n5bn/teacher.jsonl.manifest.json")
+        used_nox = man["sources"][0].get("used", 0) + man["sources"][1].get("used", 0)
+        result["teacher_n5bn"]["nox_rows_used"] = used_nox
+        result["teacher_n5bn"]["nox_rows_expected"] = len(block_n5b)
+        if used_nox != len(block_n5b):
+            result["teacher_n5bn"]["ok"] = False
     for key in ("teacher_n5b", "teacher_n5bn"):
         if not result[key]["ok"]:
             fails.append(key)
-    result["diag_n5b_sha256"] = file_sha256(M / "teacher/diag-n5b/diag.json")
+    result["diag_n5b_sha256"] = file_sha256(M / "teacher/diag-n5b-sources/diag.json")
 result["fails"] = fails
 result["status"] = "PASS" if not fails else "FAIL"
+if phase != "n5n":
+    # Per arm: the shared build / MLX-DEV checks stop everything; a teacher or added-label failure stops its arm.
+    own = {
+        "N5B": {"teacher_n5b"},
+        "N5BN": {"teacher_n5bn", "added-row labels", "added-row M3 overlap"},
+        "MLX-DEV": set(),
+    }
+    shared = [f for f in fails if not any(f in v for v in own.values())]
+    result["arm_status"] = {
+        arm: "PASS" if not shared and not (set(fails) & mine) else "FAIL"
+        for arm, mine in own.items()
+    }
 out = M / f"lock-{phase}.json"
 out.write_text(json.dumps(result, indent=1, sort_keys=True) + "\n")
 print(
@@ -265,6 +296,7 @@ print(
         {
             "status": result["status"],
             "fails": fails,
+            "arm_status": result.get("arm_status"),
             "file": str(out),
             "sha256": file_sha256(out),
         }

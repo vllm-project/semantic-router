@@ -70,8 +70,11 @@ gpu() {  # <job> <out dir under m5> <python args...>
 idle() {
   printf 'track=dec\nstatus=idle (decoder M5 prep %s finished)\nend_utc=%s\n' "$PHASE" "$(date -u +%FT%TZ)" > "/data/dev2/leases/gpu$GPU.lock/owner"
 }
-LUXW=()
-for w in w1 w2 w3 w4 w5 c-w1; do LUXW+=(--source "$H/$R2/m3/teachers/lux1/xl/$w.targets.jsonl"); done
+LUXW=() LUXC=$LUXT
+for w in w1 w2 w3 w4 w5 c-w1; do
+  LUXW+=(--source "$H/$R2/m3/teachers/lux1/xl/$w.targets.jsonl")
+  LUXC+=,$H/$R2/m3/teachers/lux1/xl/$w.targets.jsonl
+done
 
 if [ "$PHASE" = n5n ]; then
   if [ ! -f "$M/data/hw1.sha256" ]; then
@@ -145,14 +148,27 @@ cpu overlap-n5b-add teacher/checks-n5b-add-overlap -m v2.dec.m5_labels overlap -
   --reference "$M3NOX" --report /out/overlap.json || exit 1
 cpu hw1-n5b-h8 teacher/hw1-n5b-h8 -m v2.dec.m5_labels subset --targets "$HW1" --train "$N5B" --component H8 \
   --output /out/targets.jsonl || exit 1
-cpu teacher-n5b teacher/n5b -m v2.dec.compose_teacher compose --train "$N5B" --source "$LUXT" "${LUXW[@]}" \
-  --source "$T/hw1-n5b-h8/targets.jsonl" --allow-missing-pool "$IDS:H7" --output /out/teacher.jsonl || exit 1
-cpu teacher-n5bn teacher/n5bn -m v2.dec.compose_teacher compose --train "$N5B" --source "$T/nox-n5n/labels.jsonl" \
+# A failed teacher compose stops only its own arm (preflight 3): the other arm's teacher is still built.
+built=()
+if cpu teacher-n5b teacher/n5b -m v2.dec.compose_teacher compose --train "$N5B" --source "$LUXT" "${LUXW[@]}" \
+  --source "$T/hw1-n5b-h8/targets.jsonl" --allow-missing-pool "$IDS:H7" --output /out/teacher.jsonl; then
+  built+=(n5b)
+else
+  log "N5B teacher not built: N5B stopped (preflight 3)"
+  cpu missing-n5b teacher/missing-n5b -m v2.dec.compose_teacher missing --train "$N5B" --source "$LUXT" "${LUXW[@]}" \
+    --source "$T/hw1-n5b-h8/targets.jsonl" --output /out/uncovered.jsonl
+fi
+if cpu teacher-n5bn teacher/n5bn -m v2.dec.compose_teacher compose --train "$N5B" --source "$T/nox-n5n/labels.jsonl" \
   --source "$T/nox-n5b-add/labels.jsonl" --source "$LUXT" "${LUXW[@]}" --source "$T/hw1-n5b-h8/targets.jsonl" \
-  --allow-missing-pool "$IDS:H7" --output /out/teacher.jsonl || exit 1
-cpu diag-n5b teacher/diag-n5b -m v2.dec.m5_labels diag --train "$N5B" --teacher "lux=$T/n5b/teacher.jsonl" \
+  --allow-missing-pool "$IDS:H7" --output /out/teacher.jsonl; then
+  built+=(n5bn)
+else
+  log "N5BN teacher not built: N5BN stopped (preflight 3)"
+fi
+cpu diag-n5b-sources teacher/diag-n5b-sources -m v2.dec.m5_labels diag --train "$N5B" \
+  --teacher "lux=$LUXC,$T/hw1-n5b-h8/targets.jsonl" \
   --teacher "nox=$T/nox-n5n/labels.jsonl,$T/nox-n5b-add/labels.jsonl" --report /out/diag.json || exit 1
-for mix in n5b n5bn; do
+for mix in "${built[@]}"; do
   mkdir -p "$M/data/$mix"
   [ -f "$M/data/$mix/BUILT" ] || { echo "train=$N5B" > "$M/data/$mix/BUILT"; date -u +%FT%TZ >> "$M/data/$mix/BUILT"; }
 done

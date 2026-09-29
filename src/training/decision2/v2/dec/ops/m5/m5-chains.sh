@@ -8,7 +8,9 @@
 #   phase n5n:   GPU3 N5N-s1 -> N5N-s3; GPU4 N5N-s2
 #   phase block: GPU3 baselines (MLX-DEV: Nox 1.0, N4XF s1-s3, N4XF soup, pending M5 soups) -> N5B-s2 -> N5BN-s2;
 #                GPU4 N5B-s1 -> N5B-s3 -> N5BN-s1 -> N5BN-s3
-# usage: m5-chains.sh <mirror-dir> n5n|block
+#   phases n5bn / n5b: the block phase split by arm, so one stopped arm does not hold the other's chain
+#                (n5bn: GPU3 baselines -> N5BN-s2, GPU4 N5BN-s1 -> N5BN-s3; n5b: GPU3 N5B-s2, GPU4 N5B-s1 -> N5B-s3)
+# usage: m5-chains.sh <mirror-dir> n5n|block|n5bn|n5b
 set -u
 SRC=$1 PHASE=$2
 M=/data/dev2/runs/dec/m5
@@ -45,7 +47,7 @@ baselines() {  # <gpu>
     printf '%s\n' "bash $OPS/m5-mlx.sh $SRC $gpu n4xf-s$s checkpoint /runs/m4/arms/full/m4-N4XF-s$s/$b"
   done
   printf '%s\n' "bash $OPS/m5-mlx.sh $SRC $gpu n4xf-soup checkpoint /runs/m4/soup/N4XF/build/N4XF-soup"
-  printf '%s\n' "for g in N5N N5B N5BN; do [ -d $M/soup/\$g/build/\$g-soup ] && [ ! -f $M/mlxdev/readouts/m5-\$g-soup/score.json ] && bash $OPS/m5-mlx.sh $SRC $gpu m5-\$g-soup checkpoint /runs/m5/soup/\$g/build/\$g-soup; done"
+  printf '%s\n' "for g in N5N N5B N5BN; do [ -d $M/soup/\$g/build/\$g-soup ] && [ ! -f $M/mlxdev/readouts/m5-\$g-soup/vs-n4xf-soup.json ] && bash $OPS/m5-mlx.sh $SRC $gpu m5-\$g-soup checkpoint /runs/m5/soup/\$g/build/\$g-soup; done"
 }
 chain() {  # <gpu> <item>...  (item = ARM:seed or baselines)
   local gpu=$1 f=$C/chain-$PHASE-$1.sh
@@ -67,6 +69,14 @@ case $PHASE in
   block)
     chain 3 baselines N5B:2 N5BN:2
     chain 4 N5B:1 N5B:3 N5BN:1 N5BN:3
+    ;;
+  n5bn)
+    chain 3 baselines N5BN:2
+    chain 4 N5BN:1 N5BN:3
+    ;;
+  n5b)
+    chain 3 N5B:2
+    chain 4 N5B:1 N5B:3
     ;;
   *) echo "unknown phase $PHASE" >&2; rmdir "$C/launch-$PHASE.lock"; exit 2 ;;
 esac
