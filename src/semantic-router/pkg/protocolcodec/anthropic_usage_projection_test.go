@@ -317,3 +317,77 @@ func TestAnthropicStreamMarksPartialOutputProjection(t *testing.T) {
 		t.Fatalf("streaming terminal must mark the partial output projection: %+v", diagnostics)
 	}
 }
+
+// The streaming terminal carries the unavailable usage as the zero object
+// with the same approximation mark as the buffered response.
+func TestAnthropicStreamMarksUnavailableTerminalUsage(t *testing.T) {
+	response := llmprotocol.Response{
+		Generation: 1, ID: "response_1", Model: "public-model",
+		Output: []llmprotocol.OutputItem{{
+			ID: "item_1", Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "done"}},
+		}},
+		Usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
+	}
+	_, diagnostics, err := NewBuiltinEngine().EncodeResponseStream(
+		llmprotocol.AnthropicMessagesV1,
+		response,
+		llmprotocol.StreamContext{
+			PublicModel: response.Model,
+			Options:     llmprotocol.StreamOptions{IncludeUsage: boolPointer(true)},
+		},
+	)
+	if err != nil {
+		t.Fatalf("EncodeResponseStream failed: %v", err)
+	}
+	marked := false
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Field == "usage" && diagnostic.Action == llmprotocol.DiagnosticApproximated &&
+			strings.Contains(diagnostic.Reason, "zero-valued") {
+			marked = true
+		}
+	}
+	if !marked {
+		t.Fatalf("streaming terminal must mark the zero-valued usage object: %+v", diagnostics)
+	}
+}
+
+// The input lower bound is marked on the streaming terminal exactly as it is
+// in the buffered response: cache buckets known, input total and uncached
+// count absent.
+func TestAnthropicStreamMarksInputLowerBound(t *testing.T) {
+	read, write := int64(5), int64(3)
+	response := llmprotocol.Response{
+		Generation: 1, ID: "response_1", Model: "public-model",
+		Output: []llmprotocol.OutputItem{{
+			ID: "item_1", Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "done"}},
+		}},
+		Usage: llmprotocol.Usage{
+			State:           llmprotocol.UsageAvailable,
+			InputCacheRead:  llmprotocol.TokenCount{Value: &read, Provenance: llmprotocol.UsageAuthoritative},
+			InputCacheWrite: llmprotocol.TokenCount{Value: &write, Provenance: llmprotocol.UsageAuthoritative},
+		},
+	}
+	_, diagnostics, err := NewBuiltinEngine().EncodeResponseStream(
+		llmprotocol.AnthropicMessagesV1,
+		response,
+		llmprotocol.StreamContext{
+			PublicModel: response.Model,
+			Options:     llmprotocol.StreamOptions{IncludeUsage: boolPointer(true)},
+		},
+	)
+	if err != nil {
+		t.Fatalf("EncodeResponseStream failed: %v", err)
+	}
+	marked := false
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Field == "usage" && diagnostic.Action == llmprotocol.DiagnosticApproximated &&
+			strings.Contains(diagnostic.Reason, "input") {
+			marked = true
+		}
+	}
+	if !marked {
+		t.Fatalf("streaming terminal must mark the input lower bound: %+v", diagnostics)
+	}
+}

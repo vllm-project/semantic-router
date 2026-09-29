@@ -35,11 +35,11 @@ func optionalAuthoritative(value *int64) llmprotocol.TokenCount {
 	return authoritative(*value)
 }
 
-// appendAnthropicUsageMarks records the usage projection caveats shared by
-// every Anthropic Messages surface: the buffered response, the streaming
-// message_start, and the terminal message_delta all carry the same numbers,
-// so they share one marking pass. Each caveat is an approximation diagnostic
-// because Messages requires exact numbers.
+// appendAnthropicUsageMarks records the usage projection caveats on the
+// Anthropic Messages surfaces that project final numbers: the buffered
+// response and the terminal message_delta. The streaming message_start
+// carries a provisional view and is not marked. Each caveat is an
+// approximation diagnostic because Messages requires exact numbers.
 func appendAnthropicUsageMarks(
 	diagnostics *llmprotocol.Diagnostics,
 	policy llmprotocol.Policy,
