@@ -113,7 +113,7 @@ func TestRecordTurn_ResponseAPI(t *testing.T) {
 	})
 	mu.Lock()
 	defer mu.Unlock()
-	st, ok := store["respapi:conversation:conv_1"]
+	st, ok := store[scopedTelemetrySessionID("", "respapi:conversation:conv_1")]
 	require.True(t, ok)
 	assert.Equal(t, int64(1), st.cumulativePrompt)
 }
@@ -138,7 +138,7 @@ func TestRecordTurn_ResponseAPI_LineageOnlyStillRecords(t *testing.T) {
 	})
 	mu.Lock()
 	defer mu.Unlock()
-	st, ok := store["respapi:lineage:resp_root"]
+	st, ok := store[scopedTelemetrySessionID("", "respapi:lineage:resp_root")]
 	require.True(t, ok, "lineage-only turn with empty ConversationID must still be recorded")
 	assert.Equal(t, int64(1), st.cumulativePrompt)
 }
@@ -396,7 +396,7 @@ func TestRecordTurn_ResponseAPI_PricingCostAccumulation(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	st, ok := store["respapi:conversation:conv_pricing_1"]
+	st, ok := store[scopedTelemetrySessionID("", "respapi:conversation:conv_pricing_1")]
 	require.True(t, ok)
 
 	// cumulative cost: ((500*3+200*12) + (800*3+300*12)) / 1e6

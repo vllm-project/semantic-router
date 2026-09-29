@@ -3,23 +3,10 @@
 package apiserver
 
 import (
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
-
-func (s *ClassificationAPIServer) currentMemoryStore() memory.Store {
-	if s != nil && s.runtimeRegistry != nil {
-		if store := s.runtimeRegistry.MemoryStore(); store != nil {
-			return store
-		}
-	}
-	if s == nil {
-		return nil
-	}
-	return s.memoryStore
-}
 
 func (s *ClassificationAPIServer) currentVectorStoreRuntime() *routerruntime.VectorStoreRuntime {
 	if s == nil || s.runtimeRegistry == nil {

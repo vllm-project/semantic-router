@@ -3,8 +3,12 @@
 ## Overview
 
 `complexity` estimates whether a request is `easy`, `medium`, or `hard` by
-comparing it with configured example sets. It is independent of topic: two
-requests in the same domain can still need different model tiers.
+comparing it with configured example sets. Use it alongside Domain to distinguish
+requests in the same subject that need different amounts of work.
+
+Local scoring reuses your configured Embedding model, including Vela; it needs
+no separate Complexity model download. You can also connect a
+[remote scorer](#local-and-remote-scoring).
 
 ## Key Advantages
 
@@ -32,17 +36,17 @@ routing:
     complexity:
       - name: needs_reasoning
         threshold: 0.10
-        description: Escalate multi-step reasoning or synthesis-heavy prompts.
+        description: Estimate the work needed to produce a supported answer.
         hard:
           candidates:
-            - solve this step by step
-            - compare multiple tradeoffs
-            - analyze the root cause
+            - Find a solution satisfying interacting constraints and justify why alternatives fail.
+            - Reconcile conflicting evidence and defend a conclusion under uncertainty.
+            - Derive an algorithm and prove its correctness.
         easy:
           candidates:
-            - answer briefly
-            - quick summary
-            - simple rewrite
+            - Retrieve a fact explicitly stated in the supplied text.
+            - Copy the supplied information into the requested format.
+            - Apply one specified local edit while preserving everything else.
 ```
 
 `threshold` is a margin, not a similarity cutoff. The router scores the request
@@ -56,15 +60,16 @@ signal < -threshold  -> easy
 otherwise            -> medium
 ```
 
-Because the two banks can assign similar baseline scores, subtracting their
-scores may produce a margin much smaller than either individual score. In one
-calibration run using the candidate banks above, the largest observed absolute
-margin across eight prompts was `0.197`; none reached the `hard` or `easy` band
-with a threshold of `0.75`.
+Both banks can score a request similarly, leaving a small margin even when the
+individual scores are high. The margin measures similarity separation; it is
+not a probability that the difficulty estimate is correct.
 
-Treat `0.10` as a starting point rather than a universal default. Measure the
-margin on representative traffic and tune the threshold for the configured
-candidate banks and embedding model.
+The examples and `0.10` threshold are starting points. Calibrate them on easy,
+ordinary, and demanding requests in your supported languages. Compare requests
+about the same subject that require different operations, and vary answer style
+separately: a brief answer can still require difficult reasoning. Check both
+unnecessary escalation and hard requests sent to a simpler pool. A threshold
+change cannot fix examples whose difficulty scores are ordered incorrectly.
 
 A rule emits a suffixed name. Decisions must reference
 `<rule>:easy`, `<rule>:medium`, or `<rule>:hard`:
@@ -72,7 +77,7 @@ A rule emits a suffixed name. Decisions must reference
 ```yaml
 routing:
   decisions:
-    - name: escalate-hard-prompts
+    - name: reasoning
       description: Route hard prompts to the reasoning model.
       priority: 150
       rules:
@@ -97,6 +102,27 @@ global:
           max_prototypes: 8
           top_m: 2
 ```
+
+A complexity rule can also declare `prototype_scoring` beside `hard` and
+`easy`. Omitting it inherits the family settings above. A declared object is a
+complete override: omitted fields, including those in `{}`, use built-in
+defaults rather than family overrides. This keeps authored recipe settings with
+the rule when the recipe is exported or initialized.
+
+To retain all distinct candidates in both banks:
+
+```yaml
+prototype_scoring:
+  enabled: false
+  best_weight: 0.75
+  top_m: 2
+```
+
+This disables clustering and the prototype cap while retaining best/support
+aggregation. The same resolved settings apply to text and image hard/easy banks
+and their scores. With compression enabled, `max_prototypes: 0` uses the default
+cap of 8. These settings affect local prototype scoring, not a remote scorer's
+returned score; thresholds and explicit difficulty boundaries are unchanged.
 
 ### Local and remote scoring
 
@@ -261,7 +287,7 @@ node:
 
 ```yaml
 decisions:
-  - name: deep-reasoning
+  - name: reasoning
     priority: 100
     rules:
       on_unknown: match       # no_match (default) | match | fail_request

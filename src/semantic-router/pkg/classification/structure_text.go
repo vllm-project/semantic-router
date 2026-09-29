@@ -3,6 +3,7 @@ package classification
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // multilingualTextUnitCount counts content-bearing units without relying on
@@ -73,12 +74,12 @@ func countKeywordOccurrences(text string, keyword string) int {
 
 func keywordBoundaryMatch(text string, start int, end int) bool {
 	if start > 0 {
-		if prev, _ := utf8DecodeLastRuneInString(text[:start]); isBoundaryBlockingRune(prev) {
+		if prev, _ := utf8.DecodeLastRuneInString(text[:start]); isBoundaryBlockingRune(prev) {
 			return false
 		}
 	}
 	if end < len(text) {
-		if next, _ := utf8DecodeRuneInString(text[end:]); isBoundaryBlockingRune(next) {
+		if next, _ := utf8.DecodeRuneInString(text[end:]); isBoundaryBlockingRune(next) {
 			return false
 		}
 	}
@@ -103,21 +104,4 @@ func isCJK(r rune) bool {
 		unicode.Is(unicode.Hiragana, r) ||
 		unicode.Is(unicode.Katakana, r) ||
 		unicode.Is(unicode.Hangul, r)
-}
-
-func utf8DecodeRuneInString(s string) (rune, int) {
-	for _, r := range s {
-		return r, len(string(r))
-	}
-	return rune(0), 0
-}
-
-func utf8DecodeLastRuneInString(s string) (rune, int) {
-	last := rune(0)
-	size := 0
-	for _, r := range s {
-		last = r
-		size = len(string(r))
-	}
-	return last, size
 }

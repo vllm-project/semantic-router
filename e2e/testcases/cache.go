@@ -42,13 +42,16 @@ type CacheTestCase struct {
 
 // CacheResult tracks the result of a cache test
 type CacheResult struct {
-	Description      string
-	Category         string
-	OriginalQuestion string
-	SimilarQuestion  string
-	CacheHit         bool
-	Similarity       float64 // this request's score: the match on a hit, the best rejected candidate on a miss (0 when absent)
-	Error            string
+	Description        string
+	Category           string
+	OriginalQuestion   string
+	SimilarQuestion    string
+	CacheHit           bool
+	Similarity         float64 // this request's score: the match on a hit, the best rejected candidate on a miss (0 when absent)
+	SimilarityReported bool
+	SelectedRecipe     string
+	SelectedDecision   string
+	Error              string
 }
 
 //nolint:cyclop,gocognit // Existing E2E orchestration branches by request outcome.
@@ -235,6 +238,10 @@ func loadCacheCases(filepath string) ([]CacheTestCase, error) {
 }
 
 func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, question, localPort string, verbose bool) CacheResult {
+	return testSingleCacheRequestForModel(ctx, testCase, question, localPort, "MoM", verbose)
+}
+
+func testSingleCacheRequestForModel(ctx context.Context, testCase CacheTestCase, question, localPort, model string, verbose bool) CacheResult {
 	result := CacheResult{
 		Description:      testCase.Description,
 		Category:         testCase.Category,
@@ -242,7 +249,7 @@ func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, questio
 		SimilarQuestion:  question,
 	}
 
-	resp, err := sendChatRequest(ctx, question, localPort, verbose)
+	resp, err := sendChatRequestForModel(ctx, question, localPort, model, verbose)
 	if err != nil {
 		result.Error = fmt.Sprintf("failed to send request: %v", err)
 		return result
@@ -252,6 +259,9 @@ func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, questio
 	// Check for cache hit header
 	cacheHitHeader := resp.Header.Get("x-vsr-cache-hit")
 	result.CacheHit = (cacheHitHeader == "true")
+	result.SelectedRecipe = resp.Header.Get("x-vsr-selected-recipe")
+	result.SelectedDecision = resp.Header.Get("x-vsr-selected-decision")
+	result.SimilarityReported = resp.Header.Get("x-vsr-cache-similarity") != ""
 
 	sim, simErr := parseCacheSimilarity(resp.Header.Get("x-vsr-cache-similarity"), result.CacheHit)
 	if simErr != "" {
@@ -277,12 +287,11 @@ func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, questio
 // The contract (#2473): the score belongs to this request, rejected candidates
 // included. A hit is only served above the configured threshold, so its score
 // lands in (0,1]; a miss may omit the header, or report its best rejected
-// candidate, which must still be a finite score in [0,1). The header rides the
+// candidate, which must still be a finite score in [0,1]. The header rides the
 // x-vsr-debug surface.
 //
-// The miss bound is [0,1) rather than "below threshold" on purpose: the profile
-// threshold is not visible here, and a miss reporting a full 1.0 match would
-// mean the hit path was bypassed.
+// A verifier outage (#3176) can reject even a full-similarity candidate; the
+// score alone does not establish that the candidate is safe to serve.
 func parseCacheSimilarity(simHeader string, cacheHit bool) (float64, string) {
 	if simHeader == "" {
 		if cacheHit {
@@ -303,15 +312,20 @@ func parseCacheSimilarity(simHeader string, cacheHit bool) (float64, string) {
 		}
 		return sim, ""
 	}
-	if sim < 0.0 || sim >= 1.0 {
-		return 0, fmt.Sprintf("cache-miss similarity %.4f out of expected [0,1) range", sim)
+	// Even a full-similarity candidate can miss when NLI verification fails.
+	if sim < 0.0 || sim > 1.0 {
+		return 0, fmt.Sprintf("cache-miss similarity %.4f out of expected [0,1] range", sim)
 	}
 	return sim, ""
 }
 
 func sendChatRequest(ctx context.Context, question, localPort string, verbose bool) (*http.Response, error) {
+	return sendChatRequestForModel(ctx, question, localPort, "MoM", verbose)
+}
+
+func sendChatRequestForModel(ctx context.Context, question, localPort, model string, verbose bool) (*http.Response, error) {
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": model,
 		"messages": []map[string]string{
 			{"role": "user", "content": question},
 		},

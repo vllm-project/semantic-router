@@ -25,6 +25,11 @@ std::map<std::string, ov::Tensor> prepareBertInputs(
     const ov::CompiledModel& model
 );
 
+// Published Vela graphs take explicit RoPE positions, unlike two-input BERT
+// exports. Positions are sequence offsets, never zero-valued segment IDs.
+void setPositionIds(ov::InferRequest& request, const ov::CompiledModel& model,
+                    size_t sequence_length);
+
 /**
  * @brief Helper to duplicate a C string (for FFI)
  */
@@ -32,4 +37,3 @@ char* strDup(const char* str);
 
 } // namespace utils
 } // namespace openvino_sr
-

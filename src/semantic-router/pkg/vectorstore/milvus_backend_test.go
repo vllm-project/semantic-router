@@ -22,16 +22,14 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 )
 
 var _ = Describe("MilvusBackend", func() {
-	skipMilvus := os.Getenv("SKIP_MILVUS_TESTS") != "false"
-
-	Context("integration tests (require Milvus)", func() {
+	Context("integration tests (require Milvus)", Label("storage", "storage:milvus"), func() {
 		BeforeEach(func() {
-			if skipMilvus {
-				Skip("Skipping Milvus tests (set SKIP_MILVUS_TESTS=false to enable)")
-			}
+			storagetest.Require(GinkgoT(), "milvus")
 		})
 
 		It("should create and delete collection", func() {

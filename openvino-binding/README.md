@@ -10,7 +10,7 @@ performance claims.
 
 - Go, CMake, and a C++17 compiler
 - the OpenVINO runtime and `openvino-tokenizers`
-- Python with `transformers` and `optimum[openvino]` when converting models
+- Python with the pinned dependencies in `requirements-test.txt` for qualification
 - `numactl` for the benchmark scripts
 - a built Candle library for OpenVINO-versus-Candle comparisons
 
@@ -23,12 +23,33 @@ environment. If discovery fails, activate the environment that contains
 Run the maintained targets from the repository root:
 
 ```bash
+python -m pip install -r openvino-binding/requirements-test.txt
 make build-openvino-binding
 make test-openvino-binding
 ```
 
-The test target converts its fixture models when they are missing, so it needs
-network access on the first run. To build the C++ library directly:
+The test target downloads the registered, immutable Vela Domain and Embedding
+ONNX releases and converts their local graphs and tokenizers to FP32 OpenVINO
+IR. It requires real CPU inference: embedding dimension, finite nonzero vectors,
+semantic similarity ordering, domain labels, and probability distributions.
+Missing models, failed conversion, unavailable devices, and inference failures
+fail the target. Legacy optional binding tests are separate from this gate.
+
+Source revisions, conversion contracts, Go test events, and the successful
+inference receipt are written under `.agent-harness/model-tests/openvino-cpu/`.
+`OPENVINO_TEST_DEVICE` defaults to `CPU`; another explicit available device can
+be requested locally. An automatic fallback device does not qualify a device.
+This suite validates the binding and does not claim GPU or full-router coverage.
+
+For the same gate in an x86 Linux container, run:
+
+```bash
+docker build --platform linux/amd64 --target tester \
+  -f openvino-binding/Dockerfile .
+```
+
+The first run needs network access for the pinned artifacts. To build the C++
+library directly:
 
 ```bash
 cmake -S openvino-binding -B openvino-binding/build \

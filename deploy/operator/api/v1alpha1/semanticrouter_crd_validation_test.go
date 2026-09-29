@@ -13,9 +13,9 @@ import (
 // the CRD simply stops validating. This asserts the generated artifacts still
 // carry each expression.
 //
-// It checks presence, not CEL semantics: evaluating the expressions needs an
-// API server, so a rule that is present but wrong would pass here. What it
-// does catch is the failure that actually happened once on this branch - a
+// It checks presence, not CEL semantics; semanticrouter_cel_admission_test.go
+// evaluates the expressions with the API server's own validator. What this
+// one catches is the failure that actually happened once on this branch - a
 // generated CRD copy left behind by an API change.
 func TestGeneratedCRDsCarryComplexityValidationRules(t *testing.T) {
 	expressions := []string{
@@ -51,6 +51,35 @@ func TestGeneratedCRDsCarryComplexityValidationRules(t *testing.T) {
 			if !strings.Contains(flattened, strings.Join(strings.Fields(expression), " ")) {
 				t.Errorf("%s is missing the CEL rule %q; run 'make manifests' and 'make bundle'",
 					filepath.Base(filepath.Dir(relative))+"/"+filepath.Base(relative), expression)
+			}
+		}
+	}
+}
+
+// The PII module's remote backend and failure policy must be in both generated
+// CRD copies, otherwise a Kubernetes user cannot select the token_spans.v1
+// backend or its on_error policy at all (review on #3498).
+func TestGeneratedCRDsCarryPIIBackendAndOnError(t *testing.T) {
+	for _, relative := range []string{
+		filepath.Join("..", "..", "config", "crd", "bases", "vllm.ai_semanticrouters.yaml"),
+		filepath.Join("..", "..", "bundle", "manifests", "vllm.ai_semanticrouters.yaml"),
+	} {
+		data, err := os.ReadFile(relative)
+		if err != nil {
+			t.Fatalf("read %s: %v", relative, err)
+		}
+		flattened := strings.Join(strings.Fields(string(data)), " ")
+		for _, want := range []string{
+			"- token_spans.v1",
+			"OnError selects what a PII backend failure",
+			"Backend names a remote token classifier speaking token_spans.v1",
+			"external_models:",
+			"llm_model_name:",
+			"ExternalModels declares the remote models that classifier backends",
+		} {
+			if !strings.Contains(flattened, want) {
+				t.Errorf("%s is missing %q; run 'make manifests' and refresh bundle/manifests",
+					filepath.Base(filepath.Dir(relative))+"/"+filepath.Base(relative), want)
 			}
 		}
 	}

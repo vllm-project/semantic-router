@@ -8,8 +8,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 type MockPIIInitializer struct{ InitError error }
@@ -19,7 +19,7 @@ func (m *MockPIIInitializer) Init(_ string, useCPU bool, numClasses int) error {
 }
 
 type MockPIIInferenceResponse struct {
-	classifyTokensResult candle_binding.TokenClassificationResult
+	classifyTokensResult tasks.TokenClassificationResult
 	classifyTokensError  error
 }
 
@@ -28,18 +28,23 @@ type MockPIIInference struct {
 	responseMap map[string]MockPIIInferenceResponse
 }
 
-func (m *MockPIIInference) setMockResponse(text string, entities []candle_binding.TokenEntity, err error) {
+func (m *MockPIIInference) setMockResponse(text string, entities []tasks.TokenEntity, err error) {
 	m.responseMap[text] = MockPIIInferenceResponse{
-		classifyTokensResult: candle_binding.TokenClassificationResult{Entities: entities},
+		classifyTokensResult: tasks.TokenClassificationResult{Entities: entities},
 		classifyTokensError:  err,
 	}
 }
 
-func (m *MockPIIInference) ClassifyTokens(_ context.Context, text string) (candle_binding.TokenClassificationResult, error) {
+func (m *MockPIIInference) ClassifyTokens(_ context.Context, text string) (tasks.TokenClassificationResult, error) {
+	result, err := m.classifyTokensResult, m.classifyTokensError
 	if response, exists := m.responseMap[text]; exists {
-		return response.classifyTokensResult, response.classifyTokensError
+		result, err = response.classifyTokensResult, response.classifyTokensError
 	}
-	return m.classifyTokensResult, m.classifyTokensError
+	if result.ScoresAvailable == nil {
+		available := true
+		result.ScoresAvailable = &available
+	}
+	return result, err
 }
 
 func newTestPIIClassifier() (*Classifier, *MockPIIInitializer, *MockPIIInference) {
@@ -55,16 +60,16 @@ func newTestPIIClassifier() (*Classifier, *MockPIIInitializer, *MockPIIInference
 
 	classifier, _ := newClassifierWithOptions(cfg,
 		withPII(&PIIMapping{
-			LabelToIdx: map[string]int{"PERSON": 0, "EMAIL": 1},
-			IdxToLabel: map[string]string{"0": "PERSON", "1": "EMAIL"},
+			LabelToIdx: map[string]int{"O": 0, "PERSON": 1, "EMAIL": 2},
+			IdxToLabel: map[string]string{"0": "O", "1": "PERSON", "2": "EMAIL"},
 		}, mockInitializer, mockModel),
 	)
 
 	return classifier, mockInitializer, mockModel
 }
 
-func piiEntity(entityType, text string, start, end int, confidence float32) candle_binding.TokenEntity {
-	return candle_binding.TokenEntity{
+func piiEntity(entityType, text string, start, end int, confidence float32) tasks.TokenEntity {
+	return tasks.TokenEntity{
 		EntityType: entityType,
 		Text:       text,
 		Start:      start,
@@ -214,8 +219,8 @@ var _ = Describe("PII classification", func() {
 	})
 
 	It("should return detected PII types above the configured threshold", func() {
-		mockModel.classifyTokensResult = candle_binding.TokenClassificationResult{
-			Entities: []candle_binding.TokenEntity{
+		mockModel.classifyTokensResult = tasks.TokenClassificationResult{
+			Entities: []tasks.TokenEntity{
 				piiEntity("PERSON", "John Doe", 0, 8, 0.9),
 				piiEntity("EMAIL", "john@example.com", 9, 25, 0.8),
 			},
@@ -228,8 +233,8 @@ var _ = Describe("PII classification", func() {
 	})
 
 	It("should filter out entities below the configured threshold", func() {
-		mockModel.classifyTokensResult = candle_binding.TokenClassificationResult{
-			Entities: []candle_binding.TokenEntity{
+		mockModel.classifyTokensResult = tasks.TokenClassificationResult{
+			Entities: []tasks.TokenEntity{
 				piiEntity("PERSON", "John Doe", 0, 8, 0.9),
 				piiEntity("EMAIL", "john@example.com", 9, 25, 0.5),
 			},
@@ -242,8 +247,8 @@ var _ = Describe("PII classification", func() {
 	})
 
 	It("should return an empty result when no PII is detected", func() {
-		mockModel.classifyTokensResult = candle_binding.TokenClassificationResult{
-			Entities: []candle_binding.TokenEntity{},
+		mockModel.classifyTokensResult = tasks.TokenClassificationResult{
+			Entities: []tasks.TokenEntity{},
 		}
 
 		piiTypes, err := classifier.ClassifyPII(context.Background(), "Some text")
@@ -284,15 +289,15 @@ var _ = Describe("PII content analysis", func() {
 	})
 
 	It("should skip empty texts and inference failures while retaining valid results", func() {
-		mockModel.setMockResponse("Bob", []candle_binding.TokenEntity{}, errors.New("model inference failed"))
-		mockModel.setMockResponse("Lisa Smith", []candle_binding.TokenEntity{
+		mockModel.setMockResponse("Bob", []tasks.TokenEntity{}, errors.New("model inference failed"))
+		mockModel.setMockResponse("Lisa Smith", []tasks.TokenEntity{
 			piiEntity("PERSON", "Lisa", 0, 4, 0.3),
 		}, nil)
-		mockModel.setMockResponse("Alice Smith", []candle_binding.TokenEntity{
+		mockModel.setMockResponse("Alice Smith", []tasks.TokenEntity{
 			piiEntity("PERSON", "Alice", 0, 5, 0.9),
 		}, nil)
-		mockModel.setMockResponse("No PII here", []candle_binding.TokenEntity{}, nil)
-		mockModel.setMockResponse("", []candle_binding.TokenEntity{}, nil)
+		mockModel.setMockResponse("No PII here", []tasks.TokenEntity{}, nil)
+		mockModel.setMockResponse("", []tasks.TokenEntity{}, nil)
 
 		hasPII, results, err := classifier.AnalyzeContentForPII(context.Background(), []string{"Bob", "Lisa Smith", "Alice Smith", "No PII here", ""})
 
@@ -321,16 +326,16 @@ var _ = Describe("PII content detection", func() {
 	})
 
 	It("should return the union of detected PII types", func() {
-		mockModel.setMockResponse("Bob", []candle_binding.TokenEntity{}, errors.New("model inference failed"))
-		mockModel.setMockResponse("Lisa Smith", []candle_binding.TokenEntity{
+		mockModel.setMockResponse("Bob", []tasks.TokenEntity{}, errors.New("model inference failed"))
+		mockModel.setMockResponse("Lisa Smith", []tasks.TokenEntity{
 			piiEntity("PERSON", "Lisa", 0, 4, 0.8),
 		}, nil)
-		mockModel.setMockResponse("Alice Smith alice@example.com", []candle_binding.TokenEntity{
+		mockModel.setMockResponse("Alice Smith alice@example.com", []tasks.TokenEntity{
 			piiEntity("PERSON", "Alice", 0, 5, 0.9),
 			piiEntity("EMAIL", "alice@example.com", 12, 29, 0.9),
 		}, nil)
-		mockModel.setMockResponse("No PII here", []candle_binding.TokenEntity{}, nil)
-		mockModel.setMockResponse("", []candle_binding.TokenEntity{}, nil)
+		mockModel.setMockResponse("No PII here", []tasks.TokenEntity{}, nil)
+		mockModel.setMockResponse("", []tasks.TokenEntity{}, nil)
 
 		detectedPII := classifier.DetectPIIInContent(context.Background(), []string{"Bob", "Lisa Smith", "Alice Smith alice@example.com", "No PII here", ""})
 

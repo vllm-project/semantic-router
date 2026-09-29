@@ -30,13 +30,18 @@ const retentionDropReason = "retention.drop"
 //   - This gate does NOT affect cache reads; read-side gating lives in
 //     req_filter_cache.go.
 func ShouldSkipCacheWrite(ctx *RequestContext) (bool, string) {
-	if ctx == nil || ctx.EmittedRetention == nil {
-		return false, ""
-	}
-	if ctx.EmittedRetention.Drop != nil && *ctx.EmittedRetention.Drop {
+	if retentionDropsResponseContent(ctx) {
 		return true, retentionDropReason
 	}
 	return false, ""
+}
+
+// retentionDropsResponseContent applies to Router-owned response content
+// writes: response caches, memory extraction, and retained Responses objects.
+// It does not delete existing objects or disable explicit history reads.
+func retentionDropsResponseContent(ctx *RequestContext) bool {
+	return ctx != nil && ctx.EmittedRetention != nil &&
+		ctx.EmittedRetention.Drop != nil && *ctx.EmittedRetention.Drop
 }
 
 // retentionDefaultSecondsPerTurn approximates one conversation turn as this many

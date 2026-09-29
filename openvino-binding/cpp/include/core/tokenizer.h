@@ -35,6 +35,12 @@ public:
     
     // Tokenize text to input_ids only
     std::vector<int> tokenize(const std::string& text, int max_length);
+
+    // Tokenize once, enforce the deployment budget and retain declared suffix
+    // special tokens when truncating. An empty vector signals failure.
+    std::vector<int> tokenizeWithBudget(const std::string& text, int max_length,
+                                       bool reject_overflow, int* original_tokens,
+                                       const std::vector<int>& end_tokens);
     
     // Full tokenization with attention_mask and token_type_ids
     TokenizationResult tokenizeFull(const std::string& text, int max_length);

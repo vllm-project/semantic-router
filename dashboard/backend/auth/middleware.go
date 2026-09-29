@@ -1,12 +1,17 @@
 package auth
 
 import (
+	"bufio"
 	"context"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/observability"
+	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
 type contextKey string
@@ -20,13 +25,17 @@ const (
 
 // AuthContext contains authenticated user metadata.
 type AuthContext struct {
-	UserID string
-	Email  string
-	Role   string
-	Perms  map[string]bool
+	UserID    string
+	SessionID string
+	Email     string
+	Role      string
+	Perms     map[string]bool
 }
 
-func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
+func AuthenticateRequest(service *Service, resolvers ...RoutePolicyResolver) func(http.Handler) http.Handler {
+	if len(resolvers) > 0 && resolvers[0] != nil {
+		return authenticateWithRoutePolicy(service, resolvers[0])
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !requiresAuthentication(r.URL.Path) {
@@ -63,7 +72,8 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 					http.Error(w, "Forbidden: request origin is not permitted", http.StatusForbidden)
 					return
 				}
-				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) {
+				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) &&
+					!embeddedGrafanaQueryAllowed(r, service.allowedOrigins) {
 					http.Error(w, "Forbidden: missing or invalid CSRF token", http.StatusForbidden)
 					return
 				}
@@ -76,7 +86,17 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				return
 			}
 
-			for _, required := range RequiredPermissions(r.Method, r.URL.Path) {
+			if !routerGatewayRequestAllowed(r.Method, r.URL.Path) {
+				http.Error(w, "Router management route is not exposed by the Dashboard", http.StatusForbidden)
+				return
+			}
+
+			requiredPermissions := RequiredPermissions(r.Method, r.URL.Path)
+			if len(requiredPermissions) == 0 && isProtectedNamespace(r.URL.Path) {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+			for _, required := range requiredPermissions {
 				if !perms[required] {
 					http.Error(w, "Forbidden", http.StatusForbidden)
 					return
@@ -84,10 +104,11 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), authContextKey, AuthContext{
-				UserID: user.ID,
-				Email:  user.Email,
-				Role:   user.Role,
-				Perms:  perms,
+				UserID:    user.ID,
+				SessionID: claims.ID,
+				Email:     user.Email,
+				Role:      user.Role,
+				Perms:     perms,
 			})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -104,7 +125,10 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 // This is the deny-by-default counterpart to AuthenticateRequest: it shares
 // the same requiresAuthentication policy so the set of protected routes cannot
 // drift between the two paths.
-func ServiceUnavailableGuard() func(http.Handler) http.Handler {
+func ServiceUnavailableGuard(resolvers ...RoutePolicyResolver) func(http.Handler) http.Handler {
+	if len(resolvers) > 0 && resolvers[0] != nil {
+		return unavailableWithRoutePolicy(resolvers[0])
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if requiresAuthentication(r.URL.Path) {
@@ -117,7 +141,9 @@ func ServiceUnavailableGuard() func(http.Handler) http.Handler {
 }
 
 func requiredPermission(method, path string) string {
-	path = strings.TrimSpace(strings.ToLower(path))
+	if !strings.HasPrefix(path, "/api/router/") {
+		path = strings.TrimSpace(strings.ToLower(path))
+	}
 	for _, resolver := range []func(string, string) (string, bool){
 		adminPermission,
 		settingsPermission,
@@ -133,19 +159,20 @@ func requiredPermission(method, path string) string {
 		}
 	}
 
-	if strings.HasPrefix(path, "/api/") {
-		return PermConfigRead
-	}
-
 	return ""
 }
 
 // RequiredPermissions returns every permission needed by a request. Most
-// routes require one permission; controlled-pair creation is both an evidence
-// write and an immediate two-worker launch, so it deliberately requires both.
+// routes require one permission; sr-bench run creation and recovery persist a
+// manifest and immediately launch work, so both need write and run permissions.
 func RequiredPermissions(method, path string) []string {
-	path = strings.TrimSpace(strings.ToLower(path))
-	if method == http.MethodPost && path == "/api/evaluation/v1/controlled-pairs" {
+	if policy, ok := routercontract.LookupManagement(method, path); ok {
+		return policy.Permissions
+	}
+	if !strings.HasPrefix(path, "/api/router/") {
+		path = strings.TrimSpace(strings.ToLower(path))
+	}
+	if method == http.MethodPost && (path == "/api/sr-bench/v1/runs" || isSRBenchRunAction(path, "recover")) {
 		return []string{PermEvalWrite, PermEvalRun}
 	}
 	primary := requiredPermission(method, path)
@@ -190,6 +217,8 @@ func matchesRoute(path, base string) bool {
 
 func adminPermission(method, path string) (string, bool) {
 	switch {
+	case path == "/api/auth/me" || path == "/api/auth/me/":
+		return PermSessionRead, true
 	case strings.HasPrefix(path, "/api/admin/users/password"):
 		return PermUsersManage, true
 	case strings.HasPrefix(path, "/api/admin/audit-logs"), strings.HasPrefix(path, "/api/admin/permissions"):
@@ -223,6 +252,9 @@ func settingsPermission(method, path string) (string, bool) {
 }
 
 func routerPermission(method, path string) (string, bool) {
+	if policy, ok := routercontract.LookupManagement(method, path); ok {
+		return policy.Permissions[0], true
+	}
 	switch {
 	case path == "/api/models/catalog":
 		return PermConfigRead, true
@@ -230,33 +262,33 @@ func routerPermission(method, path string) (string, bool) {
 		return PermConfigWrite, true
 	case path == "/api/models/verify":
 		return PermEvalRun, true
-	case path == "/api/router/api/v1/observability/outcomes" && method == http.MethodPost:
-		return PermFeedbackSubmit, true
-	case strings.HasPrefix(path, "/api/router/api/v1/observability/replays"):
-		return PermReplayRead, true
-	case path == "/api/router/api/v1/storage/knowledge-bases" ||
-		strings.HasPrefix(path, "/api/router/api/v1/storage/knowledge-bases/"):
-		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-	case strings.HasPrefix(path, "/api/router/api/v1/response-cache/"):
-		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-	case path == "/api/router/api/v1/context-compression/preview":
-		return PermConfigRead, true
-	case strings.HasPrefix(path, "/api/router/api/v1/context-compression/"):
-		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-	case path == "/api/router/config/deploy",
-		path == "/api/router/config/deploy/preview",
-		path == "/api/router/config/rollback":
+	case path == "/api/router/config/deploy", path == "/api/router/config/deploy/preview", path == "/api/router/config/rollback":
 		return PermConfigDeploy, true
 	case strings.HasPrefix(path, "/api/router/config/"):
 		if method == http.MethodGet {
 			return PermConfigRead, true
 		}
 		return PermConfigWrite, true
+	case path == "/api/router/v1/chat/completions" && method == http.MethodPost:
+		return PermInferenceRun, true
 	case strings.HasPrefix(path, "/api/router/"):
-		return PermConfigRead, true
+		return "", true
 	default:
 		return "", false
 	}
+}
+
+// Dashboard-owned config handlers and inference dispatch have their own policy.
+// Every management gateway request must exist in the shared exact allowlist.
+func routerGatewayRequestAllowed(method, path string) bool {
+	if !strings.HasPrefix(path, "/api/router/") || strings.HasPrefix(path, "/api/router/config/") {
+		return true
+	}
+	if path == "/api/router/v1/chat/completions" && (method == http.MethodPost || method == http.MethodOptions) {
+		return true
+	}
+	_, ok := routercontract.LookupManagement(method, path)
+	return ok
 }
 
 func knowledgePermission(_ string, path string) (string, bool) {
@@ -300,6 +332,8 @@ func observabilityPermission(_ string, path string) (string, bool) {
 		return PermTopologyRead, true
 	case strings.HasPrefix(path, "/api/logs"):
 		return PermLogsRead, true
+	case observability.IsGrafanaQueryPath(path), observability.IsJaegerAPIPath(path):
+		return PermLogsRead, true
 	case strings.HasPrefix(path, "/embedded/grafana/"), strings.HasPrefix(path, "/embedded/jaeger"):
 		return PermLogsRead, true
 	case strings.HasPrefix(path, "/api/topology"):
@@ -311,8 +345,13 @@ func observabilityPermission(_ string, path string) (string, bool) {
 
 func featurePermission(method, path string) (string, bool) {
 	switch {
-	case path == "/api/evaluation/v1" || strings.HasPrefix(path, "/api/evaluation/v1/"):
-		if isEvaluationRunAction(path) || isControlledPairCancelAction(path) {
+	case path == "/api/workflows/health":
+		return PermConfigRead, true
+	case path == "/api/sr-bench/v1" || strings.HasPrefix(path, "/api/sr-bench/v1/"):
+		if IsSRBenchComparisonRequest(method, path) {
+			return PermEvalRead, true
+		}
+		if isSRBenchRunAction(path, "cancel") {
 			return PermEvalRun, true
 		}
 		if method == http.MethodPost || method == http.MethodDelete {
@@ -328,24 +367,26 @@ func featurePermission(method, path string) (string, bool) {
 	}
 }
 
-func isControlledPairCancelAction(path string) bool {
-	path = strings.TrimRight(path, "/")
-	rest := strings.TrimPrefix(path, "/api/evaluation/v1/controlled-pairs/")
-	parts := strings.Split(rest, "/")
-	return len(parts) == 2 && parts[0] != "" && parts[1] == "cancel"
+// IsSRBenchComparisonRequest identifies the body-based read of saved results.
+// It does not exempt the request from normal POST authentication or CSRF checks.
+func IsSRBenchComparisonRequest(method, path string) bool {
+	return method == http.MethodPost && path == "/api/sr-bench/v1/comparisons"
 }
 
-func isEvaluationRunAction(path string) bool {
+func isSRBenchRunAction(path, action string) bool {
 	path = strings.TrimRight(path, "/")
-	rest := strings.TrimPrefix(path, "/api/evaluation/v1/runs/")
+	rest := strings.TrimPrefix(path, "/api/sr-bench/v1/runs/")
+	if rest == path {
+		return false
+	}
 	parts := strings.Split(rest, "/")
-	return len(parts) == 2 && parts[0] != "" && (parts[1] == "start" || parts[1] == "cancel")
+	return len(parts) == 2 && parts[0] != "" && parts[1] == action
 }
 
 func openclawPermission(method, path string) (string, bool) {
 	switch {
 	case strings.HasPrefix(path, "/embedded/openclaw/"):
-		return PermOpenClawRead, true
+		return PermOpenClaw, true
 	case strings.HasPrefix(path, "/api/openclaw/mcp"):
 		return PermMcpManage, true
 	case hasAnyPrefix(path,
@@ -354,14 +395,17 @@ func openclawPermission(method, path string) (string, bool) {
 		"/api/openclaw/stop",
 		"/api/openclaw/containers/",
 		"/api/openclaw/next-port",
+		"/api/openclaw/token",
 	):
+		return PermOpenClaw, true
+	case strings.HasPrefix(path, "/api/openclaw/rooms/") &&
+		(strings.HasSuffix(path, "/ws") || (method == http.MethodPost && strings.HasSuffix(path, "/messages"))):
 		return PermOpenClaw, true
 	case strings.HasPrefix(path, "/api/openclaw/rooms/") && (strings.HasSuffix(path, "/messages") || strings.HasSuffix(path, "/stream") || strings.HasSuffix(path, "/ws")):
 		return PermOpenClawRead, true
 	case hasAnyPrefix(path,
 		"/api/openclaw/status",
 		"/api/openclaw/skills",
-		"/api/openclaw/token",
 	):
 		return PermOpenClawRead, true
 	case hasAnyPrefix(path,
@@ -535,6 +579,24 @@ type auditResponseWriter struct {
 func (w *auditResponseWriter) WriteHeader(status int) {
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *auditResponseWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (w *auditResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+func (w *auditResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	conn, buffered, err := http.NewResponseController(w.ResponseWriter).Hijack()
+	if err == nil {
+		w.status = http.StatusSwitchingProtocols
+	}
+	return conn, buffered, err
 }
 
 func (w *auditResponseWriter) statusCodeOr200() int {

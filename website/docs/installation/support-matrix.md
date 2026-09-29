@@ -53,12 +53,12 @@ external project.
 | Integration | Classification | Project coverage |
 | --- | --- | --- |
 | [agentgateway](k8s/agentgateway) | Supported integration | **PR CI.** Router supplies ExtProc policy; agentgateway owns the data plane. Set request bodies to `FullDuplexStreamed`. |
-| [Envoy AI Gateway](k8s/ai-gateway) | Supported integration | **PR CI.** Router supplies routing policy; the gateways own provider traffic. Verify your provider separately. |
+| [Agent Router](k8s/ai-gateway) | Supported integration | **PR CI.** Formerly Envoy AI Gateway. Router supplies routing policy; the gateways own provider traffic. Verify your provider separately. |
 | [AIBrix](k8s/aibrix) | Supported integration | **PR CI.** Router selects a model or pool; AIBrix owns deployment, autoscaling, and replicas. Use AIBrix's hardware support matrix. |
 | [NVIDIA Dynamo](k8s/dynamo) | Supported integration | **Manual.** Router selects a target; Dynamo owns graphs, workers, and frontends. Use the guide version; the older fixture is test-only. |
 | [Istio Gateway](k8s/istio) | Supported integration | **PR CI.** Router supplies ExtProc policy; Istio carries requests. Supplied GPU workloads are examples only. |
 | [llm-d](k8s/llm-d) | Supported integration | **PR CI + Contract.** Router selects a model or pool; llm-d owns discovery and replica routing. Do not add a competing direct-Service route. |
-| [Streaming with Envoy AI Gateway](k8s/streamed-extproc) | Supported integration | **PR CI.** The gateway streams transport; Router uses the configured ExtProc body mode. Test that mode explicitly. |
+| [Streaming with Agent Router](k8s/streamed-extproc) | Supported integration | **PR CI.** The gateway streams transport; Router uses the configured ExtProc body mode. Test that mode explicitly. |
 | [Valkey agentic memory](valkey-memory) | Supported integration | **Contract + Manual.** Router owns memory behavior; Valkey owns persistence and Search. You own security, retention, and backup. |
 | [Responses API state with Redis](../tutorials/global/api-and-observability#response-api) | Supported integration | **Manual.** Router owns Responses behavior; Redis stores state. You own Redis security, persistence, and eviction. |
 | [Response cache](../tutorials/plugin/response-cache) | Supported integration | **Contract + Manual.** Router owns cache behavior; your backend owns storage and availability. Treat cached data as sensitive. |
@@ -70,10 +70,10 @@ external project.
 | --- | --- | --- |
 | KServe example | Experimental example | KServe integration smoke testing; not a qualified KServe or model-serving deployment. |
 | OpenShift example | Experimental example | Adapting resources to Routes and security constraints; not a hardened OpenShift profile. |
-| Anthropic-compatible backend fixture | Experimental example | Protocol integration tests; not a production model service. |
 | Hallucination policy demo | Experimental example | Fact-check policy behavior; not a qualified guardrail or model. |
 | Jailbreak error-handling demo | Experimental example | Classifier failure paths; not a secure production policy. |
-| LLM Katan development backends | Experimental example | Lightweight OpenAI-compatible test backends; not production inference. |
+| Provider mocker and optional tiny-model smoke | Experimental example | Deterministic protocol fixtures; optional pinned Qwen3-0.6B real inference via the upstream llama.cpp server. |
+| PII remote backend demo | Experimental example | Remote token_spans.v1 PII backend and its on_error policy; not a qualified PII model or redaction policy. |
 | Observability demo | Experimental example | Prometheus, Grafana, alert, and Dashboard wiring; replace all example security and retention settings. |
 | Response jailbreak demo | Experimental example | Response-classifier window behavior; not a production guardrail model. |
 | Responses API Kubernetes demo | Experimental example | Redis persistence and restart behavior; not a hardened Redis deployment. |

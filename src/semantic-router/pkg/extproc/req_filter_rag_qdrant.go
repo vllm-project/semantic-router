@@ -54,7 +54,7 @@ func (r *OpenAIRouter) retrieveFromQdrant(traceCtx context.Context, ctx *Request
 		topK = *ragConfig.TopK
 	}
 
-	queryEmbeddings, err := ragQueryEmbeddings(query)
+	queryEmbeddings, err := r.ragQueryEmbeddings(traceCtx, query, ctx)
 	if err != nil {
 		logging.Errorf("Failed to generate embedding for Qdrant RAG query: %v", err)
 		return "", fmt.Errorf("failed to generate embedding")

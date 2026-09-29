@@ -49,6 +49,9 @@ func normalizeFusionExecutionConfig(cfg fusionExecutionConfig) fusionExecutionCo
 	if cfg.OnError == "" {
 		cfg.OnError = config.FusionOnErrorSkip
 	}
+	if cfg.QuorumFailurePolicy == "" {
+		cfg.QuorumFailurePolicy = config.FusionQuorumFailurePolicyFail
+	}
 	if cfg.JudgePromptVersion == "" {
 		cfg.JudgePromptVersion = config.DefaultFusionJudgePromptVersion
 	}
@@ -129,7 +132,24 @@ func mergeFusionAlgorithmConfig(dst *fusionExecutionConfig, src *config.FusionAl
 	mergeFusionLimits(dst, src.MaxConcurrent, src.MaxCompletionTokens, src.RoundTimeoutSeconds, src.MinSuccessfulResponses)
 	mergeFusionControls(dst, src.Temperature, src.IncludeAnalysis, src.IncludeIntermediateResponses, src.OnError)
 	mergeFusionPrompts(dst, src.AnalysisTemplate, src.SynthesisTemplate, src.JudgePromptVersion)
+	mergeFusionQuorumFailure(dst, src.QuorumFailurePolicy, src.QuorumFallbackTarget)
 	mergeFusionGroundingConfig(dst, src.Grounding)
+}
+
+// mergeFusionQuorumFailure copies the recipe-owned below-quorum policy. There is
+// deliberately no request-level counterpart: request input must not weaken the
+// operator's configured quality boundary.
+func mergeFusionQuorumFailure(
+	dst *fusionExecutionConfig,
+	policy config.FusionQuorumFailurePolicy,
+	fallbackTarget string,
+) {
+	if policy != "" {
+		dst.QuorumFailurePolicy = policy
+	}
+	if trimmed := strings.TrimSpace(fallbackTarget); trimmed != "" {
+		dst.QuorumFallbackTarget = trimmed
+	}
 }
 
 func mergeFusionModels(dst *fusionExecutionConfig, judgeModel string, analysisModels []string) {

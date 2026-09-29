@@ -26,6 +26,11 @@ func TestHallucinationDetector_LongContextReachesAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 	if err = detector.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize detector: %v", err)
 	}
@@ -57,6 +62,11 @@ func TestHallucinationDetector_LongAnswerTailIsScanned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 	if err = detector.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize detector: %v", err)
 	}
@@ -107,6 +117,11 @@ func TestHallucinationDetector_LongAnswerTailIsScannedWithNLI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 	if err = detector.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize detector: %v", err)
 	}

@@ -380,46 +380,44 @@ func (v *Validator) checkProjectionPartitionImpossibleANDsInRoute(
 	route *RouteDecl,
 	memberToPartition map[string]string,
 ) {
+	// Distributing AND over OR can produce contradictory cross-products even
+	// when the original expression is satisfiable: (A OR B) AND (A OR B) still
+	// accepts A or B. An impossible-route constraint requires every alternative
+	// to contradict a partition; one viable alternative disproves that claim.
 	clauses := positiveConjunctionClauses(route.When)
 	seen := make(map[string]struct{})
-
+	var conflicts []string
 	for _, clause := range clauses {
 		partitionMembers := make(map[string]SignalRefExpr)
+		impossible := false
 		for _, ref := range clause {
 			partitionName, ok := memberToPartition[projectionPartitionMemberKey(ref.SignalType, ref.SignalName)]
 			if !ok {
 				continue
 			}
-
 			if existing, clash := partitionMembers[partitionName]; clash && existing.SignalName != ref.SignalName {
-				pair := []string{
-					projectionPartitionMemberKey(existing.SignalType, existing.SignalName),
-					projectionPartitionMemberKey(ref.SignalType, ref.SignalName),
-				}
+				impossible = true
+				pair := []string{projectionPartitionMemberKey(existing.SignalType, existing.SignalName), projectionPartitionMemberKey(ref.SignalType, ref.SignalName)}
 				sort.Strings(pair)
-				diagKey := route.Name + "|" + partitionName + "|" + strings.Join(pair, "|")
+				diagKey := partitionName + "|" + strings.Join(pair, "|")
 				if _, alreadyReported := seen[diagKey]; alreadyReported {
 					continue
 				}
 				seen[diagKey] = struct{}{}
-
-				v.addDiag(DiagConstraint, route.Pos,
-					fmt.Sprintf(
-						"ROUTE %q: WHEN clause ANDs PROJECTION partition %q members %s(%q) and %s(%q), but that partition declares them mutually exclusive",
-						route.Name,
-						partitionName,
-						existing.SignalType,
-						existing.SignalName,
-						ref.SignalType,
-						ref.SignalName,
-					),
-					nil,
-				)
+				conflicts = append(conflicts, fmt.Sprintf(
+					"ROUTE %q: WHEN clause ANDs PROJECTION partition %q members %s(%q) and %s(%q), but that partition declares them mutually exclusive",
+					route.Name, partitionName, existing.SignalType, existing.SignalName, ref.SignalType, ref.SignalName,
+				))
 				continue
 			}
-
 			partitionMembers[partitionName] = ref
 		}
+		if !impossible {
+			return
+		}
+	}
+	for _, message := range conflicts {
+		v.addDiag(DiagConstraint, route.Pos, message, nil)
 	}
 }
 

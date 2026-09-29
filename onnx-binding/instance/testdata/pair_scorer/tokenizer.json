@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "truncation": null,
+  "padding": null,
+  "added_tokens": [],
+  "normalizer": null,
+  "pre_tokenizer": {
+    "type": "Whitespace"
+  },
+  "decoder": null,
+  "post_processor": {
+    "type": "BertProcessing",
+    "sep": [
+      "[SEP]",
+      4
+    ],
+    "cls": [
+      "[UNK]",
+      0
+    ]
+  },
+  "model": {
+    "type": "WordLevel",
+    "vocab": {
+      "[UNK]": 0,
+      "hello": 1,
+      "world": 2,
+      "\u79d8\u5bc6": 3,
+      "[SEP]": 4
+    },
+    "unk_token": "[UNK]"
+  }
+}

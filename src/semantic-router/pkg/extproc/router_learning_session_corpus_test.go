@@ -3,6 +3,7 @@ package extproc
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -48,6 +49,7 @@ type protectionMessage struct {
 }
 
 type protectionExpectation struct {
+	Rejected        bool   `json:"rejected" yaml:"rejected"`
 	HardLocked      *bool  `json:"hard_locked" yaml:"hard_locked"`
 	PreflightReason string `json:"preflight_reason" yaml:"preflight_reason"`
 	Model           string `json:"model" yaml:"model"`
@@ -77,7 +79,7 @@ func decodeProtectionCorpus(raw []byte) (protectionCorpus, error) {
 	if err := decoder.Decode(&corpus); err != nil {
 		return corpus, err
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
+	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return corpus, fmt.Errorf("corpus must contain exactly one YAML document")
 	}
 	if corpus.Schema != "agent-routing-protection.v1" || len(corpus.Scenarios) == 0 || len(corpus.MissingCoverage) == 0 {
@@ -146,7 +148,9 @@ func validateProtectionCandidates(step protectionStep) error {
 }
 
 func validateProtectionExpectation(step protectionStep) error {
-	if !slices.Contains(step.Candidates, step.Proposal) || !slices.Contains(step.Candidates, step.Expected.Model) {
+	if !slices.Contains(step.Candidates, step.Proposal) ||
+		(!step.Expected.Rejected && !slices.Contains(step.Candidates, step.Expected.Model)) ||
+		(step.Expected.Rejected && step.Expected.Model != "") {
 		return fmt.Errorf("%s: proposal and expectation must be eligible", step.ID)
 	}
 	if step.Expected.Action == "" || step.Expected.Reason == "" || step.Expected.PreflightReason == "" || step.Expected.HardLocked == nil {

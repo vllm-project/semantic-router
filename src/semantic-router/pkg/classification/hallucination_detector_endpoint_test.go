@@ -28,6 +28,10 @@ func newTestEndpointDetector(t *testing.T, endpoint string, includeExplanation b
 	if err != nil {
 		t.Fatalf("NewEndpointHallucinationDetector: %v", err)
 	}
+	if err := detector.Initialize(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = detector.Close() })
 	return detector
 }
 
@@ -403,5 +407,55 @@ func TestSystemPromptHashGuard(t *testing.T) {
 	}
 	if explHash != "f6e3da772b0ed904a5785c422a81a0127f30f16285492ce74ef0c91fa1bda601" {
 		t.Errorf("systemPromptExpl drift detected (hash: %s)", explHash)
+	}
+}
+
+func TestEndpointDetector_RepeatedQuoteTakesSuccessiveOccurrences(t *testing.T) {
+	answer := "Berlin is big. Berlin is old."
+	content := `{"hallucinated_spans": [` +
+		`{"text": "Berlin", "category": "contradiction", "subcategory": "entity"},` +
+		`{"text": "Berlin", "category": "unsupported_addition", "subcategory": "entity"}` +
+		`]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, openAIResponse(content))
+	}))
+	defer server.Close()
+
+	detector := newTestEndpointDetector(t, server.URL, false)
+	result, err := detector.DetectWithNLI(context.Background(), "ctx", "q", answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Spans) != 2 || result.Spans[0].Start != 0 || result.Spans[1].Start != 15 {
+		t.Fatalf("spans = %+v, want the two occurrences of Berlin at 0 and 15", result.Spans)
+	}
+}
+
+func TestEndpointDetector_ChatSpansUseTheSharedAlignment(t *testing.T) {
+	// A multi-byte answer: the chat adapter locates quotes by byte, converts to
+	// the contract's code points, and the shared decoder converts back. The
+	// result must slice the answer exactly, the same as a classify provider.
+	answer := "Café opened in 1999, señor."
+	content := `{"hallucinated_spans": [{"text": "1999", "category": "contradiction", "subcategory": "temporal"}, {"text": "señor", "category": "unsupported_addition", "subcategory": "entity"}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, openAIResponse(content))
+	}))
+	defer server.Close()
+
+	detector := newTestEndpointDetector(t, server.URL, false)
+	result, err := detector.DetectWithNLI(context.Background(), "ctx", "q", answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Spans) != 2 {
+		t.Fatalf("spans = %+v", result.Spans)
+	}
+	for _, span := range result.Spans {
+		if answer[span.Start:span.End] != span.Text {
+			t.Errorf("span [%d,%d) selects %q, want %q", span.Start, span.End, answer[span.Start:span.End], span.Text)
+		}
+	}
+	if result.Spans[0].Start != 16 || result.Spans[0].End != 20 {
+		t.Errorf("1999 at [%d,%d), want [16,20) in bytes", result.Spans[0].Start, result.Spans[0].End)
 	}
 }

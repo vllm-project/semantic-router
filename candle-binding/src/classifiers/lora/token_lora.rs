@@ -91,7 +91,7 @@ impl LoRATokenClassifier {
                 "create_lora_compatibility_tokenizer",
                 None,
             )
-            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
+            .map_err(candle_core::Error::from)?;
 
         // Load LoRA configuration
         let lora_config_path = Path::new(model_path).join("lora_config.json");
@@ -166,14 +166,23 @@ impl LoRATokenClassifier {
         })
     }
 
+    pub fn device(&self) -> &Device {
+        &self.device
+    }
+
+    /// Owned task bindings receive the full token predictions and apply their
+    /// policy thresholds above this model boundary.
+    pub fn include_all_predictions(&mut self) {
+        self.confidence_threshold = -1.0;
+    }
+
     /// Load token configuration from model config.json using unified config loader
     fn load_token_config(model_path: &str) -> Result<crate::core::config_loader::TokenConfig> {
         use crate::core::config_loader::{ConfigLoader, TokenConfigLoader};
         use std::path::Path;
 
         let path = Path::new(model_path);
-        TokenConfigLoader::load_from_path(path)
-            .map_err(|unified_err| candle_core::Error::from(unified_err))
+        TokenConfigLoader::load_from_path(path).map_err(candle_core::Error::from)
     }
 
     /// Classify tokens in text using LoRA-enhanced model
@@ -184,7 +193,7 @@ impl LoRATokenClassifier {
         let tokens = self.tokenize_with_bert_compatible(text)?;
         let mut results = Vec::new();
 
-        for (i, (token, token_embedding)) in tokens.iter().enumerate() {
+        for (token, token_embedding, start, end) in &tokens {
             // Use real BERT embedding from tokenization
 
             // Add batch dimension: [hidden_size] -> [1, hidden_size]
@@ -226,8 +235,8 @@ impl LoRATokenClassifier {
                     label_id: predicted_id,
                     label_name,
                     confidence,
-                    start_pos: i * token.len(), // Simplified position calculation
-                    end_pos: (i + 1) * token.len(),
+                    start_pos: *start,
+                    end_pos: *end,
                 });
             }
         }
@@ -243,13 +252,13 @@ impl LoRATokenClassifier {
     }
 
     /// BERT-compatible tokenization with embeddings
-    fn tokenize_with_bert_compatible(&self, text: &str) -> Result<Vec<(String, Tensor)>> {
+    fn tokenize_with_bert_compatible(&self, text: &str) -> Result<Vec<TokenEmbedding>> {
         // Use real BERT tokenization through unified tokenizer
         let tokenization_result = self
             .tokenizer
             .tokenize_for_lora(text)
             .with_model_context(ModelErrorType::Tokenizer, "tokenize_for_lora", Some(text))
-            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
+            .map_err(candle_core::Error::from)?;
 
         // Clone tokens before creating tensors to avoid borrow checker issues
         let token_strings = tokenization_result.tokens.clone();
@@ -257,7 +266,7 @@ impl LoRATokenClassifier {
             .tokenizer
             .create_tensors(&tokenization_result)
             .with_processing_context("create_tensors", Some("token_lora"))
-            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
+            .map_err(candle_core::Error::from)?;
 
         // Create token type IDs (all zeros for single sentence)
         let token_type_ids = token_ids_tensor.zeros_like()?;
@@ -281,7 +290,8 @@ impl LoRATokenClassifier {
             if i < seq_len {
                 // Extract embedding for this token
                 let token_embedding = token_embeddings.i(i)?; // Shape: [hidden_size]
-                results.push((token.clone(), token_embedding));
+                let (start, end) = tokenization_result.offsets[i];
+                results.push((token.clone(), token_embedding, start, end));
             }
         }
 
@@ -297,12 +307,12 @@ impl LoRATokenClassifier {
             .tokenizer
             .tokenize_for_lora(word)
             .with_model_context(ModelErrorType::Tokenizer, "tokenize_for_lora", Some(word))
-            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
+            .map_err(candle_core::Error::from)?;
         let (token_ids_tensor, attention_mask_tensor) = self
             .tokenizer
             .create_tensors(&tokenization_result)
             .with_processing_context("create_tensors", Some("generate_contextual_embedding"))
-            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
+            .map_err(candle_core::Error::from)?;
 
         // Create token type IDs (all zeros for single sentence)
         let token_type_ids = token_ids_tensor.zeros_like()?;
@@ -322,14 +332,14 @@ impl LoRATokenClassifier {
         if seq_len <= 2 {
             // Only CLS and SEP tokens, use CLS token
             let cls_embedding = hidden_states.i((.., 0))?; // CLS token
-            return Ok(cls_embedding.squeeze(0)?);
+            return cls_embedding.squeeze(0);
         }
 
         // Mean pooling over actual word tokens (excluding CLS and SEP)
         let word_embeddings = hidden_states.i((.., 1..seq_len - 1))?; // Exclude CLS and SEP
         let mean_embedding = word_embeddings.mean(1)?; // Mean over sequence dimension
 
-        Ok(mean_embedding.squeeze(0)?) // Remove batch dimension
+        mean_embedding.squeeze(0) // Remove batch dimension
     }
 
     /// Get label name from ID
@@ -360,3 +370,6 @@ impl std::fmt::Debug for LoRATokenClassifier {
             .finish()
     }
 }
+
+// Token text, hidden state, and original byte range.
+type TokenEmbedding = (String, Tensor, usize, usize);

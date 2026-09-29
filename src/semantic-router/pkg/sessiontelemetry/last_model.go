@@ -77,6 +77,15 @@ func GetLastModel(sessionID string) (string, bool) {
 // GetLastModelInfo returns the most recent model and idle age for sessionID.
 // Passing a zero now uses the store clock.
 func GetLastModelInfo(sessionID string, now time.Time) (string, time.Duration, bool) {
+	return lastModelInfo(sessionID, now, true)
+}
+
+// PeekLastModelInfo leaves expired entries untouched for read-only preview.
+func PeekLastModelInfo(sessionID string, now time.Time) (string, time.Duration, bool) {
+	return lastModelInfo(sessionID, now, false)
+}
+
+func lastModelInfo(sessionID string, now time.Time, mutate bool) (string, time.Duration, bool) {
 	if sessionID == "" {
 		return "", 0, false
 	}
@@ -95,7 +104,9 @@ func GetLastModelInfo(sessionID string, now time.Time) (string, time.Duration, b
 		idleFor = 0
 	}
 	if idleFor > ttl {
-		delete(s.sessions, sessionID)
+		if mutate {
+			delete(s.sessions, sessionID)
+		}
 		return "", 0, false
 	}
 	return st.model, idleFor, true

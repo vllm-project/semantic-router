@@ -44,21 +44,22 @@ Key Features:
     - Auto-merge functionality: Generates both LoRA adapters and Rust-compatible models
 """
 
+import csv
 import json
-import logging
 import os
 import random
 import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import torch
-import torch.nn as nn
 from datasets import Dataset, load_dataset
 from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
-from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from sklearn.model_selection import train_test_split
+from torch import nn
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -76,16 +77,25 @@ from common_lora_utils import (
     set_gpu_device,
     setup_logging,
 )
+from training_args_compat import create_training_arguments
 
 # Setup logging
 logger = setup_logging()
+
+# Dataset filters and training heuristics retain their historical thresholds.
+MIN_TEXT_CHARS = 10
+MAX_SHORT_TEXT_CHARS = 300
+MAX_TEXT_CHARS = 500
+MIN_DIALOGUE_CHARS = 15
+MIN_NISQ_QUESTION_CHARS = 5
+
 
 # Label definitions
 FACT_CHECK_NEEDED = "FACT_CHECK_NEEDED"
 NO_FACT_CHECK_NEEDED = "NO_FACT_CHECK_NEEDED"
 
 
-def create_tokenizer_for_model(model_path: str, base_model_name: str = None):
+def create_tokenizer_for_model(model_path: str, base_model_name: str | None = None):
     """
     Create tokenizer with model-specific configuration.
 
@@ -119,7 +129,7 @@ class FactCheckDataset:
       https://aclanthology.org/2024.lrec-main.1516/
     """
 
-    def __init__(self, data_dir: str = None):
+    def __init__(self, data_dir: str | None = None):
         """
         Initialize the dataset loader.
 
@@ -239,7 +249,7 @@ class FactCheckDataset:
             "option2": ["Java", "Vue", "GCP"],
         }
 
-    def _load_squad_questions(self, max_samples: int) -> List[str]:
+    def _load_squad_questions(self, max_samples: int) -> list[str]:
         """Load SQuAD questions (factual reading comprehension questions)."""
         logger.info("Loading SQuAD dataset (factual questions)...")
         questions = []
@@ -249,14 +259,14 @@ class FactCheckDataset:
                 if len(questions) >= max_samples:
                     break
                 q = item.get("question", "")
-                if q and len(q) > 10 and len(q) < 300:
+                if q and len(q) > MIN_TEXT_CHARS and len(q) < MAX_SHORT_TEXT_CHARS:
                     questions.append(q.strip())
             logger.info(f"Loaded {len(questions)} questions from SQuAD")
         except Exception as e:
             logger.warning(f"Failed to load SQuAD: {e}")
         return questions
 
-    def _load_trivia_qa_questions(self, max_samples: int) -> List[str]:
+    def _load_trivia_qa_questions(self, max_samples: int) -> list[str]:
         """Load TriviaQA questions (factual trivia questions)."""
         logger.info("Loading TriviaQA dataset (factual trivia questions)...")
         questions = []
@@ -267,14 +277,14 @@ class FactCheckDataset:
                 if len(questions) >= max_samples:
                     break
                 q = item.get("question", "")
-                if q and len(q) > 10 and len(q) < 300:
+                if q and len(q) > MIN_TEXT_CHARS and len(q) < MAX_SHORT_TEXT_CHARS:
                     questions.append(q.strip())
             logger.info(f"Loaded {len(questions)} questions from TriviaQA")
         except Exception as e:
             logger.warning(f"Failed to load TriviaQA: {e}")
         return questions
 
-    def _load_hotpot_qa_questions(self, max_samples: int) -> List[str]:
+    def _load_hotpot_qa_questions(self, max_samples: int) -> list[str]:
         """Load HotpotQA questions (multi-hop factual questions)."""
         logger.info("Loading HotpotQA dataset (multi-hop factual questions)...")
         questions = []
@@ -287,14 +297,14 @@ class FactCheckDataset:
                 if len(questions) >= max_samples:
                     break
                 q = item.get("question", "")
-                if q and len(q) > 10 and len(q) < 300:
+                if q and len(q) > MIN_TEXT_CHARS and len(q) < MAX_SHORT_TEXT_CHARS:
                     questions.append(q.strip())
             logger.info(f"Loaded {len(questions)} questions from HotpotQA")
         except Exception as e:
             logger.warning(f"Failed to load HotpotQA: {e}")
         return questions
 
-    def _load_truthful_qa_questions(self, max_samples: int) -> List[str]:
+    def _load_truthful_qa_questions(self, max_samples: int) -> list[str]:
         """
         Load TruthfulQA questions (high-risk factual queries about common misconceptions).
 
@@ -311,14 +321,14 @@ class FactCheckDataset:
                 if len(questions) >= max_samples:
                     break
                 q = item.get("question", "")
-                if q and len(q) > 10 and len(q) < 300:
+                if q and len(q) > MIN_TEXT_CHARS and len(q) < MAX_SHORT_TEXT_CHARS:
                     questions.append(q.strip())
             logger.info(f"Loaded {len(questions)} questions from TruthfulQA")
         except Exception as e:
             logger.warning(f"Failed to load TruthfulQA: {e}")
         return questions
 
-    def _load_coqa_questions(self, max_samples: int) -> List[str]:
+    def _load_coqa_questions(self, max_samples: int) -> list[str]:
         """
         Load CoQA questions (conversational QA - factual questions in context).
 
@@ -337,14 +347,14 @@ class FactCheckDataset:
                 for q in q_list:
                     if len(questions) >= max_samples:
                         break
-                    if q and len(q) > 10 and len(q) < 300:
+                    if q and len(q) > MIN_TEXT_CHARS and len(q) < MAX_SHORT_TEXT_CHARS:
                         questions.append(q.strip())
             logger.info(f"Loaded {len(questions)} questions from CoQA")
         except Exception as e:
             logger.warning(f"Failed to load CoQA: {e}")
         return questions
 
-    def _load_halueval_questions(self, max_samples: int) -> List[str]:
+    def _load_halueval_questions(self, max_samples: int) -> list[str]:
         """
         Load HaluEval QA questions (factual knowledge-seeking questions).
 
@@ -366,14 +376,14 @@ class FactCheckDataset:
                 if len(questions) >= max_samples:
                     break
                 q = item.get("question", "")
-                if q and len(q) > 10 and len(q) < 500:
+                if q and len(q) > MIN_TEXT_CHARS and len(q) < MAX_TEXT_CHARS:
                     questions.append(q.strip())
             logger.info(f"Loaded {len(questions)} questions from HaluEval QA")
         except Exception as e:
             logger.warning(f"Failed to load HaluEval: {e}")
         return questions
 
-    def _load_factchd_questions(self, max_samples: int) -> List[str]:
+    def _load_factchd_questions(self, max_samples: int) -> list[str]:
         """
         Load FactCHD questions (fact-conflicting hallucination detection queries).
 
@@ -413,12 +423,12 @@ class FactCheckDataset:
 
             if not factchd_path.exists():
                 logger.warning(
-                    f"FactCHD dataset not found. Run setup_datasets.sh or clone from HuggingFace."
+                    "FactCHD dataset not found. Run setup_datasets.sh or clone from HuggingFace."
                 )
                 return []
 
             seen_questions = set()
-            with open(factchd_path, "r") as f:
+            with open(factchd_path) as f:
                 for line in f:
                     if len(questions) >= max_samples:
                         break
@@ -428,8 +438,8 @@ class FactCheckDataset:
                         # These are factual queries
                         if (
                             query
-                            and len(query) > 15
-                            and len(query) < 500
+                            and len(query) > MIN_DIALOGUE_CHARS
+                            and len(query) < MAX_TEXT_CHARS
                             and query not in seen_questions
                         ):
                             questions.append(query.strip())
@@ -442,7 +452,7 @@ class FactCheckDataset:
             logger.warning(f"Failed to load FactCHD: {e}")
         return questions
 
-    def _load_faithdial_questions(self, max_samples: int) -> List[str]:
+    def _load_faithdial_questions(self, max_samples: int) -> list[str]:
         """
         Load FaithDial questions (information-seeking dialogue questions).
 
@@ -483,11 +493,11 @@ class FactCheckDataset:
 
             if not faithdial_path.exists():
                 logger.warning(
-                    f"FaithDial dataset not found. Run setup_datasets.sh or clone from HuggingFace."
+                    "FaithDial dataset not found. Run setup_datasets.sh or clone from HuggingFace."
                 )
                 return []
 
-            with open(faithdial_path, "r") as f:
+            with open(faithdial_path) as f:
                 data = json.load(f)
 
             seen_questions = set()
@@ -504,12 +514,11 @@ class FactCheckDataset:
                         # Filter for actual questions
                         if (
                             "?" in last_user_msg
-                            and len(last_user_msg) > 15
-                            and len(last_user_msg) < 300
+                            and len(last_user_msg) > MIN_DIALOGUE_CHARS
+                            and len(last_user_msg) < MAX_SHORT_TEXT_CHARS
                             and last_user_msg not in seen_questions
-                        ):
-                            # Skip generic follow-ups
-                            if not any(
+                            # Skip generic follow-ups.
+                            and not any(
                                 skip in last_user_msg.lower()
                                 for skip in [
                                     "what else",
@@ -517,16 +526,17 @@ class FactCheckDataset:
                                     "anything else",
                                     "go on",
                                 ]
-                            ):
-                                questions.append(last_user_msg.strip())
-                                seen_questions.add(last_user_msg)
+                            )
+                        ):
+                            questions.append(last_user_msg.strip())
+                            seen_questions.add(last_user_msg)
 
             logger.info(f"Loaded {len(questions)} questions from FaithDial")
         except Exception as e:
             logger.warning(f"Failed to load FaithDial: {e}")
         return questions
 
-    def _load_rag_dataset_questions(self, max_samples: int) -> List[str]:
+    def _load_rag_dataset_questions(self, max_samples: int) -> list[str]:
         """
         Load RAG dataset questions (questions designed for retrieval-augmented generation).
 
@@ -545,7 +555,7 @@ class FactCheckDataset:
                 if len(questions) >= max_samples:
                     break
                 q = item.get("question", "")
-                if q and len(q) > 10 and len(q) < 500:
+                if q and len(q) > MIN_TEXT_CHARS and len(q) < MAX_TEXT_CHARS:
                     questions.append(q.strip())
             logger.info(f"Loaded {len(questions)} questions from RAG dataset")
         except Exception as e:
@@ -554,7 +564,7 @@ class FactCheckDataset:
 
     def _load_nisq_dataset(
         self, max_samples_isq: int, max_samples_nisq: int
-    ) -> Tuple[List[str], List[str]]:
+    ) -> tuple[list[str], list[str]]:
         """
         Load NISQ dataset (Information-Seeking vs Non-Information-Seeking Questions).
 
@@ -576,9 +586,6 @@ class FactCheckDataset:
         nisq_questions = []
 
         try:
-            import subprocess
-            import tempfile
-            import csv
 
             # Check for cached dataset first
             cached_path = None
@@ -604,6 +611,7 @@ class FactCheckDataset:
                             "https://github.com/YaoSun0422/NISQ_dataset.git",
                             repo_path,
                         ],
+                        check=False,
                         capture_output=True,
                         text=True,
                         timeout=60,
@@ -619,21 +627,27 @@ class FactCheckDataset:
                 logger.warning(f"NISQ dataset CSV not found at {csv_path}")
                 return [], []
 
-            with open(csv_path, "r", encoding="utf-8") as f:
+            with open(csv_path, encoding="utf-8") as f:
                 reader = csv.DictReader(f, delimiter=";")
                 for row in reader:
                     question = row.get("question", "").strip()
                     label = row.get("label", "").upper()
 
-                    if not question or len(question) < 5 or len(question) > 500:
+                    if (
+                        not question
+                        or len(question) < MIN_NISQ_QUESTION_CHARS
+                        or len(question) > MAX_TEXT_CHARS
+                    ):
                         continue
 
                     if label == "ISQ":
                         if len(isq_questions) < max_samples_isq:
                             isq_questions.append(question)
-                    elif label in ["DELIBERATIVE", "RHETORICAL", "OTHERS"]:
-                        if len(nisq_questions) < max_samples_nisq:
-                            nisq_questions.append(question)
+                    elif (
+                        label in ["DELIBERATIVE", "RHETORICAL", "OTHERS"]
+                        and len(nisq_questions) < max_samples_nisq
+                    ):
+                        nisq_questions.append(question)
 
             logger.info(
                 f"Loaded NISQ dataset: {len(isq_questions)} ISQ, {len(nisq_questions)} NISQ"
@@ -644,7 +658,7 @@ class FactCheckDataset:
 
         return isq_questions, nisq_questions
 
-    def _load_writing_prompts(self, max_samples: int) -> List[str]:
+    def _load_writing_prompts(self, max_samples: int) -> list[str]:
         """Load creative writing prompts (non-information-seeking)."""
         logger.info("Loading WritingPrompts dataset (creative prompts)...")
         prompts = []
@@ -656,7 +670,11 @@ class FactCheckDataset:
                 if len(prompts) >= max_samples:
                     break
                 prompt = item.get("prompt", "")
-                if prompt and len(prompt) > 10 and len(prompt) < 500:
+                if (
+                    prompt
+                    and len(prompt) > MIN_TEXT_CHARS
+                    and len(prompt) < MAX_TEXT_CHARS
+                ):
                     # Clean up common prefixes
                     prompt = prompt.strip()
                     if prompt.startswith("[WP]"):
@@ -668,7 +686,7 @@ class FactCheckDataset:
             logger.warning(f"Failed to load WritingPrompts: {e}")
         return prompts
 
-    def _load_alpaca_nonfactual(self, max_samples: int) -> List[str]:
+    def _load_alpaca_nonfactual(self, max_samples: int) -> list[str]:
         """
         Load non-factual instructions from Alpaca dataset.
 
@@ -755,15 +773,14 @@ class FactCheckDataset:
                 instr_lower = instr.lower()
 
                 # Check if it matches non-factual patterns
-                if any(kw in instr_lower for kw in all_keywords):
-                    if (
-                        instr
-                        and len(instr) > 10
-                        and len(instr) < 300
-                        and instr not in seen
-                    ):
-                        instructions.append(instr.strip())
-                        seen.add(instr)
+                if any(kw in instr_lower for kw in all_keywords) and (
+                    instr
+                    and len(instr) > MIN_TEXT_CHARS
+                    and len(instr) < MAX_SHORT_TEXT_CHARS
+                    and instr not in seen
+                ):
+                    instructions.append(instr.strip())
+                    seen.add(instr)
 
             logger.info(
                 f"Loaded {len(instructions)} instructions from Alpaca (non-factual)"
@@ -772,7 +789,7 @@ class FactCheckDataset:
             logger.warning(f"Failed to load Alpaca: {e}")
         return instructions
 
-    def _load_dolly_nonfactual(self, max_samples: int) -> List[str]:
+    def _load_dolly_nonfactual(self, max_samples: int) -> list[str]:
         """
         Load non-factual instructions from Dolly dataset.
 
@@ -814,15 +831,14 @@ class FactCheckDataset:
                 instr = item.get("instruction", "")
 
                 # Only include non-factual categories
-                if category in nonfactual_categories:
-                    if (
-                        instr
-                        and len(instr) > 10
-                        and len(instr) < 500
-                        and instr not in seen
-                    ):
-                        instructions.append(instr.strip())
-                        seen.add(instr)
+                if category in nonfactual_categories and (
+                    instr
+                    and len(instr) > MIN_TEXT_CHARS
+                    and len(instr) < MAX_TEXT_CHARS
+                    and instr not in seen
+                ):
+                    instructions.append(instr.strip())
+                    seen.add(instr)
 
             logger.info(
                 f"Loaded {len(instructions)} instructions from Dolly (non-factual)"
@@ -831,7 +847,7 @@ class FactCheckDataset:
             logger.warning(f"Failed to load Dolly: {e}")
         return instructions
 
-    def _load_code_search_net(self, max_samples: int) -> List[str]:
+    def _load_code_search_net(self, max_samples: int) -> list[str]:
         """Load code documentation (programming/technical requests)."""
         logger.info("Loading CodeSearchNet dataset (programming requests)...")
         docs = []
@@ -843,7 +859,11 @@ class FactCheckDataset:
                 if len(docs) >= max_samples:
                     break
                 doc = item.get("func_documentation_string", "")
-                if doc and len(doc) > 10 and len(doc) < 300:
+                if (
+                    doc
+                    and len(doc) > MIN_TEXT_CHARS
+                    and len(doc) < MAX_SHORT_TEXT_CHARS
+                ):
                     # Convert docstrings to request format
                     doc = doc.strip()
                     if not doc.endswith("?"):
@@ -854,7 +874,7 @@ class FactCheckDataset:
             logger.warning(f"Failed to load CodeSearchNet: {e}")
         return docs
 
-    def _generate_fallback_samples(self, templates: List[str], count: int) -> List[str]:
+    def _generate_fallback_samples(self, templates: list[str], count: int) -> list[str]:
         """Generate fallback samples from templates when datasets fail."""
         samples = set()
         max_attempts = count * 20
@@ -873,7 +893,7 @@ class FactCheckDataset:
 
         return list(samples)
 
-    def load_datasets(self, max_samples: int = 2000) -> Tuple[List[str], List[int]]:
+    def load_datasets(self, max_samples: int = 2000) -> tuple[list[str], list[int]]:
         """
         Load and combine datasets for fact-check classification.
 
@@ -1041,14 +1061,14 @@ class FactCheckDataset:
             labels.append(self.label2id[NO_FACT_CHECK_NEEDED])
 
         # Shuffle
-        combined = list(zip(texts, labels))
+        combined = list(zip(texts, labels, strict=False))
         random.shuffle(combined)
-        texts, labels = zip(*combined)
+        texts, labels = zip(*combined, strict=False)
         texts, labels = list(texts), list(labels)
 
         # Log statistics
-        fact_check_count = sum(1 for l in labels if l == 1)
-        no_fact_check_count = sum(1 for l in labels if l == 0)
+        fact_check_count = sum(1 for label in labels if label == 1)
+        no_fact_check_count = sum(1 for label in labels if label == 0)
         logger.info(f"Loaded dataset: {len(texts)} total samples")
         logger.info(f"  FACT_CHECK_NEEDED: {fact_check_count}")
         logger.info(f"  NO_FACT_CHECK_NEEDED: {no_fact_check_count}")
@@ -1074,7 +1094,7 @@ class FactCheckDataset:
             stratify=temp_labels,
         )
 
-        logger.info(f"Dataset sizes:")
+        logger.info("Dataset sizes:")
         logger.info(f"  Train: {len(train_texts)}")
         logger.info(f"  Validation: {len(val_texts)}")
         logger.info(f"  Test: {len(test_texts)}")
@@ -1086,7 +1106,7 @@ class FactCheckDataset:
         }
 
 
-def create_fact_check_dataset(max_samples: int = 2000, data_dir: str = None):
+def create_fact_check_dataset(max_samples: int = 2000, data_dir: str | None = None):
     """Create fact-check dataset.
 
     Args:
@@ -1101,7 +1121,9 @@ def create_fact_check_dataset(max_samples: int = 2000, data_dir: str = None):
 
     # Convert to the format expected by our training
     sample_data = []
-    for text, label in zip(train_texts + val_texts, train_labels + val_labels):
+    for text, label in zip(
+        train_texts + val_texts, train_labels + val_labels, strict=False
+    ):
         sample_data.append({"text": text, "label": label})
 
     logger.info(f"Created dataset with {len(sample_data)} samples")
@@ -1214,8 +1236,8 @@ def main(
     batch_size: int = 16,
     learning_rate: float = 3e-5,
     max_samples: int = 2000,
-    output_dir: str = None,
-    data_dir: str = None,
+    output_dir: str | None = None,
+    data_dir: str | None = None,
 ):
     """Main training function for LoRA fact-check classification.
 
@@ -1225,7 +1247,7 @@ def main(
     logger.info("Starting Enhanced LoRA Fact-Check Classification Training")
 
     # Device configuration and memory management
-    device, _ = set_gpu_device(gpu_id=None, auto_select=True)
+    _device, _ = set_gpu_device(gpu_id=None, auto_select=True)
     clear_gpu_memory()
     log_memory_usage("Pre-training")
 
@@ -1243,7 +1265,7 @@ def main(
         raise
 
     # Create dataset
-    sample_data, label_to_id, id_to_label = create_fact_check_dataset(
+    sample_data, label_to_id, _id_to_label = create_fact_check_dataset(
         max_samples, data_dir
     )
 
@@ -1271,7 +1293,8 @@ def main(
     os.makedirs(output_dir, exist_ok=True)
 
     # Training arguments
-    training_args = TrainingArguments(
+    training_args = create_training_arguments(
+        TrainingArguments,
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,
@@ -1329,7 +1352,7 @@ def main(
 
     # Evaluate
     eval_results = trainer.evaluate()
-    logger.info(f"Validation Results:")
+    logger.info("Validation Results:")
     logger.info(f"  Accuracy: {eval_results['eval_accuracy']:.4f}")
     logger.info(f"  F1: {eval_results['eval_f1']:.4f}")
     logger.info(f"  Precision: {eval_results['eval_precision']:.4f}")
@@ -1351,7 +1374,7 @@ def merge_lora_adapter_to_full_model(
     logger.info(f"Loading base model: {base_model_path}")
 
     # Load label mapping to get correct number of labels
-    with open(os.path.join(lora_adapter_path, "label_mapping.json"), "r") as f:
+    with open(os.path.join(lora_adapter_path, "label_mapping.json")) as f:
         mapping_data = json.load(f)
 
     if "idx_to_label" in mapping_data:
@@ -1391,7 +1414,7 @@ def merge_lora_adapter_to_full_model(
     # Fix config.json to include correct id2label mapping
     config_path = os.path.join(output_path, "config.json")
     if os.path.exists(config_path):
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = json.load(f)
 
         if "idx_to_label" in mapping_data:
@@ -1425,7 +1448,7 @@ def demo_inference(
 
     try:
         # Load label mapping
-        with open(os.path.join(model_path, "label_mapping.json"), "r") as f:
+        with open(os.path.join(model_path, "label_mapping.json")) as f:
             mapping_data = json.load(f)
         id_to_label = mapping_data.get("idx_to_label", {})
         num_labels = len(id_to_label)

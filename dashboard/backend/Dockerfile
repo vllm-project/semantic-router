@@ -10,20 +10,22 @@ ENV GOPROXY="https://proxy.golang.org|direct"
 
 COPY src/semantic-router/go.mod src/semantic-router/go.sum ./
 COPY src/semantic-router/ ./
+COPY dashboard/wasm/ /app/dashboard/wasm/
 
 # Local replace directives point at sibling bindings that are not needed for the
 # WASM build. Stub them under /app so `../../*-binding` resolves correctly.
-RUN mkdir -p /app/candle-binding /app/ml-binding /app/nlp-binding /app/openvino-binding && \
+RUN mkdir -p /app/candle-binding /app/ml-binding /app/nlp-binding /app/openvino-binding /app/onnx-binding && \
     echo 'module github.com/vllm-project/semantic-router/candle-binding' > /app/candle-binding/go.mod && \
     echo 'module github.com/vllm-project/semantic-router/ml-binding' > /app/ml-binding/go.mod && \
     echo 'module github.com/vllm-project/semantic-router/nlp-binding' > /app/nlp-binding/go.mod && \
-    echo 'module github.com/vllm-project/semantic-router/openvino-binding' > /app/openvino-binding/go.mod
+    echo 'module github.com/vllm-project/semantic-router/openvino-binding' > /app/openvino-binding/go.mod && \
+    echo 'module github.com/vllm-project/semantic-router/onnx-binding' > /app/onnx-binding/go.mod
 RUN go mod download
 RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
       -buildvcs=false \
       -ldflags="-s -w" \
       -o /build/signal-compiler.wasm \
-      ./cmd/wasm/ && \
+      /app/dashboard/wasm/main_wasm.go && \
     if [ -f "$(go env GOROOT)/lib/wasm/wasm_exec.js" ]; then \
       cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /build/wasm_exec.js; \
     else \
@@ -31,7 +33,7 @@ RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
     fi
 
 # Stage 1: Build frontend with Node.js
-FROM ${IMAGE_REGISTRY}library/node:20-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}library/node:20-alpine AS frontend-builder
 WORKDIR /workspace/dashboard/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
 COPY dashboard/frontend/src ./src
@@ -45,7 +47,7 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci --include=dev  # Use npm ci for deterministic, lockfile-based installs in CI
 RUN npm run build
 
-FROM ${IMAGE_REGISTRY}library/node:20-alpine AS wizmap-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}library/node:20-alpine AS wizmap-builder
 WORKDIR /app/wizmap
 COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
 RUN npm config set registry https://registry.npmjs.org/ && \
@@ -89,7 +91,10 @@ COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/configschema/ /app/src/semantic-router/pkg/configschema/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
+COPY src/semantic-router/pkg/fallback/ /app/src/semantic-router/pkg/fallback/
 COPY src/semantic-router/pkg/headers/ /app/src/semantic-router/pkg/headers/
+COPY src/semantic-router/pkg/k8s/configwriter/ /app/src/semantic-router/pkg/k8s/configwriter/
+COPY src/semantic-router/pkg/llmprotocol/ /app/src/semantic-router/pkg/llmprotocol/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
@@ -129,14 +134,16 @@ RUN set -eux; \
       done; \
       return 1; \
     }; \
-    apt_get_install_with_retry ca-certificates curl docker.io gosu libseccomp2 wget
+    apt_get_install_with_retry ca-certificates curl docker.io git gosu libseccomp2 wget
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
 COPY --from=frontend-builder /workspace/dashboard/frontend/dist /app/frontend
 COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 COPY src/vllm-sr/requirements.txt /app/requirements.txt
-COPY src/vllm-sr/pyproject.toml /app/pyproject.toml
+# Public version metadata is imported by the nonroot Python catalog exporter.
+# Do not inherit restrictive permissions from a caller's build context.
+COPY --chmod=0444 src/vllm-sr/pyproject.toml /app/pyproject.toml
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
@@ -155,10 +162,14 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
 RUN groupadd --gid 65532 nonroot && \
     useradd --uid 65532 --gid 65532 --create-home --shell /usr/sbin/nologin nonroot && \
     install -d -o nonroot -g root -m 0770 /app/data && \
+    find /app/frontend -type d -exec chmod 0755 {} + && \
+    find /app/frontend -type f -exec chmod 0644 {} + && \
     chown -R root:root /app/cli && \
     find /app/cli -type d -exec chmod 0555 {} + && \
     find /app/cli -type f -exec chmod 0444 {} + && \
-    chmod 0555 /app/cli/evaluation/sandbox_worker.py && \
+    chown -R root:root /app/config /app/skills && \
+    find /app/config /app/skills -type d -exec chmod 0755 {} + && \
+    find /app/config /app/skills -type f -exec chmod 0644 {} + && \
     chown root:root \
       /app/entrypoint.sh \
       /app/entrypoint_permissions.py \
@@ -171,6 +182,13 @@ RUN groupadd --gid 65532 nonroot && \
       /app/start-dashboard.sh \
       /app/dashboard-backend \
       /usr/local/bin/dashboard-backend
+# Exercise the same interpreter, user and isolated working directory as the
+# catalog HTTP handler. A root-only smoke test misses unreadable package data.
+RUN cd /tmp && gosu nonroot python3 -m cli.model_catalog_export >/dev/null
+# These directories contain only bundled public ToolsDB, knowledge-base and
+# skill assets at build time. Keep them readable under a restrictive build
+# context umask without changing mounted runtime configuration or user state.
+RUN gosu nonroot find /app/config /app/skills -type f -exec head -c 0 {} + >/dev/null
 EXPOSE 8700
 # Note: We run as root initially so entrypoint can fix ownership/permissions, then switch to nonroot
 ENTRYPOINT ["/app/entrypoint.sh"]

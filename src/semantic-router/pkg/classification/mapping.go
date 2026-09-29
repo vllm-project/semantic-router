@@ -115,7 +115,49 @@ func LoadPIIMapping(path string) (*PIIMapping, error) {
 		return nil, fmt.Errorf("failed to parse PII mapping JSON: %w", err)
 	}
 
+	// Reserve the sentinel after the same BIO normalization used by native
+	// translation and the remote label set, so a prefixed configured label
+	// cannot make a genuine detection indistinguishable from a failure.
+	if mapping.hasReservedLabel() {
+		return nil, fmt.Errorf(
+			"PII mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
+			path, PIIClassificationErrorType)
+	}
+
 	return &mapping, nil
+}
+
+// hasReservedLabel reports whether either direction contains a sentinel alias.
+// Both are probed because TranslatePIIType
+// reads IdxToLabel while the token_spans decoder reads LabelToIdx as well.
+func (pm *PIIMapping) hasReservedLabel() bool {
+	if pm == nil {
+		return false
+	}
+	for known := range pm.LabelToIdx {
+		if isReservedPIILabel(known) {
+			return true
+		}
+	}
+	for _, known := range pm.IdxToLabel {
+		if isReservedPIILabel(known) {
+			return true
+		}
+	}
+	return false
+}
+
+// isReservedPIILabel also rejects stacked prefixes: the remote decoder and
+// detection API each normalize labels, so checking only one pass is unsafe.
+// Ordinary entity translation still strips exactly one prefix per call.
+func isReservedPIILabel(label string) bool {
+	for {
+		normalized := stripBIOPrefix(label)
+		if normalized == label {
+			return label == PIIClassificationErrorType
+		}
+		label = normalized
+	}
 }
 
 // LoadJailbreakMapping loads the jailbreak mapping from a JSON file
@@ -272,18 +314,6 @@ func (cm *CategoryMapping) GetCategoryFromIndex(classIndex int) (string, bool) {
 func (pm *PIIMapping) GetPIITypeFromIndex(classIndex int) (string, bool) {
 	piiType, ok := pm.IdxToLabel[fmt.Sprintf("%d", classIndex)]
 	return piiType, ok
-}
-
-// stripBIOPrefix removes the BIO sequence labeling prefix from a PII type string.
-// For example: "B-PERSON" → "PERSON", "I-DATE_TIME" → "DATE_TIME", "PERSON" → "PERSON".
-func stripBIOPrefix(s string) string {
-	if len(s) > 2 && s[1] == '-' {
-		switch s[0] {
-		case 'B', 'I', 'E':
-			return s[2:]
-		}
-	}
-	return s
 }
 
 // TranslatePIIType translates a PII type from Rust binding format to named type.

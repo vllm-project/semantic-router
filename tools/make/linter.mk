@@ -62,5 +62,6 @@ shellcheck: ## Lint all shell scripts in the project
 		echo "  SKIP=shellcheck pre-commit run --all-files"; \
 		exit 1; \
 	fi
+	# Match the tracked-source boundary used by codespell; exclude local caches and Git metadata.
 	@echo "Running shellcheck with config from tools/linter/shellcheck/.shellcheckrc"
-	@shellcheck -e SC2155,SC2034,SC1091,SC2011,SC2012,SC2087,SC2119,SC2120,SC2162 $(shell find . -type f -name "*.sh" -not -path "./node_modules/*" -not -path "./website/node_modules/*" -not -path "./dashboard/frontend/node_modules/*" -not -path "./models/*" -not -path "./.augment/*" -not -path "./.agent-harness/*" -not -path "./.codex/*" -not -path "./.venv/*" -not -path "*/.venv/*" -not -path "./.venv-*/*" -not -path "*/.venv-*/*" -not -path "./.venv-agent/*" -not -path "./.venv-codex/*" -not -path "./.codex-agent-venv/*")
+	@git ls-files -z -- "*.sh" | xargs -0 shellcheck -e SC2155,SC2034,SC1091,SC2011,SC2012,SC2087,SC2119,SC2120,SC2162

@@ -57,7 +57,7 @@ func validateInvitationIdentity(email, name string) (string, string, error) {
 	return email, name, nil
 }
 
-func (s *Service) CreateInvitation(ctx context.Context, spec InvitationSpec, createdBy string) (*Invitation, string, error) {
+func (s *Service) CreateInvitation(ctx context.Context, spec InvitationSpec, createdBy string, actors ...AuthContext) (*Invitation, string, error) {
 	spec.Kind = strings.ToLower(strings.TrimSpace(spec.Kind))
 	if spec.Kind == "" {
 		spec.Kind = InvitationPersonal
@@ -100,16 +100,16 @@ func (s *Service) CreateInvitation(ctx context.Context, spec InvitationSpec, cre
 	if err != nil {
 		return nil, "", err
 	}
-	item, err := s.store.CreateInvitation(ctx, spec.Kind, spec.Email, spec.Name, spec.Role, digest, createdBy, spec.MaxUses, time.Now().Add(invitationLifetime).Unix())
+	item, err := s.store.CreateInvitation(ctx, spec.Kind, spec.Email, spec.Name, spec.Role, digest, createdBy, spec.MaxUses, time.Now().Add(invitationLifetime).Unix(), actors...)
 	return item, token, err
 }
 
-func (s *Service) RotateInvitation(ctx context.Context, id string) (*Invitation, string, error) {
+func (s *Service) RotateInvitation(ctx context.Context, id string, actors ...AuthContext) (*Invitation, string, error) {
 	token, digest, err := newInvitationToken()
 	if err != nil {
 		return nil, "", err
 	}
-	item, err := s.store.RotateInvitation(ctx, id, digest, time.Now().Add(invitationLifetime).Unix())
+	item, err := s.store.RotateInvitation(ctx, id, digest, time.Now().Add(invitationLifetime).Unix(), actors...)
 	return item, token, err
 }
 

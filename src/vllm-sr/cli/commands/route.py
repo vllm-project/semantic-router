@@ -5,18 +5,19 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin
 
 import click
 import requests
 
-from cli.chat_client import CHAT_COMPLETIONS_PATH, resolve_chat_base_url
+from cli.chat_client import chat_completions_url, resolve_chat_base_url
 from cli.commands.common import exit_with_logged_error
 from cli.commands.eval_rendering import render_route_preview_summary
+from cli.commands.route_probe import delivery_assertion
 from cli.router_management_client import RouterManagementClient
+from cli.routing_preview import build_preview_request
 from cli.terminal import echo
 from cli.url_display import redact_url
 from cli.utils import get_logger
@@ -25,20 +26,6 @@ log = get_logger(__name__)
 
 _MAX_SIGNAL_DISPLAY = 10
 _MAX_CONFIDENCE_DISPLAY = 5
-
-
-@dataclass(frozen=True)
-class RoutePreviewRequest:
-    """Request payload for /api/v1/routing/preview."""
-
-    messages: list[dict[str, Any]]
-    model: str | None = None
-
-    def to_json(self) -> dict[str, Any]:
-        payload = {"messages": self.messages}
-        if self.model:
-            payload["model"] = self.model
-        return payload
 
 
 def _parse_messages_json(messages_json: str) -> list[dict[str, Any]]:
@@ -181,6 +168,28 @@ def _summarize_response(payload: dict[str, Any]) -> str:
     decision_result = payload.get("decision_result")
     if isinstance(decision_result, dict):
         lines = _summarize_decision_result(payload, decision_result)
+        lines.append(
+            f"selected model: {payload.get('selected_model') or '(not determined)'}"
+        )
+        lines.append(
+            f"selection status: {payload.get('selection_status') or '(unavailable)'}"
+        )
+        if method := payload.get("selection_method"):
+            lines.append(f"selection method: {method}")
+        if reason := payload.get("selection_reason"):
+            lines.append(f"selection reason: {reason}")
+        if provenance := payload.get("selection_provenance"):
+            lines.append(
+                f"selection evidence: {provenance.get('mode', '(unavailable)')}"
+            )
+            if provenance.get("state_dependent"):
+                lines.append(
+                    "state: read-only snapshot; later live selection may differ"
+                )
+            if provenance.get("sampled"):
+                lines.append(
+                    f"sampling seed: {provenance.get('sampling_seed')}; preview-only draw"
+                )
         if lines:
             return "\n".join(lines)
 
@@ -208,6 +217,18 @@ def route() -> None:
     "--model",
     default=None,
     help="Routing model or entrypoint whose recipe should be evaluated.",
+)
+@click.option(
+    "--request-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="JSON Router Preview request; supported Chat messages and prompt fields only.",
+)
+@click.option("--session-id", help="Read-only Learning session identity.")
+@click.option("--conversation-id", help="Read-only Learning conversation identity.")
+@click.option(
+    "--sampling-seed",
+    type=click.IntRange(-(2**63), 2**63 - 1),
+    help="Preview-only exploration seed; does not fix a later live random draw.",
 )
 @click.option(
     "--endpoint",
@@ -244,32 +265,51 @@ def preview(
     prompt: str | None,
     messages_json: str | None,
     model: str | None,
+    request_file: Path | None,
+    session_id: str | None,
+    conversation_id: str | None,
+    sampling_seed: int | None,
     endpoint: str | None,
     token_env: str,
     trace: bool,
     output_json: bool,
     timeout: float,
 ) -> None:
-    """Preview signals and the selected route without calling a model backend."""
+    """Preview signals and model selection without generating an answer."""
 
-    if (prompt is None and messages_json is None) or (
-        prompt is not None and messages_json is not None
-    ):
-        raise ValueError("Provide exactly one of --prompt or --messages")
-
-    if messages_json is not None:
-        messages = _parse_messages_json(messages_json)
+    if sum(value is not None for value in (prompt, messages_json, request_file)) != 1:
+        raise ValueError(
+            "Provide exactly one of --prompt, --messages or --request-file"
+        )
+    if request_file is not None:
+        with request_file.open("rb") as stream:
+            raw = stream.read(10 * 1024 * 1024 + 1)
+        if len(raw) > 10 * 1024 * 1024:
+            raise ValueError("Preview request exceeds 10 MiB")
+        request = json.loads(raw)
+    elif messages_json is not None:
+        request = {"messages": _parse_messages_json(messages_json)}
     else:
-        messages = _prompt_to_messages(prompt or "")
-
-    req = RoutePreviewRequest(messages=messages, model=(model or "").strip() or None)
+        request = {"messages": _prompt_to_messages(prompt or "")}
+    context = {
+        key: value
+        for key, value in {
+            "session_id": session_id,
+            "conversation_id": conversation_id,
+            "sampling_seed": sampling_seed,
+        }.items()
+        if value is not None
+    }
+    req = build_preview_request(
+        request, model=(model or "").strip() or None, preview_context=context or None
+    )
     payload = (
         RouterManagementClient(
             endpoint,
             timeout=timeout,
             token_env=token_env,
         )
-        .preview_route(req.to_json(), trace=trace)
+        .preview_route(req, trace=trace)
         .payload
     )
 
@@ -310,11 +350,13 @@ def _routing_receipt_headers(response: requests.Response) -> dict[str, str]:
 def _probe_assertions(
     *,
     response: requests.Response,
+    response_body: Any,
     expected_status: int,
     expected_recipe: str | None,
     expected_decision: str | None,
     expected_algorithm: str | None,
-    expected_model: str | None,
+    expected_selected_model: str | None,
+    expected_response_model: str | None,
 ) -> list[dict[str, Any]]:
     assertions: list[dict[str, Any]] = [
         {
@@ -324,11 +366,13 @@ def _probe_assertions(
             "passed": response.status_code == expected_status,
         }
     ]
+    if HTTPStatus.OK <= expected_status < HTTPStatus.MULTIPLE_CHOICES:
+        assertions.append(delivery_assertion(response_body))
     expectations = {
         "x-vsr-selected-recipe": expected_recipe,
         "x-vsr-selected-decision": expected_decision,
         "x-vsr-selected-algorithm": expected_algorithm,
-        "x-vsr-selected-model": expected_model,
+        "x-vsr-selected-model": expected_selected_model,
     }
     for header, expected in expectations.items():
         if expected is None:
@@ -340,6 +384,18 @@ def _probe_assertions(
                 "expected": expected,
                 "actual": actual,
                 "passed": actual == expected,
+            }
+        )
+    if expected_response_model is not None:
+        actual = (
+            response_body.get("model", "") if isinstance(response_body, dict) else ""
+        )
+        assertions.append(
+            {
+                "field": "response.body.model",
+                "expected": expected_response_model,
+                "actual": actual,
+                "passed": actual == expected_response_model,
             }
         )
     return assertions
@@ -358,7 +414,10 @@ def _probe_assertions(
 @click.option(
     "--base-url",
     default=None,
-    help="Explicit Envoy-routed base URL; otherwise derive it from --config.",
+    help=(
+        "Explicit Envoy listener origin or OpenAI /v1 base URL; otherwise "
+        "derive it from --config."
+    ),
 )
 @click.option(
     "--api-key-env",
@@ -367,6 +426,12 @@ def _probe_assertions(
     help="Environment variable containing the bearer token; omitted when unset.",
 )
 @click.option("--temperature", type=float, default=None)
+@click.option(
+    "--max-completion-tokens",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Completion token budget, including reasoning; omitted uses the backend default.",
+)
 @click.option("--timeout", type=float, default=120.0, show_default=True)
 @click.option(
     "--target", default=None, help="Deployment target used for URL resolution."
@@ -376,7 +441,16 @@ def _probe_assertions(
 @click.option("--expect-recipe", default=None)
 @click.option("--expect-decision", default=None)
 @click.option("--expect-algorithm", default=None)
-@click.option("--expect-model", default=None)
+@click.option(
+    "--expect-selected-model",
+    default=None,
+    help="Assert the Router's x-vsr-selected-model receipt header.",
+)
+@click.option(
+    "--expect-response-model",
+    default=None,
+    help="Assert the upstream OpenAI response body's top-level model field.",
+)
 @exit_with_logged_error(log)
 def probe(
     prompt: str | None,
@@ -386,6 +460,7 @@ def probe(
     base_url: str | None,
     api_key_env: str,
     temperature: float | None,
+    max_completion_tokens: int | None,
     timeout: float,
     target: str | None,
     debug: bool,
@@ -393,9 +468,10 @@ def probe(
     expect_recipe: str | None,
     expect_decision: str | None,
     expect_algorithm: str | None,
-    expect_model: str | None,
+    expect_selected_model: str | None,
+    expect_response_model: str | None,
 ) -> None:
-    """Send one real routed request and emit a machine-readable evidence receipt."""
+    """Probe a real route and assert complete assistant delivery for expected 2xx."""
 
     if (prompt is None) == (messages_json is None):
         raise ValueError("Provide exactly one of --prompt or --messages")
@@ -409,10 +485,12 @@ def probe(
         target=target,
         base_url=base_url,
     )
-    url = urljoin(base.rstrip("/") + "/", CHAT_COMPLETIONS_PATH.lstrip("/"))
+    url = chat_completions_url(base)
     payload: dict[str, Any] = {"model": model, "messages": messages}
     if temperature is not None:
         payload["temperature"] = temperature
+    if max_completion_tokens is not None:
+        payload["max_completion_tokens"] = max_completion_tokens
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if debug:
@@ -428,13 +506,16 @@ def probe(
             f"Failed to probe routed endpoint {redact_url(url)}: {exc}"
         ) from exc
     latency_ms = round((time.monotonic() - started) * 1000, 3)
+    response_body = _response_body(response)
     assertions = _probe_assertions(
         response=response,
+        response_body=response_body,
         expected_status=expect_status,
         expected_recipe=expect_recipe,
         expected_decision=expect_decision,
         expected_algorithm=expect_algorithm,
-        expected_model=expect_model,
+        expected_selected_model=expect_selected_model,
+        expected_response_model=expect_response_model,
     )
     passed = all(assertion["passed"] for assertion in assertions)
     receipt = {
@@ -449,10 +530,12 @@ def probe(
             "status": response.status_code,
             "latency_ms": latency_ms,
             "routing": _routing_receipt_headers(response),
-            "body": _response_body(response),
+            "body": response_body,
         },
         "assertions": assertions,
     }
+    if max_completion_tokens is not None:
+        receipt["request"]["max_completion_tokens"] = max_completion_tokens
     click.echo(json.dumps(receipt, indent=2, ensure_ascii=False, sort_keys=True))
     if not passed:
         raise click.exceptions.Exit(2)

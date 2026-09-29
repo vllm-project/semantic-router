@@ -89,20 +89,26 @@
 
 .liveVerification {
   /* Fixed width, not min-width: idle/pending/verified/failed each render different-length
-   * text (status label, button label, and an inline error on failure). A content-driven
-   * width here changes per status and reflows every column to its right (e.g. Pricing) as
-   * the operator watches a verification run. Column layout, not this width, is what should
-   * flex if the Live column itself is ever resized. Matches the Live column's declared
-   * width in ConfigPageModelInventoryPanel.tsx (164px) minus the table cell's 1rem
-   * horizontal padding on each side (DataTable.module.css .td). */
-  display: flex;
-  flex-direction: column;
+   * label text ("Not checked", "Checking…", "Live", "Unavailable"), and the failed state
+   * adds an inline error line. A content-driven width here changes per status and reflows
+   * every column to its right (e.g. Pricing) as the operator watches a verification run,
+   * since the Models table uses table-layout: auto and a colgroup width is only a hint
+   * there. Column layout, not this width, is what should flex if the Live column itself is
+   * ever resized. Matches the Live column's declared width in
+   * ConfigPageModelInventoryPanel.tsx (164px) minus the table cell's 1rem horizontal
+   * padding on each side (DataTable.module.css .td). */
+  display: grid;
   width: 132px;
-  gap: 0.3rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.5rem;
+  row-gap: 0.15rem;
 }
 
 .liveVerificationHeading {
   display: flex;
+  grid-row: 1;
+  grid-column: 1;
   align-items: center;
   min-width: 0;
   gap: 0.42rem;
@@ -118,9 +124,9 @@
 }
 
 .liveVerificationDotSuccess {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+  border-color: rgba(74, 222, 128, 0.75);
+  background: var(--color-success, #22c55e);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
 }
 
 .liveVerificationDotError {
@@ -144,6 +150,10 @@
   font-weight: 690;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.liveVerificationLabelSuccess {
+  color: #bbf7d0;
 }
 
 .liveVerificationEvidence {
@@ -178,29 +188,27 @@
 
 .liveVerificationError {
   /* Overrides the 220px max-width shared with .liveVerificationEvidence above: this span
-   * sits inside the fixed-width .liveVerification column (see comment there) and must not
-   * exceed it, or the failed state reflows the row the same way the button label does. */
+   * spans the fixed-width .liveVerification column (see comment there) and must not
+   * exceed it, or the failed state reflows the row the same way the label text can. */
+  grid-column: 1 / -1;
+  min-width: 0;
   max-width: 100%;
   color: #fecaca;
 }
 
 .liveVerificationButton {
-  /* Fixed width (not fit-content): "Check", "Checking…" and "Check again" render at
-   * different natural widths, and a fit-content button resizes with the label, reflowing
-   * the fixed-width .liveVerification column above it. */
   display: inline-flex;
+  grid-row: 1;
+  grid-column: 2;
+  width: 28px;
+  height: 28px;
   align-items: center;
   justify-content: center;
-  gap: 0.3rem;
-  width: 100%;
-  min-height: 28px;
-  padding: 0.28rem 0.58rem;
+  padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.045);
   color: rgba(255, 255, 255, 0.78);
-  font-size: 0.68rem;
-  font-weight: 680;
 }
 
 .liveVerificationButton:hover:not(:disabled) {

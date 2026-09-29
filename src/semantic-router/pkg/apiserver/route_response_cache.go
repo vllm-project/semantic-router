@@ -5,11 +5,13 @@ package apiserver
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 type responseCacheTestRequest struct {
@@ -59,9 +61,9 @@ func (s *ClassificationAPIServer) handleResponseCacheHealth(
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CACHE_UNHEALTHY", "Response cache health check failed")
 		return
 	}
-	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-		"status":       "healthy",
-		"capabilities": service.Capabilities(),
+	s.writeJSONResponse(w, http.StatusOK, cacheHealthResponse{
+		Status:       "healthy",
+		Capabilities: service.Capabilities(),
 	})
 }
 
@@ -97,12 +99,25 @@ func (s *ClassificationAPIServer) handleResponseCacheTest(
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CACHE_CONFIG", "Invalid response cache configuration")
 		return
 	}
+	if candidate.Enabled {
+		provider, release, prepareErr := s.acquireResponseCacheEmbedding(candidate.EmbeddingModel)
+		defer release()
+		if prepareErr != nil {
+			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", "Response cache embedding provider is unavailable")
+			return
+		}
+		candidate.EmbeddingProvider = provider
+	}
 	backend, err := cache.NewCacheBackend(candidate)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CACHE_CONFIG", err.Error())
 		return
 	}
 	defer func() { _ = backend.Close() }()
+	if err = cache.ValidateBackendEmbedding(r.Context(), backend); err != nil {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CACHE_CONFIG", err.Error())
+		return
+	}
 	healthErr := backend.CheckConnection(r.Context())
 	response := responseCacheTestResponse{
 		Valid:        true,
@@ -114,6 +129,28 @@ func (s *ClassificationAPIServer) handleResponseCacheTest(
 		return
 	}
 	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
+func (s *ClassificationAPIServer) acquireResponseCacheEmbedding(model string) (embedding.Provider, func(), error) {
+	service, release := s.currentResponseCache()
+	if service != nil {
+		if provider, err := service.PreparedEmbedding(model); err == nil {
+			return provider, release, nil
+		}
+	}
+	release()
+	// Legacy configurations can validate a candidate against their existing
+	// default embedding. An explicit global binding must never borrow a recipe
+	// override when its service consumer is unavailable or incompatible.
+	cfg, prepared, release, err := s.acquireEmbeddingRuntime()
+	if cfg != nil && cfg.GlobalModelBindings["embedding"].Deployment != "" {
+		return nil, release, fmt.Errorf("global response cache embedding consumer is unavailable or incompatible")
+	}
+	if err != nil {
+		return nil, release, err
+	}
+	provider, err := prepared.Get(model, 0, 0)
+	return provider, release, err
 }
 
 func (s *ClassificationAPIServer) handleResponseCacheInvalidate(

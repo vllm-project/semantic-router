@@ -204,7 +204,7 @@ routing:
 
     fact_check:
       - name: needs_fact_check
-        description: Request needs factual verification or sources.
+        description: Requests that depend on external factual knowledge; verification routing combines this signal with feedback and source requirements.
 
     domains:
       - name: computer science
@@ -313,12 +313,13 @@ routing:
       description: Understand image-bearing follow-ups with the dedicated visual-language model.
       priority: 260
       rules:
-        operator: OR
+        operator: AND
         conditions:
           - type: conversation
             name: feedback_has_images
       modelRefs:
         - model: local/omni
+          use_reasoning: false
       algorithm:
         type: static
 
@@ -344,8 +345,6 @@ routing:
                 name: feedback_needs_evidence
               - type: keyword
                 name: verification_markers
-              - type: fact_check
-                name: needs_fact_check
           - operator: NOT
             conditions:
               - operator: OR
@@ -454,8 +453,6 @@ routing:
                     name: feedback_needs_evidence
                   - type: keyword
                     name: verification_markers
-                  - type: fact_check
-                    name: needs_fact_check
                   - type: keyword
                     name: code_error_markers
                   - type: domain
@@ -500,8 +497,6 @@ routing:
                     name: feedback_needs_evidence
                   - type: keyword
                     name: verification_markers
-                  - type: fact_check
-                    name: needs_fact_check
                   - type: keyword
                     name: code_error_markers
                   - type: domain

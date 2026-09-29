@@ -8,6 +8,7 @@ import Tabs from '@theme/Tabs'
 import TabItem from '@theme/TabItem'
 import CodeBlock from '@theme/CodeBlock'
 import {
+  AGENT_INSTALL_DOC_PATH,
   AGENT_INSTALL_PROMPT,
   AGENT_SKILL_PATH,
   CURL_INSTALL_COMMAND,
@@ -24,6 +25,16 @@ Install vLLM Semantic Router, start the local stack, and send one request.
 - Linux, macOS, or WSL2
 - Python 3.10 or newer
 - Docker; Linux can fall back to Podman
+
+For the curl installer, pass `--runtime podman` to force Podman or
+`--runtime skip` to skip container-runtime preparation. For example:
+
+```bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable --runtime skip
+```
+
+These are installer options. `vllm-sr serve --runtime` selects a container
+runtime (`docker` or `podman`); `skip` is not a `serve` runtime.
 
 ## Install
 
@@ -45,7 +56,8 @@ Install vLLM Semantic Router, start the local stack, and send one request.
   <TabItem value="agent">
     Copy this prompt into your coding agent:
     <CodeBlock language="text">{AGENT_INSTALL_PROMPT}</CodeBlock>
-    The prompt points to the self-contained <a href={AGENT_SKILL_PATH}>vLLM SR agent skill</a>.
+    The prompt points to the public, self-contained <a href={AGENT_SKILL_PATH}>vLLM SR agent skill</a>.
+    See <a href={AGENT_INSTALL_DOC_PATH}>Install with an agent</a> for the workflow and safety boundaries.
   </TabItem>
 </Tabs>
 

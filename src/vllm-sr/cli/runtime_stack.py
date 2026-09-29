@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 from cli.consts import (
     DEFAULT_API_PORT,
@@ -17,6 +17,7 @@ from cli.consts import (
 
 STACK_NAME_ENV = "VLLM_SR_STACK_NAME"
 PORT_OFFSET_ENV = "VLLM_SR_PORT_OFFSET"
+BENCH_PORT_ENV = "VLLM_SR_BENCH_PORT"
 DEFAULT_ENVOY_CONTAINER_NAME = "vllm-sr-envoy-container"
 
 DEFAULT_JAEGER_OTLP_PORT = 4318
@@ -25,6 +26,7 @@ DEFAULT_PROMETHEUS_PORT = 9090
 DEFAULT_GRAFANA_PORT = 3000
 DEFAULT_REDIS_PORT = 6379
 DEFAULT_POSTGRES_PORT = 5432
+_MAX_HOST_PORT = 65_535
 
 STACK_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -64,6 +66,31 @@ class RuntimeStackLayout:
     redis_port: int
     postgres_port: int
     milvus_port: int
+    sr_bench_port: int
+
+    def __post_init__(self) -> None:
+        for field in fields(self):
+            if not field.name.endswith("_port"):
+                continue
+            self._validate_host_port(getattr(self, field.name), field.name)
+
+    def host_port(self, container_port: int, *, name: str) -> int:
+        """Apply the stack offset and validate a configured service's host port."""
+        return self._validate_host_port(container_port + self.port_offset, name)
+
+    def _validate_host_port(self, port: int, name: str) -> int:
+        if not 1 <= port <= _MAX_HOST_PORT:
+            raise ValueError(
+                f"{PORT_OFFSET_ENV}={self.port_offset} produces invalid "
+                f"{name} {port}; host ports must be between 1 and {_MAX_HOST_PORT}"
+            )
+        return port
+
+    @property
+    def sr_bench_container_name(self) -> str:
+        return self.dashboard_container_name.replace(
+            "dashboard-container", "sr-bench-container"
+        )
 
     @property
     def dashboard_url(self) -> str:
@@ -226,6 +253,9 @@ def resolve_runtime_stack(
         redis_port=DEFAULT_REDIS_PORT + resolved_port_offset,
         postgres_port=DEFAULT_POSTGRES_PORT + resolved_port_offset,
         milvus_port=DEFAULT_MILVUS_PORT + resolved_port_offset,
+        sr_bench_port=normalize_bench_port(
+            os.getenv(BENCH_PORT_ENV), resolved_port_offset
+        ),
     )
 
 
@@ -256,3 +286,17 @@ def normalize_port_offset(raw_value: str | int | None) -> int:
     if offset < 0:
         raise ValueError(f"{PORT_OFFSET_ENV} must be >= 0, got {offset}")
     return offset
+
+
+def normalize_bench_port(raw_value: str | None, port_offset: int) -> int:
+    if raw_value in (None, ""):
+        return 8090 + port_offset
+    try:
+        port = int(raw_value)
+    except ValueError:
+        raise ValueError(
+            f"{BENCH_PORT_ENV} must be an integer between 1 and 65535"
+        ) from None
+    if not 1 <= port <= _MAX_HOST_PORT:
+        raise ValueError(f"{BENCH_PORT_ENV} must be between 1 and 65535, got {port}")
+    return port

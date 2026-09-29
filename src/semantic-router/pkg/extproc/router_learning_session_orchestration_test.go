@@ -1,9 +1,9 @@
 package extproc
 
 import (
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
@@ -46,7 +46,10 @@ func runProtectionOrchestration(t *testing.T, scenario protectionScenario) {
 		}
 		input := protectionScenarioInput(router, scenario, step, turn, request)
 		before := calls
-		ctx, result, ref, _ := router.applyRouterLearning(input.selCtx, input.baseResult, input.selectedModelRef, input.ctx)
+		ctx, result, ref, _, learningErr := router.applyRouterLearning(input.selCtx, input.baseResult, input.selectedModelRef, input.ctx)
+		if learningErr != nil {
+			t.Fatal(learningErr)
+		}
 		wantSampling := scenario.Mode == "bypass" || step.Expected.Sampling
 		assertAdaptationSampled(t, input.ctx, wantSampling)
 		if (calls > before) != wantSampling {
@@ -58,6 +61,10 @@ func runProtectionOrchestration(t *testing.T, scenario protectionScenario) {
 				t.Fatalf("%s: protected continuation switched from %q to %q", step.ID, previous, ref.Model)
 			}
 		}
-		recordAgenticSessionDecision(ctx, result, ref, input.ctx)
+		// Each accepted corpus step represents a completed dispatch boundary.
+		stageAgenticSessionDecision(ctx, result, ref, input.ctx)
+		if err := commitAgenticSessionDecision(input.ctx); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

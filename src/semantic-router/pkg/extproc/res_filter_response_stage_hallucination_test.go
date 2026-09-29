@@ -164,8 +164,8 @@ func TestHallucinationSignalDrivesTheSelectedDecisionPlugin(t *testing.T) {
 	if len(ctx.VSRMatchedHallucination) != 1 || ctx.VSRMatchedHallucination[0] != hallucinationRuleName {
 		t.Fatalf("matched hallucination rules = %v, want [%s]", ctx.VSRMatchedHallucination, hallucinationRuleName)
 	}
-	if got := ctx.VSRSignalConfidences[hallucinationSignalKey]; got != 1 {
-		t.Fatalf("confidence under %s = %v, want the detector's 1", hallucinationSignalKey, got)
+	if _, ok := ctx.VSRSignalConfidences[hallucinationSignalKey]; ok {
+		t.Fatal("categorical endpoint must not invent confidence")
 	}
 	if !ctx.HallucinationDetected || len(ctx.HallucinationSpans) != 1 || ctx.HallucinationSpans[0] != "450 meters" {
 		t.Fatalf("the plugin did not carry the evidence: detected=%v spans=%v", ctx.HallucinationDetected, ctx.HallucinationSpans)
@@ -184,8 +184,8 @@ func TestHallucinationSignalCleanAnswerTakesNoAction(t *testing.T) {
 	if len(ctx.VSRMatchedHallucination) != 0 || len(ctx.VSRSignalErrors) != 0 {
 		t.Fatalf("a clean answer must match nothing and fail nothing, got matched=%v errors=%v", ctx.VSRMatchedHallucination, ctx.VSRSignalErrors)
 	}
-	if _, ok := ctx.VSRSignalConfidences[hallucinationSignalKey]; !ok {
-		t.Fatal("a clean answer is an observation and must record its confidence")
+	if ctx.VSRHallucinationEvidence == nil || ctx.VSRHallucinationEvidence.ScoreAvailable {
+		t.Fatal("a clean endpoint verdict must retain evidence without scores")
 	}
 	if ctx.HallucinationDetected || warning != "" {
 		t.Fatalf("a clean answer is not a detection, got detected=%v warning=%q", ctx.HallucinationDetected, warning)
@@ -364,8 +364,8 @@ func TestHallucinationSignalRecordsReplayOutcome(t *testing.T) {
 		}
 		assertHallucinationOutcome(t, outcomes[0], "detected", "")
 		metadata := outcomes[0].Metadata
-		if outcomes[0].Score != 1 || metadata["spans"] != "1" || metadata["action"] != "body" || metadata["direction"] != config.SignalDirectionResponse {
-			t.Fatalf("outcome = %+v, want the detector's confidence, the span count, the plugin action and the response direction", outcomes[0])
+		if outcomes[0].Score != 0 || metadata["score_available"] != "false" || metadata["spans"] != "1" || metadata["action"] != "body" || metadata["direction"] != config.SignalDirectionResponse {
+			t.Fatalf("outcome = %+v, want unavailable score metadata, the span count, the plugin action and the response direction", outcomes[0])
 		}
 	})
 

@@ -1,5 +1,9 @@
 # Fact-Check Classifier Training
 
+For the Vela workflow with reviewed natural-request data, frozen partitions, and
+independent evaluation, see [Vela FactCheck repair](VELA_REPAIR.md). This page
+describes the original training script.
+
 This script fine-tunes a sequence classifier to predict whether a user prompt
 needs factual verification:
 

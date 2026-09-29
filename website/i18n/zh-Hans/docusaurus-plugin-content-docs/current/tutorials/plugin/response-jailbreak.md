@@ -5,7 +5,7 @@ translation:
   outdated: false
 ---
 
-# 响应越狱检测（Response Jailbreak）
+# 响应越狱检测
 
 ## 概览
 
@@ -24,7 +24,7 @@ translation:
 ## 何时使用
 
 - 路由需要最终的响应侧越狱筛查
-- 输出应在返回前被拦截，或通过响应 header 标记
+- 输出应在返回前被拦截，或通过响应头标记
 - 仅靠请求侧筛查不足以满足该工作负载的要求
 
 ## 配置
@@ -40,5 +40,5 @@ plugins:
       action: block
 ```
 
-该插件使用已配置的 prompt-guard 运行时处理生成的响应文本。它会增加延迟，也可能产生误报，因此应校准阈值，并根据策略选择 `block` 或仅通过 header 处理。完整示例见：
+该插件使用已配置的 prompt-guard 运行时处理生成的响应文本。它会增加延迟，也可能产生误报，因此应校准阈值，并根据策略选择 `block` 或仅通过请求头处理。完整示例见：
 [`config/fragments/plugin/response-jailbreak/strict.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-jailbreak/strict.yaml)。

@@ -33,7 +33,7 @@ func newOpenAPISpec() OpenAPISpec {
 		OpenAPI: "3.0.0",
 		Info: OpenAPIInfo{
 			Title:       "Semantic Router Apiserver",
-			Description: "HTTP router apiserver for classification utilities, config management, and service introspection",
+			Description: "Router management API for configuration, plugin operations, prepared-model diagnostics, storage, and observability",
 			Version:     "v1",
 		},
 		Servers: []OpenAPIServer{
@@ -45,7 +45,7 @@ func newOpenAPISpec() OpenAPISpec {
 		Paths: make(map[string]OpenAPIPath),
 		Components: OpenAPIComponents{
 			SecuritySchemes: map[string]OpenAPISecurityScheme{
-				"bearerAuth": {
+				"bearerAuth": { // #nosec G101 -- OpenAPI security scheme metadata, not a credential.
 					Type:         "http",
 					Scheme:       "bearer",
 					BearerFormat: "opaque management token",
@@ -58,31 +58,28 @@ func newOpenAPISpec() OpenAPISpec {
 
 func buildOpenAPIOperation(route apiRoute) *OpenAPIOperation {
 	operation := &OpenAPIOperation{
-		Summary:     route.Description,
-		Description: route.Description,
-		OperationID: openAPIOperationID(route.Method, route.Path),
-		Tags:        []string{route.Capability},
-		Deprecated:  route.Deprecated,
-		Parameters:  append(openAPIPathParameters(route.Path), route.Parameters...),
-		Security:    openAPIOperationSecurity(route),
-		Permission:  route.Permission,
-		Sensitivity: route.Sensitivity,
-		AuditAction: route.AuditAction,
-		Plane:       route.Plane,
-		Audiences:   append([]APIAudience(nil), route.Audiences...),
-		Stability:   route.Stability,
-		Visibility:  route.Visibility,
-		Responses: map[string]OpenAPIResponse{
-			"200": openAPIObjectResponse("Successful response"),
-			"400": openAPIErrorResponse("Bad request"),
-		},
+		Summary:          route.Description,
+		Description:      route.Description,
+		OperationID:      openAPIOperationID(route.Method, route.Path),
+		Tags:             []string{route.Capability},
+		Deprecated:       route.Deprecated,
+		Parameters:       append(openAPIPathParameters(route.Path), route.Parameters...),
+		Security:         openAPIOperationSecurity(route),
+		Permission:       route.Permission,
+		Sensitivity:      route.Sensitivity,
+		AuditAction:      route.AuditAction,
+		Plane:            route.Plane,
+		Audiences:        append([]APIAudience(nil), route.Audiences...),
+		Stability:        route.Stability,
+		PluginOperations: append([]PluginOperationContract(nil), route.PluginOperations...),
+		Visibility:       route.Visibility,
+		Responses:        routeOpenAPIResponses(route),
 	}
 
 	if route.RequestBody.Kind != requestBodyNone {
 		operation.Responses["413"] = openAPIErrorResponse("Request body too large")
 		operation.RequestBody = buildOpenAPIRequestBody(route.RequestBody)
 	}
-
 	return operation
 }
 
@@ -167,44 +164,12 @@ func requestBodyDescription(body apiRequestBody) string {
 	return fmt.Sprintf("%s request payload. Limit: %d bytes.", body.Kind, body.LimitBytes)
 }
 
-func openAPIObjectResponse(description string) OpenAPIResponse {
-	return OpenAPIResponse{
-		Description: description,
-		Content:     openAPIObjectMedia(),
-	}
-}
-
 func openAPIErrorResponse(description string) OpenAPIResponse {
-	return OpenAPIResponse{
-		Description: description,
-		Content: map[string]OpenAPIMedia{
-			"application/json": {
-				Schema: &OpenAPISchema{
-					Type: "object",
-					Properties: map[string]OpenAPISchema{
-						"error": {
-							Type: "object",
-							Properties: map[string]OpenAPISchema{
-								"code":      {Type: "string"},
-								"message":   {Type: "string"},
-								"timestamp": {Type: "string"},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func openAPIObjectMedia() map[string]OpenAPIMedia {
-	return map[string]OpenAPIMedia{
-		"application/json": {
-			Schema: &OpenAPISchema{
-				Type: "object",
-			},
-		},
-	}
+	return OpenAPIResponse{Description: description, Headers: map[string]OpenAPIHeader{
+		managementRequestIDHeader: {Description: "Correlation identifier for this management request.", Schema: OpenAPISchema{Type: "string"}},
+	}, Content: map[string]OpenAPIMedia{
+		"application/json": {Schema: openAPIRequestSchemaFor[managementErrorResponse]()},
+	}}
 }
 
 func requestBodyMedia(body apiRequestBody) map[string]OpenAPIMedia {

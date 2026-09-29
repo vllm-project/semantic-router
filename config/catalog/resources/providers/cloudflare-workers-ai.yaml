@@ -12,9 +12,11 @@ auth:
   strategy: bearer
   header: Authorization
   prefix: Bearer
+  injected_header: x-user-cloudflare-workers-ai-key
 presentation:
   logo: monogram
   monogram: Cf
   monochrome: false
 conformance:
-  status: unverified
+  status: live_verified
+  verified_at: 2026-09-19

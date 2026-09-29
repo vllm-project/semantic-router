@@ -83,16 +83,18 @@ func (r *OpenAIRouter) performHallucinationDetectionText(
 	ctx.HallucinationDetected = result.HallucinationDetected
 	ctx.HallucinationSpans = result.UnsupportedSpans
 	ctx.HallucinationConfidence = result.Confidence
+	ctx.HallucinationScoreAvailable = result.ScoreAvailable
+	ctx.HallucinationScoreKind = result.ScoreKind
 
 	decisionName := requestDecisionStateKey(ctx)
 
 	if result.HallucinationDetected {
 		metrics.RecordPluginExecution("hallucination", decisionName, "detected", latency)
-		logging.Warnf("Hallucination detected: confidence=%.3f, unsupported_spans=%d, action=%s",
-			result.Confidence, len(result.UnsupportedSpans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
+		logging.Warnf("Hallucination detected: score=%s, unsupported_spans=%d, action=%s",
+			hallucinationScoreDescription(result.ScoreAvailable, result.ScoreKind, result.Confidence), len(result.UnsupportedSpans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
 	} else {
 		metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", latency)
-		logging.Debugf("No hallucination detected: confidence=%.3f", result.Confidence)
+		logging.Debugf("No hallucination detected: score=%s", hallucinationScoreDescription(result.ScoreAvailable, result.ScoreKind, result.Confidence))
 	}
 
 	return nil
@@ -128,6 +130,8 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 	evidence := hallucinationEvidenceFromNLI(result)
 	ctx.HallucinationDetected = evidence.Detected
 	ctx.HallucinationConfidence = evidence.Confidence
+	ctx.HallucinationScoreAvailable = evidence.ScoreAvailable
+	ctx.HallucinationScoreKind = evidence.ScoreKind
 	ctx.HallucinationSpans = append(ctx.HallucinationSpans, evidence.Spans...)
 	ctx.EnhancedHallucinationInfo = evidence.Enhanced
 
@@ -135,11 +139,11 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 
 	if result.HallucinationDetected {
 		metrics.RecordPluginExecution("hallucination", decisionName, "detected_nli", latency)
-		logging.Warnf("Hallucination detected (NLI): confidence=%.3f, spans=%d, action=%s",
-			result.Confidence, len(result.Spans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
+		logging.Warnf("Hallucination detected (NLI): score=%s, spans=%d, action=%s",
+			hallucinationScoreDescription(result.ScoreAvailable, result.ScoreKind, result.Confidence), len(result.Spans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
 	} else {
 		metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", latency)
-		logging.Debugf("No hallucination detected (NLI): confidence=%.3f", result.Confidence)
+		logging.Debugf("No hallucination detected (NLI): score=%s", hallucinationScoreDescription(result.ScoreAvailable, result.ScoreKind, result.Confidence))
 	}
 
 	return nil
@@ -167,11 +171,13 @@ func (r *OpenAIRouter) consumeHallucinationSignal(ctx *RequestContext) {
 	ctx.HallucinationDetected = matched
 	ctx.HallucinationSpans = evidence.Spans
 	ctx.HallucinationConfidence = evidence.Confidence
+	ctx.HallucinationScoreAvailable = evidence.ScoreAvailable
+	ctx.HallucinationScoreKind = evidence.ScoreKind
 	ctx.EnhancedHallucinationInfo = evidence.Enhanced
 	if matched {
 		metrics.RecordPluginExecution("hallucination", decisionName, "detected", 0)
-		logging.Warnf("Hallucination detected: confidence=%.3f, unsupported_spans=%d, action=%s",
-			evidence.Confidence, len(evidence.Spans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
+		logging.Warnf("Hallucination detected: score=%s, unsupported_spans=%d, action=%s",
+			hallucinationScoreDescription(evidence.ScoreAvailable, evidence.ScoreKind, evidence.Confidence), len(evidence.Spans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
 		return
 	}
 	metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", 0)
@@ -242,7 +248,7 @@ func (r *OpenAIRouter) buildHallucinationWarningText(ctx *RequestContext, includ
 	}
 
 	// Basic details without NLI
-	warning := fmt.Sprintf("[Hallucination Warning] This response may contain unsupported claims (confidence: %.0f%%).", ctx.HallucinationConfidence*100)
+	warning := hallucinationWarningPrefix(ctx.HallucinationScoreAvailable, ctx.HallucinationScoreKind, ctx.HallucinationConfidence)
 
 	if len(ctx.HallucinationSpans) > 0 {
 		spans := strings.Join(ctx.HallucinationSpans, "\", \"")
@@ -257,12 +263,16 @@ func (r *OpenAIRouter) buildHallucinationWarningText(ctx *RequestContext, includ
 func (r *OpenAIRouter) buildEnhancedHallucinationWarningText(ctx *RequestContext) string {
 	info := ctx.EnhancedHallucinationInfo
 
-	warning := fmt.Sprintf("[Hallucination Warning] This response may contain unsupported claims (confidence: %.0f%%).", info.Confidence*100)
+	warning := hallucinationWarningPrefix(info.ScoreAvailable, info.ScoreKind, info.Confidence)
 	warning += " Detailed analysis:"
 
 	for i, span := range info.Spans {
 		warning += fmt.Sprintf(" [%d] \"%s\"", i+1, span.Text)
-		warning += fmt.Sprintf(" (NLI: %s, confidence: %.0f%%, severity: %s)", span.NLILabel, span.NLIConfidence*100, severityToString(span.Severity))
+		if span.NLILabel != "" && !strings.EqualFold(span.NLILabel, "unknown") {
+			warning += fmt.Sprintf(" (NLI: %s, confidence: %.0f%%, severity: %s)", span.NLILabel, span.NLIConfidence*100, severityToString(span.Severity))
+		} else {
+			warning += fmt.Sprintf(" (severity: %s)", severityToString(span.Severity))
+		}
 		if span.Explanation != "" {
 			warning += fmt.Sprintf(" - %s", span.Explanation)
 		}
@@ -329,4 +339,22 @@ func (r *OpenAIRouter) applySemanticUnverifiedFactualWarning(
 	default:
 		return false, headers.ResponseWarningUnverifiedFactual
 	}
+}
+
+func hallucinationWarningPrefix(available bool, kind string, score float32) string {
+	prefix := "[Hallucination Warning] This response may contain unsupported claims"
+	if !available {
+		return prefix + "."
+	}
+	if kind == "probability" {
+		return fmt.Sprintf("%s (confidence: %.0f%%).", prefix, score*100)
+	}
+	return fmt.Sprintf("%s (score: %.3f, kind: %s).", prefix, score, kind)
+}
+
+func hallucinationScoreDescription(available bool, kind string, score float32) string {
+	if !available {
+		return "unavailable"
+	}
+	return fmt.Sprintf("%.3f (%s)", score, kind)
 }

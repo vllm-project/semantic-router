@@ -211,9 +211,7 @@ def test_packaged_catalog_export_is_complete_and_config_independent(
         model for model in document["models"] if model["kind"] == "virtual"
     ]
     assert {model["id"] for model in virtual_models} == CATALOG_MODELS
-    assert all(
-        model["verification"]["status"] == "reproduced" for model in virtual_models
-    )
+    assert all(model["verification"]["status"] == "claimed" for model in virtual_models)
 
 
 def test_packaged_mom_recipes_do_not_inject_system_prompts() -> None:
@@ -408,8 +406,8 @@ def test_catalog_rejects_credential_like_literals_without_echoing_them(
         (("protocols", 0, "id"), "openai", "unsupported values"),
         (
             ("models", 0, "roles", 0, "minimum_candidates"),
-            99,
-            "exceeds its recommended pool",
+            0,
+            "must be a positive integer",
         ),
     ),
 )

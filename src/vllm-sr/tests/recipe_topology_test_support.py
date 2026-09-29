@@ -1,8 +1,14 @@
 """Shared snapshots and transitions for topology reconciliation tests."""
 
+import os
 from copy import deepcopy
 
 import pytest
+
+REQUIRES_LINUX_MEMFD = pytest.mark.skipif(
+    not hasattr(os, "memfd_create"),
+    reason="requires Linux memfd environment transport",
+)
 
 
 def _remove_transition() -> dict[str, object]:

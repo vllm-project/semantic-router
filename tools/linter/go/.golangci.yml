@@ -120,6 +120,20 @@ linters:
         text: "G306:"
         path: "_test\\.go$"
       - linters:
+          - gosec
+        text: "G101:"  # Test fixtures use placeholder credentials
+        path: "_test\\.go$"
+      - linters:
+          - gosec
+        text: "G124:"  # Cookie attribute checks added in gosec 2.22; baseline cleanup tracked in #3703
+      - linters:
+          - gosec
+        text: "G70[1-6]:"  # Taint-analysis rules added in gosec 2.22; baseline cleanup tracked in #3703
+      - linters:
+          - staticcheck
+        text: "SA4023"  # Build-tag stub returns a constant error on non-Linux hosts
+        path: "evaluation_deployment_registry\\.go$"
+      - linters:
           - revive
         text: "dot-imports:"
         path: "_test\\.go$"

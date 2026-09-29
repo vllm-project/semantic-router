@@ -68,6 +68,9 @@ type TeardownOptions struct {
 
 // TestOptions contains options for running tests
 type TestOptions struct {
+	// BaselineSuite selects standard non-stress or full canonical baseline coverage.
+	BaselineSuite string
+
 	// Profile is the test profile to run
 	Profile string
 

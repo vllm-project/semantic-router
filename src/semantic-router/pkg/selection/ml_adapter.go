@@ -93,12 +93,13 @@ func (a *MLSelectorAdapter) Select(ctx context.Context, selCtx *SelectionContext
 	}
 
 	return &SelectionResult{
-		SelectedModel: selectedRef.Model,
-		LoRAName:      selectedRef.LoRAName,
-		Score:         1.0,
-		Confidence:    0.8, // ML selectors provide reasonable confidence
-		Method:        a.method,
-		Reasoning:     fmt.Sprintf("Selected by %s algorithm", a.method),
+		SelectedModel:     selectedRef.Model,
+		SelectedCandidate: selectedRef,
+		LoRAName:          selectedRef.LoRAName,
+		Score:             1.0,
+		Confidence:        0.8, // ML selectors provide reasonable confidence
+		Method:            a.method,
+		Reasoning:         fmt.Sprintf("Selected by %s algorithm", a.method),
 	}, nil
 }
 

@@ -201,6 +201,7 @@ func assertMaintainedBalanceIntentPartition(t *testing.T, groups []config.Projec
 		"general_chat_fallback",
 		"health_guidance",
 		"history_explainer",
+		"interpersonal_drafting",
 		"premium_legal_analysis",
 		"psychology_support",
 		"reasoning_general_en",

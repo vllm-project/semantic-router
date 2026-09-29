@@ -47,6 +47,7 @@ pub mod gemma3_model;
 
 // mmBERT Embedding model (32K context, 2D Matryoshka)
 pub mod mmbert_embedding;
+pub mod representation_contract;
 
 // Multi-modal embedding model (text + image + audio, 384-dim)
 pub mod multimodal_embedding;
@@ -103,3 +104,7 @@ mod dense_layers_test;
 mod gemma3_model_test;
 
 // Multi-modal embedding tests are inside multimodal_embedding.rs
+
+pub(crate) mod runtime_identity;
+#[cfg(test)]
+mod runtime_identity_test;

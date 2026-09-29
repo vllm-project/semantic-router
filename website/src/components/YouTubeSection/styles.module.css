@@ -69,9 +69,9 @@
 .videoKind {
   display: inline-flex;
   padding: 0.3rem 0.62rem;
-  border: 1px solid rgba(48, 162, 255, 0.32);
+  border: 1px solid var(--site-hover-border);
   border-radius: 999px;
-  background: rgba(48, 162, 255, 0.1);
+  background: var(--site-accent-soft);
   color: var(--site-accent-strong);
   font-size: var(--site-text-caption);
   font-weight: var(--site-font-weight-semibold);
@@ -117,7 +117,7 @@
   justify-content: space-between;
   padding: 0.7rem;
   border-top: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--site-surface-soft);
 }
 
 .directionButton {
@@ -208,8 +208,8 @@
 }
 
 .videoCardActive {
-  border-color: rgba(48, 162, 255, 0.55);
-  background: rgba(48, 162, 255, 0.08);
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-accent-soft);
 }
 
 .thumbnail {

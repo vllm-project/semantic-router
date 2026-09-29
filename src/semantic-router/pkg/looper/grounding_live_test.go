@@ -59,7 +59,7 @@ func TestFusionWeightPolicy_LiveOllama(t *testing.T) {
 		},
 	}
 
-	resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: endpoint}).
+	resp, err := newGroundedTestFusionLooper(&config.LooperConfig{Endpoint: endpoint}).
 		Execute(context.Background(), req)
 	require.NoError(t, err)
 

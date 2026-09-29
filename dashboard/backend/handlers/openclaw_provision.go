@@ -29,6 +29,25 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 
 		asyncRequested := provisionAsyncRequested(r)
 
+		var req ProvisionRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":"Invalid request: %v"}`, err), http.StatusBadRequest)
+			return
+		}
+
+		if len(req.Skills) > 0 {
+			catalog, err := h.loadSkills()
+			if err != nil {
+				log.Printf("openclaw: failed to load skills catalog: %v", err)
+				writeJSONError(w, "Failed to load skills catalog", http.StatusInternalServerError)
+				return
+			}
+			if err := validateOpenClawSkillIDs(req.Skills, catalog); err != nil {
+				writeJSONError(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
+
 		runtimeBin, runtimeErr := detectContainerRuntime()
 		if runtimeErr != nil {
 			writeJSONError(w, runtimeErr.Error(), http.StatusServiceUnavailable)
@@ -37,12 +56,6 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 		runtimeName := filepath.Base(runtimeBin)
 		if runtimeName == "" {
 			runtimeName = runtimeBin
-		}
-
-		var req ProvisionRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"Invalid request: %v"}`, err), http.StatusBadRequest)
-			return
 		}
 
 		req.Container.ContainerName = deriveContainerName(req.Container.ContainerName, req.Identity.Name)

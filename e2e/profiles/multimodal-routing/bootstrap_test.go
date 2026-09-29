@@ -1,0 +1,40 @@
+package multimodalrouting
+
+import (
+	"context"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
+)
+
+type recordingInstaller struct{ options helm.InstallOptions }
+
+func (r *recordingInstaller) Install(_ context.Context, options helm.InstallOptions) error {
+	r.options = options
+	return nil
+}
+
+func TestBootstrapDoesNotWaitForUnpublishedCRs(t *testing.T) {
+	installer := &recordingInstaller{}
+	if err := NewProfile().deploySemanticRouter(context.Background(), installer, &framework.SetupOptions{ImageTag: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	if installer.options.Wait {
+		t.Fatal("Helm readiness wait before CR publication deadlocks startup")
+	}
+	if installer.options.Namespace != routerNamespace {
+		t.Fatal(installer.options.Namespace)
+	}
+	for _, manifest := range []string{"intelligentpool.yaml", "intelligentroute.yaml"} {
+		data, err := os.ReadFile("crds/" + manifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), "namespace: "+routerNamespace+"\n") {
+			t.Fatalf("%s is outside the Router namespace", manifest)
+		}
+	}
+}

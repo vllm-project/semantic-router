@@ -15,6 +15,7 @@ precommit-check: harness-venv-install ## Run pre-commit checks on all relevant f
 	@"$(AGENT_PRE_COMMIT)" run --all-files
 
 # Run the CI changed-file pre-commit pipeline in a Docker container.
+# Keep native build outputs inside the container's toolchain and libc environment.
 #
 # For interactive debugging:
 #   export PRECOMMIT_CONTAINER=ghcr.io/vllm-project/semantic-router/precommit:latest
@@ -55,5 +56,9 @@ precommit-local:
 	    -e SKIP_MODEL_DEPENDENT_TESTS=true \
 	    -v $(shell pwd):/app \
 	    -v /app/.venv-agent \
+	    -v /app/candle-binding/target \
+	    -v /app/onnx-binding/target \
+	    -v /app/ml-binding/target \
+	    -v /app/nlp-binding/target \
 	    -w /app \
 	    ${PRECOMMIT_CONTAINER} bash -c 'make check BASE_REF="$$BASE_REF"'

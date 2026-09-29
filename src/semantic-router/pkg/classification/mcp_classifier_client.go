@@ -9,10 +9,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	mcpclient "github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcp"
 	api "github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcp/api"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -128,41 +128,41 @@ func (m *MCPCategoryClassifier) Close() error {
 }
 
 // Classify performs category classification via MCP.
-func (m *MCPCategoryClassifier) Classify(ctx context.Context, text string) (candle_binding.ClassResult, error) {
+func (m *MCPCategoryClassifier) Classify(ctx context.Context, text string) (tasks.ClassResult, error) {
 	responseText, err := m.callMCPTextTool(ctx, m.toolName, map[string]interface{}{
 		"text": text,
 	}, "MCP tool call failed")
 	if err != nil {
-		return candle_binding.ClassResult{}, err
+		return tasks.ClassResult{}, err
 	}
 
 	var response api.ClassifyResponse
 	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
-		return candle_binding.ClassResult{}, fmt.Errorf("failed to parse MCP response: %w", err)
+		return tasks.ClassResult{}, fmt.Errorf("failed to parse MCP response: %w", err)
 	}
 
-	return candle_binding.ClassResult{
+	return tasks.ClassResult{
 		Class:      response.Class,
 		Confidence: response.Confidence,
 	}, nil
 }
 
 // ClassifyWithProbabilities performs category classification with full probability distribution via MCP.
-func (m *MCPCategoryClassifier) ClassifyWithProbabilities(ctx context.Context, text string) (candle_binding.ClassResultWithProbs, error) {
+func (m *MCPCategoryClassifier) ClassifyWithProbabilities(ctx context.Context, text string) (tasks.ClassResultWithProbs, error) {
 	responseText, err := m.callMCPTextTool(ctx, m.toolName, map[string]interface{}{
 		"text":               text,
 		"with_probabilities": true,
 	}, "MCP tool call failed")
 	if err != nil {
-		return candle_binding.ClassResultWithProbs{}, err
+		return tasks.ClassResultWithProbs{}, err
 	}
 
 	var response api.ClassifyWithProbabilitiesResponse
 	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("failed to parse MCP response: %w", err)
+		return tasks.ClassResultWithProbs{}, fmt.Errorf("failed to parse MCP response: %w", err)
 	}
 
-	return candle_binding.ClassResultWithProbs{
+	return tasks.ClassResultWithProbs{
 		Class:         response.Class,
 		Confidence:    response.Confidence,
 		Probabilities: response.Probabilities,

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
@@ -15,7 +16,7 @@ const (
 )
 
 var resourceManifests = []string{
-	"deploy/kubernetes/response-api/mock-vllm.yaml",
+	"deploy/kubernetes/router-replay/provider-mocker.yaml",
 	"deploy/kubernetes/response-api/gwapi-resources.yaml",
 }
 
@@ -32,6 +33,7 @@ func NewProfile() *Profile {
 			SemanticRouterValuesFile: valuesFile,
 			PrerequisiteManifests:    []string{postgresManifest},
 			ResourceManifests:        resourceManifests,
+			WaitDeployments:          []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
 		}),
 	}
 }
@@ -43,7 +45,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests authenticated Router Replay management access, public denial, Postgres restart recovery, and shadow dispatch capture"
+	return "Tests Router Replay management access, Postgres restart recovery, and single-shadow failure isolation"
 }
 
 // Setup deploys Postgres, the router, and gateway resources.
@@ -65,7 +67,11 @@ func (p *Profile) GetTestCases() []string {
 		"router-replay-session-list-filter",
 		"router-replay-session-turn-progression",
 		"shadow-dispatch-observes-candidate-model",
+		"shadow-dataset-export-manifest",
 		"shadow-dispatch-fail-open-unreachable-backend",
+		"shadow-dispatch-fail-open-timeout",
+		"shadow-dispatch-fail-open-malformed-response",
+		"shadow-dispatch-fail-open-queue-full",
 	}
 }
 

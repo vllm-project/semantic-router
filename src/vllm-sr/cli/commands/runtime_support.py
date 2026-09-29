@@ -24,11 +24,13 @@ from cli.commands.runtime_config_mutation import (
 from cli.commands.runtime_kb import (
     _sync_runtime_kb_store,
     _validate_package_kb_paths,
+    _validate_runtime_kb_paths,
 )
 from cli.commands.runtime_looper import apply_local_looper_endpoint
 from cli.commands.runtime_management_credentials import (
     management_credential_env_names,
 )
+from cli.commands.runtime_observability import apply_local_tracing_endpoint
 from cli.commands.runtime_paths import (
     _container_runtime_config_path,
     _write_runtime_config,
@@ -38,6 +40,8 @@ from cli.consts import (
     CONTAINER_RUNTIME_ENV,
     SUPPORTED_CONTAINER_RUNTIMES,
 )
+from cli.container_management_listener import resolve_managed_management_listener
+from cli.models import UserConfig
 from cli.runtime_env_names import (
     RESERVED_RUNTIME_ENV_NAMES,
     normalize_runtime_env_names,
@@ -397,6 +401,7 @@ def _resolve_effective_config_document(
     *,
     package_activation: bool = False,
     materialize_local_runtime: bool = True,
+    bootstrap_kb: bool = True,
 ) -> tuple[dict[str, object], bool]:
     with config_path.open() as handle:
         config = yaml.safe_load(handle) or {}
@@ -404,8 +409,11 @@ def _resolve_effective_config_document(
     if package_activation:
         _validate_package_kb_paths(config)
         kb_runtime_required, changed = False, False
-    elif materialize_local_runtime:
+    elif materialize_local_runtime and bootstrap_kb:
         kb_runtime_required, changed = _sync_runtime_kb_store(config, config_path)
+    elif materialize_local_runtime:
+        _validate_runtime_kb_paths(config)
+        kb_runtime_required, changed = False, False
     else:
         kb_runtime_required, changed = False, False
     if not setup_mode and materialize_local_runtime:
@@ -413,6 +421,7 @@ def _resolve_effective_config_document(
         changed = inject_local_service_runtime_defaults(config, stack) or changed
         changed = inject_local_store_runtime_defaults(config, stack) or changed
         changed = apply_local_looper_endpoint(config, stack) or changed
+        changed = apply_local_tracing_endpoint(config, stack) or changed
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
     apply_gpu_defaults = _platform_requires_gpu_defaults(platform)
     if (
@@ -437,8 +446,9 @@ def build_effective_config_bytes(
     platform: str | None,
     *,
     package_activation: bool = False,
+    bootstrap_kb: bool = True,
 ) -> bytes:
-    """Build the effective runtime config without touching active runtime state."""
+    """Build config bytes, optionally bootstrapping local KB files."""
 
     config, changed = _resolve_effective_config_document(
         config_path,
@@ -446,6 +456,7 @@ def build_effective_config_bytes(
         setup_mode,
         platform,
         package_activation=package_activation,
+        bootstrap_kb=bootstrap_kb,
     )
     if not changed:
         return config_path.read_bytes()
@@ -479,12 +490,15 @@ def realize_runtime_config(
     algorithm: str | None = None,
     platform: str | None = None,
     package_activation: bool = False,
+    managed_listener: bool = False,
+    skip_kb_bootstrap: bool = False,
 ) -> Path:
-    """Realize one raw package config at an explicit runtime-owned path.
+    """Realize one raw config at an explicit runtime-owned path.
 
     The raw source is never changed. Runtime defaults and current CLI
     algorithm/platform transforms are applied before a strict atomic replace of
-    ``target_path``.
+    ``target_path``. Managed listener validation precedes KB bootstrap; callers
+    can skip bootstrap to validate a candidate without changing its KB files.
     """
 
     if algorithm is None:
@@ -502,7 +516,18 @@ def realize_runtime_config(
         setup_mode=is_setup_mode_config(source_path),
         platform=platform,
         package_activation=package_activation,
+        bootstrap_kb=not (skip_kb_bootstrap or managed_listener),
     )
+    if managed_listener:
+        prepared = UserConfig.model_validate(yaml.safe_load(effective), extra="allow")
+        resolve_managed_management_listener(prepared, resolve_runtime_stack())
+        if not skip_kb_bootstrap and not package_activation:
+            effective = build_effective_config_bytes(
+                source_path,
+                algorithm=algorithm,
+                setup_mode=is_setup_mode_config(source_path),
+                platform=platform,
+            )
     return write_runtime_config_bytes(target_path, effective)
 
 

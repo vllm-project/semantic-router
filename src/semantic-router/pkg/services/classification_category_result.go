@@ -12,10 +12,27 @@ func resolveIntentCategory(
 	ctx context.Context,
 	classifier *classification.Classifier,
 	decisionResult *decision.DecisionResult,
+	signals *classification.SignalResults,
 	text string,
-) (string, float64) {
+) Classification {
 	if decisionResult != nil && decisionResult.Decision != nil {
-		return decisionResult.Decision.Name, decisionResult.Confidence
+		return Classification{
+			Category:            decisionResult.Decision.Name,
+			Confidence:          decisionResult.Confidence,
+			ConfidenceAvailable: confidenceAvailability(decisionResult.ConfidenceScored),
+		}
+	}
+	if signals != nil && signals.DomainClassification != nil {
+		result := signals.DomainClassification
+		category := result.Category
+		if !result.ConfidenceAvailable {
+			category = "other"
+		}
+		return Classification{
+			Category:            category,
+			Confidence:          result.Confidence,
+			ConfidenceAvailable: confidenceAvailability(result.ConfidenceAvailable),
+		}
 	}
 	category, confidence, _, err := classifier.ClassifyCategoryWithEntropyContext(ctx, text)
 	if err != nil {
@@ -23,7 +40,7 @@ func resolveIntentCategory(
 			"Classification fallback failed: %v, using default 'other' category",
 			err,
 		)
-		return "other", 0
+		return Classification{Category: "other", ConfidenceAvailable: confidenceAvailability(false)}
 	}
-	return category, confidence
+	return Classification{Category: category, Confidence: confidence, ConfidenceAvailable: confidenceAvailability(true)}
 }

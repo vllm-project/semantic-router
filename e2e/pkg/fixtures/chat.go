@@ -9,8 +9,23 @@ import (
 
 // ChatMessage is the minimal OpenAI chat message shape used by E2E contracts.
 type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string         `json:"role"`
+	Content    string         `json:"content,omitempty"`
+	ToolCalls  []ChatToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string         `json:"tool_call_id,omitempty"`
+}
+
+// ChatToolCall represents a tool call emitted by an assistant.
+type ChatToolCall struct {
+	ID       string           `json:"id"`
+	Type     string           `json:"type"`
+	Function ChatToolCallFunc `json:"function"`
+}
+
+// ChatToolCallFunc represents the function details in a tool call.
+type ChatToolCallFunc struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
 // ChatTool is a minimal OpenAI-format tool definition for E2E requests.

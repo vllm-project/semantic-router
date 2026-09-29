@@ -186,7 +186,6 @@ const metricsSchema = object('Metrics', {
     enabled: boolean('Enabled'),
     time_windows: stringList('Time Windows', '5m'),
     update_interval: text('Update Interval'),
-    queue_depth_estimation: boolean('Queue Depth Estimation'),
     max_models: number('Max Models', { min: 1 }),
   }),
 })

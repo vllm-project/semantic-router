@@ -137,6 +137,18 @@ describe('embedding models config support', () => {
     ).toThrow(/must match/i)
   })
 
+  it('accepts the endpoint dimension when the target requests the full model dimension', () => {
+    expect(() =>
+      embeddingModelsCatalogValue({
+        ...embeddingModelsEditData(localCatalog),
+        provider_type: 'remote',
+        remote_backend: 'openai_compatible',
+        endpoint: { base_url: 'https://example.com/v1', model: 'embed', dimensions: 1536 },
+        embedding_config: { target_dimension: 0 },
+      }),
+    ).not.toThrow()
+  })
+
   it('summarizes provider mode and remote model without exposing credentials', () => {
     const remote = embeddingModelsCatalogValue({
       ...embeddingModelsEditData(localCatalog),

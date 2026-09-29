@@ -1,60 +1,66 @@
-# Semantic Router Configuration for Dashboard E2E Profile
-# Minimal config — dashboard tests exercise the dashboard API, not routing logic.
-config:
-  model_config:
-    "base-model":
-      reasoning:
-        family: "qwen3"
-      loras:
-        - name: "general-expert"
-          description: "General-purpose adapter"
-
-  categories:
-    - name: other
-      description: "General knowledge and miscellaneous topics"
-
-  decisions:
-    - name: "other_decision"
-      description: "Default decision for all requests"
-      priority: 1
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "other"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-
-  strategy: "priority"
-  model: general-expert
-
-  bert_model:
-    model_id: models/mom-embedding-light
-    threshold: 0.6
-    use_cpu: true
-
-  classifier:
-    category_model:
-      model_id: "models/mom-domain-classifier"
-      use_modernbert: true
-      threshold: 0.6
-      use_cpu: true
-      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
-    pii_model:
-      model_id: "models/mom-pii-classifier"
-      use_modernbert: false
-      threshold: 0.9
-      use_cpu: true
-      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
-
-  prompt_guard:
-    enabled: false
-
-  response_cache:
-    enabled: false
-
+# Dashboard E2E exercises the API against a running Router and gateway.
+# Replace chart defaults atomically so no placeholder backend or classifier
+# configuration can leak into this deliberately small canonical runtime.
+configOverride:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      model: base-model
+    models:
+      - name: base-model
+        reasoning:
+          family: qwen3
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: base-model
+        loras:
+          - name: general-expert
+            description: General-purpose adapter
+    decisions:
+      - name: other_decision
+        description: Default decision for Dashboard API probes
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
   global:
+    router:
+      strategy: priority
     model_catalog:
       kbs: []
+      modules:
+        prompt_guard:
+          enabled: false
+          model_ref: ""
+          model_id: ""
+          jailbreak_mapping_path: ""
+        classifier:
+          domain:
+            model_ref: ""
+            model_id: ""
+            category_mapping_path: ""
+            use_mmbert_32k: false
+          pii:
+            model_ref: ""
+            model_id: ""
+            pii_mapping_path: ""
+            use_mmbert_32k: false
+    stores:
+      response_cache:
+        enabled: false
+    integrations:
+      tools:
+        enabled: false
+
+persistence:
+  enabled: false

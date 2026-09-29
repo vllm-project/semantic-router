@@ -325,73 +325,6 @@ def prepare_shared_tree(
         os.close(root)
 
 
-def prepare_private_tree(path: str, uid: int, gid: int) -> None:
-    """Create or normalize a store without exposing evidence to any group."""
-
-    parent_path, name = os.path.split(os.path.abspath(path))
-    if not name:
-        raise OSError("private Dashboard directory name is empty")
-    parent = open_directory(parent_path)
-    try:
-        with suppress(FileExistsError):
-            os.mkdir(name, 0o700, dir_fd=parent)
-        root = os.open(name, DIRECTORY_FLAGS, dir_fd=parent)
-    finally:
-        os.close(parent)
-
-    try:
-        for _, directories, files, directory_fd in _walk_directory(root):
-            for entry_name in [*directories, *files]:
-                entry_info = os.stat(
-                    entry_name,
-                    dir_fd=directory_fd,
-                    follow_symlinks=False,
-                )
-                if stat.S_ISLNK(entry_info.st_mode):
-                    raise OSError(
-                        f"private Dashboard tree contains symlink: {entry_name}"
-                    )
-
-            os.fchown(directory_fd, uid, gid)
-            os.fchmod(directory_fd, 0o700)
-            for file_name in files:
-                before = os.stat(
-                    file_name,
-                    dir_fd=directory_fd,
-                    follow_symlinks=False,
-                )
-                descriptor = os.open(
-                    file_name,
-                    os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOFOLLOW,
-                    dir_fd=directory_fd,
-                )
-                try:
-                    info = os.fstat(descriptor)
-                    if (
-                        not stat.S_ISREG(info.st_mode)
-                        or info.st_nlink != 1
-                        or not os.path.samestat(before, info)
-                    ):
-                        raise OSError(
-                            f"private Dashboard tree contains unsafe file: {file_name}"
-                        )
-                    os.fchown(descriptor, uid, gid)
-                    os.fchmod(descriptor, 0o600)
-                    after = os.stat(
-                        file_name,
-                        dir_fd=directory_fd,
-                        follow_symlinks=False,
-                    )
-                    if not os.path.samestat(info, after):
-                        raise OSError(
-                            f"private Dashboard tree entry changed while preparing: {file_name}"
-                        )
-                finally:
-                    os.close(descriptor)
-    finally:
-        os.close(root)
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
@@ -419,10 +352,6 @@ def build_parser() -> argparse.ArgumentParser:
     tree.add_argument("--credential-uid", type=int, default=65532)
     tree.add_argument("--credential-gid", type=int, default=65532)
     tree.add_argument("--exclude-path", action="append", default=[])
-    private_tree = commands.add_parser("prepare-private-tree")
-    private_tree.add_argument("path")
-    private_tree.add_argument("uid", type=int)
-    private_tree.add_argument("gid", type=int)
     return parser
 
 
@@ -442,8 +371,6 @@ def main() -> None:
         prepare_regular_file(args.path, args.gid)
     elif args.command == "prepare-directory":
         prepare_directory(args.path, args.gid)
-    elif args.command == "prepare-private-tree":
-        prepare_private_tree(args.path, args.uid, args.gid)
     else:
         prepare_shared_tree(
             args.path,

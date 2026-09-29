@@ -16,7 +16,7 @@ pub(crate) static GLOBAL_MULTIMODAL: OnceLock<MultiModalEmbeddingModel> = OnceLo
 /// `text_encoder.onnx`, `image_encoder.onnx`, `audio_encoder.onnx`,
 /// `tokenizer.json`, and optionally `config.json`.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn init_multimodal_embedding_model(
     model_path: *const c_char,
     use_cpu: bool,
@@ -55,7 +55,7 @@ pub extern "C" fn init_multimodal_embedding_model(
 
 /// Encode text into a multi-modal embedding.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn multimodal_encode_text(
     text: *const c_char,
     target_dim: i32,
@@ -111,7 +111,7 @@ pub extern "C" fn multimodal_encode_text(
 ///
 /// `pixel_data` is a [3*height*width] float32 array in [0,1], CHW layout.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn multimodal_encode_image(
     pixel_data: *const f32,
     height: i32,
@@ -191,7 +191,7 @@ pub extern "C" fn multimodal_encode_image(
 /// `image` crate version, same `FilterType::CatmullRom` cubic filter, same
 /// CHW packing. Kept identical on purpose so the two bindings produce the
 /// same pixels for the same input image — see #2166.
-fn decode_resize_to_chw_f32(
+pub(crate) fn decode_resize_to_chw_f32(
     bytes: &[u8],
     target_w: u32,
     target_h: u32,
@@ -252,7 +252,7 @@ fn decode_resize_to_chw_f32(
 /// # Returns
 /// 0 on success, -1 on error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn multimodal_encode_image_from_bytes(
     bytes_ptr: *const u8,
     bytes_len: usize,
@@ -447,7 +447,7 @@ mod golden_image_parity {
 ///
 /// `mel_data` is a [n_mels*time_frames] float32 array in row-major order.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn multimodal_encode_audio(
     mel_data: *const f32,
     n_mels: i32,
@@ -519,7 +519,7 @@ pub extern "C" fn multimodal_encode_audio(
 }
 
 /// Free a multi-modal embedding result's data buffer.
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn free_multimodal_embedding(data: *mut f32, length: i32) {
     if !data.is_null() && length > 0 {
         unsafe {

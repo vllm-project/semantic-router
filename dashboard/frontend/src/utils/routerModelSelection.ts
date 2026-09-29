@@ -148,11 +148,12 @@ export function listRouterModels(payload: unknown): RouterModelOption[] {
     description: model.description,
     ...(model.recipe ? { recipe: model.recipe } : {}),
   })
+  const automaticId = selectRouterAutoModel(payload)
+  const automatic = models.find((model) => model.id === automaticId)
   const explicitModels = models.filter((model) => !model.defaultRoute)
-  if (explicitModels.length > 0) return explicitModels.map(toOption)
-
-  const canonical = models.find((model) => model.id === CANONICAL_AUTO_MODEL)
-  return canonical ? [toOption(canonical)] : models.slice(0, 1).map(toOption)
+  // A specialized entrypoint can require a matching rule. Keep the advertised
+  // default available instead of silently making that entrypoint the default.
+  return [...(automatic ? [automatic] : []), ...explicitModels].map(toOption)
 }
 
 export function getRouterModelsEndpoint(chatCompletionsEndpoint: string): string {

@@ -138,7 +138,36 @@
               "abstained": {"type": "integer", "minimum": 0}
             }
           }
+        },
+        "operating_points": {
+          "description": "The decision a gate artifact actually makes: the probability mass on positive_labels compared to the threshold, rather than the argmax confidence the curve above uses. false_positive_rate is the share of safe rows the gate flags, so safe class recall is one minus it. A field is null when the split carries no row on that side.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["threshold", "positive_labels", "flagged_rate", "recall", "false_positive_rate", "precision"],
+            "properties": {
+              "threshold": {"$ref": "#/$defs/unitInterval"},
+              "positive_labels": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+              "flagged_rate": {"$ref": "#/$defs/unitInterval"},
+              "recall": {"$ref": "#/$defs/unitIntervalOrNull"},
+              "false_positive_rate": {"$ref": "#/$defs/unitIntervalOrNull"},
+              "precision": {"$ref": "#/$defs/unitIntervalOrNull"}
+            }
+          }
         }
+      }
+    },
+    "discrimination": {
+      "description": "Separation of the positive class without fixing a threshold, so two artifacts built to different threshold conventions can be compared. recall_at_fpr_budget is the most recall available while flagging no more than fpr_budget of safe rows. Present only for a task that declares positive_labels and a split that carries both sides.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["positive_labels", "roc_auc", "fpr_budget", "recall_at_fpr_budget"],
+      "properties": {
+        "positive_labels": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "roc_auc": {"$ref": "#/$defs/unitInterval"},
+        "fpr_budget": {"$ref": "#/$defs/unitInterval"},
+        "recall_at_fpr_budget": {"$ref": "#/$defs/unitIntervalOrNull"}
       }
     },
     "slices": {

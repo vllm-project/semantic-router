@@ -131,7 +131,7 @@ services:
 
 For the optional testing profile, create an override Dockerfile to configure pip mirrors.
 
-1) Create `tools/mock-vllm/Dockerfile.cn`:
+1) Create `tools/test/services/mock-vllm/Dockerfile.cn`:
 
 ```Dockerfile
 FROM python:3.11-slim

@@ -6,13 +6,12 @@ import random
 from collections import defaultdict
 from pathlib import Path
 
-import numpy as np
 import requests
 import torch
-import torch.nn as nn
 import wikipediaapi
 from datasets import load_dataset
 from sklearn.model_selection import train_test_split
+from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer, get_linear_schedule_with_warmup
@@ -85,7 +84,7 @@ ARTICLES_PER_CATEGORY = 1000
 # --- MODEL AND DATASET CLASSES (Remain the same) ---
 class MultitaskBertModel(nn.Module):
     def __init__(self, base_model_name, task_configs):
-        super(MultitaskBertModel, self).__init__()
+        super().__init__()
         self.bert = AutoModel.from_pretrained(base_model_name)
         self.dropout = nn.Dropout(0.1)
         self.task_heads = nn.ModuleDict()
@@ -236,7 +235,7 @@ class MultitaskTrainer:
                 if filename.endswith(".txt"):
                     file_path = os.path.join(category_path, filename)
                     try:
-                        with open(file_path, "r", encoding="utf-8") as f:
+                        with open(file_path, encoding="utf-8") as f:
                             text = f.read()
                         label_idx = category_to_idx[category_name]
                         samples.append((text, "category", label_idx))
@@ -307,15 +306,15 @@ class MultitaskTrainer:
         return train_samples, val_samples, datasets
 
     def _load_pii_dataset(self):
-        url = "https://raw.githubusercontent.com/microsoft/presidio-research/refs/heads/master/data/synth_dataset_v2.json"
+        url = "https://raw.githubusercontent.com/microsoft/presidio-research/refs/heads/main/data/synth_dataset_v2.json"
         dataset_path = "presidio_synth_dataset_v2.json"
         if not Path(dataset_path).exists():
-            logger.info(f"Downloading Presidio dataset...")
+            logger.info("Downloading Presidio dataset...")
             response = requests.get(url)
             response.raise_for_status()
             with open(dataset_path, "w", encoding="utf-8") as f:
                 f.write(response.text)
-        with open(dataset_path, "r", encoding="utf-8") as f:
+        with open(dataset_path, encoding="utf-8") as f:
             data = json.load(f)
         all_samples = []
         for sample in data:

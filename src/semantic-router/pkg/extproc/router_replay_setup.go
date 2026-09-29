@@ -14,6 +14,7 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 	backend := resolveReplayStoreBackend(cfg.RouterReplay)
 	if usesSharedReplayStorage(backend) {
 		recorders, replayRecorder, err := initializeSharedReplayRecorders(cfg, backend)
+		shareReplayOutcomeQueue(recorders)
 		return recorders, replayRecorder, replayRecorder != nil, err
 	}
 
@@ -22,7 +23,21 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 		return nil, nil, false, err
 	}
 
+	shareReplayOutcomeQueue(replayRecorders)
 	return replayRecorders, nil, false, nil
+}
+
+func shareReplayOutcomeQueue(recorders map[string]*routerreplay.Recorder) {
+	// A failed initialization and a config with no replay decisions both arrive
+	// here empty; neither should allocate a queue and its writer context.
+	if len(recorders) == 0 {
+		return
+	}
+	group := make([]*routerreplay.Recorder, 0, len(recorders))
+	for _, recorder := range recorders {
+		group = append(group, recorder)
+	}
+	routerreplay.ShareOutcomeQueue(group...)
 }
 
 // initializeReplayRecorders creates replay recorders for decisions with router_replay plugin configured.
@@ -44,7 +59,7 @@ func initializeIsolatedReplayRecorders(
 
 	for _, ref := range cfg.RoutingDecisionRefs() {
 		decision := ref.Decision
-		pluginCfg := cfg.EffectiveRouterReplayConfig(decision)
+		pluginCfg := replayConfigForDecisionRef(cfg, ref)
 		if pluginCfg == nil {
 			continue
 		}
@@ -73,7 +88,7 @@ func initializeSharedReplayRecorders(
 
 	for _, ref := range cfg.RoutingDecisionRefs() {
 		decision := ref.Decision
-		pluginCfg := cfg.EffectiveRouterReplayConfig(decision)
+		pluginCfg := replayConfigForDecisionRef(cfg, ref)
 		if pluginCfg == nil {
 			continue
 		}
@@ -176,7 +191,7 @@ func createReplayStore(
 	switch backend {
 	case "memory":
 		logging.Warnf("Router replay store_backend is set to %q — all replay records "+
-			"will be lost on router restart. Use \"postgres\" or \"redis\" for durable storage in production.",
+			"will be lost on configuration reload or router restart. Use \"postgres\" or \"redis\" for durable storage in production.",
 			"memory")
 		return createReplayMemoryStore(decisionName, pluginCfg, globalCfg), nil
 	case "redis":

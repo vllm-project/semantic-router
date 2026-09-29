@@ -1,0 +1,212 @@
+{
+  "cases": [
+    {
+      "theta": 10000.0,
+      "recipe": {
+        "rope_type": "yarn",
+        "factor": 4.0,
+        "original_max_position_embeddings": 8192,
+        "truncate": true
+      },
+      "head_dim": 64,
+      "positions": [
+        0,
+        1,
+        255,
+        256,
+        2047,
+        2048,
+        8191,
+        8192,
+        16383,
+        16384,
+        32766,
+        32767
+      ],
+      "inv_freq": {
+        "tensor": "rope.0.inv_freq",
+        "shape": [
+          32
+        ]
+      },
+      "attention_factor": 1.138629436111989,
+      "cos": {
+        "tensor": "rope.0.cos",
+        "shape": [
+          12,
+          32
+        ]
+      },
+      "sin": {
+        "tensor": "rope.0.sin",
+        "shape": [
+          12,
+          32
+        ]
+      },
+      "q": {
+        "tensor": "rope.0.q",
+        "shape": [
+          768
+        ]
+      },
+      "k": {
+        "tensor": "rope.0.k",
+        "shape": [
+          768
+        ]
+      },
+      "rotated_q": {
+        "tensor": "rope.0.rotated_q",
+        "shape": [
+          768
+        ]
+      },
+      "rotated_k": {
+        "tensor": "rope.0.rotated_k",
+        "shape": [
+          768
+        ]
+      }
+    },
+    {
+      "theta": 160000.0,
+      "recipe": {
+        "rope_type": "yarn",
+        "factor": 4.0,
+        "original_max_position_embeddings": 8192,
+        "beta_fast": 16.0,
+        "beta_slow": 2.0,
+        "attention_factor": 1.3
+      },
+      "head_dim": 64,
+      "positions": [
+        0,
+        1,
+        255,
+        256,
+        2047,
+        2048,
+        8191,
+        8192,
+        16383,
+        16384,
+        32766,
+        32767
+      ],
+      "inv_freq": {
+        "tensor": "rope.1.inv_freq",
+        "shape": [
+          32
+        ]
+      },
+      "attention_factor": 1.3,
+      "cos": {
+        "tensor": "rope.1.cos",
+        "shape": [
+          12,
+          32
+        ]
+      },
+      "sin": {
+        "tensor": "rope.1.sin",
+        "shape": [
+          12,
+          32
+        ]
+      },
+      "q": {
+        "tensor": "rope.1.q",
+        "shape": [
+          768
+        ]
+      },
+      "k": {
+        "tensor": "rope.1.k",
+        "shape": [
+          768
+        ]
+      },
+      "rotated_q": {
+        "tensor": "rope.1.rotated_q",
+        "shape": [
+          768
+        ]
+      },
+      "rotated_k": {
+        "tensor": "rope.1.rotated_k",
+        "shape": [
+          768
+        ]
+      }
+    },
+    {
+      "theta": 20000.0,
+      "recipe": {
+        "rope_type": "yarn",
+        "factor": 1.0,
+        "original_max_position_embeddings": 8192
+      },
+      "head_dim": 64,
+      "positions": [
+        0,
+        1,
+        255,
+        256,
+        2047,
+        2048,
+        8191,
+        8192,
+        16383,
+        16384,
+        32766,
+        32767
+      ],
+      "inv_freq": {
+        "tensor": "rope.2.inv_freq",
+        "shape": [
+          32
+        ]
+      },
+      "attention_factor": 1.0,
+      "cos": {
+        "tensor": "rope.2.cos",
+        "shape": [
+          12,
+          32
+        ]
+      },
+      "sin": {
+        "tensor": "rope.2.sin",
+        "shape": [
+          12,
+          32
+        ]
+      },
+      "q": {
+        "tensor": "rope.2.q",
+        "shape": [
+          768
+        ]
+      },
+      "k": {
+        "tensor": "rope.2.k",
+        "shape": [
+          768
+        ]
+      },
+      "rotated_q": {
+        "tensor": "rope.2.rotated_q",
+        "shape": [
+          768
+        ]
+      },
+      "rotated_k": {
+        "tensor": "rope.2.rotated_k",
+        "shape": [
+          768
+        ]
+      }
+    }
+  ]
+}

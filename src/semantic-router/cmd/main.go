@@ -2,11 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/logo"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
@@ -15,17 +22,34 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
+const (
+	processShutdownTimeout      = 30 * time.Second
+	processResourceDrainReserve = 5 * time.Second
+)
+
 func main() {
 	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
 	initializeRuntimeLogger()
 	applyBackendRuntimeTuningDefaults()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	runErr := runRouterProcess(ctx, opts)
+	stop()
 
+	if runErr != nil {
+		logging.ComponentErrorEvent("router", "router_process_failed", map[string]interface{}{
+			"error": runErr.Error(),
+		})
+		os.Exit(1)
+	}
+}
+
+func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	cfg := loadRuntimeConfigOrFatal(opts.configPath)
 	config.Replace(cfg)
 	runtimeRegistry := routerruntime.NewRegistry(cfg)
 
-	startupWriter := newStartupWriter(cfg, opts.configPath)
+	startupWriter := newStartupWriter(cfg, opts.configPath, runtimeRegistry)
 	resolvedOpts, err := resolveRuntimeManagementOptions(opts, cfg)
 	if err != nil {
 		failStartup(startupWriter, "Failed to resolve management API: %v", err)
@@ -34,35 +58,205 @@ func main() {
 
 	// Start the API server early so /startup-status is available during
 	// model downloads and initialization.
-	if err := startAPIServerIfEnabled(opts, runtimeRegistry); err != nil {
+	apiServer, err := startAPIServerIfEnabled(opts, runtimeRegistry)
+	if err != nil {
 		failStartup(startupWriter, "Failed to start management API: %v", err)
 	}
+	var (
+		routerServer     *extproc.Server
+		metricsServer    *http.Server
+		servingLifecycle *servingComponentLifecycle
+		shutdownHooks    = make([]func(context.Context) error, 0)
+		shutdownTracing  = func(context.Context) error { return nil }
+	)
+	// Return errors below so deferred shutdown can release started resources.
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), processShutdownTimeout)
+		defer cancel()
+		runErr = errors.Join(runErr, shutdownRouterProcess(
+			shutdownCtx,
+			apiServer,
+			routerServer,
+			metricsServer,
+			servingLifecycle,
+			&shutdownHooks,
+			shutdownTracing,
+		))
+	}()
 
-	ensureModelsDownloadedOrFatal(cfg, startupWriter)
-	exitIfDownloadOnly(opts.downloadOnly)
+	if err = ensureModelsDownloaded(ctx, cfg, startupWriter); err != nil {
+		return recordStartupError(startupWriter, "ensure models are downloaded", err)
+	}
+	if opts.downloadOnly {
+		logging.ComponentEvent("router", "download_only_complete", map[string]interface{}{
+			"mode": "download_only",
+		})
+		return nil
+	}
 
-	defer initializeTracing(cfg)()
+	shutdownTracing = initializeTracing(cfg)
 	initializeWindowedMetricsIfEnabled(cfg)
 
-	shutdownHooks := make([]func(), 0)
-	defer runShutdownHooks(&shutdownHooks)
-	startMetricsServerIfEnabled(cfg, opts.metricsPort)
+	metricsServer = startMetricsServerIfEnabled(cfg, opts.metricsPort)
 	startProfilingServerIfEnabled(cfg, opts, &shutdownHooks)
 
-	embeddingRuntime := initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)
-	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry)
+	_, err = initializeRuntimeDependencies(ctx, cfg, startupWriter, &shutdownHooks, runtimeRegistry)
+	if err != nil {
+		return recordStartupError(startupWriter, "initialize runtime dependencies", err)
+	}
+	routerServer, err = extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry)
+	if err != nil {
+		return recordStartupError(startupWriter, "create ExtProc server", err)
+	}
 
-	warmupRouterRuntime(server, embeddingRuntime)
-	markRouterReady(startupWriter, startupEmbeddingProviderStatus(embeddingRuntime))
+	embeddingRuntime := routerServer.EmbeddingRuntimeState()
+	if err = warmupRouterRuntime(ctx, routerServer); err != nil {
+		return recordStartupError(startupWriter, "warm up router runtime", err)
+	}
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
-	startKubernetesControllerIfNeeded(cfg, opts.kubeconfig, opts.namespace)
-	startExtProcServerOrFatal(server, startupWriter)
+	servingLifecycle, err = runRouterServing(ctx, cfg, opts, routerServer, startupWriter)
+	if err != nil {
+		return recordStartupError(startupWriter, "serve router", err)
+	}
+	return nil
 }
 
-var (
-	ensureKubernetesConfigModels   = modeldownload.EnsureModelsForConfig
-	replaceKubernetesRuntimeConfig = config.Replace
-)
+func shutdownRouterProcess(
+	ctx context.Context,
+	apiServer *apiserver.Server,
+	routerServer *extproc.Server,
+	metricsServer *http.Server,
+	servingLifecycle *servingComponentLifecycle,
+	shutdownHooks *[]func(context.Context) error,
+	shutdownTracing func(context.Context) error,
+) error {
+	var managementShutdown func(context.Context) error
+	if apiServer != nil {
+		managementShutdown = apiServer.Shutdown
+	}
+	var resourceShutdown func(context.Context) error
+	servingShutdowns := make([]func(context.Context) error, 0, 2)
+	if routerServer != nil {
+		servingShutdowns = append(servingShutdowns, routerServer.ShutdownServing)
+		resourceShutdown = routerServer.ShutdownResources
+	}
+	if servingLifecycle != nil {
+		routerResourceShutdown := resourceShutdown
+		resourceShutdown = func(ctx context.Context) error {
+			lifecycleErr := servingLifecycle.Shutdown(ctx)
+			if routerResourceShutdown != nil {
+				return errors.Join(lifecycleErr, routerResourceShutdown(ctx))
+			}
+			return lifecycleErr
+		}
+	}
+	if metricsServer != nil {
+		servingShutdowns = append(servingShutdowns, metricsServer.Shutdown)
+	}
+	return shutdownRouterComponents(
+		ctx,
+		managementShutdown,
+		resourceShutdown,
+		shutdownHooks,
+		shutdownTracing,
+		servingShutdowns...,
+	)
+}
+
+func shutdownRouterComponents(
+	ctx context.Context,
+	managementShutdown func(context.Context) error,
+	resourceShutdown func(context.Context) error,
+	shutdownHooks *[]func(context.Context) error,
+	shutdownTracing func(context.Context) error,
+	servingShutdowns ...func(context.Context) error,
+) error {
+	drainCtx, cancelDrain := processServingDrainContext(ctx)
+	defer cancelDrain()
+	managementDone := make(chan error, 1)
+	go func() {
+		if managementShutdown == nil {
+			managementDone <- nil
+			return
+		}
+		managementDone <- managementShutdown(drainCtx)
+	}()
+
+	servingErr := shutdownConcurrently(drainCtx, servingShutdowns...)
+	managementErr := <-managementDone
+	shutdownErr := errors.Join(managementErr, servingErr)
+	// Retirement rejects new leases, then waits for active consumers before
+	// closing their owners. Initiate it even when the HTTP drain timed out.
+	if resourceShutdown != nil {
+		logging.ComponentEvent("router", "runtime_retirement_started", nil)
+		resourceErr := resourceShutdown(ctx)
+		if resourceErr == nil {
+			logging.ComponentEvent("router", "runtime_retirement_completed", nil)
+		} else {
+			logging.ComponentErrorEvent("router", "runtime_retirement_failed", map[string]interface{}{"error": resourceErr.Error()})
+		}
+		shutdownErr = errors.Join(shutdownErr, resourceErr)
+		if errors.Is(resourceErr, context.Canceled) || errors.Is(resourceErr, context.DeadlineExceeded) {
+			return shutdownErr
+		}
+	}
+	if errors.Is(managementErr, context.Canceled) || errors.Is(managementErr, context.DeadlineExceeded) {
+		// Shutdown is idempotent. Confirm API-owned workers have finished before
+		// closing global dependencies that are not protected by router leases.
+		if ctx.Err() != nil {
+			return errors.Join(shutdownErr, ctx.Err())
+		}
+		if drainErr := managementShutdown(ctx); drainErr != nil {
+			return errors.Join(shutdownErr, drainErr)
+		}
+	}
+	shutdownErr = errors.Join(shutdownErr, runShutdownHooks(ctx, shutdownHooks))
+	shutdownErr = errors.Join(shutdownErr, shutdownTracing(ctx))
+	return shutdownErr
+}
+
+func processServingDrainContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := max(time.Until(deadline), 0)
+		reserve := min(processResourceDrainReserve, remaining/2)
+		return context.WithDeadline(ctx, deadline.Add(-reserve))
+	}
+	return context.WithCancel(ctx)
+}
+
+func recordStartupError(writer startupstatus.StatusWriter, operation string, cause error) error {
+	err := fmt.Errorf("%s: %w", operation, cause)
+	_ = writer.Write(startupstatus.State{
+		Phase:   "error",
+		Ready:   false,
+		Message: err.Error(),
+	})
+	logging.ComponentErrorEvent("router", "startup_failed", map[string]interface{}{
+		"message": err.Error(),
+	})
+	return err
+}
+
+func shutdownConcurrently(ctx context.Context, shutdowns ...func(context.Context) error) error {
+	shutdownResults := make(chan error, len(shutdowns))
+	for _, shutdown := range shutdowns {
+		go func(shutdown func(context.Context) error) {
+			shutdownResults <- shutdown(ctx)
+		}(shutdown)
+	}
+	shutdownErrors := make([]error, 0, len(shutdowns))
+	for range shutdowns {
+		shutdownErrors = append(shutdownErrors, <-shutdownResults)
+	}
+	return errors.Join(shutdownErrors...)
+}
+
+var ensureKubernetesConfigModels = func(ctx context.Context, cfg *config.RouterConfig, writer startupstatus.StatusWriter) error {
+	if writer != nil {
+		return ensureModelsDownloaded(ctx, cfg, writer)
+	}
+	return modeldownload.EnsureModelsForConfigWithProgressContext(ctx, cfg, nil)
+}
 
 func applyBackendRuntimeTuningDefaults() {
 	backend := strings.TrimSpace(strings.ToLower(os.Getenv("EMBEDDING_BACKEND_OVERRIDE")))
@@ -101,7 +295,7 @@ func applyBackendRuntimeTuningDefaults() {
 	})
 }
 
-func ensureModelsDownloaded(cfg *config.RouterConfig, startupWriter startupstatus.StatusWriter) error {
+func ensureModelsDownloaded(ctx context.Context, cfg *config.RouterConfig, startupWriter startupstatus.StatusWriter) error {
 	reporter := func(progress modeldownload.ProgressState) {
 		state := startupstatus.State{
 			Ready:            false,
@@ -135,15 +329,25 @@ func ensureModelsDownloaded(cfg *config.RouterConfig, startupWriter startupstatu
 		}
 	}
 
-	return modeldownload.EnsureModelsForConfigWithProgress(cfg, reporter)
+	return modeldownload.EnsureModelsForConfigWithProgressContext(ctx, cfg, reporter)
 }
 
-func applyKubernetesConfigUpdate(newConfig *config.RouterConfig) error {
-	if err := ensureKubernetesConfigModels(newConfig); err != nil {
+func applyKubernetesConfigUpdate(ctx context.Context, newConfig *config.RouterConfig, activate func(context.Context, *config.RouterConfig) error, startupWriter startupstatus.StatusWriter, currentConfig ...func() *config.RouterConfig) error {
+	if len(currentConfig) > 0 && currentConfig[0] != nil {
+		if err := modeldownload.ValidateReloadArtifacts(currentConfig[0](), newConfig); err != nil {
+			return fmt.Errorf("model artifact reload preflight failed: %w", err)
+		}
+	}
+	if err := ensureKubernetesConfigModels(ctx, newConfig, startupWriter); err != nil {
 		return fmt.Errorf("failed to ensure models for kubernetes config update: %w", err)
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
-	replaceKubernetesRuntimeConfig(newConfig)
+	if err := activate(ctx, newConfig); err != nil {
+		return fmt.Errorf("runtime activation failed: %w", err)
+	}
 	logging.ComponentEvent("router", "kubernetes_config_applied", map[string]interface{}{
 		"config_source":  newConfig.ConfigSource,
 		"decision_count": len(newConfig.Decisions),
@@ -151,35 +355,129 @@ func applyKubernetesConfigUpdate(newConfig *config.RouterConfig) error {
 	return nil
 }
 
-// startKubernetesController starts the Kubernetes controller for watching CRDs
-func startKubernetesController(staticConfig *config.RouterConfig, kubeconfig, namespace string) {
-	// Import k8s package here to avoid import errors when k8s dependencies are not available
-	// This is a lazy import pattern
+func runRouterServing(
+	ctx context.Context,
+	cfg *config.RouterConfig,
+	opts runtimeOptions,
+	routerServer *extproc.Server,
+	startupWriter startupstatus.StatusWriter,
+) (*servingComponentLifecycle, error) {
+	components := []func(context.Context) error{
+		func(ctx context.Context) error {
+			return startExtProcServer(ctx, routerServer, startupWriter)
+		},
+	}
+	if cfg.ConfigSource == config.ConfigSourceKubernetes {
+		components = append(components, func(ctx context.Context) error {
+			return startKubernetesController(ctx, cfg, opts.kubeconfig, opts.namespace, routerServer, startupWriter)
+		})
+	}
+	lifecycle := startServingComponents(ctx, components...)
+	return lifecycle, lifecycle.Wait(ctx)
+}
+
+type servingComponentLifecycle struct {
+	cancel context.CancelFunc
+	first  <-chan error
+	done   <-chan struct{}
+}
+
+func startServingComponents(ctx context.Context, components ...func(context.Context) error) *servingComponentLifecycle {
+	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	results := make(chan error, len(components))
+	for _, component := range components {
+		go func(component func(context.Context) error) {
+			results <- component(runCtx)
+		}(component)
+	}
+	first := make(chan error, 1)
+	done := make(chan struct{})
+	if len(components) == 0 {
+		first <- nil
+		close(done)
+		return &servingComponentLifecycle{cancel: cancel, first: first, done: done}
+	}
+	go func() {
+		first <- <-results
+		cancel()
+		for range len(components) - 1 {
+			<-results
+		}
+		close(done)
+	}()
+	return &servingComponentLifecycle{cancel: cancel, first: first, done: done}
+}
+
+func (l *servingComponentLifecycle) Wait(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-l.first:
+		return err
+	}
+}
+
+func (l *servingComponentLifecycle) Shutdown(ctx context.Context) error {
+	if l == nil {
+		return nil
+	}
+	l.cancel()
+	select {
+	case <-l.done:
+		return nil
+	case <-ctx.Done():
+		select {
+		case <-l.done:
+			return nil
+		default:
+			return ctx.Err()
+		}
+	}
+}
+
+// startKubernetesController runs the Kubernetes controller until ctx is canceled or it fails.
+func startKubernetesController(
+	ctx context.Context,
+	staticConfig *config.RouterConfig,
+	kubeconfig,
+	namespace string,
+	routerServer *extproc.Server,
+	startupWriter startupstatus.StatusWriter,
+) error {
 	logging.ComponentEvent("router", "kubernetes_controller_starting", map[string]interface{}{
 		"namespace":      namespace,
 		"has_kubeconfig": kubeconfig != "",
 	})
 
+	activated := false
 	controller, err := k8s.NewController(k8s.ControllerConfig{
-		Namespace:      namespace,
-		Kubeconfig:     kubeconfig,
-		StaticConfig:   staticConfig,
-		OnConfigUpdate: applyKubernetesConfigUpdate,
+		Namespace:    namespace,
+		Kubeconfig:   kubeconfig,
+		StaticConfig: staticConfig,
+		OnConfigUpdate: func(updateCtx context.Context, newConfig *config.RouterConfig) error {
+			var progressWriter startupstatus.StatusWriter
+			if !activated {
+				progressWriter = startupWriter
+			}
+			if err := applyKubernetesConfigUpdate(updateCtx, newConfig, routerServer.ActivateKubernetesConfig, progressWriter, routerServer.CurrentConfig); err != nil {
+				if !activated {
+					writeStartupState(startupWriter, startupstatus.State{Phase: "activation_failed", Ready: false, Message: err.Error()}, "Failed to write activation failure status")
+				}
+				return err
+			}
+			activated = true
+			markRouterReady(startupWriter, startupEmbeddingProviderStatus(routerServer.EmbeddingRuntimeState()))
+			return nil
+		},
 	})
 	if err != nil {
-		logging.ComponentFatalEvent("router", "kubernetes_controller_create_failed", map[string]interface{}{
-			"namespace": namespace,
-			"error":     err.Error(),
-		})
+		return fmt.Errorf("create Kubernetes controller: %w", err)
 	}
 
-	ctx := context.Background()
 	if err := controller.Start(ctx); err != nil {
-		logging.ComponentFatalEvent("router", "kubernetes_controller_failed", map[string]interface{}{
-			"namespace": namespace,
-			"error":     err.Error(),
-		})
+		return fmt.Errorf("serve Kubernetes controller: %w", err)
 	}
+	return nil
 }
 
 // logStartupSummary emits a single structured log line summarizing the router
