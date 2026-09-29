@@ -397,9 +397,6 @@
   "homepage.hero.line2": {
     "message": "Mixture-of-Models"
   },
-  "homepage.hero.description": {
-    "message": "将信号与偏好转化为跨异构 LLM 的可执行模型路径。"
-  },
   "homepage.hero.primaryCta": {
     "message": "体验 Playground"
   },
@@ -414,6 +411,12 @@
   },
   "homepage.hero.modelBand.aria": {
     "message": "Mixture-of-Models 模型生态"
+  },
+  "homepage.hero.film.title": {
+    "message": "重新认识 vLLM Semantic Router"
+  },
+  "homepage.hero.film.play": {
+    "message": "观看影片"
   },
   "homepage.stats.signals.label": {
     "message": "信号"
