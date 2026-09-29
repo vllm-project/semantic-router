@@ -4,7 +4,9 @@
 
 A card-only revision may change only the card, its assets and evaluation page, the licence texts,
 the root config.json pointer and MODEL_MANIFEST.json; every other file, and every weight file in
-particular, must keep its size and LFS SHA-256 or git blob id. Exits 1 otherwise.
+particular, must keep its size and LFS SHA-256 or git blob id. Exits 1 otherwise. Hub-managed
+files (layout.HUB_ADDED: the Hub appends LFS rules to .gitattributes for new binary paths such as
+a renamed banner) are reported separately and are never part of a package.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ CARD_FILES = {
     "LICENSING.md",
 }
 CARD_PREFIXES = ("assets/", "evaluation/", "LICENSES/")
+HUB_MANAGED = {".gitattributes"}
 WEIGHT_SUFFIXES = (".safetensors", ".bin", ".pt", ".pth")
 
 
@@ -59,7 +62,8 @@ def main() -> int:
     a, b = files(api, repo, released), files(api, repo, new)
     changed = sorted(n for n in set(a) | set(b) if a.get(n) != b.get(n))
     card = [n for n in changed if n in CARD_FILES or n.startswith(CARD_PREFIXES)]
-    other = [n for n in changed if n not in card]
+    hub = [n for n in changed if n in HUB_MANAGED]
+    other = [n for n in changed if n not in card and n not in hub]
     weights = sorted(n for n in a if n.endswith(WEIGHT_SUFFIXES))
     weights_identical = weights == sorted(
         n for n in b if n.endswith(WEIGHT_SUFFIXES)
@@ -71,6 +75,7 @@ def main() -> int:
         "new": new,
         "files": {"released": len(a), "new": len(b)},
         "changed_card_files": card,
+        "changed_hub_managed_files": hub,
         "changed_other_files": other,
         "weight_files": len(weights),
         "weight_bytes": sum(a[n]["size"] or 0 for n in weights),
@@ -85,6 +90,7 @@ def main() -> int:
                 for k in (
                     "repo",
                     "changed_card_files",
+                    "changed_hub_managed_files",
                     "changed_other_files",
                     "weight_files",
                     "weights_byte_identical",
