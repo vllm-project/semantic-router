@@ -1,0 +1,120 @@
+{
+  "schema": "jevbench-value/provenance/upstream-vs-ours/1",
+  "generated": "2026-09-29",
+  "scope": "Aggregates only. Public-231 = easy 48 + standard 72 + hard 111. Upstream artifact results/v1.4.2.2/jevbench-v1.4.2.2-results.json (HEAD 9ec6f15a) plus results/v1.2/jevbench-v1.2-per-task.json for public per-tier counts; ours = post-key same-panel REPORT.json on node A/node B, scored by jev_arena/jevbench_public.py.",
+  "upstream_public_equals_ours": {
+    "pin": "1bcc55eb6c8cffde2306b3db03ede39b61c6152a",
+    "head": "9ec6f15a",
+    "diff_datasets_and_jevbench_code_pin_to_head": "empty",
+    "public_file_sha256_match_manifest": true,
+    "local_rebuild_from_head_matches_node_A_panel": {"prompts": true, "targets": true, "manifest": true},
+    "official_gap_rule_public_p_definition": "accuracy on the 231 public items (docs/METHOD-v1.4.md:9) = our pooled public-231 accuracy"
+  },
+  "field_context_upstream_v1.4.2.2": {
+    "rows_with_sealed": 93,
+    "non_llm_rows": 87,
+    "non_llm_gap_pp_median": 47.1,
+    "non_llm_gap_pp_min": 0.3,
+    "non_llm_gap_pp_max": 57.5,
+    "non_llm_rows_gap_over_25pp": 74,
+    "non_llm_sealed_accuracy_median": 0.289,
+    "non_llm_rows_sealed_below_chance_0.293": 47,
+    "spearman_public231_vs_sealed_non_llm": 0.519,
+    "llm_baselines_public_sealed": {
+      "GPT-6 Luna": [0.996, 0.955],
+      "GPT-6 Luna low": [0.991, 0.929],
+      "DeepSeek V4.1 Flash": [0.978, 0.948],
+      "GPT-5.6 Luna low": [0.974, 0.890],
+      "Gemini 3.1 Flash-Lite": [0.870, 0.386],
+      "Qwen3.8 27B (unranked partial)": [0.719, 0.218]
+    },
+    "upstream_top1_Imajev-4B": {"public231": 0.861, "sealed": 0.370, "gap_pp": 49.1, "score": 67.37}
+  },
+  "rows": [
+    {
+      "ours": "Decider 4B", "ours_revision": "eb5fbdfc", "ours_public": {"easy": 48, "standard": 71, "hard": 73, "total": 192},
+      "ours_acc": {"easy": 1.0, "standard": 0.986, "hard": 0.658, "pooled": 0.831},
+      "upstream_key": "decider-4b-v2", "upstream_revision": "7ab294cb (decider_config 4b-v2, T=1.935)", "match": "same model family, different Hub revision",
+      "upstream_public": {"easy": 48, "standard": 71, "hard": 74, "total": 193, "derivation": "easy whole-tier 1.0; hard_public 0.6667; standard = 193-48-74"},
+      "upstream_full_tiers": {"easy72": 1.0, "standard96": 0.969, "judge146": 0.877, "hard220": 0.673, "hard_heldout109": 0.679},
+      "upstream_sealed": {"accuracy": 0.347, "correct_of_308": 107}, "upstream_gap_pp": 48.8,
+      "upstream_intelligence": 49.4, "upstream_score": 64.13, "upstream_rank": 3,
+      "delta_total_ours_minus_upstream": -1,
+      "note": "Upstream ran the author's server through the typesafe adapter; we ran the published system_one in-process. Same request object."
+    },
+    {
+      "ours": "Decider 2B", "ours_revision": "533964da", "ours_public": {"easy": 48, "standard": 64, "hard": 63, "total": 175},
+      "ours_acc": {"easy": 1.0, "standard": 0.889, "hard": 0.568, "pooled": 0.758},
+      "upstream_key": "decider-2b", "upstream_revision": "b37f7e1 (v10 weights), DECIDER_COMPILE=0", "match": "same model family, different Hub revision",
+      "upstream_public": {"easy": 48, "standard": 61, "hard": 55, "total": 164, "derivation": "per-task public outcomes"},
+      "upstream_full_tiers": {"easy72": 1.0, "standard96": 0.854, "judge146": 0.774, "hard220": 0.473},
+      "upstream_sealed": {"accuracy": 0.247, "correct_of_308": 76}, "upstream_gap_pp": 46.3,
+      "upstream_intelligence": 38.5, "upstream_score": 30.74, "upstream_rank": 41,
+      "delta_total_ours_minus_upstream": 11,
+      "note": "Disagreement is attributable to the weight revision (upstream measured ~20 Sep; ours is a later revision). Not a scorer effect (0 outcome flips under upstream-faithful rescoring)."
+    },
+    {
+      "ours": "Hopper (G) 1.2", "ours_revision": "HopitAI/hopper-g 71d991f4", "ours_public": {"easy": 48, "standard": 70, "hard": 76, "total": 194},
+      "ours_acc": {"easy": 1.0, "standard": 0.972, "hard": 0.685, "pooled": 0.840},
+      "upstream_key": "hopper", "upstream_revision": "HopitAI/hopper (round 4)", "match": "same author, different checkpoint",
+      "upstream_public": {"easy": 48, "standard": null, "hard": null, "total": 190, "derivation": "public_acc 0.8225; easy whole-tier 1.0; std/hard public split not published"},
+      "upstream_full_tiers": {"easy72": 1.0, "standard96": 0.969, "judge146": 0.836, "hard220": 0.650},
+      "upstream_sealed": {"accuracy": 0.341, "correct_of_308": 105}, "upstream_gap_pp": 48.2,
+      "upstream_intelligence": 48.0, "upstream_score": 59.43, "upstream_rank": 7,
+      "delta_total_ours_minus_upstream": 4,
+      "note": "Upstream row notes heavy public-benchmark-directed development disclosed by the author (26 configs, 20+ calibration maps observed against the public half)."
+    },
+    {
+      "ours": "Nimble 9B v2", "ours_revision": "4b8c04d1", "ours_public": {"easy": 48, "standard": 68, "hard": 69, "total": 185},
+      "ours_acc": {"easy": 1.0, "standard": 0.944, "hard": 0.622, "pooled": 0.801},
+      "upstream_key": "nimble-9b", "upstream_revision": "Bespoke-Nimble-9B (v1) re-run, 8,192-token prompt limit", "match": "same author, previous version",
+      "upstream_public": {"easy": 48, "standard": 67, "hard": 69, "total": 184, "derivation": "per-task public outcomes"},
+      "upstream_full_tiers": {"easy72": 1.0, "standard96": 0.948, "judge146": 0.890, "hard220": 0.655},
+      "upstream_sealed": {"accuracy": 0.289, "correct_of_308": 89}, "upstream_gap_pp": 50.8,
+      "upstream_intelligence": 46.3, "upstream_score": 18.66, "upstream_rank": 62,
+      "delta_total_ours_minus_upstream": 1,
+      "note": "Upstream v1.1.3 run at 2,048 tokens had hard 43.6%; at 8,192 tokens 65.5% (README v1.2.8) - a token-limit effect upstream itself documented."
+    },
+    {
+      "ours": "GLiNER2.5-Decide", "ours_revision": "7ee5da4c", "ours_public": {"easy": 48, "standard": 46, "hard": 22, "total": 116},
+      "ours_acc": {"easy": 1.0, "standard": 0.639, "hard": 0.198, "pooled": 0.502},
+      "upstream_key": "gliner2 / gliner2.5-multi / gliner2.5-small", "match": "different checkpoints (no Decide row upstream)",
+      "upstream_public": {"gliner2 (gliner2.5-base)": [47, 46, 41, 134], "gliner2.5-multi": [44, 32, 37, 113], "gliner2.5-small": [41, 30, 35, 106]},
+      "upstream_sealed": {"gliner2": 0.292, "gliner2.5-multi": 0.328, "gliner2.5-small": 0.286},
+      "upstream_gap_pp": {"gliner2": 28.8, "gliner2.5-multi": 16.1, "gliner2.5-small": 17.3},
+      "upstream_score": {"gliner2": 11.78, "gliner2.5-multi": 9.76, "gliner2.5-small": 7.19},
+      "note": "Our 56 hard invalids are native context overflows (hard items >= 1,351 state chars)."
+    },
+    {
+      "ours": "Kev 0.8B", "ours_revision": "9a45d25e", "ours_public": {"easy": 48, "standard": 58, "hard": 41, "total": 147},
+      "upstream_key": "kev-0.6b / kev-4b / kev-8b", "match": "different checkpoints (no 0.8B row upstream)",
+      "upstream_public": {"kev-0.6b": [48, 58, 48, 154], "kev-4b": [48, 64, 41, 153], "kev-8b": [48, 67, 50, 165]},
+      "upstream_sealed": {"kev-0.6b": 0.240, "kev-4b": 0.224, "kev-8b": 0.218},
+      "upstream_gap_pp": {"kev-0.6b": 42.6, "kev-4b": 43.8, "kev-8b": 49.7},
+      "upstream_score": {"kev-0.6b": 24.75, "kev-4b": 36.14, "kev-8b": 25.56}
+    },
+    {
+      "ours": ["JPT-4B 203 (48/68/87)", "Eikos-27B 212 (48/72/92)", "AutoJev-27B 201 (48/72/81)"],
+      "upstream": "named in docs/RELEASE-v1.4.2.md:49-51 as moved to v1.4.3 (JPT-4B aggregate source missing; Eikos 4B/27B and AutoJev-27B lack official sealed rows). No upstream numbers."
+    },
+    {
+      "ours": ["Decision 1.0 Kai 114 (45/39/30; 8K run 127 = 45/39/43)", "Lex 113 (42/42/29)", "Eos 142 (48/55/39)", "Sol 161 (48/66/47)", "Nox 173 (48/66/59)", "Lux 183 (48/67/68)", "Bosun 0.6B 133 (47/50/36)", "Bosun 1.7B 151 (46/62/43)", "JPT-0.8B 171 (47/60/64)", "JPT-9B 197 (48/68/81)", "Jebadiah-27B 176 (48/70/58)", "Intern-Decision 0.8B 164 (47/57/60)", "This-That 1.2 147 (48/64/35)", "Jet v6.2 174 (48/69/57)", "DEV2.0-0.6B 142 (48/54/40)", "DEV2.0-0.8B 156 (48/63/45)", "DEV2.0-2B 171 (48/66/57)", "DEV2.0-4B 171 (48/67/56)", "DEV2.0-8B 178 (48/66/64)"],
+      "upstream": "No row on the v1.4.2.2 board or in any results/ file."
+    }
+  ],
+  "upstream_reference_rows_for_system_one_style_names": {
+    "system-one-sg (Qwen3-8B, Sean Goedecke)": {"public": [48, 64, 54, 166], "sealed": 0.244, "gap_pp": 47.5, "score": 23.37},
+    "open-alternative-jev (so1, Qwen3.5-4B)": {"public": [48, 60, 63, 171], "sealed": 0.244, "gap_pp": 49.7, "score": 33.24},
+    "Jev 1.13.0 (TypeSafe)": {"public": [48, 71, 81, 200], "sealed": 0.367, "gap_pp": 49.9, "score": 63.29}
+  },
+  "rescoring_upstream_faithful": {
+    "runs_rescored": 86,
+    "outcome_flips_total": 0,
+    "answers_missing_type": 0,
+    "choice_point_not_in_labels_on_valid_answers": 0,
+    "noul_exact_0.5_answers": "1-2 per run in 7 peer runs; both rules resolve to 'no'",
+    "invalid_answers_all_context_overflow_hard_tier": {"Kai 1.0 (1,024 tok)": 44, "Lex 1.0 (1,024 tok)": 44, "GLiNER2.5-Decide": 56, "This-That 1.2 (1,536-tok state)": 37, "Jebadiah-27B (2,048-tok render)": 36},
+    "max_native_input_tokens_public231": {"DEV2.0 0.6B-8B": 3980, "Decider 4B": 3911, "Nox/Lux 1.0": 3980, "Kev 0.8B": 3897, "Kai 1.0 8K run": 3864},
+    "dev2_over_budget_answers": 0
+  }
+}
