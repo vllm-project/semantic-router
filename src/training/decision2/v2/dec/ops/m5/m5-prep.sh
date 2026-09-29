@@ -149,14 +149,24 @@ cpu overlap-n5b-add teacher/checks-n5b-add-overlap -m v2.dec.m5_labels overlap -
 cpu hw1-n5b-h8 teacher/hw1-n5b-h8 -m v2.dec.m5_labels subset --targets "$HW1" --train "$N5B" --component H8 \
   --output /out/targets.jsonl || exit 1
 # A failed teacher compose stops only its own arm (preflight 3): the other arm's teacher is still built.
+# N5B (amendment 2): N4XF's composed file (rows outside the block and kept block rows), then for the added rows
+# the published own-Lux sources in M4's precedence order (A0 canonical, RP-v2 waves 1-4, XL waves), then h-w1
+# on H8 rows. The prereg-only list (teacher/n5b) left 1,054 added MTOP rows uncovered.
+N5BLUX=(--source "$LUXT"
+  --source "$H/d8eae3e4fb5b91871c5aa7c13f0d94ea96e86ea7/m3/pk1/lux1/A0-train.canonical.jsonl"
+  --source "$H/7885baf6ea3805cc0e00405bde5061ad5b9d0aa9/m2/teachers/lux1/rp-v2/wave1.targets.jsonl"
+  --source "$H/6bd8eb4d4fe0bc2c47f517c1017f7422510b09f0/m2/teachers/lux1/rp-v2/wave2.targets.jsonl"
+  --source "$H/002e5b422bc74fc3a276be99daad1b7ad793520c/m2/teachers/lux1/rp-v2/wave3.targets.jsonl"
+  --source "$H/03b1e72d4b4a4526b2e7f5db3659adb07f200a71/m2/teachers/lux1/rp-v2/wave4.targets.jsonl"
+  "${LUXW[@]}" --source "$T/hw1-n5b-h8/targets.jsonl")
 built=()
-if cpu teacher-n5b teacher/n5b -m v2.dec.compose_teacher compose --train "$N5B" --source "$LUXT" "${LUXW[@]}" \
-  --source "$T/hw1-n5b-h8/targets.jsonl" --allow-missing-pool "$IDS:H7" --output /out/teacher.jsonl; then
+if cpu teacher-n5b-a2 teacher/n5b-a2 -m v2.dec.compose_teacher compose --train "$N5B" "${N5BLUX[@]}" \
+  --allow-missing-pool "$IDS:H7" --output /out/teacher.jsonl; then
   built+=(n5b)
 else
   log "N5B teacher not built: N5B stopped (preflight 3)"
-  cpu missing-n5b teacher/missing-n5b -m v2.dec.compose_teacher missing --train "$N5B" --source "$LUXT" "${LUXW[@]}" \
-    --source "$T/hw1-n5b-h8/targets.jsonl" --output /out/uncovered.jsonl
+  cpu missing-n5b-a2 teacher/missing-n5b-a2 -m v2.dec.compose_teacher missing --train "$N5B" "${N5BLUX[@]}" \
+    --output /out/uncovered.jsonl
 fi
 if cpu teacher-n5bn teacher/n5bn -m v2.dec.compose_teacher compose --train "$N5B" --source "$T/nox-n5n/labels.jsonl" \
   --source "$T/nox-n5b-add/labels.jsonl" --source "$LUXT" "${LUXW[@]}" --source "$T/hw1-n5b-h8/targets.jsonl" \

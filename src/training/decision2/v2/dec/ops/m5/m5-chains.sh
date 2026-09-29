@@ -22,7 +22,7 @@ D=/data/dev2/src/$SRC/src/training/decision2/v2/dec/drive_arm.sh
 NOX=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
 BASE="--train-mode full --backbone-lr 5e-6 --head-lr 5e-5 --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64"
 declare -A TRAIN=([N5N]=/runs/m4/data/m4-xl-full-29m/train.jsonl [N5B]=/runs/m5/data/n5b/train.jsonl [N5BN]=/runs/m5/data/n5b/train.jsonl)
-declare -A TEACH=([N5N]=/runs/m5/teacher/n5n/teacher.jsonl [N5B]=/runs/m5/teacher/n5b/teacher.jsonl [N5BN]=/runs/m5/teacher/n5bn/teacher.jsonl)
+declare -A TEACH=([N5N]=/runs/m5/teacher/n5n/teacher.jsonl [N5B]=/runs/m5/teacher/n5b-a2/teacher.jsonl [N5BN]=/runs/m5/teacher/n5bn/teacher.jsonl)
 declare -A READY=([N5N]=$M/data/n5n/READY [N5B]=$M/data/n5b/READY [N5BN]=$M/data/n5bn/READY)
 declare -A SEED=([1]=20260926 [2]=20260927 [3]=20260928)
 lease() {  # <gpu> <purpose> <minutes>

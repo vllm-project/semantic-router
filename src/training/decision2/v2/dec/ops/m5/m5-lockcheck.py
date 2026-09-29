@@ -244,12 +244,13 @@ else:
     ov = result["labels_added"]["m3_overlap"]
     if ov["overlap_rows"] and not ov["pass"]:
         fails.append("added-row M3 overlap")
-    for key in ("n5b", "n5bn"):
-        teacher = M / f"teacher/{key}/teacher.jsonl"
+    # N5B's teacher is the amendment-2 recompose (teacher/n5b holds the failed prereg-list attempt)
+    for key, name in (("n5b", "n5b-a2"), ("n5bn", "n5bn")):
+        teacher = M / f"teacher/{name}/teacher.jsonl"
         if teacher.is_file():
             result[f"teacher_{key}"] = coverage(n5b, teacher, None)
         else:
-            receipt = M / f"teacher/{key}.stderr.log"
+            receipt = M / f"teacher/{name}.stderr.log"
             error = (
                 receipt.read_text().strip().splitlines()[-1:]
                 if receipt.is_file()
@@ -260,9 +261,23 @@ else:
                 "missing_file": str(teacher),
                 "error": error,
             }
-    missing = M / "teacher/missing-n5b/uncovered.jsonl.manifest.json"
+    missing = M / "teacher/missing-n5b-a2/uncovered.jsonl.manifest.json"
     if missing.is_file():
         result["teacher_n5b"]["uncovered_rows"] = jload(missing)
+    if result["teacher_n5b"].get("teacher_sha256"):
+        # Amendment 2: rows outside the block keep N4XF's composed targets unchanged
+        lux = {}
+        for line in open(LUXT, encoding="utf-8"):
+            lux[json.loads(line)["id"]] = line
+        n5b_targets = {}
+        for line in open(M / "teacher/n5b-a2/teacher.jsonl", encoding="utf-8"):
+            n5b_targets[json.loads(line)["id"]] = line
+        outside = [r["id"] for c, _, r in n5b if not is_block(c, r) and r["id"] in lux]
+        changed = sum(n5b_targets.get(i) != lux[i] for i in outside)
+        result["teacher_n5b"]["outside_block_rows_with_n4xf_target"] = len(outside)
+        result["teacher_n5b"]["outside_block_targets_changed"] = changed
+        if changed:
+            result["teacher_n5b"]["ok"] = False
     if result["teacher_n5bn"].get("teacher_sha256"):
         # N5BN: Nox on every block row (the two label files are sources 0 and 1)
         man = jload(M / "teacher/n5bn/teacher.jsonl.manifest.json")
