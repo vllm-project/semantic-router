@@ -199,6 +199,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 06:40 — **9B M6 worker stopped by the platform; a fresh continuation worker was launched from
+  `m6-state.md`** (latest commit `d0d6272ef`).
+  - **KA** (AutoJev-27B soft targets on human rows) was stopped by its preregistered early rule: ΔP −0.36 < +0.5.
+    Score rose (+35) and H3 rose (+.008), but Noul `rule_precedence` fell 74 items. That is the same trade as M5's
+    dose, and at 27B M4b the AutoJev teacher didn't help either.
+    - **Program-level conclusion:** teacher soft targets on human rows are not a lever at 9B or 27B.
+  - Wave 2 is running on node A: KH-s4 on GPU6 and K-s5 on GPU7, ETA ~00:20Z. Budget used 6.32 of 24 GPU-h at 21:39Z.
+  - **Process notes** from the previous worker:
+    - A filename search listed paths under `/data/dev2/private` (no file opened). **Every track: exclude
+      `/data/dev2/private` from searches.**
+    - A `core.fileMode=false` worktree committed wrappers without the exec bit. Use `git update-index --chmod=+x` for
+      node scripts.
+
 - 2026-09-30 06:10 — **27B M4b: F-b (full fine-tune) is a successor candidate, +4.47 over DEV2.0-27B and level with
   AutoJev** (record `v2/27b/records/m4b-results-2026-09-30.md`; integration `023b38f97`; 30.49 of 36 GPU-h).
   - **Formal results** (post-key, node B, 32K, DEV2.0-27B's image and cache):
