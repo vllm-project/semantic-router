@@ -177,6 +177,16 @@ event records selection evidence; the upstream span measures provider duration.
 If a local response guard blocks an upstream HTTP 200, the upstream span retains
 200 while the root records the final client response status.
 
+The upstream span also carries OpenTelemetry GenAI attributes, so GenAI-aware
+trace backends can show each provider call: `gen_ai.operation.name` (`chat`),
+`gen_ai.provider.name`, `gen_ai.request.model` (the provider model ID sent
+upstream), and the provider-reported `gen_ai.usage.input_tokens` and
+`gen_ai.usage.output_tokens`. Buffered responses also set
+`gen_ai.response.model`; streamed responses do not yet. Usage the provider did
+not report is left unset rather than estimated, and `model.name` keeps the
+Router's logical model name. The GenAI conventions are still in Development
+status upstream, so their attribute names can change.
+
 Signal evidence events contain finite reported values and confidence separately,
 including real zero values; missing evidence remains absent. Projection events
 contain evaluated scores and configured names. Aggregate signal evaluation does

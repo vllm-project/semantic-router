@@ -17,6 +17,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 type routerProxyCredentialProvider struct {
@@ -56,7 +57,7 @@ func TestRegisterProxyRoutesDoesNotExposeFleetSimAPI(t *testing.T) {
 	t.Parallel()
 
 	mux := http.NewServeMux()
-	registerProxyRoutes(mux, &config.Config{}, nil)
+	registerProxyRoutes(mux, &config.Config{}, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
 	_, pattern := mux.Handler(req)
@@ -68,6 +69,83 @@ func TestRegisterProxyRoutesDoesNotExposeFleetSimAPI(t *testing.T) {
 	mux.ServeHTTP(recorder, req)
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+	}
+}
+
+func TestServeRouterAPIProxySetupModeAnswersStandbyInsteadOfProxyError(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("router upstream was called during setup mode: %s %s", r.Method, r.URL.Path)
+	}))
+	defer upstream.Close()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("setup:\n  mode: true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resolver := setupmode.New(configPath, false)
+	if !resolver.Active() {
+		t.Fatal("resolver did not report setup mode")
+	}
+
+	routerAPIProxy, err := proxy.NewReverseProxy(upstream.URL, "/api/router", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/router/docs", nil)
+	recorder := httptest.NewRecorder()
+	serveRouterAPIProxy(recorder, request, &config.Config{RouterAPIURL: upstream.URL}, nil, routerAPIProxy, nil, resolver, nil)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "standby") || !strings.Contains(body, "setup") {
+		t.Fatalf("body does not explain the standby state: %q", body)
+	}
+	for _, leak := range []string{"dial tcp", "no such host"} {
+		if strings.Contains(body, leak) {
+			t.Fatalf("body leaks the transport error %q: %q", leak, body)
+		}
+	}
+}
+
+func TestServeRouterAPIProxyProxiesWhenSetupIsInactive(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/docs" {
+			t.Errorf("unexpected upstream path %q", r.URL.Path)
+		}
+		_, _ = io.WriteString(w, "router docs")
+	}))
+	defer upstream.Close()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("setup:\n  mode: false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resolver := setupmode.New(configPath, false)
+	if resolver.Active() {
+		t.Fatal("resolver reported setup mode for an inactive config")
+	}
+
+	routerAPIProxy, err := proxy.NewReverseProxy(upstream.URL, "/api/router", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/router/docs", nil)
+	recorder := httptest.NewRecorder()
+	serveRouterAPIProxy(recorder, request, &config.Config{RouterAPIURL: upstream.URL}, nil, routerAPIProxy, nil, resolver, nil)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, "router docs") {
+		t.Fatalf("body was not proxied: %q", body)
 	}
 }
 
@@ -88,9 +166,8 @@ func TestRouterAPIProxyReplacesBrowserAuthorization(t *testing.T) {
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
 		nil,
-		nil,
-		routerProxyCredentialProvider{token: "router-service-token"},
-	)
+		nil, nil,
+		routerProxyCredentialProvider{token: "router-service-token"})
 	req := httptest.NewRequest(http.MethodGet, "/api/router/v1/models", nil)
 	req.Header.Set("Authorization", "Bearer dashboard-user-jwt")
 	recorder := httptest.NewRecorder()
@@ -136,7 +213,7 @@ func TestPlaygroundChatProxyPreservesIdentityAndStripsBrowserCredentials(t *test
 	}
 	cfg := &config.Config{EnvoyURL: server.URL, RouterAPIURL: server.URL, AbsConfigPath: configPath}
 	mux := http.NewServeMux()
-	registerRouterAPIProxy(mux, cfg, configureEnvoyProxy(cfg), nil, routerProxyCredentialProvider{token: "management-only-token"})
+	registerRouterAPIProxy(mux, cfg, configureEnvoyProxy(cfg), nil, setupmode.New(configPath, false), routerProxyCredentialProvider{token: "management-only-token"})
 
 	for _, conversation := range []string{"conversation-one", "conversation-one", "conversation-two"} {
 		body := `{"model":"vllm-sr/auto","messages":[{"role":"user","content":"hello"}]}`
@@ -214,7 +291,7 @@ func TestInferenceStreamStopsWhenLiveAuthorizationIsRevoked(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: upstream.URL}, envoyProxy, nil, nil)
+			registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: upstream.URL}, envoyProxy, nil, nil, nil)
 			mux.Seal()
 			front := httptest.NewServer(auth.AuthenticateRequest(svc, mux)(mux))
 			defer front.Close()
@@ -298,9 +375,8 @@ func TestRouterAPIProxyExposesRuntimeDocumentation(t *testing.T) {
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
 		nil,
-		nil,
-		routerProxyCredentialProvider{token: "router-service-token"},
-	)
+		nil, nil,
+		routerProxyCredentialProvider{token: "router-service-token"})
 	for _, target := range []string{
 		"/api/router/api/v1",
 		"/api/router/openapi.json?path=%2Fconfig%2Frouter&method=PATCH",
@@ -342,9 +418,8 @@ func TestRouterAPIProxyExposesKnowledgeBaseActivationHash(t *testing.T) {
 		mux,
 		&config.Config{RouterAPIURL: upstream.URL},
 		nil,
-		nil,
-		routerProxyCredentialProvider{token: "router-service-token"},
-	)
+		nil, nil,
+		routerProxyCredentialProvider{token: "router-service-token"})
 	request := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/config/hash", nil)
 	request.Header.Set("Authorization", "Bearer dashboard-user-jwt")
 	response := httptest.NewRecorder()
@@ -373,9 +448,8 @@ func TestRouterOutcomeProxyUsesServiceCredential(t *testing.T) {
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
 		nil,
-		nil,
-		routerProxyCredentialProvider{token: "router-service-token"},
-	)
+		nil, nil,
+		routerProxyCredentialProvider{token: "router-service-token"})
 	req := httptest.NewRequest(http.MethodPost, "/api/router/api/v1/observability/outcomes?authToken=query-user-jwt", nil)
 	req.Header.Set("Authorization", "Bearer dashboard-feedback-user-jwt")
 	req.Header.Set("Proxy-Authorization", "Bearer proxy-user-jwt")
@@ -407,9 +481,8 @@ func TestRouterAPIProxyRejectsUnknownManagementMutation(t *testing.T) {
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
 		nil,
-		nil,
-		routerProxyCredentialProvider{token: "router-service-token"},
-	)
+		nil, nil,
+		routerProxyCredentialProvider{token: "router-service-token"})
 	req := httptest.NewRequest(http.MethodPost, "/api/router/v1/unknown-mutation", nil)
 	req.Header.Set("Authorization", "Bearer dashboard-user-jwt")
 	recorder := httptest.NewRecorder()

@@ -4,8 +4,13 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func newLimitedHTTPClient(server *httptest.Server, maxResponseBytes int64) *HTTPClient {
@@ -19,6 +24,57 @@ func TestHTTPClientDefaultsResponseLimit(t *testing.T) {
 	client := NewHTTPClient("test", ClientConfig{})
 	if client.maxResponseBytes != defaultMCPMaxResponseBytes {
 		t.Fatalf("maxResponseBytes = %d, want %d", client.maxResponseBytes, defaultMCPMaxResponseBytes)
+	}
+}
+
+func TestHTTPClientDefaultsListPageLimit(t *testing.T) {
+	client := NewHTTPClient("test", ClientConfig{})
+	if client.maxListPages != defaultMCPMaxListPages {
+		t.Fatalf("maxListPages = %d, want %d", client.maxListPages, defaultMCPMaxListPages)
+	}
+}
+
+func TestHTTPClientDefaultsListByteLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		config ClientConfig
+		want   int64
+	}{
+		{name: "unset", config: ClientConfig{}, want: defaultMCPMaxResponseBytes},
+		{name: "follows response cap", config: ClientConfig{MaxResponseBytes: 64 << 20}, want: 64 << 20},
+		{name: "explicit", config: ClientConfig{MaxResponseBytes: 64 << 20, MaxListBytes: 1 << 20}, want: 1 << 20},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := NewHTTPClient("test", tc.config).maxListBytes; got != tc.want {
+				t.Fatalf("maxListBytes = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestHTTPClientStopsListingAtPageLimit(t *testing.T) {
+	core, logs := observer.New(zapcore.WarnLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+
+	server := newPagedListServer(t, 10)
+	client := NewHTTPClient("paged", ClientConfig{URL: server.URL, MaxListPages: 2})
+	if err := client.Connect(); err != nil {
+		t.Fatalf("Connect() error = %v", err)
+	}
+
+	if got, want := toolNames(client.GetTools()), []string{"tool-1", "tool-2"}; !slices.Equal(got, want) {
+		t.Errorf("loaded %v, want %v", got, want)
+	}
+	if got := len(server.cursorsSent("tools/list")); got != 2 {
+		t.Errorf("tools/list requests = %d, want 2", got)
+	}
+
+	var warned []any
+	for _, entry := range logs.FilterMessage("mcp_list_page_limit_reached").All() {
+		warned = append(warned, entry.ContextMap()["method"])
+	}
+	if want := []any{"tools/list", "resources/list", "prompts/list"}; !slices.Equal(warned, want) {
+		t.Errorf("page limit warnings for %v, want %v", warned, want)
 	}
 }
 

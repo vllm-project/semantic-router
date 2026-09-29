@@ -48,3 +48,19 @@ func TestLexicalPolarityLookupPrecedesNLI(t *testing.T) {
 		}
 	}
 }
+
+func TestInMemoryHitReportsNegationGuard(t *testing.T) {
+	for _, tc := range negationGuardServedPairs {
+		t.Run(tc.name, func(t *testing.T) {
+			c := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, SimilarityThreshold: 0.8, MaxEntries: 16, EmbeddingModel: "bert", EmbeddingProvider: storagetest.Vectors{Size: 384, Aliases: map[string]string{tc.incoming: tc.cached}}})
+			t.Cleanup(func() { _ = c.Close() })
+			if err := c.AddEntry(context.Background(), "entry1", "model1", tc.cached, []byte(`{}`), []byte("ANSWER"), 60); err != nil {
+				t.Fatal(err)
+			}
+			hit, err := c.LookupSimilarWithThreshold(context.Background(), "model1", tc.incoming, 0.8)
+			if err != nil || !hit.Found || hit.NegationGuard != tc.want {
+				t.Fatalf("lookup: found=%t negation guard=%q err=%v, want a hit reporting %q", hit.Found, hit.NegationGuard, err, tc.want)
+			}
+		})
+	}
+}

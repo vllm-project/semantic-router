@@ -62,3 +62,35 @@ func TestPolarityMismatch(t *testing.T) {
 		})
 	}
 }
+
+// Every pair passes the lexical guard, including the opposite-meaning ones; the
+// outcome says which of them the guard could actually judge.
+var negationGuardServedPairs = []struct {
+	name     string
+	incoming string
+	cached   string
+	want     NegationGuardOutcome
+}{
+	{"same words", "How do I enable dark mode?", "how do I enable dark mode", NegationGuardChecked},
+	{"word order", "Is the cache enabled in production?", "In production, is the cache enabled?", NegationGuardChecked},
+	{"both negated", "Why is the job not running?", "Why is the job never running?", NegationGuardChecked},
+	{"English rewording", "How do I reset my password?", "How can I reset my password?", NegationGuardNotApplicable},
+	{"cue-less antonym", "Is it safe to restart the database?", "Is it unsafe to restart the database?", NegationGuardNotApplicable},
+	{"German negation", "Ist es sicher, Ibuprofen mit Alkohol zu nehmen?", "Ist es nicht sicher, Ibuprofen mit Alkohol zu nehmen?", NegationGuardNotApplicable},
+	{"French negation", "Est-il sûr de redémarrer la base ?", "N'est-il pas sûr de redémarrer la base ?", NegationGuardNotApplicable},
+	{"Chinese negation", "这个药可以和酒一起吃吗？", "这个药不可以和酒一起吃吗？", NegationGuardNotApplicable},
+	{"beyond the token gate", "How do I add a member to the team?", "How do I remove a member from the team?", NegationGuardNotApplicable},
+}
+
+func TestNegationGuardOutcome(t *testing.T) {
+	for _, tt := range negationGuardServedPairs {
+		t.Run(tt.name, func(t *testing.T) {
+			if polarityMismatch(tt.incoming, tt.cached) {
+				t.Fatalf("the guard rejects %q against %q, so no hit is served", tt.incoming, tt.cached)
+			}
+			if got := negationGuardOutcomeFor(tokenizeForPolarity(tt.incoming, nil), tt.cached); got != tt.want {
+				t.Errorf("negationGuardOutcomeFor(%q, %q) = %q, want %q", tt.incoming, tt.cached, got, tt.want)
+			}
+		})
+	}
+}

@@ -39,10 +39,10 @@ A useful decision layer has to keep up with the application. Available models ch
 <ArticleVideo
   src="/videos/decision-1-0/decision-1-0-tetris.mp4"
   poster="/img/blog/decision-1-0/tetris-poster.png"
-  title="Decision 1.0 speed comparison in Tetris"
+  title="Tetris speed demo: Kai-0.6B, Lux-9B, and Jev Upstream"
   showcase
 >
-  <em>Feel the speed.</em>
+  <em>Feel the speed.</em> Kai-0.6B runs alongside Lux-9B and Jev Upstream.
 </ArticleVideo>
 
 Decision 1.0 makes the decision itself programmable:

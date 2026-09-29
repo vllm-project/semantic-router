@@ -179,6 +179,10 @@ func (decoder *anthropicStreamDecoder) decodeEvent(
 	switch wire.Type {
 	case "message_start":
 		events, diagnostics, err := decoder.emitAnthropicEvent(decodeAnthropicMessageStart(wire))
+		if wire.Message != nil && len(wire.Message.Diagnostics) > 0 && !bytes.Equal(bytes.TrimSpace(wire.Message.Diagnostics), []byte("null")) {
+			appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
+				"stream.message.diagnostics", "prompt-cache miss diagnostics have no neutral representation")
+		}
 		if wire.Message != nil && wire.Message.Usage != nil && len(wire.Message.Usage.Iterations) > 0 {
 			appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
 				"stream.message.usage.iterations", "per-iteration usage has no neutral accounting bucket")
