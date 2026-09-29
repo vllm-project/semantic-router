@@ -1,5 +1,11 @@
 # 0.8B release candidate meets the first-release threshold: E8F seed soup
 
+> **Erratum (2026-09-29, per coordinator 05:25 note).** The staging revision cited below (`16c0929a`) is no longer in the
+> `dev2-dec-staging` history, because LFS cleanups rewrote it. The release worker deleted the E8F soup's staging weights
+> at 20:47Z, on purpose, after release. Identity = the 9 `m2/E8F-soup/` lines of hash list node B
+> `m2/hf-staging/batch2.sha256` (`ab0aa4bc…`), with weights `9db82b84…` and head `cf2a2ebd…`. It is released as DEV2.0-0.8B
+> `0b631a85c19fb573aee34fc68bb413271ebe89f4`. See [dec-staging-citation-errata-2026-09-29.md](dec-staging-citation-errata-2026-09-29.md).
+
 Status: **qualifies under the coordinator's 0.8B threshold and the M2
 release reading (amendment 3)** — reported for release engineering.
 Written 2026-09-28 ≈20:30 UTC+8 right after scoring. Lock:
@@ -28,7 +34,8 @@ Best measured 0.8B peers: Intern-Decision-0.8B 43.535, Kev-0.8B 43.217.
 ## Artifact for release engineering
 
 - **Weights:** private `llm-semantic-router/dev2-dec-staging` commit
-  `16c0929ac0df649d8223483e1adf419d78a647ed`, folder `m2/E8F-soup/checkpoint/`
+  `16c0929ac0df649d8223483e1adf419d78a647ed` [corrected 2026-09-29: revision no longer exists in the repo history;
+  identity by hash list `batch2.sha256` `ab0aa4bc…`, see errata record], folder `m2/E8F-soup/checkpoint/`
   (full Decision 2.0 checkpoint, FP32: Qwen3.5 text backbone 752,393,024 +
   decision head 1,053,184 = 753,446,208 loaded parameters). `model_sha256`
   `60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b`.

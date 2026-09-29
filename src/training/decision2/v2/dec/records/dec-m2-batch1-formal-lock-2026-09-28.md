@@ -1,5 +1,10 @@
 # Formal lock: M2 batch 1 — B8F-s1, E8F-s1 (0.8B) and X4K-s1, X4K-s2 (4B)
 
+> **Erratum (2026-09-29, per coordinator 05:25 note).** The staging revision cited below (`5421582d`) is no longer in the
+> `dev2-dec-staging` history, because LFS cleanups rewrote it. Its weight files return 403. Identity = hash list node B
+> `m2/hf-staging/batch1.sha256` (`74c04b5dde66fafe3d505ceab1111d7d42ab38e9ee95e8b039b78deb9fddaf41`, 37 files); node copies
+> verified 2026-09-29. See [dec-staging-citation-errata-2026-09-29.md](dec-staging-citation-errata-2026-09-29.md).
+
 Status: **locked before any post-key v3 or public231 prediction exists for
 these four checkpoints.** Each is collected once; no checkpoint, calibration
 or adapter change after this commit. Results are labeled **post-key
@@ -10,7 +15,8 @@ same-panel**. Qualification and order: prereg `143cfc214`, amendments 1
 
 All four were uploaded from node B to the private staging repo
 `llm-semantic-router/dev2-dec-staging` at commit
-`5421582dfed51dd3b19b5686128ed75e0f8525e3` and downloaded on node A; all 37
+`5421582dfed51dd3b19b5686128ed75e0f8525e3` [corrected 2026-09-29: revision no longer exists in the repo history;
+identity by hash list `batch1.sha256` `74c04b5d…`, see errata record] and downloaded on node A; all 37
 files match node B's SHA-256 list.
 
 | Candidate | Start / mode | Selected checkpoint (SELECT) | `model_sha256` | CAL temperatures (Choice / Noul / Score) |

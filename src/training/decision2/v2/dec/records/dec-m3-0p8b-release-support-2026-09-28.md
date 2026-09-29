@@ -1,5 +1,15 @@
 # DEV2.0-0.8B release support: E8F seed soup (identities, recipe, teacher use, disclosures)
 
+> **Erratum (2026-09-29, per coordinator 05:25 note).** The staging revisions cited below (`16c0929a`, `5421582d`) are no
+> longer in the `dev2-dec-staging` history, because LFS cleanups rewrote it. Their weight files return 403.
+>
+> - E8F soup identity = its 9 lines in hash list node B `m2/hf-staging/batch2.sha256` (`ab0aa4bc…`); released as
+>   DEV2.0-0.8B `0b631a85c19fb573aee34fc68bb413271ebe89f4` (same weights and head).
+> - Seeds: `batch1.sha256` (`74c04b5d…`) and `batch2.sha256`.
+> - Node copies and file tables: [dec-staging-citation-errata-2026-09-29.md](dec-staging-citation-errata-2026-09-29.md).
+>
+> The per-file SHA-256s in the tables below remain valid.
+
 Written 2026-09-28 ≈21:40 UTC+8 (decoder Milestone 3, item 1) for release
 engineering and the coordinator. No new training. Every hash below was read
 back from the node files or the staging upload lists; nothing here changes the
@@ -13,7 +23,7 @@ candidate. Parents: [release-candidate record](dec-m2-0p8b-release-candidate-202
 | Field | Value |
 | --- | --- |
 | Candidate | E8F seed soup: uniform FP32 average of the SELECT-chosen checkpoints of E8F-s1/s2/s3 (`v2.dec.soup`) |
-| Private staging repo | `llm-semantic-router/dev2-dec-staging`, commit `16c0929ac0df649d8223483e1adf419d78a647ed`, folder `m2/E8F-soup/` |
+| Private staging repo | `llm-semantic-router/dev2-dec-staging`, commit `16c0929ac0df649d8223483e1adf419d78a647ed`, folder `m2/E8F-soup/` [corrected 2026-09-29: revision no longer exists in the repo history; identity by hash list `batch2.sha256` `ab0aa4bc…`, see errata record] |
 | Checkpoint | `m2/E8F-soup/checkpoint/` (full checkpoint: `backbone/` Transformers Qwen3.5 text model + `decision_head.safetensors` + tokenizer) |
 | `model_sha256` (inference identity) | `60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b` |
 | `backbone/model.safetensors` | `9db82b841878b2f259701e11fdccdfd4b54021b857934304de181e28379f5f1e` |
@@ -29,7 +39,7 @@ candidate. Parents: [release-candidate record](dec-m2-0p8b-release-candidate-202
 
 ## The three seed checkpoints (seed evidence; not release artifacts)
 
-| Seed | Staging commit / folder | SELECT700 (BEST) | `model_sha256` | `backbone/model.safetensors` | `decision_head.safetensors` | CAL700 calibration (C / N / S) | CAL698 16K calibration (C / N / S) |
+| Seed | Staging commit / folder [corrected 2026-09-29: these revisions no longer exist in the repo history; identity by hash lists `batch1.sha256` / `batch2.sha256`, see errata record] | SELECT700 (BEST) | `model_sha256` | `backbone/model.safetensors` | `decision_head.safetensors` | CAL700 calibration (C / N / S) | CAL698 16K calibration (C / N / S) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | E8F-s1 (20260926) | `5421582dfed51dd3b19b5686128ed75e0f8525e3` `m2/E8F-s1/checkpoint-0001776` | 592/700, .819722 | `5359b701c4a351f0f5130b34aa757494c4648f571092eaccf0912900a1a2281a` | `8b332483dc9a86faa4ac51dfb6f31c7c7f3de874bbe14abdaebea70b8bfe147c` | `bab6b40ce900b0f39d830ed86e76b81beabce4fcc71d3c329b73b7346a2efc2f` | `94edfa04…` (batch 1: `m2/E8F-s1/cal/`); 1.00520 / 1.01111 / 1.05724 | `97728822711cc891b3530211c4a16f021005e3291afb0e5b175e08d925b621ff` (batch 2: `m2/E8F-s1/cal698-16k/`); 1.00696 / 1.01286 / 1.05621 |
 | E8F-s2 (20260927) | `16c0929ac0df649d8223483e1adf419d78a647ed` `m2/E8F-s2/checkpoint-0001520` | 603/700, .854907 | `b248e25dd4fcb123127d27a3f937ebccf715e501873ae558bf4b3de96f1c82c2` | `4501784c9c010779722668cbdb69f5f0b0b54d24ce46336c7d3e3952affcfa11` | `50f3931967794203a84413fab216507efbe36f312adfde110b28c83d3739e15c` | `175064b2b492dbcf05695433a457edf1c03164fc5ffe2aaf58b7b78b4717977c`; 1.37477 / 1.02621 / 0.28753 | `f4a628af5169b9d4d75082530cebcc62bc3ca23c5a1f41d9d1415ce31c2f5417`; 1.37791 / 1.02770 / 0.28775 |
