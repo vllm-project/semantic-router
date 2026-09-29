@@ -14,6 +14,7 @@
         --d4 D4.json --label NAME --output SUCCESSOR.json
     python3 -m v2.06b.m8_scorebias choose --successor SUCCESSOR.json ... [--between PAIRED.json ...]
         --output RELEASE-CHOICE.json
+    python3 -m v2.06b.m8_scorebias publish --score-bias score_bias.json --output PUBLIC.json
 
 M8 prereg sections 1-8. Every input defaults to its node path and is verified against the
 preregistered SHA-256 (the combined panels through `v2.eval.panels.verify`).
@@ -44,6 +45,11 @@ the finalist's answers with the frozen soup's formal answers: Choice / Noul and 
 Score identical, 5-level Score equal to the offline correction of the stored probabilities.
 `successor` combines R1-R7 into SUCCESSOR.json; `choose` applies the release-choice rule to
 finalists given in section 5 rank order.
+
+`publish` (release) rewrites a scored score_bias.json with the same format, model hash and
+offsets (so the same answers) and public-only `fit` provenance: input names map to SHA-256,
+paths are dropped, and the scored file's own SHA-256 is recorded. The release builder binds
+the packaged copy to the scored run by those offsets.
 """
 
 from __future__ import annotations
@@ -53,8 +59,10 @@ import importlib
 import json
 import math
 import random
+import re
 import time
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -398,6 +406,127 @@ def fit(args: argparse.Namespace) -> int:
     )
     m7.save(args.report, report)
     print(json.dumps({"candidate": args.name, "offsets": offsets, "sha256": sha}))
+    return 0
+
+
+# ---------------------------------------------------------------- publish
+
+FITTED_ON = (
+    "score5t-dev fit half: 400 fresh resource_ledger items from the benchmark's typed "
+    "generator (benchmark/generate.py); selected on the 400-item check half and "
+    "held-out human 5-level rows"
+)
+FITTED_ON_HUMAN = (
+    "; with w_h > 0 also the M7(a) FIT_AHO and CAL698 human 5-level rows minus every "
+    "Score5-DEV panel row"
+)
+PUBLIC_FIT_KEYS = (
+    "prereg",
+    "prereg_commit",
+    "candidate",
+    "lam",
+    "human_weight",
+    "levels",
+    "objective",
+    "solver",
+    "post",
+    "export_manifest_sha256",
+)
+SHA256_TEXT = re.compile(r"[0-9a-f]{64}\Z")
+
+
+def input_hashes(value: Any, prefix: str = "") -> dict[str, str]:
+    """Input name -> SHA-256 only; paths and every non-hash field are dropped."""
+    hashes: dict[str, str] = {}
+    for key, item in sorted(value.items()):
+        name = f"{prefix}{key}".removesuffix("_sha256")
+        if isinstance(item, str) and SHA256_TEXT.match(item):
+            hashes[name] = item
+        elif isinstance(item, dict) and isinstance(item.get("sha256"), str):
+            if SHA256_TEXT.match(item["sha256"]):
+                hashes[name] = item["sha256"]
+        elif isinstance(item, dict):
+            hashes.update(input_hashes(item, f"{name}/"))
+    return hashes
+
+
+def public_rows(value: Any, private: Callable[[str], bool]) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: public_rows(item, private)
+            for key, item in value.items()
+            if key not in ("path", "inputs")
+            and not (isinstance(item, str) and private(item))
+        }
+    if isinstance(value, list):
+        return [public_rows(item, private) for item in value]
+    return value
+
+
+def public_score_bias(source: dict[str, Any], source_sha256: str) -> dict[str, Any]:
+    """The scored file with public-only `fit` provenance; answers are unchanged."""
+    from v2.release.build import IPV4, PRIVATE, SECRET
+
+    def private(text: str) -> bool:
+        return any(p.search(text) for p in (PRIVATE, IPV4, SECRET))
+
+    validate_score_bias(source, source["model_sha256"])
+    fit = source["fit"]
+    missing = [key for key in PUBLIC_FIT_KEYS if key not in fit]
+    if missing or fit["candidate"] not in CANDIDATES:
+        raise ValueError(f"not an M8 fit record (missing {missing})")
+    rows = fit.get("rows", {})
+    hashes = input_hashes(fit.get("inputs", {}))
+    human_inputs = rows.get("human", {}).get("inputs")
+    if isinstance(human_inputs, dict):
+        hashes.update(input_hashes(human_inputs, "human/"))
+    public = {
+        "format": source["format"],
+        "model_sha256": source["model_sha256"],
+        "offsets": source["offsets"],
+        "fit": {
+            **{key: fit[key] for key in PUBLIC_FIT_KEYS},
+            "fitted_on": FITTED_ON + (FITTED_ON_HUMAN if fit["human_weight"] else ""),
+            "rows": public_rows(rows, private),
+            "inputs_sha256": hashes,
+            "scored_file_sha256": source_sha256,
+        },
+    }
+    text = json.dumps(public, ensure_ascii=False, sort_keys=True, allow_nan=False)
+    if private(text):
+        raise ValueError("public score bias still matches a private-text pattern")
+    validate_score_bias(public, source["model_sha256"])
+    return public
+
+
+def publish(args: argparse.Namespace) -> int:
+    refuse_existing(args.output)
+    source = load_json(args.score_bias)
+    source_sha = file_sha256(args.score_bias)
+    public = public_score_bias(source, source_sha)
+    sha = m7.save(args.output, public)
+    written = load_json(args.output)
+    scored_offsets, _ = load_score_bias(args.score_bias, source["model_sha256"])
+    public_offsets, _ = load_score_bias(args.output, source["model_sha256"])
+    if (
+        written["offsets"] != source["offsets"]
+        or public_offsets != scored_offsets
+        or (written["format"], written["model_sha256"])
+        != (source["format"], source["model_sha256"])
+    ):
+        args.output.unlink()
+        raise ValueError("published offsets differ from the scored file")
+    print(
+        json.dumps(
+            {
+                "output": str(args.output),
+                "sha256": sha,
+                "scored_file_sha256": source_sha,
+                "offsets": written["offsets"],
+            },
+            sort_keys=True,
+        )
+    )
     return 0
 
 
@@ -1676,6 +1805,9 @@ def main(argv: list[str] | None = None) -> int:
     nine.add_argument("--successor", type=Path, action="append", required=True)
     nine.add_argument("--between", type=Path, action="append", default=[])
     nine.add_argument("--output", type=Path, required=True)
+    ten = commands.add_parser("publish")
+    ten.add_argument("--score-bias", type=Path, required=True)
+    ten.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     return {
         "fit": fit,
@@ -1687,6 +1819,7 @@ def main(argv: list[str] | None = None) -> int:
         "xcheck": xcheck,
         "successor": successor,
         "choose": choose,
+        "publish": publish,
     }[args.command](args)
 
 
