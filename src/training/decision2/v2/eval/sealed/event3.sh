@@ -3,7 +3,10 @@
 # Usage (on node A, from an exact mirror; in event mode the key arrives once on stdin):
 #   event3.sh --gpu N --src MIRROR [--lease-name owner.eval] [--shared] [--models K,K,...]
 #             [--c27 f1|f2] [--peers27 K,K] [--c27-package DIR --c27-manifest SHA --c27-repo ID
-#             --c27-revision REV] [--allow-deviation ID]... [--verify-only | --preflight-only]
+#             --c27-revision REV] [--c9b-package DIR --c9b-manifest SHA --c9b-repo ID --c9b-revision REV
+#             ...] [--allow-deviation ID]... [--verify-only | --preflight-only]
+# The 9B candidate (K-a13) is off by default: add cand9b,lux1,nimble2 to --models once its frozen
+# release package exists and pass the package with the --c9b-* options.
 # The model table is v2/eval/sealed/event3-models.json; `python3 -m v2.eval.sealed.event3 plan`
 # resolves it and refuses anything outside the C1 limits or with a PARENT-FILLS field.
 # --verify-only: images, mirror modules, paths, release manifests, tree digests, frozen caches (CPU).
@@ -28,7 +31,9 @@ while [ $# -gt 0 ]; do
   --lease-name) LEASE_NAME=$2; shift 2 ;;
   --shared) SHARED=1; shift ;;
   --c27) C27=$2; shift 2 ;;
-  --models | --peers27 | --c27-package | --c27-manifest | --c27-repo | --c27-revision | --allow-deviation)
+  --models | --peers27 | --c27-package | --c27-manifest | --c27-repo | --c27-revision | --allow-deviation | \
+    --c9b-package | --c9b-manifest | --c9b-repo | --c9b-revision | --c9b-identity | --c9b-calibration | \
+    --c9b-parity-stored | --c9b-tolerance)
     PLAN_ARGS+=("$1" "$2"); shift 2 ;;
   --verify-only) MODE=verify; shift ;;
   --preflight-only) MODE=preflight; shift ;;
