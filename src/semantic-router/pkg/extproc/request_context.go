@@ -107,6 +107,9 @@ type RequestContext struct {
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
 	SkipProcessing        bool // true only when the configured opt-out header is valid
 
+	// Request header reply held until a full-duplex body is routed.
+	fullDuplexHold *fullDuplexHeaderHold
+
 	StreamingComplete      bool // True after neutral stream finalization runs once.
 	StreamingAborted       bool // True if the neutral stream ended abnormally.
 	ProtocolResponseStream *protocolcodec.StreamEngine

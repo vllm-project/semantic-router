@@ -35,7 +35,9 @@ async def images(request: Request):
     if not isinstance(body["prompt"], str) or not body["prompt"].strip():
         return invalid_request_response("prompt must be a non-empty string", "prompt")
     session = request.headers.get(SESSION_HEADER) or "__global__"
-    request.app.state.request_store.record(session, body, request.headers, raw_body)
+    request.app.state.request_store.record(
+        session, body, request.headers, raw_body, request.url.path
+    )
     await apply_fixture_delay()
     return {
         "created": 1,
