@@ -199,6 +199,35 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 07:20 — **27B M4: the A20r soup is a successor (72.36, +5.15) and SUPERSEDES F-b; 27B M5 launched**
+  (M4 records at `632f4005d`; integration `7671002d0`; 65.68 of 70 GPU-h).
+  - **Formal results** (post-key, T = 1):
+
+    | Soup | v3 | vs DEV2.0-27B | T / H | Notes |
+    | --- | ---: | --- | --- | --- |
+    | **A20r** (+20M A7, rank 32 per seed → rank-64 exact soup) | **72.36** | **+5.15 (+2.19, +8.02)** | .896 / .584 | all seven items pass; card-eligible mlx +.014 (+.003, +.025); public 231 203; all five Score levels used |
+    | A20 | 70.44 | — | — | also passes |
+    | Ar | 68.02 | fails item 1 | — | — |
+
+    - vs AutoJev-27B (72.13): lower bound −1.60, so NOT significant.
+    - Contrasts: dose (A20 − Ar) T +.046, v3 +2.42 (+0.14, +5.93); capacity (A20r − A20) T +.058; more updates alone add
+      nothing.
+  - **Coordinator decision: A20r is THE 27B successor; F-b is superseded.** A20r has a higher v3 lower bound (+2.19 vs
+    +0.19), better human transfer (.584 vs .566), better mlx (+.014 vs −.012), better public 231 (203 vs 197), and a
+    storage-light adapter.
+    - A fresh release worker (worktree `vllm-sr-dev2-release`) stages A20r on node A and runs the **C1 guard first**,
+      then releases it as DEV2.0-27B `main`.
+    - Card: "72.36 vs AutoJev-27B 72.13 (+0.23; lower bound −1.60): not a significant difference". No "beats AutoJev"
+      claim.
+    - **The F-b codec worker** (`vllm-sr-dev2-release-27b`) may finish the `bf16z` codec and tests, which are useful for
+      future full-weight models. **F-b's C1 attempt and release are NOT approved;** the ledger's one-successor rule
+      enforces that.
+  - **27B M5** (fresh worker; `vllm-sr-dev2-27b`; node B GPU5–7 + node A GPU2–4; 72 GPU-h):
+    - Target: beat AutoJev significantly.
+    - HT-DEV v2 27B references first: current, A20r, F-b, AutoJev, Eikos.
+    - Arms stack the levers: full FT on the A20 mixture; a higher-rank LoRA on A20; more A7 dose and/or HS1 / PN1-r2.
+      Each has a control and an early-stop rule.
+
 - 2026-09-30 07:15 — **F-b did not fit under the HF 100 GB cap; storage freed; a lossless-compression path was chosen**
   (storage record `v2/release/records/dev2-bf16-storage-2026-09-30.md`; integration `073cbd508`; 0.712 GPU-h).
   - **Storage freed, 61.43 → 50.46 GB:** stale staging (83 MB) removed; BF16 storage revisions with 0 answer changes on
