@@ -199,6 +199,40 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 06:10 — **27B M4b: F-b (full fine-tune) is a successor candidate, +4.47 over DEV2.0-27B and level with
+  AutoJev** (record `v2/27b/records/m4b-results-2026-09-30.md`; integration `023b38f97`; 30.49 of 36 GPU-h).
+  - **Formal results** (post-key, node B, 32K, DEV2.0-27B's image and cache):
+
+    | Model | v3 | vs DEV2.0-27B | vs AutoJev | T / H |
+    | --- | ---: | --- | --- | --- |
+    | F-b (full FT, same mixture, gold, two-seed soup) | 71.684 | **+4.47 [+0.19, +8.13]** | −0.45 [−3.68, +3.98] | .908 / .566 (AutoJev .887 / .587) |
+    | F-a (+ own-Lux soft targets on human rows) | 70.42 | [−0.27, +6.16] | — | — |
+    | F-c (AutoJev teacher, 1 seed) | 68.31 | — | — | — |
+
+    - F-b: constraint competition .98, exception stack .83; public 231 197; card-eligible mlx-diag −.012
+      [−.029, +.004]; the full mlx average, including the internal XNLI Score part, is −.017 [−.031, −.003].
+    - Interpolation with the LoRA release was stopped by the merge check: BF16 rounding erases the merged LoRA update,
+      so an adapter must be kept separate.
+    - The development panels misread human transfer: they showed full FT ~.10 lower, while formal was level. HT-DEV v2
+      should fix this.
+  - **Coordinator rulings:**
+    - **Item 4 = card-eligible parts,** as registered at 16:05 and in the prereg, so F-b passes items 1–7. The decline
+      seen only when the XNLI Score part is included is disclosed qualitatively on the card.
+    - The pre-P0 amendments 2 and 3 are accepted: per-tensor gradient parity, and caps from the probe's speed.
+    - **Lessons:** capacity is the lever (+.120 typed at matched tokens, human transfer level); soft targets on human rows
+      don't help.
+    - "Beats AutoJev" is not met yet: v3 is below 72.133, and human transfer is .020 lower (n.s.).
+  - **F-b release path** (release worker, worktree `vllm-sr-dev2-release-27b`):
+    1. **Storage:** a BF16 27B full model is ~52 GB against 61.36 / 100 GB used. Convert FP32 packages (4B, and 2B / 0.8B
+       if FP32) to BF16 at exact parity and purge the FP32 blobs; remove stale staging. Never delete training data,
+       panels or eval backups. Stop and report if the upload would leave < 3 GB headroom.
+    2. **Transfer:** F-b goes to node A by a direct node-to-node copy (temporary key); C1 never leaves node A.
+    3. **Item 8:** the C1 post-key guard vs 57.33.
+    4. **Release** as the new DEV2.0-27B `main` (`qwen-full`), with the card as briefed, and purge the adapter blobs.
+    - The 100 GB cap will block future 27B full-model updates, which need space for old and new copies side by side.
+      Telling the user is part of the next report.
+  - **27B M5** (full FT on M4's +20M A7 mixture, gold, two seeds, ~12 GPU-h per seed) waits for M4's dose result.
+
 - 2026-09-30 04:10 — **HT-DEV v2 PASSES; it is the human-transfer screen for new milestones** (eval record
   `v2/eval/records/htdev2-validation-2026-09-30.md`; integration `bc0a12d70`; 1.454 GPU-h; usage in "Eval runners").
   - **Why v1 failed and v2 works:** v1 failed on what it measured, not on target noise. v2 is a held-out copy of nine
