@@ -314,10 +314,42 @@ def base_text_parameters(base: Path, files: dict[str, str], source_kind: str) ->
     return total
 
 
+def vendor_root(spec: dict[str, Any]) -> tuple[Path, dict[str, Any] | None]:
+    """Tree whose training/model (and v2/dec) sources are vendored.
+
+    Default: this builder's tree. ``vendor_source`` names the decision2 tree of an
+    exact node mirror (e.g. the scored run's own source mirror) so a later change
+    to a shared inference module does not block a release of an earlier scored run.
+    """
+    value = spec.get("vendor_source")
+    if not value:
+        return SOURCE_ROOT, None
+    root = Path(value).resolve(strict=True)
+    mirror = next(
+        (
+            p / ".dev2-mirror.json"
+            for p in (root, *root.parents)
+            if (p / ".dev2-mirror.json").is_file()
+        ),
+        None,
+    )
+    if mirror is None or not (root / "training/model").is_dir():
+        raise ValueError(
+            "vendor_source must be a decision2 tree with training/model inside an exact node mirror"
+        )
+    record = json.loads(mirror.read_text(encoding="utf-8"))
+    return root, {
+        "commit": record.get("commit"),
+        "tree": record.get("tree"),
+        "content_manifest_sha256": record.get("content_manifest_sha256"),
+    }
+
+
 def vendor_runtime(
     spec: dict[str, Any], stage: Path, identity: dict[str, Any]
 ) -> dict[str, Any]:
     """Copy the runtime template and the exact scored inference sources."""
+    root, _ = vendor_root(spec)
     records: dict[str, Any] = {}
     target = stage / layout.RUNTIME_DIR
     target.mkdir()
@@ -357,26 +389,27 @@ def vendor_runtime(
     if identity["head_variant"] in HEAD_MODULES:
         modules.append(HEAD_MODULES[identity["head_variant"]])
     for name in modules:
-        shutil.copyfile(SOURCE_ROOT / "training/model" / name, package / name)
+        shutil.copyfile(root / "training/model" / name, package / name)
         records[f"decision2/_vendor/dev2model/{name}"] = {
             "source": f"training/model/{name}",
             "rewritten": False,
         }
     if identity["dec_residual"]:
-        original = (SOURCE_ROOT / "v2/dec/dec_model.py").read_text(encoding="utf-8")
+        original = (root / "v2/dec/dec_model.py").read_text(encoding="utf-8")
         pattern, replacement = IMPORT_REWRITE
         (package / "dec_model.py").write_text(
             pattern.sub(replacement, original), encoding="utf-8"
         )
         records["decision2/_vendor/dev2model/dec_model.py"] = {
             "source": "v2/dec/dec_model.py",
-            "source_sha256": layout.sha_file(SOURCE_ROOT / "v2/dec/dec_model.py"),
+            "source_sha256": layout.sha_file(root / "v2/dec/dec_model.py"),
             "rewritten": "absolute training.model imports -> package-relative",
         }
     for name, record in records.items():
         source = record.get("source")
         if source and "@" not in source and "source_sha256" not in record:
-            record["source_sha256"] = layout.sha_file(SOURCE_ROOT / source)
+            tree = SOURCE_ROOT if source.startswith("v2/release/") else root
+            record["source_sha256"] = layout.sha_file(tree / source)
     return records
 
 
@@ -636,6 +669,10 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             banner=BRAND_DIR / banner,
             work=work / "card-work",
             output=stage,
+            paired_peers={
+                key: Path(path)
+                for key, path in (spec["card"].get("paired_peers") or {}).items()
+            },
         )
         pointer = layout.pointer(
             profile,
@@ -691,6 +728,11 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
                 "requirements": spec.get("runtime_requirements", {}),
                 "scored_runtime_check": scored_runtime,
                 "equivalence": spec.get("runtime_equivalence"),
+                **(
+                    {"vendor_source": vendor_root(spec)[1]}
+                    if spec.get("vendor_source")
+                    else {}
+                ),
             },
             "scored": {
                 key: value
