@@ -1,6 +1,6 @@
 # 9B M5 state (resume file)
 
-Updated: 2026-09-29 17:30 UTC+8 (M5 worker; prereg frozen, chains not yet launched)
+Updated: 2026-09-29 17:25 UTC+8 (M5 worker; prereg `567e7fd39` frozen and pushed; chains running)
 Branch: `xunzhuo/decision-2-training-9b` (merge-only into `xunzhuo/decision-2-training`)
 Prereg: `records/lux9b-m5-prereg-2026-09-29.md` (arms KD / KG, lines KD / KG / UM5, successor test vs the released T = 1 run)
 
@@ -17,11 +17,19 @@ Prereg: `records/lux9b-m5-prereg-2026-09-29.md` (arms KD / KG, lines KD / KG / U
 
 ## Running
 
-- nothing yet.
+- Mirror node A `/data/dev2/src/567e7fd399f951932a0d7980a0b11718d9efb813-src_training_decision2` (tree `52cc38ae…`,
+  `mirror_to_node.sh --verify` OK). Chain files (`lux9b/m5/chains/`) uploaded to node A `m5/logs/chains/` and verified
+  (`upload_chain.sh`): `m5-gpu6.sh` 1,292 B `49a81cf3…`, `m5-gpu7.sh` 1,468 B `48a18381…`; then launched separately with
+  `launch.sh` (arg: the mirror SHA).
+- **m5-gpu6** PID 3218725 (09:18:18Z): ref-ka13 → KD-s1 (preflights) → KD-s2 → KD-soup → KD-a13 / a12 / a23.
+- **m5-gpu7** PID 3219064 (09:18:20Z): ref-lux → KG-s1 (preflights) → KG-s2 → KG-soup → KG-a13 / a12 / a23.
+- Liveness check 09:19Z: both PIDs alive (`alive.sh`), containers `d2-9b-m5-ref-ka13-dev-g6` / `d2-9b-m5-ref-lux-dev-g7` up,
+  first step-log lines present, leases `track=9b-m5`. Check with
+  `bash $L/alive.sh m5-gpu6` (L = the mirror's `v2/9b/lux9b/m5`); logs node A `/data/dev2/runs/9b/m5/logs/`.
 
 ## Next
 
-1. Commit + push prereg; mirror HEAD to node A; upload + verify chain files; launch GPU6 / GPU7 chains (chain rule).
+1. Verify ref-ka13 reproduces M4's K ⅓ readout (T .925, 799 / 338 / 343, H3 .562, P 73.22).
 2. After soups: `score.sh` + `m5_rules seed`; after lines: `m5_rules alpha` per line → lock per finalist → formal.
 3. Successor test vs I (released T = 1 run, or the latest M5 successor handed off); record; gist 05; merge.
 
