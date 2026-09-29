@@ -2,7 +2,10 @@
 
 Recipe rows are joined by id from hash-verified pool files (A0s from the
 positional-key pk1 file). Every recipe row must receive exactly one teacher
-distribution bound to its input hash and option keys. Retention replay rows
+distribution bound to its input hash and option keys. The recipe may drop whole
+pools (``recipe_exclude_pools``) and be cut to ``recipe_budget_tokens`` native
+tokens in whole groups, stratified by pool x source x task type x language in
+the ``<seed>:recipe`` hash order. Retention replay rows
 come from an A7 view: excluded families are dropped, rows whose input (current
 or pre-renumbering hash) repeats A0 or a recipe row are dropped, and whole
 groups are sampled to a native-token budget, stratified by source x task type x
@@ -161,6 +164,55 @@ def stratified_groups(
     return set(select_groups(groups, tokens, budget, seed))
 
 
+def recipe_budget(
+    rows: list[dict[str, Any]],
+    native: dict[str, int],
+    pool_of: dict[str, str],
+    budget: int,
+    seed: str,
+    tolerance: float,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Whole recipe groups to a native-token budget, stratified by pool x source x
+    task type x language (a group's stratum is that of its first recipe row)."""
+    from v2.dec.build_template_s import group_rows, select_groups
+
+    groups = group_rows(rows)
+    keyed = {
+        g: [
+            {
+                "source": f"{pool_of[m[0]['id']]}|{m[0]['source']}",
+                "task_type": m[0]["task_type"],
+                "language": m[0]["language"],
+            }
+        ]
+        for g, m in groups.items()
+    }
+    tokens = {g: sum(native[r["id"]] for r in m) for g, m in groups.items()}
+    total = sum(tokens.values())
+    if budget >= total:
+        raise ValueError(f"recipe budget {budget} >= available {total} tokens")
+    chosen = set(select_groups(keyed, tokens, budget, seed))
+    kept = [r for r in rows if r["group_id"] in chosen]
+    realized = sum(tokens[g] for g in chosen)
+    if realized > budget * (1 + tolerance):
+        raise ValueError(
+            f"recipe budget overshoot {realized} > {budget} (+{tolerance})"
+        )
+    return kept, {
+        "budget_tokens": budget,
+        "tolerance": tolerance,
+        "seed": seed,
+        "available_rows": len(rows),
+        "available_groups": len(groups),
+        "available_native_tokens": total,
+        "strata": len({tuple(k[0].values()) for k in keyed.values()}),
+        "groups": len(chosen),
+        "rows": len(kept),
+        "native_tokens": realized,
+        "overshoot_tokens": realized - budget,
+    }
+
+
 def extra_component(
     component: dict[str, Any],
     seed: str,
@@ -240,6 +292,20 @@ def build(spec: dict[str, Any], roots: dict[str, Path], tokenizer: Path, workers
         raise ValueError("Recipe lists an id twice")
     rows: list[dict[str, Any]] = []
     stats: dict[str, Any] = {"recipe_rows": len(recipe), "pools": {}}
+    excluded_pools = spec.get("recipe_exclude_pools", [])
+    if excluded_pools:
+        unknown = sorted(set(excluded_pools) - set(by_pool))
+        if unknown:
+            raise ValueError(f"recipe_exclude_pools not in the recipe: {unknown}")
+        stats["recipe_excluded_pools"] = {
+            p: {
+                "rows": len(by_pool[p]),
+                "native_tokens": sum(e["native"] for e in by_pool[p]),
+            }
+            for p in sorted(excluded_pools)
+        }
+        for p in excluded_pools:
+            del by_pool[p]
     for pool, entries in sorted(by_pool.items()):
         available: dict[str, dict[str, Any]] = {}
         for entry in spec["pools"][pool]:
@@ -263,6 +329,17 @@ def build(spec: dict[str, Any], roots: dict[str, Path], tokenizer: Path, workers
             r["family"] in recipe_excluded for r in rows
         )
         rows = [r for r in rows if r["family"] not in recipe_excluded]
+    native = {e["id"]: e["native"] for e in recipe}
+    pool_of = {e["id"]: e["pool"] for e in recipe}
+    if "recipe_budget_tokens" in spec:
+        rows, stats["recipe_budget"] = recipe_budget(
+            rows,
+            native,
+            pool_of,
+            spec["recipe_budget_tokens"],
+            f"{spec['seed']}:recipe",
+            spec.get("recipe_budget_tolerance", 0.01),
+        )
     recipe_ids = {row["id"] for row in rows}
 
     teacher: dict[str, dict[str, Any]] = {}
@@ -285,11 +362,21 @@ def build(spec: dict[str, Any], roots: dict[str, Path], tokenizer: Path, workers
         check_teacher(row, teacher[row["id"]])
 
     blocked: set[str] = {row["input_sha256"] for row in rows}
-    for row in load_partition(verified(spec["a0_for_dedupe"], roots, inputs), "train"):
-        blocked.add(row["input_sha256"])
-        renumbering = row["audit_metadata"].get("option_key_renumbering") or {}
-        if renumbering.get("original_input_sha256"):
-            blocked.add(renumbering["original_input_sha256"])
+    stats["duplicate_input_rows"] = len(rows) - len(blocked)
+    a0_inputs: set[str] = set()
+    if "a0_for_dedupe" in spec:
+        a0_file = verified(spec["a0_for_dedupe"], roots, inputs)
+        for row in load_partition(a0_file, "train"):
+            a0_inputs.add(row["input_sha256"])
+            renumbering = row["audit_metadata"].get("option_key_renumbering") or {}
+            if renumbering.get("original_input_sha256"):
+                a0_inputs.add(renumbering["original_input_sha256"])
+        stats["rows_sharing_a0_input"] = sum(
+            r["input_sha256"] in a0_inputs for r in rows
+        )
+    elif "replay" in spec or spec.get("extras"):
+        raise ValueError("Replay / extras need a0_for_dedupe")
+    blocked |= a0_inputs
 
     components = (
         [{"name": "replay", **spec["replay"]}] if "replay" in spec else []
@@ -322,18 +409,33 @@ def build(spec: dict[str, Any], roots: dict[str, Path], tokenizer: Path, workers
     recipe_lengths = token_lengths(rows, tokenizer, workers)
     if max(recipe_lengths) > spec["max_length"]:
         raise ValueError("A recipe row exceeds max_length")
-    native = {e["id"]: e["native"] for e in recipe}
     stats["native_token_mismatches"] = sum(
         native[row["id"]] != length for row, length in zip(rows, recipe_lengths)
     )
     stats["recipe_tokens"] = sum(recipe_lengths)
+    stats["recipe_native_tokens"] = sum(native[r["id"]] for r in rows)
     stats["recipe_rows_by_type"] = dict(Counter(r["task_type"] for r in rows))
-    stats["recipe_tokens_by_type"] = dict(
-        sum(
-            (Counter({r["task_type"]: n}) for r, n in zip(rows, recipe_lengths)),
-            Counter(),
-        )
-    )
+    by_type: Counter = Counter()
+    by_pool_tokens: Counter = Counter()
+    by_pool_native: Counter = Counter()
+    for r, n in zip(rows, recipe_lengths):
+        by_type[r["task_type"]] += n
+        by_pool_tokens[pool_of[r["id"]]] += n
+        by_pool_native[pool_of[r["id"]]] += native[r["id"]]
+    stats["recipe_tokens_by_type"] = dict(by_type)
+    stats["recipe_token_share_by_type"] = {
+        t: round(n / stats["recipe_tokens"], 4) for t, n in sorted(by_type.items())
+    }
+    selected_by_pool = Counter(pool_of[r["id"]] for r in rows)
+    stats["recipe_selected_by_pool"] = {
+        p: {
+            "rows": selected_by_pool[p],
+            "native_tokens": by_pool_native[p],
+            "tokens": by_pool_tokens[p],
+        }
+        for p in sorted(selected_by_pool)
+    }
+    stats["recipe_languages"] = len({r["language"] for r in rows})
 
     train = sorted(rows + replay, key=lambda r: r["id"])
     if len({r["id"] for r in train}) != len(train):

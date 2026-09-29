@@ -1,0 +1,148 @@
+{
+  "checks": {
+    "covered_match": true,
+    "kept_matches": true,
+    "uncovered_only_in_dropped_pools": true
+  },
+  "drop_pools": [
+    "A7k",
+    "A7q",
+    "A7s",
+    "H6",
+    "V1:A6h"
+  ],
+  "expected_kept": 100079,
+  "input": {
+    "lines": 141261,
+    "path": "/data/dev2/runs/06b/m6/data/m6-cx.lux1.jsonl",
+    "sha256": "4be17f3874e0b80e5e7d1680b465241864e2b0f350b612b4277878984629ec74"
+  },
+  "kept_by_pool": {
+    "A0s-strict": 6547,
+    "A7g": 25512,
+    "A7h": 1029,
+    "A7i": 12255,
+    "A7m": 7168,
+    "A7o": 22922,
+    "A7p": 6367,
+    "A7r": 4706,
+    "V1:A1": 2969,
+    "V1:A2": 3619,
+    "V1:A3": 940,
+    "V1:A4v2h": 1203,
+    "V1:A5": 1525,
+    "V1:A6g": 3317
+  },
+  "mixtures": {
+    "m6-cx-s1.train.jsonl": {
+      "covered": 37698,
+      "covered_by_pool": {
+        "A0s-strict": 6547,
+        "A7g": 8494,
+        "A7h": 343,
+        "A7i": 4019,
+        "A7m": 2382,
+        "A7o": 7660,
+        "A7p": 2182,
+        "A7r": 1580,
+        "V1:A1": 983,
+        "V1:A2": 1201,
+        "V1:A3": 314,
+        "V1:A4v2h": 397,
+        "V1:A5": 504,
+        "V1:A6g": 1092
+      },
+      "covered_matches": true,
+      "expected_covered": 37698,
+      "rows": 51462,
+      "sha256": "ad925c379fe4f1c658087d99e88dcd4ac3cfdab372e999b592eb2f6c4e6186fc",
+      "uncovered": 13764,
+      "uncovered_by_pool": {
+        "A7k": 732,
+        "A7q": 7491,
+        "A7s": 4294,
+        "V1:A6h": 1247
+      },
+      "uncovered_only_in_dropped_pools": true
+    },
+    "m6-cx-s2.train.jsonl": {
+      "covered": 37693,
+      "covered_by_pool": {
+        "A0s-strict": 6547,
+        "A7g": 8522,
+        "A7h": 343,
+        "A7i": 4095,
+        "A7m": 2395,
+        "A7o": 7573,
+        "A7p": 2128,
+        "A7r": 1559,
+        "V1:A1": 993,
+        "V1:A2": 1221,
+        "V1:A3": 314,
+        "V1:A4v2h": 381,
+        "V1:A5": 509,
+        "V1:A6g": 1113
+      },
+      "covered_matches": true,
+      "expected_covered": 37693,
+      "rows": 51350,
+      "sha256": "420fd988f06c0fe5deb4aed72fcc71f3d2a2af414ccea2597d652679ad664489",
+      "uncovered": 13657,
+      "uncovered_by_pool": {
+        "A7k": 729,
+        "A7q": 7393,
+        "A7s": 4285,
+        "V1:A6h": 1250
+      },
+      "uncovered_only_in_dropped_pools": true
+    },
+    "m6-cx-s3.train.jsonl": {
+      "covered": 37782,
+      "covered_by_pool": {
+        "A0s-strict": 6547,
+        "A7g": 8496,
+        "A7h": 343,
+        "A7i": 4141,
+        "A7m": 2391,
+        "A7o": 7689,
+        "A7p": 2057,
+        "A7r": 1567,
+        "V1:A1": 993,
+        "V1:A2": 1197,
+        "V1:A3": 312,
+        "V1:A4v2h": 425,
+        "V1:A5": 512,
+        "V1:A6g": 1112
+      },
+      "covered_matches": true,
+      "expected_covered": 37782,
+      "rows": 51543,
+      "sha256": "9131be73edce1e3ba79a9b91adcff7807035e12352545fbbfd3b5e0e44178aa5",
+      "uncovered": 13761,
+      "uncovered_by_pool": {
+        "A7k": 729,
+        "A7q": 7510,
+        "A7s": 4281,
+        "V1:A6h": 1241
+      },
+      "uncovered_only_in_dropped_pools": true
+    }
+  },
+  "output": {
+    "lines": 100079,
+    "path": "/data/dev2/runs/06b/m7/data/m7-cx.lux1.jsonl",
+    "sha256": "2431d46c049da4b6cfdc0d08c468bb35aca8baf9828550b3699eb0144c091ba6"
+  },
+  "pass": true,
+  "recipes": {
+    "/data/dev2/runs/06b/m6/data/inputs/recipes/cx-xl-r2-a7v1-full.ids.jsonl": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2"
+  },
+  "removed_by_pool": {
+    "A7k": 2190,
+    "A7q": 22394,
+    "A7s": 12860,
+    "V1:A6h": 3738
+  },
+  "removed_lines": 41182,
+  "tool": "v2.06b.m7_teacher"
+}

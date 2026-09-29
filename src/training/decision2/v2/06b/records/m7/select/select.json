@@ -1,0 +1,345 @@
+{
+  "best_eligible_Q": 48.121884612491606,
+  "candidates": [
+    {
+      "B-D1": {
+        "checks": {
+          "delta_vs_majority_lower_bound_gt_0": true,
+          "top_share_le_0.90": true
+        },
+        "chk5": {
+          "accuracy": 0.3974571586511885,
+          "delta_vs_majority": 0.1818684355997789,
+          "delta_vs_majority_ci95": [
+            0.1498065229408513,
+            0.21393034825870647
+          ],
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "n": 1809,
+          "predicted_distribution": {
+            "0": 448,
+            "1": 238,
+            "2": 257,
+            "3": 258,
+            "4": 608
+          },
+          "top_share": 0.33609729132117194,
+          "top_value": "4"
+        },
+        "devcheck": "/data/dev2/runs/06b/m7/post/chk/m7-mx-soup/devcheck.json",
+        "pass": true,
+        "state_sha256": "5d2420b1e66b853ab8e0e33b21931e1086848995da7f57bb774f5ac4b5651593"
+      },
+      "H3": 0.4001236766579623,
+      "H_pilot": 0.33076272954544444,
+      "P": 43.75259189172979,
+      "Q": 48.121884612491606,
+      "T_dev": 0.57875,
+      "cal_noul": {
+        "accuracy": 0.9448275862068966,
+        "correct": 274,
+        "n": 290
+      },
+      "eligible": true,
+      "guards": {
+        "cal_noul_ge_085": true,
+        "choice_ge_255": true,
+        "score_ge_101": true,
+        "score_modal_le_090": true,
+        "select_noul_ge_085": true
+      },
+      "guards_failed": [],
+      "guards_pass": true,
+      "in_distribution_source": "SOUP.json",
+      "ingredients": [
+        "m7-mx-s1",
+        "m7-mx-s2",
+        "m7-mx-s3"
+      ],
+      "name": "m7-mx-soup",
+      "pilot_tasks": {
+        "discourse": 0.3208033378303764,
+        "implicit_hate": 0.33076272954544444,
+        "semeval_stance": 0.548804962598066
+      },
+      "roles": [
+        "family soup",
+        "family artifact"
+      ],
+      "score_level_counts": {
+        "0": 180,
+        "1": 99,
+        "2": 121
+      },
+      "score_modal_share": 0.45,
+      "select_noul": {
+        "accuracy": 0.9103448275862069,
+        "correct": 264,
+        "n": 290
+      },
+      "typed": {
+        "choice": 487,
+        "noul": 210,
+        "score": 229
+      },
+      "typed_n": {
+        "choice": 800,
+        "noul": 400,
+        "score": 400
+      }
+    },
+    {
+      "B-D1": {
+        "checks": {
+          "delta_vs_majority_lower_bound_gt_0": true,
+          "top_share_le_0.90": true
+        },
+        "chk5": {
+          "accuracy": 0.33499170812603646,
+          "delta_vs_majority": 0.11940298507462686,
+          "delta_vs_majority_ci95": [
+            0.08678828081813156,
+            0.15035931453841903
+          ],
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "n": 1809,
+          "predicted_distribution": {
+            "0": 639,
+            "1": 205,
+            "2": 267,
+            "3": 158,
+            "4": 540
+          },
+          "top_share": 0.35323383084577115,
+          "top_value": "0"
+        },
+        "devcheck": "/data/dev2/runs/06b/m7/post/chk/m7-cx-soup/devcheck.json",
+        "pass": true,
+        "state_sha256": "80e9fecfabc8dbd611de101b1a5977230a6ef2da16cdc950f19da4b289cd460f"
+      },
+      "H3": 0.3939575820375527,
+      "H_pilot": 0.3244683972729759,
+      "P": 39.20674727748686,
+      "Q": 43.20155141777788,
+      "T_dev": 0.47375,
+      "cal_noul": {
+        "accuracy": 0.9310344827586207,
+        "correct": 270,
+        "n": 290
+      },
+      "eligible": true,
+      "guards": {
+        "cal_noul_ge_085": true,
+        "choice_ge_255": true,
+        "score_ge_101": true,
+        "score_modal_le_090": true,
+        "select_noul_ge_085": true
+      },
+      "guards_failed": [],
+      "guards_pass": true,
+      "in_distribution_source": "SOUP.json",
+      "ingredients": [
+        "m7-cx-s1",
+        "m7-cx-s2",
+        "m7-cx-s3"
+      ],
+      "name": "m7-cx-soup",
+      "pilot_tasks": {
+        "discourse": 0.3244683972729759,
+        "implicit_hate": 0.29893405620001334,
+        "semeval_stance": 0.558470292639669
+      },
+      "roles": [
+        "family soup",
+        "family artifact"
+      ],
+      "score_level_counts": {
+        "0": 118,
+        "1": 49,
+        "2": 233
+      },
+      "score_modal_share": 0.5825,
+      "select_noul": {
+        "accuracy": 0.9172413793103448,
+        "correct": 266,
+        "n": 290
+      },
+      "typed": {
+        "choice": 355,
+        "noul": 208,
+        "score": 195
+      },
+      "typed_n": {
+        "choice": 800,
+        "noul": 400,
+        "score": 400
+      }
+    },
+    {
+      "B-D1": {
+        "checks": {
+          "delta_vs_majority_lower_bound_gt_0": true,
+          "top_share_le_0.90": true
+        },
+        "chk5": {
+          "accuracy": 0.3598673300165838,
+          "delta_vs_majority": 0.14427860696517414,
+          "delta_vs_majority_ci95": [
+            0.11166390270867883,
+            0.1752349364289663
+          ],
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "n": 1809,
+          "predicted_distribution": {
+            "0": 474,
+            "1": 230,
+            "2": 316,
+            "3": 215,
+            "4": 574
+          },
+          "top_share": 0.31730237700386954,
+          "top_value": "4"
+        },
+        "devcheck": "/data/dev2/runs/06b/m7/post/chk/m7-mxcx-soup/devcheck.json",
+        "pass": true,
+        "state_sha256": "e5189a2342a9fb462ea8963206d5aee0c63dfaf5ef60edeaeef9514934e09466"
+      },
+      "H3": 0.41365662242438145,
+      "H_pilot": 0.3377162706603527,
+      "P": 43.049018981257696,
+      "Q": 47.643894840302394,
+      "T_dev": 0.54875,
+      "cal_noul": {
+        "accuracy": 0.9344827586206896,
+        "correct": 271,
+        "n": 290
+      },
+      "eligible": true,
+      "guards": {
+        "cal_noul_ge_085": true,
+        "choice_ge_255": true,
+        "score_ge_101": true,
+        "score_modal_le_090": true,
+        "select_noul_ge_085": true
+      },
+      "guards_failed": [],
+      "guards_pass": true,
+      "in_distribution_source": "SOUP.json",
+      "ingredients": [
+        "m7-mx-s1",
+        "m7-mx-s2",
+        "m7-mx-s3",
+        "m7-cx-s1",
+        "m7-cx-s2",
+        "m7-cx-s3"
+      ],
+      "name": "m7-mxcx-soup",
+      "pilot_tasks": {
+        "discourse": 0.3377162706603527,
+        "implicit_hate": 0.3307642616221959,
+        "semeval_stance": 0.5724893349905958
+      },
+      "roles": [
+        "cross soup"
+      ],
+      "score_level_counts": {
+        "0": 142,
+        "1": 74,
+        "2": 184
+      },
+      "score_modal_share": 0.46,
+      "select_noul": {
+        "accuracy": 0.9137931034482759,
+        "correct": 265,
+        "n": 290
+      },
+      "typed": {
+        "choice": 450,
+        "noul": 209,
+        "score": 219
+      },
+      "typed_n": {
+        "choice": 800,
+        "noul": 400,
+        "score": 400
+      }
+    }
+  ],
+  "cross": "m7-mxcx-soup",
+  "cross_note": null,
+  "eligible_by_Q": [
+    "m7-mx-soup",
+    "m7-mxcx-soup",
+    "m7-cx-soup"
+  ],
+  "families": [
+    {
+      "artifact": "m7-mx-soup",
+      "artifact_is_soup": true,
+      "excluded_seeds": [],
+      "median_ambiguous": false,
+      "median_seed": "m7-mx-s1",
+      "rule": "soup if Q(soup) >= seed-mean Q, else the median-Q seed",
+      "seed_Q": {
+        "m7-mx-s1": 40.088405429169285,
+        "m7-mx-s2": 38.36807709203477,
+        "m7-mx-s3": 42.67689807078535
+      },
+      "seed_mean_Q": 40.37779353066313,
+      "seed_sd_Q": 2.1689383720370987,
+      "seeds": [
+        "m7-mx-s1",
+        "m7-mx-s2",
+        "m7-mx-s3"
+      ],
+      "soup": "m7-mx-soup",
+      "soup_Q": 48.121884612491606
+    },
+    {
+      "artifact": "m7-cx-soup",
+      "artifact_is_soup": true,
+      "excluded_seeds": [],
+      "median_ambiguous": false,
+      "median_seed": "m7-cx-s1",
+      "rule": "soup if Q(soup) >= seed-mean Q, else the median-Q seed",
+      "seed_Q": {
+        "m7-cx-s1": 40.03957132586603,
+        "m7-cx-s2": 40.12396206254621,
+        "m7-cx-s3": 37.66693455420743
+      },
+      "seed_mean_Q": 39.27682264753989,
+      "seed_sd_Q": 1.3948423580819356,
+      "seeds": [
+        "m7-cx-s1",
+        "m7-cx-s2",
+        "m7-cx-s3"
+      ],
+      "soup": "m7-cx-soup",
+      "soup_Q": 43.20155141777788
+    }
+  ],
+  "finalists": [
+    {
+      "name": "m7-mxcx-soup",
+      "reason": "order 1: the cross soup is eligible"
+    },
+    {
+      "name": "m7-mx-soup",
+      "reason": "order 2: highest-Q other eligible candidate, 0.00 Q below the best eligible (band 8.0)"
+    }
+  ],
+  "label": "development readout (never a release score)",
+  "prereg": "v2/06b/records/m7-prereg-2026-09-29.md sections 2.3 and 2.4",
+  "rules": {
+    "B-D1": "uncorrected CHK_5 modal share <= .90 and paired bootstrap 95% lower bound of accuracy - always-majority > 0 (m7_scorebias devcheck)",
+    "Q": "100*sqrt(T_dev*H3), H3 = CSS-pilot three-task mean",
+    "family_artifact": "soup if Q(soup) >= seed-mean Q, else the median-Q seed",
+    "guard": "typed-DEV Choice >= 255, Score >= 101, modal Score share <= .90, SELECT and CAL Noul >= .85 (m6_select, modal90)",
+    "order": "cross soup first if eligible; then the highest-Q other eligible candidate within 8.0 Q of the best eligible; at most 2"
+  },
+  "schema": "dev2-06b-m7-select/1",
+  "verdict": "2 finalist(s)"
+}

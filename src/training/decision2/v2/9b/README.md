@@ -23,3 +23,23 @@ mlx-diag source guard, isolation). Node-side wrappers in `lux9b/m3/`:
 readouts), `soup.sh` (seed soups and interpolations), `score.sh` (development
 readout), `formal.sh` (16K post-key runs against the Lux1 comparators), and the
 `wave*.sh` drivers that launched each wave.
+
+Milestone 4 (arm D's full fine-tuning on the XL r2 recipe): the same builder
+takes `recipe_exclude_pools` and `recipe_budget_tokens` (whole groups,
+stratified by pool x source x task type x language, seed `<seed>:recipe`,
+strict own-Lux coverage of every selected row). Specs
+`m4-k-xl-r2-60m.json` (all pools) and `m4-kn-xl-r2-nohum-60m.json` (without
+A7q / H1 / H8), 60M native tokens each. Node-side wrappers in `lux9b/m4/`
+(run root `/data/dev2/runs/9b/m4`, the M3 root mounted read-only as `/m3`,
+own training autotune cache copied once from M3): `data.sh`, `arm.sh`
+(`--kl W` strict teacher or `--no-teacher`), `readout.sh` / `soup.sh` /
+`interp.sh` / `lux_readout.sh` (CAL698 + development predictions at 16,384
+tokens; soups accept repeated members for rational weights), `score.sh` and
+`formal.sh` (runs under `formal-m4`, one copy of the frozen `formal-m3` cache).
+GPU time: `python3 lux9b/m3/gpu_hours.py /data/dev2/runs/9b/m4 /data/dev2/runs/9b/formal-m4`.
+`chain-step.sh` runs one hand-launched chain step (node B GPU0–2, or a node-A
+GPU whose chain driver was stopped) with the chain drivers' lease and log
+conventions (prereg amendment 2). `lux9b/m4_rules.py` (`seed` / `alpha`,
+tests `tests/test_m4_rules.py`) applies the preregistered seed, alpha and
+proxy-drop rules to the development readouts, with exact rational floors
+(prereg amendment 3).

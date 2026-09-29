@@ -1,0 +1,1 @@
+{"run":"m7-cx-s1-preflight","gpu":1,"render":"/dev/dri/renderD137","commit":"1c726e4a828c6d590f105966abd4989e04a7e3f5-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-29T00:59:17Z","end_utc":"2026-09-29T01:00:16Z","wall_seconds":59,"gpu_hours":0.01639,"exit":0}

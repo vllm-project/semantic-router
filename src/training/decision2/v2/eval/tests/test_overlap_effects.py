@@ -8,6 +8,7 @@ import statistics
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from benchmark.generate import FINAL_FAMILIES
 from jev_arena import compare_v3
@@ -602,6 +603,112 @@ class ExposureTest(unittest.TestCase):
         self.assertEqual(
             sum(len(u) for _f, u in units),
             sum(r["task"] == task for r in cgold.values()) - len(flagged_css),
+        )
+
+    def test_panels_without_mlx_diag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rows = {
+                "typed-final": {"id": "td_1", "family": "evidence_join"},
+                "css15": {"id": "css/ibc/1", "task": "ibc", "role": "evaluation"},
+                "public231": {"id": "hard-x-1", "tier": "hard"},
+            }
+            for panel, row in rows.items():
+                path = oe.panels.path(root, panel, "gold")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(row) + "\n")
+            (root / "mlx").mkdir()
+            (root / "mlx" / "gold.jsonl").write_text('{"id": "m1"}\n')
+            with mock.patch.object(oe.panels, "verify"):
+                gold = oe.load_panels(root, None)
+                with self.assertRaisesRegex(ValueError, "differs from the frozen"):
+                    oe.load_panels(root, root / "mlx")
+        self.assertIsNone(gold["mlx-diag"])
+        self.assertIsNone(gold["mlx-prompts"])
+        self.assertEqual(
+            gold["sha256"]["mlx-diag"],
+            oe.panels.DEVELOPMENT["mlx-diag"]["gold_sha256"],
+        )
+        self.assertEqual(list(gold["css15"]), ["css/ibc/1"])
+        with self.assertRaisesRegex(ValueError, "needs the spec's mlx_panel"):
+            oe.load_model("m", {"run": "/nonexistent", "mlx_run": "/x"}, gold)
+        exclude = {panel: set() for panel in oe.SCORED_PANELS}
+        exclude["mlx-diag"] = {"m1"}
+        with tempfile.TemporaryDirectory() as tmp:
+            receipt = Path(tmp) / "exposure.json"
+            receipt.write_text(
+                json.dumps(
+                    {
+                        "groups": ["g-a"],
+                        "files": [],
+                        "groups_by_pool": {"H3": 1},
+                        "methods_agree": True,
+                    }
+                )
+            )
+            with self.assertRaisesRegex(ValueError, "exposed mlx-diag items"):
+                oe.tier_exposure(
+                    [str(receipt)],
+                    {"candidate": "cand"},
+                    {},
+                    gold,
+                    exclude,
+                    {"m1": ["g-a"]},
+                )
+
+    def test_tier_without_own_1_0_takes_threshold_from_peers(self):
+        cfg = {
+            "candidate": "cand",
+            "own_1_0": [],
+            "peers": ["p1", "p2"],
+            "threshold_pool": ["p1", "p2"],
+        }
+        self.assertEqual(
+            [pair["right"] for pair in oe.pairs_from_tiers({"t": cfg})], ["p1", "p2"]
+        )
+
+        def value(v3, h):
+            return {
+                "v3": v3,
+                "H": h,
+                "tasks": {"media_ideology": h},
+                "public231": {"correct": 1},
+                "mlx": None,
+            }
+
+        variant_values = {
+            "full": {
+                "cand": value(67.0, 0.57),
+                "p1": value(72.0, 0.59),
+                "p2": value(69.0, 0.59),
+            },
+            "reduced": {
+                "cand": value(67.1, 0.57),
+                "p1": value(72.1, 0.59),
+                "p2": value(69.0, 0.59),
+            },
+        }
+        h_ci = {"delta": {"low": -0.04, "high": 0.05}}
+        out_pairs = {
+            oe.pair_key("cand", peer): {
+                "v3": {
+                    variant: {"axis_ci95": {"H": h_ci}}
+                    for variant in ("full", "reduced")
+                },
+                "ci_status": {},
+            }
+            for peer in ("p1", "p2")
+        }
+        summary = oe.tier_summary(cfg, variant_values, out_pairs, "media_ideology")
+        for variant, best_v3 in (("full", 72.0), ("reduced", 72.1)):
+            rules = summary["rules"][variant]
+            self.assertEqual(rules["best_peer"], "p1")
+            self.assertAlmostEqual(rules["threshold_v3"], 0.9 * best_v3)
+            self.assertTrue(rules["meets_threshold"])
+            self.assertEqual(rules["v3_vs_own_1_0"], {})
+            self.assertFalse(rules["H_significantly_below_best_peer"])
+        self.assertEqual(
+            oe.conclusion_changes(out_pairs, {"t": summary}, "reduced"), []
         )
 
 

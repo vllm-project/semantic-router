@@ -1,0 +1,14 @@
+{
+  "family": "m7-cx",
+  "queue_status": {
+    "m7-cx-s1": "COMPLETE (readout written)",
+    "m7-cx-s2": "COMPLETE (readout written)",
+    "m7-cx-s3": "COMPLETE (readout written)"
+  },
+  "complete": [
+    "m7-cx-s1",
+    "m7-cx-s2",
+    "m7-cx-s3"
+  ],
+  "dropped": false
+}
