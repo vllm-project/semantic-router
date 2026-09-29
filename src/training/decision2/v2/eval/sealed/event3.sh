@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# JevArena-C1 scoring event 3 (the last of three) on item set v1.2, node A.
+# JevArena-C1 scoring event 3 (the last of three) on item set v1.3, node A.
 # Usage (on node A, from an exact mirror; in event mode the key arrives once on stdin):
 #   event3.sh --gpu N --src MIRROR [--c27 f1|f2] --c9b-package DIR --c9b-manifest SHA
 #             [--scan-verdict-sha SHA (event mode)]
@@ -18,13 +18,13 @@
 # --preflight-only: also every model's smoke on the GPU (the first 80 prompts of typed FINAL and of
 #   public 231, so every decision type) with its parity check against the stored formal run; stdin is
 #   closed, the key is never read, and neither the sealed directory nor the event directory is touched.
-# Event mode: the pinned v1.2 retired list and the custodian's PASS rescan verdict (c1-rescan.sh;
+# Event mode: the pinned retired list of the item set and the custodian's PASS rescan verdict (c1-rescan.sh;
 # --scan-verdict-sha pins the file, and it must name this retired list and these protected rows) are
 # required first; then the same verification and smokes (a failure leaves C1 untouched and the event
 # unused), the stored event-2 seals are checked, the key is read, the event directory is created
 # (event 3 is used from here), prompts are decrypted, every model is collected on all 2,874 prompts,
 # all predictions are sealed, prompts are removed, gold is decrypted to a private temp dir, and every
-# collected and stored model is scored and paired on item set v1.2 (the retired candidates' items
+# collected and stored model is scored and paired on the item set (the retired candidates' items
 # dropped). Plaintext is removed on any exit. Each runner job writes only the named lease entry.
 set -uo pipefail
 umask 077
@@ -68,10 +68,10 @@ PROMPTS_SHA=0b29686f60c980f3fbc8a03b88537fc0bf90ee967afa67d4fe0c958b1bfde16a
 GOLD_SHA=c02777713c0e58b40cf602947433420744b2765465252ce22d692eb676ca4fe1
 BUNDLE_SHA=d924389a7ffc3d852d9204c3dfca1c12c32f82685a7e5c65277ba9980110534f
 E=/data/dev2/runs/eval/m4/c1-event3
-ITEM_SET=v1.2
-RETIRED=$C1/v1_2/RETIRED-v1_2.json
-RETIRED_SHA=bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a
-SCAN_VERDICT=/data/dev2/runs/eval/m4/c1-rescan-v1_2/SCAN-VERDICT.json
+ITEM_SET=v1.3
+RETIRED=$C1/v1_3/RETIRED-v1_3.json
+RETIRED_SHA=62fccb3dd66c7fcae4aba3a274eef43896963cdafa19bb33c894150ef90897f3
+SCAN_VERDICT=/data/dev2/runs/eval/m4/c1-rescan-v1_3/SCAN-VERDICT.json
 PROTECTED_SHA=36797f509bd96c3cb703df37cc48114c9bbdf0d2241802e56262139f4bef0a1a
 P="/data/dev2/runs/eval/m4/c1-event3-preflight/$MODE-$(date -u +%Y%m%dT%H%M%SZ)"
 PLAN="$P/PLAN.json"
