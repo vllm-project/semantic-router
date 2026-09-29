@@ -1,0 +1,320 @@
+{
+  "candidates": [
+    {
+      "H3": 0.38550010349733244,
+      "H_pilot": 0.3188362618567685,
+      "P": 32.74273859183718,
+      "Q": 36.00339009051481,
+      "T_dev": 0.33625,
+      "cal_noul": {
+        "accuracy": 0.9413793103448276,
+        "correct": 273,
+        "n": 290
+      },
+      "collapse_stopped": false,
+      "contains_new_family": false,
+      "finalist_eligible": false,
+      "guards": {
+        "cal_noul_ge_085": true,
+        "choice_ge_255": true,
+        "score_ge_101": true,
+        "score_levels_ge_3": false,
+        "select_noul_ge_085": true
+      },
+      "guards_failed": [
+        "score_levels_ge_3"
+      ],
+      "guards_pass": false,
+      "in_distribution_source": "SOUP.json",
+      "ingredients": [
+        "m4-t-a7-s1",
+        "m4-t-a7-s2",
+        "m4-t-a7-s3"
+      ],
+      "name": "m4-t-a7-soup",
+      "pilot_tasks": {
+        "discourse": 0.2984678131410807,
+        "implicit_hate": 0.3188362618567685,
+        "semeval_stance": 0.5391962354941482
+      },
+      "readout_dir": "/data/dev2/runs/06b/m1/arms/m4-t-a7-soup/readout",
+      "score_level_counts": {
+        "0": 384,
+        "2": 16
+      },
+      "score_levels": 2,
+      "select_noul": {
+        "accuracy": 0.9206896551724137,
+        "correct": 267,
+        "n": 290
+      },
+      "typed": {
+        "choice": 255,
+        "noul": 182,
+        "score": 101
+      },
+      "typed_n": {
+        "choice": 800,
+        "noul": 400,
+        "score": 400
+      }
+    },
+    {
+      "H3": 0.33464474221885093,
+      "H_pilot": 0.341786411793267,
+      "P": 39.67812570324783,
+      "Q": 39.26139762980404,
+      "T_dev": 0.460625,
+      "cal_noul": {
+        "accuracy": 0.9275862068965517,
+        "correct": 269,
+        "n": 290
+      },
+      "collapse_stopped": false,
+      "contains_new_family": false,
+      "finalist_eligible": false,
+      "guards": {
+        "cal_noul_ge_085": true,
+        "choice_ge_255": true,
+        "score_ge_101": true,
+        "score_levels_ge_3": false,
+        "select_noul_ge_085": true
+      },
+      "guards_failed": [
+        "score_levels_ge_3"
+      ],
+      "guards_pass": false,
+      "in_distribution_source": "SOUP.json",
+      "ingredients": [
+        "m4-v2-s1",
+        "m4-v2-s2",
+        "m4-v2-s3"
+      ],
+      "name": "m4-v2-soup",
+      "pilot_tasks": {
+        "discourse": 0.341786411793267,
+        "implicit_hate": 0.35003690989523784,
+        "semeval_stance": 0.31211090496804783
+      },
+      "readout_dir": "/data/dev2/runs/06b/m1/arms/m4-v2-soup/readout",
+      "score_level_counts": {
+        "0": 219,
+        "1": 181
+      },
+      "score_levels": 2,
+      "select_noul": {
+        "accuracy": 0.9103448275862069,
+        "correct": 264,
+        "n": 290
+      },
+      "typed": {
+        "choice": 385,
+        "noul": 241,
+        "score": 111
+      },
+      "typed_n": {
+        "choice": 800,
+        "noul": 400,
+        "score": 400
+      }
+    },
+    {
+      "H3": 0.42691354236129636,
+      "H_pilot": 0.32653976871783075,
+      "P": 35.399101153202686,
+      "Q": 40.47568058490771,
+      "T_dev": 0.38375,
+      "cal_noul": {
+        "accuracy": 0.9344827586206896,
+        "correct": 271,
+        "n": 290
+      },
+      "collapse_stopped": false,
+      "contains_new_family": false,
+      "finalist_eligible": false,
+      "guards": {
+        "cal_noul_ge_085": true,
+        "choice_ge_255": false,
+        "score_ge_101": true,
+        "score_levels_ge_3": true,
+        "select_noul_ge_085": true
+      },
+      "guards_failed": [
+        "choice_ge_255"
+      ],
+      "guards_pass": false,
+      "in_distribution_source": "SOUP.json",
+      "ingredients": [
+        "m5-a-s1",
+        "m5-a-s2",
+        "m5-a-s3"
+      ],
+      "name": "m5-a-soup",
+      "pilot_tasks": {
+        "discourse": 0.32653976871783075,
+        "implicit_hate": 0.32021052728509336,
+        "semeval_stance": 0.6339903310809648
+      },
+      "readout_dir": "/data/dev2/runs/06b/m1/arms/m5-a-soup/readout",
+      "score_level_counts": {
+        "0": 284,
+        "1": 7,
+        "2": 109
+      },
+      "score_levels": 3,
+      "select_noul": {
+        "accuracy": 0.9137931034482759,
+        "correct": 265,
+        "n": 290
+      },
+      "typed": {
+        "choice": 254,
+        "noul": 195,
+        "score": 165
+      },
+      "typed_n": {
+        "choice": 800,
+        "noul": 400,
+        "score": 400
+      }
+    },
+    {
+      "H3": 0.38602604195703244,
+      "H_pilot": 0.3331616214123267,
+      "P": 37.29543898919094,
+      "Q": 40.14546954726785,
+      "T_dev": 0.4175,
+      "cal_noul": {
+        "accuracy": 0.9206896551724137,
+        "correct": 267,
+        "n": 290
+      },
+      "collapse_stopped": false,
+      "contains_new_family": false,
+      "finalist_eligible": false,
+      "guards": {
+        "cal_noul_ge_085": true,
+        "choice_ge_255": true,
+        "score_ge_101": true,
+        "score_levels_ge_3": true,
+        "select_noul_ge_085": true
+      },
+      "guards_failed": [],
+      "guards_pass": true,
+      "in_distribution_source": "SOUP.json",
+      "ingredients": [
+        "m4-t-a7-s1",
+        "m4-t-a7-s2",
+        "m4-t-a7-s3",
+        "m4-v2-s1",
+        "m4-v2-s2",
+        "m4-v2-s3"
+      ],
+      "name": "m5-x-soup",
+      "pilot_tasks": {
+        "discourse": 0.3331616214123267,
+        "implicit_hate": 0.3311727173816502,
+        "semeval_stance": 0.4937437870771204
+      },
+      "readout_dir": "/data/dev2/runs/06b/m1/arms/m5-x-soup/readout",
+      "score_level_counts": {
+        "0": 368,
+        "1": 2,
+        "2": 30
+      },
+      "score_levels": 3,
+      "select_noul": {
+        "accuracy": 0.9137931034482759,
+        "correct": 265,
+        "n": 290
+      },
+      "typed": {
+        "choice": 357,
+        "noul": 197,
+        "score": 114
+      },
+      "typed_n": {
+        "choice": 800,
+        "noul": 400,
+        "score": 400
+      }
+    },
+    {
+      "H3": 0.40187597202622066,
+      "H_pilot": 0.3356598618504267,
+      "P": 38.918698932518936,
+      "Q": 42.584801558400166,
+      "T_dev": 0.45125000000000004,
+      "cal_noul": {
+        "accuracy": 0.9275862068965517,
+        "correct": 269,
+        "n": 290
+      },
+      "collapse_stopped": false,
+      "contains_new_family": false,
+      "finalist_eligible": false,
+      "guards": {
+        "cal_noul_ge_085": true,
+        "choice_ge_255": true,
+        "score_ge_101": true,
+        "score_levels_ge_3": true,
+        "select_noul_ge_085": true
+      },
+      "guards_failed": [],
+      "guards_pass": true,
+      "in_distribution_source": "SOUP.json",
+      "ingredients": [
+        "m4-t-a7-s1",
+        "m4-t-a7-s2",
+        "m4-t-a7-s3",
+        "m4-v2-s1",
+        "m4-v2-s2",
+        "m4-v2-s3",
+        "m5-a-s1",
+        "m5-a-s2",
+        "m5-a-s3"
+      ],
+      "name": "m5-z-soup",
+      "pilot_tasks": {
+        "discourse": 0.33548278679127963,
+        "implicit_hate": 0.3356598618504267,
+        "semeval_stance": 0.5344852674369558
+      },
+      "readout_dir": "/data/dev2/runs/06b/m1/arms/m5-z-soup/readout",
+      "score_level_counts": {
+        "0": 323,
+        "1": 3,
+        "2": 74
+      },
+      "score_levels": 3,
+      "select_noul": {
+        "accuracy": 0.9137931034482759,
+        "correct": 265,
+        "n": 290
+      },
+      "typed": {
+        "choice": 358,
+        "noul": 206,
+        "score": 158
+      },
+      "typed_n": {
+        "choice": 800,
+        "noul": 400,
+        "score": 400
+      }
+    }
+  ],
+  "finalist_ref_Q": 42.584801558400166,
+  "guard_passing_by_Q": [
+    "m5-z-soup",
+    "m5-x-soup"
+  ],
+  "label": "development readout (never a release score)",
+  "rules": {
+    "P": "100*sqrt(T_dev*H_pilot)",
+    "Q": "100*sqrt(T_dev*H3)",
+    "finalist": "contains m6-cx/m6-mx, guards pass, Q >= Q(m5-z-soup) - 4.0",
+    "guards": "Choice >= 255, Score >= 101, >= 3 Score levels, SELECT and CAL Noul >= 0.85"
+  },
+  "schema": "dev2-06b-m6-select-table/1"
+}

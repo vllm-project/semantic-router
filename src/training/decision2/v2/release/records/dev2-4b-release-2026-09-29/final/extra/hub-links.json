@@ -1,0 +1,167 @@
+{
+  "checked": 17,
+  "failed": [],
+  "links": [
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "20d60396cd5f024f2bf5b9551ca70bead484848d2dfac7d97af4b89d8772d140",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/DEV2.0-4B-owl-banner.png"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": true,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/collections/llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00"
+    },
+    {
+      "image": false,
+      "kind": "anchor",
+      "ok": true,
+      "source": "README.md",
+      "target": "#download-and-decide"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "63fa9556e6d28b38dd38845fdc3506b50aed82ed59575f649b40b0fe08b20b91",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevarena-v3-rank.svg"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "3f53f0917227f5e57c99b4b5598081a15f937ae34897a75987b7d2dc596a507f",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevarena-v3-model-task.svg"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "179bb14a39537f446325c1f3b54b5fac4c6c91408d624360321ae1990d94daa6",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevbench-public231-rank.svg"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "9303de3aa93a6fa3ff487e46307e2dbbe9dcb8a11efe48da29f9755870c24a66",
+      "source": "README.md",
+      "status": 200,
+      "target": "evaluation/EVALUATION.md"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.5-4B"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "b80485366eeeaa914707746ed13e8684ba038f7b61872eb7989b14db2d40c169",
+      "source": "README.md",
+      "status": 200,
+      "target": "ATTRIBUTIONS.md"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a",
+      "source": "README.md",
+      "status": 200,
+      "target": "LICENSE"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "1ab03b9cd24d8dba2f243c4b15c92f852573930a6ecb4f766adbff8c175dc00e",
+      "source": "README.md",
+      "status": 200,
+      "target": "NOTICE"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "ATTRIBUTIONS.md",
+      "status": 200,
+      "target": "https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B"
+    },
+    {
+      "image": false,
+      "kind": "external",
+      "ok": true,
+      "source": "ATTRIBUTIONS.md",
+      "status": 200,
+      "target": "https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/blob/cde2a68dbaa557ea65dc458104d410a0802ee259/ATTRIBUTIONS.md"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "ATTRIBUTIONS.md",
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.5-4B"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "ATTRIBUTIONS.md",
+      "status": 200,
+      "target": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B"
+    }
+  ],
+  "passed": true,
+  "rendered_page": {
+    "banner_referenced": false,
+    "bytes": 0,
+    "status": 401,
+    "title_present": false
+  },
+  "repo": "llm-semantic-router/DEV2.0-4B",
+  "revision": "452f133211de292a87bc29ab7e24a3bd0704e40d",
+  "schema": "dev2-hub-links/1",
+  "utc": "2026-09-29T01:08:44.883775+00:00"
+}

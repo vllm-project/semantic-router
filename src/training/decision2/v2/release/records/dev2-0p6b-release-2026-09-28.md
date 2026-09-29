@@ -1,5 +1,17 @@
 # DEV2.0-0.6B: private build, upload and verification (2026-09-28)
 
+## Erratum, 2026-09-29 ≈08:25 UTC+8: cited staging revisions no longer exist
+
+Four storage cleanups on 2026-09-29 (decoder M3 at 02:15 and 02:32, release at 04:47, decoder M4 at 04:51 UTC+8)
+called `permanently_delete_lfs_files` with its huggingface_hub 1.33 default `rewrite_history=True`, which rewrote every
+commit of the staging repositories they touched. The staging revisions `545a6784`, `784a894f` and `16c0929a`
+(`dev2-dec-staging`), `62c61c10` (`dev2-release-staging-06bm4`) and `5afd8fc8` (`dev2-release-staging`) no longer
+exist. This record's citations of `dev2-release-staging-06bm4@62c61c10…` ("Update 23:50" and "2. Package") are among
+them. Artifact identity rests on the per-file SHA-256 in each package's `MODEL_MANIFEST.json` plus the verified node
+copies, not on those staging revision IDs. The released repository was not rewritten: `7b5d3ff2`, `a87eeb72`,
+`e61b2b44` and `99c4e799` still resolve (Hub check, 2026-09-29 ≈08:20 UTC+8). Details:
+[storage steward record](hf-storage-steward-2026-09-29.md) §4.
+
 ## Final release, 2026-09-29 ≈02:11 UTC+8 — revision `99c4e799`, in the private "Decision 2.0" collection
 
 The coordinator approved the release at 02:05 UTC+8 (full-autonomy mandate) after JevArena-C1 event 2

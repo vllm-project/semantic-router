@@ -4,6 +4,8 @@
         [--expect-groups N] --output FLAGGED [--payload-output GROUPS]
     python3 -m v2.eval.overlap_effects exposure --groups GROUPS --train FILE|- [--train ...] \
         [--expect-sha256 SHA ...] --label NAME --output EXPOSURE
+    python3 -m v2.eval.overlap_effects roles --rescreen DIR --exposure EXPOSURE --groups GROUPS \
+        --flagged FLAGGED --output ROLES
     python3 -m v2.eval.overlap_effects run --spec SPEC --flagged FLAGGED --output OUT [--jobs N]
 
 `flagged` reads the research & data rescreen's private overlap receipts under DIR
@@ -18,6 +20,13 @@ row and input-hash ids, for the node that stores a model's training file.
 
 `exposure` streams a model's training file(s) and lists the excluded groups present in
 them, matched by group id, row id or input hash (all three should agree).
+
+`roles` takes one EXPOSURE receipt and reads every role that each of its groups hit in the
+rescreen receipts (all roles, not only the ones that excluded it). It splits the model's
+matched rows into groups with and without a CSS15 hit and, for each part, counts groups
+and rows per panel (typed FINAL, typed DEV, CSS15, CSS pilot, public 231, mlx-diag) or
+other role, plus the scored flagged items those groups touch. GROUPS and FLAGGED must be
+the payload and flagged files the receipt was matched against.
 
 `run` rescores every model in SPEC from its sealed predictions on the full panels and
 without the flagged items (the same items for every model): typed T, human transfer H
@@ -42,6 +51,9 @@ A candidate whose SPEC entry lists `exposure` receipts also gets its own-exposur
 analysis: the flagged items its training rows could have touched, the tier rescored
 without them (every model), a worst case in which the candidate misses every one of them
 it answered correctly, and the contamination check on those items alone.
+
+SPEC may omit `mlx_panel` (the mlx-diag gold) when no model has an `mlx_run`; mlx-diag is
+then not scored, and FLAGGED must still have been collected against the frozen mlx-diag gold.
 
 Outputs are aggregates only: no item ids, text, gold values or answers.
 """
@@ -88,10 +100,23 @@ SCHEMA = "dev2-overlap-effects/1"
 FLAGGED_SCHEMA = "dev2-overlap-flagged/1"
 PAYLOAD_SCHEMA = "dev2-overlap-excluded-groups/1"
 EXPOSURE_SCHEMA = "dev2-overlap-exposure/1"
+ROLES_SCHEMA = "dev2-overlap-roles/1"
 SECOND_SEED = PAIRED_SEED + 1
 SCORED_PANELS = ("typed-final", "css15", "public231", "mlx-diag")
 MLX_TYPES = ("choice", "noul", "score")
 EXPOSURE_VARIANTS = ("exposed_reduced", "worst_case")
+ROLE_PANELS = {
+    "typed_final_goldfree": "typed-final",
+    "typed_final_native": "typed-final",
+    "typed_dev": "typed-dev",
+    "css15_goldfree": "css15",
+    "css15_native": "css15",
+    "css_pilot": "css-pilot",
+    "jevbench_public231": "public231",
+    "jevbench_public231_native": "public231",
+    "mlx_diag_v1": "mlx-diag",
+}
+DEVELOPMENT_CLASSES = {"typed-dev", "css-pilot"}
 
 
 def digest(value: Any) -> str:
@@ -103,11 +128,19 @@ def digest(value: Any) -> str:
 # ---------------------------------------------------------------- panels
 
 
-def load_panels(panel_root: Path, mlx_panel: Path) -> dict[str, Any]:
+def load_panels(panel_root: Path, mlx_panel: Path | None) -> dict[str, Any]:
+    """Frozen gold panels; without `mlx_panel`, mlx-diag gold and prompts are None."""
     panels.verify(panel_root, ["typed-final", "css15", "public231"])
-    mlx_gold = mlx_panel / "gold.jsonl"
-    if sha_file(mlx_gold) != panels.DEVELOPMENT["mlx-diag"]["gold_sha256"]:
-        raise ValueError("mlx-diag gold differs from the frozen panel")
+    mlx_sha256 = panels.DEVELOPMENT["mlx-diag"]["gold_sha256"]
+    mlx = mlx_prompts = None
+    if mlx_panel is not None:
+        mlx_gold = mlx_panel / "gold.jsonl"
+        if sha_file(mlx_gold) != mlx_sha256:
+            raise ValueError("mlx-diag gold differs from the frozen panel")
+        mlx = {row["id"]: row for row in read_jsonl(mlx_gold)}
+        mlx_prompts = {
+            row["id"]: row for row in read_jsonl(mlx_panel / "prompts.jsonl")
+        }
     css = read_css_jsonl(panels.path(panel_root, "css15", "gold"))
     return {
         "root": panel_root,
@@ -118,15 +151,13 @@ def load_panels(panel_root: Path, mlx_panel: Path) -> dict[str, Any]:
             for row in read_jsonl(panels.path(panel_root, "public231", "gold"))
         },
         "public231_dir": panel_root / panels.FORMAL["public231"]["panel_dir"],
-        "mlx-diag": {row["id"]: row for row in read_jsonl(mlx_gold)},
-        "mlx-prompts": {
-            row["id"]: row for row in read_jsonl(mlx_panel / "prompts.jsonl")
-        },
+        "mlx-diag": mlx,
+        "mlx-prompts": mlx_prompts,
         "sha256": {
             "typed-final": panels.FORMAL["typed-final"]["gold_sha256"],
             "css15": panels.FORMAL["css15"]["gold_sha256"],
             "public231": panels.FORMAL["public231"]["gold_sha256"],
-            "mlx-diag": sha_file(mlx_gold),
+            "mlx-diag": mlx_sha256,
         },
     }
 
@@ -400,6 +431,145 @@ def exposure(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- roles
+
+
+def group_role_table(
+    rescreen: Path, groups: set[str]
+) -> tuple[dict[str, dict[str, set[str]]], dict[str, str]]:
+    """Pools and every hit role of each group, from the per-pool and union receipts."""
+    receipts = sorted((rescreen / "scan").glob("*.private.json"))
+    union = rescreen / "scan-union" / "union.private.json"
+    table: dict[str, dict[str, set[str]]] = {
+        group_id: {"pools": set(), "roles": set()} for group_id in groups
+    }
+    hashes = {}
+    for path in [*receipts, *([union] if union.exists() else [])]:
+        pool = None if path == union else path.name[: -len(".private.json")]
+        hashes[str(path.relative_to(rescreen))] = sha_file(path)
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+        for group_id, group in receipt["groups"].items():
+            entry = table.get(group_id)
+            if entry is None:
+                continue
+            entry["roles"] |= set(group.get("protected_ids") or {})
+            entry["roles"] |= set(group.get("roles") or ())
+            if pool is not None:
+                entry["pools"].add(pool)
+    missing = sorted(g for g, entry in table.items() if not entry["roles"])
+    if missing:
+        raise ValueError(f"{len(missing)} groups have no hit role in the receipts")
+    return table, hashes
+
+
+def role_class(role: str) -> str:
+    return ROLE_PANELS.get(role, role)
+
+
+def exposure_roles(
+    exposure_doc: dict[str, Any],
+    table: dict[str, dict[str, set[str]]],
+    flagged_doc: dict[str, Any],
+) -> dict[str, Any]:
+    """Rows of the exposed groups by hit role class, split by whether a group hit CSS15."""
+    rows = {g: max(m.values()) for g, m in exposure_doc["matched_rows"].items()}
+    panel_of_item = {i: p for p, ids in flagged_doc["panels"].items() for i in ids}
+    items_by_group: dict[str, set[str]] = defaultdict(set)
+    for item_id, groups in flagged_doc["item_groups"].items():
+        for group_id in groups:
+            items_by_group[group_id].add(item_id)
+
+    def summary(members: list[str]) -> dict[str, Any]:
+        classes: dict[str, dict[str, int]] = defaultdict(
+            lambda: {"groups": 0, "rows": 0}
+        )
+        pools: dict[str, dict[str, int]] = defaultdict(lambda: {"groups": 0, "rows": 0})
+        for group_id in members:
+            for name in {role_class(r) for r in table[group_id]["roles"]}:
+                classes[name]["groups"] += 1
+                classes[name]["rows"] += rows[group_id]
+            for pool in table[group_id]["pools"]:
+                pools[pool]["groups"] += 1
+                pools[pool]["rows"] += rows[group_id]
+        items = set().union(*(items_by_group[g] for g in members))
+        scored: dict[str, int] = defaultdict(int)
+        for item_id in items:
+            scored[panel_of_item[item_id]] += 1
+        return {
+            "groups": len(members),
+            "rows": sum(rows[g] for g in members),
+            "by_role_class": {k: dict(v) for k, v in sorted(classes.items())},
+            "by_pool": {k: dict(v) for k, v in sorted(pools.items())},
+            "reported_panels_hit": sorted(set(classes) & set(SCORED_PANELS)),
+            "development_panels_hit": sorted(set(classes) & DEVELOPMENT_CLASSES),
+            "scored_items": dict(sorted(scored.items())),
+        }
+
+    members = sorted(exposure_doc["groups"])
+    with_css = [
+        g for g in members if "css15" in {role_class(r) for r in table[g]["roles"]}
+    ]
+    without_css = sorted(set(members) - set(with_css))
+    return {
+        "all": summary(members),
+        "with_css15": summary(with_css),
+        "without_css15": summary(without_css),
+        "groups": {
+            g: {
+                "pools": sorted(table[g]["pools"]),
+                "rows": rows[g],
+                "role_classes": sorted({role_class(r) for r in table[g]["roles"]}),
+                "scored_items": len(items_by_group[g]),
+            }
+            for g in members
+        },
+    }
+
+
+def roles(args: argparse.Namespace) -> int:
+    exposure_doc = json.loads(args.exposure.read_text(encoding="utf-8"))
+    payload = json.loads(args.groups.read_text(encoding="utf-8"))
+    if sha_file(args.groups) != exposure_doc["payload_sha256"]:
+        raise ValueError(f"{args.exposure} was not matched against {args.groups}")
+    if payload["flagged_sha256"] != sha_file(args.flagged):
+        raise ValueError(f"{args.groups} was not derived from {args.flagged}")
+    flagged_doc = json.loads(args.flagged.read_text(encoding="utf-8"))
+    table, hashes = group_role_table(args.rescreen, set(exposure_doc["groups"]))
+    result = {
+        "schema": ROLES_SCHEMA,
+        "label": exposure_doc["label"],
+        "exposure_sha256": sha_file(args.exposure),
+        "payload_sha256": sha_file(args.groups),
+        "flagged_sha256": sha_file(args.flagged),
+        "receipts_sha256": hashes,
+        "methods_agree": exposure_doc["methods_agree"],
+        "role_classes": dict(sorted(ROLE_PANELS.items())),
+        **exposure_roles(exposure_doc, table, flagged_doc),
+    }
+    sha = write_json(args.output, result)
+    print(
+        json.dumps(
+            {
+                "output": str(args.output),
+                "sha256": sha,
+                **{
+                    part: {
+                        k: result[part][k]
+                        for k in (
+                            "groups",
+                            "rows",
+                            "reported_panels_hit",
+                            "scored_items",
+                        )
+                    }
+                    for part in ("all", "with_css15", "without_css15")
+                },
+            }
+        )
+    )
+    return 0
+
+
 # ---------------------------------------------------------------- per-model outcomes
 
 
@@ -568,6 +738,8 @@ def mlx_value(outcomes: dict[str, dict[str, Any]], exclude: set[str]) -> dict[st
 
 
 def load_model(name: str, cfg: dict[str, Any], gold: dict[str, Any]) -> dict[str, Any]:
+    if cfg.get("mlx_run") and gold["mlx-diag"] is None:
+        raise ValueError(f"{name}: an mlx_run needs the spec's mlx_panel")
     run = Path(cfg["run"])
     typed_path, css_path = verified(run, "typed-final"), verified(run, "css15")
     model: dict[str, Any] = {
@@ -1398,6 +1570,8 @@ def tier_exposure(
         panel: {i for i in exclude[panel] if groups & set(item_groups[i])}
         for panel in SCORED_PANELS
     }
+    if exposed["mlx-diag"] and gold["mlx-diag"] is None:
+        raise ValueError("exposed mlx-diag items need the spec's mlx_panel")
     strata: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for panel, ids in exposed.items():
         for item_id in ids:
@@ -1498,8 +1672,10 @@ def exposure_jobs(
 def run(args: argparse.Namespace) -> int:
     spec = json.loads(args.spec.read_text(encoding="utf-8"))
     flagged_doc = json.loads(args.flagged.read_text(encoding="utf-8"))
+    mlx_panel = spec.get("mlx_panel")
     gold = load_panels(
-        Path(spec.get("panel_root", str(panels.DEFAULT_ROOT))), Path(spec["mlx_panel"])
+        Path(spec.get("panel_root", str(panels.DEFAULT_ROOT))),
+        Path(mlx_panel) if mlx_panel else None,
     )
     if flagged_doc["gold_sha256"] != gold["sha256"]:
         raise ValueError("flagged ids were collected against different panels")
@@ -1507,7 +1683,7 @@ def run(args: argparse.Namespace) -> int:
         panel: set(flagged_doc["panels"].get(panel, [])) for panel in SCORED_PANELS
     }
     for panel, ids in exclude.items():
-        if ids - set(gold[panel]):
+        if gold[panel] is not None and ids - set(gold[panel]):
             raise ValueError(f"{panel}: flagged ids outside the panel")
     none = {panel: set() for panel in SCORED_PANELS}
     focus = spec["focus_task"]
@@ -1876,6 +2052,13 @@ def main(argv: list[str] | None = None) -> int:
     three.add_argument("--label", required=True)
     three.add_argument("--output", type=Path, required=True)
     three.set_defaults(func=exposure)
+    four = sub.add_parser("roles")
+    four.add_argument("--rescreen", type=Path, required=True)
+    four.add_argument("--exposure", type=Path, required=True)
+    four.add_argument("--groups", type=Path, required=True)
+    four.add_argument("--flagged", type=Path, required=True)
+    four.add_argument("--output", type=Path, required=True)
+    four.set_defaults(func=roles)
     two = sub.add_parser("run")
     two.add_argument("--spec", type=Path, required=True)
     two.add_argument("--flagged", type=Path, required=True)

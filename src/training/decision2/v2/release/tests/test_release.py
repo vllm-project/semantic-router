@@ -39,6 +39,27 @@ class LayoutTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             layout.name_for(1_300_000_000)
 
+    def test_count_names_keep_the_released_names(self):
+        # Loaded counts of the released DEV2.0-0.6B, 0.8B, 2B and 4B packages.
+        for loaded, name in (
+            (597_103_104, "DEV2.0-0.6B"),
+            (753_446_208, "DEV2.0-0.8B"),
+            (1_883_930_944, "DEV2.0-2B"),
+            (4_208_383_488, "DEV2.0-4B"),
+        ):
+            self.assertEqual(layout.release_name(loaded, "loaded-parameters"), name)
+            self.assertEqual(layout.release_name(loaded), name)
+        self.assertEqual(layout.tier_for(25_746_591_744), "27B")
+        self.assertEqual(layout.release_name(25_746_591_744), "DEV2.0-27B")
+        self.assertEqual(
+            layout.release_name(25_746_591_744, "loaded-parameters"), "DEV2.0-26B"
+        )
+        layout.check_repo("llm-semantic-router/DEV2.0-26B", "DEV2.0-26B", staging=False)
+        with self.assertRaises(ValueError):
+            layout.count_name(1_300_000_000)
+        with self.assertRaises(ValueError):
+            layout.release_name(4_208_383_488, "rounded")
+
     def test_repository_rules(self):
         layout.check_repo(
             "llm-semantic-router/dev2-release-staging", "DEV2.0-0.6B", staging=True

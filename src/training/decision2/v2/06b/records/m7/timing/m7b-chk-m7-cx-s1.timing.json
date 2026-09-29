@@ -1,0 +1,1 @@
+{"run":"m7b-chk-m7-cx-s1","gpu":1,"render":"/dev/dri/renderD137","commit":"07ca6fb041288e9c1a8c87d1abada7c797b0f76a-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-29T02:13:55Z","end_utc":"2026-09-29T02:15:35Z","wall_seconds":100,"gpu_hours":0.02778,"exit":0}

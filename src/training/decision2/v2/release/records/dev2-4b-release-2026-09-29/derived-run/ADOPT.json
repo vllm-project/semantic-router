@@ -1,0 +1,29 @@
+{
+  "adopted_utc": "2026-09-28T23:47:44.894856+00:00",
+  "label": "post-key same-panel",
+  "predictions": {
+    "css15": {
+      "sha256": "c966cfc725ea286af29e29b544664372c416a1f1360312757eb76ef03f2e201a",
+      "source": "/data/dev2/runs/release/inputs/dev2-4b-t1/derived/css15.predictions.jsonl"
+    },
+    "public231": {
+      "sha256": "ec085d450e40ae2cdbef1aeaea826c111f4974d097705dce1bd4361b19b7b715",
+      "source": "/data/dev2/runs/release/inputs/dev2-4b-t1/derived/public231.predictions.jsonl"
+    },
+    "typed-final": {
+      "sha256": "003c5cd57b7fced2fd6ab9c22034e9d42903a9089dd1c9986428e44cebf63b19",
+      "source": "/data/dev2/runs/release/inputs/dev2-4b-t1/derived/typed-final.predictions.jsonl"
+    }
+  },
+  "prior_gpu_hours": null,
+  "prior_receipts_sha256": {
+    "COLLECT.json": "e48bb07c00d1856a5ce09fa5063b50946159866179e0aba6e10558159a2d72cf",
+    "SEAL.json": "12b44de96cc62bbe7ce9fcf8436e619036a29b25b49d51b2a9259326c763ccea",
+    "calibration.json": "176a2f0e8f76c7b281c0784ec9e9d2ea17b84aef2e237e2673a062a5a62e421f",
+    "css15.retemper.json": "1bf4c8a75778e9b172d85a2d533c688497ae5ff3d2093cf4efc672f504eee7fe",
+    "public231.retemper.json": "0821e6cae4833ab27122d7bd1ac00603030665a1a268c442adb271f2f592f8c0",
+    "typed-final.retemper.json": "d294d05ff91feed5973e1bb1d37d5248712186121af6498588dc4fc3c5d674ba"
+  },
+  "reason": "T = 1 (uncalibrated) predictions of DEV2.0-4B derived offline from the sealed CAL698 run m4-N4XF-soup-nodeA by undoing its per-type temperatures (calibration 176a2f0e; softmax(log q * T)); identical answers, only probabilities differ; for the coordinator 23:15 calibration rule",
+  "schema": "dev2-same-panel-adopt/1"
+}

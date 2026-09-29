@@ -1,0 +1,301 @@
+{
+ "schema": "dev2-htdev-validation-spec/1",
+ "models": [
+  {
+   "key": "kai1",
+   "tier": "0.6B",
+   "group": "own 1.0",
+   "label": "Decision 1.0 Kai",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/kai1",
+   "formal_report": "/data/dev2/runs/eval/m1-adopt/kai1/REPORT.json"
+  },
+  {
+   "key": "lex",
+   "tier": "0.6B",
+   "group": "own 1.0",
+   "label": "Decision 1.0 Lex",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/lex",
+   "formal_report": "/data/dev2/runs/eval/m1/r3-lex/REPORT.json"
+  },
+  {
+   "key": "bosun06",
+   "tier": "0.6B",
+   "group": "peer",
+   "label": "Bosun v3.1 0.6B",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/bosun06",
+   "formal_report": "/data/dev2/runs/eval/m1-adopt/bosun/REPORT.json"
+  },
+  {
+   "key": "gliner25",
+   "tier": "0.6B",
+   "group": "peer",
+   "label": "GLiNER2.5-Decide",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/gliner25",
+   "formal_report": "/data/dev2/runs/eval/m1/p1-gliner25/REPORT.json"
+  },
+  {
+   "key": "06b-m4-t-a7-soup",
+   "tier": "0.6B",
+   "group": "2.0 candidate",
+   "label": "DEV2.0-0.6B (T soup)",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/06b-m4-t-a7-soup",
+   "formal_report": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup/REPORT.json"
+  },
+  {
+   "key": "06b-m4-v2-soup",
+   "tier": "0.6B",
+   "group": "2.0 candidate",
+   "label": "0.6B V2 soup",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/06b-m4-v2-soup",
+   "formal_report": "/data/dev2/runs/06b/m4/formal/m4-v2-soup/REPORT.json"
+  },
+  {
+   "key": "06b-m5-x-soup",
+   "tier": "0.6B",
+   "group": "2.0 candidate",
+   "label": "0.6B X soup",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/06b-m5-x-soup",
+   "formal_report": "/data/dev2/runs/06b/m5/formal/m5-x-soup/REPORT.json"
+  },
+  {
+   "key": "06b-m5-z-soup",
+   "tier": "0.6B",
+   "group": "2.0 candidate",
+   "label": "0.6B Z soup",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/06b-m5-z-soup",
+   "formal_report": "/data/dev2/runs/06b/m5/formal/m5-z-soup/REPORT.json"
+  },
+  {
+   "key": "eos1",
+   "tier": "0.8B",
+   "group": "own 1.0",
+   "label": "Decision 1.0 Eos",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/eos1",
+   "formal_report": "/data/dev2/runs/eval/m1/r4-eos1/REPORT.json"
+  },
+  {
+   "key": "intern08b",
+   "tier": "0.8B",
+   "group": "peer",
+   "label": "Intern-Decision-0.8B",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/intern08b",
+   "formal_report": "/data/dev2/runs/eval/m2/q2b-intern08b/REPORT.json"
+  },
+  {
+   "key": "kev08b",
+   "tier": "0.8B",
+   "group": "peer",
+   "label": "Kev 0.8B",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/kev08b",
+   "formal_report": "/data/dev2/runs/eval/m2/q1-kev08b/REPORT.json"
+  },
+  {
+   "key": "jpt08b",
+   "tier": "0.8B",
+   "group": "peer",
+   "label": "JPT-0.8B",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/jpt08b",
+   "formal_report": "/data/dev2/runs/eval/m1/p2-jpt08b/REPORT.json"
+  },
+  {
+   "key": "dec-m2-E8F-soup",
+   "tier": "0.8B",
+   "group": "2.0 candidate",
+   "label": "E8F soup (DEV2.0-0.8B lineage)",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/dec-m2-E8F-soup",
+   "formal_report": "/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA/REPORT.json"
+  },
+  {
+   "key": "dec-m2-E8F-s1",
+   "tier": "0.8B",
+   "group": "2.0 candidate",
+   "label": "E8F s1",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/dec-m2-E8F-s1",
+   "formal_report": "/data/dev2/runs/dec/formal/m2/m2-E8F-s1-nodeA/REPORT.json"
+  },
+  {
+   "key": "dec-m2-B8F-s1",
+   "tier": "0.8B",
+   "group": "2.0 candidate",
+   "label": "B8F s1",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/dec-m2-B8F-s1",
+   "formal_report": "/data/dev2/runs/dec/formal/m2/m2-B8F-s1-nodeA/REPORT.json"
+  },
+  {
+   "key": "dec-m3-E8V-soup",
+   "tier": "0.8B",
+   "group": "2.0 candidate",
+   "label": "E8V soup",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/dec-m3-E8V-soup",
+   "formal_report": "/data/dev2/runs/dec/formal/m3/m3-E8V-soup-nodeA/REPORT.json"
+  },
+  {
+   "key": "sol1",
+   "tier": "2B",
+   "group": "own 1.0",
+   "label": "Decision 1.0 Sol",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/sol1",
+   "formal_report": "/data/dev2/runs/eval/m1-adopt/sol1/REPORT.json"
+  },
+  {
+   "key": "decider2b",
+   "tier": "2B",
+   "group": "peer",
+   "label": "Decider 2B",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/decider2b",
+   "formal_report": "/data/dev2/runs/eval/m1-adopt/decider2b/REPORT.json"
+  },
+  {
+   "key": "thisthat12",
+   "tier": "2B",
+   "group": "peer",
+   "label": "This-That 1.2",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/thisthat12",
+   "formal_report": "/data/dev2/runs/eval/m2/q4-thisthat12/REPORT.json"
+  },
+  {
+   "key": "bosun17b",
+   "tier": "2B",
+   "group": "peer",
+   "label": "Bosun v3.1 1.7B",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/bosun17b",
+   "formal_report": "/data/dev2/runs/eval/m1/p3-bosun17b/REPORT.json"
+  },
+  {
+   "key": "dec-m3-S2T-soup",
+   "tier": "2B",
+   "group": "2.0 candidate",
+   "label": "S2T soup (DEV2.0-2B)",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/dec-m3-S2T-soup",
+   "formal_report": "/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA/REPORT.json"
+  },
+  {
+   "key": "nox1",
+   "tier": "4B",
+   "group": "own 1.0",
+   "label": "Decision 1.0 Nox",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/nox1",
+   "formal_report": "/data/dev2/runs/eval/m1-adopt/nox1/REPORT.json"
+  },
+  {
+   "key": "decider4b",
+   "tier": "4B",
+   "group": "peer",
+   "label": "Decider 4B",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/decider4b",
+   "formal_report": "/data/dev2/runs/eval/m1-adopt/decider4b/REPORT.json"
+  },
+  {
+   "key": "jet62",
+   "tier": "4B",
+   "group": "peer",
+   "label": "Jet v6.2",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/jet62",
+   "formal_report": "/data/dev2/runs/eval/m2/q5b-jet62/REPORT.json"
+  },
+  {
+   "key": "hopperg",
+   "tier": "4B",
+   "group": "peer",
+   "label": "Hopper-G",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/hopperg",
+   "formal_report": "/data/dev2/runs/eval/m2/q8-hopperg/REPORT.json"
+  },
+  {
+   "key": "jpt4b",
+   "tier": "4B",
+   "group": "peer",
+   "label": "JPT-4B",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/jpt4b",
+   "formal_report": "/data/dev2/runs/eval/m1/p4-jpt4b/REPORT.json"
+  },
+  {
+   "key": "dec-m3-N4LKr-soup",
+   "tier": "4B",
+   "group": "2.0 candidate",
+   "label": "N4LKr soup",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/dec-m3-N4LKr-soup",
+   "formal_report": "/data/dev2/runs/dec/formal/m3/m3-N4LKr-soup-nodeA/REPORT.json"
+  },
+  {
+   "key": "dec-m3-N4L-soup",
+   "tier": "4B",
+   "group": "2.0 candidate",
+   "label": "N4L soup",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/dec-m3-N4L-soup",
+   "formal_report": "/data/dev2/runs/dec/formal/m3/m3-N4L-soup-nodeA/REPORT.json"
+  },
+  {
+   "key": "dec-m3-N4T-soup",
+   "tier": "4B",
+   "group": "2.0 candidate",
+   "label": "N4T soup",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/dec-m3-N4T-soup",
+   "formal_report": "/data/dev2/runs/dec/formal/m3/m3-N4T-soup-nodeA/REPORT.json"
+  },
+  {
+   "key": "dec-m3-N4J-soup",
+   "tier": "4B",
+   "group": "2.0 candidate",
+   "label": "N4J soup",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/dec-m3-N4J-soup",
+   "formal_report": "/data/dev2/runs/dec/formal/m3/m3-N4J-soup-nodeA/REPORT.json"
+  },
+  {
+   "key": "dec-e1-X2",
+   "tier": "4B",
+   "group": "2.0 candidate",
+   "label": "X2",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/dec-e1-X2",
+   "formal_report": "/data/dev2/runs/dec/formal/e1-x2-nodeA/REPORT.json"
+  },
+  {
+   "key": "lux1",
+   "tier": "9B",
+   "group": "own 1.0",
+   "label": "Decision 1.0 Lux (16K comparator)",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/lux1",
+   "formal_report": "/data/dev2/runs/eval/m1/d1-lux1-autotune-cache/REPORT.json"
+  },
+  {
+   "key": "jpt9b",
+   "tier": "9B",
+   "group": "peer",
+   "label": "JPT-9B",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/jpt9b",
+   "formal_report": "/data/dev2/runs/eval/m1-adopt/jpt9b/REPORT.json"
+  },
+  {
+   "key": "nimble2",
+   "tier": "9B",
+   "group": "peer",
+   "label": "Bespoke Nimble 9B v2",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/nimble2",
+   "formal_report": "/data/dev2/runs/eval/m2/q6-nimble2/REPORT.json"
+  },
+  {
+   "key": "9b-l2-8k",
+   "tier": "9B",
+   "group": "2.0 candidate",
+   "label": "L2 (8K)",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/9b-l2-8k",
+   "formal_report": "/data/dev2/runs/9b/formal/l2-8k/REPORT.json"
+  },
+  {
+   "key": "9b-m3-B-s1",
+   "tier": "9B",
+   "group": "2.0 candidate",
+   "label": "M3 B-s1 (16K)",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/9b-m3-B-s1",
+   "formal_report": "/data/dev2/runs/9b/formal-m3/B-s1-16k/REPORT.json"
+  },
+  {
+   "key": "9b-m3-DW",
+   "tier": "9B",
+   "group": "2.0 candidate",
+   "label": "M3 DW (16K)",
+   "run_dir": "/data/dev2/runs/eval/htdev/collect/9b-m3-DW",
+   "formal_report": "/data/dev2/runs/9b/formal-m3/DW-16k/REPORT.json"
+  }
+ ]
+}

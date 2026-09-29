@@ -1,0 +1,365 @@
+{
+ "schema": "dev2-htdev-pins/1",
+ "sources": {
+  "brighter": {
+   "files": {
+    "README.md": "c573b3e4d6dd0a0c4b0ee8daac4e28e354d078b56918e4f992feaf4caa4d382f",
+    "eng/dev-00000-of-00001.parquet": "82e6a08eebef0c1cf2b6fc30497b746b38566686e1468e1ff03c052c52c037ca",
+    "eng/test-00000-of-00001.parquet": "d2ffa29d9f55227c4630a6287f1ac76325047abf2c21d7431e04190cc22c3548",
+    "eng/train-00000-of-00001.parquet": "b6d668f4bc0081c22e5b4be0679498709676acbf6288a2d81037ab01ac1e28f8"
+   },
+   "kind": "hf",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://huggingface.co/datasets/brighter-dataset/BRIGHTER-emotion-categories/blob/419566ac8f46f951b51584be36c13e5363008144/README.md",
+   "repo": "brighter-dataset/BRIGHTER-emotion-categories",
+   "revision": "419566ac8f46f951b51584be36c13e5363008144"
+  },
+  "casino": {
+   "files": {
+    "README.md": "a1b2415efb531749d88cc42ad9890d3a9da57d2360582df4312a9c5156f04df3",
+    "data/train-00000-of-00001.parquet": "1fb8a0da5097d2b6564090021d9d72bd43c214e95a872f4abf9626730067fd72"
+   },
+   "kind": "hf",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://huggingface.co/datasets/kchawla123/casino/blob/290898d2d08b6591db17005504e40ce00ac1028e/README.md",
+   "repo": "kchawla123/casino",
+   "revision": "290898d2d08b6591db17005504e40ce00ac1028e"
+  },
+  "circa": {
+   "files": {
+    "README.md": "96ac0c709de3a6ec9b628ae3c00a9afac86ed439ecfbb5362888c5e5148b3a54",
+    "data/train-00000-of-00001.parquet": "f1964d250da30e20b688f2ad1570ba7ea5aa6af4ef70b01bf599b3f95f33f9ee"
+   },
+   "kind": "hf",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://huggingface.co/datasets/google-research-datasets/circa/blob/faa1b5a78dd926a899bcd4da289c2e3abe8061a9/README.md",
+   "repo": "google-research-datasets/circa",
+   "revision": "faa1b5a78dd926a899bcd4da289c2e3abe8061a9"
+  },
+  "claim_stance": {
+   "files": {
+    "README.md": "29745b3a366eb073adf971c6cf8c1451a3597e67e6ee7ee381e9077ee331c3cd",
+    "dev_topic.csv": "af8d08c8ba3ae056cb88010ae855a3167313d3392f274ff3a85a1ce0b6669b5b",
+    "test.csv": "15d385d505b763eaea7461fcdaa0d00ac687d298701fc17bb8a7513bde8a0aed",
+    "test_topic.csv": "33df71caccb4f90b8b6638de2b7472e50cbfe843ae4b3071490539fa32cba0e1",
+    "train.csv": "c01459cd27db7103fc9cc9ac0ef37cfed8ba755389d5a9b4a1ee176633c3d0d6",
+    "train_topic.csv": "effede12e4eb847cdfcb015288b862cba07ba7c803010dff2fb977940bcd57e5"
+   },
+   "kind": "hf",
+   "licence": "cc-by-3.0",
+   "licence_evidence": "https://huggingface.co/datasets/ibm-research/claim_stance/blob/ec4e2c2ec3e0c70087c67a28a7bce58b682b8109/README.md",
+   "repo": "ibm-research/claim_stance",
+   "revision": "ec4e2c2ec3e0c70087c67a28a7bce58b682b8109"
+  },
+  "diplomacy": {
+   "files": {
+    "LICENSE": "7e7170e3cebf88a9f60c7b8421418323c09304da1af4d5e90f4da1dc1c8a2661",
+    "README.md": "c9c79cefbe65406daf6f428b18407b58e76d9b574c28ee65644c3e6019402945",
+    "data/README.md": "8d2c84e88389d77b266da397e70c6e364f264c8a850580d931f19f69214edb08",
+    "data/test.jsonl": "2061ee7f040d6d8016760cb146d7821fef57cfbb4ced868f233e63854257c050",
+    "data/train.jsonl": "833d8ef26561bbd1921e9f5e730b2ebea0a59cec24f7082bfdcacb8b6cf30792",
+    "data/validation.jsonl": "6b2ca19991c7596693ea61b34b1be2d6ada3fcf6710472edd4afed841556e571"
+   },
+   "kind": "github",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://github.com/DenisPeskov/2020_acl_diplomacy/blob/c28c0870a639f6f388c87d4f8eaf685e64bfb1a6/LICENSE",
+   "repo": "DenisPeskov/2020_acl_diplomacy",
+   "revision": "c28c0870a639f6f388c87d4f8eaf685e64bfb1a6"
+  },
+  "emobank": {
+   "files": {
+    "README.md": "b4ea304ce4ef4ae1eb3526aff90497a44d46a810bff3a007fa77565e52939e83",
+    "corpus/emobank.csv": "1ade4a4a453e880c0f39d0536d2b355e8a716e0cf88236c64cdb4d438cf9605b",
+    "corpus/meta.tsv": "c848266476711a3fb68395b9907ef574e60289ad916c8db79b7ea2e62ab62e0e"
+   },
+   "kind": "github",
+   "licence": "cc-by-sa-4.0",
+   "licence_evidence": "https://github.com/JULIELab/EmoBank/blob/248ce2a43e165a66d31aeaed83cff9641d6654e0/README.md",
+   "repo": "JULIELab/EmoBank",
+   "revision": "248ce2a43e165a66d31aeaed83cff9641d6654e0"
+  },
+  "empathic_reactions": {
+   "files": {
+    "README.md": "9bd633f9dcb393f1a21a885d2ba27e29acd9ad38637949d362869fb6ce3f0b24",
+    "data/responses/data/messages.csv": "380d2670254565629f81616df57cc0729de96ac87c056d05e39c370624ae8f64"
+   },
+   "kind": "github",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://github.com/wwbp/empathic_reactions/blob/3ddbf6b35c789f99c930a349f3fc26b4b2d9ae2e/README.md",
+   "repo": "wwbp/empathic_reactions",
+   "revision": "3ddbf6b35c789f99c930a349f3fc26b4b2d9ae2e"
+  },
+  "figqa": {
+   "files": {
+    "README.md": "102a7b952a36573af4399782efed971a5e1c6d5779b9d4b74f0c964e36e894e1",
+    "dev.csv": "eec904ed36967e1d364fb16e937bf19d8422dadb196d578efb6ee38a55b78daf",
+    "test.csv": "902f00bb812dc199e6a1853c2b7358121034b918bab7eb7b79fb1d884e2567d9",
+    "train.csv": "ed1771935e08b50799ca08466475424c25eeb86f57a7cb53767450cae2c9b4a4"
+   },
+   "kind": "hf",
+   "licence": "mit",
+   "licence_evidence": "https://huggingface.co/datasets/nightingal3/fig-qa/blob/b29ec2faf6ef73d634db9757f8741dee68f6c874/README.md",
+   "repo": "nightingal3/fig-qa",
+   "revision": "b29ec2faf6ef73d634db9757f8741dee68f6c874"
+  },
+  "hatexplain": {
+   "files": {
+    "Data/dataset.json": "63bb3340fee0ec469b09690d04cb68f7c187787dd8b83807f071892c084967fb",
+    "Data/post_id_divisions.json": "c2fb0d89862e7897b11ea3e9380753f15a793482b4b70ad0532dfb1212212835",
+    "LICENSE": "56fc351d0e8ebf939208f88cdb27e00833148b957b347a069f38ee88e5fc8db6",
+    "README.md": "7f02071fa1bfab1b07aeda32d911bfaa5598b07b631f3fa688b06a9b4efad684"
+   },
+   "kind": "github",
+   "licence": "mit",
+   "licence_evidence": "https://github.com/punyajoy/HateXplain/blob/01d742279dac941981f53806154481c0e15ee686/LICENSE",
+   "repo": "punyajoy/HateXplain",
+   "revision": "01d742279dac941981f53806154481c0e15ee686"
+  },
+  "hyperpartisan": {
+   "files": {
+    "README.txt": "4c7571ffae603171872eced5054cc56a5acdfa2d40a1b741f0816cb78916de69",
+    "articles-test-byarticle-20181207.zip": "f785b9367e42cc60fbf4ab68852bccbf81efccab6e3dd5e727cfdb0b860ca0d1",
+    "articles-test-byarticle-meta-20190204.zip": "6ac1cb636751135b0b7a594affb65402755b31aafda07d02f4990424485d9758",
+    "articles-training-byarticle-20181122.zip": "62b4a71275ef2724faddc74d6ff3d782ee9898c732cd66119c7976f6f5168990",
+    "articles-training-byarticle-meta-20190204.zip": "743556ab50680d789d08f7a0e3dc0321284dc6328843a3767a86de99ddb94407",
+    "ground-truth-test-byarticle-20181207.zip": "91e19798472af3cafa58e021de75096a52128f207b38bf563a81dd199f3931a8",
+    "ground-truth-test-byarticle-meta-20190204.zip": "aca6c9dc447e83cc8c9fb12e04e176f7af9c44a2db0df12d2c507d36e9e697e8",
+    "ground-truth-training-byarticle-20181122.zip": "0c02f4c33317287758e6fbbc976cbfd7a0978923899ddf30cb9dd2cd740af43c",
+    "ground-truth-training-byarticle-meta-20190204.zip": "c3fcddf6cd62ddc8d7b7d7fa42a4864454d944c12d00abf4652cb05c122139ca"
+   },
+   "kind": "url",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://zenodo.org/records/5776081",
+   "repo": "zenodo:10.5281/zenodo.5776081",
+   "revision": "zenodo-record-5776081",
+   "urls": {
+    "README.txt": "https://zenodo.org/api/records/5776081/files/README.txt/content",
+    "articles-test-byarticle-20181207.zip": "https://zenodo.org/api/records/5776081/files/articles-test-byarticle-20181207.zip/content",
+    "articles-test-byarticle-meta-20190204.zip": "https://zenodo.org/api/records/5776081/files/articles-test-byarticle-meta-20190204.zip/content",
+    "articles-training-byarticle-20181122.zip": "https://zenodo.org/api/records/5776081/files/articles-training-byarticle-20181122.zip/content",
+    "articles-training-byarticle-meta-20190204.zip": "https://zenodo.org/api/records/5776081/files/articles-training-byarticle-meta-20190204.zip/content",
+    "ground-truth-test-byarticle-20181207.zip": "https://zenodo.org/api/records/5776081/files/ground-truth-test-byarticle-20181207.zip/content",
+    "ground-truth-test-byarticle-meta-20190204.zip": "https://zenodo.org/api/records/5776081/files/ground-truth-test-byarticle-meta-20190204.zip/content",
+    "ground-truth-training-byarticle-20181122.zip": "https://zenodo.org/api/records/5776081/files/ground-truth-training-byarticle-20181122.zip/content",
+    "ground-truth-training-byarticle-meta-20190204.zip": "https://zenodo.org/api/records/5776081/files/ground-truth-training-byarticle-meta-20190204.zip/content"
+   }
+  },
+  "ibm_argq_pairs": {
+   "files": {},
+   "kind": "url",
+   "licence": "cc-by-sa-3.0",
+   "licence_evidence": "https://research.ibm.com/haifa/dept/vst/debating_data.shtml",
+   "repo": "IBM Debater IBM-ArgQ-9.1kPairs",
+   "revision": "unavailable",
+   "unavailable": "the IBM Project Debater datasets page returns 404 on 2026-09-29; no authors' mirror found",
+   "urls": {}
+  },
+  "magpie": {
+   "files": {
+    "README.md": "14e534a87b2d500da6807dbea9083032f123b081f78597677f6204cc9d8ac101",
+    "magpie.tsv": "c172d7622e4d14c2bb693db33c09bf8800f9546e2f6b8ac9f42b904e0f05b5f5"
+   },
+   "kind": "hf",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://github.com/hslh/magpie-corpus/blob/7fa677b82b9a772dfa54bbdd0fb414412d73db3b/LICENSE",
+   "repo": "gsarti/magpie",
+   "revision": "fa6ae9d93b03e6403e82696496dfbd2cf5c3d3d5"
+  },
+  "mfrc": {
+   "files": {
+    "README.md": "992edde48e9484e60917b3285c6a0661cea184ae81020d2b7c6792df4013e275",
+    "final_mfrc_data.csv": "f7ad7a41d65d4932e11054065cccfadacecbc84628527aa89bcc14601da7feff"
+   },
+   "kind": "hf",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://huggingface.co/datasets/USC-MOLA-Lab/MFRC/blob/ddc21d2f03e156732fd1ba95a51c4c29f07975be/README.md",
+   "repo": "USC-MOLA-Lab/MFRC",
+   "revision": "ddc21d2f03e156732fd1ba95a51c4c29f07975be"
+  },
+  "mhs": {
+   "files": {
+    "README.md": "310b4713d2aa78d239664f4613328a532483ace32525f17860fca02daf29aa8c",
+    "measuring-hate-speech.parquet": "6819525ce61bc24344df9fc3f7bf48270b31038273cc27c67fc225b51433b0e1"
+   },
+   "kind": "hf",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://huggingface.co/datasets/ucberkeley-dlab/measuring-hate-speech/blob/5468f6e118396646b02a2f691e771f6b6d9502ea/README.md",
+   "repo": "ucberkeley-dlab/measuring-hate-speech",
+   "revision": "5468f6e118396646b02a2f691e771f6b6d9502ea"
+  },
+  "moral_stories": {
+   "files": {
+    "README.md": "55cfa1d31376ecf889cd68c6f30d55d7d899286d8c6a24785125ebc31e39a29d",
+    "data/classification/action+context/norm_distance/test.jsonl": "bbc46ccdfaa60552fbab1197e4c47965ce00c7ff484f845ca26042df9f0a865b",
+    "data/classification/action+context/norm_distance/train.jsonl": "bb46dcfccf1e45c96c0a1654fe04c71e20123afbb24f49a064425c647d168043",
+    "data/classification/action+context/norm_distance/valid.jsonl": "ba024a1679a3dd690a38473d1982a6b4c973fa816c784aa8b446fed9c7264fab",
+    "data/moral_stories_full.jsonl": "98a62d4a083e02ba234ca3d4f2312df6c337ef10cd3f12dcf917a2957ba59c10"
+   },
+   "kind": "hf",
+   "licence": "mit",
+   "licence_evidence": "https://huggingface.co/datasets/demelin/moral_stories/blob/b830cf56eb00bc4edd1860dd544a192216eb3587/README.md",
+   "repo": "demelin/moral_stories",
+   "revision": "b830cf56eb00bc4edd1860dd544a192216eb3587"
+  },
+  "nycc": {
+   "files": {
+    "README.md": "6cb7efda72ce899d30f4f2f9b91cb066d9fed0e933bba2bc61d10a8f7d9f672c",
+    "ranking/test-00000-of-00001.parquet": "54ca1c1d8c5ed4b88e02b021a7c410d1ccfd38ab87212d78e0e0f623d8aa0e51",
+    "ranking/train-00000-of-00002.parquet": "09ea3575470fc93c053f14cd1777128d0f1ae7e7a879da41dc5b73c61e0e4154",
+    "ranking/train-00001-of-00002.parquet": "1d26dc89c71847412cd7862701d7fe400bd5e115d76de1060eb261bc804c6454",
+    "ranking/validation-00000-of-00001.parquet": "9ce1a29cb163f0c46f569a23e1023ce3ff3dba80b84130fe5457b3f82fef8660",
+    "ranking_1/test-00000-of-00001.parquet": "345d5fd088d843f8369651fc8f0d75868aede6d3bbb4ec27ec6a7092968310b8",
+    "ranking_2/test-00000-of-00001.parquet": "72f158aa40b65f20d7d52f44998da475e78b8b61ebf54018617e7b7f1b558150",
+    "ranking_3/test-00000-of-00001.parquet": "de4d0848686788ca201fee1374a23182188f4a91effbe6f6054d7b3850865793",
+    "ranking_4/test-00000-of-00001.parquet": "3c0651a71549d8f19eab9fb19e9d5a5fd48170ab7331e7f986dea64bf2152317"
+   },
+   "kind": "hf",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://huggingface.co/datasets/jmhessel/newyorker_caption_contest/blob/d81cbab7d0392708d5371d3a4960e69261824db4/README.md",
+   "repo": "jmhessel/newyorker_caption_contest",
+   "revision": "d81cbab7d0392708d5371d3a4960e69261824db4"
+  },
+  "pavlick": {
+   "files": {
+    "README.md": "a40077820a4dbe073319968cdf281c3933d7cffabc057f725be356a9acceb092",
+    "test.csv": "43873f898de5e9721b9a8f93da931aad97ef9f188ff7ae6c0753f0a5f588339e",
+    "train.csv": "aa7449874891d139db8accfa6913502c5a8df9c134dfeb7d8421bf7709f8ae8d"
+   },
+   "kind": "hf",
+   "licence": "cc-by-3.0",
+   "licence_evidence": "https://huggingface.co/datasets/osyvokon/pavlick-formality-scores/blob/904009d6f19d0d4eabb8f1471a92d49c839920d5/README.md",
+   "repo": "osyvokon/pavlick-formality-scores",
+   "revision": "904009d6f19d0d4eabb8f1471a92d49c839920d5"
+  },
+  "pubhealth": {
+   "files": {
+    "default/test/0000.parquet": "ccbb9040748d73db51cb2fd9e78fa18e69e5afc79b3d90697a62e7aaab579096",
+    "default/train/0000.parquet": "d0a064b56264f86a7ea5ae7824a1fadd70c16dd451e9db69d58ab63195c295ec",
+    "default/validation/0000.parquet": "c78e70220c579c808bc2d55fd82672b2fc1635e395750ce209b04b864b2687eb"
+   },
+   "kind": "hf",
+   "licence": "mit",
+   "licence_evidence": "https://github.com/neemakot/Health-Fact-Checking/blob/02136d3e0f5859af5ad5b862324511b6ab8b9058/LICENSE",
+   "note": "HF refs/convert/parquet of the authors' HF loader (57995242, card licence mit), which reads the authors' Google Drive release",
+   "repo": "ImperialCollegeLondon/health_fact",
+   "revision": "7f898a16838e708a4597986e3fab8af05b710ba4"
+  },
+  "rumoureval": {
+   "files": {
+    "README.md": "0947109a281e8b684c9307c691d8893cd3281b2f54b57cd9a3d3d264013021f5",
+    "rumoureval2019_test.csv": "7d103bfb55cdef3b0d26c481ceb772159ae824aa15bf26e8b26dc87a58c55508",
+    "rumoureval2019_train.csv": "134c036e34da708f0edb22b3cc688054d6395d1669eef78e4afa0fd9a4ed4c43",
+    "rumoureval2019_val.csv": "6cc859c2eff320ba002866e0b78f7e956b78d58e9e3a7843798b2dd9c23de201"
+   },
+   "kind": "hf",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://huggingface.co/datasets/strombergnlp/rumoureval_2019/blob/c9c0c7279d591d2fa4d692501d85f4e46d4b0572/README.md",
+   "repo": "strombergnlp/rumoureval_2019",
+   "revision": "c9c0c7279d591d2fa4d692501d85f4e46d4b0572"
+  },
+  "scruples": {
+   "files": {
+    "LICENSE": "c46c41cd80abf1393128ffea2e83459546d1933494315b0d1d9aaff3e3b9fdec",
+    "anecdotes.tar.gz": "0d7872b802dcf6f7982dd308caa2d247f4d144739350ac606f77730e07c4d2b3",
+    "readme.md": "2023714dbb27d67c3588635f526d3d9f01f809cf1bb2b444bbf378222c1f7fcf"
+   },
+   "kind": "url",
+   "licence": "apache-2.0",
+   "licence_evidence": "https://github.com/allenai/scruples/blob/c79697e97d24f5b43b5ff030a9b16011a32e4a5f/LICENSE",
+   "repo": "allenai/scruples",
+   "revision": "c79697e97d24f5b43b5ff030a9b16011a32e4a5f",
+   "urls": {
+    "LICENSE": "https://raw.githubusercontent.com/allenai/scruples/c79697e97d24f5b43b5ff030a9b16011a32e4a5f/LICENSE",
+    "anecdotes.tar.gz": "https://storage.googleapis.com/ai2-mosaic-public/projects/scruples/v1.0/data/anecdotes.tar.gz",
+    "readme.md": "https://raw.githubusercontent.com/allenai/scruples/c79697e97d24f5b43b5ff030a9b16011a32e4a5f/readme.md"
+   }
+  },
+  "swords": {
+   "files": {
+    "README.md": "4b80e2e200a390e64293932781cbc945f16600ed5ad36a9f4520b4e176c2bf7a",
+    "assets/parsed/swords-v1.1_dev.json.gz": "bc3570786455a05f11fcb4fc7f54e117642d5fb5e98f19355028c5c7ee00c954",
+    "assets/parsed/swords-v1.1_test.json.gz": "f94b6b73c52fd4bd549180bc119d44e9f9097ec78240a8b42363add158e58480"
+   },
+   "kind": "github",
+   "licence": "cc-by-3.0",
+   "licence_evidence": "https://github.com/p-lambda/swords/blob/04ca75370d0ce098a7f4db68240fc8e79a4f7b3b/README.md",
+   "repo": "p-lambda/swords",
+   "revision": "04ca75370d0ce098a7f4db68240fc8e79a4f7b3b"
+  },
+  "ukpconvarg": {
+   "files": {
+    "README.md": "744ddcefa4367f830a82b58540b2c103cb9773cc51519d8cd2e94de99e9296b2",
+    "data/UKPConvArg1Strict-CSV/ban-plastic-water-bottles_no-bad-for-the-economy.csv": "d1efc6d3f08a0167d6b71cf8f50ccb9d89da8e353162a712629dbaddee9fc883",
+    "data/UKPConvArg1Strict-CSV/ban-plastic-water-bottles_yes-emergencies-only.csv": "f1b594fcd3feb274a819b9bdd59673034f555d89acbabe7c0b40adcfc8df13de",
+    "data/UKPConvArg1Strict-CSV/christianity-or-atheism-_atheism.csv": "c9784346115d1275cab5fb6288a635e5a67b32110d73b2677629263e38a2f16e",
+    "data/UKPConvArg1Strict-CSV/christianity-or-atheism-_christianity.csv": "e90ce4eabeb3c6a34ad772e34ba7f5255364fa27cd87eaf2406824af401e1dcb",
+    "data/UKPConvArg1Strict-CSV/evolution-vs-creation_creation.csv": "722c40b9b2e6725036fcaca243fe7421deedf253f939a66a2c332e8a8395406b",
+    "data/UKPConvArg1Strict-CSV/evolution-vs-creation_evolution.csv": "0b8218b8b9bb8c3d7660a8b6008ddefc081c1d301de329dc7af796ab55f3a563",
+    "data/UKPConvArg1Strict-CSV/firefox-vs-internet-explorer_it-has-a-cute-logo-oh-and-extensions-err-add-ons.csv": "9a33cbec5bcb9f3651bc3747117ed1faa9b7c3cf93a86a3ba3bab9d3435898b1",
+    "data/UKPConvArg1Strict-CSV/firefox-vs-internet-explorer_there-s-more-browsers-than-the-ie-firefox-is-an-animal.csv": "101719aae383d31cc05195524a8a79efacca767268bf91c1f7ad2be5aca8cacd",
+    "data/UKPConvArg1Strict-CSV/gay-marriage-right-or-wrong_allowing-gay-marriage-is-right.csv": "c504170720075bb247bf857b4a74e2a0006e227874d41a365d4cf742143af02c",
+    "data/UKPConvArg1Strict-CSV/gay-marriage-right-or-wrong_allowing-gay-marriage-is-wrong.csv": "2759c1ad9c0748a1fa8cbbf6166e104b9a731d46c007eec9221746ec78a27fd2",
+    "data/UKPConvArg1Strict-CSV/human-growth-and-development-should-parents-use-spanking-as-an-option-to-discipline-_no.csv": "7a3ac8558be74f3f4f085293d545800f866f66b0b8cfdf8702c1d32b70dfe7a8",
+    "data/UKPConvArg1Strict-CSV/human-growth-and-development-should-parents-use-spanking-as-an-option-to-discipline-_yes.csv": "103403421f41b18f102954f9a8968aa18a6edf759379cccec19e2dcd10af8d71",
+    "data/UKPConvArg1Strict-CSV/if-your-spouse-committed-murder-and-he-or-she-confided-in-you-would-you-turn-them-in-_no.csv": "924bbb29b79990b196ac2f17c25a8a5ada2c1eb44369052ad006731f272459ea",
+    "data/UKPConvArg1Strict-CSV/if-your-spouse-committed-murder-and-he-or-she-confided-in-you-would-you-turn-them-in-_yes.csv": "c8c5ed3510f842aa60d4935f3137293637b2a8c775788ccbe00ac925d625d45d",
+    "data/UKPConvArg1Strict-CSV/india-has-the-potential-to-lead-the-world-_no-against.csv": "fc5d6699740e343606133afd9cb8eb5e44accaf9ddca5502c41809d40592d4d5",
+    "data/UKPConvArg1Strict-CSV/india-has-the-potential-to-lead-the-world-_yes-for.csv": "5183a1587bb9c688f13da61efe8247e1c0833d459ed59cc79c0e9ceac9bbc4b3",
+    "data/UKPConvArg1Strict-CSV/is-it-better-to-have-a-lousy-father-or-to-be-fatherless-_fatherless.csv": "90ea69a4800eebc6aec6935dccc72d592bae2ea3acf0b8a199cb43552be2948d",
+    "data/UKPConvArg1Strict-CSV/is-it-better-to-have-a-lousy-father-or-to-be-fatherless-_lousy-father.csv": "129e2e19214db77b98a04feb66a4e85c3d78cc494b0dfb1b3d099c3e37ef0b6a",
+    "data/UKPConvArg1Strict-CSV/is-porn-wrong-_no-is-is-not.csv": "b6b30bede4567c84dbc2ec8db0c6acb74f818d2685534e8d09d35f48c3f230fe",
+    "data/UKPConvArg1Strict-CSV/is-porn-wrong-_yes-porn-is-wrong.csv": "1a827506b88b7f5d7ce1a781cb935d4fe3f019b79b83bd2a778526e10c9ff6f1",
+    "data/UKPConvArg1Strict-CSV/is-the-school-uniform-a-good-or-bad-idea-_bad.csv": "7ebb532dcaedd836a7a96a65a7cc45bb10e92d49fd7d94a265795ecf68e1927a",
+    "data/UKPConvArg1Strict-CSV/is-the-school-uniform-a-good-or-bad-idea-_good.csv": "db2948b209b9d59e8aa256aa020dcc7bd53581ede762f403e2550d7eb60dad1e",
+    "data/UKPConvArg1Strict-CSV/personal-pursuit-or-advancing-the-common-good-_advancing-the-commond-good.csv": "4e0dcc10f2e9c360f0786aeb1545440943794c65c290d4f4d144c7ab22420748",
+    "data/UKPConvArg1Strict-CSV/personal-pursuit-or-advancing-the-common-good-_personal-pursuit.csv": "3ddb7f9b04425a02eaff86394b02ef3a516317457283bc4ba84cf38bb6048e0a",
+    "data/UKPConvArg1Strict-CSV/pro-choice-vs-pro-life_pro-choice.csv": "7f98ca0c5eec48782c1ce6d43aefad41428c82cb3bb0ed2b8cda48c7a035352f",
+    "data/UKPConvArg1Strict-CSV/pro-choice-vs-pro-life_pro-life.csv": "648586dff1eb6e4c22d7eb528cca79219daecc9b99906c8bae59f810bf532585",
+    "data/UKPConvArg1Strict-CSV/should-physical-education-be-mandatory-in-schools-_no-.csv": "9fa60eee8b161ff400b0b88b01c3e6a1b44bedc4795eea4a75c7089b784e7c16",
+    "data/UKPConvArg1Strict-CSV/should-physical-education-be-mandatory-in-schools-_yes-.csv": "133e27fb57352eeb1bc71638051536546cabc84b90bff4f7e6d7313da944176c",
+    "data/UKPConvArg1Strict-CSV/tv-is-better-than-books_books.csv": "2d8b8247570aab28837febfdfdd7324f4e1fac2efe58a77d7fc355c89509642f",
+    "data/UKPConvArg1Strict-CSV/tv-is-better-than-books_tv.csv": "76677ba0814e95380b1f5b9a459670fd3e71ad1f5cb02ecc7ac094e3f5dfb58e",
+    "data/UKPConvArg1Strict-CSV/william-farquhar-ought-to-be-honoured-as-the-rightful-founder-of-singapore_no-it-is-raffles-.csv": "112defbb0e49db425a7ed3e28de9a5b133c17f739fa9d0b8d08c9ee00facf785",
+    "data/UKPConvArg1Strict-CSV/william-farquhar-ought-to-be-honoured-as-the-rightful-founder-of-singapore_yes-of-course-.csv": "67addb83292e7e2d638edac70d2cc670e0b3d7ec19f57b101c8fd9ff975bab4e"
+   },
+   "kind": "github",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://github.com/UKPLab/acl2016-convincing-arguments/blob/ca9d24e41b8805ff2e1d3585d552b49bb64a65f7/README.md",
+   "repo": "UKPLab/acl2016-convincing-arguments",
+   "revision": "ca9d24e41b8805ff2e1d3585d552b49bb64a65f7"
+  },
+  "wic_tsv": {
+   "files": {
+    "README.md": "547ad4b79820f7c5cef069b8cebd12dbeb9f46a6c95e7d40df21549de8a69c2e",
+    "data/en/Development/dev_definitions.txt": "04f104b3e6de6fa1348d6024983f91e34c75ccf38a84457b2a3e98245824a10e",
+    "data/en/Development/dev_examples.txt": "b8798c78eb2f76ee04cb5d7ac8b96c63dcfdfbb251b1c70372ce90f021245453",
+    "data/en/Development/dev_hypernyms.txt": "7f9ae6b8c722dbc34cd858972f1b83d10c923faa163178c37c337d4a665109bb",
+    "data/en/Development/dev_labels.txt": "3531353642e78a960e0f00ef8eca7f7503a02d1e7008ab22520687f7349bbb80",
+    "data/en/LICENSE": "c868784e6ac7230f2fb32408e84e8a8b4be818dc41d490ea4f970c946832b5cd",
+    "data/en/Test/test_definitions.txt": "295e0fa3566e4170939b0bcfcb3f3c1b185dbf68cbb3437b3ca6e6d6113776e7",
+    "data/en/Test/test_examples.txt": "8ed7e341919988a3bd1bcb8e25508f39fb452ec60a367c7fe2a8cc1026cfbc8f",
+    "data/en/Test/test_hypernyms.txt": "3129e432b2626e069bede0656a9c6a9419acc81e514296d263c2650baf5c3493",
+    "data/en/Training/train_definitions.txt": "8ee934dd6c88c87e9172cb9cfdec3a4da7e10597b950e0cfd9ff1f7ecee8db5d",
+    "data/en/Training/train_examples.txt": "d6d5aa00493d87430aa54d0de6153c853496e38ff06a151e1ccbb6601cf9db4d",
+    "data/en/Training/train_hypernyms.txt": "4b55990f5c9b38b0343025372beb9981553770d03eee4c6e30d7a8025c3d4669",
+    "data/en/Training/train_labels.txt": "fa13e01d2e156a8880069c3f4933d65cbffa562bf3898c26d7bdbce016089a76"
+   },
+   "kind": "github",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://github.com/semantic-web-company/wic-tsv/blob/7bddf326add99eb40a2b85a331deffafead2a73f/data/en/LICENSE",
+   "repo": "semantic-web-company/wic-tsv",
+   "revision": "7bddf326add99eb40a2b85a331deffafead2a73f"
+  },
+  "xed": {
+   "files": {
+    "AnnotatedData/en-annotated.tsv": "26ac0254fbdb8b09cf2b00d44041d9084ece31bd200ae7c0e0662fbd8b037d98",
+    "README.md": "a0c88eff2fd93f76242793ff161ffdb9108ae5bdd1fd58fab9e8233fcc684228"
+   },
+   "kind": "github",
+   "licence": "cc-by-4.0",
+   "licence_evidence": "https://github.com/Helsinki-NLP/XED/blob/76666d251f147cf518071bef4f8415dab6b96115/README.md",
+   "repo": "Helsinki-NLP/XED",
+   "revision": "76666d251f147cf518071bef4f8415dab6b96115"
+  }
+ }
+}

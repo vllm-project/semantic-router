@@ -8,6 +8,7 @@ import statistics
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from benchmark.generate import FINAL_FAMILIES
 from jev_arena import compare_v3
@@ -287,6 +288,120 @@ class FlaggedTest(unittest.TestCase):
             {"g1": {"group_id": 1, "id": 1, "input_sha256": 1}, "g2": {"id": 1}},
         )
 
+    def test_roles_split_exposed_rows_by_css15_and_panel(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "scan").mkdir()
+            (root / "scan-union").mkdir()
+            (root / "scan" / "H3.private.json").write_text(
+                json.dumps(
+                    {
+                        "groups": {
+                            "g1": {
+                                "protected_ids": {
+                                    "css15_native": ["css/a/1"],
+                                    "decision_bench_v4": ["db-1"],
+                                },
+                                "roles": ["css15_native", "decision_bench_v4"],
+                            },
+                            "g2": {
+                                "protected_ids": {"decision_bench_v4": ["db-2"]},
+                                "roles": ["decision_bench_v4"],
+                            },
+                            "unexposed": {
+                                "protected_ids": {"typed_final_native": ["td-1"]}
+                            },
+                        }
+                    }
+                )
+            )
+            (root / "scan" / "E11.private.json").write_text(
+                json.dumps(
+                    {
+                        "groups": {
+                            "g3": {"protected_ids": {"rights_clean_select": ["s-1"]}}
+                        }
+                    }
+                )
+            )
+            (root / "scan-union" / "union.private.json").write_text(
+                json.dumps(
+                    {"groups": {"g3": {"protected_ids": {"typed_dev": ["dev-1"]}}}}
+                )
+            )
+            flagged = root / "flagged.json"
+            flagged.write_text(
+                json.dumps(
+                    {
+                        "panels": {
+                            "typed-final": [],
+                            "css15": ["css/a/1", "css/b/1"],
+                            "public231": [],
+                            "mlx-diag": [],
+                        },
+                        "item_groups": {"css/a/1": ["g1", "g9"], "css/b/1": ["g9"]},
+                    }
+                )
+            )
+            payload = root / "groups.json"
+            payload.write_text(
+                json.dumps({"flagged_sha256": oe.sha_file(flagged), "groups": {}})
+            )
+            exposure = root / "exposure.json"
+            exposure.write_text(
+                json.dumps(
+                    {
+                        "label": "m",
+                        "payload_sha256": oe.sha_file(payload),
+                        "groups": ["g1", "g2", "g3"],
+                        "matched_rows": {
+                            "g1": {"group_id": 2, "id": 2, "input_sha256": 2},
+                            "g2": {"group_id": 1, "id": 1, "input_sha256": 1},
+                            "g3": {"group_id": 3, "id": 3, "input_sha256": 3},
+                        },
+                        "methods_agree": True,
+                    }
+                )
+            )
+            out = root / "roles.json"
+            args = [
+                "roles",
+                "--rescreen",
+                str(root),
+                "--exposure",
+                str(exposure),
+                "--groups",
+                str(payload),
+                "--flagged",
+                str(flagged),
+                "--output",
+                str(out),
+            ]
+            self.assertEqual(oe.main(args), 0)
+            result = json.loads(out.read_text())
+            self.assertEqual((result["all"]["groups"], result["all"]["rows"]), (3, 6))
+            self.assertEqual(result["with_css15"]["rows"], 2)
+            self.assertEqual(result["with_css15"]["reported_panels_hit"], ["css15"])
+            self.assertEqual(result["with_css15"]["scored_items"], {"css15": 1})
+            without = result["without_css15"]
+            self.assertEqual((without["groups"], without["rows"]), (2, 4))
+            self.assertEqual(without["reported_panels_hit"], [])
+            self.assertEqual(without["development_panels_hit"], ["typed-dev"])
+            self.assertEqual(without["scored_items"], {})
+            self.assertEqual(
+                without["by_role_class"],
+                {
+                    "decision_bench_v4": {"groups": 1, "rows": 1},
+                    "rights_clean_select": {"groups": 1, "rows": 3},
+                    "typed-dev": {"groups": 1, "rows": 3},
+                },
+            )
+            self.assertEqual(without["by_pool"]["E11"], {"groups": 1, "rows": 3})
+            self.assertNotIn("css/a/1", out.read_text())
+            payload.write_text(json.dumps({"flagged_sha256": "x", "groups": {}}))
+            with self.assertRaises(ValueError):
+                oe.main(args)
+
 
 class AggregatesTest(unittest.TestCase):
     def test_contamination_difference_in_differences(self):
@@ -488,6 +603,112 @@ class ExposureTest(unittest.TestCase):
         self.assertEqual(
             sum(len(u) for _f, u in units),
             sum(r["task"] == task for r in cgold.values()) - len(flagged_css),
+        )
+
+    def test_panels_without_mlx_diag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rows = {
+                "typed-final": {"id": "td_1", "family": "evidence_join"},
+                "css15": {"id": "css/ibc/1", "task": "ibc", "role": "evaluation"},
+                "public231": {"id": "hard-x-1", "tier": "hard"},
+            }
+            for panel, row in rows.items():
+                path = oe.panels.path(root, panel, "gold")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(row) + "\n")
+            (root / "mlx").mkdir()
+            (root / "mlx" / "gold.jsonl").write_text('{"id": "m1"}\n')
+            with mock.patch.object(oe.panels, "verify"):
+                gold = oe.load_panels(root, None)
+                with self.assertRaisesRegex(ValueError, "differs from the frozen"):
+                    oe.load_panels(root, root / "mlx")
+        self.assertIsNone(gold["mlx-diag"])
+        self.assertIsNone(gold["mlx-prompts"])
+        self.assertEqual(
+            gold["sha256"]["mlx-diag"],
+            oe.panels.DEVELOPMENT["mlx-diag"]["gold_sha256"],
+        )
+        self.assertEqual(list(gold["css15"]), ["css/ibc/1"])
+        with self.assertRaisesRegex(ValueError, "needs the spec's mlx_panel"):
+            oe.load_model("m", {"run": "/nonexistent", "mlx_run": "/x"}, gold)
+        exclude = {panel: set() for panel in oe.SCORED_PANELS}
+        exclude["mlx-diag"] = {"m1"}
+        with tempfile.TemporaryDirectory() as tmp:
+            receipt = Path(tmp) / "exposure.json"
+            receipt.write_text(
+                json.dumps(
+                    {
+                        "groups": ["g-a"],
+                        "files": [],
+                        "groups_by_pool": {"H3": 1},
+                        "methods_agree": True,
+                    }
+                )
+            )
+            with self.assertRaisesRegex(ValueError, "exposed mlx-diag items"):
+                oe.tier_exposure(
+                    [str(receipt)],
+                    {"candidate": "cand"},
+                    {},
+                    gold,
+                    exclude,
+                    {"m1": ["g-a"]},
+                )
+
+    def test_tier_without_own_1_0_takes_threshold_from_peers(self):
+        cfg = {
+            "candidate": "cand",
+            "own_1_0": [],
+            "peers": ["p1", "p2"],
+            "threshold_pool": ["p1", "p2"],
+        }
+        self.assertEqual(
+            [pair["right"] for pair in oe.pairs_from_tiers({"t": cfg})], ["p1", "p2"]
+        )
+
+        def value(v3, h):
+            return {
+                "v3": v3,
+                "H": h,
+                "tasks": {"media_ideology": h},
+                "public231": {"correct": 1},
+                "mlx": None,
+            }
+
+        variant_values = {
+            "full": {
+                "cand": value(67.0, 0.57),
+                "p1": value(72.0, 0.59),
+                "p2": value(69.0, 0.59),
+            },
+            "reduced": {
+                "cand": value(67.1, 0.57),
+                "p1": value(72.1, 0.59),
+                "p2": value(69.0, 0.59),
+            },
+        }
+        h_ci = {"delta": {"low": -0.04, "high": 0.05}}
+        out_pairs = {
+            oe.pair_key("cand", peer): {
+                "v3": {
+                    variant: {"axis_ci95": {"H": h_ci}}
+                    for variant in ("full", "reduced")
+                },
+                "ci_status": {},
+            }
+            for peer in ("p1", "p2")
+        }
+        summary = oe.tier_summary(cfg, variant_values, out_pairs, "media_ideology")
+        for variant, best_v3 in (("full", 72.0), ("reduced", 72.1)):
+            rules = summary["rules"][variant]
+            self.assertEqual(rules["best_peer"], "p1")
+            self.assertAlmostEqual(rules["threshold_v3"], 0.9 * best_v3)
+            self.assertTrue(rules["meets_threshold"])
+            self.assertEqual(rules["v3_vs_own_1_0"], {})
+            self.assertFalse(rules["H_significantly_below_best_peer"])
+        self.assertEqual(
+            oe.conclusion_changes(out_pairs, {"t": summary}, "reduced"), []
         )
 
 

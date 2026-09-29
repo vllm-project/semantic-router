@@ -18,6 +18,16 @@
       },
       "sha256": "ddf3c7b9696d1e05873b494a00f018a980485a7c142327f756a722346c246c6b"
     },
+    "26B": {
+      "accent": "#6fdcb4",
+      "file": "DEV2.0-26B-owl-banner.png",
+      "owl": {
+        "sha256": "1c16e7f3c65dd2129b56b080a6d44456a755d046deefaff09f0f05147570b316",
+        "source": "brand/sources/DEV2.0-27B-owl-sticker.png"
+      },
+      "sha256": "fdef0634a8b4bf7a301e743a662fd54e3c0c0dac7f21d99a03a70b83540c0804",
+      "tier": "27B"
+    },
     "27B": {
       "accent": "#6fdcb4",
       "file": "DEV2.0-27B-owl-banner.png",

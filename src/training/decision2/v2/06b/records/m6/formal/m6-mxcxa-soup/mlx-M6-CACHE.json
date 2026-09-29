@@ -1,0 +1,17 @@
+{
+  "added": [],
+  "after_files": 303,
+  "after_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+  "autotune_entries_added": [],
+  "before_files": 303,
+  "before_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+  "cache": "/data/dev2/runs/06b/m6/formal/m6-mxcxa-soup-mlx.triton-cache",
+  "changed": [],
+  "kind": "per-run",
+  "recorded_utc": "2026-09-28T23:46:49.310034+00:00",
+  "removed": [],
+  "schema": "dev2-06b-m6-triton-cache/1",
+  "snapshot": "/data/dev2/runs/06b/m6/triton-cache-frozen",
+  "snapshot_manifest": "/data/dev2/runs/06b/m6/triton-cache-frozen.MANIFEST.json",
+  "unchanged": true
+}

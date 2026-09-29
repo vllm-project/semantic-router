@@ -1,0 +1,52 @@
+{
+  "gold_or_scores_read": false,
+  "label": "post-key same-panel",
+  "panels": {
+    "css15": {
+      "answer_slots": 6547,
+      "identity": {},
+      "missing_originals": 0,
+      "null_answer_slots": 0,
+      "originals": 6547,
+      "predicted_originals": 6547,
+      "predictions_sha256": "5621fbac554042d582bebc508432281c5af886c07f026699357a44ac50947842",
+      "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6"
+    },
+    "public231": {
+      "answer_slots": 231,
+      "identity": {},
+      "missing_originals": 0,
+      "null_answer_slots": 0,
+      "originals": 231,
+      "predicted_originals": 231,
+      "predictions_sha256": "7e08c0efaab87e5b647848438b3a2f9435804085668567475f5f7e90c15b3614",
+      "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd"
+    },
+    "typed-final": {
+      "answer_slots": 2000,
+      "identity": {},
+      "missing_originals": 0,
+      "null_answer_slots": 0,
+      "originals": 1600,
+      "predicted_originals": 1600,
+      "predictions_sha256": "61962365147a640c799e387a7ec096f0f6c0fc9c6536f18a56c5221ecec3f1dc",
+      "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd"
+    }
+  },
+  "provenance": {
+    "COLLECT.json": "831045df170979efc82c1e484129b6a5c2d38b2b431b25c305826292ca1ab89c"
+  },
+  "schema": "dev2-same-panel-seal/1",
+  "sealed_utc": "2026-09-28T23:13:40.069155+00:00",
+  "sources": {
+    "benchmark/generate.py": "c6569d4c86c3b9ea2ebdda564d8ba4d3428cc807d41d39984379821cfbb9422c",
+    "benchmark/score.py": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "jev_arena/compare_v3.py": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "jev_arena/jevbench_public.py": "aec840b6497beeae8b63e9270670c22506265c086a84e889bc82f694146518cf",
+    "transfer/build.py": "717e31b62d1f9d09b30f1ae2365b2e59cdf0cf40209dda5e9e08b921a1fc184d",
+    "transfer/score.py": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca",
+    "v2/eval/adapters.py": "6717d108a1336efef8aded3fed8ec697d42dede7c125d3241387868d448c8f32",
+    "v2/eval/panels.py": "2fdde94500078a24940ca65bd9afb8952900cf40c4134dc7b0d66d792c10e807",
+    "v2/eval/same_panel.py": "936f083dea972cbfc1886710f4f14e3f01f1b3eec6d667e9912bf399772da704"
+  }
+}

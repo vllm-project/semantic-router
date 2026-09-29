@@ -1,0 +1,1 @@
+{"run":"m6-mx-s3-dev","gpu":1,"render":"/dev/dri/renderD137","commit":"33faafcda2b40c1963e5013154118b551cb55b5c-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T22:55:20Z","end_utc":"2026-09-28T22:56:00Z","wall_seconds":40,"gpu_hours":0.01111,"exit":0}

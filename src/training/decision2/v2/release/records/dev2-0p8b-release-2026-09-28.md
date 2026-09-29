@@ -1,5 +1,16 @@
 # DEV2.0-0.8B: private release build, upload and verification (2026-09-28)
 
+## Erratum, 2026-09-29 ≈08:25 UTC+8: cited staging revisions no longer exist
+
+Four storage cleanups on 2026-09-29 (decoder M3 at 02:15 and 02:32, release at 04:47, decoder M4 at 04:51 UTC+8)
+called `permanently_delete_lfs_files` with its huggingface_hub 1.33 default `rewrite_history=True`, which rewrote every
+commit of the staging repositories they touched. The staging revisions `545a6784`, `784a894f` and `16c0929a`
+(`dev2-dec-staging`), `62c61c10` (`dev2-release-staging-06bm4`) and `5afd8fc8` (`dev2-release-staging`) no longer
+exist. This record's checkpoint citation `dev2-dec-staging@16c0929a…` ("Candidate and scored identity") is one of them.
+Artifact identity rests on the per-file SHA-256 in each package's `MODEL_MANIFEST.json` plus the verified node copies,
+not on those staging revision IDs. The released repository was not rewritten: `0b631a85`, `2667d883`, `7d08d0e1` and
+`f458c34c` still resolve (Hub check, 2026-09-29 ≈08:20 UTC+8). Details: [storage steward record](hf-storage-steward-2026-09-29.md) §4.
+
 ## Card-only revision (overlap and A7 v3 quarantine disclosures), 2026-09-29 ≈04:45 UTC+8 — current revision `f458c34c`
 
 The coordinator ordered this card-only revision after the eval track's overlap-effect check

@@ -1,0 +1,175 @@
+{
+  "by_type": {
+    "choice": {
+      "brier": 0.20450958306771413,
+      "english_accuracy": 0.753968253968254,
+      "gap_vs_english": -0.04761904761904756,
+      "languages": {
+        "ar": {
+          "accuracy": 0.626984126984127,
+          "correct": 79,
+          "invalid": 0,
+          "n": 126
+        },
+        "de": {
+          "accuracy": 0.6904761904761905,
+          "correct": 87,
+          "invalid": 0,
+          "n": 126
+        },
+        "en": {
+          "accuracy": 0.753968253968254,
+          "correct": 95,
+          "invalid": 0,
+          "n": 126
+        },
+        "es": {
+          "accuracy": 0.7222222222222222,
+          "correct": 91,
+          "invalid": 0,
+          "n": 126
+        },
+        "fr": {
+          "accuracy": 0.7063492063492064,
+          "correct": 89,
+          "invalid": 0,
+          "n": 126
+        },
+        "ja": {
+          "accuracy": 0.7222222222222222,
+          "correct": 91,
+          "invalid": 0,
+          "n": 126
+        },
+        "zh": {
+          "accuracy": 0.7698412698412699,
+          "correct": 97,
+          "invalid": 0,
+          "n": 126
+        }
+      },
+      "non_english_mean_accuracy": 0.7063492063492064
+    },
+    "noul": {
+      "brier": 0.3542851321241885,
+      "english_accuracy": 0.53,
+      "gap_vs_english": -0.0033333333333332993,
+      "languages": {
+        "de": {
+          "accuracy": 0.55,
+          "correct": 55,
+          "invalid": 0,
+          "n": 100
+        },
+        "en": {
+          "accuracy": 0.53,
+          "correct": 53,
+          "invalid": 0,
+          "n": 100
+        },
+        "es": {
+          "accuracy": 0.51,
+          "correct": 51,
+          "invalid": 0,
+          "n": 100
+        },
+        "fr": {
+          "accuracy": 0.52,
+          "correct": 52,
+          "invalid": 0,
+          "n": 100
+        },
+        "ja": {
+          "accuracy": 0.52,
+          "correct": 52,
+          "invalid": 0,
+          "n": 100
+        },
+        "ko": {
+          "accuracy": 0.51,
+          "correct": 51,
+          "invalid": 0,
+          "n": 100
+        },
+        "zh": {
+          "accuracy": 0.55,
+          "correct": 55,
+          "invalid": 0,
+          "n": 100
+        }
+      },
+      "non_english_mean_accuracy": 0.5266666666666667
+    },
+    "score": {
+      "brier": 0.2210994857032006,
+      "english_accuracy": 0.7474747474747475,
+      "gap_vs_english": -0.10269360269360273,
+      "languages": {
+        "ar": {
+          "accuracy": 0.5656565656565656,
+          "correct": 56,
+          "invalid": 0,
+          "n": 99
+        },
+        "de": {
+          "accuracy": 0.5959595959595959,
+          "correct": 59,
+          "invalid": 0,
+          "n": 99
+        },
+        "en": {
+          "accuracy": 0.7474747474747475,
+          "correct": 74,
+          "invalid": 0,
+          "n": 99
+        },
+        "es": {
+          "accuracy": 0.6868686868686869,
+          "correct": 68,
+          "invalid": 0,
+          "n": 99
+        },
+        "fr": {
+          "accuracy": 0.696969696969697,
+          "correct": 69,
+          "invalid": 0,
+          "n": 99
+        },
+        "ru": {
+          "accuracy": 0.6565656565656566,
+          "correct": 65,
+          "invalid": 0,
+          "n": 99
+        },
+        "zh": {
+          "accuracy": 0.6666666666666666,
+          "correct": 66,
+          "invalid": 0,
+          "n": 99
+        }
+      },
+      "non_english_mean_accuracy": 0.6447811447811448
+    }
+  },
+  "cross_language_consistency": 0.6,
+  "english_type_macro_accuracy": 0.6771476671476672,
+  "gold_sha256": "71515a41583e7c4792c7058d45e6b12980f033bc9de2847b15dd3fb7b940b484",
+  "invalid_or_missing": 0,
+  "items": 2275,
+  "non_english_type_macro_accuracy": 0.6259323392656726,
+  "per_language_mean_accuracy": {
+    "ar": 0.5963203463203464,
+    "de": 0.6121452621452621,
+    "en": 0.6771476671476672,
+    "es": 0.6396969696969697,
+    "fr": 0.6411063011063012,
+    "ja": 0.6211111111111112,
+    "ko": 0.51,
+    "ru": 0.6565656565656566,
+    "zh": 0.6621693121693122
+  },
+  "predictions_sha256": "5f663587fa6c2f5ae4974ea3e682102a6c5eabcd14cf08b29a3bce11979b4e15",
+  "schema": "dev2-mlx-diag-score/1",
+  "scope": "multilingual development diagnostic; not a release score",
+  "type_macro_accuracy": 0.6332488146773861
+}

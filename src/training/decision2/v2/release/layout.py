@@ -26,13 +26,15 @@ POINTER = {"decision_format": "vllm-sr-decision", "format_version": 2}
 RUNTIME_DIR = "decision2"
 VENDOR_DIR = "decision2/_vendor"
 ORG = "llm-semantic-router"
-RELEASE_REPO = re.compile(r"llm-semantic-router/DEV2\.0-(0\.6|0\.8|2|4|9|27)B\Z")
+RELEASE_REPO = re.compile(r"llm-semantic-router/DEV2\.0-(0\.[1-9]|[1-9][0-9]?)B\Z")
 STAGING_REPO = re.compile(
     r"llm-semantic-router/dev2-release-staging(?:-[a-z0-9]{1,24})?\Z"
 )
-MODEL_NAME = re.compile(r"DEV2\.0-(0\.6|0\.8|2|4|9|27)B\Z")
+MODEL_NAME = re.compile(r"DEV2\.0-(0\.[1-9]|[1-9][0-9]?)B\Z")
 TIERS = {"0.6B": 0.6e9, "0.8B": 0.8e9, "2B": 2e9, "4B": 4e9, "9B": 9e9, "27B": 27e9}
 SAME_SIZE_RATIO = 1.25
+# "tier": DEV2.0-<size tier>; "loaded-parameters": DEV2.0-<rounded loaded count> (brief section 2).
+NAME_BASES = ("tier", "loaded-parameters")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
 CARD_FILES = (
@@ -179,6 +181,22 @@ def name_for(parameters: int) -> str:
     return f"DEV2.0-{tier}"
 
 
+def count_name(parameters: int) -> str:
+    """DEV2.0-<loaded count>: one decimal below 1B, whole billions from 1B, inside a size tier."""
+    name_for(parameters)
+    billions = parameters / 1e9
+    size = f"{billions:.1f}" if billions < 1 else f"{round(billions)}"
+    return f"DEV2.0-{size}B"
+
+
+def release_name(parameters: int, basis: str = "tier") -> str:
+    if basis not in NAME_BASES:
+        raise ValueError(f"name_basis is one of {NAME_BASES}")
+    return (
+        count_name(parameters) if basis == "loaded-parameters" else name_for(parameters)
+    )
+
+
 def check_repo(repo_id: str, model_name: str, *, staging: bool) -> None:
     if staging:
         if not STAGING_REPO.fullmatch(repo_id):
@@ -188,7 +206,7 @@ def check_repo(repo_id: str, model_name: str, *, staging: bool) -> None:
     elif not RELEASE_REPO.fullmatch(repo_id) or repo_id.rsplit("/", 1)[1] != model_name:
         raise ValueError("Release repositories are llm-semantic-router/<model name>")
     if not MODEL_NAME.fullmatch(model_name):
-        raise ValueError("Model names are DEV2.0-<tier>")
+        raise ValueError("Model names are DEV2.0-<size>B")
 
 
 @dataclass(frozen=True)

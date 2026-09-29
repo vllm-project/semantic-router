@@ -15,6 +15,12 @@ one difference: missing or malformed rows count as wrong with Brier 1 instead of
 being dropped. The development proxy is ``100*sqrt(T_dev*H_pilot)``; within a tier,
 two checkpoints less than 8 proxy points apart are a tie that only the formal paired
 v3 interval can decide (``v2/eval/records/m5-proxy-v2-calibration-2026-09-29.md``).
+
+A run directory with ``output/score5-dev.predictions.jsonl`` also gets a ``score5`` block
+(5-level Score level usage, accuracy with CI, macro-F1, QWK and COLLAPSE / WARN /
+NO-SIGNAL flags; ``v2/eval/score5.py``). With ``output/ht-dev.predictions.jsonl`` it gets
+``htdev_empathy_levels``: gold-free level usage on HT-DEV's 5-level empathy task, context
+only (no flags).
 """
 
 from __future__ import annotations
@@ -110,6 +116,45 @@ def select_summary(
     }
 
 
+def score5_block(panel_root: Path, predictions_path: Path) -> dict[str, Any]:
+    from v2.eval import score5
+
+    panels.verify(panel_root, ["score5-dev"])
+    gold = read_jsonl(panels.path(panel_root, "score5-dev", "gold"))
+    predictions = {r["id"]: r for r in read_jsonl(predictions_path)}
+    return {
+        "predictions_sha256": sha_file(predictions_path),
+        **score5.summary(gold, predictions),
+    }
+
+
+def htdev_empathy_levels(panel_root: Path, predictions_path: Path) -> dict[str, Any]:
+    """Level usage on HT-DEV's empathy task from prompts and predictions only."""
+    from benchmark.score import evaluate_answer
+    from v2.eval import score5
+    from v2.eval.htdev.sources.empathic_reactions import QUESTION, TASK
+
+    panels.verify(panel_root, ["ht-dev"])
+    items = {
+        row["id"]: row["questions"]["decision"]
+        for row in read_jsonl(panels.path(panel_root, "ht-dev", "prompts"))
+        if row["questions"]["decision"] == QUESTION
+    }
+    predictions = {r["id"]: r for r in read_jsonl(predictions_path)}
+    points = []
+    for item_id, question in items.items():
+        answer = ((predictions.get(item_id) or {}).get("answers") or {}).get("decision")
+        # A placeholder gold: only the gold-independent `point` is read.
+        result = evaluate_answer(question, {"value": 0}, answer)
+        points.append(result.get("point") if result.get("status") == "ok" else None)
+    return {
+        "task": TASK,
+        "scope": "context only (gold-free level usage; no flags)",
+        "n": len(points),
+        **score5.level_usage(points),
+    }
+
+
 def readout(args: argparse.Namespace) -> dict[str, Any]:
     from benchmark.score import score_suite
     from transfer.score import score as score_css
@@ -170,6 +215,14 @@ def readout(args: argparse.Namespace) -> dict[str, Any]:
     if "typed_dev" in out and "css_pilot" in out:
         t, h = out["typed_dev"]["T_dev"], out["css_pilot"]["H_pilot"]
         out["development_proxy"] = 100 * math.sqrt(t * h)
+    score5_path = args.score5 or (
+        output_dir / "score5-dev.predictions.jsonl" if output_dir else None
+    )
+    if score5_path and score5_path.is_file():
+        out["score5"] = score5_block(args.panel_root, score5_path)
+    htdev_path = output_dir / "ht-dev.predictions.jsonl" if output_dir else None
+    if htdev_path and htdev_path.is_file():
+        out["htdev_empathy_levels"] = htdev_empathy_levels(args.panel_root, htdev_path)
     for name, path in (("select", args.select), ("cal", args.cal)):
         if path is not None:
             panels.verify(args.panel_root, [name])
@@ -190,6 +243,7 @@ def main() -> None:
     )
     parser.add_argument("--typed-dev", type=Path)
     parser.add_argument("--css-pilot", type=Path)
+    parser.add_argument("--score5", type=Path)
     parser.add_argument("--select", type=Path)
     parser.add_argument("--cal", type=Path)
     parser.add_argument("--label", required=True)
@@ -206,6 +260,9 @@ def main() -> None:
     ):
         if key in result:
             summary[f"{key}.{field}"] = result[key][field]
+    if "score5" in result:
+        for field in ("accuracy", "modal_share", "rare_levels", "flags"):
+            summary[f"score5.{field}"] = result["score5"][field]
     print(json.dumps(summary))
 
 

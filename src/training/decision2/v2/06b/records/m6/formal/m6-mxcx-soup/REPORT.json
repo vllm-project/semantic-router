@@ -1,0 +1,392 @@
+{
+  "batch_policy": "training.model.infer, one prompt per call, all its questions batched; 8,192-token cap, over-budget invalid, no truncation; raw probabilities (no CAL temperature)",
+  "gpu_wall_seconds": 198.0905584068969,
+  "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+  "invalid": {
+    "css15": {
+      "invalid_or_missing": 15,
+      "items": 6547,
+      "reasons": {
+        "choice": 15
+      }
+    },
+    "public231": {
+      "invalid_or_missing": 0,
+      "items": 231
+    },
+    "typed-final": {
+      "invalid_or_missing": 0,
+      "reasons": {},
+      "slots": 2000
+    }
+  },
+  "label": "post-key same-panel",
+  "latency": {
+    "css15": {
+      "answer_slots_per_second": 50.17495793461086,
+      "mean_ms": 19.930260854492847,
+      "n": 6547,
+      "p50_ms": 16.251062974333763,
+      "p95_ms": 30.547221377491947,
+      "prompts_per_second": 50.17495793461086,
+      "sum_seconds": 130.48341781436466
+    },
+    "public231": {
+      "answer_slots_per_second": 28.86085655059722,
+      "mean_ms": 34.649006284579826,
+      "n": 231,
+      "p50_ms": 16.095292987301946,
+      "p95_ms": 43.44199493061751,
+      "prompts_per_second": 28.86085655059722,
+      "sum_seconds": 8.00392045173794
+    },
+    "typed-final": {
+      "answer_slots_per_second": 55.2513939261189,
+      "mean_ms": 22.62386360191158,
+      "n": 1600,
+      "p50_ms": 16.60530606750399,
+      "p95_ms": 31.67197644943371,
+      "prompts_per_second": 44.20111514089512,
+      "sum_seconds": 36.19818176305853
+    }
+  },
+  "model": {
+    "adapter_version": null,
+    "backend": null,
+    "family": "decision2",
+    "label": "DEV2.0-0.6B M6 m6-mxcx-soup (post-key same-panel)",
+    "model_id": null,
+    "revision": null,
+    "tier": "0.6B"
+  },
+  "panel_sha256": {
+    "gold/css15.gold.jsonl": "1cda9623032138bb7b124be0c1b0a4239c06bed7be3169264e6eb31805c19ba4",
+    "gold/public231/manifest.json": "e0e7c67701cf05f996d3b4eac09abf1bb3e6bb363cfe007089acd3644a38ed35",
+    "gold/public231/prompts.jsonl": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+    "gold/public231/targets.jsonl": "abc17b971d13807a15b3cdb43062f4cd876aad9d7314e72365724904e88b937f",
+    "gold/typed-final.gold.jsonl": "707dd28dfbab10d124d437434023729f319501542e999e536fce9b7ff7f2361e",
+    "goldfree/css15.prompts.jsonl": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+    "goldfree/public231.prompts.jsonl": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+    "goldfree/typed-final.prompts.jsonl": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd"
+  },
+  "panels": {
+    "css15": {
+      "H": 0.45904022473242023,
+      "median_task_brier_sum": 0.5636768815904556,
+      "median_task_ece_pmax_15": 0.05825822341243834,
+      "micro_accuracy": 0.4881625171834428,
+      "score_sha256": "d7f2562a6aa6615100c839b32b2bcac090ec7edb1a5c0035712e3a92b4170abb",
+      "tasks": {
+        "conv_go_awry": {
+          "accuracy": 0.592,
+          "brier_sum": 0.4792981114873166,
+          "ece_pmax_15": 0.054627901666195404,
+          "invalid": 0,
+          "macro_f1": 0.5818232506272651,
+          "n": 500
+        },
+        "emotion": {
+          "accuracy": 0.5963855421686747,
+          "brier_sum": 0.5630320692573956,
+          "ece_pmax_15": 0.05825822341243834,
+          "invalid": 0,
+          "macro_f1": 0.5999300185231754,
+          "n": 498
+        },
+        "flute": {
+          "accuracy": 0.35,
+          "brier_sum": 0.7046247749876672,
+          "ece_pmax_15": 0.034891943999117075,
+          "invalid": 0,
+          "macro_f1": 0.3191123188405797,
+          "n": 500
+        },
+        "ibc": {
+          "accuracy": 0.4678714859437751,
+          "brier_sum": 0.6305309107960434,
+          "ece_pmax_15": 0.06145350016183293,
+          "invalid": 0,
+          "macro_f1": 0.45904022473242023,
+          "n": 498
+        },
+        "indian_english_dialect": {
+          "accuracy": 0.2706766917293233,
+          "brier_sum": 0.9306233297717929,
+          "ece_pmax_15": 0.17048017533575274,
+          "invalid": 0,
+          "macro_f1": 0.24626962420545903,
+          "n": 266
+        },
+        "media_ideology": {
+          "accuracy": 0.38353413654618473,
+          "brier_sum": 0.6764380905880432,
+          "ece_pmax_15": 0.02758407991796133,
+          "invalid": 0,
+          "macro_f1": 0.31772671910714445,
+          "n": 498
+        },
+        "mrf": {
+          "accuracy": 0.558,
+          "brier_sum": 0.47415707626053705,
+          "ece_pmax_15": 0.09244532970222315,
+          "invalid": 0,
+          "macro_f1": 0.5547066100882124,
+          "n": 500
+        },
+        "persuasion": {
+          "accuracy": 0.5668202764976958,
+          "brier_sum": 0.4963481382945417,
+          "ece_pmax_15": 0.05438849706945792,
+          "invalid": 0,
+          "macro_f1": 0.5515838994042516,
+          "n": 434
+        },
+        "raop": {
+          "accuracy": 0.5964912280701754,
+          "brier_sum": 0.5636768815904556,
+          "ece_pmax_15": 0.12284560519886722,
+          "invalid": 0,
+          "macro_f1": 0.5916769224113896,
+          "n": 399
+        },
+        "reddit_humor": {
+          "accuracy": 0.538,
+          "brier_sum": 0.5107503208756099,
+          "ece_pmax_15": 0.10648628626889298,
+          "invalid": 0,
+          "macro_f1": 0.4446447890371439,
+          "n": 500
+        },
+        "talklife": {
+          "accuracy": 0.41164658634538154,
+          "brier_sum": 0.6613483545711458,
+          "ece_pmax_15": 0.04983611635105369,
+          "invalid": 0,
+          "macro_f1": 0.36637312351563484,
+          "n": 498
+        },
+        "tempowic": {
+          "accuracy": 0.5087209302325582,
+          "brier_sum": 0.5128088894632238,
+          "ece_pmax_15": 0.08335916303681308,
+          "invalid": 0,
+          "macro_f1": 0.49053114949479015,
+          "n": 344
+        },
+        "tropes": {
+          "accuracy": 0.008771929824561403,
+          "brier_sum": 0.9874168303181831,
+          "ece_pmax_15": 0.023957191755587214,
+          "invalid": 15,
+          "macro_f1": 0.008771929824561403,
+          "n": 114
+        },
+        "wiki_corpus": {
+          "accuracy": 0.53,
+          "brier_sum": 0.5059166477393532,
+          "ece_pmax_15": 0.08184809588441289,
+          "invalid": 0,
+          "macro_f1": 0.4350282485875706,
+          "n": 500
+        },
+        "wiki_politeness": {
+          "accuracy": 0.5100401606425703,
+          "brier_sum": 0.5831580941234196,
+          "ece_pmax_15": 0.05132890248980533,
+          "invalid": 0,
+          "macro_f1": 0.4989767964678359,
+          "n": 498
+        }
+      }
+    },
+    "public231": {
+      "brier_valid": 0.20590787363241092,
+      "correct": 152,
+      "ece_pmax_15": 0.0829545862268206,
+      "items": 231,
+      "score_sha256": "b9be574445ff491ae980c5fc07424a940e312dc4378cc0185e82298232c00c07",
+      "tier_macro_accuracy": 0.7409284284284284,
+      "tiers": {
+        "easy": {
+          "correct": 47,
+          "items": 48
+        },
+        "hard": {
+          "correct": 44,
+          "items": 111
+        },
+        "standard": {
+          "correct": 61,
+          "items": 72
+        }
+      },
+      "valid": 231
+    },
+    "typed-final": {
+      "T": 0.5115625,
+      "answer_slot_accuracy": 0.5185,
+      "brier": 0.3212875333534886,
+      "by_family": {
+        "constraint_competition": 0.4975,
+        "evidence_join": 0.54625,
+        "exception_stack": 0.675,
+        "resource_ledger": 0.3275
+      },
+      "by_type": {
+        "choice": {
+          "accuracy": 0.48625,
+          "brier": 0.3569416139400363,
+          "correct": 389,
+          "ece_10": 0.25575231257174424,
+          "n": 800
+        },
+        "noul": {
+          "accuracy": 0.64625,
+          "brier": 0.2584296504892811,
+          "correct": 517,
+          "ece_10": 0.1142538802296711,
+          "n": 800
+        },
+        "score": {
+          "accuracy": 0.3275,
+          "brier": 0.37569513790880815,
+          "correct": 131,
+          "ece_10": 0.05597851433659536,
+          "n": 400
+        }
+      },
+      "ece_10": 0.1461928832068394,
+      "robustness_pairs": {
+        "counterfactual": {
+          "joint_accuracy_all": 0.16,
+          "joint_correct_n": 80,
+          "n": 500,
+          "relation_consistency_all": 0.21,
+          "relation_consistent_n": 105,
+          "valid_n": 500
+        },
+        "label_invariance": {
+          "joint_accuracy_all": 0.472,
+          "joint_correct_n": 236,
+          "n": 500,
+          "relation_consistency_all": 0.894,
+          "relation_consistent_n": 447,
+          "valid_n": 500
+        },
+        "order_invariance": {
+          "joint_accuracy_all": 0.402,
+          "joint_correct_n": 201,
+          "n": 500,
+          "relation_consistency_all": 0.67,
+          "relation_consistent_n": 335,
+          "valid_n": 500
+        }
+      },
+      "score_sha256": "83c5d016860abb62d0050e2396368263e9c6adb49bd5e833500615d71a4cfdfc"
+    }
+  },
+  "parameters": {
+    "active": null,
+    "loaded": 597103104,
+    "safetensors_count": 597103104,
+    "source": "safetensors header element count"
+  },
+  "prior_gpu_hours": null,
+  "provenance": {
+    "COLLECT.json": "01758f262c0ec89ca99099ea39a7e0ebf9d883224eaae1686004b1bd6d3d7e00"
+  },
+  "reused": false,
+  "runtime": {
+    "causal_conv1d": "1.7.0",
+    "device_name": "",
+    "devices": 1,
+    "fla": "0.5.2",
+    "hip": "7.2.53211",
+    "numpy": "2.3.5",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0",
+    "triton": "3.7.1"
+  },
+  "schema": "dev2-same-panel-report/1",
+  "seal_sha256": "7d967f80adea61beeac1d393df9e7c3038e58bf86f785c77e5067a4beb2d4a78",
+  "slices": {
+    "css15": {
+      "long": {
+        "accuracy_all": 0.33595284872298625,
+        "correct": 171,
+        "invalid": 15,
+        "n": 509
+      },
+      "short": {
+        "accuracy_all": 0.5009937065253395,
+        "correct": 3025,
+        "invalid": 0,
+        "n": 6038
+      }
+    },
+    "language_screen": {
+      "css15": {
+        "de": 1,
+        "en": 6545,
+        "pt": 1
+      },
+      "public231": {
+        "en": 230,
+        "pt": 1
+      },
+      "typed-final": {
+        "en": 1600
+      }
+    },
+    "long_input_chars_threshold": 4000,
+    "multilingual_measurable": true,
+    "public231": {
+      "long": {
+        "accuracy_all": 0.35135135135135137,
+        "correct": 13,
+        "invalid": 0,
+        "n": 37
+      },
+      "short": {
+        "accuracy_all": 0.7164948453608248,
+        "correct": 139,
+        "invalid": 0,
+        "n": 194
+      }
+    },
+    "typed-final": {
+      "long": {
+        "accuracy_all": null,
+        "correct": 0,
+        "invalid": 0,
+        "n": 0
+      },
+      "short": {
+        "accuracy_all": 0.5185,
+        "correct": 1037,
+        "invalid": 0,
+        "n": 2000
+      }
+    }
+  },
+  "sources": {
+    "benchmark/generate.py": "c6569d4c86c3b9ea2ebdda564d8ba4d3428cc807d41d39984379821cfbb9422c",
+    "benchmark/score.py": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "jev_arena/compare_v3.py": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "jev_arena/jevbench_public.py": "aec840b6497beeae8b63e9270670c22506265c086a84e889bc82f694146518cf",
+    "transfer/build.py": "717e31b62d1f9d09b30f1ae2365b2e59cdf0cf40209dda5e9e08b921a1fc184d",
+    "transfer/score.py": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca",
+    "v2/eval/adapters.py": "6717d108a1336efef8aded3fed8ec697d42dede7c125d3241387868d448c8f32",
+    "v2/eval/panels.py": "2fdde94500078a24940ca65bd9afb8952900cf40c4134dc7b0d66d792c10e807",
+    "v2/eval/same_panel.py": "936f083dea972cbfc1886710f4f14e3f01f1b3eec6d667e9912bf399772da704"
+  },
+  "v3": {
+    "H": 0.45904022473242023,
+    "T": 0.5115625,
+    "formula": "100*sqrt(T*H)",
+    "score": 48.459030630490204
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "label": "DEV2.0-26B",
+  "rule": "COLLAPSED if one answer >= 90% of a type or the Wilson 95% lower bound <= chance",
+  "run": "/data/dev2/runs/27b/M3-A-soup/formal",
+  "schema": "dev2-gate-types/1",
+  "types": {
+    "choice": {
+      "accuracy": 0.785,
+      "accuracy_ci95": [
+        0.7552049006968108,
+        0.8120710402348356
+      ],
+      "chance": 0.2666666666666696,
+      "gold_distribution": {
+        "approved": 94,
+        "insufficient_evidence": 218,
+        "offer_0": 214,
+        "offer_1": 186,
+        "rejected": 88
+      },
+      "gold_majority_share": 0.2725,
+      "predicted_distinct": 7,
+      "predicted_distribution": {
+        "approved": 94,
+        "insufficient_evidence": 218,
+        "none": 36,
+        "offer_0": 145,
+        "offer_1": 110,
+        "offer_3": 109,
+        "rejected": 88
+      },
+      "predicted_top_share": 0.2725,
+      "slots": 800,
+      "valid": 800,
+      "verdict": "OK"
+    },
+    "noul": {
+      "accuracy": 0.89375,
+      "accuracy_ci95": [
+        0.8704821749041294,
+        0.9132543224356451
+      ],
+      "chance": 0.5,
+      "gold_distribution": {
+        "False": 396,
+        "True": 404
+      },
+      "gold_majority_share": 0.505,
+      "predicted_distinct": 2,
+      "predicted_distribution": {
+        "False": 411,
+        "True": 389
+      },
+      "predicted_top_share": 0.51375,
+      "slots": 800,
+      "valid": 800,
+      "verdict": "OK"
+    },
+    "score": {
+      "accuracy": 0.7925,
+      "accuracy_ci95": [
+        0.7500686395750451,
+        0.8293664656741417
+      ],
+      "chance": 0.20000000000000148,
+      "gold_distribution": {
+        "0": 35,
+        "1": 79,
+        "2": 83,
+        "3": 75,
+        "4": 128
+      },
+      "gold_majority_share": 0.32,
+      "predicted_distinct": 5,
+      "predicted_distribution": {
+        "0": 34,
+        "1": 60,
+        "2": 59,
+        "3": 65,
+        "4": 182
+      },
+      "predicted_top_share": 0.455,
+      "recall_by_level": {
+        "0": 0.9142857142857143,
+        "1": 0.7215189873417721,
+        "2": 0.6144578313253012,
+        "3": 0.6533333333333333,
+        "4": 1.0
+      },
+      "slots": 400,
+      "valid": 400,
+      "verdict": "OK"
+    }
+  }
+}

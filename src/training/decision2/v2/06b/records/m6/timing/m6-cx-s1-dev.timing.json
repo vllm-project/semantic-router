@@ -1,0 +1,1 @@
+{"run":"m6-cx-s1-dev","gpu":0,"render":"/dev/dri/renderD129","commit":"33faafcda2b40c1963e5013154118b551cb55b5c-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T20:39:43Z","end_utc":"2026-09-28T20:40:23Z","wall_seconds":40,"gpu_hours":0.01111,"exit":0}

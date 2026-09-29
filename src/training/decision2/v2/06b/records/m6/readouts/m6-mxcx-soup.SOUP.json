@@ -1,0 +1,216 @@
+{
+  "best_export_manifest_sha256": "3ae009ad838487c0df839a55898a98f5665276136d2a8cab3c1260dd0b29dfa2",
+  "cal": {
+    "metrics": {
+      "by_family": {
+        "human_goemotions_choice": {
+          "accuracy": 0.825,
+          "brier": 0.14338231363101486,
+          "correct": 165,
+          "n": 200,
+          "nll": 0.5373366615345542
+        },
+        "human_goemotions_noul": {
+          "accuracy": 0.905,
+          "brier": 0.0705614528755287,
+          "correct": 181,
+          "n": 200,
+          "nll": 0.25293640630137176
+        },
+        "pilot_narrative_reading": {
+          "accuracy": 1.0,
+          "brier": 0.0011348000677646635,
+          "correct": 130,
+          "n": 130,
+          "nll": 0.02525013199933079
+        },
+        "pilot_open_world_abstention": {
+          "accuracy": 1.0,
+          "brier": 0.0020152156570163726,
+          "correct": 40,
+          "n": 40,
+          "nll": 0.04076589298362241
+        },
+        "pilot_string_composition": {
+          "accuracy": 0.525,
+          "brier": 0.26815146716840565,
+          "correct": 21,
+          "n": 40,
+          "nll": 0.9602617180868721
+        },
+        "targeted_quantized_median": {
+          "accuracy": 0.4444444444444444,
+          "brier": 0.3367054333485576,
+          "correct": 40,
+          "n": 90,
+          "nll": 1.2901161371005123
+        }
+      },
+      "by_type": {
+        "choice": {
+          "accuracy": 0.83125,
+          "brier": 0.12338807806524998,
+          "correct": 266,
+          "n": 320,
+          "nll": 0.4616853877163192
+        },
+        "noul": {
+          "accuracy": 0.9344827586206896,
+          "brier": 0.049168136697431065,
+          "correct": 271,
+          "n": 290,
+          "nll": 0.18496176241619258
+        },
+        "score": {
+          "accuracy": 0.4444444444444444,
+          "brier": 0.3367054333485576,
+          "correct": 40,
+          "n": 90,
+          "nll": 1.2901161371005123
+        }
+      },
+      "correct": 577,
+      "family_macro_accuracy": 0.7832407407407408,
+      "family_macro_brier": 0.13699178045804797,
+      "micro_accuracy": 0.8242857142857143,
+      "n": 700,
+      "score_levels_predicted": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "probabilities_sha256": "df223972b1a642a500ab2f8f38af33108edcecc41ff6ee504e1320d6618fa127"
+  },
+  "elapsed_seconds": 49.172926106955856,
+  "ingredients": [
+    {
+      "arm": "m6-mx-s1",
+      "best_select": 560,
+      "best_step": 2634,
+      "state_sha256": "506cd5e0dc7a5b385b6941890215639db7a703c4160465ed8d1b541c60e2001f"
+    },
+    {
+      "arm": "m6-mx-s2",
+      "best_select": 570,
+      "best_step": 4211,
+      "state_sha256": "fe41c7cae46bf81c3626c0a42c44156092712f2e361f50c4906172a4ba7e8369"
+    },
+    {
+      "arm": "m6-mx-s3",
+      "best_select": 566,
+      "best_step": 4200,
+      "state_sha256": "484885ef0ef9473283a07e129ad8f256a22054dd84c68203f9476906d72a0d74"
+    },
+    {
+      "arm": "m6-cx-s1",
+      "best_select": 561,
+      "best_step": 3217,
+      "state_sha256": "12c257ca22e5687ffb4ee2eb3ef116ec91c561415c8476a6c8d93ca735bde500"
+    },
+    {
+      "arm": "m6-cx-s2",
+      "best_select": 570,
+      "best_step": 3210,
+      "state_sha256": "2b0a9f58ab3815e07d745638b0d5a84487bf5b58e2dd135d2c369296caf23cba"
+    },
+    {
+      "arm": "m6-cx-s3",
+      "best_select": 570,
+      "best_step": 2819,
+      "state_sha256": "841dcbd6c3312045687b25fe4c445591cfc4e15409768c94413cc994a919ab1a"
+    }
+  ],
+  "recipe_spec_sha256": "d238fcfa0629c92ba21e55987a6ec86c6811ae774f11cd941759caf634a2e666",
+  "reload_category_changes": 0,
+  "reload_max_abs_drift": 0.0,
+  "select": {
+    "metrics": {
+      "by_family": {
+        "human_goemotions_choice": {
+          "accuracy": 0.845,
+          "brier": 0.14021580042563742,
+          "correct": 169,
+          "n": 200,
+          "nll": 0.5488448336930054
+        },
+        "human_goemotions_noul": {
+          "accuracy": 0.895,
+          "brier": 0.08331920940673504,
+          "correct": 179,
+          "n": 200,
+          "nll": 0.2858883841276296
+        },
+        "pilot_narrative_reading": {
+          "accuracy": 1.0,
+          "brier": 0.0012171897026133822,
+          "correct": 130,
+          "n": 130,
+          "nll": 0.02718923434133349
+        },
+        "pilot_open_world_abstention": {
+          "accuracy": 1.0,
+          "brier": 0.0016922127949809973,
+          "correct": 40,
+          "n": 40,
+          "nll": 0.03377711062950144
+        },
+        "pilot_string_composition": {
+          "accuracy": 0.6,
+          "brier": 0.27103403527845893,
+          "correct": 24,
+          "n": 40,
+          "nll": 0.9656116228183402
+        },
+        "targeted_quantized_median": {
+          "accuracy": 0.37777777777777777,
+          "brier": 0.3337968821048153,
+          "correct": 34,
+          "n": 90,
+          "nll": 1.2705851362288285
+        }
+      },
+      "by_type": {
+        "choice": {
+          "accuracy": 0.853125,
+          "brier": 0.12172904309647273,
+          "correct": 273,
+          "n": 320,
+          "nll": 0.46868244562594724
+        },
+        "noul": {
+          "accuracy": 0.9275862068965517,
+          "brier": 0.058003423309932946,
+          "correct": 269,
+          "n": 290,
+          "nll": 0.20854624402107205
+        },
+        "score": {
+          "accuracy": 0.37777777777777777,
+          "brier": 0.3337968821048153,
+          "correct": 34,
+          "n": 90,
+          "nll": 1.2705851362288285
+        }
+      },
+      "correct": 576,
+      "family_macro_accuracy": 0.7862962962962964,
+      "family_macro_brier": 0.13854588828554018,
+      "micro_accuracy": 0.8228571428571428,
+      "n": 700,
+      "score_levels_predicted": [
+        0,
+        2,
+        3,
+        4
+      ]
+    },
+    "probabilities_sha256": "beef35412b69d5f1b0485244b0ab41f0a1d5963c1344713721bb8200760f580e"
+  },
+  "soup_spec_sha256": "67a029fbd1fc45c1f7478cbfd5b9839fa582e04ba01c774e358957b711a6a6a2",
+  "state_sha256": "5c3d3ca18434fab1045a5840f4ef4508f9956fd3b2de00bd1bacf912b9729068",
+  "status": "COMPLETE",
+  "weights": "uniform"
+}
