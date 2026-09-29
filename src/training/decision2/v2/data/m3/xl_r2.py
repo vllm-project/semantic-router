@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any
 
 from training.model.data import file_sha256
+from v2.common import eval_only
 from v2.data import overlap
 from v2.data.m2.common import read_jsonl, sha
 from v2.data.m3 import xl
@@ -1033,6 +1034,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--gap", action="append", required=True)
     c.add_argument("--report", type=Path, required=True)
     args = parser.parse_args(argv)
+    pools_spec = getattr(args, "pools", None)
+    eval_only.guard(args, json.loads(pools_spec.read_text()) if pools_spec else {})
     if args.command == "rows":
         manifest, recipes = r1_recipes(args.r1_dir, args.r1_manifest_sha256)
         args.out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)

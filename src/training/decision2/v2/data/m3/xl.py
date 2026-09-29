@@ -28,6 +28,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from v2.common import eval_only
 from v2.data.m2.common import read_jsonl, sha
 from v2.data.m3.strict import EXCLUDED
 
@@ -152,6 +153,7 @@ def summary(rows: list[dict]) -> dict[str, Any]:
 
 
 def write(out: Path, name: str, rows: list[dict]) -> str:
+    eval_only.check_rows(rows)
     data = "".join(
         json.dumps(
             {
@@ -215,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     specs = json.loads(args.pools.read_text())
+    eval_only.guard(args, specs)
     pools, dropped = load(specs)
     teachers = {}
     for spec in args.targets:

@@ -6,6 +6,30 @@ not met. Built by the research & data track (HS1, build commit `21bdb5e90e2b`) a
 `m3/arms/` arms: content hash = SHA-256 of the canonical JSONL (rows sorted by `id`). Rows follow the Decision 2.0
 training contract. They carry **gold labels only**: no teacher targets exist for them.
 
+**Revision of 2026-09-30: `train.jsonl` was replaced by the template-fixed build `46702e2fce2b`**
+(`0dfaa6ebff1b614e5f1c432f2c7432c3fd217f7c344d402c7a7b37fe507de5e7`).
+
+- **The defect.** A blind spot-check of 153 TRAIN rows (51 per family) agreed with the gold on all 153. It
+  confirmed one template defect: in 150 F2 travel-expense rows the policy said "at least N nights consecutive
+  nights". This was a duplicated word; the answer was unaffected.
+- **What changed.**
+  - 138 rows differ only in that phrase, which now reads "at least N nights in a row".
+  - In 12 rows the packet also gained one filler section, because of the generator's length rule, and its clause
+    numbers shifted to match.
+  - Ids, labels, options and instructions are identical to the first build.
+- **Audits.** All were re-run on the new file:
+  - PI-v4 full scan: the same 52 report-only groups; quarantining roles: 0; PI-hs1: 0.
+  - Structural scan: 0.
+  - Isolation: PASS.
+  - Local audit (A2, A3a–d, A7): PASS.
+  - Native tokens: 14,030,228.
+- **Kept from the first build.** `train.tokens.jsonl`, `train.manifest.json`, `build.json`, `isolation.json` and
+  `audits/` describe the new build.
+  - `dev.jsonl`, `dev.tokens.jsonl`, `dev.manifest.json` and the `hs1-dev` panel are unchanged, so development
+    readouts stay comparable. Twenty dev rows keep the duplicated word.
+  - `build-21bdb5e90e2b.json` is the first build's receipt.
+  - `audits/dq-hs1-spot.json` is the spot-check.
+
 | Family | Content | TRAIN rows (groups) | Choice / Noul / Score (TRAIN) | Dev rows: dev-id + dev-ood | Language |
 | --- | --- | ---: | --- | --- | --- |
 | F1 `hs1_quote_check` | Quoted-conclusion verification. Evidence records (a short note, or a long thread or report with distractor records) plus a named person's conclusion and rationale. The two rows of a world differ only in the quote: one follows the solver, the other follows one generic reasoning slip. | 7,178 (3,589) | 2,946 / 3,332 / 900 | 958: 638 + 320 | en |
@@ -18,7 +42,8 @@ fresh seed groups, dev-ood only held-out kinds and domains that have no TRAIN ro
 seed namespaces. **Never train on it.** It is for development readouts only. The gold-free prompts and gold of the
 `hs1-dev` panel are not in this dataset.
 
-Files: `train.jsonl` (`c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71`), `dev.jsonl`
+Files: `train.jsonl` (`0dfaa6ebff1b614e5f1c432f2c7432c3fd217f7c344d402c7a7b37fe507de5e7`; first build
+`c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71`), `dev.jsonl`
 (`2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf`), `train.tokens.jsonl` / `dev.tokens.jsonl`
 (`{id, native, kai}` per row: Qwen3.5-0.8B-Base native encode and raw Kai-0.6B; join to rows by `id`),
 `train.manifest.json` / `dev.manifest.json` (freeze manifests: counts, token totals, licence table; dev frozen with
@@ -29,7 +54,8 @@ role `aho`, partition `select`), `build.json` (generator code hashes, per-family
 only: overlap by role class, tokens per family, gold and duplicate checks). `license-registry-hs1.json` is the
 licence registry. `registry.json` lists every file here with its SHA-256 (paths relative to `m4/`).
 
-**Tokens** (native Qwen3.5-0.8B): TRAIN 14,029,697 (F1 5,594,547; F2 3,939,776; F3 4,495,374), dev 1,946,468. The
+**Tokens** (native Qwen3.5-0.8B): TRAIN 14,030,228 in the fixed build (first build 14,029,697: F1 5,594,547;
+F2 3,939,776; F3 4,495,374), dev 1,946,468. The
 longest row has 2,875 native tokens (TRAIN) and 2,774 (dev). Rows over 1,024 Kai tokens: 3,891 TRAIN (F2 2,393,
 F1 1,498, F3 0) and 693 dev.
 

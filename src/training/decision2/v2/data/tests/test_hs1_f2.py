@@ -102,6 +102,17 @@ class F2FamilyTest(unittest.TestCase):
                         key,
                     )
 
+    def test_no_unit_noun_is_rendered_twice(self) -> None:
+        doubled = re.compile(
+            r"\b\d[\d,.]* (nights|days|hours|weeks|months|years|minutes|sessions)"
+            r" (?:[a-z]+ ){0,2}\1\b"
+        )
+        for (kind, interface), cell in self.built.items():
+            for key, items in cell:
+                for item in items:
+                    with self.subTest(kind=kind, interface=interface, key=key):
+                        self.assertIsNone(doubled.search(item.state))
+
     def test_two_cases_share_one_packet(self) -> None:
         for (kind, interface), cell in self.built.items():
             for key, (first, second) in cell:
