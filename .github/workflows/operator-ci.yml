@@ -187,7 +187,6 @@ jobs:
     needs: [checks, bundle-validate]
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
         cache-backend: ${{ fromJSON(inputs.integration_matrix).*.cache-backend }}
     steps:
