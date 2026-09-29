@@ -199,6 +199,62 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 22:50 — **PN1 (paraphrase-style multilingual Noul arm) LANDED; its dev slice is VALID** (data record under
+  `v2/data/records/`; integration `e53e5c57a`; 1.010 GPU-h).
+  - **Location:** private `llm-semantic-router/decision-2.0-training-data@5ad362872f57034c7fada2c2990cfc6c36398d73`,
+    folder `m4/pn1/`. TRAIN `f6f6a531…`, dev `c3b68ac1…`, dev prompts `79dbf999…`, gold `e0d3e57c…`, attribution
+    `293d0491…`.
+  - **Source:** Tatoeba (2026-09-26 export; CC BY 2.0 FR plus CC0 subset; per-sentence attribution). Qwen3.5-27B /
+    Qwen3.8-27B (Apache-2.0) served only as filters (swap edits, label and fluency checks), never as targets.
+  - **TRAIN:** 4,888 rows, ~0.55M tokens, 50/50 labels per language, 70% swap-style, ja-heavy (ja 2,236, zh 948, de 822,
+    ru 402, ko 222, ar 130, es 94, fr 34). It is short of target because es / fr swap rows failed the overlap-shortcut
+    gate and Korean supply was thin.
+  - **Dev:** 1,974 rows.
+    - Pooled (6 PAWS-X languages): N4XF yes .708 vs Nox 1.0 .653 (gold .50), +.055 [+.042, +.068], in every language.
+    - The bias sits in the near-miss and swap rows.
+    - This table is the readout baseline.
+  - **How tracks use it** (decoder M6 and 9B M5 add it by amendment):
+    - The N5BN replicate plus `m4/pn1/arms/pn1.train.jsonl` as a whole-group block repeated 2–3× (~2% of a 29M-token
+      mixture), against a matched control without PN1 at equal tokens.
+    - Success means lower near-miss / swap yes-rates without a lower yes-rate on true paraphrases, with mlx-diag PAWS-X
+      as the out-of-family check.
+  - **Open audits, which must close before any PN1-trained model is RELEASED:**
+    - the house embedding scan (manifests on node B);
+    - isolation against the H7 / H8 slices;
+    - a blind label review of ≥ 200 rows.
+    - Assigned to the data track's next worker.
+    - C1: the custodian content recheck would be needed before any C1 event that scores a PN1-trained model; after
+      event 3 C1 is exhausted, so this only matters for the record.
+
+- 2026-09-29 22:05 — **DEV2.0-0.6B successor released (first progressive update)** (gist 07b; record
+  `v2/release/records/dev2-0p6b-m8-release-2026-09-29.md`; integration `56eee31c2`; 0.249 GPU-h).
+  - Private `llm-semantic-router/DEV2.0-0.6B@b21313375ad77ddf4a8e420fa5195e6e09582043` (`main`, replaces `99c4e799`).
+    - Manifest `816827dd…`, 597,103,104 loaded parameters.
+    - BF16 storage copy with exact parity (10,653 prompts, 0 changes); 2.40 → 1.52 GB.
+    - Score offsets bound to the BF16 hash (`score_bias.json` `7d3a060f…`, sourced from `725c16f9…`).
+    - T = 1: CAL698 worsened all four development measures.
+    - Final decision `3fbe847b…`.
+  - **Successor gate profile** (new in `gate.py`, with `profile --spec` for pre-upload evaluation): R1–R7 all pass vs
+    `99c4e799`, with 12 of 12 gate items.
+  - Card:
+    - the M6 recipe, with credits rebuilt from the six M6 mixtures (232,754 rows, 37 public datasets, no NC /
+      research-only source);
+    - the hand-off disclosures verbatim;
+    - the JevBench note;
+    - C1 "measured on `99c4e799`". Event 2 scored `e61b2b44`, whose weights are byte-identical.
+  - **Purge:** the superseded backbone and head were purged with `rewrite_history=False`. Old weight paths return 403,
+    and the node A copy is the durable store. Storage 62.09 → 61.20 / 100 GB.
+  - **Shared code:**
+    - `bf16_copy.py` / `build.py`: single-file backbones, and offsets bound to the BF16 copy.
+    - `card.py`: the new public-231 note, which applies to every card at its next render.
+    - `calibrate_frozen.py --score-bias`.
+  - **Mirror race, known issue:** two workers mirrored the same commit to node A at once, and one copy ended up nested
+    inside the other. It was cleaned and re-verified. `mirror_to_node.sh` moves its staging copy into place without
+    checking the target.
+    - **Interim rule for every track:** if `/data/dev2/src/<SRC>` already exists, verify it and reuse it instead of
+      re-mirroring.
+    - The fix (lock + existence / hash check) goes to the next release worker, bundled with the C1 card pass.
+
 - 2026-09-29 21:35 — **C1: P2 adopted (v1.2); event 3 re-authorized** (analysis in event-3 record §000; integration
   `0de943f68`; 0 GPU-h; nothing decrypted).
   - **Hit sources:** all 1,510 flagged rows (228 OVERLAP / 1,282 REVIEW) match raw public corpora added by the widened

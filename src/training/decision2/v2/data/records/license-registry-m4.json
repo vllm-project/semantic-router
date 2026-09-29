@@ -1,0 +1,16 @@
+{
+ "tatoeba-2026-09-26": {
+  "attribution": "Sentences from Tatoeba (https://tatoeba.org) by their contributors, CC BY 2.0 FR; per-sentence usernames in attribution.tsv; edited sentences are marked as changed (edits by rule or by Qwen3.5-27B, Apache-2.0)",
+  "evidence": "https://tatoeba.org/en/downloads; https://tatoeba.org/en/terms_of_use (sec. 6); weekly export of 2026-09-26 (downloads.tatoeba.org/exports/, per-file URL, Last-Modified and SHA-256 in the PN1 source-manifest.json)",
+  "license": "CC BY 2.0 FR (CC0 1.0 for contributor-opted sentences)",
+  "redistribution": "permitted with attribution (CC BY 2.0 FR); per-sentence usernames and licences ship in attribution.tsv",
+  "used_by": "M4 PN1 pn-hop, pn-near (both sentences are unchanged Tatoeba text)"
+ },
+ "tatoeba-2026-09-26-edited": {
+  "attribution": "Sentences from Tatoeba (https://tatoeba.org) by their contributors, CC BY 2.0 FR; per-sentence usernames in attribution.tsv; edited sentences are marked as changed (edits by rule or by Qwen3.5-27B, Apache-2.0)",
+  "evidence": "https://tatoeba.org/en/downloads; https://tatoeba.org/en/terms_of_use (sec. 6); weekly export of 2026-09-26 (downloads.tatoeba.org/exports/, per-file URL, Last-Modified and SHA-256 in the PN1 source-manifest.json); edit model Qwen/Qwen3.5-27B, Apache-2.0",
+  "license": "CC BY 2.0 FR (CC0 1.0 for contributor-opted sentences)",
+  "redistribution": "permitted with attribution; each row marks its edited sentence as changed (audit_metadata.editor 'rule' or 'qwen3.5-27b@<revision>', attribution.tsv edited=1)",
+  "used_by": "M4 PN1 pn-name (rule edits), pn-twin (Qwen3.5-27B edits); the other sentence of the row is unchanged Tatoeba text"
+ }
+}
