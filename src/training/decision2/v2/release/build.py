@@ -98,6 +98,28 @@ def _object(path: Path) -> dict[str, Any]:
     return value
 
 
+def name_base_model(spec: dict[str, Any]) -> str:
+    """The base model whose size names a ``name_basis: base`` release; it must be in the lineage."""
+    pinned = (spec.get("base") or {}).get("repo_id")
+    named = spec.get("name_base_model") or pinned
+    if not named:
+        raise ValueError("name_basis base needs name_base_model (or a pinned base)")
+    if pinned and named != pinned:
+        raise ValueError(
+            f"name_base_model {named} differs from the pinned base {pinned}"
+        )
+    lineage = {
+        spec["origin"]["repo_id"],
+        *(c["source"].split("@", 1)[0] for c in spec["licence"]["components"]),
+        *([pinned] if pinned else []),
+    }
+    if named not in lineage:
+        raise ValueError(
+            f"name_base_model {named} is not in the declared weight lineage"
+        )
+    return named
+
+
 def load_spec(path: Path) -> dict[str, Any]:
     spec = _object(path)
     required = {
@@ -125,6 +147,8 @@ def load_spec(path: Path) -> dict[str, Any]:
     layout.check_repo(
         spec["repo_id"], spec["model_name"], staging=spec["kind"] == "staging"
     )
+    if spec.get("name_basis", "tier") == "base":
+        name_base_model(spec)
     if spec.get("gate_profile") is not None:
         from v2.release.gate import gate_profile
 
@@ -603,10 +627,12 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "Backbone header count differs from the checkpoint's text parameter count"
         )
     name_basis = spec.get("name_basis", "tier")
-    if layout.release_name(loaded, name_basis) != spec["model_name"]:
+    base_model = name_base_model(spec) if name_basis == "base" else None
+    named = layout.release_name(loaded, name_basis, base_model)
+    if named != spec["model_name"]:
         raise ValueError(
             f"{loaded:,} loaded parameters name the model "
-            f"{layout.release_name(loaded, name_basis)} ({name_basis}), not {spec['model_name']}"
+            f"{named} ({name_basis}), not {spec['model_name']}"
         )
     decision = licence_policy.package_licence(spec["licence"]["components"])
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -646,6 +672,11 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "origin": spec["origin"],
             "licence": decision,
             "banner": banner,
+            **(
+                {"name_basis": name_basis, "name_base_model": base_model}
+                if base_model
+                else {}
+            ),
             "calibration_text": spec["card"].get("calibration_text")
             or (
                 "per-type temperatures fitted on the frozen calibration partition (`calibration.json`)."
@@ -704,6 +735,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "model_name": spec["model_name"],
             "tier": layout.tier_for(loaded),
             **({"name_basis": name_basis} if name_basis != "tier" else {}),
+            **({"name_base_model": base_model} if base_model else {}),
             "profile": profile,
             "files_sha256": inventory,
             "model_files": files,
