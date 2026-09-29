@@ -1,6 +1,6 @@
 # 9B M4 state (resume file)
 
-Updated: 2026-09-29 13:15 UTC+8 (worker 3)
+Updated: 2026-09-29 13:30 UTC+8 (worker 3)
 Branch: `xunzhuo/decision-2-training-9b` (merge-only into `xunzhuo/decision-2-training`)
 Base: `eead88a60` + merge of origin `xunzhuo/decision-2-training` (`f3aae7155`) = `1424df742`
 
@@ -32,9 +32,13 @@ Base: `eead88a60` + merge of origin `xunzhuo/decision-2-training` (`f3aae7155`) 
 - Cache: 13 Triton `__grp__*.json` files rewritten with `formal-m4` paths (kernels, `.hsaco`, autotune JSON byte-identical);
   final tree `5604ffdc5f19`. Scratch readout: node A `formal-m4/readout-w3/`.
 
+- Step 4a (13:30): result record `records/lux9b-m4-formal-result-2026-09-29.md` (+ README m4_rules sentence).
+  Prereg is silent on several passers: K-a13 and KN-a12 both go to the coordinator (amendment 1: report at once;
+  upload only a coordinator-approved release candidate, by release engineering, after `hf_headroom.sh`).
+
 ## Next
 
-4. Result record `records/lux9b-m4-formal-result-2026-09-29.md` + gist 05 entry; merge into `xunzhuo/decision-2-training`.
+4. Gist 05 entry (13:30, above 08:35; draft `/tmp/m4-gist-entry.md` on the worker host); merge into `xunzhuo/decision-2-training`.
 
 ## GPU-hours
 

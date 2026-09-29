@@ -39,4 +39,7 @@ tokens; soups accept repeated members for rational weights), `score.sh` and
 GPU time: `python3 lux9b/m3/gpu_hours.py /data/dev2/runs/9b/m4 /data/dev2/runs/9b/formal-m4`.
 `chain-step.sh` runs one hand-launched chain step (node B GPU0–2, or a node-A
 GPU whose chain driver was stopped) with the chain drivers' lease and log
-conventions (prereg amendment 2).
+conventions (prereg amendment 2). `lux9b/m4_rules.py` (`seed` / `alpha`,
+tests `tests/test_m4_rules.py`) applies the preregistered seed, alpha and
+proxy-drop rules to the development readouts, with exact rational floors
+(prereg amendment 3).
