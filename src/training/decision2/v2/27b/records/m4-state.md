@@ -53,6 +53,12 @@ the mirror; no uploads).
   `m4-mlx-score.sh NAME...`. Node B: `m4-tail.sh {soup|readout|guard|prepkg|formal|gates|overlap|mlx|contrast}` from
   the amendment-1 mirror (see below).
 
+- Node B tail mirror: `ff660322a76b04c4774fdb6aaa31e5af2a45743e` (content manifest `edb7f5f8…`, 3,640 files).
+- **Relay watcher (workstation, started 09:56Z):** `~/.cache/m4-work/relay-watch.sh` (pid in `pgrep -af relay-watch`)
+  runs the committed `m4-relay-best.sh` (SHA-256 `7bdb8167…` = `ff660322a`) for M4-A20-s2, M4-Ar-s1, M4-Ar-s2 in
+  order, retrying every 5 min until each run is complete; log `~/.cache/m4-work/relay-watch.log` and
+  `relay-<ARM>.log`. If it is not running, restart it the same way (the relay is idempotent).
+
 ## Next
 
 1. Monitor (heartbeats); training ends ≈ 19:10–20:30Z.
