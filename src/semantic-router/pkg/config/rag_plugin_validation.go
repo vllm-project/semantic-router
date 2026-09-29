@@ -151,10 +151,12 @@ func validateRAGTopK(topK *int) error {
 }
 
 func validateRAGMaxContextLength(maxContextLength *int) error {
-	if maxContextLength == nil || *maxContextLength > 0 {
+	// Zero is a supported explicit value: the injection path truncates a zero
+	// budget to the ellipsis marker, and issue #4327 keeps it valid.
+	if maxContextLength == nil || *maxContextLength >= 0 {
 		return nil
 	}
-	return fmt.Errorf("max_context_length must be greater than 0, got %d", *maxContextLength)
+	return fmt.Errorf("max_context_length must not be negative, got %d", *maxContextLength)
 }
 
 func validateRAGInjectionMode(mode string) error {

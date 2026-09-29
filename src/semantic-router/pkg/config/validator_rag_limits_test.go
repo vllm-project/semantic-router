@@ -13,7 +13,7 @@ func TestValidateRAGMaxContextLength(t *testing.T) {
 	}{
 		{"unset_ok", nil, false},
 		{"positive_ok", intPtr(10000), false},
-		{"zero_rejected", intPtr(0), true},
+		{"zero_ok", intPtr(0), false},
 		{"negative_rejected", intPtr(-5), true},
 	}
 	for _, tc := range cases {

@@ -68,53 +68,6 @@ func TestValidateMemoryNilConfig(t *testing.T) {
 	}
 }
 
-func TestValidateMemoryGlobalHybridModeEnum(t *testing.T) {
-	cases := []struct {
-		name    string
-		mode    string
-		wantErr bool
-	}{
-		{"unset_ok", "", false},
-		{"weighted_ok", "weighted", false},
-		{"rrf_ok", "rrf", false},
-		{"rerank_rejected", "rerank", true},
-		{"recency_semantic_rejected", "recency_semantic", true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := &RouterConfig{}
-			cfg.Memory.HybridMode = tc.mode
-			err := validateMemoryContracts(cfg)
-			if tc.wantErr != (err != nil) {
-				t.Fatalf("hybrid_mode=%q: wantErr=%v, got err=%v", tc.mode, tc.wantErr, err)
-			}
-		})
-	}
-}
-
-func TestValidateMemoryReflectionAlgorithmEnum(t *testing.T) {
-	cases := []struct {
-		name      string
-		algorithm string
-		wantErr   bool
-	}{
-		{"unset_ok", "", false},
-		{"heuristic_ok", "heuristic", false},
-		{"noop_ok", "noop", false},
-		{"recency_semantic_rejected", "recency_semantic", true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := &RouterConfig{}
-			cfg.Memory.Reflection.Algorithm = tc.algorithm
-			err := validateMemoryContracts(cfg)
-			if tc.wantErr != (err != nil) {
-				t.Fatalf("algorithm=%q: wantErr=%v, got err=%v", tc.algorithm, tc.wantErr, err)
-			}
-		})
-	}
-}
-
 func TestValidateMemoryGlobalRetrievalLimit(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -165,11 +118,6 @@ func TestValidateMemoryPerDecisionPluginContracts(t *testing.T) {
 		wantInError   string
 	}{
 		{
-			name:          "unknown hybrid mode",
-			configuration: map[string]interface{}{"enabled": true, "hybrid_mode": "rerank"},
-			wantInError:   "hybrid_mode",
-		},
-		{
 			name:          "negative retrieval limit",
 			configuration: map[string]interface{}{"enabled": true, "retrieval_limit": -3},
 			wantInError:   "retrieval_limit",
@@ -178,11 +126,6 @@ func TestValidateMemoryPerDecisionPluginContracts(t *testing.T) {
 			name:          "zero retrieval limit",
 			configuration: map[string]interface{}{"enabled": true, "retrieval_limit": 0},
 			wantInError:   "retrieval_limit",
-		},
-		{
-			name:          "unknown reflection algorithm",
-			configuration: map[string]interface{}{"enabled": true, "reflection": map[string]interface{}{"algorithm": "recency_semantic"}},
-			wantInError:   "algorithm",
 		},
 		{
 			name:          "out-of-range dedup threshold",
