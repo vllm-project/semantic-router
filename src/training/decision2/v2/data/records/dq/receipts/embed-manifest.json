@@ -1,0 +1,92 @@
+{
+ "extended": [
+  {
+   "path": "<dev2>/private/panels/goldfree/ht-dev.prompts.jsonl",
+   "role": "ext_ht_dev",
+   "sha256": "30b0bd3569da9dd183f142e606ba6dcb598de7e4d3d9c168f87f91852178fd65"
+  },
+  {
+   "path": "<dev2>/private/panels/goldfree/score5-dev.prompts.jsonl",
+   "role": "ext_score5_dev",
+   "sha256": "a01551c280473c9251ebbf8aed7bf9cfba3e12927def8959e4dd1283c072a86a"
+  },
+  {
+   "path": "<dev2>/private/panels/goldfree/score5t-dev.prompts.jsonl",
+   "role": "ext_score5t_dev",
+   "sha256": "8e35bfffc2c3b8e4252d3c39ec1c65054250a3ddf80159d219a16b41bca1d93c"
+  },
+  {
+   "path": "<dev2>/private/panels/goldfree/hs1-dev.prompts.jsonl",
+   "role": "ext_hs1_dev",
+   "sha256": "49f192a700242efe46265c4377a3cedb44dd635e5c5d23db1fc2d1e6fac3f072"
+  }
+ ],
+ "out_sha256": "122bb74795476514d1a39d166f029d51a087f0d9f2275a8c466fedab84d3b9a5",
+ "remapped": [
+  {
+   "from": "<dev2>/private/data/pi-v3-extra/mlx-diag.prompts.jsonl",
+   "role": "mlx_diag_v1",
+   "to": "<dev2>/private/panels/goldfree/mlx-diag.prompts.jsonl"
+  },
+  {
+   "from": "<dev2>/private/a7/runs/a7-dec10-v3/7cef77052a94/final/A7g.aho.jsonl",
+   "role": "a7_aho_A7g",
+   "to": "<dev2>/runs/data/m3b/hf/v2/a7/arms/A7g/aho.jsonl"
+  },
+  {
+   "from": "<dev2>/private/a7/runs/a7-dec10-v3/7cef77052a94/final/A7h.aho.jsonl",
+   "role": "a7_aho_A7h",
+   "to": "<dev2>/runs/data/m3b/hf/v2/a7/arms/A7h/aho.jsonl"
+  },
+  {
+   "from": "<dev2>/private/a7/runs/a7-dec10-v3/7cef77052a94/final/A7i.aho.jsonl",
+   "role": "a7_aho_A7i",
+   "to": "<dev2>/runs/data/m3b/hf/v2/a7/arms/A7i/aho.jsonl"
+  },
+  {
+   "from": "<dev2>/private/a7/runs/a7-enc10-v4/a8e01e6ca917/final/A7k.aho.jsonl",
+   "role": "a7_aho_A7k",
+   "to": "<dev2>/runs/data/m3b/hf/v2/a7/arms/A7k/aho.jsonl"
+  },
+  {
+   "from": "<dev2>/private/a7/runs/a7-dec10-v3/7cef77052a94/final/A7m.aho.jsonl",
+   "role": "a7_aho_A7m",
+   "to": "<dev2>/runs/data/m3b/hf/v2/a7/arms/A7m/aho.jsonl"
+  },
+  {
+   "from": "<dev2>/private/a7/runs/a7-dec10-v3/7cef77052a94/final/A7o.aho.jsonl",
+   "role": "a7_aho_A7o",
+   "to": "<dev2>/runs/data/m3b/hf/v2/a7/arms/A7o/aho.jsonl"
+  },
+  {
+   "from": "<dev2>/private/a7/runs/a7-dec10-v3/7cef77052a94/final/A7p.aho.jsonl",
+   "role": "a7_aho_A7p",
+   "to": "<dev2>/runs/data/m3b/hf/v2/a7/arms/A7p/aho.jsonl"
+  },
+  {
+   "from": "<dev2>/private/a7/runs/a7-enc10-v4/a8e01e6ca917/final/A7q.aho.jsonl",
+   "role": "a7_aho_A7q",
+   "to": "<dev2>/runs/data/m3b/hf/v2/a7/arms/A7q/aho.jsonl"
+  },
+  {
+   "from": "<dev2>/private/a7/runs/a7-rec10-v2/83ab31ba3e7d/final/A7r.aho.jsonl",
+   "role": "a7_aho_A7r",
+   "to": "<dev2>/runs/data/m3b/hf/v2/a7/arms/A7r/aho.jsonl"
+  },
+  {
+   "from": "<dev2>/private/a7/runs/a7-enc10-v4/a8e01e6ca917/final/A7s.aho.jsonl",
+   "role": "a7_aho_A7s",
+   "to": "<dev2>/runs/data/m3b/hf/v2/a7/arms/A7s/aho.jsonl"
+  },
+  {
+   "from": "<dev2>/private/a7/runs/a7-enc10-v4/a8e01e6ca917/final/A7x.aho.jsonl",
+   "role": "a7_aho_A7x",
+   "to": "<dev2>/runs/data/m3b/hf/v2/a7/arms/A7x/aho.jsonl"
+  }
+ ],
+ "roles": 62,
+ "same_path": 46,
+ "schema": "dev2-dq-embed-manifest/1",
+ "source_roles": 58,
+ "source_sha256": "deb4b7e9fd9ef5dd2856e4d2a3468828eabcaf96c98c80657ef5800abc0b7d1c"
+}

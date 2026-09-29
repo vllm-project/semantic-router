@@ -1,0 +1,478 @@
+{
+ "labels_after": 41,
+ "labels_before": 34,
+ "manifest_sha256": "cbf8a7314af2b1750c94af44057564a50822fdef9327aaac2499c98a84dd6e21",
+ "moved": {
+  "hf-head": [
+   {
+    "path": "<iso-training>/hf/head-75e557f1/m3/teachers/autojev27/qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "89b4095a04c7dbbcada0179141d3d49c97ffbc3a74991bf6a03ca3b4f45ea102"
+   }
+  ],
+  "local-code": [
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/b1/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/b1/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/b2/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/b2/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/b3/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/b3/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/b4/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/b4/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/t1/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/t1/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/t2/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/t2/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/t3/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/gap/code/t3/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/tmp-code/t1/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/tmp-code/t1/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/tmp-code/t2/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/tmp-code/t2/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/tmp-code/t3/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/tmp-code/t3/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/tmp-code/t4/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<iso-training>/local-code/m3b/tmp-code/t4/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   }
+  ],
+  "local-m3a": [
+   {
+    "path": "<iso-training>/local/m3a/qualification.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qualify.events.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "4c7ce40d5322c2311c68be699cb0a0a0d79d0ae2dcdc3690b45d384b8c0d2332"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/qual.prompts.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "c1d6d9222b488347dc1616a42ef4f3ae9b6669c648d860fd8e0c4478c3d4bb80"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/sets.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "02d91835a211bbdc0e8e23d1435fa7e9267bec2260852ecfb791d3d3f6195842"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/warm.prompts.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "f9d958e82424bc83bd712f669ea8e7edbfd545524eae3ed6a2ee32163673fa4d"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/out/p1.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "fe8c1ab8150860e0669ef3eca2d188570426b74fc4a0bec7a0d8822f9d22fed3"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/out/p1.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "77ede31942cfe1ba1267edbed4c7ee06747263145ddc4c122f5db60c3b3e8ee6"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/out/p2.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "3f0e35f53a59e1076347151d2a686fe86b47048053c09d260e08fd14aee24f40"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/out/p2.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "aea9ec5f2410f44c6af50aa2182f54b4dd0bfab95cd947e6de047fb5ed14cfc0"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/out/p3.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "c94f11185fa7bba2942b6c2c2f386954f8c8e10c9777aa5ea2e130a81d529b8e"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/out/p3.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "cbd3aad1b5affa7f3584dc2df212ca5523683364344de57bec45ef01e37e28b7"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/out/p4.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0482ee70a63936ac3ed3356703992899bbf29f480f7204198e6fa6d91ecdfaeb"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/out/p4.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "e082b51cab3ba6a8c082741a7cc4a8efe67561f425d1f709d16d5b784e4f91d3"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/out/warm.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "63254f6577e38e85846e28c4244a94311ea00cfeff143da4ae13d31ad8019f18"
+   },
+   {
+    "path": "<iso-training>/local/m3a/qual/out/warm.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "13426333981ba37c59504138a38be2c005979c146799d82a5f59c72dad8e39f9"
+   }
+  ],
+  "local-m3a2": [
+   {
+    "path": "<iso-training>/local/m3a2/qualification.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qualify.events.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "01d96d65027ebecabbc41a2ea5680d1982f73433fd7670ad17a403a9ba0b6f00"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/qual.prompts.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "c1d6d9222b488347dc1616a42ef4f3ae9b6669c648d860fd8e0c4478c3d4bb80"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/sets.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "02d91835a211bbdc0e8e23d1435fa7e9267bec2260852ecfb791d3d3f6195842"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/warm-v2.prompts.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "b173a3c3d40857e8451ed8d3175fe447313a58122ff12025e73abf64218903c8"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/warm.prompts.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "f9d958e82424bc83bd712f669ea8e7edbfd545524eae3ed6a2ee32163673fa4d"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/out/p1.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "abfb8b789e367ac3dca211b9722186df3be7e45c13fae37aca4f3a2077dabda4"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/out/p1.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "f24f1a954e23c29916ef69eb1232d1468cb095a078d5a109e54ca3605f0cd819"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/out/p2.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "d90d1f967a0c6052cb1af852f78c49488059278eb99058f974c99f631f05f2f9"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/out/p2.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "e2c6365c8af5a818c9816d9418f9b619f42d4eb36f88734ea1ae1681656690a6"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/out/p3.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "5986c1c06ef988c8e568957cd9dd44d274fab5673a8797e49047a77dda9f1f8a"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/out/p3.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "28b0a25f4358a9d856ca26e81e66e5fdfeac5df12cf143340187a1f2daf0c576"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/out/p4.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "c7deaf52c1f54a2b30b3737787b07379fcb753c723b2a9e7ce04c97c81204a01"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/out/p4.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "5d2be545d6231da2f5d73a9a5cf82c691fb1f912946c49c72df93dc9829be13d"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/out/warm.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "d4562fd5b0e0029c3ab58cfaa5e8f1e7756b59c941b88b4bf0924716e07f82cb"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/qual/out/warm.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "5b6771f631571378af3d21b6acca5d567e7eacc0a611bd0be091606173c08ad0"
+   },
+   {
+    "path": "<iso-training>/local/m3a2/upload-aj-m/qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "89b4095a04c7dbbcada0179141d3d49c97ffbc3a74991bf6a03ca3b4f45ea102"
+   }
+  ],
+  "r2-local": [
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qualification.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qualify.events.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "01d96d65027ebecabbc41a2ea5680d1982f73433fd7670ad17a403a9ba0b6f00"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/qual.prompts.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "c1d6d9222b488347dc1616a42ef4f3ae9b6669c648d860fd8e0c4478c3d4bb80"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/sets.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "02d91835a211bbdc0e8e23d1435fa7e9267bec2260852ecfb791d3d3f6195842"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/warm-v2.prompts.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "b173a3c3d40857e8451ed8d3175fe447313a58122ff12025e73abf64218903c8"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/warm.prompts.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "f9d958e82424bc83bd712f669ea8e7edbfd545524eae3ed6a2ee32163673fa4d"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/out/p1.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "abfb8b789e367ac3dca211b9722186df3be7e45c13fae37aca4f3a2077dabda4"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/out/p1.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "f24f1a954e23c29916ef69eb1232d1468cb095a078d5a109e54ca3605f0cd819"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/out/p2.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "d90d1f967a0c6052cb1af852f78c49488059278eb99058f974c99f631f05f2f9"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/out/p2.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "e2c6365c8af5a818c9816d9418f9b619f42d4eb36f88734ea1ae1681656690a6"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/out/p3.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "5986c1c06ef988c8e568957cd9dd44d274fab5673a8797e49047a77dda9f1f8a"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/out/p3.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "28b0a25f4358a9d856ca26e81e66e5fdfeac5df12cf143340187a1f2daf0c576"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/out/p4.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "c7deaf52c1f54a2b30b3737787b07379fcb753c723b2a9e7ce04c97c81204a01"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/out/p4.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "5d2be545d6231da2f5d73a9a5cf82c691fb1f912946c49c72df93dc9829be13d"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/out/warm.jsonl",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "d4562fd5b0e0029c3ab58cfaa5e8f1e7756b59c941b88b4bf0924716e07f82cb"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/qual/out/warm.jsonl.manifest.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "5b6771f631571378af3d21b6acca5d567e7eacc0a611bd0be091606173c08ad0"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot/m3a2/upload-aj-m/qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "89b4095a04c7dbbcada0179141d3d49c97ffbc3a74991bf6a03ca3b4f45ea102"
+   }
+  ],
+  "r2-local-code": [
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/b1/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/b1/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/b2/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/b2/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/b3/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/b3/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/b4/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/b4/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/t1/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/t1/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/t2/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/t2/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/t3/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/gap/code/t3/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/tmp-code/t1/src/training/decision2/v2/data/records/m3a/autojev-qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "07da814cd175f60a7a3a6cd0ac16d95df156046ea08751a9fac78798ce0904e6"
+   },
+   {
+    "path": "<c1-recheck2>/local-snapshot-code/m3b/tmp-code/t1/src/training/decision2/v2/data/records/m3a/autojev-qualification.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "0954cfc4c5ebd89247ab54b41904f1452319dc81dcb64c3bfbbbc8b2234fb370"
+   }
+  ],
+  "rev-3a99bf1c": [
+   {
+    "path": "<c1-corpora>/3a99bf1c/m3/teachers/autojev27/qualification-v2.report.json",
+    "pool": "m3a-autojev-runtime-qualification",
+    "sha256": "89b4095a04c7dbbcada0179141d3d49c97ffbc3a74991bf6a03ca3b4f45ea102"
+   }
+  ]
+ },
+ "moved_by_label": {
+  "hf-head": 1,
+  "local-code": 22,
+  "local-m3a": 15,
+  "local-m3a2": 17,
+  "r2-local": 17,
+  "r2-local-code": 16,
+  "rev-3a99bf1c": 1
+ },
+ "out_sha256": "2af8e7f3f6247eae927107d34a5b7d6cbfcab4bf477d67777b55edb0ff491529",
+ "registry_sha256": "d9b41d11cc818487af77f76044811c5eac5a14079d76c323bed3c856a00639ba",
+ "schema": "dev2-eval-only-relabel/1"
+}
