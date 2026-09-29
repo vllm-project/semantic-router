@@ -662,6 +662,12 @@ def main(argv: list[str] | None = None) -> int:
             "--min-free-gb", type=float, help="co-tenant: required free VRAM"
         )
         sub.add_argument(
+            "--shape-allowance",
+            type=float,
+            default=SHAPE_ALLOWANCE,
+            help="seconds charged per first-time padded width in the budget projection",
+        )
+        sub.add_argument(
             "--dry-run",
             action="store_true",
             help="CPU only: licence, tokenizer, prompts, batches",

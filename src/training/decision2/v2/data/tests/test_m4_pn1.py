@@ -1170,6 +1170,46 @@ class GpuCostTest(unittest.TestCase):
         self.assertAlmostEqual(
             runner.cost(fresh), pn1_gpu.SAFETY * 4 * 5.0 + pn1_gpu.SHAPE_ALLOWANCE
         )
+        args = pn1_gpu.main.__globals__["argparse"].Namespace()
+        self.assertIsNotNone(args)
+        from unittest import mock as _mock
+
+        with _mock.patch.object(
+            pn1_gpu, "cmd_judge", lambda a: a.shape_allowance
+        ), _mock.patch.object(pn1_gpu, "cmd_generate", lambda a: a.shape_allowance):
+            common = [
+                "--model-dir",
+                "m",
+                "--repo-id",
+                "r",
+                "--revision",
+                "v",
+                "--output-dir",
+                "o",
+                "--budget-seconds",
+                "5",
+            ]
+            self.assertEqual(
+                pn1_gpu.main(
+                    [
+                        "judge",
+                        *common,
+                        "--items",
+                        "i",
+                        "--shape-allowance",
+                        "3",
+                        "--min-free-gb",
+                        "100",
+                    ]
+                ),
+                3.0,
+            )
+            self.assertEqual(
+                pn1_gpu.main(
+                    ["generate", *common, "--seeds", "s", "--languages", "ja"]
+                ),
+                pn1_gpu.SHAPE_ALLOWANCE,
+            )
         runner.log = runner.log[:1] + runner.log[2:]
         self.assertEqual(runner.batch_seconds(), 25.0)
 
