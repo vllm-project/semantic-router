@@ -106,3 +106,24 @@ Labeled by chain b4 on node B GPU4 (`ops/m6/m6-label.sh sol`, mirror of `8f5699b
 - **Labels:** `sol-labels/labels.jsonl` is one shard and is byte-identical to `sol-59m`. The identity and TRAIN
   hash checks pass, and 529 s of labeling used 0.168 GPU-h.
 - **Subset check:** `sol-29m` differs from `sol-59m` on 0 of the 58,742 shared rows.
+
+## Part 2b — own-Eos labels (locked 2026-09-29 ≈17:50 UTC+8)
+
+Labeled by chain a5 on node A GPU5 (`ops/m6/m6-label.sh eos`, mirror of `6fe568271`): `v2.dec.teacher_label` over
+every row of `m6-e8f-r2clean`'s node-A copy (`f9f3c022…`), then `merge_labels`. `m6-lockcheck.py eos` gives
+**PASS**; `lock-eos.json` is `04b04766d0e487b174839fab7a2e359079e21793bc7e26776f2432658371c1c4`.
+
+- **`eos-e8f-r2clean` (E6K):** `f8202208db8af5433b14e11ae42d0e4bf4c5dd8a5fc11169ec463ec15860a737`, covering
+  162,696 / 162,696 rows (0 bad, 0 extra). One shard, byte-identical to `eos-labels/labels.jsonl`. Gold agreement
+  (Choice / Noul / Score) is .688 / .692 / .347.
+- **Teacher:** `llm-semantic-router/Decision-1.0-Eos-0.8B` at `363c4a5e`, max length 8192. The identity and TRAIN
+  hash checks pass. 918 s of labeling; chain a5's GPU total is 0.294 GPU-h so far.
+- **Temperature: 1.0389139156246665 for every type.** The Eos package ships no `temperature.json`. Its single
+  calibrated temperature is `config.json` `calibration.temperature` (`config.json` `37c16ffa…`).
+- **Deviation: shared-module fix (`6fe568271`).** The first a5 attempt (09:20:43–09:20:59Z, 0.0044 GPU-h, no
+  labels written) failed because `teacher_label` required `temperature.json`. The fix makes `teacher_temperatures`
+  fall back to `config.json`'s single calibrated temperature for all types, and adds
+  `v2/dec/tests/test_teacher_label.py`. The tests pass in the node-A image, and Sol still resolves to 1.3003552.
+  The M2 adapter had read Eos at T = 1.0, so M6's own-Eos targets are calibrated where earlier Eos targets were not.
+  The attempt's files are kept in `m6/attempts/a5-1-eos-temperature/`. E6K had not trained, and a5 was relaunched
+  from the fix's mirror at 09:26:15Z.
