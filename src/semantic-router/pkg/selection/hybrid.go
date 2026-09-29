@@ -188,7 +188,11 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	// Get RouterDC scores
 	if h.routerDCSelector != nil && h.config.RouterDCWeight > 0 {
 		result, err := h.routerDCSelector.Select(ctx, selCtx)
-		if err == nil && result != nil {
+		if err != nil {
+			if requestErr := ctx.Err(); requestErr != nil {
+				return nil, requestErr
+			}
+		} else if result != nil {
 			componentScores["router_dc"] = result.ScoresFor(selCtx.CandidateModels)
 			componentResults = append(componentResults, result)
 		}

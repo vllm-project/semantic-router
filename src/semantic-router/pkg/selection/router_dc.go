@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -276,8 +275,8 @@ func (r *RouterDCSelector) Select(ctx context.Context, selCtx *SelectionContext)
 		var err error
 		queryEmbedding, err = r.embeddingFunc(ctx, selCtx.Query)
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return nil, err
+			if requestErr := ctx.Err(); requestErr != nil {
+				return nil, requestErr
 			}
 			return r.defaultSelection(selCtx, fmt.Sprintf("embedding error: %v", err))
 		}

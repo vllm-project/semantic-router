@@ -18,7 +18,6 @@ package selection
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 
@@ -85,8 +84,8 @@ func (a *MLSelectorAdapter) Select(ctx context.Context, selCtx *SelectionContext
 		}
 		embedding, err := a.embeddingFunc(ctx, selCtx.Query)
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return nil, err
+			if requestErr := ctx.Err(); requestErr != nil {
+				return nil, requestErr
 			}
 			logging.Warnf("[MLAdapter] Failed to compute embedding: %v, using empty embedding", err)
 		} else {

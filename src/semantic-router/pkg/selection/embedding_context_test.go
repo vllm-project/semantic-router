@@ -19,6 +19,7 @@ package selection
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -86,6 +87,74 @@ func TestMLSelectorAdapterPropagatesEmbeddingCancellation(t *testing.T) {
 	if calls := ml.calls.Load(); calls != 0 {
 		t.Fatalf("ML selector calls = %d, want 0 after embedding cancellation", calls)
 	}
+}
+
+func TestRouterDCSelectorPreservesProviderTimeoutFallback(t *testing.T) {
+	selector := NewRouterDCSelector(DefaultRouterDCConfig())
+	selector.setContextEmbeddingFunc(func(context.Context, string) ([]float32, error) {
+		return nil, fmt.Errorf("provider attempt timeout: %w", context.DeadlineExceeded)
+	})
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		Query:           "provider timeout",
+		CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+	})
+	if err != nil {
+		t.Fatalf("selection error = %v, want existing fallback", err)
+	}
+	if result == nil || result.SelectedModel != "model-a" {
+		t.Fatalf("selection = %#v, want default model-a", result)
+	}
+}
+
+func TestMLSelectorAdapterPreservesProviderTimeoutFallback(t *testing.T) {
+	ml := &cancellationTestMLSelector{}
+	adapter := NewMLSelectorAdapter(ml, MethodKNN)
+	adapter.setContextEmbeddingFunc(func(context.Context, string) ([]float32, error) {
+		return nil, fmt.Errorf("provider attempt timeout: %w", context.DeadlineExceeded)
+	})
+
+	result, err := adapter.Select(context.Background(), &SelectionContext{
+		Query:           "provider timeout",
+		CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+	})
+	if err != nil {
+		t.Fatalf("selection error = %v, want existing empty-embedding fallback", err)
+	}
+	if result == nil || result.SelectedModel != "model-a" {
+		t.Fatalf("selection = %#v, want model-a", result)
+	}
+}
+
+func TestFactoryHybridPropagatesRouterDCCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	started := make(chan struct{})
+
+	cfg := DefaultModelSelectionConfig()
+	cfg.Method = string(MethodHybrid)
+	cfg.Hybrid = &HybridConfig{RouterDCWeight: 1}
+	selector := NewFactory(cfg).WithContextEmbeddingFunc(func(got context.Context, _ string, _ EmbeddingConfig) ([]float32, error) {
+		if got != ctx {
+			t.Errorf("embedding context = %p, want request context %p", got, ctx)
+		}
+		close(started)
+		<-got.Done()
+		return nil, got.Err()
+	}, EmbeddingConfig{}).Create()
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := selector.Select(ctx, &SelectionContext{
+			Query:           "cancel hybrid",
+			CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+		})
+		errCh <- err
+	}()
+
+	waitForEmbeddingStart(t, started)
+	cancel()
+	assertEmbeddingCancellation(t, errCh)
 }
 
 func waitForEmbeddingStart(t *testing.T, started <-chan struct{}) {
