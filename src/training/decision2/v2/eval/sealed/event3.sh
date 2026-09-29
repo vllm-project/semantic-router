@@ -121,6 +121,17 @@ decrypt() {
 }
 helper() { python3 -m v2.eval.sealed.event3 "$@" 3<&-; }
 field() { helper field --plan "$PLAN" --key "$1" --field "$2"; }
+# A finished 27B job's VRAM (about 27%) is still being released when the next job starts, and the runner
+# refuses a GPU that is not idle unless --shared. Wait up to 120 s for it to drain.
+drain() {
+  local i v=""
+  for ((i = 0; i < 60; i++)); do
+    v=$({ rocm-smi -d "$GPU" --showmemuse 2>/dev/null | awk -F': ' '/VRAM%/ {v = $NF} END {print v}'; } 3<&-)
+    [ "$v" = 0 ] && break
+    sleep 2 3<&-
+  done
+  if [ "$i" -gt 0 ]; then log "GPU$GPU VRAM ${v:-unknown}% before $1; waited $((2 * i)) s"; fi
+}
 
 # key phase(smoke|collect) run-dir: one runner job, with a fresh copy of the frozen autotune cache if any
 job() {
@@ -133,7 +144,7 @@ job() {
       >>"$P/PREFLIGHT.log" 2>&1 3<&- || return 1
     extra=(--cache-dir "$cache")
   fi
-  if [ "$SHARED" = 1 ]; then extra+=(--shared); fi
+  if [ "$SHARED" = 1 ]; then extra+=(--shared); else drain "$phase $k"; fi
   helper argv --plan "$PLAN" --key "$k" --phase "$phase" --run-dir "$d" --gpu "$GPU" --src "$SRC" \
     --src-root "$S" --lease-name "$LEASE_NAME" "${extra[@]}" >"$d.argv" || return 1
   mapfile -d '' -t argv <"$d.argv"
