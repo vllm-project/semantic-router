@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react'
 import Translate, { translate } from '@docusaurus/Translate'
 import useBaseUrl from '@docusaurus/useBaseUrl'
+import IconExternalLink from '@theme/Icon/ExternalLink'
 import Claude from '@lobehub/icons/es/Claude/components/Mono'
 import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
 import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
@@ -12,6 +13,7 @@ import Mistral from '@lobehub/icons/es/Mistral/components/Mono'
 import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono'
 import Qwen from '@lobehub/icons/es/Qwen/components/Mono'
 import Zhipu from '@lobehub/icons/es/Zhipu/components/Mono'
+import { PillLink } from '@site/src/components/site/Chrome'
 import TerrainCanvas from './TerrainCanvas'
 import styles from './index.module.css'
 
@@ -98,12 +100,42 @@ export default function SemanticTerrainHero(): JSX.Element {
       <header className={styles.hero}>
         <div className={styles.heroScrim} aria-hidden="true" />
         <div className="site-shell-container">
-          <h1 className={styles.visuallyHidden}>
-            <Translate id="homepage.hero.line1">Build your</Translate>
-            {' '}
-            <Translate id="homepage.hero.line2">Mixture-of-Models</Translate>
-          </h1>
-          <HeroFilm />
+          <div className={styles.heroInner}>
+            <div className={styles.intro}>
+              <h1 className={styles.title}>
+                <span className={styles.accent}>
+                  <Translate id="homepage.hero.line1">Build your</Translate>
+                </span>
+                {' '}
+                <span className={styles.nowrap}>
+                  <Translate id="homepage.hero.line2">Mixture-of-Models</Translate>
+                </span>
+              </h1>
+              <div className={styles.actions}>
+                <PillLink
+                  className={styles.primaryCta}
+                  href="https://app.vllm-sr.ai"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <Translate id="homepage.hero.primaryCta">
+                    Try the Playground
+                  </Translate>
+                  <IconExternalLink />
+                </PillLink>
+                <PillLink
+                  className={styles.secondaryCta}
+                  to="/docs/intro"
+                  muted
+                >
+                  <Translate id="homepage.hero.secondaryCta">
+                    Explore the Docs
+                  </Translate>
+                </PillLink>
+              </div>
+            </div>
+            <HeroFilm />
+          </div>
         </div>
       </header>
 

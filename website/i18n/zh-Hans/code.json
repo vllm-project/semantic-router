@@ -397,8 +397,14 @@
   "homepage.hero.line2": {
     "message": "Mixture-of-Models"
   },
+  "homepage.hero.primaryCta": {
+    "message": "体验 Playground"
+  },
   "homepage.hero.manifesto": {
     "message": "先把请求看明白，再把系统做大；以信号驱动，以不确定性为标尺，让决策足够清晰。"
+  },
+  "homepage.hero.secondaryCta": {
+    "message": "浏览文档"
   },
   "homepage.hero.modelBand.eyebrow": {
     "message": "Mixture-of-Models"

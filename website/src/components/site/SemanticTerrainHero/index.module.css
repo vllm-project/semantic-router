@@ -129,7 +129,7 @@
   display: grid;
   min-height: 0;
   align-items: center;
-  padding: clamp(2.5rem, 6vh, 4.5rem) 0 clamp(2rem, 5vh, 3.5rem);
+  padding: clamp(2rem, 5vh, 3.5rem) 0 clamp(1.5rem, 4vh, 2.75rem);
   pointer-events: none;
 }
 
@@ -143,24 +143,100 @@
   pointer-events: none;
 }
 
-.visuallyHidden {
+.heroInner {
+  display: grid;
+  width: min(100%, 84rem);
+  gap: clamp(1.5rem, 3.2vh, 2.25rem);
+  margin: 0 auto;
+}
+
+.intro {
+  position: relative;
+  display: grid;
+  gap: 1.1rem;
+  justify-items: start;
+  justify-self: start;
+  pointer-events: auto;
+}
+
+/* The terrain HUD and glyphs run behind the top-left corner; keep the copy on a quiet patch. */
+.intro::before {
+  content: '';
   position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  border: 0;
+  z-index: -1;
+  inset: -3rem -5rem -2.5rem -6rem;
+  background: radial-gradient(ellipse at 42% 50%, color-mix(in srgb, var(--site-bg) 94%, transparent) 0, color-mix(in srgb, var(--site-bg) 78%, transparent) 48%, transparent 74%);
+  pointer-events: none;
+}
+
+.stage .title {
+  margin: 0;
+  color: var(--site-text);
+  font-size: clamp(2.1rem, 3.4vw, 3.15rem);
+  font-weight: 460;
+  letter-spacing: -0.045em;
+  line-height: 1.04;
+}
+
+.stage .title .accent {
+  color: var(--site-accent-strong);
+  font-weight: 720;
+}
+
+.nowrap {
   white-space: nowrap;
 }
 
-/* Sized so the whole film and the model band fit in the first viewport. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.actions .primaryCta,
+.actions .secondaryCta {
+  min-width: 12rem;
+  min-height: 3rem;
+  border-radius: 0.25rem;
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+/* Match the shared CTA and hover palette in both color modes. */
+.actions .primaryCta {
+  border-color: var(--site-cta-border);
+  background: var(--site-cta-bg);
+  color: var(--site-cta-text);
+  box-shadow: var(--site-cta-shadow);
+}
+
+.actions .primaryCta:hover,
+.actions .primaryCta:focus-visible {
+  border-color: var(--site-cta-border-hover);
+  background: var(--site-cta-bg-hover);
+  color: var(--site-cta-text);
+}
+
+.actions .secondaryCta {
+  border-color: var(--site-border-strong);
+  background: var(--site-surface-glass);
+  color: var(--site-text);
+  box-shadow: none;
+}
+
+.actions .secondaryCta:hover,
+.actions .secondaryCta:focus-visible {
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-hover-text);
+}
+
 .film {
   position: relative;
-  width: min(100%, 72rem, calc((100svh - var(--site-header-height) - 13rem) * 16 / 9));
+  width: 100%;
   aspect-ratio: 16 / 9;
-  margin: 0 auto;
+  margin: 0;
   overflow: hidden;
   border: 1px solid var(--site-border-strong);
   border-radius: 1.25rem;
@@ -333,7 +409,7 @@
   }
 
   .hero {
-    padding: 3rem 0 2.5rem;
+    padding: 2.25rem 0 2rem;
   }
 }
 
@@ -365,7 +441,23 @@
   }
 
   .hero {
-    padding: 2.5rem 0 2rem;
+    padding: 2rem 0 1.75rem;
+  }
+
+  .stage .title {
+    font-size: clamp(1.95rem, 8.6vw, 2.5rem);
+  }
+
+  .actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .actions .primaryCta,
+  .actions .secondaryCta {
+    width: 100%;
+    min-width: 0;
   }
 
   .heroScrim {
@@ -424,10 +516,6 @@
   .hero {
     padding-top: 1.75rem;
     padding-bottom: 1.5rem;
-  }
-
-  .film {
-    width: min(100%, 72rem, calc((100svh - var(--site-header-height) - 10rem) * 16 / 9));
   }
 
   .modelBand {
