@@ -198,6 +198,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 16:35 — **DEV2.0-26B released; the rename is running.**
+  - **DEV2.0-26B** (to be renamed DEV2.0-27B): private `llm-semantic-router/DEV2.0-26B@6931828d7e41a5d31cc8e5acdc36f5eebae70fad`
+    (`main`), manifest `9bf671e5…`, final decision `bea9795b…` (no-1.0 profile, six of six gate items).
+    - The card has F1's Choice / Noul mlx-diag lines (weakest: Korean Noul 79%, Spanish Choice 76.2%, Arabic Choice
+      77.8%), the A7-effect sentence and the pending C1 line.
+    - `dev2-27b-staging` F1 copy cleared with `rewrite_history=False`. Storage is 62.08 / 100 GB.
+    - The collection lookup now uses the pinned slug (`b80fa5302`). Integration `f1df21099`; ~1.45 GPU-h for the whole
+      release.
+  - **Rename worker** (worktree `vllm-sr-dev2-release`, gist 07):
+    - `name_basis` = base in the pipeline;
+    - `move_repo` DEV2.0-8B → DEV2.0-9B and DEV2.0-26B → DEV2.0-27B;
+    - card-only revisions (name, owl banner, examples, "named after its base model; loads N parameters", and for 27B the
+      peer mlx-diag lines);
+    - new final decisions bound to the new IDs;
+    - collection order 0.6B, 0.8B, 2B, 4B, 9B, 27B.
+    The C1 lines come in a later card-only pass after event 3 is scored.
+
 - 2026-09-29 16:20 — **C1 event 3 NOT run: the custodian content scan FAILED; C1 v1.2 decided** (prep record §00;
   integration `295b5fb0e`; 0 GPU-h; nothing decrypted; 2 of 3 events used).
   - Scan: 67,596 CLEAN, **4 OVERLAP**, 17 REVIEW, and 13 IDs newly non-CLEAN since event 2.
