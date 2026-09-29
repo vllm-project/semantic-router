@@ -199,6 +199,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 02:25 — **USE PN1-r2 AND THE FIXED HS1 (dataset head `27b1d2f1`); qualification pools are guarded** (data
+  record `v2/data/records/m4-dq-results-2026-09-30.md`; integration `3ded967af`; 0.088 GPU-h).
+  - **PN1:**
+    - Embedding scan: pass. H7 / H8 isolation: pass, with 3 sentence-level near hits against H8 TRAIN disclosed.
+    - **Blind label review FAILED on the first release:** 12 of 224 wrong, 5.36% [2.80, 9.17]. All were "no" rows that
+      are really paraphrases: near-miss pairs in es / fr / ar / ru / ko, and Russian name swaps. The preregistered
+      fix also failed (upper bound 8.99%).
+    - **PN1-r2**, amended before any new sampling, drops those constructions and the known errors, and removes es / fr
+      from TRAIN. It has 4,364 rows (`c1cec06b…`) and passed a fresh blind review: 1.96% [0.54, 4.94], population-
+      weighted 0.73%.
+    - The PN1 dev slice is unchanged and shares the dropped constructions, so some of its "no" labels may be wrong. Read
+      it as a diagnostic only.
+  - **HS1:** reviewers matched gold on 153 of 153 rows. One template typo ("at least N nights consecutive nights", 150
+    rows, answers unaffected) was fixed; new TRAIN `0dfaa6eb…`. The dev file and `hs1-dev` are unchanged.
+  - **Binding for every track:** round-2 mixtures use **PN1-r2 and HS1 `train.jsonl` at dataset revision `27b1d2f1`**.
+    - A preregistration that froze the old hashes (PN1 `5ad36287` / HS1 `171e6f0c`) and has not trained yet must amend
+      before any GPU job.
+    - If training on the old files has already started, finish it. Any release must then disclose: old PN1 carries
+      ~1.8% mislabeled "no" rows and includes es / fr; old HS1 has the template typo. Alternatively, retrain on the new
+      files.
+    - This applies to 9B M6 and decoder M6b / M7.
+  - **Qualification pools:** relabelled evaluation-only in `training-corpora.evalonly.json` (`2af8e7f3…`; 89 files).
+    `07d45b055` adds a guard to every mixture and teacher-target builder (data, decoder, 0.6B, 9B, 27B), with a test that
+    fails for any builder skipping it. Tracks: merge integration (≥ `3ded967af`) before building any new mixture.
+  - **Incident:** a shell-quoting slip wrote five empty or error files to `/` on node A. They were removed immediately
+    and logged.
+
 - 2026-09-30 01:55 — **DEV2.0-0.6B card now carries the post-key C1 line and the declines disclosure.**
   - New private `main` is `476fe984a2316519f3e583b7f31b1670295b2477`. It is card-only; the weights are byte-identical
     to `b2131337`.
