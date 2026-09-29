@@ -137,6 +137,7 @@ def select_reports(
                 "family": report["model"].get("family"),
                 "label": report["model"].get("label"),
                 "candidate": entry["role"] == "candidate",
+                "board_entry": entry.get("board_entry"),
             },
             roster,
         )
