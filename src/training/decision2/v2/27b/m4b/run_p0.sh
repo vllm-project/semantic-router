@@ -12,7 +12,7 @@ CODE=/data/dev2/src/$SHA/src/training/decision2
 GPUS=${GPUS:-0,1,2}
 P0=/data/dev2/runs/27b/m4b/P0
 export TMPDIR=/data/dev2/tmp/m4b-P0
-mkdir -p "$P0/receipts" "$P0/parity" "$TMPDIR"
+mkdir -p "$P0/receipts" "$P0/parity" "$P0/triton-cache" "$TMPDIR"
 cd "$CODE"
 export PYTHONPATH=$CODE PYTHONDONTWRITEBYTECODE=1
 
@@ -24,6 +24,8 @@ if has parity && [ ! -f "$P0/parity/parity.json" ]; then
   python3 -m v2.27b.m4b.launch3 --name d2-27b-m4b-p0-parity --gpus "$GPUS" --cap-hours 0.25 \
     --purpose "P0 tiny-model FSDP2 parity" --receipt "$P0/receipts/parity.json" \
     --mount "$CODE:/code" --mount "$P0/parity:/out:rw" --mount "$TMPDIR:$TMPDIR:rw" \
+    --mount "$P0/triton-cache:/triton-cache:rw" --env TRITON_CACHE_AUTOTUNING=1 \
+    --env TRITON_CACHE_DIR=/triton-cache \
     --env PYTHONPATH=/code:/opt/decision-fla --env "TMPDIR=$TMPDIR" --env HF_HUB_OFFLINE=1 \
     -- python3 -m torch.distributed.run --nnodes 1 --master-addr 127.0.0.1 --master-port 29500 \
     --nproc-per-node "${#n[@]}" \
