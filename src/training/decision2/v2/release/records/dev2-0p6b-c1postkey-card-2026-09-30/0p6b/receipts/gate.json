@@ -1,0 +1,77 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the post-key C1 card line approved in the cross-track note of 2026-09-30 00:30 UTC+8, under the user's full-autonomy mandate",
+  "decision": "release",
+  "decision_sha256": "54a0f25f373be7002eed7c3caacc89744b0fb3cc0ef391468824a0bf8b5f1feb",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 48.636 vs current 43.541: +5.09 [+2.65, +9.30]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.064, +0.061]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0044 [-0.0058, +0.0144]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "own 1.0 low +10.00; v3 48.636 vs 90% of GLiNER2.5-Decide 42.524; H vs GLiNER2.5-Decide [-0.013, +0.161]; own 1.0 low > 0 ok, v3 >= 38.272 ok, H vs GLiNER2.5-Decide upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "6 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 152 vs 142 (+10; McNemar p 0.087)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "1 results below own 1.0 listed in the card tradeoffs table",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 33 files re-hashed; loaded 597103104",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "5a3317a2034bf7fe9cc75ac228d6434907730ef97e0be7446c639851ad721dde",
+  "model_name": "DEV2.0-0.6B",
+  "receipts_sha256": {
+    "card-post": "aa84d7916c25aeeb4b21dceb70fb8f9e27fb8009bc763dd0f84fb6fd089f3171",
+    "card-pre": "7fb320d3119c3ec21dc2d7a6cf5c0b4d194f594d5f8f44d33f941a6186a5e779",
+    "download": "3cfd709a2967efca299ba928d3cbdd97b25359343fd572afb9008ed7cfbe2f94",
+    "post": "bec50a763684ab52b9cbc8eb0b089aa5cdc160ffc84b79e0d77389ded9afc847",
+    "readback": "603f320abac360b0c1fb8c2a4ed1eb7bb8ecc5b1fad5bde50705076932e408bc",
+    "repeat-post": "117e88ca5bda32d0ab1091171118bcd71dee52c016be3a7dc05a4769800c00cf",
+    "repeat-pre": "b4f25d842aa9d2ca3478badeab9f4395dc29d3b2af1e2f23948a025995a849dc",
+    "tree": "a298ea3fa69c22788bf8e3568f83bcd163fb59f3b3a498bbdfcdd36a9d311e14",
+    "upload": "4cd1aa3eb0d16313e5c4c9c02cd8d4548751303b7a338f7249c5c465aa0e03a2"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+  "revision": "476fe984a2316519f3e583b7f31b1670295b2477",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "787c31c9e5bf618c788d28acbe6b1009181d62b6e37fa16e6c231b2dd2ca2bc1",
+    "revision": "99c4e799392afa73241915aeb16fefa5ef3518d7"
+  },
+  "utc": "2026-09-29T17:45:59.724631+00:00"
+}
