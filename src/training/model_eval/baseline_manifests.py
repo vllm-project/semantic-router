@@ -200,6 +200,14 @@ def _build_dataset(
         label_field=spec.label_field,
         preprocessing_steps=[
             "load the published split without shuffling",
+            *(
+                [
+                    f"leave out rows whose {spec.exclude_prefix[0]} starts with "
+                    f"{spec.exclude_prefix[1]}"
+                ]
+                if spec.exclude_prefix is not None
+                else []
+            ),
             "map label values onto the artifact's own class order",
             "drop rows whose label the artifact does not define",
         ],

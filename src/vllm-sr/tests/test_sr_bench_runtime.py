@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import sqlite3
 import stat
 import subprocess
@@ -273,6 +274,109 @@ def test_reconciliation_failure_rolls_back_only_new_runtime_containers(monkeypat
     assert status == 1
     assert "reconciliation" in error
     assert removed == ["router", "envoy"]
+
+
+def test_worker_that_never_started_is_removed_and_its_port_conflict_named(
+    monkeypatch,
+):
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+        worker = {"id": "unstarted-id", "status": "created"}
+        removed = []
+
+        def run(command, **kwargs):
+            if command[1] == "run":
+                raise subprocess.CalledProcessError(
+                    125,
+                    command,
+                    stderr=f"Bind for 127.0.0.1:{port} failed: port is already allocated",
+                )
+            if command[1] == "inspect":
+                labels = {BENCH_IDENTITY_LABEL: "same"}
+                return SimpleNamespace(
+                    returncode=0, stdout=json.dumps({**worker, "labels": labels})
+                )
+            removed.append(command[1:])
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", run)
+        specs = [
+            (
+                "sr-bench",
+                "bench",
+                (
+                    [
+                        "docker",
+                        "run",
+                        "--label",
+                        f"{BENCH_IDENTITY_LABEL}=same",
+                        "-p",
+                        f"127.0.0.1:{port}:8090",
+                    ],
+                ),
+            )
+        ]
+        code, _, error = container_start_runner.run_container_specs(
+            specs, storage_secret_values={}, bench_secret_values={}
+        )
+        assert code == 1
+        assert f"port {port} is already in use" in error
+        assert "VLLM_SR_BENCH_PORT" in error and "VLLM_SR_PORT_OFFSET" in error
+        assert removed == [["rm", "unstarted-id"]]
+
+        # A worker that ran and stopped keeps its evidence, even on a taken port.
+        worker["status"] = "exited"
+        code, _, error = container_start_runner.run_container_specs(
+            specs, storage_secret_values={}, bench_secret_values={}
+        )
+        assert code == 1
+        assert "inspect its saved ledger" in error
+        assert removed == [["rm", "unstarted-id"]]
+
+
+def test_worker_that_never_started_is_removed_and_reports_the_runtime_error(
+    monkeypatch,
+):
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    runtime_error = "OCI runtime create failed: exec: no such file or directory"
+    removed = []
+
+    def run(command, **kwargs):
+        if command[1] == "run":
+            raise subprocess.CalledProcessError(127, command, stderr=runtime_error)
+        if command[1] == "inspect":
+            worker = {"id": "unstarted-id", "status": "created", "labels": {}}
+            return SimpleNamespace(returncode=0, stdout=json.dumps(worker))
+        removed.append(command[1:])
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    code, _, error = container_start_runner.run_container_specs(
+        [
+            (
+                "sr-bench",
+                "bench",
+                (
+                    [
+                        "docker",
+                        "run",
+                        "--label",
+                        f"{BENCH_IDENTITY_LABEL}=same",
+                        "-p",
+                        f"127.0.0.1:{port}:8090",
+                    ],
+                ),
+            )
+        ],
+        storage_secret_values={},
+        bench_secret_values={},
+    )
+    assert (code, error) == (127, runtime_error)
+    assert removed == [["rm", "unstarted-id"]]
 
 
 @pytest.mark.parametrize(

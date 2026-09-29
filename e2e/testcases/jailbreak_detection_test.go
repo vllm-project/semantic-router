@@ -2,8 +2,25 @@ package testcases
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
 )
+
+func TestJailbreakFailedCasesPreserveExactMissesWithoutPrompts(t *testing.T) {
+	results := []JailbreakResult{
+		{Description: "blocked attack", Question: "attack text", ExpectedBlocked: true, ActuallyBlocked: true, Correct: true},
+		{Description: "known miss", Question: "sensitive prompt", ExpectedBlocked: true},
+		{Description: "request error", Question: "private prompt", Error: "backend failed"},
+		{Description: "allowed benign", Question: "benign text", Correct: true},
+	}
+	want := []jailbreakCaseFailure{
+		{Description: "known miss", ExpectedBlocked: true},
+		{Description: "request error", Error: "request error"},
+	}
+	if got := jailbreakFailedCases(results); !reflect.DeepEqual(got, want) {
+		t.Fatalf("failed cases = %#v, want %#v", got, want)
+	}
+}
 
 func TestJailbreakAcceptanceRequiresBothClasses(t *testing.T) {
 	balanced := func(positive, negative int) []JailbreakResult {

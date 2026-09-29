@@ -248,7 +248,7 @@ const alternativeComparison = [
     aiGateway: (
       <ExampleProducts
         products={[
-          { label: 'Envoy AI Gateway', to: '/docs/installation/k8s/ai-gateway' },
+          { label: 'Agent Router', to: '/docs/installation/k8s/ai-gateway' },
           { label: 'LiteLLM' },
           { label: 'agentgateway', to: '/docs/installation/k8s/agentgateway' },
         ]}
