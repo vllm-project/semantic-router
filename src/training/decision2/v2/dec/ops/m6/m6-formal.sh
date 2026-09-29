@@ -16,7 +16,8 @@
 #                                            m6-relay.sh mark; node A: needs <run>/REPORT.json from m6-score.sh)
 #   m6-formal.sh <tier> gpuh                 GPU-hours of the formal jobs so far (GPU-SECONDS.jsonl)
 #
-# <point> is a finalist named in /data/dev2/runs/dec/m6/select/<tier>-finalists.json (m6-rules.sh). Tiers: 4b node B
+# <point> is a finalist named in /data/dev2/runs/dec/m6/select/<tier>-finalists.json (m6-rules.sh; M6_SELECT names
+# another select directory, e.g. a later milestone's preregistered finalists). Tiers: 4b node B
 # (master formal/m5/cache-frozen f6d0f920..., mlx cache-frozen-mlx 65d7d38f...); 2b node B after `2b ref` and a
 # node-A exactness check (REF-EXACT.json relayed by m6-relay.sh mark-ref), or node A with M6_2B_NODE=A (image
 # f83b1d10, HIP_FORCE_DEV_KERNARG=1, copy of formal/m3/m3-S2T-soup-nodeA-triton, package relayed by m6-relay.sh pkg);

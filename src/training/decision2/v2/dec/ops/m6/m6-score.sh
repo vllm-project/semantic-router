@@ -15,8 +15,11 @@
 #                                       candidate's exposure receipts are the incumbent's (inherited) plus the new
 #                                       training files' (M6_EXPOSURE=comma list, from the data lock)
 #   m6-score.sh <tier> successor <run> [<run> ...]
-#                                       successor rule items 1-6 per run (m6_successor.py evaluate) and the tier choice
-#                                       (m6_successor.py choose) -> successor/<tier>-*.json / .md
+#                                       successor rule items 1-8 per run (m6_successor.py evaluate) and the tier choice
+#                                       (m6_successor.py choose) -> successor/<tier>-*.json / .md. Item 7 runs
+#                                       v2.eval.gates public231 vs the bar (successor/<tier>-<run>.public231.json);
+#                                       item 8 reads the custodian's C1 SUMMARY.json from <run>.c1/SUMMARY.json once
+#                                       it is placed there (pending before)
 set -u
 S=$(cd "$(dirname "$0")/../../../.." && pwd)
 MIRROR=${S%/src/training/decision2}
@@ -206,9 +209,16 @@ EOF
       exp=()
       IFS=, read -r -a new <<< "${M6_EXPOSURE:-}"
       for e in "${new[@]}"; do exp+=(--exposure "$e"); done
+      PUB=$OUTD/$TIER-$run.public231.json
+      [ -f "$R/REPORT.json" ] || die "$run not scored yet"
+      [ -f "$PUB" ] || py -m v2.eval.gates public231 --left "$R" --right "${CMP[0]}" --left-name "$run" \
+        --right-name bar-t1 --output "$PUB" > "$PUB.log" 2>&1 || die "$run public231 guard FAILED to run"
+      c1=()
+      [ -f "$FA/$run.c1/SUMMARY.json" ] && c1=(--c1 "$FA/$run.c1/SUMMARY.json")
       python3 -B "$S/v2/dec/ops/m6/m6_successor.py" evaluate --tier "$TIER" --run "$R" --types "$R/TYPES.json" \
         --mlx-paired "$FA/$run-mlx/MLX-PAIRED.json" --overlap "$FA/$run.overlap/overlap-effects.json" "${exp[@]}" \
-        --output "$OUTD/$TIER-$run" > "$OUTD/$TIER-$run.log" 2>&1 || die "$run successor evaluation FAILED"
+        --public231 "$PUB" "${c1[@]}" --output "$OUTD/$TIER-$run" > "$OUTD/$TIER-$run.log" 2>&1 \
+        || die "$run successor evaluation FAILED"
       results+=(--result "$OUTD/$TIER-$run.json")
       flog "$run successor: $(tail -1 "$OUTD/$TIER-$run.log")"
     done
