@@ -1959,7 +1959,7 @@ Record `v2/eval/records/c1-postkey-guard-2026-09-29.md` (§6 has the full block;
   | 4B | `452f1332` | 48.38 |
   | 9B | package `53bac735` | 53.77 |
   | 27B | `5683c6f0` | 57.33 |
-  | 0.8B | event-1 weights | being registered |
+  | 0.8B | event-1 weights (T = 1 changes 0 answers) | 40.17 (node A `/data/dev2/runs/eval/m4/c1-event1/e8f`; integration `12e5ba152`) |
 
   After a release, put `SUMMARY.json` → `baseline_entry` into the registry.
 
