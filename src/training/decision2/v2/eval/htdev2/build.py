@@ -71,6 +71,7 @@ TEMPLATE_KEY = {
     "mrf": "mrf-classification",
 }
 TASK_CAP = 150
+FREEZE_CAP = 216  # at most 1,950 items over the 9 admitted tasks
 GROUP_CAP = 2
 FLOOR = 60
 PRESCAN_FACTOR = 40
@@ -630,7 +631,7 @@ def freeze(args: argparse.Namespace) -> dict[str, Any]:
         if not info["admitted"]:
             summary[task] = {"admitted": False, "reason": "reconstruction check"}
             continue
-        quota = info["quota_per_class"]
+        quota = FREEZE_CAP // len(info["labels"])
         rows = sorted(by_task[task], key=lambda r: r["order"])
         chosen, per_class, per_group, dropped = [], Counter(), Counter(), 0
         for row in rows:

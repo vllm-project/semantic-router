@@ -141,7 +141,7 @@ def test_freeze_balances_caps_groups_and_skips_flagged(tmp_path, monkeypatch):
         )
     )
     summary = result["tasks"]["mrf"]
-    assert summary["by_class"] == {"Misinformation": 75, "Trustworthy": 75}
+    assert summary["by_class"] == {"Misinformation": 108, "Trustworthy": 108}
     assert summary["flagged_in_scan"] == 1
     golds = [
         json.loads(line) for line in (tmp_path / "out/gold/ht-dev2.gold.jsonl").open()
