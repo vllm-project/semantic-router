@@ -32,6 +32,7 @@ SCHEMA = "dev2-htdev2-ceiling/1"
 THRESHOLD = 0.02
 SEED = 20260930
 FRACTIONS = (0.35, 0.5)
+DEV_TASKS = EVALUATION_TASKS
 
 
 def coded(
@@ -179,7 +180,7 @@ def run(
     }
     rng = np.random.default_rng(SEED)
     sims: dict[str, Any] = {}
-    for fraction in FRACTIONS:
+    for fraction in fractions:
         rows = []
         boot = []
         for rep in range(replicates):
@@ -191,7 +192,7 @@ def run(
             for f in formal:
                 dev_f1 = [
                     macro_f1(f[t][0][masks[t][0]], f[t][1][masks[t][0]], f[t][2])
-                    for t in EVALUATION_TASKS
+                    for t in dev_tasks
                 ]
                 tgt_f1 = [
                     macro_f1(f[t][0][masks[t][1]], f[t][1][masks[t][1]], f[t][2])
@@ -264,6 +265,8 @@ def run(
         "models_with_pilot": int(with_pilot.sum()),
         "tiers": {t: tiers.count(t) for t in sorted(set(tiers))},
         "css15_task_sizes": sizes,
+        "dev_tasks": list(dev_tasks),
+        "fractions": list(fractions),
         "observed": observed,
         "split_simulation": sims,
         "per_model": [
@@ -279,9 +282,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--panel-root", type=Path, default=panels.DEFAULT_ROOT)
     parser.add_argument("--replicates", type=int, default=200)
     parser.add_argument("--draws", type=int, default=1000)
+    parser.add_argument("--fractions", default=",".join(map(str, FRACTIONS)))
+    parser.add_argument("--dev-tasks", default=",".join(DEV_TASKS))
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
-    result = run(args.spec, args.panel_root, args.replicates, args.draws)
+    fractions = tuple(float(x) for x in args.fractions.split(","))
+    dev_tasks = tuple(args.dev_tasks.split(","))
+    if not set(dev_tasks) <= set(EVALUATION_TASKS):
+        raise ValueError("dev tasks must be CSS15 evaluation tasks")
+    result = run(
+        args.spec, args.panel_root, args.replicates, args.draws, fractions, dev_tasks
+    )
     write_json(args.output, result)
     print(
         json.dumps(
