@@ -1,0 +1,59 @@
+{
+  "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+  "prompt_version": "decision2-segmented-options-global-query-v1",
+  "base_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+  "source_prompt_version": "structured-segmented-candidate-endpoints-global-query-v2",
+  "head_dim": 256,
+  "max_options": 255,
+  "text_parameter_count": 7936684544,
+  "parameter_dtype": "float32",
+  "autocast_dtype": "bfloat16",
+  "head_compute_dtype": "float32",
+  "attention": "sdpa",
+  "checkpoint_format": "full",
+  "full_training_source": {
+    "kind": "decision1",
+    "revision": null,
+    "source_fingerprint": {
+      "source_name": "model",
+      "files_sha256": {
+        "MATERIALS.json": "832327d19b15901d0f6298a6d2f014dc0bac71357a7d0be28bea8add51e1ce89",
+        "backbone/config.json": "4a87e4e7e11a11284a210066648b6d7616fda2872caeadec015aecb26dd9cffe",
+        "backbone/model-00001-of-00004.safetensors": "38b8c6b3cacebb8e5e24557fb29854efd0db217224ed0c5fb7482513de7436ca",
+        "backbone/model-00002-of-00004.safetensors": "2b5686373f785b0043289bcd0d374bfdccd8b513754b66401ef54bd4c8ad2403",
+        "backbone/model-00003-of-00004.safetensors": "ff152c4b46e7f2df8e257c7dc2818d569fd4ab0dc659494b26d65004f0f83d50",
+        "backbone/model-00004-of-00004.safetensors": "99d7d3bf53cf1a3c5c355bdf7a139c7daa3ab47ce703980eaa8a27106590a8a6",
+        "backbone/model.safetensors.index.json": "f943816d8882f0acb572029805817240c2310d0d7e5b76fe1ececff63eab0686",
+        "bundle-manifest.json": "985ade73c509399291d60b5f98e8bbbbe99c0ee0efe611a5f84604f71420e0fd",
+        "decision_config.json": "656b1717b8cfebad6253e9d1321023323651ad3c80327562b7d1542ec74c23d1",
+        "decision_head.safetensors": "f810788b27ee5fbeede232041d2b61022033d2b717d1d90070d2d903fca6137f",
+        "model-card-example.json": "12d68a696b50851b3614c1ed9d5e73347780ca5ad487ee2ad35e746ab40bbb18",
+        "release-manifest.json": "f786ce80a159c716f22b7d9c652af765b06f9db083bf43a8b08e67c3be3e69c5",
+        "runtime.json": "2fffc75c6c681d7056b24ca660f95491f12816d0ed1c4a70ff3dbee3896044bb",
+        "temperature.json": "ca7dfe0c3f28ab5d66804688ad779e2bc1f98f2e57a97669033a9d3bc4bf2e63",
+        "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+        "tokenizer_config.json": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87"
+      }
+    }
+  },
+  "training_mode": "full",
+  "loss_version": "decision2-valid-k-ce-plus-optional-brier-and-replay-kl-v1",
+  "soup": {
+    "method": "uniform weight average (FP32)",
+    "members": [
+      {
+        "path": "/m4/K-soup-build/soup",
+        "model_sha256": "20dbb8999f212a13febf1858b6263f1b9e94ecceaa43b8ebc4ce04505b438af7"
+      },
+      {
+        "path": "/m3/pf-D-s1-zero/run/checkpoint-0000000",
+        "model_sha256": "dc9b795ca75adeb9cd4b3f88b102a147191c493a300f8f709ba7146ad3af0112"
+      },
+      {
+        "path": "/m3/pf-D-s1-zero/run/checkpoint-0000000",
+        "model_sha256": "dc9b795ca75adeb9cd4b3f88b102a147191c493a300f8f709ba7146ad3af0112"
+      }
+    ]
+  },
+  "initialization": "uniform-soup-of-full-checkpoints"
+}

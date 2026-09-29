@@ -1,0 +1,116 @@
+{
+  "bf16_pattern": "layers\\.\\d+\\.(self_attn\\.[qkvo]_proj|linear_attn\\.(in_proj_(qkv|z|a|b)|out_proj)|mlp\\.(gate|up|down)_proj)\\.weight",
+  "files": {
+    "backbone/config.json": {
+      "bytes": 1979,
+      "sha256": "fe4a44abcba0abed76d80f4840b761704a29236113cafd9cd7c84c6435f511c6",
+      "source_sha256": "fe4a44abcba0abed76d80f4840b761704a29236113cafd9cd7c84c6435f511c6",
+      "verbatim": true
+    },
+    "backbone/model-00001-of-00009.safetensors": {
+      "bytes": 4068475016,
+      "sha256": "36d5dc229e27493b1c78dd8f07cfe073a42980bc8fed6fd1fd717d7af41d6118",
+      "source_sha256": "36d5dc229e27493b1c78dd8f07cfe073a42980bc8fed6fd1fd717d7af41d6118",
+      "verbatim": false
+    },
+    "backbone/model-00002-of-00009.safetensors": {
+      "bytes": 1965715032,
+      "sha256": "a58975a1c0000a2b96a2e72d302e864b295e31a313f64fff6cefa4aa843bc918",
+      "source_sha256": "ef33a62bac86283231b232f523b31152a576a1adfd71d016b1b371fd2cd70153",
+      "verbatim": false
+    },
+    "backbone/model-00003-of-00009.safetensors": {
+      "bytes": 1999285240,
+      "sha256": "5a867565c00fc94c1f64fd7126ee2623fc3ac7ea8c3519a0722534eb87aa8d0d",
+      "source_sha256": "d274b0e5854cf25e6cada63cfb8c36a2c8266cf67f7f0e5f3a1ae8f72b411d01",
+      "verbatim": false
+    },
+    "backbone/model-00004-of-00009.safetensors": {
+      "bytes": 1998596904,
+      "sha256": "60a71a7aeae01cdba8b5b63ea2314781372eb7b4f9fd81bb5d792cdbe017b3f2",
+      "source_sha256": "baf6700f3824bee78bb86f2c8c8aa7cf5d3243ab1a5cf34793c32eebb44bd12f",
+      "verbatim": false
+    },
+    "backbone/model-00005-of-00009.safetensors": {
+      "bytes": 1965731600,
+      "sha256": "5cb73b1e4fcd13cf63e9402407866817620146e925d00e1249f6bca6cde9d29d",
+      "source_sha256": "69c7b164a0d455514238b172c1b2e7b66172d25ecfdf936d9e5de5225bbb4b77",
+      "verbatim": false
+    },
+    "backbone/model-00006-of-00009.safetensors": {
+      "bytes": 1931487216,
+      "sha256": "a3fb769f6a9785ec978fa91802ad01f926d552de6c75cdfd07bf863fbfe27335",
+      "source_sha256": "27dde07321fb81d3fa68d596f3270d9aba93b25db7b8cb26ebb2159771a5d5f8",
+      "verbatim": false
+    },
+    "backbone/model-00007-of-00009.safetensors": {
+      "bytes": 1931520176,
+      "sha256": "1c964494281f878cc7a917c0a590af7c25d42c219fe6fe8174f0ef7afb010bd2",
+      "source_sha256": "0bd5313234142b6cb649e53df8b90b4d1a4e782b5ae66820ed513595e95b622c",
+      "verbatim": false
+    },
+    "backbone/model-00008-of-00009.safetensors": {
+      "bytes": 1973449200,
+      "sha256": "3275040901c5ae3e06bd335e885ebb93d105adae4b189fbcb351cdf727dc27c3",
+      "source_sha256": "66fad449819457c81560b647926326dea858800ea4ce7b26348219f18edf0e89",
+      "verbatim": false
+    },
+    "backbone/model-00009-of-00009.safetensors": {
+      "bytes": 75514184,
+      "sha256": "7f9b096901ec874f044397a450e2d0249b1303b8d63dd8d8322aeca3b3a5e87a",
+      "source_sha256": "54d40b878147785df960a2cc001c29c5f1b145d38be3a0c1b1536f164fe783c5",
+      "verbatim": false
+    },
+    "backbone/model.safetensors.index.json": {
+      "bytes": 33048,
+      "sha256": "d6cee5639ed3cacfdfc0f76d5810e08da55f349a2879656675356cd7b2550d5c",
+      "source_sha256": "47fc0f375656c2c6e3cda66ca42ee0ce82bfbc6f741ec4841f4e9de739b0025e",
+      "verbatim": false
+    },
+    "chat_template.jinja": {
+      "bytes": 7756,
+      "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+      "source_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+      "verbatim": true
+    },
+    "decision_config.json": {
+      "bytes": 3122,
+      "sha256": "579777565605595c8792c133c438c195712b4a7ea6328e2084d98b2e542d1ded",
+      "source_sha256": "579777565605595c8792c133c438c195712b4a7ea6328e2084d98b2e542d1ded",
+      "verbatim": true
+    },
+    "decision_head.safetensors": {
+      "bytes": 16845656,
+      "sha256": "264ebb5ff22724d7a38ecfdf8241b121fcd2a59cd00014ad67cd4c63ed36e9ec",
+      "source_sha256": "264ebb5ff22724d7a38ecfdf8241b121fcd2a59cd00014ad67cd4c63ed36e9ec",
+      "verbatim": true
+    },
+    "tokenizer.json": {
+      "bytes": 19989325,
+      "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "source_sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "verbatim": true
+    },
+    "tokenizer_config.json": {
+      "bytes": 1123,
+      "sha256": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87",
+      "source_sha256": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87",
+      "verbatim": true
+    }
+  },
+  "model_sha256": "b1ed5a71038b474902d2a6dfebeee0c6f7ce901097553b4621f6f0a23fb6da98",
+  "numel_by_storage_dtype": {
+    "BF16": 6918504448,
+    "F32": 1018180096
+  },
+  "rule": "BF16 storage for Linear projection weights (rounded exactly as BF16 autocast does); FP32 bit-exact for all other tensors",
+  "safetensors": "0.8.0",
+  "schema": "dev2-release-bf16-copy/1",
+  "source_model_sha256": "b9d973b3ef555457da2dfa839c45cef3d4a98a47a43d1fd724e77fdec4aa125d",
+  "tensor_bytes": 17909729280,
+  "tensors_by_storage_dtype": {
+    "BF16": 248,
+    "F32": 178
+  },
+  "torch": "2.12.0+git6bbd260"
+}

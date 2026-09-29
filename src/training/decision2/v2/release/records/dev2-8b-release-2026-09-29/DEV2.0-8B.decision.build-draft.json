@@ -1,0 +1,21 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-8B",
+  "repo_id": "llm-semantic-router/DEV2.0-8B",
+  "identity": {
+    "model_sha256": "b1ed5a71038b474902d2a6dfebeee0c6f7ce901097553b4621f6f0a23fb6da98"
+  },
+  "calibration": "none (temperature 1); CAL698 temperatures 65297c6d (Choice 1.420, Noul 1.037, Score 0.563; fitted at 8,192 tokens and used by the scored run K-a13-16k) evaluated on the development panels and rejected under the 23:15 rule (receipt 17fa4211: typed-DEV Brier 0.0537 -> 0.0581 and CSS-pilot Brier-sum 0.5535 -> 0.5553 worsen, typed-DEV ECE-10 0.0157 -> 0.0107 and CSS-pilot ECE-15 0.1326 -> 0.0577 improve; 0 answer changes)",
+  "report_sha256": "66106ef9123bf0bb9ac8aeb5024384cc98d5194dd231ff71cebc541b88cf3b17",
+  "paired_sha256": "ae559e9a1e13afca5ebb677e98706a027db415313f102e9059607d5114e99550",
+  "prepared_by": "Decision 2.0 release engineering, 9B-tier (DEV2.0-8B) worker (build-time binding draft, T = 1 BF16-storage package)",
+  "decided_by": null,
+  "rationale": "Binding draft for the private build, upload and verification of the uncalibrated (T = 1) DEV2.0-8B package: 9B candidate K-a13 (coordinator 2026-09-29 13:45) = 1/3 x K soup (three seeds of own Decision 1.0 Lux bd45a30a fully fine-tuned on a 60M-token XL r2 subsample with 1.0 x KL(own Lux) on every row) + 2/3 x Lux 1.0; scored identity b9d973b3 (FP32, node A m4/K-a13-build/soup, SHA256SUMS 6913eb61); qwen-full, 16,384 tokens, 7,940,895,744 loaded parameters (name by loaded count: DEV2.0-8B, 9B tier). Package identity b1ed5a71 = the BF16-storage copy (v2.release.bf16_copy: 248 Linear projection matrices in BF16 exactly as BF16 autocast rounds them, every other tensor bit for bit in FP32); a no-upload staging run of that package gave 0 answer changes, 0 missing and 0 input mismatches on every scored prompt and on mlx-diag (typed-final 1,600 prompts / 2,000 slots, css15 6,547, public231 231, mlx-diag 2,275; largest probability drift 8.9e-16), so it replaces the scored bytes per the coordinator's storage rule. Scored bindings: the T = 1 derivation of the sealed CAL698 run (derived run dev2-8b-t1-derived: REPORT 66106ef9, SEAL d00e453b; identical answers). Post-key same-panel v3 67.737 vs adopted native Lux1 16K 65.808: +1.929, 95% CI [+0.607, +4.144]; human transfer +0.008 [-0.011, +0.042]; no type collapsed (types OK x3).",
+  "pending": [
+    "coordinator decision (status final, decided_by)",
+    "eval-track 9B gate checks (card disclosures relayed by the coordinator; card placeholder until then)",
+    "JevArena-C1 line (card-only revision)"
+  ]
+}
