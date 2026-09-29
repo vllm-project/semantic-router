@@ -35,6 +35,50 @@ func optionalAuthoritative(value *int64) llmprotocol.TokenCount {
 	return authoritative(*value)
 }
 
+// appendAnthropicUsageMarks records the usage projection caveats shared by
+// every Anthropic Messages surface: the buffered response, the streaming
+// message_start, and the terminal message_delta all carry the same numbers,
+// so they share one marking pass. Each caveat is an approximation diagnostic
+// because Messages requires exact numbers.
+func appendAnthropicUsageMarks(
+	diagnostics *llmprotocol.Diagnostics,
+	policy llmprotocol.Policy,
+	source llmprotocol.WireFormat,
+	usage llmprotocol.Usage,
+) {
+	if usageUnavailable(usage) {
+		appendDiagnostic(diagnostics, policy, source, llmprotocol.AnthropicMessagesV1,
+			"usage", llmprotocol.DiagnosticApproximated,
+			"Messages requires usage; emitted an explicit zero-valued usage object")
+		return
+	}
+	if anthropicOutputTotalIsLowerBound(usage) {
+		appendDiagnostic(diagnostics, policy, source, llmprotocol.AnthropicMessagesV1,
+			"usage", llmprotocol.DiagnosticApproximated,
+			"output total is incomplete; the known output components project as a lower bound")
+	}
+	if anthropicInputTotalIsLowerBound(usage) {
+		appendDiagnostic(diagnostics, policy, source, llmprotocol.AnthropicMessagesV1,
+			"usage", llmprotocol.DiagnosticApproximated,
+			"input total and uncached count are absent; the projected input count is a lower bound")
+	}
+}
+
+// appendDiagnostic appends one bounded diagnostic with an explicit action.
+func appendDiagnostic(
+	diagnostics *llmprotocol.Diagnostics,
+	policy llmprotocol.Policy,
+	source, target llmprotocol.WireFormat,
+	field string,
+	action llmprotocol.DiagnosticAction,
+	reason string,
+) {
+	*diagnostics = appendDiagnostics(*diagnostics, llmprotocol.Diagnostics{{
+		Source: source, Target: target, Field: field,
+		Action: action, Reason: reason,
+	}}, policy.Limits.Diagnostics)
+}
+
 func appendAnthropicPartialCacheOmission(diagnostics *llmprotocol.Diagnostics, policy llmprotocol.Policy, source llmprotocol.WireFormat, usage llmprotocol.Usage) {
 	readKnown, writeKnown := usage.InputCacheRead.Value != nil, usage.InputCacheWrite.Value != nil
 	if readKnown != writeKnown {

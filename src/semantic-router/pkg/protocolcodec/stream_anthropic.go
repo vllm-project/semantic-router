@@ -567,6 +567,9 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicLifecycleEvent(
 	switch event.Type {
 	case llmprotocol.EventResponseStarted:
 		wire = encodeAnthropicMessageStart(event)
+		if event.Usage != nil {
+			appendAnthropicUsageMarks(&diagnostics, encoder.policy, encoder.context.Source, *event.Usage)
+		}
 	case llmprotocol.EventUsageUpdated:
 		if event.Usage == nil {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "usage event is invalid", nil)
@@ -757,6 +760,7 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicCompletion(
 	stopEvent := anthropicEventWire{Type: "message_stop"}
 	second, err := encodeSSE(stopEvent.Type, stopEvent)
 	var diagnostics llmprotocol.Diagnostics
+	appendAnthropicUsageMarks(&diagnostics, encoder.policy, encoder.context.Source, *event.Usage)
 	appendAnthropicPartialCacheOmission(&diagnostics, encoder.policy, encoder.context.Source, *event.Usage)
 	return [][]byte{first, second}, diagnostics, err
 }

@@ -114,6 +114,10 @@
           {
             "field": "stream.moderation",
             "action": "dropped"
+          },
+          {
+            "field": "usage",
+            "action": "approximated"
           }
         ]
       }

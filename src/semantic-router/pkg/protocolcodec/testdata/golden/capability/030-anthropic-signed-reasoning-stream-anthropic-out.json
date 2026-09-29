@@ -108,5 +108,11 @@
         "event": "message_stop"
       }
     ]
-  }
+  },
+  "diagnostics": [
+    {
+      "field": "usage",
+      "action": "approximated"
+    }
+  ]
 }

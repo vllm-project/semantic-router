@@ -171,40 +171,12 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 		return append([]byte(nil), envelope.Response...), nil, nil
 	}
 	var diagnostics llmprotocol.Diagnostics
-	if usageUnavailable(response.Usage) {
-		// Messages requires usage, so an unavailable projection becomes an
-		// explicit zero-valued usage object (see encodeAnthropicUsage). Record
-		// the approximation instead of failing the translation: OpenAI
-		// backends may omit usage on non-streaming responses, and the streaming
-		// path already projects the same zero-valued object for this case.
-		diagnostics = appendDiagnostics(diagnostics, llmprotocol.Diagnostics{{
-			Source: envelope.Format, Target: llmprotocol.AnthropicMessagesV1, Field: "usage",
-			Action: llmprotocol.DiagnosticApproximated,
-			Reason: "Messages requires usage; emitted an explicit zero-valued usage object",
-		}}, policy.Limits.Diagnostics)
-	}
-	if !usageUnavailable(response.Usage) {
-		if anthropicOutputTotalIsLowerBound(response.Usage) {
-			// The output total is absent and at least one output bucket is unknown,
-			// so the sum of known components only states a lower bound. Messages
-			// carries one number, so the projection is approximate by construction.
-			diagnostics = appendDiagnostics(diagnostics, llmprotocol.Diagnostics{{
-				Source: envelope.Format, Target: llmprotocol.AnthropicMessagesV1, Field: "usage",
-				Action: llmprotocol.DiagnosticApproximated,
-				Reason: "output total is incomplete; the known output components project as a lower bound",
-			}}, policy.Limits.Diagnostics)
-		}
-		if anthropicInputTotalIsLowerBound(response.Usage) {
-			// The input total is absent and the uncached portion is unknown, so
-			// the projected input count has no basis beyond the known cache
-			// buckets; Messages carries one number, so mark the lower bound.
-			diagnostics = appendDiagnostics(diagnostics, llmprotocol.Diagnostics{{
-				Source: envelope.Format, Target: llmprotocol.AnthropicMessagesV1, Field: "usage",
-				Action: llmprotocol.DiagnosticApproximated,
-				Reason: "input total and uncached count are absent; the projected input count is a lower bound",
-			}}, policy.Limits.Diagnostics)
-		}
-	}
+	// Messages requires usage, so an unavailable projection becomes an explicit
+	// zero-valued usage object (see encodeAnthropicUsage) and the partial-count
+	// cases become lower bounds; record both as approximations instead of
+	// failing the translation. The streaming path carries the same projection,
+	// so the marking lives in a shared helper.
+	appendAnthropicUsageMarks(&diagnostics, policy, envelope.Format, response.Usage)
 	appendAnthropicPartialCacheOmission(&diagnostics, policy, envelope.Format, response.Usage)
 	if len(response.Alternatives) > 0 {
 		if err := appendLossy(&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1, "response.alternatives", "Messages has one output sequence"); err != nil {

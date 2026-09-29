@@ -279,3 +279,41 @@ func TestAnthropicMessagesKeepsInputExactWhenUncachedIsKnown(t *testing.T) {
 		}
 	}
 }
+
+// The streaming terminal carries the same projection as the buffered
+// response, so the partial output projection is marked there too.
+func TestAnthropicStreamMarksPartialOutputProjection(t *testing.T) {
+	reasoning := int64(3)
+	response := llmprotocol.Response{
+		Generation: 1, ID: "response_1", Model: "public-model",
+		Output: []llmprotocol.OutputItem{{
+			ID: "item_1", Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "done"}},
+		}},
+		Usage: llmprotocol.Usage{
+			State:           llmprotocol.UsageAvailable,
+			OutputReasoning: llmprotocol.TokenCount{Value: &reasoning, Provenance: llmprotocol.UsageAuthoritative},
+		},
+	}
+	_, diagnostics, err := NewBuiltinEngine().EncodeResponseStream(
+		llmprotocol.AnthropicMessagesV1,
+		response,
+		llmprotocol.StreamContext{
+			PublicModel: response.Model,
+			Options:     llmprotocol.StreamOptions{IncludeUsage: boolPointer(true)},
+		},
+	)
+	if err != nil {
+		t.Fatalf("EncodeResponseStream failed: %v", err)
+	}
+	marked := false
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Field == "usage" && diagnostic.Action == llmprotocol.DiagnosticApproximated &&
+			strings.Contains(diagnostic.Reason, "output") {
+			marked = true
+		}
+	}
+	if !marked {
+		t.Fatalf("streaming terminal must mark the partial output projection: %+v", diagnostics)
+	}
+}
