@@ -1,0 +1,84 @@
+{
+  "builder_commit": "7855c46dd8781880480ae82d1a96a4c3669ae9c5",
+  "card": {
+    "excluded": [],
+    "figures_sha256": {
+      "assets/jevarena-v3-model-task.svg": "3f53f0917227f5e57c99b4b5598081a15f937ae34897a75987b7d2dc596a507f",
+      "assets/jevarena-v3-rank.svg": "63fa9556e6d28b38dd38845fdc3506b50aed82ed59575f649b40b0fe08b20b91",
+      "assets/jevbench-public231-rank.svg": "179bb14a39537f446325c1f3b54b5fac4c6c91408d624360321ae1990d94daa6"
+    },
+    "paired": {
+      "ci95": [
+        0.9918192998375132,
+        9.636141293499255
+      ],
+      "delta": 6.681113632282006,
+      "replicates": 5000,
+      "sha256": "27f1419f9604eaef711abf102952612fcd99a8de7b7a81f03a48010bf07dd186"
+    },
+    "readme_sha256": "8df7f96fdb44d91e8ad651d6519d37086cc9557053dc0533abd5aafc739d398e",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "57fa23efddef219c83eb39bad58ba2e46c4ff48bd2f1379a1309afe3060102c2"
+      },
+      {
+        "key": "nox1",
+        "licence": "apache-2.0",
+        "report_sha256": "ff6378c2b84242a316b0c6dd50695f4b1ca4f37d525da568c08f1be642dda3c3"
+      },
+      {
+        "key": "decider4b",
+        "licence": "apache-2.0",
+        "report_sha256": "526dbd039d7faef123048e905f137dd7a5e30629dbdf3a5dd2a139bd28bb591c"
+      },
+      {
+        "key": "jet62",
+        "licence": "apache-2.0",
+        "report_sha256": "3b9188c86e0399d5b33cf5959b377c9f3ddf9899123ee934ed3d4cb51f82e4a8"
+      }
+    ],
+    "tradeoffs": [
+      "mlx-diag non-English Choice (accuracy): 75.1% versus 75.9%",
+      "mlx-diag non-English Noul (accuracy): 72.7% versus 80.0%",
+      "Transfer: wiki corpus (macro-F1): 45.4% versus 51.9%",
+      "Transfer: mrf (macro-F1): 71.5% versus 76.1%",
+      "Transfer: media ideology (macro-F1): 42.6% versus 44.3%",
+      "Transfer: talklife (macro-F1): 29.5% versus 29.6%",
+      "JevBench public hard (correct): 56/111 versus 59/111"
+    ]
+  },
+  "ended_utc": "2026-09-29T00:25:27.629361+00:00",
+  "files": 36,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "11b5ca1c22f8cd38d67d718cbfa59a3fb4dc8f4e7bfd75b3e988f34e35fad0ad",
+    "temperature_by_type": null,
+    "text_parameter_count": 4205751296
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "18338b093e955978fbb0718268cc593f972dbd09c80baef642c4e48d1adccacb",
+  "package": "/data/dev2/runs/release/dev2-4b-release-20260929T002455Z/package/DEV2.0-4B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 4208383488,
+    "packaged": {
+      "backbone": 4205751296,
+      "head": 2632192,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "00c25bb61faa3f5f24a002747e230eb48c4316f4ea4d5369d8fa3d6dbceb4fe6",
+    "status": "draft"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 35
+  },
+  "spec_sha256": "d632552c00f885d62b525414b97e3a5ada1c9484ce8c998ac0cf6a7213499ce5",
+  "started_utc": "2026-09-29T00:24:56.755290+00:00"
+}

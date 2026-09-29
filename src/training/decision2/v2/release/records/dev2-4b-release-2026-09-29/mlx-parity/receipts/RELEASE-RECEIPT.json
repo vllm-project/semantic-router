@@ -1,0 +1,113 @@
+{
+  "device": "cuda:0",
+  "gpu_hours": 0.06602909061643812,
+  "image": "decision20-train-fast:host2",
+  "launcher": {
+    "device": "cuda:0",
+    "env": [
+      "HIP_FORCE_DEV_KERNARG=1",
+      "TRITON_CACHE_AUTOTUNING=1",
+      "TRITON_CACHE_DIR=/data/dev2/runs/release/triton/dev2-4b-N4XF-soup-mlx-copy-20260929T001839Z"
+    ],
+    "gpu": "5",
+    "image": "decision20-train-fast:host2",
+    "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+    "require_kernels": true,
+    "rw_mounts": [
+      "/data/dev2/runs/release/triton/dev2-4b-N4XF-soup-mlx-copy-20260929T001839Z"
+    ],
+    "schema": "dev2-release-launcher/1",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "track": "release"
+  },
+  "package_manifest_sha256": "18338b093e955978fbb0718268cc593f972dbd09c80baef642c4e48d1adccacb",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 4208383488,
+    "packaged": {
+      "backbone": 4205751296,
+      "head": 2632192,
+      "residual": 0
+    }
+  },
+  "passed": true,
+  "schema": "dev2-release-receipt/1",
+  "source_commit": "7855c46dd8781880480ae82d1a96a4c3669ae9c5-src_training_decision2",
+  "steps": {
+    "build": {
+      "files": 36,
+      "manifest_sha256": "18338b093e955978fbb0718268cc593f972dbd09c80baef642c4e48d1adccacb",
+      "passed": true,
+      "sha256": "32e719364c38d7c95241a40db0022f53b95be1f23797b97bd6c326b2474b05c3"
+    },
+    "card-pre": {
+      "passed": true,
+      "seconds": 33.969760162057355,
+      "sha256": "fe16708fe5044f09bcba95c82cb92674f40ee49e1b89330814949f68ac2e3b04"
+    },
+    "parity-pre": {
+      "device": "cuda:0",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "load_seconds": 26.230644328985363,
+      "panels": {
+        "mlx-diag": {
+          "category_changes": 0,
+          "input_mismatch": 0,
+          "max_abs_drift": 1.9206858326015208e-14,
+          "prompts": 2275,
+          "slots": 2275
+        }
+      },
+      "passed": true,
+      "sha256": "2561031ca5bea024402a548146a0e43f706d6f358971cd5ba912d3988b8a40ed"
+    },
+    "pre-a": {
+      "answers_sha256": "34059e6acfbf50ddb9d67222b692a1447bde8d32fa05e58703c5fb6e74c64525",
+      "device": "cuda:0",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "load_seconds": 25.912903141928837,
+      "loaded_parameters": 4208383488,
+      "passed": true,
+      "sha256": "5b9a9a51eef6e5cceb3df6a4d05385595367ed30c48c74a7f056aa037f2d2d6c"
+    },
+    "pre-b": {
+      "answers_sha256": "34059e6acfbf50ddb9d67222b692a1447bde8d32fa05e58703c5fb6e74c64525",
+      "device": "cuda:0",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "load_seconds": 25.6996869049035,
+      "loaded_parameters": 4208383488,
+      "passed": true,
+      "sha256": "003b60d5f917823dbb48aed681098e37686b9e3f83d0da39eb5fd86ccca3f2c4"
+    },
+    "repeat-pre": {
+      "bit_identical_answers": true,
+      "passed": true,
+      "sha256": "e4e183c1887fd68f8c0e9884e82eaed220d4e3d436b2cfee34f1341b187c2e6b",
+      "totals": {
+        "category_changes": 0,
+        "max_abs_drift": 0.0,
+        "missing": 0,
+        "slots": 11
+      }
+    }
+  },
+  "utc": "2026-09-29T00:22:37.873505+00:00",
+  "wall_seconds": 237.70472621917725
+}

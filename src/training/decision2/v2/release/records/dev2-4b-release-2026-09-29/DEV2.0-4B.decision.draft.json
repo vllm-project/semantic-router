@@ -1,0 +1,52 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-4B",
+  "repo_id": "llm-semantic-router/DEV2.0-4B",
+  "identity": {
+    "model_sha256": "11b5ca1c22f8cd38d67d718cbfa59a3fb4dc8f4e7bfd75b3e988f34e35fad0ad"
+  },
+  "calibration": "none (temperature 1); CAL698 temperatures 176a2f0e (Choice 0.667, Noul 0.496, Score 0.212) evaluated on the development panels and rejected under the 23:15 rule (receipt 5b1d2e37: typed-DEV Brier 0.216 -> 0.206 and ECE-10 0.119 -> 0.090 and CSS-pilot Brier-sum 0.609 -> 0.602 improve, CSS-pilot ECE-15 0.063 -> 0.068 worsens; 0 answer changes)",
+  "report_sha256": "57fa23efddef219c83eb39bad58ba2e46c4ff48bd2f1379a1309afe3060102c2",
+  "paired_sha256": "27f1419f9604eaef711abf102952612fcd99a8de7b7a81f03a48010bf07dd186",
+  "prepared_by": "Decision 2.0 release engineering, DEV2.0-4B worker (verified draft for the coordinator's final decision, T = 1 package, card-only revision with the 08:05 gate disclosures)",
+  "decided_by": null,
+  "rationale": "Verified draft for the private release of DEV2.0-4B: decoder N4XF soup (full fine-tuning of Decision 1.0 Nox cde2a68d on a token-matched subsample of XL r2 full with own-Lux 1.0 soft targets, KL 1.0; uniform soup of three seeds), staging dev2-dec-staging@e8656221 m4/N4XF-soup, identity 11b5ca1c, qwen-full, 16,384 tokens, T = 1, 4,208,383,488 loaded parameters (tier 4B). Scored bindings: the T = 1 report 57fa23ef derived offline from the sealed CAL698 run m4-N4XF-soup-nodeA (0 answer changes on all four panels) and its paired comparison with the adopted Decision 1.0 Nox run (the 4B release bar): v3 63.151 vs 56.470, +6.68 [+0.99, +9.64]; vs the Nox 1.0 16K same-renderer control +7.46 [+1.80, +10.45]; vs Decider 4B +1.27 [-5.71, +4.31]; vs Jet v6.2 +2.78 [-3.33, +5.94]; public 231 171 vs 173. The eval track's 4B gates pass with no training-row exposure (record m4-dev2-4b-gates-2026-09-29, integration e1ea4f5c7; coordinator approval 08:05) and their card disclosures are on the card. Package verified on node A GPU5 (shared lease): the upload run (revision c73123f3) passed every release.sh step (examples bit-identical in three processes, card example reproduced, parity on all 8,378 scored JevArena / JevBench prompts before and after upload with 0 category changes and drift <= 1.8e-14 using the formal run's frozen autotune cache, real download and re-hash 36/36, readback private with no card problems, HTTP 13/13 with anonymous 401, links 17/17, gate items 6/6); a no-upload run of the same package (manifest 18338b09) with the mlx-diag run's own frozen cache passed mlx-diag parity (2,275 prompts, 0 category changes, drift 1.9e-14); the card-only revision 8052eb6c (README and MODEL_MANIFEST only; safetensors identical) passed every step again with subset parity (600 prompts, 0 changes). It approves nothing: the coordinator writes the final decision and runs the collection add.",
+  "pending": [
+    "coordinator decision (status final, decided_by) written to /data/dev2/runs/release/decisions/DEV2.0-4B.decision.json with this identity, report and paired file",
+    "spec gate_receipt pointed at the final decision (commit, push, mirror), then card2/extra/launch-command.txt with the new mirror and --upload --collect (not --already-collected: the repository is not in the collection); only builder.source_commit in MODEL_MANIFEST.json changes",
+    "after the collection add: delete the staging copy dev2-dec-staging m4/N4XF-soup (16.85 GB) with rewrite_history=False once its Hub OIDs equal the released files",
+    "JevArena-C1 line after C1 event 3 (card-only revision with --upload --collect --already-collected)"
+  ],
+  "verified_package": {
+    "revision": "8052eb6c99c0b3b6a9980dcd77fb868c27da353a",
+    "manifest_sha256": "eab4e8ac26d3975e9fe83ddd35cf879b431b596f903bf06ae043819eeae151c9",
+    "files": 36,
+    "bytes": 16854371330,
+    "loaded_parameters": 4208383488,
+    "build_time_draft_sha256": "00c25bb61faa3f5f24a002747e230eb48c4316f4ea4d5369d8fa3d6dbceb4fe6",
+    "builder_commit": "b798099c58b82420fb89b62a5094827e57d2bdb2",
+    "work_dir": "/data/dev2/runs/release/dev2-4b-card2-20260929T004630Z",
+    "full_parity_revision": "c73123f36b6d9046ba7d85722adfd6031c7d9e23",
+    "full_parity_work_dir": "/data/dev2/runs/release/dev2-4b-release-20260929T002455Z",
+    "mlx_parity_work_dir": "/data/dev2/runs/release/dev2-4b-mlxparity-20260929T001839Z"
+  },
+  "disclosures": [
+    "gain over Decision 1.0 Nox is mainly typed reasoning (T +0.074 [+0.051, +0.096]); human transfer higher but not significant (+0.061 [-0.037, +0.113]; 11 of 15 tasks up)",
+    "transfer tasks below Nox 1.0: wiki_corpus -0.065, mrf -0.045, media_ideology -0.016, talklife -0.001 (the card's tradeoffs table)",
+    "public 231 171 vs 173 (hard 56 vs 59); significantly below Decider 4B 192 (-21 [-32, -10]; hard 73), level with Jet v6.2 174; long inputs level with Nox 1.0, weaker than both peers",
+    "vs the 4B peers: v3 margins not significant; typed accuracy and human transfer level with Decider 4B; Choice the weakest type vs peers (0.728 vs 0.938 / 0.900)",
+    "typed Score rarely predicts level 0 (4 of 400; recall 0.11, Nox 0.14); level-2 recall 0.19 vs 0.30",
+    "mlx-diag (card-eligible parts): non-English Choice 75.1% vs 75.9%, non-English Noul 72.7% vs 80.0%, Korean Noul 63% vs 69%, Japanese Noul 67% vs 77%; the overall .770 vs .795 includes the XNLI Score part and stays off the card (licence policy)",
+    "typed ECE at T = 1 0.116 vs Nox 0.092 (Brier 0.175 vs 0.205)",
+    "weight origin own Nox 1.0 (Qwen3.5-4B lineage, Apache-2.0); teacher own Lux 1.0 only; training data by family with licences; three-seed soup and seed dependence",
+    "peer licences: Decider 4B Apache-2.0 from card metadata only; Jet v6.2 Apache-2.0 LICENSE; Hopper and JPT-4B are not card-eligible",
+    "evaluation familiarity: no training-row exposure; v3 stays 63.15 without the 84 flagged items (eval-track sentence)",
+    "CPU inference not verified",
+    "C1 line pending (event 3)"
+  ],
+  "supersedes": [
+    "verified draft d5baa5bf (named revision c73123f3, before the 08:05 card disclosures)"
+  ]
+}

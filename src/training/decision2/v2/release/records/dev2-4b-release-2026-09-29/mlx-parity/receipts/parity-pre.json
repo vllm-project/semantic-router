@@ -1,0 +1,52 @@
+{
+  "device": "cuda:0",
+  "load_seconds": 26.230644328985363,
+  "mode": "parity",
+  "package_manifest_sha256": "18338b093e955978fbb0718268cc593f972dbd09c80baef642c4e48d1adccacb",
+  "panels": {
+    "mlx-diag": {
+      "category_changes": 0,
+      "ids_sha256": "8db2c13b74553334a8331717e63ac859befa4f08e6addf49cdc444a0c21deb32",
+      "input_mismatch": 0,
+      "max_abs_drift": 1.9206858326015208e-14,
+      "missing": 0,
+      "predictions_sha256": "19a095e5c9dd8dc2eb797ce6bd1e0fe5f9e7dc4abfd2eb8a093c192e04c62d40",
+      "prompts": 2275,
+      "prompts_sha256": "25fde28f4b227a9cc8588da79a597ce816ba4a8f979139f99f69aeb595580a5f",
+      "seconds": 71.59128364105709,
+      "slots": 2275
+    }
+  },
+  "passed": true,
+  "runtime": {
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-4b-N4XF-soup-mlx-copy-20260929T001839Z"
+    },
+    "numpy": "2.3.5",
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1",
+  "tolerance": 0.0001
+}
