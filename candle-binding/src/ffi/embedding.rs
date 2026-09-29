@@ -8,7 +8,7 @@ use crate::ffi::types::{
     BatchSimilarityResult, EmbeddingResult, EmbeddingSimilarityResult, SimilarityMatch,
 };
 use crate::model_architectures::ModelType;
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
 
 //Import embedding models and model factory
 use crate::model_architectures::config::{DualPathConfig, EmbeddingConfig};
@@ -30,6 +30,46 @@ enum PaddingSide {
 
 /// Global singleton for ModelFactory
 pub(crate) static GLOBAL_MODEL_FACTORY: OnceLock<ModelFactory> = OnceLock::new();
+
+fn global_factory_has_requested_models(
+    factory: &ModelFactory,
+    qwen3_requested: bool,
+    mmbert_requested: bool,
+) -> bool {
+    requested_model_presence_matches(
+        qwen3_requested,
+        mmbert_requested,
+        factory.has_qwen3_embedding_model(),
+        factory.has_mmbert_embedding_model(),
+    )
+}
+
+fn requested_model_presence_matches(
+    qwen3_requested: bool,
+    mmbert_requested: bool,
+    qwen3_present: bool,
+    mmbert_present: bool,
+) -> bool {
+    (!qwen3_requested || qwen3_present) && (!mmbert_requested || mmbert_present)
+}
+
+#[cfg(test)]
+mod requested_model_presence_tests {
+    use super::requested_model_presence_matches;
+
+    #[test]
+    fn concurrent_initializer_is_success_when_winner_has_requested_models() {
+        assert!(requested_model_presence_matches(true, true, true, true));
+        assert!(requested_model_presence_matches(true, false, true, false));
+        assert!(requested_model_presence_matches(false, false, false, false));
+    }
+
+    #[test]
+    fn concurrent_initializer_fails_when_winner_lacks_requested_model() {
+        assert!(!requested_model_presence_matches(true, false, false, true));
+        assert!(!requested_model_presence_matches(false, true, true, false));
+    }
+}
 
 use crate::model_architectures::embedding::MultiModalEmbeddingModel;
 use tokenizers::Tokenizer as MmTokenizer;
@@ -298,7 +338,9 @@ pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu
     // Create or get factory
     let factory = if GLOBAL_MODEL_FACTORY.get().is_some() {
         // Factory exists but mmbert not loaded - we can't modify OnceLock
-        eprintln!("Error: ModelFactory already initialized without mmBERT. Initialize mmBERT first or use init_embedding_models_with_mmbert.");
+        eprintln!(
+            "Error: ModelFactory already initialized without mmBERT. Initialize mmBERT first or use init_embedding_models_with_mmbert."
+        );
         return false;
     } else {
         let mut factory = ModelFactory::new(device);
@@ -380,17 +422,15 @@ pub extern "C" fn init_embedding_models_with_mmbert(
         eprintln!("Error: at least one model path must be provided");
         return false;
     }
+    let qwen3_requested = qwen3_path.is_some();
+    let mmbert_requested = mmbert_path.is_some();
 
     if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
         // A second call can only be an idempotent no-op when every requested
         // model is already registered. Reporting success while mmBERT is
         // missing silently breaks every mmBERT consumer downstream.
-        if mmbert_path.is_some() && !factory.has_mmbert_embedding_model() {
-            eprintln!("Error: ModelFactory already initialized without mmBERT. Initialize mmBERT first.");
-            return false;
-        }
-        if qwen3_path.is_some() && !factory.has_qwen3_embedding_model() {
-            eprintln!("Error: ModelFactory already initialized without Qwen3. Initialize Qwen3 first.");
+        if !global_factory_has_requested_models(factory, qwen3_requested, mmbert_requested) {
+            eprintln!("Error: ModelFactory is missing a requested embedding model");
             return false;
         }
         eprintln!("WARNING: ModelFactory already initialized with the requested models");
@@ -429,12 +469,9 @@ pub extern "C" fn init_embedding_models_with_mmbert(
 
     match GLOBAL_MODEL_FACTORY.set(factory) {
         Ok(_) => true,
-        Err(_) => {
-            // A concurrent initializer won the slot; this call's models are
-            // not the ones callers will find in the global factory.
-            eprintln!("Error: ModelFactory was initialized concurrently; this call's models were not published");
-            false
-        }
+        Err(_) => GLOBAL_MODEL_FACTORY.get().is_some_and(|factory| {
+            global_factory_has_requested_models(factory, qwen3_requested, mmbert_requested)
+        }),
     }
 }
 
@@ -443,11 +480,12 @@ pub extern "C" fn init_embedding_models_with_mmbert(
 /// # Safety
 /// - `qwen3_model_path` and `gemma_model_path` must be valid null-terminated C strings or null
 /// - Must be called before any embedding generation functions
-/// - Can only be called once (subsequent calls will return true as already initialized)
+/// - Subsequent calls succeed only when every requested embedding model is
+///   already registered in the global factory.
 ///
 /// # Returns
-/// - `true` if initialization succeeded or already initialized
-/// - `false` if initialization failed
+/// - true if initialization succeeded or every requested model is already registered
+/// - false if initialization failed or a requested model is missing
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn init_embedding_models(
@@ -485,13 +523,16 @@ pub extern "C" fn init_embedding_models(
         eprintln!("Error: at least one embedding model path must be provided");
         return false;
     }
+    let qwen3_requested = qwen3_path.is_some();
 
     // A second call can only be an idempotent no-op when the requested
     // models are already registered; otherwise reporting success would hide
     // the missing model from every downstream consumer.
     if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
-        if qwen3_path.is_some() && !factory.has_qwen3_embedding_model() {
-            eprintln!("Error: ModelFactory already initialized without Qwen3. Initialize Qwen3 first.");
+        if !global_factory_has_requested_models(factory, qwen3_requested, false) {
+            eprintln!(
+                "Error: ModelFactory already initialized without Qwen3. Initialize Qwen3 first."
+            );
             return false;
         }
         eprintln!("WARNING: ModelFactory already initialized with the requested models");
@@ -533,7 +574,9 @@ pub extern "C" fn init_embedding_models(
             }
             Err(e) => {
                 eprintln!("WARNING: Failed to register Gemma model: {:?}", e);
-                eprintln!("WARNING: Continuing with Qwen3 only. This is expected if Gemma model is not downloaded (e.g., missing HF_TOKEN for gated models)");
+                eprintln!(
+                    "WARNING: Continuing with Qwen3 only. This is expected if Gemma model is not downloaded (e.g., missing HF_TOKEN for gated models)"
+                );
                 // Don't return false - Gemma is optional, continue with Qwen3
             }
         }
@@ -542,12 +585,9 @@ pub extern "C" fn init_embedding_models(
     // Try to initialize the global factory
     match GLOBAL_MODEL_FACTORY.set(factory) {
         Ok(_) => true,
-        Err(_) => {
-            // A concurrent initializer won the slot; this call's models are
-            // not the ones callers will find in the global factory.
-            eprintln!("Error: ModelFactory was initialized concurrently; this call's models were not published");
-            false
-        }
+        Err(_) => GLOBAL_MODEL_FACTORY.get().is_some_and(|factory| {
+            global_factory_has_requested_models(factory, qwen3_requested, false)
+        }),
     }
 }
 
@@ -2120,7 +2160,9 @@ pub extern "C" fn get_embedding_batched(
     let batched_context = match GLOBAL_BATCHED_MODEL.get() {
         Some(ctx) => ctx,
         None => {
-            eprintln!("Error: batched embedding model not initialized. Call init_embedding_models_batched first.");
+            eprintln!(
+                "Error: batched embedding model not initialized. Call init_embedding_models_batched first."
+            );
             unsafe {
                 (*result) = create_error_result();
             }
