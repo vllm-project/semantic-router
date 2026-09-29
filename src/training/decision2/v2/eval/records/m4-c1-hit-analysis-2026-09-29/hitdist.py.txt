@@ -1,0 +1,34 @@
+import collections
+import json
+import sys
+
+hits = sys.argv[1]
+by_file = collections.Counter()
+by_source = collections.Counter()
+by_prefix = collections.Counter()
+verdicts = collections.Counter()
+exact_only = 0
+for line in open(hits):
+    row = json.loads(line)
+    if row["verdict"] == "CLEAN":
+        continue
+    verdicts[row["verdict"]] += 1
+    source = row["id"].split("/", 1)[0]
+    by_source[(source, row["verdict"])] += 1
+    path = row.get("file") or "?"
+    parts = path.split("/")
+    prefix = "/".join(parts[:7]) if path.startswith("/data/dev2/runs/eval") else "/".join(parts[:6])
+    by_prefix[(prefix, row["verdict"])] += 1
+    by_file[path] += 1
+    if row["verdict"] == "REVIEW" and row.get("containment", 0) < 0.2:
+        exact_only += 1
+print("verdicts", dict(verdicts), "review_exact_only", exact_only)
+print("-- by C1 source")
+for (source, verdict), n in sorted(by_source.items(), key=lambda x: -x[1]):
+    print(f"  {n:6d} {verdict:7s} {source}")
+print("-- by location (best-match file prefix)")
+for (prefix, verdict), n in sorted(by_prefix.items(), key=lambda x: -x[1])[:40]:
+    print(f"  {n:6d} {verdict:7s} {prefix}")
+print("-- top files")
+for path, n in by_file.most_common(25):
+    print(f"  {n:6d} {path}")

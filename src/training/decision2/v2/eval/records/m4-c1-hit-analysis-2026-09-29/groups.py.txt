@@ -1,0 +1,32 @@
+import collections
+import json
+import re
+
+base = "/data/dev2/runs/eval/m4/c1-hitgroups"
+rows = collections.defaultdict(dict)
+files = collections.defaultdict(collections.Counter)
+for node in ("nodeA", "nodeB"):
+    for line in open(f"{base}/{node}/overlap-hits.jsonl"):
+        hit = json.loads(line)
+        for group, cell in (hit.get("labels") or {}).items():
+            if cell["verdict"] == "CLEAN":
+                continue
+            old = rows[hit["id"]].get(group)
+            if old is None or (cell["verdict"] == "OVERLAP", cell["containment"]) > (old["verdict"] == "OVERLAP", old["containment"]):
+                rows[hit["id"]][group] = cell
+            files[group][(node, cell["file"])] += 1
+count = collections.Counter()
+over = collections.Counter()
+for rid, groups in rows.items():
+    for group, cell in groups.items():
+        count[group] += 1
+        over[group] += cell["verdict"] == "OVERLAP"
+print("rows", len(rows), "groups", len(count))
+TRAIN = re.compile(r"^(training-data:|/data/dev2/runs/(?!eval)|/data/dev2/private/(data|27b|dec-arms|a7/runs|a7/base|06b|9b|dec)|/data/dev2/tmp|hf-blobs)")
+for group, n in count.most_common():
+    tag = "T" if TRAIN.match(group) else " "
+    print(f"{tag} {n:5d} {over[group]:4d} {group}")
+print("---- training-type files")
+for group in sorted(g for g in count if TRAIN.match(g)):
+    for (node, path), n in files[group].most_common(12):
+        print(f"  {group} | {node} | {n} | {path}")

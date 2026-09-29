@@ -1,0 +1,117 @@
+import collections
+import json
+import os
+import re
+
+base = "/data/dev2/runs/eval/m4/c1-hitgroups"
+judge = sorted(d for d in os.listdir("/data/dev2/runs/eval/m4/c1-rescan-v1_3") if d.startswith("judge-"))[-1]
+J = f"/data/dev2/runs/eval/m4/c1-rescan-v1_3/{judge}"
+OUT = "/data/dev2/private/sealed/c1/policies"
+os.makedirs(OUT, mode=0o700, exist_ok=True)
+
+A_ROWS = set(open("/data/dev2/private/sealed/c1/policies/a-rows.txt").read().split())  # rows found in a released model's own training file (per-file scan; private)
+V12 = set(json.load(open("/data/dev2/private/sealed/c1/v1_2/RETIRED-v1_2.json"))["protected_rows"])
+TRAIN = re.compile(r"^(training-data:|/data/dev2/runs/(?!eval)|/data/dev2/private/(data/(arms-v1|arms-v2|hf-upload|m3b-gap|teachers-v2)|27b|dec-arms|a7/runs|a7/base)|/data/dev2/tmp)")
+EVAL = re.compile(r"(/panels|/evals|panel[^/]*\.private|gold-free|/protected|formal-v3|css-transfer|core-inventory|decision-models-css|/private/data/pi-v)")
+RAW = re.compile(r"^(/data/dev2/private/(sources|a7/sources|ml-sources)/|/data/decision20-[^/]+/(external|private-race06-audit|experiments/[^/]+/(source|hf-cache)|private-small06))")
+OLD_SCAN = re.compile(r"^(training-data:|/data/dev2/runs/(data/m3b|06b/m6|06b/m7|9b/m4)|/data/dev2/private/sources/m3b/nq-extract-v3)")
+
+
+def klass(group):
+    if TRAIN.match(group):
+        return "b"
+    if EVAL.search(group):
+        return "d"
+    if RAW.match(group):
+        return "c"
+    return "e"
+
+
+groups = collections.defaultdict(dict)
+for node in ("nodeA", "nodeB"):
+    for line in open(f"{base}/{node}/overlap-hits.jsonl"):
+        hit = json.loads(line)
+        for group, cell in (hit.get("labels") or {}).items():
+            if cell["verdict"] != "CLEAN":
+                old = groups[hit["id"]].get(group)
+                if old is None or (cell["verdict"] == "OVERLAP", cell["containment"]) > (old["verdict"] == "OVERLAP", old["containment"]):
+                    groups[hit["id"]][group] = cell
+extract = {}
+for node in ("nodeA", "nodeB"):
+    part = json.load(open(f"{J}/EXTRACT-{node}.json"))
+    for hit in part["non_clean"]:
+        old = extract.get(hit["id"])
+        if old is None or (hit["verdict"] == "OVERLAP", hit["containment"]) > (old["verdict"] == "OVERLAP", old["containment"]):
+            extract[hit["id"]] = hit
+    protected_sha = part["protected_sha256"]
+rows = sorted(extract)
+print("flagged", len(rows), "v1.2 rows", len(V12 & set(rows)))
+
+
+def strength(hit):
+    c = hit["containment"]
+    if hit["verdict"] == "OVERLAP":
+        return ">=0.8" if c >= 0.8 else ("0.5-0.8" if c >= 0.5 else "exact>=8tok")
+    return "0.2-0.5" if c >= 0.2 else "exact<8tok only"
+
+
+print("\n== by C1 source file x verdict")
+t = collections.Counter((r.split("|")[0], extract[r]["verdict"]) for r in rows)
+for (f, v), n in sorted(t.items()):
+    print(f"  {f:45s} {v:7s} {n}")
+print("\n== strength by verdict (overall best match), and rows with <=5 shingles")
+s = collections.Counter((extract[r]["verdict"], strength(extract[r])) for r in rows)
+small = collections.Counter(extract[r]["verdict"] for r in rows if (extract[r].get("shingles") or 0) <= 5)
+for k, n in sorted(s.items()):
+    print(f"  {k} {n}")
+print("  rows with <=5 shingles by verdict:", dict(small))
+cls = {}
+for r in rows:
+    ks = {klass(g) for g in groups.get(r, {})}
+    if r in A_ROWS:
+        ks.add("a")
+    cls[r] = ks
+print("\n== class hit (non-exclusive) x verdict of the row")
+ne = collections.Counter((k, extract[r]["verdict"]) for r in rows for k in cls[r])
+for k, n in sorted(ne.items()):
+    print(f"  {k} {n}")
+print("== most severe class (a>b>d>c>e) x verdict; OVERLAP rows by the class of their OVERLAP match")
+order = "abdce"
+ex = collections.Counter((min(cls[r], key=order.index) if cls[r] else "?", extract[r]["verdict"]) for r in rows)
+for k, n in sorted(ex.items()):
+    print(f"  {k} {n}")
+ov = collections.Counter()
+for r in rows:
+    if extract[r]["verdict"] == "OVERLAP":
+        oc = {klass(g) for g, c in groups.get(r, {}).items() if c["verdict"] == "OVERLAP"}
+        ov[",".join(sorted(oc)) or "?"] += 1
+print("  OVERLAP match classes:", dict(ov))
+print("\n== rows non-CLEAN only in groups outside the failed event-3 scan's coverage (the widening)")
+new_only = [r for r in rows if groups.get(r) and not any(OLD_SCAN.match(g) for g in groups[r])]
+print("  ", len(new_only), "of", len(rows), collections.Counter(extract[r]["verdict"] for r in new_only))
+top = collections.Counter()
+for r in new_only:
+    best = max(groups[r].items(), key=lambda kv: (kv[1]["verdict"] == "OVERLAP", kv[1]["containment"]))[0]
+    top[re.sub(r"@[0-9a-f]{8,}.*", "", best).replace("/data/dev2/private/sources/", "sources/")] += 1
+for g, n in top.most_common(14):
+    print(f"     {n:5d} {g}")
+
+
+def near(hit):
+    return hit["verdict"] == "OVERLAP" or hit["containment"] >= 0.8
+
+
+b_near = {r for r in rows if any(klass(g) == "b" and near(c) for g, c in groups.get(r, {}).items())}
+policies = {
+    "P1": set(rows),
+    "P2": V12 | A_ROWS | b_near,
+    "P3": V12 | A_ROWS | b_near | {r for r in rows if extract[r]["verdict"] == "OVERLAP"},
+}
+print("\n== policy row sets (P2/P3 keep the registered v1.2 rows as a floor); b near-exact:", len(b_near))
+for name, ids in policies.items():
+    value = {"schema": "dev2-c1-scan-extract/1", "node": name, "protected_sha256": protected_sha,
+             "non_clean": [extract[r] for r in sorted(ids)]}
+    path = f"{OUT}/{name}-extract.json"
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+        json.dump(value, f)
+    print(f"  {name}: {len(ids)} rows ({collections.Counter(extract[r]['verdict'] for r in ids)})")
