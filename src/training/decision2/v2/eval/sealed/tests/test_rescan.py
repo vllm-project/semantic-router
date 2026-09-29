@@ -37,8 +37,18 @@ class RescanSpecTest(unittest.TestCase):
         folder = "c1-rescan-" + item_set.replace(".", "_")
         self.assertEqual(
             pinned(self.event, "SCAN_VERDICT"),
-            f"/data/dev2/runs/eval/m4/{folder}/SCAN-VERDICT.json",
+            entry.get("verdict", f"/data/dev2/runs/eval/m4/{folder}/SCAN-VERDICT.json"),
         )
+        self.assertNotIn("withdrawn", entry)
+
+    def test_the_event_uses_v1_2_under_p2_and_v1_3_is_withdrawn(self) -> None:
+        self.assertEqual(pinned(self.event, "ITEM_SET"), "v1.2")
+        self.assertEqual(
+            pinned(self.event, "VERDICT_SCHEMA"), "dev2-c1-class-verdict/1"
+        )
+        self.assertIn('--schema "$VERDICT_SCHEMA"', self.event)
+        self.assertIn("never used", self.spec["item_sets"]["v1.3"]["withdrawn"])
+        self.assertNotIn("v1_3", self.event)
 
     def test_event2_baseline_and_scan_settings(self) -> None:
         self.assertEqual(

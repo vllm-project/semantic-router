@@ -10,7 +10,11 @@
         --baseline OLD --retired RETIRED.json --retired-sha SHA --protected-sha SHA \
         [--coverage NODE=COVERAGE-RECEIPT.json ...] --output SCAN-VERDICT.json
     python3 -m v2.eval.sealed.scanverdict check-v2 --verdict SCAN-VERDICT.json --verdict-sha SHA \
-        --retired-sha SHA --protected-sha SHA
+        --retired-sha SHA --protected-sha SHA [--schema SCHEMA]
+    python3 -m v2.eval.sealed.scanverdict judge-classes --extract EXTRACT.json [--extract ...] \
+        --grouped NODE=HITS ... --perfile NODE=HITS ... --perfile-manifest NODE=MANIFEST ... \
+        --classes CLASSES.json --retired RETIRED.json --retired-sha SHA --protected-sha SHA \
+        --output SCAN-VERDICT.json
 
 ``compare`` reads two ``overlap scan --hits`` files (one row per protected candidate) and fails when
 any candidate is OVERLAP, when a candidate is non-CLEAN now but was CLEAN at event 2, when a recurring
@@ -27,6 +31,15 @@ ids outside the retired list's ``protected_rows``; it also fails on extracts of 
 rows or of another baseline, on candidate counts that differ between the nodes or from the
 baseline, on repeated node names and on a retired list other than the pinned one. It exits 1 on FAIL. ``check-v2`` is the matching
 interlock: it exits 0 only for the pinned PASS verdict of the pinned retired list and protected rows.
+
+``judge-classes`` applies the class-aware rule (policy P2) to the same merged extracts, using the
+analysis scans of ``hitgroups`` (one label per corpus group, and one label per file for the rows with
+a hit under the training roots). Among the flagged rows outside the retired list it fails on any
+non-CLEAN hit in a class-(a) file (the training files of a released or candidate model, by SHA-256 or
+path) and on any near-exact hit in class (b) (every other group or file under the training roots).
+Classes (c) raw sources, (d) evaluation-only pools and (e) other are counted, never failing. It also
+fails when a grouped scan misses a flagged row, when the per-file scan misses a row with a hit under
+the training roots, or when a pinned class-(a) file is absent from every per-file manifest.
 """
 
 from __future__ import annotations
@@ -35,6 +48,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 from collections import Counter
 from datetime import datetime, timezone
@@ -43,8 +57,11 @@ from typing import Any
 
 SCHEMA = "dev2-c1-event3-scan-verdict/1"
 SCHEMA_V2 = "dev2-c1-scan-verdict/2"
+SCHEMA_CLASSES = "dev2-c1-class-verdict/1"
 EXTRACT_SCHEMA = "dev2-c1-scan-extract/1"
 RETIRED_SCHEMA = "dev2-c1-retired/1"
+CLASSES_SCHEMA = "dev2-c1-hit-classes/1"
+CLASSES = ("a", "b", "c", "d", "e")
 RANK = ("CLEAN", "REVIEW", "OVERLAP")
 
 
@@ -341,8 +358,8 @@ def check_v2(args: argparse.Namespace) -> int:
     problems = []
     if digest != args.verdict_sha:
         problems.append("not the pinned scan verdict")
-    if value.get("schema") != SCHEMA_V2:
-        problems.append("not a v2 scan verdict")
+    if value.get("schema") != args.schema:
+        problems.append(f"not a {args.schema} scan verdict")
     if value.get("verdict") != "PASS":
         problems.append(f"verdict {value.get('verdict')!r}")
     if value.get("retired_sha256") != args.retired_sha:
@@ -353,11 +370,262 @@ def check_v2(args: argparse.Namespace) -> int:
         print("scan verdict refused: " + "; ".join(problems), file=sys.stderr)
         return 1
     hits = " ".join(node["hits_sha256"][:12] for node in value["nodes"])
+    rule = f", rule {value['rule']}" if value.get("rule") else ""
     print(
-        f"scan verdict PASS (item set {value['item_set']}, {len(value['nodes'])} nodes,"
+        f"scan verdict PASS (item set {value['item_set']}{rule}, {len(value['nodes'])} nodes,"
         f" hits {hits}, {value['utc']})"
     )
     return 0
+
+
+def compile_classes(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "a_sha": {s: entry["model"] for entry in value["a"] for s in entry["sha256"]},
+        "a_paths": [
+            (re.compile(p), entry["model"])
+            for entry in value["a"]
+            for p in entry["paths"]
+        ],
+        "roots": re.compile(value["training_roots"]),
+        "d": re.compile(value["d"]),
+        "c": re.compile(value["c"]),
+        "near": value["near_exact"],
+        "disclose": [(e["name"], re.compile(e["pattern"])) for e in value["disclose"]],
+    }
+
+
+def group_class(group: str, classes: dict[str, Any]) -> str:
+    """Class of a corpus group; class (a) is decided per file, inside the training roots."""
+    if classes["roots"].match(group):
+        return "b"
+    if classes["d"].search(group):
+        return "d"
+    if classes["c"].match(group):
+        return "c"
+    return "e"
+
+
+def near_exact(cell: dict[str, Any], near: dict[str, Any]) -> bool:
+    return (
+        cell.get("containment", 0.0) >= near["containment"]
+        or (cell.get("exact_tokens") or 0) >= near["exact_tokens"]
+    )
+
+
+def non_clean(row: dict[str, Any] | None) -> list[tuple[str, dict[str, Any]]]:
+    labels = (row or {}).get("labels") or {}
+    return [(k, c) for k, c in sorted(labels.items()) if c.get("verdict") != "CLEAN"]
+
+
+def judge_classes(args: argparse.Namespace) -> int:
+    problems = []
+    retired, retired_sha = read_json(args.retired)
+    if retired_sha != args.retired_sha:
+        problems.append("the retired list differs from --retired-sha")
+    if not isinstance(retired, dict) or retired.get("schema") != RETIRED_SCHEMA:
+        problems.append(f"the retired list is not {RETIRED_SCHEMA}")
+        retired = {}
+    spec, classes_sha = read_json(args.classes)
+    if spec.get("schema") != CLASSES_SCHEMA:
+        raise SystemExit(f"{args.classes} is not a {CLASSES_SCHEMA} class map")
+    classes = compile_classes(spec)
+    parts = []
+    for path in args.extract:
+        part, sha = read_json(path)
+        if part.get("schema") != EXTRACT_SCHEMA:
+            problems.append(f"{path.name} is not a scan extract")
+        else:
+            parts.append((part, sha))
+    names = Counter(part["node"] for part, _ in parts)
+    repeated = sorted(name for name, count in names.items() if count > 1)
+    if repeated:
+        problems.append(f"repeated node names: {', '.join(repeated)}")
+    for part, _ in parts:
+        if part["protected_sha256"] != args.protected_sha:
+            problems.append(f"node {part['node']} scanned other protected rows")
+    inputs = {
+        "grouped": dict(args.grouped),
+        "perfile": dict(args.perfile),
+        "perfile_manifest": dict(args.perfile_manifest),
+    }
+    for flag, given in (
+        ("--grouped", args.grouped),
+        ("--perfile", args.perfile),
+        ("--perfile-manifest", args.perfile_manifest),
+    ):
+        if len(given) != len(names) or set(dict(given)) != set(names):
+            problems.append(f"{flag} must name each extract's node once")
+    merged = merge([part for part, _ in parts])
+    retired_rows = set(retired.get("protected_rows", []))
+    kept = {k for k in merged if k not in retired_rows}
+
+    grouped = {n: read_hits(p) for n, p in inputs["grouped"].items()}
+    perfile = {n: read_hits(p) for n, p in inputs["perfile"].items()}
+    files: dict[tuple[str, str], str] = {}
+    for n, path in inputs["perfile_manifest"].items():
+        for label, entry in read_json(path)[0]["labels"].items():
+            files[(n, label)] = entry["files"][0]["sha256"]
+    for n, rows in grouped.items():
+        if set(merged) - set(rows):
+            problems.append(
+                f"the grouped scan of {n} misses {len(set(merged) - set(rows))} flagged rows"
+            )
+    rooted = {
+        k
+        for rows in grouped.values()
+        for k, row in rows.items()
+        if k in merged and any(classes["roots"].match(g) for g, _ in non_clean(row))
+    }
+    for n, rows in perfile.items():
+        if rooted - set(rows):
+            problems.append(
+                f"the per-file scan of {n} misses {len(rooted - set(rows))} rows"
+                " with a hit under the training roots"
+            )
+    a_sets = []
+    for entry in spec["a"]:
+        found = sorted(
+            [n, label.split("::", 1)[1], sha]
+            for (n, label), sha in files.items()
+            if sha in entry["sha256"]
+            or any(
+                p.match(label.split("::", 1)[1])
+                for p in map(re.compile, entry["paths"])
+            )
+        )
+        missing = sorted(set(entry["sha256"]) - {sha for *_, sha in found})
+        if missing:
+            problems.append(
+                f"{len(missing)} pinned class-(a) files of {entry['model']} are in no per-file manifest"
+            )
+        a_sets.append({"model": entry["model"], "files": found})
+
+    def file_class(n: str, label: str) -> str:
+        path = label.split("::", 1)[1]
+        if files.get((n, label)) in classes["a_sha"] or any(
+            p.match(path) for p, _ in classes["a_paths"]
+        ):
+            return "a"
+        return group_class(label.split("::", 1)[0], classes)
+
+    by_class: dict[str, set[str]] = {c: set() for c in CLASSES}
+    a_hits, b_near = set(), set()
+    disclosed = {name: {} for name, _ in classes["disclose"]}
+    for k in sorted(merged):
+        for n in sorted(grouped):
+            for g, cell in non_clean(grouped[n].get(k)):
+                cls = group_class(g, classes)
+                by_class[cls].add(k)
+                if cls == "b" and near_exact(cell, classes["near"]):
+                    b_near.add(k)
+                for name, pattern in classes["disclose"]:
+                    if pattern.match(g):
+                        old = disclosed[name].get(k)
+                        new = (
+                            RANK.index(cell["verdict"]),
+                            cell.get("containment", 0.0),
+                            cell.get("exact_tokens") or 0,
+                        )
+                        disclosed[name][k] = max(old or new, new)
+            for label, cell in non_clean(perfile.get(n, {}).get(k)):
+                cls = file_class(n, label)
+                by_class[cls].add(k)
+                if cls == "a":
+                    a_hits.add(k)
+                elif cls == "b" and near_exact(cell, classes["near"]):
+                    b_near.add(k)
+    a_kept, b_kept = sorted(a_hits & kept), sorted(b_near & kept)
+    if a_kept:
+        problems.append(
+            f"{len(a_kept)} rows still in the item set hit class-(a) training files"
+        )
+    if b_kept:
+        problems.append(
+            f"{len(b_kept)} rows still in the item set have a near-exact class-(b) hit"
+        )
+
+    def summary(rows: set[str]) -> dict[str, Any]:
+        return {
+            "rows": len(rows),
+            "by_class": {c: len(by_class[c] & rows) for c in CLASSES},
+            "by_verdict": dict(
+                sorted(Counter(merged[k]["verdict"] for k in rows).items())
+            ),
+        }
+
+    near = classes["near"]
+    value = {
+        "schema": SCHEMA_CLASSES,
+        "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "rule": spec["rule"],
+        "item_set": retired.get("version"),
+        "retired_sha256": retired_sha,
+        "protected_sha256": args.protected_sha,
+        "classes_sha256": classes_sha,
+        "nodes": [
+            {
+                "node": part["node"],
+                "manifest_sha256": part["manifest_sha256"],
+                "hits_sha256": part["hits_sha256"],
+                "receipt_sha256": part["receipt_sha256"],
+                "extract_sha256": sha,
+                **{
+                    f"{key}_sha256": (
+                        sha_file(given[part["node"]]) if part["node"] in given else None
+                    )
+                    for key, given in inputs.items()
+                },
+            }
+            for part, sha in sorted(parts, key=lambda pair: pair[0]["node"])
+        ],
+        "flagged": summary(set(merged)),
+        "retired": summary(set(merged) - kept),
+        "kept": summary(kept),
+        "class_a_sets": a_sets,
+        "class_a_ids": a_kept,
+        "class_b_near_exact_ids": b_kept,
+        "disclosed": [
+            {
+                "name": name,
+                "kept_rows": sum(k in kept for k in rows),
+                "kept_by_verdict": dict(
+                    sorted(
+                        Counter(
+                            RANK[v[0]] for k, v in rows.items() if k in kept
+                        ).items()
+                    )
+                ),
+                "kept_max_containment": max(
+                    (v[1] for k, v in rows.items() if k in kept), default=0.0
+                ),
+                "kept_max_exact_tokens": max(
+                    (v[2] for k, v in rows.items() if k in kept), default=0
+                ),
+                "kept_near_exact": sum(
+                    k in kept
+                    and (v[1] >= near["containment"] or v[2] >= near["exact_tokens"])
+                    for k, v in rows.items()
+                ),
+                "retired_rows": sum(k not in kept for k in rows),
+            }
+            for name, rows in disclosed.items()
+        ],
+        "problems": problems,
+        "verdict": "FAIL" if problems else "PASS",
+    }
+    digest = write_new(args.output, value)
+    print(
+        json.dumps(
+            {
+                "verdict": value["verdict"],
+                "item_set": value["item_set"],
+                "kept": value["kept"],
+                "problems": problems,
+                "verdict_sha256": digest,
+            }
+        )
+    )
+    return 0 if value["verdict"] == "PASS" else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -388,6 +656,17 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--verdict", type=Path, required=True)
     for flag in ("--verdict-sha", "--retired-sha", "--protected-sha"):
         e.add_argument(flag, required=True)
+    e.add_argument("--schema", default=SCHEMA_V2, choices=(SCHEMA_V2, SCHEMA_CLASSES))
+    f = sub.add_parser("judge-classes")
+    f.add_argument("--extract", type=Path, action="append", required=True)
+    for flag in ("--grouped", "--perfile", "--perfile-manifest"):
+        f.add_argument(
+            flag, type=node_file, action="append", required=True, metavar="NODE=PATH"
+        )
+    for flag in ("--classes", "--retired", "--output"):
+        f.add_argument(flag, type=Path, required=True)
+    f.add_argument("--retired-sha", required=True)
+    f.add_argument("--protected-sha", required=True)
     args = parser.parse_args(argv)
     return {
         "compare": compare,
@@ -395,6 +674,7 @@ def main(argv: list[str] | None = None) -> int:
         "extract": extract,
         "judge": judge_v2,
         "check-v2": check_v2,
+        "judge-classes": judge_classes,
     }[args.command](args)
 
 

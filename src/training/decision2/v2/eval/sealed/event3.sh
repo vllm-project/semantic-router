@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# JevArena-C1 scoring event 3 (the last of three) on item set v1.3, node A.
+# JevArena-C1 scoring event 3 (the last of three) on item set v1.2 under policy P2, node A.
 # Usage (on node A, from an exact mirror; in event mode the key arrives once on stdin):
 #   event3.sh --gpu N --src MIRROR [--c27 f1|f2] --c9b-package DIR --c9b-manifest SHA
 #             [--scan-verdict-sha SHA (event mode)]
@@ -18,8 +18,9 @@
 # --preflight-only: also every model's smoke on the GPU (the first 80 prompts of typed FINAL and of
 #   public 231, so every decision type) with its parity check against the stored formal run; stdin is
 #   closed, the key is never read, and neither the sealed directory nor the event directory is touched.
-# Event mode: the pinned retired list of the item set and the custodian's PASS rescan verdict (c1-rescan.sh;
-# --scan-verdict-sha pins the file, and it must name this retired list and these protected rows) are
+# Event mode: the pinned retired list of the item set and the custodian's PASS class-aware judgment of the
+# rescan (scanverdict judge-classes; --scan-verdict-sha pins the file, and it must name this retired list
+# and these protected rows) are
 # required first; then the same verification and smokes (a failure leaves C1 untouched and the event
 # unused), the stored event-2 seals are checked, the key is read, the event directory is created
 # (event 3 is used from here), prompts are decrypted, every model is collected on all 2,874 prompts,
@@ -68,10 +69,11 @@ PROMPTS_SHA=0b29686f60c980f3fbc8a03b88537fc0bf90ee967afa67d4fe0c958b1bfde16a
 GOLD_SHA=c02777713c0e58b40cf602947433420744b2765465252ce22d692eb676ca4fe1
 BUNDLE_SHA=d924389a7ffc3d852d9204c3dfca1c12c32f82685a7e5c65277ba9980110534f
 E=/data/dev2/runs/eval/m4/c1-event3
-ITEM_SET=v1.3
-RETIRED=$C1/v1_3/RETIRED-v1_3.json
-RETIRED_SHA=62fccb3dd66c7fcae4aba3a274eef43896963cdafa19bb33c894150ef90897f3
-SCAN_VERDICT=/data/dev2/runs/eval/m4/c1-rescan-v1_3/SCAN-VERDICT.json
+ITEM_SET=v1.2
+RETIRED=$C1/v1_2/RETIRED-v1_2.json
+RETIRED_SHA=bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a
+SCAN_VERDICT=/data/dev2/runs/eval/m4/c1-rescan-v1_2/SCAN-VERDICT-P2.json
+VERDICT_SCHEMA=dev2-c1-class-verdict/1
 PROTECTED_SHA=36797f509bd96c3cb703df37cc48114c9bbdf0d2241802e56262139f4bef0a1a
 P="/data/dev2/runs/eval/m4/c1-event3-preflight/$MODE-$(date -u +%Y%m%dT%H%M%SZ)"
 PLAN="$P/PLAN.json"
@@ -179,8 +181,8 @@ if [ "$MODE" = event ]; then
   [ "$(sha256sum <"$RETIRED" | cut -c1-64)" = "$RETIRED_SHA" ] ||
     abort "the $ITEM_SET retired list differs from ${RETIRED_SHA:0:12}; key not read, event 3 not used"
   [[ "$SCAN_VERDICT_SHA" =~ ^[0-9a-f]{64}$ ]] || abort "--scan-verdict-sha is required in event mode; key not read, event 3 not used"
-  # The custodian's rescan (c1-rescan.sh) of this item set must have passed.
-  helper_verdict=$(python3 -m v2.eval.sealed.scanverdict check-v2 --verdict "$SCAN_VERDICT" \
+  # The custodian's class-aware judgment of the rescan (policy P2) for this item set must have passed.
+  helper_verdict=$(python3 -m v2.eval.sealed.scanverdict check-v2 --verdict "$SCAN_VERDICT" --schema "$VERDICT_SCHEMA" \
     --verdict-sha "$SCAN_VERDICT_SHA" --retired-sha "$RETIRED_SHA" --protected-sha "$PROTECTED_SHA" 2>&1 3<&-) ||
     abort "no PASS $ITEM_SET scan verdict ${SCAN_VERDICT_SHA:0:12} ($helper_verdict); key not read, event 3 not used"
   log "$helper_verdict; retired list ${RETIRED_SHA:0:12}"
