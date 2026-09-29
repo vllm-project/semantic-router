@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# DEV2.0-4B collection add: the card-only launcher (card2/extra/launch-command.txt) from mirror f8f52c695, whose spec
+# gate_receipt names the coordinator's final decision, with --upload --collect (not --already-collected). Subset parity
+# on the three scored panels with the formal run's frozen cache; readback, card HTTP and link checks.
+set -euo pipefail
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+SRC=f8f52c695fb6741ed831888cc4998edcc2613790-src_training_decision2; S=/data/dev2/src/$SRC/src/training/decision2
+G=/data/dev2/private/panels/goldfree; P=/data/dev2/runs/release/inputs/dev2-4b-t1/derived
+FROZEN=/data/dev2/runs/dec/formal/m4/m4-N4XF-soup-nodeA-triton
+TC=/data/dev2/runs/release/triton/dev2-4b-N4XF-soup-nodeA-copy-$TS
+W=/data/dev2/runs/release/dev2-4b-final-$TS
+HFPY=/data/dev2/tools/hf-cli/bin/python
+trap 'rm -f /data/dev2/leases/gpu5.lock/owner.release' EXIT
+# storage guard (card-only: README and MODEL_MANIFEST change; LFS objects are already in the repository)
+bash $S/v2/common/hf_headroom.sh --min-free-gb 1
+cp -a $FROZEN $TC
+digest() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64); }
+echo "cache copy $TC files=$(find $TC -type f | wc -l) digest=$(digest $TC) frozen_digest=$(digest $FROZEN)"
+set -x
+$S/v2/release/release.sh --spec $S/v2/release/specs/dev2-4b-release.json --src $SRC --work $W \
+  --gpu 5 --track release --shared-lease release --threads 4 \
+  --site /opt/decision-fla --require-kernels \
+  --env HIP_FORCE_DEV_KERNARG=1 --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=$TC --mount-rw $TC \
+  --mount $G --mount $P \
+  --parity typed-final:$G/typed-final.prompts.jsonl:$P/typed-final.predictions.jsonl:200 \
+  --parity css15:$G/css15.prompts.jsonl:$P/css15.predictions.jsonl:300 \
+  --parity public231:$G/public231.prompts.jsonl:$P/public231.predictions.jsonl:100 \
+  --upload --collect
+set +x
+echo "cache after run files=$(find $TC -type f | wc -l) digest=$(digest $TC) frozen_digest=$(digest $FROZEN)"
+REV=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['revision'])" $W/receipts/upload.json)
+cd $S && export PYTHONPATH=$S && mkdir -p $W/extra
+$HFPY -m v2.release.tests.hub_card_http_check --repo llm-semantic-router/DEV2.0-4B --revision $REV \
+  --package $W/package/DEV2.0-4B --output $W/extra/card-http.json
+$HFPY -m v2.release.hub_links --repo llm-semantic-router/DEV2.0-4B --revision $REV \
+  --package $W/package/DEV2.0-4B --output $W/extra/hub-links.json
+bash $S/v2/common/hf_headroom.sh --min-free-gb 0
+echo "work=$W revision=$REV"

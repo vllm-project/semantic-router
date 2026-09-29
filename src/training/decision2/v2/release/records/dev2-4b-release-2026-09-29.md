@@ -1,6 +1,51 @@
 # DEV2.0-4B: private release build, upload and verification (2026-09-29)
 
-**Status: verified private revision, stopped before `--collect`.** Private
+## Released, 2026-09-29 ≈09:09 UTC+8 — revision `452f1332`, in the private "Decision 2.0" collection
+
+The coordinator decided the release at 08:59 UTC+8 under the full-autonomy mandate: T = 1 kept (the 23:15 rule has
+no tolerance band; no calibration-only revision), and the mlx-diag card handling (Choice / Noul parts only) approved.
+
+- **Revision `452f133211de292a87bc29ab7e24a3bd0704e40d`** of private `llm-semantic-router/DEV2.0-4B` (now `main`).
+  Manifest `8fa3be69…`. Against the verified `8052eb6c` only `MODEL_MANIFEST.json` differs (builder commit); against
+  `c73123f3` also `README.md`. All six safetensors files are identical to both
+  ([readback](dev2-4b-release-2026-09-29/final/extra/final-readback.json)); anonymous access refused.
+- **Final decision** [`DEV2.0-4B.decision.json`](dev2-4b-release-2026-09-29/DEV2.0-4B.decision.json)
+  `bfd457855538313ecf15e92a0f1a6f086ed2a3e2c0fad9d7185fdc78207b6172`: `status: final`, decided by the coordinator;
+  identity `11b5ca1c…`, report `57fa23ef…`, paired `27f1419f…`; supersedes the drafts `ec50b04b…`, `d5baa5bf…` and the
+  build draft `00c25bb6…`. Gate evidence: +6.68 [+0.99, +9.64] vs the adopted Nox 1.0 run; human transfer not below
+  Decider 4B or Jet v6.2; no type collapsed; no training-row exposure to the flagged items; T = 1; Apache-2.0 lineage.
+  `gate.json` `e8a38a01…` binds it to `452f1332` and the manifest.
+- **Publishing run** ([command](dev2-4b-release-2026-09-29/final/extra/launch-command.txt),
+  [receipts](dev2-4b-release-2026-09-29/final/receipts/)): the card-only launcher from mirror `f8f52c695` with
+  `--upload --collect`, node A GPU5 (shared lease), formal-run frozen cache copy (digest equal). 17/17 steps: examples
+  bit-identical in three processes, card example, 600-prompt parity before and after upload (0 changes), re-hash 36/36,
+  readback, gate seal, collect, readback-collected; HTTP 13/13 with anonymous 401; links 17/17. 0.101 GPU-hours.
+- **Collection:** "Decision 2.0" private, exactly DEV2.0-0.6B, DEV2.0-0.8B, DEV2.0-2B and DEV2.0-4B.
+- **Storage** (coordinator order; the steward's `free_staging_lfs.py` from mirror `f8f52c695`, plan then apply,
+  `rewrite_history=False`; an object is deleted only if every listed node copy re-hashes to its Hub SHA-256 now and no
+  kept path or other org repo holds it; [receipts](dev2-4b-release-2026-09-29/storage/)):
+
+  | Staging copy | Category | Node copy re-hashed | Objects deleted | GB | Kept |
+  | --- | --- | --- | ---: | ---: | --- |
+  | `dev2-dec-staging` `m4/N4XF-soup/` | released duplicate of DEV2.0-4B | node A `staging-e8656221` + node B `hf-staging/N4XF-soup` | 6 | 16.834 | `tokenizer.json` (shared with other folders / repos) |
+  | `dev2-9b-staging` `m3/DW/` | 9B HOLD | node A `9b/m3/DW-build/soup` | 10 | 31.764 | `tokenizer.json` (shared with released repos) |
+  | `dev2-staging-06bm5-z` | 0.6B not-a-successor | node A `m5-z-soup-r517/full/best-export` | 2 | 2.388 | `tokenizer.json` (node copy differs; shared elsewhere) |
+  | `dev2-staging-06bm6-mxcx` | 0.6B not-a-successor | node A `m6-mxcx-soup/full/best-export` | 2 | 2.388 | `tokenizer.json` (shared with DEV2.0-0.6B) |
+
+  - N4XF apply `4b0030cf…` (right after the collection add), HOLD apply `8fc08dfd…`; both `ok: true`: every repo's
+    commits and refs unchanged, exactly the chosen objects gone, deleted paths no longer download (403), identical
+    released files still download (206).
+  - The three HOLD targets are category `hold-best`; the coordinator ordered all three deleted, so the tool ran with
+    `--min-free-gb 100` (its `hold-best` skip applies only above that headroom). One HOLD run hit the Hub's API rate
+    limit before writing anything and was rerun after the window.
+  - `hf_headroom.sh --node node-a --min-free-gb 40`: **93.85 GB used (6.15 GB free, BELOW) → 40.48 GB used (59.52 GB
+    free, OK)**. Every released DEV2.0 repo still serves all its weight files (0.6B 2/2, 0.8B 2/2, 2B 3/3, 4B 6/6).
+    Nothing else was touched: no released repo, dataset or eval artifact.
+- **GPU total for 4B release engineering:** 0.514 GPU-hours (0.413 before, 0.101 publishing).
+
+## Verified package (before the collection add)
+
+**Status then: verified private revision, stopped before `--collect`.** Private
 `llm-semantic-router/DEV2.0-4B@8052eb6c99c0b3b6a9980dcd77fb868c27da353a` (card-only revision of the verified `c73123f3`; manifest
 **`eab4e8ac26d3975e9fe83ddd35cf879b431b596f903bf06ae043819eeae151c9`**, 36 files, 16,854,371,330 bytes, 4,208,383,488 loaded parameters, temperature 1). Every
 `release.sh` step passed in all three runs (§4). The repository is not in the "Decision 2.0" collection. Verified draft
