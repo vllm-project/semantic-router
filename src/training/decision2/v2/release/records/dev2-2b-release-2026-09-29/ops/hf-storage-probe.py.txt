@@ -1,0 +1,31 @@
+"""Sum Hub storage of every repo in the org (private and public separately). Prints no secrets."""
+import json
+import sys
+
+from huggingface_hub import HfApi
+
+ORG = "llm-semantic-router"
+api = HfApi()
+rows = []
+for kind, lister, getter in (("model", api.list_models, api.model_info),
+                              ("dataset", api.list_datasets, api.dataset_info),
+                              ("space", api.list_spaces, api.space_info)):
+    for info in lister(author=ORG, expand=["private"]):
+        full = getter(info.id, expand=["usedStorage"])
+        rows.append({"kind": kind, "id": info.id, "private": bool(info.private),
+                     "used": int(getattr(full, "used_storage", None) or 0)})
+rows.sort(key=lambda r: -r["used"])
+tot = {"private": sum(r["used"] for r in rows if r["private"]),
+       "public": sum(r["used"] for r in rows if not r["private"])}
+print(json.dumps({"org": ORG, "repos": len(rows), "private_bytes": tot["private"], "public_bytes": tot["public"],
+                  "private_GB": round(tot["private"] / 1e9, 2)}))
+for r in rows:
+    if r["private"] and r["used"] > 5e8:
+        print(f'{r["kind"]:8s} {r["used"] / 1e9:9.2f} GB  {r["id"]}')
+who = api.whoami()
+for org in who.get("orgs", []):
+    if org.get("name") == ORG:
+        print("org keys:", sorted(org.keys()))
+        print("org plan:", org.get("plan"), "| periodEnd:", org.get("periodEnd"))
+if len(sys.argv) > 1:
+    json.dump(rows, open(sys.argv[1], "x"), indent=1)

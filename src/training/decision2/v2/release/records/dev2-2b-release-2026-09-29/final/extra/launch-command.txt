@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# DEV2.0-2B collection add (--upload --collect), then the DEV2.0-0.8B card-only revision
+# (--upload --collect --already-collected). Node A GPU5, shared lease; 600-prompt parity per run.
+set -euo pipefail
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+SRC=33de83cea695e8988e385866ee603d492f7f0e3a-src_training_decision2; S=/data/dev2/src/$SRC/src/training/decision2
+G=/data/dev2/private/panels/goldfree
+digest() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64); }
+run() {  # name spec frozen-cache predictions-dir extra-flags...
+  local name=$1 spec=$2 frozen=$3 P=$4; shift 4
+  local TC=/data/dev2/runs/release/triton/$name-copy-$TS W=/data/dev2/runs/release/$name-$TS
+  cp -a $frozen $TC
+  echo "$name cache copy files=$(find $TC -type f | wc -l) digest=$(digest $TC) frozen=$(digest $frozen)"
+  $S/v2/release/release.sh --spec $S/v2/release/specs/$spec --src $SRC --work $W \
+    --gpu 5 --track release --shared-lease release --threads 4 \
+    --site /opt/decision-fla --require-kernels \
+    --env HIP_FORCE_DEV_KERNARG=1 --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=$TC --mount-rw $TC \
+    --mount $G --mount $P \
+    --parity typed-final:$G/typed-final.prompts.jsonl:$P/typed-final.predictions.jsonl:150 \
+    --parity css15:$G/css15.prompts.jsonl:$P/css15.predictions.jsonl:200 \
+    --parity public231:$G/public231.prompts.jsonl:$P/public231.predictions.jsonl:100 \
+    --parity mlx-diag:$G/mlx-diag.prompts.jsonl:$P/mlx-diag.predictions.jsonl:150 \
+    --upload --collect "$@"
+  echo "$name done W=$W"
+}
+run dev2-2b-final dev2-2b-release.json /data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA-triton \
+  /data/dev2/runs/release/inputs/dev2-2b-t1/derived
+run dev2-0p8b-card2 dev2-0p8b-card2.json /data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA-triton \
+  /data/dev2/runs/release/inputs/dev2-0p8b-t1/derived --already-collected
+rm -f /data/dev2/leases/gpu5.lock/owner.release
+echo ALL-DONE

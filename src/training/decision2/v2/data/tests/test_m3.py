@@ -326,3 +326,48 @@ class TeacherTargetsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StrictTest(unittest.TestCase):
+    def test_drops_excluded_families_and_subsets_targets(self) -> None:
+        from v2.data.m3 import strict
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rows = [
+                _row(1, "choice"),
+                dict(_row(2, "choice"), family="natural_cosmos_qa"),
+                _row(3, "noul"),
+            ]
+            _jsonl(root / "rows.jsonl", rows)
+            targets = [
+                {"id": r["id"], "input_sha256": r["input_sha256"], "teacher_probs": {}}
+                for r in rows
+            ]
+            _jsonl(root / "t.jsonl", targets)
+            out = root / "out"
+            strict.main(
+                [
+                    "--rows",
+                    str(root / "rows.jsonl"),
+                    "--targets",
+                    f"lux1={root / 't.jsonl'}",
+                    "--out-dir",
+                    str(out),
+                ]
+            )
+            receipt = json.loads((out / "receipt.json").read_text())
+            self.assertEqual(receipt["rows"], 2)
+            self.assertEqual(receipt["targets"]["lux1"]["rows"], 2)
+            _jsonl(root / "short.jsonl", targets[:1])
+            with self.assertRaises(ValueError):
+                strict.main(
+                    [
+                        "--rows",
+                        str(root / "rows.jsonl"),
+                        "--targets",
+                        f"x={root / 'short.jsonl'}",
+                        "--out-dir",
+                        str(root / "o3"),
+                    ]
+                )

@@ -1,0 +1,247 @@
+{
+  "answers_sha256": "1425b44585e1d65cd74198db08e880b863ac8500091dcdd2784ac2cfc8b07b8b",
+  "checks": {
+    "multilingual": {
+      "passed": true,
+      "problems": []
+    },
+    "null-description": {
+      "passed": true,
+      "problems": []
+    },
+    "over-budget": {
+      "passed": true,
+      "problems": []
+    },
+    "policy-check": {
+      "passed": true,
+      "problems": []
+    },
+    "structured-state": {
+      "passed": true,
+      "problems": []
+    },
+    "support-routing": {
+      "passed": true,
+      "problems": []
+    }
+  },
+  "device": "cuda:0",
+  "load_seconds": 14.585909325163811,
+  "loaded_parameters": 1883930944,
+  "mode": "run",
+  "model_name": "DEV2.0-2B",
+  "outputs": [
+    {
+      "id": "support-routing",
+      "input_sha256": "d97b537c37ddf12ca4117ff655a31fa14afbfd968729bc2b512beadca6054f88",
+      "latency_ms": 5598.336006980389,
+      "response": {
+        "answers": {
+          "receipt": {
+            "noul": 0.9766083617766077,
+            "type": "noul"
+          },
+          "route": {
+            "choice": "returns",
+            "confidence": 0.7986231272096407,
+            "probabilities": {
+              "billing": 0.013298030061005791,
+              "returns": 0.9519018944213703,
+              "technical": 0.03480007551762396
+            },
+            "type": "choice"
+          },
+          "urgency": {
+            "confidence": 0.275057725940385,
+            "legend": {
+              "0": "Routine",
+              "1": "Soon",
+              "2": "Today"
+            },
+            "probabilities": {
+              "0": 0.07439405323537307,
+              "1": 0.24175652870103895,
+              "2": 0.683849418063588
+            },
+            "score": 1.609455364828215,
+            "type": "score"
+          }
+        },
+        "model": "DEV2.0-2B",
+        "usage": {
+          "input_tokens": 317,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "structured-state",
+      "input_sha256": "b8557ad323a641d6ea898abb86818d9e13d91e0d327bb0dabc8fe696c840d829",
+      "latency_ms": 71.62843993864954,
+      "response": {
+        "answers": {
+          "escalate": {
+            "noul": 0.8237218292015532,
+            "type": "noul"
+          },
+          "severity": {
+            "confidence": 0.100411241885067,
+            "legend": {
+              "0": "Minor",
+              "1": "Moderate",
+              "2": "Major",
+              "3": "Critical",
+              "4": "Full outage"
+            },
+            "probabilities": {
+              "0": 0.04958890408967405,
+              "1": 0.14387033955238276,
+              "2": 0.1993881421192076,
+              "3": 0.2164029766215201,
+              "4": 0.39074963761721543
+            },
+            "score": 2.7548541041242203,
+            "type": "score"
+          }
+        },
+        "model": "DEV2.0-2B",
+        "usage": {
+          "input_tokens": 283,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "policy-check",
+      "input_sha256": "af52e9c0442937e0032aca068ae665a0abe8a64c60de0cbe69de386d569ce7c0",
+      "latency_ms": 58.99744085036218,
+      "response": {
+        "answers": {
+          "action": {
+            "choice": "decline",
+            "confidence": 0.5838033009363508,
+            "probabilities": {
+              "approve": 0.07421352869139475,
+              "decline": 0.8763862934049637,
+              "escalate": 0.04940017790364161
+            },
+            "type": "choice"
+          },
+          "eligible": {
+            "noul": 0.31933882045274076,
+            "type": "noul"
+          }
+        },
+        "model": "DEV2.0-2B",
+        "usage": {
+          "input_tokens": 236,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "multilingual",
+      "input_sha256": "28be6206986889181cc9bf19c4ad593721955ecdffc1c03da97e1be473bf496a",
+      "latency_ms": 31.781332101672888,
+      "response": {
+        "answers": {
+          "queue": {
+            "choice": "hardware",
+            "confidence": 0.7578918224954846,
+            "probabilities": {
+              "account": 0.0006560182772911844,
+              "hardware": 0.9266436248619433,
+              "shipping": 0.07270035686076551
+            },
+            "type": "choice"
+          }
+        },
+        "model": "DEV2.0-2B",
+        "usage": {
+          "input_tokens": 112,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "null-description",
+      "input_sha256": "78429233af527c450bc84b2757198df46d011c93dad94bed70d567637c953928",
+      "latency_ms": 22.324625169858336,
+      "response": {
+        "answers": {
+          "intent": {
+            "choice": "cancel",
+            "confidence": 0.0007181313245574472,
+            "probabilities": {
+              "cancel": 0.35155692661458365,
+              "pause": 0.328177151681955,
+              "upgrade": 0.3202659217034613
+            },
+            "type": "choice"
+          }
+        },
+        "model": "DEV2.0-2B",
+        "usage": {
+          "input_tokens": 99,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "over-budget",
+      "input_sha256": "9022743d7cdc7a9aab2c39bd872384a75af79f16f7974461f12219ad7ae47fb9",
+      "latency_ms": 55.686949053779244,
+      "response": {
+        "answers": {
+          "tone": {
+            "error": "max_length_exceeded",
+            "type": "score"
+          },
+          "weather": {
+            "error": "max_length_exceeded",
+            "type": "noul"
+          }
+        },
+        "model": "DEV2.0-2B",
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0
+        }
+      }
+    }
+  ],
+  "package_manifest_sha256": "63c61883ba52acc61b3782a9eed3fadde2d69fa4d1dd7078bcb46b8dd26f019d",
+  "passed": true,
+  "profile": "qwen-full",
+  "runtime": {
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-2b-S2T-soup-nodeA-copy-20260928T193603Z"
+    },
+    "numpy": "2.3.5",
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1"
+}

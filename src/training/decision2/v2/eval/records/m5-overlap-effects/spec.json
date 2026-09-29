@@ -1,0 +1,92 @@
+{
+  "label": "post-key same-panel",
+  "panel_root": "/data/dev2/private/panels",
+  "mlx_panel": "/data/dev2/private/panels/mlx-diag-v1",
+  "focus_task": "media_ideology",
+  "models": {
+    "DEV2.0-0.8B": {
+      "run": "/data/dev2/runs/release/dev2-0p8b-t1-derived",
+      "equivalent_runs": ["/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA"],
+      "mlx_run": "/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA-mlx",
+      "exposure": ["/data/dev2/runs/eval/m5/overlap-effects/final/exposure-dev2-0p8b.json"],
+      "note": "released revision 7d08d0e1 (T = 1); the gate run m2-E8F-soup-nodeA must give identical outcomes"
+    },
+    "Eos1": {"run": "/data/dev2/runs/eval/m1/r4-eos1", "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-eos1"},
+    "Intern": {"run": "/data/dev2/runs/eval/m2/q2b-intern08b", "mlx_run": "/data/dev2/runs/eval/m2/q2b-intern08b"},
+    "Kev": {"run": "/data/dev2/runs/eval/m2/q1-kev08b", "mlx_run": "/data/dev2/runs/eval/m2/q1-kev08b"},
+    "JPT-0.8B": {
+      "run": "/data/dev2/runs/eval/m1/p2-jpt08b",
+      "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-jpt08b",
+      "note": "CC BY-NC: in the 0.8B threshold pool, not shown on the card"
+    },
+    "DEV2.0-0.6B": {
+      "run": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup",
+      "mlx_run": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup-mlx",
+      "exposure": ["/data/dev2/runs/eval/m5/overlap-effects/final/exposure-dev2-0p6b.json"],
+      "note": "released revision 99c4e799 (weights of the frozen package e61b2b44 = this export)"
+    },
+    "Kai1": {"run": "/data/dev2/runs/eval/m1-adopt/kai1", "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-kai"},
+    "Lex": {"run": "/data/dev2/runs/eval/m1/r3-lex", "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-lex"},
+    "Bosun": {"run": "/data/dev2/runs/eval/m1-adopt/bosun", "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-bosun06"},
+    "GLiNER2.5-Decide": {"run": "/data/dev2/runs/eval/m1/p1-gliner25", "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-gliner25"},
+    "DEV2.0-2B (S2T)": {
+      "run": "/data/dev2/runs/release/dev2-2b-t1-derived",
+      "equivalent_runs": ["/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA"],
+      "mlx_run": "/data/dev2/runs/dec/formal/m3/m3-S2T-soup-mlx",
+      "exposure": ["/data/dev2/runs/eval/m5/overlap-effects/final/exposure-dev2-2b-s2t.json"],
+      "note": "approved candidate; the gate run m3-S2T-soup-nodeA must give identical outcomes"
+    },
+    "Sol1-16K": {
+      "run": "/data/dev2/runs/dec/formal/m3/sol1-16k",
+      "note": "same-limit Sol 1.0 control of the 2B gates; no mlx-diag run"
+    },
+    "Sol1": {"run": "/data/dev2/runs/eval/m1-adopt/sol1", "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-sol1"},
+    "Decider 2B": {"run": "/data/dev2/runs/eval/m1-adopt/decider2b", "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-decider2b"},
+    "This-That 1.2": {"run": "/data/dev2/runs/eval/m2/q4-thisthat12", "mlx_run": "/data/dev2/runs/eval/m2/q4-thisthat12"},
+    "Bosun 1.7B": {
+      "run": "/data/dev2/runs/eval/m1/p3-bosun17b",
+      "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-bosun17b",
+      "note": "fifth model on the DEV2.0-2B card (release spec dev2-2b-release.json); added after the preregistered run"
+    }
+  },
+  "tiers": {
+    "0.8B": {
+      "candidate": "DEV2.0-0.8B",
+      "own_1_0": ["Eos1"],
+      "peers": ["Intern", "Kev"],
+      "internal_peers": ["JPT-0.8B"],
+      "threshold_pool": ["Intern", "Kev", "JPT-0.8B"]
+    },
+    "0.6B": {
+      "candidate": "DEV2.0-0.6B",
+      "own_1_0": ["Kai1", "Lex"],
+      "peers": ["GLiNER2.5-Decide", "Bosun"],
+      "threshold_pool": ["GLiNER2.5-Decide", "Bosun"]
+    },
+    "2B": {
+      "candidate": "DEV2.0-2B (S2T)",
+      "own_1_0": ["Sol1-16K", "Sol1"],
+      "peers": ["Decider 2B", "This-That 1.2", "Bosun 1.7B"],
+      "threshold_pool": ["Decider 2B", "This-That 1.2", "Bosun 1.7B"]
+    }
+  },
+  "reproduce": [
+    {"left": "DEV2.0-0.8B", "right": "Eos1", "stored": "/data/dev2/runs/eval/m4/gates-08b/paired-vs-eos1.json"},
+    {"left": "DEV2.0-0.8B", "right": "Intern", "stored": "/data/dev2/runs/eval/m4/gates-08b/paired-vs-intern.json"},
+    {"left": "DEV2.0-0.8B", "right": "Kev", "stored": "/data/dev2/runs/eval/m4/gates-08b/paired-vs-kev.json"},
+    {"left": "DEV2.0-0.8B", "right": "Eos1", "stored": "/data/dev2/runs/release/dev2-0p8b-t1-derived/PAIRED-vs-adopted-1.0.json"},
+    {"left": "DEV2.0-0.6B", "right": "Kai1", "stored": "/data/dev2/runs/eval/m4/gates-06b/paired-vs-Kai1.json"},
+    {"left": "DEV2.0-0.6B", "right": "Lex", "stored": "/data/dev2/runs/eval/m4/gates-06b/paired-vs-Lex.json"},
+    {"left": "DEV2.0-0.6B", "right": "Bosun", "stored": "/data/dev2/runs/eval/m4/gates-06b/paired-vs-Bosun.json"},
+    {"left": "DEV2.0-0.6B", "right": "GLiNER2.5-Decide", "stored": "/data/dev2/runs/eval/m4/gates-06b/paired-vs-GLiNER2.5-Decide.json"},
+    {"left": "DEV2.0-0.6B", "right": "Kai1", "stored": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup/PAIRED-vs-kai1.json"},
+    {"left": "DEV2.0-2B (S2T)", "right": "Sol1-16K", "stored": "/data/dev2/runs/eval/m4/gates-2b/paired-vs-sol1-16k.json"},
+    {"left": "DEV2.0-2B (S2T)", "right": "Sol1", "stored": "/data/dev2/runs/eval/m4/gates-2b/paired-vs-sol1.json"},
+    {"left": "DEV2.0-2B (S2T)", "right": "Decider 2B", "stored": "/data/dev2/runs/eval/m4/gates-2b/paired-vs-decider2b.json"},
+    {"left": "DEV2.0-2B (S2T)", "right": "This-That 1.2", "stored": "/data/dev2/runs/eval/m4/gates-2b/paired-vs-thisthat12.json"},
+    {"left": "DEV2.0-2B (S2T)", "right": "Sol1-16K", "stored": "/data/dev2/runs/release/dev2-2b-t1-derived/PAIRED-vs-same-limit-16k.json"},
+    {"left": "DEV2.0-2B (S2T)", "right": "Sol1", "stored": "/data/dev2/runs/release/dev2-2b-t1-derived/PAIRED-vs-adopted-1.0.json"},
+    {"left": "DEV2.0-2B (S2T)", "right": "Decider 2B", "stored": "/data/dev2/runs/release/dev2-2b-t1-derived/PAIRED-vs-decider2b.json"},
+    {"left": "DEV2.0-2B (S2T)", "right": "This-That 1.2", "stored": "/data/dev2/runs/release/dev2-2b-t1-derived/PAIRED-vs-thisthat12.json"}
+  ]
+}

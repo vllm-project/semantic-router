@@ -1,0 +1,44 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "DEV2.0-2B",
+  "repo_id": "llm-semantic-router/DEV2.0-2B",
+  "identity": {
+    "model_sha256": "073bd1f2fe62e39fe993f57006bab17ece50a7e6fc7c5ee72107fefddeb81da4"
+  },
+  "report_sha256": "08745acf9fc753bc1d3b0335dc3e341c697a657a9e6c7c26d85eebfebf4d160c",
+  "paired_sha256": "bca44e5f286312f2e96ac69b590347ddf37d81899dd762f5ce48475365c824ab",
+  "calibration": "none: raw model probabilities (temperature 1), no calibration.json; the CAL698 temperatures d73e9ce4 (Choice 0.742, Noul 0.816, Score 0.154) were evaluated on the development panels and rejected under the coordinator's 2026-09-28 23:15 UTC+8 rule (receipt 56de813b: typed-DEV Brier 0.267 -> 0.289, ECE-10 0.095 -> 0.135, CSS-pilot Brier-sum 0.748 -> 0.757; 0 answer changes)",
+  "decided_by": "coordinator (Decision 2.0 program), under the user's full-autonomy mandate of 2026-09-28",
+  "prepared_by": "Decision 2.0 release engineering, DEV2.0-2B worker",
+  "decided_utc": "2026-09-28T20:35:00Z",
+  "action": "Add the private repository llm-semantic-router/DEV2.0-2B to the private 'Decision 2.0' collection, which then holds DEV2.0-0.8B, DEV2.0-0.6B and DEV2.0-2B. The repository and the collection stay private.",
+  "approved_package": "The T = 1 package verified as revision b2c5d7eac4ef24648cbf9c23c26421f0960ca542 (MODEL_MANIFEST.json 63c61883...), with the card's evaluation-familiarity item extended by the eval track's overlap-effect result. The publishing run rebuilds it from the mirror of the publishing commit: every model file must equal b2c5d7ea's; README.md, evaluation/* and MODEL_MANIFEST.json (builder.source_commit and the README hash) may differ.",
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect run binds this file's SHA-256 to the Hub revision and package manifest it verified.",
+  "supersedes": {
+    "draft_sha256": "31ae8a9890bc3daf4d0dbd3cb8844b4a0164449d709fde69a441791d9701b536",
+    "build_draft_sha256": "fde8c87ea45162a1cbecf85be579eb22c8d19c6d5a3635dd1b238f81adcdaa6c",
+    "verified_revision": "b2c5d7eac4ef24648cbf9c23c26421f0960ca542"
+  },
+  "rationale": "Per-size release gate under the full-autonomy mandate. (1) Post-key same-panel JevArena v3 53.437 vs the stricter Decision 1.0 Sol same-renderer 16K control 45.781: +7.66 [+3.26, +10.81] (lower bound > 0); vs adopted Sol1 +7.86 [+3.36, +10.80]; 53.44 >= 44.5 (90% of Decider 2B 49.50). (2) Eval gates (record m4-dev2-2b-gates-2026-09-29, approval 02:50 UTC+8): human transfer not below Decider 2B (+0.105 [-0.008, +0.132]) or This-That 1.2 (+0.120 [-0.050, +0.223]); no type collapsed (Choice .556, Noul .709, Score .438 vs chance .267 / .50 / .20). (3) Calibration: T = 1 under the 23:15 rule. (4) Overlap effect (eval record m5-overlap-effects-2026-09-29, integration cae64f4e8): the S2T training rows flagged by the M3b XL r2 rescreen touch 19 scored items (18 media_ideology, 1 tropes); rescored without them or counting all as errors, v3 stays 53.44 and no comparison or gate changes; no contamination signature. (5) Package verified (real download, re-hash 33/33, loaded parameters 1,883,930,944, examples bit-identical in three processes, full-panel parity 0 changes). (6) Card in the 1.0 design with every disclosure; C1 line pending event 3 (placeholder). Licence apache-2.0.",
+  "gate_evidence": {
+    "post_key_v3": {"candidate": 53.437, "sol1_16k_control": 45.781, "delta": 7.66, "ci95": [3.26, 10.81], "paired_sha256": "bca44e5f286312f2e96ac69b590347ddf37d81899dd762f5ce48475365c824ab"},
+    "vs_sol1_adopted": {"delta": 7.86, "ci95": [3.36, 10.80]},
+    "vs_decider_2b": {"delta": 3.94, "ci95": [-2.48, 5.67], "H_delta": 0.105, "H_ci95": [-0.008, 0.132], "T_delta": -0.040, "T_ci95": [-0.070, -0.009]},
+    "vs_this_that_1p2": {"delta": 7.33, "ci95": [-2.00, 13.60], "H_delta": 0.120, "H_ci95": [-0.050, 0.223]},
+    "no_type_collapsed": {"choice": 0.556, "noul": 0.709, "score": 0.438},
+    "public231": {"candidate": 171, "sol1_16k_control": 160, "decider_2b": 175},
+    "overlap_effect": {"record": "v2/eval/records/m5-overlap-effects-2026-09-29.md", "integration": "cae64f4e8", "touched_items": 19, "v3_without_or_all_wrong": 53.44}
+  },
+  "licence_decision": "apache-2.0: own weights, Decision 1.0 Sol-2B @ce0c018a and Qwen/Qwen3.5-2B @15852e8c text backbone and tokenizer are all Apache-2.0; training-data licences (CC BY, CC BY-SA, MIT, Apache-2.0, CC0, OANC) credited in ATTRIBUTIONS.md; Decider 2B (Apache-2.0) and This-That 1.2 (MIT) shown with a note that their licences come from card metadata only; the XNLI-based mlx-diag Score part stays off the card.",
+  "disclosures": [
+    "gain over Decision 1.0 Sol is typed reasoning; human transfer level (+0.033 [-0.044, +0.092])",
+    "transfer tasks below Sol 1.0 (mrf -0.094, wiki_corpus -0.045, flute -0.032, full tradeoffs table)",
+    "vs Decider 2B: margin not significant; typed accuracy significantly lower (-0.040); Choice weakest type vs peers; public hard tier 57 vs 63",
+    "typed Score almost never predicts level 0 (6 of 400, recall 0.03)",
+    "mlx-diag: non-English Noul -2.2 points, Korean Noul 0.59 vs 0.63",
+    "evaluation familiarity: 45 training rows share long word sequences with 19 human-transfer items; v3 unchanged without them",
+    "seed dependence; CPU not verified; C1 line pending"
+  ]
+}

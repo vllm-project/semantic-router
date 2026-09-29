@@ -12,7 +12,9 @@ Inputs are native predictions on the frozen development panels:
 SELECT/CAL use the trainers' definitions (unique-argmax correctness, multiclass
 Brier divided by two, family-macro accuracy and Brier over the six families) with
 one difference: missing or malformed rows count as wrong with Brier 1 instead of
-being dropped. The development proxy is ``100*sqrt(T_dev*H_pilot)``.
+being dropped. The development proxy is ``100*sqrt(T_dev*H_pilot)``; within a tier,
+two checkpoints less than 8 proxy points apart are a tie that only the formal paired
+v3 interval can decide (``v2/eval/records/m5-proxy-v2-calibration-2026-09-29.md``).
 """
 
 from __future__ import annotations
