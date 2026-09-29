@@ -1,0 +1,57 @@
+{
+  "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+  "title": "🎲 Decision 2.0",
+  "private": true,
+  "before": [
+    [
+      1,
+      "llm-semantic-router/DEV2.0-0.8B"
+    ],
+    [
+      2,
+      "llm-semantic-router/DEV2.0-0.6B"
+    ],
+    [
+      3,
+      "llm-semantic-router/DEV2.0-2B"
+    ],
+    [
+      4,
+      "llm-semantic-router/DEV2.0-4B"
+    ],
+    [
+      5,
+      "llm-semantic-router/DEV2.0-8B"
+    ],
+    [
+      6,
+      "llm-semantic-router/DEV2.0-26B"
+    ]
+  ],
+  "after": [
+    [
+      1,
+      "llm-semantic-router/DEV2.0-0.6B"
+    ],
+    [
+      2,
+      "llm-semantic-router/DEV2.0-0.8B"
+    ],
+    [
+      3,
+      "llm-semantic-router/DEV2.0-2B"
+    ],
+    [
+      4,
+      "llm-semantic-router/DEV2.0-4B"
+    ],
+    [
+      5,
+      "llm-semantic-router/DEV2.0-8B"
+    ],
+    [
+      6,
+      "llm-semantic-router/DEV2.0-26B"
+    ]
+  ]
+}

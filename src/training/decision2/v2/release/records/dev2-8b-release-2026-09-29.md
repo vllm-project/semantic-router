@@ -1,6 +1,36 @@
 # DEV2.0-8B (9B tier, candidate K-a13): private release build, upload and verification (2026-09-29)
 
-## Status: verified private package, stopped before the collection add
+## Released, 2026-09-29 ≈16:00 UTC+8 — revision `53bac735`, in the private "Decision 2.0" collection
+
+The coordinator decided the release at 15:49 UTC+8 (full-autonomy mandate) on the verified draft `1db7683f…`.
+
+- **Revision `53bac735be58def53673d0d290b9baa3f2af1cf9`** of private `llm-semantic-router/DEV2.0-8B` (now `main`), manifest
+  `d5007cdb83cd9e29c353efb5dff92a72035c53a4312468c660cb73af2a3accfa`. Against the verified `0dee8017` only
+  `MODEL_MANIFEST.json` differs (builder commit, decision binding); README and all weights are byte-identical.
+- **Final decision** [`DEV2.0-8B.decision.json`](dev2-8b-release-2026-09-29/DEV2.0-8B.decision.json)
+  `7666fd7c8676fac9052b7e10812c556dfac5e1bc040ddb86a6687639155f905a` (`status: final`, decided by the coordinator;
+  supersedes `1db7683f…` and the build draft `5db122b0…`); `receipts/gate.json` `de1436a6…` seals it to `53bac735` and
+  the manifest. The spec's `gate_receipt` names it.
+- **C1:** the card keeps the family's pending line, verbatim as on the released DEV2.0-2B / DEV2.0-4B cards
+  ("Independent sealed confirmation (JevArena-C1): PLACEHOLDER — to be added after the final sealed scoring event.");
+  that event is C1 event 3, and the sealed result comes in a separate card-only revision. No card text changed.
+- **Publishing run** ([launcher](dev2-8b-release-2026-09-29/ops/final-collect.sh), [receipts](dev2-8b-release-2026-09-29/final/receipts/),
+  mirror `6d21c8980`, node A GPU6): build, examples in two processes (bit-identical), card, subset parity (typed-final 200,
+  css15 300, public231 100, mlx-diag 100; 0 answer changes) before and after upload, real download and re-hash, readback,
+  gate seal — all pass. `hub collect` then refused: the collection is now titled "🎲 Decision 2.0" (renamed outside
+  the pipeline; `hub.py` expects "Decision 2.0"; both repo and collection verified private). DEV2.0-8B was already a
+  collection item (added outside the pipeline between 07:41Z and 07:49Z; Vela-2.0-Encoder-307M-Unified, present at
+  07:49Z, was gone by 08:00Z), so nothing needed adding. [`final-collect-finish.sh`](dev2-8b-release-2026-09-29/ops/final-collect-finish.sh)
+  (mirror `2ab92d25c`) ran the pipeline's post-collect readback (`--expect-collected`: private, 40 files, 0 hash
+  mismatches, 0 card problems, in the collection — pass), card HTTP 12/12 (anonymous 401), links 15/15. The title and
+  the shared guard were left unchanged; the ~27B collection add will hit the same guard.
+- **Collection** ([order receipt](dev2-8b-release-2026-09-29/final/extra/collection-order.json)): private, in size order
+  via `update_collection_item`: DEV2.0-0.6B, DEV2.0-0.8B, DEV2.0-2B, DEV2.0-4B, DEV2.0-8B, DEV2.0-26B (0.6B and 0.8B were
+  swapped). DEV2.0-26B was already an item before this run (not added by this worker, not removed).
+- Storage 62.57 / 100 GB (37.43 GB free; no change). Final run ≈0.109 GPU-h; release total **0.737 GPU-hours**. GPU6
+  lease back to `idle`.
+
+## Verified package (before the collection add)
 
 - **Private `llm-semantic-router/DEV2.0-8B@0dee801731a69a89c4219a2bf26381ce4d59af48`** (2026-09-29 07:32Z): manifest
   `80770483735c962454406e9723239af79aec8cc3ba7adb2d8546663ff7ca4ecc`, 40 files, 17,947,416,716 bytes; identity
