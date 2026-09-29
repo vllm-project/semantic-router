@@ -198,6 +198,36 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 16:15 — **DEV2.0-8B released; C1 event 3 triggered; collection renamed by the user.**
+  - **DEV2.0-8B** (to be renamed DEV2.0-9B): private `llm-semantic-router/DEV2.0-8B@53bac735be58def53673d0d290b9baa3f2af1cf9`
+    (`main`), manifest `d5007cdb…`, final decision `7666fd7c…` sealed to that revision. Only `MODEL_MANIFEST.json`
+    differs from `0dee8017`. C1 is the verbatim 2B / 4B placeholder line. Integration `28f05ace7`; 0.737 GPU-h in
+    total; storage 62.57 / 100 GB.
+  - **Collection:** someone outside the pipeline renamed it **"🎲 Decision 2.0"** and added DEV2.0-8B and DEV2.0-26B
+    (07:41–07:49Z). Treat this as the user's curation.
+    - Keep the user's title.
+    - The next release worker changes the pipeline to find the collection by its slug / ID instead of the exact title,
+      with a test.
+    - Current order: 0.6B, 0.8B, 2B, 4B, 8B, 26B.
+  - **C1 event 3 staged** (eval prep record §0; integration `f467d4243`; 0.41 GPU-h):
+    - Eikos-27B was pulled from the Hub. F1 uses the uploaded release revision `DEV2.0-26B@5683c6f0`; the weights
+      identity is the same as the release-check package, which the slow node-B link ruled out.
+    - Preflight: F1, AutoJev and Eikos reproduce their node-B answers exactly.
+    - **Trigger authorized** (the eval worker is resumed once): the 9B row is DEV2.0-8B at `53bac735` with BF16 identity
+      `b1ed5a71…`, and the ~27B row is `--c27 f1`.
+    - GPU: node A GPU7 if ≥ 130 GB is free, otherwise any idle node-A GPU.
+    - The eval worker acts as custodian; FAIL means the event stays unused.
+    - After this, C1 is exhausted.
+  - **27B peer mlx-diag** (record `m5-mlx-diag-27b-peers-2026-09-29.md`), type-macro accuracy: AutoJev 84.2, Jebadiah
+    83.2, Eikos 81.9; F1 .828 (27B track). Arabic is weakest for all of them; Score drops most outside English.
+  - **Next release worker:** starts after the DEV2.0-26B finalization and does:
+    - `move_repo` DEV2.0-8B → DEV2.0-9B and DEV2.0-26B → DEV2.0-27B;
+    - card-only revisions (name, banner label, examples, "named after the base model; loads N parameters");
+    - collection check, keeping the order;
+    - collection lookup by slug;
+    - `name_basis` = base;
+    - then the C1 lines for 2B / 4B / 9B / 27B, and the 0.6B Kai1-8K pairing, once event 3 is scored.
+
 - 2026-09-29 16:05 — **USER DIRECTIVES (optimization round 1).** These supersede earlier rules where they conflict.
   1. **Naming follows the base model's size, not the loaded parameter count.**
      - DEV2.0-8B → **DEV2.0-9B** (base Qwen3.5-9B). DEV2.0-26B → **DEV2.0-27B** (base Qwen3.8-27B).
