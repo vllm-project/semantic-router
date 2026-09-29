@@ -46,6 +46,15 @@ func validateGlobalMemoryContracts(cfg *RouterConfig) error {
 	); err != nil {
 		return err
 	}
+	if err := validateMemoryRetrievalLimit(cfg.Memory.DefaultRetrievalLimit, false, "global memory default_retrieval_limit"); err != nil {
+		return err
+	}
+	if err := validateMemoryHybridMode(cfg.Memory.HybridMode, "global memory hybrid_mode"); err != nil {
+		return err
+	}
+	if err := validateMemoryReflectionContracts(cfg.Memory.Reflection, "global memory reflection"); err != nil {
+		return err
+	}
 	return validateMemoryPersistence(cfg.Memory.Persistence)
 }
 
@@ -83,12 +92,32 @@ func validateDecisionMemoryContracts(cfg *RouterConfig) error {
 	for i := range decisions {
 		decision := &decisions[i]
 		pluginCfg := decision.GetMemoryConfig()
-		if pluginCfg == nil || pluginCfg.SimilarityThreshold == nil {
+		if pluginCfg == nil {
 			continue
 		}
-		scope := fmt.Sprintf("decision %q memory plugin similarity_threshold", decision.Name)
-		if err := validateMemorySimilarityThreshold(*pluginCfg.SimilarityThreshold, scope); err != nil {
-			return err
+		if pluginCfg.SimilarityThreshold != nil {
+			scope := fmt.Sprintf("decision %q memory plugin similarity_threshold", decision.Name)
+			if err := validateMemorySimilarityThreshold(*pluginCfg.SimilarityThreshold, scope); err != nil {
+				return err
+			}
+		}
+		if pluginCfg.RetrievalLimit != nil {
+			scope := fmt.Sprintf("decision %q memory plugin retrieval_limit", decision.Name)
+			if err := validateMemoryRetrievalLimit(*pluginCfg.RetrievalLimit, true, scope); err != nil {
+				return err
+			}
+		}
+		if pluginCfg.HybridMode != "" {
+			scope := fmt.Sprintf("decision %q memory plugin hybrid_mode", decision.Name)
+			if err := validateMemoryHybridMode(pluginCfg.HybridMode, scope); err != nil {
+				return err
+			}
+		}
+		if pluginCfg.Reflection != nil {
+			scope := fmt.Sprintf("decision %q memory plugin reflection", decision.Name)
+			if err := validateMemoryReflectionContracts(*pluginCfg.Reflection, scope); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -101,6 +130,68 @@ func validateDecisionMemoryContracts(cfg *RouterConfig) error {
 func validateMemorySimilarityThreshold(threshold float32, scope string) error {
 	if threshold < 0.0 || threshold > 1.0 {
 		return fmt.Errorf("%s must be between 0.0 and 1.0, got %.2f", scope, threshold)
+	}
+	return nil
+}
+
+// validMemoryHybridModes mirrors the score-fusion modes the vector-store
+// hybrid retriever implements ("weighted" fusion and "rrf"); the runtime
+// treats any other value as "weighted" without warning, so an unknown mode
+// must be rejected at load instead of silently mis-fusing scores
+// (pkg/vectorstore/hybrid.go applyDefaults/fuse).
+var validMemoryHybridModes = []string{"weighted", "rrf"}
+
+// validMemoryReflectionAlgorithms mirrors the memory reflection filter
+// registry (pkg/memory/filter_registry.go init). Unknown algorithms fall
+// back to heuristic at request time, which silently changes injection
+// behavior, so the allowed set is pinned here at load.
+var validMemoryReflectionAlgorithms = []string{"heuristic", "noop"}
+
+func validateMemoryEnum(value string, scope string, allowed []string) error {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s must be one of %v, got %q", scope, allowed, value)
+}
+
+func validateMemoryHybridMode(mode string, scope string) error {
+	if mode == "" {
+		return nil
+	}
+	return validateMemoryEnum(mode, scope, validMemoryHybridModes)
+}
+
+// validateMemoryRetrievalLimit rejects non-positive retrieval limits. The
+// global field is a plain int whose zero value means "unset" (runtime
+// default), while the decision plugin uses a pointer, where an explicit
+// zero or negative would reach the vector stores as an unbounded retrieval
+// ("a non-positive topK means unlimited results").
+func validateMemoryRetrievalLimit(limit int, explicit bool, scope string) error {
+	if limit == 0 && !explicit {
+		return nil
+	}
+	if limit <= 0 {
+		return fmt.Errorf("%s must be greater than 0, got %d", scope, limit)
+	}
+	return nil
+}
+
+func validateMemoryReflectionContracts(reflection MemoryReflectionConfig, scope string) error {
+	if reflection.Algorithm != "" {
+		if err := validateMemoryEnum(reflection.Algorithm, scope+" algorithm", validMemoryReflectionAlgorithms); err != nil {
+			return err
+		}
+	}
+	if reflection.DedupThreshold < 0.0 || reflection.DedupThreshold > 1.0 {
+		return fmt.Errorf("%s dedup_threshold must be between 0.0 and 1.0, got %.2f", scope, reflection.DedupThreshold)
+	}
+	if reflection.MaxInjectTokens < 0 {
+		return fmt.Errorf("%s max_inject_tokens must not be negative, got %d", scope, reflection.MaxInjectTokens)
+	}
+	if reflection.RecencyDecayDays < 0 {
+		return fmt.Errorf("%s recency_decay_days must not be negative, got %d", scope, reflection.RecencyDecayDays)
 	}
 	return nil
 }

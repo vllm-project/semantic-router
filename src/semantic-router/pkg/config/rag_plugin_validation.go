@@ -22,6 +22,9 @@ func (c *RAGPluginConfig) Validate() error {
 	if err := validateRAGTopK(c.TopK); err != nil {
 		return err
 	}
+	if err := validateRAGMaxContextLength(c.MaxContextLength); err != nil {
+		return err
+	}
 	if err := validateRAGInjectionMode(c.InjectionMode); err != nil {
 		return err
 	}
@@ -145,6 +148,13 @@ func validateRAGTopK(topK *int) error {
 		return nil
 	}
 	return fmt.Errorf("TopK must be greater than 0, got %d", *topK)
+}
+
+func validateRAGMaxContextLength(maxContextLength *int) error {
+	if maxContextLength == nil || *maxContextLength > 0 {
+		return nil
+	}
+	return fmt.Errorf("max_context_length must be greater than 0, got %d", *maxContextLength)
 }
 
 func validateRAGInjectionMode(mode string) error {
