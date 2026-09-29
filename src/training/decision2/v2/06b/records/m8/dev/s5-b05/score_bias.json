@@ -1,0 +1,85 @@
+{
+  "fit": {
+    "candidate": "s5-b05",
+    "export_manifest_sha256": "3ae009ad838487c0df839a55898a98f5665276136d2a8cab3c1260dd0b29dfa2",
+    "fit": {
+      "gradient_norm": 5.243824511246333e-10,
+      "newton_steps": 3,
+      "objective_end": 1.5228310221391774,
+      "objective_start": 1.5332134700005002,
+      "offsets": [
+        0.039188,
+        0.203049,
+        0.079362,
+        -0.15162,
+        -0.169979
+      ],
+      "raw_offsets": [
+        0.0,
+        0.16386051424964254,
+        0.040173248546208455,
+        -0.19080822803719957,
+        -0.20916764367820698
+      ]
+    },
+    "human_weight": 0.0,
+    "inputs": {
+      "score5t_check_gold": {
+        "path": "/data/dev2/private/panels/gold/score5t-dev.check.gold.jsonl",
+        "sha256": "2e4a9490642cb04da7c016c4ebd22a9366666f0e464cfbc418371a92266adb3d"
+      },
+      "score5t_fit_gold": {
+        "path": "/data/dev2/private/panels/gold/score5t-dev.fit.gold.jsonl",
+        "sha256": "3d735da439ac7a459bffcc931b44202541e8a3d55b82960c70b0eedff9efb5f6"
+      },
+      "score5t_panel": {
+        "gold/score5t-dev.gold.jsonl": "31abc1a5d7820e06961a903327c76dc4503b46987f0db58b645e0e6562e08aed",
+        "goldfree/score5t-dev.prompts.jsonl": "8e35bfffc2c3b8e4252d3c39ec1c65054250a3ddf80159d219a16b41bca1d93c"
+      },
+      "score5t_predictions": {
+        "path": "/data/dev2/runs/eval/score5t-dev/collect/m6-mxcx-soup/output/score5t-dev.predictions.jsonl",
+        "sha256": "033148fc38ab2aadbffd26d09c8516e4b16f39d286f425e7d8f2dd50731f9642"
+      }
+    },
+    "lam": 0.5,
+    "levels": 5,
+    "model_sha256": "01fae75098ce29314c5de2990321fcfd31457de7c02bb757bd8345662a823854",
+    "objective": "J(b) = sum_ledger a_i l_i(b) + w_h sum_human a_i l_i(b), l_i(b) = -log softmax(z_i + b)_{y_i}, z = log max(p, 1e-12), a_i = n_{s,y_i}^(-lam) / sum_{j in s} n_{s,y_j}^(-lam), b_0 = 0",
+    "post": "shift to mean zero, round to 6 decimals",
+    "prereg": "v2/06b/records/m8-prereg-2026-09-29.md section 3",
+    "prereg_commit": "e6a5f4515b902f2760ff768d47bf50c9eafb3849",
+    "rows": {
+      "block_weight": {
+        "human": 0.0,
+        "ledger": 1.0
+      },
+      "human": {
+        "rows": 0,
+        "used": false
+      },
+      "ledger": {
+        "rows": 400,
+        "rows_by_level": {
+          "0": 48,
+          "1": 77,
+          "2": 81,
+          "3": 61,
+          "4": 133
+        }
+      },
+      "objective_rows": 400
+    },
+    "solver": "Newton, float64, backtracking, gradient norm < 1e-09, at most 200 steps (m7_scorebias)"
+  },
+  "format": "dev2-score-bias-v1",
+  "model_sha256": "01fae75098ce29314c5de2990321fcfd31457de7c02bb757bd8345662a823854",
+  "offsets": {
+    "5": [
+      0.039188,
+      0.203049,
+      0.079362,
+      -0.15162,
+      -0.169979
+    ]
+  }
+}

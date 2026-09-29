@@ -56,7 +56,13 @@ The model name must match the loaded size tier (`DEV2.0-<tier>`, nearest tier
 within the frozen 1.25 same-size ratio), or, with `"name_basis":
 "loaded-parameters"` in the spec, the rounded loaded count inside that tier
 (one decimal below 1B, whole billions from 1B; e.g. `DEV2.0-26B` for the ~27B
-tier's 25.75B text model). Training state never enters a package.
+tier's 25.75B text model), or, with `"name_basis": "base"`, the size label of
+the base model (`name_base_model`, or the pinned `base.repo_id` of an adapter;
+it must be in the declared weight lineage and in the loaded count's tier).
+Base-named cards add "Named after its base model (…); it loads N parameters"
+under Model details, with N the exact loaded count. DEV2.0-9B (Qwen3.5-9B base,
+7,940,895,744 loaded) and DEV2.0-27B (Qwen3.8-27B base, 25,746,591,744 loaded)
+use it. Training state never enters a package.
 
 ## Release spec and commands
 
@@ -65,6 +71,14 @@ names the repository, profile, checkpoint and its expected identity, calibration
 input cap, direct weight origin, lineage licences (with pinned licence-file
 hashes), the scored run binding and the card inputs. Release (non-staging) specs
 also need the coordinator's gate receipt (`dev2-release-gate/1`).
+Optional `"score_bias": {"path", "sha256"}` (Qwen profiles) packages per-level Score
+logit offsets (`dev2-score-bias-v1`, from `training.model.infer --score-bias`) as
+`score_bias.json`: bound to the model hash and, by value, to the offsets the scored
+native manifest records (`score_bias.offsets`, `score_bias_sha256`), so a copy with
+public-only `fit` provenance can be packaged (the screen refuses private paths).
+Recorded as `MODEL_MANIFEST.json` `score_bias` (`file`, `sha256` of the packaged
+file, `scored_sha256` of the applied file, `offsets`) and applied by the runtime
+exactly as at scoring time. Without the key, packages and answers are unchanged.
 
 ```bash
 # local: push, then mirror the subtree to the node that holds the checkpoint
@@ -140,7 +154,10 @@ each remote file's LFS SHA-256 or git blob id against the package, the Hub-parse
 card metadata, that every card link and image resolves, and collection
 membership (staging repositories must not be in the collection). `collect` only
 accepts a `DEV2.0-*` release package with a gate receipt naming the exact
-revision and manifest.
+revision and manifest. `ensure`, `upload`, `readback` and `collect` refuse a
+repository ID that the Hub resolves to a different repository (the old ID of a
+renamed repository redirects to the new one), so a superseded spec cannot write
+to a retired name.
 
 ## Model card
 
@@ -167,7 +184,8 @@ Lux), a new owl with a ringed planet for 27B (`brand/sources`, generated in the
 same style), the `DEV2.0` wordmark, a `DECISION 2.0` pill and the size in the
 tier's 1.0 accent colour. `brand/BANNERS.json` records every source hash.
 `--label 27B=26B` draws a final name that follows the loaded count with the
-tier's owl and accent (`DEV2.0-26B-owl-banner.png`).
+tier's owl and accent (`DEV2.0-26B-owl-banner.png`). Base-named releases
+(DEV2.0-9B, DEV2.0-27B) use their tier banners unchanged.
 
 ## Tests
 

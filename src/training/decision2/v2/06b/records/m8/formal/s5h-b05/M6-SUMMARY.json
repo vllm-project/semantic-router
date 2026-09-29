@@ -1,0 +1,353 @@
+{
+  "H": 0.45904022473242023,
+  "T": 0.5115625,
+  "gate_human_transfer_vs_released": {
+    "ci95_H": [
+      -0.06449448188458451,
+      0.06050216930368588
+    ],
+    "ci95_v3": [
+      2.5024727304107675,
+      9.122829899026312
+    ],
+    "delta_H": -0.02054502089056126,
+    "released": "released"
+  },
+  "gpu_time": {
+    "gpu_hours": 0.06801066239674886,
+    "image_ids": [
+      "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    ],
+    "runs": {
+      "m8-s5h-b05": 0.051998359031147426,
+      "m8-s5h-b05-mlx": 0.016012303365601433
+    }
+  },
+  "label": "post-key same-panel",
+  "loaded_parameters": 597103104,
+  "mlx_diag": {
+    "english": 0.6872486772486772,
+    "invalid_or_missing": 0,
+    "items": 2275,
+    "non_english": 0.6347049863716531,
+    "overall": 0.6422112279255137,
+    "scope": "multilingual development diagnostic; not a release score"
+  },
+  "mlx_run_dir": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05-mlx",
+  "model_path": "/data/dev2/runs/06b/m1/arms/m8-s5h-b05/full/best-export",
+  "model_revision": "8dd5f8892a0f1f61a4c44ecb70a6b332bdfa9c3ab7273765fcb4a09f4f15401f",
+  "name": "m8-s5h-b05",
+  "paired": {
+    "bosun06": {
+      "ci95_H": [
+        0.013699044651004893,
+        0.18943735465451686
+      ],
+      "ci95_T": [
+        0.04999218749999999,
+        0.10625000000000001
+      ],
+      "ci95_v3": [
+        4.11130706196444,
+        13.876056953930874
+      ],
+      "delta_H": 0.11687911786543104,
+      "delta_T": 0.0778125,
+      "delta_v3": 9.9347032381065,
+      "file_sha256": "76e0e22a0d7a270545f400c679e3fb93a5c7cca5f0b239a43ff37791bb095ea7",
+      "replicates": 5000,
+      "right_v3": 38.524327392383704,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/bosun"
+    },
+    "causal-control": {
+      "ci95_H": [
+        -0.1123302881819857,
+        0.10659413123245128
+      ],
+      "ci95_T": [
+        0.17249218749999998,
+        0.23250000000000004
+      ],
+      "ci95_v3": [
+        4.9337006257835085,
+        15.779987465146752
+      ],
+      "delta_H": -0.02105384923256537,
+      "delta_T": 0.2025,
+      "delta_v3": 9.93902612181921,
+      "file_sha256": "668f6c2f8a2464b8985de797c94a4afcde251ed5811b8223afeee11750eb639d",
+      "replicates": 5000,
+      "right_v3": 38.52000450867099,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/dev20-06b"
+    },
+    "gliner25": {
+      "ci95_H": [
+        -0.012659984461693176,
+        0.16115121983091787
+      ],
+      "ci95_T": [
+        0.07,
+        0.13375781249999993
+      ],
+      "ci95_v3": [
+        4.011100625600345,
+        13.566513999972571
+      ],
+      "delta_H": 0.01799127915212012,
+      "delta_T": 0.10156250000000006,
+      "delta_v3": 5.934911863851077,
+      "file_sha256": "19a464cef449646c5d910333c7ff3aef41514294230f23fc94597a84f05a341d",
+      "replicates": 5000,
+      "right_v3": 42.52411876663913,
+      "run_dir": "/data/dev2/runs/eval/m1/p1-gliner25"
+    },
+    "kai1": {
+      "ci95_H": [
+        0.055842406142562605,
+        0.19297140773920443
+      ],
+      "ci95_T": [
+        0.1246875,
+        0.17562499999999998
+      ],
+      "ci95_v3": [
+        9.830550241866588,
+        17.277066468431105
+      ],
+      "delta_H": 0.1021328441657337,
+      "delta_T": 0.14968750000000003,
+      "delta_v3": 12.520769912618832,
+      "file_sha256": "c94a8f6c7d6f57691e9e080fe021b1989058423f6ba5bdcd38e9b0b4e867e75c",
+      "replicates": 5000,
+      "right_v3": 35.93826071787137,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/kai1"
+    },
+    "kai1-8k": {
+      "ci95_H": [
+        0.05182266780433946,
+        0.19189957178303516
+      ],
+      "ci95_T": [
+        0.1246875,
+        0.17562499999999998
+      ],
+      "ci95_v3": [
+        9.556690058751208,
+        17.222574584281695
+      ],
+      "delta_H": 0.10152817156819316,
+      "delta_T": 0.14968750000000003,
+      "delta_v3": 12.49033948960983,
+      "file_sha256": "4724dace7ef9a7a20581fd511a0496a5a9e98635ffd0f927eaff1e12edda6bfa",
+      "replicates": 5000,
+      "right_v3": 35.968691140880374,
+      "run_dir": "/data/dev2/runs/06b/m2/formal/kai1-native-8k"
+    },
+    "lex": {
+      "ci95_H": [
+        0.04127046887111454,
+        0.30264118355617053
+      ],
+      "ci95_T": [
+        0.12062500000000004,
+        0.179375
+      ],
+      "ci95_v3": [
+        9.721173485897479,
+        23.93767700266915
+      ],
+      "delta_H": 0.19309346978780428,
+      "delta_T": 0.14968750000000003,
+      "delta_v3": 17.436541699783355,
+      "file_sha256": "89eea816cd8d032facf0c863aa10ae7d8ba66cd6a84ea8d11a97137a85eb2157",
+      "replicates": 5000,
+      "right_v3": 31.02248893070685,
+      "run_dir": "/data/dev2/runs/eval/m1/r3-lex"
+    },
+    "m5-x": {
+      "ci95_H": [
+        -0.05818870501793786,
+        0.06928939214064515
+      ],
+      "ci95_T": [
+        0.05031249999999998,
+        0.10468750000000004
+      ],
+      "ci95_v3": [
+        0.6774431981061456,
+        7.56242489620638
+      ],
+      "delta_H": -0.01405012737154604,
+      "delta_T": 0.07656250000000003,
+      "delta_v3": 3.0944736321875155,
+      "file_sha256": "e8e02c0eca6b2547d7facc7a0ce628fa6d5a80a92ba1d350ddf1e8c0f1e59a64",
+      "replicates": 5000,
+      "right_v3": 45.36455699830269,
+      "run_dir": "/data/dev2/runs/06b/m5/formal/m5-x-soup"
+    },
+    "m5-z": {
+      "ci95_H": [
+        -0.058091882014632584,
+        0.032551114286810366
+      ],
+      "ci95_T": [
+        0.07,
+        0.125
+      ],
+      "ci95_v3": [
+        1.6088523543092155,
+        6.88577286293677
+      ],
+      "delta_H": -0.03930913782629142,
+      "delta_T": 0.0965625,
+      "delta_v3": 2.9821150070812905,
+      "file_sha256": "448c1a708323224633f15db19d3ce1e2dc42aafef42230c00e6604b9723ff082",
+      "replicates": 5000,
+      "right_v3": 45.476915623408914,
+      "run_dir": "/data/dev2/runs/06b/m5/formal/m5-z-soup"
+    },
+    "m6-mxcx": {
+      "ci95_H": [
+        0.0,
+        0.0
+      ],
+      "ci95_T": [
+        -0.007500000000000062,
+        0.008125000000000049
+      ],
+      "ci95_v3": [
+        -0.3646185036476316,
+        0.3883538587296869
+      ],
+      "delta_H": 0.0,
+      "delta_T": 0.0,
+      "delta_v3": 0.0,
+      "file_sha256": "c2daf7b49ecda437b594397f82153171d031f1b9f17849c00fa4dd2f13873a22",
+      "replicates": 5000,
+      "right_v3": 48.459030630490204,
+      "run_dir": "/data/dev2/runs/06b/m6/formal/m6-mxcx-soup"
+    },
+    "released": {
+      "ci95_H": [
+        -0.06449448188458451,
+        0.06050216930368588
+      ],
+      "ci95_T": [
+        0.09187500000000004,
+        0.14218749999999997
+      ],
+      "ci95_v3": [
+        2.5024727304107675,
+        9.122829899026312
+      ],
+      "delta_H": -0.02054502089056126,
+      "delta_T": 0.11625000000000002,
+      "delta_v3": 4.917551279148121,
+      "file_sha256": "db14c23e8694d997c2fe5da25a6aea8ae40f2f0bacb5e291455f9b56ca9c2d41",
+      "replicates": 5000,
+      "right_v3": 43.54147935134208,
+      "run_dir": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup"
+    }
+  },
+  "public231": {
+    "correct": 152,
+    "easy": 47,
+    "hard": 44,
+    "items": 231,
+    "standard": 61
+  },
+  "run_dir": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05",
+  "runtime": {
+    "causal_conv1d": "1.7.0",
+    "device_name": "",
+    "devices": 1,
+    "fla": "0.5.2",
+    "hip": "7.2.53211",
+    "numpy": "2.3.5",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0",
+    "triton": "3.7.1"
+  },
+  "runtime_env": {
+    "HIP_FORCE_DEV_KERNARG": "1",
+    "TRITON_CACHE_AUTOTUNING": "1",
+    "TRITON_CACHE_DIR": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05.triton-cache"
+  },
+  "schema": "dev2-06b-m6-summary/1",
+  "seal_sha256": "dd547f9e7963e4b9ecfb2aa076019dfa337d77370f63355f87ee0d90f0be0051",
+  "successor": {
+    "checks": {
+      "H_upper_bound_ge_0": true,
+      "no_type_collapsed": true,
+      "v3_lower_bound_gt_0": true
+    },
+    "released": "released",
+    "released_run_dir": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup",
+    "verdict": true
+  },
+  "triton_cache": {
+    "m8-s5h-b05": {
+      "added": [],
+      "after_files": 303,
+      "after_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "autotune_entries_added": [],
+      "before_files": 303,
+      "before_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "cache": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05.triton-cache",
+      "changed": [],
+      "kind": "per-run",
+      "removed": [],
+      "schema": "dev2-06b-m6-triton-cache/1",
+      "snapshot": "/data/dev2/runs/06b/m6/triton-cache-frozen",
+      "snapshot_manifest": "/data/dev2/runs/06b/m6/triton-cache-frozen.MANIFEST.json",
+      "unchanged": true
+    },
+    "m8-s5h-b05-mlx": {
+      "added": [],
+      "after_files": 303,
+      "after_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "autotune_entries_added": [],
+      "before_files": 303,
+      "before_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "cache": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05-mlx.triton-cache",
+      "changed": [],
+      "kind": "per-run",
+      "removed": [],
+      "schema": "dev2-06b-m6-triton-cache/1",
+      "snapshot": "/data/dev2/runs/06b/m6/triton-cache-frozen",
+      "snapshot_manifest": "/data/dev2/runs/06b/m6/triton-cache-frozen.MANIFEST.json",
+      "unchanged": true
+    }
+  },
+  "type_collapse": {
+    "accuracy": {
+      "choice": 0.48625,
+      "noul": 0.64625,
+      "score": 0.3275
+    },
+    "any_collapsed": false,
+    "verdicts": {
+      "choice": "OK",
+      "noul": "OK",
+      "score": "OK"
+    }
+  },
+  "typed_final": {
+    "choice": {
+      "correct": 389,
+      "n": 800
+    },
+    "noul": {
+      "correct": 517,
+      "n": 800
+    },
+    "score": {
+      "correct": 131,
+      "n": 400
+    }
+  },
+  "v3": 48.459030630490204
+}

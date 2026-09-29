@@ -1,0 +1,30 @@
+{
+  "schema": "dev2-revision-diff/1",
+  "repo": "llm-semantic-router/DEV2.0-27B",
+  "released": "6931828d7e41a5d31cc8e5acdc36f5eebae70fad",
+  "new": "32e7e8b1960fa1e6af3438cd11395cac2849a8c1",
+  "files": {
+    "released": 32,
+    "new": 32
+  },
+  "changed_card_files": [
+    "MODEL_MANIFEST.json",
+    "NOTICE",
+    "README.md",
+    "assets/DEV2.0-26B-owl-banner.png",
+    "assets/DEV2.0-27B-owl-banner.png",
+    "assets/jevarena-v3-model-task.svg",
+    "assets/jevarena-v3-rank.svg",
+    "assets/jevbench-public231-rank.svg",
+    "config.json",
+    "evaluation/EVALUATION.md",
+    "evaluation/manifest.json"
+  ],
+  "changed_other_files": [
+    ".gitattributes"
+  ],
+  "weight_files": 2,
+  "weight_bytes": 488098072,
+  "weights_byte_identical": true,
+  "ok": false
+}
