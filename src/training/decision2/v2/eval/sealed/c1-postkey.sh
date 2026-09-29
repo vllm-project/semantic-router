@@ -8,6 +8,7 @@
 #                         [--approval TEXT] [--verify-only | --preflight-only]
 #   c1-postkey.sh gate --src MIRROR --left RUN --right RUN --left-name A --right-name B --output OUT
 #   c1-postkey.sh reproduce --src MIRROR --output-dir DIR [--event-dir DIR]
+#   c1-postkey.sh rescore --src MIRROR --run RUN --label NAME --output OUT
 # collect: SPEC (dev2-c1-postkey-spec/1, absolute or relative to the mirror's src/training/decision2)
 #   is one frozen release package with its formal runtime. The plan resolves it against
 #   v2/eval/sealed/c1-postkey-baselines.json: a successor is gated against its tier's registered
@@ -22,6 +23,8 @@
 #   Job dir: /data/dev2/runs/eval/c1-postkey/<tier>/<name>-<UTC>; the run is <job>/cand.
 # gate: v2.eval.gates c1 between two sealed C1 runs; the gold exists only during the call.
 # reproduce: v2.eval.gates c1 on every pair of the event-3 plan, compared with the event's files.
+# rescore: a stored sealed C1 run (e.g. an earlier event's baseline) scored on v1.2 with the post-key label;
+#   OUT (a REPORT-C1.json) goes outside the run directory.
 # One post-key process at a time (lock). Plaintext is removed on any exit, each key-reading step is
 # logged in C1's ACCESS.log, and each runner job writes only the named lease entry.
 set -uo pipefail
@@ -30,11 +33,11 @@ umask 077
 MODE=${1:-}
 [ $# -gt 0 ] && shift
 case $MODE in
-collect | gate | reproduce) ;;
-*) echo "usage: c1-postkey.sh collect|gate|reproduce ... (see the header)" >&2; exit 2 ;;
+collect | gate | reproduce | rescore) ;;
+*) echo "usage: c1-postkey.sh collect|gate|reproduce|rescore ... (see the header)" >&2; exit 2 ;;
 esac
 GPU="" SRC="" SPEC="" LEASE_NAME=owner.eval SHARED=0 APPROVAL="" PHASE=run J=""
-LEFT="" RIGHT="" LEFT_NAME="" RIGHT_NAME="" OUTPUT="" OUT_DIR=""
+LEFT="" RIGHT="" LEFT_NAME="" RIGHT_NAME="" OUTPUT="" OUT_DIR="" RUN="" LABEL=""
 EVENT_DIR=/data/dev2/runs/eval/m4/c1-event3
 while [ $# -gt 0 ]; do
   case $1 in
@@ -53,6 +56,8 @@ while [ $# -gt 0 ]; do
   --output) OUTPUT=$2; shift 2 ;;
   --output-dir) OUT_DIR=$2; shift 2 ;;
   --event-dir) EVENT_DIR=$2; shift 2 ;;
+  --run) RUN=$2; shift 2 ;;
+  --label) LABEL=$2; shift 2 ;;
   *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -80,8 +85,13 @@ reproduce)
   [ "$PHASE" = run ] || { echo "reproduce has no --verify-only / --preflight-only" >&2; exit 2; }
   [ -n "$OUT_DIR" ] || { echo "reproduce needs --output-dir" >&2; exit 2; }
   ;;
+rescore)
+  [ "$PHASE" = run ] || { echo "rescore has no --verify-only / --preflight-only" >&2; exit 2; }
+  [ -n "$RUN" ] && [ -n "$LABEL" ] && [ -n "$OUTPUT" ] || { echo "rescore needs --run --label --output" >&2; exit 2; }
+  case $OUTPUT in "${RUN%/}"/*) echo "--output must be outside the run directory" >&2; exit 2 ;; esac
+  ;;
 esac
-for path in "$LEFT" "$RIGHT" "$OUTPUT" "$OUT_DIR" "$EVENT_DIR"; do
+for path in "$LEFT" "$RIGHT" "$OUTPUT" "$OUT_DIR" "$EVENT_DIR" "$RUN"; do
   case $path in "" | /*) ;; *) echo "paths must be absolute: $path" >&2; exit 2 ;; esac
 done
 [ -f "/data/dev2/src/$SRC/.dev2-mirror.json" ] || { echo "no verified mirror $SRC" >&2; exit 1; }
@@ -220,6 +230,21 @@ if [ "$MODE" = reproduce ]; then
   gold_out
   [ "$rc" = 0 ] || abort "a pair differs from the event's paired file, or a gate failed (exit $rc)"
   log "end: every event-3 pair reproduced ($OUT_DIR/REPRODUCE.json)"
+  exit 0
+fi
+
+if [ "$MODE" = rescore ]; then
+  LOG="$OUTPUT.log"
+  log "start: $LABEL ($RUN) rescored on v1.2 with the post-key label; mirror $SRC"
+  read_key
+  gold_in
+  python3 -m v2.eval.sealed.score score --post-key --gold "$GT/gold.jsonl" \
+    --predictions "$RUN/output/sealed-c1.predictions.jsonl" --seal "$RUN/SEAL-C1.json" --label "$LABEL" \
+    --retired "$RETIRED" --retired-sha "$RETIRED_SHA" --output "$OUTPUT" 3<&- | tee -a "$LOG"
+  rc=${PIPESTATUS[0]}
+  gold_out
+  [ "$rc" = 0 ] || abort "scoring failed (exit $rc)"
+  log "end: $OUTPUT"
   exit 0
 fi
 

@@ -531,6 +531,15 @@ class ScriptTest(unittest.TestCase):
             "paths must be absolute",
             self.run_script("reproduce", "--src", "M", "--output-dir", "out").stderr,
         )
+        self.assertEqual(
+            self.run_script("rescore", "--src", "M", "--run", "/r").returncode, 2
+        )
+        inside = self.run_script(
+            *("rescore", "--src", "M", "--run", "/r", "--label", "x"),
+            *("--output", "/r/REPORT.json"),
+        )
+        self.assertEqual(inside.returncode, 2)
+        self.assertIn("outside the run directory", inside.stderr)
         missing = self.run_script(
             "collect", "--src", "no-such-mirror", "--spec", "s", "--verify-only"
         )
