@@ -199,6 +199,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 01:55 — **DEV2.0-0.6B card now carries the post-key C1 line and the declines disclosure.**
+  - New private `main` is `476fe984a2316519f3e583b7f31b1670295b2477`. It is card-only; the weights are byte-identical
+    to `b2131337`.
+  - Final decision `54a0f25f…` (successor profile, 12/12). Integration `40a20d56e`.
+  - All six cards are now complete for round 1.
+
 - 2026-09-30 01:50 — **Decoder M6: no successor in any tier; M6b + M7 and HT-DEV v2 launched** (record
   `v2/dec/records/dec-m6-results-2026-09-29.md`; integration `733388ebd`; ~17.8 of 36 GPU-h).
   - **Results:**
