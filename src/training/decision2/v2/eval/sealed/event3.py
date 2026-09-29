@@ -20,9 +20,10 @@
 candidate, one Decision 1.0 configuration and two open peers; internal-only peers, a second scoring of
 a 1.0 model or a second candidate of a size need a recorded deviation approval. ``argv`` prints the
 runner arguments NUL-separated. ``verify`` checks images, mirror modules, paths, release-package
-manifests and pinned tree digests. ``parity`` compares a typed-FINAL smoke with the model's stored
-formal run. None of these reads C1 prompts or gold; ``stored`` hashes stored C1 prediction files and
-seals, and ``event3.sh`` calls it only in the event phase.
+manifests and pinned tree digests. ``parity`` compares a smoke (typed FINAL and public 231, which
+together cover every decision type) with the model's stored formal run. None of these reads C1
+prompts or gold; ``stored`` hashes stored C1 prediction files and seals, and ``event3.sh`` calls it
+only in the event phase.
 
 Tree digest (as ``triton_cache.py``, but following file symlinks, e.g. HF snapshots)::
 
@@ -51,7 +52,7 @@ PROMPTS_SHA256 = "0b29686f60c980f3fbc8a03b88537fc0bf90ee967afa67d4fe0c958b1bfde1
 TIERS = ("0.6B", "0.8B", "2B", "4B", "9B", "27B")
 ROLES = ("candidate", "own1", "peer", "internal")
 PARITY_MODES = ("exact", "near", "none")
-SMOKE_PANEL = "typed-final"
+SMOKE_PANELS = ("typed-final", "public231")
 C1_PANEL = "sealed-c1"
 EXCLUDED_TOP = (".cache", ".git")
 NUMERIC_KEYS = ("noul", "score", "confidence")
@@ -480,7 +481,7 @@ def runner_argv(
     for k, v in row.get("extra", {}).items():
         argv += ["--extra", f"{k}={v}"]
     if phase == "smoke":
-        argv += ["--panels", SMOKE_PANEL]
+        argv += ["--panels", ",".join(SMOKE_PANELS)]
         if row.get("smoke_items"):
             argv += ["--max-items", str(row["smoke_items"])]
     elif phase == "collect":
@@ -613,8 +614,10 @@ def verify_row(row: dict[str, Any], src_root: Path, workers: int) -> dict[str, A
             "adapter_module_sha256"
         ) == out.get("adapter_module_sha256")
     parity = row["parity"]
-    if parity["mode"] != "none" and not os.path.isfile(parity["stored"]):
-        problems.append("stored typed-final predictions for parity missing")
+    if parity["mode"] != "none":
+        for panel in SMOKE_PANELS:
+            if not stored_predictions(row, panel).is_file():
+                problems.append(f"stored {panel} predictions for parity missing")
     if row.get("package"):
         out["package"] = check_package(row["package"], workers)
         problems += out["package"]["problems"]
@@ -732,12 +735,18 @@ def drift(a: Any, b: Any) -> float:
     return worst
 
 
-def smoke_predictions(run_dir: Path) -> Path | None:
+def smoke_predictions(run_dir: Path, panel: str) -> Path | None:
     for sub in ("smoke", "output"):
-        path = run_dir / sub / f"{SMOKE_PANEL}.predictions.jsonl"
+        path = run_dir / sub / f"{panel}.predictions.jsonl"
         if path.is_file():
             return path
     return None
+
+
+def stored_predictions(row: dict[str, Any], panel: str) -> Path:
+    """The stored run's predictions for a smoke panel (named like its typed-final file)."""
+    path = Path(row["parity"]["stored"])
+    return path.with_name(path.name.replace(SMOKE_PANELS[0], panel))
 
 
 def compare_smoke(
@@ -746,6 +755,7 @@ def compare_smoke(
     answers = changed = missing = 0
     worst = 0.0
     identity_bad = 0
+    by_type: dict[str, int] = {}
     expect = row.get("identity")
     for pred in smoke:
         if expect and pred.get("model_sha256") != expect:
@@ -757,6 +767,8 @@ def compare_smoke(
         mine, theirs = pred.get("answers") or {}, ref.get("answers") or {}
         for qid in set(mine) | set(theirs):
             answers += 1
+            kind = (theirs.get(qid) or mine.get(qid) or {}).get("type", "invalid")
+            by_type[kind] = by_type.get(kind, 0) + 1
             if point(mine.get(qid)) != point(theirs.get(qid)):
                 changed += 1
             worst = max(worst, drift(mine.get(qid), theirs.get(qid)))
@@ -779,6 +791,7 @@ def compare_smoke(
         "prompts": len(smoke),
         "missing_in_stored": missing,
         "answers": answers,
+        "answers_by_type": by_type,
         "changed": changed,
         "max_probability_drift": worst,
         "identity_expected": expect,
@@ -791,35 +804,37 @@ def compare_smoke(
 def parity_cmd(args: argparse.Namespace) -> int:
     p = load_plan(args.plan)
     row = p["models"][args.key]
-    path = smoke_predictions(args.run_dir)
-    smoke = read_jsonl(path) if path else []
-    stored: dict[str, dict[str, Any]] = {}
-    if row["parity"]["mode"] != "none":
-        stored = {r["id"]: r for r in read_jsonl(Path(row["parity"]["stored"]))}
-    result = compare_smoke(smoke, stored, row)
-    result.update(
-        key=args.key,
-        preflight=str(path) if path else None,
-        stored_run=row["parity"].get("stored"),
-        panel=SMOKE_PANEL,
-    )
-    write_new(args.output, result)
-    print(
-        json.dumps(
-            {
-                k: result[k]
-                for k in (
-                    "key",
-                    "mode",
-                    "prompts",
-                    "answers",
-                    "changed",
-                    "max_probability_drift",
-                    "passed",
-                )
-            }
+    panels = {}
+    for panel in SMOKE_PANELS:
+        path = smoke_predictions(args.run_dir, panel)
+        smoke = read_jsonl(path) if path else []
+        stored: dict[str, dict[str, Any]] = {}
+        if row["parity"]["mode"] != "none":
+            stored = {r["id"]: r for r in read_jsonl(stored_predictions(row, panel))}
+        panels[panel] = compare_smoke(smoke, stored, row)
+        panels[panel].update(
+            preflight=str(path) if path else None,
+            stored_run=str(stored_predictions(row, panel)),
         )
-    )
+    result = {
+        "schema": SCHEMA + "/parity",
+        "key": args.key,
+        "mode": row["parity"]["mode"],
+        "panels": panels,
+        "passed": all(v["passed"] for v in panels.values()),
+    }
+    write_new(args.output, result)
+    for panel, v in panels.items():
+        print(
+            json.dumps(
+                {"key": args.key, "panel": panel}
+                | {
+                    k: v[k]
+                    for k in ("mode", "prompts", "answers_by_type", "changed")
+                    + ("max_probability_drift", "passed")
+                }
+            )
+        )
     return 0 if result["passed"] else 1
 
 

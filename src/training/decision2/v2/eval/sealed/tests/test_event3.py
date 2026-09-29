@@ -251,7 +251,9 @@ class ArgvTest(unittest.TestCase):
             collect[1], "/m/src/v2/eval/sealed/adapters/dev2-dec-package-t1.json"
         )
         self.assertIn("max_length=16384", collect)
-        self.assertEqual(collect[-4:], ["--panels", "typed-final", "--max-items", "20"])
+        self.assertEqual(
+            collect[-4:], ["--panels", "typed-final,public231", "--max-items", "80"]
+        )
         full = self.argv("cand2b", "collect", "/r/run-triton", shared=True)
         self.assertIn("--shared", full)
         self.assertEqual(full[-2:], ["--panels", "sealed-c1"])
@@ -268,6 +270,22 @@ class ArgvTest(unittest.TestCase):
         )
         self.assertIn("HIP_FORCE_DEV_KERNARG=1", big)
         self.assertIn("max_length=32768", big)
+
+    def test_stored_smoke_panels(self) -> None:
+        for key in event3.collected(self.plan):
+            row = self.plan["models"][key]
+            paths = [
+                event3.stored_predictions(row, panel) for panel in event3.SMOKE_PANELS
+            ]
+            self.assertEqual(str(paths[0]), row["parity"]["stored"])
+            self.assertTrue(
+                paths[1].name.endswith("public231.predictions.jsonl"), paths[1]
+            )
+        pinned = {f["path"] for f in self.plan["models"]["cand27"]["files"]}
+        self.assertIn(
+            str(event3.stored_predictions(self.plan["models"]["cand27"], "public231")),
+            pinned,
+        )
 
     def test_misuse(self) -> None:
         with self.assertRaises(ValueError):
@@ -304,6 +322,7 @@ class ParityTest(unittest.TestCase):
         result = self.check(self.rows())
         self.assertTrue(result["passed"])
         self.assertEqual((result["answers"], result["changed"]), (20, 0))
+        self.assertEqual(result["answers_by_type"], {"choice": 20})
 
     def test_changed_answer(self) -> None:
         smoke = self.rows({3: choice("zz", 0.8)})
@@ -335,6 +354,47 @@ class ParityTest(unittest.TestCase):
         smoke = self.rows()
         smoke[0]["id"] = "unknown"
         self.assertFalse(self.check(smoke, "near")["passed"])
+
+
+class ParityCmdTest(unittest.TestCase):
+    def test_every_smoke_panel_is_compared(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            rows = {
+                "typed-final": [{"id": "t", "answers": {"q": choice("a")}}],
+                "public231": [
+                    {"id": "p", "answers": {"q": {"type": "noul", "noul": 0.8}}}
+                ],
+            }
+            for panel, content in rows.items():
+                for folder in ("stored/output", "run/smoke"):
+                    path = tmp / folder / f"{panel}.predictions.jsonl"
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("".join(json.dumps(r) + "\n" for r in content))
+            stored = tmp / "stored/output/typed-final.predictions.jsonl"
+            plan = {
+                "schema": event3.SCHEMA,
+                "selection": ["m"],
+                "models": {"m": {"parity": {"mode": "exact", "stored": str(stored)}}},
+            }
+            path = tmp / "plan.json"
+            path.write_text(json.dumps(plan))
+            args = [
+                "parity",
+                "--plan",
+                str(path),
+                "--key",
+                "m",
+                "--run-dir",
+                str(tmp / "run"),
+            ]
+            self.assertEqual(event3.main(args + ["--output", str(tmp / "a.json")]), 0)
+            report = json.loads((tmp / "a.json").read_text())
+            self.assertEqual(
+                report["panels"]["public231"]["answers_by_type"], {"noul": 1}
+            )
+            (tmp / "run/smoke/public231.predictions.jsonl").unlink()
+            self.assertEqual(event3.main(args + ["--output", str(tmp / "b.json")]), 1)
 
 
 class DigestTest(unittest.TestCase):

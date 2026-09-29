@@ -7,9 +7,9 @@
 # The model table is v2/eval/sealed/event3-models.json; `python3 -m v2.eval.sealed.event3 plan`
 # resolves it and refuses anything outside the C1 limits or with a PARENT-FILLS field.
 # --verify-only: images, mirror modules, paths, release manifests, tree digests, frozen caches (CPU).
-# --preflight-only: also every model's typed-FINAL smoke on the GPU with its parity check against
-#   the stored formal run; stdin is closed, the key is never read, and neither the sealed directory
-#   nor the event directory is touched.
+# --preflight-only: also every model's smoke on the GPU (the first 80 prompts of typed FINAL and of
+#   public 231, so every decision type) with its parity check against the stored formal run; stdin is
+#   closed, the key is never read, and neither the sealed directory nor the event directory is touched.
 # Event mode: the same verification and smokes (a failure leaves C1 untouched and the event unused),
 # the stored event-2 seals are checked, the key is read, the event directory is created (event 3 is
 # used from here), prompts are decrypted, every model is collected once, all predictions are sealed,
