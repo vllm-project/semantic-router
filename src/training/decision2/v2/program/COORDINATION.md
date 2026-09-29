@@ -199,6 +199,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 00:30 — **The C1 post-key guard (item 8) is live; the 0.6B successor is confirmed on fresh data** (eval
+  record `v2/eval/records/c1-postkey-guard-2026-09-29.md`; integration `d2650b0e4`; 0.041 GPU-h; usage in "Eval
+  runners").
+  - DEV2.0-0.6B `b2131337` scores **36.92** on C1 v1.2 vs 33.02 for the previous revision: **+3.89 [+2.16, +5.60]**,
+    p < .001. So item 8, applied after the fact, PASSES.
+    - Choice +5.16, Noul +8.05; Score level (−1.45, n.s.: the offsets did not move C1 Score).
+    - Declines to disclose: `star_rating`, `moment_type`, `is_rapport`, `likelihood`, Russian and Finnish.
+  - **Approved card line**, for the card pass:
+    - The line: "JevArena-C1 v1.2, post-key (not an independent validation): 36.92 on this revision vs 33.02 for the
+      previous revision (+3.89, 95% CI [+2.16, +5.60]; 2,840 items, paired by source group). The independent sealed
+      confirmation above measured the previous revision."
+    - Also disclose the task and language declines listed above.
+    - The running card-pass worker is resumed once afterwards if it did not add them.
+  - The 0.8B baseline (event-1 weights at T = 1) is being registered by the same eval worker.
+  - The gate's sensitivity is losses of about 1.3–2 C1 points. Tracks: successors need a frozen package on node A plus
+    a spec, and eval collects them under the ledger (one successor per tier baseline).
+
 - 2026-09-30 00:25 — **HS1 (hard-skill families) LANDED; its dev slice is NOT validated on accuracy; round-2 data plan**
   (data records; integration `3592f2e01`; 0.107 GPU-h).
   - **Location:** private `llm-semantic-router/decision-2.0-training-data@171e6f0c0913d5f0d8f7304928da4f14dca6e127`,
@@ -1906,6 +1923,45 @@ aggregates in `records/htdev-validation/`).
   - Collections and validation are on node A under `/data/dev2/runs/eval/htdev/{collect,validation}`.
   - Backup: private eval-artifacts dataset, `htdev/v1/` at `ad4b958e`.
   - GPU: 3.27 GPU-h in total (build 0.64 + collections 2.63); the validation itself was CPU only.
+
+### JevArena-C1 v1.2 post-key successor guard (successor-rule item 8; eval custodian; code at `2b5e878db` or later)
+
+Record `v2/eval/records/c1-postkey-guard-2026-09-29.md` (§6 has the full block; integration `d2650b0e4`).
+
+- **Rules:**
+  - C1 is post-key. It is never training data and never a selection criterion, whether in development or among
+    siblings.
+  - Cards say only "JevArena-C1 v1.2, post-key (not an independent validation)".
+  - Prompts and gold never leave node A. The key goes on stdin only.
+  - The ledger allows one successor per tier baseline; another candidate needs `--approval "<coordinator decision>"`.
+- **Gate:** `python3 -m v2.eval.gates c1 --left <successor run> --right <current run> --left-name A --right-name B --gold
+  <gold> --output OUT` returns PASS or REGRESSION (Δ < 0 with paired 95% CI below 0). It uses the events' group
+  bootstrap on the 2,840 v1.2 items, and detects losses of about 1.3–2 C1 points.
+- **Runner** (node A):
+  - `bash $S/v2/eval/sealed/c1-postkey.sh collect --gpu <N> --src $SRC --spec <successor spec.json> [--shared]`, with
+    the key on stdin. Run it key-free first with `--verify-only` (CPU) or `--preflight-only` (GPU smoke + exact parity).
+  - The result is `<job>/SUMMARY.json` → `item8.verdict`.
+  - `gate` compares two sealed runs; `reproduce` re-checks event 3.
+  - About 5 min for 0.6B, and about 0.34 × the formal wall time for larger tiers.
+- **Successor spec:** copy `v2/eval/sealed/c1-postkey/dev2-0p6b-b2131337.json`, or the tier's row in
+  `sealed/event3-models.json`. Then set:
+  - `role: successor`, a new `name` and the `revision`;
+  - `model_path` = the frozen package dir, `package.manifest_sha256` and `identity`;
+  - `parity.stored` (formal typed-final predictions with public 231 beside them), `files` and `stored_collect`;
+  - `cache` (the formal run's persisted autotune cache and its digest) and `image`.
+  27B packages and caches are staged on node A first.
+- **Baselines** (`v2/eval/sealed/c1-postkey-baselines.json`; valid for any revision with the same weights):
+
+  | Tier | Weights | C1 v1.2 |
+  | --- | --- | ---: |
+  | 0.6B | `b2131337` | 36.92 |
+  | 2B | `5ad3e9a3` | 45.70 |
+  | 4B | `452f1332` | 48.38 |
+  | 9B | package `53bac735` | 53.77 |
+  | 27B | `5683c6f0` | 57.33 |
+  | 0.8B | event-1 weights | being registered |
+
+  After a release, put `SUMMARY.json` → `baseline_entry` into the registry.
 
 ### Score5-typed-DEV v1 (`score5t-dev`; eval track, 2026-09-29 ~16:30 UTC+8; code at `06d596398` or later)
 
