@@ -26,8 +26,9 @@ PRECISION=${PRECISION:-autocast}
 MAX_BATCH_TOKENS=${MAX_BATCH_TOKENS:-16384}
 ALLOC_CONF=${ALLOC_CONF:-expandable_segments:True}
 PROBE_UPDATES=${PROBE_UPDATES:-24}
-FULL_CAP=${FULL_CAP:-5.0}
-ARM_CAP=${ARM_CAP:-6.0}
+# Amendment 3 caps, from the 16,384-token probe's speed.
+FULL_CAP=${FULL_CAP:-7.5}
+ARM_CAP=${ARM_CAP:-8.3}
 # Stage caps in GPU-hours (wall cap = GPU-hours / GPUs); amendment 2 may re-set them from the probe.
 PROBE_CAP=${PROBE_CAP:-1.2}
 ONESTEP_CAP=${ONESTEP_CAP:-0.9}
