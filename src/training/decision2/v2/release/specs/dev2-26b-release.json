@@ -119,7 +119,7 @@
         "**Not used:** outputs of Jev or of any third-party decision model; every row trains on its gold label. Datasets keep their own licences ([attributions](ATTRIBUTIONS.md))."
       ],
       "limitations": [
-        "**Below AutoJev-27B.** JevArena v3 is significantly lower than AutoJev-27B (−4.92, 95% CI [−6.82, −0.43]). Typed accuracy is the gap (T 0.788 vs 0.887, −0.099, 95% CI [−0.123, −0.075]; constraint competition 0.570 vs 1.000), while human transfer is level (H 0.574 vs 0.587, −0.013, 95% CI [−0.040, +0.056]).",
+        "**Below AutoJev-27B.** JevArena v3 is significantly lower than AutoJev-27B (−4.92, 95% CI [−6.82, −0.43]). Typed accuracy is the gap (T 0.7875 vs 0.8869, −0.099, 95% CI [−0.123, −0.075]; constraint competition 0.570 vs 1.000), while human transfer is level (H 0.574 vs 0.587, −0.013, 95% CI [−0.040, +0.056]).",
         "**Against the other 27B models** the JevArena v3 margins are not significant: Eikos-27B −2.08 (95% CI [−5.04, +2.62]) and Jebadiah-27B +1.74 (95% CI [−0.97, +4.83]).",
         "**JevBench public 231:** 198 correct, versus 201 for AutoJev-27B and 212 for Eikos-27B.",
         "**Score levels.** On typed Score it over-predicts the top level (182 of 400 answers versus 128 in the gold labels); recall at levels 2 and 3 is 0.61 and 0.65.",
