@@ -26,6 +26,7 @@
   },
   "calibration": null,
   "max_input_tokens": 32768,
+  "vendor_source": "/data/dev2/src/35fa052d2b7c3ad0f9b2ee9bd1529e6b28076029-src_training_decision2/src/training/decision2",
   "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-26B.decision.build-draft.json",
   "gate_profile": {
     "name": "no-1.0",
