@@ -198,6 +198,28 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 16:40 — **Score5-typed-DEV v1 PASSES; 0.6B Milestone 8 launched** (eval record
+  `v2/eval/records/score5t-dev-2026-09-29.md`; integration `ab2f1082a`; 0.083 GPU-h; usage pasted into "Eval runners").
+  - The panel: 800 fresh `resource_ledger` items from `benchmark/generate.py`, in fit and check halves. It flags the known
+    collapses (m6-mxcx, m7-mx), leaves the released soup and mxcxa unflagged, and ranks six models in FINAL's order
+    (τ = 1.0).
+  - Correction: typed FINAL Score is ONE family (`resource_ledger`), not four.
+  - **Binding rule for every track:** never train on typed-FINAL-family generator draws (FINAL covers 80 of the ledger
+    family's 90 answer structures), and never train on panel items. Corrections are fitted on the fit half and
+    selected on the check half, with a card disclosure.
+  - **Data track (next worker):** relabel the AutoJev runtime-qualification pools in the training-corpora manifest as
+    evaluation-only. They hold 128 typed FINAL prompts as spot checks, and their outputs are never targets.
+  - **0.6B Milestone 8** (fresh worker; node A GPU0–1; ≤ 6 GPU-h):
+    - Core arm: `m6-mxcx-soup` plus per-level Score offsets fitted only on the score5t fit half, optionally with
+      weighted human 5-level held-out rows.
+    - Development gates: the check half clears COLLAPSE and WARN; typed-DEV Score top share ≤ .90; the human 5-level
+      check is not worse.
+    - Then formal, and the 16:05 successor rule vs the released soup.
+    - It adds per-level offsets to the release runtime (`v2/release/runtime/qwen.py`, with parity tests) so a successor
+      releases fast.
+    - Disclosure: the offsets were fitted on generator draws, and ledger Score accuracy stays near always-majority
+      (NO-GAIN).
+
 - 2026-09-29 16:35 — **DEV2.0-26B released; the rename is running.**
   - **DEV2.0-26B** (to be renamed DEV2.0-27B): private `llm-semantic-router/DEV2.0-26B@6931828d7e41a5d31cc8e5acdc36f5eebae70fad`
     (`main`), manifest `9bf671e5…`, final decision `bea9795b…` (no-1.0 profile, six of six gate items).
@@ -1606,6 +1628,52 @@ aggregates in `records/htdev-validation/`).
   - Collections and validation are on node A under `/data/dev2/runs/eval/htdev/{collect,validation}`.
   - Backup: private eval-artifacts dataset, `htdev/v1/` at `ad4b958e`.
   - GPU: 3.27 GPU-h in total (build 0.64 + collections 2.63); the validation itself was CPU only.
+
+### Score5-typed-DEV v1 (`score5t-dev`; eval track, 2026-09-29 ~16:30 UTC+8; code at `06d596398` or later)
+
+Record `v2/eval/records/score5t-dev-2026-09-29.md` (prereg `score5t-dev-prereg-2026-09-29.md`; integration `ab2f1082a`).
+
+- **Validated (PASS).** Its COLLAPSE flag reproduces the typed FINAL release-gate Score verdicts of the five 0.6B soups
+  (m6-mxcx and m7-mx flagged; mxcxa and the released soup not). Its top share ranks six models in FINAL's order
+  (τ = 1.0), each within ±0.05. Use it to screen Score fixes on development data at any tier; the formal typed FINAL gate
+  still decides.
+- **Panel:** 800 fresh `resource_ledger` items. This is typed FINAL's only Score family, with 5 levels and FINAL's format,
+  from `benchmark/generate.py` (not `publication/generate_arena_v3.py`, which only renders card artifacts) with two public
+  seeds. Fit half 400 + check half 400, each 100 groups × 4 variants.
+  - Disjoint from typed FINAL up to event ids and row order, and from typed DEV, SELECT/CAL/CAL698 and the training
+    corpora. C1 is disjoint by source.
+  - About 75% of its groups share an answer structure with FINAL.
+- **Flags** (the release gate's own rule):
+  - COLLAPSE = top share ≥ 0.90 or accuracy Wilson lower bound ≤ 0.20.
+  - WARN = top-share Wilson upper bound ≥ 0.90.
+  - NO-GAIN (informational) = lower bound of accuracy − always-majority ≤ 0.
+- **Rules (binding for every track):**
+  - Its items are never training data.
+  - Do NOT add `resource_ledger` (or any typed-FINAL-family) generator draws to training: FINAL covers 80 of the
+    family's 90 answer structures, so typed FINAL would become in-distribution.
+  - Fit post-hoc corrections (e.g. per-level offsets) only on the fit half; check and select on the check half.
+  - Disclose on the card when a correction was fitted on it.
+- **Run** (node A; about 40 s on one GPU for a 0.6B model):
+
+  ```bash
+  SRC=<full-sha>-src_training_decision2; S=/data/dev2/src/$SRC/src/training/decision2; export PYTHONPATH=$S
+  $S/v2/eval/run_same_panel.sh --gpu <N> --track <track> --src $SRC --run-dir <run> --model-dir <pkg> [--shared-lease <name>] \
+    [--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=<rw copy> --mount-rw <rw copy>] \
+    -- --adapter-spec <adapter.json> --model-path <pkg> --revision <id> --panels score5t-dev   # or typed-dev,css-pilot,score5t-dev
+  cd /tmp && python3 -m v2.eval.htdev.score seal --prompts /data/dev2/private/panels/goldfree/score5t-dev.prompts.jsonl \
+    --predictions <run>/output/score5t-dev.predictions.jsonl --output <run>/SEAL-SCORE5T.json
+  python3 -m v2.eval.dev_readout --run-dir <run> --label <ckpt> --output <readout.json>
+  ```
+
+  - The readout JSON gets `score5t` with `full`, `fit` and `check` blocks: histogram, top share with Wilson CI, accuracy
+    (Wilson + bootstrap), accuracy − always-majority (paired bootstrap), macro-F1, QWK and flags.
+  - Stdout adds `score5t.top_share`, `score5t.top_category`, `score5t.flags`, `score5t.check.top_share` and
+    `score5t.check.flags`.
+  - Read it at the candidate's formal input limit and kernel path, per the readout-hygiene rule.
+- **Split files** (node A; gold 0600): `/data/dev2/private/panels/{goldfree,gold}/score5t-dev.{fit,check}.{prompts,gold}.jsonl`.
+  - The gold lines carry `half` and the typed gold record, so `benchmark.score.evaluate_answer` applies directly.
+  - Backup: private eval-artifacts `score5t-dev/v1/` (HF `6f517e01`). It includes the validation collections, with
+    per-level probabilities, of the five 0.6B soups and Kai1.
 
 ### 5-level Score development check (Score5-DEV v1; eval track, 2026-09-29 ~09:25 UTC+8; code at `af16d465f` or later)
 
