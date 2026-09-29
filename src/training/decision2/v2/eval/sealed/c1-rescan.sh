@@ -37,16 +37,16 @@ SPEC="$S/v2/eval/sealed/c1-rescan-coverage.json"
 W="/data/dev2/runs/eval/m4/c1-rescan-${SET//./_}"
 mkdir -p "$W"
 spec() { python3 -c 'import json, sys; v = json.load(open(sys.argv[1]))
-for k in sys.argv[2].split("."): v = v[k]
+for k in sys.argv[2].split("/"): v = v[k]
 print("\n".join(v) if isinstance(v, list) else v)' "$SPEC" "$1"; }
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) [$CMD${NODE:+ $NODE}] $*" | tee -a "$W/OPERATIONS.log"; }
 sha() { sha256sum <"$1" | cut -c1-64; }
 IMG=$(spec image)
 PROT_SHA=$(spec protected_sha256)
-RETIRED=$(spec "item_sets.$SET.retired")
-RETIRED_SHA=$(spec "item_sets.$SET.retired_sha256")
-BASE=$(spec baseline.hits)
-BASE_SHA=$(spec baseline.sha256)
+RETIRED=$(spec "item_sets/$SET/retired")
+RETIRED_SHA=$(spec "item_sets/$SET/retired_sha256")
+BASE=$(spec baseline/hits)
+BASE_SHA=$(spec baseline/sha256)
 [[ "$RETIRED_SHA" =~ ^[0-9a-f]{64}$ ]] || { log "refused: item set $SET is not registered"; exit 1; }
 
 if [ "$CMD" = scan ]; then
@@ -107,9 +107,9 @@ fi
 if [ "$CMD" = hf-delta ]; then
   H="/data/dev2/private/c1-rescan-hf-delta/${SET//./_}-$(date -u +%Y%m%dT%H%M%SZ)"
   mkdir -p "$H"
-  log "hf-delta start: $(spec hf_delta.repo) since $(spec hf_delta.base), output $H"
-  (cd "$S" && PYTHONPATH="$S" python3 -m v2.eval.sealed.coverage hf-delta --repo "$(spec hf_delta.repo)" \
-    --repo-type "$(spec hf_delta.repo_type)" --base "$(spec hf_delta.base)" \
+  log "hf-delta start: $(spec hf_delta/repo) since $(spec hf_delta/base), output $H"
+  (cd "$S" && PYTHONPATH="$S" python3 -m v2.eval.sealed.coverage hf-delta --repo "$(spec hf_delta/repo)" \
+    --repo-type "$(spec hf_delta/repo_type)" --base "$(spec hf_delta/base)" \
     --token-file /root/.cache/huggingface/token --output "$H/files" --receipt "$H/hf-delta-receipt.json") \
     >"$H.log" 2>&1 || { log "hf-delta FAILED (see $H.log)"; exit 1; }
   log "hf-delta done: $H/files, receipt $(sha "$H/hf-delta-receipt.json")"

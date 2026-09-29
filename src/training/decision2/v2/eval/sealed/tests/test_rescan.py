@@ -115,6 +115,21 @@ class RescanScriptTest(unittest.TestCase):
         )
         self.assertIn('cp "$J/SCAN-VERDICT.json" "$W/SCAN-VERDICT.json"', self.text)
 
+    def test_every_spec_key_the_script_reads_resolves(self) -> None:
+        start = self.text.index("spec() { python3 -c '") + len("spec() { python3 -c '")
+        code = self.text[start : self.text.index('\' "$SPEC" "$1"; }', start)]
+        keys = re.findall(r'spec "?([a-z_0-9/$]+(?:\$SET)?[a-z_0-9/]*)"?\)', self.text)
+        self.assertGreaterEqual(len(keys), 12)
+        for key in keys:
+            key = key.replace("$SET", "v1.2")
+            result = subprocess.run(
+                ["python3", "-c", code, str(SPEC), key],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, (key, result.stderr))
+            self.assertTrue(result.stdout.strip(), key)
+
     def test_hf_delta_lands_under_a_covered_root(self) -> None:
         self.assertIn('H="/data/dev2/private/c1-rescan-hf-delta/', self.text)
         self.assertIn("--token-file /root/.cache/huggingface/token", self.text)
