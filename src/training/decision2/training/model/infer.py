@@ -24,10 +24,16 @@ from .calibration import (
 )
 from .data import MAX_OPTIONS, canonical, file_sha256
 from .lora import LORA_FORMAT, verify_adapter_config
+from .score_bias import apply as apply_score_bias
+from .score_bias import load_score_bias
 from .source import verify_source
 
 ADAPTER_VERSION = "decision2-typed-benchmark-adapter-v1"
 CALIBRATED_ADAPTER_VERSION = "decision2-typed-benchmark-adapter-v2-calibrated"
+SCORE_BIAS_ADAPTER_VERSION = "decision2-typed-benchmark-adapter-v3-score-bias"
+CALIBRATED_SCORE_BIAS_ADAPTER_VERSION = (
+    "decision2-typed-benchmark-adapter-v3-calibrated-score-bias"
+)
 MODEL_ROOT_FILES = {
     "decision_config.json",
     "decision_head.safetensors",
@@ -322,8 +328,16 @@ def run_prompts(
     model_sha256: str,
     adapter_sha256: str,
     calibration_sha256: str | None = None,
+    score_bias: dict[int, list[float]] | None = None,
+    score_bias_sha256: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
-    """Run one request at a time so latency means item latency, not batch share."""
+    """Run one request at a time so latency means item latency, not batch share.
+
+    With `score_bias`, Score logits get their level count's offsets before the
+    temperature and softmax, so the reported expected `score` is recomputed.
+    """
+    if (score_bias is None) != (score_bias_sha256 is None):
+        raise ValueError("score_bias and score_bias_sha256 go together")
     if max_length < 1:
         raise ValueError("max_length must be positive")
     if isinstance(temperature, dict):
@@ -377,6 +391,8 @@ def run_prompts(
             if len(scored) != len(jobs):
                 raise RuntimeError("predict_fn returned a different number of answers")
             for (question_id, row, _), logits in zip(jobs, scored):
+                if score_bias is not None and row["task_type"] == "score":
+                    logits = apply_score_bias(score_bias, logits, len(row["options"]))
                 try:
                     answers[question_id] = normalized_answer(
                         row["task_type"],
@@ -416,6 +432,8 @@ def run_prompts(
         }
         if calibration_sha256 is not None:
             record["calibration_sha256"] = calibration_sha256
+        if score_bias_sha256 is not None:
+            record["score_bias_sha256"] = score_bias_sha256
         predictions.append(record)
     return predictions, counts
 
@@ -485,6 +503,11 @@ def main() -> None:
         type=Path,
         help="Receipt for applying a selected LoRA calibration to its merged full checkpoint",
     )
+    parser.add_argument(
+        "--score-bias",
+        type=Path,
+        help="Optional per-level Score logit offsets (score_bias.json) bound to this model hash",
+    )
     args = parser.parse_args()
     if (
         args.max_length < 1
@@ -529,6 +552,11 @@ def main() -> None:
         if args.materialization_receipt is not None:
             parser.error("--materialization-receipt requires --calibration")
         calibration, calibration_report = None, None
+    if args.score_bias is not None:
+        score_bias, _ = load_score_bias(args.score_bias, model_identity["model_sha256"])
+        score_bias_sha = file_sha256(args.score_bias)
+    else:
+        score_bias, score_bias_sha = None, None
     adapter_sources = {
         name: file_sha256(Path(__file__).with_name(name))
         for name in ("infer.py", "decision_model.py", "data.py", "lora.py", "source.py")
@@ -551,6 +579,10 @@ def main() -> None:
     if calibration is not None:
         adapter_sources["calibration.py"] = file_sha256(
             Path(__file__).with_name("calibration.py")
+        )
+    if score_bias is not None:
+        adapter_sources["score_bias.py"] = file_sha256(
+            Path(__file__).with_name("score_bias.py")
         )
     adapter_sha = hashlib.sha256(canonical(adapter_sources).encode("utf-8")).hexdigest()
 
@@ -604,11 +636,21 @@ def main() -> None:
         calibration_sha256=(
             file_sha256(args.calibration) if args.calibration is not None else None
         ),
+        score_bias=score_bias,
+        score_bias_sha256=score_bias_sha,
     )
-    manifest = {
-        "adapter_version": (
+    if score_bias is not None:
+        adapter_version = (
+            CALIBRATED_SCORE_BIAS_ADAPTER_VERSION
+            if calibration is not None
+            else SCORE_BIAS_ADAPTER_VERSION
+        )
+    else:
+        adapter_version = (
             CALIBRATED_ADAPTER_VERSION if calibration is not None else ADAPTER_VERSION
-        ),
+        )
+    manifest = {
+        "adapter_version": adapter_version,
         "model_id": args.model_id,
         "model_revision": args.model_revision,
         "model_sha256": model_identity["model_sha256"],
@@ -643,6 +685,12 @@ def main() -> None:
             manifest["calibration"]["materialization_receipt_sha256"] = materialization[
                 "receipt_sha256"
             ]
+    if score_bias is not None:
+        manifest["score_bias_sha256"] = score_bias_sha
+        manifest["score_bias"] = {
+            "file_sha256": score_bias_sha,
+            "offsets": {str(key): value for key, value in sorted(score_bias.items())},
+        }
     write_output(args.output, predictions, manifest)
     print(
         json.dumps(

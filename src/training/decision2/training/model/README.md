@@ -233,6 +233,14 @@ relocates the receipt, pass its path with `--materialization-receipt`. The infer
 binding as `materialized_from_lora`; validate a small gold-free prompt sample
 for merged/unmerged numerical equivalence before release.
 
+`--score-bias /ABS/score_bias.json` adds per-level Score logit offsets
+(`score_bias.py`, format `dev2-score-bias-v1`, bound to the reported
+`model_sha256`) to the Score logits of each listed level count before the
+temperature and softmax, so the expected `score` is recomputed. Choice, Noul
+and unlisted level counts are unchanged. The file may sit in the checkpoint
+directory; it is not part of the model fingerprint. The manifest and every
+prediction row record `score_bias_sha256`, and the adapter version changes.
+
 ## Frozen benchmark inference
 
 After a pilot checkpoint is selected, run its gold-blind adapter against the
