@@ -1,0 +1,1 @@
+{"run":"m6-mxcxa-soup-score-dev","gpu":0,"render":"/dev/dri/renderD129","commit":"5624a32f5d130e765864962777012afa448262be-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T23:22:49Z","end_utc":"2026-09-28T23:22:50Z","wall_seconds":1,"gpu_hours":0.00028,"exit":0}

@@ -1,0 +1,148 @@
+{
+  "S": {
+    "H3": 0.40187597202622066,
+    "H_pilot": 0.3356598618504267,
+    "P": 38.918698932518936,
+    "Q": 42.584801558400166,
+    "T_dev": 0.45125000000000004,
+    "cal_noul": {
+      "accuracy": 0.9275862068965517,
+      "correct": 269,
+      "n": 290
+    },
+    "collapse_stopped": false,
+    "contains_new_family": false,
+    "guards": {
+      "cal_noul_ge_085": true,
+      "choice_ge_255": true,
+      "score_ge_101": true,
+      "score_modal_le_090": true,
+      "select_noul_ge_085": true
+    },
+    "guards_failed": [],
+    "guards_pass": true,
+    "in_distribution_source": "SOUP.json",
+    "ingredients": [
+      "m4-t-a7-s1",
+      "m4-t-a7-s2",
+      "m4-t-a7-s3",
+      "m4-v2-s1",
+      "m4-v2-s2",
+      "m4-v2-s3",
+      "m5-a-s1",
+      "m5-a-s2",
+      "m5-a-s3"
+    ],
+    "name": "m5-z-soup",
+    "pilot_tasks": {
+      "discourse": 0.33548278679127963,
+      "implicit_hate": 0.3356598618504267,
+      "semeval_stance": 0.5344852674369558
+    },
+    "readout_dir": "/data/dev2/runs/06b/m1/arms/m5-z-soup/readout",
+    "score_level_counts": {
+      "0": 323,
+      "1": 3,
+      "2": 74
+    },
+    "score_levels": 3,
+    "score_modal_share": 0.8075,
+    "select_noul": {
+      "accuracy": 0.9137931034482759,
+      "correct": 265,
+      "n": 290
+    },
+    "typed": {
+      "choice": 358,
+      "noul": 206,
+      "score": 158
+    },
+    "typed_n": {
+      "choice": 800,
+      "noul": 400,
+      "score": 400
+    }
+  },
+  "S_plus_g": {
+    "H3": 0.3964616249207058,
+    "H_pilot": 0.3422721971455643,
+    "P": 42.56645913908427,
+    "Q": 45.812320689133244,
+    "T_dev": 0.5293749999999999,
+    "cal_noul": {
+      "accuracy": 0.9310344827586207,
+      "correct": 270,
+      "n": 290
+    },
+    "collapse_stopped": false,
+    "contains_new_family": true,
+    "guards": {
+      "cal_noul_ge_085": true,
+      "choice_ge_255": true,
+      "score_ge_101": true,
+      "score_modal_le_090": true,
+      "select_noul_ge_085": true
+    },
+    "guards_failed": [],
+    "guards_pass": true,
+    "in_distribution_source": "SOUP.json",
+    "ingredients": [
+      "m4-t-a7-s1",
+      "m4-t-a7-s2",
+      "m4-t-a7-s3",
+      "m4-v2-s1",
+      "m4-v2-s2",
+      "m4-v2-s3",
+      "m5-a-s1",
+      "m5-a-s2",
+      "m5-a-s3",
+      "m6-cx-s1",
+      "m6-cx-s2",
+      "m6-cx-s3"
+    ],
+    "name": "m6-zcx-soup",
+    "pilot_tasks": {
+      "discourse": 0.3353690052654796,
+      "implicit_hate": 0.3422721971455643,
+      "semeval_stance": 0.5117436723510735
+    },
+    "readout_dir": "/data/dev2/runs/06b/m1/arms/m6-zcx-soup/readout",
+    "score_level_counts": {
+      "0": 235,
+      "2": 165
+    },
+    "score_levels": 2,
+    "score_modal_share": 0.5875,
+    "select_noul": {
+      "accuracy": 0.9206896551724137,
+      "correct": 267,
+      "n": 290
+    },
+    "typed": {
+      "choice": 444,
+      "noul": 207,
+      "score": 196
+    },
+    "typed_n": {
+      "choice": 800,
+      "noul": 400,
+      "score": 400
+    }
+  },
+  "accept": true,
+  "checks": {
+    "H3_within_0.010": true,
+    "Q_not_lower": true,
+    "choice_within_20": true,
+    "guards_hold": true,
+    "score_within_20": true
+  },
+  "delta": {
+    "H3": -0.005414347105514861,
+    "Q": 3.2275191307330786,
+    "choice": 86,
+    "score": 38
+  },
+  "label": "development readout (never a release score)",
+  "schema": "dev2-06b-m6-select-greedy/1"
+}

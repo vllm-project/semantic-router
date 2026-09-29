@@ -1,0 +1,466 @@
+{
+ "schema": "dev2-storage-free-staging-lfs/1",
+ "mode": "plan",
+ "utc": "2026-09-29T01:11:01.542202+00:00",
+ "node_label": "node-a",
+ "rewrite_history": false,
+ "cap_bytes": 100000000000,
+ "min_free_bytes": 40000000000,
+ "private_used_before": 93849806427,
+ "targets": [
+  {
+   "repo": "llm-semantic-router/dev2-dec-staging",
+   "folder": "m4/N4XF-soup/",
+   "category": "released-duplicate",
+   "released": "llm-semantic-router/DEV2.0-4B",
+   "reason": "Staging copy of the released DEV2.0-4B (collection add 2026-09-29; identical weight files). Coordinator order 2026-09-29 08:59 UTC+8: delete right after the collection add.",
+   "records_naming_node_copy": [
+    "src/training/decision2/v2/dec/records/dec-m4-4b-candidate-2026-09-29.md (node copies)",
+    "src/training/decision2/v2/release/records/dev2-4b-release-2026-09-29.md \u00a71 (node A copy re-verified 14/14)"
+   ],
+   "delete": [
+    {
+     "path": "m4/N4XF-soup/checkpoint/backbone/model-00001-of-00005.safetensors",
+     "paths_in_folder": [
+      "m4/N4XF-soup/checkpoint/backbone/model-00001-of-00005.safetensors"
+     ],
+     "sha256": "06faf67f333d1136e4cbc583220e98602354b454d3b0fb917bf433a8bf4dbb3f",
+     "size": 3992269864,
+     "pushed_at": "2026-09-28T22:56:32+00:00",
+     "node_copies": [
+      {
+       "label": "node-a",
+       "path": "/data/dev2/runs/dec/m4/formal-candidates/staging-e8656221/m4/N4XF-soup/checkpoint/backbone/model-00001-of-00005.safetensors",
+       "sha256": "06faf67f333d1136e4cbc583220e98602354b454d3b0fb917bf433a8bf4dbb3f",
+       "hashed_utc": "2026-09-29T01:11:22.999482+00:00"
+      },
+      {
+       "label": "node-b",
+       "path": "/data/dev2/runs/dec/m4/hf-staging/N4XF-soup/m4/N4XF-soup/checkpoint/backbone/model-00001-of-00005.safetensors",
+       "sha256": "06faf67f333d1136e4cbc583220e98602354b454d3b0fb917bf433a8bf4dbb3f",
+       "hashed_utc": "2026-09-29T01:07:07.000178+00:00"
+      }
+     ],
+     "same_sha_elsewhere": [
+      [
+       "model",
+       "llm-semantic-router/DEV2.0-4B",
+       "main",
+       "452f133211de292a87bc29ab7e24a3bd0704e40d",
+       "backbone/model-00001-of-00005.safetensors"
+      ]
+     ]
+    },
+    {
+     "path": "m4/N4XF-soup/checkpoint/backbone/model-00005-of-00005.safetensors",
+     "paths_in_folder": [
+      "m4/N4XF-soup/checkpoint/backbone/model-00005-of-00005.safetensors"
+     ],
+     "sha256": "0ad4368c4f04781d30c237c269a9911b9ffb037104a4ee469bb7f56d57e67d15",
+     "size": 976029360,
+     "pushed_at": "2026-09-28T22:56:32+00:00",
+     "node_copies": [
+      {
+       "label": "node-a",
+       "path": "/data/dev2/runs/dec/m4/formal-candidates/staging-e8656221/m4/N4XF-soup/checkpoint/backbone/model-00005-of-00005.safetensors",
+       "sha256": "0ad4368c4f04781d30c237c269a9911b9ffb037104a4ee469bb7f56d57e67d15",
+       "hashed_utc": "2026-09-29T01:11:23.514412+00:00"
+      },
+      {
+       "label": "node-b",
+       "path": "/data/dev2/runs/dec/m4/hf-staging/N4XF-soup/m4/N4XF-soup/checkpoint/backbone/model-00005-of-00005.safetensors",
+       "sha256": "0ad4368c4f04781d30c237c269a9911b9ffb037104a4ee469bb7f56d57e67d15",
+       "hashed_utc": "2026-09-29T01:07:07.000178+00:00"
+      }
+     ],
+     "same_sha_elsewhere": [
+      [
+       "model",
+       "llm-semantic-router/DEV2.0-4B",
+       "main",
+       "452f133211de292a87bc29ab7e24a3bd0704e40d",
+       "backbone/model-00005-of-00005.safetensors"
+      ]
+     ]
+    },
+    {
+     "path": "m4/N4XF-soup/checkpoint/backbone/model-00004-of-00005.safetensors",
+     "paths_in_folder": [
+      "m4/N4XF-soup/checkpoint/backbone/model-00004-of-00005.safetensors"
+     ],
+     "sha256": "18024da979fb12651442e3a168deb92b4b8e41d41ea8076151df62879ecfa823",
+     "size": 3926578128,
+     "pushed_at": "2026-09-28T22:56:32+00:00",
+     "node_copies": [
+      {
+       "label": "node-a",
+       "path": "/data/dev2/runs/dec/m4/formal-candidates/staging-e8656221/m4/N4XF-soup/checkpoint/backbone/model-00004-of-00005.safetensors",
+       "sha256": "18024da979fb12651442e3a168deb92b4b8e41d41ea8076151df62879ecfa823",
+       "hashed_utc": "2026-09-29T01:11:25.368703+00:00"
+      },
+      {
+       "label": "node-b",
+       "path": "/data/dev2/runs/dec/m4/hf-staging/N4XF-soup/m4/N4XF-soup/checkpoint/backbone/model-00004-of-00005.safetensors",
+       "sha256": "18024da979fb12651442e3a168deb92b4b8e41d41ea8076151df62879ecfa823",
+       "hashed_utc": "2026-09-29T01:07:07.000178+00:00"
+      }
+     ],
+     "same_sha_elsewhere": [
+      [
+       "model",
+       "llm-semantic-router/DEV2.0-4B",
+       "main",
+       "452f133211de292a87bc29ab7e24a3bd0704e40d",
+       "backbone/model-00004-of-00005.safetensors"
+      ]
+     ]
+    },
+    {
+     "path": "m4/N4XF-soup/checkpoint/backbone/model-00003-of-00005.safetensors",
+     "paths_in_folder": [
+      "m4/N4XF-soup/checkpoint/backbone/model-00003-of-00005.safetensors"
+     ],
+     "sha256": "1f492a389f49f382b4bbf84686176b51f9621da50d143e436ed61f764a9fa988",
+     "size": 3937871784,
+     "pushed_at": "2026-09-28T22:56:32+00:00",
+     "node_copies": [
+      {
+       "label": "node-a",
+       "path": "/data/dev2/runs/dec/m4/formal-candidates/staging-e8656221/m4/N4XF-soup/checkpoint/backbone/model-00003-of-00005.safetensors",
+       "sha256": "1f492a389f49f382b4bbf84686176b51f9621da50d143e436ed61f764a9fa988",
+       "hashed_utc": "2026-09-29T01:11:27.201802+00:00"
+      },
+      {
+       "label": "node-b",
+       "path": "/data/dev2/runs/dec/m4/hf-staging/N4XF-soup/m4/N4XF-soup/checkpoint/backbone/model-00003-of-00005.safetensors",
+       "sha256": "1f492a389f49f382b4bbf84686176b51f9621da50d143e436ed61f764a9fa988",
+       "hashed_utc": "2026-09-29T01:07:07.000178+00:00"
+      }
+     ],
+     "same_sha_elsewhere": [
+      [
+       "model",
+       "llm-semantic-router/DEV2.0-4B",
+       "main",
+       "452f133211de292a87bc29ab7e24a3bd0704e40d",
+       "backbone/model-00003-of-00005.safetensors"
+      ]
+     ]
+    },
+    {
+     "path": "m4/N4XF-soup/checkpoint/backbone/model-00002-of-00005.safetensors",
+     "paths_in_folder": [
+      "m4/N4XF-soup/checkpoint/backbone/model-00002-of-00005.safetensors"
+     ],
+     "sha256": "abac23bcaad1d5fb2aa73d9d051db970514a4f427b0cff22336b50c5e7aa7302",
+     "size": 3990302320,
+     "pushed_at": "2026-09-28T22:56:32+00:00",
+     "node_copies": [
+      {
+       "label": "node-a",
+       "path": "/data/dev2/runs/dec/m4/formal-candidates/staging-e8656221/m4/N4XF-soup/checkpoint/backbone/model-00002-of-00005.safetensors",
+       "sha256": "abac23bcaad1d5fb2aa73d9d051db970514a4f427b0cff22336b50c5e7aa7302",
+       "hashed_utc": "2026-09-29T01:11:29.031265+00:00"
+      },
+      {
+       "label": "node-b",
+       "path": "/data/dev2/runs/dec/m4/hf-staging/N4XF-soup/m4/N4XF-soup/checkpoint/backbone/model-00002-of-00005.safetensors",
+       "sha256": "abac23bcaad1d5fb2aa73d9d051db970514a4f427b0cff22336b50c5e7aa7302",
+       "hashed_utc": "2026-09-29T01:07:07.000178+00:00"
+      }
+     ],
+     "same_sha_elsewhere": [
+      [
+       "model",
+       "llm-semantic-router/DEV2.0-4B",
+       "main",
+       "452f133211de292a87bc29ab7e24a3bd0704e40d",
+       "backbone/model-00002-of-00005.safetensors"
+      ]
+     ]
+    },
+    {
+     "path": "m4/N4XF-soup/checkpoint/decision_head.safetensors",
+     "paths_in_folder": [
+      "m4/N4XF-soup/checkpoint/decision_head.safetensors"
+     ],
+     "sha256": "bd324aa69788fa936293ff4959ea1caa8845a4e47589879b0748aed3c3df7c5a",
+     "size": 10529624,
+     "pushed_at": "2026-09-28T22:56:32+00:00",
+     "node_copies": [
+      {
+       "label": "node-a",
+       "path": "/data/dev2/runs/dec/m4/formal-candidates/staging-e8656221/m4/N4XF-soup/checkpoint/decision_head.safetensors",
+       "sha256": "bd324aa69788fa936293ff4959ea1caa8845a4e47589879b0748aed3c3df7c5a",
+       "hashed_utc": "2026-09-29T01:11:29.038657+00:00"
+      },
+      {
+       "label": "node-b",
+       "path": "/data/dev2/runs/dec/m4/hf-staging/N4XF-soup/m4/N4XF-soup/checkpoint/decision_head.safetensors",
+       "sha256": "bd324aa69788fa936293ff4959ea1caa8845a4e47589879b0748aed3c3df7c5a",
+       "hashed_utc": "2026-09-29T01:07:07.000178+00:00"
+      }
+     ],
+     "same_sha_elsewhere": [
+      [
+       "model",
+       "llm-semantic-router/DEV2.0-4B",
+       "main",
+       "452f133211de292a87bc29ab7e24a3bd0704e40d",
+       "decision_head.safetensors"
+      ]
+     ]
+    }
+   ],
+   "keep": [
+    {
+     "path": "m4/N4XF-soup/checkpoint/tokenizer.json",
+     "paths_in_folder": [
+      "m4/N4XF-soup/checkpoint/tokenizer.json"
+     ],
+     "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+     "size": 19989325,
+     "pushed_at": "2026-09-28T20:55:46+00:00",
+     "node_copies": [
+      {
+       "label": "node-a",
+       "path": "/data/dev2/runs/dec/m4/formal-candidates/staging-e8656221/m4/N4XF-soup/checkpoint/tokenizer.json",
+       "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+       "hashed_utc": "2026-09-29T01:11:21.090476+00:00"
+      },
+      {
+       "label": "node-b",
+       "path": "/data/dev2/runs/dec/m4/hf-staging/N4XF-soup/m4/N4XF-soup/checkpoint/tokenizer.json",
+       "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+       "hashed_utc": "2026-09-29T01:07:07.000178+00:00"
+      }
+     ],
+     "same_sha_elsewhere": [
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Lux-9B",
+       "main",
+       "cdf4d3ef2dda21518e599fe99ebbe468486b197c",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Nox-4B",
+       "main",
+       "cde2a68dbaa557ea65dc458104d410a0802ee259",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Nox-4B",
+       "candidate/null-choice-abb225c9f9cf",
+       "d9e3cd4305c5752c0730ab062fa0c3efdb8befcb",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Nox-4B",
+       "candidate/runtime-v1.3.1-7f54061edbe5",
+       "3e5c6bf5b6bc3fef5b8adcdd5827627fc34d1366",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Nox-4B",
+       "candidate/v1.3-3e11cc601186",
+       "a52b184a8be27579b5e4211ddfec1283c1128cfe",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Nox-4B",
+       "candidate/v1.2-d1a3d2b5d39d",
+       "2f10d2d2685559977f75210b93179ad59689d967",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Nox-4B",
+       "candidate/v1.1-f6f45f968ca3",
+       "71a01ffefa1a9b08f3a1b6f663ee10fb4549bafe",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Nox-4B",
+       "v1.3.2",
+       "e2f752a6d4609cfdab505299127cfdc1e759c1bc",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Nox-4B",
+       "v1.3.1",
+       "74979f7c7408325716dcb89b686d9cf94301923a",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Nox-4B",
+       "v1.3",
+       "ad089ad3a5dc9a7a21e6d96db546bb53e2212654",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Nox-4B",
+       "v1.2",
+       "d330a0bb3f6f34e8ad4afaf4465b304093061714",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Nox-4B",
+       "v1.1",
+       "5bee3061a7abf675813963e4e05267cb1a28f92f",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Nox-4B",
+       "v1.0",
+       "43d60043795a1ddd840c0edd5bbdc5a399c9715b",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Sol-2B",
+       "main",
+       "ce0c018a28de16d6639b1cd203b761bf643b89e6",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Sol-2B",
+       "candidate/runtime-v1.3.1-308d83e7c923",
+       "3eab57364d6a44915ad6dcaeb828b6d03e96a38f",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Sol-2B",
+       "candidate/v1.3-5c0a79cb720e",
+       "37a60faf4c2d2ad8158abfe771e52117930c2f3e",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Sol-2B",
+       "candidate/v1.2-272bef5030af",
+       "54f55d423b43bfcb7991ae504bba4510fc4c9378",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Sol-2B",
+       "candidate/v1.1-50b6ff5a0452",
+       "94771876f1cc9b053baa2e1054d8ea71f12d6eb9",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Sol-2B",
+       "v1.3.1",
+       "9cafadab7471f7f60c7577bf1145edefcc258fe2",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Sol-2B",
+       "v1.3",
+       "2412d9470d3aa125b346262dad80f6161847aa09",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Sol-2B",
+       "v1.2",
+       "7c7b9e97a2885929719886238370130e9dcec48b",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Sol-2B",
+       "v1.1",
+       "7cae429a31982870d3e618e049d3608629827487",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Sol-2B",
+       "v1.0",
+       "b6a4ce881ca625dcf19663a277d27577cfe4540a",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/Decision-1.0-Eos-0.8B",
+       "main",
+       "363c4a5e56afc115b1c78c837633956d0bbb63ab",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/DEV2.0-0.8B",
+       "main",
+       "f458c34ccfb4a5d4d32babeda1570919adb1a3c8",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/DEV2.0-2B",
+       "main",
+       "5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38",
+       "tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/dev2-9b-staging",
+       "main",
+       "8a98dc8261472999af7557da6117efd56bf742e4",
+       "m3/DW/checkpoint/tokenizer.json"
+      ],
+      [
+       "model",
+       "llm-semantic-router/DEV2.0-4B",
+       "main",
+       "452f133211de292a87bc29ab7e24a3bd0704e40d",
+       "tokenizer.json"
+      ]
+     ],
+     "kept_because": "shared with kept path(s) in the same repo ['branch:main:m3/S2T-soup/checkpoint/tokenizer.json', 'branch:main:m4/N4LX-soup/checkpoint/tokenizer.json']; same SHA-256 kept in ['llm-semantic-router/DEV2.0-0.8B', 'llm-semantic-router/DEV2.0-2B', 'llm-semantic-router/Decision-1.0-Eos-0.8B', 'llm-semantic-router/Decision-1.0-Lux-9B']"
+    }
+   ],
+   "delete_bytes": 16833581080
+  }
+ ],
+ "projected_private_used_after": 77016225347,
+ "repo_state_before": {
+  "llm-semantic-router/dev2-dec-staging": {
+   "heads": {
+    "branch:main": "e86562218928fbb77f8071b45646962f63049fad"
+   },
+   "commits": [
+    "e86562218928fbb77f8071b45646962f63049fad",
+    "5db8791bfc6b205675aaadc3f7282ac460b631f2",
+    "376c992cea89b473ff663d2d1bbbd08d006fc8a8",
+    "f594e7cdb94d3195e007792c8459e8d32d0b155c",
+    "2b990e52ddba92fc642fd3e96c1ff534c6135560",
+    "bac0f142472288c7d02ce59b5441f0a221aa3710",
+    "bb10187aaf4c68da0e9eaf91252a6b991e79ef52",
+    "a2233cffe49f64d42361c1da0fa2322adef1423b",
+    "fdcfba1a81925b7e18f1f0758aec1e20ab2ebf0b",
+    "30af6c4012c78c96ee9bae15f2d580af9f8f388f",
+    "41ea96d110d870d266e5a487fa65f02bd998f3c2",
+    "4e3990224f143c97ce5166d9ff3bc170199c4a17"
+   ],
+   "used": 16853570405,
+   "lfs_objects": 7
+  }
+ }
+}

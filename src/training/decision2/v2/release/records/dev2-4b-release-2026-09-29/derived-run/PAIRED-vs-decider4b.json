@@ -1,0 +1,96 @@
+{
+  "axis_ci95": {
+    "H": {
+      "delta": {
+        "high": 0.07258420272794004,
+        "low": -0.09477898323113802
+      },
+      "left": {
+        "high": 0.6180284357491181,
+        "low": 0.4398325264293793
+      },
+      "right": {
+        "high": 0.638376435400117,
+        "low": 0.4372514279440801
+      }
+    },
+    "T": {
+      "delta": {
+        "high": 0.028750000000000053,
+        "low": -0.030312500000000075
+      },
+      "left": {
+        "high": 0.710625,
+        "low": 0.665625
+      },
+      "right": {
+        "high": 0.7103125,
+        "low": 0.66875
+      }
+    }
+  },
+  "bootstrap": {
+    "confidence_level": 0.95,
+    "fixed_css_label_universe": true,
+    "invalid_or_missing": "counted as incorrect; never removed from draws",
+    "unit": "paired typed groups within family; CSS tasks then paired items within sampled task"
+  },
+  "ci95": {
+    "high": 4.307431476045677,
+    "low": -5.710247713985695
+  },
+  "coverage": {
+    "css_evaluation_items": 6547,
+    "css_evaluation_tasks": 15,
+    "typed_independent_groups": 400,
+    "typed_items": 1600
+  },
+  "css_gold_sha256": "1cda9623032138bb7b124be0c1b0a4239c06bed7be3169264e6eb31805c19ba4",
+  "label": "post-key same-panel",
+  "models": {
+    "left": "DEV2.0-4B (T = 1)",
+    "right": "decider4b"
+  },
+  "panel_sha256": "201f01fb3e5468d8457b2cc603a0d0081a8b2114bc5d547e879cac802f5a692c",
+  "point": {
+    "delta": {
+      "H": 0.02407969056116044,
+      "T": -0.0012499999999999734,
+      "score": 1.2697038416583766
+    },
+    "left": {
+      "H": 0.5795593764607849,
+      "T": 0.688125,
+      "score": 63.151349623509844
+    },
+    "right": {
+      "H": 0.5554796858996245,
+      "T": 0.689375,
+      "score": 61.88164578185147
+    }
+  },
+  "predictions_sha256": {
+    "left": {
+      "css": "c966cfc725ea286af29e29b544664372c416a1f1360312757eb76ef03f2e201a",
+      "typed": "003c5cd57b7fced2fd6ab9c22034e9d42903a9089dd1c9986428e44cebf63b19"
+    },
+    "right": {
+      "css": "c003e7e0e101e02d1ed7a385327da9bdd25b105c90b5302633b952b5f4b2412d",
+      "typed": "17933a9f9c1a8f27f6c7f9f189dcb62e640d6789595788d1e0281e5e8958148a"
+    }
+  },
+  "replicates": 5000,
+  "schema_version": "jevarena-v3-paired-aggregate/1",
+  "seed": 20260927,
+  "source_sha256": {
+    "arena_base": "d1b819d07db29f9eaee7269d1a4ffc50b949ff80eeabaa7de8a1ea265cc55ec7",
+    "arena_v3": "3d5b4aea031efb0d05ae7a501983868fe3bb9e42ca37e23fce5da8c002720cd8",
+    "css": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca",
+    "css_compare": "17d2264511783c07847bb6d29d6722338a02c92abb825aaa140053e7b4760d46",
+    "css_panel": "717e31b62d1f9d09b30f1ae2365b2e59cdf0cf40209dda5e9e08b921a1fc184d",
+    "paired_v3": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "typed": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "typed_panel": "c6569d4c86c3b9ea2ebdda564d8ba4d3428cc807d41d39984379821cfbb9422c"
+  },
+  "typed_gold_sha256": "707dd28dfbab10d124d437434023729f319501542e999e536fce9b7ff7f2361e"
+}

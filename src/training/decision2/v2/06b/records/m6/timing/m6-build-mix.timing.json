@@ -1,0 +1,1 @@
+{"run":"m6-build-mix","gpu":0,"render":"/dev/dri/renderD129","commit":"0581149308b8081c2152aa9f90980971bcc99045-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T19:21:16Z","end_utc":"2026-09-28T19:22:16Z","wall_seconds":60,"gpu_hours":0.01667,"exit":0}

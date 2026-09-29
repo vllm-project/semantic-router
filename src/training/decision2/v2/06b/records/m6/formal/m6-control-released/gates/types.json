@@ -1,0 +1,96 @@
+{
+  "label": "m6-control-released",
+  "rule": "COLLAPSED if one answer >= 90% of a type or the Wilson 95% lower bound <= chance",
+  "run": "/data/dev2/runs/06b/m6/formal/m6-control-released",
+  "schema": "dev2-gate-types/1",
+  "types": {
+    "choice": {
+      "accuracy": 0.31875,
+      "accuracy_ci95": [
+        0.2873902233435536,
+        0.35184218264289946
+      ],
+      "chance": 0.2666666666666696,
+      "gold_distribution": {
+        "approved": 94,
+        "insufficient_evidence": 218,
+        "offer_0": 214,
+        "offer_1": 186,
+        "rejected": 88
+      },
+      "gold_majority_share": 0.2725,
+      "predicted_distinct": 8,
+      "predicted_distribution": {
+        "approved": 125,
+        "insufficient_evidence": 1,
+        "none": 191,
+        "offer_0": 100,
+        "offer_1": 51,
+        "offer_2": 1,
+        "offer_3": 57,
+        "rejected": 274
+      },
+      "predicted_top_share": 0.3425,
+      "slots": 800,
+      "valid": 800,
+      "verdict": "OK"
+    },
+    "noul": {
+      "accuracy": 0.5525,
+      "accuracy_ci95": [
+        0.5178739134105582,
+        0.5866242862347449
+      ],
+      "chance": 0.5,
+      "gold_distribution": {
+        "False": 396,
+        "True": 404
+      },
+      "gold_majority_share": 0.505,
+      "predicted_distinct": 2,
+      "predicted_distribution": {
+        "False": 624,
+        "True": 176
+      },
+      "predicted_top_share": 0.78,
+      "slots": 800,
+      "valid": 800,
+      "verdict": "OK"
+    },
+    "score": {
+      "accuracy": 0.3325,
+      "accuracy_ci95": [
+        0.28811717839304024,
+        0.3800695562078528
+      ],
+      "chance": 0.20000000000000148,
+      "gold_distribution": {
+        "0": 35,
+        "1": 79,
+        "2": 83,
+        "3": 75,
+        "4": 128
+      },
+      "gold_majority_share": 0.32,
+      "predicted_distinct": 5,
+      "predicted_distribution": {
+        "0": 60,
+        "1": 6,
+        "2": 57,
+        "3": 20,
+        "4": 257
+      },
+      "predicted_top_share": 0.6425,
+      "recall_by_level": {
+        "0": 0.5428571428571428,
+        "1": 0.02531645569620253,
+        "2": 0.13253012048192772,
+        "3": 0.02666666666666667,
+        "4": 0.7734375
+      },
+      "slots": 400,
+      "valid": 400,
+      "verdict": "OK"
+    }
+  }
+}

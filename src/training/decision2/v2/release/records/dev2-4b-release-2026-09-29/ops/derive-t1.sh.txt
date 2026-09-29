@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# DEV2.0-4B T = 1 scored bindings (coordinator calibration rule 2026-09-28 23:15: CAL698 rejected on the
+# development panels because the CSS-pilot ECE worsens). The sealed formal run m4-N4XF-soup-nodeA and its mlx-diag
+# run were scored with the 16K CAL698 temperatures; undo them offline (softmax(log q * T); answers unchanged),
+# adopt, seal, report, pair against the same comparator runs, and score mlx-diag. Node A, CPU only, host python3.
+set -euo pipefail
+SRC=4fd7e3388bf036639d58f96c48cf0d0c1a877a09-src_training_decision2
+S=/data/dev2/src/$SRC/src/training/decision2
+G=/data/dev2/private/panels/goldfree
+F=/data/dev2/runs/dec/formal/m4
+RUN=$F/m4-N4XF-soup-nodeA
+MLX=$F/m4-N4XF-soup-mlx
+ST=/data/dev2/runs/dec/m4/formal-candidates/staging-e8656221
+P=$ST/m4/N4XF-soup
+CAL=$P/cal698-16k/calibration.json
+I=/data/dev2/runs/release/inputs/dev2-4b-t1/derived
+D=/data/dev2/runs/release/dev2-4b-t1-derived
+DM=/data/dev2/runs/release/dev2-4b-t1-derived-mlx
+LABEL="DEV2.0-4B N4XF soup at T = 1 (derived from the CAL698 run; post-key same-panel)"
+
+echo "$(sha256sum $CAL | cut -c1-64)" | grep -qx 176a2f0e8f76c7b281c0784ec9e9d2ea17b84aef2e237e2673a062a5a62e421f
+(cd $ST && sha256sum -c --quiet /data/dev2/runs/dec/m4/formal-candidates/N4XF-soup.nodeB.sha256)
+echo "staging copy verified: $(wc -l < /data/dev2/runs/dec/m4/formal-candidates/N4XF-soup.nodeB.sha256) files"
+python3 - "$RUN/SEAL.json" "$RUN/output" <<'PY'
+import hashlib, json, sys
+seal = json.load(open(sys.argv[1]))
+for panel, v in seal["panels"].items():
+    got = hashlib.sha256(open(f"{sys.argv[2]}/{panel}.predictions.jsonl", "rb").read()).hexdigest()
+    assert got == v["predictions_sha256"], (panel, got)
+    print("sealed predictions match:", panel, got[:12])
+PY
+
+mkdir -p "$(dirname $I)"; mkdir $I
+cd $S; export PYTHONPATH=$S
+for p in typed-final css15 public231; do
+  python3 -B -m v2.release.retemper_predictions --predictions $RUN/output/$p.predictions.jsonl \
+    --prompts $G/$p.prompts.jsonl --calibration $CAL --undo \
+    --output $I/$p.predictions.jsonl --receipt $I/$p.retemper.json
+done
+python3 -B -m v2.release.retemper_predictions --predictions $MLX/output/mlx-diag.predictions.jsonl \
+  --prompts $G/mlx-diag.prompts.jsonl --calibration $CAL --undo \
+  --output $I/mlx-diag.predictions.jsonl --receipt $I/mlx-diag.retemper.json
+
+mkdir $D
+python3 -B -m v2.eval.same_panel adopt --run-dir $D \
+  --typed-final $I/typed-final.predictions.jsonl --css15 $I/css15.predictions.jsonl \
+  --public231 $I/public231.predictions.jsonl \
+  --prior-receipt $RUN/COLLECT.json --prior-receipt $RUN/SEAL.json --prior-receipt $CAL \
+  --prior-receipt $I/typed-final.retemper.json --prior-receipt $I/css15.retemper.json \
+  --prior-receipt $I/public231.retemper.json \
+  --reason "T = 1 (uncalibrated) predictions of DEV2.0-4B derived offline from the sealed CAL698 run m4-N4XF-soup-nodeA by undoing its per-type temperatures (calibration 176a2f0e; softmax(log q * T)); identical answers, only probabilities differ; for the coordinator 23:15 calibration rule"
+python3 -B -m v2.eval.same_panel seal --run-dir $D
+python3 -B -m v2.eval.same_panel report --run-dir $D --label "$LABEL" --tier 4B --family decision2 \
+  --count-safetensors $P/checkpoint
+for cmp in "/data/dev2/runs/eval/m1-adopt/nox1 adopted-1.0" "/data/dev2/runs/dec/formal/m3/nox1-16k same-limit-16k" \
+           "/data/dev2/runs/eval/m1-adopt/decider4b decider4b" "/data/dev2/runs/eval/m2/q5b-jet62 jet62" \
+           "/data/dev2/runs/dec/formal/m3/m3-N4LKr-soup-nodeA m3-n4lkr"; do
+  set -- $cmp
+  python3 -B -m v2.eval.same_panel compare --run-dir $D --comparator-run-dir $1 \
+    --left-name "DEV2.0-4B (T = 1)" --right-name $2 > $D/compare-$2.log
+done
+mkdir $DM
+python3 -B -m v2.eval.multilingual_panel score --panel /data/dev2/private/panels/mlx-diag-v1 \
+  --predictions $I/mlx-diag.predictions.jsonl --output $DM/mlx-diag.score.json
+sha256sum $I/* $D/*.json $DM/mlx-diag.score.json

@@ -1,0 +1,94 @@
+{
+  "label": "m6-mxcxa-soup",
+  "rule": "COLLAPSED if one answer >= 90% of a type or the Wilson 95% lower bound <= chance",
+  "run": "/data/dev2/runs/06b/m6/formal/m6-mxcxa-soup",
+  "schema": "dev2-gate-types/1",
+  "types": {
+    "choice": {
+      "accuracy": 0.44125,
+      "accuracy_ci95": [
+        0.4072037188711895,
+        0.4758578196209711
+      ],
+      "chance": 0.2666666666666696,
+      "gold_distribution": {
+        "approved": 94,
+        "insufficient_evidence": 218,
+        "offer_0": 214,
+        "offer_1": 186,
+        "rejected": 88
+      },
+      "gold_majority_share": 0.2725,
+      "predicted_distinct": 6,
+      "predicted_distribution": {
+        "approved": 200,
+        "none": 99,
+        "offer_0": 170,
+        "offer_1": 84,
+        "offer_3": 47,
+        "rejected": 200
+      },
+      "predicted_top_share": 0.25,
+      "slots": 800,
+      "valid": 800,
+      "verdict": "OK"
+    },
+    "noul": {
+      "accuracy": 0.63125,
+      "accuracy_ci95": [
+        0.5972636492734343,
+        0.6639818498398237
+      ],
+      "chance": 0.5,
+      "gold_distribution": {
+        "False": 396,
+        "True": 404
+      },
+      "gold_majority_share": 0.505,
+      "predicted_distinct": 2,
+      "predicted_distribution": {
+        "False": 433,
+        "True": 367
+      },
+      "predicted_top_share": 0.54125,
+      "slots": 800,
+      "valid": 800,
+      "verdict": "OK"
+    },
+    "score": {
+      "accuracy": 0.33,
+      "accuracy_ci95": [
+        0.285727498574661,
+        0.3775067992292304
+      ],
+      "chance": 0.20000000000000148,
+      "gold_distribution": {
+        "0": 35,
+        "1": 79,
+        "2": 83,
+        "3": 75,
+        "4": 128
+      },
+      "gold_majority_share": 0.32,
+      "predicted_distinct": 5,
+      "predicted_distribution": {
+        "0": 21,
+        "1": 15,
+        "2": 44,
+        "3": 5,
+        "4": 315
+      },
+      "predicted_top_share": 0.7875,
+      "recall_by_level": {
+        "0": 0.2857142857142857,
+        "1": 0.0379746835443038,
+        "2": 0.08433734939759036,
+        "3": 0.0,
+        "4": 0.875
+      },
+      "slots": 400,
+      "valid": 400,
+      "verdict": "OK"
+    }
+  }
+}

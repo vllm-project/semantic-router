@@ -1,0 +1,38 @@
+[
+ {
+  "repo": "llm-semantic-router/dev2-9b-staging",
+  "folder": "m3/DW/",
+  "category": "hold-best",
+  "reason": "9B HOLD (DW; coordinator HOLD 04:30). Coordinator order 2026-09-29 08:59 UTC+8: delete to restore >= 40 GB headroom for a possible 9B / 27B release; node copy is the durable store (04:55 policy).",
+  "node_copies": [
+   {"label": "node-a", "root": "/data/dev2/runs/9b/m3/DW-build/soup", "strip_prefix": "m3/DW/checkpoint/"}
+  ],
+  "records_naming_node_copy": [
+   "src/training/decision2/v2/9b/records/lux9b-m3-formal-lock-DW-2026-09-29.md (full checkpoint m3/DW-build/soup)"
+  ]
+ },
+ {
+  "repo": "llm-semantic-router/dev2-staging-06bm5-z",
+  "folder": "",
+  "category": "hold-best",
+  "reason": "0.6B not-a-successor (soup Z, Milestone 5). Coordinator order 2026-09-29 08:59 UTC+8.",
+  "node_copies": [
+   {"label": "node-a", "root": "/data/dev2/runs/06b/m1/arms/m5-z-soup-r517/full/best-export"}
+  ],
+  "records_naming_node_copy": [
+   "src/training/decision2/v2/06b/records/m5-results-2026-09-28.md (run m5-z-soup-r517)"
+  ]
+ },
+ {
+  "repo": "llm-semantic-router/dev2-staging-06bm6-mxcx",
+  "folder": "",
+  "category": "hold-best",
+  "reason": "0.6B not-a-successor (m6-mxcx-soup, typed FINAL Score collapsed; Milestone 6). Coordinator order 2026-09-29 08:59 UTC+8.",
+  "node_copies": [
+   {"label": "node-a", "root": "/data/dev2/runs/06b/m1/arms/m6-mxcx-soup/full/best-export"}
+  ],
+  "records_naming_node_copy": [
+   "src/training/decision2/v2/06b/records/m6/formal/m6-mxcx-soup/M6-SUMMARY.json (model_path best-export)"
+  ]
+ }
+]

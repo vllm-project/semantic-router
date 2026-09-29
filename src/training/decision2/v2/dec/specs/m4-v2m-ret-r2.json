@@ -1,0 +1,139 @@
+{
+ "name": "m4-v2m-ret-r2-v1",
+ "seed": "dec-m3-v2m-ret-v1",
+ "exclude_families": [
+  "natural_cosmos_qa",
+  "natural_squad2_answerability"
+ ],
+ "exclude_group_ids": {
+  "file": "spec:m4-r2-excluded-groups.json",
+  "sha256": "c265b704bb8ff936ab800e97bf402ff577fac573bc10e10a5b8429ac87dc17b6"
+ },
+ "dedupe_original_hashes": true,
+ "components": [
+  {
+   "name": "A0s",
+   "files": [
+    "pk1:m3/pk1/A0s/train.jsonl"
+   ],
+   "ids": {
+    "file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl",
+    "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f",
+    "pool": "A0s"
+   }
+  },
+  {
+   "name": "H5",
+   "files": [
+    "v2:m2/arms/H5/train.jsonl"
+   ],
+   "ids": {
+    "file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl",
+    "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f",
+    "pool": "H5"
+   }
+  },
+  {
+   "name": "H1",
+   "files": [
+    "v2:m2/arms/H1/train.jsonl"
+   ],
+   "ids": {
+    "file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl",
+    "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f",
+    "pool": "H1"
+   }
+  },
+  {
+   "name": "H6",
+   "files": [
+    "v2:m2/arms/H6/train.jsonl"
+   ],
+   "ids": {
+    "file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl",
+    "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f",
+    "pool": "H6"
+   }
+  },
+  {
+   "name": "H3",
+   "files": [
+    "v2:m2/arms/H3/train.jsonl"
+   ],
+   "ids": {
+    "file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl",
+    "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f",
+    "pool": "H3"
+   }
+  },
+  {
+   "name": "E11",
+   "files": [
+    "v2:m2/arms/E11/train.jsonl"
+   ],
+   "ids": {
+    "file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl",
+    "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f",
+    "pool": "E11"
+   }
+  },
+  {
+   "name": "G2",
+   "files": [
+    "v2:m2/arms/G2/train.jsonl"
+   ],
+   "ids": {
+    "file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl",
+    "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f",
+    "pool": "G2"
+   }
+  },
+  {
+   "name": "G6",
+   "files": [
+    "v2:m2/arms/G6/train.jsonl"
+   ],
+   "ids": {
+    "file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl",
+    "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f",
+    "pool": "G6"
+   }
+  },
+  {
+   "name": "G4h",
+   "files": [
+    "v2:m2/arms/G4h/train.jsonl"
+   ],
+   "ids": {
+    "file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl",
+    "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f",
+    "pool": "G4h"
+   }
+  },
+  {
+   "name": "V1S",
+   "files": [
+    "v1:v2/arms/A6g/train.jsonl",
+    "v1:v2/arms/A6h/train.jsonl"
+   ],
+   "ids": {
+    "file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl",
+    "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f",
+    "pool": "V1S"
+   }
+  },
+  {
+   "name": "A7-stage4v2-ret",
+   "files": [
+    "a7:v2/a7/arms/A7g/train.jsonl",
+    "a7:v2/a7/arms/A7p/train.jsonl",
+    "a7:v2/a7/arms/A7m/train.jsonl",
+    "a7:v2/a7/arms/A7o/train.jsonl",
+    "a7:v2/a7/arms/A7i/train.jsonl",
+    "a7:v2/a7/arms/A7h/train.jsonl"
+   ],
+   "view": "a7:v2/a7/views/dec10-stage4v2.json",
+   "budget_tokens": 9747133
+  }
+ ]
+}

@@ -1,0 +1,332 @@
+{
+  "H": 0.45904022473242023,
+  "T": 0.5115625,
+  "gate_human_transfer_vs_released": {
+    "ci95_H": [
+      -0.06449448188458451,
+      0.06050216930368588
+    ],
+    "ci95_v3": [
+      2.5046634868024795,
+      9.096948825023535
+    ],
+    "delta_H": -0.02054502089056126,
+    "released": "released"
+  },
+  "gpu_time": {
+    "gpu_hours": 0.07323774894078573,
+    "image_ids": [
+      "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    ],
+    "runs": {
+      "m6-mxcx-soup": 0.05685481323136224,
+      "m6-mxcx-soup-mlx": 0.01638293570942349
+    }
+  },
+  "label": "post-key same-panel",
+  "loaded_parameters": 597103104,
+  "mlx_diag": {
+    "english": 0.6872486772486772,
+    "invalid_or_missing": 0,
+    "items": 2275,
+    "non_english": 0.6347049863716531,
+    "overall": 0.6422112279255137,
+    "scope": "multilingual development diagnostic; not a release score"
+  },
+  "mlx_run_dir": "/data/dev2/runs/06b/m6/formal/m6-mxcx-soup-mlx",
+  "model_path": "/data/dev2/runs/06b/m1/arms/m6-mxcx-soup/full/best-export",
+  "model_revision": "3ae009ad838487c0df839a55898a98f5665276136d2a8cab3c1260dd0b29dfa2",
+  "name": "m6-mxcx-soup",
+  "paired": {
+    "bosun06": {
+      "ci95_H": [
+        0.013699044651004893,
+        0.18943735465451686
+      ],
+      "ci95_T": [
+        0.04906249999999995,
+        0.10719531249999988
+      ],
+      "ci95_v3": [
+        4.03223056420859,
+        13.91849748695657
+      ],
+      "delta_H": 0.11687911786543104,
+      "delta_T": 0.0778125,
+      "delta_v3": 9.9347032381065,
+      "file_sha256": "0de9da5c8dd347ad44443e319f2290d380fced61639fd4b0cf359ccc30d52a2f",
+      "replicates": 5000,
+      "right_v3": 38.524327392383704,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/bosun"
+    },
+    "causal-control": {
+      "ci95_H": [
+        -0.1123302881819857,
+        0.10659413123245128
+      ],
+      "ci95_T": [
+        0.1715625,
+        0.23312499999999997
+      ],
+      "ci95_v3": [
+        4.967078044515148,
+        15.767215759189314
+      ],
+      "delta_H": -0.02105384923256537,
+      "delta_T": 0.2025,
+      "delta_v3": 9.93902612181921,
+      "file_sha256": "9bfa68318440fa6aa495d69894ab57df810635c24da0a20989f5262b907f8d13",
+      "replicates": 5000,
+      "right_v3": 38.52000450867099,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/dev20-06b"
+    },
+    "gliner25": {
+      "ci95_H": [
+        -0.012659984461693176,
+        0.16115121983091787
+      ],
+      "ci95_T": [
+        0.06812499999999999,
+        0.135625
+      ],
+      "ci95_v3": [
+        3.933191558036046,
+        13.575245682708232
+      ],
+      "delta_H": 0.01799127915212012,
+      "delta_T": 0.10156250000000006,
+      "delta_v3": 5.934911863851077,
+      "file_sha256": "806ee998377619ef24fe4dda36eb195b96ea4a1f11943b6fa00434702ab47aba",
+      "replicates": 5000,
+      "right_v3": 42.52411876663913,
+      "run_dir": "/data/dev2/runs/eval/m1/p1-gliner25"
+    },
+    "kai1": {
+      "ci95_H": [
+        0.055842406142562605,
+        0.19297140773920443
+      ],
+      "ci95_T": [
+        0.125625,
+        0.17407031249999994
+      ],
+      "ci95_v3": [
+        9.857069665979393,
+        17.23855549246302
+      ],
+      "delta_H": 0.1021328441657337,
+      "delta_T": 0.14968750000000003,
+      "delta_v3": 12.520769912618832,
+      "file_sha256": "92bd987e28650ee3c6d0840f1238bb56af5f3a53227822e19643bbd8de3ca839",
+      "replicates": 5000,
+      "right_v3": 35.93826071787137,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/kai1"
+    },
+    "kai1-8k": {
+      "ci95_H": [
+        0.05182266780433946,
+        0.19189957178303516
+      ],
+      "ci95_T": [
+        0.125625,
+        0.17407031249999994
+      ],
+      "ci95_v3": [
+        9.604145999676584,
+        17.174432944510457
+      ],
+      "delta_H": 0.10152817156819316,
+      "delta_T": 0.14968750000000003,
+      "delta_v3": 12.49033948960983,
+      "file_sha256": "e861836665e18fce33b812eccd80d405aaad5341506e9ec8567697b2f36e4a60",
+      "replicates": 5000,
+      "right_v3": 35.968691140880374,
+      "run_dir": "/data/dev2/runs/06b/m2/formal/kai1-native-8k"
+    },
+    "lex": {
+      "ci95_H": [
+        0.04127046887111454,
+        0.30264118355617053
+      ],
+      "ci95_T": [
+        0.12062500000000004,
+        0.17875000000000002
+      ],
+      "ci95_v3": [
+        9.640312605267559,
+        23.930593318162224
+      ],
+      "delta_H": 0.19309346978780428,
+      "delta_T": 0.14968750000000003,
+      "delta_v3": 17.436541699783355,
+      "file_sha256": "f41c219f49ce4fec17f501e71c4a7bfe3e9da01bb009d32f62db9c8fcea4df6e",
+      "replicates": 5000,
+      "right_v3": 31.02248893070685,
+      "run_dir": "/data/dev2/runs/eval/m1/r3-lex"
+    },
+    "m5-x": {
+      "ci95_H": [
+        -0.05818870501793786,
+        0.06928939214064515
+      ],
+      "ci95_T": [
+        0.05125000000000002,
+        0.10344531249999996
+      ],
+      "ci95_v3": [
+        0.6855244604834108,
+        7.520406418574401
+      ],
+      "delta_H": -0.01405012737154604,
+      "delta_T": 0.07656250000000003,
+      "delta_v3": 3.0944736321875155,
+      "file_sha256": "34975f43e45d460b115c2ccb09900d4399b2d89ac5548a25e8b3888b4b2ccbe5",
+      "replicates": 5000,
+      "right_v3": 45.36455699830269,
+      "run_dir": "/data/dev2/runs/06b/m5/formal/m5-x-soup"
+    },
+    "m5-z": {
+      "ci95_H": [
+        -0.058091882014632584,
+        0.032551114286810366
+      ],
+      "ci95_T": [
+        0.07030468749999995,
+        0.1243828124999999
+      ],
+      "ci95_v3": [
+        1.6354668700705477,
+        6.823640698212489
+      ],
+      "delta_H": -0.03930913782629142,
+      "delta_T": 0.0965625,
+      "delta_v3": 2.9821150070812905,
+      "file_sha256": "2da80c853650e523f1f161ebd76249ef03aeb2267e7d863a16e10bc31f3e1ffd",
+      "replicates": 5000,
+      "right_v3": 45.476915623408914,
+      "run_dir": "/data/dev2/runs/06b/m5/formal/m5-z-soup"
+    },
+    "released": {
+      "ci95_H": [
+        -0.06449448188458451,
+        0.06050216930368588
+      ],
+      "ci95_T": [
+        0.09218749999999998,
+        0.14219531249999995
+      ],
+      "ci95_v3": [
+        2.5046634868024795,
+        9.096948825023535
+      ],
+      "delta_H": -0.02054502089056126,
+      "delta_T": 0.11625000000000002,
+      "delta_v3": 4.917551279148121,
+      "file_sha256": "1d8b8c2d540df58630b2aa0552eeeef4b5ff5e2af59e1ec8b68e9451e7e7acf2",
+      "replicates": 5000,
+      "right_v3": 43.54147935134208,
+      "run_dir": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup"
+    }
+  },
+  "public231": {
+    "correct": 152,
+    "easy": 47,
+    "hard": 44,
+    "items": 231,
+    "standard": 61
+  },
+  "run_dir": "/data/dev2/runs/06b/m6/formal/m6-mxcx-soup",
+  "runtime": {
+    "causal_conv1d": "1.7.0",
+    "device_name": "",
+    "devices": 1,
+    "fla": "0.5.2",
+    "hip": "7.2.53211",
+    "numpy": "2.3.5",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0",
+    "triton": "3.7.1"
+  },
+  "runtime_env": {
+    "HIP_FORCE_DEV_KERNARG": "1",
+    "TRITON_CACHE_AUTOTUNING": "1",
+    "TRITON_CACHE_DIR": "/data/dev2/runs/06b/m6/formal/m6-mxcx-soup.triton-cache"
+  },
+  "schema": "dev2-06b-m6-summary/1",
+  "seal_sha256": "7d967f80adea61beeac1d393df9e7c3038e58bf86f785c77e5067a4beb2d4a78",
+  "successor": {
+    "checks": {
+      "H_upper_bound_ge_0": true,
+      "no_type_collapsed": false,
+      "v3_lower_bound_gt_0": true
+    },
+    "released": "released",
+    "released_run_dir": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup",
+    "verdict": false
+  },
+  "triton_cache": {
+    "m6-mxcx-soup": {
+      "added": [],
+      "after_files": 303,
+      "after_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "autotune_entries_added": [],
+      "before_files": 303,
+      "before_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "cache": "/data/dev2/runs/06b/m6/formal/m6-mxcx-soup.triton-cache",
+      "changed": [],
+      "kind": "per-run",
+      "removed": [],
+      "schema": "dev2-06b-m6-triton-cache/1",
+      "snapshot": "/data/dev2/runs/06b/m6/triton-cache-frozen",
+      "snapshot_manifest": "/data/dev2/runs/06b/m6/triton-cache-frozen.MANIFEST.json",
+      "unchanged": true
+    },
+    "m6-mxcx-soup-mlx": {
+      "added": [],
+      "after_files": 303,
+      "after_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "autotune_entries_added": [],
+      "before_files": 303,
+      "before_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "cache": "/data/dev2/runs/06b/m6/formal/m6-mxcx-soup-mlx.triton-cache",
+      "changed": [],
+      "kind": "per-run",
+      "removed": [],
+      "schema": "dev2-06b-m6-triton-cache/1",
+      "snapshot": "/data/dev2/runs/06b/m6/triton-cache-frozen",
+      "snapshot_manifest": "/data/dev2/runs/06b/m6/triton-cache-frozen.MANIFEST.json",
+      "unchanged": true
+    }
+  },
+  "type_collapse": {
+    "accuracy": {
+      "choice": 0.48625,
+      "noul": 0.64625,
+      "score": 0.3275
+    },
+    "any_collapsed": true,
+    "verdicts": {
+      "choice": "OK",
+      "noul": "OK",
+      "score": "COLLAPSED: one answer (4) takes 95%"
+    }
+  },
+  "typed_final": {
+    "choice": {
+      "correct": 389,
+      "n": 800
+    },
+    "noul": {
+      "correct": 517,
+      "n": 800
+    },
+    "score": {
+      "correct": 131,
+      "n": 400
+    }
+  },
+  "v3": 48.459030630490204
+}

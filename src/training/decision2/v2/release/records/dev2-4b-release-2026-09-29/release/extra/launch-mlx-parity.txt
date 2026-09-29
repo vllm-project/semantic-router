@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# DEV2.0-4B no-upload run: build, examples, repeatability, card and mlx-diag parity (2,275 prompts) against the
+# T = 1 predictions derived from the scored mlx-diag run, with a fresh copy of THAT run's frozen autotune cache.
+# The scored mlx-diag run (m4-N4XF-soup-mlx) used its own cache, whose autotune choices differ from the formal
+# run's for 2 of 6 keys, so it is checked here; the formal panels are checked by launch-command.txt (upload run).
+set -euo pipefail
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+SRC=7855c46dd8781880480ae82d1a96a4c3669ae9c5-src_training_decision2; S=/data/dev2/src/$SRC/src/training/decision2
+G=/data/dev2/private/panels/goldfree; P=/data/dev2/runs/release/inputs/dev2-4b-t1/derived
+FROZEN=/data/dev2/runs/dec/formal/m4/m4-N4XF-soup-triton
+TC=/data/dev2/runs/release/triton/dev2-4b-N4XF-soup-mlx-copy-$TS
+W=/data/dev2/runs/release/dev2-4b-mlxparity-$TS
+trap 'rm -f /data/dev2/leases/gpu5.lock/owner.release' EXIT
+cp -a $FROZEN $TC
+digest() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64); }
+echo "cache copy $TC files=$(find $TC -type f | wc -l) digest=$(digest $TC) frozen_digest=$(digest $FROZEN)"
+set -x
+$S/v2/release/release.sh --spec $S/v2/release/specs/dev2-4b-release.json --src $SRC --work $W \
+  --gpu 5 --track release --shared-lease release --threads 4 \
+  --site /opt/decision-fla --require-kernels \
+  --env HIP_FORCE_DEV_KERNARG=1 --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=$TC --mount-rw $TC \
+  --mount $G --mount $P \
+  --parity mlx-diag:$G/mlx-diag.prompts.jsonl:$P/mlx-diag.predictions.jsonl:2275
+set +x
+echo "cache after run files=$(find $TC -type f | wc -l) digest=$(digest $TC) frozen_digest=$(digest $FROZEN)"

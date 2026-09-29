@@ -287,6 +287,120 @@ class FlaggedTest(unittest.TestCase):
             {"g1": {"group_id": 1, "id": 1, "input_sha256": 1}, "g2": {"id": 1}},
         )
 
+    def test_roles_split_exposed_rows_by_css15_and_panel(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "scan").mkdir()
+            (root / "scan-union").mkdir()
+            (root / "scan" / "H3.private.json").write_text(
+                json.dumps(
+                    {
+                        "groups": {
+                            "g1": {
+                                "protected_ids": {
+                                    "css15_native": ["css/a/1"],
+                                    "decision_bench_v4": ["db-1"],
+                                },
+                                "roles": ["css15_native", "decision_bench_v4"],
+                            },
+                            "g2": {
+                                "protected_ids": {"decision_bench_v4": ["db-2"]},
+                                "roles": ["decision_bench_v4"],
+                            },
+                            "unexposed": {
+                                "protected_ids": {"typed_final_native": ["td-1"]}
+                            },
+                        }
+                    }
+                )
+            )
+            (root / "scan" / "E11.private.json").write_text(
+                json.dumps(
+                    {
+                        "groups": {
+                            "g3": {"protected_ids": {"rights_clean_select": ["s-1"]}}
+                        }
+                    }
+                )
+            )
+            (root / "scan-union" / "union.private.json").write_text(
+                json.dumps(
+                    {"groups": {"g3": {"protected_ids": {"typed_dev": ["dev-1"]}}}}
+                )
+            )
+            flagged = root / "flagged.json"
+            flagged.write_text(
+                json.dumps(
+                    {
+                        "panels": {
+                            "typed-final": [],
+                            "css15": ["css/a/1", "css/b/1"],
+                            "public231": [],
+                            "mlx-diag": [],
+                        },
+                        "item_groups": {"css/a/1": ["g1", "g9"], "css/b/1": ["g9"]},
+                    }
+                )
+            )
+            payload = root / "groups.json"
+            payload.write_text(
+                json.dumps({"flagged_sha256": oe.sha_file(flagged), "groups": {}})
+            )
+            exposure = root / "exposure.json"
+            exposure.write_text(
+                json.dumps(
+                    {
+                        "label": "m",
+                        "payload_sha256": oe.sha_file(payload),
+                        "groups": ["g1", "g2", "g3"],
+                        "matched_rows": {
+                            "g1": {"group_id": 2, "id": 2, "input_sha256": 2},
+                            "g2": {"group_id": 1, "id": 1, "input_sha256": 1},
+                            "g3": {"group_id": 3, "id": 3, "input_sha256": 3},
+                        },
+                        "methods_agree": True,
+                    }
+                )
+            )
+            out = root / "roles.json"
+            args = [
+                "roles",
+                "--rescreen",
+                str(root),
+                "--exposure",
+                str(exposure),
+                "--groups",
+                str(payload),
+                "--flagged",
+                str(flagged),
+                "--output",
+                str(out),
+            ]
+            self.assertEqual(oe.main(args), 0)
+            result = json.loads(out.read_text())
+            self.assertEqual((result["all"]["groups"], result["all"]["rows"]), (3, 6))
+            self.assertEqual(result["with_css15"]["rows"], 2)
+            self.assertEqual(result["with_css15"]["reported_panels_hit"], ["css15"])
+            self.assertEqual(result["with_css15"]["scored_items"], {"css15": 1})
+            without = result["without_css15"]
+            self.assertEqual((without["groups"], without["rows"]), (2, 4))
+            self.assertEqual(without["reported_panels_hit"], [])
+            self.assertEqual(without["development_panels_hit"], ["typed-dev"])
+            self.assertEqual(without["scored_items"], {})
+            self.assertEqual(
+                without["by_role_class"],
+                {
+                    "decision_bench_v4": {"groups": 1, "rows": 1},
+                    "rights_clean_select": {"groups": 1, "rows": 3},
+                    "typed-dev": {"groups": 1, "rows": 3},
+                },
+            )
+            self.assertEqual(without["by_pool"]["E11"], {"groups": 1, "rows": 3})
+            self.assertNotIn("css/a/1", out.read_text())
+            payload.write_text(json.dumps({"flagged_sha256": "x", "groups": {}}))
+            with self.assertRaises(ValueError):
+                oe.main(args)
+
 
 class AggregatesTest(unittest.TestCase):
     def test_contamination_difference_in_differences(self):
