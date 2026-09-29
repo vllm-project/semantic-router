@@ -205,6 +205,50 @@ class Pn1FixTest(unittest.TestCase):
             self.assertEqual(labels.count("yes"), labels.count("no"))
 
 
+class Pn1MarginFixTest(unittest.TestCase):
+    def test_margin_filter_uses_filtered_population(self):
+        rows = []
+        for language in ("ja", "de", "ko"):
+            for family, label, p in (
+                ("pn-hop", 1, 0.95),
+                ("pn-near", 0, 0.05),
+                ("pn-name", 1, 0.95),
+                ("pn-twin", 0, 0.05),
+            ):
+                for k in range(20):
+                    q = 0.35 if (label == 0 and k % 7 == 0) else p
+                    rows.append(
+                        pn1_row(
+                            f"m4pn1-{family}-{language}{k:03d}",
+                            language,
+                            family,
+                            label,
+                            p=q,
+                        )
+                    )
+        built = br.build_pn1(rows, "0" * 64)
+        key = built["key"]
+        low = [k["rid"] for k in key if k["judge_p_yes"] == 0.35]
+        self.assertTrue(low)
+        gold = {k["rid"]: k["gold"] for k in key}
+        r = answers(key, lambda i: "yes" if i["rid"] in low else gold[i["rid"]])
+        report, private = br.score_pn1(built["sample"], key, r, r, None)
+        self.assertFalse(report["verdict"]["P1"])
+        self.assertEqual(report["verdict"]["failing_language_group_cells"], [])
+        fixed, receipt = br.fix_pn1(rows, private, built["sample"]["population"])
+        self.assertTrue(receipt["steps"]["F3_margin_applied"])
+        self.assertEqual(receipt["verdict"], "FIXED-PASS")
+        self.assertEqual(receipt["after"]["errors"], 0)
+        self.assertFalse(
+            any(r["audit_metadata"]["judge"]["label_p_yes"] == 0.35 for r in fixed)
+        )
+        for cell in {br.pn1_cell(r).rsplit("|", 1)[0] for r in fixed}:
+            labels = [
+                br.noul_gold(r) for r in fixed if br.pn1_cell(r).startswith(cell + "|")
+            ]
+            self.assertEqual(labels.count("yes"), labels.count("no"))
+
+
 def hs1_rows():
     rows = []
     for family in ("hs1_quote_check", "hs1_policy_packet"):

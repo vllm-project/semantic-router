@@ -688,15 +688,14 @@ def fix_pn1(
     def keep_f02(row: Mapping[str, Any]) -> bool:
         return row["group_id"] not in dropped_groups and cell_of(row) not in failing
 
-    survivors = [
-        i
-        for i in items
-        if i["group_id"] not in dropped_groups and i["language_group"] not in failing
-    ]
-    live_pop = {
-        c: v for c, v in population.items() if c.rsplit("|", 1)[0] not in failing
-    }
-    after = pn1_verdict(survivors, live_pop) if survivors else None
+    kept_rows = [r for r in rows if keep_f02(r)]
+    kept_ids = {r["id"] for r in kept_rows}
+    survivors = [i for i in items if i["id"] in kept_ids]
+    after = (
+        pn1_verdict(survivors, Counter(pn1_cell(r) for r in kept_rows))
+        if survivors
+        else None
+    )
     margin = False
     if after is None or not (after["P1"] and after["P2"]):
         margin = True
@@ -711,12 +710,16 @@ def fix_pn1(
                 return p >= PN1_THRESHOLDS["margin_yes_min"]
             return p <= PN1_THRESHOLDS["margin_no_max"]
 
-        kept_ids = {r["id"] for r in rows if keep_f02(r) and confident(r)}
+        kept_rows = [r for r in kept_rows if confident(r)]
+        kept_ids = {r["id"] for r in kept_rows}
         survivors = [i for i in survivors if i["id"] in kept_ids]
-        after = pn1_verdict(survivors, live_pop) if survivors else None
-    else:
-        kept_ids = {r["id"] for r in rows if keep_f02(r)}
+        after = (
+            pn1_verdict(survivors, Counter(pn1_cell(r) for r in kept_rows))
+            if survivors
+            else None
+        )
     steps["F3_margin_applied"] = margin
+    steps["reviewed_survivors"] = len(survivors)
     kept = [r for r in rows if r["id"] in kept_ids and r["id"] not in error_ids]
     by_cell: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
     for row in kept:
