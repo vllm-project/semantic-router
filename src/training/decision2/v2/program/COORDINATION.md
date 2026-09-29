@@ -89,6 +89,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | eval: human-transfer dev panel | `/home/xunliu/code/vllm-sr-dev2-eval-devpanel` | `xunzhuo/decision-2-training-eval-devpanel` |
 | HF storage steward | `/home/xunliu/code/vllm-sr-dev2-storage` | `xunzhuo/decision-2-training-storage` |
 | release engineering (DEV2.0-4B) | `/home/xunliu/code/vllm-sr-dev2-release-4b` | `xunzhuo/decision-2-training-release-4b` |
+| release engineering (~27B) | `/home/xunliu/code/vllm-sr-dev2-release-27b` | `xunzhuo/decision-2-training-release-27b` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -182,6 +183,7 @@ exactly one gist file and updates it in place:
 | `07b-decision-2-release-06b.md` | release engineering for DEV2.0-0.6B |
 | `07c-decision-2-release-2b.md` | release engineering for DEV2.0-2B |
 | `07d-decision-2-release-4b.md` | release engineering for DEV2.0-4B |
+| `07e-decision-2-release-27b.md` | release engineering for the ~27B tier |
 
 - Create: write the file locally with exactly that name, then `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -a <local-path>`.
   Update: `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -f <file-name> <local-path>`. Never modify or delete other files.
@@ -190,6 +192,27 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 11:55 — **FIFTH RELEASE CANDIDATE: ~27B F1** (27B M3; gist 06; integration `15775dca0`).
+  - F1 = exact rank-16 LoRA seed soup of the A7-curriculum arm (A0s-strict + A6 + ~5M A7 typed-curriculum tokens; official
+    Qwen3.8-27B base), T = 1 (CAL698 failed the development rule: typed-DEV ECE .049 → .096), 32K limit, FLA kernel path.
+    Post-key v3 67.21 vs the >= 64.9 bar (AutoJev-27B 72.13; F1 − AutoJev −4.92 [−6.82, −0.43]); vs Eikos-27B −2.08 [−5.04,
+    +2.62]; vs Jebadiah +1.74 [−0.97, +4.83]; human transfer vs AutoJev −.013 [−.040, +.056]; no type collapsed (Choice
+    628 / 800, Noul 715 / 800, Score 317 / 400); constraint competition .39 → .57, exception stack .62 → .79. Staged private
+    `dev2-27b-staging@14f75b3107e197bd9be43150069f52cf56837e75` (`m3/M3-A-soup/`); scored run node B
+    `/data/dev2/runs/27b/M3-A-soup/formal`. Release-pipeline dry run with FLA required: 0 answer changes on 10,378 prompts.
+    The matched control F2 (M3-S soup) finishes automatically ≈14:40 UTC+8 (`/data/dev2/runs/27b/M3-S-soup/formal` or
+    `M3-S-final`; contrast `/data/dev2/runs/27b/m3-contrast/contrast.json`); if F2 beats F1 formally, the coordinator switches.
+  - **No-1.0 gate profile (coordinator decision):** for the ~27B tier the release gate is: post-key v3 >= 90% of the best
+    measured open-weight peer (>= 64.9), human transfer not significantly below that peer, no type collapsed. The pipeline's
+    "beat own 1.0" check and the card's own-1.0 slot are replaced by a statement that no Decision 1.0 model exists at this
+    size; peers (AutoJev-27B, Eikos-27B as the disclosed BF16 sibling of its FP8 board entry, Jebadiah) appear only if
+    card-eligible.
+  - **Naming:** the brief sets final names by actual loaded parameter count — the ~25.7B text model is named accordingly
+    (e.g., DEV2.0-26B; release engineering confirms the count and name).
+  - Milestone 2's formal 27B runs (incl. 62.72) used the reference gated-delta path (no FLA); not answer-comparable with
+    kernel-path runs. The proxy's "27B LoRA over-prediction by 4–5" likely came from reference-path readouts at 4K; with
+    FLA-path readouts at the formal limit the proxy predicted ≈67.1 vs 67.21 measured (eval: note this in "Eval runners").
 
 - 2026-09-29 09:30 — **DEV2.0-4B RELEASED (private)**: `llm-semantic-router/DEV2.0-4B@452f133211de292a87bc29ab7e24a3bd0704e40d`
   (final decision `bfd45785…`; weights identical to `8052eb6c` / `c73123f3`; T = 1; integration `e7e7fe1c3`). The private
