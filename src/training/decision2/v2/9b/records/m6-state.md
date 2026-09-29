@@ -1,6 +1,6 @@
 # 9B M6 state (resume file)
 
-Updated: 2026-09-30 03:25 UTC+8 (M6 worker; **wave 1 training: KA-s4 on GPU6, K-s4 on GPU7**)
+Updated: 2026-09-30 06:05 UTC+8 (M6 worker; **KA stopped by its early rule; KH-s4 on GPU6, K-s5 on GPU7**)
 Branch: `xunzhuo/decision-2-training-9b` (merge-only into `xunzhuo/decision-2-training`)
 Prereg: `records/lux9b-m6-prereg-2026-09-30.md` (`f41402e68`) + amendment 1 (`7380a3cbf`). Code / wrappers mirror
 `7380a3cbf` on node A (created, verified); runtime mirror `3277dec9d` (verified, reused).
@@ -28,9 +28,19 @@ Prereg: `records/lux9b-m6-prereg-2026-09-30.md` (`f41402e68`) + amendment 1 (`73
 ## Running
 
 - Chains `m6-g6` (PID 3537189; step log `logs/m6-gpu6.log`) and `m6-g7` (PID 3537271; `logs/m6-gpu7.log`), mirror
-  `e611b96b4`, launched 18:50Z. `ref-ka13` done 18:54Z: identical to M4's K ⅓ readout (T .925, C/N/S 799 / 338 / 343,
-  H3 .5622, P 73.22; `m6/readout-ref`). Preflights `pf-KA-s4-check`, `pf-K-s4-check`: PASS. KA-s4 and K-s4 full runs
-  from ~19:05Z; ETA ~21:45Z with in-arm readouts.
+  `e611b96b4`, launched 18:50Z. `ref-ka13` = M4's K ⅓ readout exactly (`m6/readout-ref`).
+- Wave 1 done: KA-s4 18:50–21:27Z, K-s4 18:54–21:32Z (preflights PASS; BEST = final checkpoint 1,629 for both).
+- **Early rule KA: STOP** (`rules/early-KA-s4.json` `9e3cf68d…`; readout `early-KA-s4/readout.json` `55fe7647…`):
+
+  | ⅓ point (first seed) | T | H3 | H | P | C / N / S | rule_precedence |
+  | --- | ---: | ---: | ---: | ---: | --- | ---: |
+  | KA-s4 (AutoJev on S) | .8988 | .5731 | .5945 | 73.10 | 800 / 272 / 366 | 272 |
+  | K-s4 (own-Lux control) | .9231 | .5654 | .5846 | 73.46 | 800 / 346 / 331 | 346 |
+
+  ΔP −0.36 < +0.5. H3 was higher (+.008; discourse +.010, stance +.013). Typed Score +35, with more level-1 answers
+  (76 vs 38; gold 107), but Noul `rule_precedence` fell 74 items to Lux's level. That is the same trade as M5's dose.
+  No KA second seed or line.
+- Wave 2 running: KH-s4 (GPU6, from 21:39Z) and K-s5 (GPU7, from 21:38Z); ETA ~00:20Z. Budget used 6.32 GPU-h at 21:39Z.
 
 ## Next
 
