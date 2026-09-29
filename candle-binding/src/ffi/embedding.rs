@@ -8,7 +8,7 @@ use crate::ffi::types::{
     BatchSimilarityResult, EmbeddingResult, EmbeddingSimilarityResult, SimilarityMatch,
 };
 use crate::model_architectures::ModelType;
-use std::ffi::{CStr, c_char};
+use std::ffi::{c_char, CStr};
 
 //Import embedding models and model factory
 use crate::model_architectures::config::{DualPathConfig, EmbeddingConfig};
@@ -480,8 +480,8 @@ pub extern "C" fn init_embedding_models_with_mmbert(
 /// # Safety
 /// - `qwen3_model_path` and `gemma_model_path` must be valid null-terminated C strings or null
 /// - Must be called before any embedding generation functions
-/// - Subsequent calls succeed only when every requested embedding model is
-///   already registered in the global factory.
+/// - Subsequent calls require Qwen3 to be registered when requested. Gemma
+///   loading remains best-effort and does not affect the return value.
 ///
 /// # Returns
 /// - true if initialization succeeded or every requested model is already registered
