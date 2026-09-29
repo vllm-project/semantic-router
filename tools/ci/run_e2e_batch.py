@@ -18,6 +18,7 @@ from ci_results import actual_platform, artifact_records, make_receipt
 from deployment_test_results import kubernetes
 from execution_batches import validate_execution_batch
 from image_artifacts import IMAGE_ENV
+from release_guard_waiver import waiver_evidence_errors
 
 ROOT = Path(__file__).resolve().parents[2]
 MINUTE = 60
@@ -162,11 +163,14 @@ def remove_state(state: Path) -> None:
         )
 
 
-def profile_evidence(record: dict, cluster: str, raw: Path) -> dict:
+def profile_evidence(record: dict, cluster: str, raw: Path, *, passed: bool) -> dict:
     report = json.loads((raw / "test-report.json").read_text())
     if report.get("cluster_name") != cluster:
         raise ValueError("Kubernetes report belongs to a different cluster")
-    evidence = kubernetes(report, record["profile"])
+    waiver = record.get("known_issue_waiver") if not passed else None
+    if not passed and not waiver:
+        raise ValueError("profile execution failed without a planned waiver")
+    evidence = kubernetes(report, record["profile"], waiver=waiver)
     evidence.update(
         runtime=record["runtime"],
         device=record["device"],
@@ -174,6 +178,38 @@ def profile_evidence(record: dict, cluster: str, raw: Path) -> dict:
         profile=record["profile"],
         cluster_name=cluster,
     )
+    if waiver:
+        result = next(
+            row for row in report["test_results"] if row["Name"] == waiver["case"]
+        )
+        details = result.get("Details")
+        report_lines = (raw / "test-report.md").read_text().splitlines()
+        if not any(
+            line.startswith(f"- ❌ **{waiver['case']}**")
+            and f"Error: `{waiver['reason']}`" in line
+            for line in report_lines
+        ):
+            raise ValueError("Guard failure reason differs from accepted #4120")
+        evidence.update(
+            known_issue_waiver=waiver,
+            waived_failure={
+                "case": waiver["case"],
+                "reason": waiver["reason"],
+                "details": details,
+            },
+            framework_report={
+                key: report[key]
+                for key in (
+                    "status",
+                    "exit_code",
+                    "total_tests",
+                    "passed_tests",
+                    "failed_tests",
+                )
+            },
+        )
+        if errors := waiver_evidence_errors(evidence, waiver):
+            raise ValueError("; ".join(errors))
     return evidence
 
 
@@ -202,7 +238,7 @@ def run_profile(record: dict, raw: Path, state: Path, env: dict) -> tuple[bool, 
         passed = True
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         (raw / "failure.txt").write_text(str(error) + "\n")
-        print(f"::error::{record['id']}: {error}", flush=True)
+        print(f"{record['id']}: {error}", flush=True)
     finally:
         try:
             cleanup_cluster(cluster, isolated, raw)
@@ -230,6 +266,7 @@ def run_batch(batch: dict, output: Path) -> bool:
     state_root.mkdir(parents=True, exist_ok=False)
     artifacts = artifact_records({}, environ=env)
     failures = []
+    waived = []
     safe_to_continue = True
     for record in batch["verifications"]:
         identity = record["id"]
@@ -250,10 +287,12 @@ def run_batch(batch: dict, output: Path) -> bool:
                 if "image:" + image not in {row["id"] for row in artifacts}:
                     raise ValueError(f"required image receipt missing: {image}")
             passed, safe_to_continue = run_profile(record, raw, state, env)
-            if not passed or not safe_to_continue:
-                raise ValueError("profile execution or teardown failed")
+            if not safe_to_continue:
+                raise ValueError("profile teardown failed")
             execution = json.loads((raw / "execution.json").read_text())
-            evidence = profile_evidence(record, execution["cluster"], raw)
+            evidence = profile_evidence(
+                record, execution["cluster"], raw, passed=passed
+            )
             evidence["artifacts"] = [
                 row
                 for row in artifacts
@@ -270,6 +309,13 @@ def run_batch(batch: dict, output: Path) -> bool:
             (output / "results" / f"{identity}.json").write_text(
                 json.dumps(receipt, indent=2) + "\n"
             )
+            if not passed:
+                waived.append(identity)
+                print(
+                    f"::warning::{identity}: Guard case failed as #4120; "
+                    "release qualification retained failed evidence",
+                    flush=True,
+                )
         except (
             OSError,
             ValueError,
@@ -286,6 +332,7 @@ def run_batch(batch: dict, output: Path) -> bool:
     summary = {
         "selected": [row["id"] for row in batch["verifications"]],
         "failed": failures,
+        "qualified_with_waiver": waived,
     }
     (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     return not failures

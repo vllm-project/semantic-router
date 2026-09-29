@@ -19,7 +19,7 @@ def build_chat_usage(req: ChatRequest, content: str) -> dict:
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "total_tokens": prompt_tokens + completion_tokens,
-        "prompt_tokens_details": {"cached_tokens": 0},
+        "prompt_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
         "completion_tokens_details": {"reasoning_tokens": 0},
     }
 
@@ -57,10 +57,20 @@ def chat_requests_mock_tool(req: ChatRequest) -> bool:
 
 
 def chat_contains(req: ChatRequest, marker: str) -> bool:
-    return any(
-        isinstance(message.content, str) and marker in message.content
-        for message in req.messages
-    )
+    for message in req.messages:
+        content = message.content
+        if isinstance(content, str) and marker in content:
+            return True
+        if isinstance(content, list):
+            for part in content:
+                if (
+                    isinstance(part, dict)
+                    and part.get("type") == "text"
+                    and isinstance(part.get("text"), str)
+                    and marker in part["text"]
+                ):
+                    return True
+    return False
 
 
 def chat_has_tool_result(req: ChatRequest) -> bool:
@@ -147,6 +157,145 @@ def generate_chat_tool_stream(req: ChatRequest, created_ts: int) -> Iterator[str
         {},
         "tool_calls",
         build_chat_usage(req, "lookup weather"),
+    )
+    yield "data: [DONE]\n\n"
+
+
+def generate_chat_custom_tool_kind_stream(
+    req: ChatRequest, created_ts: int, variant: str
+) -> Iterator[str]:
+    """Emit a complete native stream with one valid or switched tool kind."""
+    response_id = "cmpl-mock-custom-kind-123"
+    yield build_chat_stream_chunk(
+        req, response_id, created_ts, {"role": "assistant"}, None
+    )
+    if variant == "function_to_custom":
+        first = {
+            "index": 0,
+            "id": "call_mock_custom_kind",
+            "type": "function",
+            "function": {"name": "lookup", "arguments": "{}"},
+        }
+        remaining = [{"index": 0, "custom": {"input": "def"}}]
+    else:
+        first = {
+            "index": 0,
+            "id": "call_mock_custom_kind",
+            "type": "custom",
+            "custom": {"name": "apply_patch", "input": "abc"},
+        }
+        if variant == "custom_to_function":
+            remaining = [
+                {
+                    "index": 0,
+                    "type": "function",
+                    "function": {"arguments": '{"x":1}'},
+                }
+            ]
+        elif variant == "custom_to_untyped_function":
+            remaining = [{"index": 0, "function": {"arguments": '{"x":1}'}}]
+        elif variant == "valid_custom":
+            remaining = [
+                {"index": 0, "custom": {"input": "def"}},
+                {"index": 0},
+                {"index": 0, "custom": {"input": "ghi"}},
+            ]
+        else:
+            raise ValueError(f"unknown custom tool kind fixture: {variant}")
+
+    for call in [first, *remaining]:
+        yield build_chat_stream_chunk(
+            req, response_id, created_ts, {"tool_calls": [call]}, None
+        )
+    yield build_chat_stream_chunk(
+        req,
+        response_id,
+        created_ts,
+        {},
+        "tool_calls",
+        build_chat_usage(req, "apply_patch"),
+    )
+    yield "data: [DONE]\n\n"
+
+
+CUSTOM_TOOL_FIXTURE_INPUT = "*** Begin Patch\n+provider\n*** End Patch"
+
+
+def build_chat_custom_tool_response(
+    req: ChatRequest, created_ts: int
+) -> dict[str, Any]:
+    return {
+        "id": "cmpl-mock-custom-tool-123",
+        "object": "chat.completion",
+        "created": created_ts,
+        "model": req.model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_mock_patch",
+                            "type": "custom",
+                            "custom": {
+                                "name": "apply_patch",
+                                "input": CUSTOM_TOOL_FIXTURE_INPUT,
+                            },
+                        }
+                    ],
+                },
+                "finish_reason": "tool_calls",
+                "logprobs": None,
+            }
+        ],
+        "usage": build_chat_usage(req, CUSTOM_TOOL_FIXTURE_INPUT),
+    }
+
+
+def generate_chat_custom_tool_stream(
+    req: ChatRequest, created_ts: int
+) -> Iterator[str]:
+    response_id = "cmpl-mock-custom-tool-123"
+    # Some Chat providers announce an id before the custom kind/name.
+    yield build_chat_stream_chunk(
+        req,
+        response_id,
+        created_ts,
+        {"role": "assistant", "tool_calls": [{"index": 0, "id": "call_mock_patch"}]},
+        None,
+    )
+    first, second = CUSTOM_TOOL_FIXTURE_INPUT[:15], CUSTOM_TOOL_FIXTURE_INPUT[15:]
+    yield build_chat_stream_chunk(
+        req,
+        response_id,
+        created_ts,
+        {
+            "tool_calls": [
+                {
+                    "index": 0,
+                    "type": "custom",
+                    "custom": {"name": "apply_patch", "input": first},
+                }
+            ]
+        },
+        None,
+    )
+    yield build_chat_stream_chunk(
+        req,
+        response_id,
+        created_ts,
+        {"tool_calls": [{"index": 0, "custom": {"input": second}}]},
+        None,
+    )
+    yield build_chat_stream_chunk(
+        req,
+        response_id,
+        created_ts,
+        {},
+        "tool_calls",
+        build_chat_usage(req, CUSTOM_TOOL_FIXTURE_INPUT),
     )
     yield "data: [DONE]\n\n"
 

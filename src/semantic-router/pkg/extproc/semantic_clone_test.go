@@ -16,5 +16,6 @@ func TestCloneSemanticRequestForReplayPreservesAbsentRawFields(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, cloned.OutputFormat.Schema)
 	require.Nil(t, cloned.ChatTemplateKwargs)
+	require.Nil(t, cloned.ContextManagement)
 	require.Nil(t, cloned.Tools[0].InputSchema)
 }

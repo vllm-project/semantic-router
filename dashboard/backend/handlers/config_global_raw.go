@@ -5,11 +5,11 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -69,7 +69,7 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 		}
 		defer release()
 
-		existingData, err := os.ReadFile(configPath)
+		existingData, err := readPersistedDashboardConfig(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
 			return
@@ -81,8 +81,14 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := writeConfigAtomically(configPath, updatedYAML); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
+			writeConfigPersistenceError(w, err)
+			return
+		}
+		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 			return
 		}
 
@@ -94,6 +100,13 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			http.Error(w, fmt.Sprintf("Failed to apply config to runtime: %v. Previous config restored.", err), http.StatusInternalServerError)
 			return
 		}
+		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
+			return
+		}
+		if configActivationDeferred() {
+			writeDeferredConfigResponse(w)
+			return
+		}
 
 		if err := writeYAMLTaggedJSON(w, map[string]string{"status": "success"}); err != nil {
 			log.Printf("Error encoding response: %v", err)
@@ -102,7 +115,7 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 }
 
 func readEffectiveGlobalYAML(configPath string) ([]byte, error) {
-	data, err := os.ReadFile(configPath)
+	data, err := readPersistedDashboardConfig(configPath)
 	if err != nil {
 		return nil, err
 	}

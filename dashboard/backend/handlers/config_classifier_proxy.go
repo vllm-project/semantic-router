@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
@@ -59,6 +60,9 @@ func RouterClassifierProxyHandler(routerAPIURL string, readonlyMode bool, creden
 			return
 		}
 
+		if policy.Mutation && auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		resp, err := http.DefaultClient.Do(proxyReq)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Router API request failed: %v", err), http.StatusBadGateway)

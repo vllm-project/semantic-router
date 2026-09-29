@@ -160,6 +160,16 @@
       "minProperties": 1,
       "description": "Complete canonical Router config that atomically replaces chart config defaults before Kubernetes integration rewrites."
     },
+    "configMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "applyValuesRevision": {
+          "type": "string",
+          "description": "Change this revision to apply chart config values once on upgrade; the same revision preserves later runtime edits."
+        }
+      }
+    },
     "dashboard": {
       "type": "object",
       "additionalProperties": true,

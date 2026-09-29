@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -56,7 +57,7 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 		return err
 	}
 	preview := *request
-	if decision != nil {
+	if decision != nil && !preserveExplicitAnthropicReasoning(&preview, format) {
 		if format != llmprotocol.OpenAIChatV1 {
 			if family := r.getModelReasoningFamily(ref.Model); family != nil {
 				exact := *decision
@@ -68,6 +69,10 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 				}
 			}
 		}
+	}
+	preview, err = r.projectRequestForBackend(preview, ref.Model, format)
+	if err != nil {
+		return err
 	}
 	demand, err := selection.EffectiveCandidateDemand(&preview, decision)
 	if err != nil {
@@ -104,16 +109,42 @@ func (r *OpenAIRouter) capabilityEligibleSelectionContext(input *selection.Selec
 	}
 	requirements := r.candidateRequirements(ctx)
 	eligible := make([]config.ModelRef, 0, len(input.CandidateModels))
+	var unsupported *llmprotocol.ProtocolError
+	onlyUnsupported := true
+	// Context, budget, and hard-policy filters can narrow the decision before
+	// this stage. A wire mismatch in the remainder is not the sole exclusion.
+	if ctx.VSRSelectedDecision != nil {
+		for _, ref := range ctx.VSRSelectedDecision.ModelRefs {
+			if !modelRefInEligibility(ref, input.CandidateModels) {
+				onlyUnsupported = false
+				break
+			}
+		}
+	}
 	for _, ref := range input.CandidateModels {
 		if (!decisionUsesAutomaticOutput(request, ctx.VSRSelectedDecision) && !selection.CandidateRequirementsEnabled(requirements) && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
 			(ctx.VSREligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSREligibleModelRefs)) ||
-			(ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs)) ||
-			r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, requirements, ctx.AutomaticCandidateDemands) != nil {
+			(ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs)) {
+			onlyUnsupported = false
+			continue
+		}
+		if err := r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, requirements, ctx.AutomaticCandidateDemands); err != nil {
+			var protocolErr *llmprotocol.ProtocolError
+			if !errors.As(err, &protocolErr) || protocolErr.Category != llmprotocol.ErrorUnsupportedFeature {
+				onlyUnsupported = false
+			} else if unsupported == nil {
+				unsupported = protocolErr
+			}
 			continue
 		}
 		eligible = append(eligible, ref)
 	}
 	if len(eligible) == 0 {
+		// Dispatch to a named model reports this mismatch as a client error, so
+		// auto routing does too when it is the only reason no candidate qualified.
+		if onlyUnsupported && unsupported != nil {
+			return nil, unsupported
+		}
 		return nil, fmt.Errorf("%w: decision %q has no candidate supporting the request capabilities", selection.ErrNoEligibleCandidates, input.DecisionName)
 	}
 	decision := &config.Decision{Name: input.DecisionName, Algorithm: algorithm}

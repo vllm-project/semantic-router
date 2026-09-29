@@ -56,6 +56,24 @@ func TestCacheAffinity_PreviousResponseID_TriggersContinuation(t *testing.T) {
 	assert.Greater(t, result.Adjustments["model-a"], 0.0)
 }
 
+func TestCacheAffinity_PromptCacheKey_TriggersContinuation(t *testing.T) {
+	affCtx := makeAffCtx(0, 0, 500, "model-a", "", nil)
+	affCtx.PromptCacheKey = "conversation-1"
+	result := ComputeCacheAffinityAdjustments(affCtx, makeCandidates("model-a", "model-b"), equalBase("model-a", "model-b"))
+
+	assert.GreaterOrEqual(t, result.WReq, wrPromptCacheKeyFloor)
+	assert.Greater(t, result.Adjustments["model-a"], 0.0)
+	assert.Less(t, result.Adjustments["model-b"], 0.0)
+}
+
+func TestCacheAffinity_NoPromptCacheKey_NoContinuation(t *testing.T) {
+	affCtx := makeAffCtx(0, 0, 500, "model-a", "", nil)
+	result := ComputeCacheAffinityAdjustments(affCtx, makeCandidates("model-a", "model-b"), equalBase("model-a", "model-b"))
+
+	assert.Equal(t, 0.0, result.LambdaReq)
+	assert.Empty(t, result.Adjustments)
+}
+
 func TestCacheAffinity_SingleCandidate_ZeroAdjustment(t *testing.T) {
 	affCtx := makeAffCtx(3, 1000, 1500, "model-a", "", nil)
 	result := ComputeCacheAffinityAdjustments(affCtx, makeCandidates("model-a"), map[string]float64{"model-a": 0.8})

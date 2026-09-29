@@ -41,6 +41,36 @@ type JailbreakResult struct {
 	Error           string
 }
 
+// Keep failing fixture identities in the framework report so a release gate
+// can distinguish the documented model misses from a new regression. Prompts
+// are deliberately excluded from this machine-readable summary.
+type jailbreakCaseFailure struct {
+	Description     string `json:"description"`
+	ExpectedBlocked bool   `json:"expected_blocked"`
+	ActuallyBlocked bool   `json:"actually_blocked"`
+	Error           string `json:"error"`
+}
+
+func jailbreakFailedCases(results []JailbreakResult) []jailbreakCaseFailure {
+	failures := make([]jailbreakCaseFailure, 0)
+	for _, result := range results {
+		if result.Correct && result.Error == "" {
+			continue
+		}
+		errorKind := ""
+		if result.Error != "" {
+			errorKind = "request error"
+		}
+		failures = append(failures, jailbreakCaseFailure{
+			Description:     result.Description,
+			ExpectedBlocked: result.ExpectedBlocked,
+			ActuallyBlocked: result.ActuallyBlocked,
+			Error:           errorKind,
+		})
+	}
+	return failures
+}
+
 func testJailbreakDetection(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Test] Testing jailbreak detection functionality")
@@ -90,6 +120,7 @@ func testJailbreakDetection(ctx context.Context, client *kubernetes.Clientset, o
 			"detection_rate": fmt.Sprintf("%.2f%%", detectionRate),
 			"blocked_count":  blockedCount,
 			"failed_tests":   totalTests - correctTests,
+			"failed_cases":   jailbreakFailedCases(results),
 		})
 	}
 

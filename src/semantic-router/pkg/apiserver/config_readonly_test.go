@@ -9,10 +9,16 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	fakeclientset "k8s.io/client-go/kubernetes/fake"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
 // The mandatory contract uses a self-contained Kubernetes configuration source.
@@ -93,5 +99,81 @@ func TestManagementRouteReadonlyConfiguration(t *testing.T) {
 				t.Fatalf("normal management route surfaces late filesystem failure instead of declared immutable capability: HTTP=%d body=%s", response.Code, response.Body.String())
 			}
 		})
+	}
+}
+
+func TestManagementRoutePersistsConfigMapAndRequiresRollout(t *testing.T) {
+	original := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("before_configmap_update"))
+	candidate := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("after_configmap_update"))
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, original, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	const namespace, name = "router-test", "router-config"
+	t.Setenv(configwriter.ConfigMapNameEnv, name)
+	t.Setenv(configwriter.ConfigMapNamespaceEnv, namespace)
+	client := fakeclientset.NewSimpleClientset(&corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Data:       map[string]string{"config.yaml": string(original)},
+	})
+	restoreWriter := stubInClusterConfigMapWriter(t, configwriter.NewConfigMapWriter(client))
+	defer restoreWriter()
+
+	const token = "configmap-route-test-token"
+	t.Setenv("RELEASE_AUDIT_MGMT_TOKEN", token)
+	management := config.ManagementAPIConfig{Auth: config.ManagementAPIAuthConfig{
+		Mode:   config.ManagementAuthModeBearer,
+		Tokens: []config.ManagementAPITokenRef{{Env: "RELEASE_AUDIT_MGMT_TOKEN", Role: "admin"}},
+		Roles:  config.DefaultManagementAPIRoles(),
+	}}
+	server := testManagementAPIServer(t, management)
+	server.configPath = configPath
+	mux := server.setupRoutes()
+	payload, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(candidate)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	put := func() *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewReader(payload))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Authorization", "Bearer "+token)
+		request.Header.Set("If-Match", configDocumentETag(original))
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, request)
+		return response
+	}
+	first := put()
+	if first.Code != http.StatusAccepted || !strings.Contains(first.Body.String(), `"activation_status":"persisted"`) {
+		t.Fatalf("ConfigMap write = HTTP %d: %s", first.Code, first.Body.String())
+	}
+	stored, err := client.CoreV1().ConfigMaps(namespace).Get(t.Context(), name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedDoc, err := decodeYAMLDocument([]byte(stored.Data["config.yaml"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidateDoc, err := decodeYAMLDocument(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(storedDoc, candidateDoc) {
+		t.Fatalf("candidate document was not persisted to the ConfigMap: got=%v want=%v", storedDoc, candidateDoc)
+	}
+	mounted, err := os.ReadFile(configPath)
+	if err != nil || !bytes.Equal(mounted, original) {
+		t.Fatal("a ConfigMap update unexpectedly changed the mounted source")
+	}
+	get := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
+	get.Header.Set("Authorization", "Bearer "+token)
+	readback := httptest.NewRecorder()
+	mux.ServeHTTP(readback, get)
+	if readback.Code != http.StatusOK || readback.Header().Get("ETag") != configDocumentETag([]byte(stored.Data["config.yaml"])) {
+		t.Fatalf("ConfigMap readback = HTTP %d ETag %s: %s", readback.Code, readback.Header().Get("ETag"), readback.Body.String())
+	}
+	second := put()
+	if second.Code != http.StatusConflict || !strings.Contains(second.Body.String(), "CONFIG_ROLLOUT_REQUIRED") {
+		t.Fatalf("stale Pod accepted a second mutation: HTTP %d: %s", second.Code, second.Body.String())
 	}
 }
