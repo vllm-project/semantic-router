@@ -402,7 +402,123 @@ class SaveReloadTest(TinyModelCase):
                     )
 
 
+def unsplit_run_update(
+    model,
+    optimizer,
+    group,
+    *,
+    micro_batches,
+    rows,
+    items,
+    dummy,
+    pad_id,
+    precision,
+    brier_weight,
+    kl_weight,
+    step,
+    horizon,
+    warmup_ratio,
+    clip,
+):
+    """``train_ff.run_update`` as it was before the accumulate / step split."""
+    factor = learning_factor(step, horizon, warmup_ratio)
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = param_group["peak_lr"] * factor
+    optimizer.zero_grad(set_to_none=True)
+    sums = torch.zeros(5, dtype=torch.float64, device=group.device)
+    for batch_ids in micro_batches:
+        subset = [items[index] for index in batch_ids] if batch_ids else [dummy]
+        logits, batch, terms = train_ff.batch_terms(
+            model,
+            subset,
+            pad_id=pad_id,
+            device=group.device,
+            precision=precision,
+            brier_weight=brier_weight,
+            kl_weight=kl_weight,
+        )
+        (terms["total"].sum() * (1.0 / rows if batch_ids else 0.0)).backward()
+        if batch_ids:
+            sums += torch.stack(
+                [
+                    *(
+                        terms[name].detach().double().sum()
+                        for name in ("total", "ce", "brier", "replay_kl")
+                    ),
+                    (logits.detach().argmax(-1) == batch["labels"]).sum().double(),
+                ]
+            )
+    group.all_reduce(sums)
+    norm = train_ff.scalar(torch.nn.utils.clip_grad_norm_(model.parameters(), clip))
+    totals = sums.tolist()
+    if not all(math.isfinite(value) for value in totals) or not math.isfinite(norm):
+        raise RuntimeError(f"Nonfinite loss or gradient norm at update {step + 1}")
+    optimizer.step()
+    optimizer.zero_grad(set_to_none=True)
+    lrs = {g["name"]: g["lr"] for g in optimizer.param_groups}
+    return {
+        "loss": totals[0] / rows,
+        "ce": totals[1] / rows,
+        "brier": totals[2] / rows,
+        "kl": totals[3] / rows,
+        "accuracy": totals[4] / rows,
+        "grad_norm_preclip": norm,
+        "lr_backbone": lrs["backbone"],
+        "lr_head": lrs["head"],
+    }
+
+
 class LossNormalizationTest(TinyModelCase):
+    def test_run_update_matches_unsplit_update(self):
+        _, tokenizer = train_ff.build_model(self.sources["qwen3"], "rev", 16, 9)
+        items = [
+            encode(row, tokenizer, 512)
+            for row in load_partition(self.train, "train")[:7]
+        ]
+        updates = [([[0, 1], None, [2, 3, 4]], 5), ([[5], None, [6]], 2)]
+        runs = []
+        for update in (unsplit_run_update, train_ff.run_update):
+            model, _ = train_ff.build_model(self.sources["qwen3"], "rev", 16, 9)
+            model = train_ff.prepare_model(model, train_ff.Group(), "fp32", True)
+            optimizer = train_ff.make_optimizer(model, 1e-3, 1e-2, 0.01)
+            model.train()
+            results = [
+                update(
+                    model,
+                    optimizer,
+                    train_ff.Group(),
+                    micro_batches=micro_batches,
+                    rows=rows,
+                    items=items,
+                    dummy=items[0],
+                    pad_id=tokenizer.pad_token_id,
+                    precision="fp32",
+                    brier_weight=0.5,
+                    kl_weight=0.0,
+                    step=step,
+                    horizon=4,
+                    warmup_ratio=0.25,
+                    clip=0.05,
+                )
+                for step, (micro_batches, rows) in enumerate(updates)
+            ]
+            state = {k: v.clone() for k, v in model.state_dict().items()}
+            moments = [
+                (s["exp_avg"].clone(), s["exp_avg_sq"].clone())
+                for s in optimizer.state.values()
+            ]
+            grads = [p.grad for p in model.parameters()]
+            runs.append((results, state, moments, grads))
+        (old, old_state, old_moments, old_grads), (new, state, moments, grads) = runs
+        self.assertEqual(old, new)
+        self.assertTrue(all(g is None for g in old_grads + grads))
+        self.assertEqual(sorted(old_state), sorted(state))
+        for name in state:
+            self.assertTrue(torch.equal(old_state[name], state[name]), name)
+        self.assertEqual(len(old_moments), len(moments))
+        for (a, b), (c, d) in zip(old_moments, moments):
+            self.assertTrue(torch.equal(a, c) and torch.equal(b, d))
+
     def run_once(self, micro_batches, rows, items, dummy, pad_id):
         model, _ = train_ff.build_model(self.sources["qwen3"], "rev", 16, 9)
         model = train_ff.prepare_model(model, train_ff.Group(), "fp32", False)
@@ -448,46 +564,110 @@ class LossNormalizationTest(TinyModelCase):
         self.assertEqual(whole["lr_head"], 1e-4 * learning_factor(0, 10, 0.1))
 
 
+# Triples the sharded gradient of the update whose rows are fewer than the ranks.
+SCALED_DUMMY_UPDATE = """
+import importlib
+
+train_ff = importlib.import_module("v2.27b.m4b.train_ff")
+fsdp_parity = importlib.import_module("v2.27b.m4b.fsdp_parity")
+accumulate = train_ff.accumulate_update
+
+
+def scaled(model, group, **kwargs):
+    if group.sharded and kwargs["rows"] < group.world:
+        kwargs["rows"] = kwargs["rows"] / 3
+    return accumulate(model, group, **kwargs)
+
+
+train_ff.accumulate_update = scaled
+fsdp_parity.main()
+"""
+
+
 class GlooParityTest(unittest.TestCase):
+    GRADIENT_GATES = (
+        "gradient_tensors_within_1e-4",
+        "gradient_below_floor_within_1e-6",
+        "gradient_global_within_1e-5",
+    )
+
+    def run_parity(self, tmp: Path, target: list[str]) -> tuple[int, dict, str]:
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.pathsep.join(
+            [str(ROOT), *filter(None, env.get("PYTHONPATH", "").split(os.pathsep))]
+        )
+        env["OMP_NUM_THREADS"] = "1"
+        done = subprocess.run(
+            [
+                sys.executable,
+                "-W",
+                "ignore",
+                "-m",
+                "torch.distributed.run",
+                "--standalone",
+                "--nproc-per-node",
+                "3",
+                *target,
+                "--device",
+                "cpu",
+                "--arch",
+                ARCHES[-1],
+                "--output",
+                str(tmp / "parity"),
+            ],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        log = done.stdout[-3000:] + done.stderr[-3000:]
+        self.assertTrue((tmp / "parity" / "parity.json").is_file(), log)
+        parity = json.loads((tmp / "parity" / "parity.json").read_text())
+        return done.returncode, parity, log
+
     def test_three_rank_fsdp_parity(self):
         with tempfile.TemporaryDirectory() as tmp:
-            env = dict(os.environ)
-            env["PYTHONPATH"] = os.pathsep.join(
-                [str(ROOT), *filter(None, env.get("PYTHONPATH", "").split(os.pathsep))]
+            code, parity, log = self.run_parity(
+                Path(tmp), ["-m", "v2.27b.m4b.fsdp_parity"]
             )
-            env["OMP_NUM_THREADS"] = "1"
-            done = subprocess.run(
-                [
-                    sys.executable,
-                    "-W",
-                    "ignore",
-                    "-m",
-                    "torch.distributed.run",
-                    "--standalone",
-                    "--nproc-per-node",
-                    "3",
-                    "-m",
-                    "v2.27b.m4b.fsdp_parity",
-                    "--device",
-                    "cpu",
-                    "--arch",
-                    ARCHES[-1],
-                    "--output",
-                    str(Path(tmp) / "parity"),
-                ],
-                cwd=ROOT,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=600,
-            )
-            self.assertEqual(
-                done.returncode, 0, done.stdout[-3000:] + done.stderr[-3000:]
-            )
-            parity = json.loads((Path(tmp) / "parity" / "parity.json").read_text())
+            self.assertEqual(code, 0, log)
             self.assertEqual(parity["status"], "PASS")
             self.assertTrue(all(parity["gates"].values()))
+            for gate in self.GRADIENT_GATES:
+                self.assertIn(gate, parity["gates"])
+            for gate in ("parameters_within_1e-4", "updates_within_1e-4"):
+                self.assertNotIn(gate, parity["gates"])
+                self.assertIn(gate, parity["report_only_after_adamw"])
+            self.assertIn(
+                "zero_init_parameter_relative", parity["report_only_after_adamw"]
+            )
             self.assertIn(1, parity["dummy_micro_batches_per_rank"][-1])
+            self.assertEqual(len(parity["gradient_parity"]), 2)
+            for update in parity["gradient_parity"]:
+                self.assertEqual(
+                    update["tensors"], parity["against_reference"]["tensors"]
+                )
+                self.assertGreater(update["reference_norm"], 0)
+                self.assertLessEqual(update["global_relative"], 1e-5)
+                self.assertLessEqual(update["tensor_relative_max"], 1e-4)
+                self.assertTrue(update["worst_tensors"])
+
+    def test_scaled_sharded_gradient_fails_the_gradient_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / "scaled_dummy_update.py"
+            script.write_text(SCALED_DUMMY_UPDATE, encoding="utf-8")
+            code, parity, log = self.run_parity(Path(tmp), [str(script)])
+            self.assertEqual(code, 1, log)
+            self.assertEqual(parity["status"], "FAIL")
+            first, second = parity["gradient_parity"]
+            self.assertTrue(all(first["passed"].values()))
+            self.assertFalse(second["passed"]["tensors"])
+            self.assertFalse(second["passed"]["global"])
+            self.assertAlmostEqual(second["global_relative"], 2.0, places=4)
+            self.assertFalse(parity["gates"]["gradient_tensors_within_1e-4"])
+            self.assertFalse(parity["gates"]["gradient_global_within_1e-5"])
+            self.assertTrue(parity["gates"]["loss_within_1e-5"])
 
 
 if __name__ == "__main__":

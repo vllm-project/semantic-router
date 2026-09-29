@@ -379,9 +379,8 @@ def scalar(value: torch.Tensor) -> float:
     return float((full() if full is not None else value).item())
 
 
-def run_update(
+def accumulate_update(
     model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer,
     group: Group,
     *,
     micro_batches: list[list[int] | None],
@@ -392,16 +391,13 @@ def run_update(
     precision: str,
     brier_weight: float,
     kl_weight: float,
-    step: int,
-    horizon: int,
-    warmup_ratio: float,
-    clip: float,
-) -> dict[str, Any]:
-    """One optimizer update; this rank's ``micro_batches`` hold row indices or None (dummy)."""
-    factor = learning_factor(step, horizon, warmup_ratio)
-    for param_group in optimizer.param_groups:
-        param_group["lr"] = param_group["peak_lr"] * factor
-    optimizer.zero_grad(set_to_none=True)
+) -> list[float]:
+    """Fresh gradients of one update and its global loss sums (total, ce, brier, kl, correct).
+
+    This rank's ``micro_batches`` hold row indices or None (dummy); when sharded,
+    the parameters' ``grad`` are FSDP's summed shards.
+    """
+    model.zero_grad(set_to_none=True)
     sums = torch.zeros(5, dtype=torch.float64, device=group.device)
     for batch_ids in micro_batches:
         subset = [items[index] for index in batch_ids] if batch_ids else [dummy]
@@ -426,8 +422,25 @@ def run_update(
                 ]
             )
     group.all_reduce(sums)
+    return sums.tolist()
+
+
+def step_update(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    *,
+    totals: list[float],
+    rows: int,
+    step: int,
+    horizon: int,
+    warmup_ratio: float,
+    clip: float,
+) -> dict[str, Any]:
+    """Clip, check and apply the accumulated gradients of ``accumulate_update``."""
+    factor = learning_factor(step, horizon, warmup_ratio)
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = param_group["peak_lr"] * factor
     norm = scalar(torch.nn.utils.clip_grad_norm_(model.parameters(), clip))
-    totals = sums.tolist()
     if not all(math.isfinite(value) for value in totals) or not math.isfinite(norm):
         raise RuntimeError(f"Nonfinite loss or gradient norm at update {step + 1}")
     optimizer.step()
@@ -443,6 +456,49 @@ def run_update(
         "lr_backbone": lrs["backbone"],
         "lr_head": lrs["head"],
     }
+
+
+def run_update(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    group: Group,
+    *,
+    micro_batches: list[list[int] | None],
+    rows: int,
+    items: list[dict[str, Any]],
+    dummy: dict[str, Any],
+    pad_id: int,
+    precision: str,
+    brier_weight: float,
+    kl_weight: float,
+    step: int,
+    horizon: int,
+    warmup_ratio: float,
+    clip: float,
+) -> dict[str, Any]:
+    """One optimizer update; this rank's ``micro_batches`` hold row indices or None (dummy)."""
+    totals = accumulate_update(
+        model,
+        group,
+        micro_batches=micro_batches,
+        rows=rows,
+        items=items,
+        dummy=dummy,
+        pad_id=pad_id,
+        precision=precision,
+        brier_weight=brier_weight,
+        kl_weight=kl_weight,
+    )
+    return step_update(
+        model,
+        optimizer,
+        totals=totals,
+        rows=rows,
+        step=step,
+        horizon=horizon,
+        warmup_ratio=warmup_ratio,
+        clip=clip,
+    )
 
 
 def peak_memory(group: Group) -> dict[str, float]:
