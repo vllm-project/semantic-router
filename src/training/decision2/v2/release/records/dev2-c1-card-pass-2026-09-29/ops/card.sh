@@ -86,7 +86,16 @@ if [[ "$preview" == 1 ]]; then
     "$HFPY" -c 'import shutil,sys; from huggingface_hub import hf_hub_download; shutil.copyfile(hf_hub_download(sys.argv[1], sys.argv[2], revision=sys.argv[3]), sys.argv[4])' \
       "$REPO" "$f" "$released" "$W/released/${f//\//_}" 2>/dev/null || echo "not in $released: $f"
   done
-  echo "preview=$W/package/$name released=$W/released (weights removed after the build)"
+  # Card-only means: against the released manifest, only card files may change.
+  python3 - "$W/package/$name/MODEL_MANIFEST.json" "$W/released/MODEL_MANIFEST.json" > "$W/preview-diff.json" <<'PY'
+import json, sys
+new, old = (json.load(open(p))["files_sha256"] for p in sys.argv[1:3])
+card = {"README.md", "config.json", "LICENSE", "NOTICE", "ATTRIBUTIONS.md", "LICENSING.md"}
+changed = sorted(n for n in set(new) | set(old) if new.get(n) != old.get(n))
+other = [n for n in changed if n not in card and not n.startswith(("assets/", "evaluation/", "LICENSES/"))]
+print(json.dumps({"changed_card_files": [n for n in changed if n not in other], "changed_other_files": other, "ok": not other}, indent=1))
+PY
+  echo "preview=$W/package/$name released=$W/released diff=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("ok" if d["ok"] else "NON-CARD " + ",".join(d["changed_other_files"]))' "$W/preview-diff.json") (weights removed after the build)"
   exit 0
 fi
 [[ "$gpu" == 0 || "$gpu" == 1 ]] || { echo "this pass uses node-A GPU0 or GPU1 only (--gpu 0|1)" >&2; exit 2; }

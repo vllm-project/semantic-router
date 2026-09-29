@@ -69,7 +69,7 @@
   "card_revision": {
     "kind": "card-only",
     "spec": "v2/release/specs/dev2-27b-card-c1.json",
-    "spec_sha256": "c46240c711ea5a25bac9d9db937041c9432226c5a5eacea7cd33fa1eb3686e00",
+    "spec_sha256": "a161a7716f66fe8293d49d39cace5bdebc3aae252aefefb4b8ecab0ecc69e09a",
     "c1_record": "v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)"
   },
   "c1": "Event 3 (v1.2) on the release package DEV2.0-26B@5683c6f0 (identity b7fd44e3, the same adapter and head as this repository's revisions): 57.33 vs AutoJev-27B 58.17 (-0.84 [-2.50, +0.69], level) and Eikos-27B 59.37 (-2.04 [-3.66, -0.44], significantly ahead). No Decision 1.0 model exists at this size.",

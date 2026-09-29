@@ -65,7 +65,7 @@
   "card_revision": {
     "kind": "card-only",
     "spec": "v2/release/specs/dev2-9b-card-c1.json",
-    "spec_sha256": "ec7b5a525da92ac2399a0b333ea681d7e23b78cf9797be942052f8d6db57c222",
+    "spec_sha256": "eddbaa03eca8981006f0f03c7e9980db0090cff87f9a4efd20b33b8886f1fc01",
     "c1_record": "v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)"
   },
   "c1": "Event 3 (v1.2) on the frozen package DEV2.0-8B@53bac735 (BF16 identity b1ed5a71, weights identical to this repository's revisions): 53.77 vs Decision 1.0 Lux 16K 51.97 (+1.80 [+0.55, +3.07], significantly above) and Nimble v2 52.77 (+1.00 [-0.69, +2.75], level). No significant loss against a card peer.",

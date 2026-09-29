@@ -2,7 +2,7 @@
   "schema": "dev2-release-spec/1",
   "_release": {
     "rename": "user directive 2026-09-29 16:05 UTC+8: names follow the base model's size. llm-semantic-router/DEV2.0-8B was moved to llm-semantic-router/DEV2.0-9B with move_repo on 2026-09-29 (history, revisions and privacy unchanged; the old ID redirects). This spec builds the card-only revision: name, banner, labels and the naming sentence; the weights are byte-identical to the released revision 53bac735be58def53673d0d290b9baa3f2af1cf9.",
-    "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the C1 line replaces the placeholder. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision ae6831960dd1114296cb15a59248b79832c42959."
+    "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the C1 line replaces the placeholder. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision ae6831960dd1114296cb15a59248b79832c42959. The package runtime (decision2/*.py) come from the mirror that built ae683196 (2926952c1), so only card files change."
   },
   "kind": "release",
   "repo_id": "llm-semantic-router/DEV2.0-9B",
@@ -35,6 +35,7 @@
   },
   "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the training/model sources vendored from the scored run's own source mirror (3277dec9d), whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec, which for this non-residual checkpoint wraps the same DecisionModel without extra readouts. The scored checkpoint (b9d973b3) stored every tensor in FP32; this package (v2.release.bf16_copy) stores its 248 Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32. Checked on one GPU of the scoring node against the T = 1 predictions derived exactly from the sealed CAL698 predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, with a copy of the persisted Triton autotune cache that the formal run and its mlx-diag run shared.",
   "vendor_source": "/data/dev2/src/3277dec9d81708fa374405ca884043443bab1b49-src_training_decision2/src/training/decision2",
+  "runtime_source": "/data/dev2/src/2926952c17411a9220747f84c07e050bad2aa92c-src_training_decision2/src/training/decision2",
   "scored": {
     "label": "post-key same-panel run K-a13-16k at T = 1 (predictions derived from the sealed CAL698 run by undoing its temperatures; adopted and sealed)",
     "report_sha256": "66106ef9123bf0bb9ac8aeb5024384cc98d5194dd231ff71cebc541b88cf3b17",

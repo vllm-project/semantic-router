@@ -172,7 +172,7 @@
   "card_revision": {
     "kind": "card-only",
     "spec": "v2/release/specs/dev2-0p8b-card-c1.json",
-    "spec_sha256": "efb8e8f7f3aede5abaeea29ab47b7b112ade3201aa7502a37543744ddb18c9c2",
+    "spec_sha256": "2413e88cba314837f5cdb9196c8e2ba5846dd550b37703062406c421f3ab30cf",
     "c1_record": "v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)"
   },
   "c1": "Unchanged: the event-1 line (C1 v1.1, DEV2.0-0.8B 40.24 vs Decision 1.0 Eos 37.94, +2.31 [+0.29, +4.30]). DEV2.0-0.8B was not in event 3.",

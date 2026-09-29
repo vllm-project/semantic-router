@@ -97,7 +97,7 @@
   "card_revision": {
     "kind": "card-only",
     "spec": "v2/release/specs/dev2-2b-card-c1.json",
-    "spec_sha256": "c96f063ef1ad67350c3cddb2194a8efb7b9b4a38af7138c27133dd4505a97f1b",
+    "spec_sha256": "d7f8bed3ffb45b45443c6c2a76427ec45cfff90be09dcaa169ebac76c9230fa6",
     "c1_record": "v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)"
   },
   "c1": "Event 3 (v1.2) on the released weights (5ad3e9a3, identity 073bd1f2): 45.70 vs Decision 1.0 Sol 16K 45.03 (+0.68 [-0.91, +2.22], level), Decider 2B 42.45 (+3.26 [+1.32, +5.21]) and This-That 1.2 42.81 (+2.90 [+0.85, +4.99]), both significantly above. No significant loss against a card peer, so no C1 task or language list is added.",

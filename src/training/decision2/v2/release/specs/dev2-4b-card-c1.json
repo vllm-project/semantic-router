@@ -1,7 +1,7 @@
 {
   "schema": "dev2-release-spec/1",
   "_release": {
-    "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the C1 line replaces the placeholder; a C1 disclosure (the v3 lead over Nox 1.0 does not carry over; Jet v6.2 significantly ahead; C1 tasks and languages below Nox 1.0 and Jet v6.2) and the two JevBench hard-tier skills behind the Decider 4B gap are added. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision 452f133211de292a87bc29ab7e24a3bd0704e40d."
+    "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the C1 line replaces the placeholder; a C1 disclosure (the v3 lead over Nox 1.0 does not carry over; Jet v6.2 significantly ahead; C1 tasks and languages below Nox 1.0 and Jet v6.2) and the two JevBench hard-tier skills behind the Decider 4B gap are added. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision 452f133211de292a87bc29ab7e24a3bd0704e40d. The package runtime (decision2/*.py) and the vendored inference sources come from the mirror that built 452f1332 (f8f52c695), so only card files change."
   },
   "kind": "release",
   "repo_id": "llm-semantic-router/DEV2.0-4B",
@@ -31,6 +31,8 @@
     "triton": "3.7.1 (persisted autotune cache)"
   },
   "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time) and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec, which for this non-residual checkpoint wraps the same DecisionModel without extra readouts. Checked on one GPU of the scoring node against the T = 1 predictions derived exactly from the sealed CAL698 predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, each panel with a copy of the persisted Triton autotune cache of the run that scored it (the formal run for the three JevArena / JevBench panels; the separate mlx-diag run, in a no-upload run of the same package, for the diagnostic).",
+  "vendor_source": "/data/dev2/src/f8f52c695fb6741ed831888cc4998edcc2613790-src_training_decision2/src/training/decision2",
+  "runtime_source": "/data/dev2/src/f8f52c695fb6741ed831888cc4998edcc2613790-src_training_decision2/src/training/decision2",
   "scored": {
     "label": "post-key same-panel run m4-N4XF-soup-nodeA at T = 1 (predictions derived from the sealed CAL698 run by undoing its temperatures; adopted and sealed)",
     "report_sha256": "57fa23efddef219c83eb39bad58ba2e46c4ff48bd2f1379a1309afe3060102c2",

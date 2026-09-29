@@ -9,7 +9,7 @@
     "eval_gate_record": "v2/eval/records/m4-dev2-27b-f1-gates-2026-09-29.md: all three no-1.0 gates pass; the card follows its disclosure list and its evaluation-familiarity sentence (no exposure) verbatim.",
     "final": "coordinator 2026-09-29 16:00: F2 fails (64.47 < 64.92; F2 - F1 -2.74 [-5.86, +0.38]); F1 = DEV2.0-26B is final. Card-only finalization adds F1's card-eligible mlx-diag (Choice / Noul; XNLI Score stays internal) and the A7-effect sentence.",
     "rename": "user directive 2026-09-29 16:05 UTC+8: names follow the base model's size. llm-semantic-router/DEV2.0-26B was moved to llm-semantic-router/DEV2.0-27B with move_repo on 2026-09-29 (history, revisions and privacy unchanged; the old ID redirects). This spec builds the card-only revision: name, banner, labels and the naming sentence, plus the three 27B peers' mlx-diag Choice / Noul results (eval record v2/eval/records/m5-mlx-diag-27b-peers-2026-09-29.md; score files copied to node B and re-hashed); the weights are byte-identical to the released revision 6931828d7e41a5d31cc8e5acdc36f5eebae70fad.",
-    "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the C1 line replaces the placeholder; a C1 disclosure (level with AutoJev-27B; Eikos-27B significantly ahead; C1 tasks and languages below Eikos-27B) and the two JevBench hard-tier skills behind the Eikos-27B gap are added. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision 32e7e8b1960fa1e6af3438cd11395cac2849a8c1."
+    "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the C1 line replaces the placeholder; a C1 disclosure (level with AutoJev-27B; Eikos-27B significantly ahead; C1 tasks and languages below Eikos-27B) and the two JevBench hard-tier skills behind the Eikos-27B gap are added. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision 32e7e8b1960fa1e6af3438cd11395cac2849a8c1. The package runtime (decision2/*.py) come from the mirror that built 32e7e8b1 (2926952c1), so only card files change."
   },
   "kind": "release",
   "repo_id": "llm-semantic-router/DEV2.0-27B",
@@ -31,6 +31,7 @@
   "calibration": null,
   "max_input_tokens": 32768,
   "vendor_source": "/data/dev2/src/35fa052d2b7c3ad0f9b2ee9bd1529e6b28076029-src_training_decision2/src/training/decision2",
+  "runtime_source": "/data/dev2/src/2926952c17411a9220747f84c07e050bad2aa92c-src_training_decision2/src/training/decision2",
   "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-27B.decision.card-c1.json",
   "gate_profile": {
     "name": "no-1.0",

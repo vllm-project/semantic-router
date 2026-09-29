@@ -4,6 +4,9 @@ Every spec keeps its checkpoint, identity, scored run, runtime, calibration, lic
 input; the card re-renders with the current renderer (its public-231 note). What changes:
   - gate_receipt: the new final decision of this pass;
   - _release.card_c1: why this revision exists;
+  - runtime_source (and, for 0.8B / 2B / 4B, vendor_source): the mirror that built the revision
+    this one replaces, so the package runtime and vendored sources stay byte-identical (0.6B was
+    built from a tree with the current runtime and needs no pin);
   - card.text.confirmation (not 0.8B): the event-3 line of the eval record
     v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000, verbatim, plus one plain reading
     sentence; for 0.6B the previous-revision wording;
@@ -36,8 +39,13 @@ NOTE = (
     "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record "
     "v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 "
     "23:40 UTC+8: {what}. The card re-renders with the current public-231 note of card.py. Every "
-    "model file stays byte-identical to the released revision {main}."
+    "model file stays byte-identical to the released revision {main}.{pins}"
 )
+PINS = (
+    " The package runtime{vendored} come from the mirror that built {main} ({mirror}), so only "
+    "card files change."
+)
+MIRROR = "/data/dev2/src/{sha}-src_training_decision2/src/training/decision2"
 
 CONFIRMATION = {
     "0.6B": (
@@ -150,6 +158,8 @@ TIERS = (
         "base": "dev2-0p8b-card2.json",
         "out": "dev2-0p8b-card-c1.json",
         "main": "f458c34ccfb4a5d4d32babeda1570919adb1a3c8",
+        "built_from": "33de83cea695e8988e385866ee603d492f7f0e3a",
+        "pin_vendor": True,
         "what": "no new C1 line (event 1 stands); only the public-231 note changes",
     },
     {
@@ -157,6 +167,8 @@ TIERS = (
         "base": "dev2-2b-release.json",
         "out": "dev2-2b-card-c1.json",
         "main": "5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38",
+        "built_from": "33de83cea695e8988e385866ee603d492f7f0e3a",
+        "pin_vendor": True,
         "what": "the C1 line replaces the placeholder",
     },
     {
@@ -164,6 +176,8 @@ TIERS = (
         "base": "dev2-4b-release.json",
         "out": "dev2-4b-card-c1.json",
         "main": "452f133211de292a87bc29ab7e24a3bd0704e40d",
+        "built_from": "f8f52c695fb6741ed831888cc4998edcc2613790",
+        "pin_vendor": True,
         "what": (
             "the C1 line replaces the placeholder; a C1 disclosure (the v3 lead over Nox 1.0 "
             "does not carry over; Jet v6.2 significantly ahead; C1 tasks and languages below "
@@ -176,6 +190,7 @@ TIERS = (
         "base": "dev2-9b-release.json",
         "out": "dev2-9b-card-c1.json",
         "main": "ae6831960dd1114296cb15a59248b79832c42959",
+        "built_from": "2926952c17411a9220747f84c07e050bad2aa92c",
         "what": "the C1 line replaces the placeholder",
     },
     {
@@ -183,6 +198,7 @@ TIERS = (
         "base": "dev2-27b-release.json",
         "out": "dev2-27b-card-c1.json",
         "main": "32e7e8b1960fa1e6af3438cd11395cac2849a8c1",
+        "built_from": "2926952c17411a9220747f84c07e050bad2aa92c",
         "what": (
             "the C1 line replaces the placeholder; a C1 disclosure (level with AutoJev-27B; "
             "Eikos-27B significantly ahead; C1 tasks and languages below Eikos-27B) and the two "
@@ -193,6 +209,7 @@ TIERS = (
 
 
 def insert_after(d: dict, anchor: str, key: str, value) -> dict:
+    assert anchor in d, anchor
     out = {}
     for k, v in d.items():
         if k != key:
@@ -218,8 +235,26 @@ def derive(t: dict) -> dict:
     name = spec["model_name"]
     assert name == f"DEV2.0-{t['tier']}", name
     spec["gate_receipt"] = f"{DECISIONS}/{name}.decision.card-c1.json"
+    pins = ""
+    if t.get("built_from"):
+        mirror = MIRROR.format(sha=t["built_from"])
+        anchor = "vendor_source" if "vendor_source" in spec else "runtime_equivalence"
+        if t.get("pin_vendor"):
+            assert "vendor_source" not in spec, t["tier"]
+            spec = insert_after(spec, anchor, "vendor_source", mirror)
+            anchor = "vendor_source"
+        spec = insert_after(spec, anchor, "runtime_source", mirror)
+        pins = PINS.format(
+            vendored=(
+                " (decision2/*.py) and the vendored inference sources"
+                if t.get("pin_vendor")
+                else " (decision2/*.py)"
+            ),
+            main=t["main"][:8],
+            mirror=t["built_from"][:9],
+        )
     release = dict(spec.get("_release") or {})
-    release["card_c1"] = NOTE.format(what=t["what"], main=t["main"])
+    release["card_c1"] = NOTE.format(what=t["what"], main=t["main"], pins=pins)
     spec = insert_after(spec, "schema", "_release", release)
     text = spec["card"]["text"]
     if t["tier"] == "0.6B":

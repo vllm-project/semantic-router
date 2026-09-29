@@ -1,7 +1,7 @@
 {
   "schema": "dev2-release-spec/1",
   "_release": {
-    "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: no new C1 line (event 1 stands); only the public-231 note changes. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision f458c34ccfb4a5d4d32babeda1570919adb1a3c8."
+    "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: no new C1 line (event 1 stands); only the public-231 note changes. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision f458c34ccfb4a5d4d32babeda1570919adb1a3c8. The package runtime (decision2/*.py) and the vendored inference sources come from the mirror that built f458c34c (33de83cea), so only card files change."
   },
   "kind": "release",
   "repo_id": "llm-semantic-router/DEV2.0-0.8B",
@@ -31,6 +31,8 @@
     "triton": "3.7.1 (persisted autotune cache)"
   },
   "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time) and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec, which for this non-residual checkpoint wraps the same DecisionModel without extra readouts. Checked on one GPU of the scoring node against the T = 1 predictions derived exactly from the sealed CAL698 predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) by release.sh --parity, with the scored run's persisted Triton autotune cache.",
+  "vendor_source": "/data/dev2/src/33de83cea695e8988e385866ee603d492f7f0e3a-src_training_decision2/src/training/decision2",
+  "runtime_source": "/data/dev2/src/33de83cea695e8988e385866ee603d492f7f0e3a-src_training_decision2/src/training/decision2",
   "scored": {
     "label": "post-key same-panel run m2-E8F-soup-nodeA at T = 1 (predictions derived from the sealed CAL698 run by undoing its temperatures; adopted and sealed)",
     "report_sha256": "1f5cf33d85be3f4c8c8dea29654275e1e9939848a9d8d4d6d381c1152a8f0a11",
