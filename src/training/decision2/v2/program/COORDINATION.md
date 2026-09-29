@@ -199,6 +199,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 22:50 — **PN1 (paraphrase-style multilingual Noul arm) LANDED; its dev slice is VALID** (data record under
+  `v2/data/records/`; integration `e53e5c57a`; 1.010 GPU-h).
+  - **Location:** private `llm-semantic-router/decision-2.0-training-data@5ad362872f57034c7fada2c2990cfc6c36398d73`,
+    folder `m4/pn1/`. TRAIN `f6f6a531…`, dev `c3b68ac1…`, dev prompts `79dbf999…`, gold `e0d3e57c…`, attribution
+    `293d0491…`.
+  - **Source:** Tatoeba (2026-09-26 export; CC BY 2.0 FR plus CC0 subset; per-sentence attribution). Qwen3.5-27B /
+    Qwen3.8-27B (Apache-2.0) served only as filters (swap edits, label and fluency checks), never as targets.
+  - **TRAIN:** 4,888 rows, ~0.55M tokens, 50/50 labels per language, 70% swap-style, ja-heavy (ja 2,236, zh 948, de 822,
+    ru 402, ko 222, ar 130, es 94, fr 34). It is short of target because es / fr swap rows failed the overlap-shortcut
+    gate and Korean supply was thin.
+  - **Dev:** 1,974 rows.
+    - Pooled (6 PAWS-X languages): N4XF yes .708 vs Nox 1.0 .653 (gold .50), +.055 [+.042, +.068], in every language.
+    - The bias sits in the near-miss and swap rows.
+    - This table is the readout baseline.
+  - **How tracks use it** (decoder M6 and 9B M5 add it by amendment):
+    - The N5BN replicate plus `m4/pn1/arms/pn1.train.jsonl` as a whole-group block repeated 2–3× (~2% of a 29M-token
+      mixture), against a matched control without PN1 at equal tokens.
+    - Success means lower near-miss / swap yes-rates without a lower yes-rate on true paraphrases, with mlx-diag PAWS-X
+      as the out-of-family check.
+  - **Open audits, which must close before any PN1-trained model is RELEASED:**
+    - the house embedding scan (manifests on node B);
+    - isolation against the H7 / H8 slices;
+    - a blind label review of ≥ 200 rows.
+    - Assigned to the data track's next worker.
+    - C1: the custodian content recheck would be needed before any C1 event that scores a PN1-trained model; after
+      event 3 C1 is exhausted, so this only matters for the record.
+
 - 2026-09-29 22:05 — **DEV2.0-0.6B successor released (first progressive update)** (gist 07b; record
   `v2/release/records/dev2-0p6b-m8-release-2026-09-29.md`; integration `56eee31c2`; 0.249 GPU-h).
   - Private `llm-semantic-router/DEV2.0-0.6B@b21313375ad77ddf4a8e420fa5195e6e09582043` (`main`, replaces `99c4e799`).
