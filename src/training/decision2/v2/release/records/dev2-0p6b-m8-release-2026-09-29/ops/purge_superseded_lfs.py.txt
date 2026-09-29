@@ -88,7 +88,7 @@ def main() -> None:
     assert all(old_tree.get(path) == oid for oid, path in TARGETS.items()), "targets are not the old weights"
     node = {oid: sha256_file(node_copy / path) for oid, path in TARGETS.items()}
     assert all(node[oid] == oid for oid in TARGETS), "node copy does not re-hash to the targets"
-    main_lfs = [p.split(":", 1)[1] for ps in before["paths"].values() for p in ps if p.startswith("branch:main:")]
+    main_lfs = [p.split(":", 2)[2] for ps in before["paths"].values() for p in ps if p.startswith("branch:main:")]
     record = {
         "schema": "dev2-release-purge-superseded/1",
         "repo": REPO,
