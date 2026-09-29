@@ -115,10 +115,6 @@
         },
         "diagnostics": [
           {
-            "field": "usage",
-            "action": "approximated"
-          },
-          {
             "field": "stream.delta.container",
             "action": "dropped"
           },
@@ -136,13 +132,7 @@
         "error": {
           "category": "unsupported_feature",
           "code": "unknown_stream_delta"
-        },
-        "diagnostics": [
-          {
-            "field": "usage",
-            "action": "approximated"
-          }
-        ]
+        }
       }
     }
   ]

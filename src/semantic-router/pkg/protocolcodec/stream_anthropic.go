@@ -566,10 +566,11 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicLifecycleEvent(
 	var diagnostics llmprotocol.Diagnostics
 	switch event.Type {
 	case llmprotocol.EventResponseStarted:
+		// The start event carries a provisional usage view: the streaming
+		// convention brings output counts only at the terminal message_delta,
+		// so an absent output bucket here is schedule, not a defective
+		// projection. Marks belong where the numbers are final.
 		wire = encodeAnthropicMessageStart(event)
-		if event.Usage != nil {
-			appendAnthropicUsageMarks(&diagnostics, encoder.policy, encoder.context.Source, *event.Usage)
-		}
 	case llmprotocol.EventUsageUpdated:
 		if event.Usage == nil {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "usage event is invalid", nil)

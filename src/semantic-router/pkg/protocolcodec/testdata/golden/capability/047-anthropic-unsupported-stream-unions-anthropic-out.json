@@ -7,13 +7,7 @@
         "error": {
           "category": "unsupported_feature",
           "code": "unsupported_content"
-        },
-        "diagnostics": [
-          {
-            "field": "usage",
-            "action": "approximated"
-          }
-        ]
+        }
       }
     },
     {
@@ -23,13 +17,7 @@
         "error": {
           "category": "unsupported_feature",
           "code": "unsupported_content"
-        },
-        "diagnostics": [
-          {
-            "field": "usage",
-            "action": "approximated"
-          }
-        ]
+        }
       }
     },
     {
@@ -39,13 +27,7 @@
         "error": {
           "category": "unsupported_feature",
           "code": "unsupported_content"
-        },
-        "diagnostics": [
-          {
-            "field": "usage",
-            "action": "approximated"
-          }
-        ]
+        }
       }
     },
     {
@@ -55,13 +37,7 @@
         "error": {
           "category": "unsupported_feature",
           "code": "unsupported_content"
-        },
-        "diagnostics": [
-          {
-            "field": "usage",
-            "action": "approximated"
-          }
-        ]
+        }
       }
     },
     {
@@ -71,13 +47,7 @@
         "error": {
           "category": "unsupported_feature",
           "code": "unsupported_content"
-        },
-        "diagnostics": [
-          {
-            "field": "usage",
-            "action": "approximated"
-          }
-        ]
+        }
       }
     },
     {
@@ -87,13 +57,7 @@
         "error": {
           "category": "unsupported_feature",
           "code": "unsupported_content"
-        },
-        "diagnostics": [
-          {
-            "field": "usage",
-            "action": "approximated"
-          }
-        ]
+        }
       }
     },
     {
@@ -103,13 +67,7 @@
         "error": {
           "category": "unsupported_feature",
           "code": "unsupported_content"
-        },
-        "diagnostics": [
-          {
-            "field": "usage",
-            "action": "approximated"
-          }
-        ]
+        }
       }
     },
     {
@@ -119,13 +77,7 @@
         "error": {
           "category": "unsupported_feature",
           "code": "unsupported_content"
-        },
-        "diagnostics": [
-          {
-            "field": "usage",
-            "action": "approximated"
-          }
-        ]
+        }
       }
     },
     {
@@ -135,13 +87,7 @@
         "error": {
           "category": "unsupported_feature",
           "code": "unsupported_content"
-        },
-        "diagnostics": [
-          {
-            "field": "usage",
-            "action": "approximated"
-          }
-        ]
+        }
       }
     },
     {
@@ -151,13 +97,7 @@
         "error": {
           "category": "unsupported_feature",
           "code": "unknown_stream_delta"
-        },
-        "diagnostics": [
-          {
-            "field": "usage",
-            "action": "approximated"
-          }
-        ]
+        }
       }
     }
   ]
