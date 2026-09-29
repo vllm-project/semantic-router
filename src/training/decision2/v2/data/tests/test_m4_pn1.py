@@ -936,6 +936,79 @@ class PipelineTest(unittest.TestCase):
                     ]
                 )
 
+            extend = ["judgeset-extend", "--work-dir", str(work), *judge_dirs]
+            self.assertEqual(build.main([*extend, "--dry-run"]), 0)
+            self.assertEqual(build.main(extend), 0)
+            extended = json.loads(
+                (work / "judgeset2" / "judgeset.receipt.json").read_text()
+            )
+            self.assertEqual(extended["twin_status_file"], "judgeset/twin-status.jsonl")
+            fin = ["finalize", "--work-dir", str(work), "--source-dir", str(src)]
+            fin += [
+                "--output-root",
+                str(tmp / "out2"),
+                *judge_dirs,
+                "--judgeset",
+                "judgeset2",
+            ]
+            self.assertEqual(build.main(fin), 0)
+            (third,) = list((tmp / "out2").iterdir())
+            manifest3 = json.loads((third / "build-manifest.json").read_text())
+            self.assertIsNotNone(manifest3["steps"]["judge_extension"])
+
+
+class JudgeExtensionTest(unittest.TestCase):
+    def test_extension_adds_rows_where_measured_keeps_fall_short(self):
+        pool = []
+        for i in range(40):
+            hop = record(
+                f"hop:{100 + 2 * i}:{101 + 2 * i}",
+                "de",
+                "pn-hop",
+                1,
+                [f"Er geht {i} nach Hause.", f"Er läuft {i} heim."],
+                overlap_bin=1,
+            )
+            near = record(
+                f"near:{300 + 2 * i}:{301 + 2 * i}",
+                "de",
+                "pn-near",
+                0,
+                [f"Sie kommt {i} spät.", f"Wir essen {i} Brot."],
+                overlap_bin=1,
+            )
+            for item in (hop, near):
+                item["stratum"] = "natural|ms0|b1"
+                item["judged"] = False
+            pool += [hop, near]
+        ordered_hops = sorted(
+            (r for r in pool if r["family"] == "pn-hop"), key=build.seed_key
+        )
+        ordered_nears = sorted(
+            (r for r in pool if r["family"] == "pn-near"), key=build.seed_key
+        )
+        outcome = {r["cid"]: "not_judged" for r in pool}
+        for index, item in enumerate(ordered_hops[:10]):
+            item["judged"] = True
+            outcome[item["cid"]] = "kept" if index % 2 else "rejected_label"
+        for item in ordered_nears[:10]:
+            item["judged"] = True
+            outcome[item["cid"]] = "kept"
+        zero = {lang: 0 for lang in text.LANGS}
+        with mock.patch.dict(build.TRAIN_TARGETS, dict(zero, de=20)), mock.patch.dict(
+            build.DEV_QUOTAS, zero
+        ):
+            added, plan = build.extension(pool, outcome, 1.25)
+        self.assertEqual(plan["keep_rates"]["de|pn-hop|1"], 0.5)
+        self.assertEqual(
+            [r["cid"] for r in added], [r["cid"] for r in ordered_hops[10:15]]
+        )
+        cell = plan["cells"]["de|natural|ms0|b1|y1"]
+        self.assertEqual(
+            (cell["planned_units"], cell["kept_pass1"], cell["added"]), (6, 5, 5)
+        )
+        self.assertEqual(plan["cells"]["de|natural|ms0|b1|y0"]["added"], 0)
+
 
 class GpuCostTest(unittest.TestCase):
     def test_cost_uses_repeated_widths_and_charges_new_ones(self):

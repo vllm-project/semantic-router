@@ -2,8 +2,10 @@
 
     python3 -m v2.data.m4.pn1_build candidates --source-dir SRC --work-dir WORK [--workers N]
     python3 -m v2.data.m4.pn1_build judgeset --work-dir WORK --gen-dir DIR [--gen-dir DIR ...]
+    python3 -m v2.data.m4.pn1_build judgeset-extend --work-dir WORK --judge-dir DIR ... [--dry-run]
     python3 -m v2.data.m4.pn1_build finalize --work-dir WORK --source-dir SRC --judge-dir DIR ... \
-        --gpu-time-dir DIR --output-root ROOT [--drop-groups FILE --expect-selection SHA256]
+        --gpu-time-dir DIR --output-root ROOT [--judgeset judgeset2] \
+        [--drop-groups FILE --expect-selection SHA256]
 
 ``candidates`` builds name swaps, twin seeds, hop and near pairs (``pn1_source``).
 ``judgeset`` turns generations into twin rows, stratifies the pool and picks the
@@ -11,7 +13,9 @@ rows the judge labels: per language, stratum and label the first
 ``JUDGE_FACTOR`` x planned rows in seed-hash order. ``finalize`` applies the
 judge filters, draws dev first, blocks TRAIN candidates touching a dev
 neighbourhood or near-duplicating a dev sentence, balances TRAIN and writes the
-outputs.
+outputs. ``judgeset-extend`` (amendment 2) adds unjudged rows per language,
+stratum and label, in seed-hash order, until the rows kept so far plus the
+expected keeps at the measured keep rates reach 1.25 x the planned units.
 
 Balance: strata are group (natural = hop + near, swap = name + twin) x
 same-multiset flag x bigram-Jaccard bin. A group's units (one yes + one no row)
@@ -1134,6 +1138,222 @@ def load_judgments(
     return out, receipts
 
 
+def apply_judgments(
+    pool: list[dict[str, Any]], judgments: dict[str, dict[str, Any]]
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Attach P(yes) to judged rows; keep yes rows at P >= .5, no rows below, fluency >= .5."""
+    kept: list[dict[str, Any]] = []
+    outcome: dict[str, str] = {}
+    for record in pool:
+        if not record["judged"]:
+            outcome[record["cid"]] = "not_judged"
+            continue
+        label = judgments.get(f"{record['cid']}#label")
+        fluency = judgments.get(f"{record['cid']}#fluency")
+        needs_fluency = any(record["edited"])
+        complete = label is not None and (fluency is not None or not needs_fluency)
+        record["judge"] = {
+            "complete": complete,
+            "label": label["p_yes"] if label else None,
+            "label_order": label["order"] if label else None,
+            "fluency": fluency["p_yes"] if fluency else None,
+        }
+        if not complete:
+            outcome[record["cid"]] = "judge_incomplete"
+            continue
+        label_ok = (record["judge"]["label"] >= 0.5) == (record["label"] == 1)
+        fluency_ok = not needs_fluency or record["judge"]["fluency"] >= 0.5
+        if label_ok and fluency_ok:
+            kept.append(record)
+            outcome[record["cid"]] = "kept"
+        else:
+            outcome[record["cid"]] = (
+                "rejected_label" if not label_ok else "rejected_fluency"
+            )
+    return kept, outcome
+
+
+def keep_rates(
+    pool: list[dict[str, Any]], outcome: dict[str, str], minimum: int = 20
+) -> dict[tuple[str, str, int], float]:
+    """Kept share of the judged rows per (language, family, label); pooled over languages below ``minimum``."""
+    judged: collections.Counter = collections.Counter()
+    kept: collections.Counter = collections.Counter()
+    for record in pool:
+        if outcome[record["cid"]] in ("kept", "rejected_label", "rejected_fluency"):
+            for key in (
+                (record["language"], record["family"], record["label"]),
+                ("*", record["family"], record["label"]),
+            ):
+                judged[key] += 1
+                kept[key] += outcome[record["cid"]] == "kept"
+    rates = {}
+    for lang in LANGS:
+        for family in FAMILIES:
+            for label in (0, 1):
+                key = (lang, family, label)
+                source_key_ = key if judged[key] >= minimum else ("*", family, label)
+                rates[key] = (
+                    kept[source_key_] / judged[source_key_]
+                    if judged[source_key_]
+                    else 0.0
+                )
+    return rates
+
+
+def extension(
+    pool: list[dict[str, Any]], outcome: dict[str, str], margin: float
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Unjudged rows to judge next: per language x stratum x label, in seed-hash order, until
+    the kept rows plus the expected keeps (measured keep rates) reach ``margin`` x planned units.
+    """
+    rates = keep_rates(pool, outcome)
+    added: list[dict[str, Any]] = []
+    info: dict[str, Any] = {}
+    by_lang = collections.defaultdict(list)
+    for record in pool:
+        by_lang[record["language"]].append(record)
+    for lang in LANGS:
+        records = by_lang.get(lang, [])
+        units = plan_units(records, lang)
+        for (s, label), cell in sorted(cells_of(records, seed_key).items()):
+            need = margin * units.get(s, 0)
+            expected = sum(outcome[r["cid"]] == "kept" for r in cell)
+            before = expected
+            count = 0
+            for record in cell:
+                if expected >= need:
+                    break
+                if record["judged"]:
+                    continue
+                record["rank"] = round(expected / max(need, 1), 6)
+                added.append(record)
+                expected += rates[(lang, record["family"], label)]
+                count += 1
+            info[f"{lang}|{s}|y{label}"] = {
+                "planned_units": units.get(s, 0),
+                "kept_pass1": before,
+                "added": count,
+                "expected_kept": round(expected, 1),
+            }
+    return added, {
+        "keep_rates": {"|".join(map(str, k)): round(v, 6) for k, v in rates.items()},
+        "cells": info,
+    }
+
+
+def cmd_judgeset_extend(args: argparse.Namespace) -> int:
+    work = args.work_dir
+    base = json.loads(
+        (work / "judgeset" / "judgeset.receipt.json").read_text(encoding="utf-8")
+    )
+    pool_path = work / "judgeset" / "pool.jsonl"
+    if file_sha256(pool_path) != base["files_sha256"]["pool.jsonl"]:
+        raise ValueError("pool.jsonl differs from the judge-set receipt")
+    pool = read_jsonl(pool_path)
+    judgments, receipts = load_judgments(args.judge_dir)
+    _, outcome = apply_judgments(pool, judgments)
+    added, plan = extension(pool, outcome, args.margin)
+    items = [
+        item
+        for record in sorted(added, key=lambda r: (r["rank"], r["cid"]))
+        for item in judge_items(record)
+    ]
+    counts = {
+        "rows": dict(
+            sorted(
+                collections.Counter(
+                    f"{r['language']}|{r['family']}|{r['label']}" for r in added
+                ).items()
+            )
+        ),
+        "items": dict(
+            sorted(
+                collections.Counter(
+                    f"{i['language']}|{i['kind']}" for i in items
+                ).items()
+            )
+        ),
+        "total_items": len(items),
+    }
+    if args.dry_run:
+        print(json.dumps(counts, indent=1))
+        return 0
+    out = work / args.out_name
+    out.mkdir(mode=0o700)
+    added_ids = {r["cid"] for r in added}
+    gpus = assign_gpus(
+        collections.Counter(i["language"] for i in items), args.gpus.split(",")
+    )
+    files = {
+        "pool.jsonl": write_new(
+            out / "pool.jsonl",
+            jsonl_bytes(
+                {
+                    k: v
+                    for k, v in dict(
+                        r, judged=r["judged"] or r["cid"] in added_ids
+                    ).items()
+                    if k != "judge"
+                }
+                for r in sorted(pool, key=lambda r: r["cid"])
+            ),
+        )
+    }
+    for gpu in sorted(set(gpus.values())):
+        name = f"items.{gpu}.jsonl"
+        files[name] = write_new(
+            out / name, jsonl_bytes(i for i in items if gpus[i["language"]] == gpu)
+        )
+    judged = [r for r in pool if r["judged"] or r["cid"] in added_ids]
+    receipt = {
+        **{
+            k: base[k]
+            for k in (
+                "generation",
+                "editor",
+                "twin_status",
+                "twin_edit_reasons",
+                "pool",
+            )
+        },
+        "schema": SCHEMA + "/judgeset-extend",
+        "created_utc": utc(),
+        "code": code_identity(),
+        "extends": {
+            "judgeset.receipt.json": file_sha256(
+                work / "judgeset" / "judgeset.receipt.json"
+            ),
+            "judge_passes": receipts,
+        },
+        "twin_status_file": "judgeset/twin-status.jsonl",
+        "margin": args.margin,
+        "judge_factor": base["judge_factor"],
+        "plan": plan,
+        "added": counts,
+        "judged_rows": dict(
+            sorted(
+                collections.Counter(
+                    f"{r['language']}|{r['family']}|{r['label']}" for r in judged
+                ).items()
+            )
+        ),
+        "items": dict(
+            sorted(
+                collections.Counter(
+                    f"{i['language']}|{i['kind']}" for i in items
+                ).items()
+            )
+        ),
+        "items_pass1": base["items"],
+        "gpu_of_language": gpus,
+        "files_sha256": files,
+    }
+    write_json(out / "judgeset.receipt.json", receipt)
+    print(json.dumps({"added_rows": len(added), "items": len(items), "gpus": gpus}))
+    return 0
+
+
 def disagreement(pool: list[dict[str, Any]]) -> dict[str, Any]:
     table: dict[str, Any] = {}
     for family in FAMILIES:
@@ -1203,9 +1423,9 @@ def cmd_finalize(args: argparse.Namespace) -> int:
     started = time.perf_counter()
     work = args.work_dir
     judgeset = json.loads(
-        (work / "judgeset" / "judgeset.receipt.json").read_text(encoding="utf-8")
+        (work / args.judgeset / "judgeset.receipt.json").read_text(encoding="utf-8")
     )
-    pool_path = work / "judgeset" / "pool.jsonl"
+    pool_path = work / args.judgeset / "pool.jsonl"
     if file_sha256(pool_path) != judgeset["files_sha256"]["pool.jsonl"]:
         raise ValueError("pool.jsonl differs from the judge-set receipt")
     pool = read_jsonl(pool_path)
@@ -1232,35 +1452,7 @@ def cmd_finalize(args: argparse.Namespace) -> int:
         if key not in registry:
             raise ValueError(f"licence registry lacks {key}")
     manifest = verify_source(args.source_dir, ["links"])
-
-    kept: list[dict[str, Any]] = []
-    outcome: dict[str, str] = {}
-    for record in pool:
-        if not record["judged"]:
-            outcome[record["cid"]] = "not_judged"
-            continue
-        label = judgments.get(f"{record['cid']}#label")
-        fluency = judgments.get(f"{record['cid']}#fluency")
-        needs_fluency = any(record["edited"])
-        complete = label is not None and (fluency is not None or not needs_fluency)
-        record["judge"] = {
-            "complete": complete,
-            "label": label["p_yes"] if label else None,
-            "label_order": label["order"] if label else None,
-            "fluency": fluency["p_yes"] if fluency else None,
-        }
-        if not complete:
-            outcome[record["cid"]] = "judge_incomplete"
-            continue
-        label_ok = (record["judge"]["label"] >= 0.5) == (record["label"] == 1)
-        fluency_ok = not needs_fluency or record["judge"]["fluency"] >= 0.5
-        if label_ok and fluency_ok:
-            kept.append(record)
-            outcome[record["cid"]] = "kept"
-        else:
-            outcome[record["cid"]] = (
-                "rejected_label" if not label_ok else "rejected_fluency"
-            )
+    kept, outcome = apply_judgments(pool, judgments)
     noise = disagreement(pool)
 
     links_started = time.perf_counter()
@@ -1341,7 +1533,7 @@ def cmd_finalize(args: argparse.Namespace) -> int:
     inputs = {
         "candidates.jsonl": file_sha256(work / "candidates.jsonl"),
         "seeds.jsonl": file_sha256(work / "seeds.jsonl"),
-        "judgeset/pool.jsonl": judgeset["files_sha256"]["pool.jsonl"],
+        f"{args.judgeset}/pool.jsonl": judgeset["files_sha256"]["pool.jsonl"],
         **{
             f"judge/{r['dir']}/judgments.jsonl": r["outputs_sha256"]
             for r in judge_receipts
@@ -1407,7 +1599,9 @@ def cmd_finalize(args: argparse.Namespace) -> int:
         ),
         "pn1.generation.receipt.jsonl": write_new(
             out / "pn1.generation.receipt.jsonl",
-            (work / "judgeset" / "twin-status.jsonl").read_bytes(),
+            (
+                work / judgeset.get("twin_status_file", "judgeset/twin-status.jsonl")
+            ).read_bytes(),
         ),
     }
     check = self_check(train_rows, dev_rows)
@@ -1480,6 +1674,12 @@ def cmd_finalize(args: argparse.Namespace) -> int:
             "pool": judgeset["pool"],
             "judged_rows": judgeset["judged_rows"],
             "judge_items": judgeset["items"],
+            "judge_items_pass1": judgeset.get("items_pass1"),
+            "judge_extension": (
+                {k: judgeset[k] for k in ("margin", "added", "plan")}
+                if "margin" in judgeset
+                else None
+            ),
             "outcomes": dict(
                 sorted(
                     collections.Counter(
@@ -1541,6 +1741,13 @@ def main(argv: list[str] | None = None) -> int:
     judge.add_argument("--work-dir", type=Path, required=True)
     judge.add_argument("--gen-dir", type=Path, action="append", required=True)
     judge.add_argument("--gpus", default="gpu3,gpu4")
+    extend = commands.add_parser("judgeset-extend")
+    extend.add_argument("--work-dir", type=Path, required=True)
+    extend.add_argument("--judge-dir", type=Path, action="append", required=True)
+    extend.add_argument("--out-name", default="judgeset2")
+    extend.add_argument("--margin", type=float, default=1.25)
+    extend.add_argument("--gpus", default="gpu3,gpu4")
+    extend.add_argument("--dry-run", action="store_true")
     fin = commands.add_parser("finalize")
     fin.add_argument("--work-dir", type=Path, required=True)
     fin.add_argument("--source-dir", type=Path, required=True)
@@ -1550,10 +1757,14 @@ def main(argv: list[str] | None = None) -> int:
     fin.add_argument("--drop-groups", type=Path)
     fin.add_argument("--expect-selection")
     fin.add_argument("--amendment", action="append")
+    fin.add_argument(
+        "--judgeset", default="judgeset", help="judge-set directory in WORK"
+    )
     args = parser.parse_args(argv)
     return {
         "candidates": cmd_candidates,
         "judgeset": cmd_judgeset,
+        "judgeset-extend": cmd_judgeset_extend,
         "finalize": cmd_finalize,
     }[args.command](args)
 
