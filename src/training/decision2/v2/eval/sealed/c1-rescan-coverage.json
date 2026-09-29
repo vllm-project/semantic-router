@@ -3,7 +3,7 @@
   "item_sets": {
     "v1.2": {
       "retired": "/data/dev2/private/sealed/c1/v1_2/RETIRED-v1_2.json",
-      "retired_sha256": "PARENT-FILLS"
+      "retired_sha256": "bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a"
     }
   },
   "protected_sha256": "36797f509bd96c3cb703df37cc48114c9bbdf0d2241802e56262139f4bef0a1a",
