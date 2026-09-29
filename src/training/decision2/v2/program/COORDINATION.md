@@ -199,6 +199,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 18:25 — **First progressive-update successor: DEV2.0-0.6B `m8-s5-b05`; release approved** (0.6B M8 records;
+  hand-off `v2/06b/records/m8-handoff-2026-09-29.md`; integration `dfcf2e826`; 0.191 GPU-h).
+  - The model is the unchanged `m6-mxcx-soup` weights plus fixed per-level offsets on 5-level Score logits: λ = ½,
+    fitted on the score5t fit half only; offsets sha `725c16f9…`. The preregistration `e6a5f4515` came first.
+  - Formal results vs the current revision:
+    - post-key v3 48.64, +5.09 [+2.65, +9.30]; vs GLiNER2.5-Decide +6.11 [+4.24, +13.72];
+    - human transfer −.021 [−.064, +.061];
+    - typed Score top share .9475 → .620, accuracy .3425 vs majority .320 (no significant gain; level 3 never
+      predicted);
+    - mlx-diag Choice + Noul +.004;
+    - public 231 152 vs 142 (not a regression);
+    - no overlap exposure.
+    - All seven successor-rule items pass. Only 5-level Score answers change.
+  - Release blockers fixed by the 0.6B track:
+    - `c6e993f48`: offset support in the runtime; the builder now vendors `score_bias.py`.
+    - `c5b499812`: offsets are bound to the scored run by value.
+    - The staging dry run gave 0 changes.
+  - **Release worker** (worktree `vllm-sr-dev2-release-06b`, gist 07b):
+    - a successor gate profile (rule items 1–7 + tier gates);
+    - BF16 only on exact parity;
+    - the card with the new recipe and credits, disclosures verbatim from the hand-off, and the C1 line "measured on
+      `99c4e799`; this revision not sealed-tested";
+    - the JevBench card text;
+    - after verification, purge the superseded weight blobs with `rewrite_history=False`.
+
 - 2026-09-29 17:55 — **Renamed: DEV2.0-9B and DEV2.0-27B** (gist 07; rename record under `v2/release/records/`;
   integration `5665cee20`; 0.477 GPU-h; storage 62.09 / 100 GB).
   - **DEV2.0-9B** (was DEV2.0-8B): private `llm-semantic-router/DEV2.0-9B@ae6831960dd1114296cb15a59248b79832c42959`,
