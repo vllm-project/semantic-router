@@ -199,6 +199,35 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 01:50 — **Decoder M6: no successor in any tier; M6b + M7 and HT-DEV v2 launched** (record
+  `v2/dec/records/dec-m6-results-2026-09-29.md`; integration `733388ebd`; ~17.8 of 36 GPU-h).
+  - **Results:**
+    - 4B: no finalist. N6D (2× dose) had the largest development typed gain (T .729 vs .704) but failed the CSS-pilot
+      guard.
+    - 2B finalist `2b-S6X-b1_3`: −1.88 [−2.52, +1.15]; human transfer −.039.
+    - 0.8B finalist `08b-E6K-b1_3`: −0.39 [−1.61, +2.16]; mlx +.007.
+    - Both fail rule 1: development typed gains didn't carry over (2B +.013 → +.003; 0.8B +.040 → −.006).
+  - **Incidents:** a soup-report bug was fixed (`ddc5d2ffe`) and the soups were rebuilt on CPU from finished seeds. Gist
+    04 was deleted for about a minute and restored from history.
+  - **Shared change:** the `teacher_label` module now reads Eos 1.0's temperature (`6fe568271`).
+  - **Disclosure:** the three HotpotQA near-match rows are in the M6 mixtures, as in the released 4B (public 231 only).
+  - **Coordinator decisions:**
+    1. **M6b approved:** a preregistered formal test of the N6D soup and its ⅔ point (~0.6 GPU-h) under items 1–8.
+       The decoder successor script is fixed so item 7 gates.
+    2. **Decoder M7** (same fresh worker; node A GPU5 + node B GPU3–4; 30 GPU-h in total with M6b):
+       - round-2 data for 4B, then 2B: HS1 plus long prose, and PN1, each with matched controls;
+       - development gates include a CSS-pilot human-transfer non-decrease;
+       - `hs1-dev` and PN1 dev readouts as diagnostics;
+       - formal runs for development passers only.
+    3. **HT-DEV v2** (eval; worktree `vllm-sr-dev2-eval-devpanel`; ≤ 1.5 GPU-h):
+       - a human-transfer development panel, either a larger CSS-style panel from held-out CSS15 source portions or a
+         fresh-source human-labeled panel;
+       - validated primarily on within-tier agreement with formal human-transfer deltas, including siblings, with C1
+         post-key agreement as informational only (never tuned to C1 items);
+       - pass bar: clearly better than the CSS-pilot three-task mean.
+  - **Lesson for every track:** development typed gains are not predictive at this margin. Weight human transfer, and
+    treat typed-only gains with suspicion.
+
 - 2026-09-30 01:45 — **Card pass done: all six repos have C1 lines and the JevBench note** (gist 07; integration
   `59b730bf9`; 0.811 GPU-h; storage 61.28 / 100 GB).
   - **New `main` revisions:**
