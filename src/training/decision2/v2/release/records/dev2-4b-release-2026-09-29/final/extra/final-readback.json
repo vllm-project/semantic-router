@@ -1,0 +1,35 @@
+{
+ "schema": "dev2-release-final-readback/1",
+ "utc": "2026-09-29T01:10:36+00:00",
+ "repo": "llm-semantic-router/DEV2.0-4B",
+ "main": "452f133211de292a87bc29ab7e24a3bd0704e40d",
+ "private": true,
+ "anonymous": "RepositoryNotFoundError",
+ "differ_vs_8052eb6c": [
+  "MODEL_MANIFEST.json"
+ ],
+ "differ_vs_c73123f3": [
+  "MODEL_MANIFEST.json",
+  "README.md"
+ ],
+ "safetensors_identical_to_8052eb6c_and_c73123f3": true,
+ "safetensors": {
+  "backbone/model-00001-of-00005.safetensors": "06faf67f333d1136e4cbc583220e98602354b454d3b0fb917bf433a8bf4dbb3f",
+  "backbone/model-00002-of-00005.safetensors": "abac23bcaad1d5fb2aa73d9d051db970514a4f427b0cff22336b50c5e7aa7302",
+  "backbone/model-00003-of-00005.safetensors": "1f492a389f49f382b4bbf84686176b51f9621da50d143e436ed61f764a9fa988",
+  "backbone/model-00004-of-00005.safetensors": "18024da979fb12651442e3a168deb92b4b8e41d41ea8076151df62879ecfa823",
+  "backbone/model-00005-of-00005.safetensors": "0ad4368c4f04781d30c237c269a9911b9ffb037104a4ee469bb7f56d57e67d15",
+  "decision_head.safetensors": "bd324aa69788fa936293ff4959ea1caa8845a4e47589879b0748aed3c3df7c5a"
+ },
+ "collection": {
+  "title": "Decision 2.0",
+  "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+  "private": true,
+  "items": [
+   "llm-semantic-router/DEV2.0-0.6B",
+   "llm-semantic-router/DEV2.0-0.8B",
+   "llm-semantic-router/DEV2.0-2B",
+   "llm-semantic-router/DEV2.0-4B"
+  ]
+ }
+}

@@ -1,0 +1,17 @@
+[
+ {
+  "repo": "llm-semantic-router/dev2-dec-staging",
+  "folder": "m4/N4XF-soup/",
+  "category": "released-duplicate",
+  "released": "llm-semantic-router/DEV2.0-4B",
+  "reason": "Staging copy of the released DEV2.0-4B (collection add 2026-09-29; identical weight files). Coordinator order 2026-09-29 08:59 UTC+8: delete right after the collection add.",
+  "node_copies": [
+   {"label": "node-a", "root": "/data/dev2/runs/dec/m4/formal-candidates/staging-e8656221"},
+   {"label": "node-b", "root": "/data/dev2/runs/dec/m4/hf-staging/N4XF-soup"}
+  ],
+  "records_naming_node_copy": [
+   "src/training/decision2/v2/dec/records/dec-m4-4b-candidate-2026-09-29.md (node copies)",
+   "src/training/decision2/v2/release/records/dev2-4b-release-2026-09-29.md §1 (node A copy re-verified 14/14)"
+  ]
+ }
+]
