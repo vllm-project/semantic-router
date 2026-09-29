@@ -88,7 +88,7 @@ change the outcome.
 
 Exit code `2` conventionally signals a usage error, so automation that only checks for a non-zero exit misreads a failed run as CLI misuse. Check for `2` explicitly when a script needs to tell the two apart.
 
-`--detach` opts out of this contract: the command returns immediately with the durable run ID and no status, so there is no exit code to interpret. Use `vllm-sr benchmark runs` to inspect detached runs and `vllm-sr benchmark cancel` to stop one.
+`--detach` opts out of this contract: the command returns immediately with the durable run ID before the run reaches a terminal state, so there is no exit code to interpret. Use `vllm-sr benchmark runs` to inspect detached runs and `vllm-sr benchmark cancel` to stop one.
 
 ## Reporting results
 

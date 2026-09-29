@@ -7,7 +7,7 @@ description: Plan, apply, and delete recipes with the vllm-sr CLI against the Ro
 
 The `vllm-sr recipe` commands are the CLI's stateful write path for the canonical Router configuration: they read a recipe file, validate it, and compare-and-swap it into the live configuration. What a recipe is, and how recipes relate to entrypoints and models, is covered in [Recipes](../tutorials/global/recipes). How the CLI fits the other configuration interfaces is covered in [Configuration Workflows](./configuration-workflows). This page covers the command lifecycle.
 
-All recipe commands talk to the Router management API and share the same connection options:
+The recipe commands that operate on the live configuration talk to the Router management API and share the same connection options:
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -24,7 +24,7 @@ vllm-sr recipe list
 vllm-sr recipe get my-recipe
 ```
 
-`list` prints every managed recipe together with the collection ETag, which identifies the state observed by that read. `get` reads one recipe and returns it with its own ETag. The write commands below independently fetch a fresh collection ETag when they run.
+`list` prints every managed recipe together with the collection ETag, which identifies the state observed by that read. `get` reads one recipe and returns it under the same collection ETag, because the ETag identifies the configuration document rather than any single recipe. The write commands below independently fetch a fresh collection ETag when they run.
 
 ## Validate
 
@@ -56,7 +56,7 @@ vllm-sr recipe apply recipe.yaml
 vllm-sr recipe delete my-recipe
 ```
 
-Before deleting, inspect the target with `get` or `list`. `recipe plan recipe.yaml` only previews an apply proposal; it does not preview what `delete` removes. `delete` fetches a fresh collection ETag and compare-and-swaps one recipe out of the configuration, so it protects only against a change that races with the delete command itself. Only an unreferenced recipe can be deleted: while any entrypoint or other configuration element still points at it, deletion is refused. Delete removes that recipe and nothing else — there is no cascade and no undo.
+Before deleting, inspect the target with `get` or `list`. `recipe plan recipe.yaml` only previews an apply proposal; it does not preview what `delete` removes. `delete` fetches a fresh collection ETag and compare-and-swaps one recipe out of the configuration, so it protects only against a change that races with the delete command itself. Only an unreferenced recipe can be deleted: while any entrypoint or other configuration element still points at it, deletion is refused. The default recipe cannot be deleted either — it is the top-level routing profile, and the server refuses it the same way. Delete removes that recipe and nothing else — there is no cascade and no undo.
 
 ## Interaction with the Dashboard
 
