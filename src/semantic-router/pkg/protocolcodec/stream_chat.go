@@ -167,6 +167,7 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	// Some gateways emit an empty synthetic chunk while waiting for the first
 	// model token. It must not establish the response ID or model identity.
 	if isGatewayChatKeepalive(chunk) {
+		diagnostics = decoder.appendProviderChunkDiagnostics(chunk, diagnostics)
 		return nil, diagnostics, nil
 	}
 	if err := decoder.observeProviderIdentity(chunk.ID, chunk.Model); err != nil {
