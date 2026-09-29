@@ -45,3 +45,6 @@ AutoJev waves 0.868 (0.424 + 0.444); total 0.868 of 24.
 
 - A filename search on node A (`find /data/dev2 …`) traversed `/data/dev2/private/` and listed training-data snapshot
   paths under the custodian's sealed tree. No file there was opened. From now on searches exclude `/data/dev2/private`.
+- The first launch of `m6-gpu6` / `m6-gpu7` (18:48Z, mirror `7380a3cbf`) exited at its first step: this worktree has
+  `core.fileMode=false`, so the new wrappers were committed 100644 and `job.sh` could not be executed. No GPU job or run
+  directory was created. Fixed by `git update-index --chmod=+x`; relaunched from the new mirror as `m6-g6` / `m6-g7`.
