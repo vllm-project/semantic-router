@@ -1,11 +1,13 @@
 """Build HS1 TRAIN, the dev slices and the ``hs1-dev`` panel files (prereg §2-§3).
 
-    python3 -m v2.data.hs1.build --out-dir DIR [--scale 1.0]
+    python3 -m v2.data.hs1.build --out-dir DIR [--scale 1.0] [--drop-groups FILE]
 
 Writes (O_EXCL, mode 0600): ``hs1.train.jsonl``, ``hs1.dev.jsonl`` (training
 contract, split=select), ``hs1-dev.prompts.jsonl`` (gold-free panel prompts),
 ``hs1-dev.gold.jsonl`` and ``hs1.build.json`` (sizes, code hashes, content
 hashes, statistics). An oracle / re-check disagreement stops the build.
+``--drop-groups`` removes whole groups quarantined by the overlap audit (A4);
+every listed group must exist.
 """
 
 from __future__ import annotations
@@ -257,6 +259,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=1.0,
         help="smoke builds only; the release build uses 1.0",
     )
+    parser.add_argument(
+        "--drop-groups", type=Path, help="group ids quarantined by the A4 overlap audit"
+    )
     args = parser.parse_args(argv)
     started = time.time()
     train: list[dict[str, Any]] = []
@@ -270,6 +275,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{family}: train {len(train)} dev {len(dev)} ({time.time() - started:.0f}s)",
             file=sys.stderr,
         )
+    dropped: dict[str, Any] = {}
+    if args.drop_groups:
+        raw = args.drop_groups.read_bytes()
+        drop = {line.strip() for line in raw.decode().splitlines() if line.strip()}
+        present = {row["group_id"] for row in train + dev}
+        missing = drop - present
+        if missing:
+            raise ValueError(f"{len(missing)} drop groups are not in the build")
+        before = (len(train), len(dev))
+        train = [row for row in train if row["group_id"] not in drop]
+        dev = [row for row in dev if row["group_id"] not in drop]
+        dropped = {
+            "file_sha256": hashlib.sha256(raw).hexdigest(),
+            "groups": len(drop),
+            "train_rows": before[0] - len(train),
+            "dev_rows": before[1] - len(dev),
+        }
     check_partition_isolation({"train": train, "select": dev})
     for rows in (train, dev):
         seen: set[tuple[str, str]] = set()
@@ -303,6 +325,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "sizes": SIZES,
         "code_sha256": code_hashes(),
         "files_sha256": hashes,
+        "dropped": dropped,
         "train": stats(train),
         "dev": stats(dev),
         "seconds": round(time.time() - started, 1),
