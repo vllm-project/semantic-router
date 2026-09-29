@@ -33,8 +33,10 @@ STAGING_REPO = re.compile(
 MODEL_NAME = re.compile(r"DEV2\.0-(0\.[1-9]|[1-9][0-9]?)B\Z")
 TIERS = {"0.6B": 0.6e9, "0.8B": 0.8e9, "2B": 2e9, "4B": 4e9, "9B": 9e9, "27B": 27e9}
 SAME_SIZE_RATIO = 1.25
-# "tier": DEV2.0-<size tier>; "loaded-parameters": DEV2.0-<rounded loaded count> (brief section 2).
-NAME_BASES = ("tier", "loaded-parameters")
+# "tier": DEV2.0-<size tier>; "loaded-parameters": DEV2.0-<rounded loaded count> (brief section 2);
+# "base": DEV2.0-<size label of the base model>, which must fall in the loaded count's tier.
+NAME_BASES = ("tier", "loaded-parameters", "base")
+BASE_SIZE = re.compile(r"(?:^|[-_])([0-9]+(?:\.[0-9]+)?)B(?=$|[-_])")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
 CARD_FILES = (
@@ -189,9 +191,36 @@ def count_name(parameters: int) -> str:
     return f"DEV2.0-{size}B"
 
 
-def release_name(parameters: int, basis: str = "tier") -> str:
+def base_size_label(base_model: str) -> str:
+    """Size label of a base model repository, e.g. ``Qwen/Qwen3.5-9B`` -> ``9B``."""
+    labels = BASE_SIZE.findall(base_model.rsplit("/", 1)[-1])
+    if len(labels) != 1:
+        raise ValueError(f"{base_model} does not name exactly one size (<n>B)")
+    return f"{labels[0]}B"
+
+
+def base_name(parameters: int, base_model: str) -> str:
+    """DEV2.0-<base model size>, if that size and the loaded count share a size tier."""
+    label = base_size_label(base_model)
+    tier = tier_for(parameters)
+    if tier is None:
+        raise ValueError(f"{parameters:,} parameters fall outside every size tier")
+    if tier_for(round(float(label[:-1]) * 1e9)) != tier:
+        raise ValueError(
+            f"{base_model} ({label}) is outside the {tier} tier of {parameters:,} loaded parameters"
+        )
+    return f"DEV2.0-{label}"
+
+
+def release_name(
+    parameters: int, basis: str = "tier", base_model: str | None = None
+) -> str:
     if basis not in NAME_BASES:
         raise ValueError(f"name_basis is one of {NAME_BASES}")
+    if basis == "base":
+        if not base_model:
+            raise ValueError("name_basis base needs the base model repository")
+        return base_name(parameters, base_model)
     return (
         count_name(parameters) if basis == "loaded-parameters" else name_for(parameters)
     )

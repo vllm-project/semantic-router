@@ -1,0 +1,121 @@
+{
+  "adapter": {
+    "args": [
+      "--checkpoint",
+      "{model}",
+      "--model-id",
+      "{model_id}",
+      "--model-revision",
+      "{revision}",
+      "--max-length",
+      "8192",
+      "--score-bias",
+      "{model}/score_bias.json",
+      "--input",
+      "{input}",
+      "--output",
+      "{output}"
+    ],
+    "batch_policy": "training.model.infer, one prompt per call, all its questions batched; 8,192-token cap, over-budget invalid, no truncation; raw probabilities (no CAL temperature) with the package's per-level Score logit offsets (score_bias.json bound to the model hash)",
+    "extra_mounts": [],
+    "image": "decision20-train-fast:host2",
+    "model_id": null,
+    "module": "training.model.infer",
+    "name": "dev2-06b-causal-8k-sb",
+    "python": "python3",
+    "requires": [
+      "model_id"
+    ]
+  },
+  "adapter_module_sha256": "7bb9f3cc88f04cd6e4ded62e69f41dd1c7a3d0154a76acdf44c0d73e4163ef58",
+  "ended_utc": "2026-09-29T09:35:49.278584+00:00",
+  "extra": {
+    "model_id": "dev2-06b/m8-s5-b05"
+  },
+  "gpu_label": "gpu0",
+  "gpu_wall_seconds": 24.794395701028407,
+  "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+  "label": "post-key same-panel",
+  "model_id": "dev2-06b/m8-s5-b05",
+  "model_path": "/data/dev2/runs/06b/m1/arms/m8-s5-b05/full/best-export",
+  "model_revision": "85c1add12019a6855ffbbd34b9a05febe5acd5ae4160280ed1560582e0f83a3b",
+  "panels": [
+    {
+      "argv": [
+        "python3",
+        "-m",
+        "training.model.infer",
+        "--checkpoint",
+        "/data/dev2/runs/06b/m1/arms/m8-s5-b05/full/best-export",
+        "--model-id",
+        "dev2-06b/m8-s5-b05",
+        "--model-revision",
+        "85c1add12019a6855ffbbd34b9a05febe5acd5ae4160280ed1560582e0f83a3b",
+        "--max-length",
+        "8192",
+        "--score-bias",
+        "/data/dev2/runs/06b/m1/arms/m8-s5-b05/full/best-export/score_bias.json",
+        "--input",
+        "/data/dev2/private/panels/goldfree/score5t-dev.prompts.jsonl",
+        "--output",
+        "/data/dev2/runs/06b/m8/d4/s5-b05/output/score5t-dev.predictions.jsonl"
+      ],
+      "exit_code": 0,
+      "expected_rows": 800,
+      "log_sha256": "205200a51ce360b249e5149bcac69fbad5d6ef481f1581326f7bf7bc14d76fb6",
+      "output_rows": 800,
+      "output_sha256": "256b45dc57bd9a7745da236064de91d9828db9a87872201c3fa26a09384695a9",
+      "panel": "score5t-dev",
+      "utc_end": "2026-09-29T09:35:49.273986+00:00",
+      "utc_start": "2026-09-29T09:35:24.479602+00:00",
+      "wall_seconds": 24.794395701028407
+    }
+  ],
+  "runtime": {
+    "causal_conv1d": "1.7.0",
+    "device_name": "",
+    "devices": 1,
+    "fla": "0.5.2",
+    "hip": "7.2.53211",
+    "numpy": "2.3.5",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0",
+    "triton": "3.7.1"
+  },
+  "runtime_env": {
+    "HIP_FORCE_DEV_KERNARG": "1",
+    "TRITON_CACHE_AUTOTUNING": "1",
+    "TRITON_CACHE_DIR": "/data/dev2/runs/06b/m8/d4/s5-b05.triton-cache"
+  },
+  "schema": "dev2-same-panel-collect/1",
+  "source_mirror": {
+    "archive_sha256": "5743801a9d0fd53a6aa0618b492f5552d1faf537039969a15048db3ec9c6a7f3",
+    "commit": "49e632bfc1664a47a514abc6736a1241b878d455",
+    "content_manifest_sha256": "e7dd90497833930f83fecf240c3eb0cfc4c92d4c5b3a1f627944af311d7e4f4c",
+    "created_utc": "2026-09-29T09:33:52Z",
+    "files": 3788,
+    "path": "src/training/decision2",
+    "schema": "dev2-mirror/1",
+    "tree": "f5a002cf66f9a37af30c95a28dd82b60d99d1bb0"
+  },
+  "sources": {
+    "benchmark/generate.py": "c6569d4c86c3b9ea2ebdda564d8ba4d3428cc807d41d39984379821cfbb9422c",
+    "benchmark/score.py": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "jev_arena/compare_v3.py": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "jev_arena/jevbench_public.py": "aec840b6497beeae8b63e9270670c22506265c086a84e889bc82f694146518cf",
+    "transfer/build.py": "717e31b62d1f9d09b30f1ae2365b2e59cdf0cf40209dda5e9e08b921a1fc184d",
+    "transfer/score.py": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca",
+    "v2/eval/adapters.py": "6717d108a1336efef8aded3fed8ec697d42dede7c125d3241387868d448c8f32",
+    "v2/eval/panels.py": "b05ec5888761d3b4254aeda8399360e9fbc80759455d93ff78003303c159fb70",
+    "v2/eval/same_panel.py": "936f083dea972cbfc1886710f4f14e3f01f1b3eec6d667e9912bf399772da704"
+  },
+  "started_utc": "2026-09-29T09:35:17.753304+00:00",
+  "visible_devices": {
+    "CUDA_VISIBLE_DEVICES": null,
+    "HIP_VISIBLE_DEVICES": null,
+    "ROCR_VISIBLE_DEVICES": "0"
+  }
+}

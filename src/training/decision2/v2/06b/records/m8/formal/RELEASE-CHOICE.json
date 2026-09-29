@@ -1,0 +1,50 @@
+{
+  "comparisons": [
+    {
+      "ci95_H": [
+        0.0,
+        0.0
+      ],
+      "ci95_v3": [
+        -0.5539571756821433,
+        0.18574659359877582
+      ],
+      "delta_H": 0.0,
+      "delta_v3": -0.17728972862263248,
+      "first": "m8-s5-b05",
+      "later": "m8-s5h-b05",
+      "models": {
+        "left": "m8-s5h-b05",
+        "right": "m8-s5-b05"
+      },
+      "significantly_better": false
+    }
+  ],
+  "inputs": [
+    {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5-b05.gates/SUCCESSOR.json",
+      "sha256": "208d24cf8a78cf029372cdacfc30acbd3a3fea8d1b07932d2478e65c6c3eb4eb"
+    },
+    {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05.gates/SUCCESSOR.json",
+      "sha256": "3a62fe340f64dad267e9f2c8904b444829317d752e048f945a617addf0a02573"
+    },
+    {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05/PAIRED-vs-m8-s5-b05.json",
+      "sha256": "7e326770b2376ef6f4c737e3c63c9c8d7d874b4f358fff8e84d2f4685d8521d1"
+    }
+  ],
+  "passers": [
+    "m8-s5-b05",
+    "m8-s5h-b05"
+  ],
+  "prereg": "v2/06b/records/m8-prereg-2026-09-29.md section 8 (release choice)",
+  "prereg_commit": "e6a5f4515b902f2760ff768d47bf50c9eafb3849",
+  "ranking": [
+    "m8-s5-b05",
+    "m8-s5h-b05"
+  ],
+  "rule": "the first passer in the section 5 ranking, unless a later passer is significantly better on v3 (paired delta later - first, 95% lower bound > 0)",
+  "schema": "dev2-06b-m8-release-choice/1",
+  "successor": "m8-s5-b05"
+}

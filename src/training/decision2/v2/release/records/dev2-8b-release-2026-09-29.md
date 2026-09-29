@@ -1,5 +1,23 @@
 # DEV2.0-8B (9B tier, candidate K-a13): private release build, upload and verification (2026-09-29)
 
+## Renamed DEV2.0-9B, 2026-09-29 16:44 UTC+8 — card-only revision `ae683196` (current)
+
+- **Why:** the user directive of 2026-09-29 16:05 UTC+8: names follow the base model's size, and this model's base is
+  Qwen3.5-9B.
+- **Move:** the repository was moved to **`llm-semantic-router/DEV2.0-9B`** at 08:44:34Z. History, revisions and
+  privacy are unchanged, and the old ID redirects.
+- **Card-only revision `ae6831960dd1114296cb15a59248b79832c42959`** (`main`):
+  - manifest `996b28192928d9238657dce562721e10b850cae183926ff88396383192bef628`;
+  - final decision `bad976354662ea807cfc444c48f39f723624b14bd8446f74195308b19c1b0b4a`, which supersedes `7666fd7c…`
+    below;
+  - gate.json `9de02171…`.
+- **Weights:** every weight file is byte-identical to `53bac735`.
+- **Card:** it shows the 9B owl and says "Named after its base model (Qwen3.5-9B); it loads 7,940,895,744
+  parameters". The pending C1 line is unchanged.
+- **Collection:** position 5 of 0.6B, 0.8B, 2B, 4B, 9B, 27B.
+- Spec: `specs/dev2-9b-release.json`. Record: [`dev2-rename-9b-27b-2026-09-29.md`](dev2-rename-9b-27b-2026-09-29.md).
+- The sections below describe the release as DEV2.0-8B.
+
 ## Released, 2026-09-29 ≈16:00 UTC+8 — revision `53bac735`, in the private "Decision 2.0" collection
 
 The coordinator decided the release at 15:49 UTC+8 (full-autonomy mandate) on the verified draft `1db7683f…`.

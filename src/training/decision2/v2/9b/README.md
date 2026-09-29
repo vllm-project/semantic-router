@@ -43,3 +43,13 @@ conventions (prereg amendment 2). `lux9b/m4_rules.py` (`seed` / `alpha`,
 tests `tests/test_m4_rules.py`) applies the preregistered seed, alpha and
 proxy-drop rules to the development readouts, with exact rational floors
 (prereg amendment 3).
+
+Milestone 5: `lux9b/m5_rules.py` (`seed` / `alpha` / `finalists`) applies the
+incumbent-anchored alpha rule (reference = the M5 re-read of K-a13, line-local
+proxy drop, M4's Lux-anchored pick reported alongside). Two post-key CPU
+reporters run from a mirror with
+`PYTHONPATH=<mirror>/src/training/decision2:<mirror>/src/training/decision2/v2/9b`:
+`lux9b/mlx_paired.py` (paired, type x language stratified bootstrap of the
+card-eligible mlx-diag Choice + Noul parts, self-checked against both stored
+`mlx-diag.score.json`) and `lux9b/score_levels.py` (typed FINAL Score level
+usage via `v2.eval.gates.type_summary`).

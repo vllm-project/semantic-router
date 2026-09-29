@@ -1,0 +1,153 @@
+{
+  "ci95": {
+    "high": 5.0,
+    "low": -9.0
+  },
+  "delta": -2,
+  "discordant": {
+    "left_only": 5,
+    "right_only": 7
+  },
+  "families": {
+    "adequacy": {
+      "items": 12,
+      "left": 8,
+      "right": 8
+    },
+    "adversarial": {
+      "items": 6,
+      "left": 5,
+      "right": 6
+    },
+    "ambiguous": {
+      "items": 7,
+      "left": 3,
+      "right": 3
+    },
+    "extraction": {
+      "items": 24,
+      "left": 24,
+      "right": 23
+    },
+    "fact": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "intent": {
+      "items": 24,
+      "left": 24,
+      "right": 24
+    },
+    "judge_hard": {
+      "items": 17,
+      "left": 9,
+      "right": 9
+    },
+    "long_policy": {
+      "items": 19,
+      "left": 3,
+      "right": 5
+    },
+    "multi_hop": {
+      "items": 18,
+      "left": 13,
+      "right": 12
+    },
+    "ordinal": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "policy": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "probability": {
+      "items": 10,
+      "left": 6,
+      "right": 6
+    },
+    "routing": {
+      "items": 12,
+      "left": 11,
+      "right": 11
+    },
+    "routing_hard": {
+      "items": 5,
+      "left": 5,
+      "right": 5
+    },
+    "temporal_numeric": {
+      "items": 15,
+      "left": 2,
+      "right": 3
+    },
+    "tool_selection": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "tradeoff": {
+      "items": 6,
+      "left": 3,
+      "right": 3
+    },
+    "trap": {
+      "items": 8,
+      "left": 7,
+      "right": 7
+    }
+  },
+  "items": 231,
+  "label": "post-key same-panel",
+  "left_correct": 171,
+  "mcnemar_exact_p": 0.7744140625,
+  "names": {
+    "left": "DEV2.0-4B (N4XF)",
+    "right": "Nox 1.0"
+  },
+  "right_correct": 173,
+  "rule": "REGRESSION if left − right < 0 items and the exact two-sided McNemar p < 0.05",
+  "runs": {
+    "left": "/data/dev2/runs/dec/formal/m4/m4-N4XF-soup-nodeA",
+    "right": "/data/dev2/runs/eval/m1-adopt/nox1"
+  },
+  "schema": "dev2-gate-public231/1",
+  "tiers": {
+    "easy": {
+      "items": 48,
+      "left": 48,
+      "right": 48
+    },
+    "hard": {
+      "items": 111,
+      "left": 56,
+      "right": 59
+    },
+    "standard": {
+      "items": 72,
+      "left": 67,
+      "right": 66
+    }
+  },
+  "types": {
+    "choice": {
+      "items": 139,
+      "left": 106,
+      "right": 103
+    },
+    "noul": {
+      "items": 74,
+      "left": 50,
+      "right": 55
+    },
+    "score": {
+      "items": 18,
+      "left": 15,
+      "right": 15
+    }
+  },
+  "verdict": "OK"
+}

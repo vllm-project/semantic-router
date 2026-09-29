@@ -1,0 +1,143 @@
+{
+  "fit": {
+    "candidate": "s5h-b1",
+    "export_manifest_sha256": "3ae009ad838487c0df839a55898a98f5665276136d2a8cab3c1260dd0b29dfa2",
+    "fit": {
+      "gradient_norm": 1.7130287712303238e-10,
+      "newton_steps": 3,
+      "objective_end": 2.985702232149899,
+      "objective_start": 2.998418083568294,
+      "offsets": [
+        0.060589,
+        0.126975,
+        0.047507,
+        -0.022625,
+        -0.212446
+      ],
+      "raw_offsets": [
+        0.0,
+        0.06638588707562078,
+        -0.013082699143980305,
+        -0.08321400359459924,
+        -0.2730357261492773
+      ]
+    },
+    "human_weight": 1.0,
+    "inputs": {
+      "score5t_check_gold": {
+        "path": "/data/dev2/private/panels/gold/score5t-dev.check.gold.jsonl",
+        "sha256": "2e4a9490642cb04da7c016c4ebd22a9366666f0e464cfbc418371a92266adb3d"
+      },
+      "score5t_fit_gold": {
+        "path": "/data/dev2/private/panels/gold/score5t-dev.fit.gold.jsonl",
+        "sha256": "3d735da439ac7a459bffcc931b44202541e8a3d55b82960c70b0eedff9efb5f6"
+      },
+      "score5t_panel": {
+        "gold/score5t-dev.gold.jsonl": "31abc1a5d7820e06961a903327c76dc4503b46987f0db58b645e0e6562e08aed",
+        "goldfree/score5t-dev.prompts.jsonl": "8e35bfffc2c3b8e4252d3c39ec1c65054250a3ddf80159d219a16b41bca1d93c"
+      },
+      "score5t_predictions": {
+        "path": "/data/dev2/runs/eval/score5t-dev/collect/m6-mxcx-soup/output/score5t-dev.predictions.jsonl",
+        "sha256": "033148fc38ab2aadbffd26d09c8516e4b16f39d286f425e7d8f2dd50731f9642"
+      }
+    },
+    "lam": 1.0,
+    "levels": 5,
+    "model_sha256": "01fae75098ce29314c5de2990321fcfd31457de7c02bb757bd8345662a823854",
+    "objective": "J(b) = sum_ledger a_i l_i(b) + w_h sum_human a_i l_i(b), l_i(b) = -log softmax(z_i + b)_{y_i}, z = log max(p, 1e-12), a_i = n_{s,y_i}^(-lam) / sum_{j in s} n_{s,y_j}^(-lam), b_0 = 0",
+    "post": "shift to mean zero, round to 6 decimals",
+    "prereg": "v2/06b/records/m8-prereg-2026-09-29.md section 3",
+    "prereg_commit": "e6a5f4515b902f2760ff768d47bf50c9eafb3849",
+    "rows": {
+      "block_weight": {
+        "human": 1.0,
+        "ledger": 1.0
+      },
+      "human": {
+        "inputs": {
+          "aho_dir": "/data/dev2/runs/06b/m7/a/aho",
+          "aho_manifest_sha256": "c20eb26b36ceb6bad83eeb192aaa482fc08b3aebd79319618713bfd336e6e19e",
+          "best_export_manifest_sha256": "3ae009ad838487c0df839a55898a98f5665276136d2a8cab3c1260dd0b29dfa2",
+          "cal698_ids_sha256": "7e8c01c8552f56ba30f4dd1a5c0ca7c2e74baf4412d2533eecbd23b77300f947",
+          "cal_gold": "/data/dev2/private/panels/gold/cal.jsonl",
+          "cal_gold_sha256": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a",
+          "cal_parity_max_abs_drift": 0.0,
+          "cal_probs_sha256": "df223972b1a642a500ab2f8f38af33108edcecc41ff6ee504e1320d6618fa127",
+          "complete_sha256": "1e5603a5dd415d2a52efeab3dc2fa511101958ce404ed6ee380f7b488ff515ef",
+          "fit_aho_probs_sha256": "238ce555511fde5f18d0e4b1f65d374e2fb5a5a99dce365e7882948df7ec1292",
+          "fit_aho_sha256": "4bfe6731c5ef12782a626f4eacbd5844e0557deb468cd0e3662f08b754657a9e",
+          "probs_manifest": "/data/dev2/runs/06b/m7/a/probs/PROBS.json",
+          "probs_manifest_sha256": "4b14486785e453f0417cd034dd18e04a73d2df49ed03cf65bc75509710f5f289",
+          "score5_panel_rows": {
+            "path": "/data/dev2/runs/eval/score5-dev/build-v1/panel-rows.jsonl",
+            "sha256": "889ff2c7609f79d0af9eb9f470b0d76b45630a6956ab12c0abd34cb5e2599138"
+          },
+          "soup_dir": "/data/dev2/runs/06b/m1/arms/m6-mxcx-soup/full",
+          "state_sha256": "5c3d3ca18434fab1045a5840f4ef4508f9956fd3b2de00bd1bacf912b9729068"
+        },
+        "removed": 264,
+        "removed_by_source": {
+          "A6g": 0,
+          "A6h": 0,
+          "A7g": 0,
+          "A7q": 264,
+          "CAL698": 0,
+          "G6": 0,
+          "H6": 0
+        },
+        "rows": 1762,
+        "rows_by_level": {
+          "0": 331,
+          "1": 409,
+          "2": 339,
+          "3": 347,
+          "4": 336
+        },
+        "rows_by_source": {
+          "A6g": 45,
+          "A6h": 15,
+          "A7g": 89,
+          "A7q": 1003,
+          "CAL698": 90,
+          "G6": 150,
+          "H6": 370
+        },
+        "rows_l5_before_removal": 2026,
+        "rows_l5_before_removal_by_source": {
+          "A6g": 45,
+          "A6h": 15,
+          "A7g": 89,
+          "A7q": 1267,
+          "CAL698": 90,
+          "G6": 150,
+          "H6": 370
+        },
+        "score5_dev_panel_rows": 500,
+        "score5_dev_rule": "drop a human row whose id is a panel row's source_row_id or panel_id"
+      },
+      "ledger": {
+        "rows": 400,
+        "rows_by_level": {
+          "0": 48,
+          "1": 77,
+          "2": 81,
+          "3": 61,
+          "4": 133
+        }
+      },
+      "objective_rows": 2162
+    },
+    "solver": "Newton, float64, backtracking, gradient norm < 1e-09, at most 200 steps (m7_scorebias)"
+  },
+  "format": "dev2-score-bias-v1",
+  "model_sha256": "01fae75098ce29314c5de2990321fcfd31457de7c02bb757bd8345662a823854",
+  "offsets": {
+    "5": [
+      0.060589,
+      0.126975,
+      0.047507,
+      -0.022625,
+      -0.212446
+    ]
+  }
+}

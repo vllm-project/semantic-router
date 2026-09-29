@@ -52,6 +52,43 @@ class GatesTest(unittest.TestCase):
         self.assertLess(low, 0.5)
         self.assertGreater(high, 0.5)
 
+    def test_mcnemar_exact(self):
+        self.assertEqual(gates.mcnemar_exact(0, 0), 1.0)
+        self.assertEqual(gates.mcnemar_exact(3, 3), 1.0)
+        self.assertAlmostEqual(gates.mcnemar_exact(2, 7), 92 / 512)
+        self.assertAlmostEqual(gates.mcnemar_exact(7, 2), 92 / 512)
+        self.assertLess(gates.mcnemar_exact(6, 27), 0.001)
+
+    def test_public_guard_flags_only_significant_losses(self):
+        targets = {
+            f"p{i}": {
+                "tier": "hard" if i < 40 else "easy",
+                "family": "long" if i < 10 else "short",
+                "task_type": "choice",
+            }
+            for i in range(60)
+        }
+
+        def outcomes(wrong: set[int]) -> dict:
+            return {
+                key: {"tier": row["tier"], "correct": int(key[1:]) not in wrong}
+                for key, row in targets.items()
+            }
+
+        base = outcomes(set())
+        big = gates.public_guard(outcomes(set(range(12))), base, targets, 200, 1)
+        self.assertEqual(big["delta"], -12)
+        self.assertEqual(big["discordant"], {"left_only": 0, "right_only": 12})
+        self.assertEqual(big["verdict"], "REGRESSION")
+        self.assertEqual(big["tiers"]["hard"], {"items": 40, "left": 28, "right": 40})
+        self.assertEqual(big["families"]["long"]["left"], 0)
+        small = gates.public_guard(outcomes({0, 1}), base, targets, 200, 1)
+        self.assertEqual(small["verdict"], "OK")
+        gain = gates.public_guard(base, outcomes(set(range(12))), targets, 200, 1)
+        self.assertEqual(gain["verdict"], "OK")
+        with self.assertRaises(ValueError):
+            gates.public_guard(base, {"p0": base["p0"]}, targets, 200, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
