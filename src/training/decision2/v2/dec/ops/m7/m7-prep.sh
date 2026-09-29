@@ -111,7 +111,7 @@ for tier in $TIERS; do
       --groups /data/excluded-groups.json --train "$d/train.jsonl" --expect-sha256 "$sha" \
       --label "decoder M7 $n" --output "/out/exposure-$n.json" || exit 1
   done
-  python3 -B "$CODE/v2/dec/ops/m7/m7_lock.py" --tier "$tier" --tag "$TAG" --arms "$ARMS" \
+  python3 -B "$CODE/v2/dec/ops/m7/m7_lock.py" --tier "$tier" --tag="$TAG" --arms "$ARMS" \
     --hs1-cleared "$HOST_H/$HS1C_REV/m4/hs1/train.jsonl" --hs1-cleared-sha "$HS1C_SHA" \
     --out "$M/lock-$tier$TAG.json" > "$M/lock-$tier$TAG.log" 2>&1
   log "lock $tier$TAG: $(tail -1 "$M/lock-$tier$TAG.log")"

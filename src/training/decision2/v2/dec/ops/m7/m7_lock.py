@@ -107,9 +107,10 @@ def main(argv: list[str] | None = None) -> int:
                 sources[row["source"]] += 1
                 families[row["family"]] += 1
                 qhits += row["group_id"] in quarantine
-                defect += row["source"] == "decision2_hardskills_hs1" and any(
-                    s in line for s in drops
-                )
+                if row["source"] == "decision2_hardskills_hs1":
+                    defect += any(s in line for s in drops)
+                    hs1_rows += 1
+                    hs1_differ += cleared is not None and cleared.get(row["id"]) != row
                 tokens_rows += 1
         if any(n > 1 for n in ids.values()):
             fails.append(f"{name}: repeated ids")
