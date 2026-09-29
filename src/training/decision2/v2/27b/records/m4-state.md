@@ -1,6 +1,6 @@
 # ~27B M4 state (resume file)
 
-Updated: 2026-09-29 16:50 UTC+8 (M4 worker; **preregistered, launching**)
+Updated: 2026-09-29 17:05 UTC+8 (M4 worker; **all six arm-seeds in full training**)
 Branch: `xunzhuo/decision-2-training-27b` (merge-only into `xunzhuo/decision-2-training`)
 Prereg: `m4-prereg-2026-09-29.md`. Code mirror on both nodes: `1b56e482b` (drivers in `v2/27b/m4/`, run from
 the mirror; no uploads).
@@ -31,9 +31,19 @@ the mirror; no uploads).
 - Liveness: `docker ps --filter name=d2-27b-M4-` (never `pgrep -f`).
 - Run dirs: `/data/dev2/runs/27b/M4-*` on the node that trains them; driver log `driver.log`, receipts `receipts/`.
 
+## Launch receipts (prereg `727de1149`)
+
+- Launched 08:44Z (A20-s2 08:52Z, after the probe). Every driver's first log line, T0 copy check (`1933eb36…`) and
+  pipeline check are in its `driver.log`; containers confirmed by name.
+- Preflights, all six: admission all admitted; one-step exit 0 (0.07–0.08 GPU-h); reload 32 rows, 0 argmax
+  changes, passed. Full containers `d2-27b-M4-<ARM>-full` running on B5/B6/B7 and A2/A3/A4 by 08:58Z.
+- **Cross-node probe** `M4-xnode-A20-s1` (node A GPU2, 0.071 GPU-h): step-1 adapter `628b7825…` and head
+  `02c858ad…` are byte-identical to node B's M4-A20-s1 one-step; loss 1.6794943176209927 and gradient norm
+  13.559420585632324 are equal. Training is node-invariant on this image / base / T0.
+- Heartbeats: `m4-status.sh {a,b} --loop 600` running on both nodes (pids in `m4-logs/heartbeat-*.driver.log`).
+
 ## Next
 
-1. Launch the five node-B/node-A arm-seeds and the probe; verify containers and first log lines.
-2. G1 budget check after ~300 full updates of every run.
+1. G1 budget check after ~300 full updates of every run.
 3. As node A runs finish: relay BEST checkpoints (no `trainer_state.pt`) to node B, check SHA-256.
 4. Soups → readouts (sanity) → CAL698 / 23:15 → packages → formal → gates / overlap → mlx-diag → contrasts.
