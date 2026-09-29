@@ -1,0 +1,188 @@
+{
+ "arm_id": "HS1",
+ "canonical_form": "rows sorted by id; canonical(row) + '\\n' per row; UTF-8",
+ "canonical_path": "hs1.train.jsonl",
+ "choice": {
+  "by_option_bucket": {
+   "3": 1194,
+   "4": 3028,
+   "5-8": 1884
+  },
+  "gold_position_by_bucket": {
+   "3": {
+    "0": 398,
+    "1": 398,
+    "2": 398
+   },
+   "4": {
+    "0": 758,
+    "1": 758,
+    "2": 758,
+    "3": 754
+   },
+   "5-8": {
+    "0": 359,
+    "1": 367,
+    "2": 365,
+    "3": 359,
+    "4": 359,
+    "5": 58,
+    "6": 17
+   }
+  }
+ },
+ "content_sha256": "c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71",
+ "counts": {
+  "family": {
+   "hs1_policy_packet": 2398,
+   "hs1_quote_check": 7178,
+   "hs1_unmet_condition": 10392
+  },
+  "language": {
+   "en": 19968
+  },
+  "source": {
+   "decision2_hardskills_hs1": 19968
+  },
+  "task_type": {
+   "choice": 6106,
+   "noul": 11444,
+   "score": 2418
+  }
+ },
+ "groups": 9984,
+ "input": {
+  "is_canonical": true,
+  "path": "hs1.train.jsonl",
+  "sha256": "c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71"
+ },
+ "license_registry_sha256": "05c88396f825d85f82c056c907ad62f9576d6b2700e5c6c14e779186ac64bcf9",
+ "licenses": {
+  "decision2_hardskills_hs1": {
+   "attribution": "Decision 2.0 HS1 hard-skill generators (quoted-conclusion check, long policy packets, unmet-condition Noul)",
+   "evidence": "generator source under src/training/decision2/v2/data/hs1 at the build commit; project-authored templates only; no corpus text and no model-written text",
+   "license": "project-generated (no third-party text)",
+   "redistribution": "unrestricted within the project; may be redistributed with the models under Apache-2.0"
+  }
+ },
+ "noul": {
+  "labels": {
+   "false": 5724,
+   "true": 5720
+  },
+  "true_fraction": 0.499825
+ },
+ "partition": "train",
+ "role": "train",
+ "rows": 19968,
+ "rows_per_group": {
+  "2": 9984
+ },
+ "schema": "decision2.v2.freeze.v1",
+ "score": {
+  "by_levels": {
+   "4": 2418
+  },
+  "by_levels_grade": {
+   "4": {
+    "0": 872,
+    "1": 544,
+    "2": 483,
+    "3": 519
+   }
+  }
+ },
+ "state_chars": {
+  "p0": 561,
+  "p10": 1017,
+  "p100": 11472,
+  "p25": 1146,
+  "p50": 1561,
+  "p75": 2529,
+  "p90": 5619,
+  "p99": 9785
+ },
+ "tokens": [
+  {
+   "by_language": {
+    "en": 13624784
+   },
+   "by_task_type": {
+    "choice": 5078826,
+    "noul": 6583558,
+    "score": 1962400
+   },
+   "kind": "native_decoder",
+   "name": "qwen3-0.6b-base@da87bfb6",
+   "padded8_total": 13694000,
+   "path": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+   "quantiles": {
+    "p0": 190,
+    "p10": 318,
+    "p100": 2801,
+    "p25": 361,
+    "p50": 489,
+    "p75": 695,
+    "p90": 1466,
+    "p99": 2391
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+   "total": 13624784
+  },
+  {
+   "by_language": {
+    "en": 14029697
+   },
+   "by_task_type": {
+    "choice": 5230640,
+    "noul": 6777370,
+    "score": 2021687
+   },
+   "kind": "native_decoder",
+   "name": "qwen3.5-0.8b-base@dc7cdfe2",
+   "padded8_total": 14099104,
+   "path": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+   "quantiles": {
+    "p0": 201,
+    "p10": 331,
+    "p100": 2875,
+    "p25": 375,
+    "p50": 506,
+    "p75": 713,
+    "p90": 1502,
+    "p99": 2433
+   },
+   "revision": null,
+   "tokenizer_json_sha256": null,
+   "total": 14029697
+  },
+  {
+   "by_language": {
+    "en": 12366373
+   },
+   "by_task_type": {
+    "choice": 4573212,
+    "noul": 6000768,
+    "score": 1792393
+   },
+   "kind": "raw",
+   "name": "kai-0.6b@7185f514",
+   "padded8_total": 12436104,
+   "path": "tokenizer",
+   "quantiles": {
+    "p0": 139,
+    "p10": 265,
+    "p100": 2836,
+    "p25": 301,
+    "p50": 421,
+    "p75": 627,
+    "p90": 1403,
+    "p99": 2337
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+   "total": 12366373
+  }
+ ]
+}
