@@ -1,6 +1,6 @@
 # 9B M4 state (resume file)
 
-Updated: 2026-09-29 12:55 UTC+8 (worker 3)
+Updated: 2026-09-29 13:15 UTC+8 (worker 3)
 Branch: `xunzhuo/decision-2-training-9b` (merge-only into `xunzhuo/decision-2-training`)
 Base: `eead88a60` + merge of origin `xunzhuo/decision-2-training` (`f3aae7155`) = `1424df742`
 
@@ -19,20 +19,23 @@ Base: `eead88a60` + merge of origin `xunzhuo/decision-2-training` (`f3aae7155`) 
 - Lock pushed `d9c04cbda` (`records/lux9b-m4-formal-lock-2026-09-29.md`) before any formal prediction. sha256 prefixes:
   K-a13 `b9d973b3ef55`, U-a13 `8c1ab3719947`, KN-a12 `e0dffa0ec943`; cache tree `af623300d71a`.
 
-## Running (step 3, launched per lock; do NOT relaunch - `formal.sh` exits 66 on existing dirs)
-
-- node A GPU6 driver PID 2828062 (04:46:41Z): K-a13, then KN-a12 if K-a13 exits 0. GPU7 driver PID 2829031 (04:47:24Z): U-a13.
-- Poll: `/data/dev2/runs/9b/m4/logs/formal-gpu{6,7}.{log,console}` (`end step=NAME ... exit=N`, `done NAME`);
-  outputs `/data/dev2/runs/9b/formal-m4/NAME-{smoke,16k,16k-mlx}`, `NAME-cache.jsonl`.
-- Both smokes exit 0; hashes / image match the lock. Cache tree hash changed during the smokes `af623300d71a` ->
-  `d10b24d792c8` (4,785 files; both 16k runs started from `d10b24d7`): report, do not rerun.
+- Step 3 (13:15): formal runs ended exit 0 (K-a13 04:58:24Z, U-a13 04:58:55Z, KN-a12 05:09:44Z); identities match the lock;
+  types gate run (host python3, lock loop). Post-key same-panel v3, paired vs native Lux1 16K 65.808 [95% CI]:
+  - **K-a13 67.737, +1.929 [+0.607, +4.144]; H +.0081 [-.011, +.042]; types OK x3 -> PASS.**
+    Scored run: node A `/data/dev2/runs/9b/formal-m4/K-a13-16k` (SEAL `11abc1cc7818`).
+  - U-a13 67.866, +2.058 [-0.215, +4.040]; H +.0103 [-.024, +.041]; types OK x3 -> FAIL (lower bound <= 0).
+  - **KN-a12 67.982, +2.174 [+0.358, +4.962]; H +.0057 [-.022, +.049]; types OK x3 -> PASS.**
+    Scored run: node A `/data/dev2/runs/9b/formal-m4/KN-a12-16k` (SEAL `92084d7ed1e0`).
+  - vs same-renderer 65.231: K-a13 +2.507 [+1.037, +4.599], U-a13 +2.636 [+0.265, +4.496], KN-a12 +2.751 [+0.733, +5.511].
+- Kept on node A (no HF upload): `m4/NAME-build/soup` + `m4/NAME-cal/`, manifest `m4/NAME-build/SHA256SUMS`
+  (23 files, re-hash 23/23 OK): K-a13 `6913eb61836a`, U-a13 `d426c1a4f18f`, KN-a12 `1159daf23803`.
+- Cache: 13 Triton `__grp__*.json` files rewritten with `formal-m4` paths (kernels, `.hsaco`, autotune JSON byte-identical);
+  final tree `5604ffdc5f19`. Scratch readout: node A `formal-m4/readout-w3/`.
 
 ## Next
 
-3. After all three end: `v2.eval.gates types` per finalist (lock bash block); read `NAME-16k/PAIRED-vs-Lux1-16K.json`
-   (`ci95.low`, `axis_ci95.H.delta.high`) and `-shared`; mlx-diag; public 231; SHA-256 manifests next to each soup.
-4. Result record + gist 05 entry; merge into `xunzhuo/decision-2-training`.
+4. Result record `records/lux9b-m4-formal-result-2026-09-29.md` + gist 05 entry; merge into `xunzhuo/decision-2-training`.
 
 ## GPU-hours
 
-M4 before formal runs: 19.31 GPU-h (node-A run records incl. node-B copies, CPU soups excluded); cap 22.
+M4 total 19.86 GPU-h = 19.31 (training + readouts, node-B copies in, CPU soups out) + 0.55 formal (1,987 GPU-s); cap 22.
