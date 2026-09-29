@@ -89,6 +89,22 @@ func parseShadowDatasetPolicy(values url.Values) (shadowdataset.Policy, error) {
 			Weight: parsed,
 		})
 	}
+
+	by, rawCap := strings.TrimSpace(values.Get("balance_by")), strings.TrimSpace(values.Get("balance_max"))
+	if by == "" && rawCap == "" {
+		return policy, nil
+	}
+	// A cap without a group, or a group without a cap, describes no balance at
+	// all. Reading one of them as a default would silently build a dataset
+	// under a rule the caller did not state.
+	if by == "" || rawCap == "" {
+		return policy, fmt.Errorf("balance_by and balance_max are given together")
+	}
+	limit, err := strconv.Atoi(rawCap)
+	if err != nil {
+		return policy, fmt.Errorf("balance_max must be an integer")
+	}
+	policy.Balance = &shadowdataset.Balance{By: by, Max: limit}
 	return policy, nil
 }
 
