@@ -1,0 +1,4 @@
+m7-mx-soup       Q  48.12  guard pass  B-D1 pass  eligible True
+m7-cx-soup       Q  43.20  guard pass  B-D1 pass  eligible True
+m7-mxcx-soup     Q  47.64  guard pass  B-D1 pass  eligible True
+finalists: m7-mxcx-soup, m7-mx-soup

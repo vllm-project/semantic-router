@@ -1,0 +1,81 @@
+{
+  "step": "M7(b) M6 baselines: uncorrected CHK probabilities (m7_probs) as recorded co-tenants of the M7(b) training queues (m7_baselines.sh)",
+  "mirror": "07ca6fb041288e9c1a8c87d1abada7c797b0f76a-src_training_decision2",
+  "jobs": [
+    {
+      "arm": "m6-cx-s1",
+      "gpu": 1,
+      "lease": "owner.m7b-post",
+      "start_utc": "2026-09-29T01:44:18Z",
+      "end_utc": "2026-09-29T01:46:04Z",
+      "wall_seconds": 106,
+      "exit": 0
+    },
+    {
+      "arm": "m6-cx-s2",
+      "gpu": 1,
+      "lease": "owner.m7b-post",
+      "start_utc": "2026-09-29T01:46:07Z",
+      "end_utc": "2026-09-29T01:47:54Z",
+      "wall_seconds": 107,
+      "exit": 0
+    },
+    {
+      "arm": "m6-cx-s3",
+      "gpu": 1,
+      "lease": "owner.m7b-post",
+      "start_utc": "2026-09-29T01:47:57Z",
+      "end_utc": "2026-09-29T01:49:48Z",
+      "wall_seconds": 111,
+      "exit": 0
+    },
+    {
+      "arm": "m6-cx-soup",
+      "gpu": 1,
+      "lease": "owner.m7b-post",
+      "start_utc": "2026-09-29T01:49:51Z",
+      "end_utc": "2026-09-29T01:51:44Z",
+      "wall_seconds": 113,
+      "exit": 0
+    },
+    {
+      "arm": "m6-mx-s1",
+      "gpu": 0,
+      "lease": "owner.m7b-post",
+      "start_utc": "2026-09-29T01:44:18Z",
+      "end_utc": "2026-09-29T01:46:01Z",
+      "wall_seconds": 103,
+      "exit": 0
+    },
+    {
+      "arm": "m6-mx-s2",
+      "gpu": 0,
+      "lease": "owner.m7b-post",
+      "start_utc": "2026-09-29T01:46:03Z",
+      "end_utc": "2026-09-29T01:47:39Z",
+      "wall_seconds": 96,
+      "exit": 0
+    },
+    {
+      "arm": "m6-mx-s3",
+      "gpu": 0,
+      "lease": "owner.m7b-post",
+      "start_utc": "2026-09-29T01:47:42Z",
+      "end_utc": "2026-09-29T01:49:21Z",
+      "wall_seconds": 99,
+      "exit": 0
+    },
+    {
+      "arm": "m6-mx-soup",
+      "gpu": 0,
+      "lease": "owner.m7b-post",
+      "start_utc": "2026-09-29T01:49:24Z",
+      "end_utc": "2026-09-29T01:51:06Z",
+      "wall_seconds": 102,
+      "exit": 0
+    }
+  ],
+  "gpu_seconds": 837,
+  "gpu_hours": 0.2325,
+  "note": "m6-mxcx-soup reuses its M7(a) CHK probabilities (m7/a/probs); its devcheck is host-only (no GPU)"
+}

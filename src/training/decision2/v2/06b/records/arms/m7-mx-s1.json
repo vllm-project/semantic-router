@@ -1,0 +1,60 @@
+{
+  "arm": "m7-mx-s1",
+  "family": "qwen-causal",
+  "start": {
+    "path": "/work/models/Qwen3-0.6B-Base",
+    "repo": "Qwen/Qwen3-0.6B-Base",
+    "revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+    "head_seed": 20260928,
+    "architecture": "official causal endpoint + global query shared head (training.model.decision_model)",
+    "collapse_stop": {
+      "step": 1580,
+      "min_select": 350
+    }
+  },
+  "data": {
+    "parent": "/work/data/hf-private-decision20-clean-v2",
+    "converter_bundle": "/work/models/Decision-1.0-Kai-0.6B",
+    "mixture": {
+      "template": "materialized",
+      "path": "/runs/m6/data/m6-mx-s1.train.jsonl",
+      "sha256": "a277bd45a61662b8edbdc3472d0f74f605bc2a4d6e187605afc2bb3d4c998eae",
+      "build_spec": "src/training/decision2/v2/06b/records/mixtures/m6-mx-s1.json",
+      "build_report_sha256": "60f33560a750cd3e6d888f315663c108aad04164b991fe3b5bee52e7b7b6c29b",
+      "expected": {
+        "train_rows": 67411,
+        "train_ids_sha256": "d3f0f06bc9c06e644299175ce47d16822d340a2297d139d5d210b9a74d4e45e7"
+      }
+    }
+  },
+  "logical_batch": 16,
+  "max_micro_rows": 8,
+  "micro_token_budget": 32768,
+  "seed": "20260928-06b-m6-s1",
+  "optimizer": {
+    "encoder_lr": 1e-05,
+    "head_lr": 0.0002,
+    "lr_min": 1e-06,
+    "warmup_ratio": 0.1,
+    "weight_decay": 0.01,
+    "clip": 1.0
+  },
+  "loss": {
+    "ce": 1.0,
+    "brier": 0.5,
+    "score_rps": 0.0,
+    "teacher_kl": 1.0
+  },
+  "teacher": {
+    "path": "/runs/m7/data/m7-mx.lux1.jsonl",
+    "sha256": "a18929b20ac3924f9c08156dfbb6cd4be077ff4275ff143054f349e99ce5173a",
+    "format": "option-key",
+    "source": "M6 own-Lux teacher m6-mx.lux1.jsonl (6b5d8ffa; source: own Lux1 targets (Decision-1.0-Lux-9B bd45a30a native runtime; package temperature 2.00544 for every type, no rescaling) merged by v2.06b.teacher_merge, restricted to the rows of m6-mx-s1..s3, priority pk1 canonical A0 56627939 > RP-v2 waves 1-4 (47049a6b, 2c6ab38d, 450bdd7b, 084adacd) > XL waves w1-w5 (4a852b74, a659c3e5, 6d141c96, b8ae1374, 0da12210) > c-w1 (1a6b5a80); no id repeated across inputs) minus every row of pools A7q, A7k, A7s, H6, V1:A6h (51,432 lines removed; those rows train on gold labels only, CE + Brier, no KL); kept lines byte-identical and in order (v2.06b.m7_teacher, records/m7/m7-mx.lux1.report.json)",
+    "screen": "137,450 of 188,882 M6 lines kept; covers 50,226 of 67,411 rows of m6-mx-s1 by id and input_sha256; the uncovered rows are exactly the A7q/A7k/A7s/H6/V1:A6h rows (records/m7/m7-verify.json)",
+    "coverage": "subset"
+  },
+  "milestones": "eighths",
+  "include_step0_in_best": false,
+  "gpu_hour_cap": 1.8,
+  "max_reserved_gib": 72
+}
