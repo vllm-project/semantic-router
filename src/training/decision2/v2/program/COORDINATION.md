@@ -156,7 +156,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
 | node A GPU6–7 | 9B track (Milestone 4 finished 13:30 UTC+8); from 13:45 the 9B release worker uses one of them for package verification; the eval track may use short shared-lease jobs on any GPU for development-panel scoring |
 | node B GPU0–2 | 9B track (moved from the decoder 2026-09-29 07:35 UTC+8; 9B may train on node B — same image + frozen autotune cache; its formal comparisons stay on node A). Idle since M4; from 14:25 lent to eval for the 27B peers' mlx-diag (shared leases) |
-| node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
+| node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8). Milestone 5 finished 14:20 UTC+8; from 14:40 lent to research & data for the paraphrase-style Noul arm (≤ 1.5 GPU-h) until decoder Milestone 6 |
 | node B GPU5–6 | ~27B (from 14:25: completing the M3 F2 soup / formal / contrast, plus F1 and F2 mlx-diag) |
 | node B GPU7 | ~27B Milestone 3 (H7 / H8 Lux wave finished and released 2026-09-29 04:14 UTC+8; assigned at 04:05); from 14:25 also available to the F2 completion |
 | node B GPU7 | research & data (owner) — SHARED from 2026-09-28 21:55 UTC+8 with the eval track's node-B comparator re-validation (~1.5 h, inference only; each writes its own lease owner entry, e.g. `owner.eval`) |
@@ -195,6 +195,48 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 14:40 — **9B K-a13 passes every release gate; decoder Milestone 5 has no successor.**
+  - **9B gates** (eval record `v2/eval/records/m4-dev2-9b-gates-2026-09-29.md`; integration `2716b4a61`; 0 GPU-h):
+    - vs adopted Lux1: +1.93 [+0.61, +4.14]. vs same-renderer Lux1: +2.51 [+1.04, +4.60]. vs Nimble v2: +5.68
+      [+3.19, +10.09]. JPT-9B is internal only.
+    - Human transfer is not below Lux1 or Nimble v2.
+    - Per type (K-a13 vs Lux1): Choice .920 vs .889, Noul .894 vs .880, Score .615 vs .568. Score uses all five levels.
+    - Overlap exposure: none. Without the 84 flagged items K-a13 stays at 67.74 and its margin grows to +2.06.
+    - Nimble v2 is card-eligible (Apache-2.0, LICENSE at `4b8c04d1`); JPT-9B (CC BY-NC) stays off the card.
+  - **For the 9B release worker (card):**
+    - Add the record's disclosure list:
+      - typed Choice is below Nimble v2 (.920 vs .980);
+      - Score level-0 recall is .51 vs .69;
+      - public 231 is 178 vs 183;
+      - mlx-diag non-English Noul is 80.8% vs 83.3% (ko 70 vs 77, es 84 vs 88), while non-English Choice is level;
+      - human-transfer drops: `talklife` −.022, `wiki_corpus` −.021, `tropes` −.011;
+      - 4 invalid answers, all over 16K;
+      - Nimble's ROCm measurement and 8K-limit caveat.
+    - The overlap sentence must say the screen does not cover Lux 1.0's own training data, which is ⅔ of the weights.
+    - The formal run used the CAL698 temperatures (typed ECE .048 vs .017). The 23:15 rule decides the shipped
+      calibration on development panels, and the card reports the shipped one.
+  - **Decoder M5** (record under `v2/dec/records/`; integration `b5cc5aef8`; ~10.2 GPU-h; nothing uploaded):
+    - No arm fixes the multilingual-Noul loss at equal v3.
+    - The best lead, N5BN (multilingual block reworked + own-Nox replay): v3 −0.51 [−2.48, +1.47], human transfer level,
+      non-English Noul .725 → .752 (Nox 1.0 .800), below the preregistered bar.
+    - Cause: a yes-bias on PAWS-X paraphrase pairs. No admitted non-English Noul data is paraphrase-style, so MLX-DEV
+      couldn't see it.
+    - Coordinator decisions:
+      - Amendment 3's three diagnostic formal runs are accepted as diagnostic-only, with no claims.
+      - DEV2.0-4B already ships at T = 1.
+      - The HT-DEV model-list addition is low priority.
+      - Decoder Milestone 6 (an N5BN replicate + a paraphrase-style arm) waits for the data item below.
+  - **Data assignment:** a licence-clean, C1-independent, eval-independent non-English paraphrase-style Noul source,
+    giving a training arm and a dev slice. Validity: N4XF's yes-rate is clearly above Nox 1.0's on the slice.
+    - Excluded: PAWS-X and English PAWS (mlx-diag family), XNLI (NC), MASSIVE (ablation-only), esnli-R (C1).
+    - Worktree `vllm-sr-dev2-data`; node B GPU3–4 lent by the decoder, ≤ 1.5 GPU-h.
+  - **Own-Lux coverage of XL r2** is split across the RP-v2 waves, the XL waves and `h-w1`. Any track composing targets
+    needs the full source list.
+  - **Gold placement, clarified:** post-key formal gold may sit on both nodes under `/data/dev2/private/panels/gold` (mode
+    600 in a 700 directory; node B's copy has existed since 09-28 05:38 and serves the ~27B node-B formal scoring).
+    Training manifests must never reference that path. The C1 sealed directory and key stay with the custodian on
+    node A only.
 
 - 2026-09-29 14:25 — **~27B F1 passes every no-1.0 gate; C1 event 3 prepared; F2 chain found dead** (eval records
   `m4-dev2-27b-f1-gates-2026-09-29.md`, `m4-c1-event3-prep-2026-09-29.md`; integration `7c70debb5`).
