@@ -232,7 +232,7 @@ EOF
     -e TRITON_CACHE_DIR="$TC" -e TRITON_CACHE_AUTOTUNING=1 -e HIP_FORCE_DEV_KERNARG=1 \
     -v "$M:$M:ro" -v "$HF:$HF:ro" -v "$PRIV:$PRIV" -v "$TC:$TC" \
     -w "$S" --entrypoint python3 "$IMAGE" -m v2.data.m4.pn1_gpu "$@" \
-    --budget-seconds "$((budget - 60))" --expect-pci-bus "${BUS[$gpu]}" "${extra[@]}" \
+    --budget-seconds "$((budget - ${PN1_START_MARGIN:-60}))" --expect-pci-bus "${BUS[$gpu]}" "${extra[@]}" \
     > "$run/stdout.log" 2> "$run/stderr.log"
   status=$?
   set -e

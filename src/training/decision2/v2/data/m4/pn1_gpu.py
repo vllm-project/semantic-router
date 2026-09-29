@@ -214,9 +214,12 @@ class Runner:
     times SAFETY, plus SHAPE_ALLOWANCE seconds per padded width not seen yet.
     """
 
-    def __init__(self, budget: float, size: int) -> None:
+    def __init__(
+        self, budget: float, size: int, allowance: float = SHAPE_ALLOWANCE
+    ) -> None:
         self.budget = budget
         self.size = size
+        self.allowance = allowance
         self.log: list[dict[str, Any]] = []
         self.shapes: set[int] = set()
         self.stopped = False
@@ -227,7 +230,7 @@ class Runner:
 
     def cost(self, groups: list[list[dict[str, Any]]]) -> float:
         new = {width_of(batch) for batch in groups} - self.shapes
-        return SAFETY * len(groups) * self.batch_seconds() + SHAPE_ALLOWANCE * len(new)
+        return SAFETY * len(groups) * self.batch_seconds() + self.allowance * len(new)
 
     def run(self, groups: list[list[dict[str, Any]]], step, phase: str) -> list[Any]:
         import torch
@@ -292,6 +295,7 @@ def common_receipt(args: argparse.Namespace, job: str) -> dict[str, Any]:
             "preflight_items": PREFLIGHT_ITEMS,
             "budget_seconds": args.budget_seconds,
             "safety": SAFETY,
+            "shape_allowance": args.shape_allowance,
         },
         "timing": {},
     }
@@ -440,7 +444,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
         lang: sum(s["language"] == lang for s in interleaved) for lang in languages
     }
     preflight = [items[s["seed"]] for s in interleaved]
-    runner = Runner(args.budget_seconds, args.batch_size)
+    runner = Runner(args.budget_seconds, args.batch_size, args.shape_allowance)
     results = runner.run(batches(preflight, args.batch_size), step, "preflight")
     spent = elapsed()
 
@@ -579,7 +583,7 @@ def cmd_judge(args: argparse.Namespace) -> int:
     preflight = []
     while rows and len(preflight) + len(rows[0]) <= PREFLIGHT_ITEMS:
         preflight += rows.pop(0)
-    runner = Runner(args.budget_seconds, args.batch_size)
+    runner = Runner(args.budget_seconds, args.batch_size, args.shape_allowance)
     results = runner.run(batches(preflight, args.batch_size), step, "preflight")
     spent = elapsed()
 
