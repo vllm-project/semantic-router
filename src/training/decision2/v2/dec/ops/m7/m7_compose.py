@@ -43,6 +43,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from training.model.data import file_sha256, load_partition  # noqa: E402
+from v2.common import eval_only  # noqa: E402
 from v2.dec.build_template_s import group_rows, select_groups  # noqa: E402
 
 SCHEMA = "dec-m7-compose/1"
@@ -366,6 +367,7 @@ def main(argv: list[str] | None = None) -> int:
         p.error("--filler replay needs --base-teacher")
     if a.output.exists():
         raise FileExistsError(a.output)
+    eval_only.guard(a)
     from v2.dec.build_mixture import token_lengths
 
     base = verified(a.base, a.base_sha)
@@ -403,6 +405,8 @@ def main(argv: list[str] | None = None) -> int:
         lp_budget=a.lp_budget,
         pn1_repeat=a.pn1_repeat,
     )
+    for arm in ARMS:
+        eval_only.check_rows(r for r, _ in arms[arm])
     a.output.mkdir(parents=True)
     files: dict[str, Any] = {}
     for arm in ARMS:
