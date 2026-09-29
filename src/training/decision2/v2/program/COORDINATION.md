@@ -199,6 +199,35 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 21:35 — **C1: P2 adopted (v1.2); event 3 re-authorized** (analysis in event-3 record §000; integration
+  `0de943f68`; 0 GPU-h; nothing decrypted).
+  - **Hit sources:** all 1,510 flagged rows (228 OVERLAP / 1,282 REVIEW) match raw public corpora added by the widened
+    coverage, which no model trained on: Tatoeba 494, Natural-Instructions 408, Taskmaster 197, MIRACL 106, ConvoKit 67,
+    ABCD 63, TyDi QA 51, RACE 27, SGD 23, and others.
+  - **Trained-data hits:** only 6 rows are in released or candidate training mixtures (E8F, S2T, K), all REVIEW-level
+    (containment ≤ 0.33) and all already retired by v1.2. The 16 rows in unreleased-arm pools are not near-exact
+    (≤ 0.46). No trained pool added an OVERLAP.
+  - **Policies:**
+
+    | Policy | Retired, at most | C1 standard error |
+    | --- | ---: | ---: |
+    | P1: every flag | 907 (31.6%) | ×1.13 |
+    | P2: v1.2 | 48 (1.7%) | ×1.0075 |
+    | P3: P2 + every OVERLAP | 391 (13.6%) | ×1.07 |
+
+  - **Coordinator decision: P2.**
+    - Independence concerns what the scored models trained on, and C1's seal record says it tests label novelty, not
+      text novelty.
+    - P1 / P3 cost 14–32% of C1 with no independence gain.
+    - Registered before the key:
+      - (1) the class-aware PASS rule: no remaining hit in class-a trained rows; no near-exact remaining hit in class-b
+        unreleased pools; classes c / d / e are recorded, not failing;
+      - (2) the event re-pinned to v1.2, with v1.3 withdrawn and never used;
+      - (3) the existing rescan judged under the rule, with no new scan.
+    - Then the event runs as staged on node A GPU0 or GPU1 (≥ 130 GB free; GPU7 has only ~79 GB).
+  - A fresh eval worker executes. After scoring, a release worker adds the C1 lines and the JevBench card text to all
+    six cards in one card-only pass.
+
 - 2026-09-29 20:50 — **All eight stopped workers resumed (first resume each), in economy mode.** The user re-sent the
   16:05 directives; all four are already in effect.
   - Economy mode: few internal subagents, polls every 45–60 minutes, concise outputs, and no redone steps.
