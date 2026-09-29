@@ -22,6 +22,8 @@ RO=(
   /data/dev2/private/27b/m3-data/mixtures-m3-1
   /data/dev2/private/27b/m2-data/hf-12912429/m3
   /data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data
+  # The dataset repo's blobs are symlinks into the cache's shared store.
+  /data/dev2/hf-cache/blobs
   "$BASE"
 )
 for n in 1 2; do
