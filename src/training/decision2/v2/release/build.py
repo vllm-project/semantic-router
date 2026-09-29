@@ -125,6 +125,10 @@ def load_spec(path: Path) -> dict[str, Any]:
     layout.check_repo(
         spec["repo_id"], spec["model_name"], staging=spec["kind"] == "staging"
     )
+    if spec.get("gate_profile") is not None:
+        from v2.release.gate import gate_profile
+
+        gate_profile(spec)
     if spec["kind"] == "release":
         from v2.release.gate import check
 
@@ -616,6 +620,11 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
                 else "raw native probabilities (no post-hoc temperature)."
             ),
             "requirements_text": spec["card"]["requirements_text"],
+            **(
+                {"comparison": spec["gate_profile"]["name"]}
+                if spec.get("gate_profile")
+                else {}
+            ),
         }
         roster = Path(spec["card"]["roster"])
         card = card_module.build_card(

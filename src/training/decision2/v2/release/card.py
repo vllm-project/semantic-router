@@ -7,6 +7,11 @@ local System One example, then short model details and limits. No Pareto chart,
 no internal gate ledger. Every comparator passes the licence filter; charts come
 from the eval track's generator (``v2.eval.charts``) on relabeled copies of the
 exact reports (display names only).
+
+At a size without a Decision 1.0 model (``facts["comparison"] == "no-1.0"``) the
+own-1.0 slot states that no Decision 1.0 model exists at this size, and the
+summary and tradeoffs compare with the release gate's reference peer (role
+``reference``) when that peer passes the licence filter.
 """
 
 from __future__ import annotations
@@ -42,6 +47,8 @@ FORBIDDEN = (
     ),
 )
 TYPED_N = {"choice": 800, "noul": 800, "score": 400}
+NO_OWN_1_0 = "no-1.0"
+NO_OWN_1_0_TEXT = "There is no Decision 1.0 model at this size."
 MLX_SCHEMA = "dev2-mlx-diag-score/1"
 # mlx-diag Score is built from XNLI (CC BY-NC 4.0, internal use only); cards show Choice and Noul.
 MLX_CARD_TYPES = ("choice", "noul")
@@ -91,7 +98,9 @@ def _mlx(entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return scores
 
 
-def select_reports(entries: list[dict[str, Any]], roster_path: Path) -> dict[str, Any]:
+def select_reports(
+    entries: list[dict[str, Any]], roster_path: Path, comparison: str = "own-1.0"
+) -> dict[str, Any]:
     """Validate one same panel, apply the licence filter, keep display order."""
     from v2.eval.charts import load_reports
 
@@ -100,7 +109,17 @@ def select_reports(entries: list[dict[str, Any]], roster_path: Path) -> dict[str
     roster = licence_policy.load_roster(roster_path)
     shown, excluded = [], []
     roles = [e.get("role") for e in entries]
-    if roles.count("candidate") != 1 or roles.count("own-1.0") != 1:
+    if comparison == NO_OWN_1_0:
+        if (
+            roles.count("candidate") != 1
+            or roles.count("reference") != 1
+            or "own-1.0" in roles
+        ):
+            raise ValueError(
+                "A card without a Decision 1.0 model needs exactly one candidate, "
+                "one reference peer and no own Decision 1.0 comparator"
+            )
+    elif roles.count("candidate") != 1 or roles.count("own-1.0") != 1:
         raise ValueError(
             "A card needs exactly one candidate and one own Decision 1.0 comparator"
         )
@@ -131,7 +150,7 @@ def select_reports(entries: list[dict[str, Any]], roster_path: Path) -> dict[str
             "mlx_sha256": (mlx.get(entry["key"]) or {}).get("sha256"),
         }
         (shown if decision["eligible"] else excluded).append(item)
-    if not any(e["role"] == "own-1.0" for e in shown):
+    if comparison != NO_OWN_1_0 and not any(e["role"] == "own-1.0" for e in shown):
         raise ValueError(
             "The own Decision 1.0 comparator failed the card licence filter"
         )
@@ -397,8 +416,10 @@ def render_readme(ctx: dict[str, Any]) -> str:
     facts, text = ctx["facts"], ctx["text"]
     name, repo = facts["model_name"], facts["repo_id"]
     local = repo.rsplit("/", 1)[1]
-    candidate, own = ctx["candidate"]["data"], ctx["own"]["data"]
-    own_label = ctx["own"].get("label") or own["model"]["label"]
+    no_own = ctx.get("comparison") == NO_OWN_1_0
+    candidate = ctx["candidate"]["data"]
+    own = ctx["own"]["data"] if ctx["own"] else None
+    own_label = (ctx["own"].get("label") or own["model"]["label"]) if own else None
     lic = facts["licence"]
     front = ["---", f"license: {lic['spdx']}"]
     if lic["spdx"] == "other":
@@ -420,26 +441,52 @@ def render_readme(ctx: dict[str, Any]) -> str:
         "---",
     ]
     paired = ctx["paired"]
-    v3, own_v3 = candidate["v3"]["score"], own["v3"]["score"]
-    public, own_public = candidate["panels"]["public231"], own["panels"]["public231"]
-    summary = (
-        f"On the same 8,147-item JevArena v3 panel, {name} scores **{v3:.2f}** versus "
-        f"**{own_v3:.2f}** for {own_label}"
-    )
-    if paired:
-        lo, hi = paired["ci95"]
-        summary += (
-            f" ({paired['delta']:+.2f}; paired 95% interval [{lo:+.2f}, {hi:+.2f}])"
+    v3 = candidate["v3"]["score"]
+    public = candidate["panels"]["public231"]
+    if own is None:
+        summary = (
+            f"On the same 8,147-item JevArena v3 panel, {name} scores **{v3:.2f}**. "
+            f"{NO_OWN_1_0_TEXT} On the separate 231 public JevBench questions it answers "
+            f"**{public['correct']}/231** correctly."
         )
-    summary += (
-        f". On the separate 231 public JevBench questions it answers **{public['correct']}/231** "
-        f"correctly versus **{own_public['correct']}/231**."
-    )
+    else:
+        own_v3, own_public = own["v3"]["score"], own["panels"]["public231"]
+        if no_own:
+            strongest = own_v3 >= max(
+                e["data"]["v3"]["score"]
+                for e in ctx["shown"]
+                if e["role"] != "candidate"
+            )
+            summary = (
+                f"On the same 8,147-item JevArena v3 panel, {name} scores **{v3:.2f}**. "
+                f"{NO_OWN_1_0_TEXT[:-1]}; {own_label}"
+                + (", the strongest same-size model shown," if strongest else "")
+                + f" scores **{own_v3:.2f}**"
+            )
+        else:
+            summary = (
+                f"On the same 8,147-item JevArena v3 panel, {name} scores **{v3:.2f}** versus "
+                f"**{own_v3:.2f}** for {own_label}"
+            )
+        if paired:
+            lo, hi = paired["ci95"]
+            summary += (
+                f" ({paired['delta']:+.2f}; paired 95% interval [{lo:+.2f}, {hi:+.2f}])"
+            )
+        summary += (
+            f". On the separate 231 public JevBench questions it answers **{public['correct']}/231** "
+            f"correctly versus **{own_public['correct']}/231**"
+            + (f" for {own_label}." if no_own else ".")
+        )
     table, ordered = score_table(ctx["shown"], facts["parameters"]["loaded"])
     rank = next(i for i, e in enumerate(ordered, 1) if e["role"] == "candidate")
     summary += f" It ranks {rank} of {len(ordered)} models shown on JevArena v3."
-    regressions = tradeoff_rows(
-        candidate, own, ctx["candidate"].get("mlx"), ctx["own"].get("mlx")
+    regressions = (
+        tradeoff_rows(
+            candidate, own, ctx["candidate"].get("mlx"), ctx["own"].get("mlx")
+        )
+        if own
+        else []
     )
     mlx_note = (
         " mlx-diag is a multilingual development diagnostic (public test splits in seven "
@@ -448,21 +495,28 @@ def render_readme(ctx: dict[str, Any]) -> str:
         if any(e.get("mlx") for e in ctx["shown"])
         else ""
     )
+    lead = (
+        f"{NO_OWN_1_0_TEXT[:-1]}, so this compares with {own_label}. " if no_own else ""
+    )
     tradeoff_text = (
-        "\n".join(
-            [
-                f"Results below {own_label} on this panel:",
-                "",
-                f"| Result | {name} | {own_label} |",
-                "| --- | ---: | ---: |",
-                *(
-                    f"| {row} | {mine} | {theirs} |"
-                    for row, mine, theirs in regressions
-                ),
-            ]
+        f"{NO_OWN_1_0_TEXT} No same-size comparator passed this card's licence filter."
+        if own is None
+        else (
+            "\n".join(
+                [
+                    f"{lead}Results below {own_label} on this panel:",
+                    "",
+                    f"| Result | {name} | {own_label} |",
+                    "| --- | ---: | ---: |",
+                    *(
+                        f"| {row} | {mine} | {theirs} |"
+                        for row, mine, theirs in regressions
+                    ),
+                ]
+            )
+            if regressions
+            else f"{lead}No Choice, Noul, Score, transfer-task or public-tier result is below {own_label}."
         )
-        if regressions
-        else f"No Choice, Noul, Score, transfer-task or public-tier result is below {own_label}."
     )
     limits = [
         *text.get("limitations", []),
@@ -523,7 +577,7 @@ def render_readme(ctx: dict[str, Any]) -> str:
         + (f"{text['comparator_note']} " if text.get("comparator_note") else "")
         + "[Methods and per-model results](evaluation/EVALUATION.md)",
         "",
-        f"### Tradeoffs versus {own_label}",
+        f"### Tradeoffs versus {own_label}" if own else "### Tradeoffs",
         "",
         tradeoff_text,
         "",
@@ -655,12 +709,18 @@ def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         else ""
     )
     paired = ctx["paired"]
+    no_own = ctx.get("comparison") == NO_OWN_1_0
     paired_text = (
-        f"The candidate-minus-{ctx['own'].get('label') or ctx['own']['data']['model']['label']} v3 "
-        f"difference is {paired['delta']:+.3f} with paired 95% interval "
-        f"[{paired['ci95'][0]:+.3f}, {paired['ci95'][1]:+.3f}]."
-        if paired
-        else "No paired interval was supplied."
+        NO_OWN_1_0_TEXT
+        if ctx["own"] is None
+        else (f"{NO_OWN_1_0_TEXT} " if no_own else "")
+        + (
+            f"The candidate-minus-{ctx['own'].get('label') or ctx['own']['data']['model']['label']} v3 "
+            f"difference is {paired['delta']:+.3f} with paired 95% interval "
+            f"[{paired['ci95'][0]:+.3f}, {paired['ci95'][1]:+.3f}]."
+            if paired
+            else "No paired interval was supplied."
+        )
     )
     text = "\n".join(
         [
@@ -712,7 +772,14 @@ def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
             )
         },
         "models": models,
-        "paired_vs_own_1_0": paired,
+        **(
+            {
+                "decision_1_0": None,
+                "paired_vs_reference": paired if ctx["own"] else None,
+            }
+            if no_own
+            else {"paired_vs_own_1_0": paired}
+        ),
         "excluded_comparators": len(ctx["excluded"]),
     }
     return text, manifest
@@ -730,15 +797,18 @@ def build_card(
     output: Path,
 ) -> dict[str, Any]:
     """Write README.md, assets/ and evaluation/ into ``output``; return digests."""
-    selection = select_reports(entries, roster)
+    comparison = facts.get("comparison", "own-1.0")
+    selection = select_reports(entries, roster, comparison)
     shown = selection["shown"]
+    slot = "reference" if comparison == NO_OWN_1_0 else "own-1.0"
     ctx = {
         "facts": facts,
         "text": text,
         "shown": shown,
         "excluded": selection["excluded"],
+        "comparison": comparison,
         "candidate": next(e for e in shown if e["role"] == "candidate"),
-        "own": next(e for e in shown if e["role"] == "own-1.0"),
+        "own": next((e for e in shown if e["role"] == slot), None),
         "paired": _paired(paired),
     }
     if len(shown) < 2:
@@ -773,11 +843,15 @@ def build_card(
         "excluded": [
             {"key": e["key"], "reason": e["reason"]} for e in selection["excluded"]
         ],
-        "tradeoffs": tradeoffs(
-            ctx["candidate"]["data"],
-            ctx["own"]["data"],
-            ctx["candidate"].get("mlx"),
-            ctx["own"].get("mlx"),
+        "tradeoffs": (
+            tradeoffs(
+                ctx["candidate"]["data"],
+                ctx["own"]["data"],
+                ctx["candidate"].get("mlx"),
+                ctx["own"].get("mlx"),
+            )
+            if ctx["own"]
+            else []
         ),
         "paired": ctx["paired"],
     }
