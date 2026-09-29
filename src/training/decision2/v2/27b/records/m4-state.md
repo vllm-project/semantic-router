@@ -1,6 +1,6 @@
 # ~27B M4 state (resume file)
 
-Updated: 2026-09-29 18:25 UTC+8 (M4 worker; **all six arm-seeds in full training; G1 passed; amendment 1**)
+Updated: 2026-09-30 06:40 UTC+8 (M4 worker; **M4 complete: successor M4-A20r soup**)
 Branch: `xunzhuo/decision-2-training-27b` (merge-only into `xunzhuo/decision-2-training`)
 Prereg: `m4-prereg-2026-09-29.md`. Code mirror on both nodes: `1b56e482b` (drivers in `v2/27b/m4/`, run from
 the mirror; no uploads).
@@ -59,8 +59,33 @@ the mirror; no uploads).
   order, retrying every 5 min until each run is complete; log `~/.cache/m4-work/relay-watch.log` and
   `relay-<ARM>.log`. If it is not running, restart it the same way (the relay is idempotent).
 
-## Next
+## Resume after the usage-limit stop (20:45 UTC+8)
 
-1. Monitor (heartbeats); training ends ≈ 19:10–20:30Z.
-3. As node A runs finish: relay BEST checkpoints (no `trainer_state.pt`) to node B, check SHA-256.
-4. Soups → readouts (sanity) → CAL698 / 23:15 → packages → formal → gates / overlap → mlx-diag → contrasts.
+- Runs untouched and healthy (5.8 h into full training at 14:37Z; projected full attempts 9.9–11.1).
+- Amendment 2 (`53685d65e`): the 16:05 seven-item successor rule vs DEV2.0-27B (F1's scored run), the beats-AutoJev
+  check, and JevBench item 7 (`gates public231`, no selection on it). Merged integration → `44a94e581`, mirrored to
+  both nodes (use it for `gates public231` on node B and `v2.06b.m8_scorebias mlx-paired` on node A).
+
+## Training done (20:00Z)
+
+- All six full attempts: exit 0, no watchdog, all planned updates, 0 recoveries, training cache frozen_check passed
+  (0 added / 0 changed). Full GPU-h: A20 9.998 / 10.029, A20r 9.994 / 10.076, Ar 10.974 / 11.081. Receipts total
+  63.29 GPU-h (incl. preflights, probe, 2 soup readouts).
+- BEST: A20-s1 1784, A20-s2 2676, A20r-s1 3561, A20r-s2 2230, Ar-s1 3018, Ar-s2 3018.
+- Relays (workstation → node B), SHA-256 lists equal: A20-s2 (19:02Z, 276.8 MB), Ar-s1, Ar-s2 (20:00Z).
+- Soups exact: A20r r64 α128 (max rel 5.2e-7), A20 r16 α32 (2.5e-7); Ar building.
+- Soup readouts (sanity only): A20r P 78.99 (T .916, H .681; Noul 270/400), A20 P 76.30 (T .876, H .665; Noul 202/400).
+- Node B chain `m4-logs/m4-chain-formal.sh` (uploaded, size+SHA checked, pid confirmed 20:28Z): waits for the Ar
+  readout, runs `guard`, then per finalist `prepkg` + `formal` (A20r GPU5, A20 GPU6, Ar GPU7); logs
+  `m4-logs/chain-formal.log`, `final-<ARM>.log`.
+
+## Milestone 4 complete (2026-09-30 06:40 UTC+8)
+
+- Results: `m4-results-2026-09-29.md`. **Successor = M4-A20r soup** (post-key v3 72.360, +5.15 (+2.19, +8.02) vs
+  DEV2.0-27B; all seven 16:05 items pass; tie-break over M4-A20). Not "beats AutoJev" (LB −1.60).
+- Package node B `/data/dev2/runs/27b/M4-A20r-soup/package` (T = 1, 32K), SEAL `9d60e611…`. Nothing on HF.
+- GPU-h 65.68 of 70. No chain left running; heartbeat loops ended on their own; leases set back to reserved-idle (node A GPU2–4, node B GPU5–7).
+
+## Next (coordinator)
+
+- Release step for the successor as a new DEV2.0-27B revision (card disclosures listed in the results record).
