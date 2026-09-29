@@ -342,7 +342,9 @@ class TestK8sBackend:
         monkeypatch.setattr(
             backend,
             "_run",
-            lambda *_args, **_kwargs: subprocess.CompletedProcess(args=[], returncode=1),
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=1
+            ),
         )
         monkeypatch.setattr(
             backend,
@@ -366,7 +368,9 @@ class TestK8sBackend:
         monkeypatch.setattr(
             backend,
             "_run",
-            lambda *_args, **_kwargs: subprocess.CompletedProcess(args=[], returncode=0),
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0
+            ),
         )
         monkeypatch.setattr(
             backend,

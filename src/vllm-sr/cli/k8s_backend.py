@@ -709,7 +709,7 @@ class K8sBackend:
             raise SystemExit(result.returncode)
 
     def _log_failed_pod_diagnostics(self) -> None:
-        log.error("Timed out waiting for pods to become ready; current pod status:")
+        log.error("kubectl wait failed; current pod status:")
         self._run_display(
             [
                 *self._kubectl_base_cmd(),
