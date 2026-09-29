@@ -1,0 +1,12 @@
+mirror: /data/dev2/src/08382e424f597ee19b57df2d344a926d85a7295d-src_training_decision2/src/training/decision2
+source verified: 23 files
+test_casts_projections_and_copies_everything_else_exactly (v2.release.tests.test_bf16_copy.ConvertTest.test_casts_projections_and_copies_everything_else_exactly) ... ok
+test_only_linear_projection_weights_become_bf16 (v2.release.tests.test_bf16_copy.StorageDtypeTest.test_only_linear_projection_weights_become_bf16) ... ok
+test_refuses_a_source_that_is_not_fp32 (v2.release.tests.test_bf16_copy.StorageDtypeTest.test_refuses_a_source_that_is_not_fp32) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.005s
+
+OK
+ccdcf1c30fd2dfae23e68ffa6aed804d9d89fb42fe91b43f1abc134f1681262d  /data/dev2/runs/release/inputs/dev2-8b-bf16/bf16-copy.json
+17946656577	/data/dev2/runs/release/inputs/dev2-8b-bf16/checkpoint

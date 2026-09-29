@@ -1,0 +1,96 @@
+{
+  "axis_ci95": {
+    "H": {
+      "delta": {
+        "high": 0.04185431818059572,
+        "low": -0.010984272302588681
+      },
+      "left": {
+        "high": 0.6069067559289519,
+        "low": 0.5408559843387992
+      },
+      "right": {
+        "high": 0.5923326992931905,
+        "low": 0.5222055111851729
+      }
+    },
+    "T": {
+      "delta": {
+        "high": 0.05437499999999995,
+        "low": 0.015000000000000013
+      },
+      "left": {
+        "high": 0.8325,
+        "low": 0.78875
+      },
+      "right": {
+        "high": 0.799375,
+        "low": 0.7537499999999999
+      }
+    }
+  },
+  "bootstrap": {
+    "confidence_level": 0.95,
+    "fixed_css_label_universe": true,
+    "invalid_or_missing": "counted as incorrect; never removed from draws",
+    "unit": "paired typed groups within family; CSS tasks then paired items within sampled task"
+  },
+  "ci95": {
+    "high": 4.1435665002092525,
+    "low": 0.6068816517553796
+  },
+  "coverage": {
+    "css_evaluation_items": 6547,
+    "css_evaluation_tasks": 15,
+    "typed_independent_groups": 400,
+    "typed_items": 1600
+  },
+  "css_gold_sha256": "1cda9623032138bb7b124be0c1b0a4239c06bed7be3169264e6eb31805c19ba4",
+  "label": "post-key same-panel",
+  "models": {
+    "left": "DEV2.0-8B (T = 1)",
+    "right": "adopted-1.0"
+  },
+  "panel_sha256": "201f01fb3e5468d8457b2cc603a0d0081a8b2114bc5d547e879cac802f5a692c",
+  "point": {
+    "delta": {
+      "H": 0.008125005963563137,
+      "T": 0.03437499999999993,
+      "score": 1.9292432629787157
+    },
+    "left": {
+      "H": 0.5660248237607367,
+      "T": 0.8106249999999999,
+      "score": 67.73727723794684
+    },
+    "right": {
+      "H": 0.5578998177971736,
+      "T": 0.77625,
+      "score": 65.80803397496813
+    }
+  },
+  "predictions_sha256": {
+    "left": {
+      "css": "e8f378b8a0147328fa96f8afe1c5bfcbe420475027f7e1886d3795ecae8e304e",
+      "typed": "22c9c689b7991701641114bcfa27ccd2c6b885b87f3794ccf207c7c0049e4ba3"
+    },
+    "right": {
+      "css": "2c17e9e78f404b1a981513a78c7ca398ffdfa9a5f7ea3debb864c772ed9c5bba",
+      "typed": "925013c037d9147d11346752dae677a6777f0b6475f6c391714d3cdabeb764c2"
+    }
+  },
+  "replicates": 5000,
+  "schema_version": "jevarena-v3-paired-aggregate/1",
+  "seed": 20260927,
+  "source_sha256": {
+    "arena_base": "d1b819d07db29f9eaee7269d1a4ffc50b949ff80eeabaa7de8a1ea265cc55ec7",
+    "arena_v3": "3d5b4aea031efb0d05ae7a501983868fe3bb9e42ca37e23fce5da8c002720cd8",
+    "css": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca",
+    "css_compare": "17d2264511783c07847bb6d29d6722338a02c92abb825aaa140053e7b4760d46",
+    "css_panel": "717e31b62d1f9d09b30f1ae2365b2e59cdf0cf40209dda5e9e08b921a1fc184d",
+    "paired_v3": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "typed": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "typed_panel": "c6569d4c86c3b9ea2ebdda564d8ba4d3428cc807d41d39984379821cfbb9422c"
+  },
+  "typed_gold_sha256": "707dd28dfbab10d124d437434023729f319501542e999e536fce9b7ff7f2361e"
+}
