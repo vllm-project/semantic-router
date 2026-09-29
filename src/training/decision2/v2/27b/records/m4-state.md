@@ -1,6 +1,6 @@
 # ~27B M4 state (resume file)
 
-Updated: 2026-09-29 17:05 UTC+8 (M4 worker; **all six arm-seeds in full training**)
+Updated: 2026-09-29 18:25 UTC+8 (M4 worker; **all six arm-seeds in full training; G1 passed; amendment 1**)
 Branch: `xunzhuo/decision-2-training-27b` (merge-only into `xunzhuo/decision-2-training`)
 Prereg: `m4-prereg-2026-09-29.md`. Code mirror on both nodes: `1b56e482b` (drivers in `v2/27b/m4/`, run from
 the mirror; no uploads).
@@ -42,8 +42,19 @@ the mirror; no uploads).
   13.559420585632324 are equal. Training is node-invariant on this image / base / T0.
 - Heartbeats: `m4-status.sh {a,b} --loop 600` running on both nodes (pids in `m4-logs/heartbeat-*.driver.log`).
 
+## G1 and amendment 1 (18:20 UTC+8)
+
+- G1 at ~350 updates: projected full attempts 10.25 / 10.30 (A20), 10.59 / 10.35 (A20r), 11.07 / 11.48 (Ar);
+  training ≈ 64.7 + evaluation ≈ 2.95 ≈ 67.6 of 70 → continue.
+- Amendment 1: post-training drivers (`32718523d`, `d815066f9`), group-level family CIs, CAL698 not optional,
+  typed-DEV collapse check refined (chance test only where F1 ≥ chance + .10; modal share ≥ .95), `M4_LEFT` from
+  `m4-budget.sh` gates every tail GPU stage.
+- Tail tools (workstation): `v2/27b/m4/m4-budget.sh` (prints `M4_LEFT`), `m4-relay-best.sh ARM` (node A BEST → node B),
+  `m4-mlx-score.sh NAME...`. Node B: `m4-tail.sh {soup|readout|guard|prepkg|formal|gates|overlap|mlx|contrast}` from
+  the amendment-1 mirror (see below).
+
 ## Next
 
-1. G1 budget check after ~300 full updates of every run.
+1. Monitor (heartbeats); training ends ≈ 19:10–20:30Z.
 3. As node A runs finish: relay BEST checkpoints (no `trainer_state.pt`) to node B, check SHA-256.
 4. Soups → readouts (sanity) → CAL698 / 23:15 → packages → formal → gates / overlap → mlx-diag → contrasts.
