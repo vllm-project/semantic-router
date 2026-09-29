@@ -10,7 +10,7 @@
   },
   "calibration": null,
   "max_input_tokens": 16384,
-  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-4B.decision.build-draft.json",
+  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-4B.decision.json",
   "origin": {
     "repo_id": "llm-semantic-router/Decision-1.0-Nox-4B",
     "revision": "cde2a68dbaa557ea65dc458104d410a0802ee259",
