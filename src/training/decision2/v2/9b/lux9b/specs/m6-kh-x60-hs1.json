@@ -1,0 +1,55 @@
+{
+ "name": "m6-kh-x60-hs1",
+ "note": "K recipe (M4 x60) cut in whole groups, stratified as the x60 recipe, by the native tokens of the HS1 block (every hs1_unmet_condition row + whole hs1_quote_check groups up to half of its native tokens), plus that block; block rows train on gold only (--teacher-partial).",
+ "seed": "20260930:m6-kh",
+ "max_length": 8192,
+ "keep_tolerance": 0.01,
+ "x60": {
+  "train": {
+   "file": "m4:data/m4-k-xl-r2-60m/build/train.jsonl",
+   "sha256": "a66131b1165513128e5a51af78587c4ddefcc836773e724c4514a592e33fc0e0"
+  },
+  "teacher": {
+   "file": "m4:data/m4-k-xl-r2-60m/build/teacher.jsonl",
+   "sha256": "cdcd99c1550d35531df0982ae85116fe3ea5035bc9a09c1ef7b5b3063a32f2c9"
+  }
+ },
+ "ids": {
+  "file": "m3b:xl-r2-a4/upload/m3/mixtures/xl-r2/mx-xl-full-r2.ids.jsonl",
+  "sha256": "7843afb7b2bbb315902b6748d6559532f384283d8efd836b935daac5f55dbd4a"
+ },
+ "hs1": {
+  "train": {
+   "file": "hf:171e6f0c0913d5f0d8f7304928da4f14dca6e127/m4/hs1/train.jsonl",
+   "sha256": "c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71"
+  },
+  "f1_share_num": 1,
+  "f1_share_den": 2
+ },
+ "isolation": [
+  {
+   "role": "select",
+   "file": "d10:data/rights_clean_goemotions_v2/select.jsonl",
+   "sha256": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6"
+  },
+  {
+   "role": "cal",
+   "file": "hf:ed87a03ab80ca5b9560780bba51a83a77ff47d14/m2/cal/CAL698/cal.jsonl",
+   "sha256": "19cc1a8c4ebe6fd13031079f6b7d131046ce503f435f894e3ea672f91c2ed41f"
+  },
+  {
+   "role": "hs1-dev",
+   "split": "select",
+   "file": "hf:171e6f0c0913d5f0d8f7304928da4f14dca6e127/m4/hs1/dev.jsonl",
+   "sha256": "2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf"
+  }
+ ],
+ "denied_sources": {
+  "c1_registry": "repo:v2/eval/records/sealed-c1-source-registry-2026-09-28.json",
+  "extra": [
+   "massive",
+   "pawsx",
+   "xnli"
+  ]
+ }
+}

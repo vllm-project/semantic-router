@@ -1,0 +1,100 @@
+{
+  "schema": "dev2-c1-postkey-baselines/1",
+  "label": "JevArena-C1 v1.2, post-key (not an independent validation)",
+  "use": "successor-rule item 8 only: never training data, never a selection criterion (development or siblings)",
+  "rule": "python3 -m v2.eval.gates c1 --left <successor run> --right <this tier's run> must not return REGRESSION (left - right < 0 and two-sided paired bootstrap p < .05)",
+  "item_set": {
+    "version": "v1.2",
+    "retired_sha256": "bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a",
+    "scored_items": 2840
+  },
+  "images": {
+    "host2": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+    "kernel": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1"
+  },
+  "tiers": {
+    "0.6B": {
+      "model": "DEV2.0-0.6B",
+      "repo": "llm-semantic-router/DEV2.0-0.6B",
+      "revision": "b21313375ad77ddf4a8e420fa5195e6e09582043",
+      "identity": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983",
+      "manifest_sha256": "816827dd836d21ab0b7555605fdc56dd5189ee4462a541a84de27de97f637796",
+      "run": "/data/dev2/runs/eval/c1-postkey/0.6B/dev2-0p6b-b2131337-20260929T161232Z/cand",
+      "seal_sha256": "056026acbad7b51f095f8ad8b5dbbf5b46d067bb6f2048b658bdd73c71eaa3cc",
+      "predictions_sha256": "43403f39a3ad81ee835d9b33c151ab7a87aa8fb84b3be5aa96daa251d60bcd8c",
+      "c1": 36.91555891288061,
+      "source": "post-key C1 v1.2 collection dev2-0p6b-b2131337-20260929T161232Z (spec c1-postkey/dev2-0p6b-b2131337.json; mirror 2b5e878db); not an independent validation",
+      "backup": "private eval-artifacts c1-postkey/0.6B/dev2-0p6b-b2131337-20260929T161232Z (afcbb407)"
+    },
+    "0.8B": {
+      "model": "DEV2.0-0.8B",
+      "repo": "llm-semantic-router/DEV2.0-0.8B",
+      "revision": "7d08d0e12082ee6810a4221063342cefe45b6ac3",
+      "identity": "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b",
+      "manifest_sha256": "2a19a65a0141a8d71939bbf82025e299266db404cadd8b2bc712d1a992e98e7e",
+      "run": "/data/dev2/runs/eval/m4/c1-event1/e8f",
+      "seal_sha256": "fe510c87b81cc5b583500ab72d56f434b98e14f3731463eb728f4ff1a28dc978",
+      "predictions_sha256": "bf23d30fc8157a80a8157dd30083f0a85edb80a6892e363274fcf03ae204030a",
+      "c1": 40.16661731265686,
+      "source": "C1 event 1 (v1.1) stored predictions of the same weights, rescored on v1.2 (report 8b494cd2, post-key label). The event collected them with CAL698 temperatures; the current revision serves T = 1, and undoing the temperatures changes 0 of 2,874 answers under the C1 scorer's rule (receipt c1-postkey/0.8B/e8f-t1-derivation/T1-DERIVATION.json), so these answers are the T = 1 answers; valid for every revision with these weights",
+      "backup": "private eval-artifacts m4/c1-event1/ (event run) and c1-postkey/0.8B/ (derivation and v1.2 report; 758acf53)"
+    },
+    "2B": {
+      "model": "DEV2.0-2B",
+      "repo": "llm-semantic-router/DEV2.0-2B",
+      "revision": "5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38",
+      "identity": "073bd1f2fe62e39fe993f57006bab17ece50a7e6fc7c5ee72107fefddeb81da4",
+      "manifest_sha256": "6c4e1885ec68f1047b7bb9e9604373cc44129178dc900791f5617612016c6e51",
+      "run": "/data/dev2/runs/eval/m4/c1-event3/cand2b",
+      "seal_sha256": "1b008844309931af0852237e07b5962f41dfa6fc124c78ac99429407b1012362",
+      "predictions_sha256": "863086b8157f442671e1bddda547d77863fd204d1de8cd75c68e4ba9b2bebb61",
+      "c1": 45.704223017025036,
+      "source": "C1 event 3 (independent confirmation, v1.2), stored predictions; valid for every revision with these weights, card-only revisions included",
+      "backup": "private eval-artifacts m4/c1-event3/cand2b (1561a3a5)"
+    },
+    "4B": {
+      "model": "DEV2.0-4B",
+      "repo": "llm-semantic-router/DEV2.0-4B",
+      "revision": "452f133211de292a87bc29ab7e24a3bd0704e40d",
+      "identity": "11b5ca1c22f8cd38d67d718cbfa59a3fb4dc8f4e7bfd75b3e988f34e35fad0ad",
+      "manifest_sha256": "8fa3be690678b545380042f161c4c9101503fcf52ef7f3f65e2a44037d881f8c",
+      "run": "/data/dev2/runs/eval/m4/c1-event3/cand4b",
+      "seal_sha256": "b73e25f1ce5ea8ef53fe34b410d06644b4fb947ce6606761685921e631e7a137",
+      "predictions_sha256": "ebf6e9f2cbcadecae048a4416f629c0e3f2e9418fd8a7ddef78dde43182602fb",
+      "c1": 48.38195769720628,
+      "source": "C1 event 3 (independent confirmation, v1.2), stored predictions; valid for every revision with these weights, card-only revisions included",
+      "backup": "private eval-artifacts m4/c1-event3/cand4b (1561a3a5)"
+    },
+    "9B": {
+      "model": "DEV2.0-9B",
+      "repo": "llm-semantic-router/DEV2.0-9B",
+      "revision": "53bac735be58def53673d0d290b9baa3f2af1cf9",
+      "identity": "b1ed5a71038b474902d2a6dfebeee0c6f7ce901097553b4621f6f0a23fb6da98",
+      "manifest_sha256": "d5007cdb83cd9e29c353efb5dff92a72035c53a4312468c660cb73af2a3accfa",
+      "run": "/data/dev2/runs/eval/m4/c1-event3/cand9b",
+      "seal_sha256": "2457cb74e16c9e28af1f834aa30b1a71168536f72f3f1156cbd3ea865f5ab215",
+      "predictions_sha256": "37d96d973b27de7f09c2036f126587be5936e5ea8c56c876be12c398ebc7889f",
+      "c1": 53.77373085445,
+      "source": "C1 event 3 (independent confirmation, v1.2), stored predictions of the frozen package DEV2.0-8B@53bac735 (BF16 storage); valid for every revision with these weights (the DEV2.0-9B rename and card-only revisions included)",
+      "backup": "private eval-artifacts m4/c1-event3/cand9b (1561a3a5)"
+    },
+    "27B": {
+      "model": "DEV2.0-27B",
+      "repo": "llm-semantic-router/DEV2.0-27B",
+      "revision": "5683c6f04fb6ac88484cee82220f1a1a2fa43392",
+      "identity": "b7fd44e3ad73d24faa85c2ba06ba61d4494aa4be2a2025c580ba02bedae6e781",
+      "manifest_sha256": "ab07948eeff64d72b3dc179e72f6083a984b3fe8c481da3f9175480091a07cf5",
+      "run": "/data/dev2/runs/eval/m4/c1-event3/cand27",
+      "seal_sha256": "f41d44c5f325c9b2db1a2615c60be63e0d35f3803aa696a06c9e180053e32c2c",
+      "predictions_sha256": "0840d38e9aacd6c3bbdced805b917ff9070f03eea5badcc7d97c2abae71ec710",
+      "c1": 57.33121099149735,
+      "source": "C1 event 3 (independent confirmation, v1.2), stored predictions of the release package DEV2.0-26B@5683c6f0 (F1); valid for every revision with these weights (the DEV2.0-27B rename and card-only revisions included)",
+      "backup": "private eval-artifacts m4/c1-event3/cand27 (1561a3a5)"
+    }
+  },
+  "notes": [
+    "A tier's entry is the C1 run of its current HF revision's weights. When a successor is released, its post-key run (SUMMARY.json baseline_entry) replaces the entry in the same commit as the release record.",
+    "0.6B: the current revision b2131337 was collected post-key on 2026-09-29 (C1 36.92 on v1.2 vs 33.02 for the previous revision e61b2b44's event-2 predictions); a re-collection of these weights is refused.",
+    "0.8B: registered 2026-09-30 by the coordinator's decision, from the event-1 predictions (0 answer changes at T = 1); no new collection."
+  ]
+}

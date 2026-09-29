@@ -79,6 +79,13 @@ public-only `fit` provenance can be packaged (the screen refuses private paths).
 Recorded as `MODEL_MANIFEST.json` `score_bias` (`file`, `sha256` of the packaged
 file, `scored_sha256` of the applied file, `offsets`) and applied by the runtime
 exactly as at scoring time. Without the key, packages and answers are unchanged.
+Optional `"vendor_source"` and `"runtime_source"` name the decision2 tree of an exact
+node mirror (`/data/dev2/src/<sha>-src_training_decision2/src/training/decision2`):
+the first supplies the vendored scored inference sources (`training/model`), the
+second the package runtime `decision2/*.py` (`v2/release/runtime`). Both default to
+the builder's tree and are recorded under `MODEL_MANIFEST.json` `runtime`. A
+card-only revision pins both to the mirror that built the revision it replaces, so
+only card files change.
 
 ```bash
 # local: push, then mirror the subtree to the node that holds the checkpoint

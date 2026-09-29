@@ -53,3 +53,15 @@ reporters run from a mirror with
 card-eligible mlx-diag Choice + Noul parts, self-checked against both stored
 `mlx-diag.score.json`) and `lux9b/score_levels.py` (typed FINAL Score level
 usage via `v2.eval.gates.type_summary`).
+
+Milestone 6: `lux9b/m6_data.py` (CPU; `split` / `ka` / `kh`) builds the
+human-rated soft-target set S on the K recipe (x60) and the AutoJev-27B wave
+inputs for S rows without production targets, the KA teacher file (AutoJev on
+S, own-Lux elsewhere; train.jsonl is x60 byte for byte), and the KH TRAIN (x60
+cut in stratified whole groups by the tokens of an HS1 block, plus the block,
+gold only). `lux9b/m6_rules.py` (`seed` / `early` / `alpha` / `finalists`)
+adds a Noul `rule_precedence` floor to M5's incumbent-anchored alpha rule and
+the early stop at an arm's first full checkpoint. Node wrappers in `lux9b/m6/`
+follow M5's (`aj_job.sh` / `aj_wave.sh` run the qualified AutoJev collector on
+GPU6-7; `early.sh`, `hs1.sh`; `formal.sh` adds the public-231 gate, successor
+item 7).

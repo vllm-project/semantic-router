@@ -1,0 +1,20 @@
+{
+  "schema": "dev2-revision-diff/1",
+  "repo": "llm-semantic-router/DEV2.0-9B",
+  "released": "ae6831960dd1114296cb15a59248b79832c42959",
+  "new": "e51f9881b92f646cb0bd62b2876d4878cc8d16ec",
+  "files": {
+    "released": 41,
+    "new": 41
+  },
+  "changed_card_files": [
+    "MODEL_MANIFEST.json",
+    "README.md"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [],
+  "weight_files": 10,
+  "weight_bytes": 17926620224,
+  "weights_byte_identical": true,
+  "ok": true
+}
