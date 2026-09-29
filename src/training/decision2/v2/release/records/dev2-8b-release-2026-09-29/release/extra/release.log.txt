@@ -1,0 +1,9 @@
+07:22:07Z build llm-semantic-router/DEV2.0-8B from 05914b8e8928f746aaffb1f098249729533b14d0-src_training_decision2
+07:22:38Z pre-upload examples (two processes)
+07:23:58Z card example (pre-upload)
+07:24:34Z scored-panel parity (pre-upload)
+07:31:33Z ensure private llm-semantic-router/DEV2.0-8B
+07:31:33Z upload
+07:32:05Z real hf download of 0dee801731a69a89c4219a2bf26381ce4d59af48
+07:32:48Z post-download examples
+07:41:33Z readback

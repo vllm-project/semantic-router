@@ -1,0 +1,29 @@
+mirror: /data/dev2/src/08382e424f597ee19b57df2d344a926d85a7295d-src_training_decision2/src/training/decision2
+node copy verified: 23 files
+sealed predictions match: css15 2dabce5472ec
+sealed predictions match: public231 82c5fe2cc63e
+sealed predictions match: typed-final ad6720492020
+mlx-diag predictions: a152a1e668cadfba18dba8e8086f5b658a9a54e3945c9cbb54ab41292d6caf9f
+{"rows": 1600, "answer_changes": 0}
+{"rows": 6547, "answer_changes": 0}
+{"rows": 231, "answer_changes": 0}
+{"rows": 2275, "answer_changes": 0}
+{"seal_sha256": "d00e453b14badafaca0e3b70acfa0820c333252b5f945e604dd47e691b372c43", "panels": ["css15", "public231", "typed-final"]}
+{"label": "DEV2.0-8B (K-a13) at T = 1 (derived from the CAL698 run; post-key same-panel)", "v3": {"T": 0.8106249999999999, "H": 0.5660248237607367, "score": 67.73727723794684, "formula": "100*sqrt(T*H)"}, "public": 178}
+{"type_macro_accuracy": 0.8223507180650037, "english_type_macro_accuracy": 0.8622510822510823, "non_english_type_macro_accuracy": 0.8157006573673241, "cross_language_consistency": 0.683076923076923, "invalid_or_missing": 0}
+e8f378b8a0147328fa96f8afe1c5bfcbe420475027f7e1886d3795ecae8e304e  /data/dev2/runs/release/inputs/dev2-8b-t1/derived/css15.predictions.jsonl
+d775fa0ada4d2b41e04160e2c74416bfad20ad573ca3310305e2825670218a69  /data/dev2/runs/release/inputs/dev2-8b-t1/derived/css15.retemper.json
+1acda62f2253eb96a0044ba0c3bd368c3a4414cb49045c37ac4ce521337280be  /data/dev2/runs/release/inputs/dev2-8b-t1/derived/mlx-diag.predictions.jsonl
+abda2d1d8cc3108e7dc807f88fdb065e10a2cabbf7d55e0602494886f9de8e73  /data/dev2/runs/release/inputs/dev2-8b-t1/derived/mlx-diag.retemper.json
+813b54417eb84f74c2a367f862ad303f51c4b60babf95ae8248da5b240da7621  /data/dev2/runs/release/inputs/dev2-8b-t1/derived/public231.predictions.jsonl
+939718e99076d5393314bd9eabeadf180cf0bee17d518c117e2875e48dc79a18  /data/dev2/runs/release/inputs/dev2-8b-t1/derived/public231.retemper.json
+22c9c689b7991701641114bcfa27ccd2c6b885b87f3794ccf207c7c0049e4ba3  /data/dev2/runs/release/inputs/dev2-8b-t1/derived/typed-final.predictions.jsonl
+654912fa67a0d0a25d89e07aa424ff7b80375a7e4fabedea34772ea68e4c3d6a  /data/dev2/runs/release/inputs/dev2-8b-t1/derived/typed-final.retemper.json
+21d4d59a6a6b9d239b3e6aba7b819e7cb11c17c519826b9b1c4da721defd7bf1  /data/dev2/runs/release/dev2-8b-t1-derived/ADOPT.json
+ae559e9a1e13afca5ebb677e98706a027db415313f102e9059607d5114e99550  /data/dev2/runs/release/dev2-8b-t1-derived/PAIRED-vs-adopted-1.0.json
+9fd1ea374d00bc1d791960594c28e02bf7d9b333178e873b8527a99fe207c998  /data/dev2/runs/release/dev2-8b-t1-derived/PAIRED-vs-jpt9b.json
+c2909c293b5219ebf9106b5136e0c1cbe7a3ea7b66778eb1c514344690414d7a  /data/dev2/runs/release/dev2-8b-t1-derived/PAIRED-vs-nimble2.json
+477c8ef010945f736332a88afe31266edc3f92b0eb52c0c67496eaf6e787f5d0  /data/dev2/runs/release/dev2-8b-t1-derived/PAIRED-vs-same-renderer-16k.json
+66106ef9123bf0bb9ac8aeb5024384cc98d5194dd231ff71cebc541b88cf3b17  /data/dev2/runs/release/dev2-8b-t1-derived/REPORT.json
+d00e453b14badafaca0e3b70acfa0820c333252b5f945e604dd47e691b372c43  /data/dev2/runs/release/dev2-8b-t1-derived/SEAL.json
+0ab43a76b4c096032ec398a12ee8360505697aeaf5b4ca685aa1a6df1fa89504  /data/dev2/runs/release/dev2-8b-t1-derived-mlx/mlx-diag.score.json
