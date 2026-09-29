@@ -1,0 +1,18 @@
+{
+  "gpu": "node A GPU1 (recorded co-tenant with M7(b) training)",
+  "gpu_minutes": 3.13,
+  "jobs": [
+    {
+      "commit": "44f4438d57b34eb78c1b9b5b5ca5c1080d5fc058-src_training_decision2",
+      "end_utc": "2026-09-29T01:23:32Z",
+      "exit": 0,
+      "gpu": 1,
+      "gpu_hours": 0.05222,
+      "image": "decision20-train-fast:host2",
+      "run": "m7a-probs",
+      "start_utc": "2026-09-29T01:20:24Z",
+      "wall_seconds": 188
+    }
+  ],
+  "step": "m7a step 2 probabilities"
+}

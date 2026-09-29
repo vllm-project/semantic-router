@@ -1,0 +1,1 @@
+{"step":"m7b CHK probabilities (m7_probs, trainer path)","arm":"m7-mxcx-soup","gpu":0,"mode":"owner","lease":"owner","start_utc":"2026-09-29T04:37:18Z","end_utc":"2026-09-29T04:38:37Z","exit":0,"container_timing":"/data/dev2/runs/06b/m7/timing/m7b-chk-m7-mxcx-soup.timing.json"}

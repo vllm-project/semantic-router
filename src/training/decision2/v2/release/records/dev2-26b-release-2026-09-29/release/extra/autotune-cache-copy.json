@@ -1,0 +1,11 @@
+{
+  "autotune_entries": 18,
+  "copied_utc": "2026-09-29T05:10:12Z",
+  "copy": "/data/dev2/runs/release/triton/dev2-26b-f1-copy-20260929T051011Z",
+  "copy_sha256": "03b172f1a6adeef6c6a6c491d04389b355c9d8579480008023f408c8659b502b",
+  "expected_sha256": "03b172f1a6adeef6c6a6c491d04389b355c9d8579480008023f408c8659b502b",
+  "files": 2659,
+  "frozen": "/data/dev2/runs/27b/M3-A-soup/formal/triton-cache",
+  "note": "summary of the triton_cache copy receipt (per-file list omitted)",
+  "schema": "decision2-27b-triton-cache/1"
+}

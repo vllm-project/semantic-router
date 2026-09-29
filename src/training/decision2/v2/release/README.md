@@ -53,7 +53,10 @@ metadata and the Hub's `.gitattributes` are ignored), per-file SHA-256 and the
 header parameter counts; `from_pretrained` additionally asserts the loaded
 parameter count, the scored model identity and the calibration binding.
 The model name must match the loaded size tier (`DEV2.0-<tier>`, nearest tier
-within the frozen 1.25 same-size ratio). Training state never enters a package.
+within the frozen 1.25 same-size ratio), or, with `"name_basis":
+"loaded-parameters"` in the spec, the rounded loaded count inside that tier
+(one decimal below 1B, whole billions from 1B; e.g. `DEV2.0-26B` for the ~27B
+tier's 25.75B text model). Training state never enters a package.
 
 ## Release spec and commands
 
@@ -113,6 +116,17 @@ without `--collect`); `gate seal`, and therefore `--collect`, accepts only a
 fills in the card's confirmation line in the spec, writes the final decision,
 and reruns `release.sh ... --upload --collect` into a new work directory.
 
+A size without a Decision 1.0 model (~27B) uses the **no-1.0 gate profile**
+(coordinator 2026-09-29 11:55): the spec names `gate_profile: {"name": "no-1.0",
+"reference": <card report key with role "reference">, "v3_share": 0.9,
+"types": <v2.eval.gates types output for the scored run>}`, `card.paired` is the
+candidate-minus-reference comparison, and gate item `1_near_first_tier_no_1_0`
+replaces `1_beats_own_1_0`: v3 >= 0.9 x the reference peer's v3, the
+human-transfer interval's upper bound >= 0 and every typed-FINAL type `OK`.
+Its decisions also name `gate_profile` and `types_sha256`. The card then says
+"There is no Decision 1.0 model at this size" and compares with the reference
+peer where the own-1.0 model would appear.
+
 A later revision of a collected release (for example a calibration-only
 revision) needs its own final decision and `--upload --collect
 --already-collected`. Collection items name a repository, not a revision, so
@@ -138,7 +152,10 @@ every per-type, per-task and public-tier result below the tier's own Decision
 1.0 model, a runnable local System One example (executed by the verifier), and
 short model details and limits. No Pareto chart, no internal gate ledger.
 Comparators pass a fail-closed licence filter (`licence.py`): CC BY-NC,
-research-only, unknown and internal-only models are excluded. Card metadata is
+research-only, unknown and internal-only models are excluded. A peer measured
+from a sibling of its Decision Index board artifact (e.g. the BF16 weights of
+an FP8 entry) names `board_entry` and takes that roster entry's licence only
+if the entry names it as its base model; disclose it in `comparator_note`. Card metadata is
 `apache-2.0` only when every upstream component of the weight lineage is
 Apache-compatible; otherwise `other` with `LICENSING.md`.
 
@@ -149,6 +166,8 @@ composition: the tier's 1.0 mosaic owl (pixels unchanged; Kai, Eos, Sol, Nox,
 Lux), a new owl with a ringed planet for 27B (`brand/sources`, generated in the
 same style), the `DEV2.0` wordmark, a `DECISION 2.0` pill and the size in the
 tier's 1.0 accent colour. `brand/BANNERS.json` records every source hash.
+`--label 27B=26B` draws a final name that follows the loaded count with the
+tier's owl and accent (`DEV2.0-26B-owl-banner.png`).
 
 ## Tests
 

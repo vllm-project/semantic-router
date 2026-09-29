@@ -1,0 +1,45 @@
+{
+  "arm": "m7-mxcx-soup",
+  "family": "qwen-causal",
+  "recipe": "/src/src/training/decision2/v2/06b/records/arms/m7-mx-s1.json",
+  "ingredients": [
+    {
+      "arm": "m7-mx-s1",
+      "run": "/runs/m1/arms/m7-mx-s1/full",
+      "state_sha256": "8376d2cce235b3e69a33d976dd2916509fa377fbdd3dbcbe76af3bd1b2240fa5"
+    },
+    {
+      "arm": "m7-mx-s2",
+      "run": "/runs/m1/arms/m7-mx-s2/full",
+      "state_sha256": "ccd07bad471781cdf752874dae061666b28fc2354f604ab1655497eee287c655"
+    },
+    {
+      "arm": "m7-mx-s3",
+      "run": "/runs/m1/arms/m7-mx-s3/full",
+      "state_sha256": "958679495d3d03071f95e3a4ef1f19c0fa817e1525dcd854f58009f104349a5a"
+    },
+    {
+      "arm": "m7-cx-s1",
+      "run": "/runs/m1/arms/m7-cx-s1/full",
+      "state_sha256": "aa52bd37cc7b99e38ceedeeeca431b207ea626d997147bdad3df89b7edcadc0e"
+    },
+    {
+      "arm": "m7-cx-s2",
+      "run": "/runs/m1/arms/m7-cx-s2/full",
+      "state_sha256": "0c0d216773e51ab7711a1d1416dbc869b70dc3a1e595e3d2973438ea27deca79"
+    },
+    {
+      "arm": "m7-cx-s3",
+      "run": "/runs/m1/arms/m7-cx-s3/full",
+      "state_sha256": "d01deeb76a1b0daa8ad18dfcfb6de0773c41e54d24c458cc2bae6ded30268596"
+    }
+  ],
+  "allowed_differences": [
+    "arm",
+    "data.mixture",
+    "seed",
+    "start.collapse_stop",
+    "teacher"
+  ],
+  "export": true
+}

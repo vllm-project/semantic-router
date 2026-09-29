@@ -1,0 +1,1 @@
+{"run":"m7-mx-s2-readout","gpu":0,"render":"/dev/dri/renderD129","commit":"1c726e4a828c6d590f105966abd4989e04a7e3f5-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-29T03:17:01Z","end_utc":"2026-09-29T03:17:01Z","wall_seconds":0,"gpu_hours":0.00000,"exit":0}

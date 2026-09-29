@@ -1,0 +1,47 @@
+{
+  "label": "post-key same-panel",
+  "panel_root": "/data/dev2/private/panels",
+  "mlx_panel": "/data/dev2/private/panels/mlx-diag-v1",
+  "focus_task": "media_ideology",
+  "models": {
+    "K-a13": {
+      "run": "/data/dev2/runs/9b/formal-m4/K-a13-16k",
+      "mlx_run": "/data/dev2/runs/9b/formal-m4/K-a13-16k-mlx",
+      "exposure": ["/data/dev2/runs/eval/m5/overlap-effects/final-9b/exposure-9b-k-a13-x60.json"],
+      "note": "sixth release candidate (9B M4 K-a13 = 1/3 K soup + 2/3 Lux 1.0; node A m4/K-a13-build/soup + m4/K-a13-cal, manifest 6913eb61836a); the K soup's three seeds trained on x60 m4-k-xl-r2-60m a66131b1…"
+    },
+    "Lux1": {
+      "run": "/data/dev2/runs/eval/m1/d1-lux1-autotune-cache",
+      "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-lux1",
+      "note": "adopted Lux 1.0 16K run (65.808): the release bar and the tier's best measured model"
+    },
+    "Lux1 same-renderer": {
+      "run": "/data/dev2/runs/9b/formal-m3/lux1-16k-shared",
+      "mlx_run": "/data/dev2/runs/9b/formal-m3/lux1-16k-shared-mlx",
+      "note": "Lux 1.0 through the shared 2.0 renderer at 16,384 tokens (65.231)"
+    },
+    "Nimble v2": {"run": "/data/dev2/runs/eval/m2/q6-nimble2", "mlx_run": "/data/dev2/runs/eval/m2/q6-nimble2"},
+    "JPT-9B": {
+      "run": "/data/dev2/runs/eval/m1-adopt/jpt9b",
+      "mlx_run": "/data/dev2/runs/eval/m2/mlx/x-jpt9b",
+      "note": "CC BY-NC: in the 9B threshold pool, not shown on the card"
+    }
+  },
+  "tiers": {
+    "9B": {
+      "candidate": "K-a13",
+      "own_1_0": ["Lux1", "Lux1 same-renderer"],
+      "peers": ["Nimble v2"],
+      "internal_peers": ["JPT-9B"],
+      "threshold_pool": ["Lux1", "Nimble v2", "JPT-9B"]
+    }
+  },
+  "reproduce": [
+    {"left": "K-a13", "right": "Lux1", "stored": "/data/dev2/runs/eval/m4/gates-9b/paired-vs-lux1.json"},
+    {"left": "K-a13", "right": "Lux1 same-renderer", "stored": "/data/dev2/runs/eval/m4/gates-9b/paired-vs-lux1-shared.json"},
+    {"left": "K-a13", "right": "Nimble v2", "stored": "/data/dev2/runs/eval/m4/gates-9b/paired-vs-nimble2.json"},
+    {"left": "K-a13", "right": "JPT-9B", "stored": "/data/dev2/runs/eval/m4/gates-9b/paired-vs-jpt9b.json"},
+    {"left": "K-a13", "right": "Lux1", "stored": "/data/dev2/runs/9b/formal-m4/K-a13-16k/PAIRED-vs-Lux1-16K.json"},
+    {"left": "K-a13", "right": "Lux1 same-renderer", "stored": "/data/dev2/runs/9b/formal-m4/K-a13-16k/PAIRED-vs-Lux1-16K-shared.json"}
+  ]
+}

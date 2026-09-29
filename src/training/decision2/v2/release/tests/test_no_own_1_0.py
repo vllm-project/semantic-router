@@ -218,7 +218,12 @@ def entries(reference: dict | None = None) -> list[dict]:
 
 
 class NoOwnCardTest(unittest.TestCase):
-    def build(self, items: list[dict], paired: dict | None = None) -> dict:
+    def build(
+        self,
+        items: list[dict],
+        paired: dict | None = None,
+        peers: dict[str, dict] | None = None,
+    ) -> dict:
         with tempfile.TemporaryDirectory() as scratch:
             out, banner = Path(scratch) / "pkg", Path(scratch) / "banner.png"
             banner.write_bytes(b"\x89PNG\r\n\x1a\n")
@@ -234,6 +239,10 @@ class NoOwnCardTest(unittest.TestCase):
                 banner=banner,
                 work=Path(scratch) / "work",
                 output=out,
+                paired_peers={
+                    key: write(Path(scratch) / f"paired-{key}.json", value)
+                    for key, value in (peers or {}).items()
+                },
             )
             files = {
                 p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()
@@ -272,6 +281,30 @@ class NoOwnCardTest(unittest.TestCase):
         self.assertNotIn("paired_vs_own_1_0", result["manifest"])
         self.assertEqual(result["manifest"]["paired_vs_reference"]["delta"], -1.5)
         self.assertTrue(result["tradeoffs"])
+
+    def test_paired_intervals_of_the_other_peers_on_the_evaluation_page(self):
+        v3 = {
+            name: json.loads((REPORTS / f"{name}.json").read_text())["v3"]["score"]
+            for name in ("lex", "gliner25")
+        }
+        gliner = {
+            "point": {
+                "left": {"score": v3["lex"]},
+                "right": {"score": v3["gliner25"]},
+                "delta": {"score": v3["lex"] - v3["gliner25"]},
+            },
+            "ci95": {"low": -2.0, "high": 1.0},
+        }
+        result = self.build(entries(), peers={"gliner": gliner})
+        self.assertIn(
+            "Against the other models shown: GLiNER2.5-Decide", result["evaluation"]
+        )
+        self.assertIn("[-2.000, +1.000].", result["evaluation"])
+        self.assertIn("gliner", str(result["manifest"]["paired_vs_peers"]).lower())
+        self.assertNotIn("paired_vs_peers", self.build(entries())["manifest"])
+        gliner["point"]["right"]["score"] += 1.0
+        with self.assertRaises(ValueError):
+            self.build(entries(), peers={"gliner": gliner})
 
     def test_reference_outside_the_licence_filter_is_not_named(self):
         jpt = {

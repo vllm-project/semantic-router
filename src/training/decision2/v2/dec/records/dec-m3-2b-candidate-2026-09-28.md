@@ -1,5 +1,12 @@
 # 2B release candidate meets the first-release threshold: S2T seed soup (Sol 1.0 + v2 full-M, own-Sol trust region)
 
+> **Erratum (2026-09-29, per coordinator 05:25 note).** The staging revision cited below (`545a6784`) is no longer in the
+> `dev2-dec-staging` history, because LFS cleanups rewrote it. The S2T weights are no longer on the staging repo, on
+> purpose. S2T identity = hash list node B `m3/hf-staging/S2T-soup.sha256`
+> (`22e7fe86fba8b925d4930e2691c046a10235dc30ae45b9933560d8e81c9a47dd`, 11 files) plus the verified node copies. It is
+> released as `llm-semantic-router/DEV2.0-2B@5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38`. See
+> [dec-staging-citation-errata-2026-09-29.md](dec-staging-citation-errata-2026-09-29.md).
+
 Status: **qualifies under the coordinator's 2B threshold and the M3 release reading**
 (prereg `5c8bbc569` rule 4). Written 2026-09-28 ≈23:00 UTC+8 right after scoring.
 The recommendation between 2B artifacts is final once the matched AutoJev (S2J)
@@ -41,7 +48,9 @@ vs 155).
 ## Artifact for release engineering
 
 - **Weights:** private `llm-semantic-router/dev2-dec-staging` commit
-  `545a6784175ce7a62319abeaec9502d775e586e2`, folder `m3/S2T-soup/checkpoint/`.
+  `545a6784175ce7a62319abeaec9502d775e586e2`, folder `m3/S2T-soup/checkpoint/`. [corrected 2026-09-29: revision no
+  longer exists in the repo history; identity by hash list `S2T-soup.sha256` `22e7fe86…`, released as
+  DEV2.0-2B@`5ad3e9a3`, see errata record.]
   It is a full Decision 2.0 checkpoint in FP32: Qwen3.5 text backbone (two safetensors
   shards) plus decision head. Loaded parameters: **1,883,930,944** (safetensors
   header count). `model_sha256` `073bd1f2fe62e39fe993f57006bab17ece50a7e6fc7c5ee72107fefddeb81da4`,

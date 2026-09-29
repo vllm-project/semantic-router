@@ -1,0 +1,33 @@
+{
+  "adapter": {
+    "config": "adapter/adapter_config.json",
+    "weights": [
+      "adapter/adapter_model.safetensors"
+    ]
+  },
+  "backbone": {
+    "repository": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+  },
+  "calibration": null,
+  "decision_format": "vllm-sr-decision",
+  "decision_weights": {
+    "decision_head": "decision_head.safetensors"
+  },
+  "format_version": 2,
+  "manifest": "MODEL_MANIFEST.json",
+  "max_input_tokens": 32768,
+  "model_config": "decision_config.json",
+  "model_name": "DEV2.0-26B",
+  "package_schema": "dev2-package/1",
+  "runtime": {
+    "entry": "decision2.Decision2.from_pretrained",
+    "python_package": "decision2"
+  },
+  "runtime_family": "decision2-qwen-adapter",
+  "tokenizer": {
+    "chat_template": "chat_template.jinja",
+    "config": "tokenizer_config.json",
+    "json": "tokenizer.json"
+  }
+}

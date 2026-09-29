@@ -1,0 +1,444 @@
+{
+  "base_identical": true,
+  "base_rows": 6547,
+  "families": {
+    "m6-cx": {
+      "group_ids_disjoint_across_pools": true,
+      "nonbase_groups_disjoint": true,
+      "nonbase_ids_disjoint": true,
+      "recipe_rows": 191536,
+      "recipe_tokens": 115665804,
+      "seeds": [
+        "m6-cx-s1",
+        "m6-cx-s2",
+        "m6-cx-s3"
+      ],
+      "union_by_pool": {
+        "A0s-strict": {
+          "of_rows": 6547,
+          "of_tokens": 3888278,
+          "rows": 6547,
+          "tokens": 3888278
+        },
+        "A7g": {
+          "of_rows": 38443,
+          "of_tokens": 56000082,
+          "rows": 25512,
+          "tokens": 37296544
+        },
+        "A7h": {
+          "of_rows": 1549,
+          "of_tokens": 238998,
+          "rows": 1029,
+          "tokens": 158801
+        },
+        "A7i": {
+          "of_rows": 18317,
+          "of_tokens": 7129197,
+          "rows": 12255,
+          "tokens": 4747056
+        },
+        "A7k": {
+          "of_rows": 2190,
+          "of_tokens": 575921,
+          "rows": 2190,
+          "tokens": 575921
+        },
+        "A7m": {
+          "of_rows": 10763,
+          "of_tokens": 2056350,
+          "rows": 7168,
+          "tokens": 1369359
+        },
+        "A7o": {
+          "of_rows": 34569,
+          "of_tokens": 16208934,
+          "rows": 22922,
+          "tokens": 10795705
+        },
+        "A7p": {
+          "of_rows": 9800,
+          "of_tokens": 3450897,
+          "rows": 6367,
+          "tokens": 2298233
+        },
+        "A7q": {
+          "of_rows": 23530,
+          "of_tokens": 10507449,
+          "rows": 22394,
+          "tokens": 10006054
+        },
+        "A7r": {
+          "of_rows": 7061,
+          "of_tokens": 1089025,
+          "rows": 4706,
+          "tokens": 725082
+        },
+        "A7s": {
+          "of_rows": 12860,
+          "of_tokens": 2045617,
+          "rows": 12860,
+          "tokens": 2045617
+        },
+        "V1:A1": {
+          "of_rows": 4434,
+          "of_tokens": 1398315,
+          "rows": 2969,
+          "tokens": 930813
+        },
+        "V1:A2": {
+          "of_rows": 5453,
+          "of_tokens": 2235494,
+          "rows": 3619,
+          "tokens": 1486460
+        },
+        "V1:A3": {
+          "of_rows": 1420,
+          "of_tokens": 3617434,
+          "rows": 940,
+          "tokens": 2404806
+        },
+        "V1:A4v2h": {
+          "of_rows": 1792,
+          "of_tokens": 830210,
+          "rows": 1203,
+          "tokens": 551251
+        },
+        "V1:A5": {
+          "of_rows": 2298,
+          "of_tokens": 517742,
+          "rows": 1525,
+          "tokens": 344540
+        },
+        "V1:A6g": {
+          "of_rows": 4905,
+          "of_tokens": 2369878,
+          "rows": 3317,
+          "tokens": 1571320
+        },
+        "V1:A6h": {
+          "of_rows": 5605,
+          "of_tokens": 1505983,
+          "rows": 3738,
+          "tokens": 1002955
+        }
+      },
+      "union_row_share": 0.7375,
+      "union_rows": 141261,
+      "union_token_share": 0.7107
+    },
+    "m6-mx": {
+      "group_ids_disjoint_across_pools": true,
+      "nonbase_groups_disjoint": true,
+      "nonbase_ids_disjoint": true,
+      "recipe_rows": 340306,
+      "recipe_tokens": 150820228,
+      "seeds": [
+        "m6-mx-s1",
+        "m6-mx-s2",
+        "m6-mx-s3"
+      ],
+      "union_by_pool": {
+        "A0s-strict": {
+          "of_rows": 6547,
+          "of_tokens": 3888278,
+          "rows": 6547,
+          "tokens": 3888278
+        },
+        "A7g": {
+          "of_rows": 18312,
+          "of_tokens": 29695161,
+          "rows": 8942,
+          "tokens": 14524259
+        },
+        "A7h": {
+          "of_rows": 1549,
+          "of_tokens": 238998,
+          "rows": 756,
+          "tokens": 116642
+        },
+        "A7i": {
+          "of_rows": 16539,
+          "of_tokens": 6426348,
+          "rows": 8174,
+          "tokens": 3142596
+        },
+        "A7k": {
+          "of_rows": 2190,
+          "of_tokens": 575921,
+          "rows": 2190,
+          "tokens": 575921
+        },
+        "A7m": {
+          "of_rows": 10763,
+          "of_tokens": 2056350,
+          "rows": 5266,
+          "tokens": 1005766
+        },
+        "A7o": {
+          "of_rows": 20581,
+          "of_tokens": 9634720,
+          "rows": 9961,
+          "tokens": 4712677
+        },
+        "A7p": {
+          "of_rows": 9800,
+          "of_tokens": 3450897,
+          "rows": 4714,
+          "tokens": 1687804
+        },
+        "A7q": {
+          "of_rows": 22394,
+          "of_tokens": 10006054,
+          "rows": 22394,
+          "tokens": 10006054
+        },
+        "A7r": {
+          "of_rows": 6817,
+          "of_tokens": 1051544,
+          "rows": 3337,
+          "tokens": 514156
+        },
+        "A7s": {
+          "of_rows": 12860,
+          "of_tokens": 2045617,
+          "rows": 12860,
+          "tokens": 2045617
+        },
+        "E11": {
+          "of_rows": 11804,
+          "of_tokens": 4387207,
+          "rows": 5832,
+          "tokens": 2144881
+        },
+        "G2": {
+          "of_rows": 21624,
+          "of_tokens": 7982111,
+          "rows": 10564,
+          "tokens": 3902543
+        },
+        "G4h": {
+          "of_rows": 3799,
+          "of_tokens": 1602968,
+          "rows": 1874,
+          "tokens": 783203
+        },
+        "G6": {
+          "of_rows": 13078,
+          "of_tokens": 5899717,
+          "rows": 6415,
+          "tokens": 2884434
+        },
+        "H1": {
+          "of_rows": 56014,
+          "of_tokens": 8323726,
+          "rows": 27256,
+          "tokens": 4071881
+        },
+        "H3": {
+          "of_rows": 8688,
+          "of_tokens": 10532772,
+          "rows": 4238,
+          "tokens": 5147329
+        },
+        "H5": {
+          "of_rows": 49020,
+          "of_tokens": 20537064,
+          "rows": 24016,
+          "tokens": 10046057
+        },
+        "H6": {
+          "of_rows": 22905,
+          "of_tokens": 11786175,
+          "rows": 11298,
+          "tokens": 5764404
+        },
+        "V1:A1": {
+          "of_rows": 4434,
+          "of_tokens": 1398315,
+          "rows": 2180,
+          "tokens": 683207
+        },
+        "V1:A2": {
+          "of_rows": 5453,
+          "of_tokens": 2235494,
+          "rows": 2653,
+          "tokens": 1091176
+        },
+        "V1:A3": {
+          "of_rows": 760,
+          "of_tokens": 1925366,
+          "rows": 366,
+          "tokens": 935358
+        },
+        "V1:A4v2h": {
+          "of_rows": 1720,
+          "of_tokens": 798061,
+          "rows": 830,
+          "tokens": 389939
+        },
+        "V1:A5": {
+          "of_rows": 2298,
+          "of_tokens": 517742,
+          "rows": 1114,
+          "tokens": 252691
+        },
+        "V1:A6g": {
+          "of_rows": 4868,
+          "of_tokens": 2350228,
+          "rows": 2415,
+          "tokens": 1143752
+        },
+        "V1:A6h": {
+          "of_rows": 5489,
+          "of_tokens": 1473394,
+          "rows": 2690,
+          "tokens": 720304
+        }
+      },
+      "union_row_share": 0.555,
+      "union_rows": 188882,
+      "union_token_share": 0.5449
+    }
+  },
+  "mixtures": {
+    "m6-cx-s1": {
+      "sha256": "ad925c379fe4f1c658087d99e88dcd4ac3cfdab372e999b592eb2f6c4e6186fc",
+      "spec_sha256": "f60d18517c4ba55eed313bb86173ce7c445969209fe3ff601d7c7c483059a675"
+    },
+    "m6-cx-s2": {
+      "sha256": "420fd988f06c0fe5deb4aed72fcc71f3d2a2af414ccea2597d652679ad664489",
+      "spec_sha256": "77a41a2a7dacac6978e057e09b5b7b1a14e25a1bd843b6bc95ad47b22cc1d562"
+    },
+    "m6-cx-s3": {
+      "sha256": "9131be73edce1e3ba79a9b91adcff7807035e12352545fbbfd3b5e0e44178aa5",
+      "spec_sha256": "fa99109e4777e686fcb8e7ab8cc157db3ae3530ddbcc4e69ecfcd4e62dc11cfb"
+    },
+    "m6-mx-s1": {
+      "sha256": "a277bd45a61662b8edbdc3472d0f74f605bc2a4d6e187605afc2bb3d4c998eae",
+      "spec_sha256": "908c06fc74bd8af36aab197c4df9afdbba4564a4c140ed6cac299ff61c25ed4a"
+    },
+    "m6-mx-s2": {
+      "sha256": "5fafa72d6199025e36cda7eb315a1faa341d1f5164ac1d06ccafd69f4e7ed8c0",
+      "spec_sha256": "2a0f27ea0095ba4be2534c37dcdec3f23b48a3478031fd656f64319989022636"
+    },
+    "m6-mx-s3": {
+      "sha256": "e484c99b1fe4ca5051a2f33ca032edda71f07ff601f6ace859f82c687e31f653",
+      "spec_sha256": "dac18183ed57be4a2db7d6f338cc94e5b75d4cc44b19fdadfb0733f53b9d0167"
+    }
+  },
+  "native_conversion": {
+    "rows": 232754,
+    "task_types": {
+      "choice": 88676,
+      "noul": 75701,
+      "score": 68377
+    }
+  },
+  "pass": true,
+  "per_seed": {
+    "m6-cx-s1": {
+      "ids_match_report": true,
+      "rows": 51462,
+      "teacher_covered": 37698,
+      "teacher_missing_by_pool": {
+        "A7k": 732,
+        "A7q": 7491,
+        "A7s": 4294,
+        "V1:A6h": 1247
+      },
+      "tokens": 29993891,
+      "tokens_match_report": true,
+      "within_tolerance": true
+    },
+    "m6-cx-s2": {
+      "ids_match_report": true,
+      "rows": 51350,
+      "teacher_covered": 37693,
+      "teacher_missing_by_pool": {
+        "A7k": 729,
+        "A7q": 7393,
+        "A7s": 4285,
+        "V1:A6h": 1250
+      },
+      "tokens": 29990906,
+      "tokens_match_report": true,
+      "within_tolerance": true
+    },
+    "m6-cx-s3": {
+      "ids_match_report": true,
+      "rows": 51543,
+      "teacher_covered": 37782,
+      "teacher_missing_by_pool": {
+        "A7k": 729,
+        "A7q": 7510,
+        "A7s": 4281,
+        "V1:A6h": 1241
+      },
+      "tokens": 29990554,
+      "tokens_match_report": true,
+      "within_tolerance": true
+    },
+    "m6-mx-s1": {
+      "ids_match_report": true,
+      "rows": 67411,
+      "teacher_covered": 50226,
+      "teacher_missing_by_pool": {
+        "A7k": 732,
+        "A7q": 7491,
+        "A7s": 4294,
+        "H6": 3766,
+        "V1:A6h": 902
+      },
+      "tokens": 29987286,
+      "tokens_match_report": true,
+      "within_tolerance": true
+    },
+    "m6-mx-s2": {
+      "ids_match_report": true,
+      "rows": 67373,
+      "teacher_covered": 50299,
+      "teacher_missing_by_pool": {
+        "A7k": 729,
+        "A7q": 7393,
+        "A7s": 4285,
+        "H6": 3772,
+        "V1:A6h": 895
+      },
+      "tokens": 29985083,
+      "tokens_match_report": true,
+      "within_tolerance": true
+    },
+    "m6-mx-s3": {
+      "ids_match_report": true,
+      "rows": 67192,
+      "teacher_covered": 50019,
+      "teacher_missing_by_pool": {
+        "A7k": 729,
+        "A7q": 7510,
+        "A7s": 4281,
+        "H6": 3760,
+        "V1:A6h": 893
+      },
+      "tokens": 29985116,
+      "tokens_match_report": true,
+      "within_tolerance": true
+    }
+  },
+  "qks_identical_across_families": {
+    "1": true,
+    "2": true,
+    "3": true
+  },
+  "teachers": {
+    "m6-cx": {
+      "entries": 100079,
+      "sha256": "2431d46c049da4b6cfdc0d08c468bb35aca8baf9828550b3699eb0144c091ba6"
+    },
+    "m6-mx": {
+      "entries": 137450,
+      "sha256": "a18929b20ac3924f9c08156dfbb6cd4be077ff4275ff143054f349e99ce5173a"
+    }
+  },
+  "trainer_isolation_vs_select_cal": "pass"
+}

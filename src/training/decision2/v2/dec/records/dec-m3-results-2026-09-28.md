@@ -1,5 +1,16 @@
 # Decoder track Milestone 3 results (2B / 4B on data v2 full-M; 0.8B release support and follow-up), 2026-09-28/29
 
+> **Erratum (2026-09-29, per coordinator 05:25 note).** The M3 LFS cleanups did rewrite history.
+> `permanently_delete_lfs_files` in huggingface_hub 1.33 defaults to `rewrite_history=True`. The staging revisions
+> cited below (S2T `545a6784`, N4LKr `784a894f`) are no longer in the repo history, and their weight files return 403.
+>
+> - S2T identity = hash list node B `m3/hf-staging/S2T-soup.sha256` (`22e7fe86…`), released as
+>   DEV2.0-2B@`5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38`.
+> - N4LKr identity = hash list node B `m3/hf-staging/N4LKr-soup.sha256` (`25f4deab…`).
+> - Details and node copies: [dec-staging-citation-errata-2026-09-29.md](dec-staging-citation-errata-2026-09-29.md).
+>
+> Corrections below: `~~…~~` then `[corrected 2026-09-29: …]`.
+
 Development readouts (SELECT700, CAL698, typed DEV1600, CSS pilot1430) are never
 release scores. JevArena v3 and public JevBench 231 are **post-key same-panel**
 comparisons (node A, the eval track's frozen runner, 16,384-token packages,
@@ -186,7 +197,8 @@ CPU builds and merges are excluded.
 - **Hugging Face private storage limit reached** (18:08 UTC): the N4LKr staging
   upload was rejected ("Private repository storage limit reached"). I freed private
   storage in my own staging repo only, with `permanently_delete_lfs_files`. That
-  deletes LFS objects; git history and every commit SHA stay valid. Every node B
+  deletes LFS objects; ~~git history and every commit SHA stay valid~~ [corrected 2026-09-29: called without
+  `rewrite_history=False`, it rewrote every commit SHA of the repo]. Every node B
   copy was re-hashed first.
   - Deleted: the HOLD / non-improvement artifacts m3/N4T-soup, m3/N4J-soup,
     m3/N4L-soup, m3/E8V-soup, m2/B8F-s1 and m2/B8F-s2, 59.6 GB in total.
@@ -194,12 +206,14 @@ CPU builds and merges are excluded.
   - Kept in staging: m3/S2T-soup (2B candidate), m3/N4LKr-soup (4B borderline), and
     the m2 E8F soup and seeds (provenance of the released DEV2.0-0.8B).
   - `dev2-dec-staging` went from 96.5 GB at its peak to 36.7 GB.
-  - The N4LKr upload was then retried once and succeeded (`784a894f`).
+  - The N4LKr upload was then retried once and succeeded (`784a894f`). [corrected 2026-09-29: revision no longer
+    exists in the repo history; identity by hash list `N4LKr-soup.sha256` `25f4deab…`, see errata record.]
 
 ## Items for the coordinator
 
 1. **2B release candidate: S2T soup** — private `llm-semantic-router/dev2-dec-staging@545a6784`
-   `m3/S2T-soup/`, profile `qwen-full`, 16,384 tokens, scored run
+   `m3/S2T-soup/` [corrected 2026-09-29: revision no longer exists in the repo history; identity by hash list
+   `S2T-soup.sha256` `22e7fe86…`, released as DEV2.0-2B@`5ad3e9a3`, see errata record], profile `qwen-full`, 16,384 tokens, scored run
    `/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA`. Details and disclosures are in
    the [candidate record](dec-m3-2b-candidate-2026-09-28.md). The teacher is own Sol
    1.0 (clean). Needs: release engineering, and C1 event 2 (with DEV2.0-0.6B).
@@ -208,12 +222,14 @@ CPU builds and merges are excluded.
    - Gains: T +.015, H +.044 (level with Decider 4B), typed Score +11.
    - Losses: public231 171 vs 173; `mlx-diag` .773 vs .795 (non-English Noul −7.7).
    - It is staged at `llm-semantic-router/dev2-dec-staging@784a894f`
-     `m3/N4LKr-soup/` (profile `qwen-full`, 16K), scored run
+     `m3/N4LKr-soup/` [corrected 2026-09-29: revision no longer exists in the repo history and the weights were
+     deleted at 20:51Z; identity by hash list `N4LKr-soup.sha256` `25f4deab…`, node B copy, see errata record] (profile `qwen-full`, 16K), scored run
      `/data/dev2/runs/dec/formal/m3/m3-N4LKr-soup-nodeA`.
    - My recommendation is HOLD: the preregistered rule needs a lower bound > 0, and
      there is a multilingual regression.
 3. **Hugging Face private storage is at its plan limit** (org-level). I freed 59.6 GB
-   from my own staging repo without rewriting history. Release engineering's 2B
+   from my own staging repo ~~without rewriting history~~ [corrected 2026-09-29: the cleanups rewrote its history].
+   Release engineering's 2B
    package and every other track's upload draw on the same quota, so the program
    may need a quota decision or cleanup elsewhere.
 4. **Cross-track:** the CSS pilot's `discourse` / `semeval_stance` inflation from data v2

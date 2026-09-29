@@ -1,0 +1,1440 @@
+{
+  "chk_sha256": "98425b276dd2540c2886b9a7ec904a85101f6f79d0fd642e5e9fafbf79282b16",
+  "label": "development evidence (not gated, never a release score)",
+  "pairs": {
+    "m7-m6:cx-s1": {
+      "L3": {
+        "control": {
+          "accuracy": 0.49633577614923385,
+          "correct": 745,
+          "delta_vs_majority": 0.1459027315123251,
+          "kappa": 0.24666302862764938,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 702,
+            "1": 358,
+            "2": 441
+          },
+          "top_share": 0.46768820786142573,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.02465023317788141,
+          "accuracy_ci95": [
+            -0.047968021319120584,
+            -0.0006662225183211193
+          ],
+          "changed_answers": 429,
+          "delta_vs_majority": -0.024650233177881398,
+          "level_usage": {
+            "0": -46,
+            "1": 138,
+            "2": -92
+          },
+          "top_share": -0.030646235842771485
+        },
+        "n": 1501,
+        "treatment": {
+          "accuracy": 0.47168554297135246,
+          "correct": 708,
+          "delta_vs_majority": 0.12125249833444371,
+          "kappa": 0.20688692458485095,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 656,
+            "1": 496,
+            "2": 349
+          },
+          "top_share": 0.43704197201865425,
+          "top_value": "0"
+        }
+      },
+      "L4": {
+        "control": {
+          "accuracy": 0.4344422700587084,
+          "correct": 222,
+          "delta_vs_majority": 0.1643835616438356,
+          "kappa": 0.24089666090961426,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 238,
+            "1": 88,
+            "2": 67,
+            "3": 118
+          },
+          "top_share": 0.4657534246575342,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.0136986301369863,
+          "accuracy_ci95": [
+            -0.0547945205479452,
+            0.025440313111545987
+          ],
+          "changed_answers": 191,
+          "delta_vs_majority": -0.0136986301369863,
+          "level_usage": {
+            "0": -24,
+            "1": -3,
+            "2": 0,
+            "3": 27
+          },
+          "top_share": -0.046966731898238745
+        },
+        "n": 511,
+        "treatment": {
+          "accuracy": 0.4207436399217221,
+          "correct": 215,
+          "delta_vs_majority": 0.1506849315068493,
+          "kappa": 0.22183808700662627,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 214,
+            "1": 85,
+            "2": 67,
+            "3": 145
+          },
+          "top_share": 0.4187866927592955,
+          "top_value": "0"
+        }
+      },
+      "L5": {
+        "control": {
+          "accuracy": 0.3250414593698176,
+          "correct": 588,
+          "delta_vs_majority": 0.10945273631840796,
+          "kappa": 0.15880748713812226,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 709,
+            "1": 182,
+            "2": 115,
+            "3": 434,
+            "4": 369
+          },
+          "top_share": 0.3919292426755113,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": 0.009950248756218905,
+          "accuracy_ci95": [
+            -0.01105583195135434,
+            0.03095632946379215
+          ],
+          "changed_answers": 756,
+          "delta_vs_majority": 0.009950248756218902,
+          "level_usage": {
+            "0": -176,
+            "1": 44,
+            "2": 204,
+            "3": -245,
+            "4": 173
+          },
+          "top_share": -0.0923161967938087
+        },
+        "n": 1809,
+        "treatment": {
+          "accuracy": 0.33499170812603646,
+          "correct": 606,
+          "delta_vs_majority": 0.11940298507462686,
+          "kappa": 0.1719141513709365,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 533,
+            "1": 226,
+            "2": 319,
+            "3": 189,
+            "4": 542
+          },
+          "top_share": 0.2996130458817026,
+          "top_value": "4"
+        }
+      },
+      "control_probs": "/data/dev2/runs/06b/m7/baselines/m6-cx-s1/PROBS.json",
+      "control_state_sha256": "12c257ca22e5687ffb4ee2eb3ef116ec91c561415c8476a6c8d93ca735bde500",
+      "treatment_probs": "/data/dev2/runs/06b/m7/post/chk/m7-cx-s1/PROBS.json",
+      "treatment_state_sha256": "aa52bd37cc7b99e38ceedeeeca431b207ea626d997147bdad3df89b7edcadc0e"
+    },
+    "m7-m6:cx-s2": {
+      "L3": {
+        "control": {
+          "accuracy": 0.4417055296469021,
+          "correct": 663,
+          "delta_vs_majority": 0.09127248500999334,
+          "kappa": 0.16464630700213517,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 854,
+            "1": 339,
+            "2": 308
+          },
+          "top_share": 0.5689540306462358,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": 0.013990672884743505,
+          "accuracy_ci95": [
+            -0.005996002664890073,
+            0.034643570952698204
+          ],
+          "changed_answers": 310,
+          "delta_vs_majority": 0.013990672884743496,
+          "level_usage": {
+            "0": -36,
+            "1": -43,
+            "2": 79
+          },
+          "top_share": -0.02398401065956024
+        },
+        "n": 1501,
+        "treatment": {
+          "accuracy": 0.45569620253164556,
+          "correct": 684,
+          "delta_vs_majority": 0.10526315789473684,
+          "kappa": 0.18675361157827158,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 818,
+            "1": 296,
+            "2": 387
+          },
+          "top_share": 0.5449700199866756,
+          "top_value": "0"
+        }
+      },
+      "L4": {
+        "control": {
+          "accuracy": 0.3776908023483366,
+          "correct": 193,
+          "delta_vs_majority": 0.10763209393346379,
+          "kappa": 0.16384686631676443,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 265,
+            "1": 76,
+            "2": 57,
+            "3": 113
+          },
+          "top_share": 0.5185909980430529,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": 0.03913894324853229,
+          "accuracy_ci95": [
+            0.0,
+            0.07832681017612453
+          ],
+          "changed_answers": 183,
+          "delta_vs_majority": 0.03913894324853229,
+          "level_usage": {
+            "0": -59,
+            "1": 10,
+            "2": 0,
+            "3": 49
+          },
+          "top_share": -0.1154598825831703
+        },
+        "n": 511,
+        "treatment": {
+          "accuracy": 0.41682974559686886,
+          "correct": 213,
+          "delta_vs_majority": 0.14677103718199608,
+          "kappa": 0.2153288056640524,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 206,
+            "1": 86,
+            "2": 57,
+            "3": 162
+          },
+          "top_share": 0.40313111545988256,
+          "top_value": "0"
+        }
+      },
+      "L5": {
+        "control": {
+          "accuracy": 0.3189607517965727,
+          "correct": 577,
+          "delta_vs_majority": 0.10337202874516307,
+          "kappa": 0.1524911843321635,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 797,
+            "1": 114,
+            "2": 158,
+            "3": 413,
+            "4": 327
+          },
+          "top_share": 0.4405749032614704,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": 0.03316749585406302,
+          "accuracy_ci95": [
+            0.012147595356550578,
+            0.05472636815920398
+          ],
+          "changed_answers": 683,
+          "delta_vs_majority": 0.033167495854063006,
+          "level_usage": {
+            "0": -215,
+            "1": 96,
+            "2": 172,
+            "3": -188,
+            "4": 135
+          },
+          "top_share": -0.11885019347705916
+        },
+        "n": 1809,
+        "treatment": {
+          "accuracy": 0.3521282476506357,
+          "correct": 637,
+          "delta_vs_majority": 0.13653952459922608,
+          "kappa": 0.19348871286360375,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 582,
+            "1": 210,
+            "2": 330,
+            "3": 225,
+            "4": 462
+          },
+          "top_share": 0.32172470978441126,
+          "top_value": "0"
+        }
+      },
+      "control_probs": "/data/dev2/runs/06b/m7/baselines/m6-cx-s2/PROBS.json",
+      "control_state_sha256": "2b0a9f58ab3815e07d745638b0d5a84487bf5b58e2dd135d2c369296caf23cba",
+      "treatment_probs": "/data/dev2/runs/06b/m7/post/chk/m7-cx-s2/PROBS.json",
+      "treatment_state_sha256": "0c0d216773e51ab7711a1d1416dbc869b70dc3a1e595e3d2973438ea27deca79"
+    },
+    "m7-m6:cx-s3": {
+      "L3": {
+        "control": {
+          "accuracy": 0.4696868754163891,
+          "correct": 705,
+          "delta_vs_majority": 0.11925383077948035,
+          "kappa": 0.20515757863630987,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 719,
+            "1": 427,
+            "2": 355
+          },
+          "top_share": 0.47901399067288475,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.0033311125916055963,
+          "accuracy_ci95": [
+            -0.02598267821452365,
+            0.018654230512991338
+          ],
+          "changed_answers": 420,
+          "delta_vs_majority": -0.003331112591605595,
+          "level_usage": {
+            "0": 170,
+            "1": -155,
+            "2": -15
+          },
+          "top_share": 0.11325782811459029
+        },
+        "n": 1501,
+        "treatment": {
+          "accuracy": 0.46635576282478347,
+          "correct": 700,
+          "delta_vs_majority": 0.11592271818787475,
+          "kappa": 0.202887846817753,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 889,
+            "1": 272,
+            "2": 340
+          },
+          "top_share": 0.592271818787475,
+          "top_value": "0"
+        }
+      },
+      "L4": {
+        "control": {
+          "accuracy": 0.4246575342465753,
+          "correct": 217,
+          "delta_vs_majority": 0.15459882583170254,
+          "kappa": 0.22700844850118854,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 213,
+            "1": 83,
+            "2": 67,
+            "3": 148
+          },
+          "top_share": 0.41682974559686886,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.021526418786692758,
+          "accuracy_ci95": [
+            -0.060665362035225046,
+            0.017661448140899483
+          ],
+          "changed_answers": 177,
+          "delta_vs_majority": -0.021526418786692758,
+          "level_usage": {
+            "0": 79,
+            "1": -32,
+            "2": 0,
+            "3": -47
+          },
+          "top_share": 0.15459882583170254
+        },
+        "n": 511,
+        "treatment": {
+          "accuracy": 0.40313111545988256,
+          "correct": 206,
+          "delta_vs_majority": 0.13307240704500978,
+          "kappa": 0.19898546553460927,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 292,
+            "1": 51,
+            "2": 67,
+            "3": 101
+          },
+          "top_share": 0.5714285714285714,
+          "top_value": "0"
+        }
+      },
+      "L5": {
+        "control": {
+          "accuracy": 0.3333333333333333,
+          "correct": 603,
+          "delta_vs_majority": 0.11774461028192372,
+          "kappa": 0.16942749554857503,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 704,
+            "1": 130,
+            "2": 248,
+            "3": 440,
+            "4": 287
+          },
+          "top_share": 0.38916528468767275,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": 0.003869541182974019,
+          "accuracy_ci95": [
+            -0.019347705914870093,
+            0.026533996683250415
+          ],
+          "changed_answers": 855,
+          "delta_vs_majority": 0.003869541182974015,
+          "level_usage": {
+            "0": -77,
+            "1": 96,
+            "2": 48,
+            "3": -246,
+            "4": 179
+          },
+          "top_share": -0.042564953012714235
+        },
+        "n": 1809,
+        "treatment": {
+          "accuracy": 0.33720287451630737,
+          "correct": 610,
+          "delta_vs_majority": 0.12161415146489774,
+          "kappa": 0.17551274083281543,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 627,
+            "1": 226,
+            "2": 296,
+            "3": 194,
+            "4": 466
+          },
+          "top_share": 0.3466003316749585,
+          "top_value": "0"
+        }
+      },
+      "control_probs": "/data/dev2/runs/06b/m7/baselines/m6-cx-s3/PROBS.json",
+      "control_state_sha256": "841dcbd6c3312045687b25fe4c445591cfc4e15409768c94413cc994a919ab1a",
+      "treatment_probs": "/data/dev2/runs/06b/m7/post/chk/m7-cx-s3/PROBS.json",
+      "treatment_state_sha256": "d01deeb76a1b0daa8ad18dfcfb6de0773c41e54d24c458cc2bae6ded30268596"
+    },
+    "m7-m6:cx-soup": {
+      "L3": {
+        "control": {
+          "accuracy": 0.46902065289806794,
+          "correct": 704,
+          "delta_vs_majority": 0.11858760826115923,
+          "kappa": 0.20567509154712138,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 706,
+            "1": 363,
+            "2": 432
+          },
+          "top_share": 0.4703530979347102,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.010659560293137908,
+          "accuracy_ci95": [
+            -0.02731512325116589,
+            0.005329780146568954
+          ],
+          "changed_answers": 224,
+          "delta_vs_majority": -0.010659560293137915,
+          "level_usage": {
+            "0": 57,
+            "1": -43,
+            "2": -14
+          },
+          "top_share": 0.03797468354430383
+        },
+        "n": 1501,
+        "treatment": {
+          "accuracy": 0.45836109260493,
+          "correct": 688,
+          "delta_vs_majority": 0.10792804796802132,
+          "kappa": 0.19044693778853655,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 763,
+            "1": 320,
+            "2": 418
+          },
+          "top_share": 0.508327781479014,
+          "top_value": "0"
+        }
+      },
+      "L4": {
+        "control": {
+          "accuracy": 0.436399217221135,
+          "correct": 223,
+          "delta_vs_majority": 0.16634050880626222,
+          "kappa": 0.24260842266698912,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 201,
+            "1": 83,
+            "2": 68,
+            "3": 159
+          },
+          "top_share": 0.3933463796477495,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.019569471624266144,
+          "accuracy_ci95": [
+            -0.05675146771037182,
+            0.0136986301369863
+          ],
+          "changed_answers": 147,
+          "delta_vs_majority": -0.019569471624266144,
+          "level_usage": {
+            "0": 4,
+            "1": 11,
+            "2": 6,
+            "3": -21
+          },
+          "top_share": 0.007827788649706457
+        },
+        "n": 511,
+        "treatment": {
+          "accuracy": 0.41682974559686886,
+          "correct": 213,
+          "delta_vs_majority": 0.14677103718199608,
+          "kappa": 0.21741364867434457,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 205,
+            "1": 94,
+            "2": 74,
+            "3": 138
+          },
+          "top_share": 0.40117416829745595,
+          "top_value": "0"
+        }
+      },
+      "L5": {
+        "control": {
+          "accuracy": 0.33609729132117194,
+          "correct": 608,
+          "delta_vs_majority": 0.1205085682697623,
+          "kappa": 0.17357450180168837,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 729,
+            "1": 92,
+            "2": 202,
+            "3": 375,
+            "4": 411
+          },
+          "top_share": 0.40298507462686567,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.001105583195135434,
+          "accuracy_ci95": [
+            -0.01990049751243781,
+            0.017136539524599224
+          ],
+          "changed_answers": 578,
+          "delta_vs_majority": -0.0011055831951354428,
+          "level_usage": {
+            "0": -90,
+            "1": 113,
+            "2": 65,
+            "3": -217,
+            "4": 129
+          },
+          "top_share": -0.04975124378109452
+        },
+        "n": 1809,
+        "treatment": {
+          "accuracy": 0.33499170812603646,
+          "correct": 606,
+          "delta_vs_majority": 0.11940298507462686,
+          "kappa": 0.17312393564110024,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 639,
+            "1": 205,
+            "2": 267,
+            "3": 158,
+            "4": 540
+          },
+          "top_share": 0.35323383084577115,
+          "top_value": "0"
+        }
+      },
+      "control_probs": "/data/dev2/runs/06b/m7/baselines/m6-cx-soup/PROBS.json",
+      "control_state_sha256": "98f8934b3d36e639fd63de7794fc60bef8462c801326cc36c05f76f5facc4029",
+      "treatment_probs": "/data/dev2/runs/06b/m7/post/chk/m7-cx-soup/PROBS.json",
+      "treatment_state_sha256": "80e9fecfabc8dbd611de101b1a5977230a6ef2da16cdc950f19da4b289cd460f"
+    },
+    "m7-m6:mx-s1": {
+      "L3": {
+        "control": {
+          "accuracy": 0.5816122584943371,
+          "correct": 873,
+          "delta_vs_majority": 0.23117921385742837,
+          "kappa": 0.3761103562207415,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 446,
+            "1": 305,
+            "2": 750
+          },
+          "top_share": 0.4996668887408394,
+          "top_value": "2"
+        },
+        "delta": {
+          "accuracy": 0.039973351099267154,
+          "accuracy_ci95": [
+            0.013990672884743505,
+            0.06528980679546968
+          ],
+          "changed_answers": 486,
+          "delta_vs_majority": 0.03997335109926717,
+          "level_usage": {
+            "0": 121,
+            "1": 46,
+            "2": -167
+          },
+          "top_share": -0.11125916055962687
+        },
+        "n": 1501,
+        "treatment": {
+          "accuracy": 0.6215856095936043,
+          "correct": 933,
+          "delta_vs_majority": 0.27115256495669554,
+          "kappa": 0.4345698630209667,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 567,
+            "1": 351,
+            "2": 583
+          },
+          "top_share": 0.38840772818121255,
+          "top_value": "2"
+        }
+      },
+      "L4": {
+        "control": {
+          "accuracy": 0.4227005870841487,
+          "correct": 216,
+          "delta_vs_majority": 0.15264187866927592,
+          "kappa": 0.22225432482213153,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 177,
+            "1": 47,
+            "2": 66,
+            "3": 221
+          },
+          "top_share": 0.4324853228962818,
+          "top_value": "3"
+        },
+        "delta": {
+          "accuracy": 0.03718199608610567,
+          "accuracy_ci95": [
+            -0.007827788649706457,
+            0.0821917808219178
+          ],
+          "changed_answers": 229,
+          "delta_vs_majority": 0.03718199608610567,
+          "level_usage": {
+            "0": 2,
+            "1": -5,
+            "2": 46,
+            "3": -43
+          },
+          "top_share": -0.0821917808219178
+        },
+        "n": 511,
+        "treatment": {
+          "accuracy": 0.4598825831702544,
+          "correct": 235,
+          "delta_vs_majority": 0.1898238747553816,
+          "kappa": 0.27687566974471506,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 179,
+            "1": 42,
+            "2": 112,
+            "3": 178
+          },
+          "top_share": 0.350293542074364,
+          "top_value": "0"
+        }
+      },
+      "L5": {
+        "control": {
+          "accuracy": 0.3692647871752349,
+          "correct": 668,
+          "delta_vs_majority": 0.1536760641238253,
+          "kappa": 0.21300563841258172,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 579,
+            "1": 63,
+            "2": 169,
+            "3": 422,
+            "4": 576
+          },
+          "top_share": 0.3200663349917081,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": 0.02377003869541183,
+          "accuracy_ci95": [
+            0.000552791597567717,
+            0.04643449419568822
+          ],
+          "changed_answers": 813,
+          "delta_vs_majority": 0.023770038695411833,
+          "level_usage": {
+            "0": -202,
+            "1": 176,
+            "2": 87,
+            "3": -79,
+            "4": 18
+          },
+          "top_share": 0.008291873963515772
+        },
+        "n": 1809,
+        "treatment": {
+          "accuracy": 0.39303482587064675,
+          "correct": 711,
+          "delta_vs_majority": 0.17744610281923714,
+          "kappa": 0.2414375962867035,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 377,
+            "1": 239,
+            "2": 256,
+            "3": 343,
+            "4": 594
+          },
+          "top_share": 0.3283582089552239,
+          "top_value": "4"
+        }
+      },
+      "control_probs": "/data/dev2/runs/06b/m7/baselines/m6-mx-s1/PROBS.json",
+      "control_state_sha256": "506cd5e0dc7a5b385b6941890215639db7a703c4160465ed8d1b541c60e2001f",
+      "treatment_probs": "/data/dev2/runs/06b/m7/post/chk/m7-mx-s1/PROBS.json",
+      "treatment_state_sha256": "8376d2cce235b3e69a33d976dd2916509fa377fbdd3dbcbe76af3bd1b2240fa5"
+    },
+    "m7-m6:mx-s2": {
+      "L3": {
+        "control": {
+          "accuracy": 0.5989340439706862,
+          "correct": 899,
+          "delta_vs_majority": 0.24850099933377748,
+          "kappa": 0.4021514824109464,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 659,
+            "1": 248,
+            "2": 594
+          },
+          "top_share": 0.4390406395736176,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.019986675549633577,
+          "accuracy_ci95": [
+            -0.04397068620919387,
+            0.003997335109926716
+          ],
+          "changed_answers": 405,
+          "delta_vs_majority": -0.01998667554963357,
+          "level_usage": {
+            "0": -116,
+            "1": 142,
+            "2": -26
+          },
+          "top_share": -0.06062624916722187
+        },
+        "n": 1501,
+        "treatment": {
+          "accuracy": 0.5789473684210527,
+          "correct": 869,
+          "delta_vs_majority": 0.2285143237841439,
+          "kappa": 0.37024922976630437,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 543,
+            "1": 390,
+            "2": 568
+          },
+          "top_share": 0.37841439040639574,
+          "top_value": "2"
+        }
+      },
+      "L4": {
+        "control": {
+          "accuracy": 0.45596868884540115,
+          "correct": 233,
+          "delta_vs_majority": 0.18590998043052837,
+          "kappa": 0.2681232966342265,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 265,
+            "1": 36,
+            "2": 60,
+            "3": 150
+          },
+          "top_share": 0.5185909980430529,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.0273972602739726,
+          "accuracy_ci95": [
+            -0.07436399217221135,
+            0.019569471624266144
+          ],
+          "changed_answers": 236,
+          "delta_vs_majority": -0.0273972602739726,
+          "level_usage": {
+            "0": -84,
+            "1": 58,
+            "2": 55,
+            "3": -29
+          },
+          "top_share": -0.16438356164383566
+        },
+        "n": 511,
+        "treatment": {
+          "accuracy": 0.42857142857142855,
+          "correct": 219,
+          "delta_vs_majority": 0.15851272015655576,
+          "kappa": 0.23694680535526164,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 181,
+            "1": 94,
+            "2": 115,
+            "3": 121
+          },
+          "top_share": 0.3542074363992172,
+          "top_value": "0"
+        }
+      },
+      "L5": {
+        "control": {
+          "accuracy": 0.373134328358209,
+          "correct": 675,
+          "delta_vs_majority": 0.15754560530679934,
+          "kappa": 0.2182302650783864,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 628,
+            "1": 161,
+            "2": 189,
+            "3": 426,
+            "4": 405
+          },
+          "top_share": 0.34715312327252623,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": 0.0,
+          "accuracy_ci95": [
+            -0.02321724709784411,
+            0.02321724709784411
+          ],
+          "changed_answers": 854,
+          "delta_vs_majority": 0.0,
+          "level_usage": {
+            "0": -150,
+            "1": 179,
+            "2": 153,
+            "3": -247,
+            "4": 65
+          },
+          "top_share": -0.0829187396351575
+        },
+        "n": 1809,
+        "treatment": {
+          "accuracy": 0.373134328358209,
+          "correct": 675,
+          "delta_vs_majority": 0.15754560530679934,
+          "kappa": 0.2189175677543432,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 478,
+            "1": 340,
+            "2": 342,
+            "3": 179,
+            "4": 470
+          },
+          "top_share": 0.26423438363736873,
+          "top_value": "0"
+        }
+      },
+      "control_probs": "/data/dev2/runs/06b/m7/baselines/m6-mx-s2/PROBS.json",
+      "control_state_sha256": "fe41c7cae46bf81c3626c0a42c44156092712f2e361f50c4906172a4ba7e8369",
+      "treatment_probs": "/data/dev2/runs/06b/m7/post/chk/m7-mx-s2/PROBS.json",
+      "treatment_state_sha256": "ccd07bad471781cdf752874dae061666b28fc2354f604ab1655497eee287c655"
+    },
+    "m7-m6:mx-s3": {
+      "L3": {
+        "control": {
+          "accuracy": 0.6095936042638241,
+          "correct": 915,
+          "delta_vs_majority": 0.25916055962691537,
+          "kappa": 0.41748075622744574,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 596,
+            "1": 295,
+            "2": 610
+          },
+          "top_share": 0.40639573617588276,
+          "top_value": "2"
+        },
+        "delta": {
+          "accuracy": 0.019986675549633577,
+          "accuracy_ci95": [
+            -0.0006662225183211193,
+            0.04197201865423051
+          ],
+          "changed_answers": 352,
+          "delta_vs_majority": 0.019986675549633626,
+          "level_usage": {
+            "0": -80,
+            "1": 96,
+            "2": -16
+          },
+          "top_share": -0.010659560293137915
+        },
+        "n": 1501,
+        "treatment": {
+          "accuracy": 0.6295802798134577,
+          "correct": 945,
+          "delta_vs_majority": 0.279147235176549,
+          "kappa": 0.44605230057063733,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 516,
+            "1": 391,
+            "2": 594
+          },
+          "top_share": 0.39573617588274485,
+          "top_value": "2"
+        }
+      },
+      "L4": {
+        "control": {
+          "accuracy": 0.46771037181996084,
+          "correct": 239,
+          "delta_vs_majority": 0.19765166340508805,
+          "kappa": 0.2823997108782074,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 245,
+            "1": 30,
+            "2": 51,
+            "3": 185
+          },
+          "top_share": 0.4794520547945205,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.01761252446183953,
+          "accuracy_ci95": [
+            -0.05283757338551859,
+            0.01761252446183953
+          ],
+          "changed_answers": 133,
+          "delta_vs_majority": -0.01761252446183953,
+          "level_usage": {
+            "0": -22,
+            "1": 8,
+            "2": 18,
+            "3": -4
+          },
+          "top_share": -0.043052837573385516
+        },
+        "n": 511,
+        "treatment": {
+          "accuracy": 0.4500978473581213,
+          "correct": 230,
+          "delta_vs_majority": 0.18003913894324852,
+          "kappa": 0.2602520246460733,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 223,
+            "1": 38,
+            "2": 69,
+            "3": 181
+          },
+          "top_share": 0.436399217221135,
+          "top_value": "0"
+        }
+      },
+      "L5": {
+        "control": {
+          "accuracy": 0.37037037037037035,
+          "correct": 670,
+          "delta_vs_majority": 0.15478164731896074,
+          "kappa": 0.21468364967159234,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 647,
+            "1": 68,
+            "2": 147,
+            "3": 460,
+            "4": 487
+          },
+          "top_share": 0.35765616362631286,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": 0.02211166390270868,
+          "accuracy_ci95": [
+            0.0,
+            0.04422332780541736
+          ],
+          "changed_answers": 728,
+          "delta_vs_majority": 0.02211166390270869,
+          "level_usage": {
+            "0": -220,
+            "1": 153,
+            "2": 131,
+            "3": -189,
+            "4": 125
+          },
+          "top_share": -0.01934770591487006
+        },
+        "n": 1809,
+        "treatment": {
+          "accuracy": 0.39248203427307904,
+          "correct": 710,
+          "delta_vs_majority": 0.17689331122166943,
+          "kappa": 0.24181865193289256,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 427,
+            "1": 221,
+            "2": 278,
+            "3": 271,
+            "4": 612
+          },
+          "top_share": 0.3383084577114428,
+          "top_value": "4"
+        }
+      },
+      "control_probs": "/data/dev2/runs/06b/m7/baselines/m6-mx-s3/PROBS.json",
+      "control_state_sha256": "484885ef0ef9473283a07e129ad8f256a22054dd84c68203f9476906d72a0d74",
+      "treatment_probs": "/data/dev2/runs/06b/m7/post/chk/m7-mx-s3/PROBS.json",
+      "treatment_state_sha256": "958679495d3d03071f95e3a4ef1f19c0fa817e1525dcd854f58009f104349a5a"
+    },
+    "m7-m6:mx-soup": {
+      "L3": {
+        "control": {
+          "accuracy": 0.5836109260493004,
+          "correct": 876,
+          "delta_vs_majority": 0.23317788141239174,
+          "kappa": 0.37949196555779413,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 605,
+            "1": 249,
+            "2": 647
+          },
+          "top_share": 0.43104596935376416,
+          "top_value": "2"
+        },
+        "delta": {
+          "accuracy": 0.009327115256495669,
+          "accuracy_ci95": [
+            -0.009993337774816789,
+            0.029313790806129246
+          ],
+          "changed_answers": 282,
+          "delta_vs_majority": 0.009327115256495683,
+          "level_usage": {
+            "0": -51,
+            "1": 71,
+            "2": -20
+          },
+          "top_share": -0.01332445036642238
+        },
+        "n": 1501,
+        "treatment": {
+          "accuracy": 0.5929380413057961,
+          "correct": 890,
+          "delta_vs_majority": 0.24250499666888742,
+          "kappa": 0.3923487615221112,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 554,
+            "1": 320,
+            "2": 627
+          },
+          "top_share": 0.4177215189873418,
+          "top_value": "2"
+        }
+      },
+      "L4": {
+        "control": {
+          "accuracy": 0.4598825831702544,
+          "correct": 235,
+          "delta_vs_majority": 0.1898238747553816,
+          "kappa": 0.27149697567627595,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 222,
+            "1": 39,
+            "2": 50,
+            "3": 200
+          },
+          "top_share": 0.4344422700587084,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.005870841487279843,
+          "accuracy_ci95": [
+            -0.0410958904109589,
+            0.029354207436399216
+          ],
+          "changed_answers": 138,
+          "delta_vs_majority": -0.005870841487279843,
+          "level_usage": {
+            "0": -27,
+            "1": 18,
+            "2": 38,
+            "3": -29
+          },
+          "top_share": -0.05283757338551859
+        },
+        "n": 511,
+        "treatment": {
+          "accuracy": 0.45401174168297453,
+          "correct": 232,
+          "delta_vs_majority": 0.18395303326810175,
+          "kappa": 0.2673929241283625,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 195,
+            "1": 57,
+            "2": 88,
+            "3": 171
+          },
+          "top_share": 0.3816046966731898,
+          "top_value": "0"
+        }
+      },
+      "L5": {
+        "control": {
+          "accuracy": 0.37037037037037035,
+          "correct": 670,
+          "delta_vs_majority": 0.15478164731896074,
+          "kappa": 0.2153344171534527,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 658,
+            "1": 62,
+            "2": 181,
+            "3": 401,
+            "4": 507
+          },
+          "top_share": 0.3637368711995578,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": 0.027086788280818133,
+          "accuracy_ci95": [
+            0.00552791597567717,
+            0.048645660585959094
+          ],
+          "changed_answers": 689,
+          "delta_vs_majority": 0.027086788280818147,
+          "level_usage": {
+            "0": -210,
+            "1": 176,
+            "2": 76,
+            "3": -143,
+            "4": 101
+          },
+          "top_share": -0.027639579878385834
+        },
+        "n": 1809,
+        "treatment": {
+          "accuracy": 0.3974571586511885,
+          "correct": 719,
+          "delta_vs_majority": 0.1818684355997789,
+          "kappa": 0.2482543676550482,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 448,
+            "1": 238,
+            "2": 257,
+            "3": 258,
+            "4": 608
+          },
+          "top_share": 0.33609729132117194,
+          "top_value": "4"
+        }
+      },
+      "control_probs": "/data/dev2/runs/06b/m7/baselines/m6-mx-soup/PROBS.json",
+      "control_state_sha256": "25e41a000f8ecd66a8a574ac505da605aae8323eadb835685d7894efc540f158",
+      "treatment_probs": "/data/dev2/runs/06b/m7/post/chk/m7-mx-soup/PROBS.json",
+      "treatment_state_sha256": "5d2420b1e66b853ab8e0e33b21931e1086848995da7f57bb774f5ac4b5651593"
+    },
+    "m7-m6:mxcx-soup": {
+      "L3": {
+        "control": {
+          "accuracy": 0.5356429047301798,
+          "correct": 804,
+          "delta_vs_majority": 0.18520986009327114,
+          "kappa": 0.3069013924948772,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 606,
+            "1": 305,
+            "2": 590
+          },
+          "top_share": 0.4037308461025983,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.0013324450366422385,
+          "accuracy_ci95": [
+            -0.017321785476349102,
+            0.014656895403064623
+          ],
+          "changed_answers": 207,
+          "delta_vs_majority": -0.0013324450366422325,
+          "level_usage": {
+            "0": -13,
+            "1": 55,
+            "2": -42
+          },
+          "top_share": -0.008660892738174553
+        },
+        "n": 1501,
+        "treatment": {
+          "accuracy": 0.5343104596935376,
+          "correct": 802,
+          "delta_vs_majority": 0.1838774150566289,
+          "kappa": 0.3038758599549761,
+          "majority_accuracy": 0.3504330446369087,
+          "majority_level": 1,
+          "predicted_distribution": {
+            "0": 593,
+            "1": 360,
+            "2": 548
+          },
+          "top_share": 0.39506995336442374,
+          "top_value": "0"
+        }
+      },
+      "L4": {
+        "control": {
+          "accuracy": 0.4520547945205479,
+          "correct": 231,
+          "delta_vs_majority": 0.18199608610567514,
+          "kappa": 0.2622917010394324,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 202,
+            "1": 68,
+            "2": 59,
+            "3": 182
+          },
+          "top_share": 0.3953033268101761,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": -0.03718199608610567,
+          "accuracy_ci95": [
+            -0.06653620352250489,
+            -0.007827788649706457
+          ],
+          "changed_answers": 109,
+          "delta_vs_majority": -0.03718199608610567,
+          "level_usage": {
+            "0": -7,
+            "1": -11,
+            "2": 23,
+            "3": -5
+          },
+          "top_share": -0.0136986301369863
+        },
+        "n": 511,
+        "treatment": {
+          "accuracy": 0.41487279843444225,
+          "correct": 212,
+          "delta_vs_majority": 0.14481409001956946,
+          "kappa": 0.2142221627932093,
+          "majority_accuracy": 0.2700587084148728,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 195,
+            "1": 57,
+            "2": 82,
+            "3": 177
+          },
+          "top_share": 0.3816046966731898,
+          "top_value": "0"
+        }
+      },
+      "L5": {
+        "control": {
+          "accuracy": 0.3410724156992814,
+          "correct": 617,
+          "delta_vs_majority": 0.12548369264787176,
+          "kappa": 0.1793576672337219,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 675,
+            "1": 87,
+            "2": 200,
+            "3": 359,
+            "4": 488
+          },
+          "top_share": 0.373134328358209,
+          "top_value": "0"
+        },
+        "delta": {
+          "accuracy": 0.018794914317302378,
+          "accuracy_ci95": [
+            0.0,
+            0.03814262023217247
+          ],
+          "changed_answers": 594,
+          "delta_vs_majority": 0.018794914317302375,
+          "level_usage": {
+            "0": -201,
+            "1": 143,
+            "2": 116,
+            "3": -144,
+            "4": 86
+          },
+          "top_share": -0.05583195135433944
+        },
+        "n": 1809,
+        "treatment": {
+          "accuracy": 0.3598673300165838,
+          "correct": 651,
+          "delta_vs_majority": 0.14427860696517414,
+          "kappa": 0.20210053930398214,
+          "majority_accuracy": 0.2155887230514096,
+          "majority_level": 3,
+          "predicted_distribution": {
+            "0": 474,
+            "1": 230,
+            "2": 316,
+            "3": 215,
+            "4": 574
+          },
+          "top_share": 0.31730237700386954,
+          "top_value": "4"
+        }
+      },
+      "control_probs": "/data/dev2/runs/06b/m7/a/probs/PROBS.json",
+      "control_state_sha256": "5c3d3ca18434fab1045a5840f4ef4508f9956fd3b2de00bd1bacf912b9729068",
+      "treatment_probs": "/data/dev2/runs/06b/m7/post/chk/m7-mxcx-soup/PROBS.json",
+      "treatment_state_sha256": "e5189a2342a9fb462ea8963206d5aee0c63dfaf5ef60edeaeef9514934e09466"
+    }
+  },
+  "prereg": "v2/06b/records/m7-prereg-2026-09-29.md section 2.3",
+  "rule": "uncorrected CHK answers (unique argmax); paired item bootstrap of the accuracy delta (5000 draws, seed 20260929); treatment minus control",
+  "schema": "dev2-06b-m7-chk-delta/1"
+}
