@@ -1,0 +1,90 @@
+{
+ "out": "/data/dev2/private/eval/jevbench-value/contamination",
+ "repos": [
+  {
+   "name": "Bosun-0.6B",
+   "repo": "Hanno-Labs/bosun-v3.1-0.6b",
+   "revision": "1d8b6f9611f9b64b514ce8b57cd86398fbc31a3b"
+  },
+  {
+   "name": "GLiNER2.5-Decide",
+   "repo": "fastino/GLiNER2.5-Decide",
+   "revision": "5a7adf72a23b4d311abae6ce050d7f0012bb3416"
+  },
+  {
+   "name": "JPT-0.8B",
+   "repo": "kirp/jpt-0.8b",
+   "revision": "1431c0509bbc10772cd59964cc7af5835c8720d6"
+  },
+  {
+   "name": "Kev",
+   "repo": "jaredpalmer/kev-0.8b",
+   "revision": "9a45d25eb2ab761841196625383fa1dff0e56c1e"
+  },
+  {
+   "name": "Intern",
+   "repo": "internlm/Intern-Decision-0.8B",
+   "revision": "85a0cc5a99d67ea8d56dfe98115689212867171d"
+  },
+  {
+   "name": "Decider-2B",
+   "repo": "Mapika/decider-2b",
+   "revision": "533964dae8be954c5b5e19fa4948e48408094c1e"
+  },
+  {
+   "name": "This-That",
+   "repo": "flock-io/this-that-model-1.2",
+   "revision": "c4d1c30b8d512d278726de439b8cc81fccc70c8f"
+  },
+  {
+   "name": "Bosun-1.7B",
+   "repo": "Hanno-Labs/bosun-v3.1-1.7b",
+   "revision": "1d8dc82a20e4a32ed60927a47272d6efff48eed2"
+  },
+  {
+   "name": "JPT-4B",
+   "repo": "kirp/jpt-4b",
+   "revision": "78312f855b8bebf83ae7e9e8f05b5a0f73f519a9"
+  },
+  {
+   "name": "Jet-v6.2",
+   "repo": "michaljach/jet",
+   "revision": "fbc3d2daa679e0d4bd9f99c9912b6496d5a41f0a"
+  },
+  {
+   "name": "Hopper-G",
+   "repo": "HopitAI/hopper-g",
+   "revision": "71d991f4df78c445a50a4bc952748cea89c2ac21"
+  },
+  {
+   "name": "Decider-4B",
+   "repo": "Mapika/decider-4b",
+   "revision": "eb5fbdfc9448473ec25e399882912863afbdb70e"
+  },
+  {
+   "name": "JPT-9B",
+   "repo": "kirp/jpt-9b",
+   "revision": "b447cc7ee105c0a76a22f8fde8ecf05074dc8be0"
+  },
+  {
+   "name": "Nimble-v2",
+   "repo": "bespokelabs/Bespoke-Nimble-9B-v2",
+   "revision": "4b8c04d1ac2cea3e41e5e3c4d2130bcead2c0abe"
+  },
+  {
+   "name": "AutoJev-27B",
+   "repo": "denis-pplx/autojev-27b",
+   "revision": "6f5b557e037f5edb25c7dc92dbc6553e5a19c015"
+  },
+  {
+   "name": "Jebadiah-27B",
+   "repo": "frontier-infra/jebadiah-27b",
+   "revision": "c68db2b5570f3c2bdab511088885a88bd8b3a814"
+  },
+  {
+   "name": "Eikos-27B",
+   "repo": "caiovicentino1/Eikos-27B-FP8",
+   "revision": "bbdb02333652ad91cfa0dc2163efe8429138eb66"
+  }
+ ]
+}

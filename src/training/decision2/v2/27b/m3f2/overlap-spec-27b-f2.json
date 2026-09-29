@@ -1,0 +1,44 @@
+{
+  "label": "post-key same-panel",
+  "panel_root": "/data/dev2/private/panels",
+  "focus_task": "media_ideology",
+  "models": {
+    "DEV2.0-27B (F2)": {
+      "run": "/data/dev2/runs/27b/M3-S-soup/formal",
+      "exposure": ["/data/dev2/runs/27b/m3-f2/overlap/exposure-dev2-27b-f2.json"],
+      "note": "M3 finalist F2, the matched control (M3-S rank-16 LoRA seed soup on Qwen/Qwen3.8-27B, 32,768 tokens, FLA kernel path, formal run from a copy of F1's post-run cache 03b172f1); both seeds trained on the M3 mixture score_rep.train.jsonl 8402fe1c... (22,030 rows); the 17:15 rule picked the soup (P_dev 75.20 >= seed mean 74.42)"
+    },
+    "DEV2.0-27B (F1)": {
+      "run": "/data/dev2/runs/27b/M3-A-soup/formal",
+      "note": "M3 finalist F1 (M3-A soup, SEAL 42ba2fa1); no own exposure (receipt 6ae7fab0)"
+    },
+    "AutoJev-27B": {
+      "run": "/data/dev2/runs/27b/m2-peer-autojev27-nodeB-kernel",
+      "note": "sealed node-B copy of the eval track's m4/nodeB-kernel/autojev27 collection (image dbe5f32b); best measured open-weight peer, sets the 27B bar"
+    },
+    "Eikos-27B": {
+      "run": "/data/dev2/runs/27b/m3-peer-eikos27-nodeB-kernel",
+      "note": "sealed node-B copy of the eval track's m4/nodeB-kernel/eikos27b collection; BF16 sibling of its FP8 board entry"
+    },
+    "Jebadiah-27B": {
+      "run": "/data/dev2/runs/27b/m3-peer-jebadiah-nodeB-kernel",
+      "note": "sealed node-B copy of the eval track's m4/nodeB-kernel/jebadiah27b collection"
+    }
+  },
+  "tiers": {
+    "27B": {
+      "candidate": "DEV2.0-27B (F2)",
+      "own_1_0": [],
+      "peers": ["AutoJev-27B", "Eikos-27B", "Jebadiah-27B"],
+      "internal_peers": ["DEV2.0-27B (F1)"],
+      "threshold_pool": ["AutoJev-27B", "Eikos-27B", "Jebadiah-27B"],
+      "note": "no Decision 1.0 model exists at this size; the gate bar is 0.9 x the best measured open-weight peer; F1 is the within-milestone comparison"
+    }
+  },
+  "reproduce": [
+    {"left": "DEV2.0-27B (F2)", "right": "AutoJev-27B", "stored": "/data/dev2/runs/27b/M3-S-soup/formal/PAIRED-vs-AutoJev-27B.json"},
+    {"left": "DEV2.0-27B (F2)", "right": "Eikos-27B", "stored": "/data/dev2/runs/27b/M3-S-soup/formal/PAIRED-vs-Eikos-27B.json"},
+    {"left": "DEV2.0-27B (F2)", "right": "Jebadiah-27B", "stored": "/data/dev2/runs/27b/M3-S-soup/formal/PAIRED-vs-Jebadiah.json"},
+    {"left": "DEV2.0-27B (F2)", "right": "DEV2.0-27B (F1)", "stored": "/data/dev2/runs/27b/M3-S-soup/formal/PAIRED-vs-M3-A-soup.json"}
+  ]
+}

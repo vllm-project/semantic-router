@@ -1,0 +1,235 @@
+{
+  "all_checks": true,
+  "panels": {
+    "css15": {
+      "bindings": {
+        "finalist_model_sha256": true,
+        "finalist_score_bias_sha256": true,
+        "reference_model_sha256": true,
+        "reference_without_score_bias": true
+      },
+      "by_kind": {
+        "choice": {
+          "identical": 6547,
+          "max_abs_dp": 0.0,
+          "same_answer": 6547,
+          "slots": 6547
+        },
+        "invalid": {
+          "identical": 0,
+          "max_abs_dp": 0.0,
+          "same_answer": 0,
+          "slots": 0
+        },
+        "noul": {
+          "identical": 0,
+          "max_abs_dp": 0.0,
+          "same_answer": 0,
+          "slots": 0
+        },
+        "score5": {
+          "changed_vs_reference": 0,
+          "equal_offline_argmax": 0,
+          "identical": 0,
+          "max_abs_dp": 0.0,
+          "max_abs_dp_vs_offline": 0.0,
+          "max_abs_dscore_vs_offline": 0.0,
+          "same_answer": 0,
+          "slots": 0
+        },
+        "score_other": {
+          "identical": 0,
+          "max_abs_dp": 0.0,
+          "same_answer": 0,
+          "slots": 0
+        }
+      },
+      "checks": {
+        "choice_noul_identical": true,
+        "same_ids": true,
+        "same_question_keys": true,
+        "score5_max_abs_dp_le_1e-4": true,
+        "score5_offline_argmax_all": true,
+        "score_other_identical": true
+      },
+      "finalist_sha256": "92b391835b2f4b7d19364d8c632f787a443046ade9c246ff1d67263f5113aec0",
+      "items": 6547,
+      "reference_sha256": "70e23d5768ba9b744b943015997e2e9066c3e3bb62563119380bc8e7ab61b734"
+    },
+    "mlx-diag": {
+      "bindings": {
+        "finalist_model_sha256": true,
+        "finalist_score_bias_sha256": true,
+        "reference_model_sha256": true,
+        "reference_without_score_bias": true
+      },
+      "by_kind": {
+        "choice": {
+          "identical": 882,
+          "max_abs_dp": 0.0,
+          "same_answer": 882,
+          "slots": 882
+        },
+        "invalid": {
+          "identical": 0,
+          "max_abs_dp": 0.0,
+          "same_answer": 0,
+          "slots": 0
+        },
+        "noul": {
+          "identical": 700,
+          "max_abs_dp": 0.0,
+          "same_answer": 700,
+          "slots": 700
+        },
+        "score5": {
+          "changed_vs_reference": 0,
+          "equal_offline_argmax": 0,
+          "identical": 0,
+          "max_abs_dp": 0.0,
+          "max_abs_dp_vs_offline": 0.0,
+          "max_abs_dscore_vs_offline": 0.0,
+          "same_answer": 0,
+          "slots": 0
+        },
+        "score_other": {
+          "identical": 693,
+          "max_abs_dp": 0.0,
+          "same_answer": 693,
+          "slots": 693
+        }
+      },
+      "checks": {
+        "choice_noul_identical": true,
+        "same_ids": true,
+        "same_question_keys": true,
+        "score5_max_abs_dp_le_1e-4": true,
+        "score5_offline_argmax_all": true,
+        "score_other_identical": true
+      },
+      "finalist_sha256": "7271175f3298a00e813b0aa32f73e0e509c14525f3654d054dae32162498af9d",
+      "items": 2275,
+      "reference_sha256": "7c12400ecbfc74270819291b7f16b594a20e13eef10a5148334656b33eac0790"
+    },
+    "public231": {
+      "bindings": {
+        "finalist_model_sha256": true,
+        "finalist_score_bias_sha256": true,
+        "reference_model_sha256": true,
+        "reference_without_score_bias": true
+      },
+      "by_kind": {
+        "choice": {
+          "identical": 139,
+          "max_abs_dp": 0.0,
+          "same_answer": 139,
+          "slots": 139
+        },
+        "invalid": {
+          "identical": 0,
+          "max_abs_dp": 0.0,
+          "same_answer": 0,
+          "slots": 0
+        },
+        "noul": {
+          "identical": 74,
+          "max_abs_dp": 0.0,
+          "same_answer": 74,
+          "slots": 74
+        },
+        "score5": {
+          "changed_vs_reference": 1,
+          "equal_offline_argmax": 1,
+          "identical": 0,
+          "max_abs_dp": 0.03510069206177413,
+          "max_abs_dp_vs_offline": 2.7755575615628914e-17,
+          "max_abs_dscore_vs_offline": 0.0,
+          "same_answer": 0,
+          "slots": 1
+        },
+        "score_other": {
+          "identical": 17,
+          "max_abs_dp": 0.0,
+          "same_answer": 17,
+          "slots": 17
+        }
+      },
+      "checks": {
+        "choice_noul_identical": true,
+        "same_ids": true,
+        "same_question_keys": true,
+        "score5_max_abs_dp_le_1e-4": true,
+        "score5_offline_argmax_all": true,
+        "score_other_identical": true
+      },
+      "finalist_sha256": "ae6374c09c5772ec9725e6d5a07bb791265e825b3ba466b0f150d0957f6a0532",
+      "items": 231,
+      "reference_sha256": "affad96da16cbc08a8acbcbd7111df7789f077acb56e5ac6149256e54b2e1b06"
+    },
+    "typed-final": {
+      "bindings": {
+        "finalist_model_sha256": true,
+        "finalist_score_bias_sha256": true,
+        "reference_model_sha256": true,
+        "reference_without_score_bias": true
+      },
+      "by_kind": {
+        "choice": {
+          "identical": 800,
+          "max_abs_dp": 0.0,
+          "same_answer": 800,
+          "slots": 800
+        },
+        "invalid": {
+          "identical": 0,
+          "max_abs_dp": 0.0,
+          "same_answer": 0,
+          "slots": 0
+        },
+        "noul": {
+          "identical": 800,
+          "max_abs_dp": 0.0,
+          "same_answer": 800,
+          "slots": 800
+        },
+        "score5": {
+          "changed_vs_reference": 66,
+          "equal_offline_argmax": 400,
+          "identical": 0,
+          "max_abs_dp": 0.03952994805571203,
+          "max_abs_dp_vs_offline": 1.1102230246251565e-16,
+          "max_abs_dscore_vs_offline": 8.881784197001252e-16,
+          "same_answer": 334,
+          "slots": 400
+        },
+        "score_other": {
+          "identical": 0,
+          "max_abs_dp": 0.0,
+          "same_answer": 0,
+          "slots": 0
+        }
+      },
+      "checks": {
+        "choice_noul_identical": true,
+        "same_ids": true,
+        "same_question_keys": true,
+        "score5_max_abs_dp_le_1e-4": true,
+        "score5_offline_argmax_all": true,
+        "score_other_identical": true
+      },
+      "finalist_sha256": "bbc156647518e3d746d00fd1f9a20bf879280ffd55587c670356398b2ff7e919",
+      "items": 1600,
+      "reference_sha256": "b6ea401e318c2c53f79957a9b148bde7661c7af85b6fb454f49870b67e91fe7b"
+    }
+  },
+  "prereg": "v2/06b/records/m8-prereg-2026-09-29.md section 7 (report only)",
+  "prereg_commit": "e6a5f4515b902f2760ff768d47bf50c9eafb3849",
+  "runs": {
+    "finalist": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05",
+    "finalist_mlx": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05-mlx",
+    "reference": "/data/dev2/runs/06b/m6/formal/m6-mxcx-soup",
+    "reference_mlx": "/data/dev2/runs/06b/m6/formal/m6-mxcx-soup-mlx"
+  },
+  "schema": "dev2-06b-m8-xcheck/1",
+  "score_bias_sha256": "f61a729af88ec4193464ee7dcabade70d42f681f39cdbaad95010e067cb43302"
+}

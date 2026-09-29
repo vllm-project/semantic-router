@@ -34,6 +34,28 @@ def resolve_base(base: dict[str, Any], base_path: str | Path | None) -> Path:
     return root
 
 
+def load_score_bias_entry(
+    root: Path, manifest: dict[str, Any], model_sha256: str
+) -> dict[int, list[float]] | None:
+    """Per-level Score offsets bound by the manifest; None when it lists none."""
+    entry = manifest.get("score_bias")
+    if entry is None:
+        return None
+    from ._vendor.dev2model.score_bias import load_score_bias
+
+    path = root / entry["file"]
+    if (
+        manifest["files_sha256"].get(entry["file"]) != entry["sha256"]
+        or not path.is_file()
+        or file_sha256(path) != entry["sha256"]
+    ):
+        raise ValueError("Score offsets differ from the packaged score_bias file")
+    offsets, _ = load_score_bias(path, model_sha256)
+    if {str(key): value for key, value in offsets.items()} != entry["offsets"]:
+        raise ValueError("Score offsets differ from MODEL_MANIFEST.json")
+    return offsets
+
+
 class QwenDecision:
     def __init__(
         self,
@@ -43,6 +65,7 @@ class QwenDecision:
         temperatures: dict,
         cap: int,
         torch: Any,
+        score_bias: dict[int, list[float]] | None = None,
     ):
         self.model = model
         self.tokenizer = tokenizer
@@ -50,6 +73,7 @@ class QwenDecision:
         self.temperatures = temperatures
         self.cap = cap
         self.torch = torch
+        self.score_bias = score_bias
 
     @classmethod
     def load(
@@ -84,6 +108,7 @@ class QwenDecision:
             identity = checkpoint_fingerprint(root, source)
         if identity["model_sha256"] != manifest["identity"]["model_sha256"]:
             raise ValueError("Model identity differs from the scored checkpoint")
+        score_bias = load_score_bias_entry(root, manifest, identity["model_sha256"])
         calibration = manifest.get("calibration")
         if calibration:
             temperatures, report = load_calibration(
@@ -111,7 +136,13 @@ class QwenDecision:
         if tokenizer.pad_token_id is None and tokenizer.eos_token_id is None:
             raise ValueError("Tokenizer needs a pad or EOS token")
         return cls(
-            model, tokenizer, target, temperatures, manifest["max_input_tokens"], torch
+            model,
+            tokenizer,
+            target,
+            temperatures,
+            manifest["max_input_tokens"],
+            torch,
+            score_bias,
         )
 
     def parameter_count(self) -> int:
@@ -177,12 +208,19 @@ class QwenDecision:
             logits = self.model(**batch)
         if len(logits) != len(jobs):
             raise RuntimeError("Model returned the wrong number of question answers")
+        if self.score_bias is not None:
+            from ._vendor.dev2model.score_bias import apply as apply_score_bias
         for (qid, row, encoded), values in zip(jobs, logits):
             try:
+                values = values[: len(encoded["keys"])].float().cpu().tolist()
+                if self.score_bias is not None and row["task_type"] == "score":
+                    values = apply_score_bias(
+                        self.score_bias, values, len(row["options"])
+                    )
                 answers[qid] = product_answer(
                     row["task_type"],
                     encoded["keys"],
-                    values[: len(encoded["keys"])].float().cpu().tolist(),
+                    values,
                     self.temperatures[row["task_type"]],
                     [option["description"] for option in row["options"]],
                 )

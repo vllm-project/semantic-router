@@ -1,0 +1,2 @@
+llm-semantic-router private storage: 62.57 GB used of 100 GB, headroom 37.43 GB (38 private repos; threshold 0 GB: OK)
+     17.95 GB  model    llm-semantic-router/DEV2.0-8B

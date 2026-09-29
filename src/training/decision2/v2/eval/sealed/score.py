@@ -2,9 +2,11 @@
 
     python3 -m v2.eval.sealed.score seal --prompts <prompts.jsonl> --predictions <preds.jsonl> --output <SEAL-C1.json>
     python3 -m v2.eval.sealed.score score --gold <gold.jsonl> --predictions <preds.jsonl> \
-        --seal <SEAL-C1.json> --label <name> --output <REPORT-C1.json>
+        --seal <SEAL-C1.json> --label <name> [--retired <RETIRED.json> --retired-sha <sha256>] \
+        --output <REPORT-C1.json>
     python3 -m v2.eval.sealed.score compare --gold <gold.jsonl> --left <preds> --right <preds> \
-        --left-name A --right-name B --output <PAIRED-C1.json>
+        --left-name A --right-name B [--retired <RETIRED.json> --retired-sha <sha256>] \
+        --output <PAIRED-C1.json>
 
 `seal` reads prompts and predictions only (never gold): every prompt answered exactly once
 from the identical input, with the question keys intact. `score` refuses predictions whose
@@ -16,6 +18,12 @@ wrong. Also reported: per-type means over tasks, per-task macro-F1 and accuracy,
 weighted kappa for Score tasks, and accuracy slices for long inputs (>= 4,000 characters),
 non-English items and NC-licensed sources. `compare` draws a paired bootstrap of the C1
 difference, resampling source groups within each task (5,000 draws, seed 20260927).
+
+With `--retired` (a `dev2-c1-retired/1` list, pinned by `--retired-sha`), `score` and
+`compare` first drop every gold item whose `task|source_item_id` is a retired candidate, so
+C1 and the bootstrap cover that item set (e.g. v1.2), and record it as `item_set`: its
+version, the retired, dropped and scored item counts, the drops per task and the tasks left
+without items.
 """
 
 from __future__ import annotations
@@ -29,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "dev2-sealed-c1-score/1"
+RETIRED_SCHEMA = "dev2-c1-retired/1"
 LABEL = "independent confirmation (JevArena-C1)"
 REPLICATES = 5000
 SEED = 20260927
@@ -245,11 +254,47 @@ def _mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else float("nan")
 
 
+def apply_retired(
+    gold: list[dict[str, Any]], args: argparse.Namespace
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """The gold without the retired candidates, and its item set (None without --retired)."""
+    path, sha = getattr(args, "retired", None), getattr(args, "retired_sha", None)
+    if path is None and sha is None:
+        return gold, None
+    if path is None or sha is None:
+        raise ValueError("--retired and --retired-sha go together")
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != sha:
+        raise ValueError("the retired list differs from --retired-sha")
+    retired = json.loads(raw)
+    if not isinstance(retired, dict) or retired.get("schema") != RETIRED_SCHEMA:
+        raise ValueError(f"the retired list is not {RETIRED_SCHEMA}")
+    candidates = set(retired["candidates"])
+    kept = [
+        row
+        for row in gold
+        if f"{row['task']}|{row['source_item_id']}" not in candidates
+    ]
+    before = Counter(row["task"] for row in gold)
+    after = Counter(row["task"] for row in kept)
+    return kept, {
+        "version": retired["version"],
+        "retired_sha256": sha,
+        "retired_candidates": len(retired["candidates"]),
+        "gold_items": len(gold),
+        "dropped_items": len(gold) - len(kept),
+        "scored_items": len(kept),
+        "dropped_by_task": dict(sorted((before - after).items())),
+        "tasks_emptied": sorted(set(before) - set(after)),
+    }
+
+
 def score(args: argparse.Namespace) -> int:
     sealed = json.loads(args.seal.read_text(encoding="utf-8"))
     if sha_file(args.predictions) != sealed["predictions_sha256"]:
         raise ValueError("predictions changed after the seal")
-    gold = read_jsonl(args.gold)
+    gold, item_set = apply_retired(read_jsonl(args.gold), args)
+    extra = {} if item_set is None else {"item_set": item_set}
     predictions = {row["id"]: row for row in read_jsonl(args.predictions)}
     report = {
         "schema": SCHEMA,
@@ -258,11 +303,17 @@ def score(args: argparse.Namespace) -> int:
         "seal_sha256": sha_file(args.seal),
         "gold_sha256": sha_file(args.gold),
         **summarize(outcomes(gold, predictions)),
+        **extra,
     }
     digest = write_new(args.output, report)
     print(
         json.dumps(
-            {"c1": report["c1"], "by_type": report["by_type"], "report_sha256": digest}
+            {
+                "c1": report["c1"],
+                "by_type": report["by_type"],
+                "report_sha256": digest,
+                **extra,
+            }
         )
     )
     return 0
@@ -322,7 +373,8 @@ def paired(
 
 
 def compare(args: argparse.Namespace) -> int:
-    gold = read_jsonl(args.gold)
+    gold, item_set = apply_retired(read_jsonl(args.gold), args)
+    extra = {} if item_set is None else {"item_set": item_set}
     left = {row["id"]: row for row in read_jsonl(args.left)}
     right = {row["id"]: row for row in read_jsonl(args.right)}
     result = paired(gold, left, right, args.replicates, SEED)
@@ -335,10 +387,11 @@ def compare(args: argparse.Namespace) -> int:
                 "name": args.right_name,
                 "predictions_sha256": sha_file(args.right),
             },
+            **extra,
         }
     )
     write_new(args.output, result)
-    print(json.dumps({"delta": result["delta"], "ci95": result["ci95"]}))
+    print(json.dumps({"delta": result["delta"], "ci95": result["ci95"], **extra}))
     return 0
 
 
@@ -354,6 +407,8 @@ def main(argv: list[str] | None = None) -> int:
     two.add_argument("--predictions", type=Path, required=True)
     two.add_argument("--seal", type=Path, required=True)
     two.add_argument("--label", required=True)
+    two.add_argument("--retired", type=Path)
+    two.add_argument("--retired-sha")
     two.add_argument("--output", type=Path, required=True)
     three = commands.add_parser("compare")
     three.add_argument("--gold", type=Path, required=True)
@@ -362,6 +417,8 @@ def main(argv: list[str] | None = None) -> int:
     three.add_argument("--left-name", required=True)
     three.add_argument("--right-name", required=True)
     three.add_argument("--replicates", type=int, default=REPLICATES)
+    three.add_argument("--retired", type=Path)
+    three.add_argument("--retired-sha")
     three.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     return {"seal": seal, "score": score, "compare": compare}[args.command](args)

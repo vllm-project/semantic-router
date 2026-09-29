@@ -54,6 +54,8 @@ QWEN_MODULES = (
     "lora.py",
     "source.py",
 )
+# Imported by newer infer.py; mirrors of earlier scored runs lack it.
+OPTIONAL_QWEN_MODULES = ("score_bias.py",)
 HEAD_MODULES = {
     "type-separated": "type_separated_head.py",
     "candidate-interaction": "candidate_interaction_head.py",
@@ -98,6 +100,28 @@ def _object(path: Path) -> dict[str, Any]:
     return value
 
 
+def name_base_model(spec: dict[str, Any]) -> str:
+    """The base model whose size names a ``name_basis: base`` release; it must be in the lineage."""
+    pinned = (spec.get("base") or {}).get("repo_id")
+    named = spec.get("name_base_model") or pinned
+    if not named:
+        raise ValueError("name_basis base needs name_base_model (or a pinned base)")
+    if pinned and named != pinned:
+        raise ValueError(
+            f"name_base_model {named} differs from the pinned base {pinned}"
+        )
+    lineage = {
+        spec["origin"]["repo_id"],
+        *(c["source"].split("@", 1)[0] for c in spec["licence"]["components"]),
+        *([pinned] if pinned else []),
+    }
+    if named not in lineage:
+        raise ValueError(
+            f"name_base_model {named} is not in the declared weight lineage"
+        )
+    return named
+
+
 def load_spec(path: Path) -> dict[str, Any]:
     spec = _object(path)
     required = {
@@ -125,6 +149,8 @@ def load_spec(path: Path) -> dict[str, Any]:
     layout.check_repo(
         spec["repo_id"], spec["model_name"], staging=spec["kind"] == "staging"
     )
+    if spec.get("name_basis", "tier") == "base":
+        name_base_model(spec)
     if spec.get("gate_profile") is not None:
         from v2.release.gate import gate_profile
 
@@ -227,6 +253,66 @@ def _dec_fingerprint(identity: dict[str, Any], checkpoint: Path) -> dict[str, An
     }
 
 
+def verify_score_bias(spec: dict[str, Any], model_sha256: str) -> dict[str, Any] | None:
+    """Spec Score offsets, bound to their pinned bytes and the model hash."""
+    entry = spec.get("score_bias")
+    if not entry:
+        return None
+    from training.model.score_bias import load_score_bias
+
+    path = Path(entry["path"])
+    if layout.sha_file(path) != entry["sha256"]:
+        raise ValueError("Score offsets file differs from its pinned sha256")
+    offsets, _ = load_score_bias(path, model_sha256)
+    return {
+        "sha256": entry["sha256"],
+        "offsets": {str(key): value for key, value in sorted(offsets.items())},
+    }
+
+
+BF16_COPY_SCHEMA = "dev2-release-bf16-copy/1"
+
+
+def verify_bf16_copy(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any] | None:
+    """A ``bf16_copy`` spec entry: the checkpoint is exactly that copy of the scored weights.
+
+    Returns the scored (source) identity the copy was made from, so Score offsets
+    can still be bound to the scored run by value.
+    """
+    entry = spec.get("bf16_copy")
+    if not entry:
+        return None
+    path = Path(entry["receipt"])
+    if layout.sha_file(path) != entry["sha256"]:
+        raise ValueError("BF16 copy receipt differs from its pinned sha256")
+    receipt = _object(path)
+    if receipt.get("schema") != BF16_COPY_SCHEMA:
+        raise ValueError("Not a v2.release.bf16_copy receipt")
+    if receipt.get("model_sha256") != spec["expected_identity"].get("model_sha256"):
+        raise ValueError("BF16 copy receipt names another package identity")
+    files = {
+        p.relative_to(checkpoint).as_posix()
+        for p in checkpoint.rglob("*")
+        if p.is_file()
+    }
+    recorded = receipt.get("files") or {}
+    if set(recorded) != files or any(
+        layout.sha_file(checkpoint / name) != value["sha256"]
+        for name, value in recorded.items()
+    ):
+        raise ValueError("Checkpoint is not the BF16 copy its receipt describes")
+    if (
+        spec.get("score_bias")
+        and (receipt.get("score_bias") or {}).get("sha256")
+        != spec["score_bias"]["sha256"]
+    ):
+        raise ValueError("BF16 copy receipt names other Score offsets")
+    return {
+        "receipt_sha256": entry["sha256"],
+        "source_model_sha256": receipt["source_model_sha256"],
+    }
+
+
 def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
     from training.model.calibration import load_calibration
     from training.model.infer import checkpoint_fingerprint
@@ -256,6 +342,7 @@ def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
             spec["max_input_tokens"],
         ):
             raise ValueError("Calibration context differs from the package limit")
+    score_bias = verify_score_bias(spec, identity["model_sha256"])
     result = {
         "model_sha256": identity["model_sha256"],
         "fingerprint_files": identity["files_sha256"],
@@ -265,6 +352,11 @@ def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
         "text_parameter_count": metadata.get("text_parameter_count"),
         "temperature_by_type": temperatures,
     }
+    if score_bias is not None:
+        result["score_bias"] = score_bias
+    bf16 = verify_bf16_copy(spec, checkpoint)
+    if bf16 is not None:
+        result["bf16_copy"] = bf16
     if adapter:
         contract = metadata["lora"]
         base = spec["base"]
@@ -314,10 +406,42 @@ def base_text_parameters(base: Path, files: dict[str, str], source_kind: str) ->
     return total
 
 
+def vendor_root(spec: dict[str, Any]) -> tuple[Path, dict[str, Any] | None]:
+    """Tree whose training/model (and v2/dec) sources are vendored.
+
+    Default: this builder's tree. ``vendor_source`` names the decision2 tree of an
+    exact node mirror (e.g. the scored run's own source mirror) so a later change
+    to a shared inference module does not block a release of an earlier scored run.
+    """
+    value = spec.get("vendor_source")
+    if not value:
+        return SOURCE_ROOT, None
+    root = Path(value).resolve(strict=True)
+    mirror = next(
+        (
+            p / ".dev2-mirror.json"
+            for p in (root, *root.parents)
+            if (p / ".dev2-mirror.json").is_file()
+        ),
+        None,
+    )
+    if mirror is None or not (root / "training/model").is_dir():
+        raise ValueError(
+            "vendor_source must be a decision2 tree with training/model inside an exact node mirror"
+        )
+    record = json.loads(mirror.read_text(encoding="utf-8"))
+    return root, {
+        "commit": record.get("commit"),
+        "tree": record.get("tree"),
+        "content_manifest_sha256": record.get("content_manifest_sha256"),
+    }
+
+
 def vendor_runtime(
     spec: dict[str, Any], stage: Path, identity: dict[str, Any]
 ) -> dict[str, Any]:
     """Copy the runtime template and the exact scored inference sources."""
+    root, _ = vendor_root(spec)
     records: dict[str, Any] = {}
     target = stage / layout.RUNTIME_DIR
     target.mkdir()
@@ -354,41 +478,96 @@ def vendor_runtime(
         "rewritten": False,
     }
     modules = list(QWEN_MODULES)
+    modules += [
+        name
+        for name in OPTIONAL_QWEN_MODULES
+        if (root / "training/model" / name).is_file()
+    ]
+    if spec.get("score_bias") and "score_bias.py" not in modules:
+        raise ValueError("Score offsets need score_bias.py in the vendored sources")
     if identity["head_variant"] in HEAD_MODULES:
         modules.append(HEAD_MODULES[identity["head_variant"]])
     for name in modules:
-        shutil.copyfile(SOURCE_ROOT / "training/model" / name, package / name)
+        shutil.copyfile(root / "training/model" / name, package / name)
         records[f"decision2/_vendor/dev2model/{name}"] = {
             "source": f"training/model/{name}",
             "rewritten": False,
         }
     if identity["dec_residual"]:
-        original = (SOURCE_ROOT / "v2/dec/dec_model.py").read_text(encoding="utf-8")
+        original = (root / "v2/dec/dec_model.py").read_text(encoding="utf-8")
         pattern, replacement = IMPORT_REWRITE
         (package / "dec_model.py").write_text(
             pattern.sub(replacement, original), encoding="utf-8"
         )
         records["decision2/_vendor/dev2model/dec_model.py"] = {
             "source": "v2/dec/dec_model.py",
-            "source_sha256": layout.sha_file(SOURCE_ROOT / "v2/dec/dec_model.py"),
+            "source_sha256": layout.sha_file(root / "v2/dec/dec_model.py"),
             "rewritten": "absolute training.model imports -> package-relative",
         }
     for name, record in records.items():
         source = record.get("source")
         if source and "@" not in source and "source_sha256" not in record:
-            record["source_sha256"] = layout.sha_file(SOURCE_ROOT / source)
+            tree = SOURCE_ROOT if source.startswith("v2/release/") else root
+            record["source_sha256"] = layout.sha_file(tree / source)
     return records
 
 
+def check_scored_score_bias(
+    spec: dict[str, Any], native: dict[str, Any], score_bias: dict[str, Any] | None
+) -> str | None:
+    """Packaged offsets must equal, by value, the offsets the scored run applied.
+
+    The packaged file may differ in bytes (e.g. public-only ``fit`` provenance);
+    answers depend only on the model hash and the offsets. Returns the scored
+    file's SHA-256.
+    """
+    scored_entry = native.get("score_bias")
+    scored_sha = native.get("score_bias_sha256")
+    if not spec.get("score_bias"):
+        if scored_entry is not None or scored_sha is not None:
+            raise ValueError("The scored run applied Score offsets; the spec has none")
+        return None
+    if score_bias is None:
+        raise ValueError("Score offsets are not verified against the checkpoint")
+    scored_identity = spec["expected_identity"].get("model_sha256")
+    if spec.get("bf16_copy"):
+        scored_identity = _object(Path(spec["bf16_copy"]["receipt"]))[
+            "source_model_sha256"
+        ]
+    if (
+        not isinstance(scored_sha, str)
+        or not isinstance(scored_entry, dict)
+        or scored_entry.get("file_sha256") != scored_sha
+        or scored_entry.get("offsets") != score_bias["offsets"]
+        or native.get("model_sha256") != scored_identity
+    ):
+        raise ValueError("Score offsets differ from the ones the scored run applied")
+    return scored_sha
+
+
 def check_scored_runtime(
-    spec: dict[str, Any], records: dict[str, Any]
+    spec: dict[str, Any],
+    records: dict[str, Any],
+    score_bias: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """Vendored sources must equal the scored adapter sources recorded at scoring time."""
+    """Vendored sources must equal the scored adapter sources recorded at scoring time.
+
+    ``score_bias`` is the verified spec entry (``verify_score_bias``).
+    """
     scored = spec.get("scored") or {}
     path = scored.get("native_manifest")
     if not path:
+        if spec.get("score_bias"):
+            raise ValueError("Score offsets need the scored native manifest")
         return None
-    recorded = _object(Path(path)).get("adapter_files_sha256") or {}
+    native = _object(Path(path))
+    scored_score_bias = check_scored_score_bias(spec, native, score_bias)
+    recorded = native.get("adapter_files_sha256") or {}
+    if "score_bias.py" in recorded and not any(
+        record.get("source") == "training/model/score_bias.py"
+        for record in records.values()
+    ):
+        raise ValueError("The scored run used score_bias.py; it is not vendored")
     checked = {}
     for record in records.values():
         source = record.get("source") or ""
@@ -399,7 +578,10 @@ def check_scored_runtime(
                         f"Vendored {source} differs from the scored adapter source"
                     )
                 checked[source] = recorded[key]
-    return {"native_manifest_sha256": layout.sha_file(Path(path)), "checked": checked}
+    result = {"native_manifest_sha256": layout.sha_file(Path(path)), "checked": checked}
+    if scored_score_bias is not None:
+        result["score_bias_sha256"] = scored_score_bias
+    return result
 
 
 def write_licences(spec: dict[str, Any], stage: Path, decision: dict[str, Any]) -> None:
@@ -528,6 +710,8 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
     profile = spec["profile"]
     checkpoint = Path(spec["checkpoint"]).resolve(strict=True)
     if profile == "kai-native":
+        if spec.get("score_bias"):
+            raise ValueError("Score offsets are a Qwen-runtime feature")
         identity = verify_kai_native(
             spec, checkpoint, Path(spec["runtime_bundle"]).resolve(strict=True)
         )
@@ -570,10 +754,12 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "Backbone header count differs from the checkpoint's text parameter count"
         )
     name_basis = spec.get("name_basis", "tier")
-    if layout.release_name(loaded, name_basis) != spec["model_name"]:
+    base_model = name_base_model(spec) if name_basis == "base" else None
+    named = layout.release_name(loaded, name_basis, base_model)
+    if named != spec["model_name"]:
         raise ValueError(
             f"{loaded:,} loaded parameters name the model "
-            f"{layout.release_name(loaded, name_basis)} ({name_basis}), not {spec['model_name']}"
+            f"{named} ({name_basis}), not {spec['model_name']}"
         )
     decision = licence_policy.package_licence(spec["licence"]["components"])
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -595,10 +781,19 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
                 "sha256": layout.sha_file(stage / "calibration.json"),
                 "temperature_by_type": identity.get("temperature_by_type"),
             }
+        score_bias = None
+        if identity.get("score_bias"):
+            shutil.copyfile(spec["score_bias"]["path"], stage / "score_bias.json")
+            staged = layout.sha_file(stage / "score_bias.json")
+            if staged != identity["score_bias"]["sha256"]:
+                raise ValueError("Score offsets file changed while staging")
+            score_bias = {"file": "score_bias.json", **identity["score_bias"]}
         runtime = vendor_runtime(spec, stage, identity)
         for name, record in runtime.items():
             record["sha256"] = layout.sha_file(stage / name)
-        scored_runtime = check_scored_runtime(spec, runtime)
+        scored_runtime = check_scored_runtime(spec, runtime, identity.get("score_bias"))
+        if score_bias:
+            score_bias["scored_sha256"] = scored_runtime["score_bias_sha256"]
         write_licences(spec, stage, decision)
         banner = spec["card"].get("banner") or f"{spec['model_name']}-owl-banner.png"
         facts = {
@@ -613,6 +808,11 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "origin": spec["origin"],
             "licence": decision,
             "banner": banner,
+            **(
+                {"name_basis": name_basis, "name_base_model": base_model}
+                if base_model
+                else {}
+            ),
             "calibration_text": spec["card"].get("calibration_text")
             or (
                 "per-type temperatures fitted on the frozen calibration partition (`calibration.json`)."
@@ -636,6 +836,10 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             banner=BRAND_DIR / banner,
             work=work / "card-work",
             output=stage,
+            paired_peers={
+                key: Path(path)
+                for key, path in (spec["card"].get("paired_peers") or {}).items()
+            },
         )
         pointer = layout.pointer(
             profile,
@@ -667,6 +871,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "model_name": spec["model_name"],
             "tier": layout.tier_for(loaded),
             **({"name_basis": name_basis} if name_basis != "tier" else {}),
+            **({"name_base_model": base_model} if base_model else {}),
             "profile": profile,
             "files_sha256": inventory,
             "model_files": files,
@@ -686,11 +891,17 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "origin": spec["origin"],
             "base": identity.get("base"),
             "calibration": calibration,
+            **({"score_bias": score_bias} if score_bias else {}),
             "max_input_tokens": spec["max_input_tokens"],
             "runtime": {
                 "requirements": spec.get("runtime_requirements", {}),
                 "scored_runtime_check": scored_runtime,
                 "equivalence": spec.get("runtime_equivalence"),
+                **(
+                    {"vendor_source": vendor_root(spec)[1]}
+                    if spec.get("vendor_source")
+                    else {}
+                ),
             },
             "scored": {
                 key: value
@@ -747,6 +958,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "external_base_text": external,
         },
         "identity": {k: v for k, v in identity.items() if k != "fingerprint_files"},
+        **({"score_bias": score_bias} if score_bias else {}),
         "card": card,
         "screen": screened,
         "licence": decision["spdx"],

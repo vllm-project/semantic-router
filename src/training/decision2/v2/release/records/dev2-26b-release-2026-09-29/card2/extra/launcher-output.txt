@@ -1,0 +1,43 @@
+llm-semantic-router private storage: 44.63 GB used of 100 GB, headroom 55.37 GB (37 private repos; threshold 1 GB: OK)
+     16.85 GB  model    llm-semantic-router/DEV2.0-4B
+      7.56 GB  model    llm-semantic-router/DEV2.0-2B
+      3.23 GB  dataset  llm-semantic-router/decision-2.0-training-data
+      3.13 GB  model    llm-semantic-router/Vela-2.0-Encoder-307M-Unified
+      3.03 GB  model    llm-semantic-router/DEV2.0-0.8B
+      2.40 GB  model    llm-semantic-router/DEV2.0-0.6B
+      2.32 GB  model    llm-semantic-router/Decision-1.0-Route-0.6B
+      1.21 GB  dataset  llm-semantic-router/vela-embedding-training
+{"copy": "/data/dev2/runs/release/triton/dev2-26b-f1-copy-20260929T062522Z", "copy_sha256": "03b172f1a6adeef6c6a6c491d04389b355c9d8579480008023f408c8659b502b", "files": 2659}
++ status=0
++ /data/dev2/src/da6e44671deddc224c8791f8506e8c987c0db895-src_training_decision2/src/training/decision2/v2/release/release.sh --spec /data/dev2/src/da6e44671deddc224c8791f8506e8c987c0db895-src_training_decision2/src/training/decision2/v2/release/specs/dev2-26b-release.json --src da6e44671deddc224c8791f8506e8c987c0db895-src_training_decision2 --work /data/dev2/runs/release/dev2-26b-release-20260929T062522Z --image sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1 --gpu 6 --track release --shared-lease release --threads 4 --site /opt/decision-fla --require-kernels --base-path /data/dev2/hf-cache/models--Qwen--Qwen3.8-27B/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0 --env HIP_FORCE_DEV_KERNARG=1 --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=/data/dev2/runs/release/triton/dev2-26b-f1-copy-20260929T062522Z --mount-rw /data/dev2/runs/release/triton/dev2-26b-f1-copy-20260929T062522Z --env HF_HUB_CACHE=/data/dev2/hf-cache --mount /data/dev2/hf-cache/models--Qwen--Qwen3.8-27B --mount /data/dev2/hf-cache/blobs --mount /data/dev2/private/panels/goldfree --mount /data/dev2/runs/27b/M3-A-soup/formal/output --parity typed-final:/data/dev2/private/panels/goldfree/typed-final.prompts.jsonl:/data/dev2/runs/27b/M3-A-soup/formal/output/typed-final.predictions.jsonl:200 --parity css15:/data/dev2/private/panels/goldfree/css15.prompts.jsonl:/data/dev2/runs/27b/M3-A-soup/formal/output/css15.predictions.jsonl:300 --parity public231:/data/dev2/private/panels/goldfree/public231.prompts.jsonl:/data/dev2/runs/27b/M3-A-soup/formal/output/public231.predictions.jsonl:100 --upload
+06:25:23Z build llm-semantic-router/DEV2.0-26B from da6e44671deddc224c8791f8506e8c987c0db895-src_training_decision2
+06:25:50Z pre-upload examples (two processes)
+{"mode": "compare", "passed": true}
+06:29:49Z card example (pre-upload)
+06:31:46Z scored-panel parity (pre-upload)
+06:34:52Z ensure private llm-semantic-router/DEV2.0-26B
+{"command": "ensure", "passed": true, "repo": "llm-semantic-router/DEV2.0-26B"}
+06:34:53Z upload
+{"command": "upload", "passed": true, "repo": "llm-semantic-router/DEV2.0-26B", "revision": "50772fb359acee5cfb5af6c6f3a5e77b076f0226"}
+06:34:55Z real hf download of 50772fb359acee5cfb5af6c6f3a5e77b076f0226
+{"command": "download", "passed": true, "repo": "llm-semantic-router/DEV2.0-26B", "revision": "50772fb359acee5cfb5af6c6f3a5e77b076f0226"}
+{"command": "tree", "passed": true}
+06:34:59Z post-download examples
+{"mode": "compare", "passed": true}
+06:42:42Z readback
+{"command": "readback", "passed": true, "repo": "llm-semantic-router/DEV2.0-26B", "revision": "50772fb359acee5cfb5af6c6f3a5e77b076f0226"}
+{"passed": true, "steps": {"build": true, "pre-a": true, "pre-b": true, "repeat-pre": true, "card-pre": true, "parity-pre": true, "ensure": true, "upload": true, "download": true, "tree": true, "post": true, "repeat-post": true, "card-post": true, "parity-post": true, "readback": true}}
++ set +x
+{"copy": "/data/dev2/runs/release/triton/dev2-26b-f1-copy-20260929T062522Z", "post_sha256": "4faf19465716cebc4b4766a99401f0dde819378adbdc4e6c56675dbec12cc231", "added": 33, "changed": 7, "removed": 0, "path_rewrites": 7, "frozen_check": false}
+{"passed": true, "targets": 11, "anonymous": {"model_api": 401, "readme": 401, "model_page": 401}, "rendered": {"status": 401}}
+{"checked": 12, "failed": [], "passed": true}
+llm-semantic-router private storage: 44.63 GB used of 100 GB, headroom 55.37 GB (37 private repos; threshold 0 GB: OK)
+     16.85 GB  model    llm-semantic-router/DEV2.0-4B
+      7.56 GB  model    llm-semantic-router/DEV2.0-2B
+      3.23 GB  dataset  llm-semantic-router/decision-2.0-training-data
+      3.13 GB  model    llm-semantic-router/Vela-2.0-Encoder-307M-Unified
+      3.03 GB  model    llm-semantic-router/DEV2.0-0.8B
+      2.40 GB  model    llm-semantic-router/DEV2.0-0.6B
+      2.32 GB  model    llm-semantic-router/Decision-1.0-Route-0.6B
+      1.21 GB  dataset  llm-semantic-router/vela-embedding-training
+work=/data/dev2/runs/release/dev2-26b-release-20260929T062522Z revision=50772fb359acee5cfb5af6c6f3a5e77b076f0226 cache=/data/dev2/runs/release/triton/dev2-26b-f1-copy-20260929T062522Z

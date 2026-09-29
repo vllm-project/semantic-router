@@ -12,54 +12,59 @@
   "gate_profile": "no-1.0",
   "types_sha256": "d6f2d6bd6a1af47433fb1075612360699fe7d671ac47f9ba3c7a829692d28db8",
   "calibration": "none (temperature 1); the CAL698 per-type temperatures (Choice 0.538, Noul 0.428, Score 0.567) were rejected under the 23:15 rule on the development panels (typed-DEV ECE .049 -> .096, Brier .089 -> .106; CSS-pilot ECE .063 -> .120; only CSS-pilot Brier improved, .504 -> .454)",
-  "prepared_by": "release engineering, DEV2.0-26B worker (verified draft after the private upload and verification)",
+  "prepared_by": "release engineering, DEV2.0-26B worker (verified draft after the card-only revision)",
   "decided_by": null,
-  "rationale": "F1 (27B Milestone 3 M3-A soup; rank-16 LoRA + head on the frozen official Qwen3.8-27B) meets the no-1.0 gate profile (coordinator 2026-09-29 11:55): post-key v3 67.209 >= 64.919 (90% of AutoJev-27B's 72.133, the best measured open-weight peer); human transfer minus AutoJev-27B -0.013 (95% CI -0.040, +0.056), not significantly below; no type collapsed (typed FINAL Choice .785, Noul .894, Score .792 against chance .267 / .50 / .20; eval type check d6f2d6bd). Every mechanical item passed on the private upload 5683c6f0 (gate evaluate 6 of 6 against the build draft). It approves nothing: the coordinator writes the final decision after the eval track's 27B gate record and the C1 line, and runs the collection add.",
+  "rationale": "F1 (27B Milestone 3 M3-A soup; rank-16 LoRA + head on the frozen official Qwen3.8-27B) meets the no-1.0 gate profile (coordinator 2026-09-29 11:55): post-key v3 67.209 >= 64.919 (90% of AutoJev-27B's 72.133, the best measured open-weight peer); human transfer minus AutoJev-27B -0.013 (95% CI -0.040, +0.056), not significantly below; no type collapsed (typed FINAL Choice .785, Noul .894, Score .792 against chance .267 / .50 / .20; eval type check d6f2d6bd). Every mechanical item passed on the full-parity private upload 5683c6f0 and again on the card-only revision 50772fb3 (weights, runtime and answers unchanged; gate evaluate 6 of 6 on both). It approves nothing: the coordinator writes the final decision after the eval track's 27B gate record and the C1 line, and runs the collection add.",
   "gate_evidence": {
     "1_near_first_tier_no_1_0": "no Decision 1.0 at this size; v3 67.209 vs 90% of AutoJev-27B 72.133 = 64.919; human transfer minus AutoJev-27B 95% interval [-0.040, +0.056]; types choice OK, noul OK, score OK",
     "2_regressions_disclosed": "11 results below AutoJev-27B (no Decision 1.0 at this size) listed in the card tradeoffs table",
     "3_download_hash_parameters": "tree 31 files re-hashed; loaded 25746591744",
     "4_native_examples": "examples and the card's Python block reproduced from the download",
-    "5_output_consistency": "cross-process and pre/post-download answers identical; scored-panel parity 0 changes on 10,378 prompts before and after upload (max drift 0.0)",
+    "5_output_consistency": "cross-process and pre/post-download answers identical (answers caba63fa on both revisions); scored-panel parity 0 changes / max drift 0.0 on all 10,378 prompts (5683c6f0) and on 200 / 300 / 100 prompts before and after upload (50772fb3)",
     "6_card_design": "Hub card apache-2.0 / problems []"
   },
   "verified_package": {
-    "revision": "5683c6f04fb6ac88484cee82220f1a1a2fa43392",
-    "manifest_sha256": "ab07948eeff64d72b3dc179e72f6083a984b3fe8c481da3f9175480091a07cf5",
+    "revision": "50772fb359acee5cfb5af6c6f3a5e77b076f0226",
+    "manifest_sha256": "98d6b01c12a125162052c6db6b75cbdf4d05529267567ccf2add46c7dcc93e95",
     "files": 31,
-    "bytes": 509000015,
+    "bytes": 509003094,
     "loaded_parameters": 25746591744,
     "parameters": "Qwen3.8-27B text backbone 25,624,600,064 (pinned, not redistributed) + rank-16 LoRA 116,727,808 + decision head 5,263,872; no vision tower, MTP or LM head",
     "tier": "27B",
     "name_basis": "loaded-parameters",
     "base": "Qwen/Qwen3.8-27B@1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0: 28 pinned files by SHA-256, verified from a fresh Hub download",
-    "builder_commit": "b2c7c9448ff644488b7a6f194ea31aeb18fddf75",
-    "work": "/data/dev2/runs/release/dev2-26b-release-20260929T051011Z",
-    "build_draft_sha256": "4bae27a42d87d7996944d3fad7db0cb2fc9ffa97f731df3d7cd614c8455b0323"
+    "builder_commit": "da6e44671deddc224c8791f8506e8c987c0db895",
+    "work": "/data/dev2/runs/release/dev2-26b-release-20260929T062522Z",
+    "build_draft_sha256": "4bae27a42d87d7996944d3fad7db0cb2fc9ffa97f731df3d7cd614c8455b0323",
+    "vendor_source": "35fa052d2b7c3ad0f9b2ee9bd1529e6b28076029 (F1's scored source mirror)",
+    "card_only_on": "5683c6f04fb6ac88484cee82220f1a1a2fa43392 (full-parity upload; only README.md, evaluation/EVALUATION.md, evaluation/manifest.json and MODEL_MANIFEST.json differ)",
+    "full_parity_work": "/data/dev2/runs/release/dev2-26b-release-20260929T051011Z"
   },
   "disclosures": [
     "significantly below AutoJev-27B on post-key v3 (-4.92, 95% CI -6.82, -0.43) and typed accuracy (T 0.7875 vs 0.8869, -0.099, 95% CI -0.123, -0.075; constraint competition .570 vs 1.000); human transfer level (-0.013, 95% CI -0.040, +0.056)",
     "public 231: 198 vs 201 (AutoJev-27B) and 212 (Eikos-27B)",
     "v3 margins against Eikos-27B (-2.08, 95% CI -5.04, +2.62) and Jebadiah-27B (+1.74, 95% CI -0.97, +4.83) not significant",
+    "public 231 level with AutoJev-27B (-3, 95% CI -10, +5), significantly below Eikos-27B (-14, 95% CI -22, -6), above Jebadiah-27B (+22); human transfer level with all three peers; wiki politeness lower than all three; long inputs level",
     "typed Score over-predicts the top level (182 of 400 answers vs 128 gold); level 2 / 3 recall .61 / .65",
     "T = 1; CAL698 per-type temperatures (Choice 0.538, Noul 0.428, Score 0.567) evaluated and rejected",
     "32,768-token input limit, over-budget inputs rejected; training inputs at most 4,096 tokens",
     "weight origin: exact rank-16 soup of two rank-8 LoRA seeds + averaged head on the frozen official Qwen3.8-27B@1d4bf0f2 (Apache-2.0), base not redistributed; the runtime downloads the 28 pinned files or takes base_path",
     "training data: A0s-strict (Cosmos QA and SQuAD 2.0 answerability families removed) + A6 Score arms (A6g generated, A6h KLUE STS / JGLUE JSTS / IBM ArgQ-30k / SAF) + a 5.0M-token A7 typed-curricula slice incl. the A7i BANKING77 / CLINC150 intents; gold labels only, no third-party model outputs",
     "Eikos-27B shown from its BF16 weights, the sibling of the FP8 Decision Index entry (licence via its board entry, MIT)",
-    "one GPU with about 104 GB of memory at the 32K limit; CPU not verified",
-    "evaluation familiarity (A7 rescreen): PLACEHOLDER on the card until the eval track's 27B gate record",
+    "memory: evaluation peak 108 GB allocated / 120 GB reserved on an 18,261-token input (card asks for >= 120 GB); CPU not verified",
+    "evaluation familiarity: the eval track's 27B gate record sentence (no exposure; v3 stays 67.21, bar 64.92 -> 64.89), verbatim on the card",
     "independent sealed confirmation (JevArena-C1): PLACEHOLDER on the card until C1 event 3"
   ],
   "pending": [
-    "eval track's 27B gate record (m4-dev2-27b-f1-gates): replace the card's evaluation-familiarity placeholder with its sentence and check that no card number changes",
-    "C1 event 3: replace the card's confirmation placeholder",
+    "done: eval track's 27B gate record (m4-dev2-27b-f1-gates-2026-09-29.md) passes all three no-1.0 gates; its familiarity sentence and disclosures are on the card of 50772fb3",
+    "C1 event 3: replace the card's confirmation placeholder (the eval record suggests no C1 line until then)",
     "F2 (M3-S soup, the matched control) formal result, about 14:40 UTC+8: if the coordinator switches to F2, this draft lapses and F2 needs its own spec",
     "coordinator: final decision (status final, decided_by, gate_profile no-1.0, types_sha256 d6f2d6bd...) at /data/dev2/runs/release/decisions/DEV2.0-26B.decision.json; point the spec's gate_receipt at it; commit, push, mirror",
     "rerun ops/release-upload.sh <SRC> --collect --parity-n \"200 300 100\" into a new work dir (card-only revision plus collection add)",
     "after the collection add: delete the dev2-27b-staging m3/M3-A-soup/ copy with rewrite_history=False (node copy re-hashed first)"
   ],
   "supersedes": [
+    "verified draft 9b0259125c6e7ec9699b65b3a17d6dcb020b4b376b47387e3240073717dedd02 (named revision 5683c6f0, before the eval track's gate record)",
     "build draft 4bae27a42d87d7996944d3fad7db0cb2fc9ffa97f731df3d7cd614c8455b0323 (named no revision)"
   ]
 }

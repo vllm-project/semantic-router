@@ -57,6 +57,22 @@ def build_report(
     }
 
 
+def with_score_bias(
+    records: list[dict[str, Any]], offsets: dict[int, list[float]]
+) -> list[dict[str, Any]]:
+    """CAL logits as the package runtime scores them: Score rows plus their offsets."""
+    from training.model.score_bias import apply
+
+    return [
+        (
+            {**r, "logits": apply(offsets, r["logits"], len(r["logits"]))}
+            if r["task_type"] == "score"
+            else r
+        )
+        for r in records
+    ]
+
+
 def cal_logits(
     checkpoint: Path,
     rows: list[dict[str, Any]],
@@ -121,6 +137,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--source-path", type=Path)
     parser.add_argument("--require-kernels", action="store_true")
+    parser.add_argument("--score-bias", type=Path)
     args = parser.parse_args()
     if args.output.exists() or (args.logits and args.logits.exists()):
         raise FileExistsError("refusing to overwrite calibration outputs")
@@ -149,6 +166,12 @@ def main() -> None:
     }
     if kernel_runtime is not None:
         inference["kernel_runtime"] = kernel_runtime
+    if args.score_bias:
+        from training.model.score_bias import load_score_bias
+
+        offsets, _ = load_score_bias(args.score_bias, identity["model_sha256"])
+        records = with_score_bias(records, offsets)
+        inference["score_bias_sha256"] = file_sha256(args.score_bias)
     report = build_report(records, identity, args.cal_sha256, inference)
     if args.logits:
         with args.logits.open("x", encoding="utf-8") as stream:

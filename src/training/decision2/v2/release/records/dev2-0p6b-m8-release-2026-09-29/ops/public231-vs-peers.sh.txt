@@ -1,0 +1,14 @@
+set -e
+S=/data/dev2/src/95a683e506e723e7f7810402d3152a2192a7f864-src_training_decision2/src/training/decision2
+O=/data/dev2/runs/release/dev2-0p6b-m8-public231-$(date -u +%Y%m%dT%H%M%SZ); mkdir -p $O; cd $S
+L=/data/dev2/runs/06b/m8/formal/m8-s5-b05
+K8=/data/dev2/runs/06b/m2/formal/kai1-native-8k
+for p in kai1:/data/dev2/runs/eval/m1-adopt/kai1 gliner25:/data/dev2/runs/eval/m1/p1-gliner25 bosun:/data/dev2/runs/eval/m1-adopt/bosun lex1:/data/dev2/runs/eval/m1/r3-lex kai1-8k:$K8 previous:/data/dev2/runs/06b/m4/formal/m4-t-a7-soup; do
+  k=${p%%:*}; r=${p#*:}
+  python3 -m v2.eval.gates public231 --left $L --right $r --left-name DEV2.0-0.6B --right-name $k --output $O/public231-vs-$k.json >/dev/null
+  python3 -c "
+import json;d=json.load(open('$O/public231-vs-$k.json'))
+t=d['tiers'];f=d['families']
+print('$k',d['left_correct'],d['right_correct'],d['delta'],d['ci95'],round(d['mcnemar_exact_p'],4),d['verdict'],{x:(t[x]['left'],t[x]['right']) for x in t},'peer_ahead_fam:',{n:(v['left'],v['right']) for n,v in f.items() if v['right']>v['left']})"
+done
+echo $O; cd $O; sha256sum *.json | cut -c1-12

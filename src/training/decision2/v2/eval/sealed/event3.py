@@ -2,8 +2,9 @@
 
     python3 -m v2.eval.sealed.event3 plan --table T [--models K,...] [--c27 f1|f2] [--peers27 K,...] \
         [--c27-package DIR --c27-manifest SHA --c27-repo ID --c27-revision REV] \
-        [--c9b-package DIR --c9b-manifest SHA --c9b-repo ID --c9b-revision REV [--c9b-identity SHA] \
-         [--c9b-calibration FILE|none] [--c9b-parity-stored PATH] [--c9b-tolerance X]] [--site node-a|node-b] \
+        [--c9b-package DIR --c9b-manifest SHA [--c9b-repo ID] [--c9b-revision REV] [--c9b-identity SHA] \
+         [--c9b-calibration FILE|none] [--c9b-parity-stored PATH] [--c9b-tolerance X] \
+         [--c9b-cache DIR --c9b-cache-sha SHA]] [--site node-a|node-b] \
         [--allow-deviation ID]... --output PLAN.json
     python3 -m v2.eval.sealed.event3 show --plan PLAN.json
     python3 -m v2.eval.sealed.event3 argv --plan P --key K --phase smoke|collect --run-dir D --gpu N \
@@ -14,18 +15,31 @@
     python3 -m v2.eval.sealed.event3 pairs --plan P --event-dir E
     python3 -m v2.eval.sealed.event3 summary --plan P --event-dir E --preflight-dir D --output S.json
     python3 -m v2.eval.sealed.event3 stage --plan P
-    python3 -m v2.eval.sealed.event3 keys --plan P [--collected]
+    python3 -m v2.eval.sealed.event3 keys --plan P [--collected | --stored]
     python3 -m v2.eval.sealed.event3 field --plan P --key K --field cache.frozen
     python3 -m v2.eval.sealed.event3 digest DIR
+    python3 -m v2.eval.sealed.event3 c27-receipt --package-dir DIR \
+        (--formal-run DIR | --typed-final F --public231 F --collect F) [--seal F] [--report F] \
+        [--calibration FILE] [--cache DIR] [--base DIR] --output RECEIPT.json
+    python3 -m v2.eval.sealed.event3 fill-c27 --table T --key f2 --receipt R [--repo ID] \
+        [--revision REV] [--include 'SUBDIR/*'] [--adopt-paths] [--output T2]
 
 ``plan`` resolves the table (``event3-models.json``) and enforces the C1 limits: per size at most one
 candidate, one Decision 1.0 configuration and two open peers; internal-only peers, a second scoring of
-a 1.0 model or a second candidate of a size need a recorded deviation approval. ``argv`` prints the
-runner arguments NUL-separated. ``verify`` checks images, mirror modules, paths, release-package
-manifests and pinned tree digests. ``parity`` compares a smoke (typed FINAL and public 231, which
-together cover every decision type) with the model's stored formal run. None of these reads C1
-prompts or gold; ``stored`` hashes stored C1 prediction files and seals, and ``event3.sh`` calls it
-only in the event phase.
+a 1.0 model or a second candidate of a size need a recorded deviation approval. The 9B candidate's
+package dir and manifest hash are parameters: the weights identity is read from that package's
+MODEL_MANIFEST.json, whose SHA-256 must be ``--c9b-manifest``, and must be in the row's
+``identity_allowed`` (or equal ``--c9b-identity``). ``argv`` prints the runner arguments
+NUL-separated. ``verify`` checks images, mirror modules, paths, release-package manifests and pinned
+tree digests. ``parity`` compares a smoke (typed FINAL and public 231, which together cover every
+decision type) with the model's stored formal run. None of these reads C1 prompts or gold; ``stored``
+hashes stored C1 prediction files and seals, and ``event3.sh`` calls it only in the event phase.
+
+``c27-receipt`` (CPU, on the node that holds a ~27B candidate's formal run) records what the table
+pins for that candidate with the functions ``verify`` uses: the package check, calibration, stored
+predictions (against the run's SEAL.json and the manifest identity), COLLECT, v3 and the frozen
+cache. ``fill-c27`` writes a passed receipt into a ``candidates_27b`` block (only that block's text
+changes) and refuses while any PARENT-FILLS remains in it.
 
 Tree digest (as ``triton_cache.py``, but following file symlinks, e.g. HF snapshots)::
 
@@ -58,6 +72,12 @@ SMOKE_PANELS = ("typed-final", "public231")
 C1_PANEL = "sealed-c1"
 EXCLUDED_TOP = (".cache", ".git")
 NUMERIC_KEYS = ("noul", "score", "confidence")
+SRC_ROOT = Path(__file__).resolve().parents[3]
+C9B_REFUSAL = (
+    "cand9b (DEV2.0-8B) needs its frozen release package on this node: pass --c9b-package DIR"
+    " and --c9b-manifest SHA, or leave the 9B rows out with --models"
+)
+RECEIPT_ROLES = ("calibration", "typed-final", "public231", "collect")
 
 
 def utc() -> str:
@@ -300,38 +320,79 @@ def build_pairs(
     return pairs
 
 
-def apply_c9b(row: dict[str, Any], args: argparse.Namespace) -> None:
-    """The 9B candidate's frozen release package, known only once release engineering is done."""
-    for flag, dotted in (
-        ("c9b_manifest", "package.manifest_sha256"),
-        ("c9b_repo", "repo"),
-        ("c9b_revision", "revision"),
-        ("c9b_parity_stored", "parity.stored"),
-    ):
-        value = getattr(args, flag, None)
-        if value:
-            set_dotted(row, dotted, value)
-    if getattr(args, "c9b_package", None):
-        row["model_path"] = row["model_dir"] = args.c9b_package
-        row["package"]["dir"] = args.c9b_package
-    if getattr(args, "c9b_identity", None):
-        row["identity"] = row["package"]["identity"] = args.c9b_identity
+def apply_c9b(
+    row: dict[str, Any], args: argparse.Namespace, roots: dict[str, str]
+) -> None:
+    """The 9B candidate's frozen release package; its weights identity comes from its manifest."""
+    package = getattr(args, "c9b_package", None)
+    manifest = getattr(args, "c9b_manifest", None)
+    if not (package and manifest):
+        raise ValueError(C9B_REFUSAL)
+    path = Path(package) / "MODEL_MANIFEST.json"
+    if not path.is_file():
+        raise ValueError(f"cand9b: no MODEL_MANIFEST.json in {package}")
+    actual = sha_file(path)
+    if actual != manifest:
+        raise ValueError(
+            f"cand9b: {path} has SHA-256 {actual}, not --c9b-manifest {manifest}"
+        )
+    value = json.loads(path.read_text(encoding="utf-8"))
+    identity = (value.get("identity") or {}).get("model_sha256")
+    allowed = row.pop("identity_allowed", {})
+    override = getattr(args, "c9b_identity", None)
+    if override and override != identity:
+        raise ValueError(
+            f"cand9b: --c9b-identity {override} is not the manifest identity {identity}"
+        )
+    if identity not in allowed and not override:
+        raise ValueError(
+            f"cand9b: manifest identity {identity} is not an allowed DEV2.0-8B weights identity"
+            f" ({', '.join(allowed)}); --c9b-identity accepts another one"
+        )
+    row["model_path"] = row["model_dir"] = package
+    row["package"].update(dir=package, manifest_sha256=manifest, identity=identity)
+    row["identity"] = identity
+    if getattr(args, "c9b_repo", None):
+        row["repo"] = args.c9b_repo
+    row["extra"]["model_id"] = row["repo"]
+    row["revision"] = (
+        getattr(args, "c9b_revision", None) or f"manifest-sha256:{manifest}"
+    )
+    cache = getattr(args, "c9b_cache", None)
+    cache_sha = getattr(args, "c9b_cache_sha", None)
+    if bool(cache) != bool(cache_sha):
+        raise ValueError("--c9b-cache DIR and --c9b-cache-sha SHA go together")
+    if cache:
+        row["cache"] = {"frozen": cache, "sha256": cache_sha}
     if getattr(args, "c9b_tolerance", None) is not None:
         row["parity"]["tolerance"] = args.c9b_tolerance
+    calibrated = expand(row.pop("calibrated"), roots)
     calibration = getattr(args, "c9b_calibration", None)
-    if calibration == "none":
-        row["adapter_spec"] = "v2/eval/sealed/adapters/dev2-dec-package-t1.json"
-        row["extra"].pop("calibration", None)
-        row["files"] = [
-            f for f in row.get("files", []) if "calibration" not in f["path"]
-        ]
-    elif calibration:
+    if calibration and calibration != "none":
+        calibration = os.path.abspath(calibration)
+        if not os.path.isfile(calibration):
+            raise ValueError(f"cand9b: no calibration file {calibration}")
+        report = json.loads(Path(calibration).read_text(encoding="utf-8"))
+        bound = report.get("model_sha256") if isinstance(report, dict) else None
+        if bound != identity:
+            raise ValueError(
+                f"cand9b: {calibration} is bound to {bound}, not to the package identity"
+                f" {identity} (a BF16-storage package runs only at T = 1)"
+            )
+        row["adapter_spec"] = calibrated["adapter_spec"]
         row["extra"]["calibration"] = calibration
+        folder = os.path.dirname(calibration)
+        if folder not in row["mounts"]:
+            row["mounts"].append(folder)
+        row["parity"]["stored"] = calibrated["parity_stored"]
         row["files"] = [
-            f for f in row.get("files", []) if "calibration" not in f["path"]
+            f
+            for f in calibrated["files"]
+            if "calibration" not in f["path"] or f["path"] == calibration
         ]
-    if calibration or getattr(args, "c9b_parity_stored", None):
-        # Pinned hashes describe the scored run; a re-packaged release is checked by its manifest.
+    if getattr(args, "c9b_parity_stored", None):
+        row["parity"]["stored"] = args.c9b_parity_stored
+        # The pins describe the table's parity files; another stored run is checked by existence.
         row["files"] = [
             f for f in row.get("files", []) if "predictions" not in f["path"]
         ]
@@ -379,7 +440,7 @@ def plan(args: argparse.Namespace) -> int:
             if args.c27_package:
                 row["model_path"] = row["model_dir"] = args.c27_package
         if key == "cand9b":
-            apply_c9b(row, args)
+            apply_c9b(row, args, roots)
         row.pop("node_b", None)
         models[key] = expand(row, roots)
     errors = [
@@ -600,6 +661,8 @@ def check_package(package: dict[str, Any], workers: int) -> dict[str, Any]:
     problems = []
     if result["manifest_sha256"] != package["manifest_sha256"]:
         problems.append("manifest hash differs")
+    if not names:
+        problems.append("manifest pins no package files")
     if bad:
         problems.append(f"{len(bad)} package files differ from the manifest")
     if package.get("identity") and identity != package["identity"]:
@@ -620,6 +683,14 @@ def check_package(package: dict[str, Any], workers: int) -> dict[str, Any]:
     result["ok"] = not problems
     result["problems"] = problems
     return result
+
+
+def cache_digest(src_root: Path, frozen: Path) -> str:
+    """Tree hash of a frozen autotune cache by ``v2/27b/triton_cache.py`` (as event3.sh copies)."""
+    sys.path.insert(0, str(src_root / "v2" / "27b"))
+    import triton_cache
+
+    return triton_cache.tree_digest(triton_cache.file_hashes(frozen))
 
 
 def verify_row(row: dict[str, Any], src_root: Path, workers: int) -> dict[str, Any]:
@@ -682,12 +753,7 @@ def verify_row(row: dict[str, Any], src_root: Path, workers: int) -> dict[str, A
         if not os.path.isdir(cache["frozen"]):
             problems.append(f"frozen autotune cache missing: {cache['frozen']}")
         else:
-            sys.path.insert(0, str(src_root / "v2" / "27b"))
-            import triton_cache
-
-            digest = triton_cache.tree_digest(
-                triton_cache.file_hashes(Path(cache["frozen"]))
-            )
+            digest = cache_digest(src_root, Path(cache["frozen"]))
             out["cache_sha256"] = digest
             if digest != cache["sha256"]:
                 problems.append("frozen autotune cache digest differs")
@@ -968,11 +1034,9 @@ def summary_cmd(args: argparse.Namespace) -> int:
     models = {}
     for key in p["selection"]:
         row = p["models"][key]
-        report = (
-            Path(row["stored"]["report"])
-            if row.get("stored")
-            else args.event_dir / key / "REPORT-C1.json"
-        )
+        report = args.event_dir / key / "REPORT-C1.json"
+        if row.get("stored") and not report.is_file():
+            report = Path(row["stored"]["report"])
         if report.is_file():
             value = json.loads(report.read_text(encoding="utf-8"))
             models[key] = {
@@ -983,6 +1047,8 @@ def summary_cmd(args: argparse.Namespace) -> int:
                 "c1": value["c1"],
                 "by_type": value["by_type"],
                 "valid": value["valid"],
+                "items": value["items"],
+                "item_set": value.get("item_set"),
                 "long_input": value["slices"]["long_input"]["accuracy"],
                 "non_english": value["slices"]["non_english"]["accuracy"],
                 "report_sha256": sha_file(report),
@@ -997,6 +1063,7 @@ def summary_cmd(args: argparse.Namespace) -> int:
                 "delta": value["delta"],
                 "ci95": value["ci95"],
                 "by_type": value["by_type"],
+                "item_set": value.get("item_set"),
                 "sha256": sha_file(path),
             }
     smokes, runs = gpu_hours(args.preflight_dir), gpu_hours(args.event_dir)
@@ -1023,7 +1090,12 @@ def summary_cmd(args: argparse.Namespace) -> int:
 
 def keys_cmd(args: argparse.Namespace) -> int:
     p = load_plan(args.plan)
-    keys = collected(p) if args.collected else p["selection"]
+    if args.collected:
+        keys = collected(p)
+    elif args.stored:
+        keys = [k for k in p["selection"] if p["models"][k].get("stored") is not None]
+    else:
+        keys = p["selection"]
     sys.stdout.write("".join(k + "\0" for k in keys))
     return 0
 
@@ -1043,7 +1115,9 @@ def field_cmd(args: argparse.Namespace) -> int:
 
 
 def stage_cmd(args: argparse.Namespace) -> int:
-    """Node-A staging steps of the selected rows: kind, key, source, destination, repo, revision."""
+    """Node-A staging steps of the selected rows: kind, key, source, destination, repo, revision,
+    include (an ``hf download --include`` pattern, for a package in a folder of a staging repo).
+    """
     p = load_plan(args.plan)
     fields = []
     for key in collected(p):
@@ -1055,6 +1129,7 @@ def stage_cmd(args: argparse.Namespace) -> int:
                 step["to"],
                 step.get("repo", ""),
                 step.get("revision", ""),
+                step.get("include", ""),
             ]
     sys.stdout.write("".join(f + "\0" for f in fields))
     return 0
@@ -1063,6 +1138,413 @@ def stage_cmd(args: argparse.Namespace) -> int:
 def digest_cmd(args: argparse.Namespace) -> int:
     digest, count = tree_digest(args.dir, args.hash_workers)
     print(f"{digest} files={count} {args.dir}")
+    return 0
+
+
+# ------------------------------------------------------- ~27B candidate receipt
+
+
+def fingerprint_check(manifest: dict[str, Any]) -> dict[str, Any] | None:
+    """The identity recomputed from the manifest's fingerprint files, and those not pinned by it."""
+    files = (manifest.get("identity") or {}).get("fingerprint_files")
+    if not isinstance(files, dict):
+        return None
+    sys.path.insert(0, str(SRC_ROOT))
+    from training.model.data import canonical
+
+    base = (manifest.get("base") or {}).get("files_sha256") or {}
+    pinned = {
+        f"checkpoint/{k}": v for k, v in (manifest.get("files_sha256") or {}).items()
+    }
+    pinned.update({f"source/{k}": v for k, v in base.items()})
+    return {
+        "sha256": hashlib.sha256(canonical(files).encode("utf-8")).hexdigest(),
+        "files": len(files),
+        "unpinned": sorted(k for k, v in files.items() if pinned.get(k) != v),
+    }
+
+
+def runtime_identity(root: Path, base: Path) -> str:
+    """The identity ``training.model.infer`` (the kernel collector's runtime) computes on disk."""
+    sys.path.insert(0, str(SRC_ROOT))
+    from training.model import infer as runtime
+
+    return runtime.checkpoint_fingerprint(root, base)["model_sha256"]
+
+
+def rows_check(
+    path: Path, identity: str | None, calibration_sha: str | None
+) -> dict[str, Any]:
+    rows = read_jsonl(path)
+    out: dict[str, Any] = {
+        "sha256": sha_file(path),
+        "rows": len(rows),
+        "model_sha256_mismatches": sum(r.get("model_sha256") != identity for r in rows),
+    }
+    if calibration_sha is not None:
+        out["calibration_sha256_mismatches"] = sum(
+            r.get("calibration_sha256") != calibration_sha for r in rows
+        )
+    return out
+
+
+def c27_receipt(args: argparse.Namespace) -> int:
+    """What the table pins for a ~27B candidate, computed from its package and formal run (CPU)."""
+    run: Path | None = args.formal_run
+    paths: dict[str, Path | None] = {
+        "typed_final": args.typed_final
+        or (run and run / "output" / f"{SMOKE_PANELS[0]}.predictions.jsonl"),
+        "public231": args.public231
+        or (run and run / "output" / f"{SMOKE_PANELS[1]}.predictions.jsonl"),
+        "collect": args.collect or (run and run / "COLLECT.json"),
+        "seal": args.seal or (run and run / "SEAL.json"),
+        "report": args.report or (run and run / "REPORT.json"),
+    }
+    if not (paths["typed_final"] and paths["public231"] and paths["collect"]):
+        raise ValueError(
+            "give --formal-run DIR, or --typed-final, --public231 and --collect"
+        )
+    problems: list[str] = []
+    root: Path = args.package_dir
+    manifest_path = root / "MODEL_MANIFEST.json"
+    if not manifest_path.is_file():
+        raise ValueError(f"no MODEL_MANIFEST.json in {root}")
+    manifest_sha = sha_file(manifest_path)
+    package = check_package(
+        {"dir": str(root), "manifest_sha256": manifest_sha}, args.hash_workers
+    )
+    problems += package["problems"]
+    identity = package["identity"]
+    if not identity:
+        problems.append("the manifest records no weights identity")
+    fingerprint = fingerprint_check(
+        json.loads(manifest_path.read_text(encoding="utf-8"))
+    )
+    if fingerprint is not None:
+        if fingerprint["sha256"] != identity:
+            problems.append(
+                "the identity is not the hash of the manifest's fingerprint files"
+            )
+        if fingerprint["unpinned"]:
+            problems.append(
+                f"{len(fingerprint['unpinned'])} fingerprint files are not the pinned files"
+            )
+    runtime = None
+    if args.base:
+        try:
+            runtime = runtime_identity(root, args.base)
+        except ValueError as exc:
+            problems.append(f"the runtime refuses this package and base: {exc}")
+        if runtime is not None and runtime != identity:
+            problems.append(
+                "the runtime computes another identity on this package and base"
+            )
+    calibration = None
+    if args.calibration:
+        value = json.loads(args.calibration.read_text(encoding="utf-8"))
+        calibration = {
+            "sha256": sha_file(args.calibration),
+            "model_sha256": (
+                value.get("model_sha256") if isinstance(value, dict) else None
+            ),
+        }
+        if calibration["model_sha256"] != identity:
+            problems.append("the calibration file is bound to other weights")
+    seal = None
+    if paths["seal"]:
+        if paths["seal"].is_file():
+            seal = json.loads(paths["seal"].read_text(encoding="utf-8"))
+        else:
+            problems.append(f"no {paths['seal']}")
+    predictions = {}
+    for panel, key in zip(SMOKE_PANELS, ("typed_final", "public231")):
+        out = rows_check(paths[key], identity, calibration and calibration["sha256"])
+        if seal is not None:
+            sealed = ((seal.get("panels") or {}).get(panel) or {}).get(
+                "predictions_sha256"
+            )
+            out["sealed"] = sealed == out["sha256"]
+            if not out["sealed"]:
+                problems.append(f"{panel} predictions are not the ones in SEAL.json")
+        if out["model_sha256_mismatches"]:
+            problems.append(
+                f"{panel}: {out['model_sha256_mismatches']} rows lack the identity"
+            )
+        if out.get("calibration_sha256_mismatches"):
+            problems.append(
+                f"{panel}: rows were not predicted with this calibration file"
+            )
+        predictions[panel] = out
+    value = json.loads(paths["collect"].read_text(encoding="utf-8"))
+    collect = {
+        "sha256": sha_file(paths["collect"]),
+        "adapter_module_sha256": value.get("adapter_module_sha256"),
+        "image_id": value.get("image_id"),
+    }
+    v3 = report_sha = None
+    if paths["report"]:
+        if paths["report"].is_file():
+            report_sha = sha_file(paths["report"])
+            report = json.loads(paths["report"].read_text(encoding="utf-8"))
+            v3 = (report.get("v3") or {}).get("score")
+            if v3 is None:
+                problems.append("REPORT.json has no v3")
+            if seal is not None and report.get("seal_sha256") != sha_file(
+                paths["seal"]
+            ):
+                problems.append("REPORT.json is not the report of this SEAL.json")
+        else:
+            problems.append(f"no {paths['report']}")
+    cache = None
+    if args.cache:
+        cache = {"sha256": cache_digest(SRC_ROOT, args.cache)}
+        post = args.cache.with_name(args.cache.name + ".post.json")
+        if post.is_file():
+            cache["post_sha256"] = json.loads(post.read_text(encoding="utf-8")).get(
+                "post_sha256"
+            )
+            if cache["post_sha256"] != cache["sha256"]:
+                problems.append(
+                    "the cache changed after the formal run (its post.json)"
+                )
+    inputs = {
+        "package_dir": root,
+        **paths,
+        "calibration": args.calibration,
+        "cache": args.cache,
+        "base": args.base,
+    }
+    receipt = {
+        "schema": SCHEMA + "/c27-receipt",
+        "utc": utc(),
+        "inputs": {k: os.path.abspath(v) if v else None for k, v in inputs.items()},
+        "manifest_sha256": manifest_sha,
+        "identity": identity,
+        "package": {
+            "files": package["files"],
+            "mismatched": package["mismatched"],
+            "fingerprint": fingerprint,
+            "runtime_identity": runtime,
+        },
+        "calibration": calibration,
+        "predictions": predictions,
+        "collect": collect,
+        "seal_checked": seal is not None,
+        "seal_sha256": sha_file(paths["seal"]) if seal is not None else None,
+        "report_sha256": report_sha,
+        "v3": v3,
+        "cache": cache,
+        "problems": problems,
+        "passed": not problems,
+    }
+    write_new(args.output, receipt)
+    print(
+        json.dumps(
+            {
+                "manifest_sha256": manifest_sha,
+                "identity": identity,
+                "calibration": calibration and calibration["sha256"],
+                **{p: predictions[p]["sha256"] for p in SMOKE_PANELS},
+                "collect": collect["sha256"],
+                "cache": cache and cache["sha256"],
+                "v3": v3,
+                "passed": receipt["passed"],
+            }
+        )
+    )
+    for line in problems:
+        print(f"c27-receipt problem: {line}", file=sys.stderr)
+    return 0 if receipt["passed"] else 1
+
+
+def template(path: str, roots: dict[str, str]) -> str:
+    """``path`` with its longest table root written as ``${ROOT}``."""
+    under = [
+        name
+        for name, root in roots.items()
+        if path == root or path.startswith(root.rstrip("/") + "/")
+    ]
+    if not under:
+        return path
+    name = max(under, key=lambda n: len(roots[n]))
+    return "${" + name + "}" + path[len(roots[name]) :]
+
+
+def layout(value: Any, indent: int = 0) -> str:
+    """JSON as the table writes it: containers of objects one entry per line, the rest inline."""
+    pad = " " * (indent + 2)
+
+    def holds_objects(v: Any) -> bool:
+        return isinstance(v, dict) or (
+            isinstance(v, list) and any(isinstance(x, dict) for x in v)
+        )
+
+    if isinstance(value, dict) and any(holds_objects(v) for v in value.values()):
+        body = ",\n".join(
+            f"{pad}{json.dumps(k)}: {layout(v, indent + 2)}" for k, v in value.items()
+        )
+        return "{\n" + body + "\n" + " " * indent + "}"
+    if isinstance(value, list) and any(isinstance(x, dict) for x in value):
+        body = ",\n".join(pad + layout(x, indent + 2) for x in value)
+        return "[\n" + body + "\n" + " " * indent + "]"
+    return json.dumps(value, ensure_ascii=False)
+
+
+def splice_block(text: str, key: str, block: dict[str, Any]) -> str:
+    """The table text with one ``candidates_27b`` block rewritten; the rest byte-identical."""
+    start = text.index('"candidates_27b"')
+    match = re.compile(r'\n( *)"' + re.escape(key) + r'": (\{)').search(text, start)
+    if match is None:
+        raise ValueError(f"no candidates_27b block {key!r} in the table text")
+    _, end = json.JSONDecoder().raw_decode(text, match.start(2))
+    return text[: match.start(2)] + layout(block, len(match.group(1))) + text[end:]
+
+
+def fill_c27(args: argparse.Namespace) -> int:
+    """Write a passed ``c27-receipt`` into a ``candidates_27b`` block of the model table."""
+    text = args.table.read_text(encoding="utf-8")
+    table = load_table(args.table)
+    roots = table["roots"]
+    if args.key not in table.get("candidates_27b", {}):
+        raise ValueError(
+            f"--key must be one of {sorted(table.get('candidates_27b', {}))}"
+        )
+    block = json.loads(json.dumps(table["candidates_27b"][args.key]))
+    receipt = json.loads(args.receipt.read_text(encoding="utf-8"))
+    if receipt.get("schema") != SCHEMA + "/c27-receipt":
+        raise ValueError("not a c27-receipt")
+    if not receipt.get("passed"):
+        raise ValueError(
+            "the receipt did not pass: " + "; ".join(receipt.get("problems", []))
+        )
+    if not (receipt.get("seal_checked") and receipt.get("v3") is not None):
+        raise ValueError("the receipt needs the formal run's SEAL.json and REPORT.json")
+    if not (receipt.get("calibration") and receipt.get("cache")):
+        raise ValueError("the receipt needs --calibration and --cache")
+    block["v3"] = round(receipt["v3"], 3)
+    block["identity"] = block["package"]["identity"] = receipt["identity"]
+    block["package"]["manifest_sha256"] = receipt["manifest_sha256"]
+    block["cache"]["sha256"] = receipt["cache"]["sha256"]
+    if args.repo:
+        block["repo"] = args.repo
+    if args.revision:
+        block["revision"] = args.revision
+    hf = [s for s in block.get("stage_node_a", []) if s["kind"] == "hf"]
+    if len(hf) != 1:
+        raise ValueError(f"{args.key}: the package must come from one hf staging step")
+    hf[0].update(repo=block["repo"], revision=block["revision"])
+    if args.include:
+        folder = re.fullmatch(r"([^*?\[\]]+?)/\*\*?", args.include)
+        if folder is None:
+            raise ValueError(
+                "--include must be SUBDIR/* (the package's folder in the repo)"
+            )
+        hf[0]["include"] = args.include
+        block["model_path"] = block["package"]["dir"] = (
+            f"{hf[0]['to']}/{folder.group(1)}"
+        )
+    sha = {
+        "calibration": receipt["calibration"]["sha256"],
+        "typed-final": receipt["predictions"]["typed-final"]["sha256"],
+        "public231": receipt["predictions"]["public231"]["sha256"],
+        "collect": receipt["collect"]["sha256"],
+    }
+    here = {
+        "calibration": block["extra"]["calibration"],
+        "typed-final": block["parity"]["stored"],
+        "public231": str(stored_predictions(block, "public231")),
+        "collect": block["stored_collect"],
+    }
+    block["files"] = [{"path": here[r], "sha256": sha[r]} for r in RECEIPT_ROLES]
+    hashed = receipt["inputs"]
+    wanted = {
+        "package": hashed["package_dir"],
+        "calibration": hashed["calibration"],
+        "cache": hashed["cache"],
+        "typed-final": hashed["typed_final"],
+        "public231": hashed["public231"],
+        "collect": hashed["collect"],
+    }
+    # Node-B sources: the stage steps' "from" and the node_b overrides must be the files hashed.
+    node_b = block.setdefault("node_b", {})
+    copies = {s["to"]: s for s in block["stage_node_a"] if s["kind"] == "copy"}
+    refs: list[tuple[str, dict[str, Any], str]] = [
+        ("package", node_b, "model_path"),
+        ("package", node_b, "package.dir"),
+        ("calibration", node_b, "extra.calibration"),
+        ("cache", node_b, "cache.frozen"),
+        ("typed-final", node_b, "parity.stored"),
+        ("collect", node_b, "stored_collect"),
+    ]
+    for role, dest in (*here.items(), ("cache", block["cache"]["frozen"])):
+        if dest not in copies:
+            raise ValueError(f"{args.key}: no copy step stages {dest}")
+        refs.append((role, copies[dest], "from"))
+    mismatches = []
+    for role, holder, field in refs:
+        current = holder.get(field)
+        filled = isinstance(current, str) and PLACEHOLDER not in current
+        if filled and not args.adopt_paths:
+            if expand(current, roots) != wanted[role]:
+                mismatches.append(
+                    f"{role}: the table has {current}, the receipt hashed {wanted[role]}"
+                )
+            continue
+        holder[field] = template(wanted[role], roots)
+    public = str(
+        stored_predictions({"parity": {"stored": node_b["parity.stored"]}}, "public231")
+    )
+    if expand(public, roots) != wanted["public231"]:
+        mismatches.append(
+            f"public231: node-B parity reads {public}, the receipt hashed {wanted['public231']}"
+        )
+    if mismatches:
+        raise ValueError(
+            "node-B paths differ from the receipt (run c27-receipt on the table's paths, or pass"
+            " --adopt-paths): " + "; ".join(mismatches)
+        )
+    there = {
+        "calibration": node_b["extra.calibration"],
+        "typed-final": node_b["parity.stored"],
+        "public231": public,
+        "collect": node_b["stored_collect"],
+    }
+    node_b["files"] = [{"path": there[r], "sha256": sha[r]} for r in RECEIPT_ROLES]
+    staged = [expand(s["to"], roots) for s in block["stage_node_a"]]
+    node_b["mounts"] = [
+        m
+        for m in block.get("mounts", [])
+        if not any(t.startswith(expand(m, roots).rstrip("/") + "/") for t in staged)
+    ] + [template(os.path.dirname(wanted["calibration"]), roots)]
+    receipt_sha = sha_file(args.receipt)
+    block["notes"] = (
+        f"{block.get('notes', '')} Values from c27-receipt {receipt_sha[:12]}"
+        f" ({receipt['utc']}).".strip()
+    )
+    left = placeholders(block) + placeholders(node_b, "node_b")
+    if left:
+        raise ValueError(f"{args.key}: PARENT-FILLS remains in {', '.join(left)}")
+    new_text = splice_block(text, args.key, block)
+    expected = json.loads(text)
+    expected["candidates_27b"][args.key] = block
+    if json.loads(new_text) != expected:
+        raise ValueError("the rewritten table does not parse back to the filled table")
+    out = args.output or args.table
+    pending = out.with_name(out.name + ".pending")
+    pending.write_text(new_text, encoding="utf-8")
+    os.replace(pending, out)
+    print(
+        json.dumps(
+            {
+                "key": args.key,
+                "v3": block["v3"],
+                "identity": block["identity"],
+                "manifest_sha256": block["package"]["manifest_sha256"],
+                "revision": block["revision"],
+                "table": str(out),
+            }
+        )
+    )
     return 0
 
 
@@ -1084,6 +1566,8 @@ def main(argv: list[str] | None = None) -> int:
         "--c9b-identity",
         "--c9b-calibration",
         "--c9b-parity-stored",
+        "--c9b-cache",
+        "--c9b-cache-sha",
     ):
         a.add_argument(flag)
     a.add_argument("--c9b-tolerance", type=float)
@@ -1131,11 +1615,38 @@ def main(argv: list[str] | None = None) -> int:
     j.add_argument("--plan", type=Path, required=True)
     k = sub.add_parser("keys")
     k.add_argument("--plan", type=Path, required=True)
-    k.add_argument("--collected", action="store_true")
+    only = k.add_mutually_exclusive_group()
+    only.add_argument("--collected", action="store_true")
+    only.add_argument("--stored", action="store_true")
     m = sub.add_parser("field")
     m.add_argument("--plan", type=Path, required=True)
     m.add_argument("--key", required=True)
     m.add_argument("--field", required=True)
+    n = sub.add_parser("c27-receipt")
+    n.add_argument("--package-dir", type=Path, required=True)
+    n.add_argument("--formal-run", type=Path)
+    for flag in (
+        "--typed-final",
+        "--public231",
+        "--collect",
+        "--seal",
+        "--report",
+        "--calibration",
+        "--cache",
+        "--base",
+    ):
+        n.add_argument(flag, type=Path)
+    n.add_argument("--hash-workers", type=int, default=8)
+    n.add_argument("--output", type=Path, required=True)
+    o = sub.add_parser("fill-c27")
+    o.add_argument("--table", type=Path, required=True)
+    o.add_argument("--key", required=True)
+    o.add_argument("--receipt", type=Path, required=True)
+    o.add_argument("--repo")
+    o.add_argument("--revision")
+    o.add_argument("--include")
+    o.add_argument("--adopt-paths", action="store_true")
+    o.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     handler = {
         "plan": plan,
@@ -1150,10 +1661,12 @@ def main(argv: list[str] | None = None) -> int:
         "stage": stage_cmd,
         "keys": keys_cmd,
         "field": field_cmd,
+        "c27-receipt": c27_receipt,
+        "fill-c27": fill_c27,
     }
     try:
         return handler[args.command](args)
-    except (ValueError, KeyError) as exc:
+    except (ValueError, KeyError, OSError) as exc:
         print(f"event3 {args.command}: {exc}", file=sys.stderr)
         return 2
 

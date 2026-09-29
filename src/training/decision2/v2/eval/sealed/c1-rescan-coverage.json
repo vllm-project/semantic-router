@@ -1,0 +1,60 @@
+{
+  "schema": "dev2-c1-rescan-coverage/1",
+  "item_sets": {
+    "v1.2": {
+      "retired": "/data/dev2/private/sealed/c1/v1_2/RETIRED-v1_2.json",
+      "retired_sha256": "bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a"
+    },
+    "v1.3": {
+      "retired": "/data/dev2/private/sealed/c1/v1_3/RETIRED-v1_3.json",
+      "retired_sha256": "62fccb3dd66c7fcae4aba3a274eef43896963cdafa19bb33c894150ef90897f3"
+    }
+  },
+  "protected_sha256": "36797f509bd96c3cb703df37cc48114c9bbdf0d2241802e56262139f4bef0a1a",
+  "baseline": {
+    "hits": "/data/dev2/runs/eval/m4/c1-event2-recheck2/overlap-hits.jsonl",
+    "sha256": "077f1b53148c1fa4bc1a84d8caebba156c5da800a8d86e8989148deeef6984dd"
+  },
+  "image": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+  "scan": [
+    "--workers",
+    "48",
+    "--exact-min-tokens",
+    "8"
+  ],
+  "hot_minutes": 90,
+  "roots": [
+    "/data/dev2/runs",
+    "/data/dev2/private",
+    "/data/dev2/tmp",
+    "/data/dev2/hf-cache",
+    "/root/.cache/huggingface/hub",
+    "/root/decision2-private"
+  ],
+  "root_globs": [
+    "/data/decision20-*",
+    "/data/decision2-*",
+    "/data/jev-research-*"
+  ],
+  "excludes": [
+    "/data/dev2/src",
+    "/data/dev2/leases",
+    "/data/dev2/logs",
+    "/data/dev2/runs/eval",
+    "/data/dev2/private/sealed",
+    "/data/dev2/private/panels",
+    "/data/dev2/private/htdev",
+    "/data/dev2/private/eval",
+    "/data/dev2/hf-cache/models--*",
+    "/data/dev2/hf-cache/*--*/blobs",
+    "/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-eval-artifacts",
+    "/root/.cache/huggingface/hub/models--*",
+    "/root/.cache/huggingface/hub/*--*/blobs"
+  ],
+  "hf_delta": {
+    "repo": "llm-semantic-router/decision-2.0-training-data",
+    "repo_type": "dataset",
+    "base": "30e0a1f79ee9b81b726c6c58d4458361b2f986c6",
+    "node": "nodeA"
+  }
+}

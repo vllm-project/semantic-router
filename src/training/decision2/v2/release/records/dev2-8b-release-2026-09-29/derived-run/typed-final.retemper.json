@@ -1,0 +1,18 @@
+{
+  "answer_changes": 0,
+  "calibration_sha256": "65297c6d72b8121174c4994da49e17dc8ff760a3d2101b7b418223c47f3ba7cc",
+  "input_sha256": "ad672049202066b924217e9600bd8dca53396947c3bf09ba870cca923f89d0e0",
+  "mode": "undo",
+  "module_sha256": "11e117383d37c7d9edcbcecb814284c9277d66d04df09776278d15fa7294b306",
+  "output_sha256": "22c9c689b7991701641114bcfa27ccd2c6b885b87f3794ccf207c7c0049e4ba3",
+  "passed": true,
+  "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+  "rows": 1600,
+  "schema": "dev2-release-retemper/1",
+  "slots": 2000,
+  "temperature_by_type": {
+    "choice": 1.4202914502934263,
+    "noul": 1.0367979528273639,
+    "score": 0.56263379725605
+  }
+}

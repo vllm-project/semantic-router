@@ -49,6 +49,11 @@ FORBIDDEN = (
 TYPED_N = {"choice": 800, "noul": 800, "score": 400}
 NO_OWN_1_0 = "no-1.0"
 NO_OWN_1_0_TEXT = "There is no Decision 1.0 model at this size."
+PUBLIC231_NOTE = (
+    "JevBench public 231: public-only rerun (about a third of the official Intelligence "
+    "inputs), not the official JevBench score; easy tier at ceiling; totals within about "
+    "10 items are not distinguishable."
+)
 MLX_SCHEMA = "dev2-mlx-diag-score/1"
 # mlx-diag Score is built from XNLI (CC BY-NC 4.0, internal use only); cards show Choice and Noul.
 MLX_CARD_TYPES = ("choice", "noul")
@@ -355,6 +360,30 @@ def _paired(path: Path | None) -> dict[str, Any] | None:
     }
 
 
+def _paired_peers(
+    shown: list[dict[str, Any]], paths: dict[str, Path]
+) -> dict[str, dict[str, Any]]:
+    """Candidate-minus-peer intervals for shown peers; each file must pair exactly those two reports."""
+    candidate = next(e for e in shown if e["role"] == "candidate")["data"]["v3"][
+        "score"
+    ]
+    result = {}
+    for entry in shown:
+        path = paths.get(entry["key"])
+        if path is None or entry["role"] == "candidate":
+            continue
+        point = _report(Path(path))["point"]
+        if (
+            abs(point["left"]["score"] - candidate) > 1e-9
+            or abs(point["right"]["score"] - entry["data"]["v3"]["score"]) > 1e-9
+        ):
+            raise ValueError(
+                f"{entry['key']}: paired file is not candidate minus this peer"
+            )
+        result[entry["key"]] = _paired(Path(path))
+    return result
+
+
 def code_example(local: str) -> str:
     example = EXAMPLES[0]
     state = json.dumps(example["state"], ensure_ascii=False)
@@ -411,6 +440,14 @@ def auto_limits(candidate: dict[str, Any], cap: int) -> list[str]:
         "Probabilities are estimates; review consequential decisions against the evidence."
     )
     return limits
+
+
+def base_name_line(facts: dict[str, Any]) -> str:
+    base = facts["name_base_model"]
+    return (
+        f"- **Name:** Named after its base model ([{base.rsplit('/', 1)[-1]}]"
+        f"(https://huggingface.co/{base})); it loads {facts['parameters']['loaded']:,} parameters."
+    )
 
 
 def render_readme(ctx: dict[str, Any]) -> str:
@@ -571,8 +608,8 @@ def render_readme(ctx: dict[str, Any]) -> str:
         "over-budget answers count as failures. JevArena v3 answers were available during development, "
         "so these are post-key same-panel comparisons, not a blind test. T is typed-decision accuracy "
         "(four-family macro), H the median macro-F1 over 15 human-labeled transfer tasks, and "
-        "v3 = 100 × sqrt(T × H). JevBench public 231 is our rerun of the 231 public questions; it is not "
-        "the official sealed JevBench rank."
+        "v3 = 100 × sqrt(T × H). "
+        + PUBLIC231_NOTE
         + mlx_note
         + " Ranks include only the models shown. "
         + (f"{text['comparator_note']} " if text.get("comparator_note") else "")
@@ -603,6 +640,7 @@ def render_readme(ctx: dict[str, Any]) -> str:
         "",
         f"- **Architecture:** {text.get('architecture') or ARCHITECTURE[facts['profile']]}",
         f"- **Parameters:** {facts['parameters']['loaded']:,} loaded ({components}).",
+        *([base_name_line(facts)] if facts.get("name_basis") == "base" else []),
         f"- **Direct weight origin:** [{origin['repo_id']}](https://huggingface.co/{origin['repo_id']}) at "
         f"`{origin['revision']}`. {origin['summary']}",
         f"- **Input limit:** {facts['max_input_tokens']:,} tokens for the complete state, question and candidates.",
@@ -723,6 +761,20 @@ def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
             else "No paired interval was supplied."
         )
     )
+    peer_pairs = [
+        (e.get("label") or e["data"]["model"]["label"], ctx["paired_peers"][e["key"]])
+        for e in shown
+        if e["key"] in ctx["paired_peers"] and e is not ctx["own"]
+    ]
+    if peer_pairs:
+        paired_text += (
+            " Against the other models shown: "
+            + "; ".join(
+                f"{label} {value['delta']:+.3f} [{value['ci95'][0]:+.3f}, {value['ci95'][1]:+.3f}]"
+                for label, value in peer_pairs
+            )
+            + "."
+        )
     text = "\n".join(
         [
             "# Evaluation",
@@ -781,6 +833,11 @@ def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
             if no_own
             else {"paired_vs_own_1_0": paired}
         ),
+        **(
+            {"paired_vs_peers": {label: value for label, value in peer_pairs}}
+            if peer_pairs
+            else {}
+        ),
         "excluded_comparators": len(ctx["excluded"]),
     }
     return text, manifest
@@ -796,8 +853,13 @@ def build_card(
     banner: Path,
     work: Path,
     output: Path,
+    paired_peers: dict[str, Path] | None = None,
 ) -> dict[str, Any]:
-    """Write README.md, assets/ and evaluation/ into ``output``; return digests."""
+    """Write README.md, assets/ and evaluation/ into ``output``; return digests.
+
+    ``paired_peers`` (report key -> candidate-minus-peer paired file) adds those
+    intervals to the evaluation page for peers the licence filter shows.
+    """
     comparison = facts.get("comparison", "own-1.0")
     selection = select_reports(entries, roster, comparison)
     shown = selection["shown"]
@@ -811,6 +873,7 @@ def build_card(
         "candidate": next(e for e in shown if e["role"] == "candidate"),
         "own": next((e for e in shown if e["role"] == slot), None),
         "paired": _paired(paired),
+        "paired_peers": _paired_peers(shown, paired_peers or {}),
     }
     if len(shown) < 2:
         raise ValueError(
