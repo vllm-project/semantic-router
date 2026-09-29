@@ -25,6 +25,8 @@ PRECISION=${PRECISION:-autocast}
 # prereg's 16,384-token fallback applies, with expandable allocator segments.
 MAX_BATCH_TOKENS=${MAX_BATCH_TOKENS:-16384}
 ALLOC_CONF=${ALLOC_CONF:-expandable_segments:True}
+# Amendment 4: one-row SELECT forwards re-gather every FSDP unit per row; batch the in-process reads.
+EVAL_BATCH=${EVAL_BATCH:-16}
 PROBE_UPDATES=${PROBE_UPDATES:-24}
 # Amendment 3 caps, from the 16,384-token probe's speed.
 FULL_CAP=${FULL_CAP:-7.5}
@@ -114,7 +116,7 @@ TRAIN_ARGS=(
   --arm "$ARM" --seed "$SEED_VALUE" --precision "$PRECISION" --max-batch-tokens "$MAX_BATCH_TOKENS"
   --max-batch-rows 64 --update-rows 64 --max-length 4096 --head-dim 256 --backbone-lr 1e-5
   --head-lr 1e-4 --weight-decay 0.01 --warmup-ratio 0.1 --brier-weight 0.5 --clip 1.0
-  --gradient-checkpointing on "${TEACHER_ARGS[@]}"
+  --gradient-checkpointing on --eval-batch "$EVAL_BATCH" "${TEACHER_ARGS[@]}"
 )
 launch() {  # NAME GPU_H GPUS PURPOSE OUT_DIR -- argv...
   local name=$1 gpu_h=$2 gpus=$3 purpose=$4 out=$5 n wall status=0
