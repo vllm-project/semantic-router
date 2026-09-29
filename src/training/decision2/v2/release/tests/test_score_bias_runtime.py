@@ -553,14 +553,23 @@ class BuildScoreBiasTest(unittest.TestCase):
         build.BRAND_DIR = self.original_brand
         self.scratch.cleanup()
 
-    def write_native(self, bias_sha):
+    def write_native(self, bias_sha, offsets=OFFSETS_35, *, entry=True):
+        """A scored native manifest as training.model.infer writes it."""
         sources = {
             name: layout.sha_file(build.SOURCE_ROOT / "training/model" / name)
             for name in ("infer.py", "data.py", "score_bias.py")
         }
-        native = {"adapter_files_sha256": sources}
+        native = {"model_sha256": self.model_sha256, "adapter_files_sha256": sources}
         if bias_sha is not None:
             native["score_bias_sha256"] = bias_sha
+            if entry:
+                native["score_bias"] = {
+                    "file_sha256": bias_sha,
+                    "offsets": {
+                        str(k): row
+                        for k, row in sorted(validate_offsets(offsets).items())
+                    },
+                }
         self.native.write_text(json.dumps(native))
 
     def build(self, spec):
@@ -579,6 +588,7 @@ class BuildScoreBiasTest(unittest.TestCase):
             {
                 "file": "score_bias.json",
                 "sha256": self.bias_sha,
+                "scored_sha256": self.bias_sha,
                 "offsets": {
                     k: [float(v) for v in row] for k, row in sorted(OFFSETS_35.items())
                 },
@@ -637,12 +647,86 @@ class BuildScoreBiasTest(unittest.TestCase):
         for name, spec in cases.items():
             with self.subTest(name), self.assertRaises(ValueError):
                 self.build(spec)
-        self.write_native("e" * 64)
+        natives = {
+            "differing offsets": ((self.bias_sha, OFFSETS_5), {}),
+            "one level differs": (
+                (self.bias_sha, {**OFFSETS_35, "3": [-0.5, 0.0, 0.5000001]}),
+                {},
+            ),
+            "no score_bias.offsets": ((self.bias_sha,), {"entry": False}),
+            "no score_bias_sha256": ((None,), {}),
+        }
+        for name, (args, kwargs) in natives.items():
+            self.write_native(*args, **kwargs)
+            with self.subTest(name), self.assertRaisesRegex(
+                ValueError, "scored run applied"
+            ):
+                self.build(self.spec)
+        native = json.loads(self.native.read_text())
+        native["score_bias"] = {"file_sha256": "e" * 64, "offsets": OFFSETS_35}
+        self.native.write_text(json.dumps(native))
+        with self.assertRaisesRegex(ValueError, "scored run applied"):
+            self.build(without(self.spec, "score_bias"))
+        self.write_native(self.bias_sha)
+        native = json.loads(self.native.read_text())
+        self.native.write_text(json.dumps({**native, "model_sha256": "b" * 64}))
         with self.assertRaisesRegex(ValueError, "scored run applied"):
             self.build(self.spec)
-        self.write_native(None)
-        with self.assertRaisesRegex(ValueError, "scored run applied"):
-            self.build(self.spec)
+
+    def test_path_free_copy_with_the_scored_offsets_builds(self):
+        public = self.dir / "public" / "score_bias.json"
+        public.parent.mkdir()
+        public.write_text(
+            json.dumps(
+                bias_report(
+                    self.model_sha256,
+                    OFFSETS_35,
+                    fit={"scored_file_sha256": self.bias_sha},
+                ),
+                indent=2,
+            )
+        )
+        public_sha = layout.sha_file(public)
+        self.assertNotEqual(public_sha, self.bias_sha)
+        spec = {**self.spec, "score_bias": {"path": str(public), "sha256": public_sha}}
+        package = self.build(spec)
+        manifest = api.verify_bundle(package)
+        self.assertEqual(manifest["score_bias"]["sha256"], public_sha)
+        self.assertEqual(manifest["score_bias"]["scored_sha256"], self.bias_sha)
+        self.assertEqual(manifest["files_sha256"]["score_bias.json"], public_sha)
+        check = manifest["runtime"]["scored_runtime_check"]
+        self.assertEqual(check["score_bias_sha256"], self.bias_sha)
+        receipt = json.loads(
+            (package.parent / f"{package.name}.build/BUILD.json").read_text()
+        )
+        self.assertEqual(receipt["score_bias"], manifest["score_bias"])
+        with StagedRuntime(package) as runtime:
+            qwen = runtime.module("qwen")
+            self.assertEqual(
+                qwen.load_score_bias_entry(package, manifest, self.model_sha256),
+                validate_offsets(OFFSETS_35),
+            )
+
+
+class ScreenScoreBiasTest(unittest.TestCase):
+    def test_screen_accepts_public_and_refuses_private_provenance(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            stage = Path(scratch)
+            path = stage / "score_bias.json"
+            public = {"scored_file_sha256": "0" * 64, "inputs": {"gold": "1" * 64}}
+            path.write_text(json.dumps(bias_report("a" * 64, OFFSETS_5, fit=public)))
+            self.assertEqual(build.screen(stage)["text_files_screened"], 1)
+            private = {
+                "inputs": {
+                    "gold": {
+                        "path": "/data/dev2/private/gold.jsonl",
+                        "sha256": "1" * 64,
+                    }
+                }
+            }
+            path.write_text(json.dumps(bias_report("a" * 64, OFFSETS_5, fit=private)))
+            with self.assertRaisesRegex(ValueError, "Private path"):
+                build.screen(stage)
 
 
 if __name__ == "__main__":

@@ -238,7 +238,7 @@ def verify_score_bias(spec: dict[str, Any], model_sha256: str) -> dict[str, Any]
 
     path = Path(entry["path"])
     if layout.sha_file(path) != entry["sha256"]:
-        raise ValueError("Score offsets file differs from the scored score_bias")
+        raise ValueError("Score offsets file differs from its pinned sha256")
     offsets, _ = load_score_bias(path, model_sha256)
     return {
         "sha256": entry["sha256"],
@@ -442,12 +442,42 @@ def vendor_runtime(
     return records
 
 
+def check_scored_score_bias(
+    spec: dict[str, Any], native: dict[str, Any], score_bias: dict[str, Any] | None
+) -> str | None:
+    """Packaged offsets must equal, by value, the offsets the scored run applied.
+
+    The packaged file may differ in bytes (e.g. public-only ``fit`` provenance);
+    answers depend only on the model hash and the offsets. Returns the scored
+    file's SHA-256.
+    """
+    scored_entry = native.get("score_bias")
+    scored_sha = native.get("score_bias_sha256")
+    if not spec.get("score_bias"):
+        if scored_entry is not None or scored_sha is not None:
+            raise ValueError("The scored run applied Score offsets; the spec has none")
+        return None
+    if score_bias is None:
+        raise ValueError("Score offsets are not verified against the checkpoint")
+    if (
+        not isinstance(scored_sha, str)
+        or not isinstance(scored_entry, dict)
+        or scored_entry.get("file_sha256") != scored_sha
+        or scored_entry.get("offsets") != score_bias["offsets"]
+        or native.get("model_sha256") != spec["expected_identity"].get("model_sha256")
+    ):
+        raise ValueError("Score offsets differ from the ones the scored run applied")
+    return scored_sha
+
+
 def check_scored_runtime(
-    spec: dict[str, Any], records: dict[str, Any]
+    spec: dict[str, Any],
+    records: dict[str, Any],
+    score_bias: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Vendored sources must equal the scored adapter sources recorded at scoring time.
 
-    Score offsets must be the file the scored run applied (``score_bias_sha256``).
+    ``score_bias`` is the verified spec entry (``verify_score_bias``).
     """
     scored = spec.get("scored") or {}
     path = scored.get("native_manifest")
@@ -456,8 +486,7 @@ def check_scored_runtime(
             raise ValueError("Score offsets need the scored native manifest")
         return None
     native = _object(Path(path))
-    if native.get("score_bias_sha256") != (spec.get("score_bias") or {}).get("sha256"):
-        raise ValueError("Score offsets differ from the ones the scored run applied")
+    scored_score_bias = check_scored_score_bias(spec, native, score_bias)
     recorded = native.get("adapter_files_sha256") or {}
     if "score_bias.py" in recorded and not any(
         record.get("source") == "training/model/score_bias.py"
@@ -474,7 +503,10 @@ def check_scored_runtime(
                         f"Vendored {source} differs from the scored adapter source"
                     )
                 checked[source] = recorded[key]
-    return {"native_manifest_sha256": layout.sha_file(Path(path)), "checked": checked}
+    result = {"native_manifest_sha256": layout.sha_file(Path(path)), "checked": checked}
+    if scored_score_bias is not None:
+        result["score_bias_sha256"] = scored_score_bias
+    return result
 
 
 def write_licences(spec: dict[str, Any], stage: Path, decision: dict[str, Any]) -> None:
@@ -682,7 +714,9 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
         runtime = vendor_runtime(spec, stage, identity)
         for name, record in runtime.items():
             record["sha256"] = layout.sha_file(stage / name)
-        scored_runtime = check_scored_runtime(spec, runtime)
+        scored_runtime = check_scored_runtime(spec, runtime, identity.get("score_bias"))
+        if score_bias:
+            score_bias["scored_sha256"] = scored_runtime["score_bias_sha256"]
         write_licences(spec, stage, decision)
         banner = spec["card"].get("banner") or f"{spec['model_name']}-owl-banner.png"
         facts = {
@@ -841,6 +875,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "external_base_text": external,
         },
         "identity": {k: v for k, v in identity.items() if k != "fingerprint_files"},
+        **({"score_bias": score_bias} if score_bias else {}),
         "card": card,
         "screen": screened,
         "licence": decision["spdx"],
