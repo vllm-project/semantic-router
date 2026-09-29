@@ -60,4 +60,4 @@ Before deleting, inspect the target with `get` or `list`. `recipe plan recipe.ya
 
 ## Interaction with the Dashboard
 
-The recipe commands and the Dashboard's configuration editors act on the same canonical configuration through the same management API. Keep one interface as the source of truth for a deployment and use the others to inspect rather than to overwrite independently. The ETag preconditions reject writes that raced with another interface, but they cannot resolve a disagreement about which interface is authoritative.
+The recipe commands and the Dashboard's configuration editors act on the same canonical configuration through different paths: the commands go through the Router management API, where each write compare-and-swaps under a freshly fetched collection ETag, while the Dashboard writes the configuration and propagates it to the runtime itself. Keep one interface as the source of truth for a deployment and use the other to inspect rather than to overwrite independently. The ETag precondition guards writes made through the command path; it does not make the Dashboard's writes participate in it.
