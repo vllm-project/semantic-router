@@ -1393,7 +1393,7 @@ VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
 | --- | --- |
 | `--config TEXT` | Path to the Router configuration.  [default: config.yaml] |
 | `--replace-active-config` | Replace this local Docker stack's active runtime config from --config, discarding Dashboard edits. Default: false. |
-| `--image TEXT` | Docker image to use (default: ghcr.io/vllm-project/semantic-router/vllm-sr:latest) |
+| `--image TEXT` | Docker image to use (default: ghcr.io/vllm-project/semantic-router/vllm-sr:v0.4.0) |
 | `--router-image TEXT` | Docker image for the router container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |
 | `--envoy-image TEXT` | Docker image for the Envoy container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |
 | `--dashboard-image TEXT` | Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |

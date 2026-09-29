@@ -22,9 +22,10 @@ Examples:
 When next-version is omitted, the script defaults to the next minor base
 version (for example 0.3.0 -> 0.4.0).
 
-The script updates every versioned surface validated by the release workflow:
-the vllm-sr Python package and the candle-semantic-router Rust crate. It also
-runs the repo-level release contract check before creating the stable tag.
+The script updates the vllm-sr Python package and keeps an existing Candle
+crate patch version on the same major.minor release line. When starting a new
+release line, it updates the crate to the release version. It runs the
+repo-level release contract check before creating the stable tag.
 EOF
 }
 
@@ -114,14 +115,15 @@ write_version() {
 }
 
 release_files_match() {
-  local expected
+  local expected candle
   expected="$1"
-  [ "$(current_version)" = "$expected" ] && [ "$(current_candle_version)" = "$expected" ]
+  candle="$(current_candle_version)"
+  [ "$(current_version)" = "$expected" ] && [ "${candle%.*}" = "${expected%.*}" ]
 }
 
 default_next_version() {
-  local major minor patch
-  IFS='.' read -r major minor patch <<EOF
+  local major minor
+  IFS='.' read -r major minor _ <<EOF
 $RELEASE_VERSION
 EOF
   printf '%s\n' "$((major + 0)).$((minor + 1)).0"
@@ -169,7 +171,10 @@ main() {
   echo "  candle-semantic-router $candle_current"
 
   if ! release_files_match "$RELEASE_VERSION"; then
-    write_version "$RELEASE_VERSION"
+    write_pyproject_version "$RELEASE_VERSION"
+    if [ "${candle_current%.*}" != "${RELEASE_VERSION%.*}" ]; then
+      write_candle_version "$RELEASE_VERSION"
+    fi
     commit_if_changed "chore(vllm-sr): release v$RELEASE_VERSION" || true
   fi
 

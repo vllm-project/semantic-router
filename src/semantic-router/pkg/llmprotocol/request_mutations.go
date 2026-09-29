@@ -99,6 +99,10 @@ func BlockRequestField(request *Request, field string) (bool, error) {
 		changed := request.CacheSalt != nil
 		request.CacheSalt = nil
 		return changed, nil
+	case "prompt_cache_key":
+		changed := request.PromptCacheKey != ""
+		request.PromptCacheKey = ""
+		return changed, nil
 	case "top_k":
 		changed := request.Sampling.TopK != nil
 		request.Sampling.TopK = nil

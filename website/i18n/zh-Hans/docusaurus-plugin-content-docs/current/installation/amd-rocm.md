@@ -163,6 +163,8 @@ vllm-sr serve --platform amd --config vela-amd.yaml
 
 平台标志选择镜像和设备访问，具名 deployment 选择实际 provider 与计算图；显式 CPU 选择仍然保留。MIGraphX 冷编译可能比缓存启动更慢。CLI 默认等待 1,800 秒；若实测需要更长时间，可用 `--startup-timeout SECONDS` 设置有界等待。超时后所属容器仍保留，可继续查看日志与就绪状态。
 
+AMD Docker 部署会把 Router 的 COMGR 编译缓存保存在 `<state-root>/.vllm-sr/compiler-cache/`，按 stack 和不可变 Router 镜像隔离。相同镜像重启时可以复用已编译的内核；更换镜像或镜像内 ROCm 用户态版本后会使用新的缓存。默认 state root 是源配置所在目录。需要清理旧镜像缓存时，请先停止对应 stack。
+
 `/ready` 成功后，查看真实信号与时延：
 
 ```bash
