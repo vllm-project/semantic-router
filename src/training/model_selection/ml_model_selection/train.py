@@ -68,6 +68,7 @@ def create_training_samples(
                 model_name=record.model_name,
                 quality=record.quality,
                 latency_ms=record.latency_ms,
+                query_id=record.query,
             )
         )
 
