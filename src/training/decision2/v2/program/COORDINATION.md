@@ -191,6 +191,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 09:25 — HT-DEV v1 validated (eval records under `v2/eval/records/`; integration `af16d465f`; "Eval runners"):
+  it does NOT track formal human transfer better than the CSS pilot (within-tier sign agreement .539 vs pilot median .539
+  and pilot three-task mean .607; within-tier r .396 / .402 / .523; P(HT-DEV better) .51 vs a .90 bar). Rules:
+  - Proxy v2 and its tie band 8 stay. For human-transfer screening use the **CSS-pilot three-task mean** (best of the three);
+    human transfer is decided only by the formal paired CSS15 CI. HT-DEV is a registered diagnostic, never for selection.
+  - **Score5-DEV v1** (500 A7q held-out items, `score5` block in the dev readout) is NOT a gate: it missed the known
+    `m6-mxcx-soup` collapse (on human-rating rows that soup leans on level 0, while on typed FINAL it collapses to level 4).
+  - **0.6B track (Milestone 7, option a):** fit the per-level Score bias on CAL698 Score rows plus held-out slices of the
+    GENERATED Score arms (A7g, G6, A6g — programmatic, like typed FINAL Score), not on A7q human ratings; check level usage on
+    typed-DEV Score and those generated slices before the formal run. If you already fitted on A7q, re-fit before the formal run
+    and disclose.
+
 - 2026-09-29 09:00 — DEV2.0-4B package verified (gist `07d-decision-2-release-4b.md`; integration `31d21a4ec`): private
   `llm-semantic-router/DEV2.0-4B@8052eb6c99c0b3b6a9980dcd77fb868c27da353a` (card-only on top of the full-parity upload
   `c73123f3`; manifest `eab4e8ac…`; 4,208,383,488 loaded parameters; 16.85 GB; T = 1 — CAL698 worsened CSS-pilot ECE
@@ -1199,3 +1211,65 @@ Record `v2/eval/records/m5-proxy-v2-calibration-2026-09-29.md` (prereg `79482d86
 - **Re-run the calibration** when new formal candidates land:
   `python3 -m v2.eval.proxy_calibration extract --spec <spec.json> --output <features.json>` (node A, CPU), then
   `... analyze --features <features.json> --output <analysis.json>`.
+
+### Development proxy v3 (HT-DEV): NOT adopted, proxy v2 stays (eval track, 2026-09-29 ~09:25 UTC+8; code at `af16d465f` or later)
+
+Record `v2/eval/records/htdev-validation-2026-09-29.md` (prereg `htdev-prereg-2026-09-29.md` §5–§6 plus amendments 1–2;
+aggregates in `records/htdev-validation/`).
+
+- **HT-DEV v1 does not track formal human transfer better than the three-task CSS pilot, so no track switches.**
+  - Scope: the full preregistered set of 37 models (0.6B–9B own 1.0, peers and 2.0 candidates). Each has one same-job
+    `ht-dev,css-pilot,typed-dev` collection, compared against the stored post-key CSS15 H. No v3 item was re-read; no C1.
+  - Primary (within-tier sign agreement on pairs with |ΔH_formal| ≥ 0.02): HT-DEV 48/89 = 0.539, the same as the pilot
+    median (48/89). The pilot three-task mean gets 54/89 = 0.607. Paired model bootstrap P(HT-DEV better) = 0.51 against
+    a bar of 0.90.
+  - Within-tier Pearson r: 0.396 vs 0.402 (three-task mean 0.523). Cross-tier Spearman: 0.77 vs 0.81.
+  - Per tier, HT-DEV wins at 4B (16 vs 9 of 28 pairs) and 2B, and loses at 9B (2 vs 6 of 7), 0.8B and 0.6B. It
+    over-rates the JPT peers.
+  - Its 10%-risk gap against formal H is 0.12, wider than the whole within-tier formal-H range at 0.8B, 4B and 9B.
+- **P_HT = 100·√(T_dev·H_dev) orders v3 worse than P**, computed for the record only: 58/90 vs 67/90 within-tier
+  decision pairs, LOO RMSE 3.42 vs 3.23.
+- **Rules, unchanged and now confirmed:**
+  - Proxy v2 stands: P = 100·√(T_dev·H_pilot), v3 ≈ 22.4 + 0.58·P, tie band |ΔP| < 8. Drop only candidates ≥ 8 P
+    behind the best; send at most three finalists per tier to the formal runner.
+  - **Human transfer is decided only by the formal paired CSS15 CI.** No development panel (HT-DEV, the pilot median
+    or the three-task mean) orders within-tier candidates on formal H reliably. Release-gate formal-H pair CIs span
+    about 0.13–0.18, so within-tier gaps below about 0.05 sit inside the target's own noise.
+  - Never select on H_dev, H_pilot or a single task.
+- **HT-DEV stays registered** (`ht-dev`: 3,240 items, 13 tasks, dataset-isolated) as a diagnostic development panel
+  only, never a proxy, screen or selection criterion.
+  - Collections and validation are on node A under `/data/dev2/runs/eval/htdev/{collect,validation}`.
+  - Backup: private eval-artifacts dataset, `htdev/v1/` at `ad4b958e`.
+  - GPU: 3.27 GPU-h in total (build 0.64 + collections 2.63); the validation itself was CPU only.
+
+### 5-level Score development check (Score5-DEV v1; eval track, 2026-09-29 ~09:25 UTC+8; code at `af16d465f` or later)
+
+Record `v2/eval/records/score5-dev-2026-09-29.md` (prereg `score5-dev-prereg-2026-09-29.md`).
+
+- **It is built and in the dev readout, but it does NOT detect the m6 collapse. Do not use it as a collapse gate.**
+  - Panel: 500 items, 100 per level, from the A7q held-out slice (OASST1 reply ratings). The rows are familiar and in
+    family.
+  - Preregistered flags: COLLAPSE when the modal share is ≥ 0.60 or ≥ 2 levels are each used < 2%; WARN when the
+    modal share is ≥ 0.40 or one level is used < 2%.
+  - `m6-mxcx-soup`, which collapsed to level 4 on typed FINAL, is unflagged here: modal share 0.38 on level 0,
+    accuracy 0.34. So are mxcxa and cx.
+  - The released T soup gets WARN: it uses level 4 for 1% of answers, accuracy 0.236.
+  - The collapse is out-of-family behaviour; in-family rows don't show it. Cost: 0.03 GPU-h (node A GPU5).
+- **Fit pool, for 0.6B Milestone 7 and any track fitting on A7q held-out rows:**
+  - Fit only on the 1,913 `aho.jsonl` rows whose `id` is not in
+    `/data/dev2/runs/eval/score5-dev/build-v1/panel-rows.jsonl` (also in eval-artifacts `score5-dev/v1/`, `1b6924f6`).
+    The 500 panel rows are evaluation-only.
+  - On these in-family rows the mxcx soup over-uses level 0, not level 4. A per-level bias correction fitted on in-family
+    A7q slices may therefore not transfer to typed FINAL. The formal typed FINAL Score level usage (as in the 08:20 note)
+    and the gate's "no type collapsed" remain the check.
+- **In-family readout for a candidate** (code ≥ `1eb2d2928`). The readout JSON gains a `score5` block with the histogram,
+  modal share, rare levels, accuracy CI, macro-F1, QWK and flags:
+  1. `run_same_panel.sh ... -- ... --panels typed-dev,css-pilot,score5-dev`
+  2. `python3 -m v2.eval.htdev.score seal --prompts /data/dev2/private/panels/goldfree/score5-dev.prompts.jsonl --predictions <run>/output/score5-dev.predictions.jsonl --output <run>/SEAL-SCORE5.json`
+  3. `python3 -m v2.eval.dev_readout --run-dir <run> ...`
+- **Next eval worker: build an out-of-family 5-level Score development check.**
+  - Candidate sources: fresh 5-level items from the typed-panel generator family, disjoint from typed FINAL, if such a
+    generator exists; or out-of-family human-rated 5-level sources.
+  - Validate on mxcx vs mxcxa: two short 0.6B collections, < 0.05 GPU-h.
+  - HT-DEV's empathy task does not qualify as it stands. The T soup already puts 74% of its answers on one level there,
+    and every model is at chance accuracy.
