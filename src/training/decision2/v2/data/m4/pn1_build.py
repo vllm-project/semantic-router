@@ -3,6 +3,9 @@
     python3 -m v2.data.m4.pn1_build candidates --source-dir SRC --work-dir WORK [--workers N]
     python3 -m v2.data.m4.pn1_build judgeset --work-dir WORK --gen-dir DIR [--gen-dir DIR ...]
     python3 -m v2.data.m4.pn1_build judgeset-extend --work-dir WORK --judge-dir DIR ... [--dry-run]
+    python3 -m v2.data.m4.pn1_build probe-items --work-dir WORK
+    python3 -m v2.data.m4.pn1_build probe-eval --judge-dir DIR --output FILE
+    python3 -m v2.data.m4.pn1_build judgeset-rejudge --work-dir WORK [--prompt-version v2]
     python3 -m v2.data.m4.pn1_build finalize --work-dir WORK --source-dir SRC --judge-dir DIR ... \
         --gpu-time-dir DIR --output-root ROOT [--judgeset judgeset2] \
         [--drop-groups FILE --expect-selection SHA256]
@@ -16,18 +19,23 @@ neighbourhood or near-duplicating a dev sentence, balances TRAIN and writes the
 outputs. ``judgeset-extend`` (amendment 2) adds unjudged rows per language,
 stratum and label, in seed-hash order, until the rows kept so far plus the
 expected keeps at the measured keep rates reach 1.25 x the planned units.
+Amendment 3: ``probe-items`` / ``probe-eval`` run the control probe and
+``judgeset-rejudge`` judges the whole pool again with the v2 prompts.
 
-Balance: strata are group (natural = hop + near, swap = name + twin) x
-same-multiset flag x bigram-Jaccard bin. A group's units (one yes + one no row)
-are apportioned over its strata in proportion to the balanced counts
-min(yes, no) (largest remainder), and each stratum takes that many yes and no
-rows in ``sha256("pn1-seed:" + group key)`` order. Dev draws per stratum and
-label in ``sha256("pn1-dev:" + group key)`` order, with stratum units and
-family quotas proportional to the planned TRAIN selection.
+Balance (amendment 3): within language x group (natural = hop + near, swap =
+name + twin) x same-multiset flag, yes and no rows are matched 1:1 (greedy
+nearest neighbour on bigram Jaccard, multiset Jaccard and length ratio,
+caliper 0.03 on each; no rows in ``sha256("pn1-seed:" + group key)`` order);
+unmatched rows are dropped. A group's pairs are apportioned over its two
+strata in proportion to their pair counts (largest remainder), first pairs
+first. Dev draws matched pairs in ``sha256("pn1-dev:" + no-row group key)``
+order, with stratum units and family-pair quotas proportional to the planned
+TRAIN selection. The bigram bins stay as reported strata only.
 
 ``--drop-groups`` recomputes the same selection, removes the listed groups and
-trims every (language, split, stratum) to equal yes/no counts, dropping the
-last rows in selection order, so the result is a subset of the audited rows.
+re-matches the remaining rows of each (language, split), keeping every matched
+pair, so the result is a subset of the audited rows (an empty list reproduces
+the selection).
 """
 
 from __future__ import annotations
@@ -60,9 +68,9 @@ from v2.data.m4.pn1_text import (
     INSTRUCTIONS,
     LANGS,
     LAYOUTS,
-    fluency_prompt,
+    PROMPTS,
+    extra_metrics,
     grams,
-    label_prompt,
     near_duplicate,
     norm,
     pair_metrics,
@@ -103,6 +111,14 @@ MIX_TOLERANCE = 0.10
 DEV_PASSES = 3
 LONG_INPUT_CHARS = 4000
 FEATURES = ("bigram_jaccard", "multiset_jaccard", "same_multiset", "length_ratio")
+FEATURES_EXTENDED = FEATURES + (
+    "word_jaccard",
+    "edit_distance",
+    "containment_ab",
+    "containment_ba",
+)
+MATCH_COORDINATES = ("bigram_jaccard", "multiset_jaccard", "length_ratio")
+CALIPER = 0.03
 
 
 # --- small helpers ----------------------------------------------------------------------------
@@ -502,8 +518,9 @@ def judge_selection(
     return chosen, info
 
 
-def judge_items(record: dict[str, Any]) -> list[dict[str, Any]]:
+def judge_items(record: dict[str, Any], version: str = "v1") -> list[dict[str, Any]]:
     lang, texts = record["language"], record["texts"]
+    label_prompt_, fluency_prompt_ = PROMPTS[version]
     order = "ab" if pick(record["cid"], "judge-order", 2) == 0 else "ba"
     a, b = texts if order == "ab" else texts[::-1]
     items = [
@@ -514,7 +531,7 @@ def judge_items(record: dict[str, Any]) -> list[dict[str, Any]]:
             "language": lang,
             "order": order,
             "rank": record["rank"],
-            "prompt": label_prompt(lang, a, b),
+            "prompt": label_prompt_(lang, a, b),
         }
     ]
     for index, edited in enumerate(record["edited"]):
@@ -526,7 +543,7 @@ def judge_items(record: dict[str, Any]) -> list[dict[str, Any]]:
                     "kind": "fluency",
                     "language": lang,
                     "rank": record["rank"],
-                    "prompt": fluency_prompt(lang, texts[index]),
+                    "prompt": fluency_prompt_(lang, texts[index]),
                 }
             )
     return items
@@ -691,49 +708,129 @@ def family_mix(records: list[dict[str, Any]]) -> dict[str, float]:
     return {family: round(counts[family] / total, 6) for family in FAMILIES}
 
 
+def match_stratum(record: dict[str, Any]) -> str:
+    return f"{record['group']}|ms{int(bool(record['metrics']['same_multiset']))}"
+
+
+def match_pairs(
+    records: list[dict[str, Any]],
+) -> dict[str, list[tuple[dict[str, Any], dict[str, Any], float]]]:
+    """Greedy 1:1 nearest-neighbour matching of yes to no rows (amendment 3).
+
+    Per construction group x same-multiset flag (the caller passes one language), no
+    rows are taken in seed-hash order; each takes the unmatched yes row with every
+    coordinate of MATCH_COORDINATES within CALIPER that is nearest in Euclidean
+    distance (ties: seed-hash order). Returns (no, yes, distance) per stratum in that order.
+    """
+    by_stratum: dict[str, dict[int, list[dict[str, Any]]]] = collections.defaultdict(
+        lambda: {0: [], 1: []}
+    )
+    for record in records:
+        by_stratum[match_stratum(record)][record["label"]].append(record)
+    out: dict[str, list[tuple[dict[str, Any], dict[str, Any], float]]] = {}
+    for s in sorted(by_stratum):
+        yes = sorted(by_stratum[s][1], key=seed_key)
+        no = sorted(by_stratum[s][0], key=seed_key)
+        buckets: dict[int, list[int]] = collections.defaultdict(list)
+        coords = [[float(r["metrics"][c]) for c in MATCH_COORDINATES] for r in yes]
+        for index, point in enumerate(coords):
+            buckets[math.floor(point[0] / CALIPER)].append(index)
+        used = [False] * len(yes)
+        pairs = []
+        for record in no:
+            mine = [float(record["metrics"][c]) for c in MATCH_COORDINATES]
+            home = math.floor(mine[0] / CALIPER)
+            best = None
+            for bucket in (home - 1, home, home + 1):
+                for index in buckets.get(bucket, ()):
+                    if used[index]:
+                        continue
+                    point = coords[index]
+                    if any(abs(p - q) > CALIPER + 1e-12 for p, q in zip(point, mine)):
+                        continue
+                    distance = math.sqrt(sum((p - q) ** 2 for p, q in zip(point, mine)))
+                    if best is None or (distance, index) < best:
+                        best = (distance, index)
+            if best is not None:
+                used[best[1]] = True
+                pairs.append((record, yes[best[1]], round(best[0], 6)))
+        out[s] = pairs
+    return out
+
+
+def balance_matched(
+    records: list[dict[str, Any]], targets: dict[str, int]
+) -> tuple[list[dict[str, Any]], dict[str, int], set[str]]:
+    """Matched pairs per group apportioned over the ms strata (largest remainder); the
+    first pairs in matching order. Returns rows, units per stratum and all matched cids.
+    """
+    pairs = match_pairs(records)
+    matched = {r["cid"] for ps in pairs.values() for p in ps for r in p[:2]}
+    chosen: list[dict[str, Any]] = []
+    units: dict[str, int] = {}
+    for group in ("natural", "swap"):
+        avail = {s: len(ps) for s, ps in pairs.items() if s.startswith(group + "|")}
+        for s, n in allocate(targets[group] // 2, avail, avail).items():
+            units[s] = n
+            for no, yes, distance in pairs[s][:n]:
+                no["match"] = {"partner": yes["cid"], "distance": distance}
+                yes["match"] = {"partner": no["cid"], "distance": distance}
+                chosen += [yes, no]
+    return chosen, units, matched
+
+
 def draw_dev(
     records: list[dict[str, Any]],
     lang: str,
     plan: list[dict[str, Any]],
     plan_units_by_stratum: dict[str, int],
 ) -> list[dict[str, Any]]:
+    """Matched pairs in sha256("pn1-dev:" + no-row key) order, with stratum units and
+    (yes family, no family) quotas proportional to the planned TRAIN selection."""
     quota = DEV_QUOTAS[lang]
     share = sum(r["group"] == "swap" for r in plan) / len(plan) if plan else None
     targets = group_targets(lang, quota, share)
-    cells = cells_of(records, dev_key)
-    strata = sorted({s for s, _ in cells})
-    family_weights = collections.Counter(
-        (r["stratum"], r["label"], r["family"]) for r in plan
+    pairs = {
+        s: sorted(ps, key=lambda p: dev_key(p[0]))
+        for s, ps in match_pairs(records).items()
+    }
+    by_cid = {r["cid"]: r for r in plan}
+    combo_weights = collections.Counter(
+        (match_stratum(r), r["family"], by_cid[r["match"]["partner"]]["family"])
+        for r in plan
+        if r["label"] == 0 and r.get("match", {}).get("partner") in by_cid
     )
     dev: list[dict[str, Any]] = []
     for group in ("natural", "swap"):
-        avail = {
-            s: min(len(cells.get((s, 0), [])), len(cells.get((s, 1), [])))
-            for s in strata
-            if s.startswith(group + "|")
-        }
+        avail = {s: len(ps) for s, ps in pairs.items() if s.startswith(group + "|")}
         weights = {s: plan_units_by_stratum.get(s, 0) for s in avail}
         for s, n in allocate(targets[group] // 2, weights, avail).items():
-            for label in (1, 0):
-                cell = cells[(s, label)]
-                available = collections.Counter(r["family"] for r in cell)
-                quotas = allocate(
-                    n,
-                    {f: family_weights[(s, label, f)] for f in available},
-                    dict(available),
-                )
-                taken, counts = [], collections.Counter()
-                for record in cell:
-                    if counts[record["family"]] < quotas.get(record["family"], 0):
-                        taken.append(record)
-                        counts[record["family"]] += 1
-                chosen = {r["cid"] for r in taken}
-                for record in cell:
-                    if len(taken) >= n:
-                        break
-                    if record["cid"] not in chosen:
-                        taken.append(record)
-                dev += sorted(taken, key=dev_key)[:n]
+            cell = pairs[s]
+            available = collections.Counter(
+                (p[0]["family"], p[1]["family"]) for p in cell
+            )
+            quotas = allocate(
+                n,
+                {c: combo_weights[(s, *c)] for c in available},
+                dict(available),
+            )
+            taken, counts = [], collections.Counter()
+            for pair in cell:
+                combo = (pair[0]["family"], pair[1]["family"])
+                if counts[combo] < quotas.get(combo, 0):
+                    taken.append(pair)
+                    counts[combo] += 1
+            chosen = {p[0]["cid"] for p in taken}
+            for pair in cell:
+                if len(taken) >= n:
+                    break
+                if pair[0]["cid"] not in chosen:
+                    taken.append(pair)
+            for no, yes, distance in taken[:n]:
+                dev += [
+                    dict(yes, match={"partner": no["cid"], "distance": distance}),
+                    dict(no, match={"partner": yes["cid"], "distance": distance}),
+                ]
     return dev
 
 
@@ -741,7 +838,7 @@ def select_language(
     records: list[dict[str, Any]], lang: str, graph: source.LinkGraph
 ) -> dict[str, Any]:
     targets = group_targets(lang, TRAIN_TARGETS[lang])
-    plan, units = balance(records, targets)
+    plan, units, _ = balance_matched(records, targets)
     passes = []
     for attempt in range(DEV_PASSES):
         dev = draw_dev(records, lang, plan, units)
@@ -757,7 +854,7 @@ def select_language(
                 train_pool.append(record)
             else:
                 blocked[record["cid"]] = reason
-        train, train_units = balance(train_pool, targets)
+        train, train_units, matched = balance_matched(train_pool, targets)
         dev_mix, train_mix = family_mix(dev), family_mix(train)
         worst = (
             max(abs(dev_mix[f] - train_mix[f]) for f in FAMILIES)
@@ -788,21 +885,24 @@ def select_language(
             "ok": worst <= MIX_TOLERANCE,
         },
         "train_units": train_units,
+        "train_pool_matched": matched,
+        "train_pool_size": len(train_pool),
     }
 
 
 def trim(
-    records: list[dict[str, Any]], key
+    records: list[dict[str, Any]], key=None
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Equal yes/no per stratum: keep the first min(yes, no) of each label in key order."""
-    cells = cells_of(records, key)
-    kept, removed = [], []
-    for s in sorted({s for s, _ in cells}):
-        yes, no = cells.get((s, 1), []), cells.get((s, 0), [])
-        n = min(len(yes), len(no))
-        kept += yes[:n] + no[:n]
-        removed += yes[n:] + no[n:]
-    return kept, removed
+    """Re-match the rows (amendment 3 matching) and keep every matched pair."""
+    kept = []
+    for pairs in match_pairs(records).values():
+        for no, yes, distance in pairs:
+            kept += [
+                dict(yes, match={"partner": no["cid"], "distance": distance}),
+                dict(no, match={"partner": yes["cid"], "distance": distance}),
+            ]
+    ids = {r["cid"] for r in kept}
+    return kept, [r for r in records if r["cid"] not in ids]
 
 
 def apply_drops(selection: dict[str, dict[str, Any]], drop: set[str]) -> dict[str, Any]:
@@ -828,7 +928,11 @@ def apply_drops(selection: dict[str, dict[str, Any]], drop: set[str]) -> dict[st
 
 
 def make_row(
-    record: dict[str, Any], split: str, export_date: str, judge_model: str
+    record: dict[str, Any],
+    split: str,
+    export_date: str,
+    judge_model: str,
+    prompt_version: str = "v1",
 ) -> dict[str, Any]:
     rid = row_id(export_date, record)
     k, j, swap = (
@@ -858,10 +962,13 @@ def make_row(
                 "length_ratio",
                 "bin",
             )
-        },
+        }
+        | extra_metrics(first, second),
         "stratum": record["stratum"],
+        "match": record.get("match"),
         "judge": {
             "model": judge_model,
+            "prompt_version": prompt_version,
             "label_p_yes": record["judge"]["label"],
             "label_order": record["judge"]["label_order"],
             "fluency_p_yes": record["judge"].get("fluency"),
@@ -1045,16 +1152,19 @@ def fit_logistic(
     return w
 
 
-def overlap_features(row: dict[str, Any]) -> list[float]:
+def overlap_features(row: dict[str, Any], features=FEATURES) -> list[float]:
     overlap = row["audit_metadata"]["overlap"]
-    return [float(overlap[name]) for name in FEATURES]
+    return [float(overlap[name]) for name in features]
 
 
-def cv_accuracy(rows: list[dict[str, Any]], folds: int = 5) -> dict[str, Any]:
+def cv_accuracy(
+    rows: list[dict[str, Any]], folds: int = 5, features=FEATURES
+) -> dict[str, Any]:
     if len(rows) < 2 * folds:
         return {"n": len(rows), "skipped": "too few rows"}
     fold_of = [int(sha(f"pn1-fold:{r['group_id']}"), 16) % folds for r in rows]
-    x = [overlap_features(r) for r in rows]
+    x = [overlap_features(r, features) for r in rows]
+    width = len(features)
     y = [r["label"] for r in rows]
     correct = majority = 0
     for fold in range(folds):
@@ -1062,13 +1172,13 @@ def cv_accuracy(rows: list[dict[str, Any]], folds: int = 5) -> dict[str, Any]:
         test = [i for i in range(len(rows)) if fold_of[i] == fold]
         if not train or not test:
             continue
-        means = [sum(x[i][c] for i in train) / len(train) for c in range(len(FEATURES))]
+        means = [sum(x[i][c] for i in train) / len(train) for c in range(width)]
         scales = [
             math.sqrt(sum((x[i][c] - means[c]) ** 2 for i in train) / len(train)) or 1.0
-            for c in range(len(FEATURES))
+            for c in range(width)
         ]
         z = [
-            [(x[i][c] - means[c]) / scales[c] for c in range(len(FEATURES))]
+            [(x[i][c] - means[c]) / scales[c] for c in range(width)]
             for i in range(len(rows))
         ]
         w = fit_logistic([z[i] for i in train], [y[i] for i in train])
@@ -1090,6 +1200,7 @@ def self_check(
 ) -> dict[str, Any]:
     report: dict[str, Any] = {
         "features": list(FEATURES),
+        "features_extended": list(FEATURES_EXTENDED),
         "folds": "5, group-disjoint by sha256('pn1-fold:'+group_id)",
     }
     for split, rows in (("train", train_rows), ("dev", dev_rows)):
@@ -1104,6 +1215,7 @@ def self_check(
                 "label_rate": round(sum(r["label"] for r in mine) / len(mine), 6),
                 "family_mix": family_mix(mine),
                 "overlap_lr": cv_accuracy(mine),
+                "overlap_lr_extended": cv_accuracy(mine, features=FEATURES_EXTENDED),
             }
         report[split] = entry
     return report
@@ -1354,6 +1466,276 @@ def cmd_judgeset_extend(args: argparse.Namespace) -> int:
     return 0
 
 
+PROBE_PER_LANGUAGE = 25
+PROBE_PASS = {
+    "identical_median": 0.90,
+    "coord_median": 0.80,
+    "seed_fluency_share": 0.80,
+}
+
+
+def original_sentences(pool: list[dict[str, Any]]) -> dict[str, dict[int, str]]:
+    """Unedited Tatoeba sentences of the pool, per language."""
+    out: dict[str, dict[int, str]] = collections.defaultdict(dict)
+    for record in pool:
+        for index, (value, edited) in enumerate(zip(record["texts"], record["edited"])):
+            if not edited:
+                sid = (
+                    record["ids"][index]
+                    if len(record["ids"]) > index
+                    else record["ids"][0]
+                )
+                out[record["language"]][sid] = value
+    return out
+
+
+def cmd_probe_items(args: argparse.Namespace) -> int:
+    """Amendment 3 control probe: identical pairs, coordination swaps and seed fluency,
+    25 per language each (hash order), under both prompt versions."""
+    work = args.work_dir
+    pool = read_jsonl(work / "judgeset" / "pool.jsonl")
+    seeds = read_jsonl(work / "seeds.jsonl")
+    originals = original_sentences(pool)
+    items = []
+    for lang in LANGS:
+        same = sorted(
+            originals.get(lang, {}), key=lambda s: sha(f"pn1-probe-identical:{s}")
+        )
+        coords = sorted(
+            (
+                r
+                for r in pool
+                if r["language"] == lang
+                and r["family"] == "pn-name"
+                and r.get("kind") == "coord"
+            ),
+            key=lambda r: sha(f"pn1-probe-coord:{r['cid']}"),
+        )
+        mine = sorted(
+            (s for s in seeds if s["language"] == lang),
+            key=lambda s: sha(f"pn1-probe-seed:{s['seed']}"),
+        )
+        for version in ("v1", "v2"):
+            label_, fluency_ = PROMPTS[version]
+            for sid in same[:PROBE_PER_LANGUAGE]:
+                value = originals[lang][sid]
+                items.append(
+                    {
+                        "item": f"probe:{version}:identical:{sid}",
+                        "cid": f"probe:identical:{sid}",
+                        "kind": "label",
+                        "language": lang,
+                        "order": "ab",
+                        "rank": 0,
+                        "prompt": label_(lang, value, value),
+                    }
+                )
+            for record in coords[:PROBE_PER_LANGUAGE]:
+                order = "ab" if pick(record["cid"], "judge-order", 2) == 0 else "ba"
+                a, b = record["texts"] if order == "ab" else record["texts"][::-1]
+                items.append(
+                    {
+                        "item": f"probe:{version}:coord:{record['cid']}",
+                        "cid": f"probe:coord:{record['cid']}",
+                        "kind": "label",
+                        "language": lang,
+                        "order": order,
+                        "rank": 0,
+                        "prompt": label_(lang, a, b),
+                    }
+                )
+            for seed in mine[:PROBE_PER_LANGUAGE]:
+                items.append(
+                    {
+                        "item": f"probe:{version}:seed:{seed['seed']}",
+                        "cid": f"probe:seed:{seed['seed']}",
+                        "kind": "fluency",
+                        "language": lang,
+                        "rank": 0,
+                        "prompt": fluency_(lang, seed["text"]),
+                    }
+                )
+    items.sort(key=lambda i: (i["cid"], i["item"]))
+    out = work / "probe"
+    out.mkdir(mode=0o700)
+    digest_ = write_new(out / "items.probe.jsonl", jsonl_bytes(items))
+    counts = dict(
+        sorted(
+            collections.Counter(
+                i["item"].split(":")[1] + "|" + i["item"].split(":")[2] for i in items
+            ).items()
+        )
+    )
+    write_json(
+        out / "probe-items.receipt.json",
+        {
+            "schema": SCHEMA + "/probe-items",
+            "code": code_identity(),
+            "counts": counts,
+            "items_sha256": digest_,
+            "pass_rule": PROBE_PASS,
+        },
+    )
+    print(json.dumps({"items": len(items), "counts": counts}))
+    return 0
+
+
+def cmd_probe_eval(args: argparse.Namespace) -> int:
+    judgments, receipts = load_judgments(args.judge_dir)
+    values: dict[tuple[str, str], list[float]] = collections.defaultdict(list)
+    per_lang: dict[tuple[str, str, str], list[float]] = collections.defaultdict(list)
+    for item, record in judgments.items():
+        _, version, kind = item.split(":")[:3]
+        values[(version, kind)].append(record["p_yes"])
+        per_lang[(version, kind, record["language"])].append(record["p_yes"])
+
+    def median(v: list[float]) -> float | None:
+        v = sorted(v)
+        return round((v[(len(v) - 1) // 2] + v[len(v) // 2]) / 2, 6) if v else None
+
+    def summary(get) -> dict[str, Any]:
+        return {
+            "identical_median": median(get("identical")),
+            "coord_median": median(get("coord")),
+            "seed_fluency_share": round(
+                sum(p >= 0.5 for p in get("seed")) / max(len(get("seed")), 1), 6
+            ),
+            "n": {k: len(get(k)) for k in ("identical", "coord", "seed")},
+        }
+
+    report = {
+        version: {
+            **summary(lambda k, v=version: values[(v, k)]),
+            "per_language": {
+                lang: summary(lambda k, v=version, l=lang: per_lang[(v, k, l)])
+                for lang in LANGS
+            },
+        }
+        for version in ("v1", "v2")
+    }
+    v2 = report["v2"]
+    passed = all(
+        v2["n"][k] == PROBE_PER_LANGUAGE * len(LANGS) for k in v2["n"]
+    ) and all(v2[k] is not None and v2[k] >= t for k, t in PROBE_PASS.items())
+    receipt = {
+        "schema": SCHEMA + "/probe",
+        "code": code_identity(),
+        "pass_rule": PROBE_PASS,
+        "passed": passed,
+        "results": report,
+        "judge": receipts,
+    }
+    write_json(args.output, receipt)
+    print(
+        json.dumps(
+            {
+                "passed": passed,
+                "v1": {k: report["v1"][k] for k in PROBE_PASS},
+                "v2": {k: v2[k] for k in PROBE_PASS},
+                "n": v2["n"],
+            }
+        )
+    )
+    return 0 if passed else 4
+
+
+def cmd_judgeset_rejudge(args: argparse.Namespace) -> int:
+    """Amendment 3: every pool row judged again with the given prompt version (label for
+    all, fluency for every edited sentence), rows ordered by need as in the first pass.
+    """
+    work = args.work_dir
+    base = json.loads(
+        (work / "judgeset" / "judgeset.receipt.json").read_text(encoding="utf-8")
+    )
+    pool_path = work / "judgeset" / "pool.jsonl"
+    if file_sha256(pool_path) != base["files_sha256"]["pool.jsonl"]:
+        raise ValueError("pool.jsonl differs from the judge-set receipt")
+    pool = read_jsonl(pool_path)
+    by_lang = collections.defaultdict(list)
+    for record in pool:
+        record.pop("judge", None)
+        record["judged"] = True
+        by_lang[record["language"]].append(record)
+    for lang, records in by_lang.items():
+        units = plan_units(records, lang)
+        for (s, _), cell in cells_of(records, seed_key).items():
+            for index, record in enumerate(cell):
+                record["rank"] = round(index / max(units.get(s, 0), 1), 6)
+    items = [
+        item
+        for record in sorted(pool, key=lambda r: (r["rank"], r["cid"]))
+        for item in judge_items(record, args.prompt_version)
+    ]
+    out = work / args.out_name
+    out.mkdir(mode=0o700)
+    gpus = assign_gpus(
+        collections.Counter(i["language"] for i in items), args.gpus.split(",")
+    )
+    files = {
+        "pool.jsonl": write_new(
+            out / "pool.jsonl", jsonl_bytes(sorted(pool, key=lambda r: r["cid"]))
+        )
+    }
+    for gpu in sorted(set(gpus.values())):
+        name = f"items.{gpu}.jsonl"
+        files[name] = write_new(
+            out / name, jsonl_bytes(i for i in items if gpus[i["language"]] == gpu)
+        )
+    counts = dict(
+        sorted(
+            collections.Counter(f"{i['language']}|{i['kind']}" for i in items).items()
+        )
+    )
+    receipt = {
+        **{
+            k: base[k]
+            for k in (
+                "generation",
+                "editor",
+                "twin_status",
+                "twin_edit_reasons",
+                "pool",
+            )
+        },
+        "schema": SCHEMA + "/judgeset-rejudge",
+        "created_utc": utc(),
+        "code": code_identity(),
+        "rejudge_of": {
+            "judgeset.receipt.json": file_sha256(
+                work / "judgeset" / "judgeset.receipt.json"
+            )
+        },
+        "prompt_version": args.prompt_version,
+        "twin_status_file": "judgeset/twin-status.jsonl",
+        "judge_factor": base["judge_factor"],
+        "judged_rows": dict(
+            sorted(
+                collections.Counter(
+                    f"{r['language']}|{r['family']}|{r['label']}" for r in pool
+                ).items()
+            )
+        ),
+        "items": counts,
+        "total_items": len(items),
+        "gpu_of_language": gpus,
+        "files_sha256": files,
+    }
+    write_json(out / "judgeset.receipt.json", receipt)
+    print(
+        json.dumps(
+            {
+                "rows": len(pool),
+                "items": len(items),
+                "gpus": gpus,
+                "per_gpu": dict(
+                    collections.Counter(gpus[i["language"]] for i in items)
+                ),
+            }
+        )
+    )
+    return 0
+
+
 def disagreement(pool: list[dict[str, Any]]) -> dict[str, Any]:
     table: dict[str, Any] = {}
     for family in FAMILIES:
@@ -1499,16 +1881,22 @@ def cmd_finalize(args: argparse.Namespace) -> int:
         outcome[record["cid"]] = "train"
     for record in dev_records:
         outcome[record["cid"]] = "dev"
+    matched_any = set().union(*(c["train_pool_matched"] for c in selection.values()))
     for record in kept:
         if outcome[record["cid"]] == "kept":
-            outcome[record["cid"]] = "unselected"
-
+            outcome[record["cid"]] = (
+                "unselected_matched" if record["cid"] in matched_any else "unmatched"
+            )
+    version = judgeset.get("prompt_version", "v1")
     train_rows = sorted(
-        (make_row(r, "train", export_date, judge_model) for r in train_records),
+        (
+            make_row(r, "train", export_date, judge_model, version)
+            for r in train_records
+        ),
         key=lambda r: r["id"],
     )
     dev_rows = sorted(
-        (make_row(r, "dev", export_date, judge_model) for r in dev_records),
+        (make_row(r, "dev", export_date, judge_model, version) for r in dev_records),
         key=lambda r: r["id"],
     )
     ids = [r["id"] for r in train_rows + dev_rows]
@@ -1658,6 +2046,13 @@ def cmd_finalize(args: argparse.Namespace) -> int:
             "swap_min_share": SWAP_MIN_SHARE,
             "judge_factor": JUDGE_FACTOR,
             "mix_tolerance": MIX_TOLERANCE,
+            "prompt_version": judgeset.get("prompt_version", "v1"),
+            "matching": {
+                "strata": "language x group x same-multiset flag",
+                "coordinates": list(MATCH_COORDINATES),
+                "caliper": CALIPER,
+                "order": "no rows in sha256('pn1-seed:'+group key) order; nearest Euclidean yes row within the caliper",
+            },
             "near_mining": {
                 "rare_bigrams": source.NEAR_RARE_BIGRAMS,
                 "postings": source.NEAR_POSTINGS,
@@ -1699,6 +2094,8 @@ def cmd_finalize(args: argparse.Namespace) -> int:
                 ),
                 "dev_neighbourhood_ids": selection[lang]["dev_neighbourhood"],
                 "train_units_by_stratum": selection[lang]["train_units"],
+                "train_pool_rows": selection[lang]["train_pool_size"],
+                "train_pool_matched_rows": len(selection[lang]["train_pool_matched"]),
             }
             for lang in LANGS
         },
@@ -1748,6 +2145,16 @@ def main(argv: list[str] | None = None) -> int:
     extend.add_argument("--margin", type=float, default=1.25)
     extend.add_argument("--gpus", default="gpu3,gpu4")
     extend.add_argument("--dry-run", action="store_true")
+    probe = commands.add_parser("probe-items")
+    probe.add_argument("--work-dir", type=Path, required=True)
+    probe_eval = commands.add_parser("probe-eval")
+    probe_eval.add_argument("--judge-dir", type=Path, action="append", required=True)
+    probe_eval.add_argument("--output", type=Path, required=True)
+    rejudge = commands.add_parser("judgeset-rejudge")
+    rejudge.add_argument("--work-dir", type=Path, required=True)
+    rejudge.add_argument("--out-name", default="judgeset3")
+    rejudge.add_argument("--prompt-version", default="v2", choices=sorted(PROMPTS))
+    rejudge.add_argument("--gpus", default="gpu3,gpu4")
     fin = commands.add_parser("finalize")
     fin.add_argument("--work-dir", type=Path, required=True)
     fin.add_argument("--source-dir", type=Path, required=True)
@@ -1765,6 +2172,9 @@ def main(argv: list[str] | None = None) -> int:
         "candidates": cmd_candidates,
         "judgeset": cmd_judgeset,
         "judgeset-extend": cmd_judgeset_extend,
+        "probe-items": cmd_probe_items,
+        "probe-eval": cmd_probe_eval,
+        "judgeset-rejudge": cmd_judgeset_rejudge,
         "finalize": cmd_finalize,
     }[args.command](args)
 

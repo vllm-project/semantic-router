@@ -565,3 +565,63 @@ def fluency_prompt(lang: str, sentence: str) -> str:
         f"Is the following sentence natural and grammatical {LANGUAGE_NAMES[lang]}?\n"
         f"{sentence}\nAnswer Yes or No."
     )
+
+
+def label_prompt_v2(lang: str, a: str, b: str) -> str:
+    """Amendment 3 label prompt."""
+    return (
+        f"Here are two sentences in {LANGUAGE_NAMES[lang]}.\n"
+        f"Sentence A: {a}\nSentence B: {b}\n"
+        "Do the two sentences mean the same thing? Differences in wording, word order, "
+        "politeness, formality or punctuation do not matter. Answer No if they differ in "
+        "who does what to whom, in a person, place, object, time or quantity, or in any "
+        "other fact. Answer Yes or No."
+    )
+
+
+def fluency_prompt_v2(lang: str, sentence: str) -> str:
+    """Amendment 3 fluency prompt."""
+    return (
+        f"Here is a sentence in {LANGUAGE_NAMES[lang]}:\n{sentence}\n"
+        "Is this a grammatical sentence that a native speaker could write? Minor "
+        "awkwardness or unusual word order is fine; answer No only for a clear grammatical "
+        "error or a sentence that makes no sense. Answer Yes or No."
+    )
+
+
+PROMPTS = {
+    "v1": (label_prompt, fluency_prompt),
+    "v2": (label_prompt_v2, fluency_prompt_v2),
+}
+
+
+def word_jaccard(a: str, b: str) -> float:
+    from v2.data.textnorm import word_tokens
+
+    return jaccard(set(word_tokens(a)), set(word_tokens(b)))
+
+
+def edit_distance(na: str, nb: str) -> float:
+    """Levenshtein distance of two norm forms over the longer length."""
+    if not na and not nb:
+        return 0.0
+    previous = list(range(len(nb) + 1))
+    for i, ca in enumerate(na, 1):
+        current = [i]
+        for j, cb in enumerate(nb, 1):
+            current.append(
+                min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (ca != cb))
+            )
+        previous = current
+    return previous[-1] / max(len(na), len(nb))
+
+
+def extra_metrics(first: str, second: str) -> dict[str, float]:
+    """Self-check features beyond the matching coordinates, in state order."""
+    na, nb = norm(first), norm(second)
+    return {
+        "word_jaccard": round(word_jaccard(first, second), 6),
+        "edit_distance": round(edit_distance(na, nb), 6),
+        "containment_ab": round(containment(na, nb), 6),
+        "containment_ba": round(containment(nb, na), 6),
+    }

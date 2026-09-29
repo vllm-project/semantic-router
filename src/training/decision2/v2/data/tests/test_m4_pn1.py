@@ -22,6 +22,7 @@ def record(
     edited=None,
     kind=None,
     overlap_bin=None,
+    coords=None,
 ):
     ids = ids or [int(part) for part in cid.split(":")[1:3] if part.isdigit()]
     edited = edited or (
@@ -42,6 +43,14 @@ def record(
     )
     if overlap_bin is not None:
         item["metrics"] = dict(item["metrics"], bin=overlap_bin)
+    if coords is not None:
+        item["metrics"] = dict(
+            item["metrics"],
+            bigram_jaccard=coords[0],
+            multiset_jaccard=coords[1],
+            length_ratio=coords[2],
+            same_multiset=family in ("pn-name",),
+        )
     item["attribution"] = {
         str(sid): {"user": f"user{sid}", "cc0": sid % 2 == 0} for sid in ids
     }
@@ -265,6 +274,31 @@ class TwinTest(unittest.TestCase):
         )
 
 
+class PromptV2Test(unittest.TestCase):
+    def test_v2_prompts_and_extra_metrics(self):
+        label = text.label_prompt_v2("ja", "a", "b")
+        self.assertTrue(
+            label.startswith(
+                "Here are two sentences in Japanese.\nSentence A: a\nSentence B: b\nDo the two sentences mean the same thing?"
+            )
+        )
+        self.assertTrue(label.endswith("or in any other fact. Answer Yes or No."))
+        fluency = text.fluency_prompt_v2("de", "s")
+        self.assertTrue(
+            fluency.startswith(
+                "Here is a sentence in German:\ns\nIs this a grammatical sentence"
+            )
+        )
+        self.assertAlmostEqual(text.edit_distance("abcd", "abce"), 0.25)
+        self.assertEqual(text.edit_distance("", ""), 0.0)
+        extra = text.extra_metrics("Ich esse einen Apfel.", "Ich esse eine Birne.")
+        self.assertAlmostEqual(extra["word_jaccard"], 2 / 6, places=5)
+        self.assertEqual(
+            set(extra),
+            {"word_jaccard", "edit_distance", "containment_ab", "containment_ba"},
+        )
+
+
 class GraphTest(unittest.TestCase):
     def test_within_two_hops(self):
         graph = source.LinkGraph.from_pairs([(1, 2), (2, 3), (3, 4), (5, 6)])
@@ -359,6 +393,7 @@ class BalanceTest(unittest.TestCase):
                     1,
                     [f"Das ist Satz {i} hier.", f"Das ist der Satz {i} hier."],
                     overlap_bin=b,
+                    coords=(0.3 + 0.01 * i, 0.7, 1.1),
                 )
             )
             rows.append(
@@ -369,6 +404,7 @@ class BalanceTest(unittest.TestCase):
                     0,
                     [f"Er kam um {i} Uhr.", f"Sie kam um {i} Uhr."],
                     overlap_bin=b,
+                    coords=(0.305 + 0.01 * i, 0.71, 1.12),
                 )
             )
         for i in range(30):
@@ -381,6 +417,7 @@ class BalanceTest(unittest.TestCase):
                     [f"Tom und Maria sind {i} hier.", f"Maria und Tom sind {i} hier."],
                     kind="coord",
                     overlap_bin=3,
+                    coords=(0.7 + 0.005 * i, 1.0, 1.0),
                 )
             )
             rows.append(
@@ -392,6 +429,7 @@ class BalanceTest(unittest.TestCase):
                     [f"Tom sah Maria {i} mal.", f"Maria sah Tom {i} mal."],
                     kind="role",
                     overlap_bin=3,
+                    coords=(0.7 + 0.005 * i, 1.0, 1.0),
                 )
             )
         return rows
@@ -410,8 +448,40 @@ class BalanceTest(unittest.TestCase):
             sorted(r["cid"] for r in chosen), sorted(r["cid"] for r in again)
         )
 
-    def test_trim_after_drops_keeps_a_balanced_subset(self):
-        chosen, _ = build.balance(self.pool(), {"natural": 30, "swap": 20})
+    def test_matching_respects_the_caliper_and_order(self):
+        pairs = build.match_pairs(self.pool())
+        self.assertEqual(set(pairs), {"natural|ms0", "swap|ms1"})
+        for stratum_pairs in pairs.values():
+            nos = [no for no, _, _ in stratum_pairs]
+            self.assertEqual(nos, sorted(nos, key=build.seed_key))
+            for no, yes, _ in stratum_pairs:
+                self.assertEqual((no["label"], yes["label"]), (0, 1))
+                for c in build.MATCH_COORDINATES:
+                    self.assertLessEqual(
+                        abs(no["metrics"][c] - yes["metrics"][c]), build.CALIPER + 1e-9
+                    )
+        natural = len(pairs["natural|ms0"])
+        self.assertGreaterEqual(natural, 36)
+        far = record(
+            "near:9000:9001",
+            "de",
+            "pn-near",
+            0,
+            ["a b", "c d"],
+            coords=(0.95, 0.2, 1.5),
+        )
+        again = build.match_pairs(self.pool() + [far])["natural|ms0"]
+        self.assertEqual(len(again), natural)
+        self.assertNotIn("near:9000:9001", {no["cid"] for no, _, _ in again})
+
+    def test_drops_rematch_a_balanced_subset_and_empty_drop_reproduces(self):
+        chosen, _, _ = build.balance_matched(self.pool(), {"natural": 30, "swap": 20})
+        self.assertEqual(len(chosen), 50)
+        same = {"de": {"train": list(chosen), "dev": []}}
+        build.apply_drops(same, set())
+        self.assertEqual(
+            {r["cid"] for r in same["de"]["train"]}, {r["cid"] for r in chosen}
+        )
         dropped = {
             build.group_id(r["group_key"]) for r in chosen if r["family"] == "pn-hop"
         }
@@ -420,7 +490,7 @@ class BalanceTest(unittest.TestCase):
         left = selection["de"]["train"]
         self.assertEqual(report["de"]["train"]["dropped"], 3)
         self.assertTrue({r["cid"] for r in left} <= {r["cid"] for r in chosen})
-        cells = collections.Counter((r["stratum"], r["label"]) for r in left)
+        cells = collections.Counter((build.match_stratum(r), r["label"]) for r in left)
         for s in {s for s, _ in cells}:
             self.assertEqual(cells[(s, 0)], cells[(s, 1)])
         self.assertEqual(2 * sum(r["label"] for r in left), len(left))
@@ -687,12 +757,12 @@ class PipelineTest(unittest.TestCase):
             ]
             links += [(a, pivot), (pivot, a), (b, pivot), (pivot, b)]
             fr += [
-                (sid + 2, f"Il mange {obj} ici {i}.", f"u{sid + 2}"),
-                (sid + 3, f"Elle mange {obj} ici {i}.", f"u{sid + 3}"),
+                (sid + 2, f"Tu vois {obj} ici {i}.", f"u{sid + 2}"),
+                (sid + 3, f"Tu vois {obj} là {i}.", f"u{sid + 3}"),
             ]
             fr += [
                 (sid + 4, f"Tom et Marie voient {obj}.", "n"),
-                (sid + 5, f"Tom regarde Marie avec {obj}.", "n"),
+                (sid + 5, f"Tom voit Marie et {obj}.", "n"),
             ]
             fr.append(
                 (
@@ -955,6 +1025,51 @@ class PipelineTest(unittest.TestCase):
             (third,) = list((tmp / "out2").iterdir())
             manifest3 = json.loads((third / "build-manifest.json").read_text())
             self.assertIsNotNone(manifest3["steps"]["judge_extension"])
+
+            self.assertEqual(build.main(["probe-items", "--work-dir", str(work)]), 0)
+            probe = build.read_jsonl(work / "probe" / "items.probe.jsonl")
+            self.assertEqual({i["item"].split(":")[1] for i in probe}, {"v1", "v2"})
+            answers = [dict(i, p_yes=0.99) for i in probe]
+            self.fake_gpu(
+                work / "judge" / "probe",
+                "judgments.jsonl",
+                answers,
+                {"repo_id": "Qwen/Qwen3.8-27B", "revision": "judgerev"},
+            )
+            code = build.main(
+                [
+                    "probe-eval",
+                    "--judge-dir",
+                    str(work / "judge" / "probe"),
+                    "--output",
+                    str(work / "probe" / "probe.receipt.json"),
+                ]
+            )
+            self.assertEqual(code, 4)
+            self.assertFalse(
+                json.loads((work / "probe" / "probe.receipt.json").read_text())[
+                    "passed"
+                ]
+            )
+            self.assertEqual(
+                build.main(["judgeset-rejudge", "--work-dir", str(work)]), 0
+            )
+            rejudge = [
+                i
+                for p in sorted((work / "judgeset3").glob("items.*.jsonl"))
+                for i in build.read_jsonl(p)
+            ]
+            self.assertEqual(len({i["cid"] for i in rejudge}), len(pool))
+            self.assertTrue(
+                all(
+                    "do not matter" in i["prompt"] or "native speaker" in i["prompt"]
+                    for i in rejudge
+                )
+            )
+            receipt3 = json.loads(
+                (work / "judgeset3" / "judgeset.receipt.json").read_text()
+            )
+            self.assertEqual(receipt3["prompt_version"], "v2")
 
 
 class JudgeExtensionTest(unittest.TestCase):
