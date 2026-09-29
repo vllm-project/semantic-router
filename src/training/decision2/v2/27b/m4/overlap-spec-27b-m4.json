@@ -1,0 +1,82 @@
+{
+  "label": "post-key same-panel",
+  "panel_root": "/data/dev2/private/panels",
+  "focus_task": "media_ideology",
+  "models": {
+    "M4-A20-soup": {
+      "run": "/data/dev2/runs/27b/M4-A20-soup/formal",
+      "exposure": ["/data/dev2/runs/27b/m4-overlap/exposure-m4-a20.json"],
+      "note": "M4 candidate M4-A20: rank-16 LoRA soup (two rank-8 seeds) on Qwen/Qwen3.8-27B, 32,768 tokens, FLA kernel path, formal run from a copy of F1's post-run cache 03b172f1; both seeds trained on the M4 mixture a20.train.jsonl 4aa0dc96... (56,969 rows, +20M A7 tokens, 25.04M total)"
+    },
+    "M4-A20r-soup": {
+      "run": "/data/dev2/runs/27b/M4-A20r-soup/formal",
+      "exposure": ["/data/dev2/runs/27b/m4-overlap/exposure-m4-a20.json"],
+      "note": "M4 candidate M4-A20r: rank-64 alpha-128 LoRA soup (two rank-32 alpha-64 seeds), otherwise M4-A20's recipe; both seeds trained on a20.train.jsonl 4aa0dc96..."
+    },
+    "M4-Ar-soup": {
+      "run": "/data/dev2/runs/27b/M4-Ar-soup/formal",
+      "exposure": ["/data/dev2/runs/27b/m4-overlap/exposure-m4-ar.json"],
+      "note": "M4 control M4-Ar: rank-16 LoRA soup (two rank-8 seeds); both seeds trained on ar.train.jsonl aadeef1a... (64,363 rows: M3-A's file, one full repeat and a whole-group prefix, 25.04M tokens)"
+    },
+    "DEV2.0-27B (F1)": {
+      "run": "/data/dev2/runs/27b/M3-A-soup/formal",
+      "note": "incumbent F1 = DEV2.0-26B (M3-A soup, SEAL 42ba2fa1); no own exposure (receipt 6ae7fab0)"
+    },
+    "DEV2.0-27B (F2)": {
+      "run": "/data/dev2/runs/27b/M3-S-soup/formal",
+      "note": "M3 finalist F2, the matched control (M3-S soup, SEAL cb7609ed); its exposure receipt is m3-f2/overlap/exposure-dev2-27b-f2.json (0 groups)"
+    },
+    "AutoJev-27B": {
+      "run": "/data/dev2/runs/27b/m2-peer-autojev27-nodeB-kernel",
+      "note": "sealed node-B copy of the eval track's m4/nodeB-kernel/autojev27 collection (image dbe5f32b); best measured open-weight peer, sets the 27B bar"
+    },
+    "Eikos-27B": {
+      "run": "/data/dev2/runs/27b/m3-peer-eikos27-nodeB-kernel",
+      "note": "sealed node-B copy of the eval track's m4/nodeB-kernel/eikos27b collection; BF16 sibling of its FP8 board entry"
+    },
+    "Jebadiah-27B": {
+      "run": "/data/dev2/runs/27b/m3-peer-jebadiah-nodeB-kernel",
+      "note": "sealed node-B copy of the eval track's m4/nodeB-kernel/jebadiah27b collection"
+    }
+  },
+  "tiers": {
+    "27B M4-A20": {
+      "candidate": "M4-A20-soup",
+      "own_1_0": [],
+      "peers": ["AutoJev-27B", "Eikos-27B", "Jebadiah-27B"],
+      "internal_peers": ["DEV2.0-27B (F1)", "DEV2.0-27B (F2)"],
+      "threshold_pool": ["AutoJev-27B", "Eikos-27B", "Jebadiah-27B"],
+      "note": "no Decision 1.0 model exists at this size; the gate bar is 0.9 x the best measured open-weight peer; F1 and F2 are the within-track comparisons"
+    },
+    "27B M4-A20r": {
+      "candidate": "M4-A20r-soup",
+      "own_1_0": [],
+      "peers": ["AutoJev-27B", "Eikos-27B", "Jebadiah-27B"],
+      "internal_peers": ["DEV2.0-27B (F1)", "DEV2.0-27B (F2)"],
+      "threshold_pool": ["AutoJev-27B", "Eikos-27B", "Jebadiah-27B"],
+      "note": "as 27B M4-A20"
+    },
+    "27B M4-Ar": {
+      "candidate": "M4-Ar-soup",
+      "own_1_0": [],
+      "peers": ["AutoJev-27B", "Eikos-27B", "Jebadiah-27B"],
+      "internal_peers": ["DEV2.0-27B (F1)", "DEV2.0-27B (F2)"],
+      "threshold_pool": ["AutoJev-27B", "Eikos-27B", "Jebadiah-27B"],
+      "note": "as 27B M4-A20"
+    }
+  },
+  "reproduce": [
+    {"left": "M4-A20-soup", "right": "AutoJev-27B", "stored": "/data/dev2/runs/27b/M4-A20-soup/formal/PAIRED-vs-AutoJev-27B.json"},
+    {"left": "M4-A20-soup", "right": "Eikos-27B", "stored": "/data/dev2/runs/27b/M4-A20-soup/formal/PAIRED-vs-Eikos-27B.json"},
+    {"left": "M4-A20-soup", "right": "Jebadiah-27B", "stored": "/data/dev2/runs/27b/M4-A20-soup/formal/PAIRED-vs-Jebadiah.json"},
+    {"left": "M4-A20-soup", "right": "DEV2.0-27B (F1)", "stored": "/data/dev2/runs/27b/M4-A20-soup/formal/PAIRED-vs-M3-A-soup.json"},
+    {"left": "M4-A20r-soup", "right": "AutoJev-27B", "stored": "/data/dev2/runs/27b/M4-A20r-soup/formal/PAIRED-vs-AutoJev-27B.json"},
+    {"left": "M4-A20r-soup", "right": "Eikos-27B", "stored": "/data/dev2/runs/27b/M4-A20r-soup/formal/PAIRED-vs-Eikos-27B.json"},
+    {"left": "M4-A20r-soup", "right": "Jebadiah-27B", "stored": "/data/dev2/runs/27b/M4-A20r-soup/formal/PAIRED-vs-Jebadiah.json"},
+    {"left": "M4-A20r-soup", "right": "DEV2.0-27B (F1)", "stored": "/data/dev2/runs/27b/M4-A20r-soup/formal/PAIRED-vs-M3-A-soup.json"},
+    {"left": "M4-Ar-soup", "right": "AutoJev-27B", "stored": "/data/dev2/runs/27b/M4-Ar-soup/formal/PAIRED-vs-AutoJev-27B.json"},
+    {"left": "M4-Ar-soup", "right": "Eikos-27B", "stored": "/data/dev2/runs/27b/M4-Ar-soup/formal/PAIRED-vs-Eikos-27B.json"},
+    {"left": "M4-Ar-soup", "right": "Jebadiah-27B", "stored": "/data/dev2/runs/27b/M4-Ar-soup/formal/PAIRED-vs-Jebadiah.json"},
+    {"left": "M4-Ar-soup", "right": "DEV2.0-27B (F1)", "stored": "/data/dev2/runs/27b/M4-Ar-soup/formal/PAIRED-vs-M3-A-soup.json"}
+  ]
+}
