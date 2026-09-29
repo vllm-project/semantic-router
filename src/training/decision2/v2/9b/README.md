@@ -37,3 +37,6 @@ own training autotune cache copied once from M3): `data.sh`, `arm.sh`
 tokens; soups accept repeated members for rational weights), `score.sh` and
 `formal.sh` (runs under `formal-m4`, one copy of the frozen `formal-m3` cache).
 GPU time: `python3 lux9b/m3/gpu_hours.py /data/dev2/runs/9b/m4 /data/dev2/runs/9b/formal-m4`.
+`chain-step.sh` runs one hand-launched chain step (node B GPU0–2, or a node-A
+GPU whose chain driver was stopped) with the chain drivers' lease and log
+conventions (prereg amendment 2).
