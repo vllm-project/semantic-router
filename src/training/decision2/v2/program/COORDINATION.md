@@ -152,13 +152,13 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
 | node A GPU0–1 | 0.6B track (owner; Milestone 7 finished 2026-09-29 14:00 UTC+8; idle until Milestone 8, which waits for Score5-typed-DEV). Short shared-lease jobs by eval (e.g., the Score5-typed-DEV validation collections) and release workers are allowed as recorded co-tenants with their own lease entries |
-| node A GPU2–4 | ~27B track (moved from the 9B track 2026-09-29 04:30 UTC+8; the 27B track may train on node A — same image + frozen autotune cache per the comparability rule; formal comparisons stay on node B). From 14:25: one GPU lent under a shared lease to eval for C1 event 3 staging, preflight and the event (~1.3 GPU-h) |
+| node A GPU2–4 | ~27B track (moved from the 9B track 2026-09-29 04:30 UTC+8; the 27B track may train on node A — same image + frozen autotune cache per the comparability rule; formal comparisons stay on node B). From 16:00: ~27B Milestone 4 (one attempt per GPU). The eval C1 staging worker may briefly hold one of these under a shared lease for preflight smokes; the event itself runs on node A GPU7 |
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
-| node A GPU6–7 | 9B track (Milestone 4 finished 13:30 UTC+8); from 13:45 the 9B release worker uses one of them for package verification; the eval track may use short shared-lease jobs on any GPU for development-panel scoring |
+| node A GPU6–7 | 9B track (Milestone 4 finished 13:30 UTC+8). GPU6: DEV2.0-8B release verification and finalization. GPU7: reserved from 16:00 for C1 event 3 (eval shared lease, ~1.3 GPU-h). The eval track may use short shared-lease jobs on any GPU for development-panel scoring |
 | node B GPU0–2 | 9B track (moved from the decoder 2026-09-29 07:35 UTC+8; 9B may train on node B — same image + frozen autotune cache; its formal comparisons stay on node A). Idle since M4; from 14:25 lent to eval for the 27B peers' mlx-diag (shared leases) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8). Milestone 5 finished 14:20 UTC+8; from 14:40 lent to research & data for the paraphrase-style Noul arm (≤ 1.5 GPU-h) until decoder Milestone 6 |
-| node B GPU5–6 | ~27B (from 14:25: completing the M3 F2 soup / formal / contrast, plus F1 and F2 mlx-diag) |
-| node B GPU7 | ~27B Milestone 3 (H7 / H8 Lux wave finished and released 2026-09-29 04:14 UTC+8; assigned at 04:05); from 14:25 also available to the F2 completion |
+| node B GPU5–6 | ~27B (M3 F2 completion finished 15:50 UTC+8; from 16:00 ~27B Milestone 4) |
+| node B GPU7 | ~27B (from 16:00 ~27B Milestone 4) |
 | node B GPU7 | research & data (owner) — SHARED from 2026-09-28 21:55 UTC+8 with the eval track's node-B comparator re-validation (~1.5 h, inference only; each writes its own lease owner entry, e.g. `owner.eval`) |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
@@ -195,6 +195,44 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 16:00 — **F2 fails; F1 = DEV2.0-26B is final; ~27B Milestone 4 approved; C1 event 3 batch final.**
+  - **F2** (27B records at integration `86011f435`; 1.26 GPU-h; nothing to HF):
+    - Post-key v3 64.47, below the 64.92 bar. F2 − F1 −2.74 (−5.86, +0.38). Human transfer is not below any peer and
+      nothing collapsed.
+    - Attribution for the card: the A7 typed curricula raised typed accuracy by +.099 (+.081, +.118). Constraint
+      competition went .38 → .57 and exception stack .59 → .79.
+    - mlx-diag (internal, since the XNLI part is NC): F1 .828, F2 .826; weakest in Arabic and Korean.
+    - **Chain root cause:** each script was uploaded and launched in one ssh command ending in `&`. The backgrounded
+      upload read empty input and wrote 0-byte scripts. The liveness check `pgrep -f <script>` matched the ssh shell's
+      own command line, so it always passed.
+    - **Rule for every track:** upload, verify size and SHA-256, then launch in a separate step. Check liveness by
+      container or PID, never by a `pgrep -f` pattern that can match your own shell.
+  - **DEV2.0-26B finalization:** the ~27B release worker is resumed once. It adds F1's card-eligible mlx-diag lines
+    (as on the 8B card) and the A7-effect sentence, sets C1 to the 2B / 4B "pending" wording, seals the final decision,
+    runs `--collect` after 8B (order 0.6B, 0.8B, 2B, 4B, 8B, 26B) and clears `dev2-27b-staging` with
+    `rewrite_history=False`.
+  - **~27B Milestone 4 approved** (proposal `v2/27b/records/m4-proposal-2026-09-29.md`; fresh worker; state file
+    `v2/27b/records/m4-state.md`):
+    - Arms, two seeds each on the M3 recipe:
+      - M4-A20: +20M A7 tokens, ~25M in total;
+      - M4-A20r: the same mixture at rank 32;
+      - M4-Ar: the control, M3-A's mixture repeated to ~25M tokens.
+    - Budget: 70 GPU-h cap, 13 GPU-h per attempt.
+    - GPUs: node B GPU5–7 + node A GPU2–4. Formal runs on node B with F1's image and cache.
+    - Selection: all three soups go formal. Successor rule: paired v3 lower bound vs F1 > 0, human transfer not
+      significantly below F1, every no-1.0 gate, no collapse, no overlap exposure.
+    - C1 events are exhausted after event 3, so an M4 successor would carry no sealed-set line.
+  - **C1 event 3, final batch:**
+    - DEV2.0-2B vs Sol 1.0 16K, Decider 2B and This-That 1.2.
+    - DEV2.0-4B vs Nox 1.0 (adopted config), Decider 4B and Jet v6.2.
+    - **DEV2.0-26B** (F1; manifest `98d6b01c…`; `qwen-adapter` on `Qwen/Qwen3.8-27B@1d4bf0f2…`) vs AutoJev-27B and
+      Eikos-27B.
+    - **DEV2.0-8B** (manifest `80770483…`, BF16, 16K) vs Lux 1.0 16K and Nimble v2.
+    - Kai 1.0 8K, paired with the stored event-2 DEV2.0-0.6B predictions.
+    - Trigger on node A **GPU7** (shared lease; not GPU2–4, which now belong to 27B M4) when the staging worker
+      returns. That worker may briefly hold one of node A GPU2–4 for staging smokes; M4 waits for that lease to be
+      released.
 
 - 2026-09-29 15:50 — **DEV2.0-8B package verified; release approved; finalization running** (gist `07f`; record
   `v2/release/records/dev2-8b-release-2026-09-29.md`; integration `b9ef18de1`; 0.63 GPU-h on node A GPU6).
