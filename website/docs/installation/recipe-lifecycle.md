@@ -24,7 +24,7 @@ vllm-sr recipe list
 vllm-sr recipe get my-recipe
 ```
 
-`list` prints every managed recipe together with the collection ETag — the version handle that the write commands below use as their precondition. `get` reads one recipe and returns it with its own ETag.
+`list` prints every managed recipe together with the collection ETag, which identifies the state observed by that read. `get` reads one recipe and returns it with its own ETag. The write commands below independently fetch a fresh collection ETag when they run.
 
 ## Validate
 
@@ -40,7 +40,7 @@ Validation checks the file against the recipe contract without touching the live
 vllm-sr recipe plan recipe.yaml
 ```
 
-`plan` validates the recipe and binds the plan to the collection ETag that is current at that moment. It writes nothing: the output is what `apply` would execute, together with the ETag the apply will require. Use it as the review step before a write.
+`plan` validates the recipe and reports the proposed action together with the collection ETag observed at that moment. It writes nothing. Its ETag is advisory: a later `apply` fetches a fresh ETag rather than requiring the one printed by `plan`, so planning is not a lock or a guarantee that the configuration will remain unchanged. Use it to review the proposed apply, and run it again immediately before applying if the current configuration matters to the decision.
 
 ## Apply
 
@@ -48,7 +48,7 @@ vllm-sr recipe plan recipe.yaml
 vllm-sr recipe apply recipe.yaml
 ```
 
-`apply` validates the recipe, then compare-and-swaps it into the active configuration using the collection ETag read at the start of the command. If the configuration changed on the server in the meantime, the ETag precondition fails and nothing is written. Re-run `plan` against the new state and apply again if the change is still what you want.
+`apply` validates the recipe, then compare-and-swaps it into the active configuration using the collection ETag it read at the start of that command. If the configuration changes between that read and the write, the ETag precondition fails and nothing is written. A change after an earlier `plan` but before `apply` begins does not block the apply; it can succeed against the newer state. Re-run `plan` against the new state if the proposed change needs review again.
 
 ## Delete
 
@@ -56,7 +56,7 @@ vllm-sr recipe apply recipe.yaml
 vllm-sr recipe delete my-recipe
 ```
 
-`delete` compare-and-swaps one recipe out of the configuration, with the same ETag precondition as `apply`. Only an unreferenced recipe can be deleted: while any entrypoint or other configuration element still points at it, deletion is refused. Delete removes that recipe and nothing else — there is no cascade and no undo, so treat `plan` as the review step.
+Before deleting, inspect the target with `get` or `list`. `recipe plan recipe.yaml` only previews an apply proposal; it does not preview what `delete` removes. `delete` fetches a fresh collection ETag and compare-and-swaps one recipe out of the configuration, so it protects only against a change that races with the delete command itself. Only an unreferenced recipe can be deleted: while any entrypoint or other configuration element still points at it, deletion is refused. Delete removes that recipe and nothing else — there is no cascade and no undo.
 
 ## Interaction with the Dashboard
 
