@@ -839,7 +839,14 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             ),
             "requirements_text": spec["card"]["requirements_text"],
             **(
-                {"comparison": spec["gate_profile"]["name"]}
+                {
+                    "comparison": (
+                        "no-1.0"
+                        if (spec["gate_profile"].get("tier") or {}).get("no_1_0")
+                        is True
+                        else spec["gate_profile"]["name"]
+                    )
+                }
                 if spec.get("gate_profile")
                 else {}
             ),

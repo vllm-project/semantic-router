@@ -319,6 +319,107 @@ class SuccessorGateTest(unittest.TestCase):
         self.assertTrue(items["1_beats_own_1_0"]["passed"])
         self.assertEqual(below, "own 1.0")
 
+    def no_1_0(self, low: float = -1.6):
+        """A tier without Decision 1.0: card.paired is the candidate minus the reference."""
+        reports = self.spec["card"]["reports"]
+        reports[1]["role"] = "peer"
+        reports[2]["role"] = "reference"
+        self.spec["card"]["paired"] = str(
+            write(
+                self.root / "p-reference.json",
+                paired(48.64, 42.52, low, 0.16, (self.run, self.root / "gliner")),
+            )
+        )
+        self.spec["gate_profile"]["tier"]["no_1_0"] = True
+
+    def c1_summary(self, **changes) -> Path:
+        rule = {
+            "verdict": "PASS",
+            "delta": 1.2,
+            "ci95": [-0.4, 2.8],
+            "p": 0.15,
+            "name": "DEV2.0-0.6B 99999999 (current revision)",
+        }
+        value = {
+            "schema": gate.C1_SUMMARY_SCHEMA,
+            "role": "successor",
+            "c1": 38.1,
+            "model": {"identity": "a" * 64},
+            "comparisons": [{"key": "baseline", "kind": "item8", **rule}],
+            "item8": rule,
+            **changes,
+        }
+        path = write(self.root / "c1-summary.json", value)
+        self.spec["gate_profile"]["c1_postkey"] = str(path)
+        return path
+
+    def test_no_1_0_successor_tier_gates_use_the_reference(self):
+        self.no_1_0(low=-1.6)
+        items, below = gate.first_items(self.spec)
+        self.assertEqual(list(items), list(gate.SUCCESSOR_ITEMS))
+        self.assertEqual(self.failing(), [], items)
+        self.assertIn(
+            "no Decision 1.0 at this size",
+            items["1_successor_R5_tier_gates"]["evidence"],
+        )
+        self.assertEqual(below, "GLiNER2.5-Decide (no Decision 1.0 at this size)")
+        self.edit(
+            self.spec["gate_profile"]["tier"]["paired"],
+            **{"axis_ci95.H.delta.high": -0.01},
+        )
+        self.assertEqual(self.failing(), ["1_successor_R5_tier_gates"])
+
+    def test_no_1_0_card_comparison_must_be_the_reference(self):
+        self.no_1_0()
+        self.spec["card"]["paired"] = str(
+            write(
+                self.root / "p-other.json",
+                paired(48.64, 35.94, 1.0, 0.16, (self.run, self.root / "kai")),
+            )
+        )
+        self.assertEqual(self.failing(), ["1_successor_R5_tier_gates"])
+
+    def test_c1_postkey_item(self):
+        self.c1_summary()
+        items = self.items()
+        self.assertEqual(list(items), [*gate.SUCCESSOR_ITEMS, gate.C1_ITEM])
+        self.assertEqual(self.failing(), [], items)
+        regression = {
+            "verdict": "REGRESSION",
+            "delta": -2.5,
+            "ci95": [-4.1, -0.9],
+            "p": 0.002,
+            "name": "baseline",
+        }
+        for changes in (
+            {"item8": regression},
+            {"model": {"identity": "b" * 64}},
+            {"role": "current"},
+            {"comparisons": []},
+        ):
+            with self.subTest(changes=list(changes)):
+                self.c1_summary(**changes)
+                self.assertEqual(self.failing(), [gate.C1_ITEM])
+
+    def test_c1_postkey_is_bound_by_the_decision(self):
+        path = self.c1_summary()
+        evidence = gate.evidence_sha256(gate.gate_profile(self.spec))
+        self.assertEqual(evidence["c1_postkey"], layout.sha_file(path))
+        gate.check(self.spec, self.decision_for(), final=True)
+        self.edit(str(path), c1=37.0)
+        with self.assertRaises(ValueError):
+            gate.check(self.spec, self.decision, final=True)
+
+    def test_profile_rejects_bad_no_1_0_and_c1_values(self):
+        for change in (
+            lambda s: s["gate_profile"]["tier"].update(no_1_0="yes"),
+            lambda s: s["gate_profile"].update(c1_postkey=""),
+        ):
+            spec = json.loads(json.dumps(self.spec))
+            change(spec)
+            with self.subTest(), self.assertRaises(ValueError):
+                gate.gate_profile(spec)
+
 
 if __name__ == "__main__":
     unittest.main()
