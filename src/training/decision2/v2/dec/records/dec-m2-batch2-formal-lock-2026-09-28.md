@@ -1,5 +1,11 @@
 # Formal lock: M2 batch 2 — 0.8B release artifact (E8F seed soup) and seed runs
 
+> **Erratum (2026-09-29, per coordinator 05:25 note).** The staging revision cited below (`16c0929a`) is no longer in the
+> `dev2-dec-staging` history, because LFS cleanups rewrote it. Its weight files return 403. Identity = hash list node B
+> `m2/hf-staging/batch2.sha256` (`ab0aa4bc00b6c884d982c9a69af2755be51c685eefb4209fdb880d0849dcf8c6`, 37 files); node copies
+> verified 2026-09-29. The E8F soup is released as DEV2.0-0.8B `0b631a85c19fb573aee34fc68bb413271ebe89f4`. See
+> [dec-staging-citation-errata-2026-09-29.md](dec-staging-citation-errata-2026-09-29.md).
+
 Status: **locked before any post-key v3 or public231 prediction exists for
 these checkpoints.** Each is collected once. Results are labeled **post-key
 same-panel**. Rules: [amendment 3](dec-m2-amendment-3-2026-09-28.md) (`fc6d1e508`).
@@ -20,7 +26,8 @@ P_soup 40.73 ≥ seed mean 37.04 → **the release artifact is the soup**
 ## Frozen identities
 
 All from the private staging repo `llm-semantic-router/dev2-dec-staging` at
-commit `16c0929ac0df649d8223483e1adf419d78a647ed` (37 batch-2 files verified
+commit `16c0929ac0df649d8223483e1adf419d78a647ed` [corrected 2026-09-29: revision no longer exists in the repo
+history; identity by hash list `batch2.sha256` `ab0aa4bc…`, see errata record] (37 batch-2 files verified
 against node B's SHA-256 list).
 
 | Run | Checkpoint | `model_sha256` | Calibration (file / CAL / temperatures C, N, S) | Limit |

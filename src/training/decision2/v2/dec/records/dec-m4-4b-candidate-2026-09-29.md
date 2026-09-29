@@ -1,5 +1,11 @@
 # DEV2.0-4B release candidate — N4XF soup (decoder Milestone 4; 2026-09-29)
 
+> **Erratum (2026-09-29, per coordinator 05:25 note).** The identity of this checkpoint rests on the per-file SHA-256
+> list (node B `m4/hf-staging/N4XF-soup.sha256`, `cea4cc9a2a5997e02ebb55ed3cb653b348f2067855a51b13bbbba7f95da984f3`, 14 files,
+> 16,853,623,514 B) and the verified node copies, not on the staging revision. `e8656221` was created after every
+> history-rewriting cleanup. It is `main` of `dev2-dec-staging`, and its files were downloadable when checked on
+> 2026-09-29 ≈00:15Z. Details: [dec-staging-citation-errata-2026-09-29.md](dec-staging-citation-errata-2026-09-29.md).
+
 **Qualifies under the preregistered 4B bar** ([prereg](dec-m4-prereg-2026-09-29.md),
 [amendment 1](dec-m4-amendment-1-2026-09-29.md), [selection](dec-m4-selection-2026-09-29.md), chosen on
 development panels before any formal run). The paired 95% CI lower bound vs the adopted Nox 1.0 run is > 0;
