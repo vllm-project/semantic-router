@@ -319,10 +319,16 @@ func TestEmbeddingEndpointsValidateShapeBeforeAvailability(t *testing.T) {
 		{"unsafe image url", "/api/v1/embeddings", `{"recipe":"default","images":["https://example.com/cat.png"]}`, api.handleEmbeddings},
 		{"malformed audio", "/api/v1/embeddings", `{"recipe":"default","audios":["data:audio/wav;base64,YQ=="]}`, api.handleEmbeddings},
 		{"negative dimension", "/api/v1/embeddings", `{"recipe":"default","texts":["hi"],"dimension":-1}`, api.handleEmbeddings},
+		{"negative target_layer", "/api/v1/embeddings", `{"recipe":"default","texts":["hi"],"target_layer":-1}`, api.handleEmbeddings},
+		{"target_layer too large", "/api/v1/embeddings", `{"recipe":"default","texts":["hi"],"target_layer":2147483648}`, api.handleEmbeddings},
 		{"no inputs", "/api/v1/embeddings", `{"recipe":"default"}`, api.handleEmbeddings},
 		{"similarity negative dimension", "/api/v1/similarity", `{"recipe":"default","text1":"hello","text2":"world","dimension":-1}`, api.handleSimilarity},
+		{"similarity negative target_layer", "/api/v1/similarity", `{"recipe":"default","text1":"hello","text2":"world","target_layer":-1}`, api.handleSimilarity},
+		{"similarity target_layer too large", "/api/v1/similarity", `{"recipe":"default","text1":"hello","text2":"world","target_layer":2147483648}`, api.handleSimilarity},
 		{"similarity missing text", "/api/v1/similarity", `{"recipe":"default","text1":"hello"}`, api.handleSimilarity},
 		{"batch similarity empty candidates", "/api/v1/similarity/batch", `{"recipe":"default","query":"hello","candidates":[]}`, api.handleBatchSimilarity},
+		{"batch similarity negative target_layer", "/api/v1/similarity/batch", `{"recipe":"default","query":"hello","candidates":["world"],"target_layer":-1}`, api.handleBatchSimilarity},
+		{"batch similarity target_layer too large", "/api/v1/similarity/batch", `{"recipe":"default","query":"hello","candidates":["world"],"target_layer":2147483648}`, api.handleBatchSimilarity},
 	}
 
 	for _, tc := range tests {

@@ -266,9 +266,9 @@ func validateEmbeddingRequest(req EmbeddingRequest, availableLayers []int) (stri
 
 // validateEmbeddingRequestShape enforces the model-independent input contract:
 // inputs are present, image and audio payloads decode within their documented
-// bounds, and the requested dimension is a nonnegative int32. These answers do
-// not depend on which provider the generation prepared, so they are decided
-// before availability.
+// bounds, the requested dimension is a nonnegative int32, and target_layer is
+// within the int32 range. These answers do not depend on which provider the
+// generation prepared, so they are decided before availability.
 func validateEmbeddingRequestShape(req EmbeddingRequest) (string, string, bool) {
 	if len(req.Texts) == 0 && len(req.Images) == 0 && len(req.Audios) == 0 {
 		return "INVALID_INPUT", "at least one of texts, images or audios must be provided", false
@@ -278,6 +278,9 @@ func validateEmbeddingRequestShape(req EmbeddingRequest) (string, string, bool) 
 	}
 	if !isValidDimension(req.Dimension) {
 		return "INVALID_DIMENSION", fmt.Sprintf(invalidDimensionMessage, req.Dimension), false
+	}
+	if req.TargetLayer < 0 || req.TargetLayer > math.MaxInt32 {
+		return "INVALID_LAYER", fmt.Sprintf("target_layer must be between 0 and %d (got %d)", math.MaxInt32, req.TargetLayer), false
 	}
 	if len(req.Audios) > maxAudiosPerRequest {
 		return "INVALID_INPUT", "at most 8 audios may be provided per request", false
@@ -293,9 +296,10 @@ func validateEmbeddingRequestShape(req EmbeddingRequest) (string, string, bool) 
 
 // validateEmbeddingTargetLayer is the per-model half of the contract: a layer
 // exit only means something for a model that advertises it, so this runs after
-// media selection has named the model.
+// media selection has named the model. The numeric range is validated in
+// validateEmbeddingRequestShape.
 func validateEmbeddingTargetLayer(req EmbeddingRequest, availableLayers []int) (string, string, bool) {
-	if req.TargetLayer < 0 || req.TargetLayer > math.MaxInt32 || (req.TargetLayer > 0 && req.Model != "auto" && !slices.Contains(availableLayers, req.TargetLayer)) {
+	if req.TargetLayer > 0 && req.Model != "auto" && !slices.Contains(availableLayers, req.TargetLayer) {
 		return "INVALID_LAYER", fmt.Sprintf("target_layer must be 0 or one of the loaded model layers: %s (got %d)", formatLayerList(availableLayers), req.TargetLayer), false
 	}
 	return "", "", true
@@ -377,6 +381,11 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		Texts:           []string{req.Text1, req.Text2},
 	}
 
+	if code, message, ok := validateEmbeddingRequestShape(request); !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
+		return
+	}
+
 	if checkErr := checkEmbeddingReadiness(prepared, request); checkErr != nil {
 		s.writeEmbeddingNotReady(w, "calculate similarity", checkErr)
 		return
@@ -431,14 +440,19 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		s.writeEmbeddingRuntimeError(w, err)
 		return
 	}
-	if checkErr := checkEmbeddingReadiness(prepared, EmbeddingRequest{
+	embReq := EmbeddingRequest{
 		Model:           req.Model,
 		Dimension:       req.Dimension,
 		TargetLayer:     req.TargetLayer,
 		QualityPriority: req.QualityPriority,
 		LatencyPriority: req.LatencyPriority,
 		Texts:           []string{req.Query},
-	}); checkErr != nil {
+	}
+	if code, message, ok := validateEmbeddingRequestShape(embReq); !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
+		return
+	}
+	if checkErr := checkEmbeddingReadiness(prepared, embReq); checkErr != nil {
 		s.writeEmbeddingNotReady(w, "calculate batch similarity", checkErr)
 		return
 	}
