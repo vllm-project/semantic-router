@@ -152,13 +152,13 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
 | node A GPU0–1 | 0.6B track (owner; Milestone 7 finished 2026-09-29 14:00 UTC+8; idle until Milestone 8, which waits for Score5-typed-DEV). Short shared-lease jobs by eval (e.g., the Score5-typed-DEV validation collections) and release workers are allowed as recorded co-tenants with their own lease entries |
-| node A GPU2–4 | ~27B Milestone 3 (moved from the 9B track 2026-09-29 04:30 UTC+8; the 27B track may train on node A — same image + frozen autotune cache per the comparability rule; formal comparisons stay on node B) |
+| node A GPU2–4 | ~27B track (moved from the 9B track 2026-09-29 04:30 UTC+8; the 27B track may train on node A — same image + frozen autotune cache per the comparability rule; formal comparisons stay on node B). From 14:25: one GPU lent under a shared lease to eval for C1 event 3 staging, preflight and the event (~1.3 GPU-h) |
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
-| node A GPU6–7 | 9B track Milestone 4 (2026-09-29 04:30 UTC+8); the eval track may use short shared-lease jobs on any GPU for development-panel scoring |
-| node B GPU0–2 | 9B track (moved from the decoder 2026-09-29 07:35 UTC+8; 9B may train on node B — same image + frozen autotune cache; its formal comparisons stay on node A) |
+| node A GPU6–7 | 9B track (Milestone 4 finished 13:30 UTC+8); from 13:45 the 9B release worker uses one of them for package verification; the eval track may use short shared-lease jobs on any GPU for development-panel scoring |
+| node B GPU0–2 | 9B track (moved from the decoder 2026-09-29 07:35 UTC+8; 9B may train on node B — same image + frozen autotune cache; its formal comparisons stay on node A). Idle since M4; from 14:25 lent to eval for the 27B peers' mlx-diag (shared leases) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
-| node B GPU5–6 | ~27B |
-| node B GPU7 | ~27B Milestone 3 (H7 / H8 Lux wave finished and released 2026-09-29 04:14 UTC+8; assigned at 04:05); more GPUs from the 9B track when its Milestone 3 ends |
+| node B GPU5–6 | ~27B (from 14:25: completing the M3 F2 soup / formal / contrast, plus F1 and F2 mlx-diag) |
+| node B GPU7 | ~27B Milestone 3 (H7 / H8 Lux wave finished and released 2026-09-29 04:14 UTC+8; assigned at 04:05); from 14:25 also available to the F2 completion |
 | node B GPU7 | research & data (owner) — SHARED from 2026-09-28 21:55 UTC+8 with the eval track's node-B comparator re-validation (~1.5 h, inference only; each writes its own lease owner entry, e.g. `owner.eval`) |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
@@ -195,6 +195,54 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 14:25 — **~27B F1 passes every no-1.0 gate; C1 event 3 prepared; F2 chain found dead** (eval records
+  `m4-dev2-27b-f1-gates-2026-09-29.md`, `m4-c1-event3-prep-2026-09-29.md`; integration `7c70debb5`).
+  - **F1 gates:**
+    - v3 67.21 vs the 64.92 bar.
+    - Human transfer is not below any peer: vs AutoJev-27B −.013 [−.040, +.056], vs Eikos −.014, vs Jebadiah −.004.
+    - No type collapsed: Choice .785, Noul .894, Score .793. Score leans on level 4 (182 predictions vs 128 gold) but uses
+      all levels.
+    - Overlap exposure: none.
+    - All three peers are card-eligible (AutoJev and Jebadiah Apache-2.0; Eikos BF16 MIT on an Apache base).
+    - F1 is 25,746,591,744 loaded parameters → DEV2.0-26B.
+  - **Disclosure list** (from the eval record):
+    - The typed-reasoning gap to AutoJev-27B: v3 −4.92 [−6.82, −0.43], typed −.099.
+    - Public 231 is 198 vs Eikos 212.
+    - CSS15 losses on `wiki_politeness`, `persuasion` and `flute`.
+    - T = 1; hard labels only; no own 1.0.
+    - Multilingual pending the new mlx-diag runs.
+  - **Release-engineering gaps, for the ~27B release worker:**
+    - `gate.py` "beats own 1.0" and `card.py`'s own-1.0 slot need a no-1.0 mode.
+    - The spec's memory figure is understated: the measured peak is 108 GB.
+    - The A6h human data sources are missing from the credits.
+  - **F2 incident:** the 27B M3 handoff said the matched-control soup "runs automatically, ETA 14:40". But
+    `m3-s-side.sh` and `m3-final-score.sh` on node B are 0-byte files with empty logs. `M3-S-s1` and `M3-S-s2` finished
+    training (s2 at 13:25 UTC+8), then nothing ran. At 14:17 every GPU on both nodes was idle.
+    - **New rule for every track:** before ending a turn with an "automatic" chain, verify that its scripts are
+      non-empty, that the chain is actually running (process or queue entry), and that its first log line exists. Record
+      the check in the handoff.
+  - **Coordinator decisions:**
+    1. A fresh 27B worker completes F2 exactly as preregistered: S soup, readout at the formal limit on the kernel path,
+       formal post-key 32K on node B with F1's image and frozen cache, and the contrast. It also runs mlx-diag for F1 and
+       F2 with their scored caches.
+    2. **F1/F2 rule, declared before F2 exists:** F2 replaces F1 only if F2 − F1 post-key v3 has paired 95% CI lower
+       bound > 0 AND F2 passes every no-1.0 gate and has no overlap exposure. Otherwise F1 is the ~27B release and F2 is
+       attribution only (the A7 curriculum effect, stated on the card).
+    3. **C1 event 3:**
+       - Batch confirmed:
+         - DEV2.0-2B vs Sol 1.0 16K (the release control), Decider 2B and This-That 1.2.
+         - DEV2.0-4B vs Nox 1.0 (the adopted config from the 4B gate), Decider 4B and Jet v6.2.
+         - The final ~27B vs AutoJev-27B and Eikos-27B.
+         - Kai 1.0 8K, paired with the stored event-2 DEV2.0-0.6B predictions.
+         - **9B enabled:** the frozen DEV2.0-9B-tier package vs Lux 1.0 16K and Nimble v2.
+       - Staging approved now: the ~0.7 GB node-B relay and the 52 GB Eikos-27B download to node A `/data`, after a
+         disk check.
+       - The eval worker also collects mlx-diag for the three 27B peers on node B GPU0–2, lent by 9B, which is idle
+         since M4.
+       - Trigger when the 9B package and the ~27B choice are frozen. The eval worker acts as custodian and runs the
+         custodian content scan. On FAIL: record, stop, and the event stays unused.
+       - GPU for the event: one node-A GPU from the ~27B block (GPU2–4) under a shared lease, ~1.3 GPU-h.
 
 - 2026-09-29 14:05 — **0.6B Milestone 7: no successor; the released DEV2.0-0.6B stands** (record
   `v2/06b/records/m7-results-2026-09-29.md`; gist 03; integration `f64e38ce8`; 7.35 GPU-h, track total ~36.1; nothing
