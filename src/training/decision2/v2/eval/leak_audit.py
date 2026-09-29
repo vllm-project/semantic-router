@@ -88,6 +88,7 @@ PANEL_ROLES = {
     "ht-dev": "development (human transfer)",
     "score5-dev": "development (5-level Score check)",
     "score5t-dev": "development (5-level typed Score check)",
+    "hs1-dev": "development (HS1 hard-skill families)",
 }
 
 

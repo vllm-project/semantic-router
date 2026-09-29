@@ -6,7 +6,9 @@ DEV, the three-task CSS pilot, the private-dataset SELECT/CAL partitions,
 HT-DEV, the 13-task human-annotated transfer panel (v2/eval/htdev/),
 Score5-DEV, the 500-item 5-level Score check (v2/eval/score5.py), and
 Score5-typed-DEV, 800 fresh 5-level typed Score items from the typed FINAL
-generator's Score family in fit / check halves (v2/eval/score5t.py).
+generator's Score family in fit / check halves (v2/eval/score5t.py), and
+HS1-DEV, 2,400 held-out rows of the data track's HS1 hard-skill families
+(v2/data/hs1/; records/hs1-prereg-2026-09-29.md).
 
 Layout under a panel root (default ``/data/dev2/private/panels``)::
 
@@ -101,6 +103,13 @@ DEVELOPMENT: dict[str, dict[str, Any]] = {
         "gold": "gold/score5t-dev.gold.jsonl",
         "gold_sha256": "31abc1a5d7820e06961a903327c76dc4503b46987f0db58b645e0e6562e08aed",
         "originals": 800,
+    },
+    "hs1-dev": {
+        "prompts": "goldfree/hs1-dev.prompts.jsonl",
+        "prompts_sha256": "9ecf86a2d9e28311057bf08f422b0652363e0a67b92e6ae94a15a8ecab4df7c8",
+        "gold": "gold/hs1-dev.gold.jsonl",
+        "gold_sha256": "ca21deea218645afb7c5c27229dae85932405756b3be902a4385044abe817961",
+        "originals": 2400,
     },
     "select": {
         "gold": "gold/select.jsonl",
