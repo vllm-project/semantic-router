@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from training.model.data import canonical
+from v2.common import eval_only
 from v2.data.build_a0_variants import native_prompt
 from v2.data.m2.common import read_jsonl
 from v2.data.m3.qualify import IDENTITY, IMAGE_ID, PENDING, RUN_CONSTANT
@@ -250,7 +251,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--attestation", type=Path, required=True)
-    report = build(parser.parse_args(argv))
+    args = parser.parse_args(argv)
+    eval_only.guard(args.rows, args.prompts, args.shard)
+    report = build(args)
     print(
         json.dumps(
             {k: report[k] for k in ("wave", "rows", "prompts", "content_sha256")}
