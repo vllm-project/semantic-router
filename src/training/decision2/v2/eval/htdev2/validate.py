@@ -327,24 +327,35 @@ def analyze(
             "agreement_by_H_dev2_gap": binned(
                 rows, pairs, CANDIDATE, "H_formal", GAP_BINS, None
             ),
-            "htdev_v1_subset": {
-                "models": len(v1_rows),
-                **{
-                    x: block(v1_rows, v1_pairs, x) for x in (CANDIDATE, BAR, "H_dev_v1")
-                },
-            },
-            "c1_postkey_informational": {
-                "note": "stored C1 aggregates of the event models (events 1-2 on v1.1, event 3 and the 0.6B post-key run on v1.2); reported only, never tuned to",
-                "models": len(c1_rows),
-                "pairs": len(c1_pairs),
-                **{
-                    x: {
-                        "agreement_all": agreement(c1_rows, c1_pairs, x, "c1", 0.0),
-                        "agreement_ge_1pt": agreement(c1_rows, c1_pairs, x, "c1", 1.0),
-                    }
-                    for x in (CANDIDATE, BAR, "H_formal")
-                },
-            },
+            "htdev_v1_subset": (
+                {
+                    "models": len(v1_rows),
+                    **{
+                        x: block(v1_rows, v1_pairs, x)
+                        for x in (CANDIDATE, BAR, "H_dev_v1")
+                    },
+                }
+                if v1_pairs
+                else None
+            ),
+            "c1_postkey_informational": (
+                None
+                if not c1_pairs
+                else {
+                    "note": "stored C1 aggregates of the event models (events 1-2 on v1.1, event 3 on v1.2); reported only, never tuned to",
+                    "models": len(c1_rows),
+                    "pairs": len(c1_pairs),
+                    **{
+                        x: {
+                            "agreement_all": agreement(c1_rows, c1_pairs, x, "c1", 0.0),
+                            "agreement_ge_1pt": agreement(
+                                c1_rows, c1_pairs, x, "c1", 1.0
+                            ),
+                        }
+                        for x in (CANDIDATE, BAR, "H_formal")
+                    },
+                }
+            ),
         },
         "screen_band": band,
         "table": [
