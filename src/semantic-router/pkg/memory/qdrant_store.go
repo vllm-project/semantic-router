@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -140,6 +141,24 @@ func (s *QdrantStore) ensureListIndexes(ctx context.Context) error {
 func qdrantIndexAlreadyExists(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "already exists") || strings.Contains(msg, "already exist")
+}
+
+func qdrantListTotal(total uint64) (int, error) {
+	if total > uint64(math.MaxInt) {
+		return 0, fmt.Errorf("qdrant count %d exceeds the maximum supported list total", total)
+	}
+	return int(total), nil
+}
+
+func qdrantPointCreatedAt(point *qdrant.RetrievedPoint) (int64, error) {
+	if point == nil || point.Id == nil {
+		return 0, fmt.Errorf("qdrant ordered scroll returned a point without an ID")
+	}
+	createdAt, ok := point.Payload["created_at"]
+	if !ok || createdAt == nil {
+		return 0, fmt.Errorf("qdrant ordered scroll returned a point without created_at")
+	}
+	return createdAt.GetIntegerValue(), nil
 }
 
 // Qdrant only allows UUIDs and +ve integers.
@@ -419,14 +438,21 @@ func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 	if err != nil {
 		return nil, fmt.Errorf("qdrant count failed: %w", err)
 	}
+	totalAsInt, err := qdrantListTotal(total)
+	if err != nil {
+		return nil, err
+	}
 
-	// Scroll orders by created_at only, and that value is whole seconds. Keep
-	// reading through the timestamp that touches the page end so the id
-	// tie-break cannot repeat a row on the next page.
+	// Qdrant disables next_page_offset when a payload order is requested. Use
+	// created_at start_from and exclude the IDs at that timestamp instead. This
+	// advances through every ordered batch while retaining all rows that tie at
+	// the page boundary for the router-side ID tie-break.
 	direction := qdrant.Direction_Desc
 	window := offset + limit
 	collected := make([]*Memory, 0, window)
-	var cursor *qdrant.PointId
+	var startFrom *qdrant.StartFrom
+	var startTimestamp int64
+	var excludedIDs []*qdrant.PointId
 	for createdAtPrefixNeedsMore(collected, window) {
 		if createdAtTieGroupExceeds(collected, window, maxListTieGroup) {
 			return nil, fmt.Errorf("qdrant list tie group exceeds %d rows", maxListTieGroup)
@@ -435,12 +461,15 @@ func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 		if batch < 1 || batch > maxListLimit {
 			batch = maxListLimit
 		}
-		points, next, scrollErr := s.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
+		scrollFilter := &qdrant.Filter{Must: must}
+		if len(excludedIDs) > 0 {
+			scrollFilter.MustNot = []*qdrant.Condition{qdrant.NewHasID(excludedIDs...)}
+		}
+		points, _, scrollErr := s.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
 			CollectionName: s.collectionName,
-			Filter:         filter,
+			Filter:         scrollFilter,
 			Limit:          qdrant.PtrOf(uint32(batch)), //nolint:gosec
-			Offset:         cursor,
-			OrderBy:        &qdrant.OrderBy{Key: "created_at", Direction: &direction},
+			OrderBy:        &qdrant.OrderBy{Key: "created_at", Direction: &direction, StartFrom: startFrom},
 			WithPayload:    qdrant.NewWithPayload(true),
 		})
 		if scrollErr != nil {
@@ -449,20 +478,34 @@ func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 		if len(points) == 0 {
 			break
 		}
+		lastCreatedAt, pointErr := qdrantPointCreatedAt(points[len(points)-1])
+		if pointErr != nil {
+			return nil, pointErr
+		}
+		nextExcludedIDs := make([]*qdrant.PointId, 0, len(excludedIDs)+len(points))
+		if startFrom != nil && lastCreatedAt == startTimestamp {
+			nextExcludedIDs = append(nextExcludedIDs, excludedIDs...)
+		}
 		for _, pt := range points {
+			createdAt, pointErr := qdrantPointCreatedAt(pt)
+			if pointErr != nil {
+				return nil, pointErr
+			}
 			collected = append(collected, payloadToMemory(pt.Payload))
+			if createdAt == lastCreatedAt {
+				nextExcludedIDs = append(nextExcludedIDs, pt.Id)
+			}
 		}
-		if next == nil {
-			break
-		}
-		cursor = next
+		startTimestamp = lastCreatedAt
+		startFrom = qdrant.NewStartFromInt(startTimestamp)
+		excludedIDs = nextExcludedIDs
 	}
 	sortMemoriesForList(collected)
 	page := pageMemories(collected, offset, limit)
 
 	return &ListResult{
 		Memories: page,
-		Total:    int(total),
+		Total:    totalAsInt,
 		Limit:    limit,
 		Offset:   offset,
 	}, nil
