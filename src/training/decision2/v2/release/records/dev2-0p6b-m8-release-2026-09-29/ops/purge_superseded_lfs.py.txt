@@ -1,0 +1,145 @@
+"""Purge the superseded DEV2.0-0.6B weight LFS objects after the successor revision verified.
+
+Coordinator 2026-09-29 16:05 §3: after the new revision verifies, the superseded revision's weight LFS
+blobs are purged with rewrite_history=False; node copies stay the durable store. Exactly two objects of
+exactly one repository: the m4-t-a7-soup backbone and head of revision 99c4e799 (shared with the older
+revisions 7b5d3ff2 / cb2bfd76 / a87eeb72 / e61b2b44). tokenizer.json is shared with the new revision and kept.
+
+    <hf-cli python> purge_superseded_lfs.py.txt plan|apply RECEIPT.json --new-revision SHA --node-copy DIR
+
+Refuses unless: main is the verified new revision; no branch or tag tree references a target; both targets
+are LFS objects of the repo and sit at their paths in 99c4e799; the node copies re-hash to the targets.
+apply deletes with rewrite_history=False, then checks commits and refs are unchanged, exactly the targets
+are gone, the old weight paths are no longer served and every LFS file of main still is.
+"""
+
+import datetime as dt
+import hashlib
+import json
+import sys
+import time
+from pathlib import Path
+
+from huggingface_hub import HfApi, hf_hub_url
+from huggingface_hub.utils import build_hf_headers, get_session
+
+REPO = "llm-semantic-router/DEV2.0-0.6B"
+OLD_REVISION = "99c4e799392afa73241915aeb16fefa5ef3518d7"
+TARGETS = {
+    "7e2d1f9d7010cb59fe0e38d3e0fb848222ba12657663dc96776a22221bd82b8e": "backbone/model.safetensors",
+    "70dc7451862bec4c88f2f8abcdaae66b7f1f118baa8582e3fa863c1794810046": "decision_head.safetensors",
+}
+api = HfApi()
+session = get_session()
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1 << 24), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def served(path: str, revision: str) -> int:
+    url = hf_hub_url(REPO, path, revision=revision)
+    headers = {**build_hf_headers(), "Range": "bytes=0-1023"}
+    try:
+        r = session.get(url, headers=headers, follow_redirects=True)
+    except TypeError:
+        r = session.get(url, headers=headers, allow_redirects=True)
+    return r.status_code
+
+
+def state() -> dict:
+    refs = api.list_repo_refs(REPO)
+    heads = {
+        **{f"branch:{b.name}": b.target_commit for b in refs.branches},
+        **{f"tag:{t.name}": t.target_commit for t in refs.tags},
+    }
+    paths = {}
+    for name, commit in heads.items():
+        for e in api.list_repo_tree(REPO, revision=commit, recursive=True):
+            if getattr(e, "lfs", None):
+                paths.setdefault(e.lfs.sha256, []).append(f"{name}:{e.path}")
+    return {
+        "heads": heads,
+        "commits": [c.commit_id for c in api.list_repo_commits(REPO)],
+        "lfs": {f.file_oid: f for f in api.list_lfs_files(REPO)},
+        "paths": paths,
+    }
+
+
+def main() -> None:
+    mode, receipt = sys.argv[1], Path(sys.argv[2])
+    args = dict(zip(sys.argv[3::2], sys.argv[4::2]))
+    new_revision, node_copy = args["--new-revision"], Path(args["--node-copy"])
+    assert mode in ("plan", "apply") and not receipt.exists()
+    before = state()
+    assert before["heads"].get("branch:main") == new_revision, "main is not the verified new revision"
+    for oid in TARGETS:
+        assert oid not in before["paths"], f"a branch or tag still references {oid}"
+        assert oid in before["lfs"], f"{oid} is not an LFS object of {REPO}"
+    old_tree = {
+        e.path: e.lfs.sha256
+        for e in api.list_repo_tree(REPO, revision=OLD_REVISION, recursive=True)
+        if getattr(e, "lfs", None)
+    }
+    assert all(old_tree.get(path) == oid for oid, path in TARGETS.items()), "targets are not the old weights"
+    node = {oid: sha256_file(node_copy / path) for oid, path in TARGETS.items()}
+    assert all(node[oid] == oid for oid in TARGETS), "node copy does not re-hash to the targets"
+    main_lfs = [p.split(":", 1)[1] for ps in before["paths"].values() for p in ps if p.startswith("branch:main:")]
+    record = {
+        "schema": "dev2-release-purge-superseded/1",
+        "repo": REPO,
+        "mode": mode,
+        "utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "rewrite_history": False,
+        "old_revision": OLD_REVISION,
+        "new_revision": new_revision,
+        "targets": {
+            oid: {"path": path, "bytes": before["lfs"][oid].size, "node_copy_sha256": node[oid]}
+            for oid, path in TARGETS.items()
+        },
+        "node_copy": str(node_copy),
+        "before": {
+            "heads": before["heads"],
+            "commits": len(before["commits"]),
+            "lfs_objects": len(before["lfs"]),
+            "old_paths_served": {p: served(p, OLD_REVISION) for p in TARGETS.values()},
+            "main_lfs_served": {p: served(p, new_revision) for p in main_lfs},
+        },
+    }
+    if mode == "apply":
+        api.permanently_delete_lfs_files(
+            REPO, [before["lfs"][oid] for oid in TARGETS], rewrite_history=False
+        )
+        time.sleep(20)
+        after = state()
+        record["after"] = {
+            "heads": after["heads"],
+            "commits": len(after["commits"]),
+            "lfs_objects": len(after["lfs"]),
+            "old_paths_served": {p: served(p, OLD_REVISION) for p in TARGETS.values()},
+            "main_lfs_served": {p: served(p, new_revision) for p in main_lfs},
+        }
+        record["checks"] = {
+            "commits_unchanged": after["commits"] == before["commits"],
+            "refs_unchanged": after["heads"] == before["heads"],
+            "exactly_targets_gone": set(after["lfs"]) == set(before["lfs"]) - set(TARGETS),
+            "old_weights_not_served": all(
+                s not in (200, 206) for s in record["after"]["old_paths_served"].values()
+            ),
+            "main_still_served": all(
+                s in (200, 206) for s in record["after"]["main_lfs_served"].values()
+            ),
+        }
+        record["passed"] = all(record["checks"].values())
+    receipt.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(json.dumps({k: record.get(k) for k in ("mode", "checks", "passed")}))
+    if mode == "apply" and not record["passed"]:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
