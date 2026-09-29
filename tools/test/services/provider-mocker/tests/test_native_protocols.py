@@ -1,8 +1,10 @@
 """Native endpoint contracts which survive fixture consolidation."""
 
 import base64
+import io
 import json
 import struct
+import wave
 import zlib
 
 import httpx
@@ -247,6 +249,51 @@ async def test_images_reject_unsupported_contracts(client, patch):
     assert response.json()["error"]["type"] == "invalid_request_error"
     assert (
         await client.post("/v1/images/edits", json={"prompt": "draw"})
+    ).status_code == 404
+
+
+async def test_speech_is_valid_deterministic_wav_and_request_is_observable(client):
+    request = {
+        "model": "tts",
+        "input": "hello from the speech fixture",
+        "voice": "default",
+        "response_format": "wav",
+        "task_type": "CustomVoice",
+        "language": "English",
+        "seed": 7,
+    }
+    headers = {"x-vsr-test-session-id": "speech-session"}
+    first = await client.post("/v1/audio/speech", json=request, headers=headers)
+    second = await client.post("/v1/audio/speech", json=request, headers=headers)
+    assert first.status_code == 200 and first.content == second.content
+    assert first.headers["content-type"] == "audio/wav"
+    with wave.open(io.BytesIO(first.content)) as audio:
+        assert audio.getnchannels() == 1
+        assert audio.getsampwidth() == 2
+        assert audio.getframerate() == 24000
+        assert audio.getnframes() == 2400
+    observed = await client.get("/debug/last-request", headers=headers)
+    assert observed.json()["body"] == request
+
+
+@pytest.mark.parametrize(
+    "request_body",
+    [
+        {"input": "speak", "stream": True},
+        {"input": "speak", "stream_format": "sse"},
+        {"input": "speak", "response_format": "mp3"},
+        {"input": ""},
+        {"input": 5},
+        {"voice": "default"},
+        {"input": "speak", "unknown_provider_field": True},
+    ],
+)
+async def test_speech_rejects_unsupported_contracts(client, request_body):
+    response = await client.post("/v1/audio/speech", json=request_body)
+    assert response.status_code == 400
+    assert response.json()["error"]["type"] == "invalid_request_error"
+    assert (
+        await client.post("/v1/audio/transcriptions", json={"model": "asr"})
     ).status_code == 404
 
 

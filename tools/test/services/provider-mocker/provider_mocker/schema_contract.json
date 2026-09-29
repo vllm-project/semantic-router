@@ -540,6 +540,43 @@
       ],
       "extension_request_fields": [],
       "official_usage_fields": []
+    },
+    "openai_speech": {
+      "schema_revision": "router-speech-fixture-v1",
+      "official_request_fields": [
+        "model",
+        "input",
+        "voice",
+        "instructions",
+        "response_format",
+        "speed",
+        "stream_format"
+      ],
+      "required_request_fields": [
+        "input"
+      ],
+      "official_response_fields": [],
+      "extension_request_fields": [
+        "ambient_sound",
+        "duration_seconds",
+        "extra_params",
+        "initial_codec_chunk_frames",
+        "language",
+        "max_new_tokens",
+        "non_streaming_mode",
+        "ref_audio",
+        "ref_audio_2",
+        "ref_text",
+        "sample_rate",
+        "seed",
+        "speaker",
+        "speaker_embedding",
+        "stream",
+        "task_type",
+        "word_timestamps",
+        "x_vector_only_mode"
+      ],
+      "official_usage_fields": []
     }
   }
 }
