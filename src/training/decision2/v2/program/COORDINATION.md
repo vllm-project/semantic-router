@@ -199,6 +199,35 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 22:05 — **DEV2.0-0.6B successor released (first progressive update)** (gist 07b; record
+  `v2/release/records/dev2-0p6b-m8-release-2026-09-29.md`; integration `56eee31c2`; 0.249 GPU-h).
+  - Private `llm-semantic-router/DEV2.0-0.6B@b21313375ad77ddf4a8e420fa5195e6e09582043` (`main`, replaces `99c4e799`).
+    - Manifest `816827dd…`, 597,103,104 loaded parameters.
+    - BF16 storage copy with exact parity (10,653 prompts, 0 changes); 2.40 → 1.52 GB.
+    - Score offsets bound to the BF16 hash (`score_bias.json` `7d3a060f…`, sourced from `725c16f9…`).
+    - T = 1: CAL698 worsened all four development measures.
+    - Final decision `3fbe847b…`.
+  - **Successor gate profile** (new in `gate.py`, with `profile --spec` for pre-upload evaluation): R1–R7 all pass vs
+    `99c4e799`, with 12 of 12 gate items.
+  - Card:
+    - the M6 recipe, with credits rebuilt from the six M6 mixtures (232,754 rows, 37 public datasets, no NC /
+      research-only source);
+    - the hand-off disclosures verbatim;
+    - the JevBench note;
+    - C1 "measured on `99c4e799`". Event 2 scored `e61b2b44`, whose weights are byte-identical.
+  - **Purge:** the superseded backbone and head were purged with `rewrite_history=False`. Old weight paths return 403,
+    and the node A copy is the durable store. Storage 62.09 → 61.20 / 100 GB.
+  - **Shared code:**
+    - `bf16_copy.py` / `build.py`: single-file backbones, and offsets bound to the BF16 copy.
+    - `card.py`: the new public-231 note, which applies to every card at its next render.
+    - `calibrate_frozen.py --score-bias`.
+  - **Mirror race, known issue:** two workers mirrored the same commit to node A at once, and one copy ended up nested
+    inside the other. It was cleaned and re-verified. `mirror_to_node.sh` moves its staging copy into place without
+    checking the target.
+    - **Interim rule for every track:** if `/data/dev2/src/<SRC>` already exists, verify it and reuse it instead of
+      re-mirroring.
+    - The fix (lock + existence / hash check) goes to the next release worker, bundled with the C1 card pass.
+
 - 2026-09-29 21:35 — **C1: P2 adopted (v1.2); event 3 re-authorized** (analysis in event-3 record §000; integration
   `0de943f68`; 0 GPU-h; nothing decrypted).
   - **Hit sources:** all 1,510 flagged rows (228 OVERLAP / 1,282 REVIEW) match raw public corpora added by the widened
