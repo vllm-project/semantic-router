@@ -74,6 +74,71 @@ func setupFallbackTestRouter(t *testing.T, fallbackPolicy fallback.FallbackPolic
 	return router, cfg
 }
 
+func setupDuplicateLoRAAccountingRouter(t *testing.T, policy fallback.FallbackPolicy) *OpenAIRouter {
+	t.Helper()
+	router, cfg := setupFallbackTestRouter(t, policy)
+	cfg.ModelConfig["base-a"] = config.ModelParams{
+		PreferredEndpoints: []string{"base-a-backend"},
+		APIFormat:          "openai.chat.v1",
+		LoRAs:              []config.LoRAAdapter{{Name: "shared"}},
+	}
+	cfg.ModelConfig["base-b"] = config.ModelParams{
+		PreferredEndpoints: []string{"base-b-backend"},
+		APIFormat:          "openai.chat.v1",
+		LoRAs:              []config.LoRAAdapter{{Name: "shared"}},
+	}
+	cfg.VLLMEndpoints = append(cfg.VLLMEndpoints,
+		config.VLLMEndpoint{Name: "base-a-backend", Address: "127.0.0.1", Port: 8101, ProviderProfileName: "prof-openai"},
+		config.VLLMEndpoint{Name: "base-b-backend", Address: "127.0.0.1", Port: 8102, ProviderProfileName: "prof-openai"},
+	)
+	return router
+}
+
+func prepareDuplicateLoRAPrimary(t *testing.T, router *OpenAIRouter) *RequestContext {
+	t.Helper()
+	selected := config.ModelRef{Model: "base-b", LoRAName: "shared"}
+	ctx := testFallbackRequestContext("shared", []string{"shared", "base-a"})
+	ctx.VSREligibleModelRefs = []config.ModelRef{selected, {Model: "base-a"}}
+	ctx.VSRSelectedCandidate = &selected
+	_, err := router.prepareProviderDispatch(ctx.SemanticRequest, "shared", "", false, ctx)
+	require.NoError(t, err)
+	require.Equal(t, "base-b-backend", ctx.primaryBackendName)
+	return ctx
+}
+
+func TestPrimarySuccessAccountingUsesSelectedLoRABackend(t *testing.T) {
+	policy := fallback.DefaultEnabledPolicy()
+	policy.CircuitBreaker.ConsecutiveFailures = 1
+	router := setupDuplicateLoRAAccountingRouter(t, policy)
+	ctx := prepareDuplicateLoRAPrimary(t, router)
+	circuitBreaker := router.FallbackOrchestrator.CircuitBreaker()
+
+	circuitBreaker.RecordFailure("base-a-backend")
+	require.False(t, circuitBreaker.Allow("base-a-backend"))
+
+	router.recordPrimarySuccess(ctx)
+
+	require.False(t, circuitBreaker.Allow("base-a-backend"), "success for base-b must not reset base-a")
+	require.True(t, circuitBreaker.Allow("base-b-backend"))
+}
+
+func TestPrimaryFailureAccountingUsesSelectedLoRABackend(t *testing.T) {
+	policy := fallback.DefaultEnabledPolicy()
+	policy.MaxAttempts = 1
+	policy.CircuitBreaker.ConsecutiveFailures = 1
+	router := setupDuplicateLoRAAccountingRouter(t, policy)
+	ctx := prepareDuplicateLoRAPrimary(t, router)
+	ctx.UpstreamStatusCode = http.StatusServiceUnavailable
+
+	resp := router.maybeExecuteFallback([]byte("upstream unavailable"), ctx)
+	require.Nil(t, resp)
+	require.NotNil(t, ctx.FallbackRecord)
+	require.Len(t, ctx.FallbackRecord.Attempts, 1)
+	require.Equal(t, "base-b-backend", ctx.FallbackRecord.Attempts[0].Backend)
+	require.False(t, router.FallbackOrchestrator.CircuitBreaker().Allow("base-b-backend"))
+	require.True(t, router.FallbackOrchestrator.CircuitBreaker().Allow("base-a-backend"))
+}
+
 func testFallbackRequestContext(primaryModel string, eligibleModels []string) *RequestContext {
 	req := testNeutralRequest(primaryModel, "Explain quantum computing in one sentence")
 	modelRefs := make([]config.ModelRef, len(eligibleModels))

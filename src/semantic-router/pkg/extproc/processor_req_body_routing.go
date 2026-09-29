@@ -81,6 +81,9 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		return nil, protocolErr
 	}
 	ctx.TargetFormat = dispatch.targetFormat
+	if !ctx.LooperRequest {
+		ctx.primaryBackendName = dispatch.backendName
+	}
 	// Bind response policy where the backend is selected.
 	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
 	ctx.SemanticRequest = request
