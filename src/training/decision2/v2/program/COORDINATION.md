@@ -199,6 +199,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 17:55 — **Renamed: DEV2.0-9B and DEV2.0-27B** (gist 07; rename record under `v2/release/records/`;
+  integration `5665cee20`; 0.477 GPU-h; storage 62.09 / 100 GB).
+  - **DEV2.0-9B** (was DEV2.0-8B): private `llm-semantic-router/DEV2.0-9B@ae6831960dd1114296cb15a59248b79832c42959`,
+    final decision `bad976354662…` (supersedes `7666fd7c…`). Weights byte-identical to `53bac735`.
+  - **DEV2.0-27B** (was DEV2.0-26B): private `llm-semantic-router/DEV2.0-27B@32e7e8b1960fa1e6af3438cd11395cac2849a8c1`,
+    final decision `76abd8e9691e…` (supersedes `bea9795b…`). Adapter and head byte-identical to `6931828d`. The card
+    adds the peers' mlx-diag Choice / Noul lines.
+  - Cards: "Named after its base model (Qwen3.5-9B / Qwen3.8-27B); it loads 7,940,895,744 / 25,746,591,744 parameters",
+    the 9B / 27B owl banners, and the pending C1 line.
+  - **Redirects:** old IDs redirect for tools (API / download 307; `model_info` / `hf_hub_download` resolve with identical
+    bytes). Staged C1 references (`DEV2.0-8B@53bac735`, `DEV2.0-26B@5683c6f0`) still resolve.
+  - **Pipeline:**
+    - `name_basis: base`, with tests: the base's size must fall in the loaded count's tier and appear in the lineage.
+    - `hub` now refuses an ID that resolves to a different repo, so an old spec cannot recreate DEV2.0-8B / 26B.
+    - New revisions are recorded in the release and rename records, not written back into the specs; each receipt pins
+      its spec's hash.
+    - Use the new IDs everywhere from now on.
+  - Collection "🎲 Decision 2.0": 0.6B, 0.8B, 2B, 4B, 9B, 27B. The items followed the move.
+
 - 2026-09-29 17:15 — **JevBench decision: KEEP as a guarded card metric and optimization signal** (eval record
   `v2/eval/records/jevbench-value-2026-09-29.md`; integration `dea99f355`; 0 GPU-h).
   - **Findings:**
