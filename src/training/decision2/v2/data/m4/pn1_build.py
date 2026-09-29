@@ -118,6 +118,12 @@ FEATURES_EXTENDED = FEATURES + (
     "containment_ba",
 )
 MATCH_COORDINATES = ("bigram_jaccard", "multiset_jaccard", "length_ratio")
+MATCH_COORDINATES_V4 = MATCH_COORDINATES + (
+    "word_jaccard",
+    "edit_distance",
+    "containment_min",
+    "containment_max",
+)
 CALIPER = 0.03
 
 
@@ -708,6 +714,23 @@ def family_mix(records: list[dict[str, Any]]) -> dict[str, float]:
     return {family: round(counts[family] / total, 6) for family in FAMILIES}
 
 
+def match_point(record: dict[str, Any], coordinates=None) -> list[float]:
+    """Matching coordinates of a candidate; amendment 4 adds the audit learner's features
+    (containment taken order-free, since the state order is drawn later)."""
+    coordinates = coordinates or MATCH_COORDINATES_V4
+    metrics = dict(record["metrics"])
+    if any(c not in metrics for c in coordinates):
+        extra = extra_metrics(*record["texts"])
+        metrics.update(extra)
+        metrics["containment_min"] = min(
+            extra["containment_ab"], extra["containment_ba"]
+        )
+        metrics["containment_max"] = max(
+            extra["containment_ab"], extra["containment_ba"]
+        )
+    return [float(metrics[c]) for c in coordinates]
+
+
 def match_stratum(record: dict[str, Any]) -> str:
     return f"{record['group']}|ms{int(bool(record['metrics']['same_multiset']))}"
 
@@ -719,7 +742,7 @@ def match_pairs(
 
     Per construction group x same-multiset flag (the caller passes one language), no
     rows are taken in seed-hash order; each takes the unmatched yes row with every
-    coordinate of MATCH_COORDINATES within CALIPER that is nearest in Euclidean
+    coordinate of MATCH_COORDINATES_V4 within CALIPER that is nearest in Euclidean
     distance (ties: seed-hash order). Returns (no, yes, distance) per stratum in that order.
     """
     by_stratum: dict[str, dict[int, list[dict[str, Any]]]] = collections.defaultdict(
@@ -732,13 +755,13 @@ def match_pairs(
         yes = sorted(by_stratum[s][1], key=seed_key)
         no = sorted(by_stratum[s][0], key=seed_key)
         buckets: dict[int, list[int]] = collections.defaultdict(list)
-        coords = [[float(r["metrics"][c]) for c in MATCH_COORDINATES] for r in yes]
+        coords = [match_point(r) for r in yes]
         for index, point in enumerate(coords):
             buckets[math.floor(point[0] / CALIPER)].append(index)
         used = [False] * len(yes)
         pairs = []
         for record in no:
-            mine = [float(record["metrics"][c]) for c in MATCH_COORDINATES]
+            mine = match_point(record)
             home = math.floor(mine[0] / CALIPER)
             best = None
             for bucket in (home - 1, home, home + 1):
@@ -1182,7 +1205,7 @@ def cv_accuracy(
             for i in range(len(rows))
         ]
         w = fit_logistic([z[i] for i in train], [y[i] for i in train])
-        base = int(sum(y[i] for i in train) * 2 >= len(train))
+        base = int(sum(y) * 2 >= len(y))
         for i in test:
             score = w[0] + sum(wi * zi for wi, zi in zip(w[1:], z[i]))
             correct += int((score > 0) == bool(y[i]))

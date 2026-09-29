@@ -50,6 +50,10 @@ def record(
             multiset_jaccard=coords[1],
             length_ratio=coords[2],
             same_multiset=family in ("pn-name",),
+            word_jaccard=coords[3] if len(coords) > 3 else 0.5,
+            edit_distance=coords[4] if len(coords) > 4 else 0.5,
+            containment_min=0.5,
+            containment_max=0.5,
         )
     item["attribution"] = {
         str(sid): {"user": f"user{sid}", "cc0": sid % 2 == 0} for sid in ids
@@ -448,6 +452,34 @@ class BalanceTest(unittest.TestCase):
             sorted(r["cid"] for r in chosen), sorted(r["cid"] for r in again)
         )
 
+    def test_matching_uses_the_audit_features(self):
+        yes = record(
+            "hop:7000:7001",
+            "de",
+            "pn-hop",
+            1,
+            ["x y", "y x"],
+            coords=(0.5, 0.5, 1.0, 0.5, 0.10),
+        )
+        near = record(
+            "near:7002:7003",
+            "de",
+            "pn-near",
+            0,
+            ["x z", "z x"],
+            coords=(0.5, 0.5, 1.0, 0.5, 0.12),
+        )
+        far = record(
+            "near:7004:7005",
+            "de",
+            "pn-near",
+            0,
+            ["x w", "w x"],
+            coords=(0.5, 0.5, 1.0, 0.5, 0.40),
+        )
+        self.assertEqual(len(build.match_pairs([yes, far])["natural|ms0"]), 0)
+        self.assertEqual(len(build.match_pairs([yes, near])["natural|ms0"]), 1)
+
     def test_matching_respects_the_caliper_and_order(self):
         pairs = build.match_pairs(self.pool())
         self.assertEqual(set(pairs), {"natural|ms0", "swap|ms1"})
@@ -456,7 +488,7 @@ class BalanceTest(unittest.TestCase):
             self.assertEqual(nos, sorted(nos, key=build.seed_key))
             for no, yes, _ in stratum_pairs:
                 self.assertEqual((no["label"], yes["label"]), (0, 1))
-                for c in build.MATCH_COORDINATES:
+                for c in build.MATCH_COORDINATES_V4:
                     self.assertLessEqual(
                         abs(no["metrics"][c] - yes["metrics"][c]), build.CALIPER + 1e-9
                     )
