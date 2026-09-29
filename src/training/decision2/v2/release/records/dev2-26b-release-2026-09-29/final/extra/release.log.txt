@@ -1,0 +1,11 @@
+08:02:32Z build llm-semantic-router/DEV2.0-26B from a752ca6969f7c12fb4c4049d6a17f54757dde47c-src_training_decision2
+08:03:01Z pre-upload examples (two processes)
+08:07:02Z card example (pre-upload)
+08:08:59Z scored-panel parity (pre-upload)
+08:12:03Z ensure private llm-semantic-router/DEV2.0-26B
+08:12:04Z upload
+08:12:06Z real hf download of 6931828d7e41a5d31cc8e5acdc36f5eebae70fad
+08:12:10Z post-download examples
+08:19:13Z readback
+08:19:14Z gate seal and collection add
+08:26 collect + readback-collected from b80fa53026aa1729eed9e3cde04e39f333f5f550-src_training_decision2 (the --collect run stopped at the collection title check)
