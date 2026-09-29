@@ -369,6 +369,22 @@ class SuccessorNoOwnAndC1Test(SuccessorGateTest):
         self.spec["card"]["paired"] = str(own)
         self.assertEqual(self.failing(), ["1_successor_R5_tier_gates"])
 
+    def test_mlx_pairing_in_the_9b_schema(self):
+        mlx_current = self.spec["gate_profile"]["current"]["mlx_predictions"]
+        write(
+            Path(self.files["mlx_paired"]),
+            {
+                "schema": gate.MLX_PAIRED_9B,
+                "types": ["choice", "noul"],
+                "overall": {"ci95": {"low": -0.029, "high": 0.004}, "delta": -0.012},
+                "left": {"predictions_sha256": "m" * 64},
+                "right": {"predictions_sha256": layout.sha_file(Path(mlx_current))},
+            },
+        )
+        self.assertEqual(self.failing(), [])
+        self.edit("mlx_paired", **{"overall.ci95": {"low": -0.03, "high": -0.001}})
+        self.assertEqual(self.failing(), ["1_successor_R4_mlx_diag"])
+
     # The own-1.0 variants of these are covered by SuccessorGateTest.
     def test_each_rule_fails_on_its_criterion(self):
         pass

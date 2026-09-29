@@ -70,6 +70,7 @@ SUCCESSOR_ITEMS = (
     "1_successor_R7_public231",
 )
 SUCCESSOR_C1 = "1_successor_R8_c1_postkey"
+MLX_PAIRED_9B = "dev2-9b-mlx-paired/1"
 C1_SUMMARY_SCHEMA = "dev2-c1-postkey/1/summary"
 DECISION_TYPES = ("choice", "noul", "score")
 VERIFY_STEPS = (
@@ -262,20 +263,28 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
 
     def r4() -> Any:
         mlx = _json(Path(profile["mlx_paired"]))
-        low, high = mlx["bootstrap"]["card_macro_ci95"]
-        runs, problems = mlx["runs"], []
-        if (
-            "mlx-diag" in predictions
-            and runs["candidate"]["predictions_sha256"] != predictions["mlx-diag"]
-        ):
+        problems = []
+        if mlx.get("schema") == MLX_PAIRED_9B:
+            low, high = mlx["overall"]["ci95"]["low"], mlx["overall"]["ci95"]["high"]
+            delta = mlx["overall"]["delta"]
+            candidate = mlx["left"]["predictions_sha256"]
+            released = mlx["right"]["predictions_sha256"]
+            if sorted(mlx.get("types") or []) != ["choice", "noul"]:
+                problems.append(
+                    "mlx-diag pairing is not the card-eligible Choice + Noul"
+                )
+        else:
+            low, high = mlx["bootstrap"]["card_macro_ci95"]
+            delta = mlx["delta"]["card_macro"]
+            candidate = mlx["runs"]["candidate"]["predictions_sha256"]
+            released = mlx["runs"]["released"]["predictions_sha256"]
+        if "mlx-diag" in predictions and candidate != predictions["mlx-diag"]:
             problems.append("mlx-diag candidate predictions are not the scored ones")
         if (
             current.get("mlx_predictions")
-            and sha_file(Path(current["mlx_predictions"]))
-            != runs["released"]["predictions_sha256"]
+            and sha_file(Path(current["mlx_predictions"])) != released
         ):
             problems.append("mlx-diag comparison is not against the current revision")
-        delta = mlx["delta"]["card_macro"]
         return (
             high >= 0,
             f"mlx-diag card-eligible macro {delta:+.4f} [{low:+.4f}, {high:+.4f}]",
