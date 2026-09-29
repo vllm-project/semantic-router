@@ -22,12 +22,6 @@ from classify_pr_changes import (  # noqa: E402
     classify,
     full_e2e_profiles,
 )
-from classify_pr_changes import (  # noqa: E402
-    NIGHTLY_IMAGES,
-    PRODUCTION_RELEASE_IMAGES,
-    classify,
-    full_e2e_profiles,
-)
 from domain_registry import load_domain_registry, profile_records  # noqa: E402
 from run_model_tests import CLASSIFIER_TESTS, OWNED_OMNI_TESTS  # noqa: E402
 from verification_catalog import (  # noqa: E402
@@ -597,6 +591,7 @@ class SelectionTests(unittest.TestCase):
             result.profiles,
             ("envoy-ai-gateway", "sticky-tool-selection-redis"),
         )
+
     def test_release_performance_base_uses_a_compatible_vela_anchor(self):
         self.assertEqual(
             performance_base("0.4.0", ["v0.3.0"]),

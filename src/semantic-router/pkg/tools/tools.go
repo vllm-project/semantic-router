@@ -396,6 +396,32 @@ func (db *ToolsDatabase) GetAllTools() []openai.ChatCompletionToolParam {
 	return tools
 }
 
+// FilterToolsByCategory returns the provider definitions whose database
+// metadata matches category. Category metadata is not part of the provider
+// tool wire value, so sticky authorization must apply this filter before
+// reusing a historical identity.
+func (db *ToolsDatabase) FilterToolsByCategory(catalog []openai.ChatCompletionToolParam, category string) []openai.ChatCompletionToolParam {
+	category = strings.TrimSpace(category)
+	if db == nil || category == "" || len(catalog) == 0 {
+		return catalog
+	}
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	allowed := make(map[string]struct{}, len(db.entries))
+	for _, entry := range db.entries {
+		if strings.EqualFold(strings.TrimSpace(entry.Category), category) {
+			allowed[entry.Tool.Function.Name] = struct{}{}
+		}
+	}
+	filtered := make([]openai.ChatCompletionToolParam, 0, len(catalog))
+	for _, tool := range catalog {
+		if _, ok := allowed[tool.Function.Name]; ok {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered
+}
+
 // GetToolCount returns the number of tools in the database
 func (db *ToolsDatabase) GetToolCount() int {
 	if !db.enabled {

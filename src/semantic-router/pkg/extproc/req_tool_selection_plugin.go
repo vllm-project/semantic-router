@@ -126,6 +126,11 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 		toolSnapshot, retrievalFingerprint := db.Snapshot()
 		authorizedTools, catalogErr := tools.SemanticTools(toolSnapshot)
 		if catalogErr == nil {
+			if advanced != nil && advanced.Enabled && advanced.UseCategoryFilter != nil && *advanced.UseCategoryFilter {
+				if category := resolveCategory(advanced, ctx); category != "" {
+					authorizedTools = db.FilterToolsByCategory(authorizedTools, category)
+				}
+			}
 			if toolsCfg != nil && toolsCfg.Enabled && toolsCfg.EffectiveMode() == config.ToolsPluginModeFiltered {
 				authorizedTools = filterToolsByDecisionPolicy(
 					authorizedTools,

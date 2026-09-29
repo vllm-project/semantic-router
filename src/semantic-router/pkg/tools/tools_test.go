@@ -365,6 +365,25 @@ var _ = Describe("ToolsDatabase", func() {
 		})
 	})
 
+	Describe("FilterToolsByCategory", func() {
+		It("filters the current catalog using database category metadata", func() {
+			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{Enabled: true})
+			Expect(db.AddTool(openai.ChatCompletionToolParam{
+				Type: "function",
+				Function: openai.FunctionDefinitionParam{Name: "weather"},
+			}, "weather", "utility", nil)).To(Succeed())
+			Expect(db.AddTool(openai.ChatCompletionToolParam{
+				Type: "function",
+				Function: openai.FunctionDefinitionParam{Name: "search"},
+			}, "search", "information", nil)).To(Succeed())
+
+			catalog := db.GetAllTools()
+			filtered := db.FilterToolsByCategory(catalog, "UTILITY")
+			Expect(filtered).To(HaveLen(1))
+			Expect(filtered[0].Function.Name).To(Equal("weather"))
+		})
+	})
+
 	Describe("GetToolCount", func() {
 		It("should return correct count when enabled", Label("model-artifacts"), func() {
 			if toolsEmbeddingProvider == nil {
