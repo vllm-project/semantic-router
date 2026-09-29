@@ -14,6 +14,7 @@ R=/data/dev2/runs/dec
 M=$R/m6
 H=/data/dev2/hf-cache
 SEL=${M6_SELECT:-$M/select}
+PFX=${M6_PREFIX:-m6}
 LEASES=/data/dev2/leases
 PANELS=/data/dev2/private/panels
 CAL698_DIR=$R/m3/data-sel700-cal698

@@ -20,7 +20,8 @@
 # another select directory, e.g. a later milestone's preregistered finalists). Tiers: 4b node B
 # (master formal/m5/cache-frozen f6d0f920..., mlx cache-frozen-mlx 65d7d38f...); 2b node B after `2b ref` and a
 # node-A exactness check (REF-EXACT.json relayed by m6-relay.sh mark-ref), or node A with M6_2B_NODE=A (image
-# f83b1d10, HIP_FORCE_DEV_KERNARG=1, copy of formal/m3/m3-S2T-soup-nodeA-triton, package relayed by m6-relay.sh pkg);
+# f83b1d10, HIP_FORCE_DEV_KERNARG=1, copy of formal/m3/m3-S2T-soup-nodeA-triton, package relayed by m6-relay.sh pkg,
+# or staged on node A with M6_2B_STAGE_A=1 when the points live there); M6_PREFIX (default m6) names runs/packages;
 # 08b node A (copy of formal/m2/m2-E8F-soup-nodeA-triton). CAL698 is data-sel700-cal698/cal.jsonl (19cc1a8c...;
 # relay it to node A with m6-relay.sh cal698). No upload anywhere.
 set -u
@@ -48,12 +49,13 @@ devcal() { # devcal <label> <typed-dev preds> <css-pilot preds> <candidate (16K)
 # stage <point>: sets NAME PKG LIST REV MODEL SPEC CAL DECISION CALX PARAMS
 stage() {
   local point=$1
-  NAME=m6-$point PKG=$F/pkg/m6-$point LIST=$F/pkg/m6-$point.sha256 PARAMS=$F/stage-params/m6-$point
+  NAME=$PFX-$point PKG=$F/pkg/$PFX-$point LIST=$F/pkg/$PFX-$point.sha256 PARAMS=$F/stage-params/$PFX-$point
   if [ -f "$LIST" ]; then
     (cd "$PKG" && sha256sum -c --quiet "$LIST") > "$LIST.verify.log" 2>&1 || die "$NAME package changed since staging"
     [ "$(tree_manifest "$PKG" | sha256sum | cut -d' ' -f1)" = "$(sha "$LIST")" ] || die "$NAME package has extra or missing files"
   else
-    [ "$NODE" = A ] && [ "$TIER" = 2b ] && die "$NAME: stage on node B and relay the package (m6-relay.sh pkg $point)"
+    [ "$NODE" = A ] && [ "$TIER" = 2b ] && [ -z "${M6_2B_STAGE_A:-}" ] \
+      && die "$NAME: stage on node B and relay the package (m6-relay.sh pkg $point)"
     local fj=$SEL/$TIER-finalists.json
     [ -f "$fj" ] || die "no $fj (m6-rules.sh $TIER)"
     local info
@@ -197,7 +199,7 @@ case $CMD in
     point=$(jget "$RD/M6-RECEIPT.json" point)
     [ "$point" = None ] && point=-
     params=-
-    [ "$point" != - ] && params=$F/stage-params/m6-$point
+    [ "$point" != - ] && params=$F/stage-params/$PFX-$point
     cache_copy "$base" "$pin" "$F/$RUN-mlx-cache"
     flog "$RUN-mlx collection start (GPU$GPU, copy of $base)"
     run_collect "$RUN-mlx" "$model" "$pkg" "$rev" "$spec" "$F/$RUN-mlx-cache" "M6 mlx-diag $RUN (node $NODE)" \
