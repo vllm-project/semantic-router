@@ -117,6 +117,24 @@ func TestExtraKeywordMatchKeepsReportedEvidence(t *testing.T) {
 	}
 }
 
+func TestNOTGuardDoesNotDisqualifyReportedScore(t *testing.T) {
+	guarded := config.Decision{Name: "guarded", Priority: 100, Rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{
+		{Type: "embedding", Name: "strong"},
+		{Operator: "NOT", Conditions: []config.RuleNode{{Type: "domain", Name: "legal"}}},
+	}}}
+	plain := config.Decision{Name: "plain", Priority: 200, Rules: config.RuleNode{Type: "embedding", Name: "weak"}}
+	trace := rankingTraceFor(t, []config.Decision{guarded, plain}, config.RoutingStrategyConfidence, &SignalMatches{
+		EmbeddingRules:    []string{"strong", "weak"},
+		SignalConfidences: map[string]float64{"embedding:strong": 0.95, "embedding:weak": 0.80},
+	})
+	if trace.Winner != "guarded" || trace.DecidedBy != "confidence" || trace.Fallback != "" {
+		t.Fatalf("NOT guard changed score ranking: %+v", trace)
+	}
+	if kinds := config.DeclaredScoreKinds(&guarded.Rules); len(kinds) != 1 || kinds[0] != config.ScoreKindSimilarity {
+		t.Fatalf("declared score kinds = %v, want similarity only", kinds)
+	}
+}
+
 // A conjunction that rests on several evidence leaves is not comparable, so
 // the pool ranks by priority instead of by a mean that moves with leaf count.
 func TestMultiEvidenceDecisionRanksByPriority(t *testing.T) {
