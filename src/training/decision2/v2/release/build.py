@@ -54,6 +54,8 @@ QWEN_MODULES = (
     "lora.py",
     "source.py",
 )
+# Imported by newer infer.py; mirrors of earlier scored runs lack it.
+OPTIONAL_QWEN_MODULES = ("score_bias.py",)
 HEAD_MODULES = {
     "type-separated": "type_separated_head.py",
     "candidate-interaction": "candidate_interaction_head.py",
@@ -251,6 +253,23 @@ def _dec_fingerprint(identity: dict[str, Any], checkpoint: Path) -> dict[str, An
     }
 
 
+def verify_score_bias(spec: dict[str, Any], model_sha256: str) -> dict[str, Any] | None:
+    """Spec Score offsets, bound to their pinned bytes and the model hash."""
+    entry = spec.get("score_bias")
+    if not entry:
+        return None
+    from training.model.score_bias import load_score_bias
+
+    path = Path(entry["path"])
+    if layout.sha_file(path) != entry["sha256"]:
+        raise ValueError("Score offsets file differs from the scored score_bias")
+    offsets, _ = load_score_bias(path, model_sha256)
+    return {
+        "sha256": entry["sha256"],
+        "offsets": {str(key): value for key, value in sorted(offsets.items())},
+    }
+
+
 def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
     from training.model.calibration import load_calibration
     from training.model.infer import checkpoint_fingerprint
@@ -280,6 +299,7 @@ def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
             spec["max_input_tokens"],
         ):
             raise ValueError("Calibration context differs from the package limit")
+    score_bias = verify_score_bias(spec, identity["model_sha256"])
     result = {
         "model_sha256": identity["model_sha256"],
         "fingerprint_files": identity["files_sha256"],
@@ -289,6 +309,8 @@ def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
         "text_parameter_count": metadata.get("text_parameter_count"),
         "temperature_by_type": temperatures,
     }
+    if score_bias is not None:
+        result["score_bias"] = score_bias
     if adapter:
         contract = metadata["lora"]
         base = spec["base"]
@@ -410,6 +432,13 @@ def vendor_runtime(
         "rewritten": False,
     }
     modules = list(QWEN_MODULES)
+    modules += [
+        name
+        for name in OPTIONAL_QWEN_MODULES
+        if (root / "training/model" / name).is_file()
+    ]
+    if spec.get("score_bias") and "score_bias.py" not in modules:
+        raise ValueError("Score offsets need score_bias.py in the vendored sources")
     if identity["head_variant"] in HEAD_MODULES:
         modules.append(HEAD_MODULES[identity["head_variant"]])
     for name in modules:
@@ -440,12 +469,25 @@ def vendor_runtime(
 def check_scored_runtime(
     spec: dict[str, Any], records: dict[str, Any]
 ) -> dict[str, Any] | None:
-    """Vendored sources must equal the scored adapter sources recorded at scoring time."""
+    """Vendored sources must equal the scored adapter sources recorded at scoring time.
+
+    Score offsets must be the file the scored run applied (``score_bias_sha256``).
+    """
     scored = spec.get("scored") or {}
     path = scored.get("native_manifest")
     if not path:
+        if spec.get("score_bias"):
+            raise ValueError("Score offsets need the scored native manifest")
         return None
-    recorded = _object(Path(path)).get("adapter_files_sha256") or {}
+    native = _object(Path(path))
+    if native.get("score_bias_sha256") != (spec.get("score_bias") or {}).get("sha256"):
+        raise ValueError("Score offsets differ from the ones the scored run applied")
+    recorded = native.get("adapter_files_sha256") or {}
+    if "score_bias.py" in recorded and not any(
+        record.get("source") == "training/model/score_bias.py"
+        for record in records.values()
+    ):
+        raise ValueError("The scored run used score_bias.py; it is not vendored")
     checked = {}
     for record in records.values():
         source = record.get("source") or ""
@@ -585,6 +627,8 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
     profile = spec["profile"]
     checkpoint = Path(spec["checkpoint"]).resolve(strict=True)
     if profile == "kai-native":
+        if spec.get("score_bias"):
+            raise ValueError("Score offsets are a Qwen-runtime feature")
         identity = verify_kai_native(
             spec, checkpoint, Path(spec["runtime_bundle"]).resolve(strict=True)
         )
@@ -654,6 +698,13 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
                 "sha256": layout.sha_file(stage / "calibration.json"),
                 "temperature_by_type": identity.get("temperature_by_type"),
             }
+        score_bias = None
+        if identity.get("score_bias"):
+            shutil.copyfile(spec["score_bias"]["path"], stage / "score_bias.json")
+            staged = layout.sha_file(stage / "score_bias.json")
+            if staged != identity["score_bias"]["sha256"]:
+                raise ValueError("Score offsets file changed while staging")
+            score_bias = {"file": "score_bias.json", **identity["score_bias"]}
         runtime = vendor_runtime(spec, stage, identity)
         for name, record in runtime.items():
             record["sha256"] = layout.sha_file(stage / name)
@@ -755,6 +806,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "origin": spec["origin"],
             "base": identity.get("base"),
             "calibration": calibration,
+            **({"score_bias": score_bias} if score_bias else {}),
             "max_input_tokens": spec["max_input_tokens"],
             "runtime": {
                 "requirements": spec.get("runtime_requirements", {}),

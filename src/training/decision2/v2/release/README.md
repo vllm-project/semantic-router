@@ -71,6 +71,12 @@ names the repository, profile, checkpoint and its expected identity, calibration
 input cap, direct weight origin, lineage licences (with pinned licence-file
 hashes), the scored run binding and the card inputs. Release (non-staging) specs
 also need the coordinator's gate receipt (`dev2-release-gate/1`).
+Optional `"score_bias": {"path", "sha256"}` (Qwen profiles) packages per-level Score
+logit offsets (`dev2-score-bias-v1`, from `training.model.infer --score-bias`) as
+`score_bias.json`: bound to the model hash and to the scored native manifest's
+`score_bias_sha256`, recorded as `MODEL_MANIFEST.json` `score_bias` (`file`,
+`sha256`, `offsets`), and applied by the runtime exactly as at scoring time. Without
+the key, packages and answers are unchanged.
 
 ```bash
 # local: push, then mirror the subtree to the node that holds the checkpoint

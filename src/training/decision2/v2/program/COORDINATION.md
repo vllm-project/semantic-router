@@ -94,6 +94,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | eval: 9B gates | `/home/xunliu/code/vllm-sr-dev2-eval-9bgates` | `xunzhuo/decision-2-training-eval-9bgates` |
 | eval: JevBench analysis | `/home/xunliu/code/vllm-sr-dev2-eval-jevbench` | `xunzhuo/decision-2-training-eval-jevbench` |
 | ~27B Milestone 4b | `/home/xunliu/code/vllm-sr-dev2-27b-m4b` | `xunzhuo/decision-2-training-27b-m4b` |
+| research & data: hard-skill families | `/home/xunliu/code/vllm-sr-dev2-data-hardskills` | `xunzhuo/decision-2-training-data-hardskills` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -197,6 +198,64 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 17:15 — **JevBench decision: KEEP as a guarded card metric and optimization signal** (eval record
+  `v2/eval/records/jevbench-value-2026-09-29.md`; integration `dea99f355`; 0 GPU-h).
+  - **Findings:**
+    - Our public-231 reproduction is exact: 86 stored runs rescored with upstream's rule changed 0 items.
+    - Per-model 95% interval ≈ ±11 items. The easy tier is at ceiling. The minimum detectable within-tier gap is 11–20
+      items.
+    - It is mainly a size meter (ρ .91 with size; within-tier ρ with v3 only .27), but carries information beyond v3,
+      tied to mlx-diag residuals.
+    - Noise: DEV2.0-9B vs Lux 1.0 −5 [−11, +1]; DEV2.0-4B vs Nox 1.0 −2 [−9, +5].
+    - Real gaps:
+      - DEV2.0-4B vs Decider 4B −21 [−32, −10];
+      - DEV2.0-27B vs Eikos-27B −14 [−22, −6].
+    - The real gaps come from two hard-tier skills neither JevArena nor our training covers:
+      - verifying a quoted person's plausible-but-wrong conclusion instead of adopting it;
+      - applying long policy documents with amendments and precedence;
+      - plus a smaller one: saying "yes" when a condition is not met.
+    - We inherited these gaps from Decision 1.0, and our fine-tunes deepened them slightly. A7 is not the cause.
+    - No contamination in our data. JPT-4B is a moderate open suspicion and off-card anyway.
+  - **Successor rule item 7 (replaces "pending"):** `python3 -m v2.eval.gates public231 --left <successor> --right
+    <current revision>` must not return REGRESSION (a loss with p < .05) (`5551fb38e`).
+    - Nobody selects on public 231, whether in development or among siblings.
+    - Formal runs keep reporting it by easy / standard / hard.
+  - **Cards** (the next card-only pass, together with the C1 lines, for all six models):
+    - Keep the easy / standard / hard column.
+    - The note under the public-231 rank chart becomes: "public-only rerun (about a third of the official Intelligence
+      inputs), not the official JevBench score; easy tier at ceiling; totals within about 10 items are not
+      distinguishable."
+    - Disclosures quote paired gaps with CIs and name the two skills where a peer is significantly ahead.
+    - Never show upstream board numbers.
+  - **Data (new worker):** build "quoted-conclusion verification" and "long policy packet" families, plus "condition not
+    met" Noul negatives, from independent material.
+    - Never use JevBench items, paraphrases or family names, nor typed-FINAL-family generators.
+    - Public-231 hard is then read only in formal runs, as the out-of-sample check.
+  - **Every track:** add long-prose rows to typed / A7 mixtures where the preregistration allows. Quarantine the 4B
+    near-match group (3 HotpotQA rows) in future mixtures.
+
+- 2026-09-29 16:40 — **Score5-typed-DEV v1 PASSES; 0.6B Milestone 8 launched** (eval record
+  `v2/eval/records/score5t-dev-2026-09-29.md`; integration `ab2f1082a`; 0.083 GPU-h; usage pasted into "Eval runners").
+  - The panel: 800 fresh `resource_ledger` items from `benchmark/generate.py`, in fit and check halves. It flags the known
+    collapses (m6-mxcx, m7-mx), leaves the released soup and mxcxa unflagged, and ranks six models in FINAL's order
+    (τ = 1.0).
+  - Correction: typed FINAL Score is ONE family (`resource_ledger`), not four.
+  - **Binding rule for every track:** never train on typed-FINAL-family generator draws (FINAL covers 80 of the ledger
+    family's 90 answer structures), and never train on panel items. Corrections are fitted on the fit half and
+    selected on the check half, with a card disclosure.
+  - **Data track (next worker):** relabel the AutoJev runtime-qualification pools in the training-corpora manifest as
+    evaluation-only. They hold 128 typed FINAL prompts as spot checks, and their outputs are never targets.
+  - **0.6B Milestone 8** (fresh worker; node A GPU0–1; ≤ 6 GPU-h):
+    - Core arm: `m6-mxcx-soup` plus per-level Score offsets fitted only on the score5t fit half, optionally with
+      weighted human 5-level held-out rows.
+    - Development gates: the check half clears COLLAPSE and WARN; typed-DEV Score top share ≤ .90; the human 5-level
+      check is not worse.
+    - Then formal, and the 16:05 successor rule vs the released soup.
+    - It adds per-level offsets to the release runtime (`v2/release/runtime/qwen.py`, with parity tests) so a successor
+      releases fast.
+    - Disclosure: the offsets were fitted on generator draws, and ledger Score accuracy stays near always-majority
+      (NO-GAIN).
 
 - 2026-09-29 16:35 — **DEV2.0-26B released; the rename is running.**
   - **DEV2.0-26B** (to be renamed DEV2.0-27B): private `llm-semantic-router/DEV2.0-26B@6931828d7e41a5d31cc8e5acdc36f5eebae70fad`
@@ -1606,6 +1665,52 @@ aggregates in `records/htdev-validation/`).
   - Collections and validation are on node A under `/data/dev2/runs/eval/htdev/{collect,validation}`.
   - Backup: private eval-artifacts dataset, `htdev/v1/` at `ad4b958e`.
   - GPU: 3.27 GPU-h in total (build 0.64 + collections 2.63); the validation itself was CPU only.
+
+### Score5-typed-DEV v1 (`score5t-dev`; eval track, 2026-09-29 ~16:30 UTC+8; code at `06d596398` or later)
+
+Record `v2/eval/records/score5t-dev-2026-09-29.md` (prereg `score5t-dev-prereg-2026-09-29.md`; integration `ab2f1082a`).
+
+- **Validated (PASS).** Its COLLAPSE flag reproduces the typed FINAL release-gate Score verdicts of the five 0.6B soups
+  (m6-mxcx and m7-mx flagged; mxcxa and the released soup not). Its top share ranks six models in FINAL's order
+  (τ = 1.0), each within ±0.05. Use it to screen Score fixes on development data at any tier; the formal typed FINAL gate
+  still decides.
+- **Panel:** 800 fresh `resource_ledger` items. This is typed FINAL's only Score family, with 5 levels and FINAL's format,
+  from `benchmark/generate.py` (not `publication/generate_arena_v3.py`, which only renders card artifacts) with two public
+  seeds. Fit half 400 + check half 400, each 100 groups × 4 variants.
+  - Disjoint from typed FINAL up to event ids and row order, and from typed DEV, SELECT/CAL/CAL698 and the training
+    corpora. C1 is disjoint by source.
+  - About 75% of its groups share an answer structure with FINAL.
+- **Flags** (the release gate's own rule):
+  - COLLAPSE = top share ≥ 0.90 or accuracy Wilson lower bound ≤ 0.20.
+  - WARN = top-share Wilson upper bound ≥ 0.90.
+  - NO-GAIN (informational) = lower bound of accuracy − always-majority ≤ 0.
+- **Rules (binding for every track):**
+  - Its items are never training data.
+  - Do NOT add `resource_ledger` (or any typed-FINAL-family) generator draws to training: FINAL covers 80 of the
+    family's 90 answer structures, so typed FINAL would become in-distribution.
+  - Fit post-hoc corrections (e.g. per-level offsets) only on the fit half; check and select on the check half.
+  - Disclose on the card when a correction was fitted on it.
+- **Run** (node A; about 40 s on one GPU for a 0.6B model):
+
+  ```bash
+  SRC=<full-sha>-src_training_decision2; S=/data/dev2/src/$SRC/src/training/decision2; export PYTHONPATH=$S
+  $S/v2/eval/run_same_panel.sh --gpu <N> --track <track> --src $SRC --run-dir <run> --model-dir <pkg> [--shared-lease <name>] \
+    [--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=<rw copy> --mount-rw <rw copy>] \
+    -- --adapter-spec <adapter.json> --model-path <pkg> --revision <id> --panels score5t-dev   # or typed-dev,css-pilot,score5t-dev
+  cd /tmp && python3 -m v2.eval.htdev.score seal --prompts /data/dev2/private/panels/goldfree/score5t-dev.prompts.jsonl \
+    --predictions <run>/output/score5t-dev.predictions.jsonl --output <run>/SEAL-SCORE5T.json
+  python3 -m v2.eval.dev_readout --run-dir <run> --label <ckpt> --output <readout.json>
+  ```
+
+  - The readout JSON gets `score5t` with `full`, `fit` and `check` blocks: histogram, top share with Wilson CI, accuracy
+    (Wilson + bootstrap), accuracy − always-majority (paired bootstrap), macro-F1, QWK and flags.
+  - Stdout adds `score5t.top_share`, `score5t.top_category`, `score5t.flags`, `score5t.check.top_share` and
+    `score5t.check.flags`.
+  - Read it at the candidate's formal input limit and kernel path, per the readout-hygiene rule.
+- **Split files** (node A; gold 0600): `/data/dev2/private/panels/{goldfree,gold}/score5t-dev.{fit,check}.{prompts,gold}.jsonl`.
+  - The gold lines carry `half` and the typed gold record, so `benchmark.score.evaluate_answer` applies directly.
+  - Backup: private eval-artifacts `score5t-dev/v1/` (HF `6f517e01`). It includes the validation collections, with
+    per-level probabilities, of the five 0.6B soups and Kai1.
 
 ### 5-level Score development check (Score5-DEV v1; eval track, 2026-09-29 ~09:25 UTC+8; code at `af16d465f` or later)
 
