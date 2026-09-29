@@ -1,0 +1,95 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "DEV2.0-27B",
+  "repo_id": "llm-semantic-router/DEV2.0-27B",
+  "name_basis": "base",
+  "name_base_model": "Qwen/Qwen3.8-27B",
+  "identity": {
+    "model_sha256": "b7fd44e3ad73d24faa85c2ba06ba61d4494aa4be2a2025c580ba02bedae6e781"
+  },
+  "report_sha256": "f1641c1b9ad8f701ff00d54cb6bde6797c32ba211a788c8d9ee5fe92b202f1a1",
+  "paired_sha256": "02c3257c0897282be7d32aad52eca016a8dd3c7c1d4431236705885f7b18fbfc",
+  "gate_profile": "no-1.0",
+  "types_sha256": "d6f2d6bd6a1af47433fb1075612360699fe7d671ac47f9ba3c7a829692d28db8",
+  "calibration": "none (temperature 1); the CAL698 per-type temperatures (Choice 0.538, Noul 0.428, Score 0.567) were rejected under the 23:15 rule on the development panels (typed-DEV ECE .049 -> .096, Brier .089 -> .106; CSS-pilot ECE .063 -> .120; only CSS-pilot Brier improved, .504 -> .454)",
+  "prepared_by": "Decision 2.0 release engineering, C1 card-pass worker (worktree vllm-sr-dev2-release)",
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the C1 event-3 card pass assigned to release engineering in the cross-track note of 2026-09-29 23:40 UTC+8, under the user's full-autonomy mandate",
+  "decided_utc": "2026-09-29T15:40:00Z",
+  "action": "Card-only revision of the private repository llm-semantic-router/DEV2.0-27B: the event-3 C1 line replaces the placeholder; a C1 disclosure and the JevBench hard-tier skills are added (listed in disclosures); the public-231 note under the rank chart now reads 'public-only rerun (about a third of the official Intelligence inputs), not the official JevBench score; easy tier at ceiling; totals within about 10 items are not distinguishable' (eval decision of 2026-09-29 17:15 UTC+8). Every model file stays byte-identical to the released revision 32e7e8b1960fa1e6af3438cd11395cac2849a8c1. The repository stays in the private collection '🎲 Decision 2.0', ordered 0.6B, 0.8B, 2B, 4B, 9B, 27B; everything stays private.",
+  "rationale": "The release judgement of the superseded final decision 76abd8e9… stands unchanged: the same identity, scored report, paired comparison, gate profile and evidence, calibration and licence decision. JevArena-C1 event 3 (item set v1.2) was scored after that decision (eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)); the card now states its result and discloses every significant C1 loss against a card peer. Only the card changes, as listed in action.",
+  "gate_evidence": {
+    "1_near_first_tier_no_1_0": "no Decision 1.0 at this size; v3 67.209 vs 90% of AutoJev-27B 72.133 = 64.919; human transfer minus AutoJev-27B 95% interval [-0.040, +0.056]; types choice OK, noul OK, score OK",
+    "2_regressions_disclosed": "11 results below AutoJev-27B (no Decision 1.0 at this size) listed in the card tradeoffs table",
+    "3_download_hash_parameters": "tree 31 files re-hashed; loaded 25746591744",
+    "4_native_examples": "examples and the card's Python block reproduced from the download",
+    "5_output_consistency": "cross-process and pre/post-download answers identical (answers caba63fa on both revisions); scored-panel parity 0 changes / max drift 0.0 on all 10,378 prompts (5683c6f0) and on 200 / 300 / 100 prompts before and after upload (50772fb3)",
+    "6_card_design": "Hub card apache-2.0 / problems []"
+  },
+  "approved_package": {
+    "identity": "b7fd44e3ad73d24faa85c2ba06ba61d4494aa4be2a2025c580ba02bedae6e781",
+    "loaded_parameters": 25746591744,
+    "base": "Qwen/Qwen3.8-27B@1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0: 28 pinned files by SHA-256, verified from a fresh Hub download",
+    "name_basis": "base",
+    "tier": "27B",
+    "revision_binding": "gate.json binds this decision to the uploaded revision and manifest of the --collect --already-collected run",
+    "name_base_model": "Qwen/Qwen3.8-27B"
+  },
+  "licence_decision": "apache-2.0 (adapter, head, runtime and card ours; base Qwen3.8-27B Apache-2.0; training-data licences credited in ATTRIBUTIONS.md)",
+  "supersedes": {
+    "final_sha256": "76abd8e9691e899c3398600f4f023c3b4916467e079a57c059054e625bda11fd",
+    "released_as": "llm-semantic-router/DEV2.0-27B@32e7e8b1960fa1e6af3438cd11395cac2849a8c1",
+    "released_manifest_sha256": "2a942d3c99288d9720c297bb3350304e215206405fb14425e115ccf4794428c2",
+    "released_gate_sha256": "b7e13465c50517822dd6074f0afe234cef9cf124d61be501124eae5bc3f588fe",
+    "earlier": {
+      "final_sha256": "bea9795bbecc5afb4f6453a700b7c4dd63b4c3a89e55053b8ff30f1a642f542e",
+      "released_as": "llm-semantic-router/DEV2.0-26B@6931828d7e41a5d31cc8e5acdc36f5eebae70fad",
+      "released_manifest_sha256": "9bf671e537e607cb03a3606f532dccb4ee70aea0f98eba55b8fc2ca21c39584c",
+      "released_gate_sha256": "5092470c38e3e95c6d2cd1949d56691c5406a948dfe574eaa1c718c0df509a2c",
+      "earlier": {
+        "verified_draft_sha256": "17891a2e14feba6f128bb9f575d23da5e88cb8eb20738b3b91ac68c1163ae3d5",
+        "earlier_draft_sha256": "9b0259125c6e7ec9699b65b3a17d6dcb020b4b376b47387e3240073717dedd02",
+        "build_draft_sha256": "4bae27a42d87d7996944d3fad7db0cb2fc9ffa97f731df3d7cd614c8455b0323",
+        "verified_revision": "50772fb359acee5cfb5af6c6f3a5e77b076f0226"
+      }
+    }
+  },
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified.",
+  "rename": {
+    "directive": "the user's naming directive of 2026-09-29 16:05 UTC+8 (optimization round 1, item 1: names follow the base model's size, not the loaded parameter count; cards still state the loaded count)",
+    "from": "llm-semantic-router/DEV2.0-26B",
+    "to": "llm-semantic-router/DEV2.0-27B",
+    "moved_utc": "2026-09-29T08:44:35Z",
+    "move_receipt": "v2/release/records/dev2-rename-9b-27b-2026-09-29/receipts/move.json",
+    "loaded_parameters": 25746591744
+  },
+  "release_rationale": "Coordinator decision 2026-09-29 16:00 UTC+8: F2 (M3-S soup, the matched control) does not replace F1 (post-key v3 64.47 below the 64.92 bar; F2 - F1 -2.74, 95% CI -5.86, +0.38), so F1 = DEV2.0-26B is final. F1 meets the no-1.0 gate profile (v3 67.209 >= 64.919 = 90% of AutoJev-27B; human transfer minus AutoJev-27B -0.013, 95% CI -0.040, +0.056; no type collapsed) and the eval track's 27B gate record agrees; every mechanical item passed on the verified revisions 5683c6f0 and 50772fb3. The release revision is a card-only revision on the same weights and manifest identity (adds the card-eligible mlx-diag lines and the A7-effect sentence; C1 stays pending).",
+  "previous_rationale": "Under the user's naming directive of 2026-09-29 16:05 UTC+8 (optimization round 1, item 1: names follow the base model's size, not the loaded parameter count; cards still state the loaded count), DEV2.0-26B becomes DEV2.0-27B after its base model Qwen/Qwen3.8-27B and still states its 25,746,591,744 loaded parameters. The release judgement of the superseded final decision bea9795b… stands unchanged: the same identity, scored report, paired comparison, calibration, licence decision, disclosures and the pending C1 line. Only the name and the card change as listed in action.",
+  "card_revision": {
+    "kind": "card-only",
+    "spec": "v2/release/specs/dev2-27b-card-c1.json",
+    "spec_sha256": "c46240c711ea5a25bac9d9db937041c9432226c5a5eacea7cd33fa1eb3686e00",
+    "c1_record": "v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)"
+  },
+  "c1": "Event 3 (v1.2) on the release package DEV2.0-26B@5683c6f0 (identity b7fd44e3, the same adapter and head as this repository's revisions): 57.33 vs AutoJev-27B 58.17 (-0.84 [-2.50, +0.69], level) and Eikos-27B 59.37 (-2.04 [-3.66, -0.44], significantly ahead). No Decision 1.0 model exists at this size.",
+  "disclosures": [
+    "significantly below AutoJev-27B on post-key v3 (-4.92, 95% CI -6.82, -0.43) and typed accuracy (T 0.7875 vs 0.8869, -0.099, 95% CI -0.123, -0.075; constraint competition .570 vs 1.000); human transfer level (-0.013, 95% CI -0.040, +0.056)",
+    "public 231: 198 vs 201 (AutoJev-27B) and 212 (Eikos-27B)",
+    "v3 margins against Eikos-27B (-2.08, 95% CI -5.04, +2.62) and Jebadiah-27B (+1.74, 95% CI -0.97, +4.83) not significant",
+    "public 231 level with AutoJev-27B (-3, 95% CI -10, +5), significantly below Eikos-27B (-14, 95% CI -22, -6), above Jebadiah-27B (+22); human transfer level with all three peers; wiki politeness lower than all three; long inputs level",
+    "typed Score over-predicts the top level (182 of 400 answers vs 128 gold); level 2 / 3 recall .61 / .65",
+    "T = 1; CAL698 per-type temperatures (Choice 0.538, Noul 0.428, Score 0.567) evaluated and rejected",
+    "32,768-token input limit, over-budget inputs rejected; training inputs at most 4,096 tokens",
+    "weight origin: exact rank-16 soup of two rank-8 LoRA seeds + averaged head on the frozen official Qwen3.8-27B@1d4bf0f2 (Apache-2.0), base not redistributed; the runtime downloads the 28 pinned files or takes base_path",
+    "training data: A0s-strict (Cosmos QA and SQuAD 2.0 answerability families removed) + A6 Score arms (A6g generated, A6h KLUE STS / JGLUE JSTS / IBM ArgQ-30k / SAF) + a 5.0M-token A7 typed-curricula slice incl. the A7i BANKING77 / CLINC150 intents; gold labels only, no third-party model outputs",
+    "Eikos-27B shown from its BF16 weights, the sibling of the FP8 Decision Index entry (licence via its board entry, MIT)",
+    "memory: evaluation peak 108 GB allocated / 120 GB reserved on an 18,261-token input (card asks for >= 120 GB); CPU not verified",
+    "evaluation familiarity: the eval track's 27B gate record sentence (no exposure; v3 stays 67.21, bar 64.92 -> 64.89), verbatim on the card",
+    "independent sealed confirmation (JevArena-C1): PLACEHOLDER on the card until C1 event 3",
+    "mlx-diag vs the three 27B peers (Choice / Noul parts only; no paired test): non-English Choice 79.1% vs AutoJev-27B 80.6%, Eikos-27B 78.4%, Jebadiah-27B 77.6%; non-English Noul 85.5% vs 88.7%, 85.0%, 85.3%; Korean Noul 79% vs 85%, 84%, 80%; Arabic Choice 77.8% vs 78.6%, 75.4%, 75.4% (eval record m5-mlx-diag-27b-peers-2026-09-29.md)",
+    "C1 (event 3, v1.2): level with AutoJev-27B (-0.84 [-2.50, +0.69]) although post-key v3 is significantly lower; Eikos-27B significantly ahead (-2.04 [-3.66, -0.44]), mainly on Choice (-3.01 [-5.35, -0.75])",
+    "C1 tasks below Eikos-27B: preferred_idea 44.2 vs 51.7, likelihood 25.9 vs 32.2, setting_concreteness 28.7 vs 34.9, event_causality 48.0 vs 53.8, communicative_function 45.8 vs 48.9 (epistemic_stance, span_is_event, moment_type within 2.5); languages en .578 vs .599, fi .441 vs .515",
+    "JevBench public 231 vs Eikos-27B -14 [-22, -6] (hard 79 vs 92), mostly two hard-tier skills: applying long policy documents with amendments and precedence, and checking a quoted person's plausible but wrong conclusion against the evidence (eval record v2/eval/records/jevbench-value-2026-09-29.md); long_policy 10 vs 15 of 19, planted conclusions 29 vs 38 of 46"
+  ]
+}

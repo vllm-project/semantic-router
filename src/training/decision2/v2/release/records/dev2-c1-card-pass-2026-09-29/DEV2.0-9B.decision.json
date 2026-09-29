@@ -1,0 +1,85 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "DEV2.0-9B",
+  "repo_id": "llm-semantic-router/DEV2.0-9B",
+  "name_basis": "base",
+  "name_base_model": "Qwen/Qwen3.5-9B",
+  "identity": {
+    "model_sha256": "b1ed5a71038b474902d2a6dfebeee0c6f7ce901097553b4621f6f0a23fb6da98"
+  },
+  "report_sha256": "66106ef9123bf0bb9ac8aeb5024384cc98d5194dd231ff71cebc541b88cf3b17",
+  "paired_sha256": "ae559e9a1e13afca5ebb677e98706a027db415313f102e9059607d5114e99550",
+  "calibration": "none (temperature 1); CAL698 temperatures 65297c6d (Choice 1.420, Noul 1.037, Score 0.563; fitted at 8,192 tokens and used by the scored run K-a13-16k) evaluated on the development panels and rejected under the 23:15 rule (receipt 17fa4211: typed-DEV Brier 0.0537 -> 0.0581 and CSS-pilot Brier-sum 0.5535 -> 0.5553 worsen, typed-DEV ECE-10 0.0157 -> 0.0107 and CSS-pilot ECE-15 0.1326 -> 0.0577 improve; 0 answer changes)",
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the C1 event-3 card pass assigned to release engineering in the cross-track note of 2026-09-29 23:40 UTC+8, under the user's full-autonomy mandate",
+  "prepared_by": "Decision 2.0 release engineering, C1 card-pass worker (worktree vllm-sr-dev2-release)",
+  "decided_utc": "2026-09-29T15:40:00Z",
+  "action": "Card-only revision of the private repository llm-semantic-router/DEV2.0-9B: the event-3 C1 line replaces the placeholder; the public-231 note under the rank chart now reads 'public-only rerun (about a third of the official Intelligence inputs), not the official JevBench score; easy tier at ceiling; totals within about 10 items are not distinguishable' (eval decision of 2026-09-29 17:15 UTC+8). Every model file stays byte-identical to the released revision ae6831960dd1114296cb15a59248b79832c42959. The repository stays in the private collection '🎲 Decision 2.0', ordered 0.6B, 0.8B, 2B, 4B, 9B, 27B; everything stays private.",
+  "approved_package": "The T = 1 BF16-storage package verified as revision 0dee801731a69a89c4219a2bf26381ce4d59af48 (MODEL_MANIFEST.json 80770483735c962454406e9723239af79aec8cc3ba7adb2d8546663ff7ca4ecc; full-panel parity 0 answer changes before and after upload). The publishing run rebuilds it from a later mirror with the same weights, calibration (none) and card text; only MODEL_MANIFEST.json (builder commit, decision binding) may differ.",
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified.",
+  "supersedes": {
+    "final_sha256": "bad976354662ea807cfc444c48f39f723624b14bd8446f74195308b19c1b0b4a",
+    "released_as": "llm-semantic-router/DEV2.0-9B@ae6831960dd1114296cb15a59248b79832c42959",
+    "released_manifest_sha256": "996b28192928d9238657dce562721e10b850cae183926ff88396383192bef628",
+    "released_gate_sha256": "9de02171f411ed123eeaebf04f261d909905fc62127a0371df93ab9767a7210a",
+    "earlier": {
+      "final_sha256": "7666fd7c8676fac9052b7e10812c556dfac5e1bc040ddb86a6687639155f905a",
+      "released_as": "llm-semantic-router/DEV2.0-8B@53bac735be58def53673d0d290b9baa3f2af1cf9",
+      "released_manifest_sha256": "d5007cdb83cd9e29c353efb5dff92a72035c53a4312468c660cb73af2a3accfa",
+      "released_gate_sha256": "de1436a65589b576004766b8d6d8c753db33728cf319c363cb283dbfd21e4b2c",
+      "earlier": {
+        "draft_sha256": "1db7683ff0657485ffdbdf84b3599c7780c5ea275b2f47f36989b38e40495725",
+        "build_draft_sha256": "5db122b0ffe5d1dde6d36d155b675bf60ee8f2de1abadfe064c85a4ecaf1f3e5"
+      }
+    }
+  },
+  "rationale": "The release judgement of the superseded final decision bad97635… stands unchanged: the same identity, scored report, paired comparison, calibration and licence decision. JevArena-C1 event 3 (item set v1.2) was scored after that decision (eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)); the card now states its result and discloses every significant C1 loss against a card peer. Only the card changes, as listed in action.",
+  "verified_package": {
+    "revision": "0dee801731a69a89c4219a2bf26381ce4d59af48",
+    "manifest_sha256": "80770483735c962454406e9723239af79aec8cc3ba7adb2d8546663ff7ca4ecc",
+    "files": 40,
+    "bytes": 17947416716,
+    "loaded_parameters": 7940895744,
+    "scored_identity": "b9d973b3ef555457da2dfa839c45cef3d4a98a47a43d1fd724e77fdec4aa125d",
+    "build_time_draft_sha256": "5db122b0ffe5d1dde6d36d155b675bf60ee8f2de1abadfe064c85a4ecaf1f3e5",
+    "builder_commit": "05914b8e8928f746aaffb1f098249729533b14d0",
+    "vendor_source_commit": "3277dec9d81708fa374405ca884043443bab1b49",
+    "work_dir": "/data/dev2/runs/release/dev2-8b-release-20260929T072207Z",
+    "release_receipt_sha256": "d729f47147d03d74d989bd3070794c3271349bb8cd9718021425d2011538de09",
+    "readback_sha256": "b36e9471c8efada75bc22f76aaaaf41a827bb84212014939725b6ff3726dda3c",
+    "gate_evaluate_sha256": "9b25ed2493ee99405d11323a63e8303aaa5db91e732081d81295be03b372103f",
+    "bf16_parity_receipt_sha256": "8c5f7acb505ed79cbf24d808bb629d2897f5f2b7bed873a000ea3814c279ae13"
+  },
+  "licence_decision": "apache-2.0: own weights, Decision 1.0 Lux-9B @bd45a30a and Qwen/Qwen3.5-9B @c2022362 text backbone and tokenizer are all Apache-2.0; teacher Decision 1.0 Lux-9B (own); training-data licences (CC BY, CC BY-SA, OANC terms, MIT, Apache-2.0, CC0) credited on the card.",
+  "rename": {
+    "directive": "the user's naming directive of 2026-09-29 16:05 UTC+8 (optimization round 1, item 1: names follow the base model's size, not the loaded parameter count; cards still state the loaded count)",
+    "from": "llm-semantic-router/DEV2.0-8B",
+    "to": "llm-semantic-router/DEV2.0-9B",
+    "moved_utc": "2026-09-29T08:44:34Z",
+    "move_receipt": "v2/release/records/dev2-rename-9b-27b-2026-09-29/receipts/move.json",
+    "loaded_parameters": 7940895744
+  },
+  "release_rationale": "Verified draft for the private release of DEV2.0-8B, the 9B-tier successor of Decision 1.0 Lux: candidate K-a13 (coordinator 2026-09-29 13:45) = 1/3 x K soup (three seeds of own Decision 1.0 Lux bd45a30a fully fine-tuned on a 60M-token XL r2 subsample with 1.0 x KL(own Lux) on every row) + 2/3 x Lux 1.0; qwen-full, 16,384 tokens, T = 1, 7,940,895,744 loaded parameters (name by loaded count, 9B tier). Package identity b1ed5a71 is the BF16-storage copy of the scored FP32 identity b9d973b3 (248 Linear projection matrices in BF16 as BF16 autocast rounds them, every other tensor bit for bit in FP32): 0 answer changes on every scored prompt and on mlx-diag in the no-upload test and again before and after upload (largest probability drift 8.9e-16). Scored bindings: the T = 1 derivation of the sealed CAL698 run (derived REPORT 66106ef9, SEAL d00e453b; identical answers). Post-key same-panel v3 67.737 vs adopted native Lux1 16K 65.808: +1.929, 95% CI [+0.607, +4.144]; T +0.034 [+0.015, +0.054]; H +0.008 [-0.011, +0.042]; vs the same-renderer Lux1 +2.507 [+1.037, +4.599]; vs Nimble v2 +5.681 [+3.190, +10.090]; no type collapsed; no overlap exposure (eval record m4-dev2-9b-gates-2026-09-29.md, fbee86265: all gates pass). Apache-2.0 lineage (Lux 1.0 and Qwen3.5-9B LICENSE files). release.sh (mirror 05914b8e8, node A GPU6, scored image f83b1d10 with FLA 0.5.2 + causal-conv1d 1.7.0 required, fresh copy of the scored run's autotune cache): 15/15 steps pass (build, two example processes, repeatability, card, parity, ensure private, upload, real download, re-hash, post-download examples, repeatability, card, parity, readback); card HTTP 12/12 with anonymous 401; links 15/15; gate evaluate 6/6.",
+  "previous_rationale": "Under the user's naming directive of 2026-09-29 16:05 UTC+8 (optimization round 1, item 1: names follow the base model's size, not the loaded parameter count; cards still state the loaded count), DEV2.0-8B becomes DEV2.0-9B after its base model Qwen/Qwen3.5-9B and still states its 7,940,895,744 loaded parameters. The release judgement of the superseded final decision 7666fd7c… stands unchanged: the same identity, scored report, paired comparison, calibration, licence decision, disclosures and the pending C1 line. Only the name and the card change as listed in action.",
+  "card_revision": {
+    "kind": "card-only",
+    "spec": "v2/release/specs/dev2-9b-card-c1.json",
+    "spec_sha256": "ec7b5a525da92ac2399a0b333ea681d7e23b78cf9797be942052f8d6db57c222",
+    "c1_record": "v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)"
+  },
+  "c1": "Event 3 (v1.2) on the frozen package DEV2.0-8B@53bac735 (BF16 identity b1ed5a71, weights identical to this repository's revisions): 53.77 vs Decision 1.0 Lux 16K 51.97 (+1.80 [+0.55, +3.07], significantly above) and Nimble v2 52.77 (+1.00 [-0.69, +2.75], level). No significant loss against a card peer.",
+  "disclosures": [
+    "gain over Decision 1.0 Lux is typed reasoning (T +0.034 [+0.015, +0.054]); human transfer level (+0.008 [-0.011, +0.042]; 11 of 15 tasks up); Lux 1.0 shown at its adopted native 16K run (65.81) with the same-renderer control (65.23) noted",
+    "transfer tasks below Lux 1.0: talklife -0.022, wiki_corpus -0.021, tropes -0.011, conv_go_awry -0.001 (tradeoffs table)",
+    "JevBench public 231 178 vs 183 (-5 [-11, +1]; hard 64 vs 68, standard 66 vs 67); long public inputs 19 vs 22 of 37 (-3 [-7, +1]); long human-transfer inputs level (265 vs 262 of 509)",
+    "vs Nimble v2: v3 +5.68 [+3.19, +10.09], H +0.030 [-0.007, +0.102] not significant; typed Choice lower (0.920 vs 0.980); public 231 178 vs 185 (-7 [-18, +4]); Nimble v2 peer notes (LoRA over Qwen3.5-9B, bundled scorer on ROCm, 8,192-token limit with 21 invalid answers, parameter count with vision tower and unmerged LoRA)",
+    "weight origin and seed dependence: each seed and the uniform soup were below Lux 1.0 on the development proxy (65.8 / 65.1 / 61.5 / 67.2 vs 70.8); the 1/3 interpolation (73.2) carries the gain; only it was evaluated on JevArena v3",
+    "mlx-diag (Choice / Noul parts only): non-English Choice level (79.4% vs 78.3%); non-English Noul 80.8% vs 83.3% (-2.5 [-4.7, -0.3] points; Korean 70% vs 77%, Spanish 84% vs 88%; English Noul 84% vs 88%); internal type macro .822 vs .828 native / .832 same-renderer",
+    "Score: all five levels used; level-0 predicted less often (42 vs 63; recall .51 vs .69 on 35 items); level 4 under-predicted (104 for 128)",
+    "calibration: T = 1 shipped, rejected CAL698 temperatures listed; typed Brier 0.100 vs 0.119 with ECE 0.016 vs 0.017; CSS15 median ECE 0.114 vs 0.137 (Nimble v2 0.082)",
+    "evaluation familiarity (eval-track line): no training-row exposure to the 84 flagged items; v3 stays 67.74; margin over Lux 1.0 +1.93 -> +2.06 without them; the screen does not cover the data behind the Lux 1.0 weights",
+    "teacher own Lux 1.0 only (soft targets on all 122,651 rows, mostly computed without the causal-conv1d kernel); no Jev or third-party decision outputs; x60 data families and licences incl. the human arms credited",
+    "4 CSS15 inputs over the 16,384-token limit counted as failures; CPU inference not verified; BF16 storage of the projection matrices (answers identical to the evaluated FP32 checkpoint)"
+  ]
+}
