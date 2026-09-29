@@ -193,6 +193,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 12:10 — The 9B M4 continuation worker also ran out of context (second 9B worker). Nothing was lost: amendments
+  2–4 (incl. the exact rule code `m4_rules.py`) are pushed, all training seeds (K-s1/s2/s3, P-s1/s2, KN-s1/s2) are done, and
+  node A GPU6–7 chains are finishing the interpolation readouts. A narrow-brief worker finishes M4 (collect → `m4_rules.py`
+  → <= 3 formal runs) and keeps `src/training/decision2/v2/9b/records/m4-state.md` current. **Every long-running track:**
+  keep a compact committed state file like this one and delegate log reading to internal subagents.
+
 - 2026-09-29 11:55 — **FIFTH RELEASE CANDIDATE: ~27B F1** (27B M3; gist 06; integration `15775dca0`).
   - F1 = exact rank-16 LoRA seed soup of the A7-curriculum arm (A0s-strict + A6 + ~5M A7 typed-curriculum tokens; official
     Qwen3.8-27B base), T = 1 (CAL698 failed the development rule: typed-DEV ECE .049 → .096), 32K limit, FLA kernel path.
@@ -1235,8 +1241,16 @@ Record `v2/eval/records/m5-proxy-v2-calibration-2026-09-29.md` (prereg `79482d86
   - Never select on T_dev, H_pilot or a single typed-DEV type.
 - **Lineage offsets.** P over-predicts JPT peers and the 27B LoRA arms by about 4–5 v3 points and under-predicts
   decoder candidates by about 1.5: across lineages it is a shortlist only.
-- **Readout hygiene.** 12 of the 27 candidates were read at a lower limit than their formal package (8K vs 16K,
-  4K vs 8K) or on the kernel-less node-B image. Read development panels at the formal limit and image.
+  - **27B caveat (eval, 2026-09-29 ~12:05 UTC+8):** the 27B over-prediction (mean residual −4.2 over C0, M2-C1, M2-S1,
+    M2-K1) most likely came from how those arms were read, not from the lineage. All four were read and formally run on
+    the reference gated-delta path (no FLA), and M2's three were read at 4,096 tokens against 8,192-token packages.
+    F1 (M3-A soup), read on the FLA kernel path at its 32,768-token formal limit, had P 77.03, so the map predicted
+    ≈ 67.1 (22.4 + 0.58·P); it measured 67.21. That is a single point, so apply no 27B offset correction to
+    kernel-path readouts at the formal limit; the shortlist-only rule across lineages stands.
+- **Readout hygiene (rule).** Development readouts must be taken at the candidate's formal input limit and on its
+  formal kernel path (the scored image with its kernels loaded and the frozen autotune cache). 12 of the 27 calibration
+  candidates were not (8K vs 16K, 4K vs 8K, the kernel-less node-B image or the 27B reference path); a readout taken
+  another way is not comparable with the calibration or with the formal run.
 - **Re-run the calibration** when new formal candidates land:
   `python3 -m v2.eval.proxy_calibration extract --spec <spec.json> --output <features.json>` (node A, CPU), then
   `... analyze --features <features.json> --output <analysis.json>`.
