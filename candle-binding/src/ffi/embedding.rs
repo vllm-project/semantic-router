@@ -342,11 +342,6 @@ pub extern "C" fn init_embedding_models_with_mmbert(
 ) -> bool {
     use candle_core::Device;
 
-    if GLOBAL_MODEL_FACTORY.get().is_some() {
-        eprintln!("WARNING: ModelFactory already initialized");
-        return true;
-    }
-
     // Parse paths
     let qwen3_path = if qwen3_model_path.is_null() {
         None
@@ -386,6 +381,22 @@ pub extern "C" fn init_embedding_models_with_mmbert(
         return false;
     }
 
+    if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
+        // A second call can only be an idempotent no-op when every requested
+        // model is already registered. Reporting success while mmBERT is
+        // missing silently breaks every mmBERT consumer downstream.
+        if mmbert_path.is_some() && !factory.has_mmbert_embedding_model() {
+            eprintln!("Error: ModelFactory already initialized without mmBERT. Initialize mmBERT first.");
+            return false;
+        }
+        if qwen3_path.is_some() && !factory.has_qwen3_embedding_model() {
+            eprintln!("Error: ModelFactory already initialized without Qwen3. Initialize Qwen3 first.");
+            return false;
+        }
+        eprintln!("WARNING: ModelFactory already initialized with the requested models");
+        return true;
+    }
+
     let device = if use_cpu {
         Device::Cpu
     } else {
@@ -418,7 +429,12 @@ pub extern "C" fn init_embedding_models_with_mmbert(
 
     match GLOBAL_MODEL_FACTORY.set(factory) {
         Ok(_) => true,
-        Err(_) => true, // Already initialized
+        Err(_) => {
+            // A concurrent initializer won the slot; this call's models are
+            // not the ones callers will find in the global factory.
+            eprintln!("Error: ModelFactory was initialized concurrently; this call's models were not published");
+            false
+        }
     }
 }
 
@@ -440,12 +456,6 @@ pub extern "C" fn init_embedding_models(
     use_cpu: bool,
 ) -> bool {
     use candle_core::Device;
-
-    // Check if already initialized (OnceLock can only be set once)
-    if GLOBAL_MODEL_FACTORY.get().is_some() {
-        eprintln!("WARNING: ModelFactory already initialized");
-        return true; // Already initialized, return success
-    }
 
     // Parse model paths
     let qwen3_path = if qwen3_model_path.is_null() {
@@ -474,6 +484,18 @@ pub extern "C" fn init_embedding_models(
     if qwen3_path.is_none() && gemma_path.is_none() {
         eprintln!("Error: at least one embedding model path must be provided");
         return false;
+    }
+
+    // A second call can only be an idempotent no-op when the requested
+    // models are already registered; otherwise reporting success would hide
+    // the missing model from every downstream consumer.
+    if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
+        if qwen3_path.is_some() && !factory.has_qwen3_embedding_model() {
+            eprintln!("Error: ModelFactory already initialized without Qwen3. Initialize Qwen3 first.");
+            return false;
+        }
+        eprintln!("WARNING: ModelFactory already initialized with the requested models");
+        return true;
     }
 
     // Determine device
@@ -521,8 +543,10 @@ pub extern "C" fn init_embedding_models(
     match GLOBAL_MODEL_FACTORY.set(factory) {
         Ok(_) => true,
         Err(_) => {
-            // Already initialized - idempotent behavior
-            true
+            // A concurrent initializer won the slot; this call's models are
+            // not the ones callers will find in the global factory.
+            eprintln!("Error: ModelFactory was initialized concurrently; this call's models were not published");
+            false
         }
     }
 }
