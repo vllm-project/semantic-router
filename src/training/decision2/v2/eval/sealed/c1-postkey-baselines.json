@@ -13,6 +13,19 @@
     "kernel": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1"
   },
   "tiers": {
+    "0.6B": {
+      "model": "DEV2.0-0.6B",
+      "repo": "llm-semantic-router/DEV2.0-0.6B",
+      "revision": "b21313375ad77ddf4a8e420fa5195e6e09582043",
+      "identity": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983",
+      "manifest_sha256": "816827dd836d21ab0b7555605fdc56dd5189ee4462a541a84de27de97f637796",
+      "run": "/data/dev2/runs/eval/c1-postkey/0.6B/dev2-0p6b-b2131337-20260929T161232Z/cand",
+      "seal_sha256": "056026acbad7b51f095f8ad8b5dbbf5b46d067bb6f2048b658bdd73c71eaa3cc",
+      "predictions_sha256": "43403f39a3ad81ee835d9b33c151ab7a87aa8fb84b3be5aa96daa251d60bcd8c",
+      "c1": 36.91555891288061,
+      "source": "post-key C1 v1.2 collection dev2-0p6b-b2131337-20260929T161232Z (spec c1-postkey/dev2-0p6b-b2131337.json; mirror 2b5e878db); not an independent validation",
+      "backup": "private eval-artifacts c1-postkey/0.6B/dev2-0p6b-b2131337-20260929T161232Z (afcbb407)"
+    },
     "2B": {
       "model": "DEV2.0-2B",
       "repo": "llm-semantic-router/DEV2.0-2B",
@@ -68,7 +81,7 @@
   },
   "notes": [
     "A tier's entry is the C1 run of its current HF revision's weights. When a successor is released, its post-key run (SUMMARY.json baseline_entry) replaces the entry in the same commit as the release record.",
-    "0.6B: the current revision b2131337 is collected post-key by the eval track (spec c1-postkey/dev2-0p6b-b2131337.json); the entry is added from that run's summary.",
+    "0.6B: the current revision b2131337 was collected post-key on 2026-09-29 (C1 36.92 on v1.2 vs 33.02 for the previous revision e61b2b44's event-2 predictions); a re-collection of these weights is refused.",
     "0.8B: not registered. Its current revision 7d08d0e1 is a calibration-only (T = 1) revision of the weights scored in C1 event 1 (v1.1, 0b631a85); the release record states the answers are unchanged. Registering the event-1 run needs the coordinator's agreement."
   ]
 }

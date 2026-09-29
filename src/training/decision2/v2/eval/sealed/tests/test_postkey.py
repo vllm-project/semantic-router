@@ -29,7 +29,9 @@ def spec(**changes) -> dict:
 
 
 def registry(**tiers) -> dict:
+    """The committed registry as it was before the 0.6B collection, plus the given tiers."""
     value = json.loads(REGISTRY.read_text())
+    value["tiers"].pop("0.6B")
     value["tiers"].update(tiers)
     return value
 
@@ -88,6 +90,17 @@ class PlanTest(unittest.TestCase):
                 self.assertTrue(cell["run"].startswith("/data/dev2/runs/eval/"))
                 self.assertGreater(cell["c1"], 0)
 
+    def test_committed_registry_holds_the_06b_baseline(self):
+        committed = json.loads(REGISTRY.read_text())
+        base = committed["tiers"]["0.6B"]
+        self.assertEqual(base["identity"], spec()["identity"])
+        with self.assertRaises(ValueError):
+            postkey.resolve(spec(), committed)
+        p = postkey.resolve(successor(), committed)
+        self.assertEqual(p["comparisons"][0]["kind"], "item8")
+        self.assertEqual(p["comparisons"][0]["run"], base["run"])
+        self.assertEqual(p["comparisons"][0]["seal_sha256"], base["seal_sha256"])
+
     def test_successor_is_gated_against_the_registered_baseline(self):
         p = postkey.resolve(successor(), registry(**{"0.6B": entry()}))
         self.assertEqual(
@@ -144,18 +157,18 @@ class PlanTest(unittest.TestCase):
     def test_plan_command_writes_the_plan_or_refuses(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            bad = root / "bad.json"
-            bad.write_text(json.dumps(successor()))
             with contextlib.redirect_stderr(io.StringIO()):
                 refused = postkey.main(
-                    ["plan", "--spec", str(bad), "--registry", str(REGISTRY)]
+                    ["plan", "--spec", str(SPEC), "--registry", str(REGISTRY)]
                     + ["--output", str(root / "refused.json")]
                 )
             self.assertEqual(refused, 2)
             self.assertFalse((root / "refused.json").exists())
+            before = root / "registry.json"
+            before.write_text(json.dumps(registry()))
             with contextlib.redirect_stdout(io.StringIO()):
                 ok = postkey.main(
-                    ["plan", "--spec", str(SPEC), "--registry", str(REGISTRY)]
+                    ["plan", "--spec", str(SPEC), "--registry", str(before)]
                     + ["--output", str(root / "plan.json")]
                 )
             self.assertEqual(ok, 0)
