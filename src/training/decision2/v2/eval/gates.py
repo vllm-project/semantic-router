@@ -3,6 +3,8 @@
     python3 -m v2.eval.gates paired --left RUN --right RUN --left-name A --right-name B --output OUT
     python3 -m v2.eval.gates types --run RUN --label L --output OUT
     python3 -m v2.eval.gates public231 --left RUN --right RUN --left-name A --right-name B --output OUT
+    python3 -m v2.eval.gates c1 --left RUN --right RUN --left-name A --right-name B --gold GOLD \
+        [--retired RETIRED-v1_2.json --retired-sha SHA] --output OUT
 
 `paired` runs the joint v3 paired bootstrap (5,000 draws, seed 20260927) between two run
 directories after checking both seals. It reports the composite and per-axis (T typed,
@@ -14,6 +16,17 @@ the discordant items, the within-tier paired bootstrap interval, and counts by t
 and type. The verdict is REGRESSION when left − right < 0 and p < 0.05. The panel cannot
 separate sibling checkpoints, so the guard only catches large losses; it is never a
 selection criterion.
+
+`c1` is the JevArena-C1 v1.2 post-key successor guard (successor-rule item 8). A RUN is a C1
+run directory (`SEAL-C1.json`, `output/sealed-c1.predictions.jsonl`): the successor on the
+left, the current revision's run on the right. It checks both seals and the gold's hash,
+drops the pinned v1.2 retired items and repeats the scoring events' paired comparison (group
+bootstrap by source group within each task, 5,000 draws, seed 20260927), so on event runs it
+reproduces the event's delta and intervals. p is the two-sided percentile-bootstrap p-value
+of the same draws. The verdict is REGRESSION when left − right < 0 and p < 0.05 (the paired
+95% interval lies below 0), otherwise PASS. The gold stays on node A (`c1-postkey.sh gate`
+decrypts it for the call); OUT holds aggregates only. Label: "JevArena-C1 v1.2, post-key (not
+an independent validation)". C1 is never training data and never a selection criterion.
 
 `types` is the "no decision type collapsed" check on typed FINAL. For each of Choice, Noul
 and Score it reports accuracy with a Wilson 95% interval against chance, the predicted
@@ -41,9 +54,16 @@ from v2.eval.same_panel import (
     sha_file,
     write_json,
 )
+from v2.eval.sealed import score as c1score
 
 TOP_SHARE = 0.9
 PUBLIC_ALPHA = 0.05
+C1_ALPHA = 0.05
+C1_PANEL = "sealed-c1"
+C1_USE = (
+    "successor-rule item 8 only: never training data, never a selection criterion"
+    " (development or siblings)"
+)
 
 
 def verified(run: Path, panel: str) -> Path:
@@ -292,25 +312,128 @@ def public231(args: argparse.Namespace) -> int:
     return 0
 
 
+def bootstrap_p(draws: list[float]) -> float:
+    """Two-sided percentile-bootstrap p: the smallest level at which the interval that
+    ``score.interval`` takes from the same draws excludes 0. For 5,000 draws, p < 0.05 exactly
+    when that 95% interval excludes 0."""
+    last = len(draws) - 1
+    below = sum(d < 0 for d in draws)
+    above = sum(d > 0 for d in draws)
+    return min(1.0, max(0.0, 2 * min(last - below, len(draws) - above) / last))
+
+
+def c1_run(run: Path) -> tuple[Path, dict[str, Any]]:
+    """A C1 run's predictions after checking its seal, and what the gate records about it."""
+    seal_path = run / "SEAL-C1.json"
+    predictions = prediction_path(run, C1_PANEL)
+    sealed = json.loads(seal_path.read_text(encoding="utf-8"))
+    if sealed.get("prompts_sha256") != panels.SEALED[C1_PANEL]["prompts_sha256"]:
+        raise ValueError(f"{run}: the seal is not for the C1 prompts")
+    if sha_file(predictions) != sealed.get("predictions_sha256"):
+        raise ValueError(f"{run}: C1 predictions changed after the seal")
+    if sealed.get("missing") != 0:
+        raise ValueError(f"{run}: the seal records unanswered prompts")
+    return predictions, {
+        "dir": str(run),
+        "seal_sha256": sha_file(seal_path),
+        "seal_label": sealed.get("label"),
+        "predictions_sha256": sealed["predictions_sha256"],
+    }
+
+
+def c1_guard(
+    gold: list[dict[str, Any]],
+    left: dict[str, dict[str, Any]],
+    right: dict[str, dict[str, Any]],
+    replicates: int,
+    seed: int,
+) -> dict[str, Any]:
+    left_summary, right_summary, draws, type_draws = c1score.paired_draws(
+        gold, left, right, replicates, seed
+    )
+    delta = left_summary["c1"] - right_summary["c1"]
+    ci95 = c1score.interval(draws)
+    return {
+        "left": {k: left_summary[k] for k in ("c1", "by_type", "items", "valid")},
+        "right": {k: right_summary[k] for k in ("c1", "by_type", "items", "valid")},
+        "delta": delta,
+        "ci95": ci95,
+        "p": bootstrap_p(draws),
+        "by_type": {
+            kind: {
+                "delta": left_summary["by_type"][kind] - right_summary["by_type"][kind],
+                "ci95": c1score.interval(values),
+                "p": bootstrap_p(values),
+            }
+            for kind, values in type_draws.items()
+        },
+        "replicates": replicates,
+        "seed": seed,
+        "unit": "source groups within each task",
+        "verdict": "REGRESSION" if delta < 0 and ci95[1] < 0 else "PASS",
+    }
+
+
+def c1(args: argparse.Namespace) -> int:
+    output = args.output.resolve()
+    for run in (args.left, args.right):
+        if output.is_relative_to(run.resolve()):
+            raise ValueError(f"write the gate output outside the run directory {run}")
+    if sha_file(args.gold) != panels.SEALED[C1_PANEL]["gold_sha256"]:
+        raise ValueError("--gold is not the JevArena-C1 gold")
+    left_path, left_run = c1_run(args.left)
+    right_path, right_run = c1_run(args.right)
+    gold, item_set = c1score.apply_retired(read_jsonl(args.gold), args)
+    if (item_set or {}).get("retired_sha256") != c1score.POSTKEY_RETIRED_SHA256:
+        raise ValueError(f"the guard scores item set {c1score.POSTKEY_ITEM_SET} only")
+    result = {
+        "schema": "dev2-gate-c1/1",
+        "label": c1score.POSTKEY_LABEL,
+        "use": C1_USE,
+        "rule": (
+            f"REGRESSION if left − right < 0 C1 points and the two-sided paired bootstrap "
+            f"p < {C1_ALPHA} (the paired 95% interval lies below 0); otherwise PASS"
+        ),
+        "names": {"left": args.left_name, "right": args.right_name},
+        "runs": {"left": left_run, "right": right_run},
+        "gold_sha256": panels.SEALED[C1_PANEL]["gold_sha256"],
+        "item_set": item_set,
+        **c1_guard(
+            gold,
+            {row["id"]: row for row in read_jsonl(left_path)},
+            {row["id"]: row for row in read_jsonl(right_path)},
+            PAIRED_REPLICATES,
+            PAIRED_SEED,
+        ),
+    }
+    write_json(args.output, result)
+    print(json.dumps({key: result[key] for key in ("delta", "ci95", "p", "verdict")}))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--panel-root", type=Path, default=panels.DEFAULT_ROOT)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("paired", "public231"):
+    for name in ("paired", "public231", "c1"):
         pair = commands.add_parser(name)
         pair.add_argument("--left", type=Path, required=True)
         pair.add_argument("--right", type=Path, required=True)
         pair.add_argument("--left-name", required=True)
         pair.add_argument("--right-name", required=True)
         pair.add_argument("--output", type=Path, required=True)
+        if name == "c1":
+            pair.add_argument("--gold", type=Path, required=True)
+            pair.add_argument("--retired", type=Path, default=c1score.POSTKEY_RETIRED)
+            pair.add_argument("--retired-sha", default=c1score.POSTKEY_RETIRED_SHA256)
     two = commands.add_parser("types")
     two.add_argument("--run", type=Path, required=True)
     two.add_argument("--label", required=True)
     two.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
-    return {"paired": paired, "types": types, "public231": public231}[args.command](
-        args
-    )
+    return {"paired": paired, "types": types, "public231": public231, "c1": c1}[
+        args.command
+    ](args)
 
 
 if __name__ == "__main__":

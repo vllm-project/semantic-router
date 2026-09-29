@@ -199,6 +199,352 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 06:40 — **9B M6 worker stopped by the platform; a fresh continuation worker was launched from
+  `m6-state.md`** (latest commit `d0d6272ef`).
+  - **KA** (AutoJev-27B soft targets on human rows) was stopped by its preregistered early rule: ΔP −0.36 < +0.5.
+    Score rose (+35) and H3 rose (+.008), but Noul `rule_precedence` fell 74 items. That is the same trade as M5's
+    dose, and at 27B M4b the AutoJev teacher didn't help either.
+    - **Program-level conclusion:** teacher soft targets on human rows are not a lever at 9B or 27B.
+  - Wave 2 is running on node A: KH-s4 on GPU6 and K-s5 on GPU7, ETA ~00:20Z. Budget used 6.32 of 24 GPU-h at 21:39Z.
+  - **Process notes** from the previous worker:
+    - A filename search listed paths under `/data/dev2/private` (no file opened). **Every track: exclude
+      `/data/dev2/private` from searches.**
+    - A `core.fileMode=false` worktree committed wrappers without the exec bit. Use `git update-index --chmod=+x` for
+      node scripts.
+
+- 2026-09-30 06:10 — **27B M4b: F-b (full fine-tune) is a successor candidate, +4.47 over DEV2.0-27B and level with
+  AutoJev** (record `v2/27b/records/m4b-results-2026-09-30.md`; integration `023b38f97`; 30.49 of 36 GPU-h).
+  - **Formal results** (post-key, node B, 32K, DEV2.0-27B's image and cache):
+
+    | Model | v3 | vs DEV2.0-27B | vs AutoJev | T / H |
+    | --- | ---: | --- | --- | --- |
+    | F-b (full FT, same mixture, gold, two-seed soup) | 71.684 | **+4.47 [+0.19, +8.13]** | −0.45 [−3.68, +3.98] | .908 / .566 (AutoJev .887 / .587) |
+    | F-a (+ own-Lux soft targets on human rows) | 70.42 | [−0.27, +6.16] | — | — |
+    | F-c (AutoJev teacher, 1 seed) | 68.31 | — | — | — |
+
+    - F-b: constraint competition .98, exception stack .83; public 231 197; card-eligible mlx-diag −.012
+      [−.029, +.004]; the full mlx average, including the internal XNLI Score part, is −.017 [−.031, −.003].
+    - Interpolation with the LoRA release was stopped by the merge check: BF16 rounding erases the merged LoRA update,
+      so an adapter must be kept separate.
+    - The development panels misread human transfer: they showed full FT ~.10 lower, while formal was level. HT-DEV v2
+      should fix this.
+  - **Coordinator rulings:**
+    - **Item 4 = card-eligible parts,** as registered at 16:05 and in the prereg, so F-b passes items 1–7. The decline
+      seen only when the XNLI Score part is included is disclosed qualitatively on the card.
+    - The pre-P0 amendments 2 and 3 are accepted: per-tensor gradient parity, and caps from the probe's speed.
+    - **Lessons:** capacity is the lever (+.120 typed at matched tokens, human transfer level); soft targets on human rows
+      don't help.
+    - "Beats AutoJev" is not met yet: v3 is below 72.133, and human transfer is .020 lower (n.s.).
+  - **F-b release path** (release worker, worktree `vllm-sr-dev2-release-27b`):
+    1. **Storage:** a BF16 27B full model is ~52 GB against 61.36 / 100 GB used. Convert FP32 packages (4B, and 2B / 0.8B
+       if FP32) to BF16 at exact parity and purge the FP32 blobs; remove stale staging. Never delete training data,
+       panels or eval backups. Stop and report if the upload would leave < 3 GB headroom.
+    2. **Transfer:** F-b goes to node A by a direct node-to-node copy (temporary key); C1 never leaves node A.
+    3. **Item 8:** the C1 post-key guard vs 57.33.
+    4. **Release** as the new DEV2.0-27B `main` (`qwen-full`), with the card as briefed, and purge the adapter blobs.
+    - The 100 GB cap will block future 27B full-model updates, which need space for old and new copies side by side.
+      Telling the user is part of the next report.
+  - **27B M5** (full FT on M4's +20M A7 mixture, gold, two seeds, ~12 GPU-h per seed) waits for M4's dose result.
+
+- 2026-09-30 04:10 — **HT-DEV v2 PASSES; it is the human-transfer screen for new milestones** (eval record
+  `v2/eval/records/htdev2-validation-2026-09-30.md`; integration `bc0a12d70`; 1.454 GPU-h; usage in "Eval runners").
+  - **Why v1 failed and v2 works:** v1 failed on what it measured, not on target noise. v2 is a held-out copy of nine
+    CSS15 tasks (1,944 items).
+  - **Results:** within-tier agreement with formal ΔH 0.843 vs 0.657 for the CSS pilot (P(better) 0.972); r 0.647 vs
+    0.206; siblings 74 / 78. It predicts formal human transfer but NOT C1; formal human transfer itself matches only
+    14 of 25 C1 pairs.
+  - **Rules:**
+    - FLAG at ΔH_dev2 ≤ −0.02 vs the tier's reference; there formal sign agreement is 93%.
+    - New milestones use it in place of the CSS-pilot mean. Running milestones may adopt it only by an amendment made
+      before their first development readout.
+    - Formal CSS15 still decides, and the C1 guard stays.
+  - **Coverage gaps:** Kai1 and the four 0.6B 1.0 / peer models (~0.08 GPU-h); the node-B-only decoder packages; all 27B
+    models. The 27B references (F1 + peers, on node B with the kernel image) are needed before a 27B M5. They will be
+    batched with the next eval job.
+
+- 2026-09-30 02:25 — **USE PN1-r2 AND THE FIXED HS1 (dataset head `27b1d2f1`); qualification pools are guarded** (data
+  record `v2/data/records/m4-dq-results-2026-09-30.md`; integration `3ded967af`; 0.088 GPU-h).
+  - **PN1:**
+    - Embedding scan: pass. H7 / H8 isolation: pass, with 3 sentence-level near hits against H8 TRAIN disclosed.
+    - **Blind label review FAILED on the first release:** 12 of 224 wrong, 5.36% [2.80, 9.17]. All were "no" rows that
+      are really paraphrases: near-miss pairs in es / fr / ar / ru / ko, and Russian name swaps. The preregistered
+      fix also failed (upper bound 8.99%).
+    - **PN1-r2**, amended before any new sampling, drops those constructions and the known errors, and removes es / fr
+      from TRAIN. It has 4,364 rows (`c1cec06b…`) and passed a fresh blind review: 1.96% [0.54, 4.94], population-
+      weighted 0.73%.
+    - The PN1 dev slice is unchanged and shares the dropped constructions, so some of its "no" labels may be wrong. Read
+      it as a diagnostic only.
+  - **HS1:** reviewers matched gold on 153 of 153 rows. One template typo ("at least N nights consecutive nights", 150
+    rows, answers unaffected) was fixed; new TRAIN `0dfaa6eb…`. The dev file and `hs1-dev` are unchanged.
+  - **Binding for every track:** round-2 mixtures use **PN1-r2 and HS1 `train.jsonl` at dataset revision `27b1d2f1`**.
+    - A preregistration that froze the old hashes (PN1 `5ad36287` / HS1 `171e6f0c`) and has not trained yet must amend
+      before any GPU job.
+    - If training on the old files has already started, finish it. Any release must then disclose: old PN1 carries
+      ~1.8% mislabeled "no" rows and includes es / fr; old HS1 has the template typo. Alternatively, retrain on the new
+      files.
+    - This applies to 9B M6 and decoder M6b / M7.
+  - **Qualification pools:** relabelled evaluation-only in `training-corpora.evalonly.json` (`2af8e7f3…`; 89 files).
+    `07d45b055` adds a guard to every mixture and teacher-target builder (data, decoder, 0.6B, 9B, 27B), with a test that
+    fails for any builder skipping it. Tracks: merge integration (≥ `3ded967af`) before building any new mixture.
+  - **Incident:** a shell-quoting slip wrote five empty or error files to `/` on node A. They were removed immediately
+    and logged.
+
+- 2026-09-30 01:55 — **DEV2.0-0.6B card now carries the post-key C1 line and the declines disclosure.**
+  - New private `main` is `476fe984a2316519f3e583b7f31b1670295b2477`. It is card-only; the weights are byte-identical
+    to `b2131337`.
+  - Final decision `54a0f25f…` (successor profile, 12/12). Integration `40a20d56e`.
+  - All six cards are now complete for round 1.
+
+- 2026-09-30 01:50 — **Decoder M6: no successor in any tier; M6b + M7 and HT-DEV v2 launched** (record
+  `v2/dec/records/dec-m6-results-2026-09-29.md`; integration `733388ebd`; ~17.8 of 36 GPU-h).
+  - **Results:**
+    - 4B: no finalist. N6D (2× dose) had the largest development typed gain (T .729 vs .704) but failed the CSS-pilot
+      guard.
+    - 2B finalist `2b-S6X-b1_3`: −1.88 [−2.52, +1.15]; human transfer −.039.
+    - 0.8B finalist `08b-E6K-b1_3`: −0.39 [−1.61, +2.16]; mlx +.007.
+    - Both fail rule 1: development typed gains didn't carry over (2B +.013 → +.003; 0.8B +.040 → −.006).
+  - **Incidents:** a soup-report bug was fixed (`ddc5d2ffe`) and the soups were rebuilt on CPU from finished seeds. Gist
+    04 was deleted for about a minute and restored from history.
+  - **Shared change:** the `teacher_label` module now reads Eos 1.0's temperature (`6fe568271`).
+  - **Disclosure:** the three HotpotQA near-match rows are in the M6 mixtures, as in the released 4B (public 231 only).
+  - **Coordinator decisions:**
+    1. **M6b approved:** a preregistered formal test of the N6D soup and its ⅔ point (~0.6 GPU-h) under items 1–8.
+       The decoder successor script is fixed so item 7 gates.
+    2. **Decoder M7** (same fresh worker; node A GPU5 + node B GPU3–4; 30 GPU-h in total with M6b):
+       - round-2 data for 4B, then 2B: HS1 plus long prose, and PN1, each with matched controls;
+       - development gates include a CSS-pilot human-transfer non-decrease;
+       - `hs1-dev` and PN1 dev readouts as diagnostics;
+       - formal runs for development passers only.
+    3. **HT-DEV v2** (eval; worktree `vllm-sr-dev2-eval-devpanel`; ≤ 1.5 GPU-h):
+       - a human-transfer development panel, either a larger CSS-style panel from held-out CSS15 source portions or a
+         fresh-source human-labeled panel;
+       - validated primarily on within-tier agreement with formal human-transfer deltas, including siblings, with C1
+         post-key agreement as informational only (never tuned to C1 items);
+       - pass bar: clearly better than the CSS-pilot three-task mean.
+  - **Lesson for every track:** development typed gains are not predictive at this margin. Weight human transfer, and
+    treat typed-only gains with suspicion.
+
+- 2026-09-30 01:45 — **Card pass done: all six repos have C1 lines and the JevBench note** (gist 07; integration
+  `59b730bf9`; 0.811 GPU-h; storage 61.28 / 100 GB).
+  - **New `main` revisions:**
+
+    | Model | Revision | Final decision |
+    | --- | --- | --- |
+    | DEV2.0-0.6B | `188eb4c8…` | `453b4b7b…` (successor profile, 12/12) |
+    | DEV2.0-0.8B | `d4812ac6…` | `a97e063f…` |
+    | DEV2.0-2B | `a47bdf89…` | `743c5b2e…` |
+    | DEV2.0-4B | `197b70ca…` | `4d31cdab…` |
+    | DEV2.0-9B | `e51f9881…` | `e833608c…` |
+    | DEV2.0-27B | `c0dba600…` | `fd1b5ef0…` (no-1.0 profile) |
+
+    Only `README.md` and `MODEL_MANIFEST.json` changed on each repo.
+  - **Card contents:**
+    - 4B / 27B disclose that the v3 lead over Nox is not on C1, that Jet / Eikos are significantly ahead, and the two
+      JevBench hard skills.
+    - Task and language regressions are listed where a card peer is significantly ahead.
+    - 27B's Russian figures are left off, since the record doesn't attribute them to a peer.
+  - **The 0.6B post-key C1 line (approved 00:30) was missing,** because it was approved after the job started. The same
+    worker is resumed once for a 0.6B-only card revision.
+  - **Mirror race FIXED (`03224df4f`):** per-mirror lock, re-check under the lock, reuse or refuse an existing target,
+    `mv -T` staging, 8 tests. The 22:05 interim rule is retired once every track has merged this commit.
+  - **Builder `runtime_source` (`49bb605d4`):** card-only revisions now pin the runtime (and model sources) to the
+    mirror that built the replaced revision, so a newer shared runtime file is never shipped by accident. Release
+    workers must use it.
+  - The 27B release inputs now also exist on node A: 2,729 files, hash-identical to node B's.
+
+- 2026-09-30 01:20 — **9B M5: no successor; 9B M6 launched** (record `v2/9b/records/lux9b-m5-result-2026-09-29.md`;
+  integration `71e74ee78`; 14.9 of 24 GPU-h).
+  - **M5 design:** two arms on the K recipe (M4's 60M subsample + 24M A7 tokens): KD with own-Lux KL on every row, and
+    KG with gold on the A7 rows. Two seeds each, α line toward Lux, plus a UM5 mix.
+  - **Why nothing passed:** no point cleared the development rule, so there were no formal runs.
+    - KD α⅓: H3 .5589 < .5622.
+    - UM5 α⅓: typed +.005 < +.01.
+    - The soups: the Noul floor failed because `rule_precedence` collapsed to 211–221 of 400, against 309.
+    - **The A7 dose raised Score but broke Noul; the 27B A7 result does not transfer to 9B at this dose.**
+    - KL on the A7 rows helped H3 slightly.
+    - A 9B successor needs about +2 v3 over K-a13.
+  - The KD / KG soups are kept on node A with `SHA256SUMS`. The paired mlx tool shows KN-a12 at −.020 vs K-a13, so
+    α ½ artifacts risk mlx-diag losses.
+  - **9B M6** (fresh worker; node A GPU6–7; 24 GPU-h; early-stop rule):
+    - Main lever: AutoJev-27B soft targets on human-rated rows, against a matched own-Lux-KL control.
+    - Optional: HS1 (F3 + ½ F1, Noul-protected) and PN1, each with a control; a larger K-line soup.
+    - A Noul `rule_precedence` floor is added to the development rule.
+    - Formal runs only for development passers. Item 8 goes through the eval custodian.
+    - A PN1-trained successor is not releasable until PN1's audits close.
+
+- 2026-09-30 00:30 — **The C1 post-key guard (item 8) is live; the 0.6B successor is confirmed on fresh data** (eval
+  record `v2/eval/records/c1-postkey-guard-2026-09-29.md`; integration `d2650b0e4`; 0.041 GPU-h; usage in "Eval
+  runners").
+  - DEV2.0-0.6B `b2131337` scores **36.92** on C1 v1.2 vs 33.02 for the previous revision: **+3.89 [+2.16, +5.60]**,
+    p < .001. So item 8, applied after the fact, PASSES.
+    - Choice +5.16, Noul +8.05; Score level (−1.45, n.s.: the offsets did not move C1 Score).
+    - Declines to disclose: `star_rating`, `moment_type`, `is_rapport`, `likelihood`, Russian and Finnish.
+  - **Approved card line**, for the card pass:
+    - The line: "JevArena-C1 v1.2, post-key (not an independent validation): 36.92 on this revision vs 33.02 for the
+      previous revision (+3.89, 95% CI [+2.16, +5.60]; 2,840 items, paired by source group). The independent sealed
+      confirmation above measured the previous revision."
+    - Also disclose the task and language declines listed above.
+    - The running card-pass worker is resumed once afterwards if it did not add them.
+  - The 0.8B baseline (event-1 weights at T = 1) is being registered by the same eval worker.
+  - The gate's sensitivity is losses of about 1.3–2 C1 points. Tracks: successors need a frozen package on node A plus
+    a spec, and eval collects them under the ledger (one successor per tier baseline).
+
+- 2026-09-30 00:25 — **HS1 (hard-skill families) LANDED; its dev slice is NOT validated on accuracy; round-2 data plan**
+  (data records; integration `3592f2e01`; 0.107 GPU-h).
+  - **Location:** private `llm-semantic-router/decision-2.0-training-data@171e6f0c0913d5f0d8f7304928da4f14dca6e127`,
+    `m4/hs1/`; train `c90ef316…`, dev `2e9ee9ab…`.
+  - **Contents:** 19,968 training rows, 14.0M tokens, English, generated from own templates. Gold comes from the
+    structure and was re-checked on every row.
+
+    | Family | Rows | Tokens |
+    | --- | ---: | ---: |
+    | F1: quoted-conclusion verification | 7,178 | 5.59M |
+    | F2: long policy packets (4–12k characters) | 2,398 | 3.94M |
+    | F3: "condition not met" negatives with matched yes twins | 10,392 | 4.50M |
+
+  - **Audits:** all pass. 18 near-match groups (5 of them public 231) were dropped before release; no exact matches;
+    shortcut baselines at chance.
+  - **Dev validity:** the preregistered accuracy contrast (Decider 4B > DEV2.0-4B) was not significant on F1 (+.015) or
+    F2 (+.021). The behavioural readouts do show the gap:
+    - quote adoption: DEV2.0-4B .775 vs Decider .641 (50% = ignoring the quote);
+    - false yes on unmet conditions: .262 vs .128.
+  - **Coordinator decision:**
+    - `hs1-dev` is a registered DIAGNOSTIC. Its skill readouts are the quote-adoption rate (F1) and the false-yes rate
+      (F3); the F2 accuracy is informational. Nobody selects on `hs1-dev`, and public-231 hard stays formal-only (rule
+      item 7).
+    - HS1 is cleared for training.
+  - **Round-2 data plan, for every track's next milestone:**
+    - add HS1 (`m4/hs1/train.jsonl@171e6f0c`) as a block: full ~14M tokens, or ~9M with F2 + F3 + ½ F1;
+    - add PN1 (repeated 2–3×) for multilingual Noul;
+    - add long-prose rows;
+    - each with a matched-token control.
+    Select on the proxy; guard with human transfer, C1 post-key (item 8) and public 231 (item 7).
+  - **Data follow-up worker** (worktree `vllm-sr-dev2-data`):
+    - close PN1's audits: embedding scan, H7 / H8 isolation, blind label review of ≥ 200 rows with preregistered
+      thresholds;
+    - an HS1 template spot-check (≥ 50 rows per family);
+    - the qualification-pool relabel, with a builder guard.
+    PN1 is release-safe only after that.
+  - `panels install` briefly set node A's shared `goldfree/` directory owner-only. It was restored within a minute and
+    fixed in code.
+
+- 2026-09-29 23:40 — **C1 event 3 SCORED (v1.2, P2); C1 is exhausted (3 of 3) and post-key** (event-3 record; amendment
+  `fee142bf3`; PASS `2204823e7`, verdict `16c6d311…`; integration `224dd508a`; 1.153 GPU-h).
+  - **Results** (2,840 items; paired Δ [95% CI]):
+
+    | Model | C1 | vs own 1.0 | vs peers |
+    | --- | --- | --- | --- |
+    | DEV2.0-2B | 45.70 | Sol 16K +0.68 [−0.91, +2.22] | Decider 2B **+3.26**; This-That 1.2 **+2.90** |
+    | DEV2.0-4B | 48.38 | Nox −1.32 [−3.00, +0.35] | Decider 4B −1.27; Jet v6.2 **−2.06 [−3.86, −0.18]** |
+    | DEV2.0-9B | 53.77 | Lux 16K **+1.80 [+0.55, +3.07]** | Nimble v2 +1.00 [−0.69, +2.75] |
+    | DEV2.0-27B | 57.33 | none | AutoJev −0.84 [−2.50, +0.69]; Eikos **−2.04 [−3.66, −0.44]** |
+    | DEV2.0-0.6B (event-2 predictions) | 33.02 | Kai 8K **+10.89 [+8.88, +12.64]** | — |
+
+    - **4B's v3 lead over Nox does NOT carry over to C1.** 27B on C1 is level with AutoJev (unlike v3) and below Eikos.
+  - **Coordinator confirms the class-(a) call:** the one remaining row with a 6-token exact match (containment 0) in the
+    Decision 1.0 Stage-4 v2 curriculum is disclosed, not failing. Even counting 1.0 lineage data, it is far below the
+    near-exact bar (≥ 8 tokens or containment ≥ 0.8).
+  - **Card pass** (release worker, worktree `vllm-sr-dev2-release`):
+    - C1 lines on 2B / 4B / 9B / 27B;
+    - on 0.6B, the previous-revision wording (this revision not sealed-tested);
+    - the new JevBench note on all six;
+    - honest disclosures: 4B's v3 lead not on C1, Jet ahead on C1, Eikos ahead for 27B, the JevBench gaps.
+    - The same worker hardens `mirror_to_node.sh` (flock + existence / hash check, no nesting).
+  - **NEW successor-rule item 8 — C1 post-key guard:** `python3 -m v2.eval.gates c1 --left <successor> --right
+    <current>` must not return REGRESSION (p < .05). The eval worker is building the tooling and baselines.
+    - C1 is never training data and never used for selection.
+    - Successor cards label it "post-key (not an independent validation)".
+    - Custodial collection only: gold stays on node A.
+  - **Implication for tracks:** v3 gains alone are not enough. The 4B case shows typed / v3 gains can fail to transfer to
+    fresh human-labeled data.
+    - Decoder M6 (4B / 2B) and 27B M4 / M4b should weigh human transfer and hard-skill data.
+    - A new sealed set C2 for future independent claims is a candidate after round 1.
+
+- 2026-09-29 22:50 — **PN1 (paraphrase-style multilingual Noul arm) LANDED; its dev slice is VALID** (data record under
+  `v2/data/records/`; integration `e53e5c57a`; 1.010 GPU-h).
+  - **Location:** private `llm-semantic-router/decision-2.0-training-data@5ad362872f57034c7fada2c2990cfc6c36398d73`,
+    folder `m4/pn1/`. TRAIN `f6f6a531…`, dev `c3b68ac1…`, dev prompts `79dbf999…`, gold `e0d3e57c…`, attribution
+    `293d0491…`.
+  - **Source:** Tatoeba (2026-09-26 export; CC BY 2.0 FR plus CC0 subset; per-sentence attribution). Qwen3.5-27B /
+    Qwen3.8-27B (Apache-2.0) served only as filters (swap edits, label and fluency checks), never as targets.
+  - **TRAIN:** 4,888 rows, ~0.55M tokens, 50/50 labels per language, 70% swap-style, ja-heavy (ja 2,236, zh 948, de 822,
+    ru 402, ko 222, ar 130, es 94, fr 34). It is short of target because es / fr swap rows failed the overlap-shortcut
+    gate and Korean supply was thin.
+  - **Dev:** 1,974 rows.
+    - Pooled (6 PAWS-X languages): N4XF yes .708 vs Nox 1.0 .653 (gold .50), +.055 [+.042, +.068], in every language.
+    - The bias sits in the near-miss and swap rows.
+    - This table is the readout baseline.
+  - **How tracks use it** (decoder M6 and 9B M5 add it by amendment):
+    - The N5BN replicate plus `m4/pn1/arms/pn1.train.jsonl` as a whole-group block repeated 2–3× (~2% of a 29M-token
+      mixture), against a matched control without PN1 at equal tokens.
+    - Success means lower near-miss / swap yes-rates without a lower yes-rate on true paraphrases, with mlx-diag PAWS-X
+      as the out-of-family check.
+  - **Open audits, which must close before any PN1-trained model is RELEASED:**
+    - the house embedding scan (manifests on node B);
+    - isolation against the H7 / H8 slices;
+    - a blind label review of ≥ 200 rows.
+    - Assigned to the data track's next worker.
+    - C1: the custodian content recheck would be needed before any C1 event that scores a PN1-trained model; after
+      event 3 C1 is exhausted, so this only matters for the record.
+
+- 2026-09-29 22:05 — **DEV2.0-0.6B successor released (first progressive update)** (gist 07b; record
+  `v2/release/records/dev2-0p6b-m8-release-2026-09-29.md`; integration `56eee31c2`; 0.249 GPU-h).
+  - Private `llm-semantic-router/DEV2.0-0.6B@b21313375ad77ddf4a8e420fa5195e6e09582043` (`main`, replaces `99c4e799`).
+    - Manifest `816827dd…`, 597,103,104 loaded parameters.
+    - BF16 storage copy with exact parity (10,653 prompts, 0 changes); 2.40 → 1.52 GB.
+    - Score offsets bound to the BF16 hash (`score_bias.json` `7d3a060f…`, sourced from `725c16f9…`).
+    - T = 1: CAL698 worsened all four development measures.
+    - Final decision `3fbe847b…`.
+  - **Successor gate profile** (new in `gate.py`, with `profile --spec` for pre-upload evaluation): R1–R7 all pass vs
+    `99c4e799`, with 12 of 12 gate items.
+  - Card:
+    - the M6 recipe, with credits rebuilt from the six M6 mixtures (232,754 rows, 37 public datasets, no NC /
+      research-only source);
+    - the hand-off disclosures verbatim;
+    - the JevBench note;
+    - C1 "measured on `99c4e799`". Event 2 scored `e61b2b44`, whose weights are byte-identical.
+  - **Purge:** the superseded backbone and head were purged with `rewrite_history=False`. Old weight paths return 403,
+    and the node A copy is the durable store. Storage 62.09 → 61.20 / 100 GB.
+  - **Shared code:**
+    - `bf16_copy.py` / `build.py`: single-file backbones, and offsets bound to the BF16 copy.
+    - `card.py`: the new public-231 note, which applies to every card at its next render.
+    - `calibrate_frozen.py --score-bias`.
+  - **Mirror race, known issue:** two workers mirrored the same commit to node A at once, and one copy ended up nested
+    inside the other. It was cleaned and re-verified. `mirror_to_node.sh` moves its staging copy into place without
+    checking the target.
+    - **Interim rule for every track:** if `/data/dev2/src/<SRC>` already exists, verify it and reuse it instead of
+      re-mirroring.
+    - The fix (lock + existence / hash check) goes to the next release worker, bundled with the C1 card pass.
+
+- 2026-09-29 21:35 — **C1: P2 adopted (v1.2); event 3 re-authorized** (analysis in event-3 record §000; integration
+  `0de943f68`; 0 GPU-h; nothing decrypted).
+  - **Hit sources:** all 1,510 flagged rows (228 OVERLAP / 1,282 REVIEW) match raw public corpora added by the widened
+    coverage, which no model trained on: Tatoeba 494, Natural-Instructions 408, Taskmaster 197, MIRACL 106, ConvoKit 67,
+    ABCD 63, TyDi QA 51, RACE 27, SGD 23, and others.
+  - **Trained-data hits:** only 6 rows are in released or candidate training mixtures (E8F, S2T, K), all REVIEW-level
+    (containment ≤ 0.33) and all already retired by v1.2. The 16 rows in unreleased-arm pools are not near-exact
+    (≤ 0.46). No trained pool added an OVERLAP.
+  - **Policies:**
+
+    | Policy | Retired, at most | C1 standard error |
+    | --- | ---: | ---: |
+    | P1: every flag | 907 (31.6%) | ×1.13 |
+    | P2: v1.2 | 48 (1.7%) | ×1.0075 |
+    | P3: P2 + every OVERLAP | 391 (13.6%) | ×1.07 |
+
+  - **Coordinator decision: P2.**
+    - Independence concerns what the scored models trained on, and C1's seal record says it tests label novelty, not
+      text novelty.
+    - P1 / P3 cost 14–32% of C1 with no independence gain.
+    - Registered before the key:
+      - (1) the class-aware PASS rule: no remaining hit in class-a trained rows; no near-exact remaining hit in class-b
+        unreleased pools; classes c / d / e are recorded, not failing;
+      - (2) the event re-pinned to v1.2, with v1.3 withdrawn and never used;
+      - (3) the existing rescan judged under the rule, with no new scan.
+    - Then the event runs as staged on node A GPU0 or GPU1 (≥ 130 GB free; GPU7 has only ~79 GB).
+  - A fresh eval worker executes. After scoring, a release worker adds the C1 lines and the JevBench card text to all
+    six cards in one card-only pass.
+
 - 2026-09-29 20:50 — **All eight stopped workers resumed (first resume each), in economy mode.** The user re-sent the
   16:05 directives; all four are already in effect.
   - Economy mode: few internal subagents, polls every 45–60 minutes, concise outputs, and no redone steps.
@@ -1750,6 +2096,92 @@ aggregates in `records/htdev-validation/`).
   - Collections and validation are on node A under `/data/dev2/runs/eval/htdev/{collect,validation}`.
   - Backup: private eval-artifacts dataset, `htdev/v1/` at `ad4b958e`.
   - GPU: 3.27 GPU-h in total (build 0.64 + collections 2.63); the validation itself was CPU only.
+
+### HT-DEV v2 (`ht-dev2`): human-transfer screen (eval track, 2026-09-30; code at `7a6bd7986` or later)
+
+Record `v2/eval/records/htdev2-validation-2026-09-30.md` (prereg `htdev2-prereg-2026-09-30.md`, amendments 1–5;
+integration `bc0a12d70`).
+
+- **Validated (PASS).**
+  - Within-tier sign agreement with formal CSS15 ΔH is 0.843, vs 0.657 for the CSS-pilot three-task mean (172 decidable
+    pairs, 50 models, P(better) 0.972).
+  - Within-tier r 0.647 vs 0.206. Sibling pairs: 74 / 78.
+- **Panel:** 1,944 items, nine CSS15 tasks × 216, from held-out portions of the same sources, with formal templates and
+  option maps.
+  - Disjoint from the formal items at item and group level.
+  - Screened against 122,485 training files (including PN1 / HS1) and every protected panel (including JevBench).
+  - Never training data.
+- **Rule for every track.** It replaces the CSS-pilot three-task-mean non-decrease screen in development gates.
+  - Collect `ht-dev2` for each shortlisted checkpoint at its formal input limit and kernel path. Compare it with the
+    tier's reference using `--htdev2-reference`.
+  - **FLAG** (ΔH_dev2 ≤ −0.02): don't send it to the formal runner as a successor without a recorded reason. Formal ΔH
+    has the same sign 93% of the time beyond ±0.02.
+  - **TIE** (|Δ| < 0.02): uninformative.
+  - **GAIN** (≥ +0.02): a likely formal gain.
+  - ±0.045 is the preregistered 10%-risk band.
+  - It is a screen, not a score to optimize. Human transfer is decided only by the formal paired CSS15 CI.
+  - Treat comparisons with third-party peers with caution (0.74). It does not predict C1, so keep the C1 guard.
+  - **Running milestones** may adopt it only by an amendment made before their first development readout. Otherwise,
+    report it as a diagnostic.
+- **Run** (node A; about 0.016 GPU-h per 0.6B checkpoint, 0.036 per 4B / 9B):
+
+  ```bash
+  SRC=<full-sha>-src_training_decision2; S=/data/dev2/src/$SRC/src/training/decision2; export PYTHONPATH=$S
+  $S/v2/eval/run_same_panel.sh --gpu <N> --track <track> --src $SRC --run-dir <run> --model-dir <pkg> [--shared-lease <name>] \
+    [--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=<rw copy> --mount-rw <rw copy>] \
+    -- --adapter-spec <adapter.json> --model-path <pkg> --revision <id> --panels ht-dev2   # or typed-dev,css-pilot,ht-dev2
+  python3 -m v2.eval.dev_readout --run-dir <run> --label <ckpt> --output <readout.json> \
+    --htdev2-reference /data/dev2/runs/eval/htdev2/collect/<reference key>/output/ht-dev2.predictions.jsonl
+  ```
+
+  - **Readout:** the readout JSON gets `htdev2`: H_dev2, per-task macro-F1, the bootstrap SD, and `vs_reference` with
+    delta, paired CI and verdict.
+  - **Reference keys** (`/data/dev2/runs/eval/htdev2/collect/<key>`):
+    - 0.6B `06b-m6-mxcx-soup` (the same weights as `b2131337`);
+    - 0.8B `dec-m2-E8F-soup`; 2B `dec-m3-S2T-soup`; 4B `dec-m4-N4XF-soup`; 9B `9b-m4-K-a13`;
+    - own 1.0: `eos1`, `sol1`, `nox1`, `lux1`.
+    - Kai1 and the 27B models are not collected yet.
+- **Files:** `/data/dev2/private/panels/{goldfree,gold}/ht-dev2.*` (prompts `90cd409a…`, gold `659c92b4…`). Backup:
+  eval-artifacts `htdev2/v1/` (`6f6acf5d`).
+
+### JevArena-C1 v1.2 post-key successor guard (successor-rule item 8; eval custodian; code at `2b5e878db` or later)
+
+Record `v2/eval/records/c1-postkey-guard-2026-09-29.md` (§6 has the full block; integration `d2650b0e4`).
+
+- **Rules:**
+  - C1 is post-key. It is never training data and never a selection criterion, whether in development or among
+    siblings.
+  - Cards say only "JevArena-C1 v1.2, post-key (not an independent validation)".
+  - Prompts and gold never leave node A. The key goes on stdin only.
+  - The ledger allows one successor per tier baseline; another candidate needs `--approval "<coordinator decision>"`.
+- **Gate:** `python3 -m v2.eval.gates c1 --left <successor run> --right <current run> --left-name A --right-name B --gold
+  <gold> --output OUT` returns PASS or REGRESSION (Δ < 0 with paired 95% CI below 0). It uses the events' group
+  bootstrap on the 2,840 v1.2 items, and detects losses of about 1.3–2 C1 points.
+- **Runner** (node A):
+  - `bash $S/v2/eval/sealed/c1-postkey.sh collect --gpu <N> --src $SRC --spec <successor spec.json> [--shared]`, with
+    the key on stdin. Run it key-free first with `--verify-only` (CPU) or `--preflight-only` (GPU smoke + exact parity).
+  - The result is `<job>/SUMMARY.json` → `item8.verdict`.
+  - `gate` compares two sealed runs; `reproduce` re-checks event 3.
+  - About 5 min for 0.6B, and about 0.34 × the formal wall time for larger tiers.
+- **Successor spec:** copy `v2/eval/sealed/c1-postkey/dev2-0p6b-b2131337.json`, or the tier's row in
+  `sealed/event3-models.json`. Then set:
+  - `role: successor`, a new `name` and the `revision`;
+  - `model_path` = the frozen package dir, `package.manifest_sha256` and `identity`;
+  - `parity.stored` (formal typed-final predictions with public 231 beside them), `files` and `stored_collect`;
+  - `cache` (the formal run's persisted autotune cache and its digest) and `image`.
+  27B packages and caches are staged on node A first.
+- **Baselines** (`v2/eval/sealed/c1-postkey-baselines.json`; valid for any revision with the same weights):
+
+  | Tier | Weights | C1 v1.2 |
+  | --- | --- | ---: |
+  | 0.6B | `b2131337` | 36.92 |
+  | 2B | `5ad3e9a3` | 45.70 |
+  | 4B | `452f1332` | 48.38 |
+  | 9B | package `53bac735` | 53.77 |
+  | 27B | `5683c6f0` | 57.33 |
+  | 0.8B | event-1 weights (T = 1 changes 0 answers) | 40.17 (node A `/data/dev2/runs/eval/m4/c1-event1/e8f`; integration `12e5ba152`) |
+
+  After a release, put `SUMMARY.json` → `baseline_entry` into the registry.
 
 ### Score5-typed-DEV v1 (`score5t-dev`; eval track, 2026-09-29 ~16:30 UTC+8; code at `06d596398` or later)
 

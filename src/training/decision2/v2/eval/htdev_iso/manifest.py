@@ -8,7 +8,9 @@ Every file under each labelled directory (dot directories skipped) is listed in 
 training manifest with path, sha256, bytes and rows (jsonl lines, parquet rows, json
 list items; -1 when not a row format). The corpus manifest (schema c1-corpora/1, as
 `independence manifest` writes it) lists the row-format files the overlap scanner
-reads, without `*.ids.jsonl`. Labels merged from an older manifest keep its hashes.
+reads, without `*.ids.jsonl`. Labels merged from an older manifest keep its hashes. Files of
+an evaluation-only pool (``v2/common/eval_only_pools.json``) go into a sibling
+``<label>:evaluation-only`` label of kind ``evaluation-only`` in both manifests.
 """
 
 from __future__ import annotations
@@ -22,6 +24,8 @@ import os
 from multiprocessing import Pool
 from pathlib import Path
 from typing import Any
+
+from v2.common import eval_only
 
 ROW_SUFFIXES = (".jsonl", ".jsonl.gz", ".json", ".parquet", ".csv", ".tsv")
 
@@ -149,17 +153,21 @@ def main(argv: list[str] | None = None) -> int:
             "corpus_files": sum(len(v["files"]) for v in corpora.values()),
         },
     }
-    for path, payload in (
-        (args.output, manifest),
-        (args.corpora, {"schema": "c1-corpora/1", "labels": corpora}),
-    ):
+    manifest, _ = eval_only.relabel(manifest)
+    corpora_manifest, _ = eval_only.relabel(
+        {"schema": "c1-corpora/1", "labels": corpora}
+    )
+    for path, payload in ((args.output, manifest), (args.corpora, corpora_manifest)):
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             json.dump(payload, stream, indent=1)
     print(json.dumps(manifest["totals"]))
     print(
         json.dumps(
-            {k: [v["file_count"], v["bytes"], v["rows"]] for k, v in labels.items()}
+            {
+                k: [v["file_count"], v["bytes"], v["rows"]]
+                for k, v in manifest["labels"].items()
+            }
         )
     )
     return 0

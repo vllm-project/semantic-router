@@ -1,0 +1,15 @@
+{
+ "schema": "dev2-htdev2-sources/1",
+ "note": "Held-out portions of the datasets behind the formal CSS15 tasks, internal evaluation use only (as CSS15 itself); texts stay on node A and in the private eval-artifacts dataset",
+ "salt_snapshot": {"repo": "SALT-NLP/LLMs_for_CSS", "revision": "55183a64d7faaf6d5fc23eddf2bfc48ece4cacad", "data_loader_sha256": "2d6a668c1ca168c6f67ca5bd1bd540809ea87f4e338a55e9d58d7da11ae4139e", "used": ["css_data/ibc/ibc.csv", "css_data/media_ideology/media_ideology.csv", "css_data/talklife/talklife.json + talklife.csv", "css_data/mrf/mrf-classification.csv", "mappings.py (templates)"]},
+ "replication_package": {"repo": "hazemibrahim97/decision-models-css", "revision": "311956c2d1096cabc0f09a1f248e7dc0e1c0c41e", "used": "pilot_jev.py option-to-gold maps via transfer.build.criteria_for"},
+ "downloads": {
+  "emotion": {"source": "dair-ai/emotion unsplit (HF)", "revision": "cab853a1dbdf4c42c2b3ef2173804746df8825fe", "licence": "card: other (research use)", "sha256": {"unsplit/train-00000-of-00001.parquet": "ba60fe890562b2770967d63f9d7eb104691e028ca68716cd4e926996ecb31441"}},
+  "tempowic": {"source": "cardiffnlp/TempoWiC (GitHub)", "revision": "c83ccbe56f425b0ad492d76476eef42946c1efd7", "sha256": {"train.data.jl": "a9c2f37c177bb5ff64467bcc76845e6d747783a745a87435d2bb65354bbbc248", "train.labels.tsv": "40949a06192fb551c8e39d0b025c92851cf0ee5edccd2184dbbef8212d210e72", "validation.data.jl": "83a1b02cccb9d6943f5c18634fba839c85a5883aa547a2e208308c463d31fdc9", "validation.labels.tsv": "6306e5f0e733bf41baf470323a21b43ba112412d66548c7546355e9e90c02cdc", "test-codalab-10k.data.jl": "fbbaf9627edb7780237e1553220306b4061e83382602a1ebb6adbbbc63d77125", "test.gold.tsv": "99134a63aa743ecaf684cb22faf71d2665de9361238cb1021e0e64241f7b51aa"}},
+  "reddit_humor": {"source": "orionw/RedditHumorDetection reddit_full (GitHub)", "revision": "09c86e22adc48d0d87962fea8f6311e5dadc1eb3", "sha256": {"test.tsv": "45823b4b44efaf209f71d37c642abb112e5d5aef6f347be147f974222db64424", "train.tsv": "f5cdfc0dcd94e3ba5334593848705711fa2c66542fa06b9aec6ac6d4dfd81895"}},
+  "conv_go_awry": {"source": "ConvoKit conversations-gone-awry-corpus", "sha256": "84e2d1ac60a3269251b5e175e549fc65cec875fdc926f99172b5b70d3ca1b122"},
+  "wiki_corpus": {"source": "ConvoKit wiki-corpus (CC BY-SA 4.0)", "sha256": "9995d3b885338e9332496193a0b7b01453174c2d6008ec88634ad7cb884f8f41"},
+  "wiki_politeness": {"source": "ConvoKit wikipedia-politeness-corpus (CC BY 4.0); pool built, task dropped by the training scan", "sha256": "90ec6c2c6e05d064a805d2e4be4a8d442f370b31f0025798e8eaf62d0014ba48"},
+  "persuasion": {"source": "ConvoKit winning-args-corpus; pool built, task dropped (formal sample used every unsuccessful reply)", "sha256": "ea9a4b14c3a7ab5216091433883c2476484d7cc251f63cefa926998be93d091e"}
+ }
+}

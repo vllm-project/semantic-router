@@ -104,3 +104,46 @@ Writes `jevarena-v3-rank.svg`, `jevarena-v3-model-task.svg`,
 `jevbench-public231-rank.svg` and `charts.json` with the existing publication
 renderer. It refuses reports with different panel or scorer hashes; there is no
 Pareto chart for cards.
+
+## (d) JevArena-C1 v1.2 post-key successor guard (successor-rule item 8)
+
+JevArena-C1 used its three scoring events and is post-key. Its only use is item 8: a
+successor must not show a significant C1 regression against the current revision. It is
+never training data and never a selection criterion (development or siblings); a card
+may report it only as "JevArena-C1 v1.2, post-key (not an independent validation)". The
+eval track runs it as custodian on node A; prompts and gold never leave node A.
+
+```bash
+# collect + seal + score one frozen successor package, then gate it against its tier's
+# registered baseline (v2/eval/sealed/c1-postkey-baselines.json); the key only on stdin
+cat <C1 key file> | ssh "$NA" "bash $S/v2/eval/sealed/c1-postkey.sh collect --gpu <N> \
+  --src $SRC --spec <successor spec.json> [--shared]"
+# the gate alone, between two sealed C1 runs
+cat <C1 key file> | ssh "$NA" "bash $S/v2/eval/sealed/c1-postkey.sh gate --src $SRC \
+  --left <successor run> --right <current run> --left-name A --right-name B --output <out.json>"
+```
+
+The spec (`dev2-c1-postkey-spec/1`, e.g. `v2/eval/sealed/c1-postkey/`) is one frozen
+package with its formal runtime, written like a row of `sealed/event3-models.json`. The
+runner smokes typed FINAL and public 231 with exact parity against the stored formal run
+before the key is read, allows one successor per tier baseline (more need a recorded
+`--approval`), and writes `SUMMARY.json` whose `baseline_entry` replaces the tier's
+registry entry once the successor is released. `python3 -m v2.eval.gates c1` (PASS or
+REGRESSION: Δ < 0 with two-sided paired bootstrap p < .05) is the underlying check.
+
+## (e) HT-DEV v2 human-transfer screen (development)
+
+`ht-dev2` is a held-out parallel form of nine CSS15 tasks (1,944 items; same sources,
+templates and option maps as the formal items, disjoint from them at item and group level).
+Its within-tier differences agree with formal CSS15 ΔH on 84% of decidable pairs (the pilot
+three-task mean: 66%; `records/htdev2-validation-2026-09-30.md`). Collect it with
+`--panels ht-dev2` at the candidate's formal runtime and compare with a same-tier reference:
+
+```bash
+python3 -m v2.eval.dev_readout --run-dir <run> --label <ckpt> --output <readout.json> \
+  --htdev2-reference <reference run>/output/ht-dev2.predictions.jsonl
+```
+
+The `htdev2` block gives H_dev2 (mean task macro-F1), the paired delta with its 95% CI and
+a verdict: FLAG at delta <= -0.02, TIE within ±0.02, GAIN at >= +0.02. It is a screen; the
+formal paired CSS15 interval still decides human transfer. Its items are never training data.

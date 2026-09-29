@@ -189,5 +189,110 @@ class Score5tReadoutTest(unittest.TestCase):
         )
 
 
+class Htdev2ReadoutTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name) / "panels"
+        criteria = {"True": "yes", "False": "no"}
+        prompts, self.gold = [], []
+        for task in ("mrf", "reddit_humor"):
+            for n in range(20):
+                item = f"ht-dev2/{task}/{n}"
+                prompts.append(
+                    {
+                        "id": item,
+                        "state": f"{task} {n}",
+                        "questions": {
+                            "label": {
+                                "type": "choice",
+                                "instructions": "q",
+                                "criteria": criteria,
+                            }
+                        },
+                    }
+                )
+                self.gold.append(
+                    {
+                        "id": item,
+                        "task": task,
+                        "gold": "True" if n % 2 else "False",
+                        "labels": ["True", "False"],
+                        "input_sha256": f"h{item}",
+                    }
+                )
+        self.entries = {
+            "ht-dev2": {
+                "prompts": "goldfree/ht-dev2.prompts.jsonl",
+                "prompts_sha256": write_jsonl(
+                    self.root / "goldfree/ht-dev2.prompts.jsonl", prompts
+                ),
+                "gold": "gold/ht-dev2.gold.jsonl",
+                "gold_sha256": write_jsonl(
+                    self.root / "gold/ht-dev2.gold.jsonl", self.gold
+                ),
+                "originals": 40,
+            }
+        }
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def predictions(self, path: Path, wrong_every: int) -> None:
+        rows = []
+        for n, g in enumerate(self.gold):
+            choice = (
+                g["gold"]
+                if n % wrong_every
+                else ("False" if g["gold"] == "True" else "True")
+            )
+            probs = {label: float(label == choice) for label in g["labels"]}
+            rows.append(
+                {
+                    "id": g["id"],
+                    "source_input_sha256": g["input_sha256"],
+                    "answers": {
+                        "label": {
+                            "type": "choice",
+                            "choice": choice,
+                            "probabilities": probs,
+                        }
+                    },
+                }
+            )
+        write_jsonl(path, rows)
+
+    def test_block_and_paired_screen_against_a_reference(self):
+        run = Path(self.tmp.name) / "run"
+        self.predictions(run / "output/ht-dev2.predictions.jsonl", wrong_every=2)
+        reference = Path(self.tmp.name) / "reference.jsonl"
+        self.predictions(reference, wrong_every=10)
+        out = Path(self.tmp.name) / "readout.json"
+        with mock.patch.dict(panels.ALL, self.entries), mock.patch(
+            "sys.stdout", new_callable=io.StringIO
+        ) as stdout:
+            dev_readout.main(
+                [
+                    "--panel-root",
+                    str(self.root),
+                    "--run-dir",
+                    str(run),
+                    "--htdev2-reference",
+                    str(reference),
+                    "--label",
+                    "t",
+                    "--output",
+                    str(out),
+                ]
+            )
+        block = json.loads(out.read_text())["htdev2"]
+        self.assertEqual(block["panel"], "ht-dev2")
+        self.assertEqual(set(block["tasks"]), {"mrf", "reddit_humor"})
+        self.assertLess(block["vs_reference"]["delta"], -0.02)
+        self.assertEqual(block["vs_reference"]["verdict"], "FLAG")
+        summary = json.loads(stdout.getvalue())
+        self.assertEqual(summary["htdev2.verdict"], "FLAG")
+        self.assertAlmostEqual(summary["htdev2.H_dev2"], block["H_dev2"])
+
+
 if __name__ == "__main__":
     unittest.main()

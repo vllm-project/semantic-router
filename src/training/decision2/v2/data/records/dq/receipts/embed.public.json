@@ -1,0 +1,27 @@
+{
+ "by_file": {
+  "pn1.dev.jsonl": {
+   "groups": 1735,
+   "quarantined_groups": 0,
+   "review_band_groups": 0
+  },
+  "pn1.train.jsonl": {
+   "groups": 4129,
+   "quarantined_groups": 0,
+   "review_band_groups": 0
+  }
+ },
+ "candidate_windows": 5954,
+ "model_path_name": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+ "note": "Approximate semantic neighbours; not a certificate of independence.",
+ "protected_manifest_sha256": "122bb74795476514d1a39d166f029d51a087f0d9f2275a8c466fedab84d3b9a5",
+ "protected_windows": 134797,
+ "review_sample_size": 0,
+ "schema": "decision2-embed-scan/v1",
+ "stride_chars": 1000,
+ "thresholds": {
+  "quarantine": 0.93,
+  "review": 0.85
+ },
+ "window_chars": 1500
+}

@@ -1,0 +1,45 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "DEV2.0-0.6B",
+  "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+  "identity": {
+    "model_sha256": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983"
+  },
+  "report_sha256": "b2083796ed0a03728edffb2aa8af5c9c60db38df3ad8182ea5c9e08d6bb6a2ed",
+  "paired_sha256": "7b391cb2f5ab08b798e3ba6817dcf269ae0b9fb4843dabe4ac434b8177b77f98",
+  "gate_profile": "successor",
+  "current_revision": "99c4e799392afa73241915aeb16fefa5ef3518d7",
+  "evidence_sha256": {
+    "current_decision": "e22fe181f6c245a15a1c341d136141ef529768c0b8fecb92d65ee909722b15b0",
+    "current_gate": "787c31c9e5bf618c788d28acbe6b1009181d62b6e37fa16e6c231b2dd2ca2bc1",
+    "exposure": "4c2a55d2b73dff179103824fd02970eaa677eb74557e28a80ce45258e1bf5bf8",
+    "mlx_paired": "72660c429ecc375d92f33a123b69d6cff797ed267fc1f4feda31c47d5504b30f",
+    "paired": "61700400844a98f6a80f2a8f30faf7808cfd30023a2d4202d405588922740b56",
+    "public231": "dff304c9897026ebb3bd465deccf7ac63dc34d75b81f7c829908ee87c9110c8e",
+    "tier_paired": "aed5ad9a28b059c7bf001c898598771b366e4a2ef4535872045c9ec72b2a9412",
+    "types": "ce2ca8bc47ccd5e8147c7d5b25f905ab85a23126bb65f599b7f735a4e2a7440a"
+  },
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the C1 event-3 card pass assigned to release engineering in the cross-track note of 2026-09-29 23:40 UTC+8, under the user's full-autonomy mandate",
+  "prepared_by": "Decision 2.0 release engineering, C1 card-pass worker (worktree vllm-sr-dev2-release)",
+  "rationale": "The release judgement of the superseded final decision 3fbe847b… stands unchanged: the same identity, scored report, paired comparison, gate profile and evidence, calibration and licence decision. JevArena-C1 event 3 (item set v1.2) was scored after that decision (eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)); the card now states its result and discloses every significant C1 loss against a card peer. Only the card changes, as listed in action.",
+  "decided_utc": "2026-09-29T15:40:00Z",
+  "action": "Card-only revision of the private repository llm-semantic-router/DEV2.0-0.6B: the confirmation line gives the v1.2 same-limit result measured on the previous revision's weights and says the current weights were not part of any sealed event; the public-231 note under the rank chart now reads 'public-only rerun (about a third of the official Intelligence inputs), not the official JevBench score; easy tier at ceiling; totals within about 10 items are not distinguishable' (eval decision of 2026-09-29 17:15 UTC+8) (already on the card since revision b2131337). Every model file stays byte-identical to the released revision b21313375ad77ddf4a8e420fa5195e6e09582043. The repository stays in the private collection '🎲 Decision 2.0', ordered 0.6B, 0.8B, 2B, 4B, 9B, 27B; everything stays private.",
+  "release_rationale": "Successor rule (coordinator 16:05 / 17:15) against the current revision 99c4e799 (m4-t-a7-soup, scored report 72cf01de reached through its sealed gate 787c31c9 and decision e22fe181): R1 post-key v3 48.64 vs 43.54, +5.09 [+2.65, +9.30]; R2 human transfer -0.021 [-0.064, +0.061], not significantly below; R3 no type collapsed (Choice, Noul, Score OK; typed Score top share .620, accuracy .3425 vs always-majority .320, disclosed as no gain); R4 mlx-diag Choice + Noul macro +0.0044 [-0.0058, +0.0144]; R5 tier gates: vs Decision 1.0 Kai +12.70 [+10.00, +17.50], v3 48.64 >= 90% of GLiNER2.5-Decide 42.52, human transfer vs GLiNER2.5-Decide +0.018 [-0.013, +0.161], no collapse; R6 no overlap exposure (six M6 mixtures, 356,331 rows, 0 groups); R7 v2.eval.gates public231 vs the current run 152 vs 142 (+10, McNemar p .087), not REGRESSION. Package: the BF16-storage copy (bf16_copy receipt 2a991bfb) of the scored m6-mxcx-soup weights (01fae750) with the same five-level Score offsets rebound to its hash (score_bias.bf16.json 7d3a060f, from the packaged public file 725c16f9, scored file 03f0c9c7); exact parity with 0 answer changes and 0.0 probability drift on all 10,653 scored and mlx-diag prompts. Calibration T = 1: CAL698 temperatures (Choice 0.584, Noul 0.554, Score 0.450) worsened all four development measures (23:15 rule). Card disclosures verbatim from the M8 hand-off; C1 measured the previous revision only. After this revision verifies, the superseded weight LFS blobs are purged with rewrite_history=False; node copies stay the durable store.",
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified.",
+  "card_revision": {
+    "kind": "card-only",
+    "spec": "v2/release/specs/dev2-0p6b-card-c1.json",
+    "spec_sha256": "db6b41e7b2fbc3c72daba08906391c38883bf49efbcde4604a7d4cbfbdd0b007",
+    "c1_record": "v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)"
+  },
+  "c1": "Previous-revision line: event 2 sealed the predictions of revision e61b2b44 (model files byte-identical to 99c4e799); rescored on C1 v1.2 at event 3 they score 33.02 vs Decision 1.0 Kai at 8,192 tokens 22.14 (+10.89 [+8.88, +12.64]; Kai at 1,024 tokens 17.79). The current weights (m6-mxcx-soup plus Score offsets, released as b2131337) were not part of any sealed event, and C1 is post-key after event 3, so no C1 line measures them.",
+  "supersedes": {
+    "final_sha256": "3fbe847bca4cde30229797b2d5e7e270640bd69c64e3b6691201c15d9dc82410",
+    "released_as": "llm-semantic-router/DEV2.0-0.6B@b21313375ad77ddf4a8e420fa5195e6e09582043",
+    "released_manifest_sha256": "816827dd836d21ab0b7555605fdc56dd5189ee4462a541a84de27de97f637796",
+    "released_gate_sha256": "606f8794509a70e9e633384554c974fac2ae0662563b00c9496c757c7c3cef4a",
+    "earlier": null
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "before": {
+    "commits": 5,
+    "heads": {
+      "branch:main": "a53cf66a0d9d492a84b6617b61e7ce35fcd03af0"
+    },
+    "lfs_objects": 7,
+    "main_lfs_served": {
+      "assets/DEV2.0-2B-owl-banner.png": 206,
+      "backbone/model-00001-of-00002.safetensors": 206,
+      "backbone/model-00002-of-00002.safetensors": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "backbone/model-00001-of-00002.safetensors": 206,
+      "backbone/model-00002-of-00002.safetensors": 206
+    }
+  },
+  "mode": "plan",
+  "new_revision": "a53cf66a0d9d492a84b6617b61e7ce35fcd03af0",
+  "node_copy": "/data/dev2/runs/dec/m3/formal-candidates/staging-545a6784/m3/S2T-soup/checkpoint",
+  "old_revision": "a47bdf895d982896b0e65c2bdc61330fe1ad2d7c",
+  "repo": "llm-semantic-router/DEV2.0-2B",
+  "rewrite_history": false,
+  "schema": "dev2-release-purge-superseded/1",
+  "target_bytes": 7527335048,
+  "targets": {
+    "1f083a66d8cdcd02887452b2801efae6af41a6e9529bdc37c962b994721dca08": {
+      "bytes": 3999855496,
+      "node_copy_sha256": "1f083a66d8cdcd02887452b2801efae6af41a6e9529bdc37c962b994721dca08",
+      "path": "backbone/model-00001-of-00002.safetensors"
+    },
+    "3a3f291be8d6ac079f1f737ec89092ed3947abd2cd5fd342823c91ce1084af8b": {
+      "bytes": 3527479552,
+      "node_copy_sha256": "3a3f291be8d6ac079f1f737ec89092ed3947abd2cd5fd342823c91ce1084af8b",
+      "path": "backbone/model-00002-of-00002.safetensors"
+    }
+  },
+  "utc": "2026-09-29T22:58:23.478792+00:00"
+}

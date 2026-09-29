@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# usage: hg.sh NODE SCANDIR PROTECTED_DIR  (grouped analysis scan of the flagged rows; no gate)
+set -euo pipefail
+umask 077
+NODE=$1 D=$2 PD=$3
+SRC=ecf312c2bcc9fb22b6dde383fc65c46ae77ac31c-src_training_decision2
+S=/data/dev2/src/$SRC/src/training/decision2
+IMG=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
+O=/data/dev2/runs/eval/m4/c1-hitgroups/$NODE
+mkdir -p "$O"
+cd "$S"
+python3 -m v2.eval.sealed.hitgroups manifest --manifest "$D/training-manifest.json" \
+  --coverage-receipt "$D/coverage-receipt.json" --work "$D/work" --output "$O/grouped-manifest.json"
+MOUNTS=()
+while IFS= read -r dir; do MOUNTS+=(-v "$dir:$dir:ro"); done < <(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["roots"].values()))' "$D/coverage-receipt.json")
+PROT=$PD/flagged-protected.jsonl
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) HITGROUPS flagged protected rows ($(sha256sum <"$PROT" | cut -c1-12)) read (read-only) on $NODE for the analysis-only grouped scan; mirror ${SRC:0:12}" >>"$PD/ACCESS.log"
+docker run --rm --network none -v "$S:$S:ro" "${MOUNTS[@]}" --mount "type=tmpfs,destination=/data/dev2/private/sealed" \
+  -v "$PD:$PD:ro" -v "$D:$D:ro" -v "$O:$O" -e PYTHONPATH="$S" -e PYTHONDONTWRITEBYTECODE=1 -w "$S" \
+  --entrypoint python3 "$IMG" -m v2.eval.sealed.overlap scan --protected "$PROT" --manifest "$O/grouped-manifest.json" \
+  --no-verify --workers 48 --exact-min-tokens 8 --output "$O/overlap-receipt.json" --hits "$O/overlap-hits.jsonl" >"$O/scan.log" 2>&1
+echo DONE >>"$O/scan.log"

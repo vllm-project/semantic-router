@@ -1,0 +1,118 @@
+{
+ "approval": null,
+ "baseline_entry": {
+  "c1": 36.91555891288061,
+  "identity": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983",
+  "model": "DEV2.0-0.6B",
+  "predictions_sha256": "43403f39a3ad81ee835d9b33c151ab7a87aa8fb84b3be5aa96daa251d60bcd8c",
+  "repo": "llm-semantic-router/DEV2.0-0.6B",
+  "revision": "b21313375ad77ddf4a8e420fa5195e6e09582043",
+  "run": "/data/dev2/runs/eval/c1-postkey/0.6B/dev2-0p6b-b2131337-20260929T161232Z/cand",
+  "seal_sha256": "056026acbad7b51f095f8ad8b5dbbf5b46d067bb6f2048b658bdd73c71eaa3cc",
+  "source": "post-key C1 v1.2 collection dev2-0p6b-b2131337-20260929T161232Z"
+ },
+ "by_type": {
+  "choice": 38.45703699629464,
+  "noul": 55.69219722940232,
+  "score": 20.135493529514765
+ },
+ "c1": 36.91555891288061,
+ "comparisons": [
+  {
+   "by_type": {
+    "choice": {
+     "ci95": [
+      2.6473370668764615,
+      7.746402260595917
+     ],
+     "delta": 5.164597867454049,
+     "p": 0.0
+    },
+    "noul": {
+     "ci95": [
+      4.110132917474437,
+      11.858168683023544
+     ],
+     "delta": 8.045492723101304,
+     "p": 0.0
+    },
+    "score": {
+     "ci95": [
+      -4.246885898977348,
+      1.1879618621197514
+     ],
+     "delta": -1.4539288134343984,
+     "p": 0.2976595319063813
+    }
+   },
+   "ci95": [
+    2.1557727831014275,
+    5.6026237143452935
+   ],
+   "delta": 3.890924856267482,
+   "key": "prev-e61b2b44",
+   "kind": "info",
+   "name": "DEV2.0-0.6B e61b2b44 (previous revision, C1 event 2)",
+   "p": 0.0,
+   "right_c1": 33.02463405661313,
+   "run": "/data/dev2/runs/eval/m4/c1-event2/cand",
+   "sha256": "129ec762330f70e44a29f5a555d09dca860df6b32e00eda8f1001e7bbb9f49c0",
+   "verdict": "PASS"
+  }
+ ],
+ "gpu": {
+  "cand": {
+   "exit_code": 0,
+   "gpu": 0,
+   "gpu_hours": 0.02216209133466085,
+   "shared": true,
+   "wall_seconds": 79.78352880477905
+  },
+  "smoke": {
+   "exit_code": 0,
+   "gpu": 0,
+   "gpu_hours": 0.019321966899765862,
+   "shared": true,
+   "wall_seconds": 69.5590808391571
+  }
+ },
+ "gpu_hours": 0.04148405823442671,
+ "item8": null,
+ "item_set": {
+  "dropped_by_task": {
+   "delichess/communicative_function": 6,
+   "delichess/epistemic_stance": 6,
+   "implicaturex/likelihood": 1,
+   "legal_case_law/argument_function": 20,
+   "narrative_gold/span_is_event": 1
+  },
+  "dropped_items": 34,
+  "gold_items": 2874,
+  "retired_candidates": 555,
+  "retired_sha256": "bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a",
+  "scored_items": 2840,
+  "tasks_emptied": [],
+  "version": "v1.2"
+ },
+ "items": 2840,
+ "label": "JevArena-C1 v1.2, post-key (not an independent validation)",
+ "model": {
+  "adapter_spec": "v2/06b/records/adapters/dev2-06b-causal-8k-sb.json",
+  "identity": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983",
+  "label": "DEV2.0-0.6B",
+  "limit": "8,192 tokens (package limit), over-budget questions invalid, no truncation",
+  "manifest_sha256": "816827dd836d21ab0b7555605fdc56dd5189ee4462a541a84de27de97f637796",
+  "repo": "llm-semantic-router/DEV2.0-0.6B",
+  "revision": "b21313375ad77ddf4a8e420fa5195e6e09582043"
+ },
+ "name": "dev2-0p6b-b2131337",
+ "predictions_sha256": "43403f39a3ad81ee835d9b33c151ab7a87aa8fb84b3be5aa96daa251d60bcd8c",
+ "report_sha256": "b1e4f469761614dd63ccdde8da95405905eac313c9f5d319ecd93f9792081fa6",
+ "role": "current",
+ "schema": "dev2-c1-postkey/1/summary",
+ "seal_sha256": "056026acbad7b51f095f8ad8b5dbbf5b46d067bb6f2048b658bdd73c71eaa3cc",
+ "tier": "0.6B",
+ "use": "successor-rule item 8 only: never training data, never a selection criterion (development or siblings)",
+ "utc": "2026-09-29T16:18:17Z",
+ "valid": 2840
+}

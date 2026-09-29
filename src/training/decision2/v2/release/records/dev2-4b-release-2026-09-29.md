@@ -1,5 +1,37 @@
 # DEV2.0-4B: private release build, upload and verification (2026-09-29)
 
+## BF16 storage revision, 2026-09-30 ≈06:50 UTC+8 — revision `fadbba4f` (current)
+
+- **Revision `fadbba4ff671b4948fb7530fa6748f522b1ac9e4`** (`main`), manifest `d683a54182fb…`. Final decision
+  [`DEV2.0-4B.decision.json`](dev2-bf16-storage-2026-09-30/DEV2.0-4B.decision.json) `d6bcdea2…` supersedes
+  `4d31cdab…`; gate 6 of 6 items. Coordinator note 2026-09-30 06:10 (storage for the ~27B successor).
+- **Weights:** the FP32 backbone of `197b70ca` is stored as its `v2.release.bf16_copy` (Linear projection matrices
+  in BF16 exactly as BF16 autocast rounds them, every other tensor FP32 bit for bit); backbone bytes 16,823,084,504 → 9,684,902,375.
+  Decision head, tokenizer, configs, runtime, vendored sources and card text are unchanged.
+- **Parity:** 0 answer changes, 0 missing, before upload and on the real download: typed-final 1,600, CSS15 6,547 and public 231 with the formal run's cache, and mlx-diag 2,275 with the mlx run's cache (no-upload run); max drift 1.9e-14.
+- **Purge:** the superseded FP32 backbone objects were deleted with `rewrite_history=False`; older revisions' FP32
+  weights now rest on the node-A checkpoint and the per-file SHA-256.
+- Record: [`dev2-bf16-storage-2026-09-30.md`](dev2-bf16-storage-2026-09-30.md).
+
+## C1 card-only revision, 2026-09-30 ≈01:14 UTC+8 — revision `197b70ca` (superseded)
+
+- **Revision `197b70ca90759aca48410a9f94bb534e8ae2919f`** (`main`), manifest `8d3d618de3a6…`. Final decision
+  [`DEV2.0-4B.decision.json`](dev2-c1-card-pass-2026-09-29/DEV2.0-4B.decision.json) `4d31cdab…` supersedes
+  `bfd45785…` below; gate.json `5e62220a…`, 6 of 6 items.
+- **Card:**
+  - The C1 placeholder becomes the event-3 line (v1.2): 48.38 vs Decision 1.0 Nox 49.70 (−1.32 [−3.00, +0.35]),
+    Decider 4B 49.65 (−1.27 [−3.05, +0.49]) and Jet v6.2 50.44 (−2.06 [−3.86, −0.18]).
+  - A new disclosure says plainly that the post-key v3 lead over Nox 1.0 does not carry over to C1 and that Jet v6.2
+    is significantly ahead. It lists the C1 tasks and languages below Nox 1.0 (C1 Noul −3.21 [−6.28, −0.09]) and
+    below Jet v6.2 (Score −6.03 [−9.70, −2.05]).
+  - The JevBench gap to Decider 4B (−21 [−32, −10]) now names the two hard-tier skills: long policy documents (3 vs
+    10 of 19) and checking a quoted person's conclusion (18 vs 30 of 46). The Nox 1.0 comparison gains its interval
+    (−2 [−9, +5]).
+  - The public-231 note is the new one.
+- **Weights:** byte-identical to `452f1332`; only `README.md` and `MODEL_MANIFEST.json` changed. The package runtime
+  and vendored sources are pinned to mirror `f8f52c695`, which built `452f1332`.
+- Record: [`dev2-c1-card-pass-2026-09-29.md`](dev2-c1-card-pass-2026-09-29.md).
+
 ## Released, 2026-09-29 ≈09:09 UTC+8 — revision `452f1332`, in the private "Decision 2.0" collection
 
 The coordinator decided the release at 08:59 UTC+8 under the full-autonomy mandate: T = 1 kept (the 23:15 rule has

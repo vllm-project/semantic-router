@@ -36,6 +36,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable
 
+from v2.common import eval_only
+
 from . import mixture as mix
 from .common import digest, file_sha256, write_json
 
@@ -532,6 +534,7 @@ def main() -> None:
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     specs = [json.loads(p.read_text()) for p in args.spec]
+    eval_only.guard(args, specs)
     if len({s["tokenizer"] for s in specs}) != 1:
         raise ValueError("Specs name different tokenizers")
     inputs = Inputs(parallel_counter(specs[0]["tokenizer"], args.workers))
@@ -543,6 +546,7 @@ def main() -> None:
             if output.exists() or report_path.exists():
                 raise FileExistsError("refusing to overwrite a materialized mixture")
             rows, _, report = build(inputs, spec)
+            eval_only.check_rows(rows)
             pending = output.with_name(output.name + ".pending")
             with pending.open("x", encoding="utf-8") as stream:
                 for row in rows:

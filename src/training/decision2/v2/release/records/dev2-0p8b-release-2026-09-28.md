@@ -11,7 +11,31 @@ Artifact identity rests on the per-file SHA-256 in each package's `MODEL_MANIFES
 not on those staging revision IDs. The released repository was not rewritten: `0b631a85`, `2667d883`, `7d08d0e1` and
 `f458c34c` still resolve (Hub check, 2026-09-29 ≈08:20 UTC+8). Details: [storage steward record](hf-storage-steward-2026-09-29.md) §4.
 
-## Card-only revision (overlap and A7 v3 quarantine disclosures), 2026-09-29 ≈04:45 UTC+8 — current revision `f458c34c`
+## BF16 storage revision, 2026-09-30 ≈06:50 UTC+8 — revision `bede7938` (current)
+
+- **Revision `bede7938a8c209c09f27400b79eed57948d6b75e`** (`main`), manifest `a653dde2f40b…`. Final decision
+  [`DEV2.0-0.8B.decision.json`](dev2-bf16-storage-2026-09-30/DEV2.0-0.8B.decision.json) `a34b2486…` supersedes
+  `a97e063f…`; gate 6 of 6 items. Coordinator note 2026-09-30 06:10 (storage for the ~27B successor).
+- **Weights:** the FP32 backbone of `d4812ac6` is stored as its `v2.release.bf16_copy` (Linear projection matrices
+  in BF16 exactly as BF16 autocast rounds them, every other tensor FP32 bit for bit); backbone bytes 3,009,606,928 → 2,014,377,424.
+  Decision head, tokenizer, configs, runtime, vendored sources and card text are unchanged.
+- **Parity:** 0 answer changes, 0 missing, before upload and on the real download: typed-final 1,600, CSS15 6,547, public 231 and mlx-diag 2,275; max drift 8.9e-16.
+- **Purge:** the superseded FP32 backbone objects were deleted with `rewrite_history=False`; older revisions' FP32
+  weights now rest on the node-A checkpoint and the per-file SHA-256.
+- Record: [`dev2-bf16-storage-2026-09-30.md`](dev2-bf16-storage-2026-09-30.md).
+
+## C1 card-pass revision, 2026-09-30 ≈01:03 UTC+8 — revision `d4812ac6` (superseded)
+
+- **Revision `d4812ac6bb07333ec60d66091f08e1557933aa30`** (`main`), manifest `b568a92a5a21…`. Final decision
+  [`DEV2.0-0.8B.decision.json`](dev2-c1-card-pass-2026-09-29/DEV2.0-0.8B.decision.json) `a97e063f…` supersedes
+  `dd397e04…` below; gate.json `f8e25445…`, 6 of 6 items.
+- **Card:** only the public-231 note under the rank chart changes, to the eval decision of 2026-09-29 17:15 UTC+8. The
+  event-1 C1 line stands; DEV2.0-0.8B was not in event 3.
+- **Weights:** byte-identical to `f458c34c`; only `README.md` and `MODEL_MANIFEST.json` changed. The package runtime
+  and vendored sources are pinned to mirror `33de83cea`, which built `f458c34c`.
+- Record: [`dev2-c1-card-pass-2026-09-29.md`](dev2-c1-card-pass-2026-09-29.md).
+
+## Card-only revision (overlap and A7 v3 quarantine disclosures), 2026-09-29 ≈04:45 UTC+8 — revision `f458c34c` (superseded)
 
 The coordinator ordered this card-only revision after the eval track's overlap-effect check
 (`v2/eval/records/m5-overlap-effects-2026-09-29.md`, integration `cae64f4e8`). It was run by the DEV2.0-2B release

@@ -6,7 +6,10 @@ DEV, the three-task CSS pilot, the private-dataset SELECT/CAL partitions,
 HT-DEV, the 13-task human-annotated transfer panel (v2/eval/htdev/),
 Score5-DEV, the 500-item 5-level Score check (v2/eval/score5.py), and
 Score5-typed-DEV, 800 fresh 5-level typed Score items from the typed FINAL
-generator's Score family in fit / check halves (v2/eval/score5t.py).
+generator's Score family in fit / check halves (v2/eval/score5t.py), and
+HS1-DEV, 2,396 held-out rows of the data track's HS1 hard-skill families
+(v2/data/hs1/; records/hs1-prereg-2026-09-29.md), and HT-DEV v2, 1,944 held-out
+items of nine CSS15 task sources in the formal CSS format (v2/eval/htdev2/).
 
 Layout under a panel root (default ``/data/dev2/private/panels``)::
 
@@ -102,6 +105,20 @@ DEVELOPMENT: dict[str, dict[str, Any]] = {
         "gold_sha256": "31abc1a5d7820e06961a903327c76dc4503b46987f0db58b645e0e6562e08aed",
         "originals": 800,
     },
+    "hs1-dev": {
+        "prompts": "goldfree/hs1-dev.prompts.jsonl",
+        "prompts_sha256": "49f192a700242efe46265c4377a3cedb44dd635e5c5d23db1fc2d1e6fac3f072",
+        "gold": "gold/hs1-dev.gold.jsonl",
+        "gold_sha256": "808dfc01c825acdb7039f81e65ace5bae3ccdbe16e0036ec2258aebb6004d48f",
+        "originals": 2396,
+    },
+    "ht-dev2": {
+        "prompts": "goldfree/ht-dev2.prompts.jsonl",
+        "prompts_sha256": "90cd409a1e091a623362c0e5b227d13b7301bf13fe266f7905e09233cf815f74",
+        "gold": "gold/ht-dev2.gold.jsonl",
+        "gold_sha256": "659c92b45d2a5b37e250ccb728cdbf5580ba361b3fc4b2f2ab505a13e0a556cc",
+        "originals": 1944,
+    },
     "select": {
         "gold": "gold/select.jsonl",
         "gold_sha256": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6",
@@ -191,9 +208,9 @@ def install(root: Path, sources: dict[str, Path]) -> dict[str, str]:
                     raise ValueError(f"{relative} exists with different content")
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
-            os.chmod(target.parent, 0o700 if relative.startswith("gold") else 0o755)
+            os.chmod(target.parent, 0o700 if relative.startswith("gold/") else 0o755)
             shutil.copyfile(source, target)
-            os.chmod(target, 0o600 if relative.startswith("gold") else 0o644)
+            os.chmod(target, 0o600 if relative.startswith("gold/") else 0o644)
             installed[relative] = digest
     return installed
 

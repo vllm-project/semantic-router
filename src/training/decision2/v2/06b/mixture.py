@@ -34,6 +34,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from v2.common import eval_only
+
 from .common import digest, file_sha256, write_json
 
 UNIT = "qwen3-0.6b-base-native-segmented"
@@ -726,7 +728,9 @@ def main() -> None:
     if args.output.exists() or args.report.exists():
         raise FileExistsError("refusing to overwrite a materialized mixture")
     spec = json.loads(args.spec.read_text())
+    eval_only.guard(args, spec)
     rows, _, report = build_s2(spec)
+    eval_only.check_rows(rows)
     pending = args.output.with_name(args.output.name + ".pending")
     with pending.open("x", encoding="utf-8") as stream:
         for row in rows:

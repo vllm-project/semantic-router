@@ -1,0 +1,113 @@
+{
+  "builder_commit": "dcd1ad55dc3229a01a14c15495cdec67f920e4a1",
+  "card": {
+    "excluded": [],
+    "figures_sha256": {
+      "assets/jevarena-v3-model-task.svg": "c7d8799e190ebc38e9db219196d006356c0033e87576357717c5043c403a23d1",
+      "assets/jevarena-v3-rank.svg": "7f8e6dd8a7e5ee26bcf9794686e859cf93b9e70a952b55c7a788bc49161688d0",
+      "assets/jevbench-public231-rank.svg": "4bdeff5d53106f0cd984da33548e529e9be169605b367f09983cf0751e5ff9ce"
+    },
+    "paired": {
+      "ci95": [
+        10.00203051669837,
+        17.49987266238486
+      ],
+      "delta": 12.698059641241464,
+      "replicates": 5000,
+      "sha256": "7b391cb2f5ab08b798e3ba6817dcf269ae0b9fb4843dabe4ac434b8177b77f98"
+    },
+    "readme_sha256": "73e1dacb4cc244030595bb672156ab809b61e6ee61af214e4e58e41b62e2d549",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "b2083796ed0a03728edffb2aa8af5c9c60db38df3ad8182ea5c9e08d6bb6a2ed"
+      },
+      {
+        "key": "kai1",
+        "licence": "apache-2.0",
+        "report_sha256": "1b0140e360d35613d973cf36182978b54a1679e355ba62bc3cc2785714f06716"
+      },
+      {
+        "key": "gliner25",
+        "licence": "apache-2.0",
+        "report_sha256": "7dc5be9242d07a59696e37b8caef1ed18a540ab96dfae547a3ffa2ae445f162d"
+      },
+      {
+        "key": "bosun",
+        "licence": "apache-2.0",
+        "report_sha256": "80c539bfb19116105d15b4e29978f517fb67716bd688f66c7929b6265ed3aade"
+      },
+      {
+        "key": "lex1",
+        "licence": "apache-2.0",
+        "report_sha256": "45f7d5c9c8e35b70e069ffe2400c96b3401dd145994b17779e7897e8c3a4b3a9"
+      }
+    ],
+    "tradeoffs": [
+      "Transfer: mrf (macro-F1): 55.5% versus 56.6%"
+    ]
+  },
+  "ended_utc": "2026-09-29T13:40:34.560069+00:00",
+  "files": 33,
+  "identity": {
+    "architecture": "qwen3-text-endpoints-global-query-shared-bilinear-mlp",
+    "bf16_copy": {
+      "receipt_sha256": "2a991bfb4388d36f4767e8fa843aeb4b77f422aabb603f179fb609768b576c6b",
+      "source_model_sha256": "01fae75098ce29314c5de2990321fcfd31457de7c02bb757bd8345662a823854"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983",
+    "score_bias": {
+      "offsets": {
+        "5": [
+          0.039188,
+          0.203049,
+          0.079362,
+          -0.15162,
+          -0.169979
+        ]
+      },
+      "sha256": "7d3a060fe1823aa7fe759776df3db872408de580f227120fbe08b9eef53dcf6e"
+    },
+    "temperature_by_type": null,
+    "text_parameter_count": 596049920
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "816827dd836d21ab0b7555605fdc56dd5189ee4462a541a84de27de97f637796",
+  "package": "/data/dev2/runs/release/dev2-0p6b-m8-release-20260929T134030Z/package/DEV2.0-0.6B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 597103104,
+    "packaged": {
+      "backbone": 596049920,
+      "head": 1053184,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "3fbe847bca4cde30229797b2d5e7e270640bd69c64e3b6691201c15d9dc82410",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "score_bias": {
+    "file": "score_bias.json",
+    "offsets": {
+      "5": [
+        0.039188,
+        0.203049,
+        0.079362,
+        -0.15162,
+        -0.169979
+      ]
+    },
+    "scored_sha256": "03f0c9c777de95f8ea56112c05a3c29521687609aa67c9c7ca466c14bf8dadae",
+    "sha256": "7d3a060fe1823aa7fe759776df3db872408de580f227120fbe08b9eef53dcf6e"
+  },
+  "screen": {
+    "text_files_screened": 32
+  },
+  "spec_sha256": "9fe7c63797148485a580df833bd6e35bb57cb875fa99fd5de9d6c58e511b86e8",
+  "started_utc": "2026-09-29T13:40:31.103359+00:00"
+}

@@ -1,0 +1,73 @@
+{
+ "checkpoint": "/data/dev2/runs/27b/m4b/A1-soup/checkpoint",
+ "shards": 27,
+ "source_bytes": 102498493512,
+ "bf16copy_tensor_bytes": 53797287936,
+ "allbf16_tensor_bytes": 51249200128,
+ "bf16copy_file_bytes": 53797381192,
+ "fp32_kept": {
+  "embed_tokens.weight": {
+   "tensors": 1,
+   "numel": 1271398400,
+   "bytes": 5085593600
+  },
+  "layers.N.linear_attn.conv1d.weight": {
+   "tensors": 48,
+   "numel": 1966080,
+   "bytes": 7864320
+  },
+  "layers.N.input_layernorm.weight": {
+   "tensors": 64,
+   "numel": 327680,
+   "bytes": 1310720
+  },
+  "layers.N.post_attention_layernorm.weight": {
+   "tensors": 64,
+   "numel": 327680,
+   "bytes": 1310720
+  },
+  "layers.N.linear_attn.norm.weight": {
+   "tensors": 48,
+   "numel": 6144,
+   "bytes": 24576
+  },
+  "norm.weight": {
+   "tensors": 1,
+   "numel": 5120,
+   "bytes": 20480
+  },
+  "layers.N.self_attn.k_norm.weight": {
+   "tensors": 16,
+   "numel": 4096,
+   "bytes": 16384
+  },
+  "layers.N.self_attn.q_norm.weight": {
+   "tensors": 16,
+   "numel": 4096,
+   "bytes": 16384
+  },
+  "layers.N.linear_attn.A_log": {
+   "tensors": 48,
+   "numel": 2304,
+   "bytes": 9216
+  },
+  "layers.N.linear_attn.dt_bias": {
+   "tensors": 48,
+   "numel": 2304,
+   "bytes": 9216
+  }
+ },
+ "dtypes": {
+  "F32": 25624600064
+ },
+ "numel": 25624600064,
+ "other_files": {
+  "backbone/config.json": 2739,
+  "chat_template.jinja": 8952,
+  "combination_manifest.json": 4809,
+  "decision_config.json": 4690,
+  "decision_head.safetensors": 21056376,
+  "tokenizer.json": 19989325,
+  "tokenizer_config.json": 1123
+ }
+}

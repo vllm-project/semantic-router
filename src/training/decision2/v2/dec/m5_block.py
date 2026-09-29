@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from training.model.data import file_sha256
+from v2.common import eval_only
 
 from .build_mixture import row_hashes
 
@@ -599,6 +600,7 @@ def main() -> None:
     parser.add_argument("--template-max-groups", type=int)
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
+    eval_only.guard(args)
     out = args.output_dir
     if (out / "train.jsonl").exists():
         raise FileExistsError(out / "train.jsonl")
@@ -637,6 +639,7 @@ def main() -> None:
     block.compose()
     lines, manifest = block.mixture()
     checks = block.checks(lines, manifest)
+    eval_only.check_rows(json.loads(line) for line in lines)
     out.mkdir(parents=True, exist_ok=True)
     pending = out / "train.jsonl.pending"
     with pending.open("x", encoding="utf-8") as stream:

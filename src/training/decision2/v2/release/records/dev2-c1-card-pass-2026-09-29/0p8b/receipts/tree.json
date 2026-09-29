@@ -1,0 +1,11 @@
+{
+  "differs_from_pre_upload_package": [],
+  "extra": [],
+  "files": 30,
+  "hash_mismatch": [],
+  "manifest_sha256": "b568a92a5a2121f3af741d19628f400d1c247d9f0117724263c55fa072835974",
+  "missing": [],
+  "passed": true,
+  "schema": "dev2-hub-tree/1",
+  "utc": "2026-09-29T17:02:05.558746+00:00"
+}

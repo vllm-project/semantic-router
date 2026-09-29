@@ -1,0 +1,564 @@
+{
+ "code_sha256": {
+  "__init__.py": "4bb4dd78f1443bda5b61bf2a891daacf08e5f80e1a82778ed9fb130280205a5c",
+  "audit.py": "a7025c55bf56e83ae0d4dd3cb35c6d80878acf87e32f2298f7ed6cfa00355b6c",
+  "build.py": "ee10aaf6b0289c890397fbd1c7f2c0e66ce53c9ba1bb80b9820da38911aff83a",
+  "core.py": "74466e5f93b697b16be32c23d2f13b2b994f4c53153502d818ef6fcf63016e23",
+  "f1_base.py": "d6c7e5fa769feac3523cf8d8ef486265cb54b1ef62aa36e80d1d1ad049a81325",
+  "f1_kinds_a.py": "810776175f37abc5983f2bb1a23f9be5a614bcc86ac5f4804dc67180c959a350",
+  "f1_kinds_b.py": "a4b7a940d5a24658638436fd590ea129659bfc978813771d45564fd42f9cf5f0",
+  "f1_quote.py": "3ae141081663a0980e23e027232254cb60d5e039261d6843871816ecf9f5952c",
+  "f2_domains.py": "7e74de34d708c7b494ab3298a0d3b8a5a4a14b6efa4dd1287d761a87927df7b4",
+  "f2_policy.py": "402a70295e179c60f2bfa7104041ab7573c974cdc34349fed47092ca955f0d45",
+  "f3_domains.py": "8737722b028c3721231fab2187acb877064bcc24f5db5a6e28215aa89d7a27ae",
+  "f3_unmet.py": "a5e0dcbbb1e594a9d145c200aa4b6b3865a134d11e4f370e0d90f8eaa1f2d3e3",
+  "validity.py": "a025935f0f6082116c4fc17813b4095bef0f263a79bed9301d1aadfe10e01fca"
+ },
+ "dev": {
+  "hs1_policy_packet": {
+   "approx_tokens_chars_div_4": 782174,
+   "choice_gold_position": {
+    "4": {
+     "0": 30,
+     "1": 30,
+     "2": 28,
+     "3": 28
+    },
+    "5": {
+     "0": 19,
+     "1": 21,
+     "2": 20,
+     "3": 20,
+     "4": 18
+    }
+   },
+   "groups": 239,
+   "interface": {
+    "choice": 214,
+    "noul": 168,
+    "score": 96
+   },
+   "kind": {
+    "grant_funding": 40,
+    "it_access": 38,
+    "leave_policy": 40,
+    "library_lending": 40,
+    "parking_permits": 40,
+    "returns_refund": 40,
+    "travel_expense": 40,
+    "tuition_refund": 80,
+    "venue_booking": 80,
+    "warranty_service": 40
+   },
+   "length_class": {
+    "long": 478
+   },
+   "noul_true_share": 0.5,
+   "rows": 478,
+   "rows_state_ge_3000": 478,
+   "score_levels": {
+    "4": {
+     "0": 18,
+     "1": 20,
+     "2": 26,
+     "3": 16
+    },
+    "5": {
+     "0": 3,
+     "1": 4,
+     "2": 4,
+     "3": 2,
+     "4": 3
+    }
+   },
+   "slice": {
+    "dev-id": 318,
+    "dev-ood": 160
+   },
+   "state_chars": {
+    "max": 11200,
+    "min": 4385,
+    "q10": 4783,
+    "q50": 6072,
+    "q90": 8742
+   },
+   "subtype": {
+    "amendment_in_force": 93,
+    "amendment_not_yet_in_force": 36,
+    "annex_in_scope": 109,
+    "annex_out_of_scope": 19,
+    "cross_reference": 57,
+    "exception_applies": 35,
+    "exception_condition_unmet": 17,
+    "superseded_amendment": 7,
+    "temporary_measure_expired": 9,
+    "temporary_measure_in_force": 82,
+    "temporary_measure_not_yet_in_force": 14
+   },
+   "task_type": {
+    "choice": 214,
+    "noul": 168,
+    "score": 96
+   }
+  },
+  "hs1_quote_check": {
+   "approx_tokens_chars_div_4": 623197,
+   "choice_gold_position": {
+    "3": {
+     "0": 58,
+     "1": 56,
+     "2": 54
+    },
+    "4": {
+     "0": 38,
+     "1": 38,
+     "2": 36,
+     "3": 34
+    },
+    "5": {
+     "0": 16,
+     "1": 16,
+     "2": 16,
+     "3": 16,
+     "4": 12
+    }
+   },
+   "groups": 479,
+   "interface": {
+    "choice": 390,
+    "noul_direct": 242,
+    "noul_verify": 198,
+    "score": 128
+   },
+   "kind": {
+    "applicant_screen": 108,
+    "directory_route": 108,
+    "expense_total": 106,
+    "order_sla": 106,
+    "project_timeline": 106,
+    "rubric_pick": 104,
+    "subscription_bill": 160,
+    "transit_connection": 160
+   },
+   "length_class": {
+    "long": 238,
+    "short": 720
+   },
+   "noul_true_share": 0.4886,
+   "rows": 958,
+   "rows_state_ge_3000": 238,
+   "score_levels": {
+    "4": {
+     "0": 32,
+     "1": 32,
+     "2": 32,
+     "3": 32
+    }
+   },
+   "slice": {
+    "dev-id": 638,
+    "dev-ood": 320
+   },
+   "state_chars": {
+    "max": 7298,
+    "min": 836,
+    "q10": 1209,
+    "q50": 1680,
+    "q90": 5958
+   },
+   "subtype": {
+    "arithmetic_slip": 302,
+    "boundary_misread": 134,
+    "entity_swap": 116,
+    "overlooked_condition": 64,
+    "scope_misapplied": 74,
+    "short_chain": 66,
+    "stale_value": 202
+   },
+   "task_type": {
+    "choice": 390,
+    "noul": 440,
+    "score": 128
+   }
+  },
+  "hs1_unmet_condition": {
+   "approx_tokens_chars_div_4": 367523,
+   "choice_gold_position": {
+    "4": {
+     "0": 30,
+     "1": 31,
+     "2": 30,
+     "3": 29
+    },
+    "5": {
+     "0": 6,
+     "1": 8,
+     "2": 7,
+     "3": 5,
+     "4": 4
+    },
+    "6": {
+     "0": 4,
+     "1": 6,
+     "2": 6,
+     "3": 6,
+     "4": 4,
+     "5": 2
+    },
+    "7": {
+     "0": 2,
+     "1": 4,
+     "2": 3,
+     "3": 2,
+     "4": 2,
+     "5": 1
+    }
+   },
+   "groups": 480,
+   "interface": {
+    "choice": 192,
+    "noul": 672,
+    "score": 96
+   },
+   "kind": {
+    "claim_filing": 160,
+    "club_membership": 80,
+    "equipment_loan": 80,
+    "event_permit": 80,
+    "grant_application": 80,
+    "rental_application": 80,
+    "scholarship": 80,
+    "travel_grant": 80,
+    "vehicle_inspection": 160,
+    "volunteer_clearance": 80
+   },
+   "length_class": {
+    "medium": 288,
+    "short": 672
+   },
+   "noul_true_share": 0.5,
+   "rows": 960,
+   "rows_state_ge_3000": 0,
+   "score_levels": {
+    "4": {
+     "0": 48,
+     "1": 19,
+     "2": 18,
+     "3": 11
+    }
+   },
+   "slice": {
+    "dev-id": 640,
+    "dev-ood": 320
+   },
+   "state_chars": {
+    "max": 2936,
+    "min": 607,
+    "q10": 952,
+    "q50": 1156,
+    "q90": 2405
+   },
+   "subtype": {
+    "before_deadline": 78,
+    "category_match": 90,
+    "count_at_least": 48,
+    "date_window": 96,
+    "document_provided": 86,
+    "maximum": 70,
+    "minimum": 90,
+    "same_party": 84,
+    "signer_role": 80,
+    "two_unmet": 162,
+    "valid_on_date": 76
+   },
+   "task_type": {
+    "choice": 192,
+    "noul": 672,
+    "score": 96
+   }
+  }
+ },
+ "dropped": {
+  "dev_rows": 4,
+  "file_sha256": "f37e42f936f7603c3a57b91b6c22e6415e80f0a77c73942f3a69f43a69347f66",
+  "groups": 18,
+  "train_rows": 32
+ },
+ "files_sha256": {
+  "hs1-dev.gold.jsonl": "808dfc01c825acdb7039f81e65ace5bae3ccdbe16e0036ec2258aebb6004d48f",
+  "hs1-dev.prompts.jsonl": "49f192a700242efe46265c4377a3cedb44dd635e5c5d23db1fc2d1e6fac3f072",
+  "hs1.dev.jsonl": "2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf",
+  "hs1.train.jsonl": "c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71"
+ },
+ "generator": "decision2-hs1",
+ "scale": 1.0,
+ "schema": "decision2.hs1.build.v1",
+ "seconds": 21.1,
+ "sizes": {
+  "hs1_policy_packet": [
+   1200,
+   160,
+   80
+  ],
+  "hs1_quote_check": [
+   3600,
+   320,
+   160
+  ],
+  "hs1_unmet_condition": [
+   5200,
+   320,
+   160
+  ]
+ },
+ "train": {
+  "hs1_policy_packet": {
+   "approx_tokens_chars_div_4": 3966292,
+   "choice_gold_position": {
+    "4": {
+     "0": 135,
+     "1": 136,
+     "2": 135,
+     "3": 132
+    },
+    "5": {
+     "0": 109,
+     "1": 111,
+     "2": 108,
+     "3": 111,
+     "4": 111
+    }
+   },
+   "groups": 1199,
+   "interface": {
+    "choice": 1088,
+    "noul": 832,
+    "score": 478
+   },
+   "kind": {
+    "grant_funding": 300,
+    "it_access": 300,
+    "leave_policy": 300,
+    "library_lending": 300,
+    "parking_permits": 300,
+    "returns_refund": 298,
+    "travel_expense": 300,
+    "warranty_service": 300
+   },
+   "length_class": {
+    "long": 2398
+   },
+   "noul_true_share": 0.5,
+   "rows": 2398,
+   "rows_state_ge_3000": 2398,
+   "score_levels": {
+    "4": {
+     "0": 122,
+     "1": 137,
+     "2": 108,
+     "3": 111
+    }
+   },
+   "slice": {
+    "train": 2398
+   },
+   "state_chars": {
+    "max": 11472,
+    "min": 4415,
+    "q10": 4794,
+    "q50": 5860,
+    "q90": 9462
+   },
+   "subtype": {
+    "amendment_in_force": 469,
+    "amendment_not_yet_in_force": 154,
+    "annex_in_scope": 596,
+    "annex_out_of_scope": 79,
+    "cross_reference": 312,
+    "exception_applies": 148,
+    "exception_condition_unmet": 87,
+    "superseded_amendment": 22,
+    "temporary_measure_expired": 38,
+    "temporary_measure_in_force": 396,
+    "temporary_measure_not_yet_in_force": 97
+   },
+   "task_type": {
+    "choice": 1088,
+    "noul": 832,
+    "score": 478
+   }
+  },
+  "hs1_quote_check": {
+   "approx_tokens_chars_div_4": 4718135,
+   "choice_gold_position": {
+    "3": {
+     "0": 398,
+     "1": 398,
+     "2": 398
+    },
+    "4": {
+     "0": 312,
+     "1": 310,
+     "2": 312,
+     "3": 312
+    },
+    "5": {
+     "0": 100,
+     "1": 104,
+     "2": 104,
+     "3": 98,
+     "4": 100
+    }
+   },
+   "groups": 3589,
+   "interface": {
+    "choice": 2946,
+    "noul_direct": 1852,
+    "noul_verify": 1480,
+    "score": 900
+   },
+   "kind": {
+    "applicant_screen": 1200,
+    "directory_route": 1198,
+    "expense_total": 1200,
+    "order_sla": 1194,
+    "project_timeline": 1188,
+    "rubric_pick": 1198
+   },
+   "length_class": {
+    "long": 1792,
+    "short": 5386
+   },
+   "noul_true_share": 0.4994,
+   "rows": 7178,
+   "rows_state_ge_3000": 1792,
+   "score_levels": {
+    "4": {
+     "0": 230,
+     "1": 230,
+     "2": 220,
+     "3": 220
+    }
+   },
+   "slice": {
+    "train": 7178
+   },
+   "state_chars": {
+    "max": 7464,
+    "min": 1063,
+    "q10": 1323,
+    "q50": 1714,
+    "q90": 5552
+   },
+   "subtype": {
+    "arithmetic_slip": 1860,
+    "boundary_misread": 1052,
+    "entity_swap": 1180,
+    "overlooked_condition": 896,
+    "scope_misapplied": 284,
+    "short_chain": 722,
+    "stale_value": 1184
+   },
+   "task_type": {
+    "choice": 2946,
+    "noul": 3332,
+    "score": 900
+   }
+  },
+  "hs1_unmet_condition": {
+   "approx_tokens_chars_div_4": 3987186,
+   "choice_gold_position": {
+    "4": {
+     "0": 311,
+     "1": 312,
+     "2": 311,
+     "3": 310
+    },
+    "5": {
+     "0": 92,
+     "1": 93,
+     "2": 94,
+     "3": 92,
+     "4": 91
+    },
+    "6": {
+     "0": 41,
+     "1": 41,
+     "2": 41,
+     "3": 40,
+     "4": 39,
+     "5": 40
+    },
+    "7": {
+     "0": 17,
+     "1": 18,
+     "2": 18,
+     "3": 18,
+     "4": 18,
+     "5": 18,
+     "6": 17
+    }
+   },
+   "groups": 5196,
+   "interface": {
+    "choice": 2072,
+    "noul": 7280,
+    "score": 1040
+   },
+   "kind": {
+    "club_membership": 1300,
+    "equipment_loan": 1300,
+    "event_permit": 1300,
+    "grant_application": 1300,
+    "rental_application": 1300,
+    "scholarship": 1300,
+    "travel_grant": 1300,
+    "volunteer_clearance": 1292
+   },
+   "length_class": {
+    "medium": 3116,
+    "short": 7276
+   },
+   "noul_true_share": 0.5,
+   "rows": 10392,
+   "rows_state_ge_3000": 0,
+   "score_levels": {
+    "4": {
+     "0": 520,
+     "1": 177,
+     "2": 155,
+     "3": 188
+    }
+   },
+   "slice": {
+    "train": 10392
+   },
+   "state_chars": {
+    "max": 2989,
+    "min": 561,
+    "q10": 945,
+    "q50": 1153,
+    "q90": 2426
+   },
+   "subtype": {
+    "before_deadline": 832,
+    "category_match": 938,
+    "count_at_least": 888,
+    "date_window": 904,
+    "document_provided": 820,
+    "maximum": 880,
+    "minimum": 838,
+    "same_party": 918,
+    "signer_role": 912,
+    "two_unmet": 1550,
+    "valid_on_date": 912
+   },
+   "task_type": {
+    "choice": 2072,
+    "noul": 7280,
+    "score": 1040
+   }
+  }
+ },
+ "version": "1.0.0"
+}
