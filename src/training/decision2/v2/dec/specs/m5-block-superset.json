@@ -1,0 +1,70 @@
+{
+ "name": "m5-block-superset-v1",
+ "seed": "dec-m5-block-superset-v1",
+ "exclude_families": [
+  "natural_cosmos_qa",
+  "natural_squad2_answerability"
+ ],
+ "exclude_group_ids": {
+  "file": "spec:m4-r2-excluded-groups.json",
+  "sha256": "c265b704bb8ff936ab800e97bf402ff577fac573bc10e10a5b8429ac87dc17b6"
+ },
+ "dedupe_original_hashes": true,
+ "components": [
+  {
+   "name": "A7k",
+   "files": [
+    "xa7:v2/a7/arms/A7k/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/mx-xl-full-r2.ids.jsonl",
+    "sha256": "7843afb7b2bbb315902b6748d6559532f384283d8efd836b935daac5f55dbd4a",
+    "pool": "A7k"
+   }
+  },
+  {
+   "name": "A7q",
+   "files": [
+    "xa7:v2/a7/arms/A7q/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/mx-xl-full-r2.ids.jsonl",
+    "sha256": "7843afb7b2bbb315902b6748d6559532f384283d8efd836b935daac5f55dbd4a",
+    "pool": "A7q"
+   }
+  },
+  {
+   "name": "A7s",
+   "files": [
+    "xa7:v2/a7/arms/A7s/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/mx-xl-full-r2.ids.jsonl",
+    "sha256": "7843afb7b2bbb315902b6748d6559532f384283d8efd836b935daac5f55dbd4a",
+    "pool": "A7s"
+   }
+  },
+  {
+   "name": "H5",
+   "files": [
+    "xv2:m2/arms/H5/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/mx-xl-full-r2.ids.jsonl",
+    "sha256": "7843afb7b2bbb315902b6748d6559532f384283d8efd836b935daac5f55dbd4a",
+    "pool": "H5"
+   }
+  },
+  {
+   "name": "H8",
+   "files": [
+    "xh:m3/arms/H8/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/mx-xl-full-r2.ids.jsonl",
+    "sha256": "7843afb7b2bbb315902b6748d6559532f384283d8efd836b935daac5f55dbd4a",
+    "pool": "H8"
+   }
+  }
+ ]
+}
