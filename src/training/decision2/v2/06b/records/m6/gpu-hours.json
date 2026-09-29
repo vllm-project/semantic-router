@@ -1,0 +1,796 @@
+{
+  "runs": [
+    {
+      "run": "m6-unittest",
+      "gpu": 1,
+      "start_utc": "2026-09-28T19:20:55Z",
+      "end_utc": "2026-09-28T19:21:05Z",
+      "exit": 0,
+      "phase": "data_build"
+    },
+    {
+      "run": "m6-build-mix",
+      "gpu": 0,
+      "start_utc": "2026-09-28T19:21:16Z",
+      "end_utc": "2026-09-28T19:22:16Z",
+      "exit": 0,
+      "phase": "data_build"
+    },
+    {
+      "run": "m6-teacher-merge-cx",
+      "gpu": 0,
+      "start_utc": "2026-09-28T19:24:16Z",
+      "end_utc": "2026-09-28T19:24:24Z",
+      "exit": 0,
+      "phase": "data_build"
+    },
+    {
+      "run": "m6-teacher-merge-mx",
+      "gpu": 1,
+      "start_utc": "2026-09-28T19:24:16Z",
+      "end_utc": "2026-09-28T19:24:24Z",
+      "exit": 0,
+      "phase": "data_build"
+    },
+    {
+      "run": "m6-verify-mix",
+      "gpu": 1,
+      "start_utc": "2026-09-28T19:24:54Z",
+      "end_utc": "2026-09-28T19:26:11Z",
+      "exit": 0,
+      "phase": "data_build"
+    },
+    {
+      "run": "m6-cx-s1-preflight",
+      "gpu": 0,
+      "start_utc": "2026-09-28T19:32:32Z",
+      "end_utc": "2026-09-28T19:33:30Z",
+      "exit": 0,
+      "phase": "preflights"
+    },
+    {
+      "run": "m6-cx-s1-full",
+      "gpu": 0,
+      "start_utc": "2026-09-28T19:33:30Z",
+      "end_utc": "2026-09-28T20:39:42Z",
+      "exit": 0,
+      "phase": "training"
+    },
+    {
+      "run": "m6-cx-s2-full",
+      "gpu": 1,
+      "start_utc": "2026-09-28T19:33:34Z",
+      "end_utc": "2026-09-28T20:41:14Z",
+      "exit": 0,
+      "phase": "training"
+    },
+    {
+      "run": "m6-cx-s1-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T20:39:43Z",
+      "end_utc": "2026-09-28T20:40:23Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s1-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-28T20:40:23Z",
+      "end_utc": "2026-09-28T20:40:59Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s1-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T20:40:59Z",
+      "end_utc": "2026-09-28T20:41:00Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s1-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-28T20:41:00Z",
+      "end_utc": "2026-09-28T20:41:00Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s1-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-28T20:41:00Z",
+      "end_utc": "2026-09-28T20:41:00Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s3-full",
+      "gpu": 0,
+      "start_utc": "2026-09-28T20:41:00Z",
+      "end_utc": "2026-09-28T21:47:28Z",
+      "exit": 0,
+      "phase": "training"
+    },
+    {
+      "run": "m6-cx-s2-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-28T20:41:14Z",
+      "end_utc": "2026-09-28T20:41:59Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s2-css-pilot",
+      "gpu": 1,
+      "start_utc": "2026-09-28T20:41:59Z",
+      "end_utc": "2026-09-28T20:42:40Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s2-score-css",
+      "gpu": 1,
+      "start_utc": "2026-09-28T20:42:40Z",
+      "end_utc": "2026-09-28T20:42:40Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s2-score-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-28T20:42:40Z",
+      "end_utc": "2026-09-28T20:42:40Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s2-readout",
+      "gpu": 1,
+      "start_utc": "2026-09-28T20:42:41Z",
+      "end_utc": "2026-09-28T20:42:41Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s1-preflight",
+      "gpu": 1,
+      "start_utc": "2026-09-28T20:42:41Z",
+      "end_utc": "2026-09-28T20:43:47Z",
+      "exit": 0,
+      "phase": "preflights"
+    },
+    {
+      "run": "m6-mx-s1-full",
+      "gpu": 1,
+      "start_utc": "2026-09-28T20:43:47Z",
+      "end_utc": "2026-09-28T21:49:22Z",
+      "exit": 0,
+      "phase": "training"
+    },
+    {
+      "run": "m6-cx-s3-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T21:47:28Z",
+      "end_utc": "2026-09-28T21:48:06Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s3-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-28T21:48:07Z",
+      "end_utc": "2026-09-28T21:48:44Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s3-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T21:48:45Z",
+      "end_utc": "2026-09-28T21:48:46Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s3-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-28T21:48:46Z",
+      "end_utc": "2026-09-28T21:48:46Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-s3-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-28T21:48:46Z",
+      "end_utc": "2026-09-28T21:48:46Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s2-full",
+      "gpu": 0,
+      "start_utc": "2026-09-28T21:48:46Z",
+      "end_utc": "2026-09-28T22:53:38Z",
+      "exit": 0,
+      "phase": "training"
+    },
+    {
+      "run": "m6-mx-s1-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-28T21:49:22Z",
+      "end_utc": "2026-09-28T21:50:03Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s1-css-pilot",
+      "gpu": 1,
+      "start_utc": "2026-09-28T21:50:03Z",
+      "end_utc": "2026-09-28T21:50:46Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s1-readout",
+      "gpu": 1,
+      "start_utc": "2026-09-28T21:50:47Z",
+      "end_utc": "2026-09-28T21:50:47Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s1-score-css",
+      "gpu": 1,
+      "start_utc": "2026-09-28T21:50:47Z",
+      "end_utc": "2026-09-28T21:50:47Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s1-score-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-28T21:50:47Z",
+      "end_utc": "2026-09-28T21:50:47Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s3-full",
+      "gpu": 1,
+      "start_utc": "2026-09-28T21:50:47Z",
+      "end_utc": "2026-09-28T22:55:20Z",
+      "exit": 0,
+      "phase": "training"
+    },
+    {
+      "run": "m6-cx-soup",
+      "gpu": 0,
+      "start_utc": "2026-09-28T22:06:10Z",
+      "end_utc": "2026-09-28T22:07:02Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m6-cx-soup-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T22:07:02Z",
+      "end_utc": "2026-09-28T22:08:03Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-soup-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-28T22:08:03Z",
+      "end_utc": "2026-09-28T22:09:00Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-soup-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T22:09:00Z",
+      "end_utc": "2026-09-28T22:09:01Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-soup-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-28T22:09:01Z",
+      "end_utc": "2026-09-28T22:09:01Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-cx-soup-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-28T22:09:01Z",
+      "end_utc": "2026-09-28T22:09:01Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-zcx-soup",
+      "gpu": 1,
+      "start_utc": "2026-09-28T22:10:56Z",
+      "end_utc": "2026-09-28T22:12:27Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m6-zcx-soup-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-28T22:12:27Z",
+      "end_utc": "2026-09-28T22:13:25Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-zcx-soup-css-pilot",
+      "gpu": 1,
+      "start_utc": "2026-09-28T22:13:25Z",
+      "end_utc": "2026-09-28T22:14:19Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-zcx-soup-score-css",
+      "gpu": 1,
+      "start_utc": "2026-09-28T22:14:19Z",
+      "end_utc": "2026-09-28T22:14:20Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-zcx-soup-score-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-28T22:14:19Z",
+      "end_utc": "2026-09-28T22:14:19Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-zcx-soup-readout",
+      "gpu": 1,
+      "start_utc": "2026-09-28T22:14:20Z",
+      "end_utc": "2026-09-28T22:14:20Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s2-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T22:53:38Z",
+      "end_utc": "2026-09-28T22:54:17Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s2-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-28T22:54:17Z",
+      "end_utc": "2026-09-28T22:54:55Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s2-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-28T22:54:55Z",
+      "end_utc": "2026-09-28T22:54:55Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s2-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-28T22:54:55Z",
+      "end_utc": "2026-09-28T22:54:55Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s2-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T22:54:55Z",
+      "end_utc": "2026-09-28T22:54:55Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s3-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-28T22:55:20Z",
+      "end_utc": "2026-09-28T22:56:00Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s3-css-pilot",
+      "gpu": 1,
+      "start_utc": "2026-09-28T22:56:00Z",
+      "end_utc": "2026-09-28T22:56:38Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s3-score-css",
+      "gpu": 1,
+      "start_utc": "2026-09-28T22:56:38Z",
+      "end_utc": "2026-09-28T22:56:39Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s3-score-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-28T22:56:38Z",
+      "end_utc": "2026-09-28T22:56:38Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-s3-readout",
+      "gpu": 1,
+      "start_utc": "2026-09-28T22:56:39Z",
+      "end_utc": "2026-09-28T22:56:39Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-soup",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:10:25Z",
+      "end_utc": "2026-09-28T23:11:12Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m6-control-released",
+      "gpu": 1,
+      "start_utc": "2026-09-28T23:10:25Z",
+      "end_utc": "2026-09-28T23:13:39Z",
+      "exit": 0,
+      "phase": "formal"
+    },
+    {
+      "run": "m6-mx-soup-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:11:12Z",
+      "end_utc": "2026-09-28T23:11:52Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-soup-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:11:52Z",
+      "end_utc": "2026-09-28T23:12:28Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-soup-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:12:28Z",
+      "end_utc": "2026-09-28T23:12:29Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-soup-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:12:29Z",
+      "end_utc": "2026-09-28T23:12:29Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mx-soup-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:12:29Z",
+      "end_utc": "2026-09-28T23:12:29Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-control-released-mlx",
+      "gpu": 1,
+      "start_utc": "2026-09-28T23:14:51Z",
+      "end_utc": "2026-09-28T23:15:48Z",
+      "exit": 0,
+      "phase": "formal"
+    },
+    {
+      "run": "m6-mxcx-soup",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:15:43Z",
+      "end_utc": "2026-09-28T23:16:35Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m6-mxcx-soup-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:16:36Z",
+      "end_utc": "2026-09-28T23:17:16Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcx-soup-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:17:16Z",
+      "end_utc": "2026-09-28T23:17:52Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcx-soup-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:17:52Z",
+      "end_utc": "2026-09-28T23:17:53Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcx-soup-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:17:53Z",
+      "end_utc": "2026-09-28T23:17:53Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcx-soup-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:17:53Z",
+      "end_utc": "2026-09-28T23:17:53Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxa-soup",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:20:18Z",
+      "end_utc": "2026-09-28T23:21:33Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m6-mxcxa-soup-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:21:33Z",
+      "end_utc": "2026-09-28T23:22:13Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxa-soup-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:22:13Z",
+      "end_utc": "2026-09-28T23:22:49Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxa-soup-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:22:49Z",
+      "end_utc": "2026-09-28T23:22:50Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxa-soup-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:22:50Z",
+      "end_utc": "2026-09-28T23:22:50Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxa-soup-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:22:50Z",
+      "end_utc": "2026-09-28T23:22:50Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxv-soup",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:24:35Z",
+      "end_utc": "2026-09-28T23:25:50Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m6-mxcxv-soup-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:25:50Z",
+      "end_utc": "2026-09-28T23:26:30Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxv-soup-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:26:30Z",
+      "end_utc": "2026-09-28T23:27:07Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxv-soup-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:27:07Z",
+      "end_utc": "2026-09-28T23:27:08Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxv-soup-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:27:07Z",
+      "end_utc": "2026-09-28T23:27:07Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxv-soup-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:27:08Z",
+      "end_utc": "2026-09-28T23:27:08Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxt-soup",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:29:06Z",
+      "end_utc": "2026-09-28T23:30:15Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m6-mxcxt-soup-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:30:15Z",
+      "end_utc": "2026-09-28T23:31:00Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxt-soup-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:31:00Z",
+      "end_utc": "2026-09-28T23:31:39Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxt-soup-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:31:39Z",
+      "end_utc": "2026-09-28T23:31:40Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxt-soup-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:31:39Z",
+      "end_utc": "2026-09-28T23:31:39Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcxt-soup-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:31:39Z",
+      "end_utc": "2026-09-28T23:31:39Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m6-mxcx-soup-formal",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:40:54Z",
+      "end_utc": "2026-09-28T23:44:19Z",
+      "exit": 0,
+      "phase": "formal"
+    },
+    {
+      "run": "m6-mxcxa-soup-formal",
+      "gpu": 1,
+      "start_utc": "2026-09-28T23:40:57Z",
+      "end_utc": "2026-09-28T23:44:33Z",
+      "exit": 0,
+      "phase": "formal"
+    },
+    {
+      "run": "m6-mxcx-soup-mlx",
+      "gpu": 0,
+      "start_utc": "2026-09-28T23:45:31Z",
+      "end_utc": "2026-09-28T23:46:30Z",
+      "exit": 0,
+      "phase": "formal"
+    },
+    {
+      "run": "m6-mxcxa-soup-mlx",
+      "gpu": 1,
+      "start_utc": "2026-09-28T23:45:45Z",
+      "end_utc": "2026-09-28T23:46:49Z",
+      "exit": 0,
+      "phase": "formal"
+    }
+  ],
+  "per_gpu_hours": {
+    "0": 3.6622,
+    "1": 3.5581
+  },
+  "total_gpu_hours": 7.2203,
+  "summed_run_hours": 7.3244,
+  "phases": {
+    "data_build": {
+      "gpu_hours": 0.0453,
+      "per_gpu_hours": {
+        "0": 0.0189,
+        "1": 0.0264
+      },
+      "runs": 5
+    },
+    "preflights": {
+      "gpu_hours": 0.0344,
+      "per_gpu_hours": {
+        "0": 0.0161,
+        "1": 0.0183
+      },
+      "runs": 2
+    },
+    "training": {
+      "gpu_hours": 6.5889,
+      "per_gpu_hours": {
+        "0": 3.2922,
+        "1": 3.2967
+      },
+      "runs": 6
+    },
+    "readouts": {
+      "gpu_hours": 0.307,
+      "per_gpu_hours": {
+        "0": 0.2064,
+        "1": 0.1006
+      },
+      "runs": 65
+    },
+    "soups": {
+      "gpu_hours": 0.1281,
+      "per_gpu_hours": {
+        "0": 0.1028,
+        "1": 0.0253
+      },
+      "runs": 7
+    },
+    "formal": {
+      "gpu_hours": 0.2208,
+      "per_gpu_hours": {
+        "0": 0.0733,
+        "1": 0.1475
+      },
+      "runs": 6
+    }
+  },
+  "notes": [
+    "Milestone 6, node A GPU0-1, wall-clock occupancy per GPU; overlapping runs on one GPU count once in per_gpu_hours/total_gpu_hours.",
+    "Phase hours are merged within each phase; their sum (7.3245) exceeds the total because soups m6-cx and m6-zcx ran concurrently with training on the same GPU.",
+    "Sources: run_container.sh timing files m6-*.timing.json (data build, preflights, training, readouts, soups) and the formal runner's GPU-TIME.json of m6-control-released, m6-mxcx-soup, m6-mxcxa-soup and their -mlx runs (formal runs renamed *-formal where the soup has the same name).",
+    "Not counted: CPU-only work (staging upload, development contrasts, selection tables); the two formal starts refused by the idle check at 23:37Z ran no GPU job.",
+    "Formal runs of m6-mxcx-soup / m6-mxcxa-soup were recorded co-tenants (shared lease owner.m6-formal) with the eval track's HT-DEV lanes on GPU0 / GPU1.",
+    "Track total before M6 about 21.5; after M6 about 28.7."
+  ]
+}

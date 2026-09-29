@@ -1,0 +1,645 @@
+{
+  "base": {
+    "pool": "A0s-strict",
+    "rows": 6547,
+    "tokens": 3888278
+  },
+  "budget_deviation": -0.000303,
+  "budget_tokens": 30000000,
+  "budget_tolerance": 0.005,
+  "dropped": {
+    "over_cap_groups": {},
+    "repeats_earlier_input": {}
+  },
+  "english_token_share": 0.5481,
+  "family": "m6-cx",
+  "language_tokens": {
+    "ar": 1768,
+    "ca": 44779,
+    "da": 691,
+    "de": 136742,
+    "en": 16439488,
+    "es": 960056,
+    "eu": 15541,
+    "fr": 65947,
+    "hi-en": 651143,
+    "hu": 2649,
+    "id": 3471,
+    "it": 17884,
+    "ja": 223906,
+    "ko": 285173,
+    "pl": 9808,
+    "pt": 31650,
+    "ru": 395728,
+    "sw": 30694,
+    "th": 58967,
+    "tr": 1919,
+    "uk": 37390,
+    "vi": 4711,
+    "zh": 10570801
+  },
+  "max_row_tokens": 8192,
+  "name": "m6-cx-s2",
+  "nonbase_group_keys_sha256": "ad470ca5a4c294bac47b3970e7c16ac49e827957fe378a4b063d8e58113d63c9",
+  "nonbase_groups": 37327,
+  "partition_salt": "m6-partition",
+  "pool_rows": {
+    "A0s-strict": 6547,
+    "A7g": 8522,
+    "A7h": 343,
+    "A7i": 4095,
+    "A7k": 729,
+    "A7m": 2395,
+    "A7o": 7573,
+    "A7p": 2128,
+    "A7q": 7393,
+    "A7r": 1559,
+    "A7s": 4285,
+    "V1:A1": 993,
+    "V1:A2": 1221,
+    "V1:A3": 314,
+    "V1:A4v2h": 381,
+    "V1:A5": 509,
+    "V1:A6g": 1113,
+    "V1:A6h": 1250
+  },
+  "pool_sha256": {
+    "A0s-strict": "df5c76888e4397068ada2444815b50baa7eb6e36fe6c9a1c991ef069b01a7853",
+    "A7g": "cc87e0b7a441774aaacbd34b59425294bf8fd5f1b678f92c9a15fd008dcdfddd",
+    "A7h": "86474b739d8297ebb98ca6ea818c7f6c3cef153a1d778108e6a6723336812718",
+    "A7i": "0b8284b1e08229698e9516be7104fe2b6f7dad79ec25eddc3cd3c1ad48e72e12",
+    "A7k": "8aab25e53e6f3c52e91f0bb45647ec448ba7b408491098285162abddb42577b9",
+    "A7m": "dd9b1ef029f87e9f7c33165002b5dc74e26776ae28edabe503ef85fd7df9b692",
+    "A7o": "dbba002225188fb4dca8f45d15a4801c41a8964d313ee49eba335e2af6355625",
+    "A7p": "cc9217e6128da1910784cb1839127a3edf7e5b90d5c795cd104d78f35f2f137e",
+    "A7q": "c65aac85a7399ebde36039d9de7b8945d8570909e61a3f4a69a7ad5001ac7bfd",
+    "A7r": "0fc421e4937146ae85d66b9c3a039fd2e5b1f344b9aad4bad77d9ea3983a534d",
+    "A7s": "f7eef149493d83e93cca1d5128132477412bbd99239832939fd77a80fb43e6ec",
+    "V1:A1": "b50b43afcb306114f93e37880a021185e4381b97b4e55a84bd0b065d3f36c283",
+    "V1:A2": "2cd61397a01b1bd16fcdfc19bddd7b05c9ddd94320044c23aa600da89b0d8f4c",
+    "V1:A3": "96da839671e64ff3ccf13691522da8311092af4ec2f307474f3807d38a9c17bc",
+    "V1:A4v2h": "32e21294cca16ec34ae4074d17fdd90df61160556e83633005d9eb54b86984f8",
+    "V1:A5": "86868b2d10afb4e98b3798e000e7e80f2b471bdf97b8e565cd6077aaef61be54",
+    "V1:A6g": "ac94b7f4f1e7d8b73ddbffebe15035aa3b47cca9c825f622d0ec8d04bd7fc02f",
+    "V1:A6h": "23440f0c5561077780973259777fca4aa80400f5b30e9df6e1376f6d9aa31927"
+  },
+  "pool_tokens": {
+    "A0s-strict": 3888278,
+    "A7g": 12432859,
+    "A7h": 52908,
+    "A7i": 1582284,
+    "A7k": 191869,
+    "A7m": 456601,
+    "A7o": 3598839,
+    "A7p": 766219,
+    "A7q": 3333472,
+    "A7r": 241710,
+    "A7s": 681837,
+    "V1:A1": 310451,
+    "V1:A2": 495297,
+    "V1:A3": 801661,
+    "V1:A4v2h": 184167,
+    "V1:A5": 114943,
+    "V1:A6g": 523121,
+    "V1:A6h": 334390
+  },
+  "profile": {
+    "families_top12": {
+      "human_goemotions_choice": 1397,
+      "human_goemotions_noul": 1397,
+      "oasst1_creativity": 2135,
+      "oasst1_helpfulness": 2909,
+      "oasst1_quality": 1649,
+      "scoped_sources": 1648,
+      "sentimix_hinglish": 4091,
+      "stage4_boolean": 1508,
+      "stage4_natural_nli": 2395,
+      "stage4_ordinal": 1444,
+      "stage4_registers": 1444,
+      "stage4_scope": 1790
+    },
+    "groups": 42153,
+    "languages": {
+      "ar": 7,
+      "ca": 110,
+      "da": 4,
+      "de": 335,
+      "en": 28654,
+      "es": 2177,
+      "eu": 51,
+      "fr": 177,
+      "hi-en": 4091,
+      "hu": 8,
+      "id": 9,
+      "it": 41,
+      "ja": 1001,
+      "ko": 1003,
+      "pl": 30,
+      "pt": 80,
+      "ru": 692,
+      "sw": 194,
+      "th": 168,
+      "tr": 9,
+      "uk": 50,
+      "vi": 20,
+      "zh": 12439
+    },
+    "max_row_tokens": 7244,
+    "rows": 51350,
+    "score_level_counts": {
+      "10": 60,
+      "2": 158,
+      "3": 6163,
+      "4": 646,
+      "5": 8025,
+      "6": 1191,
+      "7": 403,
+      "8": 365,
+      "9": 171
+    },
+    "task_type_tokens": {
+      "choice": 16762924,
+      "noul": 6817042,
+      "score": 6410940
+    },
+    "task_types": {
+      "choice": 23987,
+      "noul": 10181,
+      "score": 17182
+    },
+    "tokens": 29990906
+  },
+  "qks": {
+    "A7k": {
+      "admissible_groups": 2168,
+      "admissible_tokens": 575921,
+      "part_groups": [
+        720,
+        721,
+        727
+      ],
+      "part_rows": [
+        732,
+        729,
+        729
+      ],
+      "part_tokens": [
+        191870,
+        191869,
+        192182
+      ],
+      "recipe_rows": 2190,
+      "shared_rows": 2190
+    },
+    "A7q": {
+      "admissible_groups": 7339,
+      "admissible_tokens": 10006054,
+      "part_groups": [
+        2494,
+        2430,
+        2415
+      ],
+      "part_rows": [
+        7491,
+        7393,
+        7510
+      ],
+      "part_tokens": [
+        3333422,
+        3333472,
+        3339160
+      ],
+      "recipe_rows": 23530,
+      "shared_rows": 22394
+    },
+    "A7s": {
+      "admissible_groups": 12860,
+      "admissible_tokens": 2045617,
+      "part_groups": [
+        4294,
+        4285,
+        4281
+      ],
+      "part_rows": [
+        4294,
+        4285,
+        4281
+      ],
+      "part_tokens": [
+        681791,
+        681837,
+        681989
+      ],
+      "recipe_rows": 12860,
+      "shared_rows": 12860
+    }
+  },
+  "qks_part_tokens": [
+    4207083,
+    4207178,
+    4213331
+  ],
+  "qks_tokens": 4207178,
+  "recipe": {
+    "name": "cx-xl-r2-a7v1-full",
+    "rows": 191536,
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2"
+  },
+  "rest": {
+    "A7g": {
+      "admissible_groups": 38443,
+      "admissible_tokens": 56000082,
+      "part_groups": [
+        8494,
+        8522,
+        8496
+      ],
+      "part_rows": [
+        8494,
+        8522,
+        8496
+      ],
+      "part_tokens": [
+        12433801,
+        12432859,
+        12429884
+      ],
+      "recipe_rows": 38443,
+      "recipe_tokens": 56000082,
+      "target_tokens": [
+        12434665.5,
+        12434611.5,
+        12431118.6
+      ],
+      "unused_groups": 12931
+    },
+    "A7h": {
+      "admissible_groups": 1450,
+      "admissible_tokens": 238998,
+      "part_groups": [
+        317,
+        328,
+        321
+      ],
+      "part_rows": [
+        343,
+        343,
+        343
+      ],
+      "part_tokens": [
+        52977,
+        52908,
+        52916
+      ],
+      "recipe_rows": 1549,
+      "recipe_tokens": 238998,
+      "target_tokens": [
+        53068.9,
+        53068.6,
+        53053.7
+      ],
+      "unused_groups": 484
+    },
+    "A7i": {
+      "admissible_groups": 17597,
+      "admissible_tokens": 7129197,
+      "part_groups": [
+        3863,
+        3935,
+        3973
+      ],
+      "part_rows": [
+        4019,
+        4095,
+        4141
+      ],
+      "part_tokens": [
+        1582355,
+        1582284,
+        1582417
+      ],
+      "recipe_rows": 18317,
+      "recipe_tokens": 7129197,
+      "target_tokens": [
+        1583018.7,
+        1583011.9,
+        1582567.2
+      ],
+      "unused_groups": 5826
+    },
+    "A7m": {
+      "admissible_groups": 10763,
+      "admissible_tokens": 2056350,
+      "part_groups": [
+        2382,
+        2395,
+        2391
+      ],
+      "part_rows": [
+        2382,
+        2395,
+        2391
+      ],
+      "part_tokens": [
+        456449,
+        456601,
+        456309
+      ],
+      "recipe_rows": 10763,
+      "recipe_tokens": 2056350,
+      "target_tokens": [
+        456606.9,
+        456604.9,
+        456476.7
+      ],
+      "unused_groups": 3595
+    },
+    "A7o": {
+      "admissible_groups": 34569,
+      "admissible_tokens": 16208934,
+      "part_groups": [
+        7660,
+        7573,
+        7689
+      ],
+      "part_rows": [
+        7660,
+        7573,
+        7689
+      ],
+      "part_tokens": [
+        3598844,
+        3598839,
+        3598022
+      ],
+      "recipe_rows": 34569,
+      "recipe_tokens": 16208934,
+      "target_tokens": [
+        3599149.6,
+        3599134.0,
+        3598123.0
+      ],
+      "unused_groups": 11647
+    },
+    "A7p": {
+      "admissible_groups": 9800,
+      "admissible_tokens": 3450897,
+      "part_groups": [
+        2182,
+        2128,
+        2057
+      ],
+      "part_rows": [
+        2182,
+        2128,
+        2057
+      ],
+      "part_tokens": [
+        766130,
+        766219,
+        765884
+      ],
+      "recipe_rows": 9800,
+      "recipe_tokens": 3450897,
+      "target_tokens": [
+        766262.3,
+        766258.9,
+        766043.7
+      ],
+      "unused_groups": 3433
+    },
+    "A7r": {
+      "admissible_groups": 7061,
+      "admissible_tokens": 1089025,
+      "part_groups": [
+        1580,
+        1559,
+        1567
+      ],
+      "part_rows": [
+        1580,
+        1559,
+        1567
+      ],
+      "part_tokens": [
+        241692,
+        241710,
+        241680
+      ],
+      "recipe_rows": 7061,
+      "recipe_tokens": 1089025,
+      "target_tokens": [
+        241815.0,
+        241814.0,
+        241746.1
+      ],
+      "unused_groups": 2355
+    },
+    "V1:A1": {
+      "admissible_groups": 2750,
+      "admissible_tokens": 1398315,
+      "part_groups": [
+        606,
+        603,
+        624
+      ],
+      "part_rows": [
+        983,
+        993,
+        993
+      ],
+      "part_tokens": [
+        310218,
+        310451,
+        310144
+      ],
+      "recipe_rows": 4434,
+      "recipe_tokens": 1398315,
+      "target_tokens": [
+        310492.0,
+        310490.7,
+        310403.5
+      ],
+      "unused_groups": 917
+    },
+    "V1:A2": {
+      "admissible_groups": 2033,
+      "admissible_tokens": 2235494,
+      "part_groups": [
+        452,
+        451,
+        451
+      ],
+      "part_rows": [
+        1201,
+        1221,
+        1197
+      ],
+      "part_tokens": [
+        496003,
+        495297,
+        495160
+      ],
+      "recipe_rows": 5453,
+      "recipe_tokens": 2235494,
+      "target_tokens": [
+        496385.3,
+        496383.2,
+        496243.8
+      ],
+      "unused_groups": 679
+    },
+    "V1:A3": {
+      "admissible_groups": 710,
+      "admissible_tokens": 3617434,
+      "part_groups": [
+        157,
+        157,
+        156
+      ],
+      "part_rows": [
+        314,
+        314,
+        312
+      ],
+      "part_tokens": [
+        802024,
+        801661,
+        801121
+      ],
+      "recipe_rows": 1420,
+      "recipe_tokens": 3617434,
+      "target_tokens": [
+        803241.4,
+        803237.9,
+        803012.2
+      ],
+      "unused_groups": 240
+    },
+    "V1:A4v2h": {
+      "admissible_groups": 1339,
+      "admissible_tokens": 830210,
+      "part_groups": [
+        299,
+        281,
+        322
+      ],
+      "part_rows": [
+        397,
+        381,
+        425
+      ],
+      "part_tokens": [
+        183958,
+        184167,
+        183126
+      ],
+      "recipe_rows": 1792,
+      "recipe_tokens": 830210,
+      "target_tokens": [
+        184345.9,
+        184345.1,
+        184293.3
+      ],
+      "unused_groups": 437
+    },
+    "V1:A5": {
+      "admissible_groups": 2110,
+      "admissible_tokens": 517742,
+      "part_groups": [
+        464,
+        474,
+        470
+      ],
+      "part_rows": [
+        504,
+        509,
+        512
+      ],
+      "part_tokens": [
+        114937,
+        114943,
+        114660
+      ],
+      "recipe_rows": 2298,
+      "recipe_tokens": 517742,
+      "target_tokens": [
+        114963.2,
+        114962.7,
+        114930.4
+      ],
+      "unused_groups": 702
+    },
+    "V1:A6g": {
+      "admissible_groups": 1045,
+      "admissible_tokens": 2369878,
+      "part_groups": [
+        225,
+        253,
+        237
+      ],
+      "part_rows": [
+        1092,
+        1113,
+        1112
+      ],
+      "part_tokens": [
+        524864,
+        523121,
+        523335
+      ],
+      "recipe_rows": 4905,
+      "recipe_tokens": 2369878,
+      "target_tokens": [
+        526224.9,
+        526222.7,
+        526074.8
+      ],
+      "unused_groups": 330
+    },
+    "V1:A6h": {
+      "admissible_groups": 5511,
+      "admissible_tokens": 1505983,
+      "part_groups": [
+        1225,
+        1232,
+        1216
+      ],
+      "part_rows": [
+        1247,
+        1250,
+        1241
+      ],
+      "part_tokens": [
+        334278,
+        334390,
+        334287
+      ],
+      "recipe_rows": 5605,
+      "recipe_tokens": 1505983,
+      "target_tokens": [
+        334399.4,
+        334398.0,
+        334304.0
+      ],
+      "unused_groups": 1838
+    }
+  },
+  "rest_budget_tokens": 21904544,
+  "rest_pool_tokens": 98648539,
+  "rest_tokens": 21895450,
+  "rows_file_sha256": "420fd988f06c0fe5deb4aed72fcc71f3d2a2af414ccea2597d652679ad664489",
+  "seed": 2,
+  "seeds": 3,
+  "shared_with": {
+    "name": "cx-xl-r2-nogap-full",
+    "rows": 340306,
+    "sha256": "4a74a06ebb4ad933485d2417f99f633ed02d7596f31a098ece29aad65b9f3bca"
+  },
+  "spec_sha256": "77a41a2a7dacac6978e057e09b5b7b1a14e25a1bd843b6bc95ad47b22cc1d562",
+  "template": "M6",
+  "train_ids_sha256": "92fffa0249c426a476b7991764128e31132d3d6fa620370ef6b48628e3a97697",
+  "train_rows": 51350,
+  "train_tokens": 29990906,
+  "unit": "qwen3-0.6b-base-native-segmented"
+}

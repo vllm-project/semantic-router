@@ -148,8 +148,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
-| node A GPU0 | 0.6B track (owner) — SHARED from 2026-09-28 22:30 UTC+8 with the DEV2.0-0.6B release worker for short CAL698-calibration / re-score jobs (≤ 30 min; own lease owner entry `owner.release`) |
-| node A GPU1 | 0.6B track (post-release optimization) |
+| node A GPU0–1 | 0.6B track (owner; Milestone 7 from 2026-09-29 08:20 UTC+8). Short shared-lease jobs by eval (e.g., HT-DEV collections) and release workers are allowed as recorded co-tenants with their own lease entries |
 | node A GPU2–4 | ~27B Milestone 3 (moved from the 9B track 2026-09-29 04:30 UTC+8; the 27B track may train on node A — same image + frozen autotune cache per the comparability rule; formal comparisons stay on node B) |
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
 | node A GPU6–7 | 9B track Milestone 4 (2026-09-29 04:30 UTC+8); the eval track may use short shared-lease jobs on any GPU for development-panel scoring |
@@ -191,6 +190,41 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 08:20 — From 0.6B Milestone 6 (gist 03; integration `4cb2afb8c`): no successor; the released DEV2.0-0.6B stands.
+  - `m6-mxcx-soup` (mx ⊕ cx, 6 seeds, XL r2 recipes at ~30M tokens with own-Lux targets on every row): post-key v3 48.46,
+    +4.92 [+2.50, +9.10] vs released, +5.93 [+3.93, +13.58] vs GLiNER2.5-Decide, human transfer −.021 [−.064, +.061], mlx-diag
+    +2.7 — but **typed FINAL Score collapsed** (379 / 400 answers = level 4; accuracy 131 ≈ always-4 128). `m6-mxcxa-soup`
+    (+ gold-label arm a): +3.29 [−1.12, +7.74], no collapse. Plausible cause: Lux distillation on the human Score rows.
+  - **Every track: watch Score level usage when distilling Lux on human-rated Score rows**; typed-DEV Score has 3 levels and
+    typed FINAL has 5, so development readouts can miss a 5-level collapse. **Eval track:** add a 5-level Score check to the
+    development readout (e.g., held-out slices of the 5-level Score arms) and publish it in "Eval runners".
+  - Coordinator: 0.6B Milestone 7 fixes the collapse — (a) a preregistered per-level Score bias correction fitted only on
+    CAL698 + in-family 5-level Score held-out slices, then one formal run; (b) a retrain with gold labels (no Lux targets)
+    on the human Score rows. Successor = paired CI lower bound > 0 vs released, human transfer not worse, no type collapsed.
+  - Storage reminder: HOLD / not-a-successor models are NOT uploaded to HF (04:55); `dev2-staging-06bm6-mxcx` is small and
+    stays, but no further HOLD uploads.
+
+- 2026-09-29 08:05 — **DEV2.0-4B APPROVED for private release** (eval record `m4-dev2-4b-gates-2026-09-29.md`; integration
+  `e1ea4f5c7`). Gates: human transfer vs Decider 4B +0.024 [−0.095, +0.073], vs Jet v6.2 +0.042 [−0.061, +0.093]; v3 vs
+  Decider 4B +1.27 [−5.71, +4.31], vs Jet +2.78 [−3.33, +5.94], vs adopted Nox1 +6.68 [+0.99, +9.64]; no type collapsed
+  (Choice .728, Noul .917, Score .463). No training-row exposure to the 84 flagged items (v3 stays 63.151 without them).
+  **Card disclosures (release worker):** margins over Decider 4B / Jet v6.2 not significant; the gain over Nox 1.0 is typed
+  reasoning (human-transfer gain not significant); typed Choice far below both peers (.728 vs .938 / .900); Score rarely
+  predicts level 0 and level-2 recall drops .30 → .19; public 231 significantly below Decider 4B (171 vs 192, −21 [−32,
+  −10]); mlx-diag Choice / Noul parts only — non-English Choice level (75.1% vs 75.9%), non-English Noul 72.7% vs 80.0%
+  (Korean 63% vs 69%, Japanese 67% vs 77%); CSS15 losses on wiki_corpus, mrf, media_ideology, talklife; long inputs; 4
+  invalid answers; the eval track's evaluation-familiarity sentence (no exposure); peer licence notes (Decider 4B licence
+  from card metadata only; Jet v6.2 Apache-2.0 with LICENSE); calibration decision; C1 placeholder. After release, delete
+  the `m4/N4XF-soup/` staging copy with `rewrite_history=False` (org private storage now has 25.4 GB free).
+  DEV2.0-2B needs no correction (the other 12 excluded rows touch only Decision Bench v4, which is in no reported panel).
+
+- 2026-09-29 07:55 — The 9B Milestone 4 worker's session ended (context exhausted) while its GPU chains kept running (node A
+  GPU6: K-s2; GPU7: P-s1; queued seeds / arms follow). A fresh 9B worker took over (see gist 05); it also uses node B
+  GPU0–2 (assigned to 9B at 07:35, idle until now). Lesson for every worker: keep context lean (delegate monitoring and
+  heavy reads to internal subagents) — two workers have now run out of context mid-milestone.
+- 2026-09-29 07:55 — **~27B track:** node A GPU2–4 have been yours since 04:30 and are idle; use them for your second
+  seeds (same image + frozen autotune cache; formal comparisons stay on node B).
 
 - 2026-09-29 07:35 — **FOURTH RELEASE CANDIDATE: DEV2.0-4B** (decoder M4; gist 04; integration `9b8137e56`).
   - N4XF soup: own Nox 1.0, fine-tuned on a token-matched subsample of mx-xl-full-r2 with own-Lux targets (KL 1.0) on

@@ -1,0 +1,234 @@
+{
+  "artifact": "m6-mx-soup",
+  "artifact_guards_failed": [
+    "score_levels_ge_3"
+  ],
+  "artifact_guards_pass": false,
+  "artifact_is_soup": true,
+  "excluded_seeds": [],
+  "label": "development readout (never a release score)",
+  "median_ambiguous": false,
+  "median_seed": "m6-mx-s1",
+  "rule": "soup if Q(soup) >= seed-mean Q, else the median-Q seed (lower middle if even)",
+  "schema": "dev2-06b-m6-select-seedmean/1",
+  "seed_mean_Q": 41.43581042894467,
+  "seed_sd_Q": 3.0781366697134187,
+  "seeds": [
+    {
+      "H3": 0.36231847673936834,
+      "H_pilot": 0.3143284005904753,
+      "P": 39.4701169928155,
+      "Q": 42.37618376328258,
+      "T_dev": 0.495625,
+      "cal_noul": null,
+      "collapse_stopped": false,
+      "contains_new_family": true,
+      "guards": {
+        "cal_noul_ge_085": null,
+        "choice_ge_255": true,
+        "score_ge_101": true,
+        "score_levels_ge_3": true,
+        "select_noul_ge_085": true
+      },
+      "guards_failed": [
+        "cal_noul_ge_085"
+      ],
+      "guards_pass": false,
+      "in_distribution_source": "BEST.json",
+      "ingredients": [],
+      "name": "m6-mx-s1",
+      "pilot_tasks": {
+        "discourse": 0.3143284005904753,
+        "implicit_hate": 0.2665124015171982,
+        "semeval_stance": 0.5061146281104316
+      },
+      "readout_dir": "/data/dev2/runs/06b/m1/arms/m6-mx-s1/readout",
+      "score_level_counts": {
+        "0": 251,
+        "1": 22,
+        "2": 127
+      },
+      "score_levels": 3,
+      "score_modal_share": 0.6275,
+      "select_noul": {
+        "accuracy": 0.903448275862069,
+        "correct": 262,
+        "n": 290
+      },
+      "typed": {
+        "choice": 396,
+        "noul": 210,
+        "score": 187
+      },
+      "typed_n": {
+        "choice": 800,
+        "noul": 400,
+        "score": 400
+      }
+    },
+    {
+      "H3": 0.40456326997811765,
+      "H_pilot": 0.33022681706763446,
+      "P": 34.32924341447275,
+      "Q": 37.99717318083554,
+      "T_dev": 0.356875,
+      "cal_noul": null,
+      "collapse_stopped": false,
+      "contains_new_family": true,
+      "guards": {
+        "cal_noul_ge_085": null,
+        "choice_ge_255": false,
+        "score_ge_101": true,
+        "score_levels_ge_3": true,
+        "select_noul_ge_085": true
+      },
+      "guards_failed": [
+        "choice_ge_255",
+        "cal_noul_ge_085"
+      ],
+      "guards_pass": false,
+      "in_distribution_source": "BEST.json",
+      "ingredients": [],
+      "name": "m6-mx-s2",
+      "pilot_tasks": {
+        "discourse": 0.33022681706763446,
+        "implicit_hate": 0.30040454529626703,
+        "semeval_stance": 0.5830584475704514
+      },
+      "readout_dir": "/data/dev2/runs/06b/m1/arms/m6-mx-s2/readout",
+      "score_level_counts": {
+        "0": 277,
+        "1": 1,
+        "2": 122
+      },
+      "score_levels": 3,
+      "score_modal_share": 0.6925,
+      "select_noul": {
+        "accuracy": 0.9379310344827586,
+        "correct": 272,
+        "n": 290
+      },
+      "typed": {
+        "choice": 249,
+        "noul": 207,
+        "score": 115
+      },
+      "typed_n": {
+        "choice": 800,
+        "noul": 400,
+        "score": 400
+      }
+    },
+    {
+      "H3": 0.37119286314447814,
+      "H_pilot": 0.3244635764929046,
+      "P": 41.07566916999775,
+      "Q": 43.93407434271589,
+      "T_dev": 0.52,
+      "cal_noul": null,
+      "collapse_stopped": false,
+      "contains_new_family": true,
+      "guards": {
+        "cal_noul_ge_085": null,
+        "choice_ge_255": true,
+        "score_ge_101": true,
+        "score_levels_ge_3": true,
+        "select_noul_ge_085": true
+      },
+      "guards_failed": [
+        "cal_noul_ge_085"
+      ],
+      "guards_pass": false,
+      "in_distribution_source": "BEST.json",
+      "ingredients": [],
+      "name": "m6-mx-s3",
+      "pilot_tasks": {
+        "discourse": 0.3244635764929046,
+        "implicit_hate": 0.31715658973140914,
+        "semeval_stance": 0.4719584232091206
+      },
+      "readout_dir": "/data/dev2/runs/06b/m1/arms/m6-mx-s3/readout",
+      "score_level_counts": {
+        "0": 23,
+        "1": 113,
+        "2": 264
+      },
+      "score_levels": 3,
+      "score_modal_share": 0.66,
+      "select_noul": {
+        "accuracy": 0.9206896551724137,
+        "correct": 267,
+        "n": 290
+      },
+      "typed": {
+        "choice": 415,
+        "noul": 211,
+        "score": 206
+      },
+      "typed_n": {
+        "choice": 800,
+        "noul": 400,
+        "score": 400
+      }
+    }
+  ],
+  "soup": {
+    "H3": 0.3998582039954275,
+    "H_pilot": 0.34061071666501164,
+    "P": 43.06041788981102,
+    "Q": 46.6554187420937,
+    "T_dev": 0.5443749999999999,
+    "cal_noul": {
+      "accuracy": 0.9379310344827586,
+      "correct": 272,
+      "n": 290
+    },
+    "collapse_stopped": false,
+    "contains_new_family": true,
+    "guards": {
+      "cal_noul_ge_085": true,
+      "choice_ge_255": true,
+      "score_ge_101": true,
+      "score_levels_ge_3": false,
+      "select_noul_ge_085": true
+    },
+    "guards_failed": [
+      "score_levels_ge_3"
+    ],
+    "guards_pass": false,
+    "in_distribution_source": "SOUP.json",
+    "ingredients": [
+      "m6-mx-s1",
+      "m6-mx-s2",
+      "m6-mx-s3"
+    ],
+    "name": "m6-mx-soup",
+    "pilot_tasks": {
+      "discourse": 0.34061071666501164,
+      "implicit_hate": 0.3318789571843693,
+      "semeval_stance": 0.5270849381369015
+    },
+    "readout_dir": "/data/dev2/runs/06b/m1/arms/m6-mx-soup/readout",
+    "score_level_counts": {
+      "0": 270,
+      "2": 130
+    },
+    "score_levels": 2,
+    "score_modal_share": 0.675,
+    "select_noul": {
+      "accuracy": 0.9137931034482759,
+      "correct": 265,
+      "n": 290
+    },
+    "typed": {
+      "choice": 502,
+      "noul": 209,
+      "score": 160
+    },
+    "typed_n": {
+      "choice": 800,
+      "noul": 400,
+      "score": 400
+    }
+  }
+}
