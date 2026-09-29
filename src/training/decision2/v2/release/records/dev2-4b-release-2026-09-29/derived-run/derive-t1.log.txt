@@ -1,0 +1,28 @@
+staging copy verified: 14 files
+sealed predictions match: css15 bb788f168933
+sealed predictions match: public231 f59cd4bbc38d
+sealed predictions match: typed-final 7f740c092821
+{"rows": 1600, "answer_changes": 0}
+{"rows": 6547, "answer_changes": 0}
+{"rows": 231, "answer_changes": 0}
+{"rows": 2275, "answer_changes": 0}
+{"seal_sha256": "328cd92745cd536e19fceff70da77336bb4194082728ca96d6da90cab5686ebf", "panels": ["css15", "public231", "typed-final"]}
+{"label": "DEV2.0-4B N4XF soup at T = 1 (derived from the CAL698 run; post-key same-panel)", "v3": {"T": 0.688125, "H": 0.5795593764607849, "score": 63.151349623509844, "formula": "100*sqrt(T*H)"}, "public": 171}
+{"type_macro_accuracy": 0.7700687143544286, "english_type_macro_accuracy": 0.8116065416065417, "non_english_type_macro_accuracy": 0.7631457431457431, "cross_language_consistency": 0.6492307692307693, "invalid_or_missing": 0}
+c966cfc725ea286af29e29b544664372c416a1f1360312757eb76ef03f2e201a  /data/dev2/runs/release/inputs/dev2-4b-t1/derived/css15.predictions.jsonl
+1bf4c8a75778e9b172d85a2d533c688497ae5ff3d2093cf4efc672f504eee7fe  /data/dev2/runs/release/inputs/dev2-4b-t1/derived/css15.retemper.json
+19a095e5c9dd8dc2eb797ce6bd1e0fe5f9e7dc4abfd2eb8a093c192e04c62d40  /data/dev2/runs/release/inputs/dev2-4b-t1/derived/mlx-diag.predictions.jsonl
+15b36d8b75cf6e7ac2f049891e626b24bd8327ea133eceaa5af3bad701045706  /data/dev2/runs/release/inputs/dev2-4b-t1/derived/mlx-diag.retemper.json
+ec085d450e40ae2cdbef1aeaea826c111f4974d097705dce1bd4361b19b7b715  /data/dev2/runs/release/inputs/dev2-4b-t1/derived/public231.predictions.jsonl
+0821e6cae4833ab27122d7bd1ac00603030665a1a268c442adb271f2f592f8c0  /data/dev2/runs/release/inputs/dev2-4b-t1/derived/public231.retemper.json
+003c5cd57b7fced2fd6ab9c22034e9d42903a9089dd1c9986428e44cebf63b19  /data/dev2/runs/release/inputs/dev2-4b-t1/derived/typed-final.predictions.jsonl
+d294d05ff91feed5973e1bb1d37d5248712186121af6498588dc4fc3c5d674ba  /data/dev2/runs/release/inputs/dev2-4b-t1/derived/typed-final.retemper.json
+6d468bcc7a3a33768ec47b3bbb70029bbec00e4feab62a8f4b754217e4e07cbf  /data/dev2/runs/release/dev2-4b-t1-derived/ADOPT.json
+27f1419f9604eaef711abf102952612fcd99a8de7b7a81f03a48010bf07dd186  /data/dev2/runs/release/dev2-4b-t1-derived/PAIRED-vs-adopted-1.0.json
+4694af6cdebee9d0abfa74b1b30a37ef9107b879685fb144a04772c3d6fb529b  /data/dev2/runs/release/dev2-4b-t1-derived/PAIRED-vs-decider4b.json
+36bb1a9b99f1aa37d5cf8de43c7f766dc5fc4b3fd116fccc557f77abf4097cf6  /data/dev2/runs/release/dev2-4b-t1-derived/PAIRED-vs-jet62.json
+7d06609583a8372fbaa0eef7c74a46af0b839867de4155e8c97e135a0aa71c22  /data/dev2/runs/release/dev2-4b-t1-derived/PAIRED-vs-m3-n4lkr.json
+85afe4b4f34bebeb333d8d4fc36be82d9242e939e9f970654de5f517430471ee  /data/dev2/runs/release/dev2-4b-t1-derived/PAIRED-vs-same-limit-16k.json
+57fa23efddef219c83eb39bad58ba2e46c4ff48bd2f1379a1309afe3060102c2  /data/dev2/runs/release/dev2-4b-t1-derived/REPORT.json
+328cd92745cd536e19fceff70da77336bb4194082728ca96d6da90cab5686ebf  /data/dev2/runs/release/dev2-4b-t1-derived/SEAL.json
+77d681c964648af4ee59febb8e6687d91d02e2a0de1fc0ee02e1e9999037998f  /data/dev2/runs/release/dev2-4b-t1-derived-mlx/mlx-diag.score.json

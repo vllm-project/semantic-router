@@ -1,0 +1,46 @@
+import json
+import sys
+from collections import defaultdict
+
+doc = json.load(open(sys.argv[1]))
+priv = [r for r in doc["repos"] if r["private"]]
+pub = [r for r in doc["repos"] if not r["private"]]
+print(f"utc {doc['utc']} repos {len(doc['repos'])} private {len(priv)} "
+      f"private_GB {sum(r['used'] for r in priv) / 1e9:.3f} public_GB {sum(r['used'] for r in pub) / 1e9:.3f} "
+      f"plan {doc.get('org_plan')}")
+for r in sorted(priv, key=lambda r: -r["used"]):
+    if r["used"] > 2e7:
+        print(f"  {r['kind']:7s} {r['used'] / 1e9:8.3f} GB  {r['id']}  last_modified={r['last_modified']}")
+print("collections:")
+for c in doc["collections"]:
+    print(f"  {c['title']!r} private={c['private']} items={[i['id'] for i in c['items']]}")
+
+cited = sys.argv[2].split(",") if len(sys.argv) > 2 else []
+for r in priv:
+    if "lfs" not in r:
+        continue
+    lfs_total = sum(f["size"] for f in r["lfs"])
+    print(f"\n== {r['id']} used {r['used'] / 1e9:.3f} GB, LFS objects {len(r['lfs'])} = {lfs_total / 1e9:.3f} GB, "
+          f"refs {r['refs']}, commits {len(r['commits'])}")
+    kept_paths = defaultdict(set)
+    for ref, t in r["trees"].items():
+        for f in t["files"]:
+            if f["lfs_sha256"]:
+                kept_paths[f["lfs_sha256"]].add(f"{ref}:{f['path']}")
+    groups = defaultdict(lambda: [0, 0, 0, "", "9999"])
+    for f in r["lfs"]:
+        parts = f["filename"].split("/")
+        key = "/".join(parts[:2]) + "/" if len(parts) > 2 else (parts[0] + "/" if len(parts) > 1 else "(root)")
+        g = groups[key]
+        g[0] += 1
+        g[1] += f["size"]
+        g[2] += 0 if f["oid"] in kept_paths else f["size"]
+        g[3] = max(g[3], f["pushed_at"] or "")
+        g[4] = min(g[4], f["pushed_at"] or "9999")
+    for key, (n, size, orphan, newest, oldest) in sorted(groups.items(), key=lambda kv: -kv[1][1]):
+        print(f"   {size / 1e9:8.3f} GB  n={n:3d}  not-at-any-ref={orphan / 1e9:6.3f} GB  pushed {oldest[:16]}..{newest[:16]}  {key}")
+    for c in cited:
+        repo, _, prefix = c.partition("@")
+        if repo == r["id"].split("/")[1]:
+            hit = [x["id"][:12] for x in r["commits"] if x["id"].startswith(prefix)]
+            print(f"   cited commit {c}: {'PRESENT ' + hit[0] if hit else 'MISSING from main history'}")

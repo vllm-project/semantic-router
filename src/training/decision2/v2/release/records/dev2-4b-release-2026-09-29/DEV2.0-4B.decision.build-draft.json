@@ -1,0 +1,21 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-4B",
+  "repo_id": "llm-semantic-router/DEV2.0-4B",
+  "identity": {
+    "model_sha256": "11b5ca1c22f8cd38d67d718cbfa59a3fb4dc8f4e7bfd75b3e988f34e35fad0ad"
+  },
+  "calibration": "none (temperature 1); CAL698 temperatures 176a2f0e (Choice 0.667, Noul 0.496, Score 0.212) evaluated on the development panels and rejected under the 23:15 rule because the CSS-pilot ECE worsens (receipt 5b1d2e37)",
+  "report_sha256": "57fa23efddef219c83eb39bad58ba2e46c4ff48bd2f1379a1309afe3060102c2",
+  "paired_sha256": "27f1419f9604eaef711abf102952612fcd99a8de7b7a81f03a48010bf07dd186",
+  "prepared_by": "Decision 2.0 release engineering, DEV2.0-4B worker (build-time binding draft, T = 1 package)",
+  "decided_by": null,
+  "rationale": "Binding draft for the private build, upload and verification of the uncalibrated (T = 1) DEV2.0-4B package (decoder N4XF soup, staging dev2-dec-staging@e8656221 m4/N4XF-soup, identity 11b5ca1c, qwen-full, 16,384 tokens). The CAL698 temperatures were evaluated on the development panels from the stored development predictions of the same weights: typed-DEV Brier 0.216 -> 0.206 and ECE-10 0.119 -> 0.090 and CSS-pilot Brier-sum 0.609 -> 0.602 improve, but CSS-pilot ECE-15 worsens 0.063 -> 0.068, so the rule (adopt only if none worsens) rejects them; 0 answer changes. It names the T = 1 report derived from the sealed CAL698 run m4-N4XF-soup-nodeA (0 answer changes on all four panels; v3 63.151, public 231 171) and its paired comparison with the adopted Decision 1.0 Nox run: +6.68 [+0.99, +9.64]. It approves nothing: the coordinator writes the final decision.",
+  "pending": [
+    "coordinator decision (status final, decided_by)",
+    "eval-track 4B gate checks (card disclosures relayed by the coordinator)",
+    "JevArena-C1 line (event 3; card-only revision)"
+  ]
+}

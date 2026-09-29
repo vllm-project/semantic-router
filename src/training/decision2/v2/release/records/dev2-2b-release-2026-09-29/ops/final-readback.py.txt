@@ -1,0 +1,26 @@
+"""Readback after finalization: privacy, weights vs the verified revisions, collection membership. Prints no secrets."""
+import json
+import sys
+from pathlib import Path
+
+from huggingface_hub import HfApi
+
+api = HfApi()
+out = {}
+pairs = {"llm-semantic-router/DEV2.0-2B": "b2c5d7eac4ef24648cbf9c23c26421f0960ca542",
+         "llm-semantic-router/DEV2.0-0.8B": "7d08d0e12082ee6810a4221063342cefe45b6ac3"}
+for repo, old in pairs.items():
+    info = api.model_info(repo, files_metadata=True)
+    prev = api.model_info(repo, revision=old, files_metadata=True)
+    cur = {s.rfilename: (s.lfs.sha256 if s.lfs else s.blob_id) for s in info.siblings}
+    was = {s.rfilename: (s.lfs.sha256 if s.lfs else s.blob_id) for s in prev.siblings}
+    changed = sorted(p for p in set(cur) | set(was) if cur.get(p) != was.get(p))
+    weights = [p for p in cur if p.endswith(".safetensors")]
+    out[repo] = {"main": info.sha, "private": info.private, "vs": old,
+                 "safetensors_identical": all(cur[p] == was.get(p) for p in weights) and len(weights) > 0,
+                 "weights": len(weights), "changed_files": changed}
+cols = [c for c in api.list_collections(owner="llm-semantic-router") if c.title == "Decision 2.0"]
+c = api.get_collection(cols[0].slug)
+out["collection"] = {"slug": c.slug, "private": c.private, "items": sorted(i.item_id for i in c.items)}
+json.dump(out, open(sys.argv[1], "x"), indent=1)
+print(json.dumps(out, indent=1))

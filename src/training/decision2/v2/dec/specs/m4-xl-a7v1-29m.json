@@ -1,0 +1,230 @@
+{
+ "name": "m4-xl-a7v1-29m-v1",
+ "seed": "dec-m4-xl-a7v1-29m-v1",
+ "exclude_families": [
+  "natural_cosmos_qa",
+  "natural_squad2_answerability"
+ ],
+ "exclude_group_ids": {
+  "file": "spec:m4-r2-excluded-groups.json",
+  "sha256": "c265b704bb8ff936ab800e97bf402ff577fac573bc10e10a5b8429ac87dc17b6"
+ },
+ "dedupe_original_hashes": true,
+ "components": [
+  {
+   "name": "A0s",
+   "files": [
+    "pk1:m3/pk1/A0s/train.jsonl"
+   ],
+   "ids": {
+    "file": "mx:m2/mixtures/mx-v2-full-M.ids.jsonl",
+    "sha256": "5b8d5d29132f3e175f573c4cd97366ad38c8e53cd66bb46c695e15569eb93f7f",
+    "pool": "A0s"
+   }
+  },
+  {
+   "name": "A7g",
+   "files": [
+    "xa7:v2/a7/arms/A7g/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "A7g"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "A7h",
+   "files": [
+    "xa7:v2/a7/arms/A7h/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "A7h"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "A7i",
+   "files": [
+    "xa7:v2/a7/arms/A7i/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "A7i"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "A7k",
+   "files": [
+    "xa7:v2/a7/arms/A7k/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "A7k"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "A7m",
+   "files": [
+    "xa7:v2/a7/arms/A7m/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "A7m"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "A7o",
+   "files": [
+    "xa7:v2/a7/arms/A7o/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "A7o"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "A7p",
+   "files": [
+    "xa7:v2/a7/arms/A7p/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "A7p"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "A7q",
+   "files": [
+    "xa7:v2/a7/arms/A7q/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "A7q"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "A7r",
+   "files": [
+    "xa7:v2/a7/arms/A7r/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "A7r"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "A7s",
+   "files": [
+    "xa7:v2/a7/arms/A7s/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "A7s"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "V1:A1",
+   "files": [
+    "xv1:v2/arms/A1/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "V1:A1"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "V1:A2",
+   "files": [
+    "xv1:v2/arms/A2/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "V1:A2"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "V1:A3",
+   "files": [
+    "xv1:v2/arms/A3/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "V1:A3"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "V1:A4v2h",
+   "files": [
+    "xv1:v2/arms/A4v2h/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "V1:A4v2h"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "V1:A5",
+   "files": [
+    "xv1:v2/arms/A5/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "V1:A5"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "V1:A6g",
+   "files": [
+    "xv1:v2/arms/A6g/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "V1:A6g"
+   },
+   "budget_fraction": 0.2212304
+  },
+  {
+   "name": "V1:A6h",
+   "files": [
+    "xv1:v2/arms/A6h/train.jsonl"
+   ],
+   "ids": {
+    "file": "xl:m3/mixtures/xl-r2/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "pool": "V1:A6h"
+   },
+   "budget_fraction": 0.2212304
+  }
+ ]
+}

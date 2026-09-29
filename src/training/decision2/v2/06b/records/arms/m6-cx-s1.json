@@ -1,0 +1,60 @@
+{
+  "arm": "m6-cx-s1",
+  "family": "qwen-causal",
+  "start": {
+    "path": "/work/models/Qwen3-0.6B-Base",
+    "repo": "Qwen/Qwen3-0.6B-Base",
+    "revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+    "head_seed": 20260928,
+    "architecture": "official causal endpoint + global query shared head (training.model.decision_model)",
+    "collapse_stop": {
+      "step": 1206,
+      "min_select": 350
+    }
+  },
+  "data": {
+    "parent": "/work/data/hf-private-decision20-clean-v2",
+    "converter_bundle": "/work/models/Decision-1.0-Kai-0.6B",
+    "mixture": {
+      "template": "materialized",
+      "path": "/runs/m6/data/m6-cx-s1.train.jsonl",
+      "sha256": "ad925c379fe4f1c658087d99e88dcd4ac3cfdab372e999b592eb2f6c4e6186fc",
+      "build_spec": "src/training/decision2/v2/06b/records/mixtures/m6-cx-s1.json",
+      "build_report_sha256": "4531e2097ec333816d9e1e7d3290d714ba79df03aaf8e277569af795b515142a",
+      "expected": {
+        "train_rows": 51462,
+        "train_ids_sha256": "7b140700e7fb7cfb33fb5bcbebea9e70d7795f2d76858cf1c846165a81131909"
+      }
+    }
+  },
+  "logical_batch": 16,
+  "max_micro_rows": 8,
+  "micro_token_budget": 32768,
+  "seed": "20260928-06b-m6-s1",
+  "optimizer": {
+    "encoder_lr": 1e-05,
+    "head_lr": 0.0002,
+    "lr_min": 1e-06,
+    "warmup_ratio": 0.1,
+    "weight_decay": 0.01,
+    "clip": 1.0
+  },
+  "loss": {
+    "ce": 1.0,
+    "brier": 0.5,
+    "score_rps": 0.0,
+    "teacher_kl": 1.0
+  },
+  "teacher": {
+    "path": "/runs/m6/data/m6-cx.lux1.jsonl",
+    "sha256": "4be17f3874e0b80e5e7d1680b465241864e2b0f350b612b4277878984629ec74",
+    "format": "option-key",
+    "source": "own Lux1 targets (Decision-1.0-Lux-9B bd45a30a native runtime; package temperature 2.00544 for every type, no rescaling) merged by v2.06b.teacher_merge, restricted to the rows of m6-cx-s1..s3, priority pk1 canonical A0 56627939 > RP-v2 waves 1-4 (47049a6b, 2c6ab38d, 450bdd7b, 084adacd) > XL waves w1-w5 (4a852b74, a659c3e5, 6d141c96, b8ae1374, 0da12210) > c-w1 (1a6b5a80); no id repeated across inputs",
+    "screen": "covers every row of m6-cx-s1..s3 by id and input_sha256 (141,261 rows; m6-verify.json)",
+    "coverage": "full"
+  },
+  "milestones": "eighths",
+  "include_step0_in_best": false,
+  "gpu_hour_cap": 1.8,
+  "max_reserved_gib": 72
+}

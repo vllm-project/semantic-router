@@ -1,0 +1,4 @@
+cd /data/dev2/src/4fd7e3388bf036639d58f96c48cf0d0c1a877a09-src_training_decision2/src/training/decision2 && python3 -B -m v2.release.dev_calibration --label DEV2.0-4B-N4XF-soup --panel-root /data/dev2/private/panels \
+  --typed-dev /data/dev2/runs/dec/m4/soup/N4XF/dev/dev.predictions.jsonl --css-pilot /data/dev2/runs/dec/m4/soup/N4XF/css-pilot/css-pilot.predictions.jsonl \
+  --source-calibration /data/dev2/runs/dec/m4/soup/N4XF/cal698/calibration.json --candidate /data/dev2/runs/dec/m4/stage-cal/N4XF-soup-cal698-16k/calibration.json \
+  --work /data/dev2/runs/release/dev2-4b/devcal-20260928T234549Z/work --output /data/dev2/runs/release/dev2-4b/devcal-20260928T234549Z/dev2-4b.json
