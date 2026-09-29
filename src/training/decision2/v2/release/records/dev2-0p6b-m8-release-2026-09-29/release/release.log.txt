@@ -1,0 +1,21 @@
+13:40:31Z build llm-semantic-router/DEV2.0-0.6B from dcd1ad55dc3229a01a14c15495cdec67f920e4a1-src_training_decision2
+13:40:34Z pre-upload examples (two processes)
+{"mode": "compare", "passed": true}
+13:41:08Z card example (pre-upload)
+13:41:25Z scored-panel parity (pre-upload)
+13:45:08Z ensure private llm-semantic-router/DEV2.0-0.6B
+{"command": "ensure", "passed": true, "repo": "llm-semantic-router/DEV2.0-0.6B"}
+13:45:08Z upload
+{"command": "upload", "passed": true, "repo": "llm-semantic-router/DEV2.0-0.6B", "revision": "b21313375ad77ddf4a8e420fa5195e6e09582043"}
+13:45:15Z real hf download of b21313375ad77ddf4a8e420fa5195e6e09582043
+{"command": "download", "passed": true, "repo": "llm-semantic-router/DEV2.0-0.6B", "revision": "b21313375ad77ddf4a8e420fa5195e6e09582043"}
+{"command": "tree", "passed": true}
+13:45:23Z post-download examples
+{"mode": "compare", "passed": true}
+13:49:58Z readback
+{"command": "readback", "passed": true, "repo": "llm-semantic-router/DEV2.0-0.6B", "revision": "b21313375ad77ddf4a8e420fa5195e6e09582043"}
+13:49:58Z gate seal and collection add
+{"gate": "sealed", "revision": "b21313375ad77ddf4a8e420fa5195e6e09582043"}
+{"command": "collect", "passed": true, "repo": "llm-semantic-router/DEV2.0-0.6B", "revision": "b21313375ad77ddf4a8e420fa5195e6e09582043"}
+{"command": "readback", "passed": true, "repo": "llm-semantic-router/DEV2.0-0.6B", "revision": "b21313375ad77ddf4a8e420fa5195e6e09582043"}
+{"passed": true, "steps": {"build": true, "pre-a": true, "pre-b": true, "repeat-pre": true, "card-pre": true, "parity-pre": true, "ensure": true, "upload": true, "download": true, "tree": true, "post": true, "repeat-post": true, "card-post": true, "parity-post": true, "readback": true, "collect": true, "readback-collected": true}}

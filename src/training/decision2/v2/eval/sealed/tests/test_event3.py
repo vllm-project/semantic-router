@@ -1135,6 +1135,67 @@ class FillC27Test(unittest.TestCase):
         self.assertEqual(self.fill("--revision", "e" * 40, receipt=partial), 2)
 
 
+class ItemSetSummaryTest(unittest.TestCase):
+    def report(self, path: Path, c1: float, item_set: dict | None) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        value = {
+            "c1": c1,
+            "by_type": {"choice": c1},
+            "valid": 10,
+            "items": 10,
+            "slices": {
+                "long_input": {"accuracy": 0.5},
+                "non_english": {"accuracy": 0.4},
+            },
+        }
+        if item_set is not None:
+            value["item_set"] = item_set
+        path.write_text(json.dumps(value))
+        return path
+
+    def test_stored_rows_are_listed_and_rescored_reports_win(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            tmp = Path(name)
+            old = self.report(tmp / "event2/REPORT-C1.json", 33.0, None)
+            row = {"label": "L", "tier": "0.6B", "role": "candidate"}
+            plan = {
+                "schema": event3.SCHEMA,
+                "event": "c1-event3",
+                "selection": ["cand", "stored"],
+                "models": {
+                    "cand": dict(row),
+                    "stored": {**row, "stored": {"report": str(old)}},
+                },
+                "pairs": [],
+            }
+            path = tmp / "PLAN.json"
+            path.write_text(json.dumps(plan))
+            for flag, keys in (("--stored", "stored\0"), ("--collected", "cand\0")):
+                with contextlib.redirect_stdout(io.StringIO()) as out:
+                    self.assertEqual(
+                        event3.main(["keys", "--plan", str(path), flag]), 0
+                    )
+                self.assertEqual(out.getvalue(), keys)
+            event, empty = tmp / "c1-event3", tmp / "preflight"
+            event.mkdir()
+            empty.mkdir()
+
+            def summary(output: str) -> dict:
+                argv = ["summary", "--plan", str(path), "--event-dir", str(event)]
+                argv += ["--preflight-dir", str(empty), "--output", str(tmp / output)]
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(event3.main(argv), 0)
+                return json.loads((tmp / output).read_text())["models"]
+
+            self.assertEqual(summary("a.json")["stored"]["c1"], 33.0)
+            v12 = {"version": "v1.2", "scored_items": 9}
+            self.report(event / "stored/REPORT-C1.json", 31.5, v12)
+            models = summary("b.json")
+            self.assertEqual(models["stored"]["c1"], 31.5)
+            self.assertEqual(models["stored"]["item_set"], v12)
+            self.assertNotIn("cand", models)
+
+
 class ScriptTest(unittest.TestCase):
     text = SCRIPT.read_text()
 
@@ -1168,7 +1229,7 @@ class ScriptTest(unittest.TestCase):
         uses = [
             line.strip()
             for line in before.splitlines()
-            if "$C1" in line and not line.startswith("C1=")
+            if "$C1" in line and not line.startswith(("C1=", "RETIRED="))
         ]
         self.assertEqual(
             uses,
@@ -1199,16 +1260,45 @@ class ScriptTest(unittest.TestCase):
         )
 
     def test_scan_verdict_interlock_precedes_the_key(self) -> None:
-        gate = self.text.index("python3 -m v2.eval.sealed.scanverdict check")
+        gate = self.text.index("python3 -m v2.eval.sealed.scanverdict check-v2")
         self.assertLess(gate, self.text.index("read -r KEY"))
         self.assertLess(gate, self.text.index('mkdir "$E"'))
-        lines = self.text[:gate].splitlines()
-        self.assertEqual(lines[-3], 'if [ "$MODE" = event ]; then')
+        block = self.text.rindex('if [ "$MODE" = event ]; then', 0, gate)
+        self.assertNotIn("\nfi\n", self.text[block:gate])
+        retired = self.text.index('sha256sum <"$RETIRED"')
+        self.assertLess(block, retired)
+        self.assertLess(retired, gate)
+        self.assertIn('--verdict-sha "$SCAN_VERDICT_SHA"', self.text[gate:])
+        self.assertIn('--retired-sha "$RETIRED_SHA"', self.text[gate:])
         self.assertIn(
-            "e37e73f9c1519362bda350ec7d475ed6acf7e47ed1f83dc084b3a5a93247acfc",
+            "36797f509bd96c3cb703df37cc48114c9bbdf0d2241802e56262139f4bef0a1a",
             self.text,
         )
+        self.assertNotIn("scanverdict check --verdict", self.text)
         self.assertLess(self.text.index('log "verify-only: done"'), gate)
+
+    def test_every_score_uses_the_item_set(self) -> None:
+        self.assertIn(
+            'ITEMS=(--retired "$RETIRED" --retired-sha "$RETIRED_SHA")', self.text
+        )
+        scores = [
+            line
+            for line in self.text.splitlines()
+            if "python3 -m v2.eval.sealed.score score" in line
+            or "python3 -m v2.eval.sealed.score compare" in line
+        ]
+        self.assertEqual(len(scores), 3)
+        body = self.text[self.text.index("ITEMS=(") :]
+        for start in ("score score --gold", "score compare --gold"):
+            for at in [m.start() for m in re.finditer(re.escape(start), body)]:
+                self.assertIn(
+                    '"${ITEMS[@]}"',
+                    body[at : body.index("\n", body.index("\n", at) + 1)],
+                )
+        self.assertIn('helper keys --plan "$PLAN" --stored', self.text)
+        self.assertLess(
+            self.text.index("decrypt v1/build-5/gold.jsonl"), self.text.index("ITEMS=(")
+        )
 
     def test_children_never_hold_the_key_descriptor(self) -> None:
         self.assertIn(

@@ -1,5 +1,13 @@
 # DEV2.0-0.6B: private build, upload and verification (2026-09-28)
 
+## Update 2026-09-29 ≈22:00 UTC+8: superseded by revision `b2131337` (successor `m8-s5-b05`)
+
+The current revision is `b21313375ad77ddf4a8e420fa5195e6e09582043` (weights `m6-mxcx-soup` in BF16 storage
+plus five-level Score offsets; final decision `3fbe847b…`): see
+[`dev2-0p6b-m8-release-2026-09-29.md`](dev2-0p6b-m8-release-2026-09-29.md). The weight LFS objects of every
+revision in this record (`7e2d1f9d…`, `70dc7451…`) were purged with `rewrite_history=False`; commits and refs
+are unchanged, and the weights live on node A at `/data/dev2/runs/release/inputs/dev2-0p6b/staging-06bm4-62c61c10/`.
+
 ## Erratum, 2026-09-29 ≈08:25 UTC+8: cited staging revisions no longer exist
 
 Four storage cleanups on 2026-09-29 (decoder M3 at 02:15 and 02:32, release at 04:47, decoder M4 at 04:51 UTC+8)

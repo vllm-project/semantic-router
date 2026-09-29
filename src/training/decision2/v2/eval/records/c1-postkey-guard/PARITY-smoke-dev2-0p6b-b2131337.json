@@ -1,0 +1,45 @@
+{
+ "mode": "exact",
+ "panels": {
+  "public231": {
+   "answers": 231,
+   "answers_by_type": {
+    "choice": 139,
+    "noul": 74,
+    "score": 18
+   },
+   "changed": 0,
+   "identity_expected": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983",
+   "identity_mismatches": 0,
+   "max_probability_drift": 0.0,
+   "missing_in_stored": 0,
+   "mode": "exact",
+   "passed": true,
+   "preflight": "/data/dev2/runs/eval/c1-postkey/0.6B/dev2-0p6b-b2131337-20260929T161232Z/smoke/output/public231.predictions.jsonl",
+   "problems": [],
+   "prompts": 231,
+   "stored_run": "/data/dev2/runs/06b/m8/formal/m8-s5-b05/output/public231.predictions.jsonl"
+  },
+  "typed-final": {
+   "answers": 2000,
+   "answers_by_type": {
+    "choice": 800,
+    "noul": 800,
+    "score": 400
+   },
+   "changed": 0,
+   "identity_expected": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983",
+   "identity_mismatches": 0,
+   "max_probability_drift": 0.0,
+   "missing_in_stored": 0,
+   "mode": "exact",
+   "passed": true,
+   "preflight": "/data/dev2/runs/eval/c1-postkey/0.6B/dev2-0p6b-b2131337-20260929T161232Z/smoke/output/typed-final.predictions.jsonl",
+   "problems": [],
+   "prompts": 1600,
+   "stored_run": "/data/dev2/runs/06b/m8/formal/m8-s5-b05/output/typed-final.predictions.jsonl"
+  }
+ },
+ "passed": true,
+ "schema": "dev2-c1-postkey/1/parity"
+}

@@ -49,6 +49,11 @@ FORBIDDEN = (
 TYPED_N = {"choice": 800, "noul": 800, "score": 400}
 NO_OWN_1_0 = "no-1.0"
 NO_OWN_1_0_TEXT = "There is no Decision 1.0 model at this size."
+PUBLIC231_NOTE = (
+    "JevBench public 231: public-only rerun (about a third of the official Intelligence "
+    "inputs), not the official JevBench score; easy tier at ceiling; totals within about "
+    "10 items are not distinguishable."
+)
 MLX_SCHEMA = "dev2-mlx-diag-score/1"
 # mlx-diag Score is built from XNLI (CC BY-NC 4.0, internal use only); cards show Choice and Noul.
 MLX_CARD_TYPES = ("choice", "noul")
@@ -603,8 +608,8 @@ def render_readme(ctx: dict[str, Any]) -> str:
         "over-budget answers count as failures. JevArena v3 answers were available during development, "
         "so these are post-key same-panel comparisons, not a blind test. T is typed-decision accuracy "
         "(four-family macro), H the median macro-F1 over 15 human-labeled transfer tasks, and "
-        "v3 = 100 × sqrt(T × H). JevBench public 231 is our rerun of the 231 public questions; it is not "
-        "the official sealed JevBench rank."
+        "v3 = 100 × sqrt(T × H). "
+        + PUBLIC231_NOTE
         + mlx_note
         + " Ranks include only the models shown. "
         + (f"{text['comparator_note']} " if text.get("comparator_note") else "")

@@ -1,10 +1,13 @@
 """One-shot JevArena-C1 scoring: seal predictions, score them, compare two packages.
 
-    python3 -m v2.eval.sealed.score seal --prompts <prompts.jsonl> --predictions <preds.jsonl> --output <SEAL-C1.json>
+    python3 -m v2.eval.sealed.score seal --prompts <prompts.jsonl> --predictions <preds.jsonl> \
+        [--post-key] --output <SEAL-C1.json>
     python3 -m v2.eval.sealed.score score --gold <gold.jsonl> --predictions <preds.jsonl> \
-        --seal <SEAL-C1.json> --label <name> --output <REPORT-C1.json>
+        --seal <SEAL-C1.json> --label <name> [--retired <RETIRED.json> --retired-sha <sha256>] \
+        [--post-key] --output <REPORT-C1.json>
     python3 -m v2.eval.sealed.score compare --gold <gold.jsonl> --left <preds> --right <preds> \
-        --left-name A --right-name B --output <PAIRED-C1.json>
+        --left-name A --right-name B [--retired <RETIRED.json> --retired-sha <sha256>] \
+        --output <PAIRED-C1.json>
 
 `seal` reads prompts and predictions only (never gold): every prompt answered exactly once
 from the identical input, with the question keys intact. `score` refuses predictions whose
@@ -16,6 +19,16 @@ wrong. Also reported: per-type means over tasks, per-task macro-F1 and accuracy,
 weighted kappa for Score tasks, and accuracy slices for long inputs (>= 4,000 characters),
 non-English items and NC-licensed sources. `compare` draws a paired bootstrap of the C1
 difference, resampling source groups within each task (5,000 draws, seed 20260927).
+
+With `--retired` (a `dev2-c1-retired/1` list, pinned by `--retired-sha`), `score` and
+`compare` first drop every gold item whose `task|source_item_id` is a retired candidate, so
+C1 and the bootstrap cover that item set (e.g. v1.2), and record it as `item_set`: its
+version, the retired, dropped and scored item counts, the drops per task and the tasks left
+without items.
+
+`--post-key` labels a seal or report of a run collected after the three scoring events as
+"JevArena-C1 v1.2, post-key (not an independent validation)" instead of the independent
+label; `score --post-key` requires the pinned v1.2 retired list.
 """
 
 from __future__ import annotations
@@ -29,7 +42,16 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "dev2-sealed-c1-score/1"
+RETIRED_SCHEMA = "dev2-c1-retired/1"
 LABEL = "independent confirmation (JevArena-C1)"
+POSTKEY_ITEM_SET = "v1.2"
+POSTKEY_LABEL = (
+    f"JevArena-C1 {POSTKEY_ITEM_SET}, post-key (not an independent validation)"
+)
+POSTKEY_RETIRED = Path("/data/dev2/private/sealed/c1/v1_2/RETIRED-v1_2.json")
+POSTKEY_RETIRED_SHA256 = (
+    "bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a"
+)
 REPLICATES = 5000
 SEED = 20260927
 NC_SOURCES = {"hallutruthqa", "innoduel", "wb_reviews"}
@@ -68,6 +90,10 @@ def write_new(path: Path, value: Any) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def label_of(args: argparse.Namespace) -> str:
+    return POSTKEY_LABEL if getattr(args, "post_key", False) else LABEL
+
+
 def seal(args: argparse.Namespace) -> int:
     prompts = {row["id"]: row for row in read_jsonl(args.prompts)}
     seen: set[str] = set()
@@ -92,7 +118,7 @@ def seal(args: argparse.Namespace) -> int:
         seen.add(item_id)
     receipt = {
         "schema": SCHEMA,
-        "label": LABEL,
+        "label": label_of(args),
         "gold_read": False,
         "prompts_sha256": sha_file(args.prompts),
         "predictions_sha256": sha_file(args.predictions),
@@ -245,32 +271,87 @@ def _mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else float("nan")
 
 
+def apply_retired(
+    gold: list[dict[str, Any]], args: argparse.Namespace
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """The gold without the retired candidates, and its item set (None without --retired)."""
+    path, sha = getattr(args, "retired", None), getattr(args, "retired_sha", None)
+    if path is None and sha is None:
+        return gold, None
+    if path is None or sha is None:
+        raise ValueError("--retired and --retired-sha go together")
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != sha:
+        raise ValueError("the retired list differs from --retired-sha")
+    retired = json.loads(raw)
+    if not isinstance(retired, dict) or retired.get("schema") != RETIRED_SCHEMA:
+        raise ValueError(f"the retired list is not {RETIRED_SCHEMA}")
+    candidates = set(retired["candidates"])
+    kept = [
+        row
+        for row in gold
+        if f"{row['task']}|{row['source_item_id']}" not in candidates
+    ]
+    before = Counter(row["task"] for row in gold)
+    after = Counter(row["task"] for row in kept)
+    return kept, {
+        "version": retired["version"],
+        "retired_sha256": sha,
+        "retired_candidates": len(retired["candidates"]),
+        "gold_items": len(gold),
+        "dropped_items": len(gold) - len(kept),
+        "scored_items": len(kept),
+        "dropped_by_task": dict(sorted((before - after).items())),
+        "tasks_emptied": sorted(set(before) - set(after)),
+    }
+
+
 def score(args: argparse.Namespace) -> int:
     sealed = json.loads(args.seal.read_text(encoding="utf-8"))
     if sha_file(args.predictions) != sealed["predictions_sha256"]:
         raise ValueError("predictions changed after the seal")
-    gold = read_jsonl(args.gold)
+    gold, item_set = apply_retired(read_jsonl(args.gold), args)
+    if (
+        getattr(args, "post_key", False)
+        and (item_set or {}).get("retired_sha256") != POSTKEY_RETIRED_SHA256
+    ):
+        raise ValueError(f"--post-key scores item set {POSTKEY_ITEM_SET} only")
+    extra = {} if item_set is None else {"item_set": item_set}
     predictions = {row["id"]: row for row in read_jsonl(args.predictions)}
     report = {
         "schema": SCHEMA,
-        "label": LABEL,
+        "label": label_of(args),
         "model": args.label,
         "seal_sha256": sha_file(args.seal),
         "gold_sha256": sha_file(args.gold),
         **summarize(outcomes(gold, predictions)),
+        **extra,
     }
     digest = write_new(args.output, report)
     print(
         json.dumps(
-            {"c1": report["c1"], "by_type": report["by_type"], "report_sha256": digest}
+            {
+                "c1": report["c1"],
+                "by_type": report["by_type"],
+                "report_sha256": digest,
+                **extra,
+            }
         )
     )
     return 0
 
 
-def paired(
+def interval(values: list[float]) -> list[float]:
+    """Percentile 95% interval: the order statistics at 2.5% and 97.5% of (draws - 1)."""
+    ordered = sorted(values)
+    last = len(ordered) - 1
+    return [ordered[int(0.025 * last)], ordered[int(0.975 * last)]]
+
+
+def paired_draws(
     gold: list[dict[str, Any]], left: dict, right: dict, replicates: int, seed: int
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, Any], list[float], dict[str, list[float]]]:
+    """Both summaries and the bootstrap draws of the C1 difference, overall and per type."""
     rows_left = outcomes(gold, left)
     rows_right = outcomes(gold, right)
     by_task_group: dict[str, dict[str, list[int]]] = defaultdict(
@@ -297,23 +378,24 @@ def paired(
         draws.append(100 * sum(sum(v) for v in per_kind.values()) / len(tasks))
         for kind in kinds:
             type_draws[kind].append(100 * sum(per_kind[kind]) / len(per_kind[kind]))
+    return left_summary, right_summary, draws, type_draws
 
-    def interval(values: list[float]) -> list[float]:
-        ordered = sorted(values)
-        return [
-            ordered[int(0.025 * (replicates - 1))],
-            ordered[int(0.975 * (replicates - 1))],
-        ]
 
+def paired(
+    gold: list[dict[str, Any]], left: dict, right: dict, replicates: int, seed: int
+) -> dict[str, Any]:
+    left_summary, right_summary, draws, type_draws = paired_draws(
+        gold, left, right, replicates, seed
+    )
     return {
         "delta": left_summary["c1"] - right_summary["c1"],
         "ci95": interval(draws),
         "by_type": {
             kind: {
                 "delta": left_summary["by_type"][kind] - right_summary["by_type"][kind],
-                "ci95": interval(type_draws[kind]),
+                "ci95": interval(values),
             }
-            for kind in kinds
+            for kind, values in type_draws.items()
         },
         "replicates": replicates,
         "seed": seed,
@@ -322,7 +404,8 @@ def paired(
 
 
 def compare(args: argparse.Namespace) -> int:
-    gold = read_jsonl(args.gold)
+    gold, item_set = apply_retired(read_jsonl(args.gold), args)
+    extra = {} if item_set is None else {"item_set": item_set}
     left = {row["id"]: row for row in read_jsonl(args.left)}
     right = {row["id"]: row for row in read_jsonl(args.right)}
     result = paired(gold, left, right, args.replicates, SEED)
@@ -335,10 +418,11 @@ def compare(args: argparse.Namespace) -> int:
                 "name": args.right_name,
                 "predictions_sha256": sha_file(args.right),
             },
+            **extra,
         }
     )
     write_new(args.output, result)
-    print(json.dumps({"delta": result["delta"], "ci95": result["ci95"]}))
+    print(json.dumps({"delta": result["delta"], "ci95": result["ci95"], **extra}))
     return 0
 
 
@@ -348,12 +432,16 @@ def main(argv: list[str] | None = None) -> int:
     one = commands.add_parser("seal")
     one.add_argument("--prompts", type=Path, required=True)
     one.add_argument("--predictions", type=Path, required=True)
+    one.add_argument("--post-key", action="store_true")
     one.add_argument("--output", type=Path, required=True)
     two = commands.add_parser("score")
     two.add_argument("--gold", type=Path, required=True)
     two.add_argument("--predictions", type=Path, required=True)
     two.add_argument("--seal", type=Path, required=True)
     two.add_argument("--label", required=True)
+    two.add_argument("--retired", type=Path)
+    two.add_argument("--retired-sha")
+    two.add_argument("--post-key", action="store_true")
     two.add_argument("--output", type=Path, required=True)
     three = commands.add_parser("compare")
     three.add_argument("--gold", type=Path, required=True)
@@ -362,6 +450,8 @@ def main(argv: list[str] | None = None) -> int:
     three.add_argument("--left-name", required=True)
     three.add_argument("--right-name", required=True)
     three.add_argument("--replicates", type=int, default=REPLICATES)
+    three.add_argument("--retired", type=Path)
+    three.add_argument("--retired-sha")
     three.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     return {"seal": seal, "score": score, "compare": compare}[args.command](args)

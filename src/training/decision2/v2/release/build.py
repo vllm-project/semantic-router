@@ -270,6 +270,49 @@ def verify_score_bias(spec: dict[str, Any], model_sha256: str) -> dict[str, Any]
     }
 
 
+BF16_COPY_SCHEMA = "dev2-release-bf16-copy/1"
+
+
+def verify_bf16_copy(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any] | None:
+    """A ``bf16_copy`` spec entry: the checkpoint is exactly that copy of the scored weights.
+
+    Returns the scored (source) identity the copy was made from, so Score offsets
+    can still be bound to the scored run by value.
+    """
+    entry = spec.get("bf16_copy")
+    if not entry:
+        return None
+    path = Path(entry["receipt"])
+    if layout.sha_file(path) != entry["sha256"]:
+        raise ValueError("BF16 copy receipt differs from its pinned sha256")
+    receipt = _object(path)
+    if receipt.get("schema") != BF16_COPY_SCHEMA:
+        raise ValueError("Not a v2.release.bf16_copy receipt")
+    if receipt.get("model_sha256") != spec["expected_identity"].get("model_sha256"):
+        raise ValueError("BF16 copy receipt names another package identity")
+    files = {
+        p.relative_to(checkpoint).as_posix()
+        for p in checkpoint.rglob("*")
+        if p.is_file()
+    }
+    recorded = receipt.get("files") or {}
+    if set(recorded) != files or any(
+        layout.sha_file(checkpoint / name) != value["sha256"]
+        for name, value in recorded.items()
+    ):
+        raise ValueError("Checkpoint is not the BF16 copy its receipt describes")
+    if (
+        spec.get("score_bias")
+        and (receipt.get("score_bias") or {}).get("sha256")
+        != spec["score_bias"]["sha256"]
+    ):
+        raise ValueError("BF16 copy receipt names other Score offsets")
+    return {
+        "receipt_sha256": entry["sha256"],
+        "source_model_sha256": receipt["source_model_sha256"],
+    }
+
+
 def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
     from training.model.calibration import load_calibration
     from training.model.infer import checkpoint_fingerprint
@@ -311,6 +354,9 @@ def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
     }
     if score_bias is not None:
         result["score_bias"] = score_bias
+    bf16 = verify_bf16_copy(spec, checkpoint)
+    if bf16 is not None:
+        result["bf16_copy"] = bf16
     if adapter:
         contract = metadata["lora"]
         base = spec["base"]
@@ -483,12 +529,17 @@ def check_scored_score_bias(
         return None
     if score_bias is None:
         raise ValueError("Score offsets are not verified against the checkpoint")
+    scored_identity = spec["expected_identity"].get("model_sha256")
+    if spec.get("bf16_copy"):
+        scored_identity = _object(Path(spec["bf16_copy"]["receipt"]))[
+            "source_model_sha256"
+        ]
     if (
         not isinstance(scored_sha, str)
         or not isinstance(scored_entry, dict)
         or scored_entry.get("file_sha256") != scored_sha
         or scored_entry.get("offsets") != score_bias["offsets"]
-        or native.get("model_sha256") != spec["expected_identity"].get("model_sha256")
+        or native.get("model_sha256") != scored_identity
     ):
         raise ValueError("Score offsets differ from the ones the scored run applied")
     return scored_sha
