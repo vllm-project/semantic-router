@@ -1,0 +1,5942 @@
+{
+  "bootstrap": {
+    "htdev": "v2.eval.htdev.score item bootstrap (2,000 draws, seed 20260929)",
+    "typed_pilot_draws": 1000,
+    "typed_pilot_unit": "typed DEV groups within family; CSS pilot items within task"
+  },
+  "created_utc": "2026-09-29T00:33:39.001220+00:00",
+  "formal_H_item_sd": "not computed: it needs css15 gold and items (no v3 item is re-read)",
+  "models": [
+    {
+      "development": {
+        "H_mean3": 0.22879989901516384,
+        "H_pilot": 0.1747724616271218,
+        "T_dev": 0.265625,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/kai1/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "e0b2be0f328304452ea2dbd01832595d4b7652397cf88cf546c1106c05895f58",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1-adopt/kai1/REPORT.json",
+          "report_sha256": "1b0140e360d35613d973cf36182978b54a1679e355ba62bc3cc2785714f06716",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/kai1/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "43142e262212c92140d196ee67fcab9adb21955add74df4bbc54610f86d6e57d",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.00824411596392002,
+          "H_pilot": 0.013441843995037374,
+          "P": 0.9519756695074498,
+          "T_dev": 0.011579125614656748
+        },
+        "pilot_invalid": 22,
+        "pilot_tasks": {
+          "discourse": 0.10683564981782472,
+          "implicit_hate": 0.1747724616271218,
+          "semeval_stance": 0.40479158560054507
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.3569073805666865,
+        "T_formal": 0.361875,
+        "css15_task_mean": 0.3178505025370043,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1-adopt/kai1/REPORT.json",
+        "report_sha256": "1b0140e360d35613d973cf36182978b54a1679e355ba62bc3cc2785714f06716",
+        "v3": 35.93826071787137
+      },
+      "group": "own 1.0",
+      "htdev": {
+        "H_dev": 0.3780027453671929,
+        "H_dev_ci95": [
+          0.3464340650403237,
+          0.41441192201995614
+        ],
+        "H_dev_mean": 0.37261179266810623,
+        "H_dev_sd": 0.017499141375110182,
+        "by_type_mean": {
+          "choice": 0.31591454325211804,
+          "noul": 0.48565850744853684,
+          "score": 0.175214771866785
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "92d3b8b6589d1b6d86b5fe8f7251afb6755120247370277c434228183271afb6",
+        "score_qwk_mean": -0.002768155672377537,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.4521272576135419,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.36617053042041053,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.1270825906120024,
+            "n": null,
+            "qwk": 0.051188299817184646,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.39938324727481356,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.2233469531215676,
+            "n": null,
+            "qwk": -0.05672461116193972,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.3333333333333333,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.4997662459093034,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.25903584628715937,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.24303026085249405,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.5062224006423124,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.3780027453671929,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.5686046710290273,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.4878472222222222,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "kai1",
+      "label": "Decision 1.0 Kai",
+      "proxies": {
+        "P": 21.54621431242719,
+        "P_HT": 31.68706033038733,
+        "P_HT_mean": 31.46029361392956
+      },
+      "tier": "0.6B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.23066558804320378,
+        "H_pilot": 0.16942434098460046,
+        "T_dev": 0.384375,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/lex/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "7fff3b334af810bf11a8a0b9b7ebf28b13dc51ce2802d7e6221a8cc78141114c",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1/r3-lex/REPORT.json",
+          "report_sha256": "45f7d5c9c8e35b70e069ffe2400c96b3401dd145994b17779e7897e8c3a4b3a9",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/lex/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "d720a67ba2aeec615d0a82e1ea8a1102ff23f1ac24577327ea789c4fa125f35d",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.009102455466546125,
+          "H_pilot": 0.015859070770923155,
+          "P": 1.256003159043823,
+          "T_dev": 0.010889100036705283
+        },
+        "pilot_invalid": 22,
+        "pilot_tasks": {
+          "discourse": 0.16942434098460046,
+          "implicit_hate": 0.13379209420835564,
+          "semeval_stance": 0.38878032893665526
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.26594675494461595,
+        "T_formal": 0.361875,
+        "css15_task_mean": 0.3018674001714662,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1/r3-lex/REPORT.json",
+        "report_sha256": "45f7d5c9c8e35b70e069ffe2400c96b3401dd145994b17779e7897e8c3a4b3a9",
+        "v3": 31.02248893070685
+      },
+      "group": "own 1.0",
+      "htdev": {
+        "H_dev": 0.3932038834951456,
+        "H_dev_ci95": [
+          0.3671140376239286,
+          0.4144862537507852
+        ],
+        "H_dev_mean": 0.3629794145419027,
+        "H_dev_sd": 0.012061342947694157,
+        "by_type_mean": {
+          "choice": 0.3260539882886795,
+          "noul": 0.4391272293995088,
+          "score": 0.22684953560214227
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "226cb9e8a1c35e84fc71d80d7c0cad4dd354460d3e4ccd192a4a69f61acc934c",
+        "score_qwk_mean": 0.13500344625024047,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.3932038834951456,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.3316040580827178,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.09071537290715373,
+            "n": null,
+            "qwk": 0.0013586956521739468,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.42687221742308457,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.36298369829713084,
+            "n": null,
+            "qwk": 0.268648196848307,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.4074116898884199,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.3794539194491152,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.22013200360538482,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.21340160163158076,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.47970030737704916,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.45772058823529416,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.5125496313102667,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.4429834173423917,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "lex",
+      "label": "Decision 1.0 Lex",
+      "proxies": {
+        "P": 25.51910677628741,
+        "P_HT": 38.87643794362423,
+        "P_HT_mean": 37.35240453632722
+      },
+      "tier": "0.6B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.25848210320491904,
+        "H_pilot": 0.20514125561639546,
+        "T_dev": 0.455625,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/bosun06/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "cd90ec80776b30b8eb86d0ea5a053c3f81e7f9ad54269009d00181d0b3334667",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1-adopt/bosun/REPORT.json",
+          "report_sha256": "80c539bfb19116105d15b4e29978f517fb67716bd688f66c7929b6265ed3aade",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/bosun06/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "57462301f38b8ef6ab7a818ec23ad69006a701cc42b98280dc30dbea6b1deae2",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.01207340516001893,
+          "H_pilot": 0.019084610972392273,
+          "P": 1.471036951600168,
+          "T_dev": 0.011201994643114903
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.15063479783491207,
+          "implicit_hate": 0.20514125561639546,
+          "semeval_stance": 0.4196702561634496
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.3421611068669892,
+        "T_formal": 0.43375,
+        "css15_task_mean": 0.34624435930909164,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1-adopt/bosun/REPORT.json",
+        "report_sha256": "80c539bfb19116105d15b4e29978f517fb67716bd688f66c7929b6265ed3aade",
+        "v3": 38.524327392383704
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.39050623834791337,
+        "H_dev_ci95": [
+          0.3556570268899036,
+          0.4266828544448941
+        ],
+        "H_dev_mean": 0.3941797839606932,
+        "H_dev_sd": 0.01778350082451349,
+        "by_type_mean": {
+          "choice": 0.3482034872600891,
+          "noul": 0.4847986097893821,
+          "score": 0.23726404822613673
+        },
+        "invalid": 3,
+        "items": 3240,
+        "report_sha256": "7a9ebb98b526c3e34104d2f79d43c2bb4f41d35d97bf7c465f34764dae7c690f",
+        "score_qwk_mean": 0.16241673986239197,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.48616600790513836,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.32700475816412616,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.17145447517306814,
+            "n": null,
+            "qwk": 0.08051529790660228,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.39050623834791337,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.3030736212792053,
+            "n": null,
+            "qwk": 0.24431818181818166,
+            "type": "score",
+            "valid": 249
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.47916666666666663,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.573268921095008,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.2686183897859933,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.2924346237295878,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.5061722315243442,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.3737929979540718,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.40542551261114135,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.5472527472527472,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3237
+      },
+      "key": "bosun06",
+      "label": "Bosun v3.1 0.6B",
+      "proxies": {
+        "P": 30.57245240248485,
+        "P_HT": 42.18108638326756,
+        "P_HT_mean": 42.37902359270336
+      },
+      "tier": "0.6B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.38048673645719117,
+        "H_pilot": 0.31034826644581387,
+        "T_dev": 0.40750000000000003,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/gliner25/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "4b456dbaaa127f00c5752578aab6f85d43a710fe5ba1b199a6a2d10121cb242b",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1/p1-gliner25/REPORT.json",
+          "report_sha256": "7dc5be9242d07a59696e37b8caef1ed18a540ab96dfae547a3ffa2ae445f162d",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/gliner25/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "8c0111f6c89603e3fc3ae1878ae195873f0310ecfcf07050468900b50aa95f13",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.01223340304359026,
+          "H_pilot": 0.016816967204190045,
+          "P": 1.0861450856223387,
+          "T_dev": 0.011280913014357482
+        },
+        "pilot_invalid": 67,
+        "pilot_tasks": {
+          "discourse": 0.31034826644581387,
+          "implicit_hate": 0.29967156822297353,
+          "semeval_stance": 0.531440374702786
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.4410489455803001,
+        "T_formal": 0.41,
+        "css15_task_mean": 0.3591704966285791,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1/p1-gliner25/REPORT.json",
+        "report_sha256": "7dc5be9242d07a59696e37b8caef1ed18a540ab96dfae547a3ffa2ae445f162d",
+        "v3": 42.52411876663913
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.4260943877487724,
+        "H_dev_ci95": [
+          0.3659043659043659,
+          0.45473031699437516
+        ],
+        "H_dev_mean": 0.3994606091024667,
+        "H_dev_sd": 0.022602111538841174,
+        "by_type_mean": {
+          "choice": 0.38506264937174084,
+          "noul": 0.45991533784457567,
+          "score": 0.25409132220295483
+        },
+        "invalid": 188,
+        "items": 3240,
+        "report_sha256": "44e0c3b8cdac966d88c332b6446da421f10901ae2c3588966982eff288ca1d26",
+        "score_qwk_mean": 0.16324317944884825,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.5074607583489439,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.4260943877487724,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.24793453221604994,
+            "n": null,
+            "qwk": 0.16000000000000003,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.591973886328725,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.26024811218985977,
+            "n": null,
+            "qwk": 0.16648635889769647,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.4270511568584468,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.4787826212679823,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 170
+          },
+          "implicature/circa": {
+            "macro_f1": 0.3104899522511396,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.1839750472976428,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.2751405101599654,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 142
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.5777027027027026,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.5402298850574713,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.3659043659043659,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3052
+      },
+      "key": "gliner25",
+      "label": "GLiNER2.5-Decide",
+      "proxies": {
+        "P": 35.562187584099654,
+        "P_HT": 41.66934880792172,
+        "P_HT_mean": 40.346028083227125
+      },
+      "tier": "0.6B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.38550010349733244,
+        "H_pilot": 0.3188362618567685,
+        "T_dev": 0.33625,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/06b-m4-t-a7-soup/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "d2c83c8dd50a43b6792915e6164d2c3f4f5aa28f7858e4705e02d5dd184c77cd",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup/REPORT.json",
+          "report_sha256": "72cf01def4ac987919cd4f13b144652da5fd37a9cdf2c92487bd9c76736bbaa9",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/06b-m4-t-a7-soup/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "f8ee0a874724ade1670476f41a902f2d870ec7cc0a3ad75a48d8770e34fcd8a2",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012385795927200084,
+          "H_pilot": 0.018268292752796088,
+          "P": 1.0824587486771204,
+          "T_dev": 0.011635298378613889
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.2984678131410807,
+          "implicit_hate": 0.3188362618567685,
+          "semeval_stance": 0.5391962354941482
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.4795852456229815,
+        "T_formal": 0.3953125,
+        "css15_task_mean": 0.42636322462263126,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup/REPORT.json",
+        "report_sha256": "72cf01def4ac987919cd4f13b144652da5fd37a9cdf2c92487bd9c76736bbaa9",
+        "v3": 43.54147935134208
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.4520562977011515,
+        "H_dev_ci95": [
+          0.3894627271999359,
+          0.4736842105263158
+        ],
+        "H_dev_mean": 0.41328080174330384,
+        "H_dev_sd": 0.021520411703661847,
+        "by_type_mean": {
+          "choice": 0.413369761960508,
+          "noul": 0.48369400099114457,
+          "score": 0.20181880345677167
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "2c75d83158f01443ab6cf941c9864130d452b171db2e00ce16f7713c80fd48f7",
+        "score_qwk_mean": 0.05891798886031152,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.5619183722077612,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5027918633652594,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.14570148316272305,
+            "n": null,
+            "qwk": -0.0023419203747072626,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.3638676844783715,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.25793612375082026,
+            "n": null,
+            "qwk": 0.1201778980953303,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.3606892753167047,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.5130221484741361,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.4520562977011515,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.29694629405434486,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.3816734029076431,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.45436507936507936,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.5957145744895896,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.48596782338936584,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "06b-m4-t-a7-soup",
+      "label": "DEV2.0-0.6B (T soup)",
+      "proxies": {
+        "P": 32.74273859183718,
+        "P_HT": 38.987681400926135,
+        "P_HT_mean": 37.27809941321927
+      },
+      "tier": "0.6B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.3346447422188509,
+        "H_pilot": 0.341786411793267,
+        "T_dev": 0.460625,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/06b-m4-v2-soup/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "22ff37fc94a99a134adffd43b6aa6f46df979509c45657285bd14f32c7804382",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/06b/m4/formal/m4-v2-soup/REPORT.json",
+          "report_sha256": "60deeee9eb027f0ac246780c5d5064439c6cab22b366e5f057c937d1b7bed698",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/06b-m4-v2-soup/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "d66e158f6064b4bf237662175fc7b9bcd62759a1804ef22b4d1d510edaddf221",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.011291398804117453,
+          "H_pilot": 0.015179624557954631,
+          "P": 1.001231626667694,
+          "T_dev": 0.010748832767299665
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.341786411793267,
+          "implicit_hate": 0.35003690989523784,
+          "semeval_stance": 0.31211090496804783
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.39737285075697093,
+        "T_formal": 0.3853125,
+        "css15_task_mean": 0.3788513204532933,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/06b/m4/formal/m4-v2-soup/REPORT.json",
+        "report_sha256": "60deeee9eb027f0ac246780c5d5064439c6cab22b366e5f057c937d1b7bed698",
+        "v3": 39.12962133183701
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.4531673087002488,
+        "H_dev_ci95": [
+          0.41065535124941066,
+          0.48673033094121415
+        ],
+        "H_dev_mean": 0.4337057402532235,
+        "H_dev_sd": 0.018898115453872818,
+        "by_type_mean": {
+          "choice": 0.42789695847985654,
+          "noul": 0.5196783520020364,
+          "score": 0.19030985944020232
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "9c80fb23691920832941dd0827e14e07f881e167f6fb04260784bab2329e7f34",
+        "score_qwk_mean": 0.14409596487459514,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.45587048494778803,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.4971557962323483,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.181101601931095,
+            "n": null,
+            "qwk": 0.24041297935103245,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.6248245146923561,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.19951811694930963,
+            "n": null,
+            "qwk": 0.04777895039815783,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.3573008629107794,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.6013024121204067,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.4531673087002488,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.20313785433966802,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.33659290833490046,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.6287229702162382,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.44761904761904764,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.6518607442977191,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "06b-m4-v2-soup",
+      "label": "0.6B V2 soup",
+      "proxies": {
+        "P": 39.67812570324783,
+        "P_HT": 45.68809380681712,
+        "P_HT_mean": 44.69627575135775
+      },
+      "tier": "0.6B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.38602604195703244,
+        "H_pilot": 0.3331616214123267,
+        "T_dev": 0.4175,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/06b-m5-x-soup/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "e6e11bd4268f111a8afba1df1a0743f8172a3a96c0ee20f48f065768e933e405",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/06b/m5/formal/m5-x-soup/REPORT.json",
+          "report_sha256": "94600e492117b5cbcfee69d58b7bbfdeb4196d92c534687017039ae7bc4c75d1",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/06b-m5-x-soup/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "9bd4d287b3c841b7cd18812be07394714a71593221d5f36b787ba12d4ddd8546",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012563146509677381,
+          "H_pilot": 0.017447816997859203,
+          "P": 1.1615345902558591,
+          "T_dev": 0.01368357213904231
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.3331616214123267,
+          "implicit_hate": 0.3311727173816502,
+          "semeval_stance": 0.4937437870771204
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.47309035210396627,
+        "T_formal": 0.435,
+        "css15_task_mean": 0.42347510076605094,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/06b/m5/formal/m5-x-soup/REPORT.json",
+        "report_sha256": "94600e492117b5cbcfee69d58b7bbfdeb4196d92c534687017039ae7bc4c75d1",
+        "v3": 45.36455699830269
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.47100275773044653,
+        "H_dev_ci95": [
+          0.41704727216665705,
+          0.49924974886562096
+        ],
+        "H_dev_mean": 0.43896296276241753,
+        "H_dev_sd": 0.02081756246363916,
+        "by_type_mean": {
+          "choice": 0.4447291932203122,
+          "noul": 0.5164504442129793,
+          "score": 0.19208494226599618
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "b1145c296834d8ecc6064e7487b07b5aee8c5dd99f5cf4eae99c884277024c97",
+        "score_qwk_mean": 0.07864541373698059,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.4749663978494624,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5087858243957865,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.15435621993571907,
+            "n": null,
+            "qwk": 0.06627680311890838,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.42953812259029034,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.22981366459627328,
+            "n": null,
+            "qwk": 0.09101402435505279,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.3694451116982945,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.6660712274095173,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.47100275773044653,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.26657927508684537,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.3515316205533597,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.6078329971901881,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.5779599366504812,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.5986353602247643,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "06b-m5-x-soup",
+      "label": "0.6B X soup",
+      "proxies": {
+        "P": 37.29543898919094,
+        "P_HT": 44.344520670818106,
+        "P_HT_mean": 42.80969947959333
+      },
+      "tier": "0.6B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.4018759720262207,
+        "H_pilot": 0.3356598618504267,
+        "T_dev": 0.45125000000000004,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/06b-m5-z-soup/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "9ff03672410ce6294c89c76b4338960554ce21e3253d6b0a0d6d3aeae9ff665c",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/06b/m5/formal/m5-z-soup/REPORT.json",
+          "report_sha256": "d909cec7cd90aae28fc277929ee2eef963dd3383c3f2905c86e74fe9ac05941d",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/06b-m5-z-soup/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "2ceda12413dd97c2130ed4a3a2d19ac7085a9b2be746638fd243aa3c73c17819",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.0126577134596922,
+          "H_pilot": 0.017234975905704063,
+          "P": 1.2086333456944212,
+          "T_dev": 0.015569562202820604
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.33548278679127963,
+          "implicit_hate": 0.3356598618504267,
+          "semeval_stance": 0.5344852674369558
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.49834936255871165,
+        "T_formal": 0.41500000000000004,
+        "css15_task_mean": 0.4319539046145739,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/06b/m5/formal/m5-z-soup/REPORT.json",
+        "report_sha256": "d909cec7cd90aae28fc277929ee2eef963dd3383c3f2905c86e74fe9ac05941d",
+        "v3": 45.476915623408914
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.42512227729229163,
+        "H_dev_ci95": [
+          0.38303286167692946,
+          0.47146180390438025
+        ],
+        "H_dev_mean": 0.4300609113265201,
+        "H_dev_sd": 0.023146034338363475,
+        "by_type_mean": {
+          "choice": 0.4305781018395777,
+          "noul": 0.5081979452423879,
+          "score": 0.1943568332962724
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "98c325736def3ab0d45bb063c0794edb165674e28c61111786e307d5864ae141",
+        "score_qwk_mean": 0.09564650666706409,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.47764744823020744,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5010382252910989,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.1500998730167623,
+            "n": null,
+            "qwk": 0.06463195691202905,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.3984993067449637,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.23861379357578247,
+            "n": null,
+            "qwk": 0.12666105642209913,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.3315508021390374,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.669770820949739,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.42512227729229163,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.32435591570345385,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.36368778280542985,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.5708232887720067,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.5715402918517779,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.5680420208722096,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "06b-m5-z-soup",
+      "label": "0.6B Z soup",
+      "proxies": {
+        "P": 38.918698932518936,
+        "P_HT": 43.799135565459125,
+        "P_HT_mean": 44.052807655822825
+      },
+      "tier": "0.6B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.2411410669279467,
+        "H_pilot": 0.18842602072415737,
+        "T_dev": 0.494375,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/eos1/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "157794cd55ca560406b598576e2d36f7376f3e57ab9e5e58548d5d7b7bc6fb5e",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1/r4-eos1/REPORT.json",
+          "report_sha256": "078d780c524602c7e51d57fe7ae40d99a35f5591a2abf91f78096a768aed3ca7",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/eos1/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "26e61398161f70db8f94c9f6f455820a6931b4ff48054f3cb42e230a02fddf8e",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.008915811607684964,
+          "H_pilot": 0.014090275373332219,
+          "P": 1.1934667844369078,
+          "T_dev": 0.011268207470994445
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.18842602072415737,
+          "implicit_hate": 0.1546664308649785,
+          "semeval_stance": 0.3803307491947043
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.461203009680688,
+        "T_formal": 0.39249999999999996,
+        "css15_task_mean": 0.41757115674261186,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1/r4-eos1/REPORT.json",
+        "report_sha256": "078d780c524602c7e51d57fe7ae40d99a35f5591a2abf91f78096a768aed3ca7",
+        "v3": 42.54670155249053
+      },
+      "group": "own 1.0",
+      "htdev": {
+        "H_dev": 0.4459540190013683,
+        "H_dev_ci95": [
+          0.3833534101990478,
+          0.4799379451378605
+        ],
+        "H_dev_mean": 0.41273809652991117,
+        "H_dev_sd": 0.024286556819164976,
+        "by_type_mean": {
+          "choice": 0.41251656352692523,
+          "noul": 0.4767450886429876,
+          "score": 0.2212709526981465
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "bc546fe0f835aba5fc5c53430e7a5b348ee5a730ca174e0f97465f61dd512138",
+        "score_qwk_mean": 0.12648927030506835,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.5758339018033618,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.4880314671459041,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.1336773030890678,
+            "n": null,
+            "qwk": 0.041720990873533204,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.3403136940322138,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.30886460230722523,
+            "n": null,
+            "qwk": 0.2112575497366035,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.46813186813186813,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.5434290306085178,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.3250335871025526,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.19805256192096807,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.347040264109154,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.5833333333333333,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.6078996223033097,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.4459540190013683,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "eos1",
+      "label": "Decision 1.0 Eos",
+      "proxies": {
+        "P": 30.520995068232175,
+        "P_HT": 46.95407523781098,
+        "P_HT_mean": 45.171605735458954
+      },
+      "tier": "0.8B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.24273524868249258,
+        "H_pilot": 0.2559933378014427,
+        "T_dev": 0.508125,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/intern08b/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "ac77585401331ccb617019c0e2c06a96f2aca3d210af0400f67e314a2a5bb059",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m2/q2b-intern08b/REPORT.json",
+          "report_sha256": "ddcdba6db2da3cfd93fafeb51bc1634694f5a6ed94aaf4ed1d9973dbe4d3f159",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/intern08b/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "2719893fa64dd0f6a0b842ffc63c5ea29582160844be5a908ab3cffa43db6eb6",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.009809192346757154,
+          "H_pilot": 0.019484428801112563,
+          "P": 1.4253169005948083,
+          "T_dev": 0.011043180800272176
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.30554574157936837,
+          "implicit_hate": 0.2559933378014427,
+          "semeval_stance": 0.16666666666666666
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.3824110671936759,
+        "T_formal": 0.495625,
+        "css15_task_mean": 0.3750723329854757,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m2/q2b-intern08b/REPORT.json",
+        "report_sha256": "ddcdba6db2da3cfd93fafeb51bc1634694f5a6ed94aaf4ed1d9973dbe4d3f159",
+        "v3": 43.53532877765661
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.4958218387856852,
+        "H_dev_ci95": [
+          0.4633207491302095,
+          0.5356356631810677
+        ],
+        "H_dev_mean": 0.47462716735854904,
+        "H_dev_sd": 0.01863674515858539,
+        "by_type_mean": {
+          "choice": 0.45199257553998845,
+          "noul": 0.5811788451562294,
+          "score": 0.211558613511909
+        },
+        "invalid": 51,
+        "items": 3240,
+        "report_sha256": "25824686adb1a5255afe8edea503feb926ad3ed5c7d551471e42c00a1a5c3627",
+        "score_qwk_mean": 0.12525353960135094,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.5395013850415512,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 236
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.4958218387856852,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.1441864400544458,
+            "n": null,
+            "qwk": 0.07446795939830086,
+            "type": "score",
+            "valid": 241
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.7372229760289462,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 248
+          },
+          "hate/mhs": {
+            "macro_f1": 0.2789307869693722,
+            "n": null,
+            "qwk": 0.176039119804401,
+            "type": "score",
+            "valid": 249
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.46178199909543194,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.6921381813468145,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.5546508847441416,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.21356071047947797,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.42953854655982315,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 233
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.5341474445952058,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.6009504964488888,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 243
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.4877214855113529,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          }
+        },
+        "valid": 3189
+      },
+      "key": "intern08b",
+      "label": "Intern-Decision-0.8B",
+      "proxies": {
+        "P": 36.06613574675808,
+        "P_HT": 50.19357248024654,
+        "P_HT_mean": 49.10905511349844
+      },
+      "tier": "0.8B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.26009216533183505,
+        "H_pilot": 0.23841869315868616,
+        "T_dev": 0.470625,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/kev08b/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "bfaced45ee05faf5c54e20fcbb5b08bc185bef85191605c0a929910b2a9f6f79",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m2/q1-kev08b/REPORT.json",
+          "report_sha256": "66fcffaf1353974e6b92fba56be7e9e9a4dfc030fcc39a21703fd131bf5da754",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/kev08b/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "a45bb8e97b461e536acbfcd2ec9ee4261eb9d5f57edc918780749d0142dc51ad",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.011673924715725056,
+          "H_pilot": 0.016617402788737193,
+          "P": 1.223431823996798,
+          "T_dev": 0.01219963472813838
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.23308127391987762,
+          "implicit_hate": 0.23841869315868616,
+          "semeval_stance": 0.3087765289169414
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.38960651228881893,
+        "T_formal": 0.479375,
+        "css15_task_mean": 0.3885526359492669,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m2/q1-kev08b/REPORT.json",
+        "report_sha256": "66fcffaf1353974e6b92fba56be7e9e9a4dfc030fcc39a21703fd131bf5da754",
+        "v3": 43.216619699885435
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.48333333333333334,
+        "H_dev_ci95": [
+          0.44759682522847394,
+          0.5401030169242089
+        ],
+        "H_dev_mean": 0.49795339930812926,
+        "H_dev_sd": 0.023646953374307687,
+        "by_type_mean": {
+          "choice": 0.4327133397050774,
+          "noul": 0.6255875902189686,
+          "score": 0.278150975583241
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "92e42c371a6c092118ec8036f9849b8b015304ae29d20753dd9843b2d5097d18",
+        "score_qwk_mean": 0.25164679085682634,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.5451788963007884,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.3395289362865807,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.19934298221520824,
+            "n": null,
+            "qwk": 0.184431137724551,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.732073667375641,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.3569589689512737,
+            "n": null,
+            "qwk": 0.3188624439891017,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.47916666666666663,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.7470895222802088,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.3888346549995442,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.3120877119556747,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.48333333333333334,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.6439487286169209,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.6340035135662698,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.6118466084575702,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "kev08b",
+      "label": "Kev 0.8B",
+      "proxies": {
+        "P": 33.497133827807815,
+        "P_HT": 47.69368406822857,
+        "P_HT_mean": 48.40963938611693
+      },
+      "tier": "0.8B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.37820583986238776,
+        "H_pilot": 0.3299918597342485,
+        "T_dev": 0.498125,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/jpt08b/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "95dc18140c5e52e9d8c0ef8af8798734c7dcff0a94c27b1eaf7728299419ffb7",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1/p2-jpt08b/REPORT.json",
+          "report_sha256": "f895774d711b81344e74644c1f5bd536b88fc176409a3d267f10dcd911d50385",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/jpt08b/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "6f5c94f4c47f98c602d2e8c59d34eb71a0e75491e9e3ca6db27f0dc16f16b073",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012490398116276493,
+          "H_pilot": 0.02099084312825005,
+          "P": 1.4075795646257858,
+          "T_dev": 0.013647658910963449
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.3299918597342485,
+          "implicit_hate": 0.25469018652121495,
+          "semeval_stance": 0.5499354733316998
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.3739429617310349,
+        "T_formal": 0.4296875,
+        "css15_task_mean": 0.3964354562806774,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1/p2-jpt08b/REPORT.json",
+        "report_sha256": "f895774d711b81344e74644c1f5bd536b88fc176409a3d267f10dcd911d50385",
+        "v3": 40.08473729099444
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.469489648441166,
+        "H_dev_ci95": [
+          0.4408507376892125,
+          0.5317412535955582
+        ],
+        "H_dev_mean": 0.4569135706422649,
+        "H_dev_sd": 0.023040899074913624,
+        "by_type_mean": {
+          "choice": 0.43149285317510966,
+          "noul": 0.5551141637463296,
+          "score": 0.22586358499795922
+        },
+        "invalid": 117,
+        "items": 3240,
+        "report_sha256": "3ede2999ed3188a1ab685eb5008d415aee9585d6a4632780558d9c4465c24239",
+        "score_qwk_mean": 0.21404737761064974,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.4373872872353566,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 246
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.3054799322541258,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.17511019055509527,
+            "n": null,
+            "qwk": 0.15944785951231788,
+            "type": "score",
+            "valid": 185
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.5636363636363637,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 245
+          },
+          "hate/mhs": {
+            "macro_f1": 0.27661697944082314,
+            "n": null,
+            "qwk": 0.2686468957089816,
+            "type": "score",
+            "valid": 247
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.4648972602739726,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.6191919191919192,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          },
+          "implicature/circa": {
+            "macro_f1": 0.6033945224796935,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.23683433389675737,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.469489648441166,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 228
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.5468582169709989,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.6305975227984211,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 235
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.6103822411747512,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 248
+          }
+        },
+        "valid": 3123
+      },
+      "key": "jpt08b",
+      "label": "JPT-0.8B",
+      "proxies": {
+        "P": 40.543457564707346,
+        "P_HT": 48.3595420914793,
+        "P_HT_mean": 47.70744935292372
+      },
+      "tier": "0.8B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.3871998085640525,
+        "H_pilot": 0.27053770560217216,
+        "T_dev": 0.613125,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/dec-m2-E8F-soup/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "99c914652ea1521427d997e2bc40c42f0ba0e68dc7bf050c39a8b56b6b494f4e",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA/REPORT.json",
+          "report_sha256": "e3e08cd17fe38becdfa655c61d329de7d39c75ffb7db70861af4f88d87fe2682",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/dec-m2-E8F-soup/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "bfb22868008511f26a1272fbe9ae7d37026bede4b8b87a675831ce9163bf3409",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012035270880458764,
+          "H_pilot": 0.016217947754224714,
+          "P": 1.277663693543462,
+          "T_dev": 0.014283378178410739
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.2684798898760788,
+          "implicit_hate": 0.27053770560217216,
+          "semeval_stance": 0.6225818302139066
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.4400895856662934,
+        "T_formal": 0.5734375,
+        "css15_task_mean": 0.40796939494857054,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA/REPORT.json",
+        "report_sha256": "e3e08cd17fe38becdfa655c61d329de7d39c75ffb7db70861af4f88d87fe2682",
+        "v3": 50.2358310153734
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.45455155746509124,
+        "H_dev_ci95": [
+          0.4126347192446956,
+          0.493000939803136
+        ],
+        "H_dev_mean": 0.4560723531693861,
+        "H_dev_sd": 0.02032126876705385,
+        "by_type_mean": {
+          "choice": 0.41380801314677174,
+          "noul": 0.5395862107920787,
+          "score": 0.3111916303578446
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "9e71a948bf389c64d1ffd3cac6389ee3336d5a0854c4260b64e5680edaa153b5",
+        "score_qwk_mean": 0.22337885942109598,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.5452125299494188,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.46543173556894196,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.22526662896870725,
+            "n": null,
+            "qwk": 0.1585233441910967,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.43452380952380953,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.3971166317469819,
+            "n": null,
+            "qwk": 0.28823437465109525,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.45455155746509124,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.6593404831754277,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.33505050505050504,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.21077441077441075,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.37722951832439866,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.6032318568749098,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.5916666666666667,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.6295442571127503,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "dec-m2-E8F-soup",
+      "label": "E8F soup (DEV2.0-0.8B lineage)",
+      "proxies": {
+        "P": 40.72756201239301,
+        "P_HT": 52.7917534915051,
+        "P_HT_mean": 52.8799925810301
+      },
+      "tier": "0.8B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.35438931160794984,
+        "H_pilot": 0.2532589976536611,
+        "T_dev": 0.5549999999999999,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/dec-m2-E8F-s1/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "462d93e5ee18d295bce8fe43007faac952feee4f88bede80712ed2fbd4b07c76",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/dec/formal/m2/m2-E8F-s1-nodeA/REPORT.json",
+          "report_sha256": "83ec5a75a032cfd6443b5f8694a0cc5aeb311efff9757c17e999ab06becde70c",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/dec-m2-E8F-s1/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "b01d956c39da4785451066506c483aebd8ab5e33e35ecfcd6bb60ebddc217704",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.01229807594220106,
+          "H_pilot": 0.017820377019484693,
+          "P": 1.380202658793309,
+          "T_dev": 0.01366979082685613
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.22690060396237127,
+          "implicit_hate": 0.2532589976536611,
+          "semeval_stance": 0.5830083332078171
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.433737714987715,
+        "T_formal": 0.57125,
+        "css15_task_mean": 0.4035276933713075,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/dec/formal/m2/m2-E8F-s1-nodeA/REPORT.json",
+        "report_sha256": "83ec5a75a032cfd6443b5f8694a0cc5aeb311efff9757c17e999ab06becde70c",
+        "v3": 49.77676864630048
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.5015999061835118,
+        "H_dev_ci95": [
+          0.45570538893858337,
+          0.5310583651973162
+        ],
+        "H_dev_mean": 0.4598300852500976,
+        "H_dev_sd": 0.01951676020795437,
+        "by_type_mean": {
+          "choice": 0.4256492999991738,
+          "noul": 0.5382364161273178,
+          "score": 0.3100630557457467
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "4b537d73c6c616922fce423da7be325f75f73c3b434e185537793dd389de299b",
+        "score_qwk_mean": 0.286191905726124,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.5448197839882625,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.4771440944544114,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.24386815891775146,
+            "n": null,
+            "qwk": 0.26723223753976666,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.5250742359689408,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.376257952573742,
+            "n": null,
+            "qwk": 0.3051515739124814,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5015999061835118,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.6295451954861507,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.30597164883882055,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.2436332767402377,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.41927990708478513,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.5998975737788874,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.5302750992626206,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.5804242749731472,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "dec-m2-E8F-s1",
+      "label": "E8F s1",
+      "proxies": {
+        "P": 37.491164785557395,
+        "P_HT": 52.76248173957031,
+        "P_HT_mean": 50.51788765514688
+      },
+      "tier": "0.8B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.361340253210898,
+        "H_pilot": 0.2591884966311115,
+        "T_dev": 0.68375,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/dec-m2-B8F-s1/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "aeeaff41ffc0df0863d1db94a5b054fe4714c83fbf0b7bc305883ca92226f41e",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/dec/formal/m2/m2-B8F-s1-nodeA/REPORT.json",
+          "report_sha256": "a9f69618a137785520eed1a18f22408921b4056851d1c665df4f8ddb82841240",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/dec-m2-B8F-s1/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "b5124834daddc1c306aae16f2c864060c919fb1069f2ae2a18e6dc56abe39828",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012672424522374756,
+          "H_pilot": 0.016677418517017456,
+          "P": 1.411319942209893,
+          "T_dev": 0.013104411694516278
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.2591884966311115,
+          "implicit_hate": 0.24398107019386797,
+          "semeval_stance": 0.5808511928077146
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.450338042104106,
+        "T_formal": 0.4121875,
+        "css15_task_mean": 0.40749060816674987,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/dec/formal/m2/m2-B8F-s1-nodeA/REPORT.json",
+        "report_sha256": "a9f69618a137785520eed1a18f22408921b4056851d1c665df4f8ddb82841240",
+        "v3": 43.08407034273644
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.42630838700125845,
+        "H_dev_ci95": [
+          0.3845549142514326,
+          0.45643527602481837
+        ],
+        "H_dev_mean": 0.4289763593452384,
+        "H_dev_sd": 0.018619768299114624,
+        "by_type_mean": {
+          "choice": 0.37808807474012995,
+          "noul": 0.5194639213290259,
+          "score": 0.2847343849066473
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "9ec0fad6e344691e31571d8ed165e6eae3975a112e2fd05f0a9cad572946285a",
+        "score_qwk_mean": 0.2430313650382364,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.48616600790513836,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.3781703816278284,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.21724850330731385,
+            "n": null,
+            "qwk": 0.18136020151133503,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.43452380952380953,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.3522202665059808,
+            "n": null,
+            "qwk": 0.3047025285651378,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.42630838700125845,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.6224535698219908,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.206363389663254,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.2526068307040686,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.3878670349258585,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.6269913847042403,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.5588523625906804,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.6269207432066777,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "dec-m2-B8F-s1",
+      "label": "B8F s1",
+      "proxies": {
+        "P": 42.097521847672034,
+        "P_HT": 53.989661937458955,
+        "P_HT_mean": 54.158340604408
+      },
+      "tier": "0.8B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.36510555691830615,
+        "H_pilot": 0.28325332351770444,
+        "T_dev": 0.653125,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/dec-m3-E8V-soup/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "3523eec0c402fea4a70373ea778a159793b64adfae2716c26b96a0911971ff33",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/dec/formal/m3/m3-E8V-soup-nodeA/REPORT.json",
+          "report_sha256": "baee6597c2a624854d9fe6f7c36fe9f3973acd173b8bf7fcb692981d40418ee8",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/dec-m3-E8V-soup/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "69a071f8cc376107ca8c95e3d684b8c470edf0f31223d42d6d717fd175c1654b",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012399077266888969,
+          "H_pilot": 0.017118206375940213,
+          "P": 1.3798099236950878,
+          "T_dev": 0.014673197078346628
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.28325332351770444,
+          "implicit_hate": 0.25230057701747555,
+          "semeval_stance": 0.5597627702197385
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.4184762605815237,
+        "T_formal": 0.5640625,
+        "css15_task_mean": 0.4168116603781539,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/dec/formal/m3/m3-E8V-soup-nodeA/REPORT.json",
+        "report_sha256": "baee6597c2a624854d9fe6f7c36fe9f3973acd173b8bf7fcb692981d40418ee8",
+        "v3": 48.58464425456522
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.4859891247098604,
+        "H_dev_ci95": [
+          0.44934846574190834,
+          0.5233794902669074
+        ],
+        "H_dev_mean": 0.4636861633359406,
+        "H_dev_sd": 0.019023459169877483,
+        "by_type_mean": {
+          "choice": 0.4546244747965634,
+          "noul": 0.530769178488238,
+          "score": 0.28509133922749125
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "b3a684c332c0dcd2c492180d50fb97ab5ec7d8c2ce43f43c7ac6c6e9bcfa2c4b",
+        "score_qwk_mean": 0.19796403733184015,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.43344171839590107,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.4859891247098604,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.23997882618974203,
+            "n": null,
+            "qwk": 0.16536964980544744,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.5342976112206881,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.33020385226524046,
+            "n": null,
+            "qwk": 0.23055842485823286,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5081967213114754,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.6213119072708113,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.4085365853658537,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.25528672173476435,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.48165042504665145,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.6151132208608634,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.5384615384615385,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.5754518705338377,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "dec-m3-E8V-soup",
+      "label": "E8V soup",
+      "proxies": {
+        "P": 43.01160621535781,
+        "P_HT": 56.33929774820836,
+        "P_HT_mean": 55.03135700932571
+      },
+      "tier": "0.8B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.3676752410450202,
+        "H_pilot": 0.3151728272203718,
+        "T_dev": 0.590625,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/sol1/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "dd2b0b3b2195b87b5614452e1c291e42ba8afdc7484c5cd1f91d91de7bf7ec39",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1-adopt/sol1/REPORT.json",
+          "report_sha256": "c56a21b9f75b45e15fcb5315c191cc97873ba2841e585efce41b115dfee5e0d0",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/sol1/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "747ae1aecaf405cc893d9f21c462b8fe434b0af7b8c5d1365b69437c2e5cc4a1",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012749286265084411,
+          "H_pilot": 0.017952113004264515,
+          "P": 1.275170104069839,
+          "T_dev": 0.011708979443545669
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.30673785364035777,
+          "implicit_hate": 0.3151728272203718,
+          "semeval_stance": 0.481115042274331
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.49246212263618927,
+        "T_formal": 0.421875,
+        "css15_task_mean": 0.4461526170554431,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1-adopt/sol1/REPORT.json",
+        "report_sha256": "c56a21b9f75b45e15fcb5315c191cc97873ba2841e585efce41b115dfee5e0d0",
+        "v3": 45.580418820710975
+      },
+      "group": "own 1.0",
+      "htdev": {
+        "H_dev": 0.570895136939913,
+        "H_dev_ci95": [
+          0.530144897767051,
+          0.6072757337742869
+        ],
+        "H_dev_mean": 0.5248409914930288,
+        "H_dev_sd": 0.019988380886763853,
+        "by_type_mean": {
+          "choice": 0.5356262308886194,
+          "noul": 0.6173466166359844,
+          "score": 0.22036101757518517
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "35aa6f3e5e1c5f62b7fbe48d80883d86b43036584717e0581e0e773913921ef4",
+        "score_qwk_mean": 0.17308855336988,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.44273680752715927,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.570895136939913,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.13759429618760768,
+            "n": null,
+            "qwk": 0.08821292775665401,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.7636937470962367,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.3031277389627626,
+            "n": null,
+            "qwk": 0.257964178983106,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5033306065209769,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.632917587888812,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.5925296816624267,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.37170067690887887,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.5544105256335472,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.6396750524109014,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.6615150914734826,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.6488059401966687,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "sol1",
+      "label": "Decision 1.0 Sol",
+      "proxies": {
+        "P": 43.14498245184857,
+        "P_HT": 58.06762783644051,
+        "P_HT_mean": 55.67622568031799
+      },
+      "tier": "2B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.4587443258700745,
+        "H_pilot": 0.446222954480327,
+        "T_dev": 0.6125,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/decider2b/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "b4c80180b8266aa6e81b1fa33cec9a26c9e3f4b92d0c1fdd431f8476f8fe793e",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1-adopt/decider2b/REPORT.json",
+          "report_sha256": "dd91e5ba628dbb5a3d2fc4092e9fd62d336c0b88f732419c7dfadd83f634e8a2",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/decider2b/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "922df2acd3192019ba90f9a29e8ade3060dded86b7f5572591b72e83a2dccf4e",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012649189562467297,
+          "H_pilot": 0.021913581928672467,
+          "P": 1.3751608283186936,
+          "T_dev": 0.012273363800701704
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.446222954480327,
+          "implicit_hate": 0.3849895978584467,
+          "semeval_stance": 0.5450204252714499
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.42017973109762485,
+        "T_formal": 0.583125,
+        "css15_task_mean": 0.4446145287002014,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1-adopt/decider2b/REPORT.json",
+        "report_sha256": "dd91e5ba628dbb5a3d2fc4092e9fd62d336c0b88f732419c7dfadd83f634e8a2",
+        "v3": 49.499222791504764
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.544537705771358,
+        "H_dev_ci95": [
+          0.4958709429613981,
+          0.5889264445517464
+        ],
+        "H_dev_mean": 0.5259582494424019,
+        "H_dev_sd": 0.024300145658044194,
+        "by_type_mean": {
+          "choice": 0.5100333515476725,
+          "noul": 0.6164429551405662,
+          "score": 0.29431637708473213
+        },
+        "invalid": 43,
+        "items": 3240,
+        "report_sha256": "0cfbf35ef65b92825de71873ec32b852a1803daf5da75fe6160f5cf09570b065",
+        "score_qwk_mean": 0.3490838453533744,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.4121687670074767,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.4685115335140861,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.2361245436936163,
+            "n": null,
+            "qwk": 0.3285019258057976,
+            "type": "score",
+            "valid": 225
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.7803782123807985,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          },
+          "hate/mhs": {
+            "macro_f1": 0.35250821047584796,
+            "n": null,
+            "qwk": 0.36966576490095115,
+            "type": "score",
+            "valid": 248
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.544537705771358,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.5865541986654916,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 248
+          },
+          "implicature/circa": {
+            "macro_f1": 0.6296523383308781,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.23565421700728637,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.4987989080982711,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 239
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.6718109631147541,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.7612103174603175,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 248
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.6595473272310424,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3197
+      },
+      "key": "decider2b",
+      "label": "Decider 2B",
+      "proxies": {
+        "P": 52.27920806775867,
+        "P_HT": 57.751999513865904,
+        "P_HT_mean": 56.75820890263109
+      },
+      "tier": "2B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.39143590332113676,
+        "H_pilot": 0.4007796368181548,
+        "T_dev": 0.5525,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/thisthat12/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "a03e04561900c2d3e9fe2a621f7dd529bdc8676f2d8ad6feb0ebaf34664ab1e4",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m2/q4-thisthat12/REPORT.json",
+          "report_sha256": "33daa04aa94d831b630401875dfec50c16cfc63e7214be32eb9008807dd29ea3",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/thisthat12/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "eb2e6b73af444ae951417f83be16054326229ad354e95156ee007d9cabfb684a",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.0125008657940313,
+          "H_pilot": 0.021109620649689635,
+          "P": 1.2959058095501617,
+          "T_dev": 0.010835270531924898
+        },
+        "pilot_invalid": 14,
+        "pilot_tasks": {
+          "discourse": 0.4007796368181548,
+          "implicit_hate": 0.31573172666981625,
+          "semeval_stance": 0.4577963464754392
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.4050104442984842,
+        "T_formal": 0.525,
+        "css15_task_mean": 0.4216710668011021,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m2/q4-thisthat12/REPORT.json",
+        "report_sha256": "33daa04aa94d831b630401875dfec50c16cfc63e7214be32eb9008807dd29ea3",
+        "v3": 46.11187301083141
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.5048701298701299,
+        "H_dev_ci95": [
+          0.47062803997799724,
+          0.5576356529334409
+        ],
+        "H_dev_mean": 0.5206134381788411,
+        "H_dev_sd": 0.02259271711927097,
+        "by_type_mean": {
+          "choice": 0.5077368498751875,
+          "noul": 0.6052643369093779,
+          "score": 0.29885221274636503
+        },
+        "invalid": 21,
+        "items": 3240,
+        "report_sha256": "314fd41215bebbae5194e4f41b1a2489692a11cb94cda4b11d547c68e122c7e9",
+        "score_qwk_mean": 0.3754961754746599,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.3989590763784312,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5025676036270743,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.20060619153625286,
+            "n": null,
+            "qwk": 0.3407126354365838,
+            "type": "score",
+            "valid": 239
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.7808441558441559,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.3970982339564772,
+            "n": null,
+            "qwk": 0.410279715512736,
+            "type": "score",
+            "valid": 246
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5048701298701299,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.6278822709857192,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          },
+          "implicature/circa": {
+            "macro_f1": 0.5554274782034545,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.31201268521626274,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.4127717062547889,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.6638063524590163,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.7101350029348464,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 247
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.7009938090583252,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          }
+        },
+        "valid": 3219
+      },
+      "key": "thisthat12",
+      "label": "This-That 1.2",
+      "proxies": {
+        "P": 47.05642882136622,
+        "P_HT": 52.814841356691275,
+        "P_HT_mean": 53.631979694377286
+      },
+      "tier": "2B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.36049289414023844,
+        "H_pilot": 0.2854805232347386,
+        "T_dev": 0.546875,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/bosun17b/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "eaa865959be5dc5964b36e843ffbf950d1e578716a05a815490d8ec7cba7f0f2",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1/p3-bosun17b/REPORT.json",
+          "report_sha256": "7003d0ecead9db7710943cf350ade4a3096962ca816eb81dfc962f67abe9895c",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/bosun17b/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "dfe8706555037a835f5de6b7809bb652f7d0fc871682b2e5bb1d2125bc504611",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012318653943602516,
+          "H_pilot": 0.020352751794553692,
+          "P": 1.4817086204088277,
+          "T_dev": 0.010981726014156425
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.2088235160530791,
+          "implicit_hate": 0.2854805232347386,
+          "semeval_stance": 0.5871746431328976
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.3799477831610097,
+        "T_formal": 0.46687500000000004,
+        "css15_task_mean": 0.39042003440196404,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1/p3-bosun17b/REPORT.json",
+        "report_sha256": "7003d0ecead9db7710943cf350ade4a3096962ca816eb81dfc962f67abe9895c",
+        "v3": 42.117469209734864
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.46823596142938173,
+        "H_dev_ci95": [
+          0.43800943800943803,
+          0.503968253968254
+        ],
+        "H_dev_mean": 0.4551050048344909,
+        "H_dev_sd": 0.016511978333605692,
+        "by_type_mean": {
+          "choice": 0.4345067143648992,
+          "noul": 0.533469039445349,
+          "score": 0.2715086271758961
+        },
+        "invalid": 4,
+        "items": 3240,
+        "report_sha256": "6773c5bb69549ee08a6321e4faa79a8002e4438d7bd9fec64c807d276dc25938",
+        "score_qwk_mean": 0.2297761726071889,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.46353224834237494,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.4617593500973212,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.1903205369464716,
+            "n": null,
+            "qwk": 0.12854442344045391,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.6118529269472666,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          },
+          "hate/mhs": {
+            "macro_f1": 0.35269671740532055,
+            "n": null,
+            "qwk": 0.3310079217739239,
+            "type": "score",
+            "valid": 249
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.46823596142938173,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.5371239598890548,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          },
+          "implicature/circa": {
+            "macro_f1": 0.4792359926752518,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.24828454068428427,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.39828864139081843,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.5150177269382568,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.5291418396000274,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.6608746205025515,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3236
+      },
+      "key": "bosun17b",
+      "label": "Bosun v3.1 1.7B",
+      "proxies": {
+        "P": 39.51229696486876,
+        "P_HT": 50.603017835569176,
+        "P_HT_mean": 49.88843047429556
+      },
+      "tier": "2B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.4278314807805483,
+        "H_pilot": 0.3643186113409103,
+        "T_dev": 0.61,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/dec-m3-S2T-soup/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "1bbe65a339f2c663384bae3da6e529f1fac3496905faa7715a2f79dc0bb715ab",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA/REPORT.json",
+          "report_sha256": "c04ca52a8107390913843bc4287bf2d30b5948e50e98c97d15910082298e4f4d",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/dec-m3-S2T-soup/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "9b0f58ab31f525f06c52c4b346368ac9bea25a23a0819281f1dbc2567153a127",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012352923189717388,
+          "H_pilot": 0.020989944273721334,
+          "P": 1.4692254419192308,
+          "T_dev": 0.013251427856437773
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.3643186113409103,
+          "implicit_hate": 0.2923981784996094,
+          "semeval_stance": 0.6267776525011252
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5254514218436512,
+        "T_formal": 0.5434375,
+        "css15_task_mean": 0.456476795731409,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA/REPORT.json",
+        "report_sha256": "c04ca52a8107390913843bc4287bf2d30b5948e50e98c97d15910082298e4f4d",
+        "v3": 53.436879311778604
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.5384667024704619,
+        "H_dev_ci95": [
+          0.4885433715220949,
+          0.5766811804547654
+        ],
+        "H_dev_mean": 0.520200886281212,
+        "H_dev_sd": 0.022726495927182278,
+        "by_type_mean": {
+          "choice": 0.5112435090264651,
+          "noul": 0.6133987781835827,
+          "score": 0.26300065371096715
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "1b6aa7223f2c46e5aeb9432bd43f619ff84bcce4eadc3ce4a48800fc2f83fbd8",
+        "score_qwk_mean": 0.2036802916283696,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.4375,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.49890017661664504,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.15976729988357896,
+            "n": null,
+            "qwk": 0.10610079575596854,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.7758709016393442,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.3662340075383554,
+            "n": null,
+            "qwk": 0.30125978750077065,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.453125,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.6978681577208785,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.5656544602938045,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.38395272732090574,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.5384667024704619,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.6545851809009704,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.609375,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.6213119072708113,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "dec-m3-S2T-soup",
+      "label": "S2T soup (DEV2.0-2B)",
+      "proxies": {
+        "P": 47.14173871612664,
+        "P_HT": 57.31183896080999,
+        "P_HT_mean": 56.331389174379446
+      },
+      "tier": "2B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.45899712740540594,
+        "H_pilot": 0.41354003816542445,
+        "T_dev": 0.6643749999999999,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/nox1/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "5e0bf09e8d41da1ce5e240c5c22330582920f697731918c305ce69d8d086aee1",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1-adopt/nox1/REPORT.json",
+          "report_sha256": "ff6378c2b84242a316b0c6dd50695f4b1ca4f37d525da568c08f1be642dda3c3",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/nox1/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "516108832fbca6bab226218a4225f2ae78453b0936128aa2aa401f99e796f042",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012988894208323462,
+          "H_pilot": 0.020359088651147637,
+          "P": 1.3493262039602012,
+          "T_dev": 0.009900238238926374
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.41354003816542445,
+          "implicit_hate": 0.37468871778816715,
+          "semeval_stance": 0.5887626262626262
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5190457868410927,
+        "T_formal": 0.614375,
+        "css15_task_mean": 0.4819805954397721,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1-adopt/nox1/REPORT.json",
+        "report_sha256": "ff6378c2b84242a316b0c6dd50695f4b1ca4f37d525da568c08f1be642dda3c3",
+        "v3": 56.47023599122784
+      },
+      "group": "own 1.0",
+      "htdev": {
+        "H_dev": 0.6001714728528795,
+        "H_dev_ci95": [
+          0.5646116335771508,
+          0.6523764051532057
+        ],
+        "H_dev_mean": 0.5621472835440275,
+        "H_dev_sd": 0.022417549554697533,
+        "by_type_mean": {
+          "choice": 0.5620025828981225,
+          "noul": 0.667888119639677,
+          "score": 0.2452865268718418
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "dd2f17e9fcecf328798f509403eaed726a3560fd78b62e7bee26ffea74eb9d25",
+        "score_qwk_mean": 0.14554254741804873,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.3924432733877363,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5914862421642049,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.17965364704008457,
+            "n": null,
+            "qwk": 0.04872107186358099,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.7959706197692469,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.310919406703599,
+            "n": null,
+            "qwk": 0.24236402297251647,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.49640050194835217,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.7232516725225009,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.6980472637482602,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.37455184367357597,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.6001714728528795,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.6495270629562191,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.7797145100049665,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.7157771693007318,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "nox1",
+      "label": "Decision 1.0 Nox",
+      "proxies": {
+        "P": 52.416186703741985,
+        "P_HT": 63.14577755294742,
+        "P_HT_mean": 61.11273202079607
+      },
+      "tier": "4B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5040116119168692,
+        "H_pilot": 0.5240701832487998,
+        "T_dev": 0.806875,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/decider4b/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "f7eba94c5da9e579ac109b3171f1d4888d968f65d0d57acddd0d424b675ee955",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1-adopt/decider4b/REPORT.json",
+          "report_sha256": "526dbd039d7faef123048e905f137dd7a5e30629dbdf3a5dd2a139bd28bb591c",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/decider4b/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "5f9364b05ce628e7263aa4678a118f489f219f31664f851fcad5bd09a04e40db",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012577211341423051,
+          "H_pilot": 0.021954123769625994,
+          "P": 1.3974047546186612,
+          "T_dev": 0.008649129268855624
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.5240701832487998,
+          "implicit_hate": 0.35109266086263213,
+          "semeval_stance": 0.6368719916391756
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5554796858996245,
+        "T_formal": 0.689375,
+        "css15_task_mean": 0.520044094597821,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1-adopt/decider4b/REPORT.json",
+        "report_sha256": "526dbd039d7faef123048e905f137dd7a5e30629dbdf3a5dd2a139bd28bb591c",
+        "v3": 61.88164578185147
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.5547182524202986,
+        "H_dev_ci95": [
+          0.5081914344685243,
+          0.6123005199928276
+        ],
+        "H_dev_mean": 0.5796228396222155,
+        "H_dev_sd": 0.026469560478230524,
+        "by_type_mean": {
+          "choice": 0.5602050602421877,
+          "noul": 0.6839996369793128,
+          "score": 0.3150368960009933
+        },
+        "invalid": 15,
+        "items": 3240,
+        "report_sha256": "2b31c8759b822eccf46625ef8d5ae87c67ca9e0b1be101844ea34e2c235a4013",
+        "score_qwk_mean": 0.36404826281531516,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.41043915732103553,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.44245803126537075,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.17799828178694158,
+            "n": null,
+            "qwk": 0.22968742911581896,
+            "type": "score",
+            "valid": 240
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8313225806451613,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 248
+          },
+          "hate/mhs": {
+            "macro_f1": 0.4520755102150451,
+            "n": null,
+            "qwk": 0.49840909651481136,
+            "type": "score",
+            "valid": 248
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5201379400091093,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.633610161211529,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.7216160732447809,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.33393883569322164,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.5547182524202986,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7828744209984559,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.8622723442867328,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.8116353259911189,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3225
+      },
+      "key": "decider4b",
+      "label": "Decider 4B",
+      "proxies": {
+        "P": 65.02761944811415,
+        "P_HT": 66.90203957441271,
+        "P_HT_mean": 68.38736569865628
+      },
+      "tier": "4B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.4994410056150484,
+        "H_pilot": 0.48354667108740806,
+        "T_dev": 0.83125,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/jet62/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "854bd63540271fb60080e9bb881939e3739ccc1daca511db13dc1f48edb5be8e",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m2/q5b-jet62/REPORT.json",
+          "report_sha256": "3b9188c86e0399d5b33cf5959b377c9f3ddf9899123ee934ed3d4cb51f82e4a8",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/jet62/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "7a84900a07be3993d275df41513a11e0d0f1548fc63911e54d65cecc338f21f4",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012541593191190302,
+          "H_pilot": 0.02165645314053902,
+          "P": 1.43972322484768,
+          "T_dev": 0.008168751793228572
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.48354667108740806,
+          "implicit_hate": 0.37619270717409864,
+          "semeval_stance": 0.6385836385836385
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5375237765580445,
+        "T_formal": 0.678125,
+        "css15_task_mean": 0.5107968534818785,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m2/q5b-jet62/REPORT.json",
+        "report_sha256": "3b9188c86e0399d5b33cf5959b377c9f3ddf9899123ee934ed3d4cb51f82e4a8",
+        "v3": 60.37452368163445
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.5968997530022997,
+        "H_dev_ci95": [
+          0.5635190615835777,
+          0.6597617460561623
+        ],
+        "H_dev_mean": 0.6179498423576126,
+        "H_dev_sd": 0.02443861513274686,
+        "by_type_mean": {
+          "choice": 0.6176085626832113,
+          "noul": 0.7051610829482922,
+          "score": 0.35716931977157795
+        },
+        "invalid": 45,
+        "items": 3240,
+        "report_sha256": "74c55586d9739d74348f58794f2aa74f50b8b2edee42f5d38df9998a8934a290",
+        "score_qwk_mean": 0.4047174952687636,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.402187054998791,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.532551506022959,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.15951030416622672,
+            "n": null,
+            "qwk": 0.20635095044500595,
+            "type": "score",
+            "valid": 233
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8470911441499677,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 248
+          },
+          "hate/mhs": {
+            "macro_f1": 0.5548283353769292,
+            "n": null,
+            "qwk": 0.6030840400925213,
+            "type": "score",
+            "valid": 234
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5784825371336813,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.69927801437317,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 247
+          },
+          "implicature/circa": {
+            "macro_f1": 0.7520983413295455,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.4517559795164287,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.5968997530022997,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 244
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7731544494134422,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.9136894234170498,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.7718211077484748,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3195
+      },
+      "key": "jet62",
+      "label": "Jet v6.2",
+      "proxies": {
+        "P": 63.39938251603149,
+        "P_HT": 70.43954284939402,
+        "P_HT_mean": 71.67083133742523
+      },
+      "tier": "4B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5328656803976841,
+        "H_pilot": 0.530020210954594,
+        "T_dev": 0.80625,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/hopperg/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "1ab22659f819651efa33868a96fa7926d5010f84fbfd9d54faad5444665e5f87",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m2/q8-hopperg/REPORT.json",
+          "report_sha256": "147dc02b20286430930f5f6829d741f7d9a05d6394cc076cd4a44987f16ead63",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/hopperg/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "2e0e372c9d231ab68cb6be3246e473ff1f0af00b197fdf58d4094c99aeef95a8",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012678928136503278,
+          "H_pilot": 0.021390161734639705,
+          "P": 1.3707435826485193,
+          "T_dev": 0.010023234238975713
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.530020210954594,
+          "implicit_hate": 0.41561998809729855,
+          "semeval_stance": 0.65295684214116
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5297319015267733,
+        "T_formal": 0.64375,
+        "css15_task_mean": 0.5017425481012966,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m2/q8-hopperg/REPORT.json",
+        "report_sha256": "147dc02b20286430930f5f6829d741f7d9a05d6394cc076cd4a44987f16ead63",
+        "v3": 58.396482052248686
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.5586441926867458,
+        "H_dev_ci95": [
+          0.5265749132818619,
+          0.6230617369137293
+        ],
+        "H_dev_mean": 0.6116782652814307,
+        "H_dev_sd": 0.024914343014878926,
+        "by_type_mean": {
+          "choice": 0.602462672116933,
+          "noul": 0.7124422803600149,
+          "score": 0.33242520295692174
+        },
+        "invalid": 55,
+        "items": 3240,
+        "report_sha256": "b11ba590672b212197d6e451cd9696a611b923cdd007b3fc6f3746b50cf7b997",
+        "score_qwk_mean": 0.3613324166439978,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.40379403794037944,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5137783220921904,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.18103923837868907,
+            "n": null,
+            "qwk": 0.2886714339480617,
+            "type": "score",
+            "valid": 225
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8443276076023774,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 245
+          },
+          "hate/mhs": {
+            "macro_f1": 0.4838111675351544,
+            "n": null,
+            "qwk": 0.43399339933993386,
+            "type": "score",
+            "valid": 245
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5439708141321045,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.8059059059059059,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 242
+          },
+          "implicature/circa": {
+            "macro_f1": 0.775533580207552,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.39160544641814415,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.5586441926867458,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 244
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7874251977346746,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.882069973238766,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 244
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.7799119647859143,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3185
+      },
+      "key": "hopperg",
+      "label": "Hopper-G",
+      "proxies": {
+        "P": 65.37039047475098,
+        "P_HT": 67.11235954380452,
+        "P_HT_mean": 70.22575036147022
+      },
+      "tier": "4B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5421619992362836,
+        "H_pilot": 0.5354683827992155,
+        "T_dev": 0.81625,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/jpt4b/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "d1797ed16da29c03c1b685d35dd65eb88f6c469766a52493461c574803cbdf44",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1/p4-jpt4b/REPORT.json",
+          "report_sha256": "2642996da6a19a2b0d05541bbcefb26f18afd1307465e96e07859d5a62bb3a62",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/jpt4b/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "bee427edb846bba61d79858e01fe3f788bc8b465310f378272ae984331f3a9a5",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012566406190547275,
+          "H_pilot": 0.021482394983900883,
+          "P": 1.372448690007552,
+          "T_dev": 0.008232295752666749
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.5354683827992155,
+          "implicit_hate": 0.41272722800855793,
+          "semeval_stance": 0.6782903869010775
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.47584645201459974,
+        "T_formal": 0.625625,
+        "css15_task_mean": 0.4595779024283442,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1/p4-jpt4b/REPORT.json",
+        "report_sha256": "2642996da6a19a2b0d05541bbcefb26f18afd1307465e96e07859d5a62bb3a62",
+        "v3": 54.5620231059694
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.5653004451038576,
+        "H_dev_ci95": [
+          0.5130689668048243,
+          0.6261671469740634
+        ],
+        "H_dev_mean": 0.5972580994731884,
+        "H_dev_sd": 0.029816134355414095,
+        "by_type_mean": {
+          "choice": 0.5776965918478423,
+          "noul": 0.7104637783592332,
+          "score": 0.30654483187841924
+        },
+        "invalid": 39,
+        "items": 3240,
+        "report_sha256": "860d112d2a9d75e12d9ca91ca911e980eae67a68d07de21e7bf2f43a5a325f50",
+        "score_qwk_mean": 0.3330153120024173,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.402187054998791,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.4581571061020418,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.2172636480449451,
+            "n": null,
+            "qwk": 0.2507138451698381,
+            "type": "score",
+            "valid": 227
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8311918904958677,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 248
+          },
+          "hate/mhs": {
+            "macro_f1": 0.39582601571189335,
+            "n": null,
+            "qwk": 0.4153167788349965,
+            "type": "score",
+            "valid": 247
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5078031212484995,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.7753490501258868,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 245
+          },
+          "implicature/circa": {
+            "macro_f1": 0.8021364906366176,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.3577572964669739,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.5653004451038576,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 247
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7626289447850786,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.897570785070785,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.791183444360211,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 248
+          }
+        },
+        "valid": 3201
+      },
+      "key": "jpt4b",
+      "label": "JPT-4B",
+      "proxies": {
+        "P": 66.11172872190377,
+        "P_HT": 67.92838054274691,
+        "P_HT_mean": 69.82205408715717
+      },
+      "tier": "4B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5402110672445537,
+        "H_pilot": 0.5304720357578443,
+        "T_dev": 0.645625,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/dec-m3-N4LKr-soup/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "03291d20be60fafc3b10024481484bf3379bf67a1e57f44e82b14d36799bdee1",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/dec/formal/m3/m3-N4LKr-soup-nodeA/REPORT.json",
+          "report_sha256": "bdb83c27862ead66c39ab7cbd146e8b88329b35e86ab8d95dda0982be225e233",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/dec-m3-N4LKr-soup/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "2349575a9408384bbfc3092dc68b863b7715c5c8d6758fe57ad915eebbb81589",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012382014458121269,
+          "H_pilot": 0.021772882581162188,
+          "P": 1.333959104115686,
+          "T_dev": 0.012036803977800752
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.5304720357578443,
+          "implicit_hate": 0.37679672239554574,
+          "semeval_stance": 0.713364443580271
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5632433535970514,
+        "T_formal": 0.629375,
+        "css15_task_mean": 0.49072223543209853,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/dec/formal/m3/m3-N4LKr-soup-nodeA/REPORT.json",
+        "report_sha256": "bdb83c27862ead66c39ab7cbd146e8b88329b35e86ab8d95dda0982be225e233",
+        "v3": 59.53917077606508
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.611490078683483,
+        "H_dev_ci95": [
+          0.5597464139344263,
+          0.6535060183916809
+        ],
+        "H_dev_mean": 0.5784194293292816,
+        "H_dev_sd": 0.023828864641453482,
+        "by_type_mean": {
+          "choice": 0.5686762883892547,
+          "noul": 0.6868849356327619,
+          "score": 0.2773807627689081
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "a418f845861348138c7b5b604d3eb49112bbcad691c5879f20b2f36bca987d7d",
+        "score_qwk_mean": 0.2305262669496932,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.4121687670074767,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5159420178327742,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.22813057817361976,
+            "n": null,
+            "qwk": 0.2077669902912621,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8278650461962178,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.32663094736419646,
+            "n": null,
+            "qwk": 0.2532855436081243,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5678893796811983,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.7346242923314462,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.6356049887502726,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.3799614407306715,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.611490078683483,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7439836149513569,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.8111658456486043,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.7239955839293428,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "dec-m3-N4LKr-soup",
+      "label": "N4LKr soup",
+      "proxies": {
+        "P": 58.52230413151538,
+        "P_HT": 62.83257770058648,
+        "P_HT_mean": 61.10990460315884
+      },
+      "tier": "4B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5387644035930089,
+        "H_pilot": 0.532660384078919,
+        "T_dev": 0.6375,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/dec-m3-N4L-soup/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "86926365e887859ef6f434e0056ddb32215e5e370342628aa63e3cfe8a73f059",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/dec/formal/m3/m3-N4L-soup-nodeA/REPORT.json",
+          "report_sha256": "60b8c95468d8bdf4b2bb552bf7cb7d96a0500667d4ff6ff3530d334bdc93f955",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/dec-m3-N4L-soup/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "de8eacf829760f9fa4a3d38dd2bd672ec7f7c7cbdbf015cf9684b8055c5c8a41",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012441029018914945,
+          "H_pilot": 0.021507314298663434,
+          "P": 1.2836634322933638,
+          "T_dev": 0.010811305642127598
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.532660384078919,
+          "implicit_hate": 0.38690497064346907,
+          "semeval_stance": 0.6967278560566388
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5368782403256973,
+        "T_formal": 0.64625,
+        "css15_task_mean": 0.4864355392474929,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/dec/formal/m3/m3-N4L-soup-nodeA/REPORT.json",
+        "report_sha256": "60b8c95468d8bdf4b2bb552bf7cb7d96a0500667d4ff6ff3530d334bdc93f955",
+        "v3": 58.90310372217087
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.6141215106732348,
+        "H_dev_ci95": [
+          0.559738201956614,
+          0.6506026077377136
+        ],
+        "H_dev_mean": 0.5836543052556362,
+        "H_dev_sd": 0.0229036201668653,
+        "by_type_mean": {
+          "choice": 0.5749627142561166,
+          "noul": 0.6848821919721181,
+          "score": 0.30169962260499
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "f6a1890628789e0f813bb9f8a57add37944d0534abf88b1724aedf33e8174ec2",
+        "score_qwk_mean": 0.2638110718883232,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.4005754475703325,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5397540356511613,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.2524580052493438,
+            "n": null,
+            "qwk": 0.23860329776915612,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8279972479559673,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.3509412399606362,
+            "n": null,
+            "qwk": 0.2890188460074903,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5634342107371153,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.7191056976763122,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.6238925283970892,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.3767919660954487,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.6141215106732348,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7709408303997686,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.8237098017350235,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.7237834462218379,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "dec-m3-N4L-soup",
+      "label": "N4L soup",
+      "proxies": {
+        "P": 58.272720448792406,
+        "P_HT": 62.57015766754844,
+        "P_HT_mean": 60.99832945257337
+      },
+      "tier": "4B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5164297883312468,
+        "H_pilot": 0.4975695517422088,
+        "T_dev": 0.6875,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/dec-m3-N4T-soup/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "12a31b5272ecf3da91c64b7ab728db0bec7d4fcfd3bbe0ed6ef6fff8c7c9db5c",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/dec/formal/m3/m3-N4T-soup-nodeA/REPORT.json",
+          "report_sha256": "1543d4d903d7b8f328435061dfc70407aab7f528b56e4df99630e248de974211",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/dec-m3-N4T-soup/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "a562266743d10ee9ae740111c45b5f8b45d46dd25c98103339e6e277a202fc68",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012468089222250005,
+          "H_pilot": 0.022198626861842263,
+          "P": 1.386449042339438,
+          "T_dev": 0.010423107142306463
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.4975695517422088,
+          "implicit_hate": 0.3474207510711442,
+          "semeval_stance": 0.7042990621803873
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.4950322006806077,
+        "T_formal": 0.645,
+        "css15_task_mean": 0.4685024519805795,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/dec/formal/m3/m3-N4T-soup-nodeA/REPORT.json",
+        "report_sha256": "1543d4d903d7b8f328435061dfc70407aab7f528b56e4df99630e248de974211",
+        "v3": 56.506262435148905
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.5841250717154332,
+        "H_dev_ci95": [
+          0.542889121191008,
+          0.6255164453449774
+        ],
+        "H_dev_mean": 0.5706525894548469,
+        "H_dev_sd": 0.02148119816024538,
+        "by_type_mean": {
+          "choice": 0.5680926898900216,
+          "noul": 0.6754778047299581,
+          "score": 0.26257669254157623
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "92a38e05a6072d46e3ff930a21e6be3b109e25bed523f673154327557d2cb14f",
+        "score_qwk_mean": 0.23938981474041882,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.4005754475703325,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5468467953045456,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.21021085634752032,
+            "n": null,
+            "qwk": 0.2127236580516898,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.815811390864245,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.31494252873563217,
+            "n": null,
+            "qwk": 0.26605597142914783,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5467744781890231,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.7191056976763122,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.5841250717154332,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.4027171042411061,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.6060771922840889,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.76,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.8029556650246306,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.70834143496014,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "dec-m3-N4T-soup",
+      "label": "N4T soup",
+      "proxies": {
+        "P": 58.48752574889525,
+        "P_HT": 63.3708124300423,
+        "P_HT_mean": 62.63574500636256
+      },
+      "tier": "4B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5367210979327787,
+        "H_pilot": 0.5394325076407269,
+        "T_dev": 0.669375,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/dec-m3-N4J-soup/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "41974460a7f506a7e4afb014757ca6e6e843d062f01399187128fa08ac4aba72",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/dec/formal/m3/m3-N4J-soup-nodeA/REPORT.json",
+          "report_sha256": "a628b2b07cdcf1ff979d846c5f4861e3429937e83238c23c9f2be95080e60ecc",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/dec-m3-N4J-soup/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "8aa6e70727223ceca6dde661f9f380d2ff5a7f2cef49b6dffd6838928b1b1421",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012397284589223819,
+          "H_pilot": 0.022045811927447565,
+          "P": 1.3180461055799666,
+          "T_dev": 0.01086953713365937
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.5394325076407269,
+          "implicit_hate": 0.36410835162116173,
+          "semeval_stance": 0.7066224345364472
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.4840261240176612,
+        "T_formal": 0.6071875,
+        "css15_task_mean": 0.47649405763043096,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/dec/formal/m3/m3-N4J-soup-nodeA/REPORT.json",
+        "report_sha256": "a628b2b07cdcf1ff979d846c5f4861e3429937e83238c23c9f2be95080e60ecc",
+        "v3": 54.21204775480941
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.6108240593534711,
+        "H_dev_ci95": [
+          0.5602781946394282,
+          0.6535835322793369
+        ],
+        "H_dev_mean": 0.571819740518536,
+        "H_dev_sd": 0.02379649786243587,
+        "by_type_mean": {
+          "choice": 0.5642910729154993,
+          "noul": 0.674451116861485,
+          "score": 0.2827472804972805
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "62c2902e9ce5dff07d1d419ca8cc98a5450842bc3a496dcffd115c4536e55ae6",
+        "score_qwk_mean": 0.23827111441997295,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.41389599317988063,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.49539691528808333,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.24727065527065525,
+            "n": null,
+            "qwk": 0.2275077559462254,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8354074668807707,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.31822390572390574,
+            "n": null,
+            "qwk": 0.2490344728937205,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5719383591237138,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.6990981187449505,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.6454630026058598,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.36876112917648624,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.6108240593534711,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7398959583833533,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.7748327328872877,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.7126483301225495,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "dec-m3-N4J-soup",
+      "label": "N4J soup",
+      "proxies": {
+        "P": 60.090151838883855,
+        "P_HT": 63.94297105466165,
+        "P_HT_mean": 61.86774917593132
+      },
+      "tier": "4B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5105805978261203,
+        "H_pilot": 0.4663652801210526,
+        "T_dev": 0.66875,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/dec-e1-X2/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "3f09068d8a7e84bf3207c972fc023583df91c0f2a6fa26fad9e1174f3c00f51b",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/dec/formal/e1-x2-nodeA/REPORT.json",
+          "report_sha256": "56edb028646f19c550125ce5be85b810ae6e0184f3b27ae68e5781b8c5e768f0",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/dec-e1-X2/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "1d39e8b0c5d2fabac15271e3ef38da4c58f13a61cc04fb480f0b48db28b334a0",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012942188606101412,
+          "H_pilot": 0.02118064106001944,
+          "P": 1.3455605419842154,
+          "T_dev": 0.010496983123140667
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.4663652801210526,
+          "implicit_hate": 0.40753380401335504,
+          "semeval_stance": 0.6578427093439532
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5365041246456961,
+        "T_formal": 0.584375,
+        "css15_task_mean": 0.5082416228581232,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/dec/formal/e1-x2-nodeA/REPORT.json",
+        "report_sha256": "56edb028646f19c550125ce5be85b810ae6e0184f3b27ae68e5781b8c5e768f0",
+        "v3": 55.992820775509124
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.6198479391756703,
+        "H_dev_ci95": [
+          0.5675571785508361,
+          0.6678671468587436
+        ],
+        "H_dev_mean": 0.5662647369883419,
+        "H_dev_sd": 0.026506330585442925,
+        "by_type_mean": {
+          "choice": 0.558990326147333,
+          "noul": 0.6771164031825482,
+          "score": 0.251895765508245
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "c1c974dd30cf9ce522d167a30fa97f15a5fc6e9710044b75fb3b6b549d8cd6bd",
+        "score_qwk_mean": 0.17016366631737417,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.41618438420144177,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5485091345553602,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.17226375278020745,
+            "n": null,
+            "qwk": 0.08072916666666685,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.7945503472501974,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.33152777823628254,
+            "n": null,
+            "qwk": 0.2595981659680815,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5389636882904937,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.751984126984127,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.6884796238244514,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.3381911032582791,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.6198479391756703,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.6808080808080808,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.7423510466988728,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.73778057478498,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "dec-e1-X2",
+      "label": "X2",
+      "proxies": {
+        "P": 55.846376881670125,
+        "P_HT": 64.38348463105498,
+        "P_HT_mean": 61.53775612264016
+      },
+      "tier": "4B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5277211633938794,
+        "H_pilot": 0.5718376589384838,
+        "T_dev": 0.868125,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/lux1/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "f512cea166672a1613566bf25aab924e7b4a94554c7583ffe6c99cd25d07d57a",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1/d1-lux1-autotune-cache/REPORT.json",
+          "report_sha256": "b4ebe0d24a3756136aa5fe79a1daf614b7509371f76d130c299d536f41add62c",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/lux1/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "0f23f1a334620f3159829bf9f5708e840bc3127b84b028adfacd68d6389d550a",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.01300986989000059,
+          "H_pilot": 0.019322913560177027,
+          "P": 1.2347125331537294,
+          "T_dev": 0.007561323875486358
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.5718376589384838,
+          "implicit_hate": 0.4216410823708077,
+          "semeval_stance": 0.5896847488723466
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5578998177971736,
+        "T_formal": 0.77625,
+        "css15_task_mean": 0.5290380314867156,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1/d1-lux1-autotune-cache/REPORT.json",
+        "report_sha256": "b4ebe0d24a3756136aa5fe79a1daf614b7509371f76d130c299d536f41add62c",
+        "v3": 65.80803397496813
+      },
+      "group": "own 1.0",
+      "htdev": {
+        "H_dev": 0.6547363516863841,
+        "H_dev_ci95": [
+          0.5993589743589743,
+          0.7083333333333334
+        ],
+        "H_dev_mean": 0.6317128754554863,
+        "H_dev_sd": 0.02844536041057071,
+        "by_type_mean": {
+          "choice": 0.6198597003567474,
+          "noul": 0.740143545691993,
+          "score": 0.3360538024928136
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "bbfa7adc21be6bb2b278f8830297d5351155e77d1133aaaf42f67bef9cc98a86",
+        "score_qwk_mean": 0.3011131444751806,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.5012576979790094,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5923828998200625,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.22605123414938205,
+            "n": null,
+            "qwk": 0.18071065989847712,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8799923195084485,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.44605637083624505,
+            "n": null,
+            "qwk": 0.4215156290518841,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.52321479806248,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.77812202481806,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.7941144299312759,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.4594908197392669,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.6547363516863841,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7300955542306515,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.8788837930366256,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.7478690871234304,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "lux1",
+      "label": "Decision 1.0 Lux (16K comparator)",
+      "proxies": {
+        "P": 70.45754520744894,
+        "P_HT": 75.39184274891696,
+        "P_HT_mean": 74.05442188045181
+      },
+      "tier": "9B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5545828456304166,
+        "H_pilot": 0.5298132342883576,
+        "T_dev": 0.895625,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/jpt9b/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "86d8c91251b90e4566cbc64ac99a28186cafa371f5162ee783b8e298302a4b7b",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m1-adopt/jpt9b/REPORT.json",
+          "report_sha256": "b3c262aaa9dfe4feefe0f7adb7dc0ec6872f2a4aacd7de04f3e2201f79084f69",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/jpt9b/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "d86378b5b01851596dcd224ff69b1b4e1fa6b5cda65ae8efb0c4dfedee146a24",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012600921283046497,
+          "H_pilot": 0.022273695311129743,
+          "P": 1.4984456540357587,
+          "T_dev": 0.008321643843015633
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.5298132342883576,
+          "implicit_hate": 0.41981473312197737,
+          "semeval_stance": 0.714120569480915
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.49686940966010734,
+        "T_formal": 0.74875,
+        "css15_task_mean": 0.5080240506452819,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m1-adopt/jpt9b/REPORT.json",
+        "report_sha256": "b3c262aaa9dfe4feefe0f7adb7dc0ec6872f2a4aacd7de04f3e2201f79084f69",
+        "v3": 60.99434158042904
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.6668298653610771,
+        "H_dev_ci95": [
+          0.6055555555555556,
+          0.7237848550170364
+        ],
+        "H_dev_mean": 0.6333845827705686,
+        "H_dev_sd": 0.030292171937323392,
+        "by_type_mean": {
+          "choice": 0.6125250119697623,
+          "noul": 0.7421259995314133,
+          "score": 0.35930925949005055
+        },
+        "invalid": 42,
+        "items": 3240,
+        "report_sha256": "ba547ce4e0a988906a7a8ba5c59d48dc38f7bcaa5d835edbbf4c51df13b0507c",
+        "score_qwk_mean": 0.3710549715430443,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.40379403794037944,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.4497155614983401,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.23760247108507232,
+            "n": null,
+            "qwk": 0.2633691417778302,
+            "type": "score",
+            "valid": 234
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8633947755286668,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 248
+          },
+          "hate/mhs": {
+            "macro_f1": 0.4810160478950288,
+            "n": null,
+            "qwk": 0.47874080130825836,
+            "type": "score",
+            "valid": 240
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5279697900665643,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.7628073687779517,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 248
+          },
+          "implicature/circa": {
+            "macro_f1": 0.8209581939775182,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.476012046703054,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.6668298653610771,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 241
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7879694676033349,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.9271519961130457,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 248
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.8287779534673594,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          }
+        },
+        "valid": 3198
+      },
+      "key": "jpt9b",
+      "label": "JPT-9B",
+      "proxies": {
+        "P": 68.88497499161267,
+        "P_HT": 77.28062487868577,
+        "P_HT_mean": 75.31766505567539
+      },
+      "tier": "9B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5324623703769136,
+        "H_pilot": 0.5273468683918677,
+        "T_dev": 0.799375,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/nimble2/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "cf2dc92865fee67bc7eafc325322dbec48ab3630a6745db9c3fd16796dc4e749",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/eval/m2/q6-nimble2/REPORT.json",
+          "report_sha256": "42636dfa1482ba5d76e9f5ada1186c699b6ab058a762106334911c60d8469cea",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/nimble2/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "43c58ded4b2af6e26d78709ca1c4b8bb0d725f123f5779f1d61f12b8fc01bbdb",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.013204389044325273,
+          "H_pilot": 0.022720009154096596,
+          "P": 1.4297544079540072,
+          "T_dev": 0.007646475801799153
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.5273468683918677,
+          "implicit_hate": 0.44889110114657277,
+          "semeval_stance": 0.6211491415923004
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5357812528444776,
+        "T_formal": 0.71875,
+        "css15_task_mean": 0.4982551881277391,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/eval/m2/q6-nimble2/REPORT.json",
+        "report_sha256": "42636dfa1482ba5d76e9f5ada1186c699b6ab058a762106334911c60d8469cea",
+        "v3": 62.05584384100891
+      },
+      "group": "peer",
+      "htdev": {
+        "H_dev": 0.6440570299265951,
+        "H_dev_ci95": [
+          0.5829166666666666,
+          0.7000264107755965
+        ],
+        "H_dev_mean": 0.6254350179588205,
+        "H_dev_sd": 0.029393708766661666,
+        "by_type_mean": {
+          "choice": 0.6098470126315558,
+          "noul": 0.7329897450686861,
+          "score": 0.34174084994738574
+        },
+        "invalid": 28,
+        "items": 3240,
+        "report_sha256": "09a2b7d0fa72f36e487e0f0b5190d1106be39ca46a37bea3665d6c7120391e82",
+        "score_qwk_mean": 0.32510616724781083,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.4205287550031599,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 248
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5535736297041008,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.20326449020387766,
+            "n": null,
+            "qwk": 0.2038508653453529,
+            "type": "score",
+            "valid": 238
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8479248366013072,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 247
+          },
+          "hate/mhs": {
+            "macro_f1": 0.4802172096908939,
+            "n": null,
+            "qwk": 0.44636146915026875,
+            "type": "score",
+            "valid": 248
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5233597453254273,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.7719087635054022,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.8103527677995763,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.4459534644013798,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.6440570299265951,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 242
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7159954559272949,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.9279815632801998,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.7855375220954524,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 249
+          }
+        },
+        "valid": 3212
+      },
+      "key": "nimble2",
+      "label": "Bespoke Nimble 9B v2",
+      "proxies": {
+        "P": 64.92672045627664,
+        "P_HT": 71.7525670828279,
+        "P_HT_mean": 70.70764580162687
+      },
+      "tier": "9B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5482163845657282,
+        "H_pilot": 0.5898363110269264,
+        "T_dev": 0.879375,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/9b-l2-8k/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "31e39446a4b45e6e0f7f85d1e005fabe6349d14cc3d3f3a8b88d2b0497496ce2",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/9b/formal/l2-8k/REPORT.json",
+          "report_sha256": "0aa2e3773d5b93d633502bac8c732777dacfef03cb64e2866c42d95c144e9c95",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/9b-l2-8k/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "a1002b58dafe78da021e106d8b05ed314cff6ad2ad18a4999955eb5d23911a7f",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.01238433195138528,
+          "H_pilot": 0.020886358262691602,
+          "P": 1.3047683836340058,
+          "T_dev": 0.007557254792581759
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.5898363110269264,
+          "implicit_hate": 0.4126260585209272,
+          "semeval_stance": 0.642186784149331
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5688937623404035,
+        "T_formal": 0.7509375,
+        "css15_task_mean": 0.5370823662647558,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/9b/formal/l2-8k/REPORT.json",
+        "report_sha256": "0aa2e3773d5b93d633502bac8c732777dacfef03cb64e2866c42d95c144e9c95",
+        "v3": 65.36081851212519
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.6523764051532057,
+        "H_dev_ci95": [
+          0.5964991098021597,
+          0.7088656731531957
+        ],
+        "H_dev_mean": 0.6203673275917709,
+        "H_dev_sd": 0.028603674124056344,
+        "by_type_mean": {
+          "choice": 0.6262277843620856,
+          "noul": 0.7212295937528181,
+          "score": 0.30312938718284205
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "53703f033033d81c8e1f8f03d6c6eb2ec0bd326669b951ac4cb5dbbe6f9cfc8d",
+        "score_qwk_mean": 0.29058118244955955,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.42887602802314956,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5882025204320452,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.21368496542213072,
+            "n": null,
+            "qwk": 0.20966084275436792,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8678964308017485,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.39257380894355337,
+            "n": null,
+            "qwk": 0.3715015221447512,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5518587391734097,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.778436648995311,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.7996942207893054,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.460940402422443,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.6523764051532057,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7304430389932248,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.845468150172425,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.7543238993710691,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "9b-l2-8k",
+      "label": "L2 (8K)",
+      "proxies": {
+        "P": 72.01994904256065,
+        "P_HT": 75.74189734100938,
+        "P_HT_mean": 73.86037629886634
+      },
+      "tier": "9B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5618733564406301,
+        "H_pilot": 0.5742798460997149,
+        "T_dev": 0.869375,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/9b-m3-B-s1/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "07af4ab9df3a535d5094ed103c248955d92a044f16b275e87410c0e657df0b2c",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/9b/formal-m3/B-s1-16k/REPORT.json",
+          "report_sha256": "8d076317fe15e80dfad1ed574b0ac2a1c8c5a930cd9ba94be37505c93442f67f",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/9b-m3-B-s1/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "62e6d083631521521f91a2d73d2a81b3fafe5d6c490d980489e89c0466c24d48",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.012141198846258461,
+          "H_pilot": 0.02239009669990631,
+          "P": 1.407711142191695,
+          "T_dev": 0.007722513530863835
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.5742798460997149,
+          "implicit_hate": 0.4057025871123846,
+          "semeval_stance": 0.7056376361097908
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5500012798533966,
+        "T_formal": 0.75875,
+        "css15_task_mean": 0.5288249133863012,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/9b/formal-m3/B-s1-16k/REPORT.json",
+        "report_sha256": "8d076317fe15e80dfad1ed574b0ac2a1c8c5a930cd9ba94be37505c93442f67f",
+        "v3": 64.59980426353974
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.6399464579203308,
+        "H_dev_ci95": [
+          0.5792210298048305,
+          0.6982571332013712
+        ],
+        "H_dev_mean": 0.6180743289448004,
+        "H_dev_sd": 0.030681932094749547,
+        "by_type_mean": {
+          "choice": 0.6243305023871819,
+          "noul": 0.7198659487252952,
+          "score": 0.2970590359973626
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "4581cb35a094ebdcc432d311c5bc1edc536deab24be5a92ef528680a74eaf80a",
+        "score_qwk_mean": 0.2737274728533451,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.41043915732103553,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.5423744301200434,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.20535553695011483,
+            "n": null,
+            "qwk": 0.2110199296600237,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8759503801520608,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.3887625350446104,
+            "n": null,
+            "qwk": 0.3364350160466665,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5356356631810677,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.8314714946070878,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.8236096703916777,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.44821164049464596,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.6399464579203308,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7718211077484748,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.805704836709384,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.7556833656418719,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "9b-m3-B-s1",
+      "label": "M3 B-s1 (16K)",
+      "proxies": {
+        "P": 70.6586541906184,
+        "P_HT": 74.5891045565294,
+        "P_HT_mean": 73.30336757110044
+      },
+      "tier": "9B"
+    },
+    {
+      "development": {
+        "H_mean3": 0.5817170493692889,
+        "H_pilot": 0.6037653684101335,
+        "T_dev": 0.958125,
+        "inputs": {
+          "css_pilot": "/data/dev2/runs/eval/htdev/collect/9b-m3-DW/output/css-pilot.predictions.jsonl",
+          "css_pilot_sha256": "324209df9b025a207185e2f477cec3d99d853b9174c94ed50dbd4c24b39e4ccd",
+          "pilot_missing": 0,
+          "report": "/data/dev2/runs/9b/formal-m3/DW-16k/REPORT.json",
+          "report_sha256": "3de8e0139ffb7d790adbee8643c9b74f7aa55a17071acedff57bdd39747b3511",
+          "typed_dev": "/data/dev2/runs/eval/htdev/collect/9b-m3-DW/output/typed-dev.predictions.jsonl",
+          "typed_dev_sha256": "37f9d6c8c565cc7ec4f016e209c5b7a7c4aeb7bdef2f0f555187243877f66bcb",
+          "typed_missing": 0
+        },
+        "noise_sd": {
+          "H_mean3": 0.011931148712477772,
+          "H_pilot": 0.021366162110177597,
+          "P": 1.3649462933353695,
+          "T_dev": 0.0051181881178181616
+        },
+        "pilot_invalid": 0,
+        "pilot_tasks": {
+          "discourse": 0.6037653684101335,
+          "implicit_hate": 0.4258538142580802,
+          "semeval_stance": 0.715531965439653
+        },
+        "typed_invalid": 0
+      },
+      "formal": {
+        "H_formal": 0.5519582849801882,
+        "T_formal": 0.8518749999999999,
+        "css15_task_mean": 0.5210501493786327,
+        "css15_tasks": 15,
+        "report": "/data/dev2/runs/9b/formal-m3/DW-16k/REPORT.json",
+        "report_sha256": "3de8e0139ffb7d790adbee8643c9b74f7aa55a17071acedff57bdd39747b3511",
+        "v3": 68.57109186949685
+      },
+      "group": "2.0 candidate",
+      "htdev": {
+        "H_dev": 0.646982765953827,
+        "H_dev_ci95": [
+          0.5876362593230063,
+          0.7065278415760731
+        ],
+        "H_dev_mean": 0.6182513713408203,
+        "H_dev_sd": 0.030881319068327338,
+        "by_type_mean": {
+          "choice": 0.6212574977222106,
+          "noul": 0.7279691180258042,
+          "score": 0.28158281533239266
+        },
+        "invalid": 0,
+        "items": 3240,
+        "report_sha256": "0fc8f9d2ab1a699bcc1929a5013f65682907c56d8616e61c87f60a5679db10f7",
+        "score_qwk_mean": 0.2845722552934001,
+        "tasks": {
+          "deception/diplomacy": {
+            "macro_f1": 0.4198638613861386,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "emotion/brighter": {
+            "macro_f1": 0.48836462667473873,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "empathy/empathic_reactions": {
+            "macro_f1": 0.2144101884712458,
+            "n": null,
+            "qwk": 0.23076923076923073,
+            "type": "score",
+            "valid": 250
+          },
+          "figurative/magpie": {
+            "macro_f1": 0.8679809892624537,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "hate/mhs": {
+            "macro_f1": 0.3487554421935395,
+            "n": null,
+            "qwk": 0.33837527981756943,
+            "type": "score",
+            "valid": 250
+          },
+          "humor/nycc_pairs": {
+            "macro_f1": 0.5425654853620956,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "ideology/hyperpartisan": {
+            "macro_f1": 0.7966686186479277,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "implicature/circa": {
+            "macro_f1": 0.8105391325317235,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "misinfo/pubhealth": {
+            "macro_f1": 0.47293812109167527,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 240
+          },
+          "moral/scruples": {
+            "macro_f1": 0.646982765953827,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "persuasion/ukpconvarg": {
+            "macro_f1": 0.7918801229508197,
+            "n": null,
+            "qwk": null,
+            "type": "choice",
+            "valid": 250
+          },
+          "stance/claim_stance": {
+            "macro_f1": 0.865938673036611,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          },
+          "wordsense/wic_tsv": {
+            "macro_f1": 0.7703797998678676,
+            "n": null,
+            "qwk": null,
+            "type": "noul",
+            "valid": 250
+          }
+        },
+        "valid": 3240
+      },
+      "key": "9b-m3-DW",
+      "label": "M3 DW (16K)",
+      "proxies": {
+        "P": 76.05804977830809,
+        "P_HT": 78.73311645232332,
+        "P_HT_mean": 76.96506318882116
+      },
+      "tier": "9B"
+    }
+  ],
+  "panels": {
+    "gold/css-pilot.gold.jsonl": "9a7274760dc4ced5ce5219b300974a1cf54c7d5e7e0c7de05d78bb33f2959391",
+    "gold/ht-dev.gold.jsonl": "c1f138918f65edf1dc06143a876333f4380f03093c44a1218f20960d6cd49f1e",
+    "gold/typed-dev.gold.jsonl": "c7a8b86bda0d0d6120e572b94dfc756bf10264108554af76307141ae02fbf5dc",
+    "goldfree/css-pilot.prompts.jsonl": "598319a429de16c659b59ede0eac3c269939356b0599f4e08d1983e44def3dda",
+    "goldfree/ht-dev.prompts.jsonl": "30b0bd3569da9dd183f142e606ba6dcb598de7e4d3d9c168f87f91852178fd65",
+    "goldfree/typed-dev.prompts.jsonl": "a17ec4b675bbc3da96dba8f31af8f25c9b02cc96ff048fb7de899bdd8b6cf79a"
+  },
+  "schema": "dev2-htdev-validation-features/1",
+  "scope": "per-model aggregates only (development readouts + stored formal REPORT.json fields)",
+  "spec_sha256": "b00ffe8abdbcc0bb9a32bac661a0a1c6136f2a04dfbb100e3544df3d5acb09dc"
+}
