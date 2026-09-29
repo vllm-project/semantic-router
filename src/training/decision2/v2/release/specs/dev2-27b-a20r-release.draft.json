@@ -76,9 +76,9 @@
     "safetensors": "0.8.0",
     "huggingface_hub": "1.31.0 (pinned base download)"
   },
-  "runtime_equivalence": "decision2/qwen.py loads the unmerged PEFT adapter on the pinned Qwen3.8-27B base (every base file checked against its SHA-256) with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of training.model.infer as run by v2.27b.typed_collect_kernel. Checked on one GPU of node A (same image and base bytes as the scoring node B) against the scored T = 1 predictions of every formal prompt (typed-final 1,600, css15 6,547, public231 231) by release.sh --parity, with the image's FLA and causal-conv1d kernels required and a fresh copy of the formal run's persisted Triton autotune cache.",
+  "runtime_equivalence": "decision2/qwen.py loads the unmerged PEFT adapter on the pinned Qwen3.8-27B base (every base file checked against its SHA-256) with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of training.model.infer as run by v2.27b.typed_collect_kernel. Checked on one GPU of another node of the same type (same image and base bytes as the scoring run) against the scored T = 1 predictions of every formal prompt (typed-final 1,600, css15 6,547, public231 231) by release.sh --parity, with the image's FLA and causal-conv1d kernels required and a fresh copy of the formal run's persisted Triton autotune cache.",
   "scored": {
-    "label": "post-key same-panel run M4-A20r-soup/formal at T = 1 (node B, kernel path, frozen autotune cache, 32,768-token limit)",
+    "label": "post-key same-panel run M4-A20r-soup/formal at T = 1 (kernel path, frozen autotune cache, 32,768-token limit)",
     "report_sha256": "e9a7c4700bd97bb78efa1c28117aa2a8a7a92fc2b3a29ead6d4f7e9c7f49b600",
     "seal_sha256": "9d60e61171da3ea477ab59e1f5303f0bcbc560a5964e8a7ebe13e61855911611",
     "predictions_sha256": {

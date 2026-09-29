@@ -280,11 +280,11 @@ def spec(
     )
     s["runtime_equivalence"] = old["runtime_equivalence"].replace(
         "Checked on one GPU of the scoring node against",
-        "Checked on one GPU of node A (same image and base bytes as the scoring node B) against",
+        "Checked on one GPU of another node of the same type (same image and base bytes as the scoring run) against",
     )
     s["scored"] = {
-        "label": "post-key same-panel run M4-A20r-soup/formal at T = 1 (node B, kernel path, frozen autotune "
-        "cache, 32,768-token limit)",
+        "label": "post-key same-panel run M4-A20r-soup/formal at T = 1 (kernel path, frozen autotune cache, "
+        "32,768-token limit)",
         "report_sha256": SHA["report"],
         "seal_sha256": SHA["seal"],
         "predictions_sha256": {
