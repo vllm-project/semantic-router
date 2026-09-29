@@ -127,7 +127,12 @@ def bootstrap_p_better(score_a, score_b, decidable, tiers, draws, rng) -> float:
 
 
 def run(
-    spec_path: Path, panel_root: Path, replicates: int, draws: int
+    spec_path: Path,
+    panel_root: Path,
+    replicates: int,
+    draws: int,
+    fractions=FRACTIONS,
+    dev_tasks=DEV_TASKS,
 ) -> dict[str, Any]:
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     hashes = panels.verify(panel_root, ["css15", "css-pilot"])
