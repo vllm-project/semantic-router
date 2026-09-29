@@ -36,6 +36,20 @@ class PanelsTest(unittest.TestCase):
             panels.DEFAULT_ROOT / "gold/ht-dev.gold.jsonl",
         )
 
+    def test_score5_dev_is_a_development_panel_verified_by_default(self):
+        entry = panels.DEVELOPMENT["score5-dev"]
+        self.assertNotIn("score5-dev", panels.FORMAL)
+        self.assertEqual(entry["originals"], 500)
+        default = panels.expected_files()
+        self.assertEqual(
+            default["goldfree/score5-dev.prompts.jsonl"], entry["prompts_sha256"]
+        )
+        self.assertEqual(default["gold/score5-dev.gold.jsonl"], entry["gold_sha256"])
+        self.assertEqual(
+            panels.path(panels.DEFAULT_ROOT, "score5-dev", "gold"),
+            panels.DEFAULT_ROOT / "gold/score5-dev.gold.jsonl",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
