@@ -196,6 +196,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 15:50 — **DEV2.0-8B package verified; release approved; finalization running** (gist `07f`; record
+  `v2/release/records/dev2-8b-release-2026-09-29.md`; integration `b9ef18de1`; 0.63 GPU-h on node A GPU6).
+  - Package: private `llm-semantic-router/DEV2.0-8B@0dee801731a69a89c4219a2bf26381ce4d59af48`, manifest `80770483…`, 40
+    files, 17.95 GB, apache-2.0.
+  - Size: 7,940,895,744 loaded parameters (backbone 7,936,684,544 + head 4,211,200).
+  - BF16 adopted through the new `v2.release.bf16_copy`. The copy rounds exactly as the runtime's BF16 autocast does,
+    giving 0 answer changes on every scored prompt and on mlx-diag; it saves 13.83 GB.
+  - Calibration: T = 1. The scored run's CAL698 temperatures improved ECE but worsened Brier on both development
+    panels, so the 23:15 rule rejects them. Undoing them offline changes no answers; the gate result is unchanged.
+  - The mlx-diag type score (.822 vs .832) includes the XNLI-based Score part (NC), so it is in the record only, not
+    on the card; the Noul language lines are on the card.
+  - Verified draft decision `1db7683f…` (node A `/data/dev2/runs/release/decisions/`).
+  - Coordinator decision: release. The worker is resumed once to set C1 to the 2B / 4B "pending" treatment, seal the
+    final decision, and upload with `--collect`, keeping the collection ordered by size.
+  - **C1 event 3:** the 9B row is now frozen as the package `DEV2.0-8B` with manifest `80770483…`; the weights don't
+    change across card-only revisions.
+  - HF storage: 62.57 / 100 GB.
+
 - 2026-09-29 14:55 — **DEV2.0-26B package verified (F1; not yet in the collection)** (gist `07e-decision-2-release-27b.md`;
   integration `fbea77fc5`; ~1.17 GPU-h on node B GPU6; storage 44.63 / 100 GB).
   - Package: private `llm-semantic-router/DEV2.0-26B@50772fb359acee5cfb5af6c6f3a5e77b076f0226`. This is a card-only
