@@ -8,11 +8,13 @@ readout cache) and F1's, read on the same path, limit and cache. Next to each
 ``cal/cal.probs.jsonl``. Rules of the preregistration
 (``records/m4-prereg-2026-09-29.md``, "Soups, readouts and finalists"):
 
-* collapse check: a soup is not a finalist if a typed-DEV type is at or below
-  chance (Choice .267, Noul .50, Score .20, the formal gate's levels), if one
-  answer category takes a whole type (semantic values for Choice, levels for
-  Score, true / false for Noul, as ``v2.eval.gates types`` counts them), or if
-  invalid answers exceed 1% on typed DEV or on the CSS pilot;
+* collapse check (as amended by amendment 1): a soup is not a finalist if a
+  typed-DEV type is at or below chance (Choice .267, Noul .50, Score .20, the
+  formal gate's levels) where the incumbent is at least 10 points above chance on
+  that type, if one answer category takes a whole type or at least 95% of its
+  answers (semantic values for Choice, levels for Score, true / false for Noul, as
+  ``v2.eval.gates types`` counts them), or if invalid answers exceed 1% on typed
+  DEV or on the CSS pilot;
 * proxy drop (proxy v2): a soup is dropped if its P_dev = 100*sqrt(T_dev*H_pilot)
   is at least 8 below the best of F1's P_dev and the M4 soups';
 * every other soup is a finalist;
@@ -49,6 +51,8 @@ contrast = importlib.import_module("v2.27b.contrast")
 SCHEMA = "decision2-27b-m4-guard/1"
 TYPES = contrast.TYPES
 CHANCE = {"choice": 0.267, "noul": 0.50, "score": 0.20}
+CHANCE_MARGIN = 0.10
+MODAL_MAX = 0.95
 INVALID_MAX = 0.01
 PROXY_DROP = 8.0
 TYPE_DROP = 0.03
@@ -238,19 +242,30 @@ class Readout:
         }
 
 
-def collapse(values: dict[str, Any]) -> list[str]:
+def collapse(values: dict[str, Any], incumbent: dict[str, Any]) -> list[str]:
+    """Amendment 1: the chance test applies to a type only where the incumbent is at least
+    CHANCE_MARGIN above chance on the same panel; near-constant output counts as collapse.
+    """
     flags = []
     for kind in TYPES:
         cell = values["typed_dev"]["by_type"][kind]
-        if cell["accuracy"] <= CHANCE[kind]:
+        floor = incumbent["typed_dev"]["by_type"][kind]["accuracy"]
+        if floor >= CHANCE[kind] + CHANCE_MARGIN and cell["accuracy"] <= CHANCE[kind]:
             flags.append(
                 f"typed-DEV {kind} accuracy {cell['accuracy']:.4f} is at or below chance "
                 f"{CHANCE[kind]}"
             )
+        answered = sum(cell["answer_categories"].values())
+        top = max(cell["answer_categories"].values(), default=0)
         if cell["distinct_categories"] <= 1:
             flags.append(
                 f"typed-DEV {kind} uses {cell['distinct_categories']} answer category "
                 f"({cell['answer_categories']}) for the whole type"
+            )
+        elif answered and top / answered >= MODAL_MAX:
+            flags.append(
+                f"typed-DEV {kind} modal answer share {top / answered:.4f} is at least "
+                f"{MODAL_MAX}"
             )
     for panel in ("typed_dev", "css_pilot"):
         rate = values[panel]["invalid_rate"]
@@ -296,7 +311,7 @@ def decide(
     best = max(pool, key=lambda n: pool[n])
     candidates = {}
     for name, value in values.items():
-        flags = collapse(value)
+        flags = collapse(value, incumbent)
         gap = pool[best] - value["P_dev"]
         dropped = gap >= PROXY_DROP
         candidates[name] = {

@@ -297,6 +297,34 @@ class GuardTest(unittest.TestCase):
         out = guard.decide("F1", value(81.0), {"a": value(73.0)})
         self.assertEqual((out["proxy_pool"]["best"], out["finalists"]), ("F1", []))
 
+    def test_amended_collapse_rules(self):
+        def value(accuracy, categories, invalid=0.0):
+            cells = {
+                k: {
+                    "accuracy": accuracy.get(k, 0.9),
+                    "distinct_categories": len(categories.get(k, {"a": 5, "b": 5})),
+                    "answer_categories": categories.get(k, {"a": 5, "b": 5}),
+                }
+                for k in KINDS
+            }
+            return {
+                "typed_dev": {"by_type": cells, "invalid_rate": invalid},
+                "css_pilot": {"invalid_rate": 0.0},
+            }
+
+        f1 = value({"choice": 1.0, "noul": 0.5725, "score": 0.9225}, {})
+        at_chance = value({"noul": 0.49, "score": 0.20}, {})
+        flags = guard.collapse(at_chance, f1)
+        self.assertEqual(len(flags), 1)
+        self.assertIn("score accuracy 0.2000 is at or below chance", flags[0])
+        near_constant = value({}, {"noul": {"true": 96, "false": 4}})
+        flags = guard.collapse(near_constant, f1)
+        self.assertEqual(len(flags), 1)
+        self.assertIn("noul modal answer share 0.9600", flags[0])
+        self.assertEqual(
+            guard.collapse(value({}, {"noul": {"true": 94, "false": 6}}), f1), []
+        )
+
     def test_retention_is_report_only(self):
         w = self.world
         cands = {
