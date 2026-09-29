@@ -1,5 +1,8 @@
 # JevArena-C1 policy P2: the class-aware PASS rule on item set v1.2, registered before the judgment and before any decryption (2026-09-29)
 
+> **Judgment: PASS** (section 7), verdict `16c6d311…`, run at 14:09Z from the mirror of the registering commit
+> `fee142bf3`. The key had not been read and nothing had been decrypted. Event 3 may run on v1.2.
+
 At 21:35 UTC+8 the coordinator adopted **P2**, the third option in the [event-3 record §000](m4-c1-event3-prep-2026-09-29.md).
 Event 3 is scored on the registered item set **v1.2**, and the existing rescan hits are judged under a class-aware
 PASS rule. This record registers that rule, the class map it uses and the re-pinned event script. It is committed and
@@ -128,3 +131,50 @@ The inputs are pinned here. Ids and hits stay on node A.
 - **GPU:** node A GPU0 or GPU1, whichever has ≥ 130 GB free, under a shared lease with the entry `owner.eval`.
 - **Code:** `scanverdict judge-classes` and `check-v2 --schema` (tests in `tests/test_scanverdict.py`, including
   that the class-(a) pins equal the release and successor records), and `tests/test_rescan.py`.
+
+## 7. Judgment: PASS (2026-09-29 14:09Z)
+
+**How it ran.** Registering commit `fee142bf3`, mirror `fee142bf3…-src_training_decision2` (mirror ok, 4,009 files).
+Node A, CPU, from the mirror, with the section-5 inputs, whose hashes the verdict re-records. It took seconds.
+
+- Output: `runs/eval/m4/c1-rescan-v1_2/judge-p2-20260929T140921Z/`, copied to `c1-rescan-v1_2/SCAN-VERDICT-P2.json`.
+- **Verdict SHA-256: `16c6d311760a5ec613e6b57ec1db98a2285e0725e63cb2debd1d5c22f38aff86`**, logged in that directory's
+  `OPERATIONS.log`.
+- Problems: none.
+
+| Flagged protected rows | Rows | OVERLAP / REVIEW | (a) | (b) | (c) | (d) | (e) |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| All | 1,510 | 228 / 1,282 | 6 | 17 | 1,510 | 23 | 3 |
+| Retired by v1.2 (exempt) | 21 | 4 / 17 | 6 | 12 | 21 | 0 | 0 |
+| **Still in the item set** | **1,489** | 224 / 1,265 | **0** | 5 | 1,489 | 23 | 3 |
+
+The class columns count rows with any hit of that class; a row can be in several.
+
+- **Rule item 1 holds.** No row still in the item set has a hit in any class-(a) file. Every pinned class-(a) file was
+  in the per-file scan:
+  - 0.6B T: 2 files on node A;
+  - the 0.6B successor: 6 on node A;
+  - E8F: 4 on nodes A and B;
+  - S2T: 2 on node B;
+  - N4XF: 2 on node B;
+  - K: 7 on nodes A and B;
+  - F1: 15 on node B.
+- **Rule item 2 holds.** Five rows have class-(b) hits, all REVIEW and none near-exact. That is one more than §000's
+  4, because the widened (b) also holds the CSS15 inventories.
+- **Coverage holds.**
+  - Each grouped scan covers all 1,510 flagged rows.
+  - Both per-file scans cover all 17 rows with a hit under the training roots.
+- **Disclosed** (rows still in the item set, class (c) or (e); none failing):
+
+  | Group | Rows | OVERLAP / REVIEW | Max containment | Max exact tokens | Near-exact |
+  | --- | ---: | --- | ---: | ---: | ---: |
+  | Pinned copies of the Decision 1.0 decoder training corpora (`a7/sources/dec10`) | 1 | 0 / 1 | 0.0002 | 6 | 0 |
+  | Raw upstream datasets of the Decision 1.0 encoder corpora (`a7/sources/enc10`, OASST1) | 18 | 2 / 16 | 1.0 | 6 | 2 |
+  | Raw-source sample dump (`private/tmp`) | 3 | 2 / 1 | 1.0 | 4 | 1 |
+
+  The 2 near-exact `enc10` rows are one-shingle DeliChess utterances. The near-exact sample-dump row also matches
+  its raw source.
+
+**Consequence.** Event 3 runs on v1.2 exactly as prepared (event-3 record §0, §5–§8), with
+`--scan-verdict-sha 16c6d311…`. The key is read only after every smoke has passed and the stored seals are
+re-checked.
