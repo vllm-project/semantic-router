@@ -14,6 +14,18 @@ no teacher term. The run refuses rows whose source matches a sealed C1
 candidate or an ``mlx-diag`` source, rows over ``max_length`` tokens, and any
 id / group / input shared with the isolation partitions.
 
+An optional ``dose`` adds teacher-covered rows from named pool files (listed in
+pinned ``members`` id files) to a native-token budget, equal per ``family``:
+groups sharing a group id, input (current or pre-renumbering hash) or id with
+the rows so far or with the ``dedupe`` files are dropped, as are groups with a
+row lacking a teacher target or over ``max_tokens``. The budget is water-filled
+over families (a family below its equal share gives everything, the rest is
+re-split); each family takes the longest prefix of its groups in
+``sha256("<seed>:<name>:" + id)`` order (a group keyed by its smallest member
+key and counted toward its first family by name) at or below its share, plus
+the next group if that lands closer. Dose rows carry their teacher targets into
+``teacher.jsonl`` unless ``emit_teacher`` is false.
+
     python3 -m lux9b.m3_data --spec SPEC --root hf=/hf --root repo=/code \\
         --tokenizer /model --output-dir OUT
 
@@ -24,6 +36,7 @@ tokens, dedupe and guard results, output hashes) into a new directory.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -282,6 +295,228 @@ def extra_component(
     }
 
 
+def waterfill(totals: dict[str, int], target: int) -> dict[str, int]:
+    """Equal integer shares of ``target``; keys whose total fits a share take it all
+    (the remainder goes one token each to the first keys by name)."""
+    quotas, active, remaining = {}, sorted(totals), target
+    while active:
+        small = [k for k in active if totals[k] * len(active) <= remaining]
+        if not small:
+            break
+        for key in small:
+            quotas[key] = totals[key]
+            remaining -= totals[key]
+        active = [k for k in active if k not in small]
+    if active:
+        share, extra = divmod(remaining, len(active))
+        for index, key in enumerate(active):
+            quotas[key] = share + (index < extra)
+    return quotas
+
+
+def take_prefix(order: list[str], tokens: dict[str, int], target: int) -> list[str]:
+    """Longest prefix at or below ``target``, plus the next group if it lands closer."""
+    chosen, total = [], 0
+    for group_id in order:
+        size = tokens[group_id]
+        if total + size <= target:
+            chosen.append(group_id)
+            total += size
+            if total == target:
+                break
+            continue
+        if abs(total + size - target) < abs(total - target):
+            chosen.append(group_id)
+        break
+    return chosen
+
+
+def argmax_key(probs: dict[str, float], keys: list[str]) -> str:
+    return max(keys, key=lambda k: (probs[k], -keys.index(k)))
+
+
+def dose_component(
+    dose: dict[str, Any],
+    seed: str,
+    teacher_entries: list[dict[str, str]],
+    roots: dict[str, Path],
+    inputs: dict[str, str],
+    blocked: set[str],
+    taken: set[str],
+    taken_groups: set[str],
+    tokenizer: Path,
+    workers: int,
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, Any]]:
+    """Teacher-covered rows of named pools, family-equal to a native-token budget."""
+    members: dict[str, str] = {}
+    for entry in dose["members"]:
+        for record in read_jsonl(verified(entry, roots, inputs)):
+            members.setdefault(record["id"], record["pool"])
+    blocked = set(blocked)
+    for entry in dose.get("dedupe", []):
+        for row in load_partition(verified(entry, roots, inputs), "train"):
+            blocked.add(row["input_sha256"])
+            renumbering = row["audit_metadata"].get("option_key_renumbering") or {}
+            if renumbering.get("original_input_sha256"):
+                blocked.add(renumbering["original_input_sha256"])
+    counts: Counter = Counter(
+        dict.fromkeys(
+            (
+                "file_rows",
+                "not_member",
+                "id_in_train",
+                "duplicate_input",
+                "group_in_train_rows",
+                "no_teacher_rows",
+                "over_length_rows",
+            ),
+            0,
+        )
+    )
+    pool_of: dict[str, str] = {}
+    candidates: list[dict[str, Any]] = []
+    for entry in dose["files"]:
+        for row in load_partition(verified(entry, roots, inputs), "train"):
+            counts["file_rows"] += 1
+            if row["id"] in pool_of:
+                raise ValueError(f"{row['id']}: dose files repeat an id")
+            pool_of[row["id"]] = entry["pool"]
+            if row["id"] not in members:
+                counts["not_member"] += 1
+                continue
+            if members[row["id"]] != entry["pool"]:
+                raise ValueError(f"{row['id']}: member pool differs from its file")
+            if row["id"] in taken:
+                counts["id_in_train"] += 1
+                continue
+            audit = row["audit_metadata"]
+            originals = {
+                (audit.get("a7") or {}).get("original_input_sha256"),
+                (audit.get("option_key_renumbering") or {}).get(
+                    "original_input_sha256"
+                ),
+            } - {None}
+            if row["input_sha256"] in blocked or originals & blocked:
+                counts["duplicate_input"] += 1
+                continue
+            candidates.append(row)
+    wanted = {r["id"] for r in candidates}
+    teacher: dict[str, dict[str, Any]] = {}
+    by_file: dict[str, int] = {}
+    for entry in teacher_entries:
+        used = 0
+        for record in read_jsonl(verified(entry, roots, inputs)):
+            if record["id"] not in wanted:
+                continue
+            previous = teacher.get(record["id"])
+            if previous is not None and previous != record:
+                raise ValueError(f"{record['id']}: conflicting teacher records")
+            if previous is None:
+                used += 1
+            teacher[record["id"]] = record
+        by_file[entry["file"]] = used
+    for row in candidates:
+        if row["id"] in teacher:
+            check_teacher(row, teacher[row["id"]])
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in candidates:
+        groups[row["group_id"]].append(row)
+    for label, test in (
+        ("group_in_train", lambda g, m: g in taken_groups),
+        ("no_teacher", lambda g, m: any(r["id"] not in teacher for r in m)),
+    ):
+        for group_id in [g for g, m in groups.items() if test(g, m)]:
+            counts[f"{label}_rows"] += len(groups.pop(group_id))
+    pool = [r for m in groups.values() for r in m]
+    lengths = dict(
+        zip((r["id"] for r in pool), token_lengths(pool, tokenizer, workers))
+    )
+    for group_id in [
+        g
+        for g, m in groups.items()
+        if any(lengths[r["id"]] > dose["max_tokens"] for r in m)
+    ]:
+        counts["over_length_rows"] += len(groups.pop(group_id))
+    pool = [r for m in groups.values() for r in m]
+    if len({r["input_sha256"] for r in pool}) != len(pool):
+        raise ValueError("dose pool repeats an input_sha256 across its own rows")
+
+    def key(row_id: str) -> str:
+        return hashlib.sha256(f"{seed}:{row_id}".encode()).hexdigest()
+
+    tokens = {g: sum(lengths[r["id"]] for r in m) for g, m in groups.items()}
+    orders: dict[str, list[str]] = defaultdict(list)
+    for group_id in sorted(groups, key=lambda g: min(key(r["id"]) for r in groups[g])):
+        orders[min(r["family"] for r in groups[group_id])].append(group_id)
+    totals = {f: sum(tokens[g] for g in order) for f, order in orders.items()}
+    budget = dose["budget_tokens"]
+    if budget >= sum(totals.values()):
+        raise ValueError(f"dose budget {budget} >= available {sum(totals.values())}")
+    quotas = waterfill(totals, budget)
+    chosen: list[str] = []
+    families: dict[str, Any] = {}
+    for family in sorted(orders):
+        picked = take_prefix(orders[family], tokens, quotas[family])
+        chosen.extend(picked)
+        families[family] = {
+            "available_tokens": totals[family],
+            "quota": quotas[family],
+            "tokens": sum(tokens[g] for g in picked),
+            "groups": len(picked),
+            "rows": sum(len(groups[g]) for g in picked),
+            "exhausted": len(picked) == len(orders[family]),
+        }
+    rows = sorted((r for g in chosen for r in groups[g]), key=lambda r: r["id"])
+    realized = sum(tokens[g] for g in chosen)
+    tolerance = dose.get("tolerance", 0.01)
+    if abs(realized - budget) > budget * tolerance:
+        raise ValueError(f"dose {realized} tokens outside {budget} +-{tolerance}")
+
+    def tally(field) -> dict[str, dict[str, Any]]:
+        out: dict[str, dict[str, Any]] = defaultdict(
+            lambda: {"rows": 0, "tokens": 0, "teacher_argmax_gold": 0}
+        )
+        for r in rows:
+            cell = out[field(r)]
+            cell["rows"] += 1
+            cell["tokens"] += lengths[r["id"]]
+            keys = [o["key"] for o in r["options"]]
+            probs = teacher[r["id"]]["teacher_probs"]
+            cell["teacher_argmax_gold"] += argmax_key(probs, keys) == keys[r["label"]]
+        for cell in out.values():
+            cell["teacher_agreement"] = round(
+                cell["teacher_argmax_gold"] / cell["rows"], 4
+            )
+        return dict(sorted(out.items()))
+
+    stats = {
+        **dict(counts),
+        "seed": seed,
+        "members": len(members),
+        "teacher_by_file": by_file,
+        "eligible_rows": len(pool),
+        "eligible_groups": len(groups),
+        "eligible_tokens": sum(totals.values()),
+        "budget_tokens": budget,
+        "tolerance": tolerance,
+        "max_tokens_limit": dose["max_tokens"],
+        "families": families,
+        "rows": len(rows),
+        "groups": len(chosen),
+        "tokens": realized,
+        "overshoot_tokens": realized - budget,
+        "max_tokens": max((lengths[r["id"]] for r in rows), default=0),
+        "by_pool": tally(lambda r: pool_of[r["id"]]),
+        "by_row_family": tally(lambda r: r["family"]),
+        "by_type": tally(lambda r: r["task_type"]),
+        "by_language": tally(lambda r: r["language"]),
+        "teacher_argmax_gold": sum(
+            c["teacher_argmax_gold"] for c in tally(lambda r: "all").values()
+        ),
+    }
+    return rows, {r["id"]: teacher[r["id"]] for r in rows}, stats
+
+
 def build(spec: dict[str, Any], roots: dict[str, Path], tokenizer: Path, workers: int):
     inputs: dict[str, str] = {}
     recipe = read_jsonl(verified(spec["recipe"], roots, inputs))
@@ -405,6 +640,24 @@ def build(spec: dict[str, Any], roots: dict[str, Path], tokenizer: Path, workers
         blocked.update(r["input_sha256"] for r in chosen_rows)
         taken.update(r["id"] for r in chosen_rows)
     replay_stats = extra_stats.get("replay", {})
+    dose_rows: list[dict[str, Any]] = []
+    dose_teacher: dict[str, dict[str, Any]] = {}
+    if "dose" in spec:
+        dose = spec["dose"]
+        dose_rows, dose_teacher, dose_stats = dose_component(
+            dose,
+            f"{spec['seed']}:{dose['name']}",
+            spec["teachers"] + dose.get("teachers", []),
+            roots,
+            inputs,
+            blocked,
+            taken,
+            {r["group_id"] for r in rows + replay},
+            tokenizer,
+            workers,
+        )
+        if not dose.get("emit_teacher", True):
+            dose_teacher = {}
 
     recipe_lengths = token_lengths(rows, tokenizer, workers)
     if max(recipe_lengths) > spec["max_length"]:
@@ -437,7 +690,7 @@ def build(spec: dict[str, Any], roots: dict[str, Path], tokenizer: Path, workers
     }
     stats["recipe_languages"] = len({r["language"] for r in rows})
 
-    train = sorted(rows + replay, key=lambda r: r["id"])
+    train = sorted(rows + replay + dose_rows, key=lambda r: r["id"])
     if len({r["id"] for r in train}) != len(train):
         raise ValueError("Duplicate id in the materialized TRAIN")
     partitions = {"train": train}
@@ -468,24 +721,37 @@ def build(spec: dict[str, Any], roots: dict[str, Path], tokenizer: Path, workers
         "denied": 0,
         "sources": dict(sorted(sources.items())),
     }
-    return (
-        train,
-        [teacher[i] for i in sorted(recipe_ids)],
-        {
-            "schema": SCHEMA,
-            "name": spec["name"],
-            "inputs_sha256": inputs,
-            "recipe": stats,
-            "teacher": {"rows": len(recipe_ids), "by_file": teacher_by_file},
-            "replay": replay_stats,
-            "extras": extra_stats,
-            "train_rows": len(train),
-            "train_rows_by_type": dict(Counter(r["task_type"] for r in train)),
-            "train_rows_by_language": dict(Counter(r["language"] for r in train)),
-            "isolation": sorted(p for p in partitions if p != "train"),
-            "source_guard": guard,
-        },
-    )
+    manifest = {
+        "schema": SCHEMA,
+        "name": spec["name"],
+        "inputs_sha256": inputs,
+        "recipe": stats,
+        "teacher": {"rows": len(recipe_ids), "by_file": teacher_by_file},
+        "replay": replay_stats,
+        "extras": extra_stats,
+        "train_rows": len(train),
+        "train_rows_by_type": dict(Counter(r["task_type"] for r in train)),
+        "train_rows_by_language": dict(Counter(r["language"] for r in train)),
+        "isolation": sorted(p for p in partitions if p != "train"),
+        "source_guard": guard,
+    }
+    if "dose" in spec:
+        teacher.update(dose_teacher)
+        manifest["dose"] = dose_stats
+        manifest["teacher"].update(
+            recipe_rows=len(recipe_ids),
+            dose_rows=len(dose_teacher),
+            rows=len(recipe_ids) + len(dose_teacher),
+        )
+        by_type = Counter(stats["recipe_tokens_by_type"])
+        by_type.update({t: c["tokens"] for t, c in dose_stats["by_type"].items()})
+        total = sum(by_type.values())
+        manifest["train_tokens"] = total
+        manifest["train_token_share_by_type"] = {
+            t: round(n / total, 4) for t, n in sorted(by_type.items())
+        }
+        manifest["train_languages"] = len({r["language"] for r in train})
+    return train, [teacher[i] for i in sorted(teacher)], manifest
 
 
 def write_lines(path: Path, records: list[dict[str, Any]]) -> str:

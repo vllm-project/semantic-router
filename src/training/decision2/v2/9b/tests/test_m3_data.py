@@ -67,7 +67,7 @@ class SourceGuardTest(unittest.TestCase):
         self.assertTrue(m3_data.denied_hits("massive_intents", keys, ["massive"]))
 
 
-class BuildTest(unittest.TestCase):
+class BuildFixture(unittest.TestCase):
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp())
         self.recipe_rows = [
@@ -146,6 +146,8 @@ class BuildTest(unittest.TestCase):
         with mock.patch.object(m3_data, "token_lengths", lengths):
             return m3_data.build(spec, {"t": self.dir}, Path("."), 1)
 
+
+class BuildTest(BuildFixture):
     def test_recipe_teacher_and_replay_dedupe(self):
         train, teachers, manifest = self.build(self.spec())
         ids = {r["id"] for r in train}
@@ -203,6 +205,145 @@ class BuildTest(unittest.TestCase):
             files=[self.ref("a7.jsonl")],
             budget_tokens=10**6,
         )
+        with self.assertRaises(ValueError):
+            self.build(spec)
+
+
+class DoseTest(BuildFixture):
+    def setUp(self):
+        super().setUp()
+        self.lengths = {}
+        self.dose = []
+        for family, count in (("f_small", 2), ("f_mid", 10), ("f_big", 12)):
+            for i in range(count):
+                r = row(f"a7:{family}-{i}", f"dg-{family}-{i}", "legacy:stage4", family)
+                self.dose.append(r)
+                self.lengths[r["id"]] = 10
+        dup = row("a7:dup-recipe", "dg-dup", "legacy:stage4", "f_big")
+        dup["state"] = self.recipe_rows[1]["state"]
+        dup["input_sha256"] = self.recipe_rows[1]["input_sha256"]
+        same_group = row("a7:same-group", "g2", "legacy:stage4", "f_big")
+        untaught = row("a7:untaught", "dg-u", "legacy:stage4", "f_mid")
+        pair = row("a7:untaught-pair", "dg-u", "legacy:stage4", "f_mid")
+        long = row("a7:long", "dg-long", "legacy:stage4", "f_mid")
+        stranger = row("a7:stranger", "dg-s", "legacy:stage4", "f_mid")
+        in_a0s = row("a7:in-a0s", "dg-a0s", "legacy:stage4", "f_mid", keys=("m", "n"))
+        self.lengths[long["id"]] = 50
+        extras = [dup, same_group, untaught, pair, long, stranger, in_a0s]
+        self.write("a7g.jsonl", self.dose[:14] + extras[:4])
+        self.write("a7o.jsonl", self.dose[14:] + extras[4:])
+        pools = {r["id"]: "A7g" for r in self.dose[:14] + extras[:4]}
+        pools.update({r["id"]: "A7o" for r in self.dose[14:] + extras[4:]})
+        del pools["a7:stranger"]
+        self.write(
+            "members.jsonl", [{"id": i, "pool": p} for i, p in sorted(pools.items())]
+        )
+        self.write(
+            "dose-teacher.jsonl",
+            [teacher(r) for r in self.dose + [dup, same_group, pair, long, in_a0s]],
+        )
+        self.write("a0s-dedupe.jsonl", [in_a0s])
+
+    def spec(self, **changes):
+        spec = super().spec(**changes)
+        spec.pop("replay")
+        spec.setdefault(
+            "dose",
+            {
+                "name": "dose",
+                "files": [
+                    {"pool": "A7g", **self.ref("a7g.jsonl")},
+                    {"pool": "A7o", **self.ref("a7o.jsonl")},
+                ],
+                "members": [self.ref("members.jsonl")],
+                "dedupe": [self.ref("a0s-dedupe.jsonl")],
+                "teachers": [self.ref("dose-teacher.jsonl")],
+                "budget_tokens": 170,
+                "tolerance": 0.1,
+                "max_tokens": 20,
+            },
+        )
+        return spec
+
+    def build(self, spec):
+        def lengths(rows, *_):
+            return [self.lengths.get(r["id"], 5) for r in rows]
+
+        with mock.patch.object(m3_data, "token_lengths", lengths):
+            return m3_data.build(spec, {"t": self.dir}, Path("."), 1)
+
+    def test_waterfill_shares(self):
+        self.assertEqual(
+            m3_data.waterfill({"a": 5, "b": 100, "c": 100}, 106),
+            {"a": 5, "b": 51, "c": 50},
+        )
+        self.assertEqual(m3_data.waterfill({"a": 5, "b": 7}, 20), {"a": 5, "b": 7})
+
+    def test_family_equal_selection_and_guards(self):
+        train, teachers, manifest = self.build(self.spec())
+        dose = manifest["dose"]
+        ids = {r["id"] for r in train}
+        for excluded in (
+            "a7:dup-recipe",
+            "a7:same-group",
+            "a7:untaught",
+            "a7:untaught-pair",
+            "a7:long",
+            "a7:stranger",
+            "a7:in-a0s",
+        ):
+            self.assertNotIn(excluded, ids)
+        self.assertEqual(dose["duplicate_input"], 2)
+        self.assertEqual(dose["group_in_train_rows"], 1)
+        self.assertEqual(dose["no_teacher_rows"], 2)
+        self.assertEqual(dose["over_length_rows"], 1)
+        self.assertEqual(dose["not_member"], 1)
+        families = dose["families"]
+        self.assertEqual(families["f_small"]["tokens"], 20)
+        self.assertTrue(families["f_small"]["exhausted"])
+        self.assertEqual(families["f_mid"]["quota"], 75)
+        self.assertEqual(families["f_big"]["quota"], 75)
+        self.assertEqual(families["f_mid"]["tokens"], 70)
+        self.assertEqual(dose["tokens"], 160)
+        self.assertEqual(sum(p["rows"] for p in dose["by_pool"].values()), 16)
+
+        def key(i):
+            return m3_data.hashlib.sha256(f"s:dose:{i}".encode()).hexdigest()
+
+        mid = sorted((r["id"] for r in self.dose if "f_mid" in r["id"]), key=key)
+        self.assertEqual(sorted(i for i in ids if "f_mid" in i), sorted(mid[:7]))
+        self.assertEqual([t["id"] for t in teachers], sorted(ids))
+        self.assertEqual(manifest["teacher"]["dose_rows"], 16)
+        self.assertEqual(dose["teacher_argmax_gold"], 16)
+
+    def test_recipe_identity_and_partial_teacher(self):
+        base_spec = self.spec()
+        base_spec.pop("dose")
+        base = self.build(base_spec)
+        full = self.build(self.spec())
+        recipe_ids = {r["id"] for r in base[0]}
+        self.assertEqual([r for r in full[0] if r["id"] in recipe_ids], base[0])
+        self.assertEqual([t for t in full[1] if t["id"] in recipe_ids], base[1])
+        spec = self.spec()
+        spec["dose"]["emit_teacher"] = False
+        partial = self.build(spec)
+        self.assertEqual(partial[0], full[0])
+        self.assertEqual(partial[1], base[1])
+        self.assertEqual(partial[2]["teacher"]["rows"], len(recipe_ids))
+
+    def test_bad_teacher_or_budget_fails(self):
+        bad = [teacher(r) for r in self.dose]
+        bad[0]["input_sha256"] = "0" * 64
+        self.write("dose-teacher.jsonl", bad)
+        with self.assertRaises(ValueError):
+            self.build(self.spec())
+        self.write("dose-teacher.jsonl", [teacher(r) for r in self.dose])
+        spec = self.spec()
+        spec["dose"]["budget_tokens"] = 10**6
+        with self.assertRaises(ValueError):
+            self.build(spec)
+        spec = self.spec()
+        spec["dose"]["tolerance"] = 0.01
         with self.assertRaises(ValueError):
             self.build(spec)
 
