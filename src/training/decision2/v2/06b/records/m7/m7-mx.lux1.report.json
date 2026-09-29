@@ -1,0 +1,180 @@
+{
+  "checks": {
+    "covered_match": true,
+    "kept_matches": true,
+    "uncovered_only_in_dropped_pools": true
+  },
+  "drop_pools": [
+    "A7k",
+    "A7q",
+    "A7s",
+    "H6",
+    "V1:A6h"
+  ],
+  "expected_kept": 137450,
+  "input": {
+    "lines": 188882,
+    "path": "/data/dev2/runs/06b/m6/data/m6-mx.lux1.jsonl",
+    "sha256": "6b5d8ffa055dcd36db21164a4bf7d41285e7ed5ea7803c76b3c541d2cbfc48f2"
+  },
+  "kept_by_pool": {
+    "A0s-strict": 6547,
+    "A7g": 8942,
+    "A7h": 756,
+    "A7i": 8174,
+    "A7m": 5266,
+    "A7o": 9961,
+    "A7p": 4714,
+    "A7r": 3337,
+    "E11": 5832,
+    "G2": 10564,
+    "G4h": 1874,
+    "G6": 6415,
+    "H1": 27256,
+    "H3": 4238,
+    "H5": 24016,
+    "V1:A1": 2180,
+    "V1:A2": 2653,
+    "V1:A3": 366,
+    "V1:A4v2h": 830,
+    "V1:A5": 1114,
+    "V1:A6g": 2415
+  },
+  "mixtures": {
+    "m6-mx-s1.train.jsonl": {
+      "covered": 50226,
+      "covered_by_pool": {
+        "A0s-strict": 6547,
+        "A7g": 2963,
+        "A7h": 253,
+        "A7i": 2646,
+        "A7m": 1752,
+        "A7o": 3273,
+        "A7p": 1540,
+        "A7r": 1120,
+        "E11": 1912,
+        "G2": 3493,
+        "G4h": 627,
+        "G6": 2159,
+        "H1": 9224,
+        "H3": 1420,
+        "H5": 8138,
+        "V1:A1": 709,
+        "V1:A2": 884,
+        "V1:A3": 124,
+        "V1:A4v2h": 282,
+        "V1:A5": 371,
+        "V1:A6g": 789
+      },
+      "covered_matches": true,
+      "expected_covered": 50226,
+      "rows": 67411,
+      "sha256": "a277bd45a61662b8edbdc3472d0f74f605bc2a4d6e187605afc2bb3d4c998eae",
+      "uncovered": 17185,
+      "uncovered_by_pool": {
+        "A7k": 732,
+        "A7q": 7491,
+        "A7s": 4294,
+        "H6": 3766,
+        "V1:A6h": 902
+      },
+      "uncovered_only_in_dropped_pools": true
+    },
+    "m6-mx-s2.train.jsonl": {
+      "covered": 50299,
+      "covered_by_pool": {
+        "A0s-strict": 6547,
+        "A7g": 3004,
+        "A7h": 250,
+        "A7i": 2699,
+        "A7m": 1753,
+        "A7o": 3406,
+        "A7p": 1653,
+        "A7r": 1110,
+        "E11": 1972,
+        "G2": 3507,
+        "G4h": 632,
+        "G6": 2164,
+        "H1": 8989,
+        "H3": 1416,
+        "H5": 7999,
+        "V1:A1": 738,
+        "V1:A2": 884,
+        "V1:A3": 122,
+        "V1:A4v2h": 263,
+        "V1:A5": 378,
+        "V1:A6g": 813
+      },
+      "covered_matches": true,
+      "expected_covered": 50299,
+      "rows": 67373,
+      "sha256": "5fafa72d6199025e36cda7eb315a1faa341d1f5164ac1d06ccafd69f4e7ed8c0",
+      "uncovered": 17074,
+      "uncovered_by_pool": {
+        "A7k": 729,
+        "A7q": 7393,
+        "A7s": 4285,
+        "H6": 3772,
+        "V1:A6h": 895
+      },
+      "uncovered_only_in_dropped_pools": true
+    },
+    "m6-mx-s3.train.jsonl": {
+      "covered": 50019,
+      "covered_by_pool": {
+        "A0s-strict": 6547,
+        "A7g": 2975,
+        "A7h": 253,
+        "A7i": 2829,
+        "A7m": 1761,
+        "A7o": 3282,
+        "A7p": 1521,
+        "A7r": 1107,
+        "E11": 1948,
+        "G2": 3564,
+        "G4h": 615,
+        "G6": 2092,
+        "H1": 9043,
+        "H3": 1402,
+        "H5": 7879,
+        "V1:A1": 733,
+        "V1:A2": 885,
+        "V1:A3": 120,
+        "V1:A4v2h": 285,
+        "V1:A5": 365,
+        "V1:A6g": 813
+      },
+      "covered_matches": true,
+      "expected_covered": 50019,
+      "rows": 67192,
+      "sha256": "e484c99b1fe4ca5051a2f33ca032edda71f07ff601f6ace859f82c687e31f653",
+      "uncovered": 17173,
+      "uncovered_by_pool": {
+        "A7k": 729,
+        "A7q": 7510,
+        "A7s": 4281,
+        "H6": 3760,
+        "V1:A6h": 893
+      },
+      "uncovered_only_in_dropped_pools": true
+    }
+  },
+  "output": {
+    "lines": 137450,
+    "path": "/data/dev2/runs/06b/m7/data/m7-mx.lux1.jsonl",
+    "sha256": "a18929b20ac3924f9c08156dfbb6cd4be077ff4275ff143054f349e99ce5173a"
+  },
+  "pass": true,
+  "recipes": {
+    "/data/dev2/runs/06b/m6/data/inputs/recipes/cx-xl-r2-nogap-full.ids.jsonl": "4a74a06ebb4ad933485d2417f99f633ed02d7596f31a098ece29aad65b9f3bca"
+  },
+  "removed_by_pool": {
+    "A7k": 2190,
+    "A7q": 22394,
+    "A7s": 12860,
+    "H6": 11298,
+    "V1:A6h": 2690
+  },
+  "removed_lines": 51432,
+  "tool": "v2.06b.m7_teacher"
+}
