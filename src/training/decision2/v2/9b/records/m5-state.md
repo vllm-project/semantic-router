@@ -27,10 +27,16 @@ Prereg: `records/lux9b-m5-prereg-2026-09-29.md` (arms KD / KG, lines KD / KG / U
   first step-log lines present, leases `track=9b-m5`. Check with
   `bash $L/alive.sh m5-gpu6` (L = the mirror's `v2/9b/lux9b/m5`); logs node A `/data/dev2/runs/9b/m5/logs/`.
 
+- 09:22Z: ref-ka13 and ref-lux done (exit 0, 3.7 min each). Scored (`m5/readout-refs/readout.json`): both reproduce M4's
+  readouts exactly (K-a13 T .925, H .57954, H3 .56219, P 73.217; Lux T .87625, H3 .52831, P 70.820) → runtime identical; R =
+  `refka13`.
+- Preflights `pf-KD-s1-check` and `pf-KG-s1-check`: **PASS**. Full arms KD-s1 / KG-s1 started 09:29:5xZ.
+- 10:05Z: step ~373 of ~2,288 (8 checkpoints every 286 steps), ≈ 10.7 steps/min, peak 150.9 GiB → ≈ 3.7 h per seed;
+  projected: s2 ends ≈ 17:00Z, lines ≈ 18:00Z, formal ≈ 18:45Z; milestone ≈ 18.3 GPU-h.
+
 ## Next
 
-1. Verify ref-ka13 reproduces M4's K ⅓ readout (T .925, 799 / 338 / 343, H3 .562, P 73.22).
-2. After soups: `score.sh` + `m5_rules seed`; after lines: `m5_rules alpha` per line → lock per finalist → formal.
+1. After soups: `score.sh` + `m5_rules seed`; after lines: `m5_rules alpha` per line → lock per finalist → formal.
 3. Successor test vs I (released T = 1 run, or the latest M5 successor handed off); record; gist 05; merge.
 
 ## GPU-hours
