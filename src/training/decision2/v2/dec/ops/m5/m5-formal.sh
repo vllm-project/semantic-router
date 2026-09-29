@@ -8,8 +8,9 @@
 #                                              checkpoint + calibrations + per-file SHA-256 list (revision = its hash)
 #   m5-formal.sh finalist <ARM> <artifact-dir> stage (if needed), then collect + seal on a copy of the frozen cache
 #   m5-formal.sh mlx <run>                     mlx-diag collection (needs <run>/V3-SEALED.json from m5-relay.sh mark)
-#   m5-formal.sh smoke [max-items]             reference package, 8 items, throwaway cache, shared lease entry
-#                                              owner.m5-formal-smoke (removed afterwards); needs >= 80 GB free VRAM
+#   m5-formal.sh smoke [max-items] [t1]        reference package, 8 items, throwaway cache, shared lease entry
+#                                              owner.m5-formal-smoke (removed afterwards); needs >= 80 GB free VRAM;
+#                                              t1 = the temperature-1 adapter spec (CAL698 rejected) instead
 #
 # <artifact-dir> is the arm's soup build /data/dev2/runs/dec/m5/soup/<ARM>/build/<ARM>-soup or the median seed's
 # BEST checkpoint /data/dev2/runs/dec/m5/arms/full/m5-<ARM>-sN/<ckpt>. No upload anywhere (04:55 policy).
@@ -93,12 +94,12 @@ case $cmd in
     cache_freeze "$REF_CACHE" "$MASTER"
     ;;
   stage)
-    [ $# -eq 3 ] || { sed -n '2,19p' "$0"; exit 2; }
+    [ $# -eq 3 ] || { sed -n '2,20p' "$0"; exit 2; }
     stage "$2" "$3"
     echo "$NAME revision $REV spec $SPEC calibration $CAL"
     ;;
   finalist)
-    [ $# -eq 3 ] || { sed -n '2,19p' "$0"; exit 2; }
+    [ $# -eq 3 ] || { sed -n '2,20p' "$0"; exit 2; }
     [ -f "$MASTER.sha256" ] || die "reference cache not frozen yet (run: m5-formal.sh ref)"
     stage "$2" "$3"
     [ ! -e "$F/$NAME" ] || die "$F/$NAME exists"
@@ -111,7 +112,7 @@ case $cmd in
       "$MASTER.sha256" "$CAL" "$DECISION" "${args[@]}"
     ;;
   mlx)
-    [ $# -eq 2 ] || { sed -n '2,19p' "$0"; exit 2; }
+    [ $# -eq 2 ] || { sed -n '2,20p' "$0"; exit 2; }
     RUN=$2 R=$F/$2
     [ -f "$R/V3-SEALED.json" ] || die "$RUN: v3 report not sealed on node A yet (m5-relay.sh mark $RUN)"
     [ ! -e "$F/$RUN-mlx" ] || die "$F/$RUN-mlx exists"
@@ -131,6 +132,8 @@ case $cmd in
     ;;
   smoke)
     N=${2:-8}
+    spec=$SPEC_CAL args=(--extra model_id=decision2-dec-m4-N4XF-soup --extra "calibration=$REF_CAL") cal=$REF_CAL
+    [ "${3:-}" = t1 ] && spec=$SPEC_T1 args=(--extra model_id=decision2-dec-m4-N4XF-soup) cal=none
     verify_ref_package
     free=$(vram_free_gb "$GPU")
     [ "$free" -ge 80 ] || die "smoke: GPU$GPU has $free GB free VRAM (< 80)"
@@ -139,12 +142,11 @@ case $cmd in
     export M5_SHARED_LEASE=m5-formal-smoke
     trap 'rm -rf "$C"; rm -f "/data/dev2/leases/gpu$GPU.lock/owner.$M5_SHARED_LEASE"' EXIT
     mkdir -p "$C" "$F/dryrun"
-    args=(--extra model_id=decision2-dec-m4-N4XF-soup --extra "calibration=$REF_CAL")
-    flog "smoke $RUN start (GPU$GPU shared, $free GB free, throwaway cache $C)"
-    run_collect "$RUN" "$REF_MODEL" "$REF_PKG" "$REF_LIST_SHA" "$SPEC_CAL" "$C" "M5 formal tooling smoke ($N items)" \
+    flog "smoke $RUN start (GPU$GPU shared, $free GB free, throwaway cache $C, spec $spec)"
+    run_collect "$RUN" "$REF_MODEL" "$REF_PKG" "$REF_LIST_SHA" "$spec" "$C" "M5 formal tooling smoke ($N items)" \
       "${args[@]}" --max-items "$N" || die "smoke collection FAILED (log $F/$RUN.collect.log)"
     finish "$RUN" smoke N4XF-soup decision2-dec-m4-N4XF-soup-nodeB-smoke "$REF_PKG" "$F/pkg/N4XF-soup-ref.sha256" \
-      "$REF_LIST_SHA" "$REF_MODEL" "$SPEC_CAL" "$C" none "$REF_CAL" none "${args[@]}" --max-items "$N"
+      "$REF_LIST_SHA" "$REF_MODEL" "$spec" "$C" none "$cal" none "${args[@]}" --max-items "$N"
     ;;
-  *) sed -n '2,19p' "$0"; exit 2 ;;
+  *) sed -n '2,20p' "$0"; exit 2 ;;
 esac

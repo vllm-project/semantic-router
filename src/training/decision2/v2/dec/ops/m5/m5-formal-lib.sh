@@ -25,7 +25,7 @@ SPEC_T1=$S/v2/dec/ops/m5/m5-adapter-infer-dec-t1.json
 GPU=${M5_GPU:-3}
 declare -A RENDER=([3]=/dev/dri/renderD153 [4]=/dev/dri/renderD161)
 export TMPDIR=/data/dev2/tmp
-mkdir -p "$F" "$TMPDIR"
+mkdir -p "$F/stage-cal" "$TMPDIR"
 
 flog() { echo "$(date -u +%FT%TZ) $*" >> "$F/OPERATIONS.log"; }
 die() { flog "$*"; echo "$*" >&2; exit 1; }
@@ -103,7 +103,7 @@ finish() {
   local run=$1 kind=$2 name=$3 label=$4 pkg=$5 list=$6 rev=$7 model=$8 spec=$9 cache=${10} before=${11} cal=${12} dec=${13}
   shift 13
   local R=$F/$run cargs=()
-  for a in "$@"; do cargs+=(--collect-arg "$a"); done
+  for a in "$@"; do cargs+=("--collect-arg=$a"); done
   if [ "$kind" = ref ] || [ "$kind" = finalist ]; then
     py -m v2.eval.same_panel seal --run-dir "$R" > "$R.seal.log" 2>&1 || die "$run seal FAILED"
   fi

@@ -364,6 +364,76 @@ class Receipt(unittest.TestCase):
             )
 
 
+class ReceiptCli(unittest.TestCase):
+    def test_smoke_receipt_with_option_like_collect_args(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Path(tmp)
+            run, cache = t / "run", t / "cache"
+            run.mkdir()
+            cache.mkdir()
+            (cache / "k.json").write_text("{}")
+            listing = t / "pkg.sha256"
+            listing.write_text("x  ./a\n")
+            write(
+                run / "GPU-TIME.json", {"gpu": 3, "wall_seconds": 12.5, "exit_code": 0}
+            )
+            write(
+                run / "SMOKE.json",
+                {"panels": [{"panel": "css15", "wall_seconds": 3.0}]},
+            )
+            argv = [
+                sys.executable,
+                str(OPS / "m5-receipt.py"),
+                "--run-dir",
+                str(run),
+                "--kind",
+                "smoke",
+            ]
+            for key in (
+                "name",
+                "label",
+                "spec",
+                "model",
+                "mirror",
+                "image",
+                "package-dir",
+            ):
+                argv += [f"--{key}", "x"]
+            argv += [
+                "--package-list",
+                str(listing),
+                "--revision",
+                receipt.sha_file(listing),
+            ]
+            argv += [
+                "--calibration-used",
+                "none",
+                "--calibration-decision",
+                "none",
+                "--cache-dir",
+                str(cache),
+            ]
+            argv += [
+                "--cache-before",
+                "none",
+                "--cache-after-manifest",
+                str(t / "after.sha256"),
+            ]
+            argv += [
+                "--collect-arg=--extra",
+                "--collect-arg=model_id=m",
+                "--collect-arg=--max-items",
+            ]
+            subprocess.run(argv, check=True, capture_output=True)
+            out = json.loads((run / "M5-RECEIPT.json").read_text())
+            self.assertEqual(
+                out["collect_args"], ["--extra", "model_id=m", "--max-items"]
+            )
+            self.assertTrue(out["revision_matches_list"])
+            self.assertEqual(out["wall_seconds"], 12.5)
+            self.assertEqual(out["cache"]["entries_after"], 1)
+
+
 class Params(unittest.TestCase):
     def test_header_stubs_count_like_the_package(self):
         with tempfile.TemporaryDirectory() as tmp:
