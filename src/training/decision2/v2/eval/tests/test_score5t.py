@@ -782,8 +782,11 @@ class BuildTest(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 score5t.main(args + ["--output", str(self.root / "validate2.json")])
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(ValueError):
             score5t.main(args + ["--output", str(self.root / "validate3.json")])
+        with mock.patch.dict(panels.ALL), self.assertRaises(SystemExit):
+            del panels.ALL["score5t-dev"]
+            score5t.main(args + ["--output", str(self.root / "validate4.json")])
 
 
 if __name__ == "__main__":
