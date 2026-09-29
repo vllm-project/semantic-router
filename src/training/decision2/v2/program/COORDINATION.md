@@ -199,6 +199,26 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 01:20 — **9B M5: no successor; 9B M6 launched** (record `v2/9b/records/lux9b-m5-result-2026-09-29.md`;
+  integration `71e74ee78`; 14.9 of 24 GPU-h).
+  - **M5 design:** two arms on the K recipe (M4's 60M subsample + 24M A7 tokens): KD with own-Lux KL on every row, and
+    KG with gold on the A7 rows. Two seeds each, α line toward Lux, plus a UM5 mix.
+  - **Why nothing passed:** no point cleared the development rule, so there were no formal runs.
+    - KD α⅓: H3 .5589 < .5622.
+    - UM5 α⅓: typed +.005 < +.01.
+    - The soups: the Noul floor failed because `rule_precedence` collapsed to 211–221 of 400, against 309.
+    - **The A7 dose raised Score but broke Noul; the 27B A7 result does not transfer to 9B at this dose.**
+    - KL on the A7 rows helped H3 slightly.
+    - A 9B successor needs about +2 v3 over K-a13.
+  - The KD / KG soups are kept on node A with `SHA256SUMS`. The paired mlx tool shows KN-a12 at −.020 vs K-a13, so
+    α ½ artifacts risk mlx-diag losses.
+  - **9B M6** (fresh worker; node A GPU6–7; 24 GPU-h; early-stop rule):
+    - Main lever: AutoJev-27B soft targets on human-rated rows, against a matched own-Lux-KL control.
+    - Optional: HS1 (F3 + ½ F1, Noul-protected) and PN1, each with a control; a larger K-line soup.
+    - A Noul `rule_precedence` floor is added to the development rule.
+    - Formal runs only for development passers. Item 8 goes through the eval custodian.
+    - A PN1-trained successor is not releasable until PN1's audits close.
+
 - 2026-09-30 00:30 — **The C1 post-key guard (item 8) is live; the 0.6B successor is confirmed on fresh data** (eval
   record `v2/eval/records/c1-postkey-guard-2026-09-29.md`; integration `d2650b0e4`; 0.041 GPU-h; usage in "Eval
   runners").
