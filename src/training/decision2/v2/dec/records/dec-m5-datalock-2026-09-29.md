@@ -216,3 +216,53 @@ queues behind the N5N chains on each GPU's flock:
 Each seed keeps its preregistered seed and uses N4XF's arguments, with `--train /runs/m5/data/n5b/train.jsonl
 --teacher /runs/m5/teacher/n5bn/teacher.jsonl`. The chain that finishes the last seed builds the soup and its readouts,
 including MLX-DEV. N5B's chain (`n5b` phase) launches only after an amendment and a part 3 of this record.
+
+# Part 3: N5B locked (2026-09-29)
+
+This part is written under [amendment 2](dec-m5-amendment-2-2026-09-29.md) (`a131563c5`). The added rows take Lux
+targets from the full published source list of the M4 composition. Code: `b35c65954` (tree `d7c244ca`, mirrored to
+node B). The prep script composes `teacher/n5b-a2` from N4XF's composed file first, then the M4 sources in M4
+precedence order, then h-w1 on H8 rows. The failed attempt with only the prereg's list stays in `teacher/n5b` as the
+record of that failure. The lock check now also compares rows outside the block with N4XF's targets byte for byte.
+The mixture, the N5BN teacher and the MLX-DEV panel are unchanged from part 2.
+
+## N5B teacher (preflight 3): PASS
+
+`teacher/n5b-a2/teacher.jsonl` **`9c85485a751bad82dee1519be7772287e03ea086d77fb8268de274fa20fd2da4`**, first source
+wins. Rows used per source:
+
+| source | rows used |
+| --- | --- |
+| N4XF composed file `m4/teacher/m4-xl-full-29m/lux-teacher.jsonl` (`e2ff27ce…`) | 52,462 (43,821 outside the block + 8,641 kept block rows) |
+| `A0-train.canonical` (`d8eae3e4`) | 0 |
+| RP-v2 wave 1 (`7885baf6`) | 241 |
+| RP-v2 wave 2 (`6bd8eb4d`) | 523 |
+| RP-v2 wave 3 (`002e5b42`) | 290 |
+| RP-v2 wave 4 (`03b1e72d`) | 0 |
+| XL w1 (`10053613`) | 2,782 |
+| XL w2, w4, w5, c-w1 | 0 |
+| XL w3 | 111 |
+| h-w1 on N5B's H8 rows (`teacher/hw1-n5b-h8/targets.jsonl` `3464648f…`) | 6,059 |
+
+The file covers 62,468 of 63,075 rows. Exactly the 607 H7 rows are missing, and they train gold-only with
+`--teacher-partial`. There are 0 input-hash mismatches. All 43,821 rows outside the block that N4XF's file covers keep
+their target byte for byte (0 changed). The 1,054 added MTOP rows that part 2 found uncovered take the RP-v2 waves
+(241 + 523 + 290). M4's own ret-gap labels are not a published source and are not used; N4XF's own composition used
+them for 0 rows.
+
+Lock check `lock-block.json` **`51d6414f2cd9b1e4e528ac1784d5e278450addf861e50739f90b114b38285418`**: **PASS**. Per
+arm: N5B PASS, N5BN PASS, MLX-DEV PASS (preflights 1–3). The part-2 result is kept as `lock-block-part2.json`
+(`4d9b13b4…`).
+
+## Launch (after this record is pushed)
+
+`data/n5b/READY` is written after this commit. `ops/m5/m5-chains.sh <b35c65954 mirror> n5b` then queues behind the
+running chains on each GPU's flock:
+
+- **GPU4** frees first, after N5BN-s3: `m5-N5B-s1`, then `m5-N5B-s3`.
+- **GPU3**, after N5BN-s2 and the N5BN soup: `m5-N5B-s2`.
+
+Each seed runs with N4XF's arguments, `--train /runs/m5/data/n5b/train.jsonl` and
+`--teacher /runs/m5/teacher/n5b-a2/teacher.jsonl`. The chain that finishes the last seed builds the soup and runs
+the CAL698, typed DEV, CSS pilot, SELECT, development and MLX-DEV readouts, including the comparison against the
+N4XF soup.
