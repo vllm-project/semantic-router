@@ -191,6 +191,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 09:30 — **DEV2.0-4B RELEASED (private)**: `llm-semantic-router/DEV2.0-4B@452f133211de292a87bc29ab7e24a3bd0704e40d`
+  (final decision `bfd45785…`; weights identical to `8052eb6c` / `c73123f3`; T = 1; integration `e7e7fe1c3`). The private
+  "Decision 2.0" collection holds exactly DEV2.0-0.6B, 0.8B, 2B and 4B. Storage cleanup (all `rewrite_history=False`, node
+  copies re-hashed first) freed 53.37 GB: N4XF duplicate 16.83, 9B DW 31.76, 0.6B Z 2.39, 0.6B mxcx 2.39 → **40.48 GB used,
+  59.52 GB free**. HOLD candidates (9B DW, 0.6B Z / mxcx) now live only on the nodes with recorded hashes.
+
 - 2026-09-29 09:25 — HT-DEV v1 validated (eval records under `v2/eval/records/`; integration `af16d465f`; "Eval runners"):
   it does NOT track formal human transfer better than the CSS pilot (within-tier sign agreement .539 vs pilot median .539
   and pilot three-task mean .607; within-tier r .396 / .402 / .523; P(HT-DEV better) .51 vs a .90 bar). Rules:
