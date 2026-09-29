@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # JevArena-C1 v1.1 scoring event 3 (the last of three), node A.
 # Usage (on node A, from an exact mirror; in event mode the key arrives once on stdin):
-#   event3.sh --gpu N --src MIRROR [--lease-name owner.eval] [--shared] [--models K,K,...]
-#             [--c27 f1|f2] [--peers27 K,K] [--c27-package DIR --c27-manifest SHA --c27-repo ID
-#             --c27-revision REV] [--c9b-package DIR --c9b-manifest SHA --c9b-repo ID --c9b-revision REV
-#             ...] [--allow-deviation ID]... [--verify-only | --preflight-only]
-# The 9B candidate (K-a13) is off by default: add cand9b,lux1,nimble2 to --models once its frozen
-# release package exists and pass the package with the --c9b-* options.
+#   event3.sh --gpu N --src MIRROR [--c27 f1|f2] --c9b-package DIR --c9b-manifest SHA
+#             [--lease-name owner.eval] [--shared] [--models K,K,...] [--peers27 K,K]
+#             [--c27-package DIR --c27-manifest SHA --c27-repo ID --c27-revision REV]
+#             [--c9b-repo ID] [--c9b-revision REV] [--c9b-identity SHA] [--c9b-calibration FILE|none]
+#             [--c9b-parity-stored PATH] [--c9b-tolerance X] [--c9b-cache DIR --c9b-cache-sha SHA]
+#             [--allow-deviation ID]... [--verify-only | --preflight-only]
+# The default selection includes the 9B rows (DEV2.0-8B, Lux 1.0, Nimble v2): the frozen DEV2.0-8B
+# package dir on node A and the SHA-256 of its MODEL_MANIFEST.json are the only 9B inputs; the plan
+# reads the weights identity from that manifest (allow-list in the table). --models without
+# cand9b,lux1,nimble2 plans without 9B. The ~27B candidate is F1 = DEV2.0-26B@5683c6f0 unless --c27 f2.
 # The model table is v2/eval/sealed/event3-models.json; `python3 -m v2.eval.sealed.event3 plan`
 # resolves it and refuses anything outside the C1 limits or with a PARENT-FILLS field.
 # --verify-only: images, mirror modules, paths, release manifests, tree digests, frozen caches (CPU).
@@ -33,7 +37,7 @@ while [ $# -gt 0 ]; do
   --c27) C27=$2; shift 2 ;;
   --models | --peers27 | --c27-package | --c27-manifest | --c27-repo | --c27-revision | --allow-deviation | \
     --c9b-package | --c9b-manifest | --c9b-repo | --c9b-revision | --c9b-identity | --c9b-calibration | \
-    --c9b-parity-stored | --c9b-tolerance)
+    --c9b-parity-stored | --c9b-tolerance | --c9b-cache | --c9b-cache-sha)
     PLAN_ARGS+=("$1" "$2"); shift 2 ;;
   --verify-only) MODE=verify; shift ;;
   --preflight-only) MODE=preflight; shift ;;
