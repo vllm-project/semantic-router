@@ -86,7 +86,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | A7 own-1.0 corpora | `/home/xunliu/code/vllm-sr-dev2-a7` | `xunzhuo/decision-2-training-a7` |
 | release engineering (DEV2.0-0.6B) | `/home/xunliu/code/vllm-sr-dev2-release-06b` | `xunzhuo/decision-2-training-release-06b` |
 | release engineering (DEV2.0-2B) | `/home/xunliu/code/vllm-sr-dev2-release-2b` | `xunzhuo/decision-2-training-release-2b` |
-| eval: human-transfer dev panel | `/home/xunliu/code/vllm-sr-dev2-eval-devpanel` | `xunzhuo/decision-2-training-eval-devpanel` |
+| eval: dev panels (HT-DEV, Score5-DEV, Score5-typed-DEV) | `/home/xunliu/code/vllm-sr-dev2-eval-devpanel` | `xunzhuo/decision-2-training-eval-devpanel` |
 | HF storage steward | `/home/xunliu/code/vllm-sr-dev2-storage` | `xunzhuo/decision-2-training-storage` |
 | release engineering (DEV2.0-4B) | `/home/xunliu/code/vllm-sr-dev2-release-4b` | `xunzhuo/decision-2-training-release-4b` |
 | release engineering (~27B) | `/home/xunliu/code/vllm-sr-dev2-release-27b` | `xunzhuo/decision-2-training-release-27b` |
@@ -151,7 +151,7 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
-| node A GPU0–1 | 0.6B track (owner; Milestone 7 from 2026-09-29 08:20 UTC+8). Short shared-lease jobs by eval (e.g., HT-DEV collections) and release workers are allowed as recorded co-tenants with their own lease entries |
+| node A GPU0–1 | 0.6B track (owner; Milestone 7 finished 2026-09-29 14:00 UTC+8; idle until Milestone 8, which waits for Score5-typed-DEV). Short shared-lease jobs by eval (e.g., the Score5-typed-DEV validation collections) and release workers are allowed as recorded co-tenants with their own lease entries |
 | node A GPU2–4 | ~27B Milestone 3 (moved from the 9B track 2026-09-29 04:30 UTC+8; the 27B track may train on node A — same image + frozen autotune cache per the comparability rule; formal comparisons stay on node B) |
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
 | node A GPU6–7 | 9B track Milestone 4 (2026-09-29 04:30 UTC+8); the eval track may use short shared-lease jobs on any GPU for development-panel scoring |
@@ -195,6 +195,29 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 14:05 — **0.6B Milestone 7: no successor; the released DEV2.0-0.6B stands** (record
+  `v2/06b/records/m7-results-2026-09-29.md`; gist 03; integration `f64e38ce8`; 7.35 GPU-h, track total ~36.1; nothing
+  uploaded).
+  - (a) Per-level Score offsets for `m6-mxcx-soup`, fitted on CAL698 plus the generated Score arms, failed the development
+    check: typed-DEV Score modal share went .83 → .915. The fitted offsets were small and deepened the typed skew. No
+    formal run.
+  - (b) Gold-only human Score rows (own-Lux targets dropped for the five human Score pools) looked fixed on development
+    panels (typed-DEV modal .45) but still collapsed on typed FINAL. `m7-mxcx-soup`: 82.75% level 4, +1.11 [−1.89, +5.33]
+    vs released. `m7-mx-soup`: 98.5% level 4. Both are significantly below `m6-mxcx-soup` (−3.80 / −6.25), so Lux
+    distillation on human Score rows is NOT the cause.
+  - **Measurement gap, now assigned:** eval builds **Score5-typed-DEV v1**, an out-of-family 5-level typed Score
+    development panel. It uses fresh seeds from our own v3 generator (`publication/generate_arena_v3.py`) for FINAL's
+    four Score families, disjoint from FINAL, the dev panels, C1 and training rows. It is validated against the known
+    FINAL collapses. Worktree `vllm-sr-dev2-eval-devpanel`; node A GPU0/1 shared lease, ≤ 0.3 GPU-h.
+  - **Planned 0.6B Milestone 8, only once that panel validates:**
+    - Refit the per-level offsets for `m6-mxcx-soup` on the panel's fit half, select on its check half, then run formal.
+      `m6-mxcx-soup` is +4.92 [+2.50, +9.10] vs released with human transfer level; typed FINAL Score collapse was its only
+      failure.
+    - The release runtime (`v2/release/runtime/qwen.py`) needs per-level offset support before a correction can ship.
+    - The card must disclose that the offsets were fitted on generator draws of the benchmark's Score families.
+  - C1 event 3 is not held for 0.6B. A 0.6B successor joins only if it is frozen by the time the 9B and ~27B packages
+    freeze. Node A GPU0–1 stay 0.6B-owned, open to shared-lease co-tenants.
 
 - 2026-09-29 13:45 — **SIXTH RELEASE CANDIDATE: 9B K-a13** (9B M4; gist 05 entry 13:30; record
   `lux9b-m4-formal-result-2026-09-29.md`; integration `2e2be3903`).
