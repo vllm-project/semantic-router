@@ -23,6 +23,7 @@ class ScriptSyntaxTest(unittest.TestCase):
             "run_mlx.sh",
             "run_gates.sh",
             "score_mlx_nodeA.sh",
+            "mlx_pair_nodeA.sh",
         ):
             with self.subTest(script=name):
                 lines = (M4B / name).read_text(encoding="utf-8").splitlines()
