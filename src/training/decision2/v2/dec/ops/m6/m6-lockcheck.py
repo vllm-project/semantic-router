@@ -39,7 +39,11 @@ PAYLOAD_SHA = "2194716a179b2e6c3ba529dee3952c5dd62c0f3281638b7236029d5d542f4914"
 EXCL_SPEC = CODE / "v2/dec/specs/m4-r2-excluded-groups.json"
 C1_REGISTRY = CODE / "v2/eval/records/sealed-c1-source-registry-2026-09-28.json"
 A7V3 = "3a4efc7768e3458e392f44e83391313fc25e49df"
-TARGET_59M = 58_814_652  # 2 x N4XF's 29,407,326 native tokens
+N4XF_TOKENS = 29_407_326
+N4XF_A0S_TOKENS = (
+    3_977_352  # A0s is taken whole in both mixtures; every other pool doubles
+)
+TARGET_59M = 2 * (N4XF_TOKENS - N4XF_A0S_TOKENS) + N4XF_A0S_TOKENS
 SOL = (
     "llm-semantic-router/Decision-1.0-Sol-2B",
     "ce0c018a28de16d6639b1cd203b761bf643b89e6",
@@ -216,9 +220,12 @@ if phase == "part1":
     src59 = Counter(r["source"] for _, r in r59)
     fam59 = Counter(r["family"] for _, r in r59)
     src29 = {r["source"] for _, r in r29}
-    c1 = {
-        name: hits
-        for name in set(src59) | set(fam59)
+    fam29 = Counter(r["family"] for _, r in r29)
+    # The 9B guard's rule: C1 name keys against every TRAIN source; family-name hits are reported only
+    c1 = {name: hits for name in src59 if (hits := denied_hits(name, keys, []))}
+    c1_family = {
+        name: {"hits": hits, "rows": fam59[name], "rows_in_29m": fam29[name]}
+        for name in fam59
         if (hits := denied_hits(name, keys, []))
     }
     comp = {
@@ -244,7 +251,12 @@ if phase == "part1":
         "rows": m59["rows"],
         "rows_by_type": m59["rows_by_type"],
         "tokens": m59["tokens"],
-        "tokens_vs_2x_n4xf": round(m59["tokens"] / TARGET_59M - 1, 5),
+        "tokens_target": TARGET_59M,
+        "tokens_vs_target": round(m59["tokens"] / TARGET_59M - 1, 5),
+        "tokens_vs_2x_n4xf": round(m59["tokens"] / (2 * N4XF_TOKENS) - 1, 5),
+        "non_a0s_tokens_vs_29m": round(
+            (m59["tokens"] - N4XF_A0S_TOKENS) / (m29["tokens"] - N4XF_A0S_TOKENS), 5
+        ),
         "tokens_by_block": {
             "A0s": block(lambda k: k == "A0s"),
             "A7": block(lambda k: k.startswith("A7")),
@@ -273,7 +285,8 @@ if phase == "part1":
         "29m_rows_differing": differ,
         "nested_by_component": nested,
         "sources_not_in_29m": sorted(set(src59) - src29),
-        "c1_registry_hits": c1,
+        "c1_registry_source_hits": c1,
+        "c1_registry_family_name_hits": c1_family,
         "c1_registry_sha256": sha(C1_REGISTRY),
         "c1_keys": len(keys),
         "a7x_components": [k for k in comp if k.upper().startswith("A7X")],
@@ -291,7 +304,7 @@ if phase == "part1":
         fails.append("59m builder identity vs 29m")
     if c1 or x["a7x_components"]:
         fails.append("59m C1 / A7x")
-    if abs(x["tokens_vs_2x_n4xf"]) > 0.02:
+    if abs(x["tokens_vs_target"]) > 0.01:
         fails.append("59m token budget")
     # own-Lux teachers
     for name, train in (("lux-all-29m", r29), ("lux-all-59m", r59)):
