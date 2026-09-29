@@ -207,5 +207,119 @@ class BuildTest(unittest.TestCase):
             self.build(spec)
 
 
+class RecipeBudgetTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.rows, self.recipe = [], []
+        for pool, source in (("P1", "s1"), ("P2", "s2"), ("P3", "s3")):
+            for g in range(30):
+                for k in range(1 + g % 3):
+                    score = (g // 2) % 2
+                    keys = ("0", "1") if score else ("a", "b")
+                    r = row(f"{pool}-{g}-{k}", f"{pool}-g{g}", source, keys=keys)
+                    r["language"] = ("en", "de")[g % 2]
+                    r["task_type"] = ("choice", "score")[score]
+                    r["input_sha256"] = digest({f: r[f] for f in INPUT_FIELDS})
+                    self.rows.append(r)
+                    self.recipe.append(
+                        {
+                            "id": r["id"],
+                            "pool": pool,
+                            "source": source,
+                            "native": 10 + (g * 7 + k) % 23,
+                        }
+                    )
+        self.native = {e["id"]: e["native"] for e in self.recipe}
+        self.total = sum(self.native.values())
+        self.write("recipe.jsonl", self.recipe)
+        for pool in ("P1", "P2", "P3"):
+            self.write(f"{pool}.jsonl", [r for r in self.rows if r["id"][:2] == pool])
+        self.write("teacher.jsonl", [teacher(r) for r in self.rows])
+        self.write("select.jsonl", [row("s-1", "sg", split="select")])
+        (self.dir / "c1.json").write_text(json.dumps(REGISTRY))
+
+    def write(self, name, records):
+        (self.dir / name).write_text("".join(json.dumps(r) + "\n" for r in records))
+
+    def ref(self, name):
+        return {"file": f"t:{name}", "sha256": file_sha256(self.dir / name)}
+
+    def spec(self, **changes):
+        spec = {
+            "name": "t",
+            "seed": "20260929",
+            "max_length": 100,
+            "recipe": self.ref("recipe.jsonl"),
+            "recipe_budget_tokens": self.total // 3,
+            "recipe_budget_tolerance": 0.5,
+            "pools": {p: [self.ref(f"{p}.jsonl")] for p in ("P1", "P2", "P3")},
+            "teachers": [self.ref("teacher.jsonl")],
+            "isolation": [{"role": "select", **self.ref("select.jsonl")}],
+            "denied_sources": {"c1_registry": "t:c1.json", "extra": ["massive"]},
+        }
+        spec.update(changes)
+        return spec
+
+    def build(self, spec):
+        lengths = lambda rows, *_: [self.native[r["id"]] for r in rows]  # noqa: E731
+        with mock.patch.object(m3_data, "token_lengths", lengths):
+            return m3_data.build(spec, {"t": self.dir}, Path("."), 1)
+
+    def test_budget_whole_groups_and_manifest(self):
+        train, teachers, manifest = self.build(self.spec())
+        budget = manifest["recipe"]["recipe_budget"]
+        realized = sum(self.native[r["id"]] for r in train)
+        self.assertEqual(budget["native_tokens"], realized)
+        self.assertEqual(manifest["recipe"]["recipe_native_tokens"], realized)
+        self.assertGreaterEqual(realized, self.total // 3)
+        self.assertLessEqual(realized, self.total // 3 * 1.5)
+        chosen = {r["group_id"] for r in train}
+        self.assertEqual(
+            {r["id"] for r in train},
+            {r["id"] for r in self.rows if r["group_id"] in chosen},
+        )
+        pools = manifest["recipe"]["recipe_selected_by_pool"]
+        self.assertEqual(set(pools), {"P1", "P2", "P3"})
+        self.assertEqual(sum(p["rows"] for p in pools.values()), len(train))
+        self.assertEqual(sum(p["tokens"] for p in pools.values()), realized)
+        self.assertEqual([t["id"] for t in teachers], sorted(r["id"] for r in train))
+        self.assertEqual(manifest["recipe"]["recipe_languages"], 2)
+
+    def test_excluded_pools_are_dropped_and_unknown_pool_fails(self):
+        train, _, manifest = self.build(self.spec(recipe_exclude_pools=["P3"]))
+        self.assertFalse(any(r["id"].startswith("P3") for r in train))
+        self.assertIn("P3", manifest["recipe"]["recipe_excluded_pools"])
+        self.assertEqual(
+            set(manifest["recipe"]["recipe_selected_by_pool"]), {"P1", "P2"}
+        )
+        with self.assertRaises(ValueError):
+            self.build(self.spec(recipe_exclude_pools=["V2:P3"]))
+
+    def test_same_seed_same_output(self):
+        first = self.build(self.spec())
+        second = self.build(self.spec())
+        self.assertEqual(first[0], second[0])
+        self.assertEqual(first[1], second[1])
+        other = self.build(self.spec(seed="other"))
+        self.assertNotEqual({r["id"] for r in first[0]}, {r["id"] for r in other[0]})
+
+    def test_selected_row_without_target_or_with_wrong_hash_fails(self):
+        self.write(
+            "teacher.jsonl", [teacher(r) for r in self.rows if r["id"][:2] != "P2"]
+        )
+        with self.assertRaises(ValueError):
+            self.build(self.spec(teachers=[self.ref("teacher.jsonl")]))
+        bad = [teacher(r) for r in self.rows]
+        for t in bad:
+            t["input_sha256"] = "0" * 64
+        self.write("teacher.jsonl", bad)
+        with self.assertRaises(ValueError):
+            self.build(self.spec(teachers=[self.ref("teacher.jsonl")]))
+
+    def test_budget_over_available_fails(self):
+        with self.assertRaises(ValueError):
+            self.build(self.spec(recipe_budget_tokens=self.total))
+
+
 if __name__ == "__main__":
     unittest.main()
