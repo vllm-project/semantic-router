@@ -1,4 +1,4 @@
-# Decoder Milestone 5 — data lock, part 1: N5N (2026-09-29)
+# Decoder Milestone 5 — data lock, part 1: N5N; part 2: N5BN and MLX-DEV (2026-09-29)
 
 Under `dec-m5-prereg-2026-09-29.md` (c62cc0853). This part locks **N5N** only. **N5B, N5BN and the MLX-DEV panel
 are not locked**: the preregistered MLX-DEV segment rule is infeasible as written (below), which changes the N5B
@@ -108,3 +108,111 @@ gate, full run, postrun) with N4XF's arguments except the teacher: `--train /run
 --teacher /runs/m5/teacher/n5n/teacher.jsonl --teacher-kl-weight 1.0 --teacher-partial --train-mode full --backbone-lr
 5e-6 --head-lr 5e-5 --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64 --seed
 20260926 / 20260927 / 20260928`; the chain finishing the last seed builds the soup and its readouts (`m5-soup.sh`).
+
+# Part 2: N5BN and MLX-DEV locked; N5B stopped (2026-09-29)
+
+Under the prereg and [amendment 1](dec-m5-amendment-1-2026-09-29.md) (`e574bbf56`: `--template-max-groups 50`, the
+implementation clarifications, N5N-first schedule). This part locks **N5BN** and the **MLX-DEV** panel. **N5B is
+stopped at preflight 3** (teacher coverage, below) and does not train until it is amended; no N5B file is READY.
+
+## Code
+
+Built by the block phase of `8e7f345e1` (mixture, panel, own-Nox labels on the added rows, checks). After the N5B
+teacher compose failed, `8e7060627` (tree `50557396`, mirrored to node B) made the launchers per-arm and nothing
+else: `m5-prep.sh` goes on past a failed teacher compose, writes the uncovered-row file and still builds the N5BN
+teacher. `m5-lockcheck.py` reports each arm's status. `m5-chains.sh` gains the phases `n5bn` / `n5b`, which split
+the block phase by arm and keep each seed on the same GPU. The report-only diagnostic now reads the Lux sources
+directly. No builder, labeller, composer or trainer code changed. `8e7060627` also adds `ops/m5/m5-select.py`
+(selection rules 1–4).
+
+## N5B / N5BN mixture (shared file)
+
+`data/n5b/train.jsonl` **`ae47b8258005a267d1f9a8c85ec20e77e22a07197ad765d78aa5608c9e6cd5c3`** (manifest `18891bbd…`),
+63,075 rows (Choice 24,989 / Noul 20,069 / Score 18,017), 29,450,191 native tokens (+0.146% vs 29,407,326). It is
+identical to the staging build under the same threshold. Superset `data/superset/train.jsonl` `d8e6c796…` (107,836
+rows, 42,627,506 tokens; `specs/m5-block-superset.json`). Rows outside the block are identical to N4XF's (same ids,
+order and bytes). The block has 18,631 rows: 11,297 N4XF block rows kept (the Noul cell shrank by 3,001 rows,
+stratified by language) and 7,334 rows added (A7k 909, A7q 780, A7s 1,093, H5 Choice 1,165, H8 Choice 2,424, H8 Score
+963). Quotas are block-token shares against N4XF's block (5,513,920 tokens); the tolerance is ±5% relative:
+
+| cell | quota | share | rel. dev. |
+| --- | --- | --- | --- |
+| Noul (H5 + H8) | .45 | .4553 | +1.19% |
+| A7q | .20 | .2022 | +1.11% |
+| A7k | .06 | .0601 | +0.15% |
+| A7s | .09 | .0900 | +0.03% |
+| H8 Choice (JCQA) | .09 | .0900 | +0.01% |
+| H8 Score (Spanglish) | .05 | .0500 | +0.01% |
+| H5 Choice (MTOP) | .06 | .0601 | +0.14% |
+
+The N5B mixture and N4XF both have 0 MLX-DEV groups, 0 MLX-DEV ids, 0 rows sharing a non-template segment with
+MLX-DEV (406 template segments ignored) and 0 rows of the 305 r2-excluded groups.
+
+## MLX-DEV panel
+
+`mlxdev/build/panel.jsonl` **`100ae4e770973640e00b79115e50c7fcca7d4837c22e596690ed6023530652a7`** (index `6ffa4b84…`,
+selection `data/n5b/mlxdev.selection.json` `98cf454d…`), 9,386 rows in 3,802 groups (`split` / `evaluation_role`
+select). A cell can overshoot its row target by at most its last group.
+
+| cell | groups | rows | languages (rows) | gold balance |
+| --- | --- | --- | --- | --- |
+| H5 Noul | 1,500 | 6,077 | 15 × 100 groups: ar 200, bn 200, de 834, es 564, fi 200, fr 974, id 200, ja 392, ko 220, ru 200, sw 219, te 200, th 200, zh 846, zh-hant 628 | 3,038 yes / 3,039 No |
+| H8 MIRACL Noul | 400 | 801 | es / fa / fr / hi 160, zh 161 (80 groups each) | 400 / 401 |
+| H8 Choice (JCQA) | 396 | 400 | ja | 5 keys, 73–89 each |
+| H5 Choice (MTOP) | 196 | 401 | de 87, es 80, fr 69, hi 90, th 75 | 9 keys |
+| A7q | 212 | 607 | 15 languages (es 283, ru 130, zh 61, …) | 5 levels, 116–128 |
+| A7k | 398 | 400 | ja 173, ko 227 | 6 levels |
+| A7s | 400 | 400 | hi-en 390, sw 10 | 3 levels |
+| H8 Score (Spanglish) | 300 | 300 | es-en | 3 levels |
+
+## Own-Nox labels on the added block rows (N5BN)
+
+Same convention and package as part 1. Co-located on node B GPU4 while `m5-N5N-s2` trained (113.9 of 274.5 GB VRAM
+in use before the job). Input `teacher/nox-rows-n5b-add/rows.jsonl` `c9afd673…`: 7,334 rows, which are the N5B
+block rows not already labelled in part 1. Labels `teacher/nox-n5b-add/labels.jsonl`
+**`545c513f0231188039db0b399f7d9d6019f3344f7808ace88b78b97e78d00c2f`**: 75.5 s of labelling (95 s wall).
+
+- **Re-label check (preflight 2, amendment 1 item 6): PASS.** 3 whole batches (324 rows,
+  `teacher/nox-check-n5b-add/check.jsonl` `9270617d…`); re-label `613243dd…`: 324 / 324 bitwise identical.
+- **M3 overlap: PASS.** 319 rows: argmax agreement 1.000, mean |Δp| 2.7e-6.
+
+## Teachers (preflight 3)
+
+- **N5BN: PASS.** `teacher/n5bn/teacher.jsonl` **`eeb39c2401e546039bce6a8f7a3f35739f86652cb010b9b4cc738f06b9ebdf0d`**.
+  First source wins: own-Nox on all 18,631 block rows (11,297 from `nox-n5n`, 7,334 from `nox-n5b-add`), then
+  N4XF's Lux file for 43,821 rows, then h-w1 for the 16 English H8 rows (`teacher/hw1-n5b-h8/targets.jsonl`
+  `3464648f…`, 6,059 rows, all of N5B's H8). The XL-r2 waves are used for 0 rows. 62,468 of 63,075 rows are covered;
+  exactly the 607 H7 rows are missing; 0 input-hash mismatches.
+- **N5B: FAIL, so N5B is stopped.** The preregistered sources (N4XF's Lux file, the XL-r2 own-Lux waves w1–w5 and
+  c-w1, h-w1 for H8) leave **1,054 added MTOP rows** (H5 Choice; de 222, es 213, hi 213, fr 205, th 201; 535 groups)
+  without a target. The waves cover only the 111 added MTOP rows that were in XL-r2 mixtures. The composer refused
+  the file, as it should. The uncovered rows, those 1,054 plus the 607 H7 rows, are in
+  `teacher/missing-n5b/uncovered.jsonl` `0f466536…`, ready if an amendment chooses own-Lux labels. The alternatives
+  are gold-only rows or a different MTOP draw. No N5B training until then.
+
+Lock check `lock-block.json` `4d9b13b4248ef7b1bbb68d1f5fe0eb2569a176ab56efe6c717726001ea568873`: overall FAIL,
+`fails = [teacher_n5b]`. Per arm: **N5BN PASS, MLX-DEV PASS, N5B FAIL.**
+
+## Training-data diagnostic, N5B / N5BN block Noul rows (report only)
+
+4,872 rows (H5 4,086, H8 786), gold yes .500. Lux targets: predicted yes .564, gold agreement .792, gold-No recall
+.728. Nox targets: .521 / .785 / .764. On H5 alone, Lux is .571 / .813 / .741 and Nox .513 / .807 / .794; on H8, Lux is
+.525 / .686 / .660 and Nox .562 / .669 / .607. File `teacher/diag-n5b-sources/diag.json` `7506f747…`.
+
+## GPU hours so far (completed receipts)
+
+N5N-s1 and N5N-s2 zero-step, one-step and gate: 0.0761 + 0.0739. Own-Nox labels, part 1: 0.0469. Own-Nox labels on
+the added rows, part 2: 0.0264 + 0.0069. **Total 0.230 GPU-h.** The two N5N full runs are in flight.
+
+## Launch (after this record is pushed)
+
+`data/n5bn/READY` and `mlxdev/READY` are written after this commit, and `ops/m5/m5-chains.sh <8e7060627 mirror> n5bn`
+queues behind the N5N chains on each GPU's flock:
+
+- **GPU3:** the MLX-DEV baselines (Nox 1.0, N4XF s1–s3 BEST, N4XF soup, then the pending N5N-soup comparison), then
+  `m5-N5BN-s2`.
+- **GPU4:** `m5-N5BN-s1`, then `m5-N5BN-s3`.
+
+Each seed keeps its preregistered seed and uses N4XF's arguments, with `--train /runs/m5/data/n5b/train.jsonl
+--teacher /runs/m5/teacher/n5bn/teacher.jsonl`. The chain that finishes the last seed builds the soup and its readouts,
+including MLX-DEV. N5B's chain (`n5b` phase) launches only after an amendment and a part 3 of this record.
