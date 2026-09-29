@@ -24,6 +24,7 @@ test-training-contracts: harness-venv-install ## Run dependency-light model trai
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/safety_classifier/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/user_feedback_classifier/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/escalation_risk/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/pii_model_fine_tuning_lora/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/sequence_repair/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/classifier_model_fine_tuning_lora/tests -p 'test_*.py'
