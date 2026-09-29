@@ -1001,6 +1001,12 @@ def main(argv: list[str] | None = None) -> None:
         metrics_file.flush()
         print(text, flush=True)
 
+    if group.device.type == "cuda":
+        # Loading and sharding peak far above training and leave cached blocks behind.
+        torch.cuda.empty_cache()
+        log({"event": "setup", **peak_memory(group)})
+        torch.cuda.reset_peak_memory_stats(group.device)
+
     records: list[tuple[int, dict[str, Any]]] = []
     saved: set[int] = set()
     timings: list[float] = []

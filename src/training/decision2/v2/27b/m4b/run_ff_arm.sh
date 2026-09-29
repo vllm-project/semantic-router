@@ -21,7 +21,10 @@ GPUS=${GPUS:-0,1,2}
 TEACHER_FILE=${TEACHER_FILE:-}
 TEACHER_KL=${TEACHER_KL:-0}
 PRECISION=${PRECISION:-autocast}
-MAX_BATCH_TOKENS=${MAX_BATCH_TOKENS:-32768}
+# Amendment 3: the 32,768-token probe exhausted device memory through allocator fragmentation, so the
+# prereg's 16,384-token fallback applies, with expandable allocator segments.
+MAX_BATCH_TOKENS=${MAX_BATCH_TOKENS:-16384}
+ALLOC_CONF=${ALLOC_CONF:-expandable_segments:True}
 PROBE_UPDATES=${PROBE_UPDATES:-24}
 FULL_CAP=${FULL_CAP:-5.0}
 ARM_CAP=${ARM_CAP:-6.0}
@@ -96,6 +99,7 @@ COMMON=(
   --env PYTHONPATH=/code:/opt/decision-fla --env "TMPDIR=$TMPDIR"
   --env HF_HUB_OFFLINE=1 --env TRANSFORMERS_OFFLINE=1 --env "DEC_MIRROR_SHA=$SHA"
   --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=/triton-cache
+  --env "PYTORCH_HIP_ALLOC_CONF=$ALLOC_CONF"
 )
 TEACHER_MOUNT=() TEACHER_ARGS=()
 if [ -n "$TEACHER_FILE" ]; then
