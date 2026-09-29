@@ -46,3 +46,61 @@ func TestGatewayKeepaliveRequiresExactEmptyShape(t *testing.T) {
 	_, _, err := decoder.Push([]byte("data: " + second + "\n\n"))
 	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "stream_response_id_mismatch")
 }
+
+func TestGatewayKeepaliveAcceptsEmptyChoiceChunksWithOwnIdentity(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy())
+	frames := []string{
+		`{"id":"gw-heartbeat","object":"chat.completion.chunk","created":1770000000,"model":"gw-internal","choices":[]}`,
+		`{"id":"chatcmpl-real","object":"chat.completion.chunk","created":1,"model":"real","choices":[{"index":0,"delta":{"role":"assistant","content":"hello"},"finish_reason":null}]}`,
+		`{"id":"chatcmpl-real","object":"chat.completion.chunk","created":1,"model":"real","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+	}
+	var sawOutput bool
+	for _, frame := range frames {
+		events, _, err := decoder.Push([]byte("data: " + frame + "\n\n"))
+		if err != nil {
+			t.Fatalf("empty-choice heartbeat must not fail the stream: %v", err)
+		}
+		for _, event := range events {
+			if event.Type == llmprotocol.EventOutputTextDelta && event.Delta == "hello" {
+				sawOutput = true
+			}
+		}
+	}
+	completed, _, err := decoder.Push([]byte("data: [DONE]\n\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sawOutput {
+		t.Fatal("real chunk after an empty-choice heartbeat lost its output")
+	}
+	if len(completed) == 0 || completed[len(completed)-1].Type != llmprotocol.EventResponseCompleted {
+		t.Fatalf("stream must complete after the heartbeat, got %+v", completed)
+	}
+}
+
+func TestGatewayEmptyChoiceChunkWithUsageIsNotKeepalive(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy())
+	frames := []string{
+		`{"id":"chatcmpl-real","object":"chat.completion.chunk","created":1,"model":"real","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}`,
+		`{"id":"chatcmpl-real","object":"chat.completion.chunk","created":1,"model":"real","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+		`{"id":"chatcmpl-real","object":"chat.completion.chunk","created":1,"model":"real","choices":[],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}`,
+	}
+	for _, frame := range frames {
+		if _, _, err := decoder.Push([]byte("data: " + frame + "\n\n")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	events, _, err := decoder.Push([]byte("data: [DONE]\n\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var completed *llmprotocol.Event
+	for i := range events {
+		if events[i].Type == llmprotocol.EventResponseCompleted {
+			completed = &events[i]
+		}
+	}
+	if completed == nil || completed.Usage == nil || completed.Usage.Total.Value == nil || *completed.Usage.Total.Value != 3 {
+		t.Fatalf("terminal event must carry the usage reported on the empty-choices chunk, got %+v", completed)
+	}
+}

@@ -241,12 +241,22 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 	return diagnostics
 }
 
-// isGatewayChatKeepalive recognizes only the empty chunk shape used by
-// gateway aggregators. A real delta, usage snapshot, or error must continue
-// through identity and content validation even when created is zero.
+// isGatewayChatKeepalive recognizes synthetic heartbeat chunks that cannot
+// carry model output, so they neither establish the response ID/model identity
+// nor poison a stream that later switches to its real identity. Two shapes
+// qualify: the exact "chatcmpl-keepalive" chunk emitted by aggregator
+// gateways, and any chunk without choices, usage, or error — an empty chunk
+// holds nothing a client could consume, but aggregator gateways do emit them
+// (often with their own synthetic IDs) and the strict identity pinning would
+// otherwise reject the real chunks that follow.
 func isGatewayChatKeepalive(chunk chatChunkWire) bool {
-	if chunk.ID != "chatcmpl-keepalive" || chunk.Created != 0 || chunk.Model != "keepalive" ||
-		chunk.Usage != nil || chunk.Error != nil || len(chunk.Choices) != 1 {
+	if chunk.Usage != nil || chunk.Error != nil {
+		return false
+	}
+	if len(chunk.Choices) == 0 {
+		return true
+	}
+	if len(chunk.Choices) != 1 || chunk.ID != "chatcmpl-keepalive" || chunk.Created != 0 || chunk.Model != "keepalive" {
 		return false
 	}
 	choice := chunk.Choices[0]
