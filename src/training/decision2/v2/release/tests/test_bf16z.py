@@ -162,5 +162,111 @@ class RoundTripTest(unittest.TestCase):
         )
 
 
+@unittest.skipUnless(HAVE, "numpy and zstandard are needed")
+class PipelineTest(unittest.TestCase):
+    """Builder, layout and runtime hooks on a tiny full checkpoint."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        rng = np.random.default_rng(7)
+        self.ckpt = self.root / "ckpt"
+        (self.ckpt / "backbone").mkdir(parents=True)
+        for i in (1, 2):
+            write_safetensors(
+                self.ckpt / "backbone" / f"model-0000{i}-of-00002.safetensors",
+                sample(rng),
+            )
+        (self.ckpt / "backbone" / "model.safetensors.index.json").write_text("{}")
+        (self.ckpt / "backbone" / "config.json").write_text("{}")
+        (self.ckpt / "decision_config.json").write_text('{"checkpoint_format": "full"}')
+        write_safetensors(self.ckpt / "decision_head.safetensors", sample(rng))
+        (self.ckpt / "tokenizer.json").write_text("{}")
+        (self.ckpt / "combination_manifest.json").write_text("{}")
+        self.out = self.root / "ckpt-bf16z"
+        result = bf16z.compress_checkpoint(self.ckpt, self.out, level=3)
+        receipt = bf16z.make_receipt(result, 3, self.ckpt)
+        self.receipt = self.root / "bf16z.json"
+        self.receipt.write_text(json.dumps(receipt))
+        report = bf16z.verify_dir(self.out, receipt["files"])
+        self.verify = self.root / "verify.json"
+        self.verify.write_text(json.dumps(report))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def spec(self) -> dict:
+        from v2.release.layout import sha_file
+
+        return {
+            "bf16z": {
+                "receipt": str(self.receipt),
+                "sha256": sha_file(self.receipt),
+                "verify": str(self.verify),
+                "verify_sha256": sha_file(self.verify),
+            }
+        }
+
+    def test_identity_from_hashes_equals_the_real_fingerprint(self):
+        from training.model.infer import checkpoint_fingerprint
+        from v2.release.build import bf16z_files, identity_from_hashes
+
+        restored, storage = bf16z_files(self.spec(), self.out)
+        self.assertEqual(
+            identity_from_hashes(restored), checkpoint_fingerprint(self.ckpt, None)
+        )
+        self.assertEqual(len(storage["files"]), 2)
+        self.assertEqual(storage["codec"], bf16z.FORMAT)
+
+    def test_tampered_compressed_file_is_refused(self):
+        from v2.release.build import bf16z_files
+
+        target = next((self.out / "backbone").glob("*.bf16z"))
+        data = bytearray(target.read_bytes())
+        data[-1] ^= 1
+        target.write_bytes(bytes(data))
+        with self.assertRaises(ValueError):
+            bf16z_files(self.spec(), self.out)
+
+    def test_counts_and_pointer_read_compressed_headers(self):
+        from v2.release import layout
+        from v2.release.runtime.api import _tensor_count
+
+        files = layout.select_model_files("qwen-full", self.out)
+        self.assertIn("backbone/model-00001-of-00002.safetensors.bf16z", files)
+        groups = layout.parameter_files("qwen-full", files)
+        plain = layout.select_model_files("qwen-full", self.ckpt)
+        plain_groups = layout.parameter_files("qwen-full", plain)
+        count = lambda root, names: sum(
+            layout.safetensors_count(root / n) for n in names
+        )
+        self.assertEqual(
+            count(self.out, groups["backbone"]),
+            count(self.ckpt, plain_groups["backbone"]),
+        )
+        self.assertEqual(
+            sum(_tensor_count(self.out / n) for n in groups["backbone"]),
+            count(self.ckpt, plain_groups["backbone"]),
+        )
+        pointer = layout.pointer(
+            "qwen-full",
+            "DEV2.0-27B",
+            files,
+            calibration=None,
+            base=None,
+            max_input_tokens=8,
+        )
+        self.assertEqual(pointer["weight_storage"]["codec"], "bf16z/1")
+        plain_pointer = layout.pointer(
+            "qwen-full",
+            "DEV2.0-27B",
+            plain,
+            calibration=None,
+            base=None,
+            max_input_tokens=8,
+        )
+        self.assertNotIn("weight_storage", plain_pointer)
+
+
 if __name__ == "__main__":
     unittest.main()
