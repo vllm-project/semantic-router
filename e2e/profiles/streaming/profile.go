@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
@@ -14,6 +15,7 @@ const valuesFile = "e2e/profiles/streaming/values.yaml"
 var resourceManifests = []string{
 	"deploy/kubernetes/routing-strategies/aigw-resources/base-model.yaml",
 	"deploy/kubernetes/streaming/aigw-resources/gwapi-resources.yaml",
+	"e2e/profiles/streaming/full-duplex.yaml",
 }
 
 // Profile implements the Streaming Body test profile.
@@ -31,6 +33,10 @@ func NewProfile() *Profile {
 			Name:                     "streaming",
 			SemanticRouterValuesFile: valuesFile,
 			ResourceManifests:        resourceManifests,
+			WaitDeployments: []helpers.DeploymentRef{
+				{Namespace: "default", Name: "full-duplex-selected"},
+				{Namespace: "default", Name: "full-duplex-default"},
+			},
 		}),
 	}
 }
@@ -62,6 +68,8 @@ func (p *Profile) GetTestCases() []string {
 		// Safety: verify fast_response blocking works with streamed body chunks
 		"streaming-pii-blocked",
 		"streaming-jailbreak-blocked",
+		// Raw Envoy FULL_DUPLEX_STREAMED gateway next to the STREAMED one
+		"envoy-full-duplex-routing",
 	}
 }
 

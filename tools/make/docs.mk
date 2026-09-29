@@ -164,10 +164,10 @@ APISERVER_INDEX_BEGIN := <!-- BEGIN-GENERATED-ENDPOINT-INDEX -->
 APISERVER_INDEX_END := <!-- END-GENERATED-ENDPOINT-INDEX -->
 
 .PHONY: generated-contract-check generated-contract-generate
-generated-contract-check: config-schema-check api-docs-check agent-skill-check docs-generated-check docs-crd-check ## Check all generated public references without rewriting
+generated-contract-check: training-contract-check config-schema-check api-docs-check agent-skill-check docs-generated-check docs-crd-check ## Check all generated public references without rewriting
 
 # OpenAPI embeds the config schema: regenerate it before exporting API docs.
-generated-contract-generate: config-schema-generate ## Regenerate OpenAPI, config contracts, and the public skill package in dependency order
+generated-contract-generate: training-contract-generate config-schema-generate ## Regenerate OpenAPI, config contracts, and the public skill package in dependency order
 	@$(MAKE) api-docs-generate
 	@$(MAKE) agent-skill-sync
 	@$(MAKE) model-catalog-generate docs-cli docs-config docs-crd
