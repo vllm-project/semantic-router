@@ -1,6 +1,6 @@
 # ~27B M4b state (resume file)
 
-Updated: 2026-09-29 19:00 UTC+8 (M4b worker; **A1-s1 full attempt running (from 10:52:48Z)**)
+Updated: 2026-09-29 20:50 UTC+8 (resumed M4b worker; **A1-s1 done; A2-s1 full running**)
 Branch: `xunzhuo/decision-2-training-27b-m4b` (worktree `/home/xunliu/code/vllm-sr-dev2-27b-m4b`; merge-only into
 `xunzhuo/decision-2-training`). Gist file: `06b-decision-2-27b-m4b.md`. GPUs: node B GPU0–2 only (lent by 9B;
 leases now `track=27b-m4b`, previous owners kept as `owner.prev-20260929T094419Z`). Budget 36 GPU-h.
@@ -44,7 +44,9 @@ local copy before launch); launch = `setsid nohup bash <script> … > /data/dev2
 | P0 parity attempt 4 (PASS) | 0.025 |
 | P0 probe 1 (32K, OOM) / probe 2 (16K, PASS) | 0.313 / 0.410 |
 | A1-s1 one-step / reload | 0.610 / 0.026 |
-| **Total so far** | **1.604** |
+| A1-s1 full (404 updates, 1.61 h wall; BEST = step 404, SELECT family-macro .914) | 4.828 |
+| A2-s1 one-step / reload | 0.205 / 0.026 |
+| **Total so far** | **6.66** |
 
 ## Research notes (read-only passes, 16:10–16:40)
 
