@@ -1,9 +1,9 @@
 # 9B M6 state (resume file)
 
-Updated: 2026-09-30 02:15 UTC+8 (M6 worker; **preregistered; AutoJev wave next**)
+Updated: 2026-09-30 03:00 UTC+8 (M6 worker; **data frozen; training chains launching**)
 Branch: `xunzhuo/decision-2-training-9b` (merge-only into `xunzhuo/decision-2-training`)
-Prereg: `records/lux9b-m6-prereg-2026-09-30.md`. Code `3c1e1a48f` (mirrored on node A, verified); runtime mirror
-`3277dec9d` (verified, reused).
+Prereg: `records/lux9b-m6-prereg-2026-09-30.md` (`f41402e68`) + amendment 1 (`7380a3cbf`). Code / wrappers mirror
+`7380a3cbf` on node A (created, verified); runtime mirror `3277dec9d` (verified, reused).
 
 ## Plan
 
@@ -14,7 +14,10 @@ Prereg: `records/lux9b-m6-prereg-2026-09-30.md`. Code `3c1e1a48f` (mirrored on n
 - Lines KA / KH / K5 (M4 K-s1..s3 + K-s4 + K-s5) at ⅓ ½ ⅔ 1; K2 report-only. Rule `lux9b.m6_rules alpha` vs a fresh re-read
   of K-a13 with the Noul `rule_precedence` floor (≥ R − 4). Finalists ≤ 3 in priority KA, KH, K5.
 
-## Done (CPU, node A `/data/dev2/runs/9b/m6/`)
+## Done (node A `/data/dev2/runs/9b/m6/`)
+
+- AutoJev wave: attempt 1 (`aj-wave-r1`, sorted-key prompts) refused at conversion; amendment 1; repeat `aj-wave` OK,
+  targets `249b1906…`. KA teacher `3f0aabe0…` (AutoJev on S 30,792, own-Lux 91,859).
 
 - `data/m6-split`: S 30,792 rows / 8.77M tokens; production AutoJev coverage 9,239; wave 21,553 rows
   (prompts `728d3c70…`); manifest `a538817d…`. Guard pre-run PASS (`pre/guard.json`).
@@ -24,8 +27,9 @@ Prereg: `records/lux9b-m6-prereg-2026-09-30.md`. Code `3c1e1a48f` (mirrored on n
 
 ## Next
 
-1. Upload + verify + launch `chains/m6-aj.sh` (GPU6 + GPU7): the AutoJev wave, then the KA teacher build.
-2. Record the KA teacher hash (amendment 1), then upload / verify / launch `m6-gpu6.sh` and `m6-gpu7.sh`.
+1. Chains `m6-gpu6` / `m6-gpu7` (mirror `7380a3cbf`): wave 1 KA-s4 + K-s4 (with `ref-ka13` first on GPU7).
+2. Early rules for KA-s4 and KH-s4 (`m6/rules/early-*.json`), then second seeds, soups and lines as the chains decide.
+3. Rules (CPU): seed rule, α rule per line, finalists → locks → formal runs → successor rule.
 
 ## Launch pattern (chain rule)
 
@@ -35,7 +39,7 @@ separate ssh call `bash $L/launch.sh <chain> <remote file> <size> <sha> <SHA>`; 
 
 ## GPU-hours
 
-0 so far (CPU builds only); cap 24.
+AutoJev waves 0.868 (0.424 + 0.444); total 0.868 of 24.
 
 ## Process notes
 

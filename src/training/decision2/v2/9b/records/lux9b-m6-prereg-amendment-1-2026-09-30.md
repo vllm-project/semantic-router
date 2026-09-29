@@ -34,3 +34,22 @@ step, development readout or teacher target exists yet.
 - **Records and budget:** the first attempt stays on node A as `m6/data/m6-split-r1` and `m6/aj-wave-r1`. Its GPU-hours
   (two shards 0.408 + the repeat check) count against the 24 GPU-h cap; `m6_gpu_hours` counts every `aj-wave*` attempt.
 - Nothing else changes: arms, seeds, rules, finalists and caps are as preregistered.
+
+## Data freeze (appended 2026-09-30 ~03:00 UTC+8, before any training step)
+
+- **Repeat wave** (chain `m6-aj2`, mirror `7380a3cbf`, 18:31–18:45Z): guard PASS; shards 10,635 + 10,918 rows, exit 0,
+  autotune digest `cff772eb…` unchanged, FLA path; repeat check 128 / 128 identical answers, drift 0.0.
+  - Targets `249b1906d25a1f2f85c8013ff22415cba723c2ce5918c353e81d4676f2c93037` (21,553 rows).
+  - Attestation `5e6f19d8…`; report `f54ac115…`; prompts `5a9182ab…` (rows `ff975f38…`, as before).
+- **KA teacher** `3f0aabe0cccdde1af6a79b4d0a926dce47f4666a8494fdfa98dc29ea2a030356` (122,651 rows; manifest `65bf8fa3…`;
+  train.jsonl `a66131b1…`, byte-identical to x60).
+  - AutoJev on all 30,792 S rows: production `aj-a0s-strict` 1,107, AJ-M 6,004, AJ-SL 2,128, M6 wave 21,553.
+  - Own-Lux on the other 91,859 rows.
+- **Agreement with gold on S** (argmax, report only):
+
+  | Teacher | All | Choice | Noul | Score |
+  | --- | ---: | ---: | ---: | ---: |
+  | AutoJev-27B | .608 | .892 | .840 | .481 |
+  | own-Lux | .585 | .851 | .823 | .460 |
+
+- **AutoJev GPU-hours:** 0.868 over both attempts (0.424 + 0.444), within the 1.5 cap.
