@@ -1,0 +1,66 @@
+{
+  "adapter_version": "decision2-typed-benchmark-adapter-v3-score-bias",
+  "model_id": "dev2-06b/m7a-mxcx-sb",
+  "model_revision": "cd71f631714d335b4d60f61cc467f811b9a40b6650d8bb869e6512b71986bad4",
+  "model_sha256": "01fae75098ce29314c5de2990321fcfd31457de7c02bb757bd8345662a823854",
+  "model_files_sha256": {
+    "backbone/config.json": "fcf62f425b626755c6df66630215aed57c70b38bf779e6ac9aeff376224310ac",
+    "backbone/model.safetensors": "b303341581505b63809694870c6657fc5fc001b4970b4bfca098e51039466855",
+    "chat_template.jinja": "87a2728cb8dc9fe424d624542f6060ec05a1d285ebbec578bb078900e33396b5",
+    "decision_config.json": "4778b8818f8510bf761eebba48ec5ffd5941c8f95ef2b228a97162fb0c814a6e",
+    "decision_head.safetensors": "508dfe385c8fde8eb0b4eec5c199f5fe8363efeb247de024a08765b53183409d",
+    "tokenizer.json": "be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506",
+    "tokenizer_config.json": "cbea7bca9904d56693d2226b00fd564e3be053609d1e50f8f1885510f0f6e790"
+  },
+  "checkpoint_format": "full",
+  "peft_version": null,
+  "adapter_sha256": "d634dcade90ba5e967223ba1b84068c63e8d433e0feb4dd6f08481ff49468d7c",
+  "adapter_files_sha256": {
+    "infer.py": "7bb9f3cc88f04cd6e4ded62e69f41dd1c7a3d0154a76acdf44c0d73e4163ef58",
+    "decision_model.py": "1ab1e49bccc8b84632a32565ce666a6db94298372ee891dee5b68e54f80957fb",
+    "data.py": "632bd60555f63459ff08ffe82c8263ca6a96f75360bc8c06469fcb10f1e2e99c",
+    "lora.py": "7049e35e2a7bf50dd5888902cd0b7030d9bbd448d7d7aba8875ceb89aebff231",
+    "source.py": "ef7b30171c4befb26163ea4d3d6e5add9dc602228a476d6f0ead9d40b450c7e3",
+    "score_bias.py": "837974bb8abb8c51c907e4f025e2632bd59bc2875eb55a4343d7bd4274622646"
+  },
+  "input_sha256": "a17ec4b675bbc3da96dba8f31af8f25c9b02cc96ff048fb7de899bdd8b6cf79a",
+  "input_items": 1600,
+  "max_length": 8192,
+  "temperature": 1.0,
+  "execution": "one benchmark item at a time; all its questions batched together; BF16 backbone, FP32 head",
+  "truncation_policy": "none; over-budget questions produce an invalid answer",
+  "counts": {
+    "items": 1600,
+    "questions": 1600,
+    "valid_questions": 1600,
+    "invalid_questions": 0,
+    "over_budget_questions": 0,
+    "truncated_questions": 0
+  },
+  "torch_version": "2.12.0+git6bbd260",
+  "score_bias_sha256": "3aa30bc1cc6ca4ad5ecc1e972ff04508c1e5fef1f1e749fb7a210b76fa91a99a",
+  "score_bias": {
+    "file_sha256": "3aa30bc1cc6ca4ad5ecc1e972ff04508c1e5fef1f1e749fb7a210b76fa91a99a",
+    "offsets": {
+      "3": [
+        -0.194633,
+        0.082067,
+        0.112566
+      ],
+      "4": [
+        -0.107577,
+        0.049272,
+        0.061924,
+        -0.003619
+      ],
+      "5": [
+        -0.169001,
+        0.038638,
+        0.031806,
+        -0.000867,
+        0.099424
+      ]
+    }
+  },
+  "predictions_sha256": "f66a25d2b5102a229b2abb53d732338d92b4cde3b1dd3fe032d475e47e13e5f1"
+}

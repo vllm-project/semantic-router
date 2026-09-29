@@ -1,0 +1,35 @@
+{
+  "best_export_manifest_sha256": "cd71f631714d335b4d60f61cc467f811b9a40b6650d8bb869e6512b71986bad4",
+  "files_verified": 7,
+  "kind": "m7a-score-bias-package",
+  "model_sha256": "01fae75098ce29314c5de2990321fcfd31457de7c02bb757bd8345662a823854",
+  "prereg": "v2/06b/records/m7-prereg-2026-09-29.md section 1.6",
+  "score_bias_offsets": {
+    "3": [
+      -0.194633,
+      0.082067,
+      0.112566
+    ],
+    "4": [
+      -0.107577,
+      0.049272,
+      0.061924,
+      -0.003619
+    ],
+    "5": [
+      -0.169001,
+      0.038638,
+      0.031806,
+      -0.000867,
+      0.099424
+    ]
+  },
+  "score_bias_sha256": "3aa30bc1cc6ca4ad5ecc1e972ff04508c1e5fef1f1e749fb7a210b76fa91a99a",
+  "source": {
+    "best_export_manifest_sha256": "3ae009ad838487c0df839a55898a98f5665276136d2a8cab3c1260dd0b29dfa2",
+    "complete_sha256": "1e5603a5dd415d2a52efeab3dc2fa511101958ce404ed6ee380f7b488ff515ef",
+    "dir": "/data/dev2/runs/06b/m1/arms/m6-mxcx-soup/full",
+    "state_sha256": "5c3d3ca18434fab1045a5840f4ef4508f9956fd3b2de00bd1bacf912b9729068"
+  },
+  "status": "COMPLETE"
+}

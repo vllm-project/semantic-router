@@ -1,0 +1,555 @@
+{
+  "counts_arm_levels_split_gold": {
+    "A6g": {
+      "3": {
+        "chk": {
+          "0": 8,
+          "1": 8,
+          "2": 8
+        },
+        "fit": {
+          "0": 7,
+          "1": 7,
+          "2": 7
+        }
+      },
+      "4": {
+        "chk": {
+          "0": 8,
+          "1": 8,
+          "2": 8,
+          "3": 8
+        },
+        "fit": {
+          "0": 8,
+          "1": 8,
+          "2": 8,
+          "3": 8
+        }
+      },
+      "5": {
+        "chk": {
+          "0": 3,
+          "1": 3,
+          "2": 3,
+          "3": 3,
+          "4": 3
+        },
+        "fit": {
+          "0": 9,
+          "1": 9,
+          "2": 9,
+          "3": 9,
+          "4": 9
+        }
+      }
+    },
+    "A6h": {
+      "3": {
+        "chk": {
+          "0": 65,
+          "1": 93,
+          "2": 59
+        },
+        "fit": {
+          "0": 67,
+          "1": 69,
+          "2": 69
+        }
+      },
+      "4": {
+        "chk": {
+          "0": 20,
+          "1": 16,
+          "2": 13,
+          "3": 25
+        },
+        "fit": {
+          "0": 26,
+          "1": 17,
+          "2": 13,
+          "3": 16
+        }
+      },
+      "5": {
+        "chk": {
+          "0": 3,
+          "1": 4,
+          "2": 8,
+          "3": 4,
+          "4": 2
+        },
+        "fit": {
+          "0": 1,
+          "1": 8,
+          "2": 1,
+          "3": 3,
+          "4": 2
+        }
+      }
+    },
+    "A7g": {
+      "3": {
+        "chk": {
+          "0": 32,
+          "1": 30,
+          "2": 23
+        },
+        "fit": {
+          "0": 15,
+          "1": 26,
+          "2": 25
+        }
+      },
+      "4": {
+        "chk": {
+          "0": 16,
+          "1": 29,
+          "2": 20,
+          "3": 20
+        },
+        "fit": {
+          "0": 18,
+          "1": 23,
+          "2": 20,
+          "3": 16
+        }
+      },
+      "5": {
+        "chk": {
+          "0": 10,
+          "1": 19,
+          "2": 18,
+          "3": 22,
+          "4": 23
+        },
+        "fit": {
+          "0": 10,
+          "1": 22,
+          "2": 16,
+          "3": 18,
+          "4": 23
+        }
+      }
+    },
+    "A7q": {
+      "5": {
+        "chk": {
+          "0": 213,
+          "1": 232,
+          "2": 222,
+          "3": 252,
+          "4": 227
+        },
+        "fit": {
+          "0": 232,
+          "1": 291,
+          "2": 250,
+          "3": 255,
+          "4": 239
+        }
+      }
+    },
+    "G6": {
+      "3": {
+        "chk": {
+          "0": 63,
+          "1": 63,
+          "2": 63
+        },
+        "fit": {
+          "0": 59,
+          "1": 59,
+          "2": 59
+        }
+      },
+      "4": {
+        "chk": {
+          "0": 33,
+          "1": 33,
+          "2": 33,
+          "3": 33
+        },
+        "fit": {
+          "0": 48,
+          "1": 48,
+          "2": 48,
+          "3": 48
+        }
+      },
+      "5": {
+        "chk": {
+          "0": 40,
+          "1": 40,
+          "2": 40,
+          "3": 40,
+          "4": 40
+        },
+        "fit": {
+          "0": 30,
+          "1": 30,
+          "2": 30,
+          "3": 30,
+          "4": 30
+        }
+      }
+    },
+    "H6": {
+      "3": {
+        "chk": {
+          "0": 324,
+          "1": 332,
+          "2": 330
+        },
+        "fit": {
+          "0": 336,
+          "1": 328,
+          "2": 323
+        }
+      },
+      "4": {
+        "chk": {
+          "0": 55,
+          "1": 44,
+          "2": 37,
+          "3": 52
+        },
+        "fit": {
+          "0": 49,
+          "1": 51,
+          "2": 57,
+          "3": 51
+        }
+      },
+      "5": {
+        "chk": {
+          "0": 63,
+          "1": 69,
+          "2": 65,
+          "3": 69,
+          "4": 69
+        },
+        "fit": {
+          "0": 72,
+          "1": 78,
+          "2": 75,
+          "3": 72,
+          "4": 73
+        }
+      }
+    }
+  },
+  "counts_arm_split_language": {
+    "A6g": {
+      "chk": {
+        "en": 53,
+        "zh": 18
+      },
+      "fit": {
+        "en": 61,
+        "zh": 37
+      }
+    },
+    "A6h": {
+      "chk": {
+        "de": 40,
+        "en": 119,
+        "ja": 91,
+        "ko": 62
+      },
+      "fit": {
+        "de": 22,
+        "en": 91,
+        "ja": 90,
+        "ko": 89
+      }
+    },
+    "A7g": {
+      "chk": {
+        "en": 131,
+        "zh": 131
+      },
+      "fit": {
+        "en": 110,
+        "zh": 122
+      }
+    },
+    "A7q": {
+      "chk": {
+        "ca": 22,
+        "de": 19,
+        "en": 461,
+        "es": 359,
+        "eu": 5,
+        "fr": 29,
+        "it": 23,
+        "pl": 9,
+        "pt": 16,
+        "ru": 97,
+        "th": 11,
+        "uk": 6,
+        "zh": 89
+      },
+      "fit": {
+        "ca": 28,
+        "de": 50,
+        "en": 514,
+        "es": 374,
+        "eu": 5,
+        "fr": 35,
+        "hu": 6,
+        "it": 12,
+        "ja": 3,
+        "pt": 29,
+        "ru": 95,
+        "th": 7,
+        "tr": 5,
+        "uk": 9,
+        "vi": 5,
+        "zh": 90
+      }
+    },
+    "G6": {
+      "chk": {
+        "en": 295,
+        "zh": 226
+      },
+      "fit": {
+        "en": 287,
+        "zh": 232
+      }
+    },
+    "H6": {
+      "chk": {
+        "de": 7,
+        "en": 1025,
+        "et": 67,
+        "ja": 43,
+        "ko": 33,
+        "ne": 69,
+        "ro": 73,
+        "ru": 54,
+        "si": 79,
+        "zh": 59
+      },
+      "fit": {
+        "de": 5,
+        "en": 1043,
+        "et": 84,
+        "ja": 34,
+        "ko": 44,
+        "ne": 70,
+        "ro": 80,
+        "ru": 62,
+        "si": 69,
+        "zh": 74
+      }
+    }
+  },
+  "dropped": {
+    "by_any_reason": {},
+    "by_first_reason": {},
+    "panel_state_matches": {},
+    "total": 0
+  },
+  "filtered_not_score_L345": {
+    "A6g": 325,
+    "A6h": 42,
+    "A7g": 5643,
+    "G6": 1915,
+    "H6": 995
+  },
+  "groups": {
+    "chk": 1922,
+    "fit": 1954
+  },
+  "inputs": {
+    "arms": {
+      "A6g": {
+        "path": "/data/dev2/private/data/arms-v1/wave1-q/A6g.aho.jsonl",
+        "sha256": "c6b2a0b4bf55e82a8176cb5871106d383900a76934630b4543b7bc285f7d5304"
+      },
+      "A6h": {
+        "path": "/data/dev2/private/data/arms-v1/wave2-q/A6h.aho.jsonl",
+        "sha256": "5b6c3fd090464ff33d5a60dbbbc7f0cbfd1b2cdc9df12089549ac24f4b1c0fb4"
+      },
+      "A7g": {
+        "path": "/data/dev2/runs/data/m3b/hf/v2/a7/arms/A7g/aho.jsonl",
+        "sha256": "25f31a2edad5a6768104a5de5bab993bc41388cc97dd0a254b750737baba2580"
+      },
+      "A7q": {
+        "path": "/data/dev2/runs/data/m3b/hf/v2/a7/arms/A7q/aho.jsonl",
+        "sha256": "f04557e25bcbeb6bf31db07cf19b7f2ca3caa62c7dc55251f90509eaac2e7250"
+      },
+      "G6": {
+        "path": "/data/dev2/private/data/hf-upload-m2a/m2/arms/G6/aho.jsonl",
+        "sha256": "4a78dade0d33b72d4f14ed73667542d7d8fc9aff5d7309a926cd1d693ac02923"
+      },
+      "H6": {
+        "path": "/data/dev2/private/data/hf-upload-m2a/m2/arms/H6/aho.jsonl",
+        "sha256": "e7223148fd47a0a8291d11c6f90933f1bada861b327bf9f78ef3d04ae80b48ba"
+      }
+    },
+    "cal698": {
+      "path": "/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/ed87a03ab80ca5b9560780bba51a83a77ff47d14/m2/cal/CAL698/cal.jsonl",
+      "sha256": "19cc1a8c4ebe6fd13031079f6b7d131046ce503f435f894e3ea672f91c2ed41f"
+    },
+    "cal700": {
+      "path": "/data/dev2/private/panels/gold/cal.jsonl",
+      "sha256": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a"
+    },
+    "excluded_groups": {
+      "groups": 305,
+      "path": "/data/dev2/runs/eval/m5/overlap-effects/final/excluded-groups.json",
+      "sha256": "2194716a179b2e6c3ba529dee3952c5dd62c0f3281638b7236029d5d542f4914"
+    },
+    "mixtures": [
+      {
+        "path": "/data/dev2/runs/06b/m6/data/m6-mx-s1.train.jsonl",
+        "sha256": "a277bd45a61662b8edbdc3472d0f74f605bc2a4d6e187605afc2bb3d4c998eae"
+      },
+      {
+        "path": "/data/dev2/runs/06b/m6/data/m6-mx-s2.train.jsonl",
+        "sha256": "5fafa72d6199025e36cda7eb315a1faa341d1f5164ac1d06ccafd69f4e7ed8c0"
+      },
+      {
+        "path": "/data/dev2/runs/06b/m6/data/m6-mx-s3.train.jsonl",
+        "sha256": "e484c99b1fe4ca5051a2f33ca032edda71f07ff601f6ace859f82c687e31f653"
+      },
+      {
+        "path": "/data/dev2/runs/06b/m6/data/m6-cx-s1.train.jsonl",
+        "sha256": "ad925c379fe4f1c658087d99e88dcd4ac3cfdab372e999b592eb2f6c4e6186fc"
+      },
+      {
+        "path": "/data/dev2/runs/06b/m6/data/m6-cx-s2.train.jsonl",
+        "sha256": "420fd988f06c0fe5deb4aed72fcc71f3d2a2af414ccea2597d652679ad664489"
+      },
+      {
+        "path": "/data/dev2/runs/06b/m6/data/m6-cx-s3.train.jsonl",
+        "sha256": "9131be73edce1e3ba79a9b91adcff7807035e12352545fbbfd3b5e0e44178aa5"
+      }
+    ],
+    "panels": {
+      "css-pilot": {
+        "path": "/data/dev2/private/panels/goldfree/css-pilot.prompts.jsonl",
+        "sha256": "598319a429de16c659b59ede0eac3c269939356b0599f4e08d1983e44def3dda"
+      },
+      "css15": {
+        "path": "/data/dev2/private/panels/goldfree/css15.prompts.jsonl",
+        "sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6"
+      },
+      "ht-dev": {
+        "path": "/data/dev2/private/panels/goldfree/ht-dev.prompts.jsonl",
+        "sha256": "30b0bd3569da9dd183f142e606ba6dcb598de7e4d3d9c168f87f91852178fd65"
+      },
+      "mlx-diag": {
+        "path": "/data/dev2/private/panels/goldfree/mlx-diag.prompts.jsonl",
+        "sha256": "25fde28f4b227a9cc8588da79a597ce816ba4a8f979139f99f69aeb595580a5f"
+      },
+      "public231": {
+        "path": "/data/dev2/private/panels/goldfree/public231.prompts.jsonl",
+        "sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd"
+      },
+      "typed-dev": {
+        "path": "/data/dev2/private/panels/goldfree/typed-dev.prompts.jsonl",
+        "sha256": "a17ec4b675bbc3da96dba8f31af8f25c9b02cc96ff048fb7de899bdd8b6cf79a"
+      },
+      "typed-final": {
+        "path": "/data/dev2/private/panels/goldfree/typed-final.prompts.jsonl",
+        "sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd"
+      }
+    },
+    "select": {
+      "path": "/data/dev2/private/panels/gold/select.jsonl",
+      "sha256": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6"
+    }
+  },
+  "kept": {
+    "L3/chk": 1501,
+    "L3/fit": 1456,
+    "L4/chk": 511,
+    "L4/fit": 581,
+    "L5/chk": 1809,
+    "L5/fit": 1936,
+    "chk": 3821,
+    "fit": 3973
+  },
+  "manifest_of_outputs_sha256": "d2cb0af43d1e0170f70377bbff4de5e1a2e903d3a96d0cd777fe796230c9a9ea",
+  "outputs": {
+    "cal698.score.ids.json": {
+      "rows": 90,
+      "sha256": "7e8c01c8552f56ba30f4dd1a5c0ca7c2e74baf4412d2533eecbd23b77300f947"
+    },
+    "chk.jsonl": {
+      "rows": 3821,
+      "sha256": "98425b276dd2540c2886b9a7ec904a85101f6f79d0fd642e5e9fafbf79282b16"
+    },
+    "fit_aho.jsonl": {
+      "rows": 3973,
+      "sha256": "4bfe6731c5ef12782a626f4eacbd5844e0557deb468cd0e3662f08b754657a9e"
+    },
+    "index.jsonl": {
+      "rows": 7794,
+      "sha256": "040ebc7105dcf0bb71be3fee3da04ca157542a95431a54508846f83c94d0c2ac"
+    }
+  },
+  "pi_v4_crosscheck": {
+    "A6g": {
+      "ids_equal": true,
+      "projection_mismatches": 0,
+      "role": "v1_aho_a6g",
+      "sha256_matches_manifest": true
+    },
+    "A6h": {
+      "ids_equal": true,
+      "projection_mismatches": 0,
+      "role": "v1_aho_a6h",
+      "sha256_matches_manifest": true
+    },
+    "A7g": {
+      "ids_equal": true,
+      "projection_mismatches": 265,
+      "role": "a7_aho_A7g",
+      "sha256_matches_manifest": true
+    },
+    "A7q": {
+      "ids_equal": true,
+      "projection_mismatches": 0,
+      "role": "a7_aho_A7q",
+      "sha256_matches_manifest": true
+    },
+    "G6": {
+      "ids_equal": true,
+      "projection_mismatches": 0,
+      "role": "v2_aho_G6",
+      "sha256_matches_manifest": true
+    },
+    "H6": {
+      "ids_equal": true,
+      "projection_mismatches": 0,
+      "role": "v2_aho_H6",
+      "sha256_matches_manifest": true
+    },
+    "manifest": {
+      "path": "/data/dev2/runs/data/m3b/gap/c1/pi/manifest.json",
+      "sha256": "24b060da2863a964da1ff2c40591943fff9d27e3ce19b28e2a9bd0918fdb47dc"
+    }
+  },
+  "rule": {
+    "drop_reasons": [
+      "in_m6_training_mixture",
+      "in_select",
+      "in_cal",
+      "r2_excluded_group",
+      "panel_state_match"
+    ],
+    "group": "group_id, or id if it has none",
+    "levels": [
+      3,
+      4,
+      5
+    ],
+    "split": "int(sha256(\"m7a-aho-split:\" + group)[:16], 16) even -> fit, else chk"
+  },
+  "schema": "dev2-06b-m7a-aho/1"
+}

@@ -1,0 +1,37 @@
+{
+  "files": {
+    "backbone/config.json": {
+      "bytes": 1411,
+      "sha256": "fcf62f425b626755c6df66630215aed57c70b38bf779e6ac9aeff376224310ac"
+    },
+    "backbone/model.safetensors": {
+      "bytes": 2384233112,
+      "sha256": "b303341581505b63809694870c6657fc5fc001b4970b4bfca098e51039466855"
+    },
+    "chat_template.jinja": {
+      "bytes": 4116,
+      "sha256": "87a2728cb8dc9fe424d624542f6060ec05a1d285ebbec578bb078900e33396b5"
+    },
+    "decision_config.json": {
+      "bytes": 1780,
+      "sha256": "4778b8818f8510bf761eebba48ec5ffd5941c8f95ef2b228a97162fb0c814a6e"
+    },
+    "decision_head.safetensors": {
+      "bytes": 4213584,
+      "sha256": "508dfe385c8fde8eb0b4eec5c199f5fe8363efeb247de024a08765b53183409d"
+    },
+    "score_bias.json": {
+      "bytes": 3678,
+      "sha256": "3aa30bc1cc6ca4ad5ecc1e972ff04508c1e5fef1f1e749fb7a210b76fa91a99a"
+    },
+    "tokenizer.json": {
+      "bytes": 11422650,
+      "sha256": "be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506"
+    },
+    "tokenizer_config.json": {
+      "bytes": 695,
+      "sha256": "cbea7bca9904d56693d2226b00fd564e3be053609d1e50f8f1885510f0f6e790"
+    }
+  },
+  "schema": "dev2-06b-causal-files/1"
+}
