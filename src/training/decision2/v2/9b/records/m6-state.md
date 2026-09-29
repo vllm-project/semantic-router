@@ -1,6 +1,6 @@
 # 9B M6 state (resume file)
 
-Updated: 2026-09-30 03:00 UTC+8 (M6 worker; **data frozen; training chains launching**)
+Updated: 2026-09-30 03:25 UTC+8 (M6 worker; **wave 1 training: KA-s4 on GPU6, K-s4 on GPU7**)
 Branch: `xunzhuo/decision-2-training-9b` (merge-only into `xunzhuo/decision-2-training`)
 Prereg: `records/lux9b-m6-prereg-2026-09-30.md` (`f41402e68`) + amendment 1 (`7380a3cbf`). Code / wrappers mirror
 `7380a3cbf` on node A (created, verified); runtime mirror `3277dec9d` (verified, reused).
@@ -25,11 +25,18 @@ Prereg: `records/lux9b-m6-prereg-2026-09-30.md` (`f41402e68`) + amendment 1 (`73
 - Exposure: `exposure/m6-kh.json` `656f5456…`, `exposure/x60.json` `14e7c0ca…`; both `groups: []`.
 - HS1 `@171e6f0c` fetched into node A's HF cache (train `c90ef316…`, dev `2e9ee9ab…`).
 
+## Running
+
+- Chains `m6-g6` (PID 3537189; step log `logs/m6-gpu6.log`) and `m6-g7` (PID 3537271; `logs/m6-gpu7.log`), mirror
+  `e611b96b4`, launched 18:50Z. `ref-ka13` done 18:54Z: identical to M4's K ⅓ readout (T .925, C/N/S 799 / 338 / 343,
+  H3 .5622, P 73.22; `m6/readout-ref`). Preflights `pf-KA-s4-check`, `pf-K-s4-check`: PASS. KA-s4 and K-s4 full runs
+  from ~19:05Z; ETA ~21:45Z with in-arm readouts.
+
 ## Next
 
-1. Chains `m6-gpu6` / `m6-gpu7` (mirror `7380a3cbf`): wave 1 KA-s4 + K-s4 (with `ref-ka13` first on GPU7).
-2. Early rules for KA-s4 and KH-s4 (`m6/rules/early-*.json`), then second seeds, soups and lines as the chains decide.
-3. Rules (CPU): seed rule, α rule per line, finalists → locks → formal runs → successor rule.
+1. Early rules (`m6/rules/early-KA-s4.json`, later `early-KH-s4.json`), written by the chains.
+2. After the lines: `m6/rules.sh` (commit `e7546eb2f`, mirror when needed) → finalists → locks → formal (`formal.sh`
+   runner `3277dec9d`), hs1-dev diagnostics, `ship_cal.sh`, successor items 1–7, item 8 hand-off.
 
 ## Launch pattern (chain rule)
 
