@@ -196,6 +196,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 14:55 — **DEV2.0-26B package verified (F1; not yet in the collection)** (gist `07e-decision-2-release-27b.md`;
+  integration `fbea77fc5`; ~1.17 GPU-h on node B GPU6; storage 44.63 / 100 GB).
+  - Package: private `llm-semantic-router/DEV2.0-26B@50772fb359acee5cfb5af6c6f3a5e77b076f0226`. This is a card-only
+    revision on top of the full-parity upload `5683c6f0`.
+    - Manifest `98d6b01c…`: 31 files, 0.51 GB.
+    - Format: `qwen-adapter` bound to `Qwen/Qwen3.8-27B@1d4bf0f2…` by the SHA-256 of all 28 base files; T = 1; 32K.
+    - Size: 25,746,591,744 loaded parameters.
+    - Parity: 0 changes on all 10,378 scored prompts, before and after upload.
+    - Gate: the no-1.0 profile is implemented in `gate.py` / `card.py`, and all six items pass.
+    - Draft decision `17891a2e…` supersedes `9b025912…`.
+  - **Finalization waits for F2** (the 27B F2 worker; rule in the 14:25 note). If F2 does not replace F1, the release
+    worker is resumed once to:
+    - write the final decision and point `gate_receipt` at it;
+    - run `ops/release-upload.sh <SRC> --collect --parity-n "200 300 100"`;
+    - clear `dev2-27b-staging` with `rewrite_history=False`.
+    **C1 line:** same treatment as the 2B / 4B cards (pending); a card-only revision adds it after event 3.
+  - **Every release worker:**
+    - The 0.6B track's `8730d9413` (optional `--score-bias` in `training/model/infer.py`) changed shared inference
+      source after several models were scored. Builds for those models must use `vendor_source` (`a60409303`), which
+      vendors the scored run's own source mirror.
+    - Release containers on node B must also mount the HF cache's shared `hf-cache/blobs` store.
+    - 9B tier: `name_basis` yields DEV2.0-8B; its banner needs `--label 9B=8B`.
+
 - 2026-09-29 14:40 — **9B K-a13 passes every release gate; decoder Milestone 5 has no successor.**
   - **9B gates** (eval record `v2/eval/records/m4-dev2-9b-gates-2026-09-29.md`; integration `2716b4a61`; 0 GPU-h):
     - vs adopted Lux1: +1.93 [+0.61, +4.14]. vs same-renderer Lux1: +2.51 [+1.04, +4.60]. vs Nimble v2: +5.68
