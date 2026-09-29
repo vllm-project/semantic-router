@@ -38,6 +38,14 @@ def native():
         free = getattr(lib, f"ml_{algorithm}_free")
         free.argtypes = [ctypes.c_void_p]
         free.restype = None
+    lib.ml_kmeans_score.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_double),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_double),
+        ctypes.c_size_t,
+    ]
+    lib.ml_kmeans_score.restype = ctypes.c_int
     lib.ml_free_string.argtypes = [ctypes.c_void_p]
     lib.ml_free_string.restype = None
     return lib
@@ -203,6 +211,39 @@ def test_kmeans_v2_export_loads_in_the_current_runtime(native, tmp_path, n_clust
     assert native_predictions(native, "kmeans", artifact, queries) == expected
 
 
+def test_kmeans_v2_native_scores_match_python(native):
+    """The score entry point returns Python's cluster id and full score row, bit for bit."""
+    samples = [
+        TrainingSample(
+            s.feature_vector, f"model-{j}", (i * j % 5) / 5, 100.0 * j, f"q{i}"
+        )
+        for i, s in enumerate(samples_for_classes(3)[:40])
+        for j in range(3)
+        if (i + j) % 4
+    ]
+    model = KMeansModel(n_clusters=4, min_support=2)
+    model.train(samples)
+    handle = native.ml_kmeans_from_json(json.dumps(model.to_artifact()).encode())
+    assert handle, "The native loader rejected a valid v2 artifact"
+    queries = np.vstack(
+        [np.random.default_rng(12).normal(size=(200, 7)), model.centroids]
+    )
+    m = len(model.model_names)
+    try:
+        for query in queries:
+            scores = (ctypes.c_double * m)()
+            vector = (ctypes.c_double * len(query))(*query)
+            cluster = native.ml_kmeans_score(handle, vector, len(query), scores, m)
+            decision = model.score(query)
+            assert cluster == decision.cluster_id
+            assert list(scores) == [decision.scores[n] for n in model.model_names]
+        short = (ctypes.c_double * (m - 1))()
+        vector = (ctypes.c_double * 7)(*queries[0])
+        assert native.ml_kmeans_score(handle, vector, 7, short, m - 1) == -1
+    finally:
+        native.ml_kmeans_free(handle)
+
+
 def test_knn_latency_regression(native, tmp_path):
     samples = [
         TrainingSample(np.array([1.0, 0.0]), "fast-low-quality", 0.85, 100.0),
@@ -218,9 +259,9 @@ def test_knn_latency_regression(native, tmp_path):
     ) == ["slow-high-quality"]
 
 
-@pytest.mark.parametrize("algorithm", ["svm", "knn"])
+@pytest.mark.parametrize("algorithm", ["svm", "knn", "kmeans"])
 def test_native_rejects_bad_shapes_without_aborting(native, tmp_path, algorithm):
-    model = SVMModel() if algorithm == "svm" else KNNModel()
+    model = {"svm": SVMModel, "knn": KNNModel, "kmeans": KMeansModel}[algorithm]()
     model.train(samples_for_classes(3))
     path = tmp_path / "artifact.json"
     model.save(path)
@@ -230,8 +271,10 @@ def test_native_rejects_bad_shapes_without_aborting(native, tmp_path, algorithm)
     ) == [None, None]
     if algorithm == "svm":
         artifact["svc"]["dual_coef"][0].pop()
-    else:
+    elif algorithm == "knn":
         artifact["labels"].pop()
+    else:
+        artifact["scores"][0].pop()
     assert not getattr(native, f"ml_{algorithm}_from_json")(
         json.dumps(artifact).encode()
     )

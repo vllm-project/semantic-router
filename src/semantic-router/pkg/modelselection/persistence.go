@@ -208,10 +208,7 @@ func (s *KMeansSelector) Load(path string) error {
 		logging.Warnf("Failed to load KMeans into Rust binding: %v (will use Go fallback)", err)
 	} else {
 		s.mu.Lock()
-		if s.mlKMeans != nil {
-			s.mlKMeans.Close()
-		}
-		s.mlKMeans = mlKMeans
+		s.replaceMLKMeans(mlKMeans)
 		s.mu.Unlock()
 	}
 

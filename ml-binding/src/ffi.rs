@@ -6,6 +6,9 @@
 //!
 //! Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
 
+// Every entry point null-checks its pointers; the Go caller owns their validity, as in candle-binding.
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
 use crate::{KMeansSelector, KNNSelector, SVMSelector};
 use libc::{c_char, c_double, c_int, size_t};
 use std::ffi::{CStr, CString};
@@ -24,7 +27,9 @@ unsafe fn c_str_to_string(ptr: *const c_char) -> Option<String> {
 }
 
 fn string_to_c_str(s: String) -> *mut c_char {
-    CString::new(s).map(|cs| cs.into_raw()).unwrap_or(ptr::null_mut())
+    CString::new(s)
+        .map(|cs| cs.into_raw())
+        .unwrap_or(ptr::null_mut())
 }
 
 // =============================================================================
@@ -115,7 +120,9 @@ pub struct KMeansHandle(KMeansSelector);
 /// Create a new KMeans selector
 #[no_mangle]
 pub extern "C" fn ml_kmeans_new(num_clusters: c_int) -> *mut KMeansHandle {
-    Box::into_raw(Box::new(KMeansHandle(KMeansSelector::new(num_clusters as usize))))
+    Box::into_raw(Box::new(KMeansHandle(KMeansSelector::new(
+        num_clusters as usize,
+    ))))
 }
 
 /// Free KMeans selector
@@ -142,6 +149,46 @@ pub extern "C" fn ml_kmeans_select(
 
     match selector.select(query_slice) {
         Ok(model) => string_to_c_str(model),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Score every candidate for a query into `scores`, which must hold one slot per candidate.
+/// Returns the nearest cluster id, or -1 on any error.
+#[no_mangle]
+pub extern "C" fn ml_kmeans_score(
+    handle: *const KMeansHandle,
+    query: *const c_double,
+    query_len: size_t,
+    scores: *mut c_double,
+    scores_len: size_t,
+) -> c_int {
+    if handle.is_null() || query.is_null() || scores.is_null() {
+        return -1;
+    }
+
+    let selector = unsafe { &(*handle).0 };
+    let query_slice = unsafe { slice::from_raw_parts(query, query_len) };
+
+    match selector.score(query_slice) {
+        Ok(scored) if scored.scores.len() == scores_len => {
+            let out = unsafe { slice::from_raw_parts_mut(scores, scores_len) };
+            out.copy_from_slice(scored.scores);
+            c_int::try_from(scored.cluster_id).unwrap_or(-1)
+        }
+        _ => -1,
+    }
+}
+
+/// Candidate names in score order, as a JSON array
+#[no_mangle]
+pub extern "C" fn ml_kmeans_candidates(handle: *const KMeansHandle) -> *mut c_char {
+    if handle.is_null() {
+        return ptr::null_mut();
+    }
+    let selector = unsafe { &(*handle).0 };
+    match serde_json::to_string(selector.model_names()) {
+        Ok(json) => string_to_c_str(json),
         Err(_) => ptr::null_mut(),
     }
 }
