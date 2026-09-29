@@ -24,6 +24,14 @@ It then applies a multiplicative bonus to cheaper models when cost adjustment
 is enabled. Cost is therefore a second-stage adjustment, not another linear
 term in the component average.
 
+Cache affinity is the last, bounded adjustment. For a request that continues a
+session, it favors the model that served the previous turn so the backend's
+prompt cache stays useful, and it fades to zero as the gap between the top two
+base scores grows. A `prompt_cache_key` also marks a request as a continuation.
+When the Router has no previous model for the session, it favors the model that
+last served the same key in the recipe. Each Router replica remembers that model
+for an hour after the key's last response.
+
 ## Select Flow
 
 ```mermaid

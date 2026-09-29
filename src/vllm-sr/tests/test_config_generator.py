@@ -168,15 +168,17 @@ routing: {}
         for item in http_filters
         if "inline_code" in item.get("typed_config", {})
     )
+    azure_key = 'token = request_handle:headers():get("api-key")'
     accepted = "if token and VALID_KEYS[token] then"
-    strip = 'request_handle:headers():remove("authorization")'
+    assert azure_key in inline_code
     assert accepted in inline_code
-    assert strip in inline_code
-    assert (
-        inline_code.index(accepted)
-        < inline_code.index(strip)
-        < inline_code.index("return", inline_code.index(accepted))
-    )
+    accepted_at = inline_code.index(accepted)
+    returned_at = inline_code.index("return", accepted_at)
+    assert inline_code.index(azure_key) < accepted_at
+    for header in ("authorization", "api-key"):
+        strip = f'request_handle:headers():remove("{header}")'
+        assert strip in inline_code
+        assert accepted_at < inline_code.index(strip) < returned_at
 
 
 def test_weighted_backend_refs_preserve_weights_and_shared_path(tmp_path, monkeypatch):

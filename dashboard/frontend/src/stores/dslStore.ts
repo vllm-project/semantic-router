@@ -554,7 +554,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       })
 
       const responseText = await resp.text()
-      let data: { version?: string; message?: string; error?: string } = {}
+      let data: { status?: string; version?: string; message?: string; error?: string } = {}
       try {
         data = responseText ? (JSON.parse(responseText) as typeof data) : {}
       } catch {
@@ -570,6 +570,21 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
             message: data.message || data.error || 'Deploy failed',
           },
         })
+        return
+      }
+
+      if (data.status === 'persisted') {
+        set({
+          deploying: false,
+          deployStep: 'done',
+          deployResult: {
+            status: 'success',
+            version: data.version,
+            message: data.message || 'Configuration saved. Roll out Router and Envoy to activate it.',
+          },
+          dirty: false,
+        })
+        get().fetchVersions()
         return
       }
 
@@ -660,6 +675,20 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
             message: data.message || 'Rollback failed',
           },
         })
+        return
+      }
+
+      if (data.status === 'persisted') {
+        set({
+          deploying: false,
+          deployStep: 'done',
+          deployResult: {
+            status: 'success',
+            version: data.version,
+            message: data.message || 'Rollback saved. Roll out Router and Envoy to activate it.',
+          },
+        })
+        get().fetchVersions()
         return
       }
 

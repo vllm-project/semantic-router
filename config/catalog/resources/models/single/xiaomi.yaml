@@ -1,3 +1,53 @@
+- id: xiaomi/mimo-v2.6-flash
+  display_name: MiMo V2.6 Flash
+  description: Efficiency-balanced open-weight omnimodal Xiaomi MoE model for coding and agentic workloads.
+  kind: physical
+  publisher: Xiaomi
+  presentation:
+    logo: package:xiaomimimo
+    monogram: Mi
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL
+    license: MIT
+  family: mimo-v2
+  parameter_size: 309B (15B active)
+  reasoning_family: mimo
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    - audio
+    output:
+    - text
+  verification:
+    authority: Xiaomi
+    status: claimed
+    verified_at: 2026-09-23
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL
+  tags:
+  - open_weights
+  - reasoning
+  - coding
+  - agentic
+  - multimodal
+  - efficient
+  - moe
+  released_at: '2026-09-22'
 - id: xiaomi/mimo-v2.5-pro
   display_name: MiMo V2.5 Pro
   description: High-capability open-weight Xiaomi model for complex software agents.

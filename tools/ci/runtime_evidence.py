@@ -149,16 +149,20 @@ def recipe_evidence(directory: Path) -> dict:
         load_probe_manifest,
     )
     from recipe_conformance_sources import (  # noqa: PLC0415
-        discover_recipe_sources,
-        shard_inventory,
+        discover_source_inventories,
+        source_matrix_payload,
     )
 
+    inventories = discover_source_inventories(
+        ROOT / "config/recipes",
+        lambda root: cpu_inventory(discover_inventory(root)),
+    )
     cases, expected, identities = [], [], []
-    for source in discover_recipe_sources(ROOT / "config/recipes"):
-        inventory = cpu_inventory(discover_inventory(source.recipes_root))
-        for index, _ in enumerate(shard_inventory(inventory, 3)):
-            identities.extend(read(directory / f"image-{source.name}-{index}.json"))
-        for recipe in inventory:
+    for job in source_matrix_payload(inventories, None, ROOT)["include"]:
+        identities.extend(read(directory / f"image-{job['shard']}.json"))
+    for item in inventories:
+        source = item.source
+        for recipe in item.recipes:
             _, probes = load_probe_manifest(
                 source.recipes_root / recipe.name / "probes.yaml"
             )

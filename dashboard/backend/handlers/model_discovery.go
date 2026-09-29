@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
@@ -79,6 +80,9 @@ func ModelDiscoveryHandler(client *http.Client) http.HandlerFunc {
 		request.Header.Set("Accept", "application/json")
 		applyModelDiscoveryHeaders(request, provider, strings.TrimSpace(input.APIKey))
 
+		if dashboardauth.RejectRevokedMutation(w, r) {
+			return
+		}
 		response, err := discoveryClient.Do(request)
 		if err != nil {
 			writeModelDiscoveryError(w, http.StatusBadGateway, "The provider could not be reached.")

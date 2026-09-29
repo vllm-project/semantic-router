@@ -28,7 +28,7 @@ The Skill directs the agent to:
 
 1. Inspect the host, existing installation, container runtime, accelerator, and
    available model endpoints without changing them.
-2. Install the latest published dev CLI when needed, then verify its supported
+2. Install the latest published stable CLI when needed, then verify its supported
    commands before changing a runtime. Discover configuration progressively from
    the CLI and the selected Router's schema and OpenAPI contract.
 3. Create or update canonical YAML for the available model pool while keeping

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release candidate to qualify without publishing.
+        description: Build release artifacts without publishing.
         required: true
         type: string
 
@@ -25,9 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-      performance_base: ${{ steps.baseline.outputs.ref }}
       tag: ${{ steps.version.outputs.tag }}
+      images: ${{ steps.contract.outputs.release_images_json }}
       sim_version: ${{ steps.contract.outputs.sim_version }}
+      candle_version: ${{ steps.contract.outputs.candle_version }}
       catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}
     steps:
       - uses: actions/checkout@v4
@@ -71,46 +72,47 @@ jobs:
             --version "${{ steps.version.outputs.version }}" \
             --github-output "$GITHUB_OUTPUT"
 
-      - name: Resolve compatible previous release for paired performance
-        id: baseline
-        env:
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          python3 tools/ci/ci_plan.py previous-release \
-            --version "$RELEASE_VERSION" --github-output "$GITHUB_OUTPUT"
-
-  ci:
-    name: Release Candidate
+  images:
+    name: Build Release Images
     needs: validate
-    uses: ./.github/workflows/ci.yml
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      images: ${{ needs.validate.outputs.images }}
+      mode: release
+      tag: ${{ needs.validate.outputs.tag }}
+      multiarch: true
+
+  helm-build:
+    name: Package Helm Chart
+    needs: validate
     permissions:
       contents: read
-      actions: read
-      security-events: write
+      packages: write
+    uses: ./.github/workflows/helm-publish.yml
     with:
-      profile: release
+      build-only: true
+      mode: release
+      version: ${{ needs.validate.outputs.version }}
       tag: ${{ needs.validate.outputs.tag }}
-      performance-base-ref: ${{ needs.validate.outputs.performance_base }}
-    secrets: inherit
 
-  gate:
-    name: Release CPU Qualification
-    if: always()
-    needs: [validate, ci]
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Require version and complete CPU evidence
-        env:
-          VERSION_RESULT: ${{ needs.validate.result }}
-          QUALIFICATION_RESULT: ${{ needs.ci.result }}
-        run: |
-          test "$VERSION_RESULT" = success
-          test "$QUALIFICATION_RESULT" = success
+  python-build:
+    name: Build Python Distribution
+    needs: validate
+    uses: ./.github/workflows/pypi-publish.yml
+    with:
+      build-only: true
+      version: ${{ needs.validate.outputs.version }}
+      tag: ${{ needs.validate.outputs.tag }}
+      catalog_snapshot: ${{ needs.validate.outputs.catalog_snapshot }}
 
   docker:
     name: Publish Images
-    needs: [validate, gate, ci]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    needs: [validate, images, helm-build, python-build]
+    if: >-
+      github.event_name == 'push'
+      && needs.images.result == 'success'
+      && needs.helm-build.result == 'success'
+      && needs.python-build.result == 'success'
     permissions:
       contents: read
       actions: read
@@ -118,21 +120,26 @@ jobs:
     uses: ./.github/workflows/docker-publish.yml
     with:
       mode: release
-      images: ${{ needs.ci.outputs.publish_images }}
+      images: ${{ needs.validate.outputs.images }}
       tag: ${{ needs.validate.outputs.tag }}
       publish_latest: true
     secrets: inherit
 
   helm:
     name: Publish Helm Chart
-    needs: [validate, gate]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    needs: [validate, images, helm-build, python-build]
+    if: >-
+      github.event_name == 'push'
+      && needs.images.result == 'success'
+      && needs.helm-build.result == 'success'
+      && needs.python-build.result == 'success'
     permissions:
       contents: read
       actions: read
       packages: write
     uses: ./.github/workflows/helm-publish.yml
     with:
+      prebuilt-chart: true
       mode: release
       version: ${{ needs.validate.outputs.version }}
       tag: ${{ needs.validate.outputs.tag }}
@@ -140,8 +147,12 @@ jobs:
 
   pypi:
     name: Publish Python Package
-    needs: [validate, gate]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    needs: [validate, images, helm-build, python-build]
+    if: >-
+      github.event_name == 'push'
+      && needs.images.result == 'success'
+      && needs.helm-build.result == 'success'
+      && needs.python-build.result == 'success'
     uses: ./.github/workflows/pypi-publish.yml
     with:
       version: ${{ needs.validate.outputs.version }}
@@ -152,18 +163,23 @@ jobs:
 
   crate:
     name: Publish Rust Crate
-    needs: [validate, gate]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    needs: [validate, images, helm-build, python-build]
+    if: >-
+      github.event_name == 'push'
+      && needs.images.result == 'success'
+      && needs.helm-build.result == 'success'
+      && needs.python-build.result == 'success'
     uses: ./.github/workflows/publish-crate.yml
     with:
       version: ${{ needs.validate.outputs.version }}
+      crate_version: ${{ needs.validate.outputs.candle_version }}
       tag: ${{ needs.validate.outputs.tag }}
     secrets: inherit
 
   release-notes:
     name: Publish GitHub Release
-    needs: [validate, gate, docker, helm, pypi, crate]
-    if: github.event_name == 'push' && needs.gate.result == 'success'
+    needs: [validate, docker, helm, pypi, crate]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -177,6 +193,22 @@ jobs:
         with:
           name: candle-release-libraries
           path: release-assets/rust
+
+      - name: Verify Rust release assets
+        env:
+          CANDLE_CRATE_VERSION: ${{ needs.validate.outputs.candle_version }}
+        run: |
+          set -euo pipefail
+          for asset in \
+            release-assets/rust/release/libcandle_semantic_router.a \
+            release-assets/rust/release/libcandle_semantic_router.so \
+            "release-assets/rust/package/candle-semantic-router-${CANDLE_CRATE_VERSION}.crate" \
+            release-assets/rust/package/qualified.sha256; do
+            if [[ ! -s "$asset" ]]; then
+              echo "::error::Missing or empty Rust release asset: $asset"
+              exit 1
+            fi
+          done
 
       - name: Resolve lowercase registry owner
         id: owner
@@ -195,14 +227,16 @@ jobs:
           prerelease: false
           overwrite_files: false
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             release-assets/python/*
-            release-assets/rust/*
+            release-assets/rust/release/*
+            release-assets/rust/package/*
           body: |
             ## Release ${{ needs.validate.outputs.tag }}
 
-            Version and CPU runtime qualification completed before Docker, Helm, PyPI, crates.io,
-            and operator image publication.
+            Release versions and artifact identities were checked before Docker,
+            Helm, PyPI, crates.io, and operator image publication.
 
             ### Container images
 
@@ -237,8 +271,11 @@ jobs:
             ### Rust Crate (crates.io)
 
             ```toml
-            candle-semantic-router = "${{ needs.validate.outputs.version }}"
+            candle-semantic-router = "${{ needs.validate.outputs.candle_version }}"
             ```
+
+            The crate version may differ from the Router tag because crates.io
+            versions are immutable. Use the version shown above for Rust dependencies.
 
             ### Built-in virtual models
 

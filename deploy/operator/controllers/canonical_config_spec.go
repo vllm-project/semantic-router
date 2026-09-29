@@ -28,6 +28,13 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 	if spec.Strategy != "" {
 		canonical.Global.Router.Strategy = routerconfig.RoutingStrategy(spec.Strategy)
 	}
+	if spec.StreamedBody != nil {
+		canonical.Global.Router.StreamedBody = routerconfig.CanonicalStreamedBody{
+			Enabled:    spec.StreamedBody.Enabled,
+			MaxBytes:   spec.StreamedBody.MaxBytes,
+			TimeoutSec: spec.StreamedBody.TimeoutSec,
+		}
+	}
 	return nil
 }
 

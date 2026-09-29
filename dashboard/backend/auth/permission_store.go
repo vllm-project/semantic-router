@@ -113,7 +113,7 @@ func (s *Store) GetEffectivePermissions(ctx context.Context, role string, userID
 	}
 
 	if userID != "" {
-		uRows, err := s.db.QueryContext(ctx, `SELECT permission_key FROM user_permissions WHERE user_id = ? AND allowed = 1`, userID)
+		uRows, err := s.db.QueryContext(ctx, `SELECT permission_key, allowed FROM user_permissions WHERE user_id = ?`, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -122,8 +122,14 @@ func (s *Store) GetEffectivePermissions(ctx context.Context, role string, userID
 		}()
 		for uRows.Next() {
 			var p string
-			if err := uRows.Scan(&p); err == nil {
+			var allowed bool
+			if err := uRows.Scan(&p, &allowed); err != nil {
+				return nil, err
+			}
+			if allowed {
 				permMap[p] = true
+			} else {
+				delete(permMap, p)
 			}
 		}
 		if err := uRows.Err(); err != nil {
