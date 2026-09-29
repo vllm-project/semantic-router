@@ -199,6 +199,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 04:10 — **HT-DEV v2 PASSES; it is the human-transfer screen for new milestones** (eval record
+  `v2/eval/records/htdev2-validation-2026-09-30.md`; integration `bc0a12d70`; 1.454 GPU-h; usage in "Eval runners").
+  - **Why v1 failed and v2 works:** v1 failed on what it measured, not on target noise. v2 is a held-out copy of nine
+    CSS15 tasks (1,944 items).
+  - **Results:** within-tier agreement with formal ΔH 0.843 vs 0.657 for the CSS pilot (P(better) 0.972); r 0.647 vs
+    0.206; siblings 74 / 78. It predicts formal human transfer but NOT C1; formal human transfer itself matches only
+    14 of 25 C1 pairs.
+  - **Rules:**
+    - FLAG at ΔH_dev2 ≤ −0.02 vs the tier's reference; there formal sign agreement is 93%.
+    - New milestones use it in place of the CSS-pilot mean. Running milestones may adopt it only by an amendment made
+      before their first development readout.
+    - Formal CSS15 still decides, and the C1 guard stays.
+  - **Coverage gaps:** Kai1 and the four 0.6B 1.0 / peer models (~0.08 GPU-h); the node-B-only decoder packages; all 27B
+    models. The 27B references (F1 + peers, on node B with the kernel image) are needed before a 27B M5. They will be
+    batched with the next eval job.
+
 - 2026-09-30 02:25 — **USE PN1-r2 AND THE FIXED HS1 (dataset head `27b1d2f1`); qualification pools are guarded** (data
   record `v2/data/records/m4-dq-results-2026-09-30.md`; integration `3ded967af`; 0.088 GPU-h).
   - **PN1:**
@@ -2033,6 +2049,53 @@ aggregates in `records/htdev-validation/`).
   - Collections and validation are on node A under `/data/dev2/runs/eval/htdev/{collect,validation}`.
   - Backup: private eval-artifacts dataset, `htdev/v1/` at `ad4b958e`.
   - GPU: 3.27 GPU-h in total (build 0.64 + collections 2.63); the validation itself was CPU only.
+
+### HT-DEV v2 (`ht-dev2`): human-transfer screen (eval track, 2026-09-30; code at `7a6bd7986` or later)
+
+Record `v2/eval/records/htdev2-validation-2026-09-30.md` (prereg `htdev2-prereg-2026-09-30.md`, amendments 1–5;
+integration `bc0a12d70`).
+
+- **Validated (PASS).**
+  - Within-tier sign agreement with formal CSS15 ΔH is 0.843, vs 0.657 for the CSS-pilot three-task mean (172 decidable
+    pairs, 50 models, P(better) 0.972).
+  - Within-tier r 0.647 vs 0.206. Sibling pairs: 74 / 78.
+- **Panel:** 1,944 items, nine CSS15 tasks × 216, from held-out portions of the same sources, with formal templates and
+  option maps.
+  - Disjoint from the formal items at item and group level.
+  - Screened against 122,485 training files (including PN1 / HS1) and every protected panel (including JevBench).
+  - Never training data.
+- **Rule for every track.** It replaces the CSS-pilot three-task-mean non-decrease screen in development gates.
+  - Collect `ht-dev2` for each shortlisted checkpoint at its formal input limit and kernel path. Compare it with the
+    tier's reference using `--htdev2-reference`.
+  - **FLAG** (ΔH_dev2 ≤ −0.02): don't send it to the formal runner as a successor without a recorded reason. Formal ΔH
+    has the same sign 93% of the time beyond ±0.02.
+  - **TIE** (|Δ| < 0.02): uninformative.
+  - **GAIN** (≥ +0.02): a likely formal gain.
+  - ±0.045 is the preregistered 10%-risk band.
+  - It is a screen, not a score to optimize. Human transfer is decided only by the formal paired CSS15 CI.
+  - Treat comparisons with third-party peers with caution (0.74). It does not predict C1, so keep the C1 guard.
+  - **Running milestones** may adopt it only by an amendment made before their first development readout. Otherwise,
+    report it as a diagnostic.
+- **Run** (node A; about 0.016 GPU-h per 0.6B checkpoint, 0.036 per 4B / 9B):
+
+  ```bash
+  SRC=<full-sha>-src_training_decision2; S=/data/dev2/src/$SRC/src/training/decision2; export PYTHONPATH=$S
+  $S/v2/eval/run_same_panel.sh --gpu <N> --track <track> --src $SRC --run-dir <run> --model-dir <pkg> [--shared-lease <name>] \
+    [--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=<rw copy> --mount-rw <rw copy>] \
+    -- --adapter-spec <adapter.json> --model-path <pkg> --revision <id> --panels ht-dev2   # or typed-dev,css-pilot,ht-dev2
+  python3 -m v2.eval.dev_readout --run-dir <run> --label <ckpt> --output <readout.json> \
+    --htdev2-reference /data/dev2/runs/eval/htdev2/collect/<reference key>/output/ht-dev2.predictions.jsonl
+  ```
+
+  - **Readout:** the readout JSON gets `htdev2`: H_dev2, per-task macro-F1, the bootstrap SD, and `vs_reference` with
+    delta, paired CI and verdict.
+  - **Reference keys** (`/data/dev2/runs/eval/htdev2/collect/<key>`):
+    - 0.6B `06b-m6-mxcx-soup` (the same weights as `b2131337`);
+    - 0.8B `dec-m2-E8F-soup`; 2B `dec-m3-S2T-soup`; 4B `dec-m4-N4XF-soup`; 9B `9b-m4-K-a13`;
+    - own 1.0: `eos1`, `sol1`, `nox1`, `lux1`.
+    - Kai1 and the 27B models are not collected yet.
+- **Files:** `/data/dev2/private/panels/{goldfree,gold}/ht-dev2.*` (prompts `90cd409a…`, gold `659c92b4…`). Backup:
+  eval-artifacts `htdev2/v1/` (`6f6acf5d`).
 
 ### JevArena-C1 v1.2 post-key successor guard (successor-rule item 8; eval custodian; code at `2b5e878db` or later)
 
