@@ -15,7 +15,7 @@ Semantic Router 可以运行在多种基于 Envoy 的 Kubernetes 网关后面。
 
 | 现有数据面 | 从此开始 | 它负责什么 |
 | --- | --- | --- |
-| Envoy AI Gateway | [Envoy AI Gateway](ai-gateway) | 提供商转换、提供商凭证、速率限制和 Gateway API 流量策略。 |
+| Agent Router（原 Envoy AI Gateway） | [Agent Router](ai-gateway) | 提供商转换、提供商凭证、速率限制和 Gateway API 流量策略。 |
 | agentgateway | [agentgateway](agentgateway) | Gateway API 代理、后端资源和 ExtProc 阶段策略。 |
 | Istio | [Istio Gateway](istio) | Ingress、`HTTPRoute` 处理，以及调用 Semantic Router 的 Envoy 过滤器。 |
 | Gateway API Inference Extension | [GIE](gateway-api-inference-extension) | Semantic Router 选择模型池之后的 `InferencePool` 端点选择。 |

@@ -6,7 +6,7 @@ sidebar_label: Model Catalog
 # Vela model catalog
 
 [Vela 1.0](https://huggingface.co/collections/llm-semantic-router/vela-10-router-models-6aa555ba70cc6997d6d67798)
-is the model family for intelligent routing. Its eleven releases share the
+is the model family for intelligent routing. Its twelve releases share the
 307M-parameter Vela Encoder foundation and cover request understanding,
 safety, retrieval, and reranking.
 
@@ -18,6 +18,7 @@ safety, retrieval, and reranking.
 | [Domain](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Domain) | Classify requests into 14 subject areas |
 | [Guard](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Guard) | Detect prompt injection and jailbreak attacks |
 | [Safety](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Safety) | Detect unsafe content |
+| [Shield](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Shield) | Detect unsafe requests; an alternative to Safety |
 | [Hazard](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Hazard) | Identify 12 content-risk categories |
 | [PII](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-PII) | Locate 17 types of personal information |
 | [FactCheck](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck) | Decide when an answer needs factual verification |
@@ -28,7 +29,10 @@ safety, retrieval, and reranking.
 
 Guard detects attempts to redirect instructions. Safety detects content risk;
 Hazard identifies its category. Use these models together when your application
-needs both prompt-attack protection and content policies.
+needs both prompt-attack protection and content policies. Shield is a separately
+trained model with the same `safe`/`unsafe` interface as Safety; Safety remains
+the default, and [the Safety signal guide](../tutorials/signal/learned/safety.md#select-vela-shield)
+shows how to select Shield instead.
 
 Embedding and Reranker offer four encoder depths and five dimensions so you
 can balance quality, latency, and memory. See

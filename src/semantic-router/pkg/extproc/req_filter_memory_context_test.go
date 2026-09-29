@@ -3,7 +3,10 @@ package extproc
 import (
 	"context"
 	"errors"
+	"path/filepath"
+	"runtime"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -117,4 +120,144 @@ func TestMemoryRuntimeInjectsNeutralMessage(t *testing.T) {
 	assert.Equal(t, "injected", diagnostics.MemoryReason)
 	assert.Equal(t, 1, diagnostics.MemoryResultCount)
 	assert.False(t, diagnostics.MemoryFailOpen)
+}
+
+type thresholdRecordingMemoryStore struct {
+	noopMemoryStore
+	threshold float32
+}
+
+func (store *thresholdRecordingMemoryStore) Retrieve(_ context.Context, opts memory.RetrieveOptions) ([]*memory.RetrieveResult, error) {
+	store.threshold = opts.Threshold
+	return nil, nil
+}
+
+func TestMemoryRetrievalThresholdFallsBackToConfigDefault(t *testing.T) {
+	configDefault := config.DefaultCanonicalGlobal().Stores.Memory.DefaultSimilarityThreshold
+	cases := []struct {
+		name   string
+		memory string
+		want   float32
+	}{
+		{name: "omitted", memory: "{enabled: true}", want: configDefault},
+		{name: "zero means unset", memory: "{enabled: true, default_similarity_threshold: 0}", want: configDefault},
+		{name: "configured", memory: "{enabled: true, default_similarity_threshold: 0.74}", want: 0.74},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := config.ParseYAMLBytes([]byte("version: v0.3\nglobal:\n  stores:\n    memory: " + tc.memory + "\n"))
+			require.NoError(t, err)
+			store := &thresholdRecordingMemoryStore{}
+			router := &OpenAIRouter{Config: cfg, MemoryStore: store}
+			query := "What is my sister's name?"
+			request := testNeutralRequest("entrypoint", query)
+			ctx := &RequestContext{
+				Headers:         map[string]string{"x-authz-user-id": "user-1"},
+				TraceContext:    context.Background(),
+				SemanticRequest: request,
+			}
+
+			require.NoError(t, router.handleMemoryRetrieval(ctx, query, request))
+			assert.Equal(t, tc.want, store.threshold)
+		})
+	}
+}
+
+// The reference configuration is copied into the Router image. A low-scoring
+// answer must survive its calibrated threshold, while an unrelated query must
+// not inject a fact. Scores match the weighted-hybrid cold-start replay in
+// #4228 for the pinned mom-embedding-light model.
+type referenceScoredMemoryStore struct {
+	noopMemoryStore
+	options []memory.RetrieveOptions
+}
+
+func (store *referenceScoredMemoryStore) Retrieve(_ context.Context, opts memory.RetrieveOptions) ([]*memory.RetrieveResult, error) {
+	store.options = append(store.options, opts)
+	var score float32
+	var content string
+	switch opts.Query {
+	case "What is my dog's name?":
+		score, content = 0.576, "My dog is a beagle named Biscuit."
+	case "Which programming language am I learning?":
+		score, content = 0.424, "I'm learning Rust for a side project."
+	case "What is my sister's name?":
+		score = 0.380
+		content = "My dog is a beagle named Biscuit."
+	default:
+		return nil, errors.New("unexpected reference memory query")
+	}
+	if score < opts.Threshold {
+		return nil, nil
+	}
+	return []*memory.RetrieveResult{{
+		Memory: &memory.Memory{Content: content, CreatedAt: time.Now()},
+		Score:  score,
+	}}, nil
+}
+
+func TestReferenceMemoryCalibratedRequestPath(t *testing.T) {
+	_, sourceFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	configPath := filepath.Join(filepath.Dir(sourceFile), "../../../../config/config.yaml")
+	cfg, err := config.Load(configPath)
+	require.NoError(t, err)
+	require.Equal(t, "bert", cfg.Memory.EmbeddingModel)
+	require.Equal(t, float32(0.40), cfg.Memory.DefaultSimilarityThreshold)
+	require.Equal(t, "weighted", cfg.Memory.HybridMode)
+	require.Equal(t, "heuristic", cfg.Memory.Reflection.Algorithm)
+
+	decision := cfg.GetDecisionByName("computer-science-remom-route")
+	require.NotNil(t, decision)
+	plugin := decision.GetMemoryConfig()
+	require.NotNil(t, plugin)
+	require.NotNil(t, plugin.SimilarityThreshold)
+	require.Equal(t, float32(0.40), *plugin.SimilarityThreshold)
+	require.Equal(t, "weighted", plugin.HybridMode)
+	require.NotNil(t, plugin.Reflection)
+	require.Equal(t, "heuristic", plugin.Reflection.Algorithm)
+
+	for _, tc := range []struct {
+		name     string
+		decision *config.Decision
+	}{
+		{name: "global"},
+		{name: "decision override", decision: decision},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &referenceScoredMemoryStore{}
+			router := &OpenAIRouter{Config: cfg, MemoryStore: store}
+			for _, query := range []struct {
+				text       string
+				wantStatus string
+				wantFact   string
+			}{
+				{text: "What is my dog's name?", wantStatus: "used", wantFact: "Biscuit"},
+				{text: "Which programming language am I learning?", wantStatus: "used", wantFact: "Rust"},
+				{text: "What is my sister's name?", wantStatus: "missing"},
+			} {
+				request := testNeutralRequest("entrypoint", query.text)
+				ctx := &RequestContext{
+					Headers:             map[string]string{"x-authz-user-id": "memory-calibration-user"},
+					TraceContext:        context.Background(),
+					VSRSelectedDecision: tc.decision,
+					SemanticRequest:     request,
+				}
+				require.NoError(t, router.handleMemoryRetrieval(ctx, query.text, request))
+				assert.Equal(t, query.wantStatus, ctx.MemoryStatus)
+				if query.wantStatus == "used" {
+					assert.Contains(t, ctx.MemoryContext, query.wantFact)
+				} else {
+					assert.Empty(t, ctx.MemoryContext)
+				}
+			}
+			require.Len(t, store.options, 3)
+			for _, opts := range store.options {
+				assert.Equal(t, float32(0.40), opts.Threshold)
+				assert.True(t, opts.HybridSearch)
+				assert.Equal(t, "weighted", opts.HybridMode)
+				assert.True(t, opts.AdaptiveThreshold)
+			}
+		})
+	}
 }

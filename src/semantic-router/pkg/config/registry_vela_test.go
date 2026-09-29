@@ -17,6 +17,7 @@ func TestVelaReleaseRegistryContracts(t *testing.T) {
 		{"Vela-1.0-Encoder-307M", PurposeEncoder, 0},
 		{"Vela-1.0-Encoder-307M-Guard", PurposeJailbreakDetection, 2},
 		{"Vela-1.0-Encoder-307M-Safety", PurposeSafety, 2},
+		{"Vela-1.0-Encoder-307M-Shield", PurposeSafety, 2},
 		{"Vela-1.0-Encoder-307M-Hazard", PurposeHazard, 12},
 		{"Vela-1.0-Encoder-307M-Embedding", PurposeEmbedding, 0},
 		{"Vela-1.0-Encoder-307M-Reranker", PurposeReranking, 0},
@@ -51,5 +52,28 @@ func TestVelaReleaseRegistryContracts(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestVelaShieldIsSelectableWithoutChangingTheSafetyDefault(t *testing.T) {
+	if got := DefaultSystemModels().Safety; got != "models/Vela-1.0-Encoder-307M-Safety" {
+		t.Fatalf("default safety model changed to %q", got)
+	}
+	if got := DefaultGlobalConfig().SafetyModels.Safety.ModelID; got != "models/Vela-1.0-Encoder-307M-Safety" {
+		t.Fatalf("default safety module resolves to %q", got)
+	}
+	shield := GetModelByPath("models/Vela-1.0-Encoder-307M-Shield")
+	if shield == nil || shield.Purpose != PurposeSafety {
+		t.Fatalf("Shield is not registered as a safety model: %+v", shield)
+	}
+	for _, pattern := range velaTrainingArtifactPatterns {
+		if !slices.Contains(shield.DownloadExcludePatterns, pattern) {
+			t.Fatalf("Shield dropped the Vela training-artifact exclusion %q", pattern)
+		}
+	}
+	for _, pattern := range []string{"lc/*", "heads/*", "demo.py", "DEMO_OUTPUT.txt"} {
+		if !slices.Contains(shield.DownloadExcludePatterns, pattern) {
+			t.Fatalf("Shield does not exclude %q", pattern)
+		}
 	}
 }

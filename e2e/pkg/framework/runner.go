@@ -350,11 +350,23 @@ func resolveWorkspaceModelsDir() (string, error) {
 	}
 
 	modelsDir := filepath.Join(workingDir, "models")
-	if err := os.MkdirAll(modelsDir, 0o755); err != nil {
-		return "", fmt.Errorf("create workspace models directory %s: %w", modelsDir, err)
+	if err := ensureWorkspaceModelsDir(modelsDir); err != nil {
+		return "", err
 	}
 
 	return modelsDir, nil
+}
+
+func ensureWorkspaceModelsDir(modelsDir string) error {
+	if err := os.MkdirAll(modelsDir, 0o777); err != nil {
+		return fmt.Errorf("create workspace models directory %s: %w", modelsDir, err)
+	}
+	// MkdirAll honors the host umask. Kind's non-root Router must be able to
+	// create Hugging Face cache and lock files in this opt-in test directory.
+	if err := os.Chmod(modelsDir, 0o777); err != nil {
+		return fmt.Errorf("make workspace models directory writable %s: %w", modelsDir, err)
+	}
+	return nil
 }
 
 func localDockerBuildArgs() map[string]string {

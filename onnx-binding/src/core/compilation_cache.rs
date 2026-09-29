@@ -5,12 +5,15 @@ use super::artifact_identity::{json_digest, ArtifactDigest, ArtifactSnapshot};
 use super::execution_contract::{validate_contract, ExecutionInput};
 use super::migraphx_identity::GpuIdentity;
 use super::unified_error::{errors, UnifiedResult};
+use anyhow::Context;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
 #[cfg(target_os = "linux")]
 use std::collections::BTreeSet;
 use std::fs::{File, OpenOptions};
+#[cfg(target_os = "linux")]
+use std::io;
 #[cfg(target_os = "linux")]
 use std::io::Read;
 use std::io::Write;
@@ -175,16 +178,35 @@ fn lock_file(_path: &Path) -> anyhow::Result<File> {
 
 struct ReadWatch {
     #[cfg(target_os = "linux")]
-    file: File,
+    file: Option<File>,
 }
 impl ReadWatch {
+    #[cfg(target_os = "linux")]
+    fn unavailable(error: io::Error, action: &'static str) -> anyhow::Result<Self> {
+        // This observer only confirms that MIGraphX consumed a verified cache
+        // copy. The manifest and first-run integrity checks remain mandatory.
+        if matches!(
+            error.raw_os_error(),
+            Some(libc::EMFILE | libc::ENFILE | libc::ENOSPC)
+        ) {
+            tracing::warn!(%error, "cache read observer unavailable; reuse will be unconfirmed");
+            return Ok(Self { file: None });
+        }
+        Err(error).context(action)
+    }
+
     fn new(path: &Path) -> anyhow::Result<Self> {
         #[cfg(target_os = "linux")]
         {
             use std::os::{fd::FromRawFd, unix::ffi::OsStrExt};
             let name = std::ffi::CString::new(path.as_os_str().as_bytes())?;
             let fd = unsafe { libc::inotify_init1(libc::IN_NONBLOCK | libc::IN_CLOEXEC) };
-            anyhow::ensure!(fd >= 0, "cache read observer initialization failed");
+            if fd < 0 {
+                return Self::unavailable(
+                    io::Error::last_os_error(),
+                    "cache read observer initialization failed",
+                );
+            }
             let file = unsafe { File::from_raw_fd(fd) };
             let watch = unsafe {
                 libc::inotify_add_watch(
@@ -193,8 +215,13 @@ impl ReadWatch {
                     libc::IN_ACCESS | libc::IN_MODIFY | libc::IN_CLOSE_WRITE,
                 )
             };
-            anyhow::ensure!(watch >= 0, "cache read observer installation failed");
-            Ok(Self { file })
+            if watch < 0 {
+                return Self::unavailable(
+                    io::Error::last_os_error(),
+                    "cache read observer installation failed",
+                );
+            }
+            Ok(Self { file: Some(file) })
         }
         #[cfg(not(target_os = "linux"))]
         {
@@ -208,13 +235,16 @@ impl ReadWatch {
     }
     #[cfg(target_os = "linux")]
     fn finish(mut self) -> anyhow::Result<(Vec<String>, bool)> {
+        let Some(file) = self.file.as_mut() else {
+            return Ok((Vec::new(), false));
+        };
         let mut names = BTreeSet::new();
         let mut modified = false;
         #[cfg(target_os = "linux")]
         {
             let mut buffer = [0_u8; 65536];
             loop {
-                let count = match self.file.read(&mut buffer) {
+                let count = match file.read(&mut buffer) {
                     Ok(0) => break,
                     Ok(n) => n,
                     Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
@@ -545,6 +575,80 @@ mod tests {
         let mut changed = identity().inputs;
         changed[0].shape[1] = 1024;
         assert!(with_inference(&mut warm, &changed, || Ok(())).is_err());
+    }
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn exhausted_read_observer_keeps_cache_valid_without_claiming_reuse() {
+        for errno in [libc::EMFILE, libc::ENFILE, libc::ENOSPC] {
+            let watch = ReadWatch::unavailable(
+                io::Error::from_raw_os_error(errno),
+                "cache read observer initialization failed",
+            )
+            .unwrap();
+            assert!(watch.file.is_none());
+            assert_eq!(watch.finish().unwrap(), (Vec::new(), false));
+        }
+        assert!(ReadWatch::unavailable(
+            io::Error::from_raw_os_error(libc::EACCES),
+            "cache read observer installation failed",
+        )
+        .is_err());
+
+        let directory = tempfile::tempdir().unwrap();
+        let mut first =
+            Some(CompilationCacheLease::prepare(directory.path(), identity(), vec![]).unwrap());
+        first.as_mut().unwrap().watch = Some(
+            ReadWatch::unavailable(
+                io::Error::from_raw_os_error(libc::EMFILE),
+                "cache read observer initialization failed",
+            )
+            .unwrap(),
+        );
+        let work = first.as_ref().unwrap().directory.clone();
+        with_inference(&mut first, &identity().inputs, || {
+            std::fs::write(work.join("program.mxr"), b"compiled-data").unwrap();
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(first.as_ref().unwrap().evidence.0.lock().state, "compiled");
+        drop(first);
+
+        let mut warm =
+            Some(CompilationCacheLease::prepare(directory.path(), identity(), vec![]).unwrap());
+        warm.as_mut().unwrap().watch = Some(
+            ReadWatch::unavailable(
+                io::Error::from_raw_os_error(libc::ENOSPC),
+                "cache read observer installation failed",
+            )
+            .unwrap(),
+        );
+        let program = warm.as_ref().unwrap().directory.join("program.mxr");
+        with_inference(&mut warm, &identity().inputs, || {
+            assert_eq!(std::fs::read(&program).unwrap(), b"compiled-data");
+            Ok(())
+        })
+        .unwrap();
+        let evidence = warm.as_ref().unwrap().evidence.0.lock().clone();
+        assert_eq!(evidence.state, "unconfirmed");
+        assert!(evidence.compiled_file_reads.is_empty());
+        assert_eq!(evidence.files.len(), 1);
+
+        let mut modified =
+            Some(CompilationCacheLease::prepare(directory.path(), identity(), vec![]).unwrap());
+        modified.as_mut().unwrap().watch = Some(
+            ReadWatch::unavailable(
+                io::Error::from_raw_os_error(libc::EMFILE),
+                "cache read observer initialization failed",
+            )
+            .unwrap(),
+        );
+        let program = modified.as_ref().unwrap().directory.join("program.mxr");
+        assert!(with_inference(&mut modified, &identity().inputs, || {
+            std::fs::write(&program, b"rewritten").unwrap();
+            Ok(())
+        })
+        .is_err());
+        assert_eq!(modified.as_ref().unwrap().evidence.0.lock().state, "failed");
     }
     #[test]
     fn failed_or_incomplete_compiles_are_not_published() {

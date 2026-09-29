@@ -12,6 +12,7 @@ from cli.sr_bench.engine import Engine, EngineClosedError
 from cli.sr_bench.recovery import recovery_plan
 from cli.sr_bench.service import PREFIX, Server
 from cli.sr_bench.store import Store
+from test_sr_bench_replay import manifest, record
 
 
 def _manifest():
@@ -294,6 +295,38 @@ def test_closed_http_engine_reconciles_existing_recovery_and_preserves_unknowns(
         assert ambiguous.json()["code"] == "recovery_plan_required"
         assert len(store.list()) == 2
         assert store.calls(parent)[0]["status"] == "sent_unknown"
+    finally:
+        server.shutdown()
+        server.server_close()
+        loop.join(timeout=5)
+
+
+def test_closed_http_engine_rejects_a_new_replay_and_reconciles_a_known_one(tmp_path):
+    store = Store(tmp_path)
+    baseline = record(store)
+    document = manifest(True)
+    document["cases"].reverse()
+    document["targets"][0]["capture_recipe"] = True
+    preview = record(store, document, preview=True)
+    server = Server(("127.0.0.1", 0), store)
+    loop = threading.Thread(target=server.serve_forever, daemon=True)
+    loop.start()
+    url = f"http://127.0.0.1:{server.server_port}{PREFIX}/replays"
+    body = {"baseline_run_id": baseline["id"], "preview_run_id": preview["id"]}
+    once = {"idempotency_key": "replay-once"}
+    try:
+        replayed = requests.post(url, json={**body, **once}, timeout=5)
+        assert replayed.status_code == HTTPStatus.CREATED
+        server.engine.close()
+        before = store.list()
+        known = requests.post(url, json={**body, **once}, timeout=5)
+        assert known.status_code == HTTPStatus.CREATED
+        assert known.json()["id"] == replayed.json()["id"]
+        for request in (body, {**body, "idempotency_key": "new-after-close"}):
+            late = requests.post(url, json=request, timeout=5)
+            assert late.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+            assert late.json()["code"] == "service_stopping"
+        assert store.list() == before
     finally:
         server.shutdown()
         server.server_close()

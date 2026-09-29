@@ -17,6 +17,7 @@ onnx-artifact-test: ck-rewrite-deps ## Verify external ONNX weight packing with 
 	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/artifact_tests -p 'test_*.py'
 
 test-training-contracts: harness-venv-install ## Run dependency-light model training contract tests
+	@"$(AGENT_PYTHON)" -m unittest src.training.control_plane.test_contracts
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'

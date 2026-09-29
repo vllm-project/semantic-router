@@ -227,6 +227,9 @@ func redactRouteDiagnosticsMap(diagnostics map[string]any) bool {
 			changed = true
 		}
 	}
+	if deleteField(diagnostics, "prepared_dispatch") {
+		changed = true
+	}
 	return changed
 }
 
@@ -250,6 +253,14 @@ func redactLearningDiagnosticsMap(learning map[string]any) bool {
 		}
 	}
 	return changed
+}
+
+func deleteField(value map[string]any, field string) bool {
+	if _, ok := value[field]; !ok {
+		return false
+	}
+	delete(value, field)
+	return true
 }
 
 func clearStringField(value map[string]any, field string) bool {

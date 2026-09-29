@@ -51,6 +51,24 @@ func TestHandleResponseHeadersSetsStreamingModeOverride(t *testing.T) {
 	}
 }
 
+func TestSameFormatChatResponseHeadersAllowCanonicalBodyRewrite(t *testing.T) {
+	ctx := &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1, TargetFormat: llmprotocol.OpenAIChatV1}
+	response, err := (&OpenAIRouter{}).handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{
+		ResponseHeaders: &ext_proc.HttpHeaders{Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+			{Key: ":status", Value: "200"},
+			{Key: "content-type", Value: "application/json"},
+			{Key: "content-length", Value: "400"},
+		}}},
+	}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
+	if mutation == nil || !containsStringForTest(mutation.GetRemoveHeaders(), "content-length") {
+		t.Fatalf("stale upstream length was committed before body sanitization: %+v", mutation)
+	}
+}
+
 func TestHandleResponseHeadersUsesResponseAPIStreamRequestFallback(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{

@@ -131,22 +131,26 @@ func TestJaegerRootRouteBoundariesMatchPermissionClassification(t *testing.T) {
 	proxies := dashboardProxySet{grafanaStatic: registerGrafanaRoutes(mux, cfg)}
 	proxies.jaegerAPI, proxies.jaegerStatic = registerJaegerRoutes(mux, cfg)
 	registerSmartAPIRouter(mux, proxies)
-	for _, tc := range []struct{ path, upstream, permission string }{
-		{"/api/services", "jaeger", auth.PermLogsRead},
-		{"/api/services/example/operations", "jaeger", auth.PermLogsRead},
-		{"/api/traces/example", "jaeger", auth.PermLogsRead},
-		{"/api/operations", "jaeger", auth.PermLogsRead},
-		{"/api/dependencies", "jaeger", auth.PermLogsRead},
-		{"/api/services-status", "grafana", auth.PermConfigRead},
-		{"/api/traces-summary", "grafana", auth.PermConfigRead},
-		{"/api/operations-old", "grafana", auth.PermConfigRead},
-		{"/api/dependencies-other", "grafana", auth.PermConfigRead},
+	for _, tc := range []struct {
+		path, upstream, permission string
+		status                     int
+	}{
+		{"/api/services", "jaeger", auth.PermLogsRead, http.StatusNoContent},
+		{"/api/services/example/operations", "jaeger", auth.PermLogsRead, http.StatusNoContent},
+		{"/api/traces/example", "jaeger", auth.PermLogsRead, http.StatusNoContent},
+		{"/api/operations", "jaeger", auth.PermLogsRead, http.StatusNoContent},
+		{"/api/dependencies", "jaeger", auth.PermLogsRead, http.StatusNoContent},
+		{"/api/services-status", "", "", http.StatusNotFound},
+		{"/api/traces-summary", "", "", http.StatusNotFound},
+		{"/api/operations-old", "", "", http.StatusNotFound},
+		{"/api/dependencies-other", "", "", http.StatusNotFound},
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, tc.path, nil))
 		permissions := auth.RequiredPermissions(http.MethodGet, tc.path)
-		if response.Code != http.StatusNoContent || response.Header().Get("X-Test-Upstream") != tc.upstream ||
-			len(permissions) != 1 || permissions[0] != tc.permission {
+		if response.Code != tc.status || response.Header().Get("X-Test-Upstream") != tc.upstream ||
+			(tc.permission == "" && len(permissions) != 0) ||
+			(tc.permission != "" && (len(permissions) != 1 || permissions[0] != tc.permission)) {
 			t.Fatalf("path=%s status=%d upstream=%s permissions=%v", tc.path, response.Code, response.Header().Get("X-Test-Upstream"), permissions)
 		}
 	}

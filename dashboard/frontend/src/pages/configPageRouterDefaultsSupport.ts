@@ -662,7 +662,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           placeholder: '70',
         },
         { name: 'hybrid_search', label: 'Hybrid Search', type: 'boolean' },
-        { name: 'hybrid_mode', label: 'Hybrid Mode', type: 'text', placeholder: 'rerank' },
+        { name: 'hybrid_mode', label: 'Hybrid Mode', type: 'text', placeholder: 'weighted' },
         { name: 'adaptive_threshold', label: 'Adaptive Threshold', type: 'boolean' },
         routerStructuredField(key, 'reflection'),
       ]

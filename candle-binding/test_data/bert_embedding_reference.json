@@ -1,0 +1,62 @@
+{
+  "model": "sentence-transformers/all-MiniLM-L12-v2",
+  "generator": "sentence-transformers 6.1.0",
+  "texts": [
+    "Which city do I live in now?",
+    "I just moved to Denver, and I live there now.",
+    "I live in Boston, near the Charles River.",
+    "I work as a nurse at the children's hospital.",
+    "My budget for the Japan trip is $4,000.",
+    "Don't, won't, shouldn't, couldn't've."
+  ],
+  "cosine": [
+    [
+      1.0,
+      0.50781,
+      0.50171,
+      0.25874,
+      0.12128,
+      -0.00876
+    ],
+    [
+      0.50781,
+      1.0,
+      0.38742,
+      0.26248,
+      0.12477,
+      0.00682
+    ],
+    [
+      0.50171,
+      0.38742,
+      1.0,
+      0.23055,
+      0.17835,
+      -0.01698
+    ],
+    [
+      0.25874,
+      0.26248,
+      0.23055,
+      1.0,
+      0.14159,
+      0.02466
+    ],
+    [
+      0.12128,
+      0.12477,
+      0.17835,
+      0.14159,
+      1.0,
+      0.05113
+    ],
+    [
+      -0.00876,
+      0.00682,
+      -0.01698,
+      0.02466,
+      0.05113,
+      1.0
+    ]
+  ]
+}

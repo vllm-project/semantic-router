@@ -1,6 +1,46 @@
 {
   "cases": [
     {
+      "name": "access_programs",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "resp_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "access_programs",
+            "action": "dropped"
+          },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "background",
       "outcome": {
         "status": "ok",
@@ -31,6 +71,46 @@
         "diagnostics": [
           {
             "field": "background",
+            "action": "dropped"
+          },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "billing",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "resp_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "billing",
             "action": "dropped"
           },
           {
@@ -205,6 +285,46 @@
           "code": "invalid_error_response"
         },
         "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "frequency_penalty",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "resp_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "frequency_penalty",
+            "action": "dropped"
+          },
           {
             "field": "output.status",
             "action": "dropped"
@@ -713,6 +833,46 @@
       }
     },
     {
+      "name": "presence_penalty",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "resp_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "presence_penalty",
+            "action": "dropped"
+          },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "prompt",
       "outcome": {
         "status": "ok",
@@ -1179,6 +1339,46 @@
         "diagnostics": [
           {
             "field": "tool_choice",
+            "action": "dropped"
+          },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tool_usage",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "resp_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "tool_usage",
             "action": "dropped"
           },
           {

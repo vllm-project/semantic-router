@@ -143,7 +143,7 @@ func (r *Runner) runBenchmarkHTTP(ctx context.Context, modelsYAMLPath, queryJSON
 // runTrainHTTP delegates training to the Python ML sidecar via HTTP.
 func (r *Runner) runTrainHTTP(ctx context.Context, benchmarkDataPath string, req TrainRequest) (string, error) {
 	job := r.createJob("train")
-	jobDir := r.TrainDir()
+	jobDir := r.JobDir(job.ID)
 	if err := ensureDir(jobDir); err != nil {
 		return "", fmt.Errorf("failed to create job dir: %w", err)
 	}

@@ -123,7 +123,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -146,7 +145,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -169,7 +167,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "developer",
               "type": "message"
             },
@@ -180,7 +177,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -202,7 +198,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -237,7 +232,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -279,7 +273,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -312,10 +305,22 @@
     {
       "name": "prompt_cache_key",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_prompt_cache_key"
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "prompt_cache_key": "cache-key"
         }
       }
     },
@@ -362,7 +367,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -387,7 +391,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -454,7 +457,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -477,7 +479,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -500,7 +501,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -526,7 +526,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -549,7 +548,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -572,7 +570,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -614,7 +611,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -637,7 +633,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -650,10 +645,24 @@
     {
       "name": "verbosity",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_verbosity"
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "text": {
+            "verbosity": "low"
+          }
         }
       }
     },
