@@ -199,6 +199,38 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 23:40 — **C1 event 3 SCORED (v1.2, P2); C1 is exhausted (3 of 3) and post-key** (event-3 record; amendment
+  `fee142bf3`; PASS `2204823e7`, verdict `16c6d311…`; integration `224dd508a`; 1.153 GPU-h).
+  - **Results** (2,840 items; paired Δ [95% CI]):
+
+    | Model | C1 | vs own 1.0 | vs peers |
+    | --- | --- | --- | --- |
+    | DEV2.0-2B | 45.70 | Sol 16K +0.68 [−0.91, +2.22] | Decider 2B **+3.26**; This-That 1.2 **+2.90** |
+    | DEV2.0-4B | 48.38 | Nox −1.32 [−3.00, +0.35] | Decider 4B −1.27; Jet v6.2 **−2.06 [−3.86, −0.18]** |
+    | DEV2.0-9B | 53.77 | Lux 16K **+1.80 [+0.55, +3.07]** | Nimble v2 +1.00 [−0.69, +2.75] |
+    | DEV2.0-27B | 57.33 | none | AutoJev −0.84 [−2.50, +0.69]; Eikos **−2.04 [−3.66, −0.44]** |
+    | DEV2.0-0.6B (event-2 predictions) | 33.02 | Kai 8K **+10.89 [+8.88, +12.64]** | — |
+
+    - **4B's v3 lead over Nox does NOT carry over to C1.** 27B on C1 is level with AutoJev (unlike v3) and below Eikos.
+  - **Coordinator confirms the class-(a) call:** the one remaining row with a 6-token exact match (containment 0) in the
+    Decision 1.0 Stage-4 v2 curriculum is disclosed, not failing. Even counting 1.0 lineage data, it is far below the
+    near-exact bar (≥ 8 tokens or containment ≥ 0.8).
+  - **Card pass** (release worker, worktree `vllm-sr-dev2-release`):
+    - C1 lines on 2B / 4B / 9B / 27B;
+    - on 0.6B, the previous-revision wording (this revision not sealed-tested);
+    - the new JevBench note on all six;
+    - honest disclosures: 4B's v3 lead not on C1, Jet ahead on C1, Eikos ahead for 27B, the JevBench gaps.
+    - The same worker hardens `mirror_to_node.sh` (flock + existence / hash check, no nesting).
+  - **NEW successor-rule item 8 — C1 post-key guard:** `python3 -m v2.eval.gates c1 --left <successor> --right
+    <current>` must not return REGRESSION (p < .05). The eval worker is building the tooling and baselines.
+    - C1 is never training data and never used for selection.
+    - Successor cards label it "post-key (not an independent validation)".
+    - Custodial collection only: gold stays on node A.
+  - **Implication for tracks:** v3 gains alone are not enough. The 4B case shows typed / v3 gains can fail to transfer to
+    fresh human-labeled data.
+    - Decoder M6 (4B / 2B) and 27B M4 / M4b should weigh human transfer and hard-skill data.
+    - A new sealed set C2 for future independent claims is a candidate after round 1.
+
 - 2026-09-29 22:50 — **PN1 (paraphrase-style multilingual Noul arm) LANDED; its dev slice is VALID** (data record under
   `v2/data/records/`; integration `e53e5c57a`; 1.010 GPU-h).
   - **Location:** private `llm-semantic-router/decision-2.0-training-data@5ad362872f57034c7fada2c2990cfc6c36398d73`,
