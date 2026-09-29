@@ -1,0 +1,49 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "DEV2.0-4B",
+  "repo_id": "llm-semantic-router/DEV2.0-4B",
+  "identity": {
+    "model_sha256": "11b5ca1c22f8cd38d67d718cbfa59a3fb4dc8f4e7bfd75b3e988f34e35fad0ad"
+  },
+  "report_sha256": "57fa23efddef219c83eb39bad58ba2e46c4ff48bd2f1379a1309afe3060102c2",
+  "paired_sha256": "27f1419f9604eaef711abf102952612fcd99a8de7b7a81f03a48010bf07dd186",
+  "calibration": "none: raw model probabilities (temperature 1), no calibration.json; the CAL698 temperatures 176a2f0e (Choice 0.667, Noul 0.496, Score 0.212) were evaluated on the development panels and rejected under the coordinator's 2026-09-28 23:15 UTC+8 rule, which has no tolerance band (receipt 5b1d2e37: CSS-pilot ECE-15 0.063 -> 0.068 worsens while typed-DEV Brier, typed-DEV ECE-10 and CSS-pilot Brier improve; 0 answer changes); no calibration-only revision",
+  "decided_by": "coordinator (Decision 2.0 program), under the user's full-autonomy mandate of 2026-09-28",
+  "prepared_by": "Decision 2.0 release engineering, DEV2.0-4B worker",
+  "decided_utc": "2026-09-29T00:59:00Z",
+  "action": "Add the private repository llm-semantic-router/DEV2.0-4B to the private 'Decision 2.0' collection, which then holds DEV2.0-0.8B, DEV2.0-0.6B, DEV2.0-2B and DEV2.0-4B. The repository and the collection stay private.",
+  "approved_package": "The T = 1 package verified as revision c73123f36b6d9046ba7d85722adfd6031c7d9e23 (full-panel parity) and its card-only revision 8052eb6c99c0b3b6a9980dcd77fb868c27da353a (MODEL_MANIFEST.json eab4e8ac...). The publishing run rebuilds it from the mirror of the publishing commit: every model file must equal 8052eb6c's; only MODEL_MANIFEST.json (builder.source_commit) may differ.",
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect run binds this file's SHA-256 to the Hub revision and package manifest it verified.",
+  "supersedes": {
+    "draft_sha256": "ec50b04bdbea6440e0c51682bcfe693168e552b435f9f50855159ea155e1a2d7",
+    "earlier_draft_sha256": "d5baa5bf048d819e20635c3bcdf2fd5d94d8f145d447d3d20aab543e03f5201c",
+    "build_draft_sha256": "00c25bb61faa3f5f24a002747e230eb48c4316f4ea4d5369d8fa3d6dbceb4fe6",
+    "verified_revision": "8052eb6c99c0b3b6a9980dcd77fb868c27da353a"
+  },
+  "rationale": "Per-size release gate under the full-autonomy mandate. (1) Post-key same-panel JevArena v3 63.151 vs the adopted Decision 1.0 Nox run 56.470 (the stricter comparator and the 4B bar): +6.68 [+0.99, +9.64] (lower bound > 0); vs the Nox 1.0 16K same-renderer control +7.46 [+1.80, +10.45]; 63.15 >= 55.7 (90% of Decider 4B 61.88). (2) Eval gates (record m4-dev2-4b-gates-2026-09-29, integration e1ea4f5c7, approval 08:05 UTC+8): human transfer not below Decider 4B (+0.024 [-0.095, +0.073]) or Jet v6.2 (+0.042 [-0.061, +0.093]); no type collapsed (Choice .728, Noul .917, Score .463 vs chance .267 / .50 / .20). (3) No training-row exposure to the 84 flagged items; v3 stays 63.151 without them. (4) Calibration: T = 1 under the 23:15 rule. (5) Package verified (real download, re-hash 36/36, loaded parameters 4,208,383,488, examples bit-identical in three processes, full-panel parity 0 changes with each panel's scored-run autotune cache). (6) Card in the 1.0 design with every disclosure; C1 line pending event 3 (placeholder). Licence apache-2.0.",
+  "gate_evidence": {
+    "post_key_v3": {"candidate": 63.151, "nox1_adopted": 56.470, "delta": 6.68, "ci95": [0.99, 9.64], "paired_sha256": "27f1419f9604eaef711abf102952612fcd99a8de7b7a81f03a48010bf07dd186"},
+    "vs_nox1_16k_control": {"delta": 7.46, "ci95": [1.80, 10.45]},
+    "vs_decider_4b": {"delta": 1.27, "ci95": [-5.71, 4.31], "H_delta": 0.024, "H_ci95": [-0.095, 0.073], "T_delta": -0.001, "T_ci95": [-0.030, 0.029]},
+    "vs_jet_v6p2": {"delta": 2.78, "ci95": [-3.33, 5.94], "H_delta": 0.042, "H_ci95": [-0.061, 0.093]},
+    "no_type_collapsed": {"choice": 0.728, "noul": 0.917, "score": 0.463},
+    "public231": {"candidate": 171, "nox1_adopted": 173, "decider_4b": 192, "jet_v6p2": 174},
+    "overlap_exposure": {"record": "v2/eval/records/m4-dev2-4b-gates-2026-09-29.md", "integration": "e1ea4f5c7", "exposed_groups": 0, "v3_without_flagged": 63.151}
+  },
+  "licence_decision": "apache-2.0: own weights, Decision 1.0 Nox-4B @cde2a68d and Qwen/Qwen3.5-4B @851bf6e8 text backbone and tokenizer are all Apache-2.0; teacher Decision 1.0 Lux-9B (own, Apache-2.0, no weights included); training-data licences (CC BY, CC BY-SA, MIT, Apache-2.0, CC0, OANC) credited in ATTRIBUTIONS.md; Decider 4B (Apache-2.0, card metadata only) and Jet v6.2 (Apache-2.0 LICENSE) shown; Hopper (G) 1.2 and JPT-4B not card-eligible; the XNLI-based mlx-diag Score part and the overall mlx-diag macro that includes it stay off the card.",
+  "disclosures": [
+    "gain over Decision 1.0 Nox is typed reasoning (T +0.074 [+0.051, +0.096]); human transfer +0.061 not significant ([-0.037, +0.113])",
+    "transfer tasks below Nox 1.0: wiki_corpus -0.065, mrf -0.045, media_ideology -0.016, talklife -0.001 (tradeoffs table)",
+    "vs the 4B peers: v3 margins not significant; T and H level with Decider 4B; typed Choice far below both peers (0.728 vs 0.938 / 0.900)",
+    "public 231 171 vs 173 (hard 56 vs 59); significantly below Decider 4B 192 (-21 [-32, -10]); level with Jet v6.2 174",
+    "long inputs level with Nox 1.0, weaker than both peers",
+    "typed Score rarely predicts level 0 (4 of 400; recall 0.11, Nox 0.14); level-2 recall 0.19 vs 0.30",
+    "mlx-diag Choice / Noul parts only: non-English Choice 75.1% vs 75.9%, non-English Noul 72.7% vs 80.0%, Korean 63% vs 69%, Japanese 67% vs 77%",
+    "typed ECE at T = 1 0.116 vs Nox 0.092; CAL698 evaluated and not adopted",
+    "evaluation familiarity: no training-row exposure; v3 unchanged without the 84 flagged items",
+    "weight origin, own-Lux teacher (targets computed without causal-conv1d), training data by family with licences, three-seed soup and seed dependence",
+    "peer licence notes; Jet v6.2 measured on ROCm; CPU not verified; 4 invalid CSS15 answers; C1 line pending"
+  ]
+}

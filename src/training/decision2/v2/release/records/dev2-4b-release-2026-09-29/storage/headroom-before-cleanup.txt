@@ -1,0 +1,9 @@
+llm-semantic-router private storage: 93.85 GB used of 100 GB, headroom 6.15 GB (34 private repos; threshold 40 GB: BELOW)
+     31.78 GB  model    llm-semantic-router/dev2-9b-staging
+     16.85 GB  model    llm-semantic-router/DEV2.0-4B
+     16.85 GB  model    llm-semantic-router/dev2-dec-staging
+      7.56 GB  model    llm-semantic-router/DEV2.0-2B
+      3.23 GB  dataset  llm-semantic-router/decision-2.0-training-data
+      3.03 GB  model    llm-semantic-router/DEV2.0-0.8B
+      2.40 GB  model    llm-semantic-router/DEV2.0-0.6B
+      2.40 GB  model    llm-semantic-router/dev2-staging-06bm5-z

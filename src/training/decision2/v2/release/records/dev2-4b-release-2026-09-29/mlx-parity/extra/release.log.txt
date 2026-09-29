@@ -1,0 +1,10 @@
+cache copy /data/dev2/runs/release/triton/dev2-4b-N4XF-soup-mlx-copy-20260929T001839Z files=415 digest=ba8f21322724f57beafac7dbce5348af0a9c148368d89394e459287226c481fc frozen_digest=ba8f21322724f57beafac7dbce5348af0a9c148368d89394e459287226c481fc
++ /data/dev2/src/7855c46dd8781880480ae82d1a96a4c3669ae9c5-src_training_decision2/src/training/decision2/v2/release/release.sh --spec /data/dev2/src/7855c46dd8781880480ae82d1a96a4c3669ae9c5-src_training_decision2/src/training/decision2/v2/release/specs/dev2-4b-release.json --src 7855c46dd8781880480ae82d1a96a4c3669ae9c5-src_training_decision2 --work /data/dev2/runs/release/dev2-4b-mlxparity-20260929T001839Z --gpu 5 --track release --shared-lease release --threads 4 --site /opt/decision-fla --require-kernels --env HIP_FORCE_DEV_KERNARG=1 --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=/data/dev2/runs/release/triton/dev2-4b-N4XF-soup-mlx-copy-20260929T001839Z --mount-rw /data/dev2/runs/release/triton/dev2-4b-N4XF-soup-mlx-copy-20260929T001839Z --mount /data/dev2/private/panels/goldfree --mount /data/dev2/runs/release/inputs/dev2-4b-t1/derived --parity mlx-diag:/data/dev2/private/panels/goldfree/mlx-diag.prompts.jsonl:/data/dev2/runs/release/inputs/dev2-4b-t1/derived/mlx-diag.predictions.jsonl:2275
+00:18:40Z build llm-semantic-router/DEV2.0-4B from 7855c46dd8781880480ae82d1a96a4c3669ae9c5-src_training_decision2
+00:19:14Z pre-upload examples (two processes)
+{"mode": "compare", "passed": true}
+00:20:23Z card example (pre-upload)
+00:20:58Z scored-panel parity (pre-upload)
+{"passed": true, "steps": {"build": true, "pre-a": true, "pre-b": true, "repeat-pre": true, "card-pre": true, "parity-pre": true}}
++ set +x
+cache after run files=481 digest=e9af4c5114f8cc4c8370715455070803a8d9d003ffdf9270988c15b3f88aa44f frozen_digest=ba8f21322724f57beafac7dbce5348af0a9c148368d89394e459287226c481fc

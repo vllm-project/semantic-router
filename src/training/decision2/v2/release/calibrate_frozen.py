@@ -9,8 +9,14 @@ package runtime batches the questions of one state, and every CAL row is one
 question). The report is accepted by ``training.model.infer --calibration``
 and by the package runtime.
 
+An adapter (``peft-lora/1``) checkpoint needs ``--source-path`` for its pinned
+base. ``--require-kernels`` fails before loading unless
+``v2.dec.runtime_check.require_runtime`` passes and records that identity as
+``inference.kernel_runtime``.
+
     python3 -m v2.release.calibrate_frozen --checkpoint CKPT --cal CAL698.jsonl \
-        --cal-sha256 H --output calibration.json [--logits logits.jsonl]
+        --cal-sha256 H --output calibration.json [--logits logits.jsonl] \
+        [--source-path BASE] [--require-kernels]
 """
 
 from __future__ import annotations
@@ -52,14 +58,20 @@ def build_report(
 
 
 def cal_logits(
-    checkpoint: Path, rows: list[dict[str, Any]], max_length: int, batch_size: int
+    checkpoint: Path,
+    rows: list[dict[str, Any]],
+    max_length: int,
+    batch_size: int,
+    source_path: Path | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     import torch
 
     from training.model.decision_model import DecisionModel, collate, encode
 
     device = torch.device("cuda:0")
-    model, tokenizer = DecisionModel.from_checkpoint(checkpoint)
+    model, tokenizer = DecisionModel.from_checkpoint(
+        checkpoint, source_path=source_path
+    )
     model = model.float().to(device).eval()
     pad_id = (
         tokenizer.pad_token_id
@@ -107,32 +119,37 @@ def main() -> None:
     parser.add_argument("--logits", type=Path)
     parser.add_argument("--max-length", type=int, default=8192)
     parser.add_argument("--batch-size", type=int, default=1)
+    parser.add_argument("--source-path", type=Path)
+    parser.add_argument("--require-kernels", action="store_true")
     args = parser.parse_args()
     if args.output.exists() or (args.logits and args.logits.exists()):
         raise FileExistsError("refusing to overwrite calibration outputs")
     if file_sha256(args.cal) != args.cal_sha256:
         raise ValueError("CAL file differs from its pinned SHA-256")
+    kernel_runtime = None
+    if args.require_kernels:
+        from v2.dec.runtime_check import require_runtime
+
+        kernel_runtime = require_runtime()
 
     from training.model.data import load_partition
     from training.model.infer import checkpoint_fingerprint
 
     rows = load_partition(args.cal, "cal")
-    identity = checkpoint_fingerprint(args.checkpoint)
+    identity = checkpoint_fingerprint(args.checkpoint, args.source_path)
     records, runtime = cal_logits(
-        args.checkpoint, rows, args.max_length, args.batch_size
+        args.checkpoint, rows, args.max_length, args.batch_size, args.source_path
     )
-    report = build_report(
-        records,
-        identity,
-        args.cal_sha256,
-        {
-            "max_length": args.max_length,
-            "batch_size": args.batch_size,
-            "device": "cuda:0",
-            "execution": "BF16 backbone, FP32 head",
-            "runtime": runtime,
-        },
-    )
+    inference = {
+        "max_length": args.max_length,
+        "batch_size": args.batch_size,
+        "device": "cuda:0",
+        "execution": "BF16 backbone, FP32 head",
+        "runtime": runtime,
+    }
+    if kernel_runtime is not None:
+        inference["kernel_runtime"] = kernel_runtime
+    report = build_report(records, identity, args.cal_sha256, inference)
     if args.logits:
         with args.logits.open("x", encoding="utf-8") as stream:
             for record in records:

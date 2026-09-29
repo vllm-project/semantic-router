@@ -1,0 +1,14 @@
+{
+ "schema": "htdev-iso-embed-families/1",
+ "note": "prereg 3.5(ii): social-text-adjacent training sources, matched case-insensitively against training-row provenance fields; first pattern wins",
+ "patterns": {
+  "goemotions": "go_?emotions?",
+  "flute": "flute",
+  "tweeteval": "tweet_?eval",
+  "socialiqa": "social_?i_?qa|socialiqa|\\bsiqa",
+  "oasst1": "oasst",
+  "argq30k": "argq",
+  "css-pilot-families": "targeted|stance|css[_-]",
+  "select-cal": "cal698|cal700|cal-698|cal-700|select700|select-700"
+ }
+}

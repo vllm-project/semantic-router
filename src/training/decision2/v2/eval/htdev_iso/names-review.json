@@ -1,0 +1,11 @@
+{
+ "schema": "htdev-iso-names-review/1",
+ "clear": [
+  {"key": "diplomacy", "path_regex": "/tokenizer\\.json$", "reason": "the word is a vocabulary entry of the model tokenizers (Decision 1.0 hf-docs), not a dataset reference"},
+  {"key": "scruples", "path_regex": "/m3b/arms-v3/logs/ni-census-v3\\.json$", "reason": "data-track NI census shortlist (candidate source list, 2 scruples tasks); no training row carries scruples provenance at freeze; disclosed as an open risk"}
+ ],
+ "confirm": [
+  {"key": "hatexplain", "reason": "Decision 1.0 Kai/Lex training: Natural Instructions families 1502/1503 (TRAINING_ATTRIBUTION.md) and A7 census lineage natural_instructions:hatexplain in 10 pool files"},
+  {"key": "casino", "reason": "Decision 1.0 Kai/Lex training: Natural Instructions family 353 (TRAINING_ATTRIBUTION.md) and A7 census lineage natural_instructions:casino; the terms file missed the plain name 'CaSiNo'"}
+ ]
+}

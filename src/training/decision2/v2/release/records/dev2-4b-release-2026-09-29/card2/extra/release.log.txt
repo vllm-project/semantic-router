@@ -1,0 +1,42 @@
+llm-semantic-router private storage: 93.85 GB used of 100 GB, headroom 6.15 GB (34 private repos; threshold 1 GB: OK)
+     31.78 GB  model    llm-semantic-router/dev2-9b-staging
+     16.85 GB  model    llm-semantic-router/DEV2.0-4B
+     16.85 GB  model    llm-semantic-router/dev2-dec-staging
+      7.56 GB  model    llm-semantic-router/DEV2.0-2B
+      3.23 GB  dataset  llm-semantic-router/decision-2.0-training-data
+      3.03 GB  model    llm-semantic-router/DEV2.0-0.8B
+      2.40 GB  model    llm-semantic-router/DEV2.0-0.6B
+      2.40 GB  model    llm-semantic-router/dev2-staging-06bm5-z
+cache copy /data/dev2/runs/release/triton/dev2-4b-N4XF-soup-nodeA-copy-20260929T004630Z files=1654 digest=438618a6e3beb39407dabb96e689b5740d021a9c93b9df9769453c3d94deb119 frozen_digest=438618a6e3beb39407dabb96e689b5740d021a9c93b9df9769453c3d94deb119
++ /data/dev2/src/b798099c58b82420fb89b62a5094827e57d2bdb2-src_training_decision2/src/training/decision2/v2/release/release.sh --spec /data/dev2/src/b798099c58b82420fb89b62a5094827e57d2bdb2-src_training_decision2/src/training/decision2/v2/release/specs/dev2-4b-release.json --src b798099c58b82420fb89b62a5094827e57d2bdb2-src_training_decision2 --work /data/dev2/runs/release/dev2-4b-card2-20260929T004630Z --gpu 5 --track release --shared-lease release --threads 4 --site /opt/decision-fla --require-kernels --env HIP_FORCE_DEV_KERNARG=1 --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=/data/dev2/runs/release/triton/dev2-4b-N4XF-soup-nodeA-copy-20260929T004630Z --mount-rw /data/dev2/runs/release/triton/dev2-4b-N4XF-soup-nodeA-copy-20260929T004630Z --mount /data/dev2/private/panels/goldfree --mount /data/dev2/runs/release/inputs/dev2-4b-t1/derived --parity typed-final:/data/dev2/private/panels/goldfree/typed-final.prompts.jsonl:/data/dev2/runs/release/inputs/dev2-4b-t1/derived/typed-final.predictions.jsonl:200 --parity css15:/data/dev2/private/panels/goldfree/css15.prompts.jsonl:/data/dev2/runs/release/inputs/dev2-4b-t1/derived/css15.predictions.jsonl:300 --parity public231:/data/dev2/private/panels/goldfree/public231.prompts.jsonl:/data/dev2/runs/release/inputs/dev2-4b-t1/derived/public231.predictions.jsonl:100 --upload
+00:46:31Z build llm-semantic-router/DEV2.0-4B from b798099c58b82420fb89b62a5094827e57d2bdb2-src_training_decision2
+00:46:59Z pre-upload examples (two processes)
+{"mode": "compare", "passed": true}
+00:48:13Z card example (pre-upload)
+00:48:48Z scored-panel parity (pre-upload)
+00:49:45Z ensure private llm-semantic-router/DEV2.0-4B
+{"command": "ensure", "passed": true, "repo": "llm-semantic-router/DEV2.0-4B"}
+00:49:45Z upload
+{"command": "upload", "passed": true, "repo": "llm-semantic-router/DEV2.0-4B", "revision": "8052eb6c99c0b3b6a9980dcd77fb868c27da353a"}
+00:49:57Z real hf download of 8052eb6c99c0b3b6a9980dcd77fb868c27da353a
+{"command": "download", "passed": true, "repo": "llm-semantic-router/DEV2.0-4B", "revision": "8052eb6c99c0b3b6a9980dcd77fb868c27da353a"}
+{"command": "tree", "passed": true}
+00:50:37Z post-download examples
+{"mode": "compare", "passed": true}
+00:52:40Z readback
+{"command": "readback", "passed": true, "repo": "llm-semantic-router/DEV2.0-4B", "revision": "8052eb6c99c0b3b6a9980dcd77fb868c27da353a"}
+{"passed": true, "steps": {"build": true, "pre-a": true, "pre-b": true, "repeat-pre": true, "card-pre": true, "parity-pre": true, "ensure": true, "upload": true, "download": true, "tree": true, "post": true, "repeat-post": true, "card-post": true, "parity-post": true, "readback": true}}
++ set +x
+cache after run files=1687 digest=5bf64399c3cf3d5e922b48d5aee20a4b341ac3f507da4158f246dde99e34eae6 frozen_digest=438618a6e3beb39407dabb96e689b5740d021a9c93b9df9769453c3d94deb119
+{"passed": true, "targets": 13, "anonymous": {"model_api": 401, "readme": 401, "model_page": 401}, "rendered": {"status": 401}}
+{"checked": 17, "failed": [], "passed": true}
+llm-semantic-router private storage: 93.85 GB used of 100 GB, headroom 6.15 GB (34 private repos; threshold 0 GB: OK)
+     31.78 GB  model    llm-semantic-router/dev2-9b-staging
+     16.85 GB  model    llm-semantic-router/DEV2.0-4B
+     16.85 GB  model    llm-semantic-router/dev2-dec-staging
+      7.56 GB  model    llm-semantic-router/DEV2.0-2B
+      3.23 GB  dataset  llm-semantic-router/decision-2.0-training-data
+      3.03 GB  model    llm-semantic-router/DEV2.0-0.8B
+      2.40 GB  model    llm-semantic-router/DEV2.0-0.6B
+      2.40 GB  model    llm-semantic-router/dev2-staging-06bm5-z
+work=/data/dev2/runs/release/dev2-4b-card2-20260929T004630Z revision=8052eb6c99c0b3b6a9980dcd77fb868c27da353a
