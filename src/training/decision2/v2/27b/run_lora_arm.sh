@@ -32,8 +32,28 @@ TRAIN_PYTHONPATH=${TRAIN_PYTHONPATH:-/pipeline:/code}
 # Amendment 4: TRITON_AUTOTUNE_CACHE=1 shares one on-disk Triton autotune cache
 # across this arm's training-stage containers so every process reuses the same
 # kernel configurations.
+# Milestone 4: TRAIN_CACHE_FROZEN (with its tree hash TRAIN_CACHE_SHA) seeds that cache with a verified copy of
+# one frozen training cache, so every arm-seed on either node starts from the same kernel configurations;
+# LORA_RANK / LORA_ALPHA set the adapter size (Milestone 1-3: 8 / 16). Each full launch is capped at the
+# smaller of FULL_CAP and what is left of ARM_CAP.
+LORA_RANK=${LORA_RANK:-8}
+LORA_ALPHA=${LORA_ALPHA:-16}
+TRAIN_CACHE_FROZEN=${TRAIN_CACHE_FROZEN:-}
 TRAIN_EXTRA=()
+if [ -n "$TRAIN_CACHE_FROZEN" ]; then
+  [ "${TRITON_AUTOTUNE_CACHE:-0}" = 1 ] || { echo "TRAIN_CACHE_FROZEN needs TRITON_AUTOTUNE_CACHE=1" >&2; exit 2; }
+  : "${TRAIN_CACHE_SHA:?TRAIN_CACHE_FROZEN needs TRAIN_CACHE_SHA}"
+fi
 if [ "${TRITON_AUTOTUNE_CACHE:-0}" = 1 ]; then
+  if [ -n "$TRAIN_CACHE_FROZEN" ] && [ ! -e "/data/dev2/runs/27b/$ARM/triton-cache" ]; then
+    mkdir -p "/data/dev2/runs/27b/$ARM"
+    (cd "$CODE" && PYTHONPATH=$CODE python3 -m v2.27b.triton_cache copy \
+      --frozen "$TRAIN_CACHE_FROZEN" --expect "$TRAIN_CACHE_SHA" --dest "/data/dev2/runs/27b/$ARM/triton-cache")
+  elif [ -n "$TRAIN_CACHE_FROZEN" ]; then
+    python3 -c "import json,sys; c=json.load(open(sys.argv[1])); sys.exit(0 if c['copy_sha256']==sys.argv[2] else 3)" \
+      "/data/dev2/runs/27b/$ARM/triton-cache.copy.json" "$TRAIN_CACHE_SHA" \
+      || { echo "arm $ARM training cache was not seeded from $TRAIN_CACHE_SHA" >&2; exit 2; }
+  fi
   mkdir -p "/data/dev2/runs/27b/$ARM/triton-cache"
   TRAIN_EXTRA=(--mount "/data/dev2/runs/27b/$ARM/triton-cache:/triton-cache:rw"
     --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=/triton-cache)
@@ -95,7 +115,7 @@ CONTRACT_ARGS=(
   --init-kind posttrained
   --base-revision "$REVISION" --train /data/train.jsonl --select /data/select.jsonl
   --cal /data/cal.jsonl --objective ce_brier --brier-weight 0.5 --train-mode lora
-  --lora-rank 8 --lora-alpha 16 --lora-dropout 0.05 --lora-lr 2e-5 --epochs 1
+  --lora-rank "$LORA_RANK" --lora-alpha "$LORA_ALPHA" --lora-dropout 0.05 --lora-lr 2e-5 --epochs 1
   --microbatch 1 --accumulation 16 --eval-batch 1 --max-length 4096 --head-dim 256
   --backbone-lr 1e-6 --head-lr 1e-4 --weight-decay 0.01 --warmup-ratio 0.05
   --seed "$SEED" --gradient-checkpointing "${REPLAY_ARGS[@]}"
@@ -160,12 +180,14 @@ if has full; then
     fi
     name=full
     [ "$attempt" -gt 1 ] && name=full-r$attempt
+    cap=$(python3 -c "import sys; print(round(min(float(sys.argv[1]), float(sys.argv[2]) - float(sys.argv[3])), 4))" \
+      "$FULL_CAP" "$ARM_CAP" "$used")
     latest=$(find "$RUN/full/$run" -maxdepth 1 -type d -name 'checkpoint-*' ! -name '*.pending' 2>/dev/null | sort | tail -1 || true)
     if [ -n "$latest" ]; then
-      train_launch "$name" "$FULL_CAP" "exact resume from $(basename "$latest")" "$RUN/full" -- "${RESUME_ARGS[@]}" \
+      train_launch "$name" "$cap" "exact resume from $(basename "$latest")" "$RUN/full" -- "${RESUME_ARGS[@]}" \
         --save-every "$SAVE_EVERY" --resume "/out/$run/$(basename "$latest")" --output "/out/$run" || true
     else
-      train_launch "$name" "$FULL_CAP" "full one-epoch arm" "$RUN/full" -- "${TRAIN_ARGS[@]}" \
+      train_launch "$name" "$cap" "full one-epoch arm" "$RUN/full" -- "${TRAIN_ARGS[@]}" \
         --save-every "$SAVE_EVERY" --output "/out/$run" || true
     fi
     [ -f "$RUN/full/$run/COMPLETE.json" ] && break
@@ -180,6 +202,9 @@ if has full; then
     attempt=$((attempt + 1))
   done
   echo "$run" > "$RUN/full/RUN_DIR"
+  if [ -n "$TRAIN_CACHE_FROZEN" ]; then
+    PYTHONPATH=$CODE python3 -m v2.27b.triton_cache finish --dest "$RUN/triton-cache" > /dev/null
+  fi
 fi
 if has readout && [ "$READOUT_MODE" = kernel ]; then
   run=$(cat "$RUN/full/RUN_DIR")

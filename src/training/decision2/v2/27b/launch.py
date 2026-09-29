@@ -1,6 +1,9 @@
 """Single-GPU container launcher for the ~27B track (host side, stdlib only).
 
-Only node B GPU5-7 are accepted. The launcher checks the render node's PCI
+Only the track's GPUs are accepted: node B GPU5-7 and, with ``DEV2_NODE=a``,
+node A GPU2-4. Both nodes share one PCI layout, so the node comes from
+``DEV2_NODE`` (default ``b``) and the lease file, which must belong to the
+track, guards against the wrong node. The launcher checks the render node's PCI
 address, updates the track's lease file, runs one network-less container with
 exactly that device, enforces a wall-clock cap and writes a GPU-hour receipt.
 """
@@ -19,12 +22,32 @@ from pathlib import Path
 
 TRACK = "27b"
 IMAGE_ID = "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1"
-ALLOWED_GPUS = {
-    5: ("0000:ab:00.0", "renderD169"),
-    6: ("0000:b3:00.0", "renderD177"),
-    7: ("0000:bb:00.0", "renderD185"),
+NODE_GPUS = {
+    "b": {
+        5: ("0000:ab:00.0", "renderD169"),
+        6: ("0000:b3:00.0", "renderD177"),
+        7: ("0000:bb:00.0", "renderD185"),
+    },
+    "a": {
+        2: ("0000:93:00.0", "renderD145"),
+        3: ("0000:9b:00.0", "renderD153"),
+        4: ("0000:a3:00.0", "renderD161"),
+    },
 }
+ALLOWED_GPUS = NODE_GPUS["b"]
+MAX_CAP_HOURS = 13.0
 LEASE_ROOT = Path("/data/dev2/leases")
+
+
+def node_name() -> str:
+    node = os.environ.get("DEV2_NODE", "b")
+    if node not in NODE_GPUS:
+        raise ValueError(f"DEV2_NODE must be one of {sorted(NODE_GPUS)}, not {node!r}")
+    return node
+
+
+def allowed_gpus(node: str | None = None) -> dict[int, tuple[str, str]]:
+    return NODE_GPUS[node or node_name()]
 
 
 def utc() -> str:
@@ -39,10 +62,15 @@ def sha_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def render_node(gpu: int, sysfs: Path = Path("/sys/class/drm")) -> Path:
-    if gpu not in ALLOWED_GPUS:
-        raise ValueError(f"GPU{gpu} is outside the ~27B allocation (node B GPU5-7)")
-    pci, node = ALLOWED_GPUS[gpu]
+def render_node(
+    gpu: int, sysfs: Path = Path("/sys/class/drm"), node_id: str | None = None
+) -> Path:
+    gpus = allowed_gpus(node_id)
+    if gpu not in gpus:
+        raise ValueError(
+            f"GPU{gpu} is outside the ~27B allocation (node B GPU5-7, node A GPU2-4)"
+        )
+    pci, node = gpus[gpu]
     actual = (sysfs / node / "device").resolve().name.lower()
     if actual != pci:
         raise ValueError(f"{node} maps to {actual}, expected {pci}")
@@ -182,8 +210,8 @@ def main() -> None:
         args.command = args.command[1:]
     if not args.command:
         raise ValueError("Missing container command after --")
-    if not 0 < args.cap_hours <= 12:
-        raise ValueError("cap-hours must be in (0, 12]")
+    if not 0 < args.cap_hours <= MAX_CAP_HOURS:
+        raise ValueError(f"cap-hours must be in (0, {MAX_CAP_HOURS:g}]")
     if args.receipt.exists():
         raise FileExistsError("Receipt already exists; use a fresh run name")
     device = render_node(args.gpu)
@@ -247,8 +275,9 @@ def main() -> None:
             "track": TRACK,
             "name": args.name,
             "purpose": args.purpose,
+            "node": node_name(),
             "gpu_index": args.gpu,
-            "pci_bus": ALLOWED_GPUS[args.gpu][0],
+            "pci_bus": allowed_gpus()[args.gpu][0],
             "render_node": device.name,
             "image_id": IMAGE_ID,
             "container_id": cid,
