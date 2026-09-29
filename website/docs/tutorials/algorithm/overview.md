@@ -120,7 +120,8 @@ traffic before using them for production routing.
   its LoRA and reasoning controls, not just its model name. Scoring, composition,
   and dispatch retain the exact winning reference. A legacy model-only result
   that matches multiple different candidates is rejected rather than resolved
-  to the first reference.
+  to the first reference. For a LoRA candidate, Envoy routes by the selected
+  base model while the provider request names the adapter.
 - Router Learning session memory retains the selected candidate's controls.
   Protection can hold that exact choice across tool-loop continuations even
   when a later base selection prefers another effort of the same model. If that
