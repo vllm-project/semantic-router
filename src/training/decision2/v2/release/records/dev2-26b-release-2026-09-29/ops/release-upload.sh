@@ -10,6 +10,8 @@ IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
 G=/data/dev2/private/panels/goldfree
 P=/data/dev2/runs/27b/M3-A-soup/formal/output
 HFC=/data/dev2/hf-cache
+# The node cache keeps LFS blobs in a shared content-addressed store ($HFC/blobs/<xx>/<sha256>);
+# the repo's blobs are symlinks into it, so containers mount both read-only.
 BASE_REPO=$HFC/models--Qwen--Qwen3.8-27B
 BASE=$BASE_REPO/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
 FROZEN=/data/dev2/runs/27b/M3-A-soup/formal/triton-cache
@@ -40,7 +42,7 @@ status=0
   --image "$IMAGE" --gpu "$GPU" --track release --shared-lease release --threads 4 \
   --site /opt/decision-fla --require-kernels --base-path "$BASE" \
   --env HIP_FORCE_DEV_KERNARG=1 --env TRITON_CACHE_AUTOTUNING=1 --env "TRITON_CACHE_DIR=$TC" --mount-rw "$TC" \
-  --env "HF_HUB_CACHE=$HFC" --mount "$BASE_REPO" \
+  --env "HF_HUB_CACHE=$HFC" --mount "$BASE_REPO" --mount "$HFC/blobs" \
   --mount "$G" --mount "$P" \
   --parity "typed-final:$G/typed-final.prompts.jsonl:$P/typed-final.predictions.jsonl:1600" \
   --parity "css15:$G/css15.prompts.jsonl:$P/css15.predictions.jsonl:6547" \
