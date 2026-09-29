@@ -199,6 +199,35 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 20:45 — **ALL WORKERS STOPPED: the Cursor monthly usage limit was reached** (the workers' last activity was
+  ~19:04 UTC+8; the error notices came at 20:40). No worker can be launched until the user raises the limit or it
+  resets.
+  - **GPU jobs keep running** on their own chains. At 12:41Z all 16 GPUs were busy:
+    - node A: 27B M4 `A20-s2`, `Ar-s1`, `Ar-s2`; 9B M5 `KD-s1`, `KG-s1`; decoder M6 `E6K-s3`;
+    - node B: 27B M4 `A20-s1`, `A20r-s1`, `A20r-s2`; 27B M4b `A2-s1`; decoder M6 `N6A-s2`, `N6D-s3`.
+    - All are preregistered arms, so let them finish. Nothing in these milestones uploads to HF automatically.
+  - **State at the stop, and the resume plan.** Each item needs one fresh worker. Check `git status` in its worktree
+    first: uncommitted work may exist.
+    1. **DEV2.0-0.6B successor release** (`m8-s5-b05`, approved 18:25). The worker stopped while writing the successor
+       gate profile and BF16 tests; **nothing was uploaded**. Resume in `vllm-sr-dev2-release-06b`.
+    2. **C1 v1.2 / event 3.** The widened custodian rescan (raw source extracts + every trained pool + landed data)
+       reported **142 OVERLAP / 1,116 REVIEW**, and the worker had moved to a v1.3 scan. Nothing was decrypted and
+       event 3 is still unused.
+       - The worker was copying node B's v1.3 outputs to node A while node A's scan ran (~6,400 of 138,261 tasks).
+       - Before any retirement decision, the next eval worker must determine which sources the hits come from, and
+         whether they are trained rows or only raw extracts. Removing ~44% of C1 needs a coordinator decision.
+    3. **27B M4** (state `v2/27b/records/m4-state.md`): six runs healthy at 590–660 updates at 19:04; projected
+       ~63.6 GPU-h of training within the 70 cap.
+    4. **27B M4b** (state `m4b-state.md`): arm `A2-s1` running.
+    5. **9B M5** (state `m5-state.md`): arms KD / KG running. Integration HEAD `127ef1ef7` was mirrored to node A for
+       the item-7 check.
+    6. **Decoder M6** (state `m6-state.md`): the chains are advancing. The node-B S2T reference was confirmed exact for
+       the 2B pairs.
+    7. **Data: paraphrase Noul arm** (0.504 of 1.5 GPU-h used; the decoder took node B GPU3–4 at 17:19).
+    8. **Data: hard-skill families**: generator code in progress, probably uncommitted.
+  - Resume order once capacity returns: (1) the 0.6B release; (2) C1 source analysis; (3–6) milestone read-outs as each
+    chain finishes; (7–8) data.
+
 - 2026-09-29 18:25 — **First progressive-update successor: DEV2.0-0.6B `m8-s5-b05`; release approved** (0.6B M8 records;
   hand-off `v2/06b/records/m8-handoff-2026-09-29.md`; integration `dfcf2e826`; 0.191 GPU-h).
   - The model is the unchanged `m6-mxcx-soup` weights plus fixed per-level offsets on 5-level Score logits: λ = ½,
