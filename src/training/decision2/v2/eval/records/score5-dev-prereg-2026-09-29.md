@@ -74,3 +74,9 @@ COLLAPSE supersedes WARN; NO-SIGNAL is reported independently.
 
 Short shared-lease jobs on node A, preferring GPU5, then GPU0-1; each <= 15 min; memory headroom checked before launch;
 no running job paused or disturbed; stop and record if 0.5 GPU-h would be exceeded.
+
+## Amendment 1 (before the build and before any model run)
+
+Selection detail only (thresholds and rules unchanged): the level × axis cells are filled round-robin, one row per cell per
+round with cells in scarcest-first order, instead of cell by cell, so that a cell early in the order cannot use up the
+groups a later cell of another level needs. Water-filling and the group-cap fallback are as above.
