@@ -199,6 +199,34 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 07:15 — **F-b did not fit under the HF 100 GB cap; storage freed; a lossless-compression path was chosen**
+  (storage record `v2/release/records/dev2-bf16-storage-2026-09-30.md`; integration `073cbd508`; 0.712 GPU-h).
+  - **Storage freed, 61.43 → 50.46 GB:** stale staging (83 MB) removed; BF16 storage revisions with 0 answer changes on
+    every scored prompt and mlx-diag, FP32 blobs (27.36 GB) purged with `rewrite_history=False`:
+
+    | Model | New revision | Decision |
+    | --- | --- | --- |
+    | DEV2.0-0.8B | `bede7938` | `a34b2486…` |
+    | DEV2.0-2B | `a53cf66a` | `86129728…` |
+    | DEV2.0-4B | `fadbba4f` | `d6bcdea2…` |
+
+    Cards are byte-identical.
+  - **Why F-b doesn't fit:** the exact package is 53.82 GB, because the runtime needs the 5.09 GB embedding and the norms
+    in FP32. That would make 104.28 GB, 7.28 GB short with 3 GB headroom. DEV2.0-27B stays `c0dba600`, and the 27B C1
+    ledger slot is unused.
+  - **Coordinator decisions:**
+    - Repos outside Decision 2.0 (Vela-2.0-Encoder, Decision-1.0-Route-0.6B, Vela datasets) are NOT ours to delete. The
+      user is informed.
+    - **F-b calibration: CAL698.** The 23:15 rule adopted it: all four development measures improved and the formal
+      run used it.
+    - **Lossless path:** a `bf16z` codec (byte-plane split + zstd, ZipNN-style) with a runtime loader that restores
+      bit-identical tensors. Expected ~33% smaller, so F-b ≈ 36–42 GB fits.
+    - Full parity on the compressed package, then the node-to-node transfer, item 8 and release. Optionally compress
+      DEV2.0-9B afterwards.
+    - The same release worker is resumed once.
+  - **Long term:** side-by-side 27B full-model updates need ~72–108 GB free. A larger HF storage plan is recommended to
+    the user; it is not blocking.
+
 - 2026-09-30 06:40 — **9B M6 worker stopped by the platform; a fresh continuation worker was launched from
   `m6-state.md`** (latest commit `d0d6272ef`).
   - **KA** (AutoJev-27B soft targets on human rows) was stopped by its preregistered early rule: ΔP −0.36 < +0.5.
