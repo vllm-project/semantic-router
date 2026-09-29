@@ -390,3 +390,5 @@ func canonicalAnthropicErrorTypeMatchesCategory(code string, category llmprotoco
 	}
 	return false
 }
+
+// CI bisect marker: no functional change.
