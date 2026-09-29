@@ -5,6 +5,32 @@ GPU3–4. Preregistrations: [M6b](dec-m6b-prereg-2026-09-30.md) (`833ec0967`), [
 
 ## Now
 
+- 2026-09-30 ≈08:00 UTC+8 (00:00Z) — **Continuation worker (the first M7 worker was stopped by the platform at
+  ≈23:30Z; no job was lost). H and C arms done on both tiers with three seeds each (no cap block: 4B seeds cost
+  1.35 GPU-h, as preregistered).** P arms training; lines, diagnostics and formal wrappers are armed.
+  - Lines read (16K, vs `<tier>-I`; gate = type / family floors + CSS-pilot H3 ≥ H3_I):
+
+    | Line | β 1 T / H3 | β ½ T / H3 | β ⅓ T / H3 | Pick |
+    | --- | --- | --- | --- | --- |
+    | 4b `I` | .704 / .5625 | | | |
+    | L-N7H | .749 / .5458 | .741 / .5513 | .731 / .5593 | none (H3 below I at every β) |
+    | L-N7C | .648 / .5634 (Choice 440 < 477 floor) | .703 / .5663 | .708 / .5643 | β ½ expected (rules pending) |
+    | 2b `I` | .610 / .4278 | | | |
+    | L-S7H | .683 / .4421 | .668 / .4388 | .652 / .4378 | β 1 expected (rules pending) |
+    | L-S7C | .614 / .4163 (Score 178 < 245) | .618 / .4181 | .621 / .4200 | none |
+
+  - Running (UTC ETA): node B `m7-N7P-s1` (GPU3) / `s2` (GPU4) → ≈00:27, then `s3` on GPU3 → ≈01:50, soup, line,
+    diagnostics, `4b-finalists.json` ≈02:20. node A `m7-S7P-s2` (s1 done 23:44) → s3 → ≈01:02, then the line and
+    `2b-finalists.json` ≈01:20.
+  - Mirror `5ae4cb9cc` (integration merged; M7 formal wrapper, HT-DEV v2 diagnostic and relays; 31 tests) on both
+    nodes. Formal wrappers (`ops/m7/m7-formal.sh`) wait for the finalists files: node A GPU5 (2B; smoke → collection →
+    report → mlx-diag), node B GPU3 (slots 1, 3) and GPU4 (slot 2). 4B runs are relayed and scored on node A by hand
+    (`m6-relay.sh pull / mark`, `m6-score.sh`).
+  - **HT-DEV v2 is a diagnostic in M7** (COORDINATION 04:10: the prereg predates it and no amendment adopted it
+    before the first development readout, 21:20Z). Collected on the M7 path (same node / image / 16K / T = 1 as the
+    line readouts) for `I`, each arm soup and each finalist; gold-free prompts installed in both nodes' decoder panel
+    dir; scored on node A (`ops/m7/m7-htdev2.sh`).
+  - GPU-h at 23:30Z ≈ 14.4 of 29.7 (arms 11.9, lines 0.96, M6b 0.28, running seeds ≈1.2).
 - 2026-09-30 ≈04:30 UTC+8 (20:30Z) — **First seeds done; every arm fits its cap.**
   - `m7-N7H-s1` 1.351 and `m7-N7C-s1` 1.343 GPU-h (the preregistered 1.35 estimate); `m7-S7H-s1` ≈ 0.65 GPU-h.
     The earlier ~1.65 reading was taken while a co-tenant readout shared the GPU. All seeds 2 are past preflight.
