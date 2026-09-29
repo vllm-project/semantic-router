@@ -11,6 +11,10 @@ Rules: ``v2/data/records/m4-dq-prereg-2026-09-30.md``.
         --out REPORT.json --private PRIVATE.json
     python3 -m v2.data.dq.blind_review fix-pn1 --rows pn1.train.jsonl --sha256 HEX \
         --private PRIVATE.json [--drop-groups GROUPS.txt] --out-rows FIXED.jsonl --receipt FIX.json
+    python3 -m v2.data.dq.blind_review rebuild-pn1r2 --rows pn1.train.jsonl --sha256 HEX \
+        --private PRIVATE.json --out-rows PN1R2.jsonl --receipt REBUILD.json
+    python3 -m v2.data.dq.blind_review sample-pn1r2 --rows PN1R2.jsonl --sha256 HEX \
+        --exclude-key DIR/pn1.key.jsonl --out-dir DIR2
     python3 -m v2.data.dq.blind_review adjudication-hs1 --key DIR/hs1.key.jsonl \
         --packet DIR/hs1.packet.F.jsonl [...] --answers A.jsonl [...] \
         --out-packet ADJ.packet.jsonl --out-key ADJ.key.jsonl
@@ -26,6 +30,7 @@ node until every blind answer is in. Every output file is created exclusively (n
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import math
@@ -36,6 +41,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from training.model.data import canonical
 from v2.data.m4.pn1_text import GROUP_OF, LANGUAGE_NAMES
 
 PN1_SALT = "dq-pn1-review-v1"
@@ -55,7 +61,7 @@ PN1_THRESHOLDS = {
     "error_max": 0.05,
     "error_upper_max": 0.08,
     "weighted_error_max": 0.05,
-    "cell_fail_errors": 4,
+    "cell_fail_cp_lower": 0.05,
     "margin_yes_min": 0.80,
     "margin_no_max": 0.20,
 }
@@ -243,21 +249,54 @@ def pn1_cell(row: Mapping[str, Any]) -> str:
     return f"{row['language']}|{GROUP_OF[row['family']]}|{noul_gold(row)}"
 
 
+@dataclasses.dataclass(frozen=True)
+class Pn1Round:
+    """Salts, allocation and review-id prefix of one PN1 review round."""
+
+    name: str
+    salt: str
+    packet_salt: str
+    r2_salt: str
+    per_cell: int
+    prefix: str
+
+
+ROUND1 = Pn1Round("r1", PN1_SALT, PN1_PACKET_SALT, PN1_R2_SALT, PN1_PER_CELL, "p")
+ROUND2 = Pn1Round(
+    "pn1r2",
+    "dq-pn1-r2-review-v1",
+    "dq-pn1-r2-packet-v1",
+    "dq-pn1-r2-r2-order-v1",
+    12,
+    "q",
+)
+
+
 def sample_pn1(
-    rows: Sequence[Mapping[str, Any]], per_cell: int = PN1_PER_CELL
+    rows: Sequence[Mapping[str, Any]],
+    per_cell: int = PN1_PER_CELL,
+    salt: str = PN1_SALT,
+    exclude: Iterable[str] = (),
 ) -> tuple[list[Mapping[str, Any]], Counter]:
-    """``per_cell`` rows per language x group x gold cell, in salted-hash order, one per group."""
+    """``per_cell`` rows per language x group x gold cell, in salted-hash order, one per group.
+    ``exclude`` ids (an earlier round's sample) count in the population but are never drawn.
+    """
     population: Counter = Counter()
     for row in rows:
         if row.get("split") != "train":
             raise ValueError(f"{row.get('id')}: not a TRAIN row")
         population[pn1_cell(row)] += 1
+    skip = set(exclude)
     taken: Counter = Counter()
     used_groups: set[str] = set()
     picked = []
-    for row in sorted(rows, key=lambda r: sha(f"{PN1_SALT}:{r['id']}")):
+    for row in sorted(rows, key=lambda r: sha(f"{salt}:{r['id']}")):
         cell = pn1_cell(row)
-        if taken[cell] >= per_cell or row["group_id"] in used_groups:
+        if (
+            row["id"] in skip
+            or taken[cell] >= per_cell
+            or row["group_id"] in used_groups
+        ):
             continue
         picked.append(row)
         taken[cell] += 1
@@ -306,10 +345,19 @@ def assert_blind(
         raise ValueError(f"packet leaks {len(leaked)} key strings, e.g. {leaked[0]!r}")
 
 
-def build_pn1(rows: Sequence[Mapping[str, Any]], rows_sha256: str) -> dict[str, Any]:
-    picked, population = sample_pn1(rows)
-    ordered = sorted(picked, key=lambda r: sha(f"{PN1_PACKET_SALT}:{r['id']}"))
-    rids = {row["id"]: f"p{index + 1:03d}" for index, row in enumerate(ordered)}
+def build_pn1(
+    rows: Sequence[Mapping[str, Any]],
+    rows_sha256: str,
+    review: Pn1Round = ROUND1,
+    exclude: Iterable[str] = (),
+) -> dict[str, Any]:
+    skip = set(exclude)
+    picked, population = sample_pn1(rows, review.per_cell, review.salt, skip)
+    ordered = sorted(picked, key=lambda r: sha(f"{review.packet_salt}:{r['id']}"))
+    rids = {
+        row["id"]: f"{review.prefix}{index + 1:03d}"
+        for index, row in enumerate(ordered)
+    }
     packet = [pn1_packet_item(rids[row["id"]], row) for row in ordered]
     key = [pn1_key_item(rids[row["id"]], row) for row in ordered]
     secrets = (
@@ -318,7 +366,7 @@ def build_pn1(rows: Sequence[Mapping[str, Any]], rows_sha256: str) -> dict[str, 
         | set(GROUP_OF)
     )
     assert_blind(packet, PN1_PACKET_FIELDS, secrets)
-    packet_r2 = sorted(packet, key=lambda item: sha(f"{PN1_R2_SALT}:{item['rid']}"))
+    packet_r2 = sorted(packet, key=lambda item: sha(f"{review.r2_salt}:{item['rid']}"))
     sampled = Counter(item["cell"] for item in key)
     return {
         "packet_r1": packet,
@@ -326,10 +374,12 @@ def build_pn1(rows: Sequence[Mapping[str, Any]], rows_sha256: str) -> dict[str, 
         "key": key,
         "sample": {
             "schema": "dev2-dq-pn1-sample/1",
+            "round": review.name,
             "rows_sha256": rows_sha256,
             "rows": len(rows),
-            "salt": PN1_SALT,
-            "per_cell": PN1_PER_CELL,
+            "salt": review.salt,
+            "per_cell": review.per_cell,
+            "excluded": len(skip),
             "n": len(key),
             "population": dict(sorted(population.items())),
             "sampled": dict(sorted(sampled.items())),
@@ -535,14 +585,17 @@ def pn1_verdict(
     _, upper = clopper_pearson(errors, n)
     by_cell: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
     lang_group: Counter = Counter()
+    lang_group_n: Counter = Counter()
     for item in items:
         by_cell[item["cell"]].append(item)
         lang_group[f"{item['language']}|{item['group']}"] += item["error"]
+        lang_group_n[f"{item['language']}|{item['group']}"] += 1
     weighted = weighted_error(by_cell, population)
     failing = sorted(
         cell
         for cell, k in lang_group.items()
-        if k >= PN1_THRESHOLDS["cell_fail_errors"]
+        if clopper_pearson(k, lang_group_n[cell])[0]
+        > PN1_THRESHOLDS["cell_fail_cp_lower"]
     )
     p1 = (
         errors / n <= PN1_THRESHOLDS["error_max"]
@@ -665,6 +718,72 @@ def score_pn1(
 # ------------------------------------------------------------------ PN1 fix rule (prereg §3.6)
 
 
+def balance_cells(
+    rows: Sequence[Mapping[str, Any]], protect: Iterable[str] = ()
+) -> tuple[list[Mapping[str, Any]], set[str]]:
+    """Exactly 50/50 labels per language x group cell: surplus rows of the larger label go
+    in salted-hash order, ``protect`` ids (reviewed rows) only when nothing else is left.
+    """
+    keep_last = set(protect)
+    by_cell: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        by_cell[f"{row['language']}|{GROUP_OF[row['family']]}"].append(row)
+    dropped: set[str] = set()
+    for members in by_cell.values():
+        yes = [r for r in members if noul_gold(r) == YES]
+        no = [r for r in members if noul_gold(r) == NO]
+        surplus = yes if len(yes) > len(no) else no
+        excess = abs(len(yes) - len(no))
+        order = sorted(
+            surplus,
+            key=lambda r: (r["id"] in keep_last, sha(f"{PN1_BALANCE_SALT}:{r['id']}")),
+        )
+        dropped.update(r["id"] for r in order[:excess])
+    return [r for r in rows if r["id"] not in dropped], dropped
+
+
+PN1R2_NEAR_DROP = ("es", "fr", "ar", "ru", "ko")
+PN1R2_NAME_DROP = ("ru",)
+
+
+def rebuild_pn1r2(
+    rows: Sequence[Mapping[str, Any]], private: Mapping[str, Any]
+) -> tuple[list[Mapping[str, Any]], dict[str, Any]]:
+    """Amendment 1: D1 (pn-near in PN1R2_NEAR_DROP), D2 (pn-name in PN1R2_NAME_DROP), F1 (the
+    round-1 gold errors), then the balance repair. No margin filter."""
+    items = private["items"]
+    reviewed = {i["id"] for i in items}
+    errors = {i["id"] for i in items if i["error"]}
+    reasons: Counter = Counter()
+    kept = []
+    for row in rows:
+        if row["family"] == "pn-near" and row["language"] in PN1R2_NEAR_DROP:
+            reasons["D1_near"] += 1
+        elif row["family"] == "pn-name" and row["language"] in PN1R2_NAME_DROP:
+            reasons["D2_ru_name"] += 1
+        elif row["id"] in errors:
+            reasons["F1_error"] += 1
+        else:
+            kept.append(row)
+    fixed, balance = balance_cells(kept, reviewed)
+    reasons["balance"] = len(balance)
+
+    def cells(members: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+        return dict(sorted(Counter(pn1_cell(r) for r in members).items()))
+
+    receipt = {
+        "schema": "dev2-dq-pn1r2-rebuild/1",
+        "rules": {"near_drop": PN1R2_NEAR_DROP, "name_drop": PN1R2_NAME_DROP},
+        "dropped": dict(reasons),
+        "rows_before": len(rows),
+        "rows_after": len(fixed),
+        "cells_before": cells(rows),
+        "cells_after": cells(fixed),
+        "languages_after": dict(sorted(Counter(r["language"] for r in fixed).items())),
+    }
+    return fixed, receipt
+
+
 def fix_pn1(
     rows: Sequence[Mapping[str, Any]],
     private: Mapping[str, Any],
@@ -721,23 +840,7 @@ def fix_pn1(
     steps["F3_margin_applied"] = margin
     steps["reviewed_survivors"] = len(survivors)
     kept = [r for r in rows if r["id"] in kept_ids and r["id"] not in error_ids]
-    by_cell: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
-    for row in kept:
-        by_cell[cell_of(row)].append(row)
-    balance_drop: set[str] = set()
-    for cell, members in by_cell.items():
-        yes = [r for r in members if noul_gold(r) == YES]
-        no = [r for r in members if noul_gold(r) == NO]
-        surplus = yes if len(yes) > len(no) else no
-        excess = abs(len(yes) - len(no))
-        pool = sorted(
-            (r for r in surplus if r["id"] not in reviewed),
-            key=lambda r: sha(f"{PN1_BALANCE_SALT}:{r['id']}"),
-        )
-        if len(pool) < excess:
-            pool = sorted(surplus, key=lambda r: sha(f"{PN1_BALANCE_SALT}:{r['id']}"))
-        balance_drop.update(r["id"] for r in pool[:excess])
-    fixed = [r for r in kept if r["id"] not in balance_drop]
+    fixed, balance_drop = balance_cells(kept, reviewed)
     receipt = {
         "schema": "dev2-dq-pn1-fix/1",
         "before": before,
@@ -925,6 +1028,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--drop-groups", type=Path)
     p.add_argument("--out-rows", type=Path, required=True)
     p.add_argument("--receipt", type=Path, required=True)
+    p = sub.add_parser("rebuild-pn1r2")
+    p.add_argument("--rows", type=Path, required=True)
+    p.add_argument("--sha256", required=True)
+    p.add_argument("--private", type=Path, required=True)
+    p.add_argument("--out-rows", type=Path, required=True)
+    p.add_argument("--receipt", type=Path, required=True)
+    p = sub.add_parser("sample-pn1r2")
+    p.add_argument("--rows", type=Path, required=True)
+    p.add_argument("--sha256", required=True)
+    p.add_argument("--exclude-key", type=Path, required=True)
+    p.add_argument("--out-dir", type=Path, required=True)
     p = sub.add_parser("adjudication-hs1")
     p.add_argument("--key", type=Path, required=True)
     p.add_argument("--packet", type=Path, action="append", required=True)
@@ -1028,6 +1142,42 @@ def main(argv: list[str] | None = None) -> int:
                 {"verdict": receipt["verdict"], **receipt["steps"]}, sort_keys=True
             )
         )
+        return 0
+    if args.command == "rebuild-pn1r2":
+        rows = load_rows(args.rows, args.sha256)
+        private = json.loads(args.private.read_text(encoding="utf-8"))
+        fixed, receipt = rebuild_pn1r2(rows, private)
+        ordered = sorted(fixed, key=lambda r: r["id"])
+        receipt["rows_sha256_before"] = args.sha256
+        receipt["rows_sha256_after"] = write_new(
+            args.out_rows, "".join(canonical(row) + "\n" for row in ordered)
+        )
+        write_json(args.receipt, receipt)
+        print(
+            json.dumps(
+                {k: receipt[k] for k in ("dropped", "rows_after", "languages_after")},
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "sample-pn1r2":
+        rows = load_rows(args.rows, args.sha256)
+        exclude = [row["id"] for row in read_jsonl(args.exclude_key)]
+        built = build_pn1(rows, args.sha256, ROUND2, exclude)
+        args.out_dir.mkdir(parents=True, exist_ok=True)
+        hashes = {
+            "packet_r1": write_jsonl(
+                args.out_dir / "pn1r2.packet.r1.jsonl", built["packet_r1"]
+            ),
+            "packet_r2": write_jsonl(
+                args.out_dir / "pn1r2.packet.r2.jsonl", built["packet_r2"]
+            ),
+            "key": write_jsonl(args.out_dir / "pn1r2.key.jsonl", built["key"]),
+            "exclude_key": file_sha256(args.exclude_key),
+        }
+        sample = {**built["sample"], "files_sha256": hashes}
+        write_json(args.out_dir / "pn1r2.sample.json", sample)
+        print(json.dumps({k: sample[k] for k in ("n", "sampled")}, sort_keys=True))
         return 0
     if args.command == "adjudication-hs1":
         key = read_jsonl(args.key)

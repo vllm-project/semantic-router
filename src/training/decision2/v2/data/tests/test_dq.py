@@ -249,6 +249,97 @@ class Pn1MarginFixTest(unittest.TestCase):
             self.assertEqual(labels.count("yes"), labels.count("no"))
 
 
+class Pn1Round2Test(unittest.TestCase):
+    def rows(self):
+        rows = []
+        for language in ("ja", "ru", "es"):
+            for family, label in (
+                ("pn-hop", 1),
+                ("pn-near", 0),
+                ("pn-name", 1),
+                ("pn-name", 0),
+                ("pn-twin", 1),
+                ("pn-twin", 0),
+            ):
+                if language == "es" and family in ("pn-name", "pn-twin"):
+                    continue
+                for k in range(30):
+                    ident = f"m4pn1-{family}-{language}{label}{k:03d}"
+                    rows.append(pn1_row(ident, language, family, label))
+        return rows
+
+    def test_rebuild_and_disjoint_sample(self):
+        rows = self.rows()
+        first = br.build_pn1(rows, "0" * 64)
+        gold = {k["rid"]: k["gold"] for k in first["key"]}
+        wrong = [
+            k
+            for k in first["key"]
+            if k["language"] == "ja" and k["family"] == "pn-twin"
+        ][:1]
+        r = answers(
+            first["key"],
+            lambda i: (
+                ("yes" if gold[i["rid"]] == "no" else "no")
+                if i["rid"] in {w["rid"] for w in wrong}
+                else gold[i["rid"]]
+            ),
+        )
+        _, private = br.score_pn1(first["sample"], first["key"], r, r, None)
+        fixed, receipt = br.rebuild_pn1r2(rows, private)
+        self.assertFalse(any(r["language"] == "es" for r in fixed))
+        self.assertFalse(
+            any(
+                r["language"] == "ru" and r["family"] in ("pn-near", "pn-name")
+                for r in fixed
+            )
+        )
+        self.assertNotIn(wrong[0]["id"], {r["id"] for r in fixed})
+        self.assertEqual(receipt["dropped"]["F1_error"], 1)
+        for cell in {br.pn1_cell(r).rsplit("|", 1)[0] for r in fixed}:
+            labels = [
+                br.noul_gold(r) for r in fixed if br.pn1_cell(r).startswith(cell + "|")
+            ]
+            self.assertEqual(labels.count("yes"), labels.count("no"))
+        exclude = [k["id"] for k in first["key"]]
+        second = br.build_pn1(fixed, "1" * 64, br.ROUND2, exclude)
+        self.assertFalse({k["id"] for k in second["key"]} & set(exclude))
+        self.assertTrue(all(k["rid"].startswith("q") for k in second["key"]))
+        self.assertEqual(second["sample"]["excluded"], len(exclude))
+        self.assertTrue(
+            all(v <= br.ROUND2.per_cell for v in second["sample"]["sampled"].values())
+        )
+
+    def test_p3_exact_lower_bound_rule(self):
+        def verdict(errors, n):
+            items = [
+                {
+                    "error": k < errors,
+                    "cell": "ja|swap|no",
+                    "language": "ja",
+                    "group": "swap",
+                }
+                for k in range(n)
+            ]
+            items += [
+                {
+                    "error": False,
+                    "cell": f"x{k}|natural|yes",
+                    "language": f"x{k}",
+                    "group": "natural",
+                }
+                for k in range(400)
+            ]
+            pop = {"ja|swap|no": 100, **{f"x{k}|natural|yes": 1 for k in range(400)}}
+            return br.pn1_verdict(items, pop)["failing_language_group_cells"]
+
+        self.assertEqual(verdict(4, 16), ["ja|swap"])
+        self.assertEqual(verdict(3, 16), [])
+        self.assertEqual(verdict(5, 24), ["ja|swap"])
+        self.assertEqual(verdict(4, 24), [])
+        self.assertEqual(verdict(3, 12), ["ja|swap"])
+
+
 def hs1_rows():
     rows = []
     for family in ("hs1_quote_check", "hs1_policy_packet"):
