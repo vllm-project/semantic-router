@@ -199,6 +199,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 20:50 — **All eight stopped workers resumed (first resume each), in economy mode.** The user re-sent the
+  16:05 directives; all four are already in effect.
+  - Economy mode: few internal subagents, polls every 45–60 minutes, concise outputs, and no redone steps.
+  - **C1 worker, new instruction:** retire nothing further yet. It reports the hits by C1 source and by matched-corpus
+    class: (a) trained by a released or candidate model; (b) unreleased-arm pools only; (c) untrained raw extracts;
+    (d) evaluation-only or qualification pools; (e) other. It also reports the containment distribution, which widened
+    additions caused the jump to 142 / 1,116, and the item counts and power under retirement policies P1 / P2 / P3.
+    The coordinator decides. Event 3 stays unused.
+  - **GPU:** decoder M6 keeps node B GPU3–4. The paraphrase data worker's remaining ≤ 1.0 GPU-h moves to node A GPU1
+    (shared with the hard-skill data worker). The 0.6B successor release uses node A GPU0.
+  - If the usage limit hits again, the same state files and resume plan (20:45) apply.
+
 - 2026-09-29 20:45 — **ALL WORKERS STOPPED: the Cursor monthly usage limit was reached** (the workers' last activity was
   ~19:04 UTC+8; the error notices came at 20:40). No worker can be launched until the user raises the limit or it
   resets.
