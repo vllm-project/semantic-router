@@ -2,6 +2,7 @@ package protocolcodec
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -182,7 +183,8 @@ func TestAnthropicMessagesDerivesOutputTotalFromKnownComponents(t *testing.T) {
 			}
 			approximated := false
 			for _, diagnostic := range diagnostics {
-				if diagnostic.Field == "usage" && diagnostic.Action == llmprotocol.DiagnosticApproximated {
+				if diagnostic.Field == "usage" && diagnostic.Action == llmprotocol.DiagnosticApproximated &&
+					strings.Contains(diagnostic.Reason, "output") {
 					approximated = true
 				}
 			}
@@ -190,5 +192,90 @@ func TestAnthropicMessagesDerivesOutputTotalFromKnownComponents(t *testing.T) {
 				t.Fatalf("usage approximated = %v, want %v: %+v", approximated, tt.wantApproximated, diagnostics)
 			}
 		})
+	}
+}
+
+// The input side has the same boundary as the output side: when the input
+// total is absent and the uncached count is unknown, the projected
+// input_tokens has no basis and must be marked approximate.
+func TestAnthropicMessagesMarksInputLowerBound(t *testing.T) {
+	read, write := int64(5), int64(3)
+	response := llmprotocol.Response{
+		Generation: 1, ID: "response_1", Model: "public-model",
+		Output: []llmprotocol.OutputItem{{
+			ID: "item_1", Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "done"}},
+		}},
+		Usage: llmprotocol.Usage{
+			State:           llmprotocol.UsageAvailable,
+			InputCacheRead:  llmprotocol.TokenCount{Value: &read, Provenance: llmprotocol.UsageAuthoritative},
+			InputCacheWrite: llmprotocol.TokenCount{Value: &write, Provenance: llmprotocol.UsageAuthoritative},
+		},
+	}
+	body, diagnostics, err := (AnthropicMessagesCodec{}).EncodeResponse(
+		response, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy(),
+	)
+	if err != nil {
+		t.Fatalf("EncodeResponse failed: %v", err)
+	}
+	var wire struct {
+		Usage *struct {
+			InputTokens int64 `json:"input_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatalf("decode encoded Messages body: %v\n%s", err, body)
+	}
+	if wire.Usage.InputTokens != 0 {
+		t.Fatalf("cache-only usage projects input_tokens 0, got %d: %s", wire.Usage.InputTokens, body)
+	}
+	marked := false
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Field == "usage" && diagnostic.Action == llmprotocol.DiagnosticApproximated &&
+			strings.Contains(diagnostic.Reason, "input") {
+			marked = true
+		}
+	}
+	if !marked {
+		t.Fatalf("input lower bound must be marked approximate: %+v", diagnostics)
+	}
+}
+
+// An authoritative uncached count keeps the input projection exact on the
+// input side even while the output side is still marked for its own gap.
+func TestAnthropicMessagesKeepsInputExactWhenUncachedIsKnown(t *testing.T) {
+	input := int64(7)
+	response := llmprotocol.Response{
+		Generation: 1, ID: "response_1", Model: "public-model",
+		Output: []llmprotocol.OutputItem{{
+			ID: "item_1", Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "done"}},
+		}},
+		Usage: llmprotocol.Usage{
+			State:         llmprotocol.UsageAvailable,
+			InputUncached: llmprotocol.TokenCount{Value: &input, Provenance: llmprotocol.UsageAuthoritative},
+		},
+	}
+	body, diagnostics, err := (AnthropicMessagesCodec{}).EncodeResponse(
+		response, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy(),
+	)
+	if err != nil {
+		t.Fatalf("EncodeResponse failed: %v", err)
+	}
+	var wire struct {
+		Usage *struct {
+			InputTokens int64 `json:"input_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatalf("decode encoded Messages body: %v\n%s", err, body)
+	}
+	if wire.Usage.InputTokens != input {
+		t.Fatalf("known uncached count must survive the projection, got %d: %s", wire.Usage.InputTokens, body)
+	}
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Field == "usage" && strings.Contains(diagnostic.Reason, "input") {
+			t.Fatalf("known uncached count must not be marked approximate: %+v", diagnostics)
+		}
 	}
 }
