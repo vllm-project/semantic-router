@@ -1,0 +1,762 @@
+{
+  "runs": [
+    {
+      "run": "m7-verify-mix",
+      "gpu": 0,
+      "start_utc": "2026-09-29T00:55:55Z",
+      "end_utc": "2026-09-29T00:57:11Z",
+      "exit": 0,
+      "phase": "data_build"
+    },
+    {
+      "run": "m7-mx-s1-preflight",
+      "gpu": 0,
+      "start_utc": "2026-09-29T00:59:16Z",
+      "end_utc": "2026-09-29T01:00:17Z",
+      "exit": 0,
+      "phase": "preflights"
+    },
+    {
+      "run": "m7-cx-s1-preflight",
+      "gpu": 1,
+      "start_utc": "2026-09-29T00:59:17Z",
+      "end_utc": "2026-09-29T01:00:16Z",
+      "exit": 0,
+      "phase": "preflights"
+    },
+    {
+      "run": "m7-cx-s1-full",
+      "gpu": 1,
+      "start_utc": "2026-09-29T01:00:16Z",
+      "end_utc": "2026-09-29T02:11:48Z",
+      "exit": 0,
+      "phase": "training"
+    },
+    {
+      "run": "m7-mx-s1-full",
+      "gpu": 0,
+      "start_utc": "2026-09-29T01:00:18Z",
+      "end_utc": "2026-09-29T02:09:14Z",
+      "exit": 0,
+      "phase": "training"
+    },
+    {
+      "run": "m7a-probs",
+      "gpu": 1,
+      "start_utc": "2026-09-29T01:20:24Z",
+      "end_utc": "2026-09-29T01:23:32Z",
+      "exit": 0,
+      "phase": "chk_m7a_probs"
+    },
+    {
+      "run": "m7-m7a-mxcx-sb-ad3-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-29T01:25:23Z",
+      "end_utc": "2026-09-29T01:26:35Z",
+      "exit": 0,
+      "phase": "ad3_collection"
+    },
+    {
+      "run": "m7-m7a-mxcx-sb-ad3-score-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-29T01:26:35Z",
+      "end_utc": "2026-09-29T01:26:35Z",
+      "exit": 0,
+      "phase": "ad3_collection"
+    },
+    {
+      "run": "m7b-chk-m6-cx-s1",
+      "gpu": 1,
+      "start_utc": "2026-09-29T01:44:18Z",
+      "end_utc": "2026-09-29T01:46:04Z",
+      "exit": 0,
+      "phase": "chk_m6_baselines"
+    },
+    {
+      "run": "m7b-chk-m6-mx-s1",
+      "gpu": 0,
+      "start_utc": "2026-09-29T01:44:18Z",
+      "end_utc": "2026-09-29T01:46:01Z",
+      "exit": 0,
+      "phase": "chk_m6_baselines"
+    },
+    {
+      "run": "m7b-chk-m6-mx-s2",
+      "gpu": 0,
+      "start_utc": "2026-09-29T01:46:03Z",
+      "end_utc": "2026-09-29T01:47:39Z",
+      "exit": 0,
+      "phase": "chk_m6_baselines"
+    },
+    {
+      "run": "m7b-chk-m6-cx-s2",
+      "gpu": 1,
+      "start_utc": "2026-09-29T01:46:07Z",
+      "end_utc": "2026-09-29T01:47:54Z",
+      "exit": 0,
+      "phase": "chk_m6_baselines"
+    },
+    {
+      "run": "m7b-chk-m6-mx-s3",
+      "gpu": 0,
+      "start_utc": "2026-09-29T01:47:42Z",
+      "end_utc": "2026-09-29T01:49:21Z",
+      "exit": 0,
+      "phase": "chk_m6_baselines"
+    },
+    {
+      "run": "m7b-chk-m6-cx-s3",
+      "gpu": 1,
+      "start_utc": "2026-09-29T01:47:57Z",
+      "end_utc": "2026-09-29T01:49:48Z",
+      "exit": 0,
+      "phase": "chk_m6_baselines"
+    },
+    {
+      "run": "m7b-chk-m6-mx-soup",
+      "gpu": 0,
+      "start_utc": "2026-09-29T01:49:24Z",
+      "end_utc": "2026-09-29T01:51:06Z",
+      "exit": 0,
+      "phase": "chk_m6_baselines"
+    },
+    {
+      "run": "m7b-chk-m6-cx-soup",
+      "gpu": 1,
+      "start_utc": "2026-09-29T01:49:51Z",
+      "end_utc": "2026-09-29T01:51:44Z",
+      "exit": 0,
+      "phase": "chk_m6_baselines"
+    },
+    {
+      "run": "m7-mx-s1-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-29T02:09:14Z",
+      "end_utc": "2026-09-29T02:09:52Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s1-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-29T02:09:52Z",
+      "end_utc": "2026-09-29T02:10:26Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s1-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-29T02:10:27Z",
+      "end_utc": "2026-09-29T02:10:27Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s1-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-29T02:10:27Z",
+      "end_utc": "2026-09-29T02:10:27Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s1-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-29T02:10:27Z",
+      "end_utc": "2026-09-29T02:10:27Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s2-full",
+      "gpu": 0,
+      "start_utc": "2026-09-29T02:10:27Z",
+      "end_utc": "2026-09-29T03:15:36Z",
+      "exit": 0,
+      "phase": "training"
+    },
+    {
+      "run": "m7b-chk-m7-mx-s1",
+      "gpu": 0,
+      "start_utc": "2026-09-29T02:10:54Z",
+      "end_utc": "2026-09-29T02:12:33Z",
+      "exit": 0,
+      "phase": "chk_m7_seeds_soups"
+    },
+    {
+      "run": "m7-cx-s1-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-29T02:11:48Z",
+      "end_utc": "2026-09-29T02:12:31Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s1-css-pilot",
+      "gpu": 1,
+      "start_utc": "2026-09-29T02:12:31Z",
+      "end_utc": "2026-09-29T02:13:08Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s1-score-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-29T02:13:08Z",
+      "end_utc": "2026-09-29T02:13:09Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s1-readout",
+      "gpu": 1,
+      "start_utc": "2026-09-29T02:13:09Z",
+      "end_utc": "2026-09-29T02:13:09Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s1-score-css",
+      "gpu": 1,
+      "start_utc": "2026-09-29T02:13:09Z",
+      "end_utc": "2026-09-29T02:13:09Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s2-full",
+      "gpu": 1,
+      "start_utc": "2026-09-29T02:13:09Z",
+      "end_utc": "2026-09-29T03:22:07Z",
+      "exit": 0,
+      "phase": "training"
+    },
+    {
+      "run": "m7b-chk-m7-cx-s1",
+      "gpu": 1,
+      "start_utc": "2026-09-29T02:13:55Z",
+      "end_utc": "2026-09-29T02:15:35Z",
+      "exit": 0,
+      "phase": "chk_m7_seeds_soups"
+    },
+    {
+      "run": "m7-mx-s2-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-29T03:15:36Z",
+      "end_utc": "2026-09-29T03:16:22Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s2-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-29T03:16:22Z",
+      "end_utc": "2026-09-29T03:17:00Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s2-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-29T03:17:00Z",
+      "end_utc": "2026-09-29T03:17:01Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s2-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-29T03:17:01Z",
+      "end_utc": "2026-09-29T03:17:01Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s2-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-29T03:17:01Z",
+      "end_utc": "2026-09-29T03:17:01Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s3-full",
+      "gpu": 0,
+      "start_utc": "2026-09-29T03:17:01Z",
+      "end_utc": "2026-09-29T04:22:59Z",
+      "exit": 0,
+      "phase": "training"
+    },
+    {
+      "run": "m7b-chk-m7-mx-s2",
+      "gpu": 0,
+      "start_utc": "2026-09-29T03:17:40Z",
+      "end_utc": "2026-09-29T03:19:21Z",
+      "exit": 0,
+      "phase": "chk_m7_seeds_soups"
+    },
+    {
+      "run": "m7-cx-s2-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-29T03:22:07Z",
+      "end_utc": "2026-09-29T03:22:51Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s2-css-pilot",
+      "gpu": 1,
+      "start_utc": "2026-09-29T03:22:51Z",
+      "end_utc": "2026-09-29T03:23:33Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s2-readout",
+      "gpu": 1,
+      "start_utc": "2026-09-29T03:23:33Z",
+      "end_utc": "2026-09-29T03:23:34Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s2-score-css",
+      "gpu": 1,
+      "start_utc": "2026-09-29T03:23:33Z",
+      "end_utc": "2026-09-29T03:23:33Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s2-score-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-29T03:23:33Z",
+      "end_utc": "2026-09-29T03:23:33Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s3-full",
+      "gpu": 1,
+      "start_utc": "2026-09-29T03:23:34Z",
+      "end_utc": "2026-09-29T04:31:55Z",
+      "exit": 0,
+      "phase": "training"
+    },
+    {
+      "run": "m7b-chk-m7-cx-s2",
+      "gpu": 1,
+      "start_utc": "2026-09-29T03:23:43Z",
+      "end_utc": "2026-09-29T03:25:17Z",
+      "exit": 0,
+      "phase": "chk_m7_seeds_soups"
+    },
+    {
+      "run": "m7-mx-s3-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:23:00Z",
+      "end_utc": "2026-09-29T04:23:38Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s3-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:23:38Z",
+      "end_utc": "2026-09-29T04:24:14Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s3-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:24:14Z",
+      "end_utc": "2026-09-29T04:24:14Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s3-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:24:15Z",
+      "end_utc": "2026-09-29T04:24:15Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-mx-s3-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:24:15Z",
+      "end_utc": "2026-09-29T04:24:15Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7b-chk-m7-mx-s3",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:24:29Z",
+      "end_utc": "2026-09-29T04:25:46Z",
+      "exit": 0,
+      "phase": "chk_m7_seeds_soups"
+    },
+    {
+      "run": "m7-mx-soup",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:25:49Z",
+      "end_utc": "2026-09-29T04:26:30Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-mx-soup-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:26:31Z",
+      "end_utc": "2026-09-29T04:27:09Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-mx-soup-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:27:09Z",
+      "end_utc": "2026-09-29T04:27:45Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-mx-soup-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:27:45Z",
+      "end_utc": "2026-09-29T04:27:45Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-mx-soup-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:27:45Z",
+      "end_utc": "2026-09-29T04:27:45Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-mx-soup-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:27:46Z",
+      "end_utc": "2026-09-29T04:27:46Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7b-chk-m7-mx-soup",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:27:46Z",
+      "end_utc": "2026-09-29T04:29:05Z",
+      "exit": 0,
+      "phase": "chk_m7_seeds_soups"
+    },
+    {
+      "run": "m7-cx-s3-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:31:55Z",
+      "end_utc": "2026-09-29T04:32:34Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s3-css-pilot",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:32:34Z",
+      "end_utc": "2026-09-29T04:33:11Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s3-score-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:33:11Z",
+      "end_utc": "2026-09-29T04:33:11Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s3-readout",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:33:12Z",
+      "end_utc": "2026-09-29T04:33:12Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7-cx-s3-score-css",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:33:12Z",
+      "end_utc": "2026-09-29T04:33:12Z",
+      "exit": 0,
+      "phase": "readouts"
+    },
+    {
+      "run": "m7b-chk-m7-cx-s3",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:33:26Z",
+      "end_utc": "2026-09-29T04:34:42Z",
+      "exit": 0,
+      "phase": "chk_m7_seeds_soups"
+    },
+    {
+      "run": "m7-cx-soup",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:34:45Z",
+      "end_utc": "2026-09-29T04:35:17Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-mxcx-soup",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:35:08Z",
+      "end_utc": "2026-09-29T04:36:03Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-cx-soup-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:35:17Z",
+      "end_utc": "2026-09-29T04:35:57Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-cx-soup-css-pilot",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:35:57Z",
+      "end_utc": "2026-09-29T04:36:37Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-mxcx-soup-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:36:03Z",
+      "end_utc": "2026-09-29T04:36:41Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-cx-soup-score-css",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:36:37Z",
+      "end_utc": "2026-09-29T04:36:37Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-cx-soup-score-dev",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:36:37Z",
+      "end_utc": "2026-09-29T04:36:37Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-cx-soup-readout",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:36:38Z",
+      "end_utc": "2026-09-29T04:36:38Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7b-chk-m7-cx-soup",
+      "gpu": 1,
+      "start_utc": "2026-09-29T04:36:38Z",
+      "end_utc": "2026-09-29T04:37:57Z",
+      "exit": 0,
+      "phase": "chk_m7_seeds_soups"
+    },
+    {
+      "run": "m7-mxcx-soup-css-pilot",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:36:41Z",
+      "end_utc": "2026-09-29T04:37:17Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-mxcx-soup-readout",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:37:18Z",
+      "end_utc": "2026-09-29T04:37:18Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-mxcx-soup-score-css",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:37:18Z",
+      "end_utc": "2026-09-29T04:37:18Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7-mxcx-soup-score-dev",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:37:18Z",
+      "end_utc": "2026-09-29T04:37:18Z",
+      "exit": 0,
+      "phase": "soups"
+    },
+    {
+      "run": "m7b-chk-m7-mxcx-soup",
+      "gpu": 0,
+      "start_utc": "2026-09-29T04:37:18Z",
+      "end_utc": "2026-09-29T04:38:37Z",
+      "exit": 0,
+      "phase": "chk_m7_seeds_soups"
+    },
+    {
+      "run": "m7-mx-soup-formal",
+      "gpu": 1,
+      "start_utc": "2026-09-29T05:37:17Z",
+      "end_utc": "2026-09-29T05:40:31Z",
+      "exit": 0,
+      "phase": "formal"
+    },
+    {
+      "run": "m7-mxcx-soup-formal",
+      "gpu": 0,
+      "start_utc": "2026-09-29T05:37:17Z",
+      "end_utc": "2026-09-29T05:40:28Z",
+      "exit": 0,
+      "phase": "formal"
+    },
+    {
+      "run": "m7-mxcx-soup-mlx",
+      "gpu": 0,
+      "start_utc": "2026-09-29T05:41:48Z",
+      "end_utc": "2026-09-29T05:42:50Z",
+      "exit": 0,
+      "phase": "formal"
+    },
+    {
+      "run": "m7-mx-soup-mlx",
+      "gpu": 1,
+      "start_utc": "2026-09-29T05:41:51Z",
+      "end_utc": "2026-09-29T05:42:54Z",
+      "exit": 0,
+      "phase": "formal"
+    }
+  ],
+  "per_gpu_hours": {
+    "0": 3.6397,
+    "1": 3.7106
+  },
+  "total_gpu_hours": 7.3503,
+  "summed_run_hours": 7.7644,
+  "phases": {
+    "data_build": {
+      "gpu_hours": 0.0211,
+      "summed_run_hours": 0.0211,
+      "per_gpu_hours": {
+        "0": 0.0211
+      },
+      "runs": 1
+    },
+    "preflights": {
+      "gpu_hours": 0.0333,
+      "summed_run_hours": 0.0333,
+      "per_gpu_hours": {
+        "0": 0.0169,
+        "1": 0.0164
+      },
+      "runs": 2
+    },
+    "training": {
+      "gpu_hours": 6.815,
+      "summed_run_hours": 6.815,
+      "per_gpu_hours": {
+        "0": 3.3342,
+        "1": 3.4808
+      },
+      "runs": 6
+    },
+    "readouts": {
+      "gpu_hours": 0.1319,
+      "summed_run_hours": 0.1319,
+      "per_gpu_hours": {
+        "0": 0.0642,
+        "1": 0.0678
+      },
+      "runs": 30
+    },
+    "soups": {
+      "gpu_hours": 0.0989,
+      "summed_run_hours": 0.0989,
+      "per_gpu_hours": {
+        "0": 0.0678,
+        "1": 0.0311
+      },
+      "runs": 18
+    },
+    "chk_m7a_probs": {
+      "gpu_hours": 0.0522,
+      "summed_run_hours": 0.0522,
+      "per_gpu_hours": {
+        "1": 0.0522
+      },
+      "runs": 1
+    },
+    "chk_m6_baselines": {
+      "gpu_hours": 0.2325,
+      "summed_run_hours": 0.2325,
+      "per_gpu_hours": {
+        "0": 0.1111,
+        "1": 0.1214
+      },
+      "runs": 8
+    },
+    "chk_m7_seeds_soups": {
+      "gpu_hours": 0.2178,
+      "summed_run_hours": 0.2178,
+      "per_gpu_hours": {
+        "0": 0.1208,
+        "1": 0.0969
+      },
+      "runs": 9
+    },
+    "ad3_collection": {
+      "gpu_hours": 0.02,
+      "summed_run_hours": 0.02,
+      "per_gpu_hours": {
+        "1": 0.02
+      },
+      "runs": 2
+    },
+    "formal": {
+      "gpu_hours": 0.1417,
+      "summed_run_hours": 0.1417,
+      "per_gpu_hours": {
+        "0": 0.0703,
+        "1": 0.0714
+      },
+      "runs": 4
+    }
+  },
+  "cotenant_summed_run_hours": 0.5225,
+  "track_total_gpu_hours": {
+    "before_m7": 28.7,
+    "after_m7_wall_clock": 36.1,
+    "after_m7_summed_runs": 36.5
+  },
+  "notes": [
+    "Milestone 7, node A GPU0-1, wall-clock occupancy per GPU; overlapping runs on one GPU count once in per_gpu_hours/total_gpu_hours (7.3503). summed_run_hours (7.7644) counts every job separately, including the recorded co-tenant jobs that overlapped the M7(b) training queues.",
+    "Phase hours are merged within each phase. Co-tenant phases (chk_m7a_probs, chk_m6_baselines, chk_m7_seeds_soups, ad3_collection; 0.5225 summed) overlap training on the same GPU except the soup CHK jobs after the queues; overlap removed by the wall-clock merge = 0.4141.",
+    "Phases: data_build = gold-only teacher mixture verify (m7-verify-mix); preflights = the two queue preflights; training = six M7(b) seeds; readouts = per-seed typed-DEV/CSS-pilot readouts and host scoring; soups = soup averaging plus soup readouts (m7-mx/cx/mxcx-soup); chk_m7a_probs = M7(a) CHK probabilities; chk_m6_baselines = uncorrected CHK probabilities of the 8 M6 seeds/soups (m6-mxcx-soup reused M7(a) probabilities, no GPU); chk_m7_seeds_soups = CHK probabilities of the 6 M7 seeds and 3 soups; ad3_collection = M7(a) A-D3 typed-DEV collection; formal = m7-mxcx-soup and m7-mx-soup formal runs and their -mlx runs.",
+    "Sources: run_container.sh timing files m7-*.timing.json, m7a-probs.timing.json, m7b-chk-*.timing.json and the formal runner's GPU-TIME.json of both finalists and their -mlx runs (formal runs renamed *-formal where the soup has the same name).",
+    "Formal runs had no shared flag in GPU-TIME.json (exclusive lease, no co-tenant); the M7 co-tenant jobs were leased as owner.m7b-post / M7(a) alongside the training queues.",
+    "Not counted: CPU-only work (selection, matched contrasts, CHK devchecks, CHK deltas, typed-DEV diagnostic).",
+    "Track total before M7 about 28.7; after M7 about 36.1 (wall-clock) or 36.5 (per-job sum)."
+  ]
+}

@@ -1,0 +1,241 @@
+{
+  "chk": {
+    "m7-cx-s1": {
+      "B-D1": {
+        "checks": {
+          "delta_vs_majority_lower_bound_gt_0": true,
+          "top_share_le_0.90": true
+        },
+        "pass": true
+      },
+      "cal_parity": null,
+      "failed": false,
+      "state_sha256": "aa52bd37cc7b99e38ceedeeeca431b207ea626d997147bdad3df89b7edcadc0e"
+    },
+    "m7-cx-s2": {
+      "B-D1": {
+        "checks": {
+          "delta_vs_majority_lower_bound_gt_0": true,
+          "top_share_le_0.90": true
+        },
+        "pass": true
+      },
+      "cal_parity": null,
+      "failed": false,
+      "state_sha256": "0c0d216773e51ab7711a1d1416dbc869b70dc3a1e595e3d2973438ea27deca79"
+    },
+    "m7-cx-s3": {
+      "B-D1": {
+        "checks": {
+          "delta_vs_majority_lower_bound_gt_0": true,
+          "top_share_le_0.90": true
+        },
+        "pass": true
+      },
+      "cal_parity": null,
+      "failed": false,
+      "state_sha256": "d01deeb76a1b0daa8ad18dfcfb6de0773c41e54d24c458cc2bae6ded30268596"
+    },
+    "m7-cx-soup": {
+      "B-D1": {
+        "checks": {
+          "delta_vs_majority_lower_bound_gt_0": true,
+          "top_share_le_0.90": true
+        },
+        "pass": true
+      },
+      "cal_parity": true,
+      "failed": false,
+      "state_sha256": "80e9fecfabc8dbd611de101b1a5977230a6ef2da16cdc950f19da4b289cd460f"
+    },
+    "m7-mx-s1": {
+      "B-D1": {
+        "checks": {
+          "delta_vs_majority_lower_bound_gt_0": true,
+          "top_share_le_0.90": true
+        },
+        "pass": true
+      },
+      "cal_parity": null,
+      "failed": false,
+      "state_sha256": "8376d2cce235b3e69a33d976dd2916509fa377fbdd3dbcbe76af3bd1b2240fa5"
+    },
+    "m7-mx-s2": {
+      "B-D1": {
+        "checks": {
+          "delta_vs_majority_lower_bound_gt_0": true,
+          "top_share_le_0.90": true
+        },
+        "pass": true
+      },
+      "cal_parity": null,
+      "failed": false,
+      "state_sha256": "ccd07bad471781cdf752874dae061666b28fc2354f604ab1655497eee287c655"
+    },
+    "m7-mx-s3": {
+      "B-D1": {
+        "checks": {
+          "delta_vs_majority_lower_bound_gt_0": true,
+          "top_share_le_0.90": true
+        },
+        "pass": true
+      },
+      "cal_parity": null,
+      "failed": false,
+      "state_sha256": "958679495d3d03071f95e3a4ef1f19c0fa817e1525dcd854f58009f104349a5a"
+    },
+    "m7-mx-soup": {
+      "B-D1": {
+        "checks": {
+          "delta_vs_majority_lower_bound_gt_0": true,
+          "top_share_le_0.90": true
+        },
+        "pass": true
+      },
+      "cal_parity": true,
+      "failed": false,
+      "state_sha256": "5d2420b1e66b853ab8e0e33b21931e1086848995da7f57bb774f5ac4b5651593"
+    },
+    "m7-mxcx-soup": {
+      "B-D1": {
+        "checks": {
+          "delta_vs_majority_lower_bound_gt_0": true,
+          "top_share_le_0.90": true
+        },
+        "pass": true
+      },
+      "cal_parity": true,
+      "failed": false,
+      "state_sha256": "e5189a2342a9fb462ea8963206d5aee0c63dfaf5ef60edeaeef9514934e09466"
+    }
+  },
+  "families": {
+    "m7-cx": {
+      "complete": [
+        "m7-cx-s1",
+        "m7-cx-s2",
+        "m7-cx-s3"
+      ],
+      "dropped": false,
+      "family": "m7-cx",
+      "queue_status": {
+        "m7-cx-s1": "COMPLETE (readout written)",
+        "m7-cx-s2": "COMPLETE (readout written)",
+        "m7-cx-s3": "COMPLETE (readout written)"
+      }
+    },
+    "m7-mx": {
+      "complete": [
+        "m7-mx-s1",
+        "m7-mx-s2",
+        "m7-mx-s3"
+      ],
+      "dropped": false,
+      "family": "m7-mx",
+      "queue_status": {
+        "m7-mx-s1": "COMPLETE (readout written)",
+        "m7-mx-s2": "COMPLETE (readout written)",
+        "m7-mx-s3": "COMPLETE (readout written)"
+      }
+    }
+  },
+  "files": {
+    "chk-delta-m7-m6.json": true,
+    "contrast-m7-m6.json": true,
+    "contrast-summary.json": true,
+    "select.json": true
+  },
+  "finalists": [
+    {
+      "name": "m7-mxcx-soup",
+      "reason": "order 1: the cross soup is eligible"
+    },
+    {
+      "name": "m7-mx-soup",
+      "reason": "order 2: highest-Q other eligible candidate, 0.00 Q below the best eligible (band 8.0)"
+    }
+  ],
+  "label": "development readouts (never release scores); no formal run launched",
+  "mirror": "07ca6fb041288e9c1a8c87d1abada7c797b0f76a-src_training_decision2",
+  "schema": "dev2-06b-m7-post-summary/1",
+  "soups": {
+    "m7-cx-soup": {
+      "complete": "COMPLETE",
+      "exit": "0",
+      "readout": true,
+      "skipped": null,
+      "started": "2026-09-29T04:34:45Z"
+    },
+    "m7-mx-soup": {
+      "complete": "COMPLETE",
+      "exit": "0",
+      "readout": true,
+      "skipped": null,
+      "started": "2026-09-29T04:25:49Z"
+    },
+    "m7-mxcx-soup": {
+      "complete": "COMPLETE",
+      "exit": "0",
+      "readout": true,
+      "skipped": null,
+      "started": "2026-09-29T04:35:08Z"
+    }
+  },
+  "timeouts": [],
+  "timing_files": [
+    "m7-cx-soup-css-pilot.timing.json",
+    "m7-cx-soup-dev.timing.json",
+    "m7-cx-soup-readout.timing.json",
+    "m7-cx-soup-score-css.timing.json",
+    "m7-cx-soup-score-dev.timing.json",
+    "m7-cx-soup.timing.json",
+    "m7-mx-soup-css-pilot.timing.json",
+    "m7-mx-soup-dev.timing.json",
+    "m7-mx-soup-readout.timing.json",
+    "m7-mx-soup-score-css.timing.json",
+    "m7-mx-soup-score-dev.timing.json",
+    "m7-mx-soup.timing.json",
+    "m7-mxcx-soup-css-pilot.timing.json",
+    "m7-mxcx-soup-dev.timing.json",
+    "m7-mxcx-soup-readout.timing.json",
+    "m7-mxcx-soup-score-css.timing.json",
+    "m7-mxcx-soup-score-dev.timing.json",
+    "m7-mxcx-soup.timing.json",
+    "m7b-chk-m6-cx-s1.timing.json",
+    "m7b-chk-m6-cx-s1.wrapper.timing.json",
+    "m7b-chk-m6-cx-s2.timing.json",
+    "m7b-chk-m6-cx-s2.wrapper.timing.json",
+    "m7b-chk-m6-cx-s3.timing.json",
+    "m7b-chk-m6-cx-s3.wrapper.timing.json",
+    "m7b-chk-m6-cx-soup.timing.json",
+    "m7b-chk-m6-cx-soup.wrapper.timing.json",
+    "m7b-chk-m6-mx-s1.timing.json",
+    "m7b-chk-m6-mx-s1.wrapper.timing.json",
+    "m7b-chk-m6-mx-s2.timing.json",
+    "m7b-chk-m6-mx-s2.wrapper.timing.json",
+    "m7b-chk-m6-mx-s3.timing.json",
+    "m7b-chk-m6-mx-s3.wrapper.timing.json",
+    "m7b-chk-m6-mx-soup.timing.json",
+    "m7b-chk-m6-mx-soup.wrapper.timing.json",
+    "m7b-chk-m7-cx-s1.timing.json",
+    "m7b-chk-m7-cx-s1.wrapper.timing.json",
+    "m7b-chk-m7-cx-s2.timing.json",
+    "m7b-chk-m7-cx-s2.wrapper.timing.json",
+    "m7b-chk-m7-cx-s3.timing.json",
+    "m7b-chk-m7-cx-s3.wrapper.timing.json",
+    "m7b-chk-m7-cx-soup.timing.json",
+    "m7b-chk-m7-cx-soup.wrapper.timing.json",
+    "m7b-chk-m7-mx-s1.timing.json",
+    "m7b-chk-m7-mx-s1.wrapper.timing.json",
+    "m7b-chk-m7-mx-s2.timing.json",
+    "m7b-chk-m7-mx-s2.wrapper.timing.json",
+    "m7b-chk-m7-mx-s3.timing.json",
+    "m7b-chk-m7-mx-s3.wrapper.timing.json",
+    "m7b-chk-m7-mx-soup.timing.json",
+    "m7b-chk-m7-mx-soup.wrapper.timing.json",
+    "m7b-chk-m7-mxcx-soup.timing.json",
+    "m7b-chk-m7-mxcx-soup.wrapper.timing.json",
+    "m7b-contrast.cpu.timing.json"
+  ],
+  "verdict": "2 finalist(s)"
+}
